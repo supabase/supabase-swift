@@ -1,6 +1,7 @@
 import ConcurrencyExtras
 import Foundation
 import HTTPTypes
+import OpenAPIRuntime
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -28,6 +29,10 @@ import HTTPTypes
 public class StorageApi: @unchecked Sendable {
   /// The configuration used to initialize this client instance.
   public let configuration: StorageClientConfiguration
+
+  /// The generated OpenAPI client for the Storage HTTP API. Internal implementation detail —
+  /// ``StorageBucketApi``/``StorageFileApi`` use this instead of hand-building requests.
+  let openAPIClient: Client
 
   private struct MutableState {
     var headers: [String: String]
@@ -83,6 +88,17 @@ public class StorageApi: @unchecked Sendable {
       fetch: configuration.session.fetch,
       interceptors: interceptors
     )
+
+    let mutableStateRef = mutableState
+    let httpRef = http
+    let decoder = configuration.decoder
+    openAPIClient = Client(
+      serverURL: configuration.url,
+      transport: StorageOpenAPITransport(execute: { request in
+        try await Self.executeRequest(
+          request, headers: mutableStateRef.headers, http: httpRef, decoder: decoder)
+      })
+    )
   }
 
   /// Sets an HTTP header that will be included in all subsequent requests made by this instance.
@@ -104,26 +120,31 @@ public class StorageApi: @unchecked Sendable {
     return self
   }
 
-  @discardableResult
-  func execute(_ request: Helpers.HTTPRequest) async throws -> Helpers.HTTPResponse {
+  private static func executeRequest(
+    _ request: Helpers.HTTPRequest,
+    headers: [String: String],
+    http: any HTTPClientType,
+    decoder: JSONDecoder
+  ) async throws -> Helpers.HTTPResponse {
     var request = request
-    let headers = mutableState.headers
     request.headers = HTTPFields(headers).merging(with: request.headers)
 
     let response = try await http.send(request)
 
     guard (200..<300).contains(response.statusCode) else {
-      if let error = try? configuration.decoder.decode(
-        StorageError.self,
-        from: response.data
-      ) {
+      if let error = try? decoder.decode(StorageError.self, from: response.data) {
         throw error
       }
-
       throw HTTPError(data: response.data, response: response.underlyingResponse)
     }
 
     return response
+  }
+
+  @discardableResult
+  func execute(_ request: Helpers.HTTPRequest) async throws -> Helpers.HTTPResponse {
+    try await Self.executeRequest(
+      request, headers: mutableState.headers, http: http, decoder: configuration.decoder)
   }
 }
 

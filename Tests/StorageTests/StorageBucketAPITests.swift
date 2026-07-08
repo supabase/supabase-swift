@@ -47,6 +47,36 @@ final class StorageBucketAPITests: XCTestCase {
     Mocker.removeAll()
   }
 
+  func testOpenAPIClientUsesConfiguredBaseURLAndHeaders() async throws {
+    Mock(
+      url: url.appendingPathComponent("bucket/bucket123"),
+      statusCode: 200,
+      data: [
+        .get: Data(
+          """
+          {
+              "id": "bucket123",
+              "name": "test-bucket",
+              "owner": "owner123",
+              "public": false,
+              "created_at": "2024-01-01T00:00:00.000Z",
+              "updated_at": "2024-01-01T00:00:00.000Z"
+          }
+          """.utf8
+        )
+      ]
+    )
+    .register()
+
+    let output = try await storage.openAPIClient.bucketGet(
+      .init(path: .init(bucketId: "bucket123"))
+    )
+    guard case .ok(let okResponse) = output, case .json(let bucket) = okResponse.body else {
+      return XCTFail("expected .ok(.json) response")
+    }
+    XCTAssertEqual(bucket.id, "bucket123")
+  }
+
   func testURLConstruction() {
     let urlTestCases = [
       (
