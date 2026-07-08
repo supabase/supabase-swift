@@ -102,10 +102,10 @@ struct ResponseParsingTests {
     let (irResponses, hoisted) = try OpenAPIParsing.parseResponses(
       responses, location: "copyObject")
 
-    #expect(irResponses[0].body == .json(.schemaRef("copyObject -> 200_response")))
+    #expect(irResponses[0].body == .json(.schemaRef("copyObject_response200")))
     #expect(hoisted.count == 2)
-    #expect(hoisted[0].name == "copyObject -> 200_response")
-    #expect(hoisted[1].name == "copyObject -> 200_response_metadata")
+    #expect(hoisted[0].name == "copyObject_response200")
+    #expect(hoisted[1].name == "copyObject_response200_metadata")
   }
 
   @Test

@@ -242,7 +242,7 @@ public enum OpenAPIParsing {
           location: location, reason: "external response reference for status \(code)")
       }
       let (body, bodyHoisted) = try parseResponseBody(
-        response.content, location: "\(location) -> \(code)")
+        response.content, operationId: location, statusCode: code, location: "\(location) -> \(code)")
       hoisted.append(contentsOf: bodyHoisted)
       results.append(IRResponse(statusCode: code, isError: !statusCode.isSuccess, body: body))
     }
@@ -251,6 +251,8 @@ public enum OpenAPIParsing {
 
   static func parseResponseBody(
     _ content: OpenAPI.Content.Map,
+    operationId: String,
+    statusCode: Int,
     location: String
   ) throws -> (body: IRResponseBody, hoisted: [IRSchema]) {
     if let jsonContent = content.first(where: { $0.key.typeAndSubtype == "application/json" })?
@@ -261,7 +263,7 @@ public enum OpenAPIParsing {
         case .object(_, let objectContext) = inlineSchema.value,
         !objectContext.properties.isEmpty
       {
-        let hoistedName = "\(location)_response"
+        let hoistedName = "\(operationId)_response\(statusCode)"
         let (properties, nestedHoisted) = try parseObjectProperties(
           name: hoistedName, objectContext: objectContext, location: hoistedName)
         let hoisted =
