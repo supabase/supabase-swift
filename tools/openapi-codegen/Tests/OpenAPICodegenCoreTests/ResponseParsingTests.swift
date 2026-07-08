@@ -109,6 +109,31 @@ struct ResponseParsingTests {
   }
 
   @Test
+  func hoistsArrayOfInlineObjectResponseBody() throws {
+    let json = """
+      {
+        "application/json": {
+          "schema": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {"path": {"type": "string"}}
+            }
+          }
+        }
+      }
+      """
+    let content = try JSONDecoder().decode(OpenAPI.Content.Map.self, from: Data(json.utf8))
+
+    let (body, hoisted) = try OpenAPIParsing.parseResponseBody(
+      content, operationId: "objectSignMany", statusCode: 200, location: "objectSignMany -> 200")
+
+    #expect(body == .json(.array(.schemaRef("objectSignMany_response200Item"))))
+    #expect(hoisted.count == 1)
+    #expect(hoisted[0].name == "objectSignMany_response200Item")
+  }
+
+  @Test
   func parsesFullDocumentEndToEnd() throws {
     let json = """
       {

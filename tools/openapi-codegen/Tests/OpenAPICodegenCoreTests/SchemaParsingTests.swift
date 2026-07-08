@@ -94,4 +94,33 @@ struct SchemaParsingTests {
     #expect(irSchemas[1].name == "bucketSchema_type")
     #expect(irSchemas[1].kind == .stringEnum(cases: ["STANDARD", "ANALYTICS"]))
   }
+
+  @Test
+  func hoistsArrayOfInlineObjectPropertyIntoItsOwnNamedSchema() throws {
+    let json = """
+      {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {"path": {"type": "string"}}
+            }
+          }
+        }
+      }
+      """
+    let schema = try JSONDecoder().decode(JSONSchema.self, from: Data(json.utf8))
+
+    let irSchemas = try OpenAPIParsing.parseNamedSchema(name: "widget", schema: schema)
+
+    #expect(irSchemas.count == 2)
+    guard case .object(let properties) = irSchemas[0].kind else {
+      Issue.record("expected the first schema to be the object")
+      return
+    }
+    #expect(properties[0].type == .array(.schemaRef("widget_itemsItem")))
+    #expect(irSchemas[1].name == "widget_itemsItem")
+  }
 }
