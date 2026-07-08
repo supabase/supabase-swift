@@ -18,10 +18,10 @@ public enum OpenAPIParsing {
 
   // MARK: - Schemas
 
-  static func parseNamedSchema(name: String, schema: JSONSchema) throws -> IRSchema {
+  static func parseNamedSchema(name: String, schema: JSONSchema) throws -> [IRSchema] {
     if case .string = schema.value, let allowedValues = schema.allowedValues {
       let cases = allowedValues.compactMap { $0.value as? String }
-      return IRSchema(name: name, kind: .stringEnum(cases: cases))
+      return [IRSchema(name: name, kind: .stringEnum(cases: cases))]
     }
     guard case .object(_, let objectContext) = schema.value else {
       throw UnsupportedSpecConstruct(
@@ -30,7 +30,24 @@ public enum OpenAPIParsing {
       )
     }
     var properties: [IRProperty] = []
+    var hoistedSchemas: [IRSchema] = []
     for (propertyName, propertySchema) in objectContext.properties {
+      if case .string = propertySchema.value, let allowedValues = propertySchema.allowedValues {
+        // Inline enum on an object property: hoist it into its own named
+        // schema instead of failing. Unlike a union or an inline object with
+        // properties, there's no ambiguity in what Swift type this becomes.
+        let hoistedName = "\(name)_\(propertyName)"
+        let cases = allowedValues.compactMap { $0.value as? String }
+        hoistedSchemas.append(IRSchema(name: hoistedName, kind: .stringEnum(cases: cases)))
+        properties.append(
+          IRProperty(
+            name: propertyName,
+            type: .schemaRef(hoistedName),
+            isOptional: !propertySchema.required || propertySchema.nullable
+          )
+        )
+        continue
+      }
       properties.append(
         IRProperty(
           name: propertyName,
@@ -39,7 +56,7 @@ public enum OpenAPIParsing {
         )
       )
     }
-    return IRSchema(name: name, kind: .object(properties: properties))
+    return [IRSchema(name: name, kind: .object(properties: properties))] + hoistedSchemas
   }
 
   static func parseType(_ schema: JSONSchema, location: String) throws -> IRType {
@@ -261,7 +278,7 @@ public enum OpenAPIParsing {
   public static func parseDocument(_ document: OpenAPI.Document) throws -> IRDocument {
     var schemas: [IRSchema] = []
     for (key, schema) in document.components.schemas {
-      schemas.append(try parseNamedSchema(name: key.rawValue, schema: schema))
+      schemas.append(contentsOf: try parseNamedSchema(name: key.rawValue, schema: schema))
     }
     return IRDocument(
       schemas: schemas.sorted { $0.name < $1.name },

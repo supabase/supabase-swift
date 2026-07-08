@@ -26,8 +26,10 @@ struct SchemaParsingTests {
       """
     let schema = try JSONDecoder().decode(JSONSchema.self, from: Data(json.utf8))
 
-    let irSchema = try OpenAPIParsing.parseNamedSchema(name: "widgetSchema", schema: schema)
+    let irSchemas = try OpenAPIParsing.parseNamedSchema(name: "widgetSchema", schema: schema)
 
+    #expect(irSchemas.count == 1)
+    let irSchema = irSchemas[0]
     #expect(irSchema.name == "widgetSchema")
     guard case .object(let properties) = irSchema.kind else {
       Issue.record("expected an object schema")
@@ -48,8 +50,10 @@ struct SchemaParsingTests {
       """
     let schema = try JSONDecoder().decode(JSONSchema.self, from: Data(json.utf8))
 
-    let irSchema = try OpenAPIParsing.parseNamedSchema(name: "visibility", schema: schema)
+    let irSchemas = try OpenAPIParsing.parseNamedSchema(name: "visibility", schema: schema)
 
+    #expect(irSchemas.count == 1)
+    let irSchema = irSchemas[0]
     #expect(irSchema.name == "visibility")
     #expect(irSchema.kind == .stringEnum(cases: ["public", "private"]))
   }
@@ -62,5 +66,32 @@ struct SchemaParsingTests {
     #expect(throws: UnsupportedSpecConstruct.self) {
       try OpenAPIParsing.parseNamedSchema(name: "count", schema: schema)
     }
+  }
+
+  @Test
+  func hoistsInlineEnumPropertyIntoItsOwnNamedSchema() throws {
+    let json = """
+      {
+        "type": "object",
+        "required": ["id", "type"],
+        "properties": {
+          "id": {"type": "string"},
+          "type": {"type": "string", "enum": ["STANDARD", "ANALYTICS"]}
+        }
+      }
+      """
+    let schema = try JSONDecoder().decode(JSONSchema.self, from: Data(json.utf8))
+
+    let irSchemas = try OpenAPIParsing.parseNamedSchema(name: "bucketSchema", schema: schema)
+
+    #expect(irSchemas.count == 2)
+    guard case .object(let properties) = irSchemas[0].kind else {
+      Issue.record("expected the first schema to be the object")
+      return
+    }
+    let byName = Dictionary(uniqueKeysWithValues: properties.map { ($0.name, $0) })
+    #expect(byName["type"]?.type == .schemaRef("bucketSchema_type"))
+    #expect(irSchemas[1].name == "bucketSchema_type")
+    #expect(irSchemas[1].kind == .stringEnum(cases: ["STANDARD", "ANALYTICS"]))
   }
 }
