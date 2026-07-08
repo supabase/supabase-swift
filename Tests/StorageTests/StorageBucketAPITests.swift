@@ -261,12 +261,7 @@ final class StorageBucketAPITests: XCTestCase {
         .put: Data(
           """
           {
-            "id": "bucket123",
-            "name": "updated-bucket",
-            "owner": "owner123",
-            "public": true,
-            "created_at": "2024-01-01T00:00:00.000Z",
-            "updated_at": "2024-01-01T00:00:00.000Z"
+            "message": "Successfully updated"
           }
           """.utf8
         )
@@ -276,11 +271,11 @@ final class StorageBucketAPITests: XCTestCase {
       #"""
       curl \
       	--request PUT \
-      	--header "Content-Length: 51" \
+      	--header "Content-Length: 15" \
       	--header "Content-Type: application/json" \
       	--header "X-Client-Info: storage-swift/0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	--data "{\"id\":\"bucket123\",\"name\":\"bucket123\",\"public\":true}" \
+      	--data "{\"public\":true}" \
       	"http://localhost:54321/storage/v1/bucket/bucket123"
       """#
     }

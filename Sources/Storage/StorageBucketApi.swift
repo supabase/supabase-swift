@@ -55,14 +55,6 @@ public class StorageBucketApi: StorageApi, @unchecked Sendable {
     return Bucket(fromGenerated: bucket)
   }
 
-  struct BucketParameters: Encodable {
-    var id: String
-    var name: String
-    var `public`: Bool
-    var fileSizeLimit: StorageByteCount?
-    var allowedMimeTypes: [String]?
-  }
-
   /// Creates a new Storage bucket.
   ///
   /// ```swift
@@ -123,21 +115,31 @@ public class StorageBucketApi: StorageApi, @unchecked Sendable {
   ///   - options: The new options to apply to the bucket.
   /// - Throws: ``StorageError`` if the bucket does not exist or the caller is not authorized.
   public func updateBucket(_ id: String, options: BucketOptions) async throws {
-    try await execute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("bucket/\(id)"),
-        method: .put,
-        body: configuration.encoder.encode(
-          BucketParameters(
-            id: id,
-            name: id,
-            public: options.isPublic,
-            fileSizeLimit: options.fileSizeLimit.map { StorageByteCount(stringLiteral: $0) },
-            allowedMimeTypes: options.allowedMimeTypes
+    let output = try await openAPIClient.bucketUpdate(
+      .init(
+        path: .init(bucketId: id),
+        body: .json(
+          .init(
+            _public: options.isPublic,
+            file_size_limit: options.fileSizeLimit.map { limit in
+              if let intValue = Int64(limit) {
+                Operations.bucketUpdate.Input.Body.jsonPayload.file_size_limitPayload(
+                  value1: Int(intValue)
+                )
+              } else {
+                Operations.bucketUpdate.Input.Body.jsonPayload.file_size_limitPayload(
+                  value2: limit
+                )
+              }
+            },
+            allowed_mime_types: options.allowedMimeTypes
           )
         )
       )
     )
+    guard case .ok = output else {
+      throw StorageError(statusCode: nil, message: "Unexpected response from Storage API")
+    }
   }
 
   /// Removes all objects inside a bucket without deleting the bucket itself.
