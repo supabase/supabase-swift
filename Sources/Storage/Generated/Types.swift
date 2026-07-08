@@ -712,11 +712,13 @@ extension APIProtocol {
     /// - Remark: Generated from `#/paths//object/{bucketName}/{wildcard}/post(objectUpload)`.
     internal func objectUpload(
         path: Operations.objectUpload.Input.Path,
-        headers: Operations.objectUpload.Input.Headers = .init()
+        headers: Operations.objectUpload.Input.Headers = .init(),
+        body: Operations.objectUpload.Input.Body
     ) async throws -> Operations.objectUpload.Output {
         try await objectUpload(Operations.objectUpload.Input(
             path: path,
-            headers: headers
+            headers: headers,
+            body: body
         ))
     }
     /// Update the object at an existing key
@@ -727,11 +729,13 @@ extension APIProtocol {
     /// - Remark: Generated from `#/paths//object/{bucketName}/{wildcard}/put(objectUploadUpdate)`.
     internal func objectUploadUpdate(
         path: Operations.objectUploadUpdate.Input.Path,
-        headers: Operations.objectUploadUpdate.Input.Headers = .init()
+        headers: Operations.objectUploadUpdate.Input.Headers = .init(),
+        body: Operations.objectUploadUpdate.Input.Body
     ) async throws -> Operations.objectUploadUpdate.Output {
         try await objectUploadUpdate(Operations.objectUploadUpdate.Input(
             path: path,
-            headers: headers
+            headers: headers,
+            body: body
         ))
     }
     /// Delete an object
@@ -841,12 +845,14 @@ extension APIProtocol {
     internal func objectUploadSigned(
         path: Operations.objectUploadSigned.Input.Path,
         query: Operations.objectUploadSigned.Input.Query,
-        headers: Operations.objectUploadSigned.Input.Headers = .init()
+        headers: Operations.objectUploadSigned.Input.Headers = .init(),
+        body: Operations.objectUploadSigned.Input.Body
     ) async throws -> Operations.objectUploadSigned.Output {
         try await objectUploadSigned(Operations.objectUploadSigned.Input(
             path: path,
             query: query,
-            headers: headers
+            headers: headers,
+            body: body
         ))
     }
     /// Retrieve an object via a presigned URL
@@ -5680,17 +5686,66 @@ internal enum Operations {
                 }
             }
             internal var headers: Operations.objectUpload.Input.Headers
+            /// - Remark: Generated from `#/paths/object/{bucketName}/{wildcard}/POST/requestBody`.
+            internal enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/object/{bucketName}/{wildcard}/POST/requestBody/multipartForm`.
+                internal enum multipartFormPayload: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/object/{bucketName}/{wildcard}/POST/requestBody/multipartForm/cacheControl`.
+                    internal struct cacheControlPayload: Sendable, Hashable {
+                        internal var body: OpenAPIRuntime.HTTPBody
+                        /// Creates a new `cacheControlPayload`.
+                        ///
+                        /// - Parameters:
+                        ///   - body:
+                        internal init(body: OpenAPIRuntime.HTTPBody) {
+                            self.body = body
+                        }
+                    }
+                    case cacheControl(OpenAPIRuntime.MultipartPart<Operations.objectUpload.Input.Body.multipartFormPayload.cacheControlPayload>)
+                    /// - Remark: Generated from `#/paths/object/{bucketName}/{wildcard}/POST/requestBody/multipartForm/metadata`.
+                    internal struct metadataPayload: Sendable, Hashable {
+                        internal var body: OpenAPIRuntime.HTTPBody
+                        /// Creates a new `metadataPayload`.
+                        ///
+                        /// - Parameters:
+                        ///   - body:
+                        internal init(body: OpenAPIRuntime.HTTPBody) {
+                            self.body = body
+                        }
+                    }
+                    case metadata(OpenAPIRuntime.MultipartPart<Operations.objectUpload.Input.Body.multipartFormPayload.metadataPayload>)
+                    /// - Remark: Generated from `#/paths/object/{bucketName}/{wildcard}/POST/requestBody/multipartForm/file`.
+                    internal struct filePayload: Sendable, Hashable {
+                        internal var body: OpenAPIRuntime.HTTPBody
+                        /// Creates a new `filePayload`.
+                        ///
+                        /// - Parameters:
+                        ///   - body:
+                        internal init(body: OpenAPIRuntime.HTTPBody) {
+                            self.body = body
+                        }
+                    }
+                    case file(OpenAPIRuntime.MultipartPart<Operations.objectUpload.Input.Body.multipartFormPayload.filePayload>)
+                    case undocumented(OpenAPIRuntime.MultipartRawPart)
+                }
+                /// - Remark: Generated from `#/paths/object/{bucketName}/{wildcard}/POST/requestBody/content/multipart\/form-data`.
+                case multipartForm(OpenAPIRuntime.MultipartBody<Operations.objectUpload.Input.Body.multipartFormPayload>)
+            }
+            internal var body: Operations.objectUpload.Input.Body
             /// Creates a new `Input`.
             ///
             /// - Parameters:
             ///   - path:
             ///   - headers:
+            ///   - body:
             internal init(
                 path: Operations.objectUpload.Input.Path,
-                headers: Operations.objectUpload.Input.Headers = .init()
+                headers: Operations.objectUpload.Input.Headers = .init(),
+                body: Operations.objectUpload.Input.Body
             ) {
                 self.path = path
                 self.headers = headers
+                self.body = body
             }
         }
         internal enum Output: Sendable, Hashable {
@@ -5944,17 +5999,66 @@ internal enum Operations {
                 }
             }
             internal var headers: Operations.objectUploadUpdate.Input.Headers
+            /// - Remark: Generated from `#/paths/object/{bucketName}/{wildcard}/PUT/requestBody`.
+            internal enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/object/{bucketName}/{wildcard}/PUT/requestBody/multipartForm`.
+                internal enum multipartFormPayload: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/object/{bucketName}/{wildcard}/PUT/requestBody/multipartForm/cacheControl`.
+                    internal struct cacheControlPayload: Sendable, Hashable {
+                        internal var body: OpenAPIRuntime.HTTPBody
+                        /// Creates a new `cacheControlPayload`.
+                        ///
+                        /// - Parameters:
+                        ///   - body:
+                        internal init(body: OpenAPIRuntime.HTTPBody) {
+                            self.body = body
+                        }
+                    }
+                    case cacheControl(OpenAPIRuntime.MultipartPart<Operations.objectUploadUpdate.Input.Body.multipartFormPayload.cacheControlPayload>)
+                    /// - Remark: Generated from `#/paths/object/{bucketName}/{wildcard}/PUT/requestBody/multipartForm/metadata`.
+                    internal struct metadataPayload: Sendable, Hashable {
+                        internal var body: OpenAPIRuntime.HTTPBody
+                        /// Creates a new `metadataPayload`.
+                        ///
+                        /// - Parameters:
+                        ///   - body:
+                        internal init(body: OpenAPIRuntime.HTTPBody) {
+                            self.body = body
+                        }
+                    }
+                    case metadata(OpenAPIRuntime.MultipartPart<Operations.objectUploadUpdate.Input.Body.multipartFormPayload.metadataPayload>)
+                    /// - Remark: Generated from `#/paths/object/{bucketName}/{wildcard}/PUT/requestBody/multipartForm/file`.
+                    internal struct filePayload: Sendable, Hashable {
+                        internal var body: OpenAPIRuntime.HTTPBody
+                        /// Creates a new `filePayload`.
+                        ///
+                        /// - Parameters:
+                        ///   - body:
+                        internal init(body: OpenAPIRuntime.HTTPBody) {
+                            self.body = body
+                        }
+                    }
+                    case file(OpenAPIRuntime.MultipartPart<Operations.objectUploadUpdate.Input.Body.multipartFormPayload.filePayload>)
+                    case undocumented(OpenAPIRuntime.MultipartRawPart)
+                }
+                /// - Remark: Generated from `#/paths/object/{bucketName}/{wildcard}/PUT/requestBody/content/multipart\/form-data`.
+                case multipartForm(OpenAPIRuntime.MultipartBody<Operations.objectUploadUpdate.Input.Body.multipartFormPayload>)
+            }
+            internal var body: Operations.objectUploadUpdate.Input.Body
             /// Creates a new `Input`.
             ///
             /// - Parameters:
             ///   - path:
             ///   - headers:
+            ///   - body:
             internal init(
                 path: Operations.objectUploadUpdate.Input.Path,
-                headers: Operations.objectUploadUpdate.Input.Headers = .init()
+                headers: Operations.objectUploadUpdate.Input.Headers = .init(),
+                body: Operations.objectUploadUpdate.Input.Body
             ) {
                 self.path = path
                 self.headers = headers
+                self.body = body
             }
         }
         internal enum Output: Sendable, Hashable {
@@ -7679,20 +7783,69 @@ internal enum Operations {
                 }
             }
             internal var headers: Operations.objectUploadSigned.Input.Headers
+            /// - Remark: Generated from `#/paths/object/upload/sign/{bucketName}/{wildcard}/PUT/requestBody`.
+            internal enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/object/upload/sign/{bucketName}/{wildcard}/PUT/requestBody/multipartForm`.
+                internal enum multipartFormPayload: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/object/upload/sign/{bucketName}/{wildcard}/PUT/requestBody/multipartForm/cacheControl`.
+                    internal struct cacheControlPayload: Sendable, Hashable {
+                        internal var body: OpenAPIRuntime.HTTPBody
+                        /// Creates a new `cacheControlPayload`.
+                        ///
+                        /// - Parameters:
+                        ///   - body:
+                        internal init(body: OpenAPIRuntime.HTTPBody) {
+                            self.body = body
+                        }
+                    }
+                    case cacheControl(OpenAPIRuntime.MultipartPart<Operations.objectUploadSigned.Input.Body.multipartFormPayload.cacheControlPayload>)
+                    /// - Remark: Generated from `#/paths/object/upload/sign/{bucketName}/{wildcard}/PUT/requestBody/multipartForm/metadata`.
+                    internal struct metadataPayload: Sendable, Hashable {
+                        internal var body: OpenAPIRuntime.HTTPBody
+                        /// Creates a new `metadataPayload`.
+                        ///
+                        /// - Parameters:
+                        ///   - body:
+                        internal init(body: OpenAPIRuntime.HTTPBody) {
+                            self.body = body
+                        }
+                    }
+                    case metadata(OpenAPIRuntime.MultipartPart<Operations.objectUploadSigned.Input.Body.multipartFormPayload.metadataPayload>)
+                    /// - Remark: Generated from `#/paths/object/upload/sign/{bucketName}/{wildcard}/PUT/requestBody/multipartForm/file`.
+                    internal struct filePayload: Sendable, Hashable {
+                        internal var body: OpenAPIRuntime.HTTPBody
+                        /// Creates a new `filePayload`.
+                        ///
+                        /// - Parameters:
+                        ///   - body:
+                        internal init(body: OpenAPIRuntime.HTTPBody) {
+                            self.body = body
+                        }
+                    }
+                    case file(OpenAPIRuntime.MultipartPart<Operations.objectUploadSigned.Input.Body.multipartFormPayload.filePayload>)
+                    case undocumented(OpenAPIRuntime.MultipartRawPart)
+                }
+                /// - Remark: Generated from `#/paths/object/upload/sign/{bucketName}/{wildcard}/PUT/requestBody/content/multipart\/form-data`.
+                case multipartForm(OpenAPIRuntime.MultipartBody<Operations.objectUploadSigned.Input.Body.multipartFormPayload>)
+            }
+            internal var body: Operations.objectUploadSigned.Input.Body
             /// Creates a new `Input`.
             ///
             /// - Parameters:
             ///   - path:
             ///   - query:
             ///   - headers:
+            ///   - body:
             internal init(
                 path: Operations.objectUploadSigned.Input.Path,
                 query: Operations.objectUploadSigned.Input.Query,
-                headers: Operations.objectUploadSigned.Input.Headers = .init()
+                headers: Operations.objectUploadSigned.Input.Headers = .init(),
+                body: Operations.objectUploadSigned.Input.Body
             ) {
                 self.path = path
                 self.query = query
                 self.headers = headers
+                self.body = body
             }
         }
         internal enum Output: Sendable, Hashable {

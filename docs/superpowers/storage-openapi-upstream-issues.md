@@ -50,3 +50,28 @@ while adopting swift-openapi-generator in this repo. File these upstream once co
   reported/fixed upstream — the real fix upstream is likely just deleting that same redundant
   `anyOf` from wherever `updateBucket.ts`'s route schema declares it (probably a documentation-only
   addition since `minProperties: 1` already carries the constraint).
+
+- **`objectUpload`/`objectUploadUpdate`/`objectUploadSigned` have no declared request body at
+  all.** Fastify's multipart handling isn't schema-validated the same way as JSON bodies, so the
+  storage service's OpenAPI export never documented these operations' `multipart/form-data`
+  request shape (`cacheControl`, optional `metadata`, and the file itself — currently sent with an
+  **empty** multipart field name in this SDK's hand-written client, which needed a real field name
+  to generate a usable typed member). Patched in the vendored copy at
+  `Sources/Storage/OpenAPI/openapi.json` by adding a `multipart/form-data` requestBody with
+  `cacheControl`/`metadata`/`file` fields to all three operations — see this repo's git history
+  for the commit that landed it — not yet reported/fixed upstream. The real fix upstream would
+  need to name the file field server-side too (or confirm the server doesn't actually key off the
+  field name, in which case this SDK's request is already safe to send named without needing a
+  server-side change first — verify this against server behavior before relying on it for anything
+  beyond documentation).
+
+  Side finding while regenerating with this schema: swift-openapi-generator's typed multipart API
+  hardcodes `Content-Type: application/octet-stream` for a `format: binary` field with no way to
+  override it per call (confirmed in the generated `Client.swift`'s `objectUpload` serializer —
+  the `.file` case always calls `converter.setRequiredRequestBodyAsBinary(..., contentType:
+  "application/octet-stream")`). This SDK needs to send the file's real MIME type (e.g.
+  `image/png`), so the file part must be built via the generator's
+  `.undocumented(OpenAPIRuntime.MultipartRawPart(headerFields:body:))` escape hatch instead of the
+  typed `.file(...)` case, setting `Content-Type`/`Content-Disposition` explicitly. Not an
+  upstream spec issue (this is a swift-openapi-generator limitation, not a supabase/storage spec
+  bug) — noted here only because it directly shapes how this repo consumes the schema above.
