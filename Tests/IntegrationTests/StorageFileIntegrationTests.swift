@@ -5,15 +5,17 @@
 //  Created by Guilherme Souza on 07/05/24.
 //
 
+import Foundation
 import InlineSnapshotTesting
 import Storage
-import XCTest
+import Testing
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
 #endif
 
-final class StorageFileIntegrationTests: XCTestCase {
+@Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil))
+final class StorageFileIntegrationTests {
   let storage = SupabaseStorageClient(
     configuration: StorageClientConfiguration(
       url: URL(string: "\(DotEnv.SUPABASE_URL)/storage/v1")!,
@@ -28,95 +30,100 @@ final class StorageFileIntegrationTests: XCTestCase {
   var file = Data()
   var uploadPath = ""
 
-  override func setUp() async throws {
-    try await super.setUp()
-
-    try XCTSkipUnless(
-      ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil,
-      "INTEGRATION_TESTS not defined."
-    )
-
+  init() async throws {
     bucketName = try await newBucket()
     file = try Data(contentsOf: uploadFileURL("sadcat.jpg"))
     uploadPath = "testpath/file-\(UUID().uuidString).jpg"
   }
 
-  override func tearDown() async throws {
-    try? await storage.emptyBucket(bucketName)
-    try? await storage.deleteBucket(bucketName)
-
-    try await super.tearDown()
+  // Async cleanup can outlive the test if the process exits immediately after — acceptable for
+  // local dev/CI cleanup, not correctness-critical.
+  deinit {
+    let storage = storage
+    let bucketName = bucketName
+    Task {
+      try? await storage.emptyBucket(bucketName)
+      try? await storage.deleteBucket(bucketName)
+    }
   }
 
-  func testGetPublicURL() throws {
+  @Test
+  func getPublicURL() throws {
     let publicURL = try storage.from(bucketName).getPublicURL(path: uploadPath)
-    XCTAssertEqual(
-      publicURL.absoluteString,
-      "\(DotEnv.SUPABASE_URL)/storage/v1/object/public/\(bucketName)/\(uploadPath)"
+    #expect(
+      publicURL.absoluteString
+        == "\(DotEnv.SUPABASE_URL)/storage/v1/object/public/\(bucketName)/\(uploadPath)"
     )
   }
 
-  func testGetPublicURLWithDownloadQueryString() throws {
+  @Test
+  func getPublicURLWithDownloadQueryString() throws {
     let publicURL = try storage.from(bucketName).getPublicURL(path: uploadPath, download: true)
-    XCTAssertEqual(
-      publicURL.absoluteString,
-      "\(DotEnv.SUPABASE_URL)/storage/v1/object/public/\(bucketName)/\(uploadPath)?download="
+    #expect(
+      publicURL.absoluteString
+        == "\(DotEnv.SUPABASE_URL)/storage/v1/object/public/\(bucketName)/\(uploadPath)?download="
     )
   }
 
-  func testGetPublicURLWithCustomDownload() throws {
+  @Test
+  func getPublicURLWithCustomDownload() throws {
     let publicURL = try storage.from(bucketName).getPublicURL(
       path: uploadPath, download: "test.jpg")
-    XCTAssertEqual(
-      publicURL.absoluteString,
-      "\(DotEnv.SUPABASE_URL)/storage/v1/object/public/\(bucketName)/\(uploadPath)?download=test.jpg"
+    #expect(
+      publicURL.absoluteString
+        == "\(DotEnv.SUPABASE_URL)/storage/v1/object/public/\(bucketName)/\(uploadPath)?download=test.jpg"
     )
   }
 
-  func testSignURL() async throws {
+  @Test
+  func signURL() async throws {
     _ = try await storage.from(bucketName).upload(uploadPath, data: file)
 
     let url = try await storage.from(bucketName).createSignedURL(path: uploadPath, expiresIn: 2000)
-    XCTAssertTrue(
+    #expect(
       url.absoluteString.contains(
         "\(DotEnv.SUPABASE_URL)/storage/v1/object/sign/\(bucketName)/\(uploadPath)")
     )
   }
 
-  func testSignURL_withDownloadQueryString() async throws {
+  @Test
+  func signURL_withDownloadQueryString() async throws {
     _ = try await storage.from(bucketName).upload(uploadPath, data: file)
 
     let url = try await storage.from(bucketName).createSignedURL(
       path: uploadPath, expiresIn: 2000, download: true)
-    XCTAssertTrue(
+    #expect(
       url.absoluteString.contains(
         "\(DotEnv.SUPABASE_URL)/storage/v1/object/sign/\(bucketName)/\(uploadPath)")
     )
-    XCTAssertTrue(url.absoluteString.contains("&download="))
+    #expect(url.absoluteString.contains("&download="))
   }
 
-  func testSignURL_withCustomFilenameForDownload() async throws {
+  @Test
+  func signURL_withCustomFilenameForDownload() async throws {
     _ = try await storage.from(bucketName).upload(uploadPath, data: file)
 
     let url = try await storage.from(bucketName).createSignedURL(
       path: uploadPath, expiresIn: 2000, download: "test.jpg")
-    XCTAssertTrue(
+    #expect(
       url.absoluteString.contains(
         "\(DotEnv.SUPABASE_URL)/storage/v1/object/sign/\(bucketName)/\(uploadPath)")
     )
-    XCTAssertTrue(url.absoluteString.contains("&download=test.jpg"))
+    #expect(url.absoluteString.contains("&download=test.jpg"))
   }
 
-  func testUploadAndUpdateFile() async throws {
+  @Test
+  func uploadAndUpdateFile() async throws {
     let file2 = try Data(contentsOf: uploadFileURL("file-2.txt"))
 
     try await storage.from(bucketName).upload(uploadPath, data: file)
 
     let res = try await storage.from(bucketName).update(uploadPath, data: file2)
-    XCTAssertEqual(res.path, uploadPath)
+    #expect(res.path == uploadPath)
   }
 
-  func testUploadFileWithinFileSizeLimit() async throws {
+  @Test
+  func uploadFileWithinFileSizeLimit() async throws {
     bucketName = try await newBucket(
       prefix: "with-limit",
       options: BucketOptions(isPublic: true, fileSizeLimit: .megabytes(1))
@@ -125,7 +132,8 @@ final class StorageFileIntegrationTests: XCTestCase {
     try await storage.from(bucketName).upload(uploadPath, data: file)
   }
 
-  func testUploadFileThatExceedFileSizeLimit() async throws {
+  @Test
+  func uploadFileThatExceedFileSizeLimit() async throws {
     bucketName = try await newBucket(
       prefix: "with-limit",
       options: BucketOptions(isPublic: true, fileSizeLimit: .kilobytes(1))
@@ -133,7 +141,7 @@ final class StorageFileIntegrationTests: XCTestCase {
 
     do {
       try await storage.from(bucketName).upload(uploadPath, data: file)
-      XCTFail("Unexpected success")
+      Issue.record("Unexpected success")
     } catch {
       assertInlineSnapshot(of: error, as: .dump) {
         """
@@ -149,7 +157,8 @@ final class StorageFileIntegrationTests: XCTestCase {
     }
   }
 
-  func testUploadFileWithValidMimeType() async throws {
+  @Test
+  func uploadFileWithValidMimeType() async throws {
     bucketName = try await newBucket(
       prefix: "with-mimetype",
       options: BucketOptions(public: true, allowedMimeTypes: ["image/jpeg"])
@@ -164,7 +173,8 @@ final class StorageFileIntegrationTests: XCTestCase {
     )
   }
 
-  func testUploadFileWithInvalidMimeType() async throws {
+  @Test
+  func uploadFileWithInvalidMimeType() async throws {
     bucketName = try await newBucket(
       prefix: "with-mimetype",
       options: BucketOptions(public: true, allowedMimeTypes: ["image/png"])
@@ -178,7 +188,7 @@ final class StorageFileIntegrationTests: XCTestCase {
           contentType: "image/jpeg"
         )
       )
-      XCTFail("Unexpected success")
+      Issue.record("Unexpected success")
     } catch {
       assertInlineSnapshot(of: error, as: .dump) {
         """
@@ -194,42 +204,46 @@ final class StorageFileIntegrationTests: XCTestCase {
     }
   }
 
-  func testSignedURLForUpload() async throws {
+  @Test
+  func signedURLForUpload() async throws {
     let res = try await storage.from(bucketName).createSignedUploadURL(path: uploadPath)
-    XCTAssertEqual(res.path, uploadPath)
-    XCTAssertTrue(
+    #expect(res.path == uploadPath)
+    #expect(
       res.signedURL.absoluteString.contains(
         "\(DotEnv.SUPABASE_URL)/storage/v1/object/upload/sign/\(bucketName)/\(uploadPath)"
       )
     )
   }
 
-  func testCanUploadWithSignedURLForUpload() async throws {
+  @Test
+  func canUploadWithSignedURLForUpload() async throws {
     let res = try await storage.from(bucketName).createSignedUploadURL(path: uploadPath)
 
     let uploadRes = try await storage.from(bucketName).uploadToSignedURL(
       res.path, token: res.token, data: file)
-    XCTAssertEqual(uploadRes.path, uploadPath)
+    #expect(uploadRes.path == uploadPath)
   }
 
-  func testCanUploadOverwritingFilesWithSignedURL() async throws {
+  @Test
+  func canUploadOverwritingFilesWithSignedURL() async throws {
     try await storage.from(bucketName).upload(uploadPath, data: file)
 
     let res = try await storage.from(bucketName).createSignedUploadURL(
       path: uploadPath, options: CreateSignedUploadURLOptions(upsert: true))
     let uploadRes = try await storage.from(bucketName).uploadToSignedURL(
       res.path, token: res.token, data: file)
-    XCTAssertEqual(uploadRes.path, uploadPath)
+    #expect(uploadRes.path == uploadPath)
   }
 
-  func testCannotUploadToSignedURLTwice() async throws {
+  @Test
+  func cannotUploadToSignedURLTwice() async throws {
     let res = try await storage.from(bucketName).createSignedUploadURL(path: uploadPath)
 
     try await storage.from(bucketName).uploadToSignedURL(res.path, token: res.token, data: file)
 
     do {
       try await storage.from(bucketName).uploadToSignedURL(res.path, token: res.token, data: file)
-      XCTFail("Unexpected success")
+      Issue.record("Unexpected success")
     } catch {
       assertInlineSnapshot(of: error, as: .dump) {
         """
@@ -245,22 +259,25 @@ final class StorageFileIntegrationTests: XCTestCase {
     }
   }
 
-  func testListObjects() async throws {
+  @Test
+  func listObjects() async throws {
     try await storage.from(bucketName).upload(uploadPath, data: file)
     let res = try await storage.from(bucketName).list(path: "testpath")
 
-    XCTAssertEqual(res.count, 1)
-    XCTAssertEqual(res[0].name, uploadPath.replacingOccurrences(of: "testpath/", with: ""))
+    #expect(res.count == 1)
+    #expect(res[0].name == uploadPath.replacingOccurrences(of: "testpath/", with: ""))
   }
 
-  func testMoveObjectToDifferentPath() async throws {
+  @Test
+  func moveObjectToDifferentPath() async throws {
     let newPath = "testpath/file-moved-\(UUID().uuidString).txt"
     try await storage.from(bucketName).upload(uploadPath, data: file)
 
     try await storage.from(bucketName).move(from: uploadPath, to: newPath)
   }
 
-  func testMoveObjectsAcrossBucketsInDifferentPath() async throws {
+  @Test
+  func moveObjectsAcrossBucketsInDifferentPath() async throws {
     let newBucketName = "bucket-move"
     try await findOrCreateBucket(name: newBucketName)
 
@@ -276,14 +293,16 @@ final class StorageFileIntegrationTests: XCTestCase {
     _ = try await storage.from(newBucketName).download(path: newPath)
   }
 
-  func testCopyObjectToDifferentPath() async throws {
+  @Test
+  func copyObjectToDifferentPath() async throws {
     let newPath = "testpath/file-moved-\(UUID().uuidString).txt"
     try await storage.from(bucketName).upload(uploadPath, data: file)
 
     try await storage.from(bucketName).copy(from: uploadPath, to: newPath)
   }
 
-  func testCopyObjectsAcrossBucketsInDifferentPath() async throws {
+  @Test
+  func copyObjectsAcrossBucketsInDifferentPath() async throws {
     let newBucketName = "bucket-copy"
     try await findOrCreateBucket(name: newBucketName)
 
@@ -299,23 +318,26 @@ final class StorageFileIntegrationTests: XCTestCase {
     _ = try await storage.from(newBucketName).download(path: newPath)
   }
 
-  func testDownloadsAnObject() async throws {
+  @Test
+  func downloadsAnObject() async throws {
     try await storage.from(bucketName).upload(uploadPath, data: file)
 
     let res = try await storage.from(bucketName).download(path: uploadPath)
-    XCTAssertGreaterThan(res.count, 0)
+    #expect(res.count > 0)
   }
 
-  func testRemovesAnObject() async throws {
+  @Test
+  func removesAnObject() async throws {
     try await storage.from(bucketName).upload(uploadPath, data: file)
 
     let res = try await storage.from(bucketName).remove(paths: [uploadPath])
-    XCTAssertEqual(res.count, 1)
-    XCTAssertEqual(res[0].bucketId, bucketName)
-    XCTAssertEqual(res[0].name, uploadPath)
+    #expect(res.count == 1)
+    #expect(res[0].bucketId == bucketName)
+    #expect(res[0].name == uploadPath)
   }
 
-  func testGetPublishURLWithTransformationOptions() throws {
+  @Test
+  func getPublishURLWithTransformationOptions() throws {
     let res = try storage.from(bucketName).getPublicURL(
       path: uploadPath,
       options: TransformOptions(
@@ -325,13 +347,14 @@ final class StorageFileIntegrationTests: XCTestCase {
       )
     )
 
-    XCTAssertEqual(
-      res.absoluteString,
-      "\(DotEnv.SUPABASE_URL)/storage/v1/render/image/public/\(bucketName)/\(uploadPath)?width=700&height=300&quality=70"
+    #expect(
+      res.absoluteString
+        == "\(DotEnv.SUPABASE_URL)/storage/v1/render/image/public/\(bucketName)/\(uploadPath)?width=700&height=300&quality=70"
     )
   }
 
-  func testCreateAndLoadEmptyFolder() async throws {
+  @Test
+  func createAndLoadEmptyFolder() async throws {
     let path = "empty-folder/.placeholder"
     try await storage.from(bucketName).upload(path, data: Data())
 
@@ -347,7 +370,8 @@ final class StorageFileIntegrationTests: XCTestCase {
     }
   }
 
-  func testInfo() async throws {
+  @Test
+  func info() async throws {
     try await storage.from(bucketName).upload(
       uploadPath,
       data: file,
@@ -357,21 +381,23 @@ final class StorageFileIntegrationTests: XCTestCase {
     )
 
     let info = try await storage.from(bucketName).info(path: uploadPath)
-    XCTAssertEqual(info.name, uploadPath)
-    XCTAssertEqual(info.metadata, ["value": 42])
+    #expect(info.name == uploadPath)
+    #expect(info.metadata == ["value": 42])
   }
 
-  func testExists() async throws {
+  @Test
+  func exists() async throws {
     try await storage.from(bucketName).upload(uploadPath, data: file)
 
     var exists = try await storage.from(bucketName).exists(path: uploadPath)
-    XCTAssertTrue(exists)
+    #expect(exists)
 
     exists = try await storage.from(bucketName).exists(path: "invalid.jpg")
-    XCTAssertFalse(exists)
+    #expect(!exists)
   }
 
-  func testUploadWithCacheControl() async throws {
+  @Test
+  func uploadWithCacheControl() async throws {
     try await storage.from(bucketName).upload(
       uploadPath,
       data: file,
@@ -383,19 +409,20 @@ final class StorageFileIntegrationTests: XCTestCase {
     let publicURL = try storage.from(bucketName).getPublicURL(path: uploadPath)
 
     let (_, response) = try await URLSession.shared.data(from: publicURL)
-    let httpResponse = try XCTUnwrap(response as? HTTPURLResponse)
-    let cacheControl = try XCTUnwrap(httpResponse.value(forHTTPHeaderField: "cache-control"))
+    let httpResponse = try #require(response as? HTTPURLResponse)
+    let cacheControl = try #require(httpResponse.value(forHTTPHeaderField: "cache-control"))
 
-    XCTAssertEqual(cacheControl, "max-age=14400")
+    #expect(cacheControl == "max-age=14400")
   }
 
-  func testUploadWithFileURL() async throws {
+  @Test
+  func uploadWithFileURL() async throws {
     try await storage.from(bucketName)
       .upload(uploadPath, fileURL: uploadFileURL("sadcat.jpg"))
 
     let uploadedFile = try await storage.from(bucketName).download(path: uploadPath)
 
-    XCTAssertEqual(uploadedFile, file)
+    #expect(uploadedFile == file)
   }
 
   private func newBucket(
