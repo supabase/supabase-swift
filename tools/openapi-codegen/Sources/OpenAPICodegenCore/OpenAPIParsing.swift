@@ -106,4 +106,70 @@ enum OpenAPIParsing {
       isOptional: !parameter.required || schema.nullable
     )
   }
+
+  // MARK: - Schema references in content bodies
+
+  static func resolveSchema(
+    _ either: Either<JSONReference<JSONSchema>, JSONSchema>,
+    location: String
+  ) throws -> IRType {
+    switch either {
+    case .a(let reference):
+      guard let name = reference.name else {
+        throw UnsupportedSpecConstruct(
+          location: location, reason: "external schema reference without a resolvable name")
+      }
+      return .schemaRef(name)
+    case .b(let schema):
+      return try parseType(schema, location: location)
+    }
+  }
+
+  // MARK: - Request bodies
+
+  static func parseRequestBody(
+    _ either: Either<JSONReference<OpenAPI.Request>, OpenAPI.Request>,
+    location: String
+  ) throws -> IRRequestBody {
+    guard let request = either.requestValue else {
+      throw UnsupportedSpecConstruct(location: location, reason: "external request body reference")
+    }
+    if let jsonContent = request.content.first(where: {
+      $0.key.typeAndSubtype == "application/json"
+    })?.value {
+      guard let schema = jsonContent.schema else {
+        throw UnsupportedSpecConstruct(
+          location: location, reason: "JSON request body without a schema")
+      }
+      return .json(try resolveSchema(schema, location: location))
+    }
+    if let multipartContent = request.content.first(where: {
+      $0.key.typeAndSubtype == "multipart/form-data"
+    })?.value {
+      guard let schemaEither = multipartContent.schema, case .b(let objectSchema) = schemaEither,
+        case .object(_, let objectContext) = objectSchema.value
+      else {
+        throw UnsupportedSpecConstruct(
+          location: location, reason: "multipart request body must be an inline object schema")
+      }
+      var fields: [IRMultipartField] = []
+      for (fieldName, fieldSchema) in objectContext.properties {
+        var isFile = false
+        if case .string(let core, _) = fieldSchema.value, core.format == .binary {
+          isFile = true
+        }
+        fields.append(
+          IRMultipartField(
+            name: fieldName,
+            type: try parseType(fieldSchema, location: "\(location).\(fieldName)"),
+            isFile: isFile
+          )
+        )
+      }
+      return .multipart(fields: fields)
+    }
+    let contentTypes = request.content.keys.map(\.rawValue).joined(separator: ", ")
+    throw UnsupportedSpecConstruct(
+      location: location, reason: "unsupported request body content type(s): \(contentTypes)")
+  }
 }
