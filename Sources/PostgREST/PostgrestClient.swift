@@ -286,7 +286,7 @@ public final class PostgrestClient: Sendable {
     if head || get {
       method = head ? .head : .get
 
-      guard let json = try JSONSerialization.jsonObject(with: bodyData) as? [String: Any] else {
+      guard case .object(let json) = try AnyJSON.decoder.decode(AnyJSON.self, from: bodyData) else {
         throw PostgrestError(
           message: "Params should be a key-value type when using `GET` or `HEAD` options."
         )
@@ -363,35 +363,30 @@ public final class PostgrestClient: Sendable {
     return PostgrestClient(configuration: configuration)
   }
 
-  private func queryValue(for value: Any) -> String {
+  private func queryValue(for value: AnyJSON) -> String {
     switch value {
-    case let array as [Any]:
-      return cleanFilterArray(array)
-    case is NSNull:
+    case .null:
       return "null"
-    case let number as NSNumber:
-      if number === kCFBooleanTrue {
-        return "true"
-      }
-      if number === kCFBooleanFalse {
-        return "false"
-      }
-      return number.stringValue
-    case let string as String:
+    case .bool(let bool):
+      return bool ? "true" : "false"
+    case .integer(let integer):
+      return String(integer)
+    case .double(let double):
+      return String(double)
+    case .string(let string):
       return string
-    default:
-      if let data = try? JSONSerialization.data(
-        withJSONObject: value, options: [.sortedKeys, .withoutEscapingSlashes]),
+    case .array(let array):
+      return "{\(array.map(queryValue(for:)).joined(separator: ","))}"
+    case .object:
+      let encoder = JSONEncoder()
+      encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+      if let data = try? encoder.encode(value),
         let json = String(data: data, encoding: .utf8)
       {
         return json
       }
-      return String(describing: value)
+      return ""
     }
-  }
-
-  private func cleanFilterArray(_ filter: [Any]) -> String {
-    "{\(filter.map { String(describing: $0) }.joined(separator: ","))}"
   }
 }
 
