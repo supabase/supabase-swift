@@ -18,6 +18,17 @@ public struct IRSchema: Equatable {
 public enum IRSchemaKind: Equatable {
   case object(properties: [IRProperty])
   case stringEnum(cases: [String])
+  case union(cases: [IRUnionCase])
+}
+
+public struct IRUnionCase: Equatable {
+  public var name: String
+  public var type: IRType
+
+  public init(name: String, type: IRType) {
+    self.name = name
+    self.type = type
+  }
 }
 
 public struct IRProperty: Equatable {

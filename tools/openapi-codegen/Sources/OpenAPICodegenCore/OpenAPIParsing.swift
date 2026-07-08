@@ -71,6 +71,14 @@ public enum OpenAPIParsing {
         continue
       }
 
+      if let (type, hoistedSchema) = try hoistUnionIfPresent(
+        name: "\(name)_\(propertyName)", schema: propertySchema, location: propertyLocation)
+      {
+        hoisted.append(hoistedSchema)
+        properties.append(IRProperty(name: propertyName, type: type, isOptional: isOptional))
+        continue
+      }
+
       properties.append(
         IRProperty(
           name: propertyName,
@@ -80,6 +88,43 @@ public enum OpenAPIParsing {
       )
     }
     return (properties, hoisted)
+  }
+
+  /// If `schema` is a `oneOf`/`anyOf` whose branches are all simple (scalar,
+  /// array-of-simple, `$ref`, or freeform object — never a nested union or an
+  /// inline object with properties), hoists it into a named tagged-union
+  /// schema. Returns `nil` if `schema` isn't a union at all, so callers fall
+  /// through to their existing logic. Propagates any error from parsing an
+  /// unsupported branch rather than silently dropping it.
+  private static func hoistUnionIfPresent(
+    name: String,
+    schema: JSONSchema,
+    location: String
+  ) throws -> (type: IRType, hoisted: IRSchema)? {
+    let branches: [JSONSchema]
+    switch schema.value {
+    case .one(let schemas, _): branches = schemas
+    case .any(let schemas, _): branches = schemas
+    default: return nil
+    }
+    var cases: [IRUnionCase] = []
+    for (index, branch) in branches.enumerated() {
+      let branchType = try parseType(branch, location: "\(location)[\(index)]")
+      cases.append(IRUnionCase(name: unionCaseName(for: branchType), type: branchType))
+    }
+    return (.schemaRef(name), IRSchema(name: name, kind: .union(cases: cases)))
+  }
+
+  private static func unionCaseName(for type: IRType) -> String {
+    switch type {
+    case .string: return "string"
+    case .integer: return "integer"
+    case .number: return "number"
+    case .boolean: return "boolean"
+    case .array: return "array"
+    case .freeform: return "freeform"
+    case .schemaRef(let name): return SwiftNames.propertyName(name)
+    }
   }
 
   static func parseType(_ schema: JSONSchema, location: String) throws -> IRType {
@@ -150,6 +195,17 @@ public enum OpenAPIParsing {
       )
       return (irParameter, IRSchema(name: hoistedName, kind: .stringEnum(cases: cases)))
     }
+    if let (type, hoistedSchema) = try hoistUnionIfPresent(
+      name: "\(location)_\(parameter.name)", schema: schema, location: parameterLocation)
+    {
+      let irParameter = IRParameter(
+        name: parameter.name,
+        location: irLocation,
+        type: type,
+        isOptional: !parameter.required || schema.nullable
+      )
+      return (irParameter, hoistedSchema)
+    }
     let irParameter = IRParameter(
       name: parameter.name,
       location: irLocation,
@@ -203,6 +259,12 @@ public enum OpenAPIParsing {
         let hoisted =
           [IRSchema(name: hoistedName, kind: .object(properties: properties))] + nestedHoisted
         return (.json(.schemaRef(hoistedName)), hoisted)
+      }
+      if case .b(let inlineSchema) = schemaEither,
+        let (type, hoistedSchema) = try hoistUnionIfPresent(
+          name: "\(location)_requestBody", schema: inlineSchema, location: location)
+      {
+        return (.json(type), [hoistedSchema])
       }
       return (.json(try resolveSchema(schemaEither, location: location)), [])
     }
@@ -281,6 +343,12 @@ public enum OpenAPIParsing {
         let hoisted =
           [IRSchema(name: hoistedName, kind: .object(properties: properties))] + nestedHoisted
         return (.json(.schemaRef(hoistedName)), hoisted)
+      }
+      if case .b(let inlineSchema) = schemaEither,
+        let (type, hoistedSchema) = try hoistUnionIfPresent(
+          name: "\(operationId)_response\(statusCode)", schema: inlineSchema, location: location)
+      {
+        return (.json(type), [hoistedSchema])
       }
       return (.json(try resolveSchema(schemaEither, location: location)), [])
     }
