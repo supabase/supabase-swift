@@ -41,6 +41,14 @@ public class StorageApi: @unchecked Sendable {
   private let mutableState: LockIsolated<MutableState>
   private let http: any HTTPClientType
 
+  /// Extra headers for a single OpenAPI-routed call, e.g. `x-upsert`/`Duplex`/`options.headers`
+  /// for `upload`/`update`. The generated `Client`'s per-operation `Input.headers` only exposes
+  /// `accept`, so there's no way to pass one-off headers through its typed API; this task-local is
+  /// read by the transport's `execute` closure and merged on top of the per-instance headers for
+  /// the duration of the call. Scope it tightly with `withValue` around a single request.
+  @TaskLocal
+  static var extraHeadersForCurrentRequest: HTTPFields = [:]
+
   /// Creates a ``StorageApi`` with the given configuration.
   ///
   /// Subclasses call this initializer via `super.init(configuration:)`.
@@ -91,11 +99,22 @@ public class StorageApi: @unchecked Sendable {
 
     let mutableStateRef = mutableState
     let httpRef = http
+
+    var openAPIConfiguration = OpenAPIRuntime.Configuration(jsonEncodingOptions: [.sortedKeys])
+    #if DEBUG
+      if let boundary = testingBoundary.value {
+        openAPIConfiguration.multipartBoundaryGenerator = ConstantMultipartBoundaryGenerator(
+          boundary: boundary)
+      }
+    #endif
+
     openAPIClient = Client(
       serverURL: configuration.url,
-      configuration: OpenAPIRuntime.Configuration(jsonEncodingOptions: [.sortedKeys]),
+      configuration: openAPIConfiguration,
       transport: StorageOpenAPITransport(execute: { request in
-        try await Self.executeRequestWithoutStatusCheck(
+        var request = request
+        request.headers = request.headers.merging(with: Self.extraHeadersForCurrentRequest)
+        return try await Self.executeRequestWithoutStatusCheck(
           request, headers: mutableStateRef.headers, http: httpRef)
       })
     )
