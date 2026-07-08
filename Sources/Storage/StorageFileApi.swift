@@ -1001,6 +1001,9 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     let options = options ?? defaultFileOptions
 
     var extraHeaders = options.headers.map { HTTPFields($0) } ?? HTTPFields()
+    if extraHeaders[.cacheControl] == nil {
+      extraHeaders[.cacheControl] = "max-age=\(options.cacheControl)"
+    }
     extraHeaders[.xUpsert] = "\(options.upsert)"
     extraHeaders[.duplex] = options.duplex
 

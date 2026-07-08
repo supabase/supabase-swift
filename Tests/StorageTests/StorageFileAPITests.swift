@@ -1,3 +1,4 @@
+import ConcurrencyExtras
 import InlineSnapshotTesting
 import Mocker
 import TestHelpers
@@ -571,6 +572,73 @@ final class StorageFileAPITests: XCTestCase {
     }
   }
 
+  func testUploadFromData() async throws {
+    Mock(
+      url: url.appendingPathComponent("object/bucket/file.txt"),
+      statusCode: 200,
+      data: [
+        .post: Data(
+          """
+          {
+            "Id": "123",
+            "Key": "bucket/file.txt"
+          }
+          """.utf8
+        )
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
+      	--header "Cache-Control: max-age=3600" \
+      	--header "Content-Length: 507" \
+      	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.e56f43407f772505" \
+      	--header "X-Client-Info: storage-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	--header "x-upsert: false" \
+      	--data "--alamofire.boundary.e56f43407f772505\#r
+      content-disposition: form-data; name=\"cacheControl\"\#r
+      content-length: 4\#r
+      content-type: text/plain\#r
+      \#r
+      3600\#r
+      --alamofire.boundary.e56f43407f772505\#r
+      content-disposition: form-data; name=\"metadata\"\#r
+      content-length: 15\#r
+      content-type: text/plain\#r
+      \#r
+      {\"mode\":\"test\"}\#r
+      --alamofire.boundary.e56f43407f772505\#r
+      content-disposition: form-data; name=\"file\"; filename=\"file.txt\"\#r
+      content-length: 11\#r
+      content-type: text/plain\#r
+      \#r
+      hello world\#r
+      --alamofire.boundary.e56f43407f772505--\#r
+      \#r
+      " \
+      	"http://localhost:54321/storage/v1/object/bucket/file.txt"
+      """#
+    }
+    .register()
+
+    let response = try await storage.from("bucket")
+      .upload(
+        "file.txt",
+        data: Data("hello world".utf8),
+        options: FileOptions(
+          metadata: [
+            "mode": "test"
+          ]
+        )
+      )
+
+    XCTAssertEqual(response.id, "123")
+    XCTAssertEqual(response.path, "file.txt")
+    XCTAssertEqual(response.fullPath, "bucket/file.txt")
+  }
+
   func testUpdateFromData() async throws {
     Mock(
       url: url.appendingPathComponent("object/bucket/file.txt"),
@@ -1024,6 +1092,7 @@ final class StorageFileAPITests: XCTestCase {
       #"""
       curl \
       	--request PUT \
+      	--header "Cache-Control: max-age=3600" \
       	--header "Content-Length: 368" \
       	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.e56f43407f772505" \
       	--header "X-Client-Info: storage-swift/0.0.0" \
@@ -1074,6 +1143,7 @@ final class StorageFileAPITests: XCTestCase {
       #"""
       curl \
       	--request PUT \
+      	--header "Cache-Control: max-age=3600" \
       	--header "Content-Length: 356" \
       	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.e56f43407f772505" \
       	--header "X-Client-Info: storage-swift/0.0.0" \
@@ -1206,5 +1276,48 @@ final class StorageFileAPITests: XCTestCase {
       .download(path: "file.txt", cacheNonce: "abc123")
 
     XCTAssertEqual(data, Data("hello world".utf8))
+  }
+
+  /// Verifies that `StorageApi.extraHeadersForCurrentRequest` (a `TaskLocal` used to thread
+  /// per-call headers like `options.headers` through to the OpenAPI transport for multipart
+  /// uploads) doesn't leak between concurrent calls on the same `StorageFileApi` instance.
+  func testConcurrentUploadsDoNotLeakHeaders() async throws {
+    let capturedHeaderA = LockIsolated<String??>(nil)
+    let capturedHeaderB = LockIsolated<String??>(nil)
+
+    var mockA = Mock(
+      url: url.appendingPathComponent("object/bucket/a.txt"),
+      statusCode: 200,
+      data: [.post: Data(#"{"Id":"a","Key":"bucket/a.txt"}"#.utf8)]
+    )
+    mockA.onRequestHandler = OnRequestHandler(requestCallback: { request in
+      capturedHeaderA.setValue(request.value(forHTTPHeaderField: "X-Mode"))
+    })
+    mockA.register()
+
+    var mockB = Mock(
+      url: url.appendingPathComponent("object/bucket/b.txt"),
+      statusCode: 200,
+      data: [.post: Data(#"{"Id":"b","Key":"bucket/b.txt"}"#.utf8)]
+    )
+    mockB.onRequestHandler = OnRequestHandler(requestCallback: { request in
+      capturedHeaderB.setValue(request.value(forHTTPHeaderField: "X-Mode"))
+    })
+    mockB.register()
+
+    async let responseA = storage.from("bucket").upload(
+      "a.txt",
+      data: Data("a".utf8),
+      options: FileOptions(headers: ["X-Mode": "a"])
+    )
+    async let responseB = storage.from("bucket").upload(
+      "b.txt",
+      data: Data("b".utf8),
+      options: FileOptions(headers: ["X-Mode": "b"])
+    )
+    _ = try await (responseA, responseB)
+
+    XCTAssertEqual(capturedHeaderA.value, "a")
+    XCTAssertEqual(capturedHeaderB.value, "b")
   }
 }
