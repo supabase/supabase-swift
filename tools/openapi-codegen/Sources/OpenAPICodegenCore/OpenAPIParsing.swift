@@ -311,9 +311,8 @@ public enum OpenAPIParsing {
       ]
       for (method, maybeOperation) in methodOperations {
         guard let operation = maybeOperation else { continue }
-        let operationLocation = "\(method.rawValue.uppercased()) \(path.rawValue)"
         guard let operationId = operation.operationId else {
-          throw UnsupportedSpecConstruct(location: operationLocation, reason: "missing operationId")
+          continue
         }
         var parameters: [IRParameter] = []
         for parameterEither in pathItem.parameters + operation.parameters {
