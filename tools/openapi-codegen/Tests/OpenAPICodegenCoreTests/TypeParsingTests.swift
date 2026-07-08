@@ -67,4 +67,10 @@ struct TypeParsingTests {
       try OpenAPIParsing.parseType(try schema(json), location: "test")
     }
   }
+
+  @Test
+  func parsesTypelessFragmentSchemaAsFreeform() throws {
+    let type = try OpenAPIParsing.parseType(schema(#"{"description": "Default Response"}"#), location: "test")
+    #expect(type == .freeform)
+  }
 }
