@@ -294,7 +294,7 @@ public enum OpenAPIParsing {
   ) {
     var operations: [IROperation] = []
     var hoisted: [IRSchema] = []
-    for (path, pathItemEither) in document.paths {
+    for (path, pathItemEither) in document.paths.sorted(by: { $0.key.rawValue < $1.key.rawValue }) {
       guard let pathItem = pathItemEither.pathItemValue else {
         throw UnsupportedSpecConstruct(
           location: path.rawValue, reason: "external path item reference")
@@ -350,7 +350,7 @@ public enum OpenAPIParsing {
 
   public static func parseDocument(_ document: OpenAPI.Document) throws -> IRDocument {
     var schemas: [IRSchema] = []
-    for (key, schema) in document.components.schemas {
+    for (key, schema) in document.components.schemas.sorted(by: { $0.key.rawValue < $1.key.rawValue }) {
       schemas.append(contentsOf: try parseNamedSchema(name: key.rawValue, schema: schema))
     }
     let (operations, operationHoisted) = try parseOperations(document)
