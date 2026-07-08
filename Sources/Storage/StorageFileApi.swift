@@ -24,30 +24,6 @@ private let defaultFileOptions = FileOptions(
 enum FileUpload {
   case data(Data)
   case url(URL)
-
-  func encode(to formData: MultipartFormData, withPath path: String, options: FileOptions) {
-    formData.append(
-      options.cacheControl.data(using: .utf8)!,
-      withName: "cacheControl"
-    )
-
-    if let metadata = options.metadata {
-      formData.append(encodeMetadata(metadata), withName: "metadata")
-    }
-
-    switch self {
-    case .data(let data):
-      formData.append(
-        data,
-        withName: "",
-        fileName: path.fileName,
-        mimeType: options.contentType ?? mimeType(forPathExtension: path.pathExtension)
-      )
-
-    case .url(let url):
-      formData.append(url, withName: "")
-    }
-  }
 }
 
 #if DEBUG
