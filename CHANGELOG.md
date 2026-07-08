@@ -1,5 +1,22 @@
 # Changelog
 
+## [2.51.0](https://github.com/supabase/supabase-swift/compare/v2.50.0...v2.51.0) (2026-07-08)
+
+
+### Features
+
+* **realtime:** update httpSend() to per-event broadcast URL format with binary support ([#1086](https://github.com/supabase/supabase-swift/issues/1086)) ([adb4928](https://github.com/supabase/supabase-swift/commit/adb4928dd556f9af4409fe56ee13cad5b7519583))
+
+
+### Bug Fixes
+
+* **auth:** harden RSA JWK verification against malformed keys ([#1079](https://github.com/supabase/supabase-swift/issues/1079)) ([8b29aeb](https://github.com/supabase/supabase-swift/commit/8b29aeb5cc65733b011083cfad2604550adeea44))
+* **auth:** include code_challenge in resend() when using PKCE flow ([#1085](https://github.com/supabase/supabase-swift/issues/1085)) ([c781371](https://github.com/supabase/supabase-swift/commit/c78137130f36b3c11b83e0e5d93be1e07a8aa416))
+* **postgrest:** encode rpc GET/HEAD scalar params by JSON type ([#1092](https://github.com/supabase/supabase-swift/issues/1092)) ([6e53a6f](https://github.com/supabase/supabase-swift/commit/6e53a6f36982294c9b1d44ff543dce58281f3b10))
+* **realtime:** keep current access token when token fetch fails in setAuth ([#1077](https://github.com/supabase/supabase-swift/issues/1077)) ([e62ebe0](https://github.com/supabase/supabase-swift/commit/e62ebe0901b87caa49db41c466f9b015cdc6bcde))
+* **storage:** preserve limit/offset defaults when list() receives partial options ([#1087](https://github.com/supabase/supabase-swift/issues/1087)) ([0e859d6](https://github.com/supabase/supabase-swift/commit/0e859d69b024933fea25487508b15c65be6424f9))
+* **storage:** preserve sortBy defaults when list() receives partial sortBy ([#1084](https://github.com/supabase/supabase-swift/issues/1084)) ([ccd33f2](https://github.com/supabase/supabase-swift/commit/ccd33f27d42f2ffaf8f72f885e832bb33fa52d7c))
+
 ## [2.50.0](https://github.com/supabase/supabase-swift/compare/v2.49.0...v2.50.0) (2026-07-06)
 
 
