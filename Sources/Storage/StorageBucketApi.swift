@@ -48,13 +48,11 @@ public class StorageBucketApi: StorageApi, @unchecked Sendable {
   /// - Returns: The ``Bucket`` with the given identifier.
   /// - Throws: ``StorageError`` if the bucket does not exist or the caller is not authorized.
   public func getBucket(_ id: String) async throws -> Bucket {
-    try await execute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("bucket/\(id)"),
-        method: .get
-      )
-    )
-    .decoded(decoder: configuration.decoder)
+    let output = try await openAPIClient.bucketGet(.init(path: .init(bucketId: id)))
+    guard case .ok(let response) = output, case .json(let bucket) = response.body else {
+      throw StorageError(statusCode: nil, message: "Unexpected response from Storage API")
+    }
+    return Bucket(fromGenerated: bucket)
   }
 
   struct BucketParameters: Encodable {
