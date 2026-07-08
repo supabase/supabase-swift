@@ -30,6 +30,7 @@ let package = Package(
     .package(url: "https://github.com/pointfreeco/swift-snapshot-testing", from: "1.17.0"),
     .package(url: "https://github.com/pointfreeco/xctest-dynamic-overlay", from: "1.2.2"),
     .package(url: "https://github.com/WeTransfer/Mocker", from: "3.0.0"),
+    .package(url: "https://github.com/apple/swift-openapi-runtime", from: "1.6.0"),
   ],
   targets: [
     .target(
@@ -169,6 +170,7 @@ let package = Package(
       dependencies: [
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
+        .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
         "Helpers",
       ]
     ),
