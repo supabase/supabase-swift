@@ -327,6 +327,7 @@ jobs:
     timeout-minutes: 10
     env:
       SWIFTLINT_VERSION: "0.65.0"
+      SWIFTLINT_SHA256: "d6cb0aa7a2f5f1ef306fc9e37bcb54dc9a26facc8f7784ac0c3dd3eccf5c6ba6"
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - name: Cache SwiftLint binary
@@ -341,6 +342,7 @@ jobs:
           curl -fL \
             "https://github.com/realm/SwiftLint/releases/download/${SWIFTLINT_VERSION}/portable_swiftlint.zip" \
             -o /tmp/swiftlint.zip
+          echo "${SWIFTLINT_SHA256}  /tmp/swiftlint.zip" | shasum -a 256 --check
           unzip -q -o /tmp/swiftlint.zip -d /tmp/swiftlint
           sudo mv /tmp/swiftlint/swiftlint /usr/local/bin/swiftlint
       - name: Verify SwiftLint version
