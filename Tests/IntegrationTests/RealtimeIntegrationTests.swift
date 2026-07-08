@@ -27,10 +27,10 @@
     override func setUp() async throws {
       try await super.setUp()
 
-      //      try XCTSkipUnless(
-      //        ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil,
-      //        "INTEGRATION_TESTS not defined. Set this environment variable to run integration tests."
-      //      )
+      try XCTSkipUnless(
+        ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil,
+        "INTEGRATION_TESTS not defined. Set this environment variable to run integration tests."
+      )
 
       _clock = testClock
 
@@ -66,12 +66,13 @@
     }
 
     override func tearDown() async throws {
-      // Clean up channels and disconnect
-      await client.realtimeV2.removeAllChannels()
-      client.realtimeV2.disconnect()
+      // Clean up channels and disconnect. `client`/`client2` are nil when `setUp()` skipped via
+      // XCTSkipUnless (INTEGRATION_TESTS not set), so this must tolerate that case.
+      await client?.realtimeV2.removeAllChannels()
+      client?.realtimeV2.disconnect()
 
-      await client2.realtimeV2.removeAllChannels()
-      client2.realtimeV2.disconnect()
+      await client2?.realtimeV2.removeAllChannels()
+      client2?.realtimeV2.disconnect()
 
       try await super.tearDown()
     }
