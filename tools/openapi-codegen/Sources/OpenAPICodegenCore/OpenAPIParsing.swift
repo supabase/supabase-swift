@@ -334,7 +334,7 @@ public enum OpenAPIParsing {
           location: location, reason: "multipart request body must be an inline object schema")
       }
       var fields: [IRMultipartField] = []
-      for (fieldName, fieldSchema) in objectContext.properties {
+      for (fieldName, fieldSchema) in objectContext.properties.sorted(by: { $0.key < $1.key }) {
         var isFile = false
         if case .string(let core, _) = fieldSchema.value, core.format == .binary {
           isFile = true
