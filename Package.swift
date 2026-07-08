@@ -217,6 +217,19 @@ let package = Package(
       ]
     ),
     .target(
+      name: "StorageOpenAPI",
+      dependencies: [
+        "HTTPRuntime"
+      ]
+    ),
+    .testTarget(
+      name: "StorageOpenAPITests",
+      dependencies: [
+        "StorageOpenAPI",
+        "HTTPRuntime",
+      ]
+    ),
+    .target(
       name: "Supabase",
       dependencies: [
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
