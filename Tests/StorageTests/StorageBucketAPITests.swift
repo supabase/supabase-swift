@@ -298,7 +298,11 @@ final class StorageBucketAPITests: XCTestCase {
       url: url.appendingPathComponent("bucket/bucket123"),
       statusCode: 200,
       data: [
-        .delete: Data()
+        .delete: Data(
+          """
+          {}
+          """.utf8
+        )
       ]
     )
     .snapshotRequest {
