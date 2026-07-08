@@ -5,28 +5,28 @@
 /// Intermediate representation of an OpenAPI document, decoupled from
 /// OpenAPIKit's types so the emitter doesn't need to know anything about
 /// OpenAPI parsing.
-struct IRDocument: Equatable {
-  var schemas: [IRSchema]
-  var operations: [IROperation]
+public struct IRDocument: Equatable {
+  public var schemas: [IRSchema]
+  public var operations: [IROperation]
 }
 
-struct IRSchema: Equatable {
-  var name: String
-  var kind: IRSchemaKind
+public struct IRSchema: Equatable {
+  public var name: String
+  public var kind: IRSchemaKind
 }
 
-enum IRSchemaKind: Equatable {
+public enum IRSchemaKind: Equatable {
   case object(properties: [IRProperty])
   case stringEnum(cases: [String])
 }
 
-struct IRProperty: Equatable {
-  var name: String
-  var type: IRType
-  var isOptional: Bool
+public struct IRProperty: Equatable {
+  public var name: String
+  public var type: IRType
+  public var isOptional: Bool
 }
 
-indirect enum IRType: Equatable {
+public indirect enum IRType: Equatable {
   case string
   case integer
   case number
@@ -38,49 +38,49 @@ indirect enum IRType: Equatable {
   case freeform
 }
 
-enum IRHTTPMethod: String, Equatable {
+public enum IRHTTPMethod: String, Equatable {
   case get, put, post, delete, options, head, patch, trace
 }
 
-enum IRParameterLocation: Equatable {
+public enum IRParameterLocation: Equatable {
   case path, query, header
 }
 
-struct IRParameter: Equatable {
-  var name: String
-  var location: IRParameterLocation
-  var type: IRType
-  var isOptional: Bool
+public struct IRParameter: Equatable {
+  public var name: String
+  public var location: IRParameterLocation
+  public var type: IRType
+  public var isOptional: Bool
 }
 
-enum IRRequestBody: Equatable {
+public enum IRRequestBody: Equatable {
   case json(IRType)
   case multipart(fields: [IRMultipartField])
 }
 
-struct IRMultipartField: Equatable {
-  var name: String
-  var type: IRType
-  var isFile: Bool
+public struct IRMultipartField: Equatable {
+  public var name: String
+  public var type: IRType
+  public var isFile: Bool
 }
 
-enum IRResponseBody: Equatable {
+public enum IRResponseBody: Equatable {
   case none
   case json(IRType)
   case binary
 }
 
-struct IRResponse: Equatable {
-  var statusCode: Int
-  var isError: Bool
-  var body: IRResponseBody
+public struct IRResponse: Equatable {
+  public var statusCode: Int
+  public var isError: Bool
+  public var body: IRResponseBody
 }
 
-struct IROperation: Equatable {
-  var operationId: String
-  var method: IRHTTPMethod
-  var path: String
-  var parameters: [IRParameter]
-  var requestBody: IRRequestBody?
-  var responses: [IRResponse]
+public struct IROperation: Equatable {
+  public var operationId: String
+  public var method: IRHTTPMethod
+  public var path: String
+  public var parameters: [IRParameter]
+  public var requestBody: IRRequestBody?
+  public var responses: [IRResponse]
 }
