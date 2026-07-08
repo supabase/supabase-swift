@@ -4,7 +4,7 @@
 //
 //  Created by Guilherme Souza on 08/07/26.
 //
-import Foundation
+public import Foundation
 
 /// Errors surfaced by the runtime itself (transport/encoding/decoding), as
 /// distinct from typed API errors decoded from a response body.

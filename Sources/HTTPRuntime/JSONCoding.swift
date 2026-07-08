@@ -4,7 +4,7 @@
 //
 //  Created by Guilherme Souza on 08/07/26.
 //
-import Foundation
+public import Foundation
 
 /// Shared JSON coders used by generated code. Dates are ISO-8601 with
 /// fractional seconds, matching the mock server and the spec timestamps.

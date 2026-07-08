@@ -4,7 +4,7 @@
 //
 //  Created by Guilherme Souza on 08/07/26.
 //
-import Foundation
+public import Foundation
 
 /// Builds a `multipart/form-data` body by streaming its parts onto a temporary
 /// file, so large file parts never load fully into memory. The resulting file
