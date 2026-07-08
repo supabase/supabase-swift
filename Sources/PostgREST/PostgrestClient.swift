@@ -293,8 +293,7 @@ public final class PostgrestClient: Sendable {
       }
 
       for (key, value) in json {
-        let formattedValue = (value as? [Any]).map(cleanFilterArray) ?? String(describing: value)
-        url.appendQueryItems([URLQueryItem(name: key, value: formattedValue)])
+        url.appendQueryItems([URLQueryItem(name: key, value: queryValue(for: value))])
       }
 
     } else {
@@ -362,6 +361,33 @@ public final class PostgrestClient: Sendable {
     var configuration = configuration
     configuration.schema = schema
     return PostgrestClient(configuration: configuration)
+  }
+
+  private func queryValue(for value: Any) -> String {
+    switch value {
+    case let array as [Any]:
+      return cleanFilterArray(array)
+    case is NSNull:
+      return "null"
+    case let number as NSNumber:
+      if number === kCFBooleanTrue {
+        return "true"
+      }
+      if number === kCFBooleanFalse {
+        return "false"
+      }
+      return number.stringValue
+    case let string as String:
+      return string
+    default:
+      if let data = try? JSONSerialization.data(
+        withJSONObject: value, options: [.sortedKeys, .withoutEscapingSlashes]),
+        let json = String(data: data, encoding: .utf8)
+      {
+        return json
+      }
+      return String(describing: value)
+    }
   }
 
   private func cleanFilterArray(_ filter: [Any]) -> String {

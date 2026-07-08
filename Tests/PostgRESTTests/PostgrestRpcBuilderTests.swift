@@ -145,6 +145,42 @@ final class PostgrestRpcBuilderTests: PostgrestQueryTests {
     XCTAssertEqual(response.sum, 6)
   }
 
+  func testRpcWithGetMethodEncodesScalarParamsByJSONType() async throws {
+    Mock(
+      url: url.appendingPathComponent("rpc/scalar"),
+      ignoreQuery: true,
+      statusCode: 200,
+      data: [
+        .get: Data("{}".utf8)
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--header "Accept: application/json" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:54321/rest/v1/rpc/scalar?disabled=false&enabled=true&maybe=null&nested=%7B%22a%22:1%7D&number=42"
+      """#
+    }
+    .register()
+
+    try await sut
+      .rpc(
+        "scalar",
+        params: [
+          "enabled": true,
+          "disabled": false,
+          "number": 42,
+          "maybe": .null,
+          "nested": ["a": 1],
+        ] as JSONObject,
+        get: true
+      )
+      .execute()
+  }
+
   func testRpcWithCount() async throws {
     Mock(
       url: url.appendingPathComponent("rpc/hello"),
