@@ -169,7 +169,7 @@ extension StorageFileApi {
     try await update(path, data: file, options: options)
   }
 
-  @available(*, deprecated, renamed: "updateToSignedURL(_:token:data:options:)")
+  @available(*, deprecated, renamed: "uploadToSignedURL(_:token:data:options:)")
   @discardableResult
   public func uploadToSignedURL(
     path: String,
