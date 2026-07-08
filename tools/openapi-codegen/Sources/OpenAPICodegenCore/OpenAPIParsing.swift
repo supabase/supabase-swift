@@ -150,6 +150,8 @@ public enum OpenAPIParsing {
       return .array(try parseType(items, location: location + "[]"))
     case .object(_, let objectContext) where objectContext.properties.isEmpty:
       return .freeform
+    case .fragment:
+      return .freeform
     case .reference(let reference, _):
       guard let name = reference.name else {
         throw UnsupportedSpecConstruct(
