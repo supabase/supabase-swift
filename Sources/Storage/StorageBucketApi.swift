@@ -137,12 +137,10 @@ public class StorageBucketApi: StorageApi, @unchecked Sendable {
   /// - Parameter id: The unique identifier of the bucket to empty.
   /// - Throws: ``StorageError`` if the bucket does not exist or the caller is not authorized.
   public func emptyBucket(_ id: String) async throws {
-    try await execute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("bucket/\(id)/empty"),
-        method: .post
-      )
-    )
+    let output = try await openAPIClient.bucketEmpty(.init(path: .init(bucketId: id)))
+    guard case .ok = output else {
+      throw StorageError(statusCode: nil, message: "Unexpected response from Storage API")
+    }
   }
 
   /// Deletes an existing bucket.
