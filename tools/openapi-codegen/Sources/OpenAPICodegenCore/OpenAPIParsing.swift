@@ -14,7 +14,7 @@ struct UnsupportedSpecConstruct: Error, CustomStringConvertible, Equatable {
   var description: String { "Unsupported OpenAPI construct at \(location): \(reason)" }
 }
 
-enum OpenAPIParsing {
+public enum OpenAPIParsing {
 
   // MARK: - Schemas
 
@@ -258,7 +258,7 @@ enum OpenAPIParsing {
 
   // MARK: - Document
 
-  static func parseDocument(_ document: OpenAPI.Document) throws -> IRDocument {
+  public static func parseDocument(_ document: OpenAPI.Document) throws -> IRDocument {
     var schemas: [IRSchema] = []
     for (key, schema) in document.components.schemas {
       schemas.append(try parseNamedSchema(name: key.rawValue, schema: schema))

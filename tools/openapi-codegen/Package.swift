@@ -27,7 +27,10 @@ let package = Package(
     ),
     .testTarget(
       name: "openapi-codegenTests",
-      dependencies: ["OpenAPICodegenCore"]
+      dependencies: [
+        "OpenAPICodegenCore",
+        .product(name: "OpenAPIKit30", package: "OpenAPIKit"),
+      ]
     ),
   ]
 )
