@@ -23,12 +23,13 @@ struct ParameterParsingTests {
     let json = """
       {"name": "bucketId", "in": "path", "required": true, "schema": {"type": "string"}}
       """
-    let irParameter = try OpenAPIParsing.parseParameter(parameter(json), location: "op")
+    let (irParameter, hoisted) = try OpenAPIParsing.parseParameter(parameter(json), location: "op")
 
     #expect(irParameter.name == "bucketId")
     #expect(irParameter.location == .path)
     #expect(irParameter.type == .string)
     #expect(irParameter.isOptional == false)
+    #expect(hoisted == nil)
   }
 
   @Test
@@ -36,11 +37,12 @@ struct ParameterParsingTests {
     let json = """
       {"name": "limit", "in": "query", "schema": {"type": "integer"}}
       """
-    let irParameter = try OpenAPIParsing.parseParameter(parameter(json), location: "op")
+    let (irParameter, hoisted) = try OpenAPIParsing.parseParameter(parameter(json), location: "op")
 
     #expect(irParameter.location == .query)
     #expect(irParameter.type == .integer)
     #expect(irParameter.isOptional == true)
+    #expect(hoisted == nil)
   }
 
   @Test
@@ -48,9 +50,10 @@ struct ParameterParsingTests {
     let json = """
       {"name": "if-none-match", "in": "header", "schema": {"type": "string"}}
       """
-    let irParameter = try OpenAPIParsing.parseParameter(parameter(json), location: "op")
+    let (irParameter, hoisted) = try OpenAPIParsing.parseParameter(parameter(json), location: "op")
 
     #expect(irParameter.location == .header)
+    #expect(hoisted == nil)
   }
 
   @Test
@@ -61,5 +64,18 @@ struct ParameterParsingTests {
     #expect(throws: UnsupportedSpecConstruct.self) {
       try OpenAPIParsing.parseParameter(try parameter(json), location: "op")
     }
+  }
+
+  @Test
+  func hoistsInlineEnumParameterIntoItsOwnNamedSchema() throws {
+    let json = """
+      {"name": "resize", "in": "query", "schema": {"type": "string", "enum": ["cover", "contain", "fill"]}}
+      """
+    let (irParameter, hoisted) = try OpenAPIParsing.parseParameter(parameter(json), location: "renderImagePublic")
+
+    #expect(irParameter.name == "resize")
+    #expect(irParameter.type == .schemaRef("renderImagePublic_resize"))
+    #expect(hoisted?.name == "renderImagePublic_resize")
+    #expect(hoisted?.kind == .stringEnum(cases: ["cover", "contain", "fill"]))
   }
 }
