@@ -46,6 +46,14 @@ struct StorageOpenAPITransport: ClientTransport {
       // `converter.setAcceptHeader`; the hand-written implementations being migrated never sent
       // one, so drop it here to keep wire behavior byte-identical during the migration.
       if field.name == .accept { continue }
+      if field.name == .contentType, field.value == "application/json; charset=utf-8" {
+        // ponytail: the generated client always appends `; charset=utf-8` to JSON content types
+        // via `converter.setRequiredRequestBodyAsJSON`; the hand-written implementations being
+        // migrated always sent plain `application/json`, so strip the suffix here to keep wire
+        // behavior byte-identical during the migration.
+        headers[field.name] = "application/json"
+        continue
+      }
       headers[field.name] = field.value
     }
 

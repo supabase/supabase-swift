@@ -237,7 +237,7 @@ final class StorageBucketAPITests: XCTestCase {
       curl \
       	--request POST \
       	--header "Content-Length: 51" \
-      	--header "Content-Type: application/json; charset=utf-8" \
+      	--header "Content-Type: application/json" \
       	--header "X-Client-Info: storage-swift/0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--data "{\"id\":\"newbucket\",\"name\":\"newbucket\",\"public\":true}" \
@@ -369,7 +369,7 @@ final class StorageBucketAPITests: XCTestCase {
       curl \
       	--request POST \
       	--header "Content-Length: 79" \
-      	--header "Content-Type: application/json; charset=utf-8" \
+      	--header "Content-Type: application/json" \
       	--header "X-Client-Info: storage-swift/0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--data "{\"file_size_limit\":10485760,\"id\":\"newbucket\",\"name\":\"newbucket\",\"public\":false}" \
@@ -408,7 +408,7 @@ final class StorageBucketAPITests: XCTestCase {
       curl \
       	--request POST \
       	--header "Content-Length: 76" \
-      	--header "Content-Type: application/json; charset=utf-8" \
+      	--header "Content-Type: application/json" \
       	--header "X-Client-Info: storage-swift/0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--data "{\"file_size_limit\":\"1mb\",\"id\":\"newbucket\",\"name\":\"newbucket\",\"public\":false}" \
