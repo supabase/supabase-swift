@@ -42,6 +42,10 @@ struct StorageOpenAPITransport: ClientTransport {
 
     var headers = HTTPFields()
     for field in request.headerFields {
+      // ponytail: the generated client always sets an `Accept` header via
+      // `converter.setAcceptHeader`; the hand-written implementations being migrated never sent
+      // one, so drop it here to keep wire behavior byte-identical during the migration.
+      if field.name == .accept { continue }
       headers[field.name] = field.value
     }
 
