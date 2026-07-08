@@ -656,10 +656,8 @@ extension Bucket {
       name: bucket.name,
       owner: bucket.owner ?? "",
       isPublic: bucket._public ?? false,
-      createdAt: bucket.created_at.flatMap { ISO8601DateFormatter().date(from: $0) }
-        ?? Date(timeIntervalSince1970: 0),
-      updatedAt: bucket.updated_at.flatMap { ISO8601DateFormatter().date(from: $0) }
-        ?? Date(timeIntervalSince1970: 0),
+      createdAt: bucket.created_at.flatMap { $0.date } ?? Date(timeIntervalSince1970: 0),
+      updatedAt: bucket.updated_at.flatMap { $0.date } ?? Date(timeIntervalSince1970: 0),
       allowedMimeTypes: bucket.allowed_mime_types,
       fileSizeLimit: bucket.file_size_limit.map(Int64.init)
     )

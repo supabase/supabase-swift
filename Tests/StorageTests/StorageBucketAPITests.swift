@@ -209,6 +209,8 @@ final class StorageBucketAPITests: XCTestCase {
     let buckets = try await storage.listBuckets()
     XCTAssertEqual(buckets.count, 1)
     XCTAssertEqual(buckets[0].name, "test-bucket")
+    XCTAssertEqual(buckets[0].createdAt, "2024-01-01T00:00:00.000Z".date!)
+    XCTAssertEqual(buckets[0].updatedAt, "2024-01-01T00:00:00.000Z".date!)
   }
 
   func testCreateBucket() async throws {
