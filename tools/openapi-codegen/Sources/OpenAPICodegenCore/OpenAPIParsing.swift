@@ -29,34 +29,57 @@ public enum OpenAPIParsing {
         reason: "top-level schema must be an object or a string enum"
       )
     }
+    let (properties, hoisted) = try parseObjectProperties(
+      name: name, objectContext: objectContext, location: name)
+    return [IRSchema(name: name, kind: .object(properties: properties))] + hoisted
+  }
+
+  /// Parses an object schema's properties, hoisting any inline enum or
+  /// inline object-with-properties into its own named schema (recursively)
+  /// instead of failing. Unlike a union, there's no ambiguity in what Swift
+  /// type these become, so a name of `"\(name)_\(propertyName)"` is enough.
+  private static func parseObjectProperties(
+    name: String,
+    objectContext: JSONSchema.ObjectContext,
+    location: String
+  ) throws -> (properties: [IRProperty], hoisted: [IRSchema]) {
     var properties: [IRProperty] = []
-    var hoistedSchemas: [IRSchema] = []
+    var hoisted: [IRSchema] = []
     for (propertyName, propertySchema) in objectContext.properties {
+      let propertyLocation = "\(location).\(propertyName)"
+      let isOptional = !propertySchema.required || propertySchema.nullable
+
       if case .string = propertySchema.value, let allowedValues = propertySchema.allowedValues {
-        // Inline enum on an object property: hoist it into its own named
-        // schema instead of failing. Unlike a union or an inline object with
-        // properties, there's no ambiguity in what Swift type this becomes.
         let hoistedName = "\(name)_\(propertyName)"
         let cases = allowedValues.compactMap { $0.value as? String }
-        hoistedSchemas.append(IRSchema(name: hoistedName, kind: .stringEnum(cases: cases)))
+        hoisted.append(IRSchema(name: hoistedName, kind: .stringEnum(cases: cases)))
         properties.append(
-          IRProperty(
-            name: propertyName,
-            type: .schemaRef(hoistedName),
-            isOptional: !propertySchema.required || propertySchema.nullable
-          )
-        )
+          IRProperty(name: propertyName, type: .schemaRef(hoistedName), isOptional: isOptional))
         continue
       }
+
+      if case .object(_, let nestedContext) = propertySchema.value,
+        !nestedContext.properties.isEmpty
+      {
+        let hoistedName = "\(name)_\(propertyName)"
+        let (nestedProperties, nestedHoisted) = try parseObjectProperties(
+          name: hoistedName, objectContext: nestedContext, location: propertyLocation)
+        hoisted.append(IRSchema(name: hoistedName, kind: .object(properties: nestedProperties)))
+        hoisted.append(contentsOf: nestedHoisted)
+        properties.append(
+          IRProperty(name: propertyName, type: .schemaRef(hoistedName), isOptional: isOptional))
+        continue
+      }
+
       properties.append(
         IRProperty(
           name: propertyName,
-          type: try parseType(propertySchema, location: "\(name).\(propertyName)"),
-          isOptional: !propertySchema.required || propertySchema.nullable
+          type: try parseType(propertySchema, location: propertyLocation),
+          isOptional: isOptional
         )
       )
     }
-    return [IRSchema(name: name, kind: .object(properties: properties))] + hoistedSchemas
+    return (properties, hoisted)
   }
 
   static func parseType(_ schema: JSONSchema, location: String) throws -> IRType {
@@ -147,18 +170,29 @@ public enum OpenAPIParsing {
   static func parseRequestBody(
     _ either: Either<JSONReference<OpenAPI.Request>, OpenAPI.Request>,
     location: String
-  ) throws -> IRRequestBody {
+  ) throws -> (body: IRRequestBody, hoisted: [IRSchema]) {
     guard let request = either.requestValue else {
       throw UnsupportedSpecConstruct(location: location, reason: "external request body reference")
     }
     if let jsonContent = request.content.first(where: {
       $0.key.typeAndSubtype == "application/json"
     })?.value {
-      guard let schema = jsonContent.schema else {
+      guard let schemaEither = jsonContent.schema else {
         throw UnsupportedSpecConstruct(
           location: location, reason: "JSON request body without a schema")
       }
-      return .json(try resolveSchema(schema, location: location))
+      if case .b(let inlineSchema) = schemaEither,
+        case .object(_, let objectContext) = inlineSchema.value,
+        !objectContext.properties.isEmpty
+      {
+        let hoistedName = "\(location)_requestBody"
+        let (properties, nestedHoisted) = try parseObjectProperties(
+          name: hoistedName, objectContext: objectContext, location: hoistedName)
+        let hoisted =
+          [IRSchema(name: hoistedName, kind: .object(properties: properties))] + nestedHoisted
+        return (.json(.schemaRef(hoistedName)), hoisted)
+      }
+      return (.json(try resolveSchema(schemaEither, location: location)), [])
     }
     if let multipartContent = request.content.first(where: {
       $0.key.typeAndSubtype == "multipart/form-data"
@@ -183,7 +217,7 @@ public enum OpenAPIParsing {
           )
         )
       }
-      return .multipart(fields: fields)
+      return (.multipart(fields: fields), [])
     }
     let contentTypes = request.content.keys.map(\.rawValue).joined(separator: ", ")
     throw UnsupportedSpecConstruct(
@@ -195,8 +229,9 @@ public enum OpenAPIParsing {
   static func parseResponses(
     _ responses: OpenAPI.Response.Map,
     location: String
-  ) throws -> [IRResponse] {
+  ) throws -> (responses: [IRResponse], hoisted: [IRSchema]) {
     var results: [IRResponse] = []
+    var hoisted: [IRSchema] = []
     for (statusCode, responseEither) in responses {
       guard case .status(let code) = statusCode.value else {
         // `default` and range ("4XX") responses aren't modeled in v1; skip them.
@@ -206,29 +241,45 @@ public enum OpenAPIParsing {
         throw UnsupportedSpecConstruct(
           location: location, reason: "external response reference for status \(code)")
       }
-      let body = try parseResponseBody(response.content, location: "\(location) -> \(code)")
+      let (body, bodyHoisted) = try parseResponseBody(
+        response.content, location: "\(location) -> \(code)")
+      hoisted.append(contentsOf: bodyHoisted)
       results.append(IRResponse(statusCode: code, isError: !statusCode.isSuccess, body: body))
     }
-    return results.sorted { $0.statusCode < $1.statusCode }
+    return (results.sorted { $0.statusCode < $1.statusCode }, hoisted)
   }
 
   static func parseResponseBody(
     _ content: OpenAPI.Content.Map,
     location: String
-  ) throws -> IRResponseBody {
+  ) throws -> (body: IRResponseBody, hoisted: [IRSchema]) {
     if let jsonContent = content.first(where: { $0.key.typeAndSubtype == "application/json" })?
       .value
     {
-      guard let schema = jsonContent.schema else { return .none }
-      return .json(try resolveSchema(schema, location: location))
+      guard let schemaEither = jsonContent.schema else { return (.none, []) }
+      if case .b(let inlineSchema) = schemaEither,
+        case .object(_, let objectContext) = inlineSchema.value,
+        !objectContext.properties.isEmpty
+      {
+        let hoistedName = "\(location)_response"
+        let (properties, nestedHoisted) = try parseObjectProperties(
+          name: hoistedName, objectContext: objectContext, location: hoistedName)
+        let hoisted =
+          [IRSchema(name: hoistedName, kind: .object(properties: properties))] + nestedHoisted
+        return (.json(.schemaRef(hoistedName)), hoisted)
+      }
+      return (.json(try resolveSchema(schemaEither, location: location)), [])
     }
-    return content.isEmpty ? .none : .binary
+    return (content.isEmpty ? .none : .binary, [])
   }
 
   // MARK: - Operations
 
-  static func parseOperations(_ document: OpenAPI.Document) throws -> [IROperation] {
+  static func parseOperations(_ document: OpenAPI.Document) throws -> (
+    operations: [IROperation], hoisted: [IRSchema]
+  ) {
     var operations: [IROperation] = []
+    var hoisted: [IRSchema] = []
     for (path, pathItemEither) in document.paths {
       guard let pathItem = pathItemEither.pathItemValue else {
         throw UnsupportedSpecConstruct(
@@ -254,10 +305,15 @@ public enum OpenAPIParsing {
         for parameterEither in pathItem.parameters + operation.parameters {
           parameters.append(try parseParameter(parameterEither, location: operationId))
         }
-        let requestBody = try operation.requestBody.map {
-          try parseRequestBody($0, location: operationId)
+        var requestBody: IRRequestBody?
+        if let requestBodyEither = operation.requestBody {
+          let (body, bodyHoisted) = try parseRequestBody(requestBodyEither, location: operationId)
+          requestBody = body
+          hoisted.append(contentsOf: bodyHoisted)
         }
-        let responses = try parseResponses(operation.responses, location: operationId)
+        let (responses, responsesHoisted) = try parseResponses(
+          operation.responses, location: operationId)
+        hoisted.append(contentsOf: responsesHoisted)
         operations.append(
           IROperation(
             operationId: operationId,
@@ -270,7 +326,7 @@ public enum OpenAPIParsing {
         )
       }
     }
-    return operations.sorted { $0.operationId < $1.operationId }
+    return (operations.sorted { $0.operationId < $1.operationId }, hoisted)
   }
 
   // MARK: - Document
@@ -280,9 +336,8 @@ public enum OpenAPIParsing {
     for (key, schema) in document.components.schemas {
       schemas.append(contentsOf: try parseNamedSchema(name: key.rawValue, schema: schema))
     }
-    return IRDocument(
-      schemas: schemas.sorted { $0.name < $1.name },
-      operations: try parseOperations(document)
-    )
+    let (operations, operationHoisted) = try parseOperations(document)
+    schemas.append(contentsOf: operationHoisted)
+    return IRDocument(schemas: schemas.sorted { $0.name < $1.name }, operations: operations)
   }
 }
