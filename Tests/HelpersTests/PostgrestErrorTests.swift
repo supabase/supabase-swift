@@ -7,13 +7,15 @@
 
 import Foundation
 import Helpers
-import XCTest
+import Testing
 
-final class PostgrestErrorTests: XCTestCase {
+@Suite
+struct PostgrestErrorTests {
 
-  func testLocalizedErrorConformance() {
+  @Test
+  func localizedErrorConformance() {
     let error = PostgrestError(message: "test error message")
-    XCTAssertEqual(error.errorDescription, "test error message")
+    #expect(error.errorDescription == "test error message")
   }
 
 }

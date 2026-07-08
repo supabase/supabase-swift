@@ -8,7 +8,7 @@
 import ConcurrencyExtras
 import Foundation
 import HTTPTypes
-import XCTest
+import Testing
 
 @testable import Helpers
 
@@ -16,7 +16,8 @@ import XCTest
   import FoundationNetworking
 #endif
 
-final class RetryRequestInterceptorTests: XCTestCase {
+@Suite
+struct RetryRequestInterceptorTests {
 
   // MARK: - Helpers
 
@@ -44,28 +45,31 @@ final class RetryRequestInterceptorTests: XCTestCase {
 
   // MARK: - defaultRetryableHTTPStatusCodes
 
-  func testDefaultRetryableHTTPStatusCodesContainsStandardCodes() {
+  @Test
+  func defaultRetryableHTTPStatusCodesContainsStandardCodes() {
     let codes = RetryRequestInterceptor.defaultRetryableHTTPStatusCodes
-    XCTAssertTrue(codes.contains(408))
-    XCTAssertTrue(codes.contains(500))
-    XCTAssertTrue(codes.contains(502))
-    XCTAssertTrue(codes.contains(503))
-    XCTAssertTrue(codes.contains(504))
+    #expect(codes.contains(408))
+    #expect(codes.contains(500))
+    #expect(codes.contains(502))
+    #expect(codes.contains(503))
+    #expect(codes.contains(504))
   }
 
-  func testDefaultRetryableHTTPStatusCodesContainsCloudflareCodes() {
+  @Test
+  func defaultRetryableHTTPStatusCodesContainsCloudflareCodes() {
     let codes = RetryRequestInterceptor.defaultRetryableHTTPStatusCodes
-    XCTAssertTrue(codes.contains(520), "520 (Cloudflare Unknown Error) should be retryable")
-    XCTAssertTrue(codes.contains(521), "521 (Web Server Down) should be retryable")
-    XCTAssertTrue(codes.contains(522), "522 (Connection Timed Out) should be retryable")
-    XCTAssertTrue(codes.contains(523), "523 (Origin Is Unreachable) should be retryable")
-    XCTAssertTrue(codes.contains(524), "524 (A Timeout Occurred) should be retryable")
-    XCTAssertTrue(codes.contains(530), "530 (Site Frozen) should be retryable")
+    #expect(codes.contains(520), "520 (Cloudflare Unknown Error) should be retryable")
+    #expect(codes.contains(521), "521 (Web Server Down) should be retryable")
+    #expect(codes.contains(522), "522 (Connection Timed Out) should be retryable")
+    #expect(codes.contains(523), "523 (Origin Is Unreachable) should be retryable")
+    #expect(codes.contains(524), "524 (A Timeout Occurred) should be retryable")
+    #expect(codes.contains(530), "530 (Site Frozen) should be retryable")
   }
 
   // MARK: - Retry behavior for Cloudflare codes
 
-  func testRetriesOnCloudflareErrorCodes() async throws {
+  @Test
+  func retriesOnCloudflareErrorCodes() async throws {
     let interceptor = makeInterceptor(retryLimit: 2)
     let request = makeRequest()
     let cloudflareCodes = [520, 521, 522, 523, 524, 530]
@@ -79,12 +83,13 @@ final class RetryRequestInterceptorTests: XCTestCase {
         }
         return self.makeResponse(statusCode: 200)
       }
-      XCTAssertEqual(finalResponse.statusCode, 200, "Should retry on \(code) and succeed")
-      XCTAssertEqual(callCount.value, 2, "Should have called next twice for \(code)")
+      #expect(finalResponse.statusCode == 200, "Should retry on \(code) and succeed")
+      #expect(callCount.value == 2, "Should have called next twice for \(code)")
     }
   }
 
-  func testDoesNotRetryOnNonRetryableStatusCodes() async throws {
+  @Test
+  func doesNotRetryOnNonRetryableStatusCodes() async throws {
     let interceptor = makeInterceptor(retryLimit: 2)
     let request = makeRequest()
     let nonRetryableCodes = [400, 401, 403, 404, 422]
@@ -95,12 +100,13 @@ final class RetryRequestInterceptorTests: XCTestCase {
         callCount.withValue { $0 += 1 }
         return self.makeResponse(statusCode: code)
       }
-      XCTAssertEqual(response.statusCode, code)
-      XCTAssertEqual(callCount.value, 1, "Should not retry on \(code)")
+      #expect(response.statusCode == code)
+      #expect(callCount.value == 1, "Should not retry on \(code)")
     }
   }
 
-  func testRetriesOnStandardRetryableStatusCodes() async throws {
+  @Test
+  func retriesOnStandardRetryableStatusCodes() async throws {
     let interceptor = makeInterceptor(retryLimit: 2)
     let request = makeRequest()
     let retryableCodes = [408, 500, 502, 503, 504]
@@ -114,12 +120,13 @@ final class RetryRequestInterceptorTests: XCTestCase {
         }
         return self.makeResponse(statusCode: 200)
       }
-      XCTAssertEqual(finalResponse.statusCode, 200, "Should retry on \(code) and succeed")
-      XCTAssertEqual(callCount.value, 2, "Should have called next twice for \(code)")
+      #expect(finalResponse.statusCode == 200, "Should retry on \(code) and succeed")
+      #expect(callCount.value == 2, "Should have called next twice for \(code)")
     }
   }
 
-  func testDoesNotRetryOnNonRetryableMethod() async throws {
+  @Test
+  func doesNotRetryOnNonRetryableMethod() async throws {
     let interceptor = makeInterceptor(retryLimit: 2)
     let request = makeRequest(method: .post)
 
@@ -128,11 +135,12 @@ final class RetryRequestInterceptorTests: XCTestCase {
       callCount.withValue { $0 += 1 }
       return self.makeResponse(statusCode: 500)
     }
-    XCTAssertEqual(response.statusCode, 500)
-    XCTAssertEqual(callCount.value, 1, "POST should not be retried")
+    #expect(response.statusCode == 500)
+    #expect(callCount.value == 1, "POST should not be retried")
   }
 
-  func testRespectsRetryLimit() async throws {
+  @Test
+  func respectsRetryLimit() async throws {
     let interceptor = makeInterceptor(retryLimit: 2)
     let request = makeRequest()
 
@@ -141,7 +149,7 @@ final class RetryRequestInterceptorTests: XCTestCase {
       callCount.withValue { $0 += 1 }
       return self.makeResponse(statusCode: 520)
     }
-    XCTAssertEqual(response.statusCode, 520)
-    XCTAssertEqual(callCount.value, 2, "Should not exceed retryLimit")
+    #expect(response.statusCode == 520)
+    #expect(callCount.value == 2, "Should not exceed retryLimit")
   }
 }

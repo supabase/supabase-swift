@@ -7,15 +7,17 @@
 
 import Foundation
 import Helpers
-import XCTest
+import Testing
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
 #endif
 
-final class HTTPErrorTests: XCTestCase {
+@Suite
+struct HTTPErrorTests {
 
-  func testInitialization() {
+  @Test
+  func initialization() {
     let data = Data("test error message".utf8)
     let response = HTTPURLResponse(
       url: URL(string: "https://example.com")!,
@@ -26,11 +28,12 @@ final class HTTPErrorTests: XCTestCase {
 
     let error = HTTPError(data: data, response: response)
 
-    XCTAssertEqual(error.data, data)
-    XCTAssertEqual(error.response, response)
+    #expect(error.data == data)
+    #expect(error.response == response)
   }
 
-  func testLocalizedErrorDescription_WithUTF8Data() {
+  @Test
+  func localizedErrorDescription_WithUTF8Data() {
     let data = Data("Bad Request: Invalid parameters".utf8)
     let response = HTTPURLResponse(
       url: URL(string: "https://example.com")!,
@@ -41,13 +44,14 @@ final class HTTPErrorTests: XCTestCase {
 
     let error = HTTPError(data: data, response: response)
 
-    XCTAssertEqual(
-      error.errorDescription,
-      "Status Code: 400 Body: Bad Request: Invalid parameters"
+    #expect(
+      error.errorDescription
+        == "Status Code: 400 Body: Bad Request: Invalid parameters"
     )
   }
 
-  func testLocalizedErrorDescription_WithEmptyData() {
+  @Test
+  func localizedErrorDescription_WithEmptyData() {
     let data = Data()
     let response = HTTPURLResponse(
       url: URL(string: "https://example.com")!,
@@ -58,10 +62,11 @@ final class HTTPErrorTests: XCTestCase {
 
     let error = HTTPError(data: data, response: response)
 
-    XCTAssertEqual(error.errorDescription, "Status Code: 404 Body: ")
+    #expect(error.errorDescription == "Status Code: 404 Body: ")
   }
 
-  func testLocalizedErrorDescription_WithNonUTF8Data() {
+  @Test
+  func localizedErrorDescription_WithNonUTF8Data() {
     // Create data that can't be converted to UTF-8 string
     let bytes: [UInt8] = [0xFF, 0xFE, 0xFD, 0xFC]
     let data = Data(bytes)
@@ -74,10 +79,11 @@ final class HTTPErrorTests: XCTestCase {
 
     let error = HTTPError(data: data, response: response)
 
-    XCTAssertEqual(error.errorDescription, "Status Code: 500")
+    #expect(error.errorDescription == "Status Code: 500")
   }
 
-  func testLocalizedErrorDescription_WithJSONData() {
+  @Test
+  func localizedErrorDescription_WithJSONData() {
     let jsonString = """
       {
         "error": "Validation failed",
@@ -94,13 +100,14 @@ final class HTTPErrorTests: XCTestCase {
 
     let error = HTTPError(data: data, response: response)
 
-    XCTAssertEqual(
-      error.errorDescription,
-      "Status Code: 422 Body: \(jsonString)"
+    #expect(
+      error.errorDescription
+        == "Status Code: 422 Body: \(jsonString)"
     )
   }
 
-  func testLocalizedErrorDescription_WithSpecialCharacters() {
+  @Test
+  func localizedErrorDescription_WithSpecialCharacters() {
     let message = "Error with special chars: áéíóú ñ ç"
     let data = Data(message.utf8)
     let response = HTTPURLResponse(
@@ -112,13 +119,14 @@ final class HTTPErrorTests: XCTestCase {
 
     let error = HTTPError(data: data, response: response)
 
-    XCTAssertEqual(
-      error.errorDescription,
-      "Status Code: 400 Body: \(message)"
+    #expect(
+      error.errorDescription
+        == "Status Code: 400 Body: \(message)"
     )
   }
 
-  func testLocalizedErrorDescription_WithLargeData() {
+  @Test
+  func localizedErrorDescription_WithLargeData() {
     let largeMessage = String(repeating: "A", count: 1000)
     let data = Data(largeMessage.utf8)
     let response = HTTPURLResponse(
@@ -130,13 +138,14 @@ final class HTTPErrorTests: XCTestCase {
 
     let error = HTTPError(data: data, response: response)
 
-    XCTAssertEqual(
-      error.errorDescription,
-      "Status Code: 413 Body: \(largeMessage)"
+    #expect(
+      error.errorDescription
+        == "Status Code: 413 Body: \(largeMessage)"
     )
   }
 
-  func testProperties() {
+  @Test
+  func properties() {
     let data = Data("test error".utf8)
     let response = HTTPURLResponse(
       url: URL(string: "https://example.com")!,
@@ -148,9 +157,9 @@ final class HTTPErrorTests: XCTestCase {
     let error = HTTPError(data: data, response: response)
 
     // Test that properties are correctly set
-    XCTAssertEqual(error.data, data)
-    XCTAssertEqual(error.response, response)
-    XCTAssertEqual(error.response.statusCode, 400)
-    XCTAssertEqual(error.response.url, URL(string: "https://example.com")!)
+    #expect(error.data == data)
+    #expect(error.response == response)
+    #expect(error.response.statusCode == 400)
+    #expect(error.response.url == URL(string: "https://example.com")!)
   }
 }
