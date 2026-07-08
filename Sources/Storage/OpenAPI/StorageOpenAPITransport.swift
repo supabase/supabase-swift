@@ -6,9 +6,11 @@ import OpenAPIRuntime
   import FoundationNetworking
 #endif
 
-/// Bridges the generated OpenAPI client's HTTP layer onto ``StorageApi``'s existing
-/// `execute(_:)` pipeline, so header merging, ``StorageError`` decoding, and the injectable
-/// ``StorageHTTPSession`` all keep working unchanged for OpenAPI-routed requests.
+/// Bridges the generated OpenAPI client's HTTP layer onto ``StorageApi``'s shared header-merging
+/// and ``StorageHTTPSession`` pipeline. Unlike the hand-written `execute(_:)` path, this transport
+/// never throws on non-2xx responses — it returns them as-is so the generated client's typed
+/// `Output` cases carry the real status and error body, and callers decode ``StorageError`` from
+/// those cases instead.
 struct StorageOpenAPITransport: ClientTransport {
   var execute: @Sendable (Helpers.HTTPRequest) async throws -> Helpers.HTTPResponse
 
