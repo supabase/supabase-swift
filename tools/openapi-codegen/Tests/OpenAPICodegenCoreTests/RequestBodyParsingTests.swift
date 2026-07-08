@@ -65,6 +65,33 @@ struct RequestBodyParsingTests {
   }
 
   @Test
+  func multipartFieldsAreSortedDeterministically() throws {
+    let json = """
+      {
+        "content": {
+          "multipart/form-data": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "zebra": {"type": "string"},
+                "apple": {"type": "string"},
+                "mango": {"type": "string"}
+              }
+            }
+          }
+        }
+      }
+      """
+    let (body, _) = try OpenAPIParsing.parseRequestBody(requestBody(json), location: "op")
+
+    guard case .multipart(let fields) = body else {
+      Issue.record("expected a multipart request body")
+      return
+    }
+    #expect(fields.map(\.name) == ["apple", "mango", "zebra"])
+  }
+
+  @Test
   func rejectsUnsupportedContentType() throws {
     let json = """
       {"content": {"text/plain": {"schema": {"type": "string"}}}}
