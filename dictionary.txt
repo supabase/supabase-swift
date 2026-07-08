@@ -175,6 +175,31 @@ xcodeproj
 xctest
 XVCJ
 
+# Terms from the OpenAPI-to-Swift code generator (tools/openapi-codegen) and
+# the generated Storage HTTP client (Sources/StorageOpenAPI).
+associatedtype
+claude
+Codegen
+codegen
+conformances
+deinit
+fileprivate
+grdsdev
+guilherme
+healthcheck
+IRHTTP
+nullable
+openapi
+ramanujan
+reencoded
+subdata
+Subrange
+TESTBOUNDARY
+typealias
+Typeless
+uppercased
+xcworkspace
+
 # Non-ASCII fixture data used to exercise Unicode-handling and URL-encoding
 # edge cases (BuildURLRequestTests, HTTPErrorTests).
 Cigányka
