@@ -250,19 +250,6 @@ for target in package.targets {
     continue
   }
 
-  // HTTPRuntime is the zero-dependency HTTP runtime that intentionally exposes
-  // Foundation types (URL, Data, etc.) in its public API for generated code.
-  // It doesn't use InternalImportsByDefault since it publicly re-exports Foundation types.
-  if target.name == "HTTPRuntime" || target.name == "HTTPRuntimeTests" {
-    target.swiftSettings = [
-      .enableUpcomingFeature("ExistentialAny"),
-      .enableUpcomingFeature("ImmutableWeakCaptures"),
-      .enableUpcomingFeature("InferIsolatedConformances"),
-      .enableUpcomingFeature("MemberImportVisibility"),
-    ]
-    continue
-  }
-
   var swiftSettings: [SwiftSetting] = [
     .enableUpcomingFeature("ExistentialAny"),
     .enableUpcomingFeature("ImmutableWeakCaptures"),

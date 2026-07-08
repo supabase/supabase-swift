@@ -4,7 +4,7 @@
 //
 //  Created by Guilherme Souza on 08/07/26.
 //
-import Foundation
+public import Foundation
 
 /// The status line and headers of a response, without the body.
 ///

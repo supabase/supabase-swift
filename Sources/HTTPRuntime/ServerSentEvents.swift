@@ -4,7 +4,7 @@
 //
 //  Created by Guilherme Souza on 08/07/26.
 //
-import Foundation
+public import Foundation
 
 /// A single Server-Sent Event frame (`text/event-stream`).
 public struct ServerSentEvent: Sendable, Hashable {
