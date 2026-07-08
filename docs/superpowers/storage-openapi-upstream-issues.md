@@ -19,3 +19,23 @@ while adopting swift-openapi-generator in this repo. File these upstream once co
   - `components.schemas.bucketSchema.properties.allowed_mime_types` — `["null", "array"]`
   - `paths./object/sign/{bucketName}.post.responses.200.content.application/json.schema.items.properties.error` — `["null", "string"]`
   - `paths./object/sign/{bucketName}.post.responses.200.content.application/json.schema.items.properties.signedURL` — `["null", "string"]`
+
+- **Second, larger batch of OpenAPI 3.1-only `anyOf` nullable syntax, also invalid under the
+  declared 3.0.3 version.** 12 properties use `anyOf: [<schema>, {"type": "null"}]` (the other
+  JSON-Schema-2020-12/3.1 way of expressing nullable), which 3.0.3 also doesn't support — nullable
+  there must be a plain `nullable: true` on the schema itself. swift-openapi-generator failed with
+  `Cannot initialize JSONType from invalid String value null` on `objectSchema.properties.id` and
+  the `/object/copy` response schema. Found while running Task 2 (after the first batch was
+  already fixed); patched by merging each non-null branch's keywords onto the parent schema and
+  setting `nullable: true` (commit 4651f5e3), not yet reported/fixed upstream. Exact locations not
+  individually enumerated here — see commit 4651f5e3's diff in this repo's history for the before
+  state if needed; a full re-scan after the fix confirmed zero remaining `type`-array or
+  `anyOf`-with-null occurrences anywhere in the document.
+
+- **`bucketUpdate`'s request body schema lists properties in `required` that don't exist at the
+  top level of `properties`.** swift-openapi-generator emits two non-fatal warnings for this
+  during generation (`public`/`file_size_limit`/`allowed_mime_types` appear in `required` without
+  a matching sibling in `properties` — likely because the real properties live inside an `anyOf`
+  branch rather than directly on the body schema). Doesn't block generation, not yet fixed on
+  either side. Reproduce with `./scripts/generate-storage-openapi.sh` and read the warnings on
+  `bucketUpdate`.
