@@ -32,10 +32,21 @@ while adopting swift-openapi-generator in this repo. File these upstream once co
   state if needed; a full re-scan after the fix confirmed zero remaining `type`-array or
   `anyOf`-with-null occurrences anywhere in the document.
 
-- **`bucketUpdate`'s request body schema lists properties in `required` that don't exist at the
-  top level of `properties`.** swift-openapi-generator emits two non-fatal warnings for this
-  during generation (`public`/`file_size_limit`/`allowed_mime_types` appear in `required` without
-  a matching sibling in `properties` — likely because the real properties live inside an `anyOf`
-  branch rather than directly on the body schema). Doesn't block generation, not yet fixed on
-  either side. Reproduce with `./scripts/generate-storage-openapi.sh` and read the warnings on
-  `bucketUpdate`.
+- **`bucketUpdate`'s request body schema had a redundant top-level `anyOf` that made
+  swift-openapi-generator drop the schema's sibling `properties` entirely.** The `PUT
+  /bucket/{bucketId}` request body declared `type: object`, `minProperties: 1`, and a normal
+  `properties` object (`public`/`file_size_limit`/`allowed_mime_types`) — but ALSO a top-level
+  `anyOf: [{required:[public]}, {required:[file_size_limit]}, {required:[allowed_mime_types]}]`
+  expressing "at least one of these three is present", which is already fully implied by
+  `minProperties: 1` given the schema has no other properties. swift-openapi-generator treats a
+  schema with a top-level `anyOf` as anyOf-driven and ignores the co-located `properties` (it
+  first only emitted two non-fatal warnings during generation, but confirmed while attempting
+  Task 10 of `docs/superpowers/plans/2026-07-08-storage-openapi-generator.md` that this actually
+  produces a request body type with zero usable properties — every field permanently `nil`, an
+  unusable/misleading generated type, not just a warning). Fixed in the vendored copy by deleting
+  the redundant top-level `anyOf` (kept `minProperties: 1` and `properties` — no semantic change,
+  the server still enforces "at least one field" and the old hand-written client never enforced it
+  client-side either), regenerated successfully with a normal populated body type. Not yet
+  reported/fixed upstream — the real fix upstream is likely just deleting that same redundant
+  `anyOf` from wherever `updateBucket.ts`'s route schema declares it (probably a documentation-only
+  addition since `minProperties: 1` already carries the constraint).

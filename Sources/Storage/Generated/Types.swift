@@ -4674,74 +4674,78 @@ internal enum Operations {
             internal enum Body: Sendable, Hashable {
                 /// - Remark: Generated from `#/paths/bucket/{bucketId}/PUT/requestBody/json`.
                 internal struct jsonPayload: Codable, Hashable, Sendable {
-                    /// - Remark: Generated from `#/paths/bucket/{bucketId}/PUT/requestBody/json/value1`.
-                    internal struct Value1Payload: Codable, Hashable, Sendable {
-                        /// Creates a new `Value1Payload`.
-                        internal init() {}
+                    /// - Remark: Generated from `#/paths/bucket/{bucketId}/PUT/requestBody/json/public`.
+                    internal var _public: Swift.Bool?
+                    /// - Remark: Generated from `#/paths/bucket/{bucketId}/PUT/requestBody/json/file_size_limit`.
+                    internal struct file_size_limitPayload: Codable, Hashable, Sendable {
+                        /// - Remark: Generated from `#/paths/bucket/{bucketId}/PUT/requestBody/json/file_size_limit/value1`.
+                        internal var value1: Swift.Int?
+                        /// - Remark: Generated from `#/paths/bucket/{bucketId}/PUT/requestBody/json/file_size_limit/value2`.
+                        internal var value2: Swift.String?
+                        /// Creates a new `file_size_limitPayload`.
+                        ///
+                        /// - Parameters:
+                        ///   - value1:
+                        ///   - value2:
+                        internal init(
+                            value1: Swift.Int? = nil,
+                            value2: Swift.String? = nil
+                        ) {
+                            self.value1 = value1
+                            self.value2 = value2
+                        }
+                        internal init(from decoder: any Swift.Decoder) throws {
+                            var errors: [any Swift.Error] = []
+                            do {
+                                self.value1 = try decoder.decodeFromSingleValueContainer()
+                            } catch {
+                                errors.append(error)
+                            }
+                            do {
+                                self.value2 = try decoder.decodeFromSingleValueContainer()
+                            } catch {
+                                errors.append(error)
+                            }
+                            try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                                [
+                                    self.value1,
+                                    self.value2
+                                ],
+                                type: Self.self,
+                                codingPath: decoder.codingPath,
+                                errors: errors
+                            )
+                        }
+                        internal func encode(to encoder: any Swift.Encoder) throws {
+                            try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                                self.value1,
+                                self.value2
+                            ])
+                        }
                     }
-                    /// - Remark: Generated from `#/paths/bucket/{bucketId}/PUT/requestBody/json/value1`.
-                    internal var value1: Operations.bucketUpdate.Input.Body.jsonPayload.Value1Payload?
-                    /// - Remark: Generated from `#/paths/bucket/{bucketId}/PUT/requestBody/json/value2`.
-                    internal struct Value2Payload: Codable, Hashable, Sendable {
-                        /// Creates a new `Value2Payload`.
-                        internal init() {}
-                    }
-                    /// - Remark: Generated from `#/paths/bucket/{bucketId}/PUT/requestBody/json/value2`.
-                    internal var value2: Operations.bucketUpdate.Input.Body.jsonPayload.Value2Payload?
-                    /// - Remark: Generated from `#/paths/bucket/{bucketId}/PUT/requestBody/json/value3`.
-                    internal struct Value3Payload: Codable, Hashable, Sendable {
-                        /// Creates a new `Value3Payload`.
-                        internal init() {}
-                    }
-                    /// - Remark: Generated from `#/paths/bucket/{bucketId}/PUT/requestBody/json/value3`.
-                    internal var value3: Operations.bucketUpdate.Input.Body.jsonPayload.Value3Payload?
+                    /// - Remark: Generated from `#/paths/bucket/{bucketId}/PUT/requestBody/json/file_size_limit`.
+                    internal var file_size_limit: Operations.bucketUpdate.Input.Body.jsonPayload.file_size_limitPayload?
+                    /// - Remark: Generated from `#/paths/bucket/{bucketId}/PUT/requestBody/json/allowed_mime_types`.
+                    internal var allowed_mime_types: [Swift.String]?
                     /// Creates a new `jsonPayload`.
                     ///
                     /// - Parameters:
-                    ///   - value1:
-                    ///   - value2:
-                    ///   - value3:
+                    ///   - _public:
+                    ///   - file_size_limit:
+                    ///   - allowed_mime_types:
                     internal init(
-                        value1: Operations.bucketUpdate.Input.Body.jsonPayload.Value1Payload? = nil,
-                        value2: Operations.bucketUpdate.Input.Body.jsonPayload.Value2Payload? = nil,
-                        value3: Operations.bucketUpdate.Input.Body.jsonPayload.Value3Payload? = nil
+                        _public: Swift.Bool? = nil,
+                        file_size_limit: Operations.bucketUpdate.Input.Body.jsonPayload.file_size_limitPayload? = nil,
+                        allowed_mime_types: [Swift.String]? = nil
                     ) {
-                        self.value1 = value1
-                        self.value2 = value2
-                        self.value3 = value3
+                        self._public = _public
+                        self.file_size_limit = file_size_limit
+                        self.allowed_mime_types = allowed_mime_types
                     }
-                    internal init(from decoder: any Swift.Decoder) throws {
-                        var errors: [any Swift.Error] = []
-                        do {
-                            self.value1 = try .init(from: decoder)
-                        } catch {
-                            errors.append(error)
-                        }
-                        do {
-                            self.value2 = try .init(from: decoder)
-                        } catch {
-                            errors.append(error)
-                        }
-                        do {
-                            self.value3 = try .init(from: decoder)
-                        } catch {
-                            errors.append(error)
-                        }
-                        try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
-                            [
-                                self.value1,
-                                self.value2,
-                                self.value3
-                            ],
-                            type: Self.self,
-                            codingPath: decoder.codingPath,
-                            errors: errors
-                        )
-                    }
-                    internal func encode(to encoder: any Swift.Encoder) throws {
-                        try self.value1?.encode(to: encoder)
-                        try self.value2?.encode(to: encoder)
-                        try self.value3?.encode(to: encoder)
+                    internal enum CodingKeys: String, CodingKey {
+                        case _public = "public"
+                        case file_size_limit
+                        case allowed_mime_types
                     }
                 }
                 /// - Remark: Generated from `#/paths/bucket/{bucketId}/PUT/requestBody/content/application\/json`.
