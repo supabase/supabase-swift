@@ -45,7 +45,7 @@ public enum OpenAPIParsing {
   ) throws -> (properties: [IRProperty], hoisted: [IRSchema]) {
     var properties: [IRProperty] = []
     var hoisted: [IRSchema] = []
-    for (propertyName, propertySchema) in objectContext.properties {
+    for (propertyName, propertySchema) in objectContext.properties.sorted(by: { $0.key < $1.key }) {
       let propertyLocation = "\(location).\(propertyName)"
       let isOptional = !propertySchema.required || propertySchema.nullable
 
