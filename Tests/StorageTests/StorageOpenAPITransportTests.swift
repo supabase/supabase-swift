@@ -61,4 +61,64 @@ final class StorageOpenAPITransportTests: XCTestCase {
 
     XCTAssertEqual(capturedRequest?.body, Data(#"{"name":"avatars"}"#.utf8))
   }
+
+  func testSendDropsAcceptHeader() async throws {
+    var capturedRequest: Helpers.HTTPRequest?
+
+    let transport = StorageOpenAPITransport(execute: { request in
+      capturedRequest = request
+      return Helpers.HTTPResponse(
+        data: Data(),
+        response: HTTPURLResponse(
+          url: URL(string: "http://localhost/storage/v1/bucket")!,
+          statusCode: 200,
+          httpVersion: nil,
+          headerFields: nil
+        )!
+      )
+    })
+
+    var request = HTTPTypes.HTTPRequest(
+      method: .get, scheme: nil, authority: nil, path: "/bucket")
+    request.headerFields[.accept] = "application/json"
+
+    _ = try await transport.send(
+      request,
+      body: nil,
+      baseURL: URL(string: "http://localhost/storage/v1")!,
+      operationID: "bucketList"
+    )
+
+    XCTAssertNil(capturedRequest?.headers[.accept])
+  }
+
+  func testSendNormalizesJSONContentTypeCharset() async throws {
+    var capturedRequest: Helpers.HTTPRequest?
+
+    let transport = StorageOpenAPITransport(execute: { request in
+      capturedRequest = request
+      return Helpers.HTTPResponse(
+        data: Data(),
+        response: HTTPURLResponse(
+          url: URL(string: "http://localhost/storage/v1/bucket")!,
+          statusCode: 200,
+          httpVersion: nil,
+          headerFields: nil
+        )!
+      )
+    })
+
+    var request = HTTPTypes.HTTPRequest(
+      method: .post, scheme: nil, authority: nil, path: "/bucket")
+    request.headerFields[.contentType] = "application/json; charset=utf-8"
+
+    _ = try await transport.send(
+      request,
+      body: HTTPBody(#"{"name":"avatars"}"#),
+      baseURL: URL(string: "http://localhost/storage/v1")!,
+      operationID: "bucketCreate"
+    )
+
+    XCTAssertEqual(capturedRequest?.headers[.contentType], "application/json")
+  }
 }

@@ -91,13 +91,12 @@ public class StorageApi: @unchecked Sendable {
 
     let mutableStateRef = mutableState
     let httpRef = http
-    let decoder = configuration.decoder
     openAPIClient = Client(
       serverURL: configuration.url,
       configuration: OpenAPIRuntime.Configuration(jsonEncodingOptions: [.sortedKeys]),
       transport: StorageOpenAPITransport(execute: { request in
-        try await Self.executeRequest(
-          request, headers: mutableStateRef.headers, http: httpRef, decoder: decoder)
+        try await Self.executeRequestWithoutStatusCheck(
+          request, headers: mutableStateRef.headers, http: httpRef)
       })
     )
   }
@@ -121,16 +120,29 @@ public class StorageApi: @unchecked Sendable {
     return self
   }
 
+  /// Merges the instance's stored headers into `request` without inspecting the response status.
+  ///
+  /// Shared by ``executeRequest(_:headers:http:decoder:)`` (which additionally throws on non-2xx
+  /// responses) and ``executeRequestWithoutStatusCheck(_:headers:http:)`` (used by the OpenAPI
+  /// transport, which must return the raw response so the facade can decode the real error body
+  /// from the generated `Output` type instead of a generic ``StorageError``).
+  private static func send(
+    _ request: Helpers.HTTPRequest,
+    headers: [String: String],
+    http: any HTTPClientType
+  ) async throws -> Helpers.HTTPResponse {
+    var request = request
+    request.headers = HTTPFields(headers).merging(with: request.headers)
+    return try await http.send(request)
+  }
+
   private static func executeRequest(
     _ request: Helpers.HTTPRequest,
     headers: [String: String],
     http: any HTTPClientType,
     decoder: JSONDecoder
   ) async throws -> Helpers.HTTPResponse {
-    var request = request
-    request.headers = HTTPFields(headers).merging(with: request.headers)
-
-    let response = try await http.send(request)
+    let response = try await send(request, headers: headers, http: http)
 
     guard (200..<300).contains(response.statusCode) else {
       if let error = try? decoder.decode(StorageError.self, from: response.data) {
@@ -140,6 +152,17 @@ public class StorageApi: @unchecked Sendable {
     }
 
     return response
+  }
+
+  /// Same request pipeline as ``executeRequest(_:headers:http:decoder:)`` but does not throw on
+  /// non-2xx responses. Used for the OpenAPI transport path, which must return the raw response so
+  /// error mapping happens in the generated-`Output`-aware facade methods instead.
+  private static func executeRequestWithoutStatusCheck(
+    _ request: Helpers.HTTPRequest,
+    headers: [String: String],
+    http: any HTTPClientType
+  ) async throws -> Helpers.HTTPResponse {
+    try await send(request, headers: headers, http: http)
   }
 
   @discardableResult

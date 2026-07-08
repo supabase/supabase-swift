@@ -417,4 +417,36 @@ final class StorageBucketAPITests: XCTestCase {
       options: BucketOptions(isPublic: false, fileSizeLimit: "1mb")
     )
   }
+
+  func testGetBucketThrowsBareStorageErrorOnNotFound() async throws {
+    Mock(
+      url: url.appendingPathComponent("bucket/missing-bucket"),
+      statusCode: 404,
+      data: [
+        .get: Data(
+          """
+          {
+            "statusCode": "404",
+            "error": "NotFound",
+            "message": "Bucket not found"
+          }
+          """.utf8
+        )
+      ]
+    )
+    .register()
+
+    do {
+      _ = try await storage.getBucket("missing-bucket")
+      XCTFail("expected getBucket to throw")
+    } catch let error as StorageError {
+      // A bare `StorageError` (not wrapped in `ClientError` by the OpenAPI runtime) with the
+      // real status/message decoded from the server's error body.
+      XCTAssertEqual(error.statusCode, "404")
+      XCTAssertEqual(error.error, "NotFound")
+      XCTAssertEqual(error.message, "Bucket not found")
+    } catch {
+      XCTFail("expected a bare StorageError, got \(type(of: error)): \(error)")
+    }
+  }
 }
