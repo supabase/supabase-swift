@@ -639,7 +639,7 @@ Expected: PASS (current hand-written implementation).
 
 - [ ] **Step 2: Add the `Bucket` ↔ generated-schema bridge**
 
-In `Sources/Storage/Types.swift`, immediately after the `Bucket` struct's `CodingKeys` (after
+In `Sources/Storage/StorageTypes.swift`, immediately after the `Bucket` struct's `CodingKeys` (after
 `Types.swift:649`, before the `// MARK: - StorageByteCount` comment), add:
 
 ```swift
@@ -694,9 +694,9 @@ apply here).
 - [ ] **Step 5: Format and commit**
 
 ```bash
-./scripts/format.sh Sources/Storage/Types.swift Sources/Storage/StorageBucketApi.swift
+./scripts/format.sh Sources/Storage/StorageTypes.swift Sources/Storage/StorageBucketApi.swift
 swift test --filter StorageBucketAPITests
-git add Sources/Storage/Types.swift Sources/Storage/StorageBucketApi.swift
+git add Sources/Storage/StorageTypes.swift Sources/Storage/StorageBucketApi.swift
 git commit -m "refactor(storage): migrate listBuckets() to generated OpenAPI client"
 ```
 
