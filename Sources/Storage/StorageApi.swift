@@ -94,6 +94,7 @@ public class StorageApi: @unchecked Sendable {
     let decoder = configuration.decoder
     openAPIClient = Client(
       serverURL: configuration.url,
+      configuration: OpenAPIRuntime.Configuration(jsonEncodingOptions: [.sortedKeys]),
       transport: StorageOpenAPITransport(execute: { request in
         try await Self.executeRequest(
           request, headers: mutableStateRef.headers, http: httpRef, decoder: decoder)
