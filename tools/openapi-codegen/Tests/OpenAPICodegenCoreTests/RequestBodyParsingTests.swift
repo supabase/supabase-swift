@@ -27,9 +27,11 @@ struct RequestBodyParsingTests {
         }
       }
       """
-    let body = try OpenAPIParsing.parseRequestBody(requestBody(json), location: "updateBucket")
+    let (body, hoisted) = try OpenAPIParsing.parseRequestBody(
+      requestBody(json), location: "updateBucket")
 
     #expect(body == .json(.schemaRef("bucketUpdate")))
+    #expect(hoisted.isEmpty)
   }
 
   @Test
@@ -49,7 +51,8 @@ struct RequestBodyParsingTests {
         }
       }
       """
-    let body = try OpenAPIParsing.parseRequestBody(requestBody(json), location: "createObject")
+    let (body, hoisted) = try OpenAPIParsing.parseRequestBody(
+      requestBody(json), location: "createObject")
 
     guard case .multipart(let fields) = body else {
       Issue.record("expected a multipart request body")
@@ -58,6 +61,7 @@ struct RequestBodyParsingTests {
     let byName = Dictionary(uniqueKeysWithValues: fields.map { ($0.name, $0) })
     #expect(byName["cacheControl"]?.isFile == false)
     #expect(byName[""]?.isFile == true)
+    #expect(hoisted.isEmpty)
   }
 
   @Test
@@ -68,5 +72,34 @@ struct RequestBodyParsingTests {
     #expect(throws: UnsupportedSpecConstruct.self) {
       try OpenAPIParsing.parseRequestBody(try requestBody(json), location: "op")
     }
+  }
+
+  @Test
+  func hoistsInlineObjectRequestBody() throws {
+    let json = """
+      {
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "sourceKey": {"type": "string"},
+                "metadata": {
+                  "type": "object",
+                  "properties": {"cacheControl": {"type": "string"}}
+                }
+              }
+            }
+          }
+        }
+      }
+      """
+    let (body, hoisted) = try OpenAPIParsing.parseRequestBody(
+      requestBody(json), location: "copyObject")
+
+    #expect(body == .json(.schemaRef("copyObject_requestBody")))
+    #expect(hoisted.count == 2)
+    #expect(hoisted[0].name == "copyObject_requestBody")
+    #expect(hoisted[1].name == "copyObject_requestBody_metadata")
   }
 }

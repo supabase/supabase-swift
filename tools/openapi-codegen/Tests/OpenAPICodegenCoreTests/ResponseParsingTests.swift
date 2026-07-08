@@ -27,7 +27,7 @@ struct ResponseParsingTests {
       """
     let responses = try JSONDecoder().decode(OpenAPI.Response.Map.self, from: Data(json.utf8))
 
-    let irResponses = try OpenAPIParsing.parseResponses(responses, location: "getBucket")
+    let (irResponses, hoisted) = try OpenAPIParsing.parseResponses(responses, location: "getBucket")
 
     #expect(irResponses.count == 2)
     #expect(irResponses[0].statusCode == 200)
@@ -36,6 +36,7 @@ struct ResponseParsingTests {
     #expect(irResponses[1].statusCode == 404)
     #expect(irResponses[1].isError == true)
     #expect(irResponses[1].body == .json(.schemaRef("errorSchema")))
+    #expect(hoisted.isEmpty)
   }
 
   @Test
@@ -50,9 +51,10 @@ struct ResponseParsingTests {
       """
     let responses = try JSONDecoder().decode(OpenAPI.Response.Map.self, from: Data(json.utf8))
 
-    let irResponses = try OpenAPIParsing.parseResponses(responses, location: "download")
+    let (irResponses, hoisted) = try OpenAPIParsing.parseResponses(responses, location: "download")
 
     #expect(irResponses[0].body == .binary)
+    #expect(hoisted.isEmpty)
   }
 
   @Test
@@ -65,10 +67,45 @@ struct ResponseParsingTests {
       """
     let responses = try JSONDecoder().decode(OpenAPI.Response.Map.self, from: Data(json.utf8))
 
-    let irResponses = try OpenAPIParsing.parseResponses(responses, location: "op")
+    let (irResponses, hoisted) = try OpenAPIParsing.parseResponses(responses, location: "op")
 
     #expect(irResponses.count == 1)
     #expect(irResponses[0].statusCode == 200)
+    #expect(hoisted.isEmpty)
+  }
+
+  @Test
+  func hoistsInlineObjectResponseBody() throws {
+    let json = """
+      {
+        "200": {
+          "description": "ok",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "key": {"type": "string"},
+                  "metadata": {
+                    "type": "object",
+                    "properties": {"cacheControl": {"type": "string"}}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      """
+    let responses = try JSONDecoder().decode(OpenAPI.Response.Map.self, from: Data(json.utf8))
+
+    let (irResponses, hoisted) = try OpenAPIParsing.parseResponses(
+      responses, location: "copyObject")
+
+    #expect(irResponses[0].body == .json(.schemaRef("copyObject -> 200_response")))
+    #expect(hoisted.count == 2)
+    #expect(hoisted[0].name == "copyObject -> 200_response")
+    #expect(hoisted[1].name == "copyObject -> 200_response_metadata")
   }
 
   @Test
