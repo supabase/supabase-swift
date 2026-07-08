@@ -66,4 +66,32 @@ struct UnionParsingTests {
       try OpenAPIParsing.parseNamedSchema(name: "widget", schema: schema)
     }
   }
+
+  @Test
+  func disambiguatesCollidingCaseNamesInTheSameUnion() throws {
+    let json = """
+      {
+        "type": "object",
+        "properties": {
+          "value": {
+            "anyOf": [
+              {"type": "array", "items": {"type": "string"}},
+              {"type": "array", "items": {"type": "integer"}}
+            ]
+          }
+        }
+      }
+      """
+    let schema = try JSONDecoder().decode(JSONSchema.self, from: Data(json.utf8))
+
+    let irSchemas = try OpenAPIParsing.parseNamedSchema(name: "widget", schema: schema)
+
+    #expect(irSchemas.count == 2)
+    #expect(
+      irSchemas[1].kind
+        == .union(cases: [
+          IRUnionCase(name: "array", type: .array(.string)),
+          IRUnionCase(name: "array2", type: .array(.integer)),
+        ]))
+  }
 }

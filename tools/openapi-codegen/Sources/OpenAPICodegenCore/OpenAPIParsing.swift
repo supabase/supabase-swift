@@ -108,9 +108,14 @@ public enum OpenAPIParsing {
     default: return nil
     }
     var cases: [IRUnionCase] = []
+    var usedNames: [String: Int] = [:]
     for (index, branch) in branches.enumerated() {
       let branchType = try parseType(branch, location: "\(location)[\(index)]")
-      cases.append(IRUnionCase(name: unionCaseName(for: branchType), type: branchType))
+      let baseName = unionCaseName(for: branchType)
+      let occurrence = (usedNames[baseName] ?? 0) + 1
+      usedNames[baseName] = occurrence
+      let caseName = occurrence == 1 ? baseName : "\(baseName)\(occurrence)"
+      cases.append(IRUnionCase(name: caseName, type: branchType))
     }
     return (.schemaRef(name), IRSchema(name: name, kind: .union(cases: cases)))
   }
