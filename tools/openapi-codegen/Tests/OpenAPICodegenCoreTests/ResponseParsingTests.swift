@@ -153,4 +153,37 @@ struct ResponseParsingTests {
     #expect(irDocument.operations[0].method == .get)
     #expect(irDocument.operations[0].path == "/bucket/{bucketId}")
   }
+
+  @Test
+  func skipsOperationsWithoutAnOperationId() throws {
+    let json = """
+      {
+        "openapi": "3.0.3",
+        "info": {"title": "Storage", "version": "1.0.0"},
+        "paths": {
+          "/bucket/{bucketId}": {
+            "get": {
+              "operationId": "getBucket",
+              "parameters": [
+                {"name": "bucketId", "in": "path", "required": true, "schema": {"type": "string"}}
+              ],
+              "responses": {"200": {"description": "ok", "content": {}}}
+            }
+          },
+          "/metrics": {
+            "get": {
+              "responses": {"200": {"description": "ok", "content": {}}}
+            }
+          }
+        },
+        "components": {"schemas": {}}
+      }
+      """
+    let document = try JSONDecoder().decode(OpenAPI.Document.self, from: Data(json.utf8))
+
+    let irDocument = try OpenAPIParsing.parseDocument(document)
+
+    #expect(irDocument.operations.count == 1)
+    #expect(irDocument.operations[0].operationId == "getBucket")
+  }
 }
