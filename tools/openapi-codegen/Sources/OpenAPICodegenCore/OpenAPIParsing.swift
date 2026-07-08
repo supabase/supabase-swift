@@ -121,7 +121,7 @@ public enum OpenAPIParsing {
   static func parseParameter(
     _ either: Either<JSONReference<OpenAPI.Parameter>, OpenAPI.Parameter>,
     location: String
-  ) throws -> IRParameter {
+  ) throws -> (parameter: IRParameter, hoisted: IRSchema?) {
     guard let parameter = either.parameterValue else {
       throw UnsupportedSpecConstruct(location: location, reason: "external parameter reference")
     }
@@ -139,12 +139,24 @@ public enum OpenAPIParsing {
       throw UnsupportedSpecConstruct(
         location: parameterLocation, reason: "parameter uses 'content' instead of 'schema'")
     }
-    return IRParameter(
+    if case .string = schema.value, let allowedValues = schema.allowedValues {
+      let hoistedName = "\(location)_\(parameter.name)"
+      let cases = allowedValues.compactMap { $0.value as? String }
+      let irParameter = IRParameter(
+        name: parameter.name,
+        location: irLocation,
+        type: .schemaRef(hoistedName),
+        isOptional: !parameter.required || schema.nullable
+      )
+      return (irParameter, IRSchema(name: hoistedName, kind: .stringEnum(cases: cases)))
+    }
+    let irParameter = IRParameter(
       name: parameter.name,
       location: irLocation,
       type: try parseType(schema, location: parameterLocation),
       isOptional: !parameter.required || schema.nullable
     )
+    return (irParameter, nil)
   }
 
   // MARK: - Schema references in content bodies
@@ -305,7 +317,11 @@ public enum OpenAPIParsing {
         }
         var parameters: [IRParameter] = []
         for parameterEither in pathItem.parameters + operation.parameters {
-          parameters.append(try parseParameter(parameterEither, location: operationId))
+          let (parameter, parameterHoisted) = try parseParameter(parameterEither, location: operationId)
+          parameters.append(parameter)
+          if let parameterHoisted {
+            hoisted.append(parameterHoisted)
+          }
         }
         var requestBody: IRRequestBody?
         if let requestBodyEither = operation.requestBody {
