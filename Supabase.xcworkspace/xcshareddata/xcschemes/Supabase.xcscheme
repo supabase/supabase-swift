@@ -171,6 +171,17 @@
             parallelizable = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
+               BlueprintIdentifier = "HTTPRuntimeTests"
+               BuildableName = "HTTPRuntimeTests"
+               BlueprintName = "HTTPRuntimeTests"
+               ReferencedContainer = "container:">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
                BlueprintIdentifier = "HelpersTests"
                BuildableName = "HelpersTests"
                BlueprintName = "HelpersTests"
@@ -207,6 +218,17 @@
                BlueprintIdentifier = "StorageTests"
                BuildableName = "StorageTests"
                BlueprintName = "StorageTests"
+               ReferencedContainer = "container:">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "StorageOpenAPITests"
+               BuildableName = "StorageOpenAPITests"
+               BlueprintName = "StorageOpenAPITests"
                ReferencedContainer = "container:">
             </BuildableReference>
          </TestableReference>
