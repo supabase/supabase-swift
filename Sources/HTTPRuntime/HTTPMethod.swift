@@ -14,4 +14,6 @@ public enum HTTPMethod: String, Sendable, Hashable {
   case patch = "PATCH"
   case delete = "DELETE"
   case head = "HEAD"
+  case options = "OPTIONS"
+  case trace = "TRACE"
 }

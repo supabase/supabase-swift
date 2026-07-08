@@ -200,6 +200,19 @@ let package = Package(
       ]
     ),
     .target(
+      name: "StorageOpenAPI",
+      dependencies: [
+        "HTTPRuntime"
+      ]
+    ),
+    .testTarget(
+      name: "StorageOpenAPITests",
+      dependencies: [
+        "StorageOpenAPI",
+        "HTTPRuntime",
+      ]
+    ),
+    .target(
       name: "Supabase",
       dependencies: [
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
@@ -239,7 +252,9 @@ let package = Package(
 // Test targets migrated to Swift Testing get full Swift 6 checking, same as
 // production targets. Everything else stays pinned to v5 until its migration
 // phase lands (see SDK-435).
-let swift6TestTargets: Set<String> = ["SupabaseTests", "HelpersTests", "HTTPRuntimeTests"]
+let swift6TestTargets: Set<String> = [
+  "SupabaseTests", "HelpersTests", "HTTPRuntimeTests", "StorageOpenAPITests",
+]
 
 for target in package.targets {
   // Test targets never opted into `ExistentialAny` below, so bumping swift-tools-version
