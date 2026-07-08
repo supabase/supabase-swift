@@ -55,6 +55,15 @@ let package = Package(
       ]
     ),
     .target(
+      name: "HTTPRuntime"
+    ),
+    .testTarget(
+      name: "HTTPRuntimeTests",
+      dependencies: [
+        "HTTPRuntime"
+      ]
+    ),
+    .target(
       name: "Auth",
       dependencies: [
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
@@ -247,7 +256,7 @@ let package = Package(
 // Test targets migrated to Swift Testing get full Swift 6 checking, same as
 // production targets. Everything else stays pinned to v5 until its migration
 // phase lands (see SDK-435).
-let swift6TestTargets: Set<String> = ["SupabaseTests", "HelpersTests"]
+let swift6TestTargets: Set<String> = ["SupabaseTests", "HelpersTests", "HTTPRuntimeTests"]
 
 for target in package.targets {
   // Test targets never opted into `ExistentialAny` below, so bumping swift-tools-version
@@ -255,6 +264,19 @@ for target in package.targets {
   // pin the rest to v5 to preserve their pre-6.1 compilation behavior exactly.
   if target.isTest, !swift6TestTargets.contains(target.name) {
     target.swiftSettings = [.swiftLanguageMode(.v5)]
+    continue
+  }
+
+  // HTTPRuntime is the zero-dependency HTTP runtime that intentionally exposes
+  // Foundation types (URL, Data, etc.) in its public API for generated code.
+  // It doesn't use InternalImportsByDefault since it publicly re-exports Foundation types.
+  if target.name == "HTTPRuntime" || target.name == "HTTPRuntimeTests" {
+    target.swiftSettings = [
+      .enableUpcomingFeature("ExistentialAny"),
+      .enableUpcomingFeature("ImmutableWeakCaptures"),
+      .enableUpcomingFeature("InferIsolatedConformances"),
+      .enableUpcomingFeature("MemberImportVisibility"),
+    ]
     continue
   }
 
