@@ -1,0 +1,78 @@
+//
+//  OpenAPIParsing.swift
+//
+
+import OpenAPIKit30
+
+/// Thrown when the input spec uses a construct this generator deliberately
+/// doesn't support (see the plan's Global Constraints for the full list).
+/// Never guess at an unfamiliar shape — fail with the exact location instead.
+struct UnsupportedSpecConstruct: Error, CustomStringConvertible, Equatable {
+  var location: String
+  var reason: String
+
+  var description: String { "Unsupported OpenAPI construct at \(location): \(reason)" }
+}
+
+enum OpenAPIParsing {
+
+  // MARK: - Schemas
+
+  static func parseNamedSchema(name: String, schema: JSONSchema) throws -> IRSchema {
+    if case .string = schema.value, let allowedValues = schema.allowedValues {
+      let cases = allowedValues.compactMap { $0.value as? String }
+      return IRSchema(name: name, kind: .stringEnum(cases: cases))
+    }
+    guard case .object(_, let objectContext) = schema.value else {
+      throw UnsupportedSpecConstruct(
+        location: "components.schemas.\(name)",
+        reason: "top-level schema must be an object or a string enum"
+      )
+    }
+    var properties: [IRProperty] = []
+    for (propertyName, propertySchema) in objectContext.properties {
+      properties.append(
+        IRProperty(
+          name: propertyName,
+          type: try parseType(propertySchema, location: "\(name).\(propertyName)"),
+          isOptional: !propertySchema.required || propertySchema.nullable
+        )
+      )
+    }
+    return IRSchema(name: name, kind: .object(properties: properties))
+  }
+
+  static func parseType(_ schema: JSONSchema, location: String) throws -> IRType {
+    if case .string = schema.value, schema.allowedValues != nil {
+      throw UnsupportedSpecConstruct(
+        location: location,
+        reason: "inline enum; register it as a named component schema instead"
+      )
+    }
+    switch schema.value {
+    case .string:
+      return .string
+    case .integer:
+      return .integer
+    case .number:
+      return .number
+    case .boolean:
+      return .boolean
+    case .array(_, let arrayContext):
+      guard let items = arrayContext.items else {
+        throw UnsupportedSpecConstruct(location: location, reason: "array schema without 'items'")
+      }
+      return .array(try parseType(items, location: location + "[]"))
+    case .object(_, let objectContext) where objectContext.properties.isEmpty:
+      return .freeform
+    case .reference(let reference, _):
+      guard let name = reference.name else {
+        throw UnsupportedSpecConstruct(
+          location: location, reason: "external reference without a resolvable name")
+      }
+      return .schemaRef(name)
+    default:
+      throw UnsupportedSpecConstruct(location: location, reason: "unsupported schema shape")
+    }
+  }
+}
