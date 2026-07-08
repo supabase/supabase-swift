@@ -102,4 +102,29 @@ struct RequestBodyParsingTests {
     #expect(hoisted[0].name == "copyObject_requestBody")
     #expect(hoisted[1].name == "copyObject_requestBody_metadata")
   }
+
+  @Test
+  func hoistsArrayOfInlineObjectRequestBody() throws {
+    let json = """
+      {
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {"path": {"type": "string"}}
+              }
+            }
+          }
+        }
+      }
+      """
+    let (body, hoisted) = try OpenAPIParsing.parseRequestBody(
+      requestBody(json), location: "deleteObjects")
+
+    #expect(body == .json(.array(.schemaRef("deleteObjects_requestBodyItem"))))
+    #expect(hoisted.count == 1)
+    #expect(hoisted[0].name == "deleteObjects_requestBodyItem")
+  }
 }

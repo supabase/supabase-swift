@@ -79,6 +79,14 @@ public enum OpenAPIParsing {
         continue
       }
 
+      if let (type, arrayHoisted) = try hoistArrayOfObjectIfPresent(
+        name: "\(name)_\(propertyName)", schema: propertySchema, location: propertyLocation)
+      {
+        hoisted.append(contentsOf: arrayHoisted)
+        properties.append(IRProperty(name: propertyName, type: type, isOptional: isOptional))
+        continue
+      }
+
       properties.append(
         IRProperty(
           name: propertyName,
@@ -118,6 +126,30 @@ public enum OpenAPIParsing {
       cases.append(IRUnionCase(name: caseName, type: branchType))
     }
     return (.schemaRef(name), IRSchema(name: name, kind: .union(cases: cases)))
+  }
+
+  /// If `schema` is an array whose `items` is an inline object with
+  /// properties (not a `$ref`, not empty), hoists the item type into its own
+  /// named schema instead of failing. Returns `nil` if `schema` isn't an
+  /// array-of-inline-object, so callers fall through to their existing logic.
+  private static func hoistArrayOfObjectIfPresent(
+    name: String,
+    schema: JSONSchema,
+    location: String
+  ) throws -> (type: IRType, hoisted: [IRSchema])? {
+    guard case .array(_, let arrayContext) = schema.value,
+      let items = arrayContext.items,
+      case .object(_, let objectContext) = items.value,
+      !objectContext.properties.isEmpty
+    else {
+      return nil
+    }
+    let hoistedName = "\(name)Item"
+    let (properties, nestedHoisted) = try parseObjectProperties(
+      name: hoistedName, objectContext: objectContext, location: "\(location)[]")
+    let hoisted =
+      [IRSchema(name: hoistedName, kind: .object(properties: properties))] + nestedHoisted
+    return (.array(.schemaRef(hoistedName)), hoisted)
   }
 
   private static func unionCaseName(for type: IRType) -> String {
@@ -173,7 +205,7 @@ public enum OpenAPIParsing {
   static func parseParameter(
     _ either: Either<JSONReference<OpenAPI.Parameter>, OpenAPI.Parameter>,
     location: String
-  ) throws -> (parameter: IRParameter, hoisted: IRSchema?) {
+  ) throws -> (parameter: IRParameter, hoisted: [IRSchema]) {
     guard let parameter = either.parameterValue else {
       throw UnsupportedSpecConstruct(location: location, reason: "external parameter reference")
     }
@@ -200,7 +232,7 @@ public enum OpenAPIParsing {
         type: .schemaRef(hoistedName),
         isOptional: !parameter.required || schema.nullable
       )
-      return (irParameter, IRSchema(name: hoistedName, kind: .stringEnum(cases: cases)))
+      return (irParameter, [IRSchema(name: hoistedName, kind: .stringEnum(cases: cases))])
     }
     if let (type, hoistedSchema) = try hoistUnionIfPresent(
       name: "\(location)_\(parameter.name)", schema: schema, location: parameterLocation)
@@ -211,7 +243,18 @@ public enum OpenAPIParsing {
         type: type,
         isOptional: !parameter.required || schema.nullable
       )
-      return (irParameter, hoistedSchema)
+      return (irParameter, [hoistedSchema])
+    }
+    if let (type, arrayHoisted) = try hoistArrayOfObjectIfPresent(
+      name: "\(location)_\(parameter.name)", schema: schema, location: parameterLocation)
+    {
+      let irParameter = IRParameter(
+        name: parameter.name,
+        location: irLocation,
+        type: type,
+        isOptional: !parameter.required || schema.nullable
+      )
+      return (irParameter, arrayHoisted)
     }
     let irParameter = IRParameter(
       name: parameter.name,
@@ -219,7 +262,7 @@ public enum OpenAPIParsing {
       type: try parseType(schema, location: parameterLocation),
       isOptional: !parameter.required || schema.nullable
     )
-    return (irParameter, nil)
+    return (irParameter, [])
   }
 
   // MARK: - Schema references in content bodies
@@ -272,6 +315,12 @@ public enum OpenAPIParsing {
           name: "\(location)_requestBody", schema: inlineSchema, location: location)
       {
         return (.json(type), [hoistedSchema])
+      }
+      if case .b(let inlineSchema) = schemaEither,
+        let (type, arrayHoisted) = try hoistArrayOfObjectIfPresent(
+          name: "\(location)_requestBody", schema: inlineSchema, location: location)
+      {
+        return (.json(type), arrayHoisted)
       }
       return (.json(try resolveSchema(schemaEither, location: location)), [])
     }
@@ -357,6 +406,12 @@ public enum OpenAPIParsing {
       {
         return (.json(type), [hoistedSchema])
       }
+      if case .b(let inlineSchema) = schemaEither,
+        let (type, arrayHoisted) = try hoistArrayOfObjectIfPresent(
+          name: "\(operationId)_response\(statusCode)", schema: inlineSchema, location: location)
+      {
+        return (.json(type), arrayHoisted)
+      }
       return (.json(try resolveSchema(schemaEither, location: location)), [])
     }
     return (content.isEmpty ? .none : .binary, [])
@@ -393,9 +448,7 @@ public enum OpenAPIParsing {
         for parameterEither in pathItem.parameters + operation.parameters {
           let (parameter, parameterHoisted) = try parseParameter(parameterEither, location: operationId)
           parameters.append(parameter)
-          if let parameterHoisted {
-            hoisted.append(parameterHoisted)
-          }
+          hoisted.append(contentsOf: parameterHoisted)
         }
         var requestBody: IRRequestBody?
         if let requestBodyEither = operation.requestBody {

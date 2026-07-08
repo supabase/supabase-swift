@@ -29,7 +29,7 @@ struct ParameterParsingTests {
     #expect(irParameter.location == .path)
     #expect(irParameter.type == .string)
     #expect(irParameter.isOptional == false)
-    #expect(hoisted == nil)
+    #expect(hoisted.isEmpty)
   }
 
   @Test
@@ -42,7 +42,7 @@ struct ParameterParsingTests {
     #expect(irParameter.location == .query)
     #expect(irParameter.type == .integer)
     #expect(irParameter.isOptional == true)
-    #expect(hoisted == nil)
+    #expect(hoisted.isEmpty)
   }
 
   @Test
@@ -53,7 +53,7 @@ struct ParameterParsingTests {
     let (irParameter, hoisted) = try OpenAPIParsing.parseParameter(parameter(json), location: "op")
 
     #expect(irParameter.location == .header)
-    #expect(hoisted == nil)
+    #expect(hoisted.isEmpty)
   }
 
   @Test
@@ -75,7 +75,31 @@ struct ParameterParsingTests {
 
     #expect(irParameter.name == "resize")
     #expect(irParameter.type == .schemaRef("renderImagePublic_resize"))
-    #expect(hoisted?.name == "renderImagePublic_resize")
-    #expect(hoisted?.kind == .stringEnum(cases: ["cover", "contain", "fill"]))
+    #expect(hoisted.count == 1)
+    #expect(hoisted.first?.name == "renderImagePublic_resize")
+    #expect(hoisted.first?.kind == .stringEnum(cases: ["cover", "contain", "fill"]))
+  }
+
+  @Test
+  func hoistsArrayOfInlineObjectParameterIntoItsOwnNamedSchema() throws {
+    let json = """
+      {
+        "name": "paths",
+        "in": "query",
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {"path": {"type": "string"}}
+          }
+        }
+      }
+      """
+    let (irParameter, hoisted) = try OpenAPIParsing.parseParameter(parameter(json), location: "listObjects")
+
+    #expect(irParameter.name == "paths")
+    #expect(irParameter.type == .array(.schemaRef("listObjects_pathsItem")))
+    #expect(hoisted.count == 1)
+    #expect(hoisted.first?.name == "listObjects_pathsItem")
   }
 }
