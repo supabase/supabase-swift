@@ -286,15 +286,14 @@ public final class PostgrestClient: Sendable {
     if head || get {
       method = head ? .head : .get
 
-      guard let json = try JSONSerialization.jsonObject(with: bodyData) as? [String: Any] else {
+      guard case .object(let json) = try AnyJSON.decoder.decode(AnyJSON.self, from: bodyData) else {
         throw PostgrestError(
           message: "Params should be a key-value type when using `GET` or `HEAD` options."
         )
       }
 
       for (key, value) in json {
-        let formattedValue = (value as? [Any]).map(cleanFilterArray) ?? String(describing: value)
-        url.appendQueryItems([URLQueryItem(name: key, value: formattedValue)])
+        url.appendQueryItems([URLQueryItem(name: key, value: queryValue(for: value))])
       }
 
     } else {
@@ -364,8 +363,30 @@ public final class PostgrestClient: Sendable {
     return PostgrestClient(configuration: configuration)
   }
 
-  private func cleanFilterArray(_ filter: [Any]) -> String {
-    "{\(filter.map { String(describing: $0) }.joined(separator: ","))}"
+  private func queryValue(for value: AnyJSON) -> String {
+    switch value {
+    case .null:
+      return "null"
+    case .bool(let bool):
+      return bool ? "true" : "false"
+    case .integer(let integer):
+      return String(integer)
+    case .double(let double):
+      return String(double)
+    case .string(let string):
+      return string
+    case .array(let array):
+      return "{\(array.map(queryValue(for:)).joined(separator: ","))}"
+    case .object:
+      let encoder = JSONEncoder()
+      encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+      if let data = try? encoder.encode(value),
+        let json = String(data: data, encoding: .utf8)
+      {
+        return json
+      }
+      return ""
+    }
   }
 }
 
