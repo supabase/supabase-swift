@@ -39,6 +39,8 @@ public enum SwiftEmitter {
       return emitStruct(named: typeName, properties: properties, isError: isError)
     case .stringEnum(let cases):
       return emitStringEnum(named: typeName, cases: cases, isError: isError)
+    case .union(let cases):
+      return emitUnion(named: typeName, cases: cases, isError: isError)
     }
   }
 
@@ -69,6 +71,47 @@ public enum SwiftEmitter {
     for value in cases {
       lines.append("  case \(SwiftNames.propertyName(value)) = \"\(value)\"")
     }
+    lines.append("}")
+    return lines.joined(separator: "\n")
+  }
+
+  static func emitUnion(named typeName: String, cases: [IRUnionCase], isError: Bool) -> String {
+    let conformances = (["Codable", "Sendable", "Hashable"] + (isError ? ["APIError"] : []))
+      .joined(separator: ", ")
+    var lines = ["public enum \(typeName): \(conformances) {"]
+    for unionCase in cases {
+      let caseName = SwiftNames.propertyName(unionCase.name)
+      let typeRef = SwiftNames.typeReference(unionCase.type, isOptional: false)
+      lines.append("  case \(caseName)(\(typeRef))")
+    }
+    lines.append("")
+    lines.append("  public init(from decoder: Decoder) throws {")
+    lines.append("    let container = try decoder.singleValueContainer()")
+    for unionCase in cases {
+      let caseName = SwiftNames.propertyName(unionCase.name)
+      let typeRef = SwiftNames.typeReference(unionCase.type, isOptional: false)
+      lines.append("    if let value = try? container.decode(\(typeRef).self) {")
+      lines.append("      self = .\(caseName)(value)")
+      lines.append("      return")
+      lines.append("    }")
+    }
+    lines.append("    throw DecodingError.typeMismatch(")
+    lines.append("      \(typeName).self,")
+    lines.append(
+      "      DecodingError.Context(codingPath: decoder.codingPath, debugDescription: \"no matching case\")"
+    )
+    lines.append("    )")
+    lines.append("  }")
+    lines.append("")
+    lines.append("  public func encode(to encoder: Encoder) throws {")
+    lines.append("    var container = encoder.singleValueContainer()")
+    lines.append("    switch self {")
+    for unionCase in cases {
+      let caseName = SwiftNames.propertyName(unionCase.name)
+      lines.append("    case .\(caseName)(let value): try container.encode(value)")
+    }
+    lines.append("    }")
+    lines.append("  }")
     lines.append("}")
     return lines.joined(separator: "\n")
   }
