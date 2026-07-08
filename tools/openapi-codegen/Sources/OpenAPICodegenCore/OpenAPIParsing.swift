@@ -172,4 +172,100 @@ enum OpenAPIParsing {
     throw UnsupportedSpecConstruct(
       location: location, reason: "unsupported request body content type(s): \(contentTypes)")
   }
+
+  // MARK: - Responses
+
+  static func parseResponses(
+    _ responses: OpenAPI.Response.Map,
+    location: String
+  ) throws -> [IRResponse] {
+    var results: [IRResponse] = []
+    for (statusCode, responseEither) in responses {
+      guard case .status(let code) = statusCode.value else {
+        // `default` and range ("4XX") responses aren't modeled in v1; skip them.
+        continue
+      }
+      guard let response = responseEither.responseValue else {
+        throw UnsupportedSpecConstruct(
+          location: location, reason: "external response reference for status \(code)")
+      }
+      let body = try parseResponseBody(response.content, location: "\(location) -> \(code)")
+      results.append(IRResponse(statusCode: code, isError: !statusCode.isSuccess, body: body))
+    }
+    return results.sorted { $0.statusCode < $1.statusCode }
+  }
+
+  static func parseResponseBody(
+    _ content: OpenAPI.Content.Map,
+    location: String
+  ) throws -> IRResponseBody {
+    if let jsonContent = content.first(where: { $0.key.typeAndSubtype == "application/json" })?
+      .value
+    {
+      guard let schema = jsonContent.schema else { return .none }
+      return .json(try resolveSchema(schema, location: location))
+    }
+    return content.isEmpty ? .none : .binary
+  }
+
+  // MARK: - Operations
+
+  static func parseOperations(_ document: OpenAPI.Document) throws -> [IROperation] {
+    var operations: [IROperation] = []
+    for (path, pathItemEither) in document.paths {
+      guard let pathItem = pathItemEither.pathItemValue else {
+        throw UnsupportedSpecConstruct(
+          location: path.rawValue, reason: "external path item reference")
+      }
+      let methodOperations: [(IRHTTPMethod, OpenAPI.Operation?)] = [
+        (.get, pathItem.get),
+        (.put, pathItem.put),
+        (.post, pathItem.post),
+        (.delete, pathItem.delete),
+        (.options, pathItem.options),
+        (.head, pathItem.head),
+        (.patch, pathItem.patch),
+        (.trace, pathItem.trace),
+      ]
+      for (method, maybeOperation) in methodOperations {
+        guard let operation = maybeOperation else { continue }
+        let operationLocation = "\(method.rawValue.uppercased()) \(path.rawValue)"
+        guard let operationId = operation.operationId else {
+          throw UnsupportedSpecConstruct(location: operationLocation, reason: "missing operationId")
+        }
+        var parameters: [IRParameter] = []
+        for parameterEither in pathItem.parameters + operation.parameters {
+          parameters.append(try parseParameter(parameterEither, location: operationId))
+        }
+        let requestBody = try operation.requestBody.map {
+          try parseRequestBody($0, location: operationId)
+        }
+        let responses = try parseResponses(operation.responses, location: operationId)
+        operations.append(
+          IROperation(
+            operationId: operationId,
+            method: method,
+            path: path.rawValue,
+            parameters: parameters,
+            requestBody: requestBody,
+            responses: responses
+          )
+        )
+      }
+    }
+    return operations.sorted { $0.operationId < $1.operationId }
+  }
+
+  // MARK: - Document
+
+  static func parseDocument(_ document: OpenAPI.Document) throws -> IRDocument {
+    var schemas: [IRSchema] = []
+    for (key, schema) in document.components.schemas {
+      schemas.append(try parseNamedSchema(name: key.rawValue, schema: schema))
+    }
+    return IRDocument(
+      schemas: schemas.sorted { $0.name < $1.name },
+      operations: try parseOperations(document)
+    )
+  }
 }
