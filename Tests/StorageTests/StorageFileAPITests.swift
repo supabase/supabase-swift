@@ -1024,22 +1024,25 @@ final class StorageFileAPITests: XCTestCase {
       #"""
       curl \
       	--request PUT \
-      	--header "Cache-Control: max-age=3600" \
-      	--header "Content-Length: 297" \
+      	--header "Content-Length: 368" \
       	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.e56f43407f772505" \
       	--header "X-Client-Info: storage-swift/0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--header "x-upsert: false" \
       	--data "--alamofire.boundary.e56f43407f772505\#r
-      Content-Disposition: form-data; name=\"cacheControl\"\#r
+      content-disposition: form-data; name=\"cacheControl\"\#r
+      content-length: 4\#r
+      content-type: text/plain\#r
       \#r
       3600\#r
       --alamofire.boundary.e56f43407f772505\#r
-      Content-Disposition: form-data; name=\"\"; filename=\"file.txt\"\#r
-      Content-Type: text/plain;charset=UTF-8\#r
+      content-disposition: form-data; name=\"file\"; filename=\"file.txt\"\#r
+      content-length: 11\#r
+      content-type: text/plain;charset=UTF-8\#r
       \#r
       hello world\#r
       --alamofire.boundary.e56f43407f772505--\#r
+      \#r
       " \
       	"http://localhost:54321/storage/v1/object/upload/sign/bucket/file.txt?token=abc.def.ghi"
       """#
@@ -1071,24 +1074,27 @@ final class StorageFileAPITests: XCTestCase {
       #"""
       curl \
       	--request PUT \
-      	--header "Cache-Control: max-age=3600" \
-      	--header "Content-Length: 285" \
+      	--header "Content-Length: 356" \
       	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.e56f43407f772505" \
       	--header "X-Client-Info: storage-swift/0.0.0" \
       	--header "X-Mode: test" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--header "x-upsert: false" \
       	--data "--alamofire.boundary.e56f43407f772505\#r
-      Content-Disposition: form-data; name=\"cacheControl\"\#r
+      content-disposition: form-data; name=\"cacheControl\"\#r
+      content-length: 4\#r
+      content-type: text/plain\#r
       \#r
       3600\#r
       --alamofire.boundary.e56f43407f772505\#r
-      Content-Disposition: form-data; name=\"\"; filename=\"file.txt\"\#r
-      Content-Type: text/plain\#r
+      content-disposition: form-data; name=\"file\"; filename=\"file.txt\"\#r
+      content-length: 13\#r
+      content-type: text/plain\#r
       \#r
       hello world!
       \#r
       --alamofire.boundary.e56f43407f772505--\#r
+      \#r
       " \
       	"http://localhost:54321/storage/v1/object/upload/sign/bucket/file.txt?token=abc.def.ghi"
       """#
