@@ -210,15 +210,34 @@ XVCJ
 
 # Terms from HTTPRuntime (Sources/HTTPRuntime) and its tests.
 corelibs
+
+# Terms from the OpenAPI-to-Swift code generator (tools/openapi-codegen) and
+# the generated Storage HTTP client (Sources/StorageOpenAPI).
+associatedtype
+claude
+Codegen
+codegen
+conformances
+deinit
+fileprivate
+grdsdev
+guilherme
+healthcheck
+IRHTTP
+nullable
+openapi
+ramanujan
 reencoded
 subdata
 Subrange
 TESTBOUNDARY
 
 # Terms from HTTPRuntimeTestHelpers planning and scheme configuration.
-fileprivate
 parallelizable
 Testables
+typealias
+Typeless
+uppercased
 xcscheme
 xcschemes
 xcshareddata
