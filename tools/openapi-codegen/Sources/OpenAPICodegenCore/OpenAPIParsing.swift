@@ -75,4 +75,35 @@ enum OpenAPIParsing {
       throw UnsupportedSpecConstruct(location: location, reason: "unsupported schema shape")
     }
   }
+
+  // MARK: - Parameters
+
+  static func parseParameter(
+    _ either: Either<JSONReference<OpenAPI.Parameter>, OpenAPI.Parameter>,
+    location: String
+  ) throws -> IRParameter {
+    guard let parameter = either.parameterValue else {
+      throw UnsupportedSpecConstruct(location: location, reason: "external parameter reference")
+    }
+    let parameterLocation = "\(location).\(parameter.name)"
+    let irLocation: IRParameterLocation
+    switch parameter.location {
+    case .path: irLocation = .path
+    case .query: irLocation = .query
+    case .header: irLocation = .header
+    case .cookie:
+      throw UnsupportedSpecConstruct(
+        location: parameterLocation, reason: "cookie parameters aren't supported")
+    }
+    guard let schema = parameter.schemaOrContent.schemaValue else {
+      throw UnsupportedSpecConstruct(
+        location: parameterLocation, reason: "parameter uses 'content' instead of 'schema'")
+    }
+    return IRParameter(
+      name: parameter.name,
+      location: irLocation,
+      type: try parseType(schema, location: parameterLocation),
+      isOptional: !parameter.required || schema.nullable
+    )
+  }
 }
