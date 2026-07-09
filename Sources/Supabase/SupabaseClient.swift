@@ -72,6 +72,7 @@ public final class SupabaseClient: Sendable {
   let storageURL: URL
   let databaseURL: URL
   let functionsURL: URL
+  let clock: any Clock<Duration>
 
   private let _auth: AuthClient
 
@@ -206,14 +207,31 @@ public final class SupabaseClient: Sendable {
   ///   - supabaseURL: Your Supabase project URL, found in the project dashboard.
   ///   - supabaseKey: Your Supabase project anon key, found in the project dashboard.
   ///   - options: Configuration options for the client and its sub-clients.
-  public init(
+  public convenience init(
     supabaseURL: URL,
     supabaseKey: String,
     options: SupabaseClientOptions
   ) {
+    self.init(
+      supabaseURL: supabaseURL,
+      supabaseKey: supabaseKey,
+      options: options,
+      clock: ContinuousClock()
+    )
+  }
+
+  /// `package`-visibility so callers in other targets of this package (e.g. `IntegrationTests`)
+  /// can inject a test clock without exposing it publicly.
+  package init(
+    supabaseURL: URL,
+    supabaseKey: String,
+    options: SupabaseClientOptions,
+    clock: any Clock<Duration>
+  ) {
     self.supabaseURL = supabaseURL
     self.supabaseKey = supabaseKey
     self.options = options
+    self.clock = clock
 
     storageURL = supabaseURL.appendingPathComponent("/storage/v1")
     databaseURL = supabaseURL.appendingPathComponent("/rest/v1")
@@ -498,7 +516,8 @@ public final class SupabaseClient: Sendable {
 
     return RealtimeClientV2(
       url: supabaseURL.appendingPathComponent("/realtime/v1"),
-      options: realtimeOptions
+      options: realtimeOptions,
+      clock: clock
     )
   }
 }

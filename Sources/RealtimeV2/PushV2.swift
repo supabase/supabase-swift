@@ -40,7 +40,9 @@ final class PushV2 {
     }
 
     do {
-      return try await withTimeout(interval: channel.socket.options.timeoutInterval) {
+      return try await withTimeout(
+        interval: channel.socket.options.timeoutInterval, clock: channel.socket.clock
+      ) {
         await withCheckedContinuation { continuation in
           self.receivedContinuation = continuation
         }

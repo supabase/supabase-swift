@@ -32,8 +32,6 @@
       //        "INTEGRATION_TESTS not defined. Set this environment variable to run integration tests."
       //      )
 
-      _clock = testClock
-
       client = SupabaseClient(
         supabaseURL: URL(string: DotEnv.SUPABASE_URL) ?? URL(string: "http://127.0.0.1:54321")!,
         supabaseKey: DotEnv.SUPABASE_PUBLISHABLE_KEY,
@@ -44,7 +42,8 @@
               Logger(subsystem: "realtime.integration.tests", category: "client1")
             )
           )
-        )
+        ),
+        clock: testClock
       )
 
       client2 = SupabaseClient(
@@ -57,7 +56,8 @@
               Logger(subsystem: "realtime.integration.tests", category: "client2")
             )
           )
-        )
+        ),
+        clock: testClock
       )
 
       // Clean up any existing data

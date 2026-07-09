@@ -52,7 +52,8 @@ final class ConnectionManagerTests: XCTestCase {
       url: url,
       headers: headers,
       reconnectDelay: reconnectDelay,
-      logger: nil
+      logger: nil,
+      clock: ContinuousClock()
     )
   }
 

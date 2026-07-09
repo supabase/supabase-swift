@@ -46,7 +46,8 @@ import XCTest
           }
         ),
         wsTransport: { _, _ in self.client },
-        http: http
+        http: http,
+        clock: ContinuousClock()
       )
     }
 

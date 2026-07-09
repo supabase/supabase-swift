@@ -30,7 +30,8 @@ import XCTest
           headers: ["apiKey": "apikey"]
         ),
         wsTransport: { _, _ in client },
-        http: HTTPClientMock()
+        http: HTTPClientMock(),
+        clock: ContinuousClock()
       )
     }
 
