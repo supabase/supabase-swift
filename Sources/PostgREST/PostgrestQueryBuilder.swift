@@ -99,7 +99,7 @@ public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable 
       $0.request.query.appendOrUpdate(URLQueryItem(name: "select", value: cleanedColumns))
 
       if let count {
-        $0.request.headers[.prefer] = "count=\(count.rawValue)"
+        $0.request.headers.appendOrUpdate(.prefer, value: "count=\(count.rawValue)")
       }
       if head {
         $0.request.method = .head
