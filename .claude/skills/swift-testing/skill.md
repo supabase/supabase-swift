@@ -3,7 +3,7 @@ name: swift-testing
 description: >
   Use when writing or migrating tests in supabase-swift. Covers Swift Testing conventions
   (@Suite, @Test, #expect), HTTP mocking strategy (Replay vs Mocker), and the XCTest
-  migration rules tracked in SDK-435.
+  migration rules.
 ---
 
 # Testing in supabase-swift
