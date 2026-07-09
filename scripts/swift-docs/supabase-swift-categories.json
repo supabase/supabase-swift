@@ -1,0 +1,8 @@
+{
+  "Auth": "Authentication",
+  "PostgREST": "Database",
+  "Realtime": "Realtime",
+  "Storage": "Storage",
+  "Functions": "Edge Functions",
+  "Supabase": "Client"
+}
