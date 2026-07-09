@@ -241,7 +241,9 @@ features:
     note: "A custom URLSession can be supplied; a full HTTP client adapter protocol is not exposed."
   client.request_configuration.global_headers: implemented
 
-  client.observability.trace_propagation: not_implemented
+  client.observability.trace_propagation:
+    status: implemented
+    note: "W3C traceparent header injection from the active OpenTelemetry span, gated behind the OpenTelemetry SPM trait (opt-in dependency on opentelemetry-swift-core). No public API — enable the trait and it's automatic."
 
   # ── Database ───────────────────────────────────────────────────────────────
 
