@@ -16,7 +16,41 @@ import Testing
   import FoundationNetworking
 #endif
 
-private final class AuthLocalStorageMock: AuthLocalStorage {
+/// Captures every request handed to it and responds with an empty JSON array.
+/// `startLoading` runs on the `URLSession` delegate queue, so mutable state is lock-guarded.
+///
+/// Shared with `TracingTests`, which needs it to assert on `traceparent` header injection.
+final class RequestCapturingProtocol: URLProtocol {
+  private static let storage = LockIsolated<[URLRequest]>([])
+
+  static var capturedRequests: [URLRequest] {
+    get { storage.value }
+    set { storage.setValue(newValue) }
+  }
+
+  override class func canInit(with request: URLRequest) -> Bool { true }
+  override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+  override func startLoading() {
+    Self.capturedRequests.append(request)
+    let response = HTTPURLResponse(
+      url: request.url!, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: nil
+    )!
+    client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+    client?.urlProtocol(self, didLoad: Data("[]".utf8))
+    client?.urlProtocolDidFinishLoading(self)
+  }
+
+  override func stopLoading() {}
+}
+
+func makeMockSession() -> URLSession {
+  let config = URLSessionConfiguration.ephemeral
+  config.protocolClasses = [RequestCapturingProtocol.self]
+  return URLSession(configuration: config)
+}
+
+final class AuthLocalStorageMock: AuthLocalStorage {
   func store(key _: String, value _: Data) throws {}
 
   func retrieve(key _: String) throws -> Data? {

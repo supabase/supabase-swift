@@ -148,6 +148,8 @@ jobs:
         run: swift build
       - name: "Test Swift Package"
         run: swift test --skip IntegrationTests
+      - name: "Test Swift Package (OpenTelemetry trait)"
+        run: swift test --traits OpenTelemetry --filter SupabaseTests
 
   integration-tests:
     name: Integration Tests (Linux)
@@ -246,6 +248,26 @@ jobs:
       - name: Build ${{ matrix.scheme }}
         run: DERIVED_DATA_PATH=~/.derivedData SCHEME="${{ matrix.scheme }}" XCODEBUILD_ARGUMENT=build ./scripts/xcodebuild.sh
 
+  examples-spm:
+    name: Examples SPM (${{ matrix.example }})
+    runs-on: macos-26
+    timeout-minutes: 30
+    strategy:
+      matrix:
+        example: [OpenTelemetryDemo]
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: "Cache Swift Package"
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: Examples/${{ matrix.example }}/.build
+          key: ${{ runner.os }}-spm-${{ matrix.example }}-${{ hashFiles('Examples/${{ matrix.example }}/Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-${{ matrix.example }}-
+      - name: Build example ${{ matrix.example }}
+        working-directory: Examples/${{ matrix.example }}
+        run: swift build
+
   # cSpell runs on Node, which the ubuntu-latest image already provides, so this
   # job needs no setup-go and no setup-node - the runner's Node is part of the
   # trusted image baseline, the same category as the OS and `ubuntu-latest`
@@ -324,7 +346,20 @@ jobs:
   ci-success:
     name: CI Success
     if: always()
-    needs: [macos, macos-legacy, spm, linux, integration-tests, library-evolution, examples, spell-check, docs, format-check]
+    needs:
+      [
+        macos,
+        macos-legacy,
+        spm,
+        linux,
+        integration-tests,
+        library-evolution,
+        examples,
+        examples-spm,
+        spell-check,
+        docs,
+        format-check,
+      ]
     runs-on: ubuntu-latest
     steps:
       - name: Check all jobs
