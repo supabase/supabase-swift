@@ -321,10 +321,44 @@ jobs:
             echo "✅ All changed Swift files are properly formatted"
           fi
 
+  lint:
+    name: SwiftLint
+    runs-on: macos-26
+    timeout-minutes: 10
+    env:
+      SWIFTLINT_VERSION: "0.65.0"
+      SWIFTLINT_SHA256: "d6cb0aa7a2f5f1ef306fc9e37bcb54dc9a26facc8f7784ac0c3dd3eccf5c6ba6"
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Cache SwiftLint binary
+        id: cache-swiftlint
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: /usr/local/bin/swiftlint
+          key: swiftlint-${{ env.SWIFTLINT_VERSION }}-${{ runner.os }}
+      - name: Install SwiftLint ${{ env.SWIFTLINT_VERSION }}
+        if: steps.cache-swiftlint.outputs.cache-hit != 'true'
+        run: |
+          curl -fL \
+            "https://github.com/realm/SwiftLint/releases/download/${SWIFTLINT_VERSION}/portable_swiftlint.zip" \
+            -o /tmp/swiftlint.zip
+          echo "${SWIFTLINT_SHA256}  /tmp/swiftlint.zip" | shasum -a 256 --check
+          unzip -q -o /tmp/swiftlint.zip -d /tmp/swiftlint
+          sudo mv /tmp/swiftlint/swiftlint /usr/local/bin/swiftlint
+      - name: Verify SwiftLint version
+        run: |
+          INSTALLED=$(swiftlint version)
+          if [ "$INSTALLED" != "$SWIFTLINT_VERSION" ]; then
+            echo "Expected SwiftLint $SWIFTLINT_VERSION, got $INSTALLED" && exit 1
+          fi
+          echo "SwiftLint $INSTALLED"
+      - name: Run SwiftLint
+        run: swiftlint lint --strict
+
   ci-success:
     name: CI Success
     if: always()
-    needs: [macos, macos-legacy, spm, linux, integration-tests, library-evolution, examples, spell-check, docs, format-check]
+    needs: [macos, macos-legacy, spm, linux, integration-tests, library-evolution, examples, spell-check, docs, format-check, lint]
     runs-on: ubuntu-latest
     steps:
       - name: Check all jobs

@@ -611,7 +611,7 @@ final class StorageFileAPITests: XCTestCase {
     do {
       try await storage.from("bucket")
         .move(from: "source", to: "destination")
-      XCTFail()
+      XCTFail("Expected StorageError to be thrown")
     } catch let error as StorageError {
       XCTAssertEqual(error.message, "Error")
     }
@@ -642,7 +642,7 @@ final class StorageFileAPITests: XCTestCase {
     do {
       try await storage.from("bucket")
         .move(from: "source", to: "destination")
-      XCTFail()
+      XCTFail("Expected HTTPError to be thrown")
     } catch let error as HTTPError {
       XCTAssertEqual(error.data, Data("error".utf8))
       XCTAssertEqual(error.response.statusCode, 412)

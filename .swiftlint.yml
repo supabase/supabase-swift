@@ -1,0 +1,47 @@
+# SwiftLint configuration for supabase-swift
+# https://github.com/realm/SwiftLint
+#
+# Pinned version: 0.65.0
+# Install locally: brew install swiftlint
+# CI pins the exact binary via portable_swiftlint.zip from GitHub releases.
+#
+# Only rules that currently trigger violations are disabled. Enable them
+# one-by-one in follow-up PRs once the violations are fixed or configured.
+
+included:
+  - Sources
+  - Tests
+
+excluded:
+  - .build
+  - Tests/IntegrationTests/supabase
+  - "**/__Snapshots__"
+
+# Rules disabled because they currently have violations.
+# Remove entries here as violations are fixed in follow-up PRs.
+disabled_rules:
+  - class_delegate_protocol
+  - closure_parameter_position
+  - comment_spacing
+  - cyclomatic_complexity
+  - file_length
+  - for_where
+  - force_cast
+  - force_try
+  - function_body_length
+  - function_name_whitespace
+  - function_parameter_count
+  - identifier_name
+  - implicit_optional_initialization
+  - line_length
+  - multiple_closures_with_trailing_closure
+  - nesting
+  - non_optional_string_data_conversion
+  - opening_brace
+  - optional_data_string_conversion
+  - orphaned_doc_comment
+  - redundant_discardable_let
+  - todo
+  - trailing_comma
+  - type_body_length
+  - type_name

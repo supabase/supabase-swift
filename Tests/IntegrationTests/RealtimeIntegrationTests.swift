@@ -785,7 +785,7 @@
 
       // Verify both clients can decode presence
       // Note: Due to timing, exact presence changes may vary, but structure should be correct
-      XCTAssertTrue(presenceChanges1.count > 0, "Client 1 should receive presence changes")
+      XCTAssertTrue(!presenceChanges1.isEmpty, "Client 1 should receive presence changes")
 
       // Verify messages were received by both clients
       XCTAssertEqual(messages1.count, 3, "Client 1 should receive all 3 messages")
@@ -816,7 +816,7 @@
 
       // Verify user 1 leaving is detected by user 2
       // Note: Due to timing, exact presence changes may vary, but structure should be correct
-      XCTAssertTrue(presenceChanges2.count > 0, "Client 2 should receive presence changes")
+      XCTAssertTrue(!presenceChanges2.isEmpty, "Client 2 should receive presence changes")
 
       // Cleanup
       await channel1.unsubscribe()
