@@ -10,6 +10,7 @@ let package = Package(
   dependencies: [
     .package(url: "https://github.com/mattpolzin/OpenAPIKit.git", from: "6.2.0"),
     .package(url: "https://github.com/pointfreeco/swift-snapshot-testing", from: "1.17.0"),
+    .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.5.0"),
   ],
   targets: [
     .target(
@@ -20,7 +21,10 @@ let package = Package(
     ),
     .executableTarget(
       name: "openapi-codegen",
-      dependencies: ["OpenAPICodegenCore"]
+      dependencies: [
+        "OpenAPICodegenCore",
+        .product(name: "ArgumentParser", package: "swift-argument-parser"),
+      ]
     ),
     .testTarget(
       name: "OpenAPICodegenCoreTests",
