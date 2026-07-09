@@ -58,16 +58,11 @@ public enum OpenAPIParsing {
         continue
       }
 
-      if case .object(_, let nestedContext) = propertySchema.value,
-        !nestedContext.properties.isEmpty
+      if let (type, objectHoisted) = try hoistInlineObjectIfPresent(
+        name: "\(name)_\(propertyName)", schema: propertySchema, location: propertyLocation)
       {
-        let hoistedName = "\(name)_\(propertyName)"
-        let (nestedProperties, nestedHoisted) = try parseObjectProperties(
-          name: hoistedName, objectContext: nestedContext, location: propertyLocation)
-        hoisted.append(IRSchema(name: hoistedName, kind: .object(properties: nestedProperties)))
-        hoisted.append(contentsOf: nestedHoisted)
-        properties.append(
-          IRProperty(name: propertyName, type: .schemaRef(hoistedName), isOptional: isOptional))
+        hoisted.append(contentsOf: objectHoisted)
+        properties.append(IRProperty(name: propertyName, type: type, isOptional: isOptional))
         continue
       }
 
@@ -150,6 +145,25 @@ public enum OpenAPIParsing {
     let hoisted =
       [IRSchema(name: hoistedName, kind: .object(properties: properties))] + nestedHoisted
     return (.array(.schemaRef(hoistedName)), hoisted)
+  }
+
+  /// If `schema` is an inline object with properties (not a `$ref`, not
+  /// empty), hoists it into a named schema instead of failing. Returns `nil`
+  /// if `schema` isn't an inline object-with-properties, so callers fall
+  /// through to their existing logic.
+  private static func hoistInlineObjectIfPresent(
+    name: String,
+    schema: JSONSchema,
+    location: String
+  ) throws -> (type: IRType, hoisted: [IRSchema])? {
+    guard case .object(_, let objectContext) = schema.value, !objectContext.properties.isEmpty
+    else {
+      return nil
+    }
+    let (properties, nestedHoisted) = try parseObjectProperties(
+      name: name, objectContext: objectContext, location: location)
+    let hoisted = [IRSchema(name: name, kind: .object(properties: properties))] + nestedHoisted
+    return (.schemaRef(name), hoisted)
   }
 
   private static func unionCaseName(for type: IRType) -> String {
@@ -299,15 +313,11 @@ public enum OpenAPIParsing {
           location: location, reason: "JSON request body without a schema")
       }
       if case .b(let inlineSchema) = schemaEither,
-        case .object(_, let objectContext) = inlineSchema.value,
-        !objectContext.properties.isEmpty
+        let (type, objectHoisted) = try hoistInlineObjectIfPresent(
+          name: "\(location)_requestBody", schema: inlineSchema, location: "\(location)_requestBody"
+        )
       {
-        let hoistedName = "\(location)_requestBody"
-        let (properties, nestedHoisted) = try parseObjectProperties(
-          name: hoistedName, objectContext: objectContext, location: hoistedName)
-        let hoisted =
-          [IRSchema(name: hoistedName, kind: .object(properties: properties))] + nestedHoisted
-        return (.json(.schemaRef(hoistedName)), hoisted)
+        return (.json(type), objectHoisted)
       }
       if case .b(let inlineSchema) = schemaEither,
         let (type, hoistedSchema) = try hoistUnionIfPresent(
@@ -389,15 +399,12 @@ public enum OpenAPIParsing {
     {
       guard let schemaEither = jsonContent.schema else { return (.none, []) }
       if case .b(let inlineSchema) = schemaEither,
-        case .object(_, let objectContext) = inlineSchema.value,
-        !objectContext.properties.isEmpty
+        let (type, objectHoisted) = try hoistInlineObjectIfPresent(
+          name: "\(operationId)_response\(statusCode)",
+          schema: inlineSchema,
+          location: "\(operationId)_response\(statusCode)")
       {
-        let hoistedName = "\(operationId)_response\(statusCode)"
-        let (properties, nestedHoisted) = try parseObjectProperties(
-          name: hoistedName, objectContext: objectContext, location: hoistedName)
-        let hoisted =
-          [IRSchema(name: hoistedName, kind: .object(properties: properties))] + nestedHoisted
-        return (.json(.schemaRef(hoistedName)), hoisted)
+        return (.json(type), objectHoisted)
       }
       if case .b(let inlineSchema) = schemaEither,
         let (type, hoistedSchema) = try hoistUnionIfPresent(
