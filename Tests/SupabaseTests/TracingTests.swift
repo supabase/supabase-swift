@@ -48,11 +48,7 @@ struct TracingTests {
     func tracePropagationInjectsTraceParentHeaderIntoRestRequests() async throws {
       let tracer = TracerProviderBuilder().build().get(instrumentationName: "test")
       let span = tracer.spanBuilder(spanName: "test-span").startSpan()
-      OpenTelemetry.instance.contextProvider.setActiveSpan(span)
-      defer {
-        span.end()
-        OpenTelemetry.instance.contextProvider.removeContextForSpan(span)
-      }
+      defer { span.end() }
 
       RequestCapturingProtocol.capturedRequests = []
       let client = SupabaseClient(
@@ -67,7 +63,12 @@ struct TracingTests {
         )
       )
 
-      _ = try? await client.from("todos").select().execute()
+      // `withActiveSpan` (not the imperative setActiveSpan/removeContextForSpan) is the only
+      // API that works with every default ContextManager — on Linux (no os.activity),
+      // TaskLocalContextManager's imperative set/remove are no-ops.
+      try await OpenTelemetry.instance.contextProvider.withActiveSpan(span) {
+        _ = try? await client.from("todos").select().execute()
+      }
 
       let context = span.context
       let expected =
