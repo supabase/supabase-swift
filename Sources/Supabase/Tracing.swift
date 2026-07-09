@@ -1,5 +1,9 @@
 import Foundation
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 #if OpenTelemetry
   import OpenTelemetryApi
 #endif
