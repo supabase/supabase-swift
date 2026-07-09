@@ -67,6 +67,7 @@ actor ChannelStateManager {
   private let topic: String
   private let maxRetryAttempts: Int
   private let timeoutInterval: TimeInterval
+  private let clock: any Clock<Duration>
 
   private let makeRef: MakeRef
   private let ensureSocketConnected: EnsureSocketConnected
@@ -80,6 +81,7 @@ actor ChannelStateManager {
     logger: (any SupabaseLogger)?,
     maxRetryAttempts: Int,
     timeoutInterval: TimeInterval,
+    clock: any Clock<Duration>,
     makeRef: @escaping MakeRef,
     ensureSocketConnected: @escaping EnsureSocketConnected,
     getClientChanges: @escaping GetClientChanges,
@@ -92,6 +94,7 @@ actor ChannelStateManager {
     self.logger = logger
     self.maxRetryAttempts = maxRetryAttempts
     self.timeoutInterval = timeoutInterval
+    self.clock = clock
     self.makeRef = makeRef
     self.ensureSocketConnected = ensureSocketConnected
     self.getClientChanges = getClientChanges
@@ -282,7 +285,7 @@ actor ChannelStateManager {
           "Subscribe attempt \(attempts)/\(maxRetryAttempts) for channel '\(topic)'"
         )
 
-        try await withTimeout(interval: timeoutInterval) {
+        try await withTimeout(interval: timeoutInterval, clock: clock) {
           [self] in try await runOneSubscribeAttempt()
         }
 
@@ -306,7 +309,7 @@ actor ChannelStateManager {
         )
 
         do {
-          try await _clock.sleep(for: .seconds(delay))
+          try await clock.sleep(for: .seconds(delay))
           if !(await ensureSocketConnected()) {
             logger?.debug("Socket disconnected during retry delay for '\(topic)'")
             throw CancellationError()
@@ -371,7 +374,7 @@ actor ChannelStateManager {
 
     if waitForServerClose {
       let stateSubject = self.stateSubject
-      _ = try? await withTimeout(interval: timeoutInterval) {
+      _ = try? await withTimeout(interval: timeoutInterval, clock: clock) {
         for await observed in stateSubject.values {
           if case .unsubscribed = observed { return }
         }

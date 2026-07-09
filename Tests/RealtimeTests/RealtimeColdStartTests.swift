@@ -18,11 +18,6 @@ final class RealtimeColdStartTests: XCTestCase {
   let url = URL(string: "http://localhost:54321/realtime/v1")!
   let apiKey = "anon.api.key"
 
-  override func setUp() {
-    super.setUp()
-    _clock = ContinuousClock()
-  }
-
   private func makeClient(socket: AsyncFakeWebSocket) -> RealtimeClientV2 {
     RealtimeClientV2(
       url: url,
@@ -40,7 +35,8 @@ final class RealtimeColdStartTests: XCTestCase {
         try await Task.sleep(nanoseconds: 20_000_000)
         return socket
       },
-      http: HTTPClientMock()
+      http: HTTPClientMock(),
+      clock: ContinuousClock()
     )
   }
 
@@ -145,7 +141,8 @@ final class RealtimeColdStartTests: XCTestCase {
         sockets.withValue { $0.append(socket) }
         return socket
       },
-      http: HTTPClientMock()
+      http: HTTPClientMock(),
+      clock: ContinuousClock()
     )
     defer { sut.disconnect() }
 
@@ -216,7 +213,8 @@ final class RealtimeColdStartTests: XCTestCase {
         sockets.withValue { $0.append(socket) }
         return socket
       },
-      http: HTTPClientMock()
+      http: HTTPClientMock(),
+      clock: ContinuousClock()
     )
     defer { sut.disconnect() }
 

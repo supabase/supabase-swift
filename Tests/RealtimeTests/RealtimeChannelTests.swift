@@ -66,7 +66,8 @@ final class RealtimeChannelTests: XCTestCase {
           accessToken: { "test-token" }
         ),
         wsTransport: { _, _ in client },
-        http: HTTPClientMock()
+        http: HTTPClientMock(),
+        clock: ContinuousClock()
       )
 
       let channel = socket.channel("test-topic")
@@ -121,7 +122,8 @@ final class RealtimeChannelTests: XCTestCase {
           accessToken: { "test-token" }
         ),
         wsTransport: { _, _ in client },
-        http: HTTPClientMock()
+        http: HTTPClientMock(),
+        clock: ContinuousClock()
       )
 
       let channel = socket.channel("test-topic")
@@ -174,7 +176,8 @@ final class RealtimeChannelTests: XCTestCase {
           accessToken: { "test-token" }
         ),
         wsTransport: { _, _ in client },
-        http: HTTPClientMock()
+        http: HTTPClientMock(),
+        clock: ContinuousClock()
       )
 
       let channel = socket.channel("test-topic")
@@ -229,7 +232,8 @@ final class RealtimeChannelTests: XCTestCase {
           accessToken: { "test-token" }
         ),
         wsTransport: { _, _ in client },
-        http: HTTPClientMock()
+        http: HTTPClientMock(),
+        clock: ContinuousClock()
       )
 
       let channel = socket.channel("test-topic")
@@ -390,7 +394,8 @@ final class RealtimeChannelTests: XCTestCase {
         accessToken: { "test-token" }
       ),
       wsTransport: { _, _ in client },
-      http: HTTPClientMock()
+      http: HTTPClientMock(),
+      clock: ContinuousClock()
     )
 
     // Create a channel without presence callback initially
@@ -451,7 +456,8 @@ final class RealtimeChannelTests: XCTestCase {
       url: URL(string: "https://localhost:54321/realtime/v1")!,
       options: RealtimeClientOptions(headers: ["apikey": "test-key"]),
       wsTransport: { _, _ in client },
-      http: httpClient
+      http: httpClient,
+      clock: ContinuousClock()
     )
 
     let channel = socket.channel("test-topic")
@@ -486,7 +492,8 @@ final class RealtimeChannelTests: XCTestCase {
         accessToken: { "test-token" }
       ),
       wsTransport: { _, _ in client },
-      http: httpClient
+      http: httpClient,
+      clock: ContinuousClock()
     )
 
     let channel = socket.channel("test-topic") { config in
@@ -534,7 +541,8 @@ final class RealtimeChannelTests: XCTestCase {
         accessToken: { "test-token" }
       ),
       wsTransport: { _, _ in client },
-      http: httpClient
+      http: httpClient,
+      clock: ContinuousClock()
     )
 
     let channel = socket.channel("room/one")
@@ -570,7 +578,8 @@ final class RealtimeChannelTests: XCTestCase {
         accessToken: { "test-token" }
       ),
       wsTransport: { _, _ in client },
-      http: httpClient
+      http: httpClient,
+      clock: ContinuousClock()
     )
 
     let channel = socket.channel("test-topic")
@@ -598,7 +607,8 @@ final class RealtimeChannelTests: XCTestCase {
       url: URL(string: "https://localhost:54321/realtime/v1")!,
       options: RealtimeClientOptions(headers: ["apikey": "test-key"]),
       wsTransport: { _, _ in client },
-      http: httpClient
+      http: httpClient,
+      clock: ContinuousClock()
     )
 
     let channel = socket.channel("test-topic")
@@ -634,7 +644,8 @@ final class RealtimeChannelTests: XCTestCase {
         accessToken: { "test-token" }
       ),
       wsTransport: { _, _ in client },
-      http: httpClient
+      http: httpClient,
+      clock: ContinuousClock()
     )
 
     let channel = socket.channel("test-topic")
@@ -670,7 +681,8 @@ final class RealtimeChannelTests: XCTestCase {
         accessToken: { "test-token" }
       ),
       wsTransport: { _, _ in client },
-      http: httpClient
+      http: httpClient,
+      clock: ContinuousClock()
     )
 
     let channel = socket.channel("test-topic")
@@ -705,7 +717,8 @@ final class RealtimeChannelTests: XCTestCase {
         accessToken: { "test-token" }
       ),
       wsTransport: { _, _ in client },
-      http: httpClient
+      http: httpClient,
+      clock: ContinuousClock()
     )
 
     let channel = socket.channel("test-topic")
@@ -740,7 +753,8 @@ final class RealtimeChannelTests: XCTestCase {
         accessToken: { "test-token" }
       ),
       wsTransport: { _, _ in client },
-      http: httpClient
+      http: httpClient,
+      clock: ContinuousClock()
     )
 
     let channel = socket.channel("test-topic")
@@ -775,7 +789,8 @@ final class RealtimeChannelTests: XCTestCase {
         accessToken: { "test-token" }
       ),
       wsTransport: { _, _ in client },
-      http: httpClient
+      http: httpClient,
+      clock: ContinuousClock()
     )
 
     let channel = socket.channel("test-topic")

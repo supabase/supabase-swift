@@ -33,7 +33,6 @@ import XCTest
       super.setUp()
       http = HTTPClientMock()
       testClock = TestClock()
-      _clock = testClock
       servers = LockIsolated([])
     }
 
@@ -85,7 +84,8 @@ import XCTest
           }
           return client
         },
-        http: http
+        http: http,
+        clock: testClock
       )
     }
 

@@ -37,6 +37,7 @@ final class ChannelStateManagerTests: XCTestCase {
       logger: nil,
       maxRetryAttempts: maxRetryAttempts,
       timeoutInterval: timeoutInterval,
+      clock: ContinuousClock(),
       makeRef: {
         ref.withValue { $0 += 1 }
         return "\(ref.value)"

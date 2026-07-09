@@ -23,6 +23,7 @@ protocol RealtimeClientProtocol: AnyObject, Sendable {
   var status: RealtimeClientStatus { get }
   var options: RealtimeClientOptions { get }
   var http: any HTTPClientType { get }
+  var clock: any Clock<Duration> { get }
   func broadcastURL(topic: String, event: String, isPrivate: Bool) -> URL
 
   func connect() async
@@ -119,8 +120,6 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   let http: any HTTPClientType
   let apikey: String
   let serializer = RealtimeSerializer()
-  // Captured at init time so parallel test classes that swap _clock cannot
-  // change the timing of an already-running client.
   let clock: any Clock<Duration>
 
   let connectionManager: ConnectionManager
@@ -207,6 +206,14 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   ///   - url: The Realtime server URL (e.g. `https://<project>.supabase.co/realtime/v1`).
   ///   - options: Configuration options for the client.
   public convenience init(url: URL, options: RealtimeClientOptions) {
+    self.init(url: url, options: options, clock: ContinuousClock())
+  }
+
+  /// Creates a new ``RealtimeClientV2`` using the default URLSession WebSocket transport,
+  /// with an explicit clock. `package`-visibility so callers below the public API in other
+  /// targets of this package (e.g. `SupabaseClient`) can inject a test clock without
+  /// exposing it publicly.
+  package convenience init(url: URL, options: RealtimeClientOptions, clock: any Clock<Duration>) {
     var interceptors: [any HTTPClientInterceptor] = []
 
     if let logger = options.logger {
@@ -225,7 +232,8 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       http: HTTPClient(
         fetch: options.fetch ?? { try await URLSession.shared.data(for: $0) },
         interceptors: interceptors
-      )
+      ),
+      clock: clock
     )
   }
 
@@ -234,7 +242,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     options: RealtimeClientOptions,
     wsTransport: @escaping WebSocketTransport,
     http: any HTTPClientType,
-    clock: any Clock<Duration> = _clock
+    clock: any Clock<Duration>
   ) {
     var options = options
     if options.headers[.xClientInfo] == nil {

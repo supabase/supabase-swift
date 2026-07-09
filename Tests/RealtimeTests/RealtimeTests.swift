@@ -46,7 +46,6 @@ import XCTest
       (client, server) = FakeWebSocket.fakes()
       http = HTTPClientMock()
       testClock = TestClock()
-      _clock = testClock
 
       sut = RealtimeClientV2(
         url: url,
@@ -57,7 +56,8 @@ import XCTest
           }
         ),
         wsTransport: { _, _ in self.client },
-        http: http
+        http: http,
+        clock: testClock
       )
     }
 
@@ -84,7 +84,8 @@ import XCTest
           }
           return FakeWebSocket.fakes().0
         },
-        http: http
+        http: http,
+        clock: testClock
       )
 
       await client.connect()
@@ -706,7 +707,8 @@ import XCTest
           accessToken: { throw FetchError() }
         ),
         wsTransport: { _, _ in self.client },
-        http: http
+        http: http,
+        clock: testClock
       )
       defer { sut.disconnect() }
 
@@ -737,7 +739,8 @@ import XCTest
           }
         ),
         wsTransport: { _, _ in self.client },
-        http: http
+        http: http,
+        clock: testClock
       )
       defer { sut.disconnect() }
 
@@ -1014,7 +1017,8 @@ import XCTest
           disconnectOnEmptyChannelsAfter: delay
         ),
         wsTransport: { _, _ in self.client },
-        http: http
+        http: http,
+        clock: testClock
       )
     }
 

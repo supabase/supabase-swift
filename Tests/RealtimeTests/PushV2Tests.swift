@@ -299,6 +299,7 @@ private final class MockRealtimeClient: RealtimeClientProtocol, @unchecked Senda
   private let _status = LockIsolated<RealtimeClientStatus>(.connected)
   let options: RealtimeClientOptions
   let http: any HTTPClientType = MockHTTPClient()
+  let clock: any Clock<Duration> = ContinuousClock()
 
   func broadcastURL(topic: String, event: String, isPrivate: Bool) -> URL {
     URL(string: "https://test.supabase.co/api/broadcast")!

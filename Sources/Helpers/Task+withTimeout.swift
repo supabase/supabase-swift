@@ -10,6 +10,7 @@ package import Foundation
 @discardableResult
 package func withTimeout<R: Sendable>(
   interval: TimeInterval,
+  clock: any Clock<Duration> = ContinuousClock(),
   @_inheritActorContext operation: @escaping @Sendable () async throws -> R
 ) async throws -> R {
   try await withThrowingTaskGroup(of: R.self) { group in
@@ -26,7 +27,7 @@ package func withTimeout<R: Sendable>(
     group.addTask {
       let interval = deadline.timeIntervalSinceNow
       if interval > 0 {
-        try await _clock.sleep(for: .seconds(interval))
+        try await clock.sleep(for: .seconds(interval))
       }
       try Task.checkCancellation()
       throw TimeoutError()

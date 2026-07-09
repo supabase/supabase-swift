@@ -186,6 +186,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       logger: logger,
       maxRetryAttempts: socket.options.maxRetryAttempts,
       timeoutInterval: socket.options.timeoutInterval,
+      clock: socket.clock,
       makeRef: { [socket] in socket.makeRef() },
       ensureSocketConnected: { [weak socket] in
         guard let socket else { return false }
@@ -372,7 +373,9 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       body: body
     )
 
-    let response = try await withTimeout(interval: timeout ?? socket.options.timeoutInterval) {
+    let response = try await withTimeout(
+      interval: timeout ?? socket.options.timeoutInterval, clock: socket.clock
+    ) {
       [self] in try await socket.http.send(request)
     }
 
@@ -417,7 +420,9 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       body: data
     )
 
-    let response = try await withTimeout(interval: timeout ?? socket.options.timeoutInterval) {
+    let response = try await withTimeout(
+      interval: timeout ?? socket.options.timeoutInterval, clock: socket.clock
+    ) {
       [self] in try await socket.http.send(request)
     }
 
@@ -492,7 +497,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       }
 
       if config.broadcast.acknowledgeBroadcasts {
-        try? await withTimeout(interval: socket.options.timeoutInterval) {
+        try? await withTimeout(interval: socket.options.timeoutInterval, clock: socket.clock) {
           await task.value
         }
       }
