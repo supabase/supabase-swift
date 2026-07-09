@@ -19,7 +19,18 @@ struct OpenAPICodegen: ParsableCommand {
   @Option(help: "Name of the generated module (used to derive the client type name).")
   var module: String
 
+  @Option(
+    help:
+      "Access level for generated declarations: public, package, or internal (default: internal).")
+  var accessLevel: String = "internal"
+
   func run() throws {
+    guard let accessLevel = AccessLevel(rawValue: accessLevel) else {
+      throw ValidationError(
+        "--access-level must be one of: \(AccessLevel.allCases.map(\.rawValue).joined(separator: ", "))"
+      )
+    }
+
     let specURL = URL(fileURLWithPath: spec)
     let outputURL = URL(fileURLWithPath: output, isDirectory: true)
 
@@ -29,12 +40,13 @@ struct OpenAPICodegen: ParsableCommand {
 
     try FileManager.default.createDirectory(at: outputURL, withIntermediateDirectories: true)
 
-    let models = SwiftEmitter.emitModels(irDocument)
+    let models = SwiftEmitter.emitModels(irDocument, accessLevel: accessLevel)
     try models.write(
       to: outputURL.appendingPathComponent("Models.swift"), atomically: true, encoding: .utf8)
 
     let clientName = "\(module)Client"
-    let client = SwiftEmitter.emitClient(irDocument, clientName: clientName)
+    let client = SwiftEmitter.emitClient(
+      irDocument, clientName: clientName, accessLevel: accessLevel)
     try client.write(
       to: outputURL.appendingPathComponent("\(clientName).swift"), atomically: true,
       encoding: .utf8)
