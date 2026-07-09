@@ -91,6 +91,7 @@ nullsfirst
 nullslast
 oidc
 OIDC
+opentelemetry
 passwordless
 Passwordless
 Pathable
@@ -143,6 +144,7 @@ timestamptz
 totp
 Totp
 TOTP
+traceparent
 tsquery
 tsvector
 Twilio

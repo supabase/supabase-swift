@@ -116,14 +116,22 @@ public struct SupabaseClientOptions: Sendable {
     /// The logger  to use across all Supabase sub-packages.
     public let logger: (any SupabaseLogger)?
 
+    /// When `true`, injects a W3C `traceparent` header derived from the currently active
+    /// OpenTelemetry span into every outgoing request.
+    ///
+    /// Requires the `OpenTelemetry` package trait to be enabled; otherwise this is a no-op.
+    public let tracePropagation: Bool
+
     public init(
       headers: [String: String] = [:],
       session: URLSession = .shared,
-      logger: (any SupabaseLogger)? = nil
+      logger: (any SupabaseLogger)? = nil,
+      tracePropagation: Bool = false
     ) {
       self.headers = headers
       self.session = session
       self.logger = logger
+      self.tracePropagation = tracePropagation
     }
   }
 

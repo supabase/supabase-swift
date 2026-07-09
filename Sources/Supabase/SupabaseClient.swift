@@ -230,7 +230,8 @@ public final class SupabaseClient: Sendable {
       decoder: options.auth.decoder,
       fetch: {
         // DON'T use `fetchWithAuth` method within the AuthClient as it may cause a deadlock.
-        try await options.global.session.data(for: $0)
+        let request = options.global.tracePropagation ? TraceContext.inject(into: $0) : $0
+        return try await options.global.session.data(for: request)
       },
       autoRefreshToken: options.auth.autoRefreshToken,
       emitLocalSessionAsInitialSession: options.auth.emitLocalSessionAsInitialSession
@@ -403,6 +404,9 @@ public final class SupabaseClient: Sendable {
     if let token {
       request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
     }
+    if options.global.tracePropagation {
+      request = TraceContext.inject(into: request)
+    }
     return request
   }
 
@@ -458,8 +462,11 @@ public final class SupabaseClient: Sendable {
     }
 
     if realtimeOptions.fetch == nil {
-      realtimeOptions.fetch = { [session = options.global.session] request in
-        try await session.data(for: request)
+      realtimeOptions.fetch = {
+        [session = options.global.session, tracePropagation = options.global.tracePropagation]
+        request in
+        let request = tracePropagation ? TraceContext.inject(into: request) : request
+        return try await session.data(for: request)
       }
     }
 

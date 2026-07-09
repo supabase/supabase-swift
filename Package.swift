@@ -21,9 +21,14 @@ let package = Package(
     .library(name: "Storage", targets: ["Storage"]),
     .library(name: "Supabase", targets: ["Supabase"]),
   ],
+  traits: [
+    // Enables W3C traceparent header propagation using opentelemetry-swift's active span.
+    "OpenTelemetry"
+  ],
   dependencies: [
     .package(url: "https://github.com/apple/swift-crypto.git", "3.0.0"..<"5.0.0"),
     .package(url: "https://github.com/apple/swift-http-types.git", from: "1.3.0"),
+    .package(url: "https://github.com/open-telemetry/opentelemetry-swift-core.git", from: "2.5.0"),
     .package(url: "https://github.com/pointfreeco/swift-clocks", from: "1.0.0"),
     .package(url: "https://github.com/pointfreeco/swift-concurrency-extras", from: "1.1.0"),
     .package(url: "https://github.com/pointfreeco/swift-custom-dump", from: "1.3.2"),
@@ -196,6 +201,10 @@ let package = Package(
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
         .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
+        .product(
+          name: "OpenTelemetryApi", package: "opentelemetry-swift-core",
+          condition: .when(traits: ["OpenTelemetry"])
+        ),
         "Auth",
         "Functions",
         "PostgREST",
@@ -210,6 +219,14 @@ let package = Package(
         .product(name: "CustomDump", package: "swift-custom-dump"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
         .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
+        .product(
+          name: "OpenTelemetryApi", package: "opentelemetry-swift-core",
+          condition: .when(traits: ["OpenTelemetry"])
+        ),
+        .product(
+          name: "OpenTelemetrySdk", package: "opentelemetry-swift-core",
+          condition: .when(traits: ["OpenTelemetry"])
+        ),
         "Supabase",
       ]
     ),
