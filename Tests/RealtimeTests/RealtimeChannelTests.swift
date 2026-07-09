@@ -807,6 +807,65 @@ final class RealtimeChannelTests: XCTestCase {
       )
     }
   }
+
+  #if canImport(Darwin)
+    @MainActor
+    func testChannelErrorResetsSubscribedStatus() async {
+      let (client, server) = FakeWebSocket.fakes()
+      let socket = RealtimeClientV2(
+        url: URL(string: "https://localhost:54321/realtime/v1")!,
+        options: RealtimeClientOptions(
+          headers: ["apikey": "test-key"],
+          accessToken: { "test-token" }
+        ),
+        wsTransport: { _, _ in client },
+        http: HTTPClientMock(),
+        clock: ContinuousClock()
+      )
+
+      let channel = socket.channel("test-topic")
+
+      let serverTask = Task { @Sendable [server] in
+        for await event in server.events {
+          guard let msg = event.realtimeMessage else { continue }
+          if msg.event == "phx_join" {
+            server.send(
+              RealtimeMessageV2(
+                joinRef: msg.joinRef,
+                ref: msg.ref,
+                topic: "realtime:test-topic",
+                event: "phx_reply",
+                payload: [
+                  "response": ["postgres_changes": []],
+                  "status": "ok",
+                ]
+              )
+            )
+          }
+        }
+      }
+      defer { serverTask.cancel() }
+
+      await socket.connect()
+      try? await channel.subscribeWithError()
+      XCTAssertEqual(channel.status, .subscribed)
+
+      server.send(
+        RealtimeMessageV2(
+          joinRef: nil,
+          ref: nil,
+          topic: "realtime:test-topic",
+          event: "phx_error",
+          payload: [:]
+        )
+      )
+
+      await waitForChannelStatus(.unsubscribed, channel: channel, timeout: 2.0)
+      XCTAssertEqual(channel.status, .unsubscribed)
+
+      socket.disconnect()
+    }
+  #endif
 }
 
 extension RealtimeChannelTests {

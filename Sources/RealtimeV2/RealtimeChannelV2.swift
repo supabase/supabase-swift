@@ -717,6 +717,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
         logger?.error(
           "Received an error in channel \(message.topic). That could be as a result of an invalid access token"
         )
+        await stateManager.didReceiveClose()
 
       case .presenceDiff:
         let joins = try message.payload["joins"]?.decode(as: [String: PresenceV2].self) ?? [:]
