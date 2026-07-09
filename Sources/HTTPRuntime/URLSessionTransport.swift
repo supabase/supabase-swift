@@ -7,7 +7,7 @@
 public import Foundation
 
 #if canImport(FoundationNetworking)
-  import FoundationNetworking
+  public import FoundationNetworking
 #endif
 
 /// The default, zero-dependency `HTTPTransport` backed by `URLSession`.
