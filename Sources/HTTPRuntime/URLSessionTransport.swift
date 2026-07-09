@@ -4,10 +4,10 @@
 //
 //  Created by Guilherme Souza on 08/07/26.
 //
-public import Foundation
+package import Foundation
 
 #if canImport(FoundationNetworking)
-  public import FoundationNetworking
+  package import FoundationNetworking
 #endif
 
 /// The default, zero-dependency `HTTPTransport` backed by `URLSession`.
@@ -23,18 +23,18 @@ public import Foundation
 ///   — background transfers must use delegate-based `downloadTask`/`uploadTask`
 ///   that complete out-of-process. That path is documented as a known limitation
 ///   rather than faked here.
-public struct URLSessionTransport: HTTPTransport {
+package struct URLSessionTransport: HTTPTransport {
   private let session: URLSession
 
-  public init(configuration: URLSessionConfiguration = .default) {
+  package init(configuration: URLSessionConfiguration = .default) {
     self.session = URLSession(configuration: configuration)
   }
 
-  public init(session: URLSession) {
+  package init(session: URLSession) {
     self.session = session
   }
 
-  public func send(_ request: HTTPRequest, uploadProgress: ProgressHandler?) async throws
+  package func send(_ request: HTTPRequest, uploadProgress: ProgressHandler?) async throws
     -> HTTPResponse
   {
     let urlRequest = try Self.makeURLRequest(request)
@@ -44,7 +44,7 @@ public struct URLSessionTransport: HTTPTransport {
     let response: URLResponse
     do {
       switch request.body {
-      case .none:
+      case nil:
         (data, response) = try await session.data(for: urlRequest, delegate: delegate)
       case .data(let payload):
         (data, response) = try await session.upload(
@@ -53,7 +53,7 @@ public struct URLSessionTransport: HTTPTransport {
         (data, response) = try await session.upload(
           for: urlRequest, fromFile: fileURL, delegate: delegate)
       case .multipart(let form):
-        let fileURL = try form.writeToTemporaryFile()
+        let fileURL = try form.buildToTempFile()
         defer { try? FileManager.default.removeItem(at: fileURL) }
         var withBoundary = urlRequest
         withBoundary.setValue(form.contentType, forHTTPHeaderField: "Content-Type")
@@ -66,7 +66,7 @@ public struct URLSessionTransport: HTTPTransport {
     return HTTPResponse(head: Self.makeHead(response), body: data)
   }
 
-  public func stream(_ request: HTTPRequest) async throws -> HTTPResponseStream {
+  package func stream(_ request: HTTPRequest) async throws -> HTTPResponseStream {
     let urlRequest = try Self.makeURLRequest(request)
     let bytes: URLSession.AsyncBytes
     let response: URLResponse

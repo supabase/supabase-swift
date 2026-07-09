@@ -7,7 +7,7 @@
 /// The abstraction generated clients depend on. Kept deliberately small so the
 /// generated code never touches `URLSession` directly and so tests can inject a
 /// mock transport.
-public protocol HTTPTransport: Sendable {
+package protocol HTTPTransport: Sendable {
   /// Buffered request/response.
   func send(_ request: HTTPRequest, uploadProgress: ProgressHandler?) async throws -> HTTPResponse
 
@@ -17,7 +17,7 @@ public protocol HTTPTransport: Sendable {
 }
 
 extension HTTPTransport {
-  public func send(_ request: HTTPRequest) async throws -> HTTPResponse {
+  package func send(_ request: HTTPRequest) async throws -> HTTPResponse {
     try await send(request, uploadProgress: nil)
   }
 }
