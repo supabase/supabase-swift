@@ -27,8 +27,8 @@ extension HTTPResponse {
   /// `status -> ErrorType` table declared by the operation's Smithy/TypeSpec
   /// error bindings.
   package func checkStatus(errorTypes: [Int: any APIError.Type]) throws {
-    guard !isSuccess else { return }
-    if let errorType = errorTypes[status] {
+    guard !head.isSuccess else { return }
+    if let errorType = errorTypes[head.status] {
       do {
         let decoded = try JSONCoding.decoder.decode(errorType, from: body)
         throw decoded
@@ -38,6 +38,6 @@ extension HTTPResponse {
         throw HTTPError.decoding(error)
       }
     }
-    throw HTTPError.unexpectedStatus(status: status, body: body)
+    throw HTTPError.unexpectedStatus(status: head.status, body: body)
   }
 }
