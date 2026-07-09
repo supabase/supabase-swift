@@ -4,6 +4,10 @@ import OpenTelemetrySdk
 import StdoutExporter
 import Supabase
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 // Prints every request handed to it — proves the traceparent header the SDK attaches while a
 // span is active, without needing a real Supabase project or network access.
 final class RequestPrintingProtocol: URLProtocol {
