@@ -8,6 +8,8 @@ import OpenAPICodegenCore
 import OpenAPIKit30
 
 struct OpenAPICodegen: ParsableCommand {
+  static let configuration = CommandConfiguration(commandName: "openapi-codegen")
+
   @Option(help: "Path to the OpenAPI spec file.")
   var spec: String
 
