@@ -6,12 +6,22 @@ import Foundation
 
 /// Builds and injects the W3C `traceparent` header from the currently active OpenTelemetry span.
 ///
-/// Requires the `OpenTelemetry` package trait; compiles to a no-op when the trait is disabled,
-/// so ``SupabaseClientOptions/GlobalOptions/tracePropagation`` is always safe to set regardless
-/// of whether the trait is enabled.
+/// Applied unconditionally by `SupabaseClient` — the `OpenTelemetry` package trait is the sole
+/// on/off switch. Compiles to a no-op when the trait is disabled, and no-ops at runtime when
+/// there's no active span, so calling ``inject(into:)`` is always safe.
 ///
 /// Not applied to `FunctionsClient._invokeWithStreamedResponse`, which uses its own `URLSession`
 /// outside `SupabaseClient`'s fetch pipeline (same pre-existing exception as auth header injection).
+///
+/// To enable, add the trait to your dependency declaration:
+///
+/// ```swift
+/// .package(
+///   url: "https://github.com/supabase/supabase-swift.git",
+///   from: "2.0.0",
+///   traits: ["OpenTelemetry"]
+/// )
+/// ```
 enum TraceContext {
   /// Sets the `traceparent` header on `request` from the active OpenTelemetry span, if any.
   static func inject(into request: URLRequest) -> URLRequest {

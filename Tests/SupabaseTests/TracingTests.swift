@@ -19,7 +19,7 @@ struct TracingTests {
   }
 
   @Test
-  func tracePropagationIsNoOpByDefault() async throws {
+  func tracePropagationIsNoOpWithoutActiveSpan() async throws {
     RequestCapturingProtocol.capturedRequests = []
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
@@ -59,10 +59,7 @@ struct TracingTests {
             storage: AuthLocalStorageMock(),
             autoRefreshToken: false
           ),
-          global: SupabaseClientOptions.GlobalOptions(
-            session: makeMockSession(),
-            tracePropagation: true
-          )
+          global: SupabaseClientOptions.GlobalOptions(session: makeMockSession())
         )
       )
 
