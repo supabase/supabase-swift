@@ -3,6 +3,10 @@ import Testing
 
 @testable import Supabase
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 #if OpenTelemetry
   import OpenTelemetryApi
   import OpenTelemetrySdk
