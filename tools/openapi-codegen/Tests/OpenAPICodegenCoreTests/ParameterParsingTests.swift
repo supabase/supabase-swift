@@ -102,4 +102,18 @@ struct ParameterParsingTests {
     #expect(hoisted.count == 1)
     #expect(hoisted.first?.name == "listObjects_pathsItem")
   }
+
+  @Test
+  func rejectsUnionParameter() throws {
+    let json = """
+      {
+        "name": "filter",
+        "in": "query",
+        "schema": {"anyOf": [{"type": "integer"}, {"type": "string"}]}
+      }
+      """
+    #expect(throws: UnsupportedSpecConstruct.self) {
+      try OpenAPIParsing.parseParameter(try parameter(json), location: "op")
+    }
+  }
 }

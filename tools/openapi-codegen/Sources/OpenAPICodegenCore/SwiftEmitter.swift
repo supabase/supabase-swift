@@ -220,6 +220,10 @@ public enum SwiftEmitter {
     if case .schemaRef = parameter.type {
       return parameter.isOptional ? "\(name)?.rawValue" : "\(name).rawValue"
     }
+    if case .array(let element) = parameter.type {
+      if case .string = element { return name }
+      return parameter.isOptional ? "\(name)?.map(String.init)" : "\(name).map(String.init)"
+    }
     return parameter.isOptional ? "\(name).map(String.init)" : "String(\(name))"
   }
 

@@ -234,16 +234,15 @@ public enum OpenAPIParsing {
       )
       return (irParameter, [IRSchema(name: hoistedName, kind: .stringEnum(cases: cases))])
     }
-    if let (type, hoistedSchema) = try hoistUnionIfPresent(
-      name: "\(location)_\(parameter.name)", schema: schema, location: parameterLocation)
-    {
-      let irParameter = IRParameter(
-        name: parameter.name,
-        location: irLocation,
-        type: type,
-        isOptional: !parameter.required || schema.nullable
+    switch schema.value {
+    case .one, .any:
+      throw UnsupportedSpecConstruct(
+        location: parameterLocation,
+        reason:
+          "union parameters aren't supported (no well-defined query/header string representation)"
       )
-      return (irParameter, [hoistedSchema])
+    default:
+      break
     }
     if let (type, arrayHoisted) = try hoistArrayOfObjectIfPresent(
       name: "\(location)_\(parameter.name)", schema: schema, location: parameterLocation)
