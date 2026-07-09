@@ -157,6 +157,43 @@ final class PostgrestQueryBuilderTests: PostgrestQueryTests {
     XCTAssertEqual(count, 10)
   }
 
+  func testSelectWithExistingPreferHeader() async throws {
+    Mock(
+      url: url.appendingPathComponent("users"),
+      ignoreQuery: true,
+      statusCode: 200,
+      data: [
+        .head: Data()
+      ],
+      additionalHeaders: [
+        "Content-Range": "0-9/10"
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--head \
+      	--header "Accept: application/json" \
+      	--header "Content-Type: application/json" \
+      	--header "Prefer: existing=value,count=exact" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:54321/rest/v1/users?select=*"
+      """#
+    }
+    .register()
+
+    let count =
+      try await sut
+      .from("users")
+      .setHeader(name: "Prefer", value: "existing=value")
+      .select(head: true, count: .exact)
+      .execute()
+      .count
+
+    XCTAssertEqual(count, 10)
+  }
+
   func testInsert() async throws {
     Mock(
       url: url.appendingPathComponent("users"),
