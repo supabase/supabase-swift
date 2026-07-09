@@ -709,6 +709,34 @@ final class StorageFileAPITests: XCTestCase {
     XCTAssertEqual(response.fullPath, "bucket/file.txt")
   }
 
+  func testUploadReturnsCleanedPath() async throws {
+    Mock(
+      url: url.appendingPathComponent("object/bucket/folder/file.txt"),
+      statusCode: 200,
+      data: [
+        .post: Data(
+          """
+          {
+            "Id": "123",
+            "Key": "bucket/folder/file.txt"
+          }
+          """.utf8
+        )
+      ]
+    )
+    .register()
+
+    let response = try await storage.from("bucket")
+      .upload(
+        "/folder//file.txt",
+        data: Data("hello world!".utf8),
+        options: FileOptions(contentType: "text/plain")
+      )
+
+    XCTAssertEqual(response.path, "folder/file.txt")
+    XCTAssertEqual(response.fullPath, "bucket/folder/file.txt")
+  }
+
   func testUpdateFromURL() async throws {
     Mock(
       url: url.appendingPathComponent("object/bucket/file.txt"),
