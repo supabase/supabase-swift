@@ -172,7 +172,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
 
     return FileUploadResponse(
       id: response.Id,
-      path: path,
+      path: cleanPath,
       fullPath: response.Key
     )
   }
