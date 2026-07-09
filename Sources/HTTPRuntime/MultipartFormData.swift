@@ -4,7 +4,7 @@
 //
 //  Created by Guilherme Souza on 08/07/26.
 //
-import Foundation
+package import Foundation
 
 /// Builds a `multipart/form-data` body by streaming its parts onto a temporary
 /// file, so large file parts never load fully into memory. The resulting file
@@ -17,7 +17,7 @@ package struct MultipartFormData: Sendable {
   let boundary: String
   private var parts: [Part] = []
 
-  var contentType: String { "multipart/form-data; boundary=\(boundary)" }
+  package var contentType: String { "multipart/form-data; boundary=\(boundary)" }
 
   enum Part {
     case text(name: String, value: String)
@@ -25,19 +25,19 @@ package struct MultipartFormData: Sendable {
     case file(name: String, fileURL: URL, fileName: String?, mimeType: String?)
   }
 
-  init(boundary: String = "----sb-\(UUID().uuidString)") {
+  package init(boundary: String = "----sb-\(UUID().uuidString)") {
     self.boundary = boundary
   }
 
   /// Add a text field to the multipart payload
-  func addText(name: String, value: String) -> MultipartFormData {
+  package func addText(name: String, value: String) -> MultipartFormData {
     var builder = self
     builder.parts.append(.text(name: name, value: value))
     return builder
   }
 
   /// Add an optional text field (only adds if value is non-nil)
-  func addOptionalText(name: String, value: String?) -> MultipartFormData {
+  package func addOptionalText(name: String, value: String?) -> MultipartFormData {
     if let value = value {
       return addText(name: name, value: value)
     }
@@ -45,7 +45,7 @@ package struct MultipartFormData: Sendable {
   }
 
   /// Add a data field to the multipart payload.
-  func addData(
+  package func addData(
     name: String,
     data: Data,
     fileName: String? = nil,
@@ -57,7 +57,7 @@ package struct MultipartFormData: Sendable {
   }
 
   /// Add a file field to the multipart payload (loads entire file into memory)
-  func addFile(
+  package func addFile(
     name: String,
     fileURL: URL,
     fileName: String? = nil,
@@ -72,7 +72,7 @@ package struct MultipartFormData: Sendable {
   /// Build the multipart payload in memory
   /// - Note: Only suitable for small payloads. Use `buildToTempFile()` for large files.
   /// - Returns: Complete multipart body data
-  func buildInMemory() throws -> Data {
+  package func buildInMemory() throws -> Data {
     guard !parts.isEmpty else { return Data() }
 
     var body = Data()
@@ -97,7 +97,7 @@ package struct MultipartFormData: Sendable {
   /// Build the multipart payload to a temporary file
   /// - Note: Streams file contents to avoid memory pressure on large files
   /// - Returns: URL of temporary file containing multipart body
-  func buildToTempFile() throws -> URL {
+  package func buildToTempFile() throws -> URL {
     let tempDir = FileManager.default.temporaryDirectory
     let tempFile = tempDir.appendingPathComponent(UUID().uuidString)
 

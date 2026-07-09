@@ -64,14 +64,12 @@ struct HTTPRuntimeTests {
     try payload.write(to: sourceURL)
     defer { try? FileManager.default.removeItem(at: sourceURL) }
 
-    var form = MultipartFormData(boundary: "TESTBOUNDARY")
-    form.append(.init(name: "meta", source: .data(Data(#"{"k":"v"}"#.utf8))))
-    form.append(
-      .init(
-        name: "file", filename: "big.bin", contentType: "application/octet-stream",
-        source: .file(sourceURL)))
+    let form = MultipartFormData(boundary: "TESTBOUNDARY")
+      .addText(name: "meta", value: #"{"k":"v"}"#)
+      .addFile(
+        name: "file", fileURL: sourceURL, fileName: "big.bin", mimeType: "application/octet-stream")
 
-    let bodyURL = try form.writeToTemporaryFile()
+    let bodyURL = try form.buildToTempFile()
     defer { try? FileManager.default.removeItem(at: bodyURL) }
     let body = try Data(contentsOf: bodyURL)
 
