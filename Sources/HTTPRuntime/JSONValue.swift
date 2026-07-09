@@ -7,7 +7,7 @@
 import Foundation
 
 /// A free-form JSON value, used for spec `document` / `Record<unknown>` types.
-public enum JSONValue: Codable, Sendable, Hashable {
+package enum JSONValue: Codable, Sendable, Hashable {
   case null
   case bool(Bool)
   case number(Double)
@@ -15,7 +15,7 @@ public enum JSONValue: Codable, Sendable, Hashable {
   case array([JSONValue])
   case object([String: JSONValue])
 
-  public init(from decoder: any Decoder) throws {
+  package init(from decoder: any Decoder) throws {
     let container = try decoder.singleValueContainer()
     if container.decodeNil() {
       self = .null
@@ -37,7 +37,7 @@ public enum JSONValue: Codable, Sendable, Hashable {
     }
   }
 
-  public func encode(to encoder: any Encoder) throws {
+  package func encode(to encoder: any Encoder) throws {
     var container = encoder.singleValueContainer()
     switch self {
     case .null: try container.encodeNil()

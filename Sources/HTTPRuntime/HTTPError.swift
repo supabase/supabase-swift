@@ -4,11 +4,11 @@
 //
 //  Created by Guilherme Souza on 08/07/26.
 //
-public import Foundation
+package import Foundation
 
 /// Errors surfaced by the runtime itself (transport/encoding/decoding), as
 /// distinct from typed API errors decoded from a response body.
-public enum HTTPError: Error, Sendable {
+package enum HTTPError: Error, Sendable {
   case invalidURL(base: URL, path: String)
   case transport(any Error)
   case decoding(any Error)
@@ -19,14 +19,14 @@ public enum HTTPError: Error, Sendable {
 
 /// Marker protocol for generated, typed API errors decoded from a response
 /// body for a known status code.
-public protocol APIError: Error, Sendable, Decodable {}
+package protocol APIError: Error, Sendable, Decodable {}
 
 extension HTTPResponse {
   /// Validates the status code, decoding a modeled error when the status
   /// matches one of the provided error types. Generated code passes the
   /// `status -> ErrorType` table declared by the operation's Smithy/TypeSpec
   /// error bindings.
-  public func checkStatus(errorTypes: [Int: any APIError.Type]) throws {
+  package func checkStatus(errorTypes: [Int: any APIError.Type]) throws {
     guard !isSuccess else { return }
     if let errorType = errorTypes[status] {
       do {

@@ -4,12 +4,12 @@
 //
 //  Created by Guilherme Souza on 08/07/26.
 //
-public import Foundation
+package import Foundation
 
 /// Shared JSON coders used by generated code. Dates are ISO-8601 with
 /// fractional seconds, matching the mock server and the spec timestamps.
-public enum JSONCoding {
-  public static let encoder: JSONEncoder = {
+package enum JSONCoding {
+  package static let encoder: JSONEncoder = {
     let encoder = JSONEncoder()
     encoder.dateEncodingStrategy = .custom { date, enc in
       var container = enc.singleValueContainer()
@@ -18,7 +18,7 @@ public enum JSONCoding {
     return encoder
   }()
 
-  public static let decoder: JSONDecoder = {
+  package static let decoder: JSONDecoder = {
     let decoder = JSONDecoder()
     decoder.dateDecodingStrategy = .custom { dec in
       let container = try dec.singleValueContainer()
@@ -35,7 +35,7 @@ public enum JSONCoding {
   }()
 
   /// ISO-8601 string with fractional seconds, for `@httpQuery` timestamp params.
-  public static func iso8601String(_ date: Date) -> String {
+  package static func iso8601String(_ date: Date) -> String {
     iso8601.string(from: date)
   }
 
