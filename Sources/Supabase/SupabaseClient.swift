@@ -47,6 +47,24 @@ import IssueReporting
 ///
 /// ### Configuration
 /// - ``headers``
+///
+/// ## OpenTelemetry Trace Propagation
+///
+/// Enable the `OpenTelemetry` trait on your dependency declaration to have every outgoing
+/// request automatically carry a W3C `traceparent` header derived from the currently active
+/// OpenTelemetry span:
+///
+/// ```swift
+/// .package(
+///   url: "https://github.com/supabase/supabase-swift.git",
+///   from: "2.0.0",
+///   traits: ["OpenTelemetry"]
+/// )
+/// ```
+///
+/// No further configuration is needed — the trait is the only toggle. With it enabled, whatever
+/// span is active (via `opentelemetry-swift`) when a request is made gets propagated; with no
+/// active span, or with the trait disabled, requests go out unchanged.
 public final class SupabaseClient: Sendable {
   let options: SupabaseClientOptions
   let supabaseURL: URL
