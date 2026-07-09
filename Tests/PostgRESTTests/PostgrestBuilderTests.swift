@@ -233,20 +233,6 @@ final class PostgrestBuilderTests: PostgrestQueryTests {
 
   // MARK: - Retry tests
 
-  override func setUp() {
-    super.setUp()
-    #if DEBUG
-      _clock = ImmediateRetryTestClock()
-    #endif
-  }
-
-  override func tearDown() {
-    super.tearDown()
-    #if DEBUG
-      _clock = ContinuousClock()
-    #endif
-  }
-
   func testRetryOn520ForGETRequest() async throws {
     struct MutableState {
       var callCount = 0
@@ -277,6 +263,34 @@ final class PostgrestBuilderTests: PostgrestQueryTests {
       XCTAssertEqual(state.capturedHeaders[2]["X-Retry-Count"], "2")
       XCTAssertTrue(result.value.isEmpty)
     }
+  }
+
+  func testRetryAfterSchemaChangeUsesInjectedClock() async throws {
+    let callCount = LockIsolated(0)
+
+    let sut = makeSUTWithCustomFetch { _ in
+      callCount.withValue { $0 += 1 }
+      if callCount.value < 3 {
+        return (Data(), self.makeHTTPURLResponse(statusCode: 520))
+      }
+      return (Data("[]".utf8), self.makeHTTPURLResponse(statusCode: 200))
+    }
+
+    let clock = ContinuousClock()
+    let start = clock.now
+    let result: PostgrestResponse<[User]> =
+      try await sut
+      .schema("private")
+      .from("users")
+      .select()
+      .execute()
+    let elapsed = clock.now - start
+
+    XCTAssertEqual(callCount.value, 3)
+    XCTAssertTrue(result.value.isEmpty)
+    XCTAssertLessThan(
+      elapsed, .seconds(1),
+      "schema(_:) must propagate the injected clock instead of falling back to the real one")
   }
 
   func testRetryOn520ForHEADRequest() async throws {
@@ -466,7 +480,10 @@ final class PostgrestBuilderTests: PostgrestQueryTests {
     retryEnabled: Bool = true,
     fetch: @escaping PostgrestClient.FetchHandler
   ) -> PostgrestClient {
-    PostgrestClient(url: url, fetch: fetch, retryEnabled: retryEnabled)
+    PostgrestClient(
+      configuration: .init(url: url, fetch: fetch, retryEnabled: retryEnabled),
+      clock: ImmediateRetryTestClock()
+    )
   }
 
   private func makeHTTPURLResponse(statusCode: Int) -> HTTPURLResponse {

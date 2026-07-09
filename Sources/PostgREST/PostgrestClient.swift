@@ -159,6 +159,7 @@ public final class PostgrestClient: Sendable {
   }
 
   private let _configuration: LockIsolated<Configuration>
+  let clock: any Clock<Duration>
 
   /// The current configuration of this client.
   ///
@@ -170,11 +171,16 @@ public final class PostgrestClient: Sendable {
   /// Creates a ``PostgrestClient`` from an existing ``Configuration``.
   ///
   /// - Parameter configuration: The configuration to use.
-  public init(configuration: Configuration) {
+  public convenience init(configuration: Configuration) {
+    self.init(configuration: configuration, clock: ContinuousClock())
+  }
+
+  init(configuration: Configuration, clock: any Clock<Duration>) {
     _configuration = LockIsolated(configuration)
     _configuration.withValue {
       $0.headers.merge(Configuration.defaultHeaders) { l, _ in l }
     }
+    self.clock = clock
   }
 
   /// Creates a ``PostgrestClient`` with individual configuration parameters.
@@ -249,7 +255,8 @@ public final class PostgrestClient: Sendable {
         url: configuration.url.appendingPathComponent(table),
         method: .get,
         headers: HTTPFields(configuration.headers)
-      )
+      ),
+      clock: clock
     )
   }
 
@@ -314,7 +321,8 @@ public final class PostgrestClient: Sendable {
 
     return PostgrestFilterBuilder(
       configuration: configuration,
-      request: request
+      request: request,
+      clock: clock
     )
   }
 
@@ -360,7 +368,7 @@ public final class PostgrestClient: Sendable {
   public func schema(_ schema: String) -> PostgrestClient {
     var configuration = configuration
     configuration.schema = schema
-    return PostgrestClient(configuration: configuration)
+    return PostgrestClient(configuration: configuration, clock: clock)
   }
 
   private func queryValue(for value: AnyJSON) -> String {

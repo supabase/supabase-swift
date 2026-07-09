@@ -37,6 +37,7 @@ public class PostgrestBuilder: @unchecked Sendable {
   /// The configuration for the PostgREST client.
   let configuration: PostgrestClient.Configuration
   let http: any HTTPClientType
+  let clock: any Clock<Duration>
 
   struct MutableState {
     var request: Helpers.HTTPRequest
@@ -52,9 +53,11 @@ public class PostgrestBuilder: @unchecked Sendable {
 
   init(
     configuration: PostgrestClient.Configuration,
-    request: Helpers.HTTPRequest
+    request: Helpers.HTTPRequest,
+    clock: any Clock<Duration>
   ) {
     self.configuration = configuration
+    self.clock = clock
 
     var interceptors: [any HTTPClientInterceptor] = []
     if let logger = configuration.logger {
@@ -74,7 +77,8 @@ public class PostgrestBuilder: @unchecked Sendable {
   convenience init(_ other: PostgrestBuilder) {
     self.init(
       configuration: other.configuration,
-      request: other.mutableState.value.request
+      request: other.mutableState.value.request,
+      clock: other.clock
     )
     mutableState.withValue { $0.retryEnabled = other.mutableState.value.retryEnabled }
   }
@@ -213,7 +217,7 @@ public class PostgrestBuilder: @unchecked Sendable {
           request: currentRequest, response: nil, error: error, retryEnabled: retryEnabled,
           attempt: attempt)
         {
-          try await _clock.sleep(for: .seconds(retryDelay(attempt: attempt)))
+          try await clock.sleep(for: .seconds(retryDelay(attempt: attempt)))
           attempt += 1
           continue
         }
@@ -230,7 +234,7 @@ public class PostgrestBuilder: @unchecked Sendable {
         request: currentRequest, response: response, error: nil, retryEnabled: retryEnabled,
         attempt: attempt)
       {
-        try await _clock.sleep(for: .seconds(retryDelay(attempt: attempt)))
+        try await clock.sleep(for: .seconds(retryDelay(attempt: attempt)))
         attempt += 1
         continue
       }
