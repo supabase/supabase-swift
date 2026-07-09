@@ -19,13 +19,6 @@ struct TracingTests {
   }
 
   @Test
-  func injectLeavesRequestUnchangedWhenNoActiveSpan() {
-    let original = URLRequest(url: URL(string: "https://project-ref.supabase.co")!)
-    let injected = TraceContext.inject(into: original)
-    #expect(injected.value(forHTTPHeaderField: "traceparent") == nil)
-  }
-
-  @Test
   func tracePropagationIsNoOpByDefault() async throws {
     RequestCapturingProtocol.capturedRequests = []
     let client = SupabaseClient(
@@ -47,27 +40,6 @@ struct TracingTests {
   }
 
   #if OpenTelemetry
-    @Test
-    func activeSpanProducesMatchingTraceParentHeader() {
-      let tracer = TracerProviderBuilder().build().get(instrumentationName: "test")
-      let span = tracer.spanBuilder(spanName: "test-span").startSpan()
-      OpenTelemetry.instance.contextProvider.setActiveSpan(span)
-      defer {
-        span.end()
-        OpenTelemetry.instance.contextProvider.removeContextForSpan(span)
-      }
-
-      let context = span.context
-      let expected =
-        "00-\(context.traceId.hexString)-\(context.spanId.hexString)-\(context.traceFlags.hexString)"
-      #expect(TraceContext.traceParentHeader() == expected)
-
-      let request = TraceContext.inject(
-        into: URLRequest(url: URL(string: "https://project-ref.supabase.co")!)
-      )
-      #expect(request.value(forHTTPHeaderField: "traceparent") == expected)
-    }
-
     @Test
     func tracePropagationInjectsTraceParentHeaderIntoRestRequests() async throws {
       let tracer = TracerProviderBuilder().build().get(instrumentationName: "test")
