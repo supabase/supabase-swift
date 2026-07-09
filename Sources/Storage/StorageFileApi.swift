@@ -855,9 +855,12 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
       headers[.xUpsert] = "true"
     }
 
+    let cleanPath = _removeEmptyFolders(path)
+
     let response = try await execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("object/upload/sign/\(bucketId)/\(path)"),
+        url: configuration.url.appendingPathComponent(
+          "object/upload/sign/\(bucketId)/\(cleanPath)"),
         method: .post,
         headers: headers
       )
@@ -880,7 +883,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
 
     return SignedUploadURL(
       signedURL: url,
-      path: path,
+      path: cleanPath,
       token: token
     )
   }
@@ -964,10 +967,12 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
       let Key: String
     }
 
+    let cleanPath = _removeEmptyFolders(path)
+
     let fullPath = try await execute(
       HTTPRequest(
         url: configuration.url
-          .appendingPathComponent("object/upload/sign/\(bucketId)/\(path)"),
+          .appendingPathComponent("object/upload/sign/\(bucketId)/\(cleanPath)"),
         method: .put,
         query: [URLQueryItem(name: "token", value: token)],
         formData: formData,
@@ -978,7 +983,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     .decoded(as: UploadResponse.self, decoder: configuration.decoder)
     .Key
 
-    return SignedURLUploadResponse(path: path, fullPath: fullPath)
+    return SignedURLUploadResponse(path: cleanPath, fullPath: fullPath)
   }
 
   private func _getFinalPath(_ path: String) -> String {

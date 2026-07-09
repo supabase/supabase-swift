@@ -1100,6 +1100,85 @@ final class StorageFileAPITests: XCTestCase {
       "http://localhost:54321/storage/v1/object/upload/sign/bucket/file.txt?token=abc.def.ghi")
   }
 
+  func testCreateSignedUploadURLCleansPath() async throws {
+    Mock(
+      url: url.appendingPathComponent("object/upload/sign/bucket/folder/file.txt"),
+      statusCode: 200,
+      data: [
+        .post: Data(
+          """
+          {
+            "url": "object/upload/sign/bucket/folder/file.txt?token=abc.def.ghi"
+          }
+          """.utf8
+        )
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
+      	--header "X-Client-Info: storage-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:54321/storage/v1/object/upload/sign/bucket/folder/file.txt"
+      """#
+    }
+    .register()
+
+    let response = try await storage.from("bucket")
+      .createSignedUploadURL(path: "/folder//file.txt")
+
+    XCTAssertEqual(response.path, "folder/file.txt")
+    XCTAssertEqual(response.token, "abc.def.ghi")
+  }
+
+  func testUploadToSignedURLCleansPath() async throws {
+    Mock(
+      url: url.appendingPathComponent("object/upload/sign/bucket/folder/file.txt"),
+      ignoreQuery: true,
+      statusCode: 200,
+      data: [
+        .put: Data(
+          """
+          {
+            "Key": "bucket/folder/file.txt"
+          }
+          """.utf8)
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request PUT \
+      	--header "Cache-Control: max-age=3600" \
+      	--header "Content-Length: 297" \
+      	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.e56f43407f772505" \
+      	--header "X-Client-Info: storage-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	--header "x-upsert: false" \
+      	--data "--alamofire.boundary.e56f43407f772505\#r
+      Content-Disposition: form-data; name=\"cacheControl\"\#r
+      \#r
+      3600\#r
+      --alamofire.boundary.e56f43407f772505\#r
+      Content-Disposition: form-data; name=\"\"; filename=\"file.txt\"\#r
+      Content-Type: text/plain;charset=UTF-8\#r
+      \#r
+      hello world\#r
+      --alamofire.boundary.e56f43407f772505--\#r
+      " \
+      	"http://localhost:54321/storage/v1/object/upload/sign/bucket/folder/file.txt?token=abc.def.ghi"
+      """#
+    }
+    .register()
+
+    let response = try await storage.from("bucket")
+      .uploadToSignedURL("/folder//file.txt", token: "abc.def.ghi", data: Data("hello world".utf8))
+
+    XCTAssertEqual(response.path, "folder/file.txt")
+    XCTAssertEqual(response.fullPath, "bucket/folder/file.txt")
+  }
+
   func testUploadToSignedURL() async throws {
     Mock(
       url: url.appendingPathComponent("object/upload/sign/bucket/file.txt"),
