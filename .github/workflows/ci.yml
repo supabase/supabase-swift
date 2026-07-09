@@ -148,6 +148,10 @@ jobs:
         run: swift build
       - name: "Test Swift Package"
         run: swift test --skip IntegrationTests
+      - name: "Build Swift Package (OpenTelemetry trait)"
+        run: swift build --traits OpenTelemetry
+      - name: "Test Swift Package (OpenTelemetry trait)"
+        run: swift test --traits OpenTelemetry --filter SupabaseTests
 
   integration-tests:
     name: Integration Tests (Linux)

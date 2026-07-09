@@ -9,6 +9,9 @@ import Foundation
 /// Requires the `OpenTelemetry` package trait; compiles to a no-op when the trait is disabled,
 /// so ``SupabaseClientOptions/GlobalOptions/tracePropagation`` is always safe to set regardless
 /// of whether the trait is enabled.
+///
+/// Not applied to `FunctionsClient._invokeWithStreamedResponse`, which uses its own `URLSession`
+/// outside `SupabaseClient`'s fetch pipeline (same pre-existing exception as auth header injection).
 enum TraceContext {
   /// Sets the `traceparent` header on `request` from the active OpenTelemetry span, if any.
   static func inject(into request: URLRequest) -> URLRequest {

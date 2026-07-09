@@ -119,7 +119,16 @@ public struct SupabaseClientOptions: Sendable {
     /// When `true`, injects a W3C `traceparent` header derived from the currently active
     /// OpenTelemetry span into every outgoing request.
     ///
-    /// Requires the `OpenTelemetry` package trait to be enabled; otherwise this is a no-op.
+    /// Requires enabling the `OpenTelemetry` trait on your dependency declaration; otherwise
+    /// this is a silent no-op:
+    ///
+    /// ```swift
+    /// .package(
+    ///   url: "https://github.com/supabase/supabase-swift.git",
+    ///   from: "2.0.0",
+    ///   traits: ["OpenTelemetry"]
+    /// )
+    /// ```
     public let tracePropagation: Bool
 
     public init(
