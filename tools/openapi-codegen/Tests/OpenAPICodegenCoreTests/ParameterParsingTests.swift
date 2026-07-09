@@ -71,7 +71,8 @@ struct ParameterParsingTests {
     let json = """
       {"name": "resize", "in": "query", "schema": {"type": "string", "enum": ["cover", "contain", "fill"]}}
       """
-    let (irParameter, hoisted) = try OpenAPIParsing.parseParameter(parameter(json), location: "renderImagePublic")
+    let (irParameter, hoisted) = try OpenAPIParsing.parseParameter(
+      parameter(json), location: "renderImagePublic")
 
     #expect(irParameter.name == "resize")
     #expect(irParameter.type == .schemaRef("renderImagePublic_resize"))
@@ -95,7 +96,8 @@ struct ParameterParsingTests {
         }
       }
       """
-    let (irParameter, hoisted) = try OpenAPIParsing.parseParameter(parameter(json), location: "listObjects")
+    let (irParameter, hoisted) = try OpenAPIParsing.parseParameter(
+      parameter(json), location: "listObjects")
 
     #expect(irParameter.name == "paths")
     #expect(irParameter.type == .array(.schemaRef("listObjects_pathsItem")))

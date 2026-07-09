@@ -381,7 +381,8 @@ public enum OpenAPIParsing {
           location: location, reason: "external response reference for status \(code)")
       }
       let (body, bodyHoisted) = try parseResponseBody(
-        response.content, operationId: location, statusCode: code, location: "\(location) -> \(code)")
+        response.content, operationId: location, statusCode: code,
+        location: "\(location) -> \(code)")
       hoisted.append(contentsOf: bodyHoisted)
       results.append(IRResponse(statusCode: code, isError: !statusCode.isSuccess, body: body))
     }
@@ -452,7 +453,8 @@ public enum OpenAPIParsing {
         }
         var parameters: [IRParameter] = []
         for parameterEither in pathItem.parameters + operation.parameters {
-          let (parameter, parameterHoisted) = try parseParameter(parameterEither, location: operationId)
+          let (parameter, parameterHoisted) = try parseParameter(
+            parameterEither, location: operationId)
           parameters.append(parameter)
           hoisted.append(contentsOf: parameterHoisted)
         }
@@ -484,7 +486,9 @@ public enum OpenAPIParsing {
 
   public static func parseDocument(_ document: OpenAPI.Document) throws -> IRDocument {
     var schemas: [IRSchema] = []
-    for (key, schema) in document.components.schemas.sorted(by: { $0.key.rawValue < $1.key.rawValue }) {
+    for (key, schema) in document.components.schemas.sorted(by: {
+      $0.key.rawValue < $1.key.rawValue
+    }) {
       schemas.append(contentsOf: try parseNamedSchema(name: key.rawValue, schema: schema))
     }
     let (operations, operationHoisted) = try parseOperations(document)
