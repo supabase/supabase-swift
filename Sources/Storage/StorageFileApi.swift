@@ -1,5 +1,6 @@
 public import Foundation
 import HTTPTypes
+import OpenAPIRuntime
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -23,30 +24,6 @@ private let defaultFileOptions = FileOptions(
 enum FileUpload {
   case data(Data)
   case url(URL)
-
-  func encode(to formData: MultipartFormData, withPath path: String, options: FileOptions) {
-    formData.append(
-      options.cacheControl.data(using: .utf8)!,
-      withName: "cacheControl"
-    )
-
-    if let metadata = options.metadata {
-      formData.append(encodeMetadata(metadata), withName: "metadata")
-    }
-
-    switch self {
-    case .data(let data):
-      formData.append(
-        data,
-        withName: "",
-        fileName: path.fileName,
-        mimeType: options.contentType ?? mimeType(forPathExtension: path.pathExtension)
-      )
-
-    case .url(let url):
-      formData.append(url, withName: "")
-    }
-  }
 }
 
 #if DEBUG
@@ -128,6 +105,49 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     let error: String?
   }
 
+  /// Builds the `Content-Type`/`Content-Disposition` headers and body for the multipart `file`
+  /// part, shared by both branches of ``_uploadOrUpdate(method:path:file:options:)`` (which each
+  /// wrap it in their own operation-specific, nominally-distinct `multipartFormPayload` enum — the
+  /// generated client gives `objectUpload` and `objectUploadUpdate` their own copy of that type
+  /// even though the shapes are identical).
+  private func _fileMultipartRawPart(path: String, file: FileUpload, options: FileOptions)
+    throws -> MultipartRawPart
+  {
+    let mimeType = options.contentType ?? mimeType(forPathExtension: path.pathExtension)
+    var fileHeaders = HTTPFields()
+    fileHeaders[.contentType] = mimeType
+    fileHeaders[.contentDisposition] =
+      #"form-data; name="file"; filename="\#(path.fileName)""#
+
+    let fileBody: HTTPBody
+    switch file {
+    case .data(let data):
+      fileBody = HTTPBody(data)
+    case .url(let url):
+      fileBody = HTTPBody(try Data(contentsOf: url))
+    }
+
+    return MultipartRawPart(headerFields: fileHeaders, body: fileBody)
+  }
+
+  /// Extra headers (`Cache-Control`, `x-upsert`, `Duplex`, and any caller-supplied
+  /// `options.headers`) for a single `upload`/`update` call. The generated `Client`'s
+  /// per-operation `Input.headers` only exposes `accept`, so these are threaded through
+  /// ``StorageApi/extraHeadersForCurrentRequest``.
+  private func _uploadExtraHeaders(method: HTTPTypes.HTTPRequest.Method, options: FileOptions)
+    -> HTTPFields
+  {
+    var headers = options.headers.map { HTTPFields($0) } ?? HTTPFields()
+    if headers[.cacheControl] == nil {
+      headers[.cacheControl] = "max-age=\(options.cacheControl)"
+    }
+    if method == .post {
+      headers[.xUpsert] = "\(options.upsert)"
+    }
+    headers[.duplex] = options.duplex
+    return headers
+  }
+
   private func _uploadOrUpdate(
     method: HTTPTypes.HTTPRequest.Method,
     path: String,
@@ -135,46 +155,82 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     options: FileOptions?
   ) async throws -> FileUploadResponse {
     let options = options ?? defaultFileOptions
-    var headers = options.headers.map { HTTPFields($0) } ?? HTTPFields()
+    let cleanPath = _removeEmptyFolders(path)
+    let extraHeaders = _uploadExtraHeaders(method: method, options: options)
 
     if method == .post {
-      headers[.xUpsert] = "\(options.upsert)"
-    }
+      let filePart = try _fileMultipartRawPart(path: path, file: file, options: options)
 
-    headers[.duplex] = options.duplex
+      var parts: [Operations.objectUpload.Input.Body.multipartFormPayload] = [
+        .cacheControl(.init(payload: .init(body: HTTPBody(options.cacheControl))))
+      ]
+      if let metadata = options.metadata {
+        parts.append(.metadata(.init(payload: .init(body: HTTPBody(encodeMetadata(metadata))))))
+      }
+      parts.append(.undocumented(filePart))
 
-    #if DEBUG
-      let formData = MultipartFormData(boundary: testingBoundary.value)
-    #else
-      let formData = MultipartFormData()
-    #endif
-    file.encode(to: formData, withPath: path, options: options)
-
-    struct UploadResponse: Decodable {
-      let Key: String
-      let Id: String
-    }
-
-    let cleanPath = _removeEmptyFolders(path)
-    let _path = _getFinalPath(cleanPath)
-
-    let response = try await execute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("object/\(_path)"),
-        method: method,
-        query: [],
-        formData: formData,
-        options: options,
-        headers: headers
+      let input = Operations.objectUpload.Input(
+        path: .init(bucketName: bucketId, wildcard: cleanPath),
+        headers: .init(),
+        body: .multipartForm(.init(parts))
       )
-    )
-    .decoded(as: UploadResponse.self, decoder: configuration.decoder)
 
-    return FileUploadResponse(
-      id: response.Id,
-      path: path,
-      fullPath: response.Key
-    )
+      let output = try await StorageApi.$extraHeadersForCurrentRequest.withValue(extraHeaders) {
+        try await openAPIClient.objectUpload(input)
+      }
+      switch output {
+      case .ok(let response):
+        guard case .json(let body) = response.body else {
+          throw StorageError.unexpectedResponse()
+        }
+        return FileUploadResponse(id: body.Id ?? "", path: path, fullPath: body.Key)
+      case .forbidden(let response):
+        throw try StorageError(decoding: response.body.json)
+      case .clientError(let statusCode, let response):
+        throw try StorageError(statusCode: statusCode, decoding: response.body.json)
+      case .undocumented(let statusCode, let payload):
+        throw await StorageError(
+          statusCode: statusCode, undocumented: payload, decoder: configuration.decoder)
+      }
+    } else {
+      let filePart = try _fileMultipartRawPart(path: path, file: file, options: options)
+
+      var parts: [Operations.objectUploadUpdate.Input.Body.multipartFormPayload] = [
+        .cacheControl(.init(payload: .init(body: HTTPBody(options.cacheControl))))
+      ]
+      if let metadata = options.metadata {
+        parts.append(.metadata(.init(payload: .init(body: HTTPBody(encodeMetadata(metadata))))))
+      }
+      parts.append(.undocumented(filePart))
+
+      let input = Operations.objectUploadUpdate.Input(
+        path: .init(bucketName: bucketId, wildcard: cleanPath),
+        headers: .init(),
+        body: .multipartForm(.init(parts))
+      )
+
+      // objectUploadUpdate.Output and objectUpload.Output are distinct generated types with the
+      // same shape (.ok/.forbidden/.clientError/.undocumented, same {Id?, Key} success body) —
+      // there is no shared protocol to unify them (confirmed during the bucket API migration), so
+      // the switch is duplicated once per concrete Output type.
+      let output = try await StorageApi.$extraHeadersForCurrentRequest.withValue(extraHeaders) {
+        try await openAPIClient.objectUploadUpdate(input)
+      }
+      switch output {
+      case .ok(let response):
+        guard case .json(let body) = response.body else {
+          throw StorageError.unexpectedResponse()
+        }
+        return FileUploadResponse(id: body.Id ?? "", path: path, fullPath: body.Key)
+      case .forbidden(let response):
+        throw try StorageError(decoding: response.body.json)
+      case .clientError(let statusCode, let response):
+        throw try StorageError(statusCode: statusCode, decoding: response.body.json)
+      case .undocumented(let statusCode, let payload):
+        throw await StorageError(
+          statusCode: statusCode, undocumented: payload, decoder: configuration.decoder)
+      }
+    }
   }
 
   /// Uploads a file to an existing bucket.
@@ -948,37 +1004,47 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     options: FileOptions?
   ) async throws -> SignedURLUploadResponse {
     let options = options ?? defaultFileOptions
-    var headers = options.headers.map { HTTPFields($0) } ?? HTTPFields()
 
-    headers[.xUpsert] = "\(options.upsert)"
-    headers[.duplex] = options.duplex
+    var extraHeaders = options.headers.map { HTTPFields($0) } ?? HTTPFields()
+    if extraHeaders[.cacheControl] == nil {
+      extraHeaders[.cacheControl] = "max-age=\(options.cacheControl)"
+    }
+    extraHeaders[.xUpsert] = "\(options.upsert)"
+    extraHeaders[.duplex] = options.duplex
 
-    #if DEBUG
-      let formData = MultipartFormData(boundary: testingBoundary.value)
-    #else
-      let formData = MultipartFormData()
-    #endif
-    file.encode(to: formData, withPath: path, options: options)
+    let filePart = try _fileMultipartRawPart(path: path, file: file, options: options)
 
-    struct UploadResponse: Decodable {
-      let Key: String
+    var parts: [Operations.objectUploadSigned.Input.Body.multipartFormPayload] = [
+      .cacheControl(.init(payload: .init(body: HTTPBody(options.cacheControl))))
+    ]
+    if let metadata = options.metadata {
+      parts.append(.metadata(.init(payload: .init(body: HTTPBody(encodeMetadata(metadata))))))
+    }
+    parts.append(.undocumented(filePart))
+
+    let input = Operations.objectUploadSigned.Input(
+      path: .init(bucketName: bucketId, wildcard: path),
+      query: .init(token: token),
+      headers: .init(),
+      body: .multipartForm(.init(parts))
+    )
+
+    let output = try await StorageApi.$extraHeadersForCurrentRequest.withValue(extraHeaders) {
+      try await openAPIClient.objectUploadSigned(input)
     }
 
-    let fullPath = try await execute(
-      HTTPRequest(
-        url: configuration.url
-          .appendingPathComponent("object/upload/sign/\(bucketId)/\(path)"),
-        method: .put,
-        query: [URLQueryItem(name: "token", value: token)],
-        formData: formData,
-        options: options,
-        headers: headers
-      )
-    )
-    .decoded(as: UploadResponse.self, decoder: configuration.decoder)
-    .Key
-
-    return SignedURLUploadResponse(path: path, fullPath: fullPath)
+    switch output {
+    case .ok(let response):
+      guard case .json(let body) = response.body else {
+        throw StorageError.unexpectedResponse()
+      }
+      return SignedURLUploadResponse(path: path, fullPath: body.Key)
+    case .clientError(let statusCode, let response):
+      throw try StorageError(statusCode: statusCode, decoding: response.body.json)
+    case .undocumented(let statusCode, let payload):
+      throw await StorageError(
+        statusCode: statusCode, undocumented: payload, decoder: configuration.decoder)
+    }
   }
 
   private func _getFinalPath(_ path: String) -> String {

@@ -35,13 +35,21 @@ public class StorageBucketApi: StorageApi, @unchecked Sendable {
   /// - Returns: An array of ``Bucket`` objects, one for each bucket in the project.
   /// - Throws: ``StorageError`` if the request fails or the caller is not authorized.
   public func listBuckets() async throws -> [Bucket] {
-    try await execute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("bucket"),
-        method: .get
-      )
-    )
-    .decoded(decoder: configuration.decoder)
+    let output = try await openAPIClient.bucketList(.init())
+    switch output {
+    case .ok(let response):
+      guard case .json(let buckets) = response.body else {
+        throw StorageError.unexpectedResponse()
+      }
+      return buckets.map(Bucket.init(fromGenerated:))
+    case .forbidden(let response):
+      throw try StorageError(decoding: response.body.json)
+    case .clientError(let statusCode, let response):
+      throw try StorageError(statusCode: statusCode, decoding: response.body.json)
+    case .undocumented(let statusCode, let payload):
+      throw await StorageError(
+        statusCode: statusCode, undocumented: payload, decoder: configuration.decoder)
+    }
   }
 
   /// Retrieves the details of an existing Storage bucket.
@@ -50,21 +58,21 @@ public class StorageBucketApi: StorageApi, @unchecked Sendable {
   /// - Returns: The ``Bucket`` with the given identifier.
   /// - Throws: ``StorageError`` if the bucket does not exist or the caller is not authorized.
   public func getBucket(_ id: String) async throws -> Bucket {
-    try await execute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("bucket/\(id)"),
-        method: .get
-      )
-    )
-    .decoded(decoder: configuration.decoder)
-  }
-
-  struct BucketParameters: Encodable {
-    var id: String
-    var name: String
-    var `public`: Bool
-    var fileSizeLimit: StorageByteCount?
-    var allowedMimeTypes: [String]?
+    let output = try await openAPIClient.bucketGet(.init(path: .init(bucketId: id)))
+    switch output {
+    case .ok(let response):
+      guard case .json(let bucket) = response.body else {
+        throw StorageError.unexpectedResponse()
+      }
+      return Bucket(fromGenerated: bucket)
+    case .forbidden(let response):
+      throw try StorageError(decoding: response.body.json)
+    case .clientError(let statusCode, let response):
+      throw try StorageError(statusCode: statusCode, decoding: response.body.json)
+    case .undocumented(let statusCode, let payload):
+      throw await StorageError(
+        statusCode: statusCode, undocumented: payload, decoder: configuration.decoder)
+    }
   }
 
   /// Creates a new Storage bucket.
@@ -85,21 +93,40 @@ public class StorageBucketApi: StorageApi, @unchecked Sendable {
   public func createBucket(_ id: String, options: BucketOptions = BucketOptions(isPublic: false))
     async throws
   {
-    try await execute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("bucket"),
-        method: .post,
-        body: configuration.encoder.encode(
-          BucketParameters(
-            id: id,
+    let output = try await openAPIClient.bucketCreate(
+      .init(
+        body: .json(
+          .init(
             name: id,
-            public: options.isPublic,
-            fileSizeLimit: options.fileSizeLimit.map { StorageByteCount(stringLiteral: $0) },
-            allowedMimeTypes: options.allowedMimeTypes
+            id: id,
+            _public: options.isPublic,
+            file_size_limit: options.fileSizeLimit.map { limit in
+              if let intValue = Int64(limit) {
+                Operations.bucketCreate.Input.Body.jsonPayload.file_size_limitPayload(
+                  value1: Int(intValue)
+                )
+              } else {
+                Operations.bucketCreate.Input.Body.jsonPayload.file_size_limitPayload(
+                  value2: limit
+                )
+              }
+            },
+            allowed_mime_types: options.allowedMimeTypes
           )
         )
       )
     )
+    switch output {
+    case .ok:
+      return
+    case .forbidden(let response):
+      throw try StorageError(decoding: response.body.json)
+    case .clientError(let statusCode, let response):
+      throw try StorageError(statusCode: statusCode, decoding: response.body.json)
+    case .undocumented(let statusCode, let payload):
+      throw await StorageError(
+        statusCode: statusCode, undocumented: payload, decoder: configuration.decoder)
+    }
   }
 
   /// Updates an existing Storage bucket's settings.
@@ -116,21 +143,39 @@ public class StorageBucketApi: StorageApi, @unchecked Sendable {
   ///   - options: The new options to apply to the bucket.
   /// - Throws: ``StorageError`` if the bucket does not exist or the caller is not authorized.
   public func updateBucket(_ id: String, options: BucketOptions) async throws {
-    try await execute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("bucket/\(id)"),
-        method: .put,
-        body: configuration.encoder.encode(
-          BucketParameters(
-            id: id,
-            name: id,
-            public: options.isPublic,
-            fileSizeLimit: options.fileSizeLimit.map { StorageByteCount(stringLiteral: $0) },
-            allowedMimeTypes: options.allowedMimeTypes
+    let output = try await openAPIClient.bucketUpdate(
+      .init(
+        path: .init(bucketId: id),
+        body: .json(
+          .init(
+            _public: options.isPublic,
+            file_size_limit: options.fileSizeLimit.map { limit in
+              if let intValue = Int64(limit) {
+                Operations.bucketUpdate.Input.Body.jsonPayload.file_size_limitPayload(
+                  value1: Int(intValue)
+                )
+              } else {
+                Operations.bucketUpdate.Input.Body.jsonPayload.file_size_limitPayload(
+                  value2: limit
+                )
+              }
+            },
+            allowed_mime_types: options.allowedMimeTypes
           )
         )
       )
     )
+    switch output {
+    case .ok:
+      return
+    case .forbidden(let response):
+      throw try StorageError(decoding: response.body.json)
+    case .clientError(let statusCode, let response):
+      throw try StorageError(statusCode: statusCode, decoding: response.body.json)
+    case .undocumented(let statusCode, let payload):
+      throw await StorageError(
+        statusCode: statusCode, undocumented: payload, decoder: configuration.decoder)
+    }
   }
 
   /// Removes all objects inside a bucket without deleting the bucket itself.
@@ -141,12 +186,18 @@ public class StorageBucketApi: StorageApi, @unchecked Sendable {
   /// - Parameter id: The unique identifier of the bucket to empty.
   /// - Throws: ``StorageError`` if the bucket does not exist or the caller is not authorized.
   public func emptyBucket(_ id: String) async throws {
-    try await execute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("bucket/\(id)/empty"),
-        method: .post
-      )
-    )
+    let output = try await openAPIClient.bucketEmpty(.init(path: .init(bucketId: id)))
+    switch output {
+    case .ok:
+      return
+    case .forbidden(let response):
+      throw try StorageError(decoding: response.body.json)
+    case .clientError(let statusCode, let response):
+      throw try StorageError(statusCode: statusCode, decoding: response.body.json)
+    case .undocumented(let statusCode, let payload):
+      throw await StorageError(
+        statusCode: statusCode, undocumented: payload, decoder: configuration.decoder)
+    }
   }
 
   /// Deletes an existing bucket.
@@ -158,11 +209,17 @@ public class StorageBucketApi: StorageApi, @unchecked Sendable {
   /// - Throws: ``StorageError`` if the bucket is not empty, does not exist, or the caller is not
   ///   authorized.
   public func deleteBucket(_ id: String) async throws {
-    try await execute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("bucket/\(id)"),
-        method: .delete
-      )
-    )
+    let output = try await openAPIClient.bucketDelete(.init(path: .init(bucketId: id)))
+    switch output {
+    case .ok:
+      return
+    case .forbidden(let response):
+      throw try StorageError(decoding: response.body.json)
+    case .clientError(let statusCode, let response):
+      throw try StorageError(statusCode: statusCode, decoding: response.body.json)
+    case .undocumented(let statusCode, let payload):
+      throw await StorageError(
+        statusCode: statusCode, undocumented: payload, decoder: configuration.decoder)
+    }
   }
 }

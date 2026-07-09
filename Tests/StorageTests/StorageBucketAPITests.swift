@@ -47,6 +47,36 @@ final class StorageBucketAPITests: XCTestCase {
     Mocker.removeAll()
   }
 
+  func testOpenAPIClientUsesConfiguredBaseURLAndHeaders() async throws {
+    Mock(
+      url: url.appendingPathComponent("bucket/bucket123"),
+      statusCode: 200,
+      data: [
+        .get: Data(
+          """
+          {
+              "id": "bucket123",
+              "name": "test-bucket",
+              "owner": "owner123",
+              "public": false,
+              "created_at": "2024-01-01T00:00:00.000Z",
+              "updated_at": "2024-01-01T00:00:00.000Z"
+          }
+          """.utf8
+        )
+      ]
+    )
+    .register()
+
+    let output = try await storage.openAPIClient.bucketGet(
+      .init(path: .init(bucketId: "bucket123"))
+    )
+    guard case .ok(let okResponse) = output, case .json(let bucket) = okResponse.body else {
+      return XCTFail("expected .ok(.json) response")
+    }
+    XCTAssertEqual(bucket.id, "bucket123")
+  }
+
   func testURLConstruction() {
     let urlTestCases = [
       (
@@ -179,6 +209,8 @@ final class StorageBucketAPITests: XCTestCase {
     let buckets = try await storage.listBuckets()
     XCTAssertEqual(buckets.count, 1)
     XCTAssertEqual(buckets[0].name, "test-bucket")
+    XCTAssertEqual(buckets[0].createdAt, "2024-01-01T00:00:00.000Z".date!)
+    XCTAssertEqual(buckets[0].updatedAt, "2024-01-01T00:00:00.000Z".date!)
   }
 
   func testCreateBucket() async throws {
@@ -229,12 +261,7 @@ final class StorageBucketAPITests: XCTestCase {
         .put: Data(
           """
           {
-            "id": "bucket123",
-            "name": "updated-bucket",
-            "owner": "owner123",
-            "public": true,
-            "created_at": "2024-01-01T00:00:00.000Z",
-            "updated_at": "2024-01-01T00:00:00.000Z"
+            "message": "Successfully updated"
           }
           """.utf8
         )
@@ -244,11 +271,11 @@ final class StorageBucketAPITests: XCTestCase {
       #"""
       curl \
       	--request PUT \
-      	--header "Content-Length: 51" \
+      	--header "Content-Length: 15" \
       	--header "Content-Type: application/json" \
       	--header "X-Client-Info: storage-swift/0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	--data "{\"id\":\"bucket123\",\"name\":\"bucket123\",\"public\":true}" \
+      	--data "{\"public\":true}" \
       	"http://localhost:54321/storage/v1/bucket/bucket123"
       """#
     }
@@ -266,7 +293,11 @@ final class StorageBucketAPITests: XCTestCase {
       url: url.appendingPathComponent("bucket/bucket123"),
       statusCode: 200,
       data: [
-        .delete: Data()
+        .delete: Data(
+          """
+          {}
+          """.utf8
+        )
       ]
     )
     .snapshotRequest {
@@ -288,7 +319,11 @@ final class StorageBucketAPITests: XCTestCase {
       url: url.appendingPathComponent("bucket/bucket123/empty"),
       statusCode: 200,
       data: [
-        .post: Data()
+        .post: Data(
+          """
+          {}
+          """.utf8
+        )
       ]
     )
     .snapshotRequest {
@@ -381,5 +416,37 @@ final class StorageBucketAPITests: XCTestCase {
       "newbucket",
       options: BucketOptions(isPublic: false, fileSizeLimit: "1mb")
     )
+  }
+
+  func testGetBucketThrowsBareStorageErrorOnNotFound() async throws {
+    Mock(
+      url: url.appendingPathComponent("bucket/missing-bucket"),
+      statusCode: 404,
+      data: [
+        .get: Data(
+          """
+          {
+            "statusCode": "404",
+            "error": "NotFound",
+            "message": "Bucket not found"
+          }
+          """.utf8
+        )
+      ]
+    )
+    .register()
+
+    do {
+      _ = try await storage.getBucket("missing-bucket")
+      XCTFail("expected getBucket to throw")
+    } catch let error as StorageError {
+      // A bare `StorageError` (not wrapped in `ClientError` by the OpenAPI runtime) with the
+      // real status/message decoded from the server's error body.
+      XCTAssertEqual(error.statusCode, "404")
+      XCTAssertEqual(error.error, "NotFound")
+      XCTAssertEqual(error.message, "Bucket not found")
+    } catch {
+      XCTFail("expected a bare StorageError, got \(type(of: error)): \(error)")
+    }
   }
 }

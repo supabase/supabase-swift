@@ -121,19 +121,25 @@ final class SupabaseStorageTests: XCTestCase {
           	--header "X-Client-Info: storage-swift/x.y.z" \
           	--header "x-upsert: false" \
           	--data "--alamofire.boundary.c21f947c1c7b0c57\#r
-          Content-Disposition: form-data; name=\"cacheControl\"\#r
+          content-disposition: form-data; name=\"cacheControl\"\#r
+          content-length: 5\#r
+          content-type: text/plain\#r
           \#r
           14400\#r
           --alamofire.boundary.c21f947c1c7b0c57\#r
-          Content-Disposition: form-data; name=\"metadata\"\#r
+          content-disposition: form-data; name=\"metadata\"\#r
+          content-length: 15\#r
+          content-type: text/plain\#r
           \#r
           {\"key\":\"value\"}\#r
           --alamofire.boundary.c21f947c1c7b0c57\#r
-          Content-Disposition: form-data; name=\"\"; filename=\"file1.txt\"\#r
-          Content-Type: text/plain\#r
+          content-disposition: form-data; name=\"file\"; filename=\"file1.txt\"\#r
+          content-length: 9\#r
+          content-type: text/plain\#r
           \#r
           test data\#r
           --alamofire.boundary.c21f947c1c7b0c57--\#r
+          \#r
           " \
           	"http://localhost:54321/storage/v1/object/tests/file1.txt"
           """#

@@ -649,6 +649,21 @@ public struct Bucket: Identifiable, Hashable, Codable, Sendable {
   }
 }
 
+extension Bucket {
+  init(fromGenerated bucket: Components.Schemas.bucketSchema) {
+    self.init(
+      id: bucket.id,
+      name: bucket.name,
+      owner: bucket.owner ?? "",
+      isPublic: bucket._public ?? false,
+      createdAt: bucket.created_at.flatMap { $0.date } ?? Date(timeIntervalSince1970: 0),
+      updatedAt: bucket.updated_at.flatMap { $0.date } ?? Date(timeIntervalSince1970: 0),
+      allowedMimeTypes: bucket.allowed_mime_types,
+      fileSizeLimit: bucket.file_size_limit.map(Int64.init)
+    )
+  }
+}
+
 // MARK: - StorageByteCount
 
 /// A file size limit for a Storage bucket, expressed as an integer byte count or a human-readable string.

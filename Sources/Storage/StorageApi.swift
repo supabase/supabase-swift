@@ -1,6 +1,7 @@
 import ConcurrencyExtras
 import Foundation
 import HTTPTypes
+import OpenAPIRuntime
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -29,12 +30,24 @@ public class StorageApi: @unchecked Sendable {
   /// The configuration used to initialize this client instance.
   public let configuration: StorageClientConfiguration
 
+  /// The generated OpenAPI client for the Storage HTTP API. Internal implementation detail —
+  /// ``StorageBucketApi``/``StorageFileApi`` use this instead of hand-building requests.
+  let openAPIClient: Client
+
   private struct MutableState {
     var headers: [String: String]
   }
 
   private let mutableState: LockIsolated<MutableState>
   private let http: any HTTPClientType
+
+  /// Extra headers for a single OpenAPI-routed call, e.g. `x-upsert`/`Duplex`/`options.headers`
+  /// for `upload`/`update`. The generated `Client`'s per-operation `Input.headers` only exposes
+  /// `accept`, so there's no way to pass one-off headers through its typed API; this task-local is
+  /// read by the transport's `execute` closure and merged on top of the per-instance headers for
+  /// the duration of the call. Scope it tightly with `withValue` around a single request.
+  @TaskLocal
+  static var extraHeadersForCurrentRequest: HTTPFields = [:]
 
   /// Creates a ``StorageApi`` with the given configuration.
   ///
@@ -83,6 +96,28 @@ public class StorageApi: @unchecked Sendable {
       fetch: configuration.session.fetch,
       interceptors: interceptors
     )
+
+    let mutableStateRef = mutableState
+    let httpRef = http
+
+    var openAPIConfiguration = OpenAPIRuntime.Configuration(jsonEncodingOptions: [.sortedKeys])
+    #if DEBUG
+      if let boundary = testingBoundary.value {
+        openAPIConfiguration.multipartBoundaryGenerator = ConstantMultipartBoundaryGenerator(
+          boundary: boundary)
+      }
+    #endif
+
+    openAPIClient = Client(
+      serverURL: configuration.url,
+      configuration: openAPIConfiguration,
+      transport: StorageOpenAPITransport(execute: { request in
+        var request = request
+        request.headers = request.headers.merging(with: Self.extraHeadersForCurrentRequest)
+        return try await Self.executeRequestWithoutStatusCheck(
+          request, headers: mutableStateRef.headers, http: httpRef)
+      })
+    )
   }
 
   /// Sets an HTTP header that will be included in all subsequent requests made by this instance.
@@ -104,51 +139,54 @@ public class StorageApi: @unchecked Sendable {
     return self
   }
 
-  @discardableResult
-  func execute(_ request: Helpers.HTTPRequest) async throws -> Helpers.HTTPResponse {
+  /// Merges the instance's stored headers into `request` without inspecting the response status.
+  ///
+  /// Shared by ``executeRequest(_:headers:http:decoder:)`` (which additionally throws on non-2xx
+  /// responses) and ``executeRequestWithoutStatusCheck(_:headers:http:)`` (used by the OpenAPI
+  /// transport, which must return the raw response so the facade can decode the real error body
+  /// from the generated `Output` type instead of a generic ``StorageError``).
+  private static func send(
+    _ request: Helpers.HTTPRequest,
+    headers: [String: String],
+    http: any HTTPClientType
+  ) async throws -> Helpers.HTTPResponse {
     var request = request
-    let headers = mutableState.headers
     request.headers = HTTPFields(headers).merging(with: request.headers)
+    return try await http.send(request)
+  }
 
-    let response = try await http.send(request)
+  private static func executeRequest(
+    _ request: Helpers.HTTPRequest,
+    headers: [String: String],
+    http: any HTTPClientType,
+    decoder: JSONDecoder
+  ) async throws -> Helpers.HTTPResponse {
+    let response = try await send(request, headers: headers, http: http)
 
     guard (200..<300).contains(response.statusCode) else {
-      if let error = try? configuration.decoder.decode(
-        StorageError.self,
-        from: response.data
-      ) {
+      if let error = try? decoder.decode(StorageError.self, from: response.data) {
         throw error
       }
-
       throw HTTPError(data: response.data, response: response.underlyingResponse)
     }
 
     return response
   }
-}
 
-extension Helpers.HTTPRequest {
-  init(
-    url: URL,
-    method: HTTPTypes.HTTPRequest.Method,
-    query: [URLQueryItem],
-    formData: MultipartFormData,
-    options: FileOptions,
-    headers: HTTPFields = [:]
-  ) throws {
-    var headers = headers
-    if headers[.contentType] == nil {
-      headers[.contentType] = formData.contentType
-    }
-    if headers[.cacheControl] == nil {
-      headers[.cacheControl] = "max-age=\(options.cacheControl)"
-    }
-    try self.init(
-      url: url,
-      method: method,
-      query: query,
-      headers: headers,
-      body: formData.encode()
-    )
+  /// Same request pipeline as ``executeRequest(_:headers:http:decoder:)`` but does not throw on
+  /// non-2xx responses. Used for the OpenAPI transport path, which must return the raw response so
+  /// error mapping happens in the generated-`Output`-aware facade methods instead.
+  private static func executeRequestWithoutStatusCheck(
+    _ request: Helpers.HTTPRequest,
+    headers: [String: String],
+    http: any HTTPClientType
+  ) async throws -> Helpers.HTTPResponse {
+    try await send(request, headers: headers, http: http)
+  }
+
+  @discardableResult
+  func execute(_ request: Helpers.HTTPRequest) async throws -> Helpers.HTTPResponse {
+    try await Self.executeRequest(
+      request, headers: mutableState.headers, http: http, decoder: configuration.decoder)
   }
 }
