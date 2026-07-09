@@ -9,7 +9,7 @@ import Foundation
 import HTTPRuntime
 import Testing
 
-@testable import StorageOpenAPI
+@testable import Storage
 
 @Suite
 struct ErrorDecodingTests {
@@ -22,7 +22,7 @@ struct ErrorDecodingTests {
     let errorBody = Data(
       #"{"message":"Access denied","error":"Forbidden","statusCode":"403"}"#.utf8)
     let transport = FakeTransport { _ in
-      HTTPResponse(head: HTTPResponseHead(status: 403, headers: [:]), body: errorBody)
+      HTTPRuntime.HTTPResponse(head: HTTPResponseHead(status: 403, headers: [:]), body: errorBody)
     }
     let client = StorageOpenAPIClient(
       baseURL: URL(string: "https://example.supabase.co/storage/v1")!, transport: transport)
@@ -35,12 +35,12 @@ struct ErrorDecodingTests {
   @Test
   func bucketGetThrowsUnexpectedStatusOnUnmappedError() async throws {
     let transport = FakeTransport { _ in
-      HTTPResponse(head: HTTPResponseHead(status: 404, headers: [:]), body: Data())
+      HTTPRuntime.HTTPResponse(head: HTTPResponseHead(status: 404, headers: [:]), body: Data())
     }
     let client = StorageOpenAPIClient(
       baseURL: URL(string: "https://example.supabase.co/storage/v1")!, transport: transport)
 
-    await #expect(throws: HTTPError.self) {
+    await #expect(throws: HTTPRuntime.HTTPError.self) {
       _ = try await client.bucketGet(bucketId: "missing")
     }
   }

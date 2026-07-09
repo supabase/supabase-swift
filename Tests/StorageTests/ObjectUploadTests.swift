@@ -9,7 +9,7 @@ import Foundation
 import HTTPRuntime
 import Testing
 
-@testable import StorageOpenAPI
+@testable import Storage
 
 @Suite
 struct ObjectUploadTests {
@@ -28,10 +28,12 @@ struct ObjectUploadTests {
       guard case .none = request.body else {
         Issue.record(
           "expected no request body to be set (multipart body generation is not yet implemented)")
-        return HTTPResponse(head: HTTPResponseHead(status: 500, headers: [:]), body: Data())
+        return HTTPRuntime.HTTPResponse(
+          head: HTTPResponseHead(status: 500, headers: [:]), body: Data())
       }
       let responseBody = Data(#"{"Key":"avatars/a.txt"}"#.utf8)
-      return HTTPResponse(head: HTTPResponseHead(status: 200, headers: [:]), body: responseBody)
+      return HTTPRuntime.HTTPResponse(
+        head: HTTPResponseHead(status: 200, headers: [:]), body: responseBody)
     }
     let client = StorageOpenAPIClient(
       baseURL: URL(string: "https://example.supabase.co/storage/v1")!, transport: transport)

@@ -179,6 +179,7 @@ let package = Package(
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
         "Helpers",
+        "HTTPRuntime",
       ]
     ),
     .testTarget(
@@ -190,6 +191,7 @@ let package = Package(
         "Mocker",
         "TestHelpers",
         "Storage",
+        "HTTPRuntime",
       ],
       exclude: [
         "__Snapshots__"
@@ -197,19 +199,6 @@ let package = Package(
       resources: [
         .copy("sadcat.jpg"),
         .process("Fixtures"),
-      ]
-    ),
-    .target(
-      name: "StorageOpenAPI",
-      dependencies: [
-        "HTTPRuntime"
-      ]
-    ),
-    .testTarget(
-      name: "StorageOpenAPITests",
-      dependencies: [
-        "StorageOpenAPI",
-        "HTTPRuntime",
       ]
     ),
     .target(
@@ -253,7 +242,7 @@ let package = Package(
 // production targets. Everything else stays pinned to v5 until its migration
 // phase lands (see SDK-435).
 let swift6TestTargets: Set<String> = [
-  "SupabaseTests", "HelpersTests", "HTTPRuntimeTests", "StorageOpenAPITests",
+  "SupabaseTests", "HelpersTests", "HTTPRuntimeTests",
 ]
 
 for target in package.targets {

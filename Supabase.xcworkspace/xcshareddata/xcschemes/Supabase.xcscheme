@@ -226,17 +226,6 @@
             parallelizable = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "StorageOpenAPITests"
-               BuildableName = "StorageOpenAPITests"
-               BlueprintName = "StorageOpenAPITests"
-               ReferencedContainer = "container:">
-            </BuildableReference>
-         </TestableReference>
-         <TestableReference
-            skipped = "NO"
-            parallelizable = "NO">
-            <BuildableReference
-               BuildableIdentifier = "primary"
                BlueprintIdentifier = "SupabaseTests"
                BuildableName = "SupabaseTests"
                BlueprintName = "SupabaseTests"
