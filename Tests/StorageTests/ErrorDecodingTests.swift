@@ -24,7 +24,7 @@ struct ErrorDecodingTests {
     let transport = FakeTransport { _ in
       HTTPRuntime.HTTPResponse(head: HTTPResponseHead(status: 403, headers: [:]), body: errorBody)
     }
-    let client = StorageOpenAPIClient(
+    let client = StorageGeneratedClient(
       baseURL: URL(string: "https://example.supabase.co/storage/v1")!, transport: transport)
 
     await #expect(throws: ErrorSchema.self) {
@@ -37,7 +37,7 @@ struct ErrorDecodingTests {
     let transport = FakeTransport { _ in
       HTTPRuntime.HTTPResponse(head: HTTPResponseHead(status: 404, headers: [:]), body: Data())
     }
-    let client = StorageOpenAPIClient(
+    let client = StorageGeneratedClient(
       baseURL: URL(string: "https://example.supabase.co/storage/v1")!, transport: transport)
 
     await #expect(throws: HTTPRuntime.HTTPError.self) {

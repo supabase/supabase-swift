@@ -17,7 +17,7 @@ struct ObjectUploadTests {
   // NOTE: the real Storage OpenAPI spec's `object#createObject` operation
   // declares a `multipart/form-data` (or raw binary) request body, but
   // Task 13's generator does not yet wire request bodies for `multipart`
-  // content types into `StorageOpenAPIClient.objectUpload` — the generated
+  // content types into `StorageGeneratedClient.objectUpload` — the generated
   // method takes only `bucketName`/`wildcard` and never calls `setBody`, so
   // no file content is ever sent. This test documents that real, current
   // behavior rather than asserting a multipart body that doesn't exist yet.
@@ -35,7 +35,7 @@ struct ObjectUploadTests {
       return HTTPRuntime.HTTPResponse(
         head: HTTPResponseHead(status: 200, headers: [:]), body: responseBody)
     }
-    let client = StorageOpenAPIClient(
+    let client = StorageGeneratedClient(
       baseURL: URL(string: "https://example.supabase.co/storage/v1")!, transport: transport)
 
     let result = try await client.objectUpload(bucketName: "avatars", wildcard: "a.txt")

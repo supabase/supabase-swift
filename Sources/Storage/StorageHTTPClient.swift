@@ -39,20 +39,40 @@ public struct StorageHTTPSession: Sendable {
   public var upload:
     @Sendable (_ request: URLRequest, _ data: Data) async throws -> (Data, URLResponse)
 
+  let uploadFromFile:
+    @Sendable (URLRequest, URL, (any URLSessionTaskDelegate)?) async throws -> (Data, URLResponse)
+
+  let bytes:
+    @Sendable (URLRequest, (any URLSessionTaskDelegate)?) async throws -> (
+      URLSession.AsyncBytes, URLResponse
+    )
+
   /// Creates a ``StorageHTTPSession`` with custom fetch and upload closures.
   ///
   /// - Parameters:
   ///   - fetch: A closure that executes a network fetch request and returns the response data and metadata.
   ///   - upload: A closure that uploads data for a request and returns the response data and metadata.
+  ///   - uploadFromFile: A closure that uploads a file for a request and returns the response data and metadata.
+  ///   - bytes: A closure that returns the response body as an `AsyncBytes` stream and the response metadata.
   public init(
     fetch: @escaping @Sendable (_ request: URLRequest) async throws -> (Data, URLResponse),
     upload:
       @escaping @Sendable (_ request: URLRequest, _ data: Data) async throws -> (
         Data, URLResponse
+      ),
+    uploadFromFile:
+      @escaping @Sendable (URLRequest, URL, (any URLSessionTaskDelegate)?) async throws -> (
+        Data, URLResponse
+      ),
+    bytes:
+      @escaping @Sendable (URLRequest, (any URLSessionTaskDelegate)?) async throws -> (
+        URLSession.AsyncBytes, URLResponse
       )
   ) {
     self.fetch = fetch
     self.upload = upload
+    self.uploadFromFile = uploadFromFile
+    self.bytes = bytes
   }
 
   /// Creates a ``StorageHTTPSession`` backed by a `URLSession`.
@@ -61,7 +81,9 @@ public struct StorageHTTPSession: Sendable {
   public init(session: URLSession = .shared) {
     self.init(
       fetch: { try await session.data(for: $0) },
-      upload: { try await session.upload(for: $0, from: $1) }
+      upload: { try await session.upload(for: $0, from: $1) },
+      uploadFromFile: { try await session.upload(for: $0, fromFile: $1, delegate: $2) },
+      bytes: { try await session.bytes(for: $0, delegate: $1) }
     )
   }
 }

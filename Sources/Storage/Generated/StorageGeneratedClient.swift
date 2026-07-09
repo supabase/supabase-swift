@@ -3,7 +3,7 @@
 import Foundation
 import HTTPRuntime
 
-internal struct StorageOpenAPIClient: Sendable {
+internal struct StorageGeneratedClient: Sendable {
   private let baseURL: URL
   private let transport: any HTTPTransport
 

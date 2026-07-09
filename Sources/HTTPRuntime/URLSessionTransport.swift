@@ -24,19 +24,69 @@ package import Foundation
 ///   that complete out-of-process. That path is documented as a known limitation
 ///   rather than faked here.
 package struct URLSessionTransport: HTTPTransport {
-  private let session: URLSession
+  private let _data:
+    @Sendable (URLRequest, (any URLSessionTaskDelegate)?) async throws -> (Data, URLResponse)
+
+  private let _uploadFromBodyData:
+    @Sendable (URLRequest, Data, (any URLSessionTaskDelegate)?) async throws -> (Data, URLResponse)
+
+  private let _uploadFromFile:
+    @Sendable (URLRequest, URL, (any URLSessionTaskDelegate)?) async throws -> (Data, URLResponse)
+
+  private let _bytes:
+    @Sendable (URLRequest, (any URLSessionTaskDelegate)?) async throws -> (
+      URLSession.AsyncBytes, URLResponse
+    )
+
+  package init(
+    data:
+      @Sendable @escaping (URLRequest, (any URLSessionTaskDelegate)?) async throws -> (
+        Data, URLResponse
+      ),
+    uploadFromBodyData:
+      @Sendable @escaping (
+        URLRequest, Data, (any URLSessionTaskDelegate)?
+      ) async throws -> (Data, URLResponse),
+    uploadFromFile:
+      @Sendable @escaping (
+        URLRequest, URL, (any URLSessionTaskDelegate)?
+      ) async throws -> (Data, URLResponse),
+    bytes:
+      @Sendable @escaping (
+        URLRequest, (any URLSessionTaskDelegate)?
+      ) async throws -> (URLSession.AsyncBytes, URLResponse)
+  ) {
+    self._data = data
+    self._uploadFromBodyData = uploadFromBodyData
+    self._uploadFromFile = uploadFromFile
+    self._bytes = bytes
+  }
 
   package init(configuration: URLSessionConfiguration = .default) {
-    self.session = URLSession(configuration: configuration)
+    self.init(session: URLSession(configuration: configuration))
   }
 
   package init(session: URLSession) {
-    self.session = session
+    self.init(
+      data: { request, delegate in
+        try await session.data(for: request, delegate: delegate)
+      },
+      uploadFromBodyData: { request, data, delegate in
+        try await session.upload(for: request, from: data, delegate: delegate)
+      },
+      uploadFromFile: { request, fileURL, delegate in
+        try await session.upload(for: request, fromFile: fileURL, delegate: delegate)
+      },
+      bytes: { request, delegate in
+        try await session.bytes(for: request, delegate: delegate)
+      }
+    )
   }
 
-  package func send(_ request: HTTPRequest, uploadProgress: ProgressHandler?) async throws
-    -> HTTPResponse
-  {
+  package func send(
+    _ request: HTTPRequest,
+    uploadProgress: ProgressHandler?
+  ) async throws -> HTTPResponse {
     let urlRequest = try Self.makeURLRequest(request)
     let delegate = uploadProgress.map { ProgressDelegate(onProgress: $0) }
 
@@ -45,20 +95,17 @@ package struct URLSessionTransport: HTTPTransport {
     do {
       switch request.body {
       case nil:
-        (data, response) = try await session.data(for: urlRequest, delegate: delegate)
+        (data, response) = try await _data(urlRequest, delegate)
       case .data(let payload):
-        (data, response) = try await session.upload(
-          for: urlRequest, from: payload, delegate: delegate)
+        (data, response) = try await _uploadFromBodyData(urlRequest, payload, delegate)
       case .file(let fileURL):
-        (data, response) = try await session.upload(
-          for: urlRequest, fromFile: fileURL, delegate: delegate)
+        (data, response) = try await _uploadFromFile(urlRequest, fileURL, delegate)
       case .multipart(let form):
         let fileURL = try form.buildToTempFile()
         defer { try? FileManager.default.removeItem(at: fileURL) }
         var withBoundary = urlRequest
         withBoundary.setValue(form.contentType, forHTTPHeaderField: "Content-Type")
-        (data, response) = try await session.upload(
-          for: withBoundary, fromFile: fileURL, delegate: delegate)
+        (data, response) = try await _uploadFromFile(withBoundary, fileURL, delegate)
       }
     } catch {
       throw HTTPError.transport(error)
@@ -71,7 +118,7 @@ package struct URLSessionTransport: HTTPTransport {
     let bytes: URLSession.AsyncBytes
     let response: URLResponse
     do {
-      (bytes, response) = try await session.bytes(for: urlRequest)
+      (bytes, response) = try await _bytes(urlRequest, nil)
     } catch {
       throw HTTPError.transport(error)
     }

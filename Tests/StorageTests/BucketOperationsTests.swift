@@ -52,7 +52,7 @@ struct BucketOperationsTests {
       return HTTPRuntime.HTTPResponse(
         head: HTTPResponseHead(status: 200, headers: [:]), body: responseBody)
     }
-    let client = StorageOpenAPIClient(
+    let client = StorageGeneratedClient(
       baseURL: URL(string: "https://example.supabase.co/storage/v1")!, transport: transport)
 
     let bucket = try await client.bucketGet(bucketId: "avatars")
