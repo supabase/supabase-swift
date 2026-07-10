@@ -12,4 +12,6 @@ permissions:
 
 jobs:
   validate:
-    uses: supabase/sdk/.github/workflows/validate-sdk-compliance-swift.yml@cbc7e5afea5399c8a6e98e4672afddd44c1feb74
+    uses: supabase/sdk/.github/workflows/validate-sdk-compliance-swift.yml@56f138c4d8eab31b4605c8a61d9419d0acec03da
+    with:
+      sdk-ref: claude/sdk-993-e2e-test
