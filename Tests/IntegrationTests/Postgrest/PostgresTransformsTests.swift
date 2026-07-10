@@ -187,6 +187,57 @@ final class PostgrestTransformsTests: XCTestCase {
     }
   }
 
+  func testMaybeSingle() async throws {
+    let res =
+      try await client.from("users")
+      .select("age_range,catchphrase,data,status,username")
+      .eq("username", value: "supabot")
+      .maybeSingle()
+      .execute().value as AnyJSON
+
+    assertInlineSnapshot(of: res, as: .json) {
+      """
+      {
+        "age_range" : "[1,2)",
+        "catchphrase" : "'cat' 'fat'",
+        "data" : null,
+        "status" : "ONLINE",
+        "username" : "supabot"
+      }
+      """
+    }
+  }
+
+  func testMaybeSingleReturnsNilOnZeroRows() async throws {
+    let res: AnyJSON? =
+      try await client.from("users")
+      .select("username")
+      .eq("username", value: "does-not-exist")
+      .maybeSingle()
+      .execute().value
+
+    XCTAssertNil(res)
+  }
+
+  func testDryRunOnUpdate() async throws {
+    // `Prefer: tx=rollback` only takes effect when the server has PostgREST's `db-tx-end`
+    // setting enabled, which the local Supabase CLI dev config doesn't expose — so this can't
+    // assert the mutation was actually rolled back. It targets a scratch row (auto-cleaned by
+    // `setUp`, since it has a non-null email) rather than shared seed data, so if this
+    // environment ends up committing anyway it doesn't corrupt other tests. The `Prefer` header
+    // itself is verified by the unit tests in PostgrestTransformBuilderTests.
+    try await client.from("users").insert([
+      "username": "dry-run-scratch", "email": "dry-run-scratch@example.com",
+    ])
+    .execute()
+
+    _ = try await client.from("users")
+      .update(["catchphrase": "temporary"])
+      .eq("username", value: "dry-run-scratch")
+      .dryRun()
+      .execute()
+  }
+
   func testSingleOnInsert() async throws {
     let res =
       try await client.from("users")
