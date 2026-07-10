@@ -1648,6 +1648,112 @@ public struct ListOAuthClientsPaginatedResponse: Hashable, Sendable {
   public var total: Int
 }
 
+// MARK: - OAuth Authorization Server Types
+
+/// Details about the OAuth client requesting authorization.
+/// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
+public struct OAuthAuthorizationClient: Codable, Hashable, Sendable {
+  /// Unique identifier for the OAuth client.
+  public let id: UUID
+
+  /// Human-readable name of the OAuth client.
+  public let name: String
+
+  /// URI of the OAuth client's homepage.
+  public let uri: URL?
+
+  /// URL of the OAuth client's logo.
+  public let logoUri: URL?
+}
+
+/// The authenticated user considering the authorization request.
+/// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
+public struct OAuthAuthorizationUser: Codable, Hashable, Sendable {
+  /// Unique identifier for the user.
+  public let id: UUID
+
+  /// The user's email address.
+  public let email: String
+}
+
+/// Details about a pending OAuth authorization request, returned by
+/// ``AuthOAuthServer/getAuthorizationDetails(authorizationId:)`` when the
+/// request still requires the user's consent.
+/// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
+public struct OAuthAuthorizationDetails: Codable, Hashable, Sendable {
+  /// Opaque identifier for this authorization request.
+  public let authorizationId: String
+
+  /// The redirect URI the client registered for this request.
+  public let redirectUri: URL
+
+  /// The OAuth client requesting authorization.
+  public let client: OAuthAuthorizationClient
+
+  /// The user considering the request.
+  public let user: OAuthAuthorizationUser
+
+  /// The requested scope.
+  public let scope: String
+}
+
+/// A redirect URL returned after approving or denying an OAuth authorization
+/// request, or in place of ``OAuthAuthorizationDetails`` when the server
+/// auto-approves a request the user has already consented to.
+/// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
+public struct OAuthRedirect: Codable, Hashable, Sendable {
+  /// The URL the client app should be redirected to. On denial, this URL's
+  /// query string carries an `error=access_denied` parameter (RFC 6749) —
+  /// denial is a successful API call, not a thrown error.
+  public let redirectURL: URL
+
+  private enum CodingKeys: String, CodingKey {
+    // The decoder's `.convertFromSnakeCase` strategy converts the JSON key
+    // "redirect_url" to "redirectUrl" (not "redirectURL") before matching
+    // against this raw value, since it doesn't know to capitalize the "URL"
+    // acronym.
+    case redirectURL = "redirectUrl"
+  }
+}
+
+/// The response from ``AuthOAuthServer/getAuthorizationDetails(authorizationId:)``.
+///
+/// The server auto-approves an authorization request if the user already has
+/// an active consent covering the requested scopes for that client, returning
+/// ``redirect(_:)`` instead of ``details(_:)``.
+/// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
+public enum OAuthAuthorizationDetailsResponse: Hashable, Sendable {
+  /// The authorization is pending; present these details to the user for consent.
+  case details(OAuthAuthorizationDetails)
+
+  /// The authorization was already approved automatically; redirect the user.
+  case redirect(OAuthRedirect)
+}
+
+extension OAuthAuthorizationDetailsResponse: Decodable {
+  public init(from decoder: Decoder) throws {
+    if let details = try? OAuthAuthorizationDetails(from: decoder) {
+      self = .details(details)
+    } else {
+      self = .redirect(try OAuthRedirect(from: decoder))
+    }
+  }
+}
+
+/// An OAuth grant the user has given to a third-party client app, returned by
+/// ``AuthOAuthServer/listGrants()``.
+/// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
+public struct OAuthGrant: Codable, Hashable, Sendable {
+  /// The OAuth client the grant was given to.
+  public let client: OAuthAuthorizationClient
+
+  /// The scopes granted to the client.
+  public let scopes: [String]
+
+  /// When the grant was given.
+  public let grantedAt: Date
+}
+
 // MARK: - JWT Claims
 
 /// JSON Web Key (JWK) representation.
