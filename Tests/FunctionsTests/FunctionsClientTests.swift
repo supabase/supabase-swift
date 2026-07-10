@@ -324,6 +324,35 @@ final class FunctionsClientTests: XCTestCase {
     }
   }
 
+  func testInvoke_relayErrorWithNon2xxStatus_shouldThrowRelayError() async {
+    Mock(
+      url: url.appendingPathComponent("hello_world"),
+      statusCode: 500,
+      data: [.post: Data()],
+      additionalHeaders: [
+        "x-relay-error": "true"
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
+      	--header "X-Client-Info: functions-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:5432/functions/v1/hello_world"
+      """#
+    }
+    .register()
+
+    do {
+      try await sut.invoke("hello_world")
+      XCTFail("Invoke should fail.")
+    } catch FunctionsError.relayError {
+    } catch {
+      XCTFail("Unexpected error thrown \(error)")
+    }
+  }
+
   func test_setAuth() {
     sut.setAuth(token: "access.token")
     XCTAssertEqual(sut.headers[.authorization], "Bearer access.token")
@@ -388,6 +417,36 @@ final class FunctionsClientTests: XCTestCase {
     Mock(
       url: url.appendingPathComponent("stream"),
       statusCode: 200,
+      data: [.post: Data()],
+      additionalHeaders: [
+        "x-relay-error": "true"
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
+      	--header "X-Client-Info: functions-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:5432/functions/v1/stream"
+      """#
+    }
+    .register()
+
+    let stream = sut._invokeWithStreamedResponse("stream")
+
+    do {
+      for try await _ in stream {
+        XCTFail("should throw error")
+      }
+    } catch FunctionsError.relayError {
+    }
+  }
+
+  func testInvokeWithStreamedResponseRelayErrorWithNon2xxStatus() async throws {
+    Mock(
+      url: url.appendingPathComponent("stream"),
+      statusCode: 500,
       data: [.post: Data()],
       additionalHeaders: [
         "x-relay-error": "true"
