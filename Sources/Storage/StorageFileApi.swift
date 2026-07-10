@@ -387,7 +387,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
 
     let response = try await execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("object/sign/\(bucketId)/\(path)"),
+        url: configuration.url.appendingPathComponent("object/sign/\(_getFinalPath(path))"),
         method: .post,
         body: encoder.encode(
           Body(expiresIn: expiresIn, transform: transform)
@@ -713,7 +713,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     do {
       try await execute(
         HTTPRequest(
-          url: configuration.url.appendingPathComponent("object/\(bucketId)/\(path)"),
+          url: configuration.url.appendingPathComponent("object/\(_getFinalPath(path))"),
           method: .head
         )
       )
@@ -776,7 +776,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
 
     let renderPath = options.map { !$0.isEmpty } == true ? "render/image" : "object"
 
-    components.path += "/\(renderPath)/public/\(bucketId)/\(path)"
+    components.path += "/\(renderPath)/public/\(_getFinalPath(path))"
     components.queryItems = !queryItems.isEmpty ? queryItems : nil
 
     guard let generatedUrl = components.url else {
@@ -987,7 +987,10 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   }
 
   private func _getFinalPath(_ path: String) -> String {
-    "\(bucketId)/\(path)"
+    let strippedPath = path.replacingOccurrences(
+      of: "^/+", with: "", options: .regularExpression
+    )
+    return "\(bucketId)/\(strippedPath)"
   }
 
   private func _removeEmptyFolders(_ path: String) -> String {
