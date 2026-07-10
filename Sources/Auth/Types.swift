@@ -1731,7 +1731,7 @@ public enum OAuthAuthorizationDetailsResponse: Hashable, Sendable {
 }
 
 extension OAuthAuthorizationDetailsResponse: Decodable {
-  public init(from decoder: Decoder) throws {
+  public init(from decoder: any Decoder) throws {
     if let details = try? OAuthAuthorizationDetails(from: decoder) {
       self = .details(details)
     } else {
