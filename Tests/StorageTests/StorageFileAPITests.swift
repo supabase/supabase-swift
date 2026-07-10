@@ -890,6 +890,40 @@ final class StorageFileAPITests: XCTestCase {
     )
   }
 
+  func testGetPublicURLStripsLeadingSlash() throws {
+    let publicURL = try storage.from("bucket")
+      .getPublicURL(path: "/folder/image.png")
+
+    XCTAssertEqual(
+      publicURL.absoluteString,
+      "http://localhost:54321/storage/v1/object/public/bucket/folder/image.png"
+    )
+  }
+
+  func testDownloadStripsLeadingSlash() async throws {
+    Mock(
+      url: url.appendingPathComponent("object/bucket/file.txt"),
+      statusCode: 200,
+      data: [
+        .get: Data("hello world".utf8)
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--header "X-Client-Info: storage-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:54321/storage/v1/object/bucket/file.txt"
+      """#
+    }
+    .register()
+
+    let data = try await storage.from("bucket")
+      .download(path: "/file.txt")
+
+    XCTAssertEqual(data, Data("hello world".utf8))
+  }
+
   func testDownload_withOptions() async throws {
     let imageData = try! Data(
       contentsOf: Bundle.module.url(forResource: "sadcat", withExtension: "jpg")!)
