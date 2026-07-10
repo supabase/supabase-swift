@@ -254,6 +254,7 @@ final class BuildURLRequestTests: XCTestCase {
     let clientInfoHeader = client.configuration.headers["X-Client-Info"]
     XCTAssertNotNil(clientInfoHeader)
   }
+
 }
 
 extension URLResponse {
