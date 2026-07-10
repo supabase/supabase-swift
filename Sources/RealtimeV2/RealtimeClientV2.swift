@@ -536,9 +536,13 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   }
 
   private func rejoinChannels() async {
-    for channel in channels.values {
-      await channel.resetForReconnect()
-      try? await channel.subscribeWithError()
+    await withTaskGroup(of: Void.self) { group in
+      for channel in channels.values {
+        group.addTask {
+          await channel.resetForReconnect()
+          try? await channel.subscribeWithError()
+        }
+      }
     }
   }
 

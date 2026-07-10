@@ -179,6 +179,86 @@ import XCTest
       XCTAssertEqual(channel.status, .subscribed)
     }
 
+    func testRejoinChannelsSubscribesConcurrently() async throws {
+      let connectionCount = LockIsolated(0)
+      let rejoinJoinTopics = LockIsolated<Set<String>>([])
+
+      let sut = RealtimeClientV2(
+        url: url,
+        options: RealtimeClientOptions(
+          headers: ["apikey": apiKey],
+          accessToken: { "custom.access.token" }
+        ),
+        wsTransport: { [servers, connectionCount, rejoinJoinTopics] _, _ in
+          let (client, server) = FakeWebSocket.fakes()
+          servers?.withValue { $0.append(server) }
+          let isFirstConnection = connectionCount.withValue { count -> Bool in
+            count += 1
+            return count == 1
+          }
+          Task { [server] in
+            for await event in server.events {
+              guard let msg = event.realtimeMessage else { continue }
+              if msg.event == "heartbeat" {
+                server.send(
+                  RealtimeMessageV2(
+                    joinRef: msg.joinRef,
+                    ref: msg.ref,
+                    topic: "phoenix",
+                    event: "phx_reply",
+                    payload: ["response": [:]]
+                  )
+                )
+              } else if msg.event == "phx_join" {
+                if isFirstConnection {
+                  server.send(
+                    RealtimeMessageV2(
+                      joinRef: msg.joinRef,
+                      ref: msg.ref,
+                      topic: msg.topic,
+                      event: "phx_reply",
+                      payload: [
+                        "response": ["postgres_changes": []],
+                        "status": "ok",
+                      ]
+                    )
+                  )
+                } else {
+                  rejoinJoinTopics.withValue { $0.insert(msg.topic) }
+                }
+              }
+            }
+          }
+          return client
+        },
+        http: http,
+        clock: testClock
+      )
+
+      let channelA = sut.channel("topic-a")
+      let channelB = sut.channel("topic-b")
+      try await channelA.subscribeWithError()
+      try await channelB.subscribeWithError()
+      XCTAssertEqual(channelA.status, .subscribed)
+      XCTAssertEqual(channelB.status, .subscribed)
+
+      let statusUpdates = sut.statusChange
+      servers.value.last?.close(code: nil, reason: "OS teardown")
+      _ = await statusUpdates.first { $0 == .disconnected }
+
+      await testClock.advance(by: .seconds(8))
+      _ = await statusUpdates.first { $0 == .connected }
+
+      let deadline = Date().addingTimeInterval(5)
+      while rejoinJoinTopics.value.count < 2, Date() < deadline {
+        try? await Task.sleep(nanoseconds: 10_000_000)
+      }
+
+      XCTAssertEqual(rejoinJoinTopics.value, ["realtime:topic-a", "realtime:topic-b"])
+
+      sut.disconnect()
+    }
+
     func testExplicitDisconnectWhileBackgroundedDoesNotReconnectOnForeground() async throws {
       let sut = makeClient()
       await sut.connect()
