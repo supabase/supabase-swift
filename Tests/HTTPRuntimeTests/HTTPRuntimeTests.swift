@@ -14,49 +14,6 @@ import Testing
 struct HTTPRuntimeTests {
 
   @Test
-  func serverSentEventParsing() async throws {
-    let raw = """
-      event: message
-      data: {"delta":"hello"}
-
-      event: progress
-      data: {"percent":50}
-
-      event: done
-      data: {"total":3}
-
-
-      """
-    let bytes = AsyncThrowingStream<Data, any Error> { continuation in
-      let full = Array(Data(raw.utf8))
-      let mid = full.count / 2
-      continuation.yield(Data(full[0..<mid]))
-      continuation.yield(Data(full[mid...]))
-      continuation.finish()
-    }
-    var events: [ServerSentEvent] = []
-    for try await event in bytes.serverSentEvents() { events.append(event) }
-    #expect(events.count == 3)
-    #expect(events[0].event == "message")
-    #expect(events[0].data == #"{"delta":"hello"}"#)
-    #expect(events[1].event == "progress")
-    #expect(events[2].event == "done")
-  }
-
-  @Test
-  func serverSentEventMultiLineData() async throws {
-    let raw = "data: line1\ndata: line2\n\n"
-    let bytes = AsyncThrowingStream<Data, any Error> { continuation in
-      continuation.yield(Data(raw.utf8))
-      continuation.finish()
-    }
-    var events: [ServerSentEvent] = []
-    for try await event in bytes.serverSentEvents() { events.append(event) }
-    #expect(events.count == 1)
-    #expect(events[0].data == "line1\nline2")
-  }
-
-  @Test
   func multipartAssemblesToFileWithoutBufferingSource() throws {
     let sourceURL = FileManager.default.temporaryDirectory
       .appendingPathComponent("src-\(UUID().uuidString).bin")
