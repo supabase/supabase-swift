@@ -92,7 +92,7 @@ final class AuthOAuthServerIntegrationTests: XCTestCase {
       accessToken: session.accessToken,
       clientId: oauthClient.clientId,
       redirectUri: redirectUri,
-      scope: "read"
+      scope: "email"
     )
 
     let detailsResponse = try await authClient.oauthServer.getAuthorizationDetails(
@@ -104,7 +104,7 @@ final class AuthOAuthServerIntegrationTests: XCTestCase {
       return
     }
     XCTAssertEqual(details.client.id, oauthClient.clientId)
-    XCTAssertEqual(details.scope, "read")
+    XCTAssertEqual(details.scope, "email")
 
     let approveRedirect = try await authClient.oauthServer.approveAuthorization(
       authorizationId: authorizationId
@@ -141,7 +141,7 @@ final class AuthOAuthServerIntegrationTests: XCTestCase {
       accessToken: session.accessToken,
       clientId: oauthClient.clientId,
       redirectUri: redirectUri,
-      scope: "read"
+      scope: "email"
     )
 
     // Denial must not throw — it's a successful call carrying an
