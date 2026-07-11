@@ -3,9 +3,11 @@
 ## Goal
 
 First-party Swift Testing support for stubbing `HTTPTransport`-issued requests: a
-custom trait (`.http(stubs:)`) that lets a test declare expected requests and
-canned responses, works under parallel test execution, and asserts both the
-response contract and (optionally) the shape of the outgoing request.
+custom trait (`.http(stubs:)`) that lets a test declare canned responses and
+works under parallel test execution, plus a standalone `assertHTTPRequests`
+helper to assert the shape of the outgoing request(s) via an inline curl
+snapshot. Response stubbing and request-shape assertion are separate
+concerns.
 
 ## Non-goals
 
@@ -48,9 +50,6 @@ public struct HTTPStub: Sendable {
     _ url: String,
     status: Int = 200,
     headers: [String: String] = [:],
-    fileID: StaticString = #fileID, filePath: StaticString = #filePath,
-    line: UInt = #line, column: UInt = #column,
-    matches requestSnapshot: (() -> String)? = nil,
     body: @Sendable @escaping () -> HTTPStubBody = { .empty }
   ) -> HTTPStub
   // .get, .put, .patch, .delete, .head — same shape
@@ -59,11 +58,9 @@ public struct HTTPStub: Sendable {
 
 - `url` is compared against the full outgoing URL string, including query,
   exactly (no path-only or pattern matching).
-- `matches:` is opt-in (default `nil`). When present, it's wired into
-  `assertInlineSnapshot(of:as:matches:)` against a curl-command rendering of
-  the actual outgoing `HTTPRequest`, using the stub's captured
-  `fileID`/`filePath`/`line`/`column` so the inline literal updates at the
-  right source location under `--record`.
+- `HTTPStub` only ever describes the canned *response*. Asserting the shape
+  of the outgoing *request* is a separate concern — see `assertHTTPRequests`
+  below.
 
 ### `HTTPTransportStub`
 
@@ -93,9 +90,11 @@ package actor HTTPTransportStub: HTTPTransport {
   }
 
   private var pending: [HTTPStub]
+  private var consumedRequests: [HTTPRequest] = []
   init(stubs: [HTTPStub]) { pending = stubs }
 
   func send(_ request: HTTPRequest, uploadProgress: ProgressHandler?) async throws(HTTPError) -> HTTPResponse {
+    consumedRequests.append(request)
     guard !pending.isEmpty else {
       let message = "Unexpected request \(request.method) \(request.url) — no stubs remaining"
       Issue.record("\(message)")
@@ -111,16 +110,11 @@ package actor HTTPTransportStub: HTTPTransport {
       Issue.record("\(message)")
       throw HTTPError.transport(HTTPStubMismatch(description: message))
     }
-    if let requestSnapshot = stub.requestSnapshot {
-      assertInlineSnapshot(
-        of: request, as: .curl, matches: requestSnapshot,
-        fileID: stub.fileID, file: stub.filePath, line: stub.line, column: stub.column)
-    }
     return HTTPResponse(head: HTTPResponseHead(status: stub.status, headers: stub.headers), body: stub.bodyData)
   }
 
   func stream(_ request: HTTPRequest) async throws(HTTPError) -> HTTPResponseStream {
-    // same pop/compare/snapshot logic as send, yields .stream(AsyncStream<Data>) chunks
+    // same pop/compare/record logic as send, yields .stream(AsyncStream<Data>) chunks
   }
 
   func assertAllConsumed() {
@@ -128,6 +122,17 @@ package actor HTTPTransportStub: HTTPTransport {
       Issue.record("Stub for \(stub.method) \(stub.url) was never consumed")
     }
   }
+
+  /// Count of requests recorded so far — `assertHTTPRequests` snapshots this
+  /// before running its operation, then diffs against it after.
+  var requestCount: Int { consumedRequests.count }
+
+  /// Requests recorded from `index` onward.
+  func requests(since index: Int) -> [HTTPRequest] { Array(consumedRequests[index...]) }
+
+  /// Stubs not yet consumed — read by `HTTPStubTrait` to merge a suite-level
+  /// queue with a nested test-level one.
+  fileprivate var remainingStubs: [HTTPStub] { pending }
 }
 ```
 
@@ -136,20 +141,49 @@ records an issue immediately (via `Issue.record`) and hands back an
 empty-queue instance — any subsequent request against it fails through the
 normal "no stubs remaining" path rather than crashing.
 
-### `Snapshotting<HTTPRequest, String>.curl`
+### `curlCommand(for:)` and `assertHTTPRequests`
 
-New, independent strategy operating directly on `HTTPRequest` (method, url,
-headers, body) — not bridged through `URLRequest`. Mirrors the formatting
-conventions (sorted headers/query, escaped body) of the existing
-`Sources/TestHelpers/URLRequestSnapshot.swift` `._curl` strategy for
-consistency across the codebase's curl-snapshot output, but implemented
-independently so `HTTPRuntimeTestHelpers` has no dependency on `TestHelpers`.
+A single formatting function renders an `HTTPRequest` as a curl command
+(method, URL, sorted headers, escaped body) — mirroring the conventions of
+the existing `Sources/TestHelpers/URLRequestSnapshot.swift` `._curl` strategy
+for consistency across the codebase's curl-snapshot output, but implemented
+independently against `HTTPRequest` so `HTTPRuntimeTestHelpers` has no
+dependency on `TestHelpers`.
+
+```swift
+func curlCommand(for request: HTTPRequest) -> String { ... }
+
+public func assertHTTPRequests<R>(
+  fileID: StaticString = #fileID, filePath: StaticString = #filePath,
+  line: UInt = #line, column: UInt = #column,
+  _ operation: () async throws -> R,
+  matches expected: () -> String
+) async throws -> R {
+  let transport = HTTPTransportStub.current
+  let startIndex = await transport.requestCount
+  let result = try await operation()
+  let requests = await transport.requests(since: startIndex)
+  let rendered = requests.map(curlCommand(for:)).joined(separator: "\n\n")
+  assertInlineSnapshot(
+    of: rendered, as: .lines, matches: expected,
+    fileID: fileID, file: filePath, line: line, column: column)
+  return result
+}
+```
+
+`assertHTTPRequests` requires an ambient `HTTPTransportStub.current` (i.e.
+must run inside a `.http(stubs:)` scope) — it reads back whatever requests
+that transport recorded while consuming stubs during `operation()`, so
+there's one source of truth for "what requests happened," not two competing
+mechanisms. Multiple requests in one `operation()` render as multiple curl
+commands joined by a blank line, in call order.
 
 ### `HTTPStubTrait`
 
 Usable at both `@Test` and `@Suite` level. Suite-level stubs are prepended;
 a `@Test`-level trait on top appends its own stubs to whatever the suite
-already queued, preserving order.
+already queued, preserving order. Defined in the same file as
+`HTTPTransportStub` so it can reach its `fileprivate remainingStubs`.
 
 ```swift
 public struct HTTPStubTrait: TestTrait, SuiteTrait, TestScoping {
@@ -158,11 +192,11 @@ public struct HTTPStubTrait: TestTrait, SuiteTrait, TestScoping {
   public func provideScope(
     for test: Test, testCase: Test.Case?, performing function: () async throws -> Void
   ) async throws {
-    let merged = (HTTPTransportStub._current?.pending ?? []) + stubs
-    let transport = HTTPTransportStub(stubs: merged)
+    let outerStubs = await HTTPTransportStub._current?.remainingStubs ?? []
+    let transport = HTTPTransportStub(stubs: outerStubs + stubs)
     try await HTTPTransportStub.$_current.withValue(transport) {
       try await function()
-      transport.assertAllConsumed()
+      await transport.assertAllConsumed()
     }
   }
 }
@@ -182,10 +216,12 @@ stub state across tests.
 3. Test body reads `HTTPTransportStub.current` and passes it explicitly to
    the client under test (constructor injection — matches how `HTTPTransport`
    is already wired into clients elsewhere in the codebase).
-4. Each `send`/`stream` call the client makes pops the next stub, checks
-   method + full URL, optionally asserts a curl snapshot of the request, and
-   returns the stubbed response.
-5. At scope exit, any unconsumed stub fails the test.
+4. Each `send`/`stream` call the client makes is recorded, pops the next
+   stub, checks method + full URL, and returns the stubbed response.
+5. Optionally, the test wraps a call in `assertHTTPRequests { ... } matches:
+   { ... }` to assert the curl rendering of whatever requests fired during
+   that call.
+6. At scope exit, any unconsumed stub fails the test.
 
 ## Error handling
 
@@ -198,18 +234,20 @@ the client under test happens to swallow the thrown error.
 
 ```swift
 @Test(.http(stubs: [
-  .post("https://example.com/auth/v1/otp", status: 200, matches: {
-    """
-    curl 'https://example.com/auth/v1/otp' \
-    	--header 'Content-Type: application/json'
-    """
-  }) {
+  .post("https://example.com/auth/v1/otp", status: 200) {
     .string(#"{"message_id":"123"}"#)
   }
 ]))
 func signInWithOTP() async throws {
   let client = MyClient(transport: HTTPTransportStub.current)
-  try await client.signInWithOTP(email: "a@b.com")
+  try await assertHTTPRequests {
+    try await client.signInWithOTP(email: "a@b.com")
+  } matches: {
+    """
+    curl 'https://example.com/auth/v1/otp' \
+    	--header 'Content-Type: application/json'
+    """
+  }
 }
 ```
 
@@ -217,8 +255,13 @@ func signInWithOTP() async throws {
 
 - Unit-test `HTTPTransportStub`'s match/consume/leftover logic directly,
   without going through the trait.
+- Unit-test `curlCommand(for:)` directly against representative `HTTPRequest`
+  values (headers, query, body variants).
 - A thin trait-wiring test verifying `.http(stubs:)` actually binds the
   TaskLocal and that mismatch/leftover/out-of-scope paths record issues (via
   `withKnownIssue`).
+- A test verifying `assertHTTPRequests` correctly slices only the requests
+  made during its own `operation()` closure — not ones made before it, and
+  not ones made by a second `assertHTTPRequests` call later in the same test.
 - No integration with `Replay`, `Mocker`, or the app-level `TestHelpers`
   target.
