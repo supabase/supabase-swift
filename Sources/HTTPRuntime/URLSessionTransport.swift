@@ -60,40 +60,61 @@ package struct URLSessionTransport: HTTPTransport {
     return HTTPResponse(head: Self.makeHead(response), body: data)
   }
 
-  package func stream(_ request: HTTPRequest) async throws(HTTPError) -> HTTPResponseStream {
-    let urlRequest = Self.makeURLRequest(request)
-    let bytes: URLSession.AsyncBytes
-    let response: URLResponse
-    do {
-      (bytes, response) = try await session.bytes(for: urlRequest)
-    } catch {
-      throw HTTPError.transport(error)
-    }
-
-    let body = AsyncThrowingStream<Data, any Error> { continuation in
-      let task = Task {
-        do {
-          var buffer = [UInt8]()
-          buffer.reserveCapacity(16 * 1024)
-          for try await byte in bytes {
-            buffer.append(byte)
-            // Flush on newline (prompt SSE frame delivery) or when a
-            // chunk fills up (bounded memory for large downloads).
-            if byte == 0x0A || buffer.count >= 16 * 1024 {
-              continuation.yield(Data(buffer))
-              buffer.removeAll(keepingCapacity: true)
-            }
-          }
-          if !buffer.isEmpty { continuation.yield(Data(buffer)) }
-          continuation.finish()
-        } catch {
-          continuation.finish(throwing: HTTPError.transport(error))
-        }
+  #if canImport(FoundationNetworking)
+    // swift-corelibs-foundation has no async byte-streaming API
+    // (`bytes(for:)`/`AsyncBytes`), so on Linux the response is buffered in
+    // full and delivered as a single chunk instead of streamed incrementally.
+    package func stream(_ request: HTTPRequest) async throws(HTTPError) -> HTTPResponseStream {
+      let urlRequest = Self.makeURLRequest(request)
+      let data: Data
+      let response: URLResponse
+      do {
+        (data, response) = try await session.data(for: urlRequest)
+      } catch {
+        throw HTTPError.transport(error)
       }
-      continuation.onTermination = { _ in task.cancel() }
+      let body = AsyncThrowingStream<Data, any Error> { continuation in
+        continuation.yield(data)
+        continuation.finish()
+      }
+      return HTTPResponseStream(head: Self.makeHead(response), body: body)
     }
-    return HTTPResponseStream(head: Self.makeHead(response), body: body)
-  }
+  #else
+    package func stream(_ request: HTTPRequest) async throws(HTTPError) -> HTTPResponseStream {
+      let urlRequest = Self.makeURLRequest(request)
+      let bytes: URLSession.AsyncBytes
+      let response: URLResponse
+      do {
+        (bytes, response) = try await session.bytes(for: urlRequest)
+      } catch {
+        throw HTTPError.transport(error)
+      }
+
+      let body = AsyncThrowingStream<Data, any Error> { continuation in
+        let task = Task {
+          do {
+            var buffer = [UInt8]()
+            buffer.reserveCapacity(16 * 1024)
+            for try await byte in bytes {
+              buffer.append(byte)
+              // Flush on newline (prompt SSE frame delivery) or when a
+              // chunk fills up (bounded memory for large downloads).
+              if byte == 0x0A || buffer.count >= 16 * 1024 {
+                continuation.yield(Data(buffer))
+                buffer.removeAll(keepingCapacity: true)
+              }
+            }
+            if !buffer.isEmpty { continuation.yield(Data(buffer)) }
+            continuation.finish()
+          } catch {
+            continuation.finish(throwing: HTTPError.transport(error))
+          }
+        }
+        continuation.onTermination = { _ in task.cancel() }
+      }
+      return HTTPResponseStream(head: Self.makeHead(response), body: body)
+    }
+  #endif
 
   // MARK: - Helpers
 

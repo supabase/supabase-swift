@@ -178,6 +178,7 @@ xctest
 XVCJ
 
 # Terms from HTTPRuntime (Sources/HTTPRuntime) and its tests.
+corelibs
 reencoded
 subdata
 Subrange
