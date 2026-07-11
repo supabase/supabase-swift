@@ -16,8 +16,9 @@ package import Foundation
 /// - Buffered and streaming requests use the modern async `URLSession` APIs
 ///   (`upload(for:fromFile:)`, `bytes(for:)`), which keep the code fully
 ///   async/await + `AsyncSequence` and Sendable-clean.
-/// - Uploads stream from a file on disk (`.file`/`.multipart`), so large bodies
-///   never fully buffer in memory. Progress is reported via a per-task delegate.
+/// - Uploads stream from a file on disk (`.file`, including caller-assembled
+///   multipart bodies), so large bodies never fully buffer in memory. Progress
+///   is reported via a per-task delegate.
 /// - Background sessions are exposed via `init(configuration:)`, BUT the async
 ///   convenience APIs are not supported on a background `URLSessionConfiguration`
 ///   — background transfers must use delegate-based `downloadTask`/`uploadTask`
@@ -34,10 +35,10 @@ package struct URLSessionTransport: HTTPTransport {
     self.session = session
   }
 
-  package func send(_ request: HTTPRequest, uploadProgress: ProgressHandler?) async throws
-    -> HTTPResponse
+  package func send(_ request: HTTPRequest, uploadProgress: ProgressHandler?)
+    async throws(HTTPError) -> HTTPResponse
   {
-    let urlRequest = try Self.makeURLRequest(request)
+    let urlRequest = Self.makeURLRequest(request)
     let delegate = uploadProgress.map { ProgressDelegate(onProgress: $0) }
 
     let data: Data
@@ -52,13 +53,6 @@ package struct URLSessionTransport: HTTPTransport {
       case .file(let fileURL):
         (data, response) = try await session.upload(
           for: urlRequest, fromFile: fileURL, delegate: delegate)
-      case .multipart(let form):
-        let fileURL = try form.buildToTempFile()
-        defer { try? FileManager.default.removeItem(at: fileURL) }
-        var withBoundary = urlRequest
-        withBoundary.setValue(form.contentType, forHTTPHeaderField: "Content-Type")
-        (data, response) = try await session.upload(
-          for: withBoundary, fromFile: fileURL, delegate: delegate)
       }
     } catch {
       throw HTTPError.transport(error)
@@ -66,8 +60,8 @@ package struct URLSessionTransport: HTTPTransport {
     return HTTPResponse(head: Self.makeHead(response), body: data)
   }
 
-  package func stream(_ request: HTTPRequest) async throws -> HTTPResponseStream {
-    let urlRequest = try Self.makeURLRequest(request)
+  package func stream(_ request: HTTPRequest) async throws(HTTPError) -> HTTPResponseStream {
+    let urlRequest = Self.makeURLRequest(request)
     let bytes: URLSession.AsyncBytes
     let response: URLResponse
     do {
@@ -103,7 +97,7 @@ package struct URLSessionTransport: HTTPTransport {
 
   // MARK: - Helpers
 
-  private static func makeURLRequest(_ request: HTTPRequest) throws -> URLRequest {
+  private static func makeURLRequest(_ request: HTTPRequest) -> URLRequest {
     var urlRequest = URLRequest(url: request.url)
     urlRequest.httpMethod = request.method.rawValue
     for (name, value) in request.headers {
@@ -129,9 +123,8 @@ package struct URLSessionTransport: HTTPTransport {
   }
 }
 
-/// Per-task delegate that forwards upload progress. Isolated state is guarded by
-/// a lock so it is safe under Swift 6 strict concurrency.
-private final class ProgressDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+/// Per-task delegate that forwards upload progress.
+private final class ProgressDelegate: NSObject, URLSessionTaskDelegate, Sendable {
   private let onProgress: ProgressHandler
 
   init(onProgress: @escaping ProgressHandler) {

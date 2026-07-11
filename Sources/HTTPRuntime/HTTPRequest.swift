@@ -9,13 +9,13 @@ package import Foundation
 /// The body of an outgoing request.
 ///
 /// `.file` is the key to streaming large uploads without loading them into
-/// memory: `URLSession` streams the file from disk. `.multipart` assembles a
-/// `multipart/form-data` body onto a temporary file and then uploads that file,
-/// so even large multipart parts never materialize fully in memory.
+/// memory: `URLSession` streams the file from disk. Multipart requests are
+/// assembled by the caller via `MultipartFormData.buildToTempFile()` and
+/// passed as `.file`, with the `Content-Type` header set to
+/// `MultipartFormData.contentType`.
 package enum HTTPBody: Sendable {
   case data(Data)
   case file(URL)
-  case multipart(MultipartFormData)
 }
 
 /// A fully-resolved HTTP request: absolute URL, headers, and body.
@@ -72,7 +72,27 @@ package struct HTTPRequestBuilder: Sendable {
 
   package mutating func setHeader(_ name: String, _ value: String?) {
     guard let value else { return }
-    headers[name] = value
+    headers[canonicalKey(for: name)] = value
+  }
+
+  /// Appends to an existing header value (joined with `"; "`) instead of
+  /// replacing it, e.g. repeated `Prefer` directives. Header names are
+  /// matched case-insensitively per HTTP semantics.
+  package mutating func addHeader(_ name: String, value: String?) {
+    guard let value else { return }
+    let key = canonicalKey(for: name)
+    if let existing = headers[key] {
+      headers[key] = "\(existing); \(value)"
+    } else {
+      headers[key] = value
+    }
+  }
+
+  /// Returns the already-stored key matching `name` case-insensitively, if
+  /// any, so repeated calls with different casing merge into one header
+  /// instead of creating a duplicate entry.
+  private func canonicalKey(for name: String) -> String {
+    headers.keys.first { $0.caseInsensitiveCompare(name) == .orderedSame } ?? name
   }
 
   package mutating func setBody(_ body: HTTPBody?) {

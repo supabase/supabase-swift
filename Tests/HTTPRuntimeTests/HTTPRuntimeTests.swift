@@ -82,6 +82,57 @@ struct HTTPRuntimeTests {
   }
 
   @Test
+  func addHeaderAppendsToExistingValue() throws {
+    var builder = HTTPRequestBuilder(
+      method: .get, baseURL: URL(string: "https://example.com")!, path: "/x")
+    builder.addHeader("Prefer", value: "returning=minimal")
+    builder.addHeader("Prefer", value: "count=exact")
+    let request = try builder.build()
+    #expect(request.headers["Prefer"] == "returning=minimal; count=exact")
+  }
+
+  @Test
+  func addHeaderSetsWhenAbsent() throws {
+    var builder = HTTPRequestBuilder(
+      method: .get, baseURL: URL(string: "https://example.com")!, path: "/x")
+    builder.addHeader("Prefer", value: "returning=minimal")
+    let request = try builder.build()
+    #expect(request.headers["Prefer"] == "returning=minimal")
+  }
+
+  @Test
+  func addHeaderMergesCaseInsensitively() throws {
+    var builder = HTTPRequestBuilder(
+      method: .get, baseURL: URL(string: "https://example.com")!, path: "/x")
+    builder.addHeader("Prefer", value: "returning=minimal")
+    builder.addHeader("prefer", value: "count=exact")
+    let request = try builder.build()
+    #expect(request.headers.count == 1)
+    #expect(request.headers["Prefer"] == "returning=minimal; count=exact")
+  }
+
+  @Test
+  func setHeaderReplacesCaseInsensitively() throws {
+    var builder = HTTPRequestBuilder(
+      method: .get, baseURL: URL(string: "https://example.com")!, path: "/x")
+    builder.setHeader("Content-Type", "text/plain")
+    builder.setHeader("content-type", "application/json")
+    let request = try builder.build()
+    #expect(request.headers.count == 1)
+    #expect(request.headers["Content-Type"] == "application/json")
+  }
+
+  @Test
+  func addHeaderIgnoresNilValue() throws {
+    var builder = HTTPRequestBuilder(
+      method: .get, baseURL: URL(string: "https://example.com")!, path: "/x")
+    builder.addHeader("Prefer", value: "returning=minimal")
+    builder.addHeader("Prefer", value: nil)
+    let request = try builder.build()
+    #expect(request.headers["Prefer"] == "returning=minimal")
+  }
+
+  @Test
   func pathEncoding() {
     #expect(PathEncoding.segment("a/b c") == "a%2Fb%20c")
     #expect(PathEncoding.greedy("a/b/c.txt") == "a/b/c.txt")
