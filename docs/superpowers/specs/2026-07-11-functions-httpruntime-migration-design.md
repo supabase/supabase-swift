@@ -13,6 +13,8 @@ Migrate `Sources/Functions`'s internal HTTP plumbing from `Helpers.HTTPClient`/`
 - No test-framework migration. `Tests/FunctionsTests` stays on XCTest + Mocker; adopting Swift Testing / `HTTPRuntimeTestHelpers` for this module is the separate SDK-435 migration track, out of scope here.
 - No new multipart/file-upload support in Functions — it doesn't use it today and doesn't need it.
 - No SSE/event-stream framing — Functions' streaming already yields raw `Data` chunks (no SSE parsing), which is exactly what `HTTPRuntime.HTTPTransport.stream(_:)` already provides.
+- No changes to `Sources/Helpers` — `HTTPClientType`/`HTTPClient`/`LoggerInterceptor`/`Helpers.HTTPRequest`/`Helpers.HTTPResponse` stay exactly as they are, since Auth, PostgREST, Realtime, and Storage all still depend on them. Functions simply stops calling them; nothing about them changes.
+- **Request/response logging is dropped for now, to be revisited later.** `LoggerInterceptor`'s verbose request/response logging (see "Current state" below) is not reimplemented against `HTTPRuntime` types in this migration. The public `logger:` initializer parameter stays (no public API change), but it becomes inert — supplying a logger no longer produces any log output. This is a deliberate, temporary regression, not an oversight; re-adding equivalent logging directly against `HTTPRuntime.HTTPRequest`/`HTTPResponse` is follow-up work, not part of this migration.
 
 ## Current state (for reference)
 
@@ -25,38 +27,13 @@ Migrate `Sources/Functions`'s internal HTTP plumbing from `Helpers.HTTPClient`/`
 
 ### Buffered path (`invoke`, `invoke(decode:)`, `invoke(decoder:)`)
 
-A new private type, `FetchHandlerTransport`, adapts the stored `fetch: FetchHandler` closure to `HTTPRuntime.HTTPTransport`. It also takes over `LoggerInterceptor`'s job directly — `Helpers.HTTPClient`'s generic interceptor chain is not carried over; Functions only ever has exactly one optional behavior here (logging), so it's folded straight into the adapter rather than kept as a pluggable chain:
+A new private type, `FetchHandlerTransport`, adapts the stored `fetch: FetchHandler` closure to `HTTPRuntime.HTTPTransport`. Logging is intentionally not reimplemented here (see Non-goals) — `Helpers.HTTPClient`'s interceptor chain is not carried over at all; the adapter is a plain, direct pass-through:
 
 ```swift
 private struct FetchHandlerTransport: HTTPTransport {
   let fetch: FunctionsClient.FetchHandler
-  let logger: (any SupabaseLogger)?
 
   func send(_ request: HTTPRequest, uploadProgress: ProgressHandler?) async throws(HTTPError) -> HTTPResponse {
-    guard let logger else {
-      return try await performSend(request)
-    }
-    let id = UUID().uuidString
-    return try await SupabaseLoggerTaskLocal.$additionalContext.withValue(merging: ["requestID": .string(id)]) {
-      logger.verbose("""
-        Request: \(request.method.rawValue) \(request.url.absoluteString.removingPercentEncoding ?? request.url.absoluteString)
-        Body: \(stringify(request.bodyData))
-        """)
-      do {
-        let response = try await performSend(request)
-        logger.verbose("""
-          Response: Status code: \(response.head.status)
-          Body: \(stringify(response.body))
-          """)
-        return response
-      } catch {
-        logger.error("Response: Failure \(error)")
-        throw error
-      }
-    }
-  }
-
-  private func performSend(_ request: HTTPRequest) async throws(HTTPError) -> HTTPResponse {
     let urlRequest = Self.makeURLRequest(request)
     let data: Data
     let response: URLResponse
@@ -82,9 +59,7 @@ private struct FetchHandlerTransport: HTTPTransport {
 }
 ```
 
-`stringify(_:)` (JSON-pretty-print a `Data?` body for logging, falling back to raw UTF-8 or `"<failed>"`/`"<none>"`) is a small, private, self-contained helper duplicated in `Functions` rather than reused from `Helpers` — `Helpers.stringify` is `internal` (not `package`), and it's a ~15-line pure function, not worth a cross-module accessibility change for.
-
-`invoke`/`invoke(decode:)`/`invoke(decoder:)` build an `HTTPRuntime.HTTPRequest` (method, url, headers as `[String: String]`, body as `.data(Data)`) instead of `Helpers.HTTPRequest`, construct a `FetchHandlerTransport(fetch: fetch, logger: logger)`, and call `.send(request, uploadProgress: nil)`. The existing status-check/error-mapping logic (non-2xx → `FunctionsError.httpError(code:data:)`, relay-error response header → `.relayError`) moves to operate on the returned `HTTPResponse` instead of `Helpers.HTTPResponse` — same checks, same error cases, different input type. `FunctionsClient` needs to retain a reference to the `logger:` it was given (it currently only passes it to the `HTTPClient` initializer and doesn't store it) so `FetchHandlerTransport` can be constructed with it per-request.
+`invoke`/`invoke(decode:)`/`invoke(decoder:)` build an `HTTPRuntime.HTTPRequest` (method, url, headers as `[String: String]`, body as `.data(Data)`) instead of `Helpers.HTTPRequest`, construct a `FetchHandlerTransport(fetch: fetch)`, and call `.send(request, uploadProgress: nil)`. The existing status-check/error-mapping logic (non-2xx → `FunctionsError.httpError(code:data:)`, relay-error response header → `.relayError`) moves to operate on the returned `HTTPResponse` instead of `Helpers.HTTPResponse` — same checks, same error cases, different input type. The `logger:` initializer parameter is still accepted (public API unchanged) but is no longer passed anywhere or used — `FunctionsClient` doesn't need to store it.
 
 ### Streaming path (`_invokeWithStreamedResponse`)
 
