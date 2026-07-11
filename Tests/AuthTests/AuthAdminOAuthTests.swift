@@ -281,25 +281,10 @@ final class AuthAdminOAuthTests: XCTestCase {
   }
 
   func testDeleteOAuthClient() async throws {
-    let responseData = """
-      {
-        "client_id": "\(clientId)",
-        "client_name": "Test Client",
-        "client_type": "confidential",
-        "token_endpoint_auth_method": "client_secret_post",
-        "registration_type": "manual",
-        "redirect_uris": ["https://example.com/callback"],
-        "grant_types": ["authorization_code", "refresh_token"],
-        "response_types": ["code"],
-        "created_at": "2024-01-01T00:00:00.000Z",
-        "updated_at": "2024-01-01T00:00:00.000Z"
-      }
-      """.data(using: .utf8)!
-
     Mock(
       url: clientURL.appendingPathComponent("admin/oauth/clients/\(clientId)"),
-      statusCode: 200,
-      data: [.delete: responseData]
+      statusCode: 204,
+      data: [.delete: Data()]
     )
     .snapshotRequest {
       #"""
@@ -316,9 +301,7 @@ final class AuthAdminOAuthTests: XCTestCase {
 
     sut = makeSUT()
 
-    let client = try await sut.admin.oauth.deleteClient(clientId: clientId)
-
-    XCTAssertEqual(client.clientId, clientId)
+    try await sut.admin.oauth.deleteClient(clientId: clientId)
   }
 
   func testRegenerateOAuthClientSecret() async throws {
