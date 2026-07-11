@@ -6,6 +6,7 @@
 //
 import Testing
 
+import HTTPRuntime
 @testable import HTTPRuntimeTestHelpers
 
 @Suite

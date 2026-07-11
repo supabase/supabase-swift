@@ -4,7 +4,7 @@
 //
 //  Created by Guilherme Souza on 11/07/26.
 //
-@_exported import Foundation
+package import Foundation
 
 /// The canned response body for an ``HTTPStub``.
 package enum HTTPStubBody: Sendable {

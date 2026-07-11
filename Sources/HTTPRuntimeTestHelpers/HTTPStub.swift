@@ -4,7 +4,7 @@
 //
 //  Created by Guilherme Souza on 11/07/26.
 //
-@_exported import HTTPRuntime
+package import HTTPRuntime
 
 /// A canned response for one request, matched by HTTP method + full URL
 /// (including query), consumed in the order it appears in `.http(stubs:)`'s
