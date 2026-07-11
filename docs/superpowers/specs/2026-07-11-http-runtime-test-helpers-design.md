@@ -153,11 +153,12 @@ dependency on `TestHelpers`.
 ```swift
 func curlCommand(for request: HTTPRequest) -> String { ... }
 
-public func assertHTTPRequests<R>(
+func assertHTTPRequests<R>(
   fileID: StaticString = #fileID, filePath: StaticString = #filePath,
+  function: StaticString = #function,
   line: UInt = #line, column: UInt = #column,
   _ operation: () async throws -> R,
-  matches expected: () -> String
+  matches expected: (() -> String)? = nil
 ) async throws -> R {
   let transport = HTTPTransportStub.current
   let startIndex = await transport.requestCount
@@ -165,8 +166,10 @@ public func assertHTTPRequests<R>(
   let requests = await transport.requests(since: startIndex)
   let rendered = requests.map(curlCommand(for:)).joined(separator: "\n\n")
   assertInlineSnapshot(
-    of: rendered, as: .lines, matches: expected,
-    fileID: fileID, file: filePath, line: line, column: column)
+    of: rendered, as: .lines,
+    syntaxDescriptor: InlineSnapshotSyntaxDescriptor(trailingClosureOffset: 1),
+    matches: expected,
+    fileID: fileID, file: filePath, function: function, line: line, column: column)
   return result
 }
 ```
@@ -177,6 +180,13 @@ that transport recorded while consuming stubs during `operation()`, so
 there's one source of truth for "what requests happened," not two competing
 mechanisms. Multiple requests in one `operation()` render as multiple curl
 commands joined by a blank line, in call order.
+
+`matches:` defaults to `nil`, same as `assertInlineSnapshot` itself, so a
+first pass can omit it and let the library auto-write the recorded literal
+into the call site on the first (intentionally failing) run —
+`syntaxDescriptor: .init(trailingClosureOffset: 1)` is required for that
+rewrite to target the right trailing closure, since `matches:` is the
+*second* trailing closure here (`operation` is the first, unlabeled one).
 
 ### `HTTPStubTrait`
 
