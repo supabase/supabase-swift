@@ -119,7 +119,7 @@ final class AuthOAuthServerIntegrationTests: XCTestCase {
     let grantsAfterRevoke = try await authClient.oauthServer.listGrants()
     XCTAssertFalse(grantsAfterRevoke.contains { $0.client.id == oauthClient.clientId })
 
-    _ = try await serviceRoleClient.admin.oauth.deleteClient(clientId: oauthClient.clientId)
+    try await serviceRoleClient.admin.oauth.deleteClient(clientId: oauthClient.clientId)
   }
 
   func testDenyAuthorizationFlow() async throws {
@@ -144,6 +144,12 @@ final class AuthOAuthServerIntegrationTests: XCTestCase {
       scope: "email"
     )
 
+    // getAuthorizationDetails must be called before approve/deny — it's what
+    // claims the authorization for the calling user server-side (the backend
+    // creates the row with no owner, to support unauthenticated visitors, and
+    // only the GET assigns it). Skipping straight to consent 404s.
+    _ = try await authClient.oauthServer.getAuthorizationDetails(authorizationId: authorizationId)
+
     // Denial must not throw — it's a successful call carrying an
     // access_denied error in the redirect URL.
     let denyRedirect = try await authClient.oauthServer.denyAuthorization(
@@ -151,7 +157,7 @@ final class AuthOAuthServerIntegrationTests: XCTestCase {
     )
     XCTAssertEqual(denyRedirect.redirectURL.query?.contains("error=access_denied"), true)
 
-    _ = try await serviceRoleClient.admin.oauth.deleteClient(clientId: oauthClient.clientId)
+    try await serviceRoleClient.admin.oauth.deleteClient(clientId: oauthClient.clientId)
   }
 
   // ponytail: `AuthClientIntegrationTests`'s equivalents are `private` on that
@@ -203,13 +209,20 @@ final class AuthOAuthServerIntegrationTests: XCTestCase {
 
 /// Suppresses automatic redirect-following so the `Location` header of a
 /// 302 response can be inspected directly.
+///
+/// Uses the completion-handler form of the delegate method rather than the
+/// `async` overload: on Linux, `FoundationNetworking` never calls the
+/// `async` variant, so the redirect would silently be followed instead of
+/// suppressed (confirmed by reproducing in a Linux container — the `async`
+/// overload's body never ran, while this one does).
 private final class NoRedirectSessionDelegate: NSObject, URLSessionTaskDelegate {
   func urlSession(
     _ session: URLSession,
     task: URLSessionTask,
     willPerformHTTPRedirection response: HTTPURLResponse,
-    newRequest request: URLRequest
-  ) async -> URLRequest? {
-    nil
+    newRequest request: URLRequest,
+    completionHandler: @escaping (URLRequest?) -> Void
+  ) {
+    completionHandler(nil)
   }
 }
