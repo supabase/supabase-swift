@@ -6,7 +6,7 @@
 //
 import Foundation
 
-/// A free-form JSON value, used for spec `document` / `Record<unknown>` types.
+/// A free-form JSON value.
 package enum JSONValue: Codable, Sendable, Hashable {
   case null
   case bool(Bool)

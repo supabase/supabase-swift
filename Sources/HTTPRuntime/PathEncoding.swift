@@ -6,8 +6,7 @@
 //
 import Foundation
 
-/// Percent-encoding for URL path parameters. Generated code calls these when
-/// substituting `@httpLabel` values into a path template.
+/// Percent-encoding for URL path parameters.
 package enum PathEncoding {
   private static let segmentAllowed: CharacterSet = {
     var set = CharacterSet.urlPathAllowed
