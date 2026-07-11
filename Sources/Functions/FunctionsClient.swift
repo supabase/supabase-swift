@@ -260,24 +260,34 @@ public final class FunctionsClient: Sendable {
     _ functionName: String,
     options invokeOptions: FunctionInvokeOptions = .init()
   ) -> AsyncThrowingStream<Data, any Error> {
+    let request = buildRequest(functionName: functionName, options: invokeOptions)
+    let transport = URLSessionTransport(configuration: sessionConfiguration)
+
     let (stream, continuation) = AsyncThrowingStream<Data, any Error>.makeStream()
-    let delegate = StreamResponseDelegate(continuation: continuation)
 
-    let session = URLSession(
-      configuration: sessionConfiguration, delegate: delegate, delegateQueue: nil)
+    let task = Task {
+      do {
+        let responseStream = try await transport.stream(request)
 
-    let urlRequest = FetchHandlerTransport.makeURLRequest(
-      buildRequest(functionName: functionName, options: invokeOptions))
+        guard 200..<300 ~= responseStream.head.status else {
+          throw FunctionsError.httpError(code: responseStream.head.status, data: Data())
+        }
+        if responseStream.head.header("x-relay-error") == "true" {
+          throw FunctionsError.relayError
+        }
 
-    let task = session.dataTask(with: urlRequest)
-    task.resume()
-
-    continuation.onTermination = { _ in
-      task.cancel()
-
-      // Hold a strong reference to delegate until continuation terminates.
-      _ = delegate
+        for try await chunk in responseStream.body {
+          continuation.yield(chunk)
+        }
+        continuation.finish()
+      } catch HTTPRuntime.HTTPError.transport(let underlying) {
+        continuation.finish(throwing: underlying)
+      } catch {
+        continuation.finish(throwing: error)
+      }
     }
+
+    continuation.onTermination = { _ in task.cancel() }
 
     return stream
   }
@@ -353,50 +363,6 @@ public final class FunctionsClient: Sendable {
         urlRequest.httpBody = payload
       }
       return urlRequest
-    }
-  }
-}
-
-final class StreamResponseDelegate: NSObject, URLSessionDataDelegate, Sendable {
-  let continuation: AsyncThrowingStream<Data, any Error>.Continuation
-
-  init(continuation: AsyncThrowingStream<Data, any Error>.Continuation) {
-    self.continuation = continuation
-  }
-
-  func urlSession(_: URLSession, dataTask _: URLSessionDataTask, didReceive data: Data) {
-    continuation.yield(data)
-  }
-
-  func urlSession(_: URLSession, task _: URLSessionTask, didCompleteWithError error: (any Error)?) {
-    continuation.finish(throwing: error)
-  }
-
-  func urlSession(
-    _: URLSession, dataTask _: URLSessionDataTask, didReceive response: URLResponse,
-    completionHandler: @escaping (URLSession.ResponseDisposition) -> Void
-  ) {
-    defer {
-      completionHandler(.allow)
-    }
-
-    guard let httpResponse = response as? HTTPURLResponse else {
-      continuation.finish(throwing: URLError(.badServerResponse))
-      return
-    }
-
-    guard 200..<300 ~= httpResponse.statusCode else {
-      let error = FunctionsError.httpError(
-        code: httpResponse.statusCode,
-        data: Data()
-      )
-      continuation.finish(throwing: error)
-      return
-    }
-
-    let isRelayError = httpResponse.value(forHTTPHeaderField: "x-relay-error") == "true"
-    if isRelayError {
-      continuation.finish(throwing: FunctionsError.relayError)
     }
   }
 }
