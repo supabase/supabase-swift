@@ -177,6 +177,12 @@ xcodeproj
 xctest
 XVCJ
 
+# Terms from HTTPRuntime (Sources/HTTPRuntime) and its tests.
+reencoded
+subdata
+Subrange
+TESTBOUNDARY
+
 # Non-ASCII fixture data used to exercise Unicode-handling and URL-encoding
 # edge cases (BuildURLRequestTests, HTTPErrorTests).
 Cigányka
