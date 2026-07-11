@@ -182,6 +182,17 @@
             parallelizable = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
+               BlueprintIdentifier = "HTTPRuntimeTestHelpersTests"
+               BuildableName = "HTTPRuntimeTestHelpersTests"
+               BlueprintName = "HTTPRuntimeTestHelpersTests"
+               ReferencedContainer = "container:">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
                BlueprintIdentifier = "HTTPRuntimeTests"
                BuildableName = "HTTPRuntimeTests"
                BlueprintName = "HTTPRuntimeTests"

@@ -74,7 +74,7 @@ let package = Package(
       name: "HTTPRuntimeTestHelpersTests",
       dependencies: [
         "HTTPRuntime",
-        "HTTPRuntimeTestHelpers"
+        "HTTPRuntimeTestHelpers",
       ]
     ),
     .target(

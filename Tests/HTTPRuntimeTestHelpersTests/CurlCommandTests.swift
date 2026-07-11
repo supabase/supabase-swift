@@ -5,10 +5,10 @@
 //  Created by Guilherme Souza on 11/07/26.
 //
 import Foundation
+import HTTPRuntime
 import Testing
 
 @testable import HTTPRuntimeTestHelpers
-import HTTPRuntime
 
 @Suite
 struct CurlCommandTests {

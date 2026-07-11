@@ -1,3 +1,4 @@
+import HTTPRuntime
 //
 //  HTTPStubTests.swift
 //  HTTPRuntimeTestHelpers
@@ -6,7 +7,6 @@
 //
 import Testing
 
-import HTTPRuntime
 @testable import HTTPRuntimeTestHelpers
 
 @Suite

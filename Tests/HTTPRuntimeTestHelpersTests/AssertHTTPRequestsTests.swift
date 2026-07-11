@@ -5,10 +5,10 @@
 //  Created by Guilherme Souza on 11/07/26.
 //
 import Foundation
+import HTTPRuntime
 import Testing
 
 @testable import HTTPRuntimeTestHelpers
-import HTTPRuntime
 
 @Suite
 struct AssertHTTPRequestsTests {
@@ -54,9 +54,11 @@ struct AssertHTTPRequestsTests {
   func rendersMultipleRequestsJoinedByBlankLine() async throws {
     try await assertHTTPRequests {
       _ = try await HTTPTransportStub.current.send(
-        HTTPRequest(method: .get, url: URL(string: "https://example.com/first")!), uploadProgress: nil)
+        HTTPRequest(method: .get, url: URL(string: "https://example.com/first")!),
+        uploadProgress: nil)
       _ = try await HTTPTransportStub.current.send(
-        HTTPRequest(method: .post, url: URL(string: "https://example.com/second")!), uploadProgress: nil)
+        HTTPRequest(method: .post, url: URL(string: "https://example.com/second")!),
+        uploadProgress: nil)
     } matches: {
       #"""
       curl \
