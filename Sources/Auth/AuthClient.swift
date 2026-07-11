@@ -143,6 +143,7 @@ private let globalJWKSCache = GlobalJWKSCache()
 /// ### Namespaces
 /// - ``mfa``
 /// - ``admin``
+/// - ``oauthServer``
 ///
 /// ### Notifications
 /// - ``didChangeAuthStateNotification``
@@ -213,6 +214,11 @@ public actor AuthClient {
   /// key in the client.
   nonisolated public var admin: AuthAdmin {
     AuthAdmin(clientID: clientID)
+  }
+
+  /// Namespace for the OAuth 2.1 authorization server consent and grant-management API.
+  nonisolated public var oauthServer: AuthOAuthServer {
+    AuthOAuthServer(clientID: clientID)
   }
 
   /// Initializes a AuthClient with a specific configuration.
