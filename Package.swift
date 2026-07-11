@@ -107,8 +107,8 @@ let package = Package(
       name: "Functions",
       dependencies: [
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
-        .product(name: "HTTPTypes", package: "swift-http-types"),
         "Helpers",
+        "HTTPRuntime",
       ]
     ),
     .testTarget(

@@ -1,6 +1,6 @@
 import ConcurrencyExtras
 public import Foundation
-import HTTPTypes
+import HTTPRuntime
 public import Helpers
 
 #if canImport(FoundationNetworking)
@@ -61,14 +61,14 @@ public final class FunctionsClient: Sendable {
 
   struct MutableState {
     /// Headers to be included in the requests.
-    var headers = HTTPFields()
+    var headers: [String: String] = [:]
   }
 
-  private let http: any HTTPClientType
+  private let fetch: FetchHandler
   private let mutableState = LockIsolated(MutableState())
   private let sessionConfiguration: URLSessionConfiguration
 
-  var headers: HTTPFields {
+  var headers: [String: String] {
     mutableState.headers
   }
 
@@ -93,36 +93,8 @@ public final class FunctionsClient: Sendable {
       url: url,
       headers: headers,
       region: region,
-      logger: logger,
-      fetch: fetch,
       decoder: decoder,
-      sessionConfiguration: .default
-    )
-  }
-
-  convenience init(
-    url: URL,
-    headers: [String: String] = [:],
-    region: String? = nil,
-    logger: (any SupabaseLogger)? = nil,
-    fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
-    decoder: JSONDecoder = JSONDecoder(),
-    sessionConfiguration: URLSessionConfiguration
-  ) {
-    var interceptors: [any HTTPClientInterceptor] = []
-    if let logger {
-      interceptors.append(LoggerInterceptor(logger: logger))
-    }
-
-    let http = HTTPClient(fetch: fetch, interceptors: interceptors)
-
-    self.init(
-      url: url,
-      headers: headers,
-      region: region,
-      decoder: decoder,
-      http: http,
-      sessionConfiguration: sessionConfiguration
+      fetch: fetch
     )
   }
 
@@ -131,19 +103,24 @@ public final class FunctionsClient: Sendable {
     headers: [String: String],
     region: String?,
     decoder: JSONDecoder = JSONDecoder(),
-    http: any HTTPClientType,
+    fetch: @escaping FetchHandler,
     sessionConfiguration: URLSessionConfiguration = .default
   ) {
     self.url = url
     self.region = region
     self.decoder = decoder
-    self.http = http
+    self.fetch = fetch
     self.sessionConfiguration = sessionConfiguration
 
     mutableState.withValue {
-      $0.headers = HTTPFields(headers)
-      if $0.headers[.xClientInfo] == nil {
-        $0.headers[.xClientInfo] = "functions-swift/\(version)"
+      $0.headers = headers
+      // HTTP header names are case-insensitive: don't clobber a caller-provided
+      // "x-client-info" (in any casing) with the default value.
+      let hasClientInfo = $0.headers.keys.contains {
+        $0.caseInsensitiveCompare("X-Client-Info") == .orderedSame
+      }
+      if !hasClientInfo {
+        $0.headers["X-Client-Info"] = "functions-swift/\(version)"
       }
     }
   }
@@ -168,7 +145,6 @@ public final class FunctionsClient: Sendable {
       url: url,
       headers: headers,
       region: region?.rawValue,
-      logger: logger,
       fetch: fetch,
       decoder: decoder
     )
@@ -179,9 +155,9 @@ public final class FunctionsClient: Sendable {
   public func setAuth(token: String?) {
     mutableState.withValue {
       if let token {
-        $0.headers[.authorization] = "Bearer \(token)"
+        $0.headers["Authorization"] = "Bearer \(token)"
       } else {
-        $0.headers[.authorization] = nil
+        $0.headers["Authorization"] = nil
       }
     }
   }
@@ -199,10 +175,10 @@ public final class FunctionsClient: Sendable {
     options: FunctionInvokeOptions = .init(),
     decode: (Data, HTTPURLResponse) throws -> Response
   ) async throws -> Response {
-    let response = try await rawInvoke(
+    let (data, response) = try await rawInvoke(
       functionName: functionName, invokeOptions: options
     )
-    return try decode(response.data, response.underlyingResponse)
+    return try decode(data, response)
   }
 
   /// Invokes a function and JSON-decodes the response body into `T`.
@@ -239,20 +215,34 @@ public final class FunctionsClient: Sendable {
   private func rawInvoke(
     functionName: String,
     invokeOptions: FunctionInvokeOptions
-  ) async throws -> Helpers.HTTPResponse {
+  ) async throws -> (data: Data, response: HTTPURLResponse) {
     let request = buildRequest(functionName: functionName, options: invokeOptions)
-    let response = try await http.send(request)
+    let transport = FetchHandlerTransport(fetch: fetch)
 
-    guard 200..<300 ~= response.statusCode else {
-      throw FunctionsError.httpError(code: response.statusCode, data: response.data)
+    let response: HTTPRuntime.HTTPResponse
+    do {
+      response = try await transport.send(request)
+    } catch HTTPRuntime.HTTPError.transport(let underlying) {
+      throw underlying
     }
 
-    let isRelayError = response.headers[.xRelayError] == "true"
-    if isRelayError {
+    guard
+      let httpResponse = HTTPURLResponse(
+        url: request.url, statusCode: response.head.status, httpVersion: nil,
+        headerFields: response.head.headers)
+    else {
+      throw URLError(.badServerResponse)
+    }
+
+    guard 200..<300 ~= response.head.status else {
+      throw FunctionsError.httpError(code: response.head.status, data: response.body)
+    }
+
+    if response.head.header("x-relay-error") == "true" {
       throw FunctionsError.relayError
     }
 
-    return response
+    return (response.body, httpResponse)
   }
 
   /// Invokes a function and returns its response as a stream of raw `Data` chunks.
@@ -276,7 +266,8 @@ public final class FunctionsClient: Sendable {
     let session = URLSession(
       configuration: sessionConfiguration, delegate: delegate, delegateQueue: nil)
 
-    let urlRequest = buildRequest(functionName: functionName, options: invokeOptions).urlRequest
+    let urlRequest = FetchHandlerTransport.makeURLRequest(
+      buildRequest(functionName: functionName, options: invokeOptions))
 
     let task = session.dataTask(with: urlRequest)
     task.resume()
@@ -292,25 +283,77 @@ public final class FunctionsClient: Sendable {
   }
 
   private func buildRequest(functionName: String, options: FunctionInvokeOptions)
-    -> Helpers.HTTPRequest
+    -> HTTPRuntime.HTTPRequest
   {
     var query = options.query
-    var request = HTTPRequest(
-      url: url.appendingPathComponent(functionName),
-      method: FunctionInvokeOptions.httpMethod(options.method) ?? .post,
-      query: query,
-      headers: mutableState.headers.merging(with: options.headers),
-      body: options.body,
-      timeoutInterval: FunctionsClient.requestIdleTimeout
-    )
+    var requestHeaders = mutableState.headers.merging(options.headers) { $1 }
 
     if let region = options.region ?? region {
-      request.headers[.xRegion] = region
+      requestHeaders["x-region"] = region
       query.appendOrUpdate(URLQueryItem(name: "forceFunctionRegion", value: region))
-      request.query = query
     }
 
-    return request
+    let requestURL = url.appendingPathComponent(functionName).appendingQueryItems(query)
+
+    return HTTPRuntime.HTTPRequest(
+      method: FunctionInvokeOptions.httpMethod(options.method) ?? .post,
+      url: requestURL,
+      headers: requestHeaders,
+      body: options.body.map { HTTPBody.data($0) }
+    )
+  }
+
+  /// Adapts the stored `fetch:` closure to `HTTPTransport` for the buffered `invoke*` path.
+  /// Only `send(_:uploadProgress:)` is used — streaming always goes through
+  /// `URLSessionTransport` directly (see `_invokeWithStreamedResponse`), never through the
+  /// public `fetch:` closure, so `stream(_:)` here is unreachable.
+  private struct FetchHandlerTransport: HTTPTransport {
+    let fetch: FunctionsClient.FetchHandler
+
+    func send(_ request: HTTPRuntime.HTTPRequest, uploadProgress: ProgressHandler?)
+      async throws(HTTPRuntime.HTTPError)
+      -> HTTPRuntime.HTTPResponse
+    {
+      let urlRequest = Self.makeURLRequest(request)
+      let data: Data
+      let response: URLResponse
+      do {
+        (data, response) = try await fetch(urlRequest)
+      } catch {
+        throw HTTPRuntime.HTTPError.transport(error)
+      }
+      guard let http = response as? HTTPURLResponse else {
+        throw HTTPRuntime.HTTPError.transport(URLError(.badServerResponse))
+      }
+      var headers: [String: String] = [:]
+      for (key, value) in http.allHeaderFields {
+        if let key = key as? String, let value = value as? String {
+          headers[key] = value
+        }
+      }
+      return HTTPRuntime.HTTPResponse(
+        head: HTTPResponseHead(status: http.statusCode, headers: headers), body: data)
+    }
+
+    func stream(_ request: HTTPRuntime.HTTPRequest) async throws(HTTPRuntime.HTTPError)
+      -> HTTPResponseStream
+    {
+      fatalError(
+        "FetchHandlerTransport does not support streaming; use URLSessionTransport instead")
+    }
+
+    static func makeURLRequest(_ request: HTTPRuntime.HTTPRequest) -> URLRequest {
+      var urlRequest = URLRequest(
+        url: request.url, timeoutInterval: FunctionsClient.requestIdleTimeout)
+      urlRequest.httpMethod = request.method.rawValue
+      for (name, value) in request.headers {
+        urlRequest.setValue(value, forHTTPHeaderField: name)
+      }
+      if case .data(let payload) = request.body {
+        urlRequest.httpBody = payload
+      }
+      return urlRequest
+    }
   }
 }
 

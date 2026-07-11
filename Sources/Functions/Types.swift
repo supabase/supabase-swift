@@ -1,5 +1,5 @@
 public import Foundation
-import HTTPTypes
+import HTTPRuntime
 import Helpers
 
 /// An error type representing various errors that can occur while invoking functions.
@@ -25,7 +25,7 @@ public struct FunctionInvokeOptions: Sendable {
   /// Method to use in the function invocation.
   let method: Method?
   /// Headers to be included in the function invocation.
-  let headers: HTTPFields
+  let headers: [String: String]
   /// Body data to be sent with the function invocation.
   let body: Data?
   /// The Region to invoke the function in.
@@ -51,22 +51,22 @@ public struct FunctionInvokeOptions: Sendable {
     body: some Encodable,
     encoder: JSONEncoder = JSONEncoder()
   ) {
-    var defaultHeaders = HTTPFields()
+    var defaultHeaders: [String: String] = [:]
 
     switch body {
     case let string as String:
-      defaultHeaders[.contentType] = "text/plain"
+      defaultHeaders["Content-Type"] = "text/plain"
       self.body = string.data(using: .utf8)
     case let data as Data:
-      defaultHeaders[.contentType] = "application/octet-stream"
+      defaultHeaders["Content-Type"] = "application/octet-stream"
       self.body = data
     default:
-      defaultHeaders[.contentType] = "application/json"
+      defaultHeaders["Content-Type"] = "application/json"
       self.body = try? encoder.encode(body)
     }
 
     self.method = method
-    self.headers = defaultHeaders.merging(with: HTTPFields(headers))
+    self.headers = defaultHeaders.merging(headers) { $1 }
     self.region = region
     self.query = query
   }
@@ -85,7 +85,7 @@ public struct FunctionInvokeOptions: Sendable {
     region: String? = nil
   ) {
     self.method = method
-    self.headers = HTTPFields(headers)
+    self.headers = headers
     self.region = region
     self.query = query
     body = nil
@@ -105,7 +105,7 @@ public struct FunctionInvokeOptions: Sendable {
     case delete = "DELETE"
   }
 
-  static func httpMethod(_ method: Method?) -> HTTPTypes.HTTPRequest.Method? {
+  static func httpMethod(_ method: Method?) -> HTTPMethod? {
     switch method {
     case .get:
       .get

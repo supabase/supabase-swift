@@ -1,5 +1,4 @@
 import ConcurrencyExtras
-import HTTPTypes
 import InlineSnapshotTesting
 import Mocker
 import TestHelpers
@@ -51,8 +50,8 @@ final class FunctionsClientTests: XCTestCase {
     )
     XCTAssertEqual(client.region, "sa-east-1")
 
-    XCTAssertEqual(client.headers[.init("apikey")!], apiKey)
-    XCTAssertNotNil(client.headers[.init("X-Client-Info")!])
+    XCTAssertEqual(client.headers["apikey"], apiKey)
+    XCTAssertNotNil(client.headers["X-Client-Info"])
   }
 
   func testInitWithCustomDecoder() async {
@@ -326,10 +325,10 @@ final class FunctionsClientTests: XCTestCase {
 
   func test_setAuth() {
     sut.setAuth(token: "access.token")
-    XCTAssertEqual(sut.headers[.authorization], "Bearer access.token")
+    XCTAssertEqual(sut.headers["Authorization"], "Bearer access.token")
 
     sut.setAuth(token: nil)
-    XCTAssertNil(sut.headers[.authorization])
+    XCTAssertNil(sut.headers["Authorization"])
   }
 
   func testInvokeWithStreamedResponse() async throws {
