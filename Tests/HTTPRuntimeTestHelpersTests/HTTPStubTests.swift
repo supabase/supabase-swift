@@ -1,10 +1,10 @@
-import HTTPRuntime
 //
 //  HTTPStubTests.swift
 //  HTTPRuntimeTestHelpers
 //
 //  Created by Guilherme Souza on 11/07/26.
 //
+import HTTPRuntime
 import Testing
 
 @testable import HTTPRuntimeTestHelpers

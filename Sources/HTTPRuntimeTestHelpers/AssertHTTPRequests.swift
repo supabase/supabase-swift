@@ -1,10 +1,10 @@
-import HTTPRuntime
 //
 //  AssertHTTPRequests.swift
 //  HTTPRuntimeTestHelpers
 //
 //  Created by Guilherme Souza on 11/07/26.
 //
+import HTTPRuntime
 @preconcurrency import InlineSnapshotTesting
 
 /// Runs `operation`, then asserts an inline curl snapshot of every request
