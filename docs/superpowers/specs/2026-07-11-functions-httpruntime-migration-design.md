@@ -61,6 +61,8 @@ private struct FetchHandlerTransport: HTTPTransport {
 
 `invoke`/`invoke(decode:)`/`invoke(decoder:)` build an `HTTPRuntime.HTTPRequest` (method, url, headers as `[String: String]`, body as `.data(Data)`) instead of `Helpers.HTTPRequest`, construct a `FetchHandlerTransport(fetch: fetch)`, and call `.send(request, uploadProgress: nil)`. The existing status-check/error-mapping logic (non-2xx → `FunctionsError.httpError(code:data:)`, relay-error response header → `.relayError`) moves to operate on the returned `HTTPResponse` instead of `Helpers.HTTPResponse` — same checks, same error cases, different input type. The `logger:` initializer parameter is still accepted (public API unchanged) but is no longer passed anywhere or used — `FunctionsClient` doesn't need to store it.
 
+`invoke(_:options:decode:)`'s `decode` closure is public API and keeps its exact signature: `(Data, HTTPURLResponse) throws -> Response`. Since `HTTPRuntime.HTTPResponse` only carries a `HTTPResponseHead` (status + `[String: String]` headers), not an `HTTPURLResponse`, `rawInvoke` must synthesize one to hand to `decode`: `HTTPURLResponse(url: request.url, statusCode: response.head.status, httpVersion: nil, headerFields: response.head.headers)`. This preserves the existing call site's type exactly; nothing about `decode`'s contract changes.
+
 ### Streaming path (`_invokeWithStreamedResponse`)
 
 Replaces the custom `URLSession` + `StreamResponseDelegate` (`FunctionsClient.swift:317-359`, deleted entirely) with `HTTPRuntime.URLSessionTransport(configuration: sessionConfiguration)`, built directly (same `sessionConfiguration` stored property already used today) — not through `FetchHandlerTransport`, since streaming never went through the public `fetch:` closure to begin with and continues not to.
@@ -77,7 +79,11 @@ let responseStream = try await transport.stream(request)
 
 ### Errors
 
-`FunctionsError`'s two cases (`.relayError`, `.httpError(code:data:)`) are unchanged. `HTTPError` (from `HTTPRuntime`) never leaks to `FunctionsClient` callers — any transport-level failure inside `FetchHandlerTransport.send` or the streaming path's `URLSessionTransport.stream` call is caught and re-thrown as whatever `FunctionsError`/underlying error the current code already throws in that situation (i.e. the conversion layer absorbs `HTTPError`, it doesn't propagate it).
+`FunctionsError`'s two cases (`.relayError`, `.httpError(code:data:)`) are unchanged.
+
+**`HTTPError` must never leak to `FunctionsClient` callers — this is verified by an existing test, not just a stated goal.** `Tests/FunctionsTests/FunctionsClientTests.swift:243-269` (`testInvoke_shouldThrow_URLError_badServerResponse`) mocks the `fetch:` closure throwing a raw `URLError(.badServerResponse)` and asserts `sut.invoke(...)` throws that *exact* `URLError` — caught via `catch let urlError as URLError`. Today this works because `Helpers.HTTPClient.send` never wraps the `fetch` closure's thrown error; it propagates untouched.
+
+Once `FetchHandlerTransport.send` wraps that same failure as `HTTPError.transport(urlError)` (per its `send` implementation above), `rawInvoke` (buffered path) and `_invokeWithStreamedResponse` (streaming path) must catch `HTTPError.transport(let underlying)` and re-throw `underlying` itself — not the `HTTPError` wrapper — so this test (and any caller pattern-matching on the underlying error type) keeps working exactly as today. `FetchHandlerTransport`/`URLSessionTransport` never produce any other `HTTPError` case in this flow (no decoding, no generated-client status-checking), so unwrapping `.transport` is the complete fix, not a partial one.
 
 ### Package.swift
 
@@ -102,5 +108,6 @@ No new tests are required by this migration beyond what's needed to keep the exi
 
 ## Error handling
 
-- Transport-level failures (network errors, decoding failures) from `FetchHandlerTransport.send` or `URLSessionTransport.stream` are caught at the `HTTPError.transport(any Error)` boundary and converted to whatever error `FunctionsClient` already surfaces for that failure mode today (this migration doesn't change what errors callers see, only what's happening internally to produce them).
+- Transport-level failures surface as `HTTPError.transport(underlying)` from both `FetchHandlerTransport.send` and `URLSessionTransport.stream`. `FunctionsClient` catches `.transport(let underlying)` at both call sites and re-throws/finishes with `underlying` directly — callers see the exact same error type they see today (see "Errors" above; this is test-verified, not just a design intention).
 - Non-2xx responses and the relay-error header check keep their exact current semantics, just reading from `HTTPResponse`/`HTTPResponseHead` instead of `Helpers.HTTPResponse`.
+- `invoke(_:options:decode:)` synthesizes an `HTTPURLResponse` from `HTTPResponseHead` + the request URL to preserve its public `(Data, HTTPURLResponse)` decode-closure signature (see "Buffered path" above).
