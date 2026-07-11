@@ -106,6 +106,10 @@ If the `HTTPRequest ↔ URLRequest` round-trip introduces any incidental differe
 
 No new tests are required by this migration beyond what's needed to keep the existing suite green; this is an internal refactor, not new behavior.
 
+Two existing test files reference the types being dropped and need small mechanical updates (not new coverage — just adapting to the type change):
+- `Tests/FunctionsTests/FunctionsClientTests.swift:2` has `import HTTPTypes`, but nothing in that file actually uses an `HTTPTypes` symbol (`Mock(... data: [.post: ...])`'s `.post` resolves to `Mocker`'s own `HTTPMethod` enum, not `HTTPTypes`) — this import is already dead code today and should simply be deleted.
+- `Tests/FunctionsTests/FunctionInvokeOptionsTests.swift` genuinely uses `HTTPTypes`: `import HTTPTypes` (line 1), `options.headers[.contentType]` (an `HTTPFields` subscript, 4 call sites), and `testMethod()`'s `[FunctionInvokeOptions.Method: HTTPTypes.HTTPRequest.Method]` dictionary. Update to `import HTTPRuntime` (transitively available via `Functions`'s new dependency on it — same mechanism that made `import HTTPTypes` resolve there today without an explicit `FunctionsTests` product dependency; no `Package.swift` change needed for the test target), `options.headers["Content-Type"]` (plain dictionary subscript), and `[FunctionInvokeOptions.Method: HTTPMethod]` with `HTTPRuntime.HTTPMethod`'s cases (`.get`/`.post`/`.put`/`.patch`/`.delete`).
+
 ## Error handling
 
 - Transport-level failures surface as `HTTPError.transport(underlying)` from both `FetchHandlerTransport.send` and `URLSessionTransport.stream`. `FunctionsClient` catches `.transport(let underlying)` at both call sites and re-throws/finishes with `underlying` directly — callers see the exact same error type they see today (see "Errors" above; this is test-verified, not just a design intention).
