@@ -15,6 +15,7 @@ Migrate `Sources/Functions`'s internal HTTP plumbing from `Helpers.HTTPClient`/`
 - No SSE/event-stream framing — Functions' streaming already yields raw `Data` chunks (no SSE parsing), which is exactly what `HTTPRuntime.HTTPTransport.stream(_:)` already provides.
 - No changes to `Sources/Helpers` — `HTTPClientType`/`HTTPClient`/`LoggerInterceptor`/`Helpers.HTTPRequest`/`Helpers.HTTPResponse` stay exactly as they are, since Auth, PostgREST, Realtime, and Storage all still depend on them. Functions simply stops calling them; nothing about them changes.
 - **Request/response logging is dropped for now, to be revisited later.** `LoggerInterceptor`'s verbose request/response logging (see "Current state" below) is not reimplemented against `HTTPRuntime` types in this migration. The public `logger:` initializer parameter stays (no public API change), but it becomes inert — supplying a logger no longer produces any log output. This is a deliberate, temporary regression, not an oversight; re-adding equivalent logging directly against `HTTPRuntime.HTTPRequest`/`HTTPResponse` is follow-up work, not part of this migration.
+- **The streaming path's 150-second idle timeout is dropped for now, to be revisited later.** `HTTPRuntime.HTTPRequest` has no `timeoutInterval` field, and `URLSessionTransport` has no per-request timeout hook — today's `Helpers.HTTPRequest.timeoutInterval: FunctionsClient.requestIdleTimeout` (150s, matching the Edge Function gateway's own timeout) only carries over to the buffered path (`FetchHandlerTransport` builds its own `URLRequest` and can set this manually). The streaming path (`_invokeWithStreamedResponse`, already underscored/experimental) falls back to `URLSessionConfiguration`'s default request timeout (~60s) instead. This is a deliberate, temporary regression — a long-running streamed function call may now time out client-side before the gateway's own 150s limit — accepted for this migration and left for follow-up work.
 
 ## Current state (for reference)
 
@@ -65,7 +66,7 @@ private struct FetchHandlerTransport: HTTPTransport {
 
 ### Streaming path (`_invokeWithStreamedResponse`)
 
-Replaces the custom `URLSession` + `StreamResponseDelegate` (`FunctionsClient.swift:317-359`, deleted entirely) with `HTTPRuntime.URLSessionTransport(configuration: sessionConfiguration)`, built directly (same `sessionConfiguration` stored property already used today) — not through `FetchHandlerTransport`, since streaming never went through the public `fetch:` closure to begin with and continues not to.
+Replaces the custom `URLSession` + `StreamResponseDelegate` (`FunctionsClient.swift:317-359`, deleted entirely) with `HTTPRuntime.URLSessionTransport(configuration: sessionConfiguration)`, built directly (same `sessionConfiguration` stored property already used today) — not through `FetchHandlerTransport`, since streaming never went through the public `fetch:` closure to begin with and continues not to. This request no longer carries the 150s `requestIdleTimeout` (see Non-goals) — it uses whatever timeout `sessionConfiguration` already specifies (default `URLSessionConfiguration.default` timeout, ~60s, unless the caller supplied a custom `sessionConfiguration` with its own value).
 
 ```swift
 let transport = URLSessionTransport(configuration: sessionConfiguration)
