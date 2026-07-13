@@ -328,7 +328,7 @@ extension HTTPField.Name {
 
 /// Verbosity of log output emitted by the Realtime client.
 ///
-/// Pass a value to ``RealtimeClientOptions/init(headers:heartbeatInterval:reconnectDelay:timeoutInterval:disconnectOnSessionLoss:connectOnSubscribe:maxRetryAttempts:disconnectOnEmptyChannelsAfter:vsn:logLevel:fetch:accessToken:logger:handleAppLifecycle:)``
+/// Pass a value to ``RealtimeClientOptions/init(headers:heartbeatInterval:reconnectDelay:timeoutInterval:disconnectOnSessionLoss:connectOnSubscribe:maxRetryAttempts:disconnectOnEmptyChannelsAfter:vsn:logLevel:fetch:accessToken:logger:session:handleAppLifecycle:)``
 /// to control how much detail the Realtime server logs.
 ///
 /// ## Topics
