@@ -15,7 +15,7 @@ import Foundation
 /// All operations are protected by internal synchronization mechanisms.
 ///
 /// ## Connection Management
-/// The connection is established asynchronously using the `connect(to:protocols:configuration:)` method.
+/// The connection is established asynchronously using the `connect(to:protocols:headers:session:)` method.
 /// Once connected, you can send text/binary messages and listen for events through the `events` stream.
 ///
 /// ## Error Handling
@@ -51,15 +51,16 @@ final class URLSessionWebSocket: WebSocket {
   ///   - headers: Optional HTTP headers to include in the WebSocket upgrade request.
   ///              These are set on the URLRequest rather than on URLSessionConfiguration's
   ///              httpAdditionalHeaders, which can interfere with the WebSocket upgrade handshake.
-  ///   - configuration: Optional `URLSessionConfiguration` for customizing the connection.
-  ///                   Defaults to `.default` if not provided.
+  ///   - session: The `URLSession` used to create the WebSocket task. Defaults to `.shared`.
+  ///             Its `delegate`'s auth-challenge callbacks (if any) are forwarded to, enabling
+  ///             certificate pinning and other server-trust customization.
   /// - Returns: A connected `URLSessionWebSocket` instance.
   /// - Throws: `WebSocketError.connection` if the connection fails or times out.
   static func connect(
     to url: URL,
     protocols: [String]? = nil,
     headers: [String: String]? = nil,
-    configuration: URLSessionConfiguration? = nil
+    session: URLSession = .shared
   ) async throws -> URLSessionWebSocket {
     guard url.scheme == "ws" || url.scheme == "wss" else {
       preconditionFailure("only ws: and wss: schemes are supported")
@@ -72,72 +73,99 @@ final class URLSessionWebSocket: WebSocket {
 
     let mutableState = LockIsolated(MutableState())
 
-    let session = URLSession.sessionWithConfiguration(
-      configuration ?? .default,
-      onComplete: { session, task, error in
-        mutableState.withValue {
-          if let webSocket = $0.webSocket {
-            // There are three possibilities here:
-            // 1. the peer sent a close Frame, `onWebSocketTaskClosed` was already
-            //    called and `_connectionClosed` is a no-op.
-            // 2. we sent a close Frame (through `close()`) and `_connectionClosed`
-            //    is a no-op.
-            // 3. an error occurred (e.g. network failure) and `_connectionClosed`
-            //    will signal that and close `event`.
-            webSocket._connectionClosed(
-              code: 1006,
-              reason: Data("abnormal close".utf8)
+    let onComplete: @Sendable (URLSession, URLSessionTask, (any Error)?) -> Void = {
+      session, task, error in
+      mutableState.withValue {
+        if let webSocket = $0.webSocket {
+          // There are three possibilities here:
+          // 1. the peer sent a close Frame, `onWebSocketTaskClosed` was already
+          //    called and `_connectionClosed` is a no-op.
+          // 2. we sent a close Frame (through `close()`) and `_connectionClosed`
+          //    is a no-op.
+          // 3. an error occurred (e.g. network failure) and `_connectionClosed`
+          //    will signal that and close `event`.
+          webSocket._connectionClosed(
+            code: 1006,
+            reason: Data("abnormal close".utf8)
+          )
+        } else if let error {
+          $0.continuation.resume(
+            throwing: WebSocketError.connection(
+              message: "connection ended unexpectedly",
+              error: error
             )
-          } else if let error {
-            $0.continuation.resume(
-              throwing: WebSocketError.connection(
-                message: "connection ended unexpectedly",
-                error: error
-              )
-            )
-          } else {
-            // `onWebSocketTaskOpened` should have been called and resumed continuation.
-            // So either there was an error creating the connection or a logic error.
-            assertionFailure(
-              "expected an error or `onWebSocketTaskOpened` to have been called first"
-            )
+          )
+        } else {
+          // `onWebSocketTaskOpened` should have been called and resumed continuation.
+          // So either there was an error creating the connection or a logic error.
+          assertionFailure(
+            "expected an error or `onWebSocketTaskOpened` to have been called first"
+          )
+        }
+      }
+    }
+    let onWebSocketTaskOpened: @Sendable (URLSession, URLSessionWebSocketTask, String?) -> Void = {
+      session, task, `protocol` in
+      mutableState.withValue {
+        $0.webSocket = URLSessionWebSocket(
+          _task: task, _protocol: `protocol` ?? "", session: session)
+        $0.continuation.resume(returning: $0.webSocket!)
+      }
+    }
+    let onWebSocketTaskClosed:
+      @Sendable (URLSession, URLSessionWebSocketTask, Int?, Data?) -> Void =
+        { session, task, code, reason in
+          mutableState.withValue {
+            assert($0.webSocket != nil, "connection should exist by this time")
+            $0.webSocket!._connectionClosed(code: code, reason: reason)
           }
         }
-      },
-      onWebSocketTaskOpened: { session, task, `protocol` in
-        mutableState.withValue {
-          $0.webSocket = URLSessionWebSocket(
-            _task: task, _protocol: `protocol` ?? "", session: session)
-          $0.continuation.resume(returning: $0.webSocket!)
+
+    func makeTask(on session: URLSession) -> URLSessionWebSocketTask {
+      if let headers, !headers.isEmpty {
+        // Use URLRequest to set headers instead of httpAdditionalHeaders on the
+        // URLSessionConfiguration. Setting httpAdditionalHeaders can interfere with
+        // the WebSocket upgrade handshake on iOS, causing -1005 errors.
+        var request = URLRequest(url: url)
+        for (key, value) in headers {
+          request.setValue(value, forHTTPHeaderField: key)
         }
-      },
-      onWebSocketTaskClosed: { session, task, code, reason in
-        mutableState.withValue {
-          assert($0.webSocket != nil, "connection should exist by this time")
-          $0.webSocket!._connectionClosed(code: code, reason: reason)
+        // session.webSocketTask(with: URLRequest) doesn't accept a protocols
+        // parameter, so set the Sec-WebSocket-Protocol header manually.
+        if let protocols, !protocols.isEmpty {
+          request.setValue(
+            protocols.joined(separator: ", "), forHTTPHeaderField: "Sec-WebSocket-Protocol")
         }
+        return session.webSocketTask(with: request)
+      } else {
+        return session.webSocketTask(with: url, protocols: protocols ?? [])
       }
-    )
+    }
 
     let task: URLSessionWebSocketTask
-    if let headers, !headers.isEmpty {
-      // Use URLRequest to set headers instead of httpAdditionalHeaders on the
-      // URLSessionConfiguration. Setting httpAdditionalHeaders can interfere with
-      // the WebSocket upgrade handshake on iOS, causing -1005 errors.
-      var request = URLRequest(url: url)
-      for (key, value) in headers {
-        request.setValue(value, forHTTPHeaderField: key)
-      }
-      // session.webSocketTask(with: URLRequest) doesn't accept a protocols
-      // parameter, so set the Sec-WebSocket-Protocol header manually.
-      if let protocols, !protocols.isEmpty {
-        request.setValue(
-          protocols.joined(separator: ", "), forHTTPHeaderField: "Sec-WebSocket-Protocol")
-      }
-      task = session.webSocketTask(with: request)
-    } else {
-      task = session.webSocketTask(with: url, protocols: protocols ?? [])
-    }
+    #if canImport(FoundationNetworking)
+      // swift-corelibs-foundation doesn't support per-task `URLSessionTask.delegate`
+      // (needed to forward auth challenges without hijacking the caller's session-level
+      // delegate). Fall back to a dedicated session with `_Delegate` attached at the
+      // session level, matching this method's pre-existing behavior. Certificate-pinning
+      // delegate forwarding via `session.delegate` is unavailable on Linux (build-only,
+      // not a production-supported platform for this package).
+      let wsSession = URLSession.sessionWithConfiguration(
+        session.configuration,
+        onComplete: onComplete,
+        onWebSocketTaskOpened: onWebSocketTaskOpened,
+        onWebSocketTaskClosed: onWebSocketTaskClosed
+      )
+      task = makeTask(on: wsSession)
+    #else
+      task = makeTask(on: session)
+      task.delegate = _Delegate(
+        onComplete: onComplete,
+        onWebSocketTaskOpened: onWebSocketTaskOpened,
+        onWebSocketTaskClosed: onWebSocketTaskClosed,
+        wrappedDelegate: session.delegate
+      )
+    #endif
 
     return try await withCheckedThrowingContinuation { continuation in
       mutableState.withValue {

@@ -125,6 +125,25 @@ final class WebSocketTests: XCTestCase {
 
       await fulfillment(of: deallocations, timeout: 10)
     }
+
+    func testConnectUsesProvidedSessionDelegateOnNonLinuxPlatforms() async throws {
+      #if canImport(FoundationNetworking)
+        throw XCTSkip("per-task delegate forwarding is unavailable on Linux")
+      #else
+        final class RecordingDelegate: NSObject, URLSessionDelegate {}
+
+        let server = try LoopbackWebSocketServer()
+        let port = try server.start()
+        defer { server.stop() }
+
+        let url = URL(string: "ws://127.0.0.1:\(port)")!
+        let delegate = RecordingDelegate()
+        let session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
+
+        let socket = try await URLSessionWebSocket.connect(to: url, session: session)
+        socket.close(code: 1000, reason: nil)
+      #endif
+    }
   #endif
 
   // MARK: - _Delegate Auth Challenge Forwarding Tests
