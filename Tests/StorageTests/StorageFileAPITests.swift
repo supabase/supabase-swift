@@ -737,6 +737,60 @@ final class StorageFileAPITests: XCTestCase {
     XCTAssertEqual(response.fullPath, "bucket/folder/file.txt")
   }
 
+  func testUploadFromURL_honorsContentType() async throws {
+    Mock(
+      url: url.appendingPathComponent("object/bucket/file.txt"),
+      statusCode: 200,
+      data: [
+        .post: Data(
+          """
+          {
+            "Id": "123",
+            "Key": "bucket/file.txt"
+          }
+          """.utf8
+        )
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
+      	--header "Cache-Control: max-age=3600" \
+      	--header "Content-Length: 284" \
+      	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.e56f43407f772505" \
+      	--header "X-Client-Info: storage-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	--header "x-upsert: false" \
+      	--data "--alamofire.boundary.e56f43407f772505\#r
+      Content-Disposition: form-data; name=\"cacheControl\"\#r
+      \#r
+      3600\#r
+      --alamofire.boundary.e56f43407f772505\#r
+      Content-Disposition: form-data; name=\"\"; filename=\"file.txt\"\#r
+      Content-Type: image/png\#r
+      \#r
+      hello world!
+      \#r
+      --alamofire.boundary.e56f43407f772505--\#r
+      " \
+      	"http://localhost:54321/storage/v1/object/bucket/file.txt"
+      """#
+    }
+    .register()
+
+    let response = try await storage.from("bucket")
+      .upload(
+        "file.txt",
+        fileURL: Bundle.module.url(forResource: "file", withExtension: "txt")!,
+        options: FileOptions(contentType: "image/png")
+      )
+
+    XCTAssertEqual(response.id, "123")
+    XCTAssertEqual(response.path, "file.txt")
+    XCTAssertEqual(response.fullPath, "bucket/file.txt")
+  }
+
   func testUpdateFromURL() async throws {
     Mock(
       url: url.appendingPathComponent("object/bucket/file.txt"),
