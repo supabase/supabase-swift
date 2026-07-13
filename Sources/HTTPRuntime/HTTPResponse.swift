@@ -15,6 +15,9 @@ package struct HTTPResponseHead: Sendable {
   package let status: Int
   package let headers: [String: String]
 
+  /// The underlying `HTTPURLResponse` that was used to create this response, if any.
+  package var _underlyingHTTPResponse: HTTPURLResponse?
+
   package init(status: Int, headers: [String: String]) {
     self.status = status
     self.headers = headers
@@ -27,6 +30,7 @@ package struct HTTPResponseHead: Sendable {
     return headers.first { $0.key.lowercased() == lowered }?.value
   }
 
+  /// Returns `true` if the status code is in the 2xx range.
   package var isSuccess: Bool { (200..<300).contains(status) }
 }
 
@@ -50,5 +54,15 @@ package struct HTTPResponseStream: Sendable {
   package init(head: HTTPResponseHead, body: AsyncThrowingStream<Data, any Error>) {
     self.head = head
     self.body = body
+  }
+}
+
+extension AsyncThrowingStream where Element == Data, Failure == any Error {
+  package func collect() async throws -> Data {
+    var result = Data()
+    for try await chunk in self {
+      result.append(chunk)
+    }
+    return result
   }
 }
