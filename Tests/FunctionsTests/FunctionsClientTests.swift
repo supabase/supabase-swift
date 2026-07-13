@@ -1,5 +1,5 @@
 import ConcurrencyExtras
-import HTTPTypes
+import HTTPRuntime
 import InlineSnapshotTesting
 import Mocker
 import TestHelpers
@@ -28,14 +28,11 @@ final class FunctionsClientTests: XCTestCase {
 
   lazy var sut = FunctionsClient(
     url: url,
-    headers: [
-      "apikey": apiKey
-    ],
-    region: region,
-    fetch: { request in
-      try await self.session.data(for: request)
-    },
-    sessionConfiguration: sessionConfiguration
+    options: FunctionsClientOptions(
+      headers: ["apikey": apiKey],
+      region: region
+    ),
+    transport: URLSessionTransport(session: session)
   )
 
   override func setUp() {
@@ -51,8 +48,8 @@ final class FunctionsClientTests: XCTestCase {
     )
     XCTAssertEqual(client.region, "sa-east-1")
 
-    XCTAssertEqual(client.headers[.init("apikey")!], apiKey)
-    XCTAssertNotNil(client.headers[.init("X-Client-Info")!])
+    XCTAssertEqual(client.headers["apikey"], apiKey)
+    XCTAssertNotNil(client.headers["X-Client-Info"])
   }
 
   func testInitWithCustomDecoder() async {
@@ -298,7 +295,7 @@ final class FunctionsClientTests: XCTestCase {
   func testInvoke_shouldThrow_FunctionsError_relayError() async {
     Mock(
       url: url.appendingPathComponent("hello_world"),
-      statusCode: 200,
+      statusCode: 300,
       data: [.post: Data()],
       additionalHeaders: [
         "x-relay-error": "true"
@@ -326,10 +323,10 @@ final class FunctionsClientTests: XCTestCase {
 
   func test_setAuth() {
     sut.setAuth(token: "access.token")
-    XCTAssertEqual(sut.headers[.authorization], "Bearer access.token")
+    XCTAssertEqual(sut.headers["Authorization"], "Bearer access.token")
 
     sut.setAuth(token: nil)
-    XCTAssertNil(sut.headers[.authorization])
+    XCTAssertNil(sut.headers["Authorization"])
   }
 
   func testInvokeWithStreamedResponse() async throws {
@@ -349,7 +346,7 @@ final class FunctionsClientTests: XCTestCase {
     }
     .register()
 
-    let stream = sut._invokeWithStreamedResponse("stream")
+    let stream = try await sut._invokeWithStreamedResponse("stream")
 
     for try await value in stream {
       XCTAssertEqual(String(decoding: value, as: UTF8.self), "hello world")
@@ -373,9 +370,8 @@ final class FunctionsClientTests: XCTestCase {
     }
     .register()
 
-    let stream = sut._invokeWithStreamedResponse("stream")
-
     do {
+      let stream = try await sut._invokeWithStreamedResponse("stream")
       for try await _ in stream {
         XCTFail("should throw error")
       }
@@ -387,7 +383,7 @@ final class FunctionsClientTests: XCTestCase {
   func testInvokeWithStreamedResponseRelayError() async throws {
     Mock(
       url: url.appendingPathComponent("stream"),
-      statusCode: 200,
+      statusCode: 300,
       data: [.post: Data()],
       additionalHeaders: [
         "x-relay-error": "true"
@@ -404,9 +400,8 @@ final class FunctionsClientTests: XCTestCase {
     }
     .register()
 
-    let stream = sut._invokeWithStreamedResponse("stream")
-
     do {
+      let stream = try await sut._invokeWithStreamedResponse("stream")
       for try await _ in stream {
         XCTFail("should throw error")
       }

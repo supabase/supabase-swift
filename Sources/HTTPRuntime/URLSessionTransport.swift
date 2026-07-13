@@ -27,36 +27,35 @@ package import Foundation
 package struct URLSessionTransport: HTTPTransport {
   private let session: URLSession
 
-  package init(configuration: URLSessionConfiguration = .default) {
+  package init(
+    configuration: URLSessionConfiguration = .default
+  ) {
     self.session = URLSession(configuration: configuration)
   }
 
-  package init(session: URLSession) {
+  package init(
+    session: URLSession
+  ) {
     self.session = session
   }
 
   package func send(_ request: HTTPRequest, uploadProgress: ProgressHandler?)
-    async throws(HTTPError) -> HTTPResponse
+    async throws -> HTTPResponse
   {
     let urlRequest = Self.makeURLRequest(request)
     let delegate = uploadProgress.map { ProgressDelegate(onProgress: $0) }
 
-    let data: Data
-    let response: URLResponse
-    do {
+    let (data, response) =
       switch request.body {
       case nil:
-        (data, response) = try await session.data(for: urlRequest, delegate: delegate)
+        try await session.data(for: urlRequest, delegate: delegate)
       case .data(let payload):
-        (data, response) = try await session.upload(
+        try await session.upload(
           for: urlRequest, from: payload, delegate: delegate)
       case .file(let fileURL):
-        (data, response) = try await session.upload(
+        try await session.upload(
           for: urlRequest, fromFile: fileURL, delegate: delegate)
       }
-    } catch {
-      throw HTTPError.transport(error)
-    }
     return HTTPResponse(head: Self.makeHead(response), body: data)
   }
 
@@ -64,15 +63,10 @@ package struct URLSessionTransport: HTTPTransport {
     // swift-corelibs-foundation has no async byte-streaming API
     // (`bytes(for:)`/`AsyncBytes`), so on Linux the response is buffered in
     // full and delivered as a single chunk instead of streamed incrementally.
-    package func stream(_ request: HTTPRequest) async throws(HTTPError) -> HTTPResponseStream {
+    package func stream(_ request: HTTPRequest) async throws -> HTTPResponseStream {
       let urlRequest = Self.makeURLRequest(request)
-      let data: Data
-      let response: URLResponse
-      do {
-        (data, response) = try await session.data(for: urlRequest)
-      } catch {
-        throw HTTPError.transport(error)
-      }
+      let (data, response) = try await session.data(for: urlRequest)
+
       let body = AsyncThrowingStream<Data, any Error> { continuation in
         continuation.yield(data)
         continuation.finish()
@@ -80,15 +74,9 @@ package struct URLSessionTransport: HTTPTransport {
       return HTTPResponseStream(head: Self.makeHead(response), body: body)
     }
   #else
-    package func stream(_ request: HTTPRequest) async throws(HTTPError) -> HTTPResponseStream {
+    package func stream(_ request: HTTPRequest) async throws -> HTTPResponseStream {
       let urlRequest = Self.makeURLRequest(request)
-      let bytes: URLSession.AsyncBytes
-      let response: URLResponse
-      do {
-        (bytes, response) = try await session.bytes(for: urlRequest)
-      } catch {
-        throw HTTPError.transport(error)
-      }
+      let (bytes, response) = try await session.bytes(for: urlRequest)
 
       let body = AsyncThrowingStream<Data, any Error> { continuation in
         let task = Task {
@@ -118,7 +106,7 @@ package struct URLSessionTransport: HTTPTransport {
 
   // MARK: - Helpers
 
-  private static func makeURLRequest(_ request: HTTPRequest) -> URLRequest {
+  package static func makeURLRequest(_ request: HTTPRequest) -> URLRequest {
     var urlRequest = URLRequest(url: request.url)
     urlRequest.httpMethod = request.method.rawValue
     for (name, value) in request.headers {
@@ -127,10 +115,13 @@ package struct URLSessionTransport: HTTPTransport {
     if case .data(let payload) = request.body {
       urlRequest.httpBody = payload
     }
+    if let timeout = request.timeout {
+      urlRequest.timeoutInterval = timeout
+    }
     return urlRequest
   }
 
-  private static func makeHead(_ response: URLResponse) -> HTTPResponseHead {
+  package static func makeHead(_ response: URLResponse) -> HTTPResponseHead {
     guard let http = response as? HTTPURLResponse else {
       return HTTPResponseHead(status: 0, headers: [:])
     }
@@ -140,7 +131,9 @@ package struct URLSessionTransport: HTTPTransport {
         headers[key] = value
       }
     }
-    return HTTPResponseHead(status: http.statusCode, headers: headers)
+    var head = HTTPResponseHead(status: http.statusCode, headers: headers)
+    head._underlyingHTTPResponse = http
+    return head
   }
 }
 

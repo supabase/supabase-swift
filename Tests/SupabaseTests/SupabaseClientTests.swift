@@ -118,7 +118,7 @@ struct SupabaseClientTests {
       """
     }
     expectNoDifference(client.headers, client.auth.configuration.headers)
-    expectNoDifference(client.headers, client.functions.headers.dictionary)
+    expectNoDifference(client.headers, client.functions.headers)
     expectNoDifference(client.headers, client.storage.configuration.headers)
     expectNoDifference(client.headers, client.rest.configuration.headers)
 

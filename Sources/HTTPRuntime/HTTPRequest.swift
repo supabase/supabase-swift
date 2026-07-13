@@ -24,17 +24,20 @@ package struct HTTPRequest: Sendable {
   package var url: URL
   package var headers: [String: String]
   package var body: HTTPBody?
+  package var timeout: TimeInterval?
 
   package init(
     method: HTTPMethod,
     url: URL,
     headers: [String: String] = [:],
-    body: HTTPBody? = nil
+    body: HTTPBody? = nil,
+    timeout: TimeInterval? = nil
   ) {
     self.method = method
     self.url = url
     self.headers = headers
     self.body = body
+    self.timeout = timeout
   }
 }
 
