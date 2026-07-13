@@ -124,7 +124,7 @@ public final class FunctionsClient: Sendable {
     )
   }
 
-  /// Internal initializer, used for testing and by SupabaseClient.
+  /// Internal initializer for injecting a custom transport, used for testing.
   package init(
     url: URL,
     options: FunctionsClientOptions,
@@ -278,7 +278,22 @@ public final class FunctionsClient: Sendable {
       throw FunctionsError.httpError(code: response.head.status, data: data)
     }
 
-    return response.body
+    let body = response.body
+    return AsyncThrowingStream { continuation in
+      let task = Task {
+        do {
+          for try await chunk in body {
+            continuation.yield(chunk)
+          }
+          continuation.finish()
+        } catch HTTPRuntime.HTTPError.transport(let underlying) {
+          continuation.finish(throwing: underlying)
+        } catch {
+          continuation.finish(throwing: error)
+        }
+      }
+      continuation.onTermination = { _ in task.cancel() }
+    }
   }
 
   private func buildRequest(
@@ -299,7 +314,8 @@ public final class FunctionsClient: Sendable {
       method: FunctionInvokeOptions.httpMethod(options.method) ?? .post,
       url: requestURL,
       headers: requestHeaders,
-      body: options.body.map { HTTPBody.data($0) }
+      body: options.body.map { HTTPBody.data($0) },
+      timeout: Self.requestIdleTimeout
     )
   }
 
@@ -320,7 +336,7 @@ public final class FunctionsClient: Sendable {
           "Upload progress is not supported with a custom fetch handler."
         )
       }
-      let urlRequest = Self.makeURLRequest(request)
+      let urlRequest = URLSessionTransport.makeURLRequest(request)
       let (data, response) = try await fetch(urlRequest)
 
       return HTTPRuntime.HTTPResponse(
@@ -329,12 +345,6 @@ public final class FunctionsClient: Sendable {
 
     func stream(_ request: HTTPRuntime.HTTPRequest) async throws -> HTTPResponseStream {
       try await URLSessionTransport().stream(request)
-    }
-
-    static func makeURLRequest(_ request: HTTPRuntime.HTTPRequest) -> URLRequest {
-      var urlRequest = URLSessionTransport.makeURLRequest(request)
-      urlRequest.timeoutInterval = FunctionsClient.requestIdleTimeout
-      return urlRequest
     }
   }
 }

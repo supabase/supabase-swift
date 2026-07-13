@@ -115,6 +115,9 @@ package struct URLSessionTransport: HTTPTransport {
     if case .data(let payload) = request.body {
       urlRequest.httpBody = payload
     }
+    if let timeout = request.timeout {
+      urlRequest.timeoutInterval = timeout
+    }
     return urlRequest
   }
 

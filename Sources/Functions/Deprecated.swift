@@ -1,3 +1,9 @@
+//
+//  Deprecated.swift
+//  Functions
+//
+//  Created by Guilherme Souza on 13/07/26.
+//
 public import Foundation
 public import Helpers
 
