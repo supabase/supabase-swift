@@ -436,7 +436,10 @@ extension URLSession {
 /// Internal URLSession delegate for handling WebSocket events.
 ///
 /// This delegate handles the various WebSocket lifecycle events and forwards them
-/// to the appropriate callbacks provided during URLSession creation.
+/// to the appropriate callbacks provided during URLSession creation. It also forwards
+/// TLS/auth-challenge callbacks to a wrapped delegate (typically the caller's own
+/// session delegate), so apps can pin certificates on the Realtime WebSocket connection
+/// using the same `URLSessionDelegate` they already use elsewhere.
 final class _Delegate: NSObject, URLSessionDelegate, URLSessionDataDelegate, URLSessionTaskDelegate,
   URLSessionWebSocketDelegate
 {
@@ -446,6 +449,10 @@ final class _Delegate: NSObject, URLSessionDelegate, URLSessionDataDelegate, URL
   let onWebSocketTaskOpened: (@Sendable (URLSession, URLSessionWebSocketTask, String?) -> Void)?
   /// Callback for WebSocket connection closed events.
   let onWebSocketTaskClosed: (@Sendable (URLSession, URLSessionWebSocketTask, Int?, Data?) -> Void)?
+  /// The delegate captured from the caller's own `URLSession` (if any), consulted for
+  /// auth-challenge forwarding only. Read-only after `init`; only ever invoked from the
+  /// URLSession delegate queue, the same way `URLSession` itself would call it.
+  private let wrappedDelegate: (any URLSessionDelegate)?
 
   init(
     onComplete: (@Sendable (URLSession, URLSessionTask, (any Error)?) -> Void)?,
@@ -454,11 +461,13 @@ final class _Delegate: NSObject, URLSessionDelegate, URLSessionDataDelegate, URL
     )?,
     onWebSocketTaskClosed: (
       @Sendable (URLSession, URLSessionWebSocketTask, Int?, Data?) -> Void
-    )?
+    )?,
+    wrappedDelegate: (any URLSessionDelegate)? = nil
   ) {
     self.onComplete = onComplete
     self.onWebSocketTaskOpened = onWebSocketTaskOpened
     self.onWebSocketTaskClosed = onWebSocketTaskClosed
+    self.wrappedDelegate = wrappedDelegate
   }
 
   /// Called when a task completes, with or without error.
@@ -487,5 +496,42 @@ final class _Delegate: NSObject, URLSessionDelegate, URLSessionDataDelegate, URL
     reason: Data?
   ) {
     onWebSocketTaskClosed?(session, webSocketTask, closeCode.rawValue, reason)
+  }
+
+  /// Forwards the task-level auth challenge to `wrappedDelegate`, trying its task-level
+  /// implementation first, then falling back to its session-level implementation, then to
+  /// default handling. Always calls `completionHandler` exactly once.
+  func urlSession(
+    _ session: URLSession,
+    task: URLSessionTask,
+    didReceive challenge: URLAuthenticationChallenge,
+    completionHandler:
+      @escaping @Sendable (URLSession.AuthChallengeDisposition, URLCredential?) ->
+      Void
+  ) {
+    guard let wrappedDelegate else {
+      completionHandler(.performDefaultHandling, nil)
+      return
+    }
+
+    let taskLevelSelector = #selector(
+      (any URLSessionTaskDelegate).urlSession(_:task:didReceive:completionHandler:))
+    if let taskDelegate = wrappedDelegate as? any URLSessionTaskDelegate,
+      wrappedDelegate.responds(to: taskLevelSelector)
+    {
+      taskDelegate.urlSession?(
+        session, task: task, didReceive: challenge, completionHandler: completionHandler)
+      return
+    }
+
+    let sessionLevelSelector = #selector(
+      (any URLSessionDelegate).urlSession(_:didReceive:completionHandler:))
+    if wrappedDelegate.responds(to: sessionLevelSelector) {
+      wrappedDelegate.urlSession?(
+        session, didReceive: challenge, completionHandler: completionHandler)
+      return
+    }
+
+    completionHandler(.performDefaultHandling, nil)
   }
 }

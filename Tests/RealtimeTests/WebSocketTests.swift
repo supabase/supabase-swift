@@ -126,6 +126,119 @@ final class WebSocketTests: XCTestCase {
       await fulfillment(of: deallocations, timeout: 10)
     }
   #endif
+
+  // MARK: - _Delegate Auth Challenge Forwarding Tests
+
+  /// No-op sender required by `URLAuthenticationChallenge`'s designated initializer.
+  /// Never invoked: these tests exercise `_Delegate` directly rather than through a
+  /// live challenge-response cycle.
+  private final class NoopChallengeSender: NSObject, URLAuthenticationChallengeSender {
+    func use(_ credential: URLCredential, for challenge: URLAuthenticationChallenge) {}
+    func continueWithoutCredential(for challenge: URLAuthenticationChallenge) {}
+    func cancel(_ challenge: URLAuthenticationChallenge) {}
+  }
+
+  private func makeChallenge() -> URLAuthenticationChallenge {
+    let protectionSpace = URLProtectionSpace(
+      host: "example.com", port: 443, protocol: "https", realm: nil,
+      authenticationMethod: NSURLAuthenticationMethodServerTrust)
+    return URLAuthenticationChallenge(
+      protectionSpace: protectionSpace, proposedCredential: nil, previousFailureCount: 0,
+      failureResponse: nil, error: nil, sender: NoopChallengeSender())
+  }
+
+  func testChallengeForwardedToTaskLevelWrappedDelegate() {
+    final class TaskDelegate: NSObject, URLSessionTaskDelegate {
+      var receivedChallenge: URLAuthenticationChallenge?
+      func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        didReceive challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+      ) {
+        receivedChallenge = challenge
+        completionHandler(.useCredential, nil)
+      }
+    }
+
+    let wrappedDelegate = TaskDelegate()
+    let delegate = _Delegate(
+      onComplete: nil,
+      onWebSocketTaskOpened: nil,
+      onWebSocketTaskClosed: nil,
+      wrappedDelegate: wrappedDelegate
+    )
+
+    let session = URLSession(configuration: .default)
+    let task = session.dataTask(with: URL(string: "https://example.com")!)
+    let challenge = makeChallenge()
+
+    let expectation = expectation(description: "completion handler called")
+    delegate.urlSession(session, task: task, didReceive: challenge) { disposition, _ in
+      XCTAssertEqual(disposition, .useCredential)
+      expectation.fulfill()
+    }
+
+    wait(for: [expectation], timeout: 1)
+    XCTAssertNotNil(wrappedDelegate.receivedChallenge)
+  }
+
+  func testChallengeForwardedToSessionLevelWrappedDelegateWhenTaskLevelNotImplemented() {
+    final class LegacyDelegate: NSObject, URLSessionDelegate {
+      var receivedChallenge: URLAuthenticationChallenge?
+      func urlSession(
+        _ session: URLSession,
+        didReceive challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+      ) {
+        receivedChallenge = challenge
+        completionHandler(.cancelAuthenticationChallenge, nil)
+      }
+    }
+
+    let wrappedDelegate = LegacyDelegate()
+    let delegate = _Delegate(
+      onComplete: nil,
+      onWebSocketTaskOpened: nil,
+      onWebSocketTaskClosed: nil,
+      wrappedDelegate: wrappedDelegate
+    )
+
+    let session = URLSession(configuration: .default)
+    let task = session.dataTask(with: URL(string: "https://example.com")!)
+    let challenge = makeChallenge()
+
+    let expectation = expectation(description: "completion handler called")
+    delegate.urlSession(session, task: task, didReceive: challenge) { disposition, _ in
+      XCTAssertEqual(disposition, .cancelAuthenticationChallenge)
+      expectation.fulfill()
+    }
+
+    wait(for: [expectation], timeout: 1)
+    XCTAssertNotNil(wrappedDelegate.receivedChallenge)
+  }
+
+  func testChallengeDefaultsToPerformDefaultHandlingWhenNoWrappedDelegate() {
+    let delegate = _Delegate(
+      onComplete: nil,
+      onWebSocketTaskOpened: nil,
+      onWebSocketTaskClosed: nil,
+      wrappedDelegate: nil
+    )
+
+    let session = URLSession(configuration: .default)
+    let task = session.dataTask(with: URL(string: "https://example.com")!)
+    let challenge = makeChallenge()
+
+    let expectation = expectation(description: "completion handler called")
+    delegate.urlSession(session, task: task, didReceive: challenge) { disposition, credential in
+      XCTAssertEqual(disposition, .performDefaultHandling)
+      XCTAssertNil(credential)
+      expectation.fulfill()
+    }
+
+    wait(for: [expectation], timeout: 1)
+  }
 }
 
 #if canImport(Network)
