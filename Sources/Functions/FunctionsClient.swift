@@ -9,13 +9,26 @@ public import Helpers
 
 let version = Helpers.version
 
+/// Options for configuring a ``FunctionsClient``.
 public struct FunctionsClientOptions: Sendable {
+  /// Additional headers to include in every request.
   public var headers: [String: String]
+  /// The region string to invoke functions in.
   public var region: String?
+  /// A logger for request and response diagnostics.
   public var logger: (any SupabaseLogger)?
+  /// The JSON decoder used to decode function response bodies.
   public var decoder: JSONDecoder
+  /// The `URLSession` used to perform requests.
   public var session: URLSession
 
+  /// Creates options for configuring a ``FunctionsClient``.
+  /// - Parameters:
+  ///   - headers: Additional headers to include in every request.
+  ///   - region: The region string to invoke functions in.
+  ///   - logger: A logger for request and response diagnostics.
+  ///   - decoder: The JSON decoder used to decode function response bodies.
+  ///   - session: The `URLSession` used to perform requests.
   public init(
     headers: [String: String] = [:],
     region: String? = nil,
@@ -49,7 +62,8 @@ public struct FunctionsClientOptions: Sendable {
 /// ## Topics
 ///
 /// ### Creating a Client
-/// - ``init(url:headers:region:logger:fetch:decoder:)``
+/// - ``init(url:options:)``
+/// - ``FunctionsClientOptions``
 /// - ``FetchHandler``
 ///
 /// ### Invoking Functions
@@ -94,6 +108,10 @@ public final class FunctionsClient: Sendable {
     mutableState.headers
   }
 
+  /// Creates a new Functions client.
+  /// - Parameters:
+  ///   - url: The base URL of the Functions endpoint.
+  ///   - options: Options for configuring the client.
   public convenience init(
     url: URL,
     options: FunctionsClientOptions = FunctionsClientOptions()
