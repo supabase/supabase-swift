@@ -2,6 +2,7 @@ import ConcurrencyExtras
 public import Foundation
 package import HTTPRuntime
 public import Helpers
+import IssueReporting
 
 #if canImport(FoundationNetworking)
   public import FoundationNetworking
@@ -310,31 +311,24 @@ public final class FunctionsClient: Sendable {
   struct FetchHandlerTransport: HTTPTransport {
     let fetch: FunctionsClient.FetchHandler
 
-    func send(_ request: HTTPRuntime.HTTPRequest, uploadProgress: ProgressHandler?)
-      async throws(HTTPRuntime.HTTPError)
-      -> HTTPRuntime.HTTPResponse
-    {
-      let urlRequest = Self.makeURLRequest(request)
-      let data: Data
-      let response: URLResponse
-      do {
-        (data, response) = try await fetch(urlRequest)
-      } catch {
-        throw HTTPRuntime.HTTPError.transport(error)
+    func send(
+      _ request: HTTPRuntime.HTTPRequest,
+      uploadProgress: ProgressHandler?
+    ) async throws -> HTTPRuntime.HTTPResponse {
+      if uploadProgress != nil {
+        reportIssue(
+          "Upload progress is not supported with a custom fetch handler."
+        )
       }
+      let urlRequest = Self.makeURLRequest(request)
+      let (data, response) = try await fetch(urlRequest)
 
       return HTTPRuntime.HTTPResponse(
         head: URLSessionTransport.makeHead(response), body: data)
     }
 
-    func stream(_ request: HTTPRuntime.HTTPRequest) async throws(HTTPRuntime.HTTPError)
-      -> HTTPResponseStream
-    {
-      do {
-        return try await URLSessionTransport().stream(request)
-      } catch {
-        throw HTTPRuntime.HTTPError.transport(error)
-      }
+    func stream(_ request: HTTPRuntime.HTTPRequest) async throws -> HTTPResponseStream {
+      try await URLSessionTransport().stream(request)
     }
 
     static func makeURLRequest(_ request: HTTPRuntime.HTTPRequest) -> URLRequest {
