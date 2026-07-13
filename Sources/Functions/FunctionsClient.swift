@@ -270,6 +270,13 @@ public final class FunctionsClient: Sendable {
     _ functionName: String,
     options invokeOptions: FunctionInvokeOptions = .init()
   ) -> AsyncThrowingStream<Data, any Error> {
+    streamResponse(functionName, options: invokeOptions).stream
+  }
+
+  func streamResponse(
+    _ functionName: String,
+    options invokeOptions: FunctionInvokeOptions
+  ) -> (stream: AsyncThrowingStream<Data, any Error>, delegate: StreamResponseDelegate) {
     let (stream, continuation) = AsyncThrowingStream<Data, any Error>.makeStream()
     let delegate = StreamResponseDelegate(continuation: continuation)
 
@@ -282,13 +289,10 @@ public final class FunctionsClient: Sendable {
     task.resume()
 
     continuation.onTermination = { _ in
-      task.cancel()
-
-      // Hold a strong reference to delegate until continuation terminates.
-      _ = delegate
+      session.invalidateAndCancel()
     }
 
-    return stream
+    return (stream, delegate)
   }
 
   private func buildRequest(functionName: String, options: FunctionInvokeOptions)
