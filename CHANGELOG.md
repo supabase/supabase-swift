@@ -1,5 +1,22 @@
 # Changelog
 
+## [2.52.0](https://github.com/supabase/supabase-swift/compare/v2.51.0...v2.52.0) (2026-07-13)
+
+
+### Features
+
+* **supabase:** add W3C trace context propagation via OpenTelemetry trait ([#1101](https://github.com/supabase/supabase-swift/issues/1101)) ([8f147ec](https://github.com/supabase/supabase-swift/commit/8f147ecc9ff5f64746203f58c342b06587e0f354))
+
+
+### Bug Fixes
+
+* **postgrest:** preserve existing Prefer header in select(count:) ([#1107](https://github.com/supabase/supabase-swift/issues/1107)) ([6ff542a](https://github.com/supabase/supabase-swift/commit/6ff542a955c12cc3a0397e2168cb1f008f8f85e2))
+* **realtime:** reset channel state on phx_error ([#1109](https://github.com/supabase/supabase-swift/issues/1109)) ([a4b0f04](https://github.com/supabase/supabase-swift/commit/a4b0f042b0e22188fcaef58fb53b5ef705a0c60f))
+* **storage:** clean path in signed upload URL and response ([#1108](https://github.com/supabase/supabase-swift/issues/1108)) ([ebef170](https://github.com/supabase/supabase-swift/commit/ebef170a4a6820d064e5909dd4f54e4341f12eb5))
+* **storage:** honor options.contentType for fileURL uploads ([#1124](https://github.com/supabase/supabase-swift/issues/1124)) ([bd33aad](https://github.com/supabase/supabase-swift/commit/bd33aadd570837cf50d3091e26503bca3aed2499))
+* **storage:** return cleaned path in upload response ([#1104](https://github.com/supabase/supabase-swift/issues/1104)) ([ba23665](https://github.com/supabase/supabase-swift/commit/ba2366564ef983de765f654d14d198e1cc57e896))
+* **storage:** strip leading slash from object paths ([#1111](https://github.com/supabase/supabase-swift/issues/1111)) ([ae8c467](https://github.com/supabase/supabase-swift/commit/ae8c4678691c3ce96e24b58bf2f14ff94f783949))
+
 ## [2.51.0](https://github.com/supabase/supabase-swift/compare/v2.50.0...v2.51.0) (2026-07-08)
 
 
