@@ -550,6 +550,11 @@ final class _Delegate: NSObject, URLSessionDelegate, URLSessionDataDelegate, URL
   /// Forwards the task-level auth challenge to `wrappedDelegate`, trying its task-level
   /// implementation first, then falling back to its session-level implementation, then to
   /// default handling. Always calls `completionHandler` exactly once.
+  ///
+  /// The `#selector`/`responds(to:)`-based dispatch below requires the Objective-C runtime,
+  /// unavailable in swift-corelibs-foundation (Linux) — guarded accordingly. `connect(session:)`
+  /// never populates `wrappedDelegate` on Linux (see its `#if canImport(FoundationNetworking)`
+  /// branch), so this always falls through to default handling there regardless.
   func urlSession(
     _ session: URLSession,
     task: URLSessionTask,
@@ -558,29 +563,33 @@ final class _Delegate: NSObject, URLSessionDelegate, URLSessionDataDelegate, URL
       @escaping @Sendable (URLSession.AuthChallengeDisposition, URLCredential?) ->
       Void
   ) {
-    guard let wrappedDelegate else {
+    #if canImport(FoundationNetworking)
       completionHandler(.performDefaultHandling, nil)
-      return
-    }
+    #else
+      guard let wrappedDelegate else {
+        completionHandler(.performDefaultHandling, nil)
+        return
+      }
 
-    let taskLevelSelector = #selector(
-      (any URLSessionTaskDelegate).urlSession(_:task:didReceive:completionHandler:))
-    if let taskDelegate = wrappedDelegate as? any URLSessionTaskDelegate,
-      wrappedDelegate.responds(to: taskLevelSelector)
-    {
-      taskDelegate.urlSession?(
-        session, task: task, didReceive: challenge, completionHandler: completionHandler)
-      return
-    }
+      let taskLevelSelector = #selector(
+        (any URLSessionTaskDelegate).urlSession(_:task:didReceive:completionHandler:))
+      if let taskDelegate = wrappedDelegate as? any URLSessionTaskDelegate,
+        wrappedDelegate.responds(to: taskLevelSelector)
+      {
+        taskDelegate.urlSession?(
+          session, task: task, didReceive: challenge, completionHandler: completionHandler)
+        return
+      }
 
-    let sessionLevelSelector = #selector(
-      (any URLSessionDelegate).urlSession(_:didReceive:completionHandler:))
-    if wrappedDelegate.responds(to: sessionLevelSelector) {
-      wrappedDelegate.urlSession?(
-        session, didReceive: challenge, completionHandler: completionHandler)
-      return
-    }
+      let sessionLevelSelector = #selector(
+        (any URLSessionDelegate).urlSession(_:didReceive:completionHandler:))
+      if wrappedDelegate.responds(to: sessionLevelSelector) {
+        wrappedDelegate.urlSession?(
+          session, didReceive: challenge, completionHandler: completionHandler)
+        return
+      }
 
-    completionHandler(.performDefaultHandling, nil)
+      completionHandler(.performDefaultHandling, nil)
+    #endif
   }
 }

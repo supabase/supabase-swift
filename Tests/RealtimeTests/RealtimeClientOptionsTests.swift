@@ -3,6 +3,10 @@ import Testing
 
 @testable import RealtimeV2
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 @Suite
 struct RealtimeClientOptionsTests {
   @Test

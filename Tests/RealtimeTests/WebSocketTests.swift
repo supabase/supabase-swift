@@ -188,116 +188,124 @@ final class WebSocketTests: XCTestCase {
 
   // MARK: - _Delegate Auth Challenge Forwarding Tests
 
-  /// No-op sender required by `URLAuthenticationChallenge`'s designated initializer.
-  /// Never invoked: these tests exercise `_Delegate` directly rather than through a
-  /// live challenge-response cycle.
-  private final class NoopChallengeSender: NSObject, URLAuthenticationChallengeSender {
-    func use(_ credential: URLCredential, for challenge: URLAuthenticationChallenge) {}
-    func continueWithoutCredential(for challenge: URLAuthenticationChallenge) {}
-    func cancel(_ challenge: URLAuthenticationChallenge) {}
-  }
+  // `URLAuthenticationChallenge`/`URLProtectionSpace` live in `FoundationNetworking` on Linux,
+  // and `_Delegate`'s challenge-forwarding logic itself is a no-op there (see its `#if
+  // canImport(FoundationNetworking)` guard in URLSessionWebSocket.swift) — these tests are
+  // Apple-platforms-only.
+  #if !canImport(FoundationNetworking)
 
-  private func makeChallenge() -> URLAuthenticationChallenge {
-    let protectionSpace = URLProtectionSpace(
-      host: "example.com", port: 443, protocol: "https", realm: nil,
-      authenticationMethod: NSURLAuthenticationMethodServerTrust)
-    return URLAuthenticationChallenge(
-      protectionSpace: protectionSpace, proposedCredential: nil, previousFailureCount: 0,
-      failureResponse: nil, error: nil, sender: NoopChallengeSender())
-  }
+    /// No-op sender required by `URLAuthenticationChallenge`'s designated initializer.
+    /// Never invoked: these tests exercise `_Delegate` directly rather than through a
+    /// live challenge-response cycle.
+    private final class NoopChallengeSender: NSObject, URLAuthenticationChallengeSender {
+      func use(_ credential: URLCredential, for challenge: URLAuthenticationChallenge) {}
+      func continueWithoutCredential(for challenge: URLAuthenticationChallenge) {}
+      func cancel(_ challenge: URLAuthenticationChallenge) {}
+    }
 
-  func testChallengeForwardedToTaskLevelWrappedDelegate() {
-    final class TaskDelegate: NSObject, URLSessionTaskDelegate {
-      var receivedChallenge: URLAuthenticationChallenge?
-      func urlSession(
-        _ session: URLSession,
-        task: URLSessionTask,
-        didReceive challenge: URLAuthenticationChallenge,
-        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
-      ) {
-        receivedChallenge = challenge
-        completionHandler(.useCredential, nil)
+    private func makeChallenge() -> URLAuthenticationChallenge {
+      let protectionSpace = URLProtectionSpace(
+        host: "example.com", port: 443, protocol: "https", realm: nil,
+        authenticationMethod: NSURLAuthenticationMethodServerTrust)
+      return URLAuthenticationChallenge(
+        protectionSpace: protectionSpace, proposedCredential: nil, previousFailureCount: 0,
+        failureResponse: nil, error: nil, sender: NoopChallengeSender())
+    }
+
+    func testChallengeForwardedToTaskLevelWrappedDelegate() {
+      final class TaskDelegate: NSObject, URLSessionTaskDelegate {
+        var receivedChallenge: URLAuthenticationChallenge?
+        func urlSession(
+          _ session: URLSession,
+          task: URLSessionTask,
+          didReceive challenge: URLAuthenticationChallenge,
+          completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+        ) {
+          receivedChallenge = challenge
+          completionHandler(.useCredential, nil)
+        }
       }
-    }
 
-    let wrappedDelegate = TaskDelegate()
-    let delegate = _Delegate(
-      onComplete: nil,
-      onWebSocketTaskOpened: nil,
-      onWebSocketTaskClosed: nil,
-      wrappedDelegate: wrappedDelegate
-    )
+      let wrappedDelegate = TaskDelegate()
+      let delegate = _Delegate(
+        onComplete: nil,
+        onWebSocketTaskOpened: nil,
+        onWebSocketTaskClosed: nil,
+        wrappedDelegate: wrappedDelegate
+      )
 
-    let session = URLSession(configuration: .default)
-    let task = session.dataTask(with: URL(string: "https://example.com")!)
-    let challenge = makeChallenge()
+      let session = URLSession(configuration: .default)
+      let task = session.dataTask(with: URL(string: "https://example.com")!)
+      let challenge = makeChallenge()
 
-    let expectation = expectation(description: "completion handler called")
-    delegate.urlSession(session, task: task, didReceive: challenge) { disposition, _ in
-      XCTAssertEqual(disposition, .useCredential)
-      expectation.fulfill()
-    }
-
-    wait(for: [expectation], timeout: 1)
-    XCTAssertNotNil(wrappedDelegate.receivedChallenge)
-  }
-
-  func testChallengeForwardedToSessionLevelWrappedDelegateWhenTaskLevelNotImplemented() {
-    final class LegacyDelegate: NSObject, URLSessionDelegate {
-      var receivedChallenge: URLAuthenticationChallenge?
-      func urlSession(
-        _ session: URLSession,
-        didReceive challenge: URLAuthenticationChallenge,
-        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
-      ) {
-        receivedChallenge = challenge
-        completionHandler(.cancelAuthenticationChallenge, nil)
+      let expectation = expectation(description: "completion handler called")
+      delegate.urlSession(session, task: task, didReceive: challenge) { disposition, _ in
+        XCTAssertEqual(disposition, .useCredential)
+        expectation.fulfill()
       }
+
+      wait(for: [expectation], timeout: 1)
+      XCTAssertNotNil(wrappedDelegate.receivedChallenge)
     }
 
-    let wrappedDelegate = LegacyDelegate()
-    let delegate = _Delegate(
-      onComplete: nil,
-      onWebSocketTaskOpened: nil,
-      onWebSocketTaskClosed: nil,
-      wrappedDelegate: wrappedDelegate
-    )
+    func testChallengeForwardedToSessionLevelWrappedDelegateWhenTaskLevelNotImplemented() {
+      final class LegacyDelegate: NSObject, URLSessionDelegate {
+        var receivedChallenge: URLAuthenticationChallenge?
+        func urlSession(
+          _ session: URLSession,
+          didReceive challenge: URLAuthenticationChallenge,
+          completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+        ) {
+          receivedChallenge = challenge
+          completionHandler(.cancelAuthenticationChallenge, nil)
+        }
+      }
 
-    let session = URLSession(configuration: .default)
-    let task = session.dataTask(with: URL(string: "https://example.com")!)
-    let challenge = makeChallenge()
+      let wrappedDelegate = LegacyDelegate()
+      let delegate = _Delegate(
+        onComplete: nil,
+        onWebSocketTaskOpened: nil,
+        onWebSocketTaskClosed: nil,
+        wrappedDelegate: wrappedDelegate
+      )
 
-    let expectation = expectation(description: "completion handler called")
-    delegate.urlSession(session, task: task, didReceive: challenge) { disposition, _ in
-      XCTAssertEqual(disposition, .cancelAuthenticationChallenge)
-      expectation.fulfill()
+      let session = URLSession(configuration: .default)
+      let task = session.dataTask(with: URL(string: "https://example.com")!)
+      let challenge = makeChallenge()
+
+      let expectation = expectation(description: "completion handler called")
+      delegate.urlSession(session, task: task, didReceive: challenge) { disposition, _ in
+        XCTAssertEqual(disposition, .cancelAuthenticationChallenge)
+        expectation.fulfill()
+      }
+
+      wait(for: [expectation], timeout: 1)
+      XCTAssertNotNil(wrappedDelegate.receivedChallenge)
     }
 
-    wait(for: [expectation], timeout: 1)
-    XCTAssertNotNil(wrappedDelegate.receivedChallenge)
-  }
+    func testChallengeDefaultsToPerformDefaultHandlingWhenNoWrappedDelegate() {
+      let delegate = _Delegate(
+        onComplete: nil,
+        onWebSocketTaskOpened: nil,
+        onWebSocketTaskClosed: nil,
+        wrappedDelegate: nil
+      )
 
-  func testChallengeDefaultsToPerformDefaultHandlingWhenNoWrappedDelegate() {
-    let delegate = _Delegate(
-      onComplete: nil,
-      onWebSocketTaskOpened: nil,
-      onWebSocketTaskClosed: nil,
-      wrappedDelegate: nil
-    )
+      let session = URLSession(configuration: .default)
+      let task = session.dataTask(with: URL(string: "https://example.com")!)
+      let challenge = makeChallenge()
 
-    let session = URLSession(configuration: .default)
-    let task = session.dataTask(with: URL(string: "https://example.com")!)
-    let challenge = makeChallenge()
+      let expectation = expectation(description: "completion handler called")
+      delegate.urlSession(session, task: task, didReceive: challenge) { disposition, credential in
+        XCTAssertEqual(disposition, .performDefaultHandling)
+        XCTAssertNil(credential)
+        expectation.fulfill()
+      }
 
-    let expectation = expectation(description: "completion handler called")
-    delegate.urlSession(session, task: task, didReceive: challenge) { disposition, credential in
-      XCTAssertEqual(disposition, .performDefaultHandling)
-      XCTAssertNil(credential)
-      expectation.fulfill()
+      wait(for: [expectation], timeout: 1)
     }
 
-    wait(for: [expectation], timeout: 1)
-  }
+  #endif
 }
 
 #if canImport(Network)
