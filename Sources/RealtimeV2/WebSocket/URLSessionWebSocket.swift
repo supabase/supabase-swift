@@ -51,9 +51,12 @@ final class URLSessionWebSocket: WebSocket {
   ///   - headers: Optional HTTP headers to include in the WebSocket upgrade request.
   ///              These are set on the URLRequest rather than on URLSessionConfiguration's
   ///              httpAdditionalHeaders, which can interfere with the WebSocket upgrade handshake.
-  ///   - session: The `URLSession` used to create the WebSocket task. Defaults to `.shared`.
-  ///             Its `delegate`'s auth-challenge callbacks (if any) are forwarded to, enabling
-  ///             certificate pinning and other server-trust customization.
+  ///   - session: The `URLSession` used to create the WebSocket task, when explicitly
+  ///             provided (i.e. not `.shared`). Its `delegate`'s auth-challenge callbacks
+  ///             (if any) are forwarded to, enabling certificate pinning and other
+  ///             server-trust customization. When left at the default `.shared`, `connect`
+  ///             builds its own dedicated internal session instead (unaffected by
+  ///             process-wide `URLSession` state), matching this method's original behavior.
   /// - Returns: A connected `URLSessionWebSocket` instance.
   /// - Throws: `WebSocketError.connection` if the connection fails or times out.
   static func connect(
@@ -142,6 +145,15 @@ final class URLSessionWebSocket: WebSocket {
       }
     }
 
+    func makeDedicatedSession() -> URLSession {
+      URLSession.sessionWithConfiguration(
+        session.configuration,
+        onComplete: onComplete,
+        onWebSocketTaskOpened: onWebSocketTaskOpened,
+        onWebSocketTaskClosed: onWebSocketTaskClosed
+      )
+    }
+
     let task: URLSessionWebSocketTask
     #if canImport(FoundationNetworking)
       // swift-corelibs-foundation doesn't support per-task `URLSessionTask.delegate`
@@ -150,21 +162,30 @@ final class URLSessionWebSocket: WebSocket {
       // session level, matching this method's pre-existing behavior. Certificate-pinning
       // delegate forwarding via `session.delegate` is unavailable on Linux (build-only,
       // not a production-supported platform for this package).
-      let wsSession = URLSession.sessionWithConfiguration(
-        session.configuration,
-        onComplete: onComplete,
-        onWebSocketTaskOpened: onWebSocketTaskOpened,
-        onWebSocketTaskClosed: onWebSocketTaskClosed
-      )
-      task = makeTask(on: wsSession)
+      task = makeTask(on: makeDedicatedSession())
     #else
-      task = makeTask(on: session)
-      task.delegate = _Delegate(
-        onComplete: onComplete,
-        onWebSocketTaskOpened: onWebSocketTaskOpened,
-        onWebSocketTaskClosed: onWebSocketTaskClosed,
-        wrappedDelegate: session.delegate
-      )
+      if session === URLSession.shared {
+        // No caller-supplied session: preserve pre-existing behavior exactly — build a
+        // dedicated internal session isolated from process-wide `URLSession` state (e.g.
+        // an app's own globally-registered `URLProtocol`, used for mocking or ad-hoc
+        // interception), rather than silently routing the WebSocket handshake through
+        // `.shared`. `.shared` is also `RealtimeClientOptions.session`'s own default and
+        // the sentinel `SupabaseClient` checks against when propagating `global.session`
+        // — this identity check is consistent with both: pinning only activates when a
+        // caller has actually opted in by supplying their own session.
+        task = makeTask(on: makeDedicatedSession())
+      } else {
+        // Caller explicitly supplied their own session (e.g. one with a pinning delegate)
+        // — use it directly and forward its delegate's auth-challenge callback via a
+        // per-task delegate, while keeping WebSocket lifecycle callbacks internal.
+        task = makeTask(on: session)
+        task.delegate = _Delegate(
+          onComplete: onComplete,
+          onWebSocketTaskOpened: onWebSocketTaskOpened,
+          onWebSocketTaskClosed: onWebSocketTaskClosed,
+          wrappedDelegate: session.delegate
+        )
+      }
     #endif
 
     return try await withCheckedThrowingContinuation { continuation in
