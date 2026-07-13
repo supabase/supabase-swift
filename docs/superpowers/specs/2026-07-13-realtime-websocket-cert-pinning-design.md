@@ -124,3 +124,15 @@ Fully additive. `RealtimeClientOptions.session` defaults to `.shared`;
 apps that don't set it see no behavior change. `URLSessionWebSocket` is an
 internal (non-`public`) type — its `connect` signature change
 (`configuration` → `session`) carries no public-API compatibility burden.
+
+**Addendum (found during implementation):** `connect` must not use a
+`.shared`-valued `session` parameter directly for the WebSocket task — doing
+so would route the connection through process-wide `URLSession` state (e.g.
+another part of the same process registering a global `URLProtocol` for
+mocking or interception), which the pre-existing implementation was immune
+to by always building its own dedicated session. `connect` treats `session
+=== URLSession.shared` as "no session was explicitly supplied" and keeps
+building a dedicated internal session in that case; it only uses the
+caller's session directly (enabling pinning) when it's a distinct instance.
+This preserves prior behavior for the common case and keeps pinning strictly
+opt-in.

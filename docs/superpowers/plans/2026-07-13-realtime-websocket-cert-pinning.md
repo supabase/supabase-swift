@@ -18,6 +18,7 @@
 - New test files use Swift Testing (`@Suite`/`@Test`/`#expect`); edits to existing XCTest files (`WebSocketTests.swift`) stay XCTest, per `AGENTS.md`'s per-file migration rule.
 - `RealtimeClientOptions.session` (like `fetch`/`accessToken`/`logger`) is `package var`, not `public var` — settable only via the public initializer, not mutable externally after construction.
 - The Task 3 e2e test shells out to `/usr/bin/openssl` via `Process` to generate a throwaway self-signed certificate; gate it to `#if os(macOS)` since `Process` is unavailable on iOS/tvOS/watchOS simulator test destinations.
+- `URLSessionWebSocket.connect`'s `session:` parameter defaults to `.shared`, but `connect` must only use the caller's session directly (enabling pinning) when it's *not* `.shared` — when left at the default, build a dedicated internal session exactly as before (see Task 2 Step 8's rationale). This keeps the common no-session-specified case immune to process-wide `URLSession` state (global `URLProtocol` registrations, etc.), matching pre-existing behavior; pinning activates only when a caller opts in with their own session.
 
 ---
 
@@ -520,6 +521,15 @@ In `Sources/RealtimeV2/WebSocket/URLSessionWebSocket.swift`, replace the `static
       }
     }
 
+    func makeDedicatedSession() -> URLSession {
+      URLSession.sessionWithConfiguration(
+        session.configuration,
+        onComplete: onComplete,
+        onWebSocketTaskOpened: onWebSocketTaskOpened,
+        onWebSocketTaskClosed: onWebSocketTaskClosed
+      )
+    }
+
     let task: URLSessionWebSocketTask
     #if canImport(FoundationNetworking)
       // swift-corelibs-foundation doesn't support per-task `URLSessionTask.delegate`
@@ -528,21 +538,30 @@ In `Sources/RealtimeV2/WebSocket/URLSessionWebSocket.swift`, replace the `static
       // session level, matching this method's pre-existing behavior. Certificate-pinning
       // delegate forwarding via `session.delegate` is unavailable on Linux (build-only,
       // not a production-supported platform for this package).
-      let wsSession = URLSession.sessionWithConfiguration(
-        session.configuration,
-        onComplete: onComplete,
-        onWebSocketTaskOpened: onWebSocketTaskOpened,
-        onWebSocketTaskClosed: onWebSocketTaskClosed
-      )
-      task = makeTask(on: wsSession)
+      task = makeTask(on: makeDedicatedSession())
     #else
-      task = makeTask(on: session)
-      task.delegate = _Delegate(
-        onComplete: onComplete,
-        onWebSocketTaskOpened: onWebSocketTaskOpened,
-        onWebSocketTaskClosed: onWebSocketTaskClosed,
-        wrappedDelegate: session.delegate
-      )
+      if session === URLSession.shared {
+        // No caller-supplied session: preserve pre-existing behavior exactly — build a
+        // dedicated internal session isolated from process-wide `URLSession` state (e.g.
+        // an app's own globally-registered `URLProtocol`, used for mocking or ad-hoc
+        // interception), rather than silently routing the WebSocket handshake through
+        // `.shared`. `.shared` is also `RealtimeClientOptions.session`'s own default
+        // (Task 1) and the sentinel `SupabaseClient` checks against (Task 5) — this
+        // identity check is consistent with both: pinning only activates when a caller
+        // has actually opted in by supplying their own session.
+        task = makeTask(on: makeDedicatedSession())
+      } else {
+        // Caller explicitly supplied their own session (e.g. one with a pinning delegate)
+        // — use it directly and forward its delegate's auth-challenge callback via a
+        // per-task delegate, while keeping WebSocket lifecycle callbacks internal.
+        task = makeTask(on: session)
+        task.delegate = _Delegate(
+          onComplete: onComplete,
+          onWebSocketTaskOpened: onWebSocketTaskOpened,
+          onWebSocketTaskClosed: onWebSocketTaskClosed,
+          wrappedDelegate: session.delegate
+        )
+      }
     #endif
 
     return try await withCheckedThrowingContinuation { continuation in
@@ -554,6 +573,8 @@ In `Sources/RealtimeV2/WebSocket/URLSessionWebSocket.swift`, replace the `static
   }
 ```
 
+**Why the `session === URLSession.shared` check:** an earlier version of this step used the caller-supplied `session` directly whenever one wasn't explicitly provided too (i.e. always, since the parameter defaults to `.shared`). That regresses real behavior: today, `connect` always builds its own dedicated internal session, so it's immune to process-wide `URLSession` state — e.g. any process-global `URLProtocol.registerClass(...)` registration (this repo's own test suite hits this: `Mocker`, used by `AuthTests`/`StorageTests`/`PostgRESTTests`/`FunctionsTests`, registers a `URLProtocol` that intercepts `URLSession.shared` process-wide the moment it's first touched, which reliably breaks the loopback WebSocket test once `WebSocketTests` runs after those suites in the same `swift test` process). The same risk applies in production to any host app with its own process-wide `URLProtocol` registration. Defaulting to `.shared` was fine as an API default value, but only if `connect` itself still special-cases "caller didn't customize it" to preserve the old dedicated-session behavior — pinning (bypassing that isolation) should be something a caller opts into by passing a real custom session, not an accidental side effect of the new default.
+
 Update the class-level DocC comment (currently line 18) to match the new parameter list:
 
 ```swift
@@ -563,15 +584,23 @@ Update the class-level DocC comment (currently line 18) to match the new paramet
 Update the method's own DocC comment (currently lines 43-57), replacing the `configuration:` parameter line with:
 
 ```swift
-  ///   - session: The `URLSession` used to create the WebSocket task. Defaults to `.shared`.
-  ///             Its `delegate`'s auth-challenge callbacks (if any) are forwarded to, enabling
-  ///             certificate pinning and other server-trust customization.
+  ///   - session: The `URLSession` used to create the WebSocket task, when explicitly
+  ///             provided (i.e. not `.shared`). Its `delegate`'s auth-challenge callbacks
+  ///             (if any) are forwarded to, enabling certificate pinning and other
+  ///             server-trust customization. When left at the default `.shared`, `connect`
+  ///             builds its own dedicated internal session instead (unaffected by
+  ///             process-wide `URLSession` state), matching this method's original behavior.
 ```
 
 - [ ] **Step 9: Run the tests to verify they pass**
 
 Run: `swift test --filter WebSocketTests`
 Expected: PASS (all tests in the file, including the new `testConnectUsesProvidedSessionDelegateOnNonLinuxPlatforms`)
+
+Also run the full suite once here (not just this file's filter) to catch cross-suite interference:
+
+Run: `swift test`
+Expected: PASS, including `testSocketsDeallocateAfterClose` — this test calls `connect(to:)` with no `session:` argument, so it exercises the `session === URLSession.shared` fallback branch above. If this fails specifically on `testSocketsDeallocateAfterClose` while the filtered run above passes, suspect cross-suite interference from another module's global `URLProtocol` registration (e.g. `Mocker`, used by `AuthTests`/`StorageTests`/`PostgRESTTests`/`FunctionsTests`) and confirm the fallback branch is actually being hit (not accidentally using `session` directly).
 
 - [ ] **Step 10: Commit**
 
