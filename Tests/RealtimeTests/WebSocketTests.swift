@@ -145,6 +145,34 @@ final class WebSocketTests: XCTestCase {
       #endif
     }
 
+    func testCallerSuppliedSessionIsNotInvalidatedAfterClose() async throws {
+      #if canImport(FoundationNetworking)
+        throw XCTSkip("per-task delegate forwarding is unavailable on Linux")
+      #else
+        let server = try LoopbackWebSocketServer()
+        let port = try server.start()
+        defer { server.stop() }
+
+        let url = URL(string: "ws://127.0.0.1:\(port)")!
+        // A session the caller owns and may keep using elsewhere (e.g. shared with
+        // Auth/PostgREST/Storage) — `connect` must never invalidate it.
+        let session = URLSession(configuration: .default)
+
+        let firstSocket = try await URLSessionWebSocket.connect(to: url, session: session)
+        firstSocket.close(code: 1000, reason: nil)
+
+        // `finishTasksAndInvalidate()` invalidates asynchronously via a delegate callback;
+        // give it time to take effect before checking whether the session still works.
+        try await Task.sleep(for: .milliseconds(200))
+
+        // If the first connection's close had invalidated `session` (the bug this test
+        // guards against), reusing it for a second connection would fail — URLSession
+        // refuses to schedule new work on an invalidated session.
+        let secondSocket = try await URLSessionWebSocket.connect(to: url, session: session)
+        secondSocket.close(code: 1000, reason: nil)
+      #endif
+    }
+
     #if os(macOS)
       func testCertPinningAcceptsMatchingCertificate() async throws {
         let (identity, certificateData) = try makeSelfSignedIdentity()

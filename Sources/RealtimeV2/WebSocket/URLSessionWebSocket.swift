@@ -26,14 +26,20 @@ final class URLSessionWebSocket: WebSocket {
   /// - Parameters:
   ///   - _task: The underlying `URLSessionWebSocketTask` for this connection.
   ///   - _protocol: The negotiated WebSocket subprotocol, empty string if none.
+  ///   - ownsSession: Whether this instance created `session` itself (a dedicated internal
+  ///     session) as opposed to being handed one by the caller. Only owned sessions are
+  ///     invalidated on close — invalidating a caller-supplied session (e.g. one also used
+  ///     for Auth/PostgREST/Storage) would break all of its other, unrelated usage.
   private init(
     _task: URLSessionWebSocketTask,
     _protocol: String,
-    session: URLSession
+    session: URLSession,
+    ownsSession: Bool
   ) {
     self._task = _task
     self._protocol = _protocol
     self.session = session
+    self.ownsSession = ownsSession
 
     (events, eventsContinuation) = AsyncStream.makeStream()
 
@@ -76,6 +82,15 @@ final class URLSessionWebSocket: WebSocket {
 
     let mutableState = LockIsolated(MutableState())
 
+    #if canImport(FoundationNetworking)
+      // Linux always builds a dedicated internal session (see below) — it always owns it.
+      let ownsSession = true
+    #else
+      // A dedicated internal session is built (and owned) exactly when the caller didn't
+      // supply their own — see the matching branch below for the full rationale.
+      let ownsSession = session === URLSession.shared
+    #endif
+
     let onComplete: @Sendable (URLSession, URLSessionTask, (any Error)?) -> Void = {
       session, task, error in
       mutableState.withValue {
@@ -111,7 +126,7 @@ final class URLSessionWebSocket: WebSocket {
       session, task, `protocol` in
       mutableState.withValue {
         $0.webSocket = URLSessionWebSocket(
-          _task: task, _protocol: `protocol` ?? "", session: session)
+          _task: task, _protocol: `protocol` ?? "", session: session, ownsSession: ownsSession)
         $0.continuation.resume(returning: $0.webSocket!)
       }
     }
@@ -164,7 +179,7 @@ final class URLSessionWebSocket: WebSocket {
       // not a production-supported platform for this package).
       task = makeTask(on: makeDedicatedSession())
     #else
-      if session === URLSession.shared {
+      if ownsSession {
         // No caller-supplied session: preserve pre-existing behavior exactly — build a
         // dedicated internal session isolated from process-wide `URLSession` state (e.g.
         // an app's own globally-registered `URLProtocol`, used for mocking or ad-hoc
@@ -201,6 +216,7 @@ final class URLSessionWebSocket: WebSocket {
   /// The negotiated WebSocket subprotocol.
   let _protocol: String
   private let session: URLSession
+  private let ownsSession: Bool
 
   /// Thread-safe mutable state for the WebSocket connection.
   struct MutableState {
@@ -361,7 +377,10 @@ final class URLSessionWebSocket: WebSocket {
       return false
     }
 
-    if shouldInvalidate {
+    // Only invalidate a session this instance created itself. Invalidating a
+    // caller-supplied session (e.g. one also used for Auth/PostgREST/Storage) would break
+    // all of its other, unrelated usage.
+    if shouldInvalidate && ownsSession {
       session.finishTasksAndInvalidate()
     }
   }
