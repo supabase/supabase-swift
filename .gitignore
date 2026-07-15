@@ -104,6 +104,7 @@ temp_coverage
 
 .cursor
 .serena/
+docs/superpowers/
 
 # Node.js
 node_modules/

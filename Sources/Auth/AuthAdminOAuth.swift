@@ -139,15 +139,13 @@ public struct AuthAdminOAuth: Sendable {
   ///
   /// - Parameter clientId: The unique identifier of the OAuth client to delete.
   /// - Note: This function should only be called on a server. Never expose your `secret` key in the client.
-  @discardableResult
-  public func deleteClient(clientId: UUID) async throws -> OAuthClient {
-    try await api.execute(
+  public func deleteClient(clientId: UUID) async throws {
+    _ = try await api.execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("admin/oauth/clients/\(clientId)"),
         method: .delete
       )
     )
-    .decoded(decoder: configuration.decoder)
   }
 
   /// Regenerates the secret for an OAuth client.

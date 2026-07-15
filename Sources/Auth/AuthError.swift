@@ -206,6 +206,12 @@ extension ErrorCode {
   public static let emailAddressNotAuthorized = ErrorCode("email_address_not_authorized")
   /// The provided JWT is invalid (malformed, bad signature, or expired).
   public static let invalidJWT = ErrorCode("invalid_jwt")
+  /// No pending OAuth authorization request exists with the given ID, it has expired, or it belongs to a different user.
+  public static let oauthAuthorizationNotFound = ErrorCode("oauth_authorization_not_found")
+  /// No active OAuth consent/grant exists for the given client.
+  public static let oauthConsentNotFound = ErrorCode("oauth_consent_not_found")
+  /// The OAuth 2.1 authorization server feature is disabled for this project.
+  public static let featureDisabled = ErrorCode("feature_disabled")
 }
 
 /// Errors that can be thrown by ``AuthClient`` and related Auth types.
