@@ -10,7 +10,7 @@ import Testing
 @testable import Helpers
 
 @Suite
-struct DecodeOneOfTests {
+struct CodableTests {
   struct Failure: Error, Equatable {
     let id: Int
   }
