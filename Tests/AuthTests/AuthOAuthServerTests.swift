@@ -167,6 +167,50 @@ final class AuthOAuthServerTests: XCTestCase {
     XCTAssertEqual(redirect.redirectURL, URL(string: "https://example.com/callback?code=abc123"))
   }
 
+  func testDecodeOAuthAuthorizationDetailsResponseSurfacesBothErrorsWhenNeitherShapeMatches() throws
+  {
+    // `client.id` is not a valid UUID, so decoding as OAuthAuthorizationDetails
+    // fails for a genuine reason (not just "this is the redirect shape");
+    // there's no `redirect_url` key either, so the redirect fallback also
+    // fails. Both underlying errors must be visible, not just the (less
+    // useful) redirect-decode one.
+    let json = """
+      {
+        "authorization_id": "abc123def456",
+        "redirect_uri": "https://example.com/callback",
+        "client": {
+          "id": "not-a-uuid",
+          "name": "Test Client"
+        },
+        "user": {
+          "id": "\(userId)",
+          "email": "user@example.com"
+        },
+        "scope": "email"
+      }
+      """.data(using: .utf8)!
+
+    XCTAssertThrowsError(
+      try AuthClient.Configuration.jsonDecoder.decode(
+        OAuthAuthorizationDetailsResponse.self, from: json
+      )
+    ) { error in
+      guard case DecodingError.dataCorrupted(let context) = error,
+        let combined = context.underlyingError as? OAuthAuthorizationDetailsResponseDecodingError
+      else {
+        XCTFail(
+          "Expected DecodingError.dataCorrupted wrapping OAuthAuthorizationDetailsResponseDecodingError, got \(error)"
+        )
+        return
+      }
+
+      XCTAssertTrue(
+        "\(combined.detailsError)".lowercased().contains("uuid"),
+        "details error should mention the invalid UUID, got \(combined.detailsError)"
+      )
+    }
+  }
+
   func testDecodeOAuthGrant() throws {
     let json = """
       {

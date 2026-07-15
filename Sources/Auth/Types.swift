@@ -1732,11 +1732,44 @@ public enum OAuthAuthorizationDetailsResponse: Hashable, Sendable {
 
 extension OAuthAuthorizationDetailsResponse: Decodable {
   public init(from decoder: any Decoder) throws {
-    if let details = try? OAuthAuthorizationDetails(from: decoder) {
-      self = .details(details)
-    } else {
-      self = .redirect(try OAuthRedirect(from: decoder))
+    do {
+      self = .details(try OAuthAuthorizationDetails(from: decoder))
+    } catch let detailsError {
+      do {
+        self = .redirect(try OAuthRedirect(from: decoder))
+      } catch let redirectError {
+        // Neither shape decoded. Surface both underlying errors instead of
+        // just the (less informative) redirect one, so a genuine decoding
+        // failure in the details shape - not just "wrong shape" - is visible.
+        throw DecodingError.dataCorrupted(
+          DecodingError.Context(
+            codingPath: decoder.codingPath,
+            debugDescription:
+              "Failed to decode as either OAuthAuthorizationDetails or OAuthRedirect.",
+            underlyingError: OAuthAuthorizationDetailsResponseDecodingError(
+              detailsError: detailsError,
+              redirectError: redirectError
+            )
+          )
+        )
+      }
     }
+  }
+}
+
+/// Both shapes failed to decode while parsing an
+/// ``OAuthAuthorizationDetailsResponse``. Carries the errors from each
+/// attempt, since either one (not just the last one tried) may be the actual
+/// cause.
+struct OAuthAuthorizationDetailsResponseDecodingError: Error, CustomStringConvertible {
+  let detailsError: any Error
+  let redirectError: any Error
+
+  var description: String {
+    """
+    as OAuthAuthorizationDetails: \(detailsError)
+    as OAuthRedirect: \(redirectError)
+    """
   }
 }
 
