@@ -195,18 +195,15 @@ final class AuthOAuthServerTests: XCTestCase {
         OAuthAuthorizationDetailsResponse.self, from: json
       )
     ) { error in
-      guard case DecodingError.dataCorrupted(let context) = error,
-        let combined = context.underlyingError as? OAuthAuthorizationDetailsResponseDecodingError
-      else {
-        XCTFail(
-          "Expected DecodingError.dataCorrupted wrapping OAuthAuthorizationDetailsResponseDecodingError, got \(error)"
-        )
+      guard let combined = error as? AllDecodingAttemptsFailedError else {
+        XCTFail("Expected AllDecodingAttemptsFailedError, got \(error)")
         return
       }
 
+      XCTAssertEqual(combined.errors.count, 2)
       XCTAssertTrue(
-        "\(combined.detailsError)".lowercased().contains("uuid"),
-        "details error should mention the invalid UUID, got \(combined.detailsError)"
+        "\(combined.errors[0])".lowercased().contains("uuid"),
+        "first attempt's error should mention the invalid UUID, got \(combined.errors[0])"
       )
     }
   }
