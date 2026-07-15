@@ -8,7 +8,8 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 jobs:
   validate:
-    uses: supabase/sdk/.github/workflows/validate-sdk-compliance-swift.yml@main
+    uses: supabase/sdk/.github/workflows/validate-sdk-compliance-swift.yml@cbc7e5afea5399c8a6e98e4672afddd44c1feb74
