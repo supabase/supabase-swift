@@ -47,6 +47,13 @@ public struct AuthOAuthServer: Sendable {
   /// ``OAuthAuthorizationDetailsResponse/details(_:)`` — callers must handle
   /// both cases.
   ///
+  /// - Important: Call this before ``approveAuthorization(authorizationId:)``
+  ///   or ``denyAuthorization(authorizationId:)``. The authorization request
+  ///   is created without an owning user (to support flows where the user
+  ///   hasn't signed in yet), and this call is what claims it for the
+  ///   current user server-side. Calling approve/deny first fails as if the
+  ///   authorization didn't exist.
+  ///
   /// - Parameter authorizationId: The opaque identifier of the authorization request.
   /// - Returns: Either the details to present for consent, or a redirect if already approved.
   public func getAuthorizationDetails(
@@ -65,6 +72,11 @@ public struct AuthOAuthServer: Sendable {
 
   /// Approves a pending OAuth authorization request.
   ///
+  /// - Important: ``getAuthorizationDetails(authorizationId:)`` must be
+  ///   called for this `authorizationId` first — it claims the request for
+  ///   the current user, without which this fails as if the authorization
+  ///   didn't exist.
+  ///
   /// - Parameter authorizationId: The opaque identifier of the authorization request.
   /// - Returns: The URL to redirect the user to, completing the third-party app's OAuth flow.
   public func approveAuthorization(authorizationId: String) async throws -> OAuthRedirect {
@@ -77,6 +89,11 @@ public struct AuthOAuthServer: Sendable {
   /// URL whose query string carries an `error=access_denied` parameter
   /// (RFC 6749), which the caller should navigate the user to so the
   /// third-party app receives the OAuth error.
+  ///
+  /// - Important: ``getAuthorizationDetails(authorizationId:)`` must be
+  ///   called for this `authorizationId` first — it claims the request for
+  ///   the current user, without which this fails as if the authorization
+  ///   didn't exist.
   ///
   /// - Parameter authorizationId: The opaque identifier of the authorization request.
   /// - Returns: The URL to redirect the user to, carrying the OAuth error.
