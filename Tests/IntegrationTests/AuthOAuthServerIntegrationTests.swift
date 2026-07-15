@@ -109,8 +109,7 @@ final class AuthOAuthServerIntegrationTests: XCTestCase {
     let approveRedirect = try await authClient.oauthServer.approveAuthorization(
       authorizationId: authorizationId
     )
-    XCTAssertNotNil(approveRedirect.redirectURL)
-
+    XCTAssertEqual(approveRedirect.redirectURL.query?.contains("code="), true)
     let grants = try await authClient.oauthServer.listGrants()
     XCTAssertTrue(grants.contains { $0.client.id == oauthClient.clientId })
 
@@ -160,9 +159,8 @@ final class AuthOAuthServerIntegrationTests: XCTestCase {
     try await serviceRoleClient.admin.oauth.deleteClient(clientId: oauthClient.clientId)
   }
 
-  // ponytail: `AuthClientIntegrationTests`'s equivalents are `private` on that
-  // type, so they aren't reachable from here. Duplicated (kept minimal)
-  // rather than widening access on the other file for three helper methods.
+  // NOTE: `AuthClientIntegrationTests` has similar helpers, but they are `private` to that file.
+  // These are duplicated here (kept minimal) to avoid widening access in the other test file.
 
   @discardableResult
   private func signUpIfNeededOrSignIn(

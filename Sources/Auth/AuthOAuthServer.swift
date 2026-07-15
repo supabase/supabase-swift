@@ -54,7 +54,9 @@ public struct AuthOAuthServer: Sendable {
   ) async throws -> OAuthAuthorizationDetailsResponse {
     try await api.authorizedExecute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("oauth/authorizations/\(authorizationId)"),
+        url: configuration.url
+          .appendingPathComponent("oauth/authorizations")
+          .appendingPathComponent(authorizationId),
         method: .get
       )
     )
@@ -86,7 +88,9 @@ public struct AuthOAuthServer: Sendable {
     try await api.authorizedExecute(
       HTTPRequest(
         url: configuration.url
-          .appendingPathComponent("oauth/authorizations/\(authorizationId)/consent"),
+          .appendingPathComponent("oauth/authorizations")
+          .appendingPathComponent(authorizationId)
+          .appendingPathComponent("consent"),
         method: .post,
         body: encoder.encode(["action": action])
       )
