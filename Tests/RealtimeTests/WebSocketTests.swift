@@ -204,6 +204,49 @@ final class WebSocketTests: XCTestCase {
 
         XCTAssertTrue(delegate.wasInvoked)
       }
+
+      func testCertPinningAcceptsMatchingCertificateWithTaskLevelDelegate() async throws {
+        let (identity, certificateData) = try makeSelfSignedIdentity()
+        let server = try LoopbackTLSWebSocketServer(identity: identity)
+        let port = try server.start()
+        defer { server.stop() }
+
+        let url = URL(string: "wss://127.0.0.1:\(port)")!
+        // A delegate implementing only the modern, task-level challenge method — the exact
+        // shape that a per-task `_Delegate.urlSession(_:didReceive:completionHandler:)`
+        // (session-level only) previously failed to forward to. `associatedTask` is what
+        // makes this work now; this test proves it over a real TLS handshake, not just a
+        // direct unit-test call into `_Delegate`.
+        let delegate = PinningTaskDelegate(expectedCertificateData: certificateData)
+        let session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
+
+        let socket = try await URLSessionWebSocket.connect(to: url, session: session)
+        socket.close(code: 1000, reason: nil)
+
+        XCTAssertTrue(delegate.wasInvoked)
+      }
+
+      func testCertPinningRejectsMismatchedCertificateWithTaskLevelDelegate() async throws {
+        let (identity, _) = try makeSelfSignedIdentity()
+        let (_, wrongCertificateData) = try makeSelfSignedIdentity()
+        let server = try LoopbackTLSWebSocketServer(identity: identity)
+        let port = try server.start()
+        defer { server.stop() }
+
+        let url = URL(string: "wss://127.0.0.1:\(port)")!
+        let delegate = PinningTaskDelegate(expectedCertificateData: wrongCertificateData)
+        let session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
+
+        do {
+          _ = try await URLSessionWebSocket.connect(to: url, session: session)
+          XCTFail("expected connection to fail due to certificate mismatch")
+        } catch {
+          // Expected: the pinning delegate rejected the server's certificate, so the
+          // TLS handshake failed and `connect` threw.
+        }
+
+        XCTAssertTrue(delegate.wasInvoked)
+      }
     #endif
   #endif
 
@@ -622,6 +665,44 @@ final class WebSocketTests: XCTestCase {
 
       func urlSession(
         _ session: URLSession,
+        didReceive challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+      ) {
+        lockedWasInvoked.setValue(true)
+
+        guard
+          challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
+          let trust = challenge.protectionSpace.serverTrust,
+          let serverCertificate = (SecTrustCopyCertificateChain(trust) as? [SecCertificate])?.first
+        else {
+          completionHandler(.cancelAuthenticationChallenge, nil)
+          return
+        }
+
+        let serverCertificateData = SecCertificateCopyData(serverCertificate) as Data
+        if serverCertificateData == expectedCertificateData {
+          completionHandler(.useCredential, URLCredential(trust: trust))
+        } else {
+          completionHandler(.cancelAuthenticationChallenge, nil)
+        }
+      }
+    }
+
+    /// Task-level pinning delegate: identical logic to `PinningSessionDelegate`, but
+    /// implements only `URLSessionTaskDelegate`'s task-level challenge method (the modern,
+    /// recommended form since iOS 15/macOS 12) rather than the classic session-level one.
+    private final class PinningTaskDelegate: NSObject, URLSessionTaskDelegate {
+      let expectedCertificateData: Data
+      private let lockedWasInvoked = LockIsolated(false)
+      var wasInvoked: Bool { lockedWasInvoked.value }
+
+      init(expectedCertificateData: Data) {
+        self.expectedCertificateData = expectedCertificateData
+      }
+
+      func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
         didReceive challenge: URLAuthenticationChallenge,
         completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
       ) {
