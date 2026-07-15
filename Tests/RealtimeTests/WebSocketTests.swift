@@ -233,7 +233,50 @@ final class WebSocketTests: XCTestCase {
         failureResponse: nil, error: nil, sender: NoopChallengeSender())
     }
 
-    func testChallengeForwardedToWrappedDelegate() {
+    func testChallengeForwardedToTaskLevelWrappedDelegate() {
+      final class TaskDelegate: NSObject, URLSessionTaskDelegate {
+        var receivedChallenge: URLAuthenticationChallenge?
+        var receivedTask: URLSessionTask?
+        func urlSession(
+          _ session: URLSession,
+          task: URLSessionTask,
+          didReceive challenge: URLAuthenticationChallenge,
+          completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+        ) {
+          receivedChallenge = challenge
+          receivedTask = task
+          completionHandler(.useCredential, nil)
+        }
+      }
+
+      let wrappedDelegate = TaskDelegate()
+      let delegate = _Delegate(
+        onComplete: nil,
+        onWebSocketTaskOpened: nil,
+        onWebSocketTaskClosed: nil,
+        wrappedDelegate: wrappedDelegate
+      )
+
+      let session = URLSession(configuration: .default)
+      let task = session.dataTask(with: URL(string: "https://example.com")!)
+      delegate.associatedTask.setValue(task)
+      let challenge = makeChallenge()
+
+      let expectation = expectation(description: "completion handler called")
+      // The OS only ever calls this delegate's session-level method (see its doc comment) —
+      // even when `wrappedDelegate` implements only the task-level one, that must still be
+      // reached via `associatedTask`.
+      delegate.urlSession(session, didReceive: challenge) { disposition, _ in
+        XCTAssertEqual(disposition, .useCredential)
+        expectation.fulfill()
+      }
+
+      wait(for: [expectation], timeout: 1)
+      XCTAssertNotNil(wrappedDelegate.receivedChallenge)
+      XCTAssertTrue(wrappedDelegate.receivedTask === task)
+    }
+
+    func testChallengeForwardedToSessionLevelWrappedDelegateWhenTaskLevelNotImplemented() {
       final class RecordingDelegate: NSObject, URLSessionDelegate {
         var receivedChallenge: URLAuthenticationChallenge?
         func urlSession(

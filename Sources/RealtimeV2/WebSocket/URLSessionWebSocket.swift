@@ -162,6 +162,10 @@ final class URLSessionWebSocket: WebSocket {
       wrappedDelegate: session?.delegate
     )
     let task = makeTask(on: dedicatedSession)
+    // Give the delegate a reference to the task it's serving, so its challenge-forwarding
+    // method can supply a real task to `wrappedDelegate`'s task-level implementation (see
+    // `_Delegate.associatedTask`).
+    (dedicatedSession.delegate as? _Delegate)?.associatedTask.setValue(task)
 
     return try await withCheckedThrowingContinuation { continuation in
       mutableState.withValue {
@@ -482,6 +486,12 @@ final class _Delegate: NSObject, URLSessionDelegate, URLSessionDataDelegate, URL
   /// auth-challenge forwarding only. Read-only after `init`; only ever invoked from the
   /// URLSession delegate queue, the same way `URLSession` itself would call it.
   private let wrappedDelegate: (any URLSessionDelegate)?
+  /// The task `connect` creates for this connection, set once right after creation (the
+  /// delegate must exist before the task can be created, since the session needs a
+  /// delegate at construction time). Used to forward auth challenges to `wrappedDelegate`'s
+  /// task-level implementation with a real task reference, even though the challenge itself
+  /// arrives through this delegate's session-level callback.
+  let associatedTask = LockIsolated<URLSessionTask?>(nil)
 
   init(
     onComplete: (@Sendable (URLSession, URLSessionTask, (any Error)?) -> Void)?,
@@ -527,10 +537,17 @@ final class _Delegate: NSObject, URLSessionDelegate, URLSessionDataDelegate, URL
     onWebSocketTaskClosed?(session, webSocketTask, closeCode.rawValue, reason)
   }
 
-  /// Forwards the auth challenge to `wrappedDelegate`'s session-level implementation, if it
-  /// has one. Always calls `completionHandler` exactly once.
+  /// Forwards the auth challenge to `wrappedDelegate`, trying its task-level implementation
+  /// first (the modern, recommended form since iOS 15/macOS 12), then falling back to its
+  /// session-level implementation, then to default handling. Always calls
+  /// `completionHandler` exactly once.
   ///
-  /// The `#selector`/`responds(to:)` check requires the Objective-C runtime, unavailable in
+  /// This delegate is only ever attached at the session level (see `connect`), so the OS
+  /// always calls this method — never the task-level overload — even when `wrappedDelegate`
+  /// itself only implements the task-level one. `associatedTask` supplies a real task
+  /// reference for that forwarding attempt despite this method itself not receiving one.
+  ///
+  /// The `#selector`/`responds(to:)` checks require the Objective-C runtime, unavailable in
   /// swift-corelibs-foundation (Linux) — guarded accordingly. `wrappedDelegate` may still be
   /// populated on Linux (`connect` doesn't special-case it), but this method ignores it there
   /// and always falls through to default handling: certificate pinning isn't supported on
@@ -545,14 +562,31 @@ final class _Delegate: NSObject, URLSessionDelegate, URLSessionDataDelegate, URL
     #if canImport(FoundationNetworking)
       completionHandler(.performDefaultHandling, nil)
     #else
-      let selector = #selector(
-        (any URLSessionDelegate).urlSession(_:didReceive:completionHandler:))
-      guard let wrappedDelegate, wrappedDelegate.responds(to: selector) else {
+      guard let wrappedDelegate else {
         completionHandler(.performDefaultHandling, nil)
         return
       }
-      wrappedDelegate.urlSession?(
-        session, didReceive: challenge, completionHandler: completionHandler)
+
+      if let task = associatedTask.value,
+        let taskDelegate = wrappedDelegate as? any URLSessionTaskDelegate,
+        wrappedDelegate.responds(
+          to: #selector(
+            (any URLSessionTaskDelegate).urlSession(_:task:didReceive:completionHandler:)))
+      {
+        taskDelegate.urlSession?(
+          session, task: task, didReceive: challenge, completionHandler: completionHandler)
+        return
+      }
+
+      if wrappedDelegate.responds(
+        to: #selector((any URLSessionDelegate).urlSession(_:didReceive:completionHandler:)))
+      {
+        wrappedDelegate.urlSession?(
+          session, didReceive: challenge, completionHandler: completionHandler)
+        return
+      }
+
+      completionHandler(.performDefaultHandling, nil)
     #endif
   }
 }
