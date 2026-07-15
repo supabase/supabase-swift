@@ -96,12 +96,15 @@ public struct RealtimeClientOptions: Sendable {
   package var accessToken: (@Sendable () async throws -> String?)?
   package var logger: (any SupabaseLogger)?
 
-  /// The `URLSession` used to establish the Realtime WebSocket connection.
+  /// A template `URLSession` used to configure the Realtime WebSocket connection.
   ///
-  /// Pass the same preconfigured `URLSession` used elsewhere in your app (e.g. one with a
-  /// `URLSessionDelegate` implementing certificate pinning) to apply the same trust
-  /// evaluation to Realtime's WebSocket connection. Defaults to `URLSession.shared`.
-  package var session: URLSession
+  /// Realtime never uses this session object directly — it always creates its own dedicated
+  /// internal session, copying this session's `configuration` and forwarding its `delegate`'s
+  /// auth-challenge callback (if any). Pass the same preconfigured `URLSession` used
+  /// elsewhere in your app (e.g. one with a `URLSessionDelegate` implementing certificate
+  /// pinning) to apply the same trust evaluation to Realtime's WebSocket connection.
+  /// Defaults to `nil` (equivalent to `.default` configuration with no delegate to forward).
+  package var session: URLSession?
 
   /// Default interval, in seconds, between heartbeat messages sent to keep the connection alive.
   public static let defaultHeartbeatInterval: TimeInterval = 25
@@ -155,7 +158,7 @@ public struct RealtimeClientOptions: Sendable {
   ///   - fetch: Optional custom HTTP fetch function used for REST broadcast calls.
   ///   - accessToken: Optional async closure that returns the current access token.
   ///   - logger: Optional logger conforming to `SupabaseLogger`.
-  ///   - session: The `URLSession` used for the WebSocket connection. Defaults to `URLSession.shared`.
+  ///   - session: A template `URLSession` to configure the WebSocket connection from. Defaults to `nil`.
   ///   - handleAppLifecycle: Whether to automatically reconnect on app foreground. Defaults to ``defaultHandleAppLifecycle``.
   public init(
     headers: [String: String] = [:],
@@ -171,7 +174,7 @@ public struct RealtimeClientOptions: Sendable {
     fetch: (@Sendable (_ request: URLRequest) async throws -> (Data, URLResponse))? = nil,
     accessToken: (@Sendable () async throws -> String?)? = nil,
     logger: (any SupabaseLogger)? = nil,
-    session: URLSession = .shared,
+    session: URLSession? = nil,
     handleAppLifecycle: Bool = Self.defaultHandleAppLifecycle
   ) {
     self.headers = HTTPFields(headers)

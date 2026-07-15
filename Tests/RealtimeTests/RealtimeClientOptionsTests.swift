@@ -10,9 +10,9 @@ import Testing
 @Suite
 struct RealtimeClientOptionsTests {
   @Test
-  func sessionDefaultsToShared() {
+  func sessionDefaultsToNil() {
     let options = RealtimeClientOptions(headers: ["apikey": "test-key"])
-    #expect(options.session === URLSession.shared)
+    #expect(options.session == nil)
   }
 
   @Test

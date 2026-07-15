@@ -499,7 +499,7 @@ public final class SupabaseClient: Sendable {
       }
     }
 
-    if realtimeOptions.session === URLSession.shared {
+    if realtimeOptions.session == nil {
       realtimeOptions.session = options.global.session
     }
 

@@ -26,20 +26,16 @@ final class URLSessionWebSocket: WebSocket {
   /// - Parameters:
   ///   - _task: The underlying `URLSessionWebSocketTask` for this connection.
   ///   - _protocol: The negotiated WebSocket subprotocol, empty string if none.
-  ///   - ownsSession: Whether this instance created `session` itself (a dedicated internal
-  ///     session) as opposed to being handed one by the caller. Only owned sessions are
-  ///     invalidated on close — invalidating a caller-supplied session (e.g. one also used
-  ///     for Auth/PostgREST/Storage) would break all of its other, unrelated usage.
+  ///   - session: The dedicated internal session `connect` created for this connection.
+  ///     Always owned by this instance, so it's always safe to invalidate on close.
   private init(
     _task: URLSessionWebSocketTask,
     _protocol: String,
-    session: URLSession,
-    ownsSession: Bool
+    session: URLSession
   ) {
     self._task = _task
     self._protocol = _protocol
     self.session = session
-    self.ownsSession = ownsSession
 
     (events, eventsContinuation) = AsyncStream.makeStream()
 
@@ -57,19 +53,21 @@ final class URLSessionWebSocket: WebSocket {
   ///   - headers: Optional HTTP headers to include in the WebSocket upgrade request.
   ///              These are set on the URLRequest rather than on URLSessionConfiguration's
   ///              httpAdditionalHeaders, which can interfere with the WebSocket upgrade handshake.
-  ///   - session: The `URLSession` used to create the WebSocket task, when explicitly
-  ///             provided (i.e. not `.shared`). Its `delegate`'s auth-challenge callbacks
-  ///             (if any) are forwarded to, enabling certificate pinning and other
-  ///             server-trust customization. When left at the default `.shared`, `connect`
-  ///             builds its own dedicated internal session instead (unaffected by
-  ///             process-wide `URLSession` state), matching this method's original behavior.
+  ///   - session: A template `URLSession` to read configuration and delegate from. `connect`
+  ///             never uses this session object directly — it always creates its own
+  ///             dedicated internal session (copying `session`'s `configuration`), so it's
+  ///             unaffected by process-wide `URLSession` state and can always safely
+  ///             invalidate what it created on close. If `session` has a `delegate`, its
+  ///             auth-challenge callback (if implemented) is forwarded to, enabling
+  ///             certificate pinning and other server-trust customization. Defaults to `nil`
+  ///             (equivalent to `.default` configuration with no delegate to forward).
   /// - Returns: A connected `URLSessionWebSocket` instance.
   /// - Throws: `WebSocketError.connection` if the connection fails or times out.
   static func connect(
     to url: URL,
     protocols: [String]? = nil,
     headers: [String: String]? = nil,
-    session: URLSession = .shared
+    session: URLSession? = nil
   ) async throws -> URLSessionWebSocket {
     guard url.scheme == "ws" || url.scheme == "wss" else {
       preconditionFailure("only ws: and wss: schemes are supported")
@@ -81,15 +79,6 @@ final class URLSessionWebSocket: WebSocket {
     }
 
     let mutableState = LockIsolated(MutableState())
-
-    #if canImport(FoundationNetworking)
-      // Linux always builds a dedicated internal session (see below) — it always owns it.
-      let ownsSession = true
-    #else
-      // A dedicated internal session is built (and owned) exactly when the caller didn't
-      // supply their own — see the matching branch below for the full rationale.
-      let ownsSession = session === URLSession.shared
-    #endif
 
     let onComplete: @Sendable (URLSession, URLSessionTask, (any Error)?) -> Void = {
       session, task, error in
@@ -126,7 +115,7 @@ final class URLSessionWebSocket: WebSocket {
       session, task, `protocol` in
       mutableState.withValue {
         $0.webSocket = URLSessionWebSocket(
-          _task: task, _protocol: `protocol` ?? "", session: session, ownsSession: ownsSession)
+          _task: task, _protocol: `protocol` ?? "", session: session)
         $0.continuation.resume(returning: $0.webSocket!)
       }
     }
@@ -160,48 +149,19 @@ final class URLSessionWebSocket: WebSocket {
       }
     }
 
-    func makeDedicatedSession() -> URLSession {
-      URLSession.sessionWithConfiguration(
-        session.configuration,
-        onComplete: onComplete,
-        onWebSocketTaskOpened: onWebSocketTaskOpened,
-        onWebSocketTaskClosed: onWebSocketTaskClosed
-      )
-    }
-
-    let task: URLSessionWebSocketTask
-    #if canImport(FoundationNetworking)
-      // swift-corelibs-foundation doesn't support per-task `URLSessionTask.delegate`
-      // (needed to forward auth challenges without hijacking the caller's session-level
-      // delegate). Fall back to a dedicated session with `_Delegate` attached at the
-      // session level, matching this method's pre-existing behavior. Certificate-pinning
-      // delegate forwarding via `session.delegate` is unavailable on Linux (build-only,
-      // not a production-supported platform for this package).
-      task = makeTask(on: makeDedicatedSession())
-    #else
-      if ownsSession {
-        // No caller-supplied session: preserve pre-existing behavior exactly — build a
-        // dedicated internal session isolated from process-wide `URLSession` state (e.g.
-        // an app's own globally-registered `URLProtocol`, used for mocking or ad-hoc
-        // interception), rather than silently routing the WebSocket handshake through
-        // `.shared`. `.shared` is also `RealtimeClientOptions.session`'s own default and
-        // the sentinel `SupabaseClient` checks against when propagating `global.session`
-        // — this identity check is consistent with both: pinning only activates when a
-        // caller has actually opted in by supplying their own session.
-        task = makeTask(on: makeDedicatedSession())
-      } else {
-        // Caller explicitly supplied their own session (e.g. one with a pinning delegate)
-        // — use it directly and forward its delegate's auth-challenge callback via a
-        // per-task delegate, while keeping WebSocket lifecycle callbacks internal.
-        task = makeTask(on: session)
-        task.delegate = _Delegate(
-          onComplete: onComplete,
-          onWebSocketTaskOpened: onWebSocketTaskOpened,
-          onWebSocketTaskClosed: onWebSocketTaskClosed,
-          wrappedDelegate: session.delegate
-        )
-      }
-    #endif
+    // Always create a dedicated internal session — copying `session`'s configuration (if
+    // any was supplied) and forwarding its delegate's auth-challenge callback — rather than
+    // ever using `session` directly. This keeps the connection immune to process-wide
+    // `URLSession` state (e.g. an app's own globally-registered `URLProtocol`) and
+    // guarantees this instance always owns (and can safely invalidate) its session.
+    let dedicatedSession = URLSession.sessionWithConfiguration(
+      session?.configuration ?? .default,
+      onComplete: onComplete,
+      onWebSocketTaskOpened: onWebSocketTaskOpened,
+      onWebSocketTaskClosed: onWebSocketTaskClosed,
+      wrappedDelegate: session?.delegate
+    )
+    let task = makeTask(on: dedicatedSession)
 
     return try await withCheckedThrowingContinuation { continuation in
       mutableState.withValue {
@@ -216,7 +176,6 @@ final class URLSessionWebSocket: WebSocket {
   /// The negotiated WebSocket subprotocol.
   let _protocol: String
   private let session: URLSession
-  private let ownsSession: Bool
 
   /// Thread-safe mutable state for the WebSocket connection.
   struct MutableState {
@@ -377,10 +336,9 @@ final class URLSessionWebSocket: WebSocket {
       return false
     }
 
-    // Only invalidate a session this instance created itself. Invalidating a
-    // caller-supplied session (e.g. one also used for Auth/PostgREST/Storage) would break
-    // all of its other, unrelated usage.
-    if shouldInvalidate && ownsSession {
+    // This instance always owns `session` (a dedicated internal session `connect` created
+    // for it), so it's always safe to invalidate here.
+    if shouldInvalidate {
       session.finishTasksAndInvalidate()
     }
   }
@@ -475,13 +433,15 @@ extension URLSession {
     onWebSocketTaskOpened: (@Sendable (URLSession, URLSessionWebSocketTask, String?) -> Void)? =
       nil,
     onWebSocketTaskClosed: (@Sendable (URLSession, URLSessionWebSocketTask, Int?, Data?) -> Void)? =
-      nil
+      nil,
+    wrappedDelegate: (any URLSessionDelegate)? = nil
   ) -> URLSession {
     let queue = OperationQueue()
     queue.maxConcurrentOperationCount = 1
 
     let hasDelegate =
       onComplete != nil || onWebSocketTaskOpened != nil || onWebSocketTaskClosed != nil
+      || wrappedDelegate != nil
 
     if hasDelegate {
       return URLSession(
@@ -489,7 +449,8 @@ extension URLSession {
         delegate: _Delegate(
           onComplete: onComplete,
           onWebSocketTaskOpened: onWebSocketTaskOpened,
-          onWebSocketTaskClosed: onWebSocketTaskClosed
+          onWebSocketTaskClosed: onWebSocketTaskClosed,
+          wrappedDelegate: wrappedDelegate
         ),
         delegateQueue: queue
       )
@@ -566,17 +527,16 @@ final class _Delegate: NSObject, URLSessionDelegate, URLSessionDataDelegate, URL
     onWebSocketTaskClosed?(session, webSocketTask, closeCode.rawValue, reason)
   }
 
-  /// Forwards the task-level auth challenge to `wrappedDelegate`, trying its task-level
-  /// implementation first, then falling back to its session-level implementation, then to
-  /// default handling. Always calls `completionHandler` exactly once.
+  /// Forwards the auth challenge to `wrappedDelegate`'s session-level implementation, if it
+  /// has one. Always calls `completionHandler` exactly once.
   ///
-  /// The `#selector`/`responds(to:)`-based dispatch below requires the Objective-C runtime,
-  /// unavailable in swift-corelibs-foundation (Linux) — guarded accordingly. `connect(session:)`
-  /// never populates `wrappedDelegate` on Linux (see its `#if canImport(FoundationNetworking)`
-  /// branch), so this always falls through to default handling there regardless.
+  /// The `#selector`/`responds(to:)` check requires the Objective-C runtime, unavailable in
+  /// swift-corelibs-foundation (Linux) — guarded accordingly. `wrappedDelegate` may still be
+  /// populated on Linux (`connect` doesn't special-case it), but this method ignores it there
+  /// and always falls through to default handling: certificate pinning isn't supported on
+  /// Linux (build-only, not a production-supported platform for this package).
   func urlSession(
     _ session: URLSession,
-    task: URLSessionTask,
     didReceive challenge: URLAuthenticationChallenge,
     completionHandler:
       @escaping @Sendable (URLSession.AuthChallengeDisposition, URLCredential?) ->
@@ -585,30 +545,14 @@ final class _Delegate: NSObject, URLSessionDelegate, URLSessionDataDelegate, URL
     #if canImport(FoundationNetworking)
       completionHandler(.performDefaultHandling, nil)
     #else
-      guard let wrappedDelegate else {
+      let selector = #selector(
+        (any URLSessionDelegate).urlSession(_:didReceive:completionHandler:))
+      guard let wrappedDelegate, wrappedDelegate.responds(to: selector) else {
         completionHandler(.performDefaultHandling, nil)
         return
       }
-
-      let taskLevelSelector = #selector(
-        (any URLSessionTaskDelegate).urlSession(_:task:didReceive:completionHandler:))
-      if let taskDelegate = wrappedDelegate as? any URLSessionTaskDelegate,
-        wrappedDelegate.responds(to: taskLevelSelector)
-      {
-        taskDelegate.urlSession?(
-          session, task: task, didReceive: challenge, completionHandler: completionHandler)
-        return
-      }
-
-      let sessionLevelSelector = #selector(
-        (any URLSessionDelegate).urlSession(_:didReceive:completionHandler:))
-      if wrappedDelegate.responds(to: sessionLevelSelector) {
-        wrappedDelegate.urlSession?(
-          session, didReceive: challenge, completionHandler: completionHandler)
-        return
-      }
-
-      completionHandler(.performDefaultHandling, nil)
+      wrappedDelegate.urlSession?(
+        session, didReceive: challenge, completionHandler: completionHandler)
     #endif
   }
 }
