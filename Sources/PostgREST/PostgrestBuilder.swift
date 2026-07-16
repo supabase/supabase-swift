@@ -47,6 +47,9 @@ public class PostgrestBuilder: @unchecked Sendable {
 
     /// An error to throw when execute() is called, set when an invalid method combination is detected.
     var pendingError: String?
+
+    /// Whether a `PGRST116` error should be returned as a `nil` value instead of being thrown.
+    var isMaybeSingle: Bool = false
   }
 
   let mutableState: LockIsolated<MutableState>
@@ -170,11 +173,11 @@ public class PostgrestBuilder: @unchecked Sendable {
     options: FetchOptions,
     decode: @Sendable (Data) throws -> T
   ) async throws -> PostgrestResponse<T> {
-    let (baseRequest, retryEnabled) = try mutableState.withValue {
+    let (baseRequest, retryEnabled, isMaybeSingle) = try mutableState.withValue {
       if let message = $0.pendingError {
         throw PostgrestError(message: message)
       }
-      return ($0.request, $0.retryEnabled)
+      return ($0.request, $0.retryEnabled, $0.isMaybeSingle)
     }
     var request = baseRequest
 
@@ -240,6 +243,12 @@ public class PostgrestBuilder: @unchecked Sendable {
       }
 
       if let error = try? configuration.decoder.decode(PostgrestError.self, from: response.data) {
+        // `maybeSingle()` turns the "no/too many rows" error (PGRST116) into a `nil` value.
+        if isMaybeSingle, error.code == "PGRST116" {
+          let value = try decode(Data("null".utf8))
+          return PostgrestResponse(
+            data: response.data, response: response.underlyingResponse, value: value)
+        }
         throw error
       }
       throw HTTPError(data: response.data, response: response.underlyingResponse)

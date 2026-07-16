@@ -187,6 +187,68 @@ final class PostgrestTransformsTests: XCTestCase {
     }
   }
 
+  func testMaybeSingle() async throws {
+    let res =
+      try await client.from("users")
+      .select("age_range,catchphrase,data,status,username")
+      .eq("username", value: "supabot")
+      .maybeSingle()
+      .execute().value as AnyJSON
+
+    assertInlineSnapshot(of: res, as: .json) {
+      """
+      {
+        "age_range" : "[1,2)",
+        "catchphrase" : "'cat' 'fat'",
+        "data" : null,
+        "status" : "ONLINE",
+        "username" : "supabot"
+      }
+      """
+    }
+  }
+
+  func testMaybeSingleReturnsNilOnZeroRows() async throws {
+    let res: AnyJSON? =
+      try await client.from("users")
+      .select("username")
+      .eq("username", value: "does-not-exist")
+      .maybeSingle()
+      .execute().value
+
+    XCTAssertNil(res)
+  }
+
+  func testDryRunOnUpdate() async throws {
+    // Requires `pgrst.db_tx_end = 'commit-allow-override'` on the `authenticator` role
+    // (see migrations/20240101000000_initial_schema.sql) so `Prefer: tx=rollback` is honored.
+    try await client.from("users").insert([
+      "username": "dry-run-scratch", "email": "dry-run-scratch@example.com",
+    ])
+    .execute()
+
+    _ = try await client.from("users")
+      .update(["catchphrase": "temporary"])
+      .eq("username", value: "dry-run-scratch")
+      .dryRun()
+      .execute()
+
+    let after =
+      try await client.from("users")
+      .select("catchphrase")
+      .eq("username", value: "dry-run-scratch")
+      .single()
+      .execute().value as AnyJSON
+
+    assertInlineSnapshot(of: after, as: .json) {
+      """
+      {
+        "catchphrase" : null
+      }
+      """
+    }
+  }
+
   func testSingleOnInsert() async throws {
     let res =
       try await client.from("users")

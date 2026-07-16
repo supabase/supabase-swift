@@ -58,6 +58,19 @@ public final class PostgrestClient: Sendable {
   /// Provide a custom ``FetchHandler`` through ``Configuration`` when you need to intercept,
   /// mock, or otherwise customize the HTTP transport layer. The default implementation uses
   /// `URLSession.shared`.
+  ///
+  /// For example, apply a custom timeout by mutating the `URLRequest` before sending it:
+  ///
+  /// ```swift
+  /// let configuration = PostgrestClient.Configuration(
+  ///   url: url,
+  ///   fetch: { request in
+  ///     var request = request
+  ///     request.timeoutInterval = 10
+  ///     return try await URLSession.shared.data(for: request)
+  ///   }
+  /// )
+  /// ```
   public typealias FetchHandler =
     @Sendable (_ request: URLRequest) async throws -> (
       Data, URLResponse

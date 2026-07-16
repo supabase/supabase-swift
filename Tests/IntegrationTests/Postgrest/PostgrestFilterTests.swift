@@ -368,6 +368,29 @@ final class PostgrestFilterTests: XCTestCase {
     }
   }
 
+  func testNotIn() async throws {
+    let res =
+      try await client.from("users").select("status").notIn("status", values: ["OFFLINE"])
+      .execute()
+      .value as AnyJSON
+
+    assertInlineSnapshot(of: res, as: .json) {
+      """
+      [
+        {
+          "status" : "ONLINE"
+        },
+        {
+          "status" : "ONLINE"
+        },
+        {
+          "status" : "ONLINE"
+        }
+      ]
+      """
+    }
+  }
+
   func testContains() async throws {
     let res =
       try await client.from("users").select("age_range").contains("age_range", value: "[1,2)")
