@@ -619,7 +619,8 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
 
   private func sendHeartbeat() async {
     if status != .connected {
-      heartbeatSubject.yield(.disconnected)
+      // Don't leak `.disconnected` to `heartbeat`/`onHeartbeat(_:)` consumers — it's not
+      // a heartbeat outcome, just this cycle bailing out early.
       return
     }
 
