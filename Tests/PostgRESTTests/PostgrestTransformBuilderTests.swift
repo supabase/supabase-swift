@@ -306,6 +306,44 @@ final class PostgrestTransformBuilderTests: PostgrestQueryTests {
     XCTAssertEqual(country["name"], "United States")
   }
 
+  func testMaybeSingle() async throws {
+    Mock(
+      url: url.appendingPathComponent("countries"),
+      ignoreQuery: true,
+      statusCode: 200,
+      data: [
+        .get: Data(
+          """
+          {
+            "name": "United States"
+          }
+          """.utf8)
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--header "Accept: application/vnd.pgrst.object+json" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:54321/rest/v1/countries?limit=1&select=name"
+      """#
+    }
+    .register()
+
+    let country =
+      try await sut
+      .from("countries")
+      .select("name")
+      .limit(1)
+      .maybeSingle()
+      .execute()
+      .value as [String: String]
+
+    XCTAssertEqual(country["name"], "United States")
+  }
+
   func testCSV() async throws {
     Mock(
       url: url.appendingPathComponent("countries"),
@@ -656,5 +694,67 @@ final class PostgrestTransformBuilderTests: PostgrestQueryTests {
     } catch let error as PostgrestError {
       XCTAssertEqual(error.message, "`.csv()` cannot be combined with `.stripNulls()`")
     }
+  }
+
+  func testDryRun() async throws {
+    Mock(
+      url: url.appendingPathComponent("countries"),
+      ignoreQuery: true,
+      statusCode: 200,
+      data: [
+        .get: Data("[]".utf8)
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--header "Accept: application/json" \
+      	--header "Content-Type: application/json" \
+      	--header "Prefer: tx=rollback" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:54321/rest/v1/countries?select=*"
+      """#
+    }
+    .register()
+
+    try await sut
+      .from("countries")
+      .select()
+      .dryRun()
+      .execute()
+  }
+
+  func testDryRunOnUpdate() async throws {
+    Mock(
+      url: url.appendingPathComponent("users"),
+      ignoreQuery: true,
+      statusCode: 200,
+      data: [
+        .patch: Data("[]".utf8)
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request PATCH \
+      	--header "Accept: application/json" \
+      	--header "Content-Length: 20" \
+      	--header "Content-Type: application/json" \
+      	--header "Prefer: return=representation,tx=rollback" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	--data "{\"username\":\"admin\"}" \
+      	"http://localhost:54321/rest/v1/users?id=eq.1"
+      """#
+    }
+    .register()
+
+    try await sut
+      .from("users")
+      .update(["username": "admin"])
+      .eq("id", value: 1)
+      .dryRun()
+      .execute()
   }
 }

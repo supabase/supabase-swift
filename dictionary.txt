@@ -83,14 +83,17 @@ Metas
 newbucket
 niled
 Nlci
+nonisolated
 nosec
 NSEC
 NSPOSIX
 NSURL
 nullsfirst
 nullslast
+oauthserver
 oidc
 OIDC
+omitempty
 opentelemetry
 passwordless
 Passwordless

@@ -79,6 +79,65 @@ final class PostgrestBuilderTests: PostgrestQueryTests {
     }
   }
 
+  func testMaybeSingleReturnsNilOnZeroRows() async throws {
+    Mock(
+      url: url.appendingPathComponent("users"),
+      ignoreQuery: true,
+      statusCode: 406,
+      data: [
+        .get: Data(
+          """
+          {
+            "code": "PGRST116",
+            "message": "JSON object requested, multiple (or no) rows returned"
+          }
+          """.utf8
+        )
+      ]
+    )
+    .register()
+
+    let user: User? =
+      try await sut
+      .from("users")
+      .select()
+      .maybeSingle()
+      .execute()
+      .value
+
+    XCTAssertNil(user)
+  }
+
+  func testMaybeSingleReturnsValueOnSingleRow() async throws {
+    Mock(
+      url: url.appendingPathComponent("users"),
+      ignoreQuery: true,
+      statusCode: 200,
+      data: [
+        .get: Data(
+          """
+          {
+            "id": 1,
+            "username": "admin"
+          }
+          """.utf8
+        )
+      ]
+    )
+    .register()
+
+    let user: User? =
+      try await sut
+      .from("users")
+      .select()
+      .maybeSingle()
+      .execute()
+      .value
+
+    XCTAssertEqual(user?.id, 1)
+    XCTAssertEqual(user?.username, "admin")
+  }
+
   func testExecuteWithHead() async throws {
     Mock(
       url: url.appendingPathComponent("users"),

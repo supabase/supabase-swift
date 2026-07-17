@@ -195,11 +195,60 @@ features:
   auth.passkey_admin.list_passkeys: not_implemented
   auth.passkey_admin.delete_passkey: not_implemented
 
-  auth.oauth_server.approve_authorization: not_implemented
-  auth.oauth_server.deny_authorization: not_implemented
-  auth.oauth_server.get_authorization_details: not_implemented
-  auth.oauth_server.list_grants: not_implemented
-  auth.oauth_server.revoke_grant: not_implemented
+  auth.oauth_server.get_authorization_details:
+    status: implemented
+    symbols:
+      - AuthClient.oauthServer
+      - AuthOAuthServer
+      - AuthOAuthServer.getAuthorizationDetails
+      - OAuthAuthorizationDetailsResponse
+      - OAuthAuthorizationDetailsResponse.details
+      - OAuthAuthorizationDetailsResponse.redirect
+      - OAuthAuthorizationDetailsResponse.init
+      - OAuthAuthorizationDetails
+      - OAuthAuthorizationDetails.authorizationId
+      - OAuthAuthorizationDetails.redirectUri
+      - OAuthAuthorizationDetails.client
+      - OAuthAuthorizationDetails.user
+      - OAuthAuthorizationDetails.scope
+      - OAuthAuthorizationDetails.init
+      - OAuthAuthorizationClient
+      - OAuthAuthorizationClient.id
+      - OAuthAuthorizationClient.name
+      - OAuthAuthorizationClient.uri
+      - OAuthAuthorizationClient.logoUri
+      - OAuthAuthorizationClient.init
+      - OAuthAuthorizationUser
+      - OAuthAuthorizationUser.id
+      - OAuthAuthorizationUser.email
+      - OAuthAuthorizationUser.init
+  auth.oauth_server.approve_authorization:
+    status: implemented
+    symbols:
+      - AuthOAuthServer.approveAuthorization
+      - OAuthRedirect
+      - OAuthRedirect.redirectURL
+      - OAuthRedirect.init
+  auth.oauth_server.deny_authorization:
+    status: implemented
+    symbols:
+      - AuthOAuthServer.denyAuthorization
+      - ErrorCode.oauthAuthorizationNotFound
+      - ErrorCode.featureDisabled
+  auth.oauth_server.list_grants:
+    status: implemented
+    symbols:
+      - AuthOAuthServer.listGrants
+      - OAuthGrant
+      - OAuthGrant.client
+      - OAuthGrant.scopes
+      - OAuthGrant.grantedAt
+      - OAuthGrant.init
+  auth.oauth_server.revoke_grant:
+    status: implemented
+    symbols:
+      - AuthOAuthServer.revokeGrant
+      - ErrorCode.oauthConsentNotFound
 
   auth.oauth_admin.create_client:
     status: implemented
@@ -284,7 +333,10 @@ features:
   database.using_filters.regex: implemented
   database.using_filters.regex_icase: implemented
   database.using_filters.is_distinct: implemented
-  database.using_filters.not_in: not_implemented
+  database.using_filters.not_in:
+    status: implemented
+    symbols:
+      - PostgrestFilterBuilder.notIn
   database.using_filters.like_all: implemented
   database.using_filters.like_any: implemented
   database.using_filters.ilike_all: implemented
@@ -294,7 +346,10 @@ features:
   database.using_modifiers.limit: implemented
   database.using_modifiers.range: implemented
   database.using_modifiers.single_row: implemented
-  database.using_modifiers.maybe_single_row: not_implemented
+  database.using_modifiers.maybe_single_row:
+    status: implemented
+    symbols:
+      - PostgrestTransformBuilder.maybeSingle
   database.using_modifiers.strip_nulls: implemented
   database.using_modifiers.format_csv: implemented
   database.using_modifiers.format_geojson: implemented
@@ -307,7 +362,10 @@ features:
   database.using_modifiers.relationship_embed:
     status: partially_implemented
     note: "Supported via query-string syntax in select() (e.g. 'user(*)'); no dedicated relationship builder API."
-  database.using_modifiers.dry_run: not_implemented
+  database.using_modifiers.dry_run:
+    status: implemented
+    symbols:
+      - PostgrestTransformBuilder.dryRun
 
   database.configuration.auto_retry: implemented
   database.configuration.request_timeout: not_implemented
