@@ -149,9 +149,13 @@ public final class SupabaseClient: Sendable {
   public var functions: FunctionsClient {
     mutableState.withValue {
       if $0.functions == nil {
+        var functionsHeaders = _headers
+        if APIKeyFormat.isNew(supabaseKey) {
+          functionsHeaders[.authorization] = nil
+        }
         $0.functions = FunctionsClient(
           url: functionsURL,
-          headers: headers,
+          headers: functionsHeaders.dictionary,
           region: options.functions.region,
           logger: options.global.logger,
           fetch: fetchWithAuth,
@@ -232,6 +236,8 @@ public final class SupabaseClient: Sendable {
     self.supabaseKey = supabaseKey
     self.options = options
     self.clock = clock
+
+    APIKeyFormat.checkFormat(supabaseKey)
 
     storageURL = supabaseURL.appendingPathComponent("/storage/v1")
     databaseURL = supabaseURL.appendingPathComponent("/rest/v1")
@@ -479,7 +485,9 @@ public final class SupabaseClient: Sendable {
     }
 
     if let accessToken {
-      functions.setAuth(token: accessToken)
+      functions.setAuth(
+        token: APIKeyFormat.functionsBearerToken(accessToken: accessToken, supabaseKey: supabaseKey)
+      )
       realtime.setAuth(accessToken)
       await realtimeV2.setAuth(accessToken)
     }

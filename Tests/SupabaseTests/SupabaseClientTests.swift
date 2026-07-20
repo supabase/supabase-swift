@@ -226,4 +226,28 @@ struct SupabaseClientTests {
     // Tracked as a migration-wide risk in SDK-435 for any later phase whose tests exercise
     // `reportIssue`-instrumented production code.
   }
+
+  @Test
+  func functionsOmitsAuthorizationBearerForNewFormatKey() {
+    let client = SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "sb_publishable_abc123",
+      options: SupabaseClientOptions(auth: .init(storage: AuthLocalStorageMock()))
+    )
+
+    #expect(client.functions.headers.dictionary["Authorization"] == nil)
+    #expect(client.functions.headers.dictionary["Apikey"] == "sb_publishable_abc123")
+  }
+
+  @Test
+  func functionsKeepsAuthorizationBearerForLegacyKey() {
+    let client = SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "legacy-jwt-key",
+      options: SupabaseClientOptions(auth: .init(storage: AuthLocalStorageMock()))
+    )
+
+    #expect(client.functions.headers.dictionary["Authorization"] == "Bearer legacy-jwt-key")
+    #expect(client.functions.headers.dictionary["Apikey"] == "legacy-jwt-key")
+  }
 }
