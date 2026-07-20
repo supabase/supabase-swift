@@ -130,14 +130,14 @@ public struct FunctionInvokeOptions: Sendable {
 ///
 /// ```swift
 /// // predefined
-/// options.region = .usEast1
+/// let options = FunctionInvokeOptions(region: .usEast1)
 /// // custom region
-/// options.region = FunctionRegion(rawValue: "custom-region")
-/// options.region = "custom-region"
+/// let options2 = FunctionInvokeOptions(region: FunctionRegion(rawValue: "custom-region"))
+/// let options3 = FunctionInvokeOptions(region: "custom-region")
 /// ```
 public struct FunctionRegion: RawRepresentable, Hashable, Sendable {
   /// The raw region string sent in the request.
-  public var rawValue: String
+  public let rawValue: String
 
   public init(rawValue: String) {
     self.rawValue = rawValue
