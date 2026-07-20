@@ -680,6 +680,25 @@ final class AuthClientTests: XCTestCase {
     )
   }
 
+  func testSignUpWhenConfirmationRequired() async throws {
+    Mock(
+      url: clientURL.appendingPathComponent("signup"),
+      ignoreQuery: true,
+      statusCode: 200,
+      data: [.post: MockData.signUpConfirmationRequired]
+    ).register()
+
+    let sut = makeSUT()
+
+    let response = try await sut.signUp(
+      email: "guilherme@grds.dev",
+      password: "the.pass"
+    )
+
+    XCTAssertNil(response.session)
+    XCTAssertNotNil(response.user)
+  }
+
   func testSignInWithEmailAndPassword() async throws {
     Mock(
       url: clientURL.appendingPathComponent("token"),
@@ -1279,6 +1298,25 @@ final class AuthClientTests: XCTestCase {
       tokenHash: "abc-def",
       type: .email
     )
+  }
+
+  func testVerifyOTPForEmailChangeSingleConfirmation() async throws {
+    Mock(
+      url: clientURL.appendingPathComponent("verify"),
+      ignoreQuery: true,
+      statusCode: 200,
+      data: [.post: MockData.emailChangeSingleConfirmation]
+    ).register()
+
+    let sut = makeSUT()
+
+    let response = try await sut.verifyOTP(
+      tokenHash: "abc-def",
+      type: .emailChange
+    )
+
+    XCTAssertNil(response.session)
+    XCTAssertNil(response.user)
   }
 
   func testUpdateUser() async throws {
@@ -3327,5 +3365,15 @@ enum MockData {
 
   static let anonymousSignInResponse = try! Data(
     contentsOf: Bundle.module.url(forResource: "anonymous-sign-in-response", withExtension: "json")!
+  )
+
+  static let signUpConfirmationRequired = try! Data(
+    contentsOf: Bundle.module.url(forResource: "signup-response", withExtension: "json")!
+  )
+
+  static let emailChangeSingleConfirmation = try! Data(
+    contentsOf: Bundle.module.url(
+      forResource: "email-change-single-confirmation", withExtension: "json"
+    )!
   )
 }

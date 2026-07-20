@@ -76,8 +76,8 @@ final class AuthClientIntegrationTests: XCTestCase {
       )
 
       XCTAssertNotNil(response.session)
-      XCTAssertEqual(response.user.email, email)
-      XCTAssertEqual(response.user.userMetadata["test"], 42)
+      XCTAssertEqual(response.user?.email, email)
+      XCTAssertEqual(response.user?.userMetadata["test"], 42)
 
       try await authClient.signOut()
 
@@ -166,7 +166,7 @@ final class AuthClientIntegrationTests: XCTestCase {
     let user = try await authClient.user(jwt: firstUserSession?.accessToken)
 
     XCTAssertEqual(user.id, firstUserSession?.user.id)
-    XCTAssertNotEqual(user.id, secondUserSession.user.id)
+    XCTAssertNotEqual(user.id, secondUserSession.user?.id)
   }
 
   func testUpdateUser() async throws {
@@ -182,14 +182,14 @@ final class AuthClientIntegrationTests: XCTestCase {
     let session = try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
     let identities = try await authClient.userIdentities()
     expectNoDifference(
-      session.user.identities?.map(\.identityId) ?? [],
+      session.user?.identities?.map(\.identityId) ?? [],
       identities.map(\.identityId)
     )
   }
 
   func testUnlinkIdentity_withOnlyOneIdentity() async throws {
     let identities = try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
-      .user.identities
+      .user?.identities
     let identity = try XCTUnwrap(identities?.first)
 
     do {
