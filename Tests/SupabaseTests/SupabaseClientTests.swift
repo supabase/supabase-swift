@@ -232,7 +232,7 @@ struct SupabaseClientTests {
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "sb_publishable_abc123",
-      options: SupabaseClientOptions()
+      options: SupabaseClientOptions(auth: .init(storage: AuthLocalStorageMock()))
     )
 
     #expect(client.functions.headers.dictionary["Authorization"] == nil)
@@ -244,7 +244,7 @@ struct SupabaseClientTests {
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "legacy-jwt-key",
-      options: SupabaseClientOptions()
+      options: SupabaseClientOptions(auth: .init(storage: AuthLocalStorageMock()))
     )
 
     #expect(client.functions.headers.dictionary["Authorization"] == "Bearer legacy-jwt-key")
