@@ -570,6 +570,51 @@ import XCTest
       )
     }
 
+    /// Regression test for SDK-1330: a heartbeat tick that lands while the
+    /// client is mid-reconnect (external close, not one triggered by the
+    /// heartbeat timer itself) must not publish `.disconnected` to
+    /// `onHeartbeat(_:)`/`heartbeat` consumers — it's an internal bookkeeping
+    /// signal, not a heartbeat outcome.
+    func testHeartbeat_doesNotLeakDisconnectedStatus() async throws {
+      let (client, server) = FakeWebSocket.fakes()
+      let sut = RealtimeClientV2(
+        url: url,
+        options: RealtimeClientOptions(
+          headers: ["apikey": apiKey],
+          heartbeatInterval: 1,
+          reconnectDelay: 10,
+          accessToken: { "custom.access.token" }
+        ),
+        wsTransport: { _, _ in client },
+        http: http,
+        clock: testClock
+      )
+      defer { sut.disconnect() }
+
+      let heartbeatStatuses = LockIsolated<[HeartbeatStatus]>([])
+      let subscription = sut.onHeartbeat { status in
+        heartbeatStatuses.withValue { $0.append(status) }
+      }
+      defer { subscription.cancel() }
+
+      await sut.connect()
+
+      // Server drops the connection out from under us — unrelated to the
+      // heartbeat timer, which is still sleeping out its first interval.
+      server.close(code: nil, reason: "boom")
+      await Task.megaYield()
+
+      // The heartbeat timer ticks while the reconnect is still sleeping out
+      // its 10s `reconnectDelay` — the still-alive old heartbeat task must
+      // not observe `status != .connected` and publish `.disconnected`.
+      await testClock.advance(by: .seconds(1))
+
+      XCTAssertFalse(
+        heartbeatStatuses.value.contains(.disconnected),
+        "heartbeat status leaked .disconnected to consumers: \(heartbeatStatuses.value)"
+      )
+    }
+
     func testHeartbeat_timeout() async throws {
       let heartbeatStatuses = LockIsolated<[HeartbeatStatus]>([])
       let s1 = sut.onHeartbeat { status in
