@@ -35,7 +35,9 @@ final class StorageFileAPITests: XCTestCase {
         ],
         session: StorageHTTPSession(
           fetch: { try await session.data(for: $0) },
-          upload: { try await session.upload(for: $0, from: $1) }
+          upload: { try await session.upload(for: $0, from: $1) },
+          uploadFromFile: { try await session.upload(for: $0, fromFile: $1, delegate: $2) },
+          bytes: { try await session.bytes(for: $0, delegate: $1) }
         ),
         logger: nil
       )

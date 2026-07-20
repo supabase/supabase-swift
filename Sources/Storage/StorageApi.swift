@@ -1,5 +1,6 @@
 import ConcurrencyExtras
 import Foundation
+import HTTPRuntime
 import HTTPTypes
 
 #if canImport(FoundationNetworking)
@@ -35,6 +36,8 @@ public class StorageApi: @unchecked Sendable {
 
   private let mutableState: LockIsolated<MutableState>
   private let http: any HTTPClientType
+
+  let generatedClient: StorageGeneratedClient
 
   /// Creates a ``StorageApi`` with the given configuration.
   ///
@@ -83,6 +86,28 @@ public class StorageApi: @unchecked Sendable {
       fetch: configuration.session.fetch,
       interceptors: interceptors
     )
+
+    let mutableState = self.mutableState
+    generatedClient = StorageGeneratedClient(
+      baseURL: configuration.url,
+      transport: HeaderInjectingTransport(
+        inner: URLSessionTransport(
+          data: { [session = configuration.session] request, _ in
+            try await session.fetch(request)
+          },
+          uploadFromBodyData: { [session = configuration.session] request, data, _ in
+            try await session.upload(request, data)
+          },
+          uploadFromFile: { [session = configuration.session] request, fileURL, delegate in
+            try await session.uploadFromFile(request, fileURL, delegate)
+          },
+          bytes: { [session = configuration.session] request, delegate in
+            try await session.bytes(request, delegate)
+          }
+        ),
+        headers: { mutableState.headers }
+      )
+    )
   }
 
   /// Sets an HTTP header that will be included in all subsequent requests made by this instance.
@@ -124,6 +149,65 @@ public class StorageApi: @unchecked Sendable {
     }
 
     return response
+  }
+
+  /// Wraps an async operation that may throw an ``ErrorSchema`` or ``HTTPRuntime.HTTPError`` and converts
+  /// it into a ``StorageError`` if applicable. This is used to maintain backward compatibility with the previous error handling behavior of the Storage API.
+  func withBackwardCompatibleErrorHandling<T>(_ operation: () async throws -> T) async throws -> T {
+    // TODO: check for other error types that may need to be converted for backward compatibility.
+    do {
+      return try await operation()
+    } catch let error as ErrorSchema {
+      throw StorageError(
+        statusCode: error.statusCode,
+        message: error.message,
+        error: error.error
+      )
+    } catch let error as HTTPRuntime.HTTPError {
+      if case .unexpectedStatus(let status, let body) = error {
+        if let error = try? configuration.decoder.decode(StorageError.self, from: body) {
+          throw error
+        }
+
+        throw StorageError(
+          statusCode: "\(status)",
+          message: String(data: body, encoding: .utf8) ?? "Unknown error"
+        )
+      } else {
+        throw error
+      }
+    } catch {
+      throw error
+    }
+  }
+}
+
+/// Wraps an `HTTPTransport`, merging this client's dynamic per-instance
+/// headers (`apikey`/`Authorization`/custom `setHeader` values) into every
+/// outgoing request before delegating. The generated client builds requests
+/// with empty headers by default — this gives calls that go through
+/// `generatedClient` the same auth/header behavior as the hand-written
+/// `execute(_:)` path, which merges `mutableState.headers` explicitly.
+private struct HeaderInjectingTransport: HTTPTransport {
+  let inner: any HTTPTransport
+  let headers: @Sendable () -> [String: String]
+
+  func send(_ request: HTTPRuntime.HTTPRequest, uploadProgress: ProgressHandler?) async throws
+    -> HTTPRuntime.HTTPResponse
+  {
+    try await inner.send(injectingHeaders(into: request), uploadProgress: uploadProgress)
+  }
+
+  func stream(_ request: HTTPRuntime.HTTPRequest) async throws -> HTTPResponseStream {
+    try await inner.stream(injectingHeaders(into: request))
+  }
+
+  private func injectingHeaders(into request: HTTPRuntime.HTTPRequest) -> HTTPRuntime.HTTPRequest {
+    var request = request
+    for (key, value) in headers() where request.headers[key] == nil {
+      request.headers[key] = value
+    }
+    return request
   }
 }
 

@@ -122,7 +122,12 @@ public final class SupabaseClient: Sendable {
           configuration: StorageClientConfiguration(
             url: storageURL,
             headers: headers,
-            session: StorageHTTPSession(fetch: fetchWithAuth, upload: uploadWithAuth),
+            session: StorageHTTPSession(
+              fetch: fetchWithAuth,
+              upload: uploadWithAuth,
+              uploadFromFile: uploadFromFileWithAuth,
+              bytes: bytesWithAuth
+            ),
             logger: options.global.logger,
             useNewHostname: options.storage.useNewHostname
           )
@@ -436,6 +441,23 @@ public final class SupabaseClient: Sendable {
     from data: Data
   ) async throws -> (Data, URLResponse) {
     try await session.upload(for: adapt(request: request), from: data)
+  }
+
+  @Sendable
+  private func uploadFromFileWithAuth(
+    _ request: URLRequest,
+    from fileURL: URL,
+    delegate: (any URLSessionTaskDelegate)?
+  ) async throws -> (Data, URLResponse) {
+    try await session.upload(for: adapt(request: request), fromFile: fileURL, delegate: delegate)
+  }
+
+  @Sendable
+  private func bytesWithAuth(
+    _ request: URLRequest,
+    delegate: (any URLSessionTaskDelegate)?
+  ) async throws -> (URLSession.AsyncBytes, URLResponse) {
+    try await session.bytes(for: adapt(request: request), delegate: delegate)
   }
 
   private func adapt(request: URLRequest) async -> URLRequest {

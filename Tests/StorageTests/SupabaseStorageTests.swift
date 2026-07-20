@@ -17,7 +17,9 @@ final class SupabaseStorageTests: XCTestCase {
 
   var sessionMock = StorageHTTPSession(
     fetch: unimplemented("StorageHTTPSession.fetch"),
-    upload: unimplemented("StorageHTTPSession.upload")
+    upload: unimplemented("StorageHTTPSession.upload"),
+    uploadFromFile: unimplemented("StorageHTTPSession.uploadFromFile"),
+    bytes: unimplemented("StorageHTTPSession.bytes")
   )
 
   func testGetPublicURL() throws {
