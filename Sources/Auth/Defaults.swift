@@ -6,7 +6,7 @@
 //
 
 import ConcurrencyExtras
-import Foundation
+public import Foundation
 
 extension AuthClient.Configuration {
   /// The default JSONEncoder instance used by the ``AuthClient``.

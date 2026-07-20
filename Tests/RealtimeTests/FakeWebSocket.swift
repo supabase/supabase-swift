@@ -2,6 +2,7 @@ import ConcurrencyExtras
 import Foundation
 
 @testable import Realtime
+@testable import RealtimeV2
 
 final class FakeWebSocket: WebSocket {
   struct MutableState {

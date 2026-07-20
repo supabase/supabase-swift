@@ -1,13 +1,70 @@
 import ConcurrencyExtras
-import Foundation
+public import Foundation
 import HTTPTypes
 import IssueReporting
 
 #if canImport(FoundationNetworking)
-  import FoundationNetworking
+  public import FoundationNetworking
 #endif
 
-/// Supabase Client.
+/// The unified client for all Supabase services.
+///
+/// Create one instance per Supabase project and share it across your app.
+///
+/// ```swift
+/// let supabase = SupabaseClient(
+///   supabaseURL: URL(string: "https://your-project.supabase.co")!,
+///   supabaseKey: "your-anon-key"
+/// )
+/// ```
+///
+/// ## Topics
+///
+/// ### Creating a Client
+/// - ``init(supabaseURL:supabaseKey:)``
+/// - ``init(supabaseURL:supabaseKey:options:)``
+///
+/// ### Supabase Services
+/// - ``auth``
+/// - ``storage``
+/// - ``functions``
+/// - ``realtimeV2``
+///
+/// ### Querying the Database
+/// - ``from(_:)``
+/// - ``rpc(_:params:count:)``
+/// - ``rpc(_:count:)``
+/// - ``schema(_:)``
+///
+/// ### Realtime Channels
+/// - ``channels``
+/// - ``channel(_:options:)``
+/// - ``removeChannel(_:)``
+/// - ``removeAllChannels()``
+///
+/// ### Deep Links
+/// - ``handle(_:)``
+///
+/// ### Configuration
+/// - ``headers``
+///
+/// ## OpenTelemetry Trace Propagation
+///
+/// Enable the `OpenTelemetry` trait on your dependency declaration to have every outgoing
+/// request automatically carry a W3C `traceparent` header derived from the currently active
+/// OpenTelemetry span:
+///
+/// ```swift
+/// .package(
+///   url: "https://github.com/supabase/supabase-swift.git",
+///   from: "2.0.0",
+///   traits: ["OpenTelemetry"]
+/// )
+/// ```
+///
+/// No further configuration is needed — the trait is the only toggle. With it enabled, whatever
+/// span is active (via `opentelemetry-swift`) when a request is made gets propagated; with no
+/// active span, or with the trait disabled, requests go out unchanged.
 public final class SupabaseClient: Sendable {
   let options: SupabaseClientOptions
   let supabaseURL: URL
@@ -15,10 +72,18 @@ public final class SupabaseClient: Sendable {
   let storageURL: URL
   let databaseURL: URL
   let functionsURL: URL
+  let clock: any Clock<Duration>
 
   private let _auth: AuthClient
 
-  /// Supabase Auth allows you to create and manage user sessions for access to data that is secured by access policies.
+  /// The Auth client for managing user sessions and authentication.
+  ///
+  /// Use this property to sign users in and out, retrieve the current session,
+  /// and listen for authentication state changes.
+  ///
+  /// > Warning: Do not access this property when ``SupabaseClientOptions/AuthOptions/accessToken``
+  /// > is configured — the client will emit a runtime issue. Use a separate ``SupabaseClient``
+  /// > without `accessToken` if you need both Supabase Auth and a third-party auth provider.
   public var auth: AuthClient {
     if options.auth.accessToken != nil {
       reportIssue(
@@ -49,7 +114,7 @@ public final class SupabaseClient: Sendable {
     }
   }
 
-  /// Supabase Storage allows you to manage user-generated content, such as photos or videos.
+  /// The Storage client for uploading, downloading, and managing files.
   public var storage: SupabaseStorageClient {
     mutableState.withValue {
       if $0.storage == nil {
@@ -70,7 +135,7 @@ public final class SupabaseClient: Sendable {
 
   let _realtime: UncheckedSendable<RealtimeClient>
 
-  /// Realtime client for Supabase
+  /// The Realtime client for subscribing to database changes and broadcasting presence events.
   public var realtimeV2: RealtimeClientV2 {
     mutableState.withValue {
       if $0.realtime == nil {
@@ -80,13 +145,17 @@ public final class SupabaseClient: Sendable {
     }
   }
 
-  /// Supabase Functions allows you to deploy and invoke edge functions.
+  /// The Functions client for invoking Supabase Edge Functions.
   public var functions: FunctionsClient {
     mutableState.withValue {
       if $0.functions == nil {
+        var functionsHeaders = _headers
+        if APIKeyFormat.isNew(supabaseKey) {
+          functionsHeaders[.authorization] = nil
+        }
         $0.functions = FunctionsClient(
           url: functionsURL,
-          headers: headers,
+          headers: functionsHeaders.dictionary,
           region: options.functions.region,
           logger: options.global.logger,
           fetch: fetchWithAuth,
@@ -99,9 +168,10 @@ public final class SupabaseClient: Sendable {
   }
 
   let _headers: HTTPFields
-  /// Headers provided to the inner clients on initialization.
+  /// The HTTP headers included in every request made by sub-clients.
   ///
-  /// - Note: This collection is non-mutable, if you want to provide different headers, pass it in ``SupabaseClientOptions/GlobalOptions/headers``.
+  /// This dictionary is read-only. To supply custom headers, set
+  /// ``SupabaseClientOptions/GlobalOptions/headers`` when initializing the client.
   public var headers: [String: String] {
     _headers.dictionary
   }
@@ -123,10 +193,10 @@ public final class SupabaseClient: Sendable {
   }
 
   #if !os(Linux) && !os(Android)
-    /// Create a new client.
+    /// Creates a client with default options.
     /// - Parameters:
-    ///   - supabaseURL: The unique Supabase URL which is supplied when you create a new project in your project dashboard.
-    ///   - supabaseKey: The unique Supabase Key which is supplied when you create a new project in your project dashboard.
+    ///   - supabaseURL: Your Supabase project URL, found in the project dashboard.
+    ///   - supabaseKey: Your Supabase project anon key, found in the project dashboard.
     public convenience init(supabaseURL: URL, supabaseKey: String) {
       self.init(
         supabaseURL: supabaseURL,
@@ -136,19 +206,38 @@ public final class SupabaseClient: Sendable {
     }
   #endif
 
-  /// Create a new client.
+  /// Creates a client with custom options.
   /// - Parameters:
-  ///   - supabaseURL: The unique Supabase URL which is supplied when you create a new project in your project dashboard.
-  ///   - supabaseKey: The unique Supabase Key which is supplied when you create a new project in your project dashboard.
-  ///   - options: Custom options to configure client's behavior.
-  public init(
+  ///   - supabaseURL: Your Supabase project URL, found in the project dashboard.
+  ///   - supabaseKey: Your Supabase project anon key, found in the project dashboard.
+  ///   - options: Configuration options for the client and its sub-clients.
+  public convenience init(
     supabaseURL: URL,
     supabaseKey: String,
     options: SupabaseClientOptions
   ) {
+    self.init(
+      supabaseURL: supabaseURL,
+      supabaseKey: supabaseKey,
+      options: options,
+      clock: ContinuousClock()
+    )
+  }
+
+  /// `package`-visibility so callers in other targets of this package (e.g. `IntegrationTests`)
+  /// can inject a test clock without exposing it publicly.
+  package init(
+    supabaseURL: URL,
+    supabaseKey: String,
+    options: SupabaseClientOptions,
+    clock: any Clock<Duration>
+  ) {
     self.supabaseURL = supabaseURL
     self.supabaseKey = supabaseKey
     self.options = options
+    self.clock = clock
+
+    APIKeyFormat.checkFormat(supabaseKey)
 
     storageURL = supabaseURL.appendingPathComponent("/storage/v1")
     databaseURL = supabaseURL.appendingPathComponent("/rest/v1")
@@ -166,13 +255,7 @@ public final class SupabaseClient: Sendable {
       .merging(with: HTTPFields(options.global.headers))
 
     // default storage key uses the supabase project ref as a namespace
-    let optionalHost: String?
-    if #available(iOS 16, macOS 13, tvOS 16, watchOS 9, visionOS 1, *) {
-      optionalHost = supabaseURL.host(percentEncoded: false)
-    } else {
-      optionalHost = supabaseURL.host
-    }
-    guard let host = optionalHost else {
+    guard let host = supabaseURL.host(percentEncoded: false) else {
       preconditionFailure("supabaseURL must have a valid host.")
     }
     let defaultStorageKey = "sb-\(host.split(separator: ".")[0])-auth-token"
@@ -189,7 +272,7 @@ public final class SupabaseClient: Sendable {
       decoder: options.auth.decoder,
       fetch: {
         // DON'T use `fetchWithAuth` method within the AuthClient as it may cause a deadlock.
-        try await options.global.session.data(for: $0)
+        try await options.global.session.data(for: TraceContext.inject(into: $0))
       },
       autoRefreshToken: options.auth.autoRefreshToken,
       emitLocalSessionAsInitialSession: options.auth.emitLocalSessionAsInitialSession
@@ -208,21 +291,20 @@ public final class SupabaseClient: Sendable {
     }
   }
 
-  /// Performs a query on a table or a view.
-  /// - Parameter table: The table or view name to query.
-  /// - Returns: A PostgrestQueryBuilder instance.
+  /// Creates a query builder targeting a table or view.
+  /// - Parameter table: The name of the table or view to query.
+  /// - Returns: A query builder for constructing and executing the query.
   public func from(_ table: String) -> PostgrestQueryBuilder {
     rest.from(table)
   }
 
-  /// Performs a function call.
+  /// Calls a Postgres function.
   /// - Parameters:
-  ///   - fn: The function name to call.
-  ///   - params: The parameters to pass to the function call.
-  ///   - count: Count algorithm to use to count rows returned by the function.
-  ///             Only applicable for set-returning functions.
-  /// - Returns: A PostgrestFilterBuilder instance.
-  /// - Throws: An error if the function call fails.
+  ///   - fn: The name of the function to call.
+  ///   - params: The parameters to pass to the function.
+  ///   - count: The count algorithm to apply to rows returned by set-returning functions.
+  /// - Returns: A filter builder for further narrowing the result set.
+  /// - Throws: If encoding `params` fails or the function call returns an error.
   public func rpc(
     _ fn: String,
     params: some Encodable,
@@ -231,13 +313,12 @@ public final class SupabaseClient: Sendable {
     try rest.rpc(fn, params: params, count: count)
   }
 
-  /// Performs a function call.
+  /// Calls a Postgres function with no parameters.
   /// - Parameters:
-  ///   - fn: The function name to call.
-  ///   - count: Count algorithm to use to count rows returned by the function.
-  ///            Only applicable for set-returning functions.
-  /// - Returns: A PostgrestFilterBuilder instance.
-  /// - Throws: An error if the function call fails.
+  ///   - fn: The name of the function to call.
+  ///   - count: The count algorithm to apply to rows returned by set-returning functions.
+  /// - Returns: A filter builder for further narrowing the result set.
+  /// - Throws: If the function call returns an error.
   public func rpc(
     _ fn: String,
     count: CountOption? = nil
@@ -245,23 +326,25 @@ public final class SupabaseClient: Sendable {
     try rest.rpc(fn, count: count)
   }
 
-  /// Select a schema to query or perform an function (rpc) call.
+  /// Returns a database client scoped to the given Postgres schema.
   ///
-  /// The schema needs to be on the list of exposed schemas inside Supabase.
+  /// The schema must be on the list of exposed schemas in your Supabase project dashboard.
   /// - Parameter schema: The schema to query.
+  /// - Returns: A ``PostgrestClient`` configured for the given schema.
   public func schema(_ schema: String) -> PostgrestClient {
     rest.schema(schema)
   }
 
-  /// Returns all Realtime channels.
+  /// All active Realtime channels.
   public var channels: [RealtimeChannelV2] {
     Array(realtimeV2.subscriptions.values)
   }
 
-  /// Creates a Realtime channel with Broadcast, Presence, and Postgres Changes.
+  /// Creates a Realtime channel with support for Broadcast, Presence, and Postgres Changes.
   /// - Parameters:
-  ///   - name: The name of the Realtime channel.
-  ///   - options: The options to pass to the Realtime channel.
+  ///   - name: A unique name for the channel.
+  ///   - options: A closure to configure broadcast, presence, and Postgres change options.
+  /// - Returns: A configured ``RealtimeChannelV2`` ready to subscribe.
   public func channel(
     _ name: String,
     options: @Sendable (inout RealtimeChannelConfig) -> Void = { _ in }
@@ -269,18 +352,21 @@ public final class SupabaseClient: Sendable {
     realtimeV2.channel(name, options: options)
   }
 
-  /// Unsubscribes and removes Realtime channel from Realtime client.
-  /// - Parameter channel: The Realtime channel to remove.
+  /// Unsubscribes from and removes a Realtime channel.
+  /// - Parameter channel: The channel to remove.
   public func removeChannel(_ channel: RealtimeChannelV2) async {
     await realtimeV2.removeChannel(channel)
   }
 
-  /// Unsubscribes and removes all Realtime channels from Realtime client.
+  /// Unsubscribes from and removes all active Realtime channels.
   public func removeAllChannels() async {
     await realtimeV2.removeAllChannels()
   }
 
-  /// Handles an incoming URL received by the app.
+  /// Passes an incoming URL to the Auth client for processing deep links and OAuth callbacks.
+  ///
+  /// Call this from your app's URL-handling entry points so Auth can complete OAuth and
+  /// magic-link flows.
   ///
   /// ## Usage example:
   ///
@@ -355,7 +441,7 @@ public final class SupabaseClient: Sendable {
   private func adapt(request: URLRequest) async -> URLRequest {
     let token = try? await _getAccessToken()
 
-    var request = request
+    var request = TraceContext.inject(into: request)
     if let token {
       request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
     }
@@ -399,7 +485,9 @@ public final class SupabaseClient: Sendable {
     }
 
     if let accessToken {
-      functions.setAuth(token: accessToken)
+      functions.setAuth(
+        token: APIKeyFormat.functionsBearerToken(accessToken: accessToken, supabaseKey: supabaseKey)
+      )
       realtime.setAuth(accessToken)
       await realtimeV2.setAuth(accessToken)
     }
@@ -415,8 +503,12 @@ public final class SupabaseClient: Sendable {
 
     if realtimeOptions.fetch == nil {
       realtimeOptions.fetch = { [session = options.global.session] request in
-        try await session.data(for: request)
+        try await session.data(for: TraceContext.inject(into: request))
       }
+    }
+
+    if realtimeOptions.session == nil {
+      realtimeOptions.session = options.global.session
     }
 
     if realtimeOptions.accessToken == nil {
@@ -436,7 +528,8 @@ public final class SupabaseClient: Sendable {
 
     return RealtimeClientV2(
       url: supabaseURL.appendingPathComponent("/realtime/v1"),
-      options: realtimeOptions
+      options: realtimeOptions,
+      clock: clock
     )
   }
 }

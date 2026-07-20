@@ -7,7 +7,7 @@
 
 import Foundation
 import HTTPTypes
-import XCTest
+import Testing
 
 @testable import Helpers
 
@@ -15,7 +15,8 @@ import XCTest
   import FoundationNetworking
 #endif
 
-final class LoggerInterceptorTests: XCTestCase {
+@Suite
+struct LoggerInterceptorTests {
 
   typealias Method = HTTPTypes.HTTPRequest.Method
 
@@ -63,7 +64,8 @@ final class LoggerInterceptorTests: XCTestCase {
 
   // MARK: - Interceptor Tests
 
-  func testInterceptorLogsRequest() async throws {
+  @Test
+  func interceptorLogsRequest() async throws {
     let logger = MockLogger()
     let interceptor = LoggerInterceptor(logger: logger)
 
@@ -75,12 +77,13 @@ final class LoggerInterceptorTests: XCTestCase {
     }
 
     // Verify request was logged
-    XCTAssertEqual(logger.verboseLogs.count, 2)  // Request and response
-    XCTAssertTrue(logger.verboseLogs[0].contains("Request:"))
-    XCTAssertTrue(logger.verboseLogs[0].contains("/users"))
+    #expect(logger.verboseLogs.count == 2)  // Request and response
+    #expect(logger.verboseLogs[0].contains("Request:"))
+    #expect(logger.verboseLogs[0].contains("/users"))
   }
 
-  func testInterceptorLogsResponse() async throws {
+  @Test
+  func interceptorLogsResponse() async throws {
     let logger = MockLogger()
     let interceptor = LoggerInterceptor(logger: logger)
 
@@ -93,11 +96,12 @@ final class LoggerInterceptorTests: XCTestCase {
     }
 
     // Verify response was logged
-    XCTAssertEqual(logger.verboseLogs.count, 2)
-    XCTAssertTrue(logger.verboseLogs[1].contains("Response: Status code: 200"))
+    #expect(logger.verboseLogs.count == 2)
+    #expect(logger.verboseLogs[1].contains("Response: Status code: 200"))
   }
 
-  func testInterceptorLogsError() async throws {
+  @Test
+  func interceptorLogsError() async throws {
     let logger = MockLogger()
     let interceptor = LoggerInterceptor(logger: logger)
 
@@ -109,17 +113,18 @@ final class LoggerInterceptorTests: XCTestCase {
       let _ = try await interceptor.intercept(request) { _ in
         throw TestError()
       }
-      XCTFail("Should have thrown error")
+      Issue.record("Should have thrown error")
     } catch {
       // Expected error
     }
 
     // Verify error was logged
-    XCTAssertEqual(logger.errorLogs.count, 1)
-    XCTAssertTrue(logger.errorLogs[0].contains("Response: Failure"))
+    #expect(logger.errorLogs.count == 1)
+    #expect(logger.errorLogs[0].contains("Response: Failure"))
   }
 
-  func testInterceptorWithJSONBody() async throws {
+  @Test
+  func interceptorWithJSONBody() async throws {
     let logger = MockLogger()
     let interceptor = LoggerInterceptor(logger: logger)
 
@@ -132,11 +137,12 @@ final class LoggerInterceptorTests: XCTestCase {
     }
 
     // Verify JSON body was logged
-    XCTAssertTrue(logger.verboseLogs[0].contains("Body:"))
-    XCTAssertTrue(logger.verboseLogs[0].contains("name"))
+    #expect(logger.verboseLogs[0].contains("Body:"))
+    #expect(logger.verboseLogs[0].contains("name"))
   }
 
-  func testInterceptorWithEmptyBody() async throws {
+  @Test
+  func interceptorWithEmptyBody() async throws {
     let logger = MockLogger()
     let interceptor = LoggerInterceptor(logger: logger)
 
@@ -148,10 +154,11 @@ final class LoggerInterceptorTests: XCTestCase {
     }
 
     // Verify empty body handling
-    XCTAssertTrue(logger.verboseLogs[0].contains("<none>"))
+    #expect(logger.verboseLogs[0].contains("<none>"))
   }
 
-  func testInterceptorWithDifferentMethods() async throws {
+  @Test
+  func interceptorWithDifferentMethods() async throws {
     let methods: [(Method, String)] = [
       (.get, "GET"),
       (.post, "POST"),
@@ -171,14 +178,15 @@ final class LoggerInterceptorTests: XCTestCase {
         return expectedResponse
       }
 
-      XCTAssertTrue(
+      #expect(
         logger.verboseLogs[0].contains("Request:"),
         "Should log \(methodString) request"
       )
     }
   }
 
-  func testInterceptorWithDifferentStatusCodes() async throws {
+  @Test
+  func interceptorWithDifferentStatusCodes() async throws {
     let statusCodes = [200, 201, 400, 401, 404, 500]
 
     for statusCode in statusCodes {
@@ -192,7 +200,7 @@ final class LoggerInterceptorTests: XCTestCase {
         return expectedResponse
       }
 
-      XCTAssertTrue(
+      #expect(
         logger.verboseLogs[1].contains("Status code: \(statusCode)"),
         "Should log status code \(statusCode)"
       )
@@ -201,44 +209,50 @@ final class LoggerInterceptorTests: XCTestCase {
 
   // MARK: - Stringify Function Tests
 
-  func testStringfyWithNilData() {
-    let result = stringfy(nil)
-    XCTAssertEqual(result, "<none>")
+  @Test
+  func stringifyWithNilData() {
+    let result = stringify(nil)
+    #expect(result == "<none>")
   }
 
-  func testStringfyWithJSONData() {
+  @Test
+  func stringifyWithJSONData() {
     let jsonData = #"{"key": "value", "number": 42}"#.data(using: .utf8)!
-    let result = stringfy(jsonData)
+    let result = stringify(jsonData)
 
-    XCTAssertTrue(result.contains("key"))
-    XCTAssertTrue(result.contains("value"))
-    XCTAssertTrue(result.contains("number"))
+    #expect(result.contains("key"))
+    #expect(result.contains("value"))
+    #expect(result.contains("number"))
   }
 
-  func testStringfyWithNonJSONData() {
+  @Test
+  func stringifyWithNonJSONData() {
     let textData = "Plain text content".data(using: .utf8)!
-    let result = stringfy(textData)
+    let result = stringify(textData)
 
-    XCTAssertEqual(result, "Plain text content")
+    #expect(result == "Plain text content")
   }
 
-  func testStringfyWithInvalidUTF8Data() {
+  @Test
+  func stringifyWithInvalidUTF8Data() {
     // Invalid UTF-8 sequence
     let invalidData = Data([0xFF, 0xFE, 0xFD])
-    let result = stringfy(invalidData)
+    let result = stringify(invalidData)
 
-    XCTAssertEqual(result, "<failed>")
+    #expect(result == "<failed>")
   }
 
-  func testStringfyWithEmptyData() {
+  @Test
+  func stringifyWithEmptyData() {
     let emptyData = Data()
-    let result = stringfy(emptyData)
+    let result = stringify(emptyData)
 
     // Empty JSON object or empty string
-    XCTAssertTrue(result.isEmpty)
+    #expect(result.isEmpty)
   }
 
-  func testStringfyWithComplexJSON() {
+  @Test
+  func stringifyWithComplexJSON() {
     let complexJSON = """
       {
         "users": [
@@ -252,39 +266,43 @@ final class LoggerInterceptorTests: XCTestCase {
       }
       """.data(using: .utf8)!
 
-    let result = stringfy(complexJSON)
+    let result = stringify(complexJSON)
 
-    XCTAssertTrue(result.contains("users"))
-    XCTAssertTrue(result.contains("Alice"))
-    XCTAssertTrue(result.contains("nested"))
+    #expect(result.contains("users"))
+    #expect(result.contains("Alice"))
+    #expect(result.contains("nested"))
   }
 
-  func testStringfyWithArrayJSON() {
+  @Test
+  func stringifyWithArrayJSON() {
     let arrayJSON = #"[1, 2, 3, 4, 5]"#.data(using: .utf8)!
-    let result = stringfy(arrayJSON)
+    let result = stringify(arrayJSON)
 
-    XCTAssertTrue(result.contains("1"))
-    XCTAssertTrue(result.contains("5"))
+    #expect(result.contains("1"))
+    #expect(result.contains("5"))
   }
 
-  func testStringfyWithBooleanJSON() {
+  @Test
+  func stringifyWithBooleanJSON() {
     let boolJSON = #"{"active": true, "deleted": false}"#.data(using: .utf8)!
-    let result = stringfy(boolJSON)
+    let result = stringify(boolJSON)
 
-    XCTAssertTrue(result.contains("active"))
-    XCTAssertTrue(result.contains("true") || result.contains("1"))
+    #expect(result.contains("active"))
+    #expect(result.contains("true") || result.contains("1"))
   }
 
-  func testStringfyWithNullJSON() {
+  @Test
+  func stringifyWithNullJSON() {
     let nullJSON = #"{"value": null}"#.data(using: .utf8)!
-    let result = stringfy(nullJSON)
+    let result = stringify(nullJSON)
 
-    XCTAssertTrue(result.contains("value"))
+    #expect(result.contains("value"))
   }
 
   // MARK: - Integration Tests
 
-  func testInterceptorPassesThroughResponse() async throws {
+  @Test
+  func interceptorPassesThroughResponse() async throws {
     let logger = MockLogger()
     let interceptor = LoggerInterceptor(logger: logger)
 
@@ -297,11 +315,12 @@ final class LoggerInterceptorTests: XCTestCase {
     }
 
     // Verify response is passed through unchanged
-    XCTAssertEqual(actualResponse.statusCode, 201)
-    XCTAssertEqual(actualResponse.data, testData)
+    #expect(actualResponse.statusCode == 201)
+    #expect(actualResponse.data == testData)
   }
 
-  func testInterceptorPassesThroughError() async throws {
+  @Test
+  func interceptorPassesThroughError() async throws {
     let logger = MockLogger()
     let interceptor = LoggerInterceptor(logger: logger)
 
@@ -317,11 +336,11 @@ final class LoggerInterceptorTests: XCTestCase {
       let _ = try await interceptor.intercept(request) { _ in
         throw expectedError
       }
-      XCTFail("Should have thrown error")
+      Issue.record("Should have thrown error")
     } catch let error as CustomError {
-      XCTAssertEqual(error, expectedError)
+      #expect(error == expectedError)
     } catch {
-      XCTFail("Wrong error type thrown")
+      Issue.record("Wrong error type thrown")
     }
   }
 }

@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 public enum SupabaseLogLevel: Int, Codable, CustomStringConvertible, Sendable {
   case verbose

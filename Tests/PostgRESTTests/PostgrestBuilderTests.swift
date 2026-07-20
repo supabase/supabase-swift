@@ -79,6 +79,65 @@ final class PostgrestBuilderTests: PostgrestQueryTests {
     }
   }
 
+  func testMaybeSingleReturnsNilOnZeroRows() async throws {
+    Mock(
+      url: url.appendingPathComponent("users"),
+      ignoreQuery: true,
+      statusCode: 406,
+      data: [
+        .get: Data(
+          """
+          {
+            "code": "PGRST116",
+            "message": "JSON object requested, multiple (or no) rows returned"
+          }
+          """.utf8
+        )
+      ]
+    )
+    .register()
+
+    let user: User? =
+      try await sut
+      .from("users")
+      .select()
+      .maybeSingle()
+      .execute()
+      .value
+
+    XCTAssertNil(user)
+  }
+
+  func testMaybeSingleReturnsValueOnSingleRow() async throws {
+    Mock(
+      url: url.appendingPathComponent("users"),
+      ignoreQuery: true,
+      statusCode: 200,
+      data: [
+        .get: Data(
+          """
+          {
+            "id": 1,
+            "username": "admin"
+          }
+          """.utf8
+        )
+      ]
+    )
+    .register()
+
+    let user: User? =
+      try await sut
+      .from("users")
+      .select()
+      .maybeSingle()
+      .execute()
+      .value
+
+    XCTAssertEqual(user?.id, 1)
+    XCTAssertEqual(user?.username, "admin")
+  }
+
   func testExecuteWithHead() async throws {
     Mock(
       url: url.appendingPathComponent("users"),
@@ -233,20 +292,6 @@ final class PostgrestBuilderTests: PostgrestQueryTests {
 
   // MARK: - Retry tests
 
-  override func setUp() {
-    super.setUp()
-    #if DEBUG
-      _clock = ImmediateRetryTestClock()
-    #endif
-  }
-
-  override func tearDown() {
-    super.tearDown()
-    #if DEBUG
-      _clock = _resolveClock()
-    #endif
-  }
-
   func testRetryOn520ForGETRequest() async throws {
     struct MutableState {
       var callCount = 0
@@ -277,6 +322,34 @@ final class PostgrestBuilderTests: PostgrestQueryTests {
       XCTAssertEqual(state.capturedHeaders[2]["X-Retry-Count"], "2")
       XCTAssertTrue(result.value.isEmpty)
     }
+  }
+
+  func testRetryAfterSchemaChangeUsesInjectedClock() async throws {
+    let callCount = LockIsolated(0)
+
+    let sut = makeSUTWithCustomFetch { _ in
+      callCount.withValue { $0 += 1 }
+      if callCount.value < 3 {
+        return (Data(), self.makeHTTPURLResponse(statusCode: 520))
+      }
+      return (Data("[]".utf8), self.makeHTTPURLResponse(statusCode: 200))
+    }
+
+    let clock = ContinuousClock()
+    let start = clock.now
+    let result: PostgrestResponse<[User]> =
+      try await sut
+      .schema("private")
+      .from("users")
+      .select()
+      .execute()
+    let elapsed = clock.now - start
+
+    XCTAssertEqual(callCount.value, 3)
+    XCTAssertTrue(result.value.isEmpty)
+    XCTAssertLessThan(
+      elapsed, .seconds(1),
+      "schema(_:) must propagate the injected clock instead of falling back to the real one")
   }
 
   func testRetryOn520ForHEADRequest() async throws {
@@ -466,7 +539,10 @@ final class PostgrestBuilderTests: PostgrestQueryTests {
     retryEnabled: Bool = true,
     fetch: @escaping PostgrestClient.FetchHandler
   ) -> PostgrestClient {
-    PostgrestClient(url: url, fetch: fetch, retryEnabled: retryEnabled)
+    PostgrestClient(
+      configuration: .init(url: url, fetch: fetch, retryEnabled: retryEnabled),
+      clock: ImmediateRetryTestClock()
+    )
   }
 
   private func makeHTTPURLResponse(statusCode: Int) -> HTTPURLResponse {
@@ -475,6 +551,9 @@ final class PostgrestBuilderTests: PostgrestQueryTests {
 }
 
 /// A no-op clock for tests — skips all sleep delays so retry tests run instantly.
-struct ImmediateRetryTestClock: _Clock {
-  func sleep(for duration: TimeInterval) async throws {}
+struct ImmediateRetryTestClock: Clock {
+  var now: ContinuousClock.Instant { ContinuousClock().now }
+  var minimumResolution: ContinuousClock.Instant.Duration { ContinuousClock().minimumResolution }
+
+  func sleep(until deadline: ContinuousClock.Instant, tolerance: Duration?) async throws {}
 }

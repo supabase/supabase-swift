@@ -17,7 +17,7 @@
 		793D8EED2E983112006B6969 /* SupabaseConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 793D8ED32E983112006B6969 /* SupabaseConfig.swift */; };
 		793D8EEF2E983112006B6969 /* ActionState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 793D8E9F2E983112006B6969 /* ActionState.swift */; };
 		793D8EF12E983112006B6969 /* UIApplicationExtensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 793D8ED72E983112006B6969 /* UIApplicationExtensions.swift */; };
-		793D8EF52E983112006B6969 /* Stringfy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 793D8ED12E983112006B6969 /* Stringfy.swift */; };
+		793D8EF52E983112006B6969 /* Stringify.swift in Sources */ = {isa = PBXBuildFile; fileRef = 793D8ED12E983112006B6969 /* Stringify.swift */; };
 		793D8EF62E983112006B6969 /* Constants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 793D8EAE2E983112006B6969 /* Constants.swift */; };
 		793D8EF72E983112006B6969 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 793D8EBE2E983112006B6969 /* Models.swift */; };
 		793D8EF82E983112006B6969 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 793D8ECC2E983112006B6969 /* RootView.swift */; };
@@ -80,7 +80,7 @@
 		793D8EBD2E983112006B6969 /* MFAFlow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MFAFlow.swift; sourceTree = "<group>"; };
 		793D8EBE2E983112006B6969 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		793D8ECC2E983112006B6969 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
-		793D8ED12E983112006B6969 /* Stringfy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Stringfy.swift; sourceTree = "<group>"; };
+		793D8ED12E983112006B6969 /* Stringify.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Stringify.swift; sourceTree = "<group>"; };
 		793D8ED22E983112006B6969 /* Supabase.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Supabase.plist; sourceTree = "<group>"; };
 		793D8ED32E983112006B6969 /* SupabaseConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseConfig.swift; sourceTree = "<group>"; };
 		793D8ED42E983112006B6969 /* ThirdPartyAuthClerk.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThirdPartyAuthClerk.swift; sourceTree = "<group>"; };
@@ -213,7 +213,7 @@
 				793D8ECC2E983112006B6969 /* RootView.swift */,
 				793D8F1E2E984184006B6969 /* Shared */,
 				793D8ED02E983112006B6969 /* Storage */,
-				793D8ED12E983112006B6969 /* Stringfy.swift */,
+				793D8ED12E983112006B6969 /* Stringify.swift */,
 				793D8ED22E983112006B6969 /* Supabase.plist */,
 				793D8ED32E983112006B6969 /* SupabaseConfig.swift */,
 				793D8ED42E983112006B6969 /* ThirdPartyAuthClerk.swift */,
@@ -465,7 +465,7 @@
 				793D8EED2E983112006B6969 /* SupabaseConfig.swift in Sources */,
 				793D8EEF2E983112006B6969 /* ActionState.swift in Sources */,
 				793D8EF12E983112006B6969 /* UIApplicationExtensions.swift in Sources */,
-				793D8EF52E983112006B6969 /* Stringfy.swift in Sources */,
+				793D8EF52E983112006B6969 /* Stringify.swift in Sources */,
 				793D8EF62E983112006B6969 /* Constants.swift in Sources */,
 				793D8EF72E983112006B6969 /* Models.swift in Sources */,
 				793D8EF82E983112006B6969 /* RootView.swift in Sources */,

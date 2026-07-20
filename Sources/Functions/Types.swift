@@ -1,5 +1,6 @@
-import Foundation
+public import Foundation
 import HTTPTypes
+import Helpers
 
 /// An error type representing various errors that can occur while invoking functions.
 public enum FunctionsError: Error, LocalizedError {
@@ -32,15 +33,15 @@ public struct FunctionInvokeOptions: Sendable {
   /// The query to be included in the function invocation.
   let query: [URLQueryItem]
 
-  /// Initializes the `FunctionInvokeOptions` structure.
-  ///
+  /// Creates options for a function invocation with an encodable body.
   /// - Parameters:
-  ///   - method: Method to use in the function invocation.
-  ///   - query: The query to be included in the function invocation.
-  ///   - headers: Headers to be included in the function invocation. (Default: empty dictionary)
-  ///   - region: The Region to invoke the function in.
-  ///   - body: The body data to be sent with the function invocation.
-  ///   - encoder: The JSON encoder to use for encoding the body. (Default: `JSONEncoder()`)
+  ///   - method: The HTTP method to use. Defaults to POST when `nil`.
+  ///   - query: Query items appended to the function URL.
+  ///   - headers: Additional headers to include in the request.
+  ///   - region: The region string to invoke the function in.
+  ///   - body: The body to encode and send. Strings are sent as `text/plain`, `Data` as
+  ///     `application/octet-stream`, and all other `Encodable` values as JSON.
+  ///   - encoder: The JSON encoder used when `body` is encoded as JSON.
   @_disfavoredOverload
   public init(
     method: Method? = nil,
@@ -70,13 +71,12 @@ public struct FunctionInvokeOptions: Sendable {
     self.query = query
   }
 
-  /// Initializes the `FunctionInvokeOptions` structure.
-  ///
+  /// Creates options for a function invocation with no body.
   /// - Parameters:
-  ///   - method: Method to use in the function invocation.
-  ///   - query: The query to be included in the function invocation.
-  ///   - headers: Headers to be included in the function invocation. (Default: empty dictionary)
-  ///   - region: The Region to invoke the function in.
+  ///   - method: The HTTP method to use. Defaults to POST when `nil`.
+  ///   - query: Query items appended to the function URL.
+  ///   - headers: Additional headers to include in the request.
+  ///   - region: The region string to invoke the function in.
   @_disfavoredOverload
   public init(
     method: Method? = nil,
@@ -91,11 +91,17 @@ public struct FunctionInvokeOptions: Sendable {
     body = nil
   }
 
+  /// The HTTP method to use when invoking a function.
   public enum Method: String, Sendable {
+    /// Performs an HTTP GET request.
     case get = "GET"
+    /// Performs an HTTP POST request.
     case post = "POST"
+    /// Performs an HTTP PUT request.
     case put = "PUT"
+    /// Performs an HTTP PATCH request.
     case patch = "PATCH"
+    /// Performs an HTTP DELETE request.
     case delete = "DELETE"
   }
 
@@ -160,14 +166,13 @@ extension FunctionRegion: ExpressibleByStringLiteral {
 }
 
 extension FunctionInvokeOptions {
-  /// Initializes the `FunctionInvokeOptions` structure.
-  ///
+  /// Creates options for a function invocation with an encodable body and a typed region.
   /// - Parameters:
-  ///   - method: Method to use in the function invocation.
-  ///   - headers: Headers to be included in the function invocation. (Default: empty dictionary)
-  ///   - region: The Region to invoke the function in.
-  ///   - body: The body data to be sent with the function invocation.
-  ///   - encoder: The JSON encoder to use for encoding the body. (Default: `JSONEncoder()`)
+  ///   - method: The HTTP method to use. Defaults to POST when `nil`.
+  ///   - headers: Additional headers to include in the request.
+  ///   - region: The region to invoke the function in.
+  ///   - body: The body to encode and send.
+  ///   - encoder: The JSON encoder used when `body` is encoded as JSON.
   public init(
     method: Method? = nil,
     headers: [String: String] = [:],
@@ -184,12 +189,11 @@ extension FunctionInvokeOptions {
     )
   }
 
-  /// Initializes the `FunctionInvokeOptions` structure.
-  ///
+  /// Creates options for a function invocation with no body and a typed region.
   /// - Parameters:
-  ///   - method: Method to use in the function invocation.
-  ///   - headers: Headers to be included in the function invocation. (Default: empty dictionary)
-  ///   - region: The Region to invoke the function in.
+  ///   - method: The HTTP method to use. Defaults to POST when `nil`.
+  ///   - headers: Additional headers to include in the request.
+  ///   - region: The region to invoke the function in.
   public init(
     method: Method? = nil,
     headers: [String: String] = [:],

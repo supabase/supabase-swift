@@ -1,5 +1,72 @@
 # Changelog
 
+## [2.52.0](https://github.com/supabase/supabase-swift/compare/v2.51.0...v2.52.0) (2026-07-13)
+
+
+### Features
+
+* **supabase:** add W3C trace context propagation via OpenTelemetry trait ([#1101](https://github.com/supabase/supabase-swift/issues/1101)) ([8f147ec](https://github.com/supabase/supabase-swift/commit/8f147ecc9ff5f64746203f58c342b06587e0f354))
+
+
+### Bug Fixes
+
+* **postgrest:** preserve existing Prefer header in select(count:) ([#1107](https://github.com/supabase/supabase-swift/issues/1107)) ([6ff542a](https://github.com/supabase/supabase-swift/commit/6ff542a955c12cc3a0397e2168cb1f008f8f85e2))
+* **realtime:** reset channel state on phx_error ([#1109](https://github.com/supabase/supabase-swift/issues/1109)) ([a4b0f04](https://github.com/supabase/supabase-swift/commit/a4b0f042b0e22188fcaef58fb53b5ef705a0c60f))
+* **storage:** clean path in signed upload URL and response ([#1108](https://github.com/supabase/supabase-swift/issues/1108)) ([ebef170](https://github.com/supabase/supabase-swift/commit/ebef170a4a6820d064e5909dd4f54e4341f12eb5))
+* **storage:** honor options.contentType for fileURL uploads ([#1124](https://github.com/supabase/supabase-swift/issues/1124)) ([bd33aad](https://github.com/supabase/supabase-swift/commit/bd33aadd570837cf50d3091e26503bca3aed2499))
+* **storage:** return cleaned path in upload response ([#1104](https://github.com/supabase/supabase-swift/issues/1104)) ([ba23665](https://github.com/supabase/supabase-swift/commit/ba2366564ef983de765f654d14d198e1cc57e896))
+* **storage:** strip leading slash from object paths ([#1111](https://github.com/supabase/supabase-swift/issues/1111)) ([ae8c467](https://github.com/supabase/supabase-swift/commit/ae8c4678691c3ce96e24b58bf2f14ff94f783949))
+
+## [2.51.0](https://github.com/supabase/supabase-swift/compare/v2.50.0...v2.51.0) (2026-07-08)
+
+
+### Features
+
+* **realtime:** update httpSend() to per-event broadcast URL format with binary support ([#1086](https://github.com/supabase/supabase-swift/issues/1086)) ([adb4928](https://github.com/supabase/supabase-swift/commit/adb4928dd556f9af4409fe56ee13cad5b7519583))
+
+
+### Bug Fixes
+
+* **auth:** harden RSA JWK verification against malformed keys ([#1079](https://github.com/supabase/supabase-swift/issues/1079)) ([8b29aeb](https://github.com/supabase/supabase-swift/commit/8b29aeb5cc65733b011083cfad2604550adeea44))
+* **auth:** include code_challenge in resend() when using PKCE flow ([#1085](https://github.com/supabase/supabase-swift/issues/1085)) ([c781371](https://github.com/supabase/supabase-swift/commit/c78137130f36b3c11b83e0e5d93be1e07a8aa416))
+* **postgrest:** encode rpc GET/HEAD scalar params by JSON type ([#1092](https://github.com/supabase/supabase-swift/issues/1092)) ([6e53a6f](https://github.com/supabase/supabase-swift/commit/6e53a6f36982294c9b1d44ff543dce58281f3b10))
+* **realtime:** keep current access token when token fetch fails in setAuth ([#1077](https://github.com/supabase/supabase-swift/issues/1077)) ([e62ebe0](https://github.com/supabase/supabase-swift/commit/e62ebe0901b87caa49db41c466f9b015cdc6bcde))
+* **storage:** preserve limit/offset defaults when list() receives partial options ([#1087](https://github.com/supabase/supabase-swift/issues/1087)) ([0e859d6](https://github.com/supabase/supabase-swift/commit/0e859d69b024933fea25487508b15c65be6424f9))
+* **storage:** preserve sortBy defaults when list() receives partial sortBy ([#1084](https://github.com/supabase/supabase-swift/issues/1084)) ([ccd33f2](https://github.com/supabase/supabase-swift/commit/ccd33f27d42f2ffaf8f72f885e832bb33fa52d7c))
+
+## [2.50.0](https://github.com/supabase/supabase-swift/compare/v2.49.0...v2.50.0) (2026-07-06)
+
+
+### Features
+
+* drop Swift 5.10 support and require Swift 6.1+ ([#1066](https://github.com/supabase/supabase-swift/issues/1066)) ([1ba29f6](https://github.com/supabase/supabase-swift/commit/1ba29f606cea63fdb71bb638d4653eff49e8bbf6))
+* raise minimum platform versions to iOS 16 and equivalents ([#1067](https://github.com/supabase/supabase-swift/issues/1067)) ([9e292aa](https://github.com/supabase/supabase-swift/commit/9e292aa0bde4d7923a341cd5f81a392a446a64fe))
+
+
+### Bug Fixes
+
+* **auth:** decode callback URL params once, with form semantics ([#1070](https://github.com/supabase/supabase-swift/issues/1070)) ([3b749aa](https://github.com/supabase/supabase-swift/commit/3b749aaef919d873c1340d9b06c6e9e9d7326e54))
+* **postgrest:** quote column names in insert()/upsert() columns list ([#1068](https://github.com/supabase/supabase-swift/issues/1068)) ([6350a1c](https://github.com/supabase/supabase-swift/commit/6350a1c0f5927ceb78df00b8a27bc00fb8c017d4))
+* **realtime:** break retain cycle in heartbeat task ([#1078](https://github.com/supabase/supabase-swift/issues/1078)) ([5df4044](https://github.com/supabase/supabase-swift/commit/5df404499e8e8a41d763687d1dfa91e2afb9744c))
+* **realtime:** send bare topic in broadcast REST body ([#1065](https://github.com/supabase/supabase-swift/issues/1065)) ([94f3895](https://github.com/supabase/supabase-swift/commit/94f389500a08f0c7ab7dade2b00b2a013651cd48))
+
+## [2.49.0](https://github.com/supabase/supabase-swift/compare/v2.48.0...v2.49.0) (2026-07-03)
+
+
+### Features
+
+* **postgrest:** add ExplainFormat enum for explain(format:) ([#1050](https://github.com/supabase/supabase-swift/issues/1050)) ([441abb8](https://github.com/supabase/supabase-swift/commit/441abb80294c6f4b37820de1b2c21402a5830e1f))
+* **realtime:** support replication-ready system event, new postgres_changes filter operators, and broadcast `select` option ([#1063](https://github.com/supabase/supabase-swift/issues/1063)) ([52c71dd](https://github.com/supabase/supabase-swift/commit/52c71dd21381a60a52f407bae18418a71aa992db))
+* **storage:** add `StorageByteCount`, `ResizeMode`, `ImageFormat`, `SortOrder`, and `DownloadBehavior` typed value types, non-breaking backport from v3 ([#1049](https://github.com/supabase/supabase-swift/issues/1049)) ([d464945](https://github.com/supabase/supabase-swift/commit/d464945de0829186a5883182fe112c22c69f3cec))
+
+
+### Bug Fixes
+
+* **postgrest:** quote in() filter values containing reserved characters ([#1061](https://github.com/supabase/supabase-swift/issues/1061)) ([a09725f](https://github.com/supabase/supabase-swift/commit/a09725fc56ee08338422f1bec88f5c0af2961062))
+* **postgrest:** remove invalid quotes from explain() plan media type ([#1048](https://github.com/supabase/supabase-swift/issues/1048)) ([261aba0](https://github.com/supabase/supabase-swift/commit/261aba01229111c72d5f30fc2e87b9a519b919ea))
+* **realtime:** make `lifecycleManager` Sendable and `withTimeout` throwing, removing the `Result`-wrapping anti-pattern at call sites, backported from v3 ([#1052](https://github.com/supabase/supabase-swift/issues/1052)) ([3de1327](https://github.com/supabase/supabase-swift/commit/3de1327b1dd158bf032a1b1f861671982eb895ff))
+* **storage:** restore source compatibility for deprecated overloads ([#1062](https://github.com/supabase/supabase-swift/issues/1062)) ([0485d41](https://github.com/supabase/supabase-swift/commit/0485d4170c7565722539e4be0b1b7b2b925eac36))
+
 ## [2.48.0](https://github.com/supabase/supabase-swift/compare/v2.47.2...v2.48.0) (2026-06-17)
 
 

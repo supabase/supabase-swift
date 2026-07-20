@@ -6,24 +6,28 @@
 //
 
 import ConcurrencyExtras
-import XCTest
+import Testing
 
 @testable import Helpers
 
-final class AsyncValueSubjectTests: XCTestCase {
+@Suite
+struct AsyncValueSubjectTests {
 
-  func testInitialValue() async {
+  @Test
+  func initialValue() async {
     let subject = AsyncValueSubject<Int>(42)
-    XCTAssertEqual(subject.value, 42)
+    #expect(subject.value == 42)
   }
 
-  func testYieldUpdatesValue() async {
+  @Test
+  func yieldUpdatesValue() async {
     let subject = AsyncValueSubject<Int>(0)
     subject.yield(10)
-    XCTAssertEqual(subject.value, 10)
+    #expect(subject.value == 10)
   }
 
-  func testValuesStream() async {
+  @Test
+  func valuesStream() async {
     let subject = AsyncValueSubject<Int>(0)
     let values = LockIsolated<[Int]>([])
 
@@ -48,10 +52,11 @@ final class AsyncValueSubjectTests: XCTestCase {
 
     await task.value
 
-    XCTAssertEqual(values.value, [0, 1, 2, 3])
+    #expect(values.value == [0, 1, 2, 3])
   }
 
-  func testOnChangeHandler() async {
+  @Test
+  func onChangeHandler() async {
     let subject = AsyncValueSubject<Int>(0)
     let values = LockIsolated<[Int]>([])
 
@@ -70,10 +75,11 @@ final class AsyncValueSubjectTests: XCTestCase {
 
     await task.value
 
-    XCTAssertEqual(values.value, [0, 1, 2, 3])
+    #expect(values.value == [0, 1, 2, 3])
   }
 
-  func testFinish() async {
+  @Test
+  func finish() async {
     let subject = AsyncValueSubject<Int>(0)
     let values = LockIsolated<[Int]>([])
 
@@ -91,7 +97,7 @@ final class AsyncValueSubjectTests: XCTestCase {
 
     await task.value
 
-    XCTAssertEqual(values.value, [0, 1])
-    XCTAssertEqual(subject.value, 1)
+    #expect(values.value == [0, 1])
+    #expect(subject.value == 1)
   }
 }

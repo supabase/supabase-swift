@@ -161,7 +161,7 @@ final class BuildURLRequestTests: XCTestCase {
           .select()
           .eq("id", value: "Cigányka-ér (0+400 cskm) vízrajzi állomás")
       },
-      TestCase(name: "query with timestampz") { client in
+      TestCase(name: "query with timestamptz") { client in
         client.from("tasks")
           .select()
           .gt("received_at", value: "2023-03-23T15:50:30.511743+00:00")
@@ -254,6 +254,7 @@ final class BuildURLRequestTests: XCTestCase {
     let clientInfoHeader = client.configuration.headers["X-Client-Info"]
     XCTAssertNotNil(clientInfoHeader)
   }
+
 }
 
 extension URLResponse {

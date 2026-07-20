@@ -12,6 +12,7 @@ import TestHelpers
 import XCTest
 
 @testable import Realtime
+@testable import RealtimeV2
 
 #if os(Linux)
   @available(
@@ -20,7 +21,6 @@ import XCTest
   final class RealtimeLifecycleTests: XCTestCase {}
 #else
 
-  @available(macOS 13.0, iOS 16.0, watchOS 9.0, tvOS 16.0, *)
   final class RealtimeLifecycleTests: XCTestCase {
     let url = URL(string: "http://localhost:54321/realtime/v1")!
     let apiKey = "publishable.api.key"
@@ -33,7 +33,6 @@ import XCTest
       super.setUp()
       http = HTTPClientMock()
       testClock = TestClock()
-      _clock = testClock
       servers = LockIsolated([])
     }
 
@@ -85,7 +84,8 @@ import XCTest
           }
           return client
         },
-        http: http
+        http: http,
+        clock: testClock
       )
     }
 
@@ -192,6 +192,33 @@ import XCTest
 
       await sut.handleAppForeground()
       XCTAssertEqual(sut.status, .disconnected)
+    }
+
+    func testHeartbeatTaskDoesNotRetainClient() async throws {
+      weak var weakClient: RealtimeClientV2?
+
+      func scope() async {
+        let sut = makeClient()
+        weakClient = sut
+        await sut.connect()
+        XCTAssertEqual(sut.status, .connected)
+
+        await testClock.advance(by: .seconds(30))
+
+        servers.value.last?.close(code: 4001, reason: "test teardown")
+      }
+      await scope()
+
+      let deadline = Date().addingTimeInterval(5)
+      while weakClient != nil, Date() < deadline {
+        await Task.yield()
+        try? await Task.sleep(nanoseconds: 10_000_000)
+      }
+
+      XCTAssertNil(
+        weakClient,
+        "RealtimeClientV2 leaked: the heartbeat task retained self, preventing deinit."
+      )
     }
 
     func testHandleAppLifecycleFalseDoesNotInstallLifecycleManager() {

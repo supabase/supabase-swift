@@ -74,4 +74,24 @@ final class BucketOptionsTests: XCTestCase {
     let options = BucketOptions(public: false, fileSizeLimit: "1mb")
     XCTAssertEqual(options.fileSizeLimit, "1mb")
   }
+
+  func testDeprecatedStringFileSizeLimitVariable() {
+    let limit: String? = "1mb"
+    let options = BucketOptions(fileSizeLimit: limit)
+    XCTAssertEqual(options.fileSizeLimit, "1mb")
+  }
+
+  func testDeprecatedIsPublicStringFileSizeLimitVariable() {
+    let limit: String? = "1mb"
+    let options = BucketOptions(isPublic: true, fileSizeLimit: limit)
+    XCTAssertTrue(options.isPublic)
+    XCTAssertEqual(options.fileSizeLimit, "1mb")
+  }
+
+  func testAllowedMimeTypesOnly() {
+    let options = BucketOptions(allowedMimeTypes: ["image/png"])
+    XCTAssertFalse(options.isPublic)
+    XCTAssertNil(options.fileSizeLimit)
+    XCTAssertEqual(options.allowedMimeTypes, ["image/png"])
+  }
 }

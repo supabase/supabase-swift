@@ -1360,6 +1360,38 @@ final class AuthClientTests: XCTestCase {
       #"""
       curl \
       	--request POST \
+      	--header "Content-Length: 201" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Supabase-Api-Version: 2024-01-01" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	--data "{\"code_challenge\":\"hgJeigklONUI1pKSS98MIAbtJGaNu0zJU1iSiFOn2lY\",\"code_challenge_method\":\"s256\",\"email\":\"example@mail.com\",\"gotrue_meta_security\":{\"captcha_token\":\"captcha-token\"},\"type\":\"email_change\"}" \
+      	"http://localhost:54321/auth/v1/resend?redirect_to=https://supabase.com"
+      """#
+    }
+    .register()
+
+    let sut = makeSUT()
+
+    try await sut.resend(
+      email: "example@mail.com",
+      type: .emailChange,
+      emailRedirectTo: URL(string: "https://supabase.com"),
+      captchaToken: "captcha-token"
+    )
+  }
+
+  func testResendEmailImplicitFlow() async throws {
+    Mock(
+      url: clientURL.appendingPathComponent("resend"),
+      ignoreQuery: true,
+      statusCode: 200,
+      data: [.post: Data()]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
       	--header "Content-Length: 107" \
       	--header "Content-Type: application/json" \
       	--header "X-Client-Info: auth-swift/0.0.0" \
@@ -1371,7 +1403,7 @@ final class AuthClientTests: XCTestCase {
     }
     .register()
 
-    let sut = makeSUT()
+    let sut = makeSUT(flowType: .implicit)
 
     try await sut.resend(
       email: "example@mail.com",
@@ -2202,7 +2234,6 @@ final class AuthClientTests: XCTestCase {
   }
 
   #if canImport(AuthenticationServices) && !os(tvOS) && !os(watchOS)
-    @available(iOS 16.0, macOS 13.0, macCatalyst 16.0, visionOS 1.0, *)
     @MainActor
     func testSignInWithPasskeyDrivesFullFlow() async throws {
       Mock(
@@ -2249,7 +2280,6 @@ final class AuthClientTests: XCTestCase {
         forwardedOptions.value?.objectValue?["challenge"]?.stringValue, "Y2hhbGxlbmdl")
     }
 
-    @available(iOS 16.0, macOS 13.0, macCatalyst 16.0, visionOS 1.0, *)
     @MainActor
     func testRegisterPasskeyDrivesFullFlow() async throws {
       Mock(
@@ -2295,7 +2325,6 @@ final class AuthClientTests: XCTestCase {
       expectNoDifference(passkey.friendlyName, "My Passkey")
     }
 
-    @available(iOS 16.0, macOS 13.0, macCatalyst 16.0, visionOS 1.0, *)
     @MainActor
     func testEnrollWebAuthnFactorDrivesFullFlow() async throws {
       Mock(
@@ -2343,7 +2372,6 @@ final class AuthClientTests: XCTestCase {
       XCTAssertFalse(session.accessToken.isEmpty)
     }
 
-    @available(iOS 16.0, macOS 13.0, macCatalyst 16.0, visionOS 1.0, *)
     @MainActor
     func testVerifyWebAuthnFactorDrivesFullFlow() async throws {
       Mock(
@@ -2435,7 +2463,7 @@ final class AuthClientTests: XCTestCase {
     )
   }
 
-  func testgetUserById() async throws {
+  func testGetUserById() async throws {
     let id = UUID(uuidString: "859f402d-b3de-4105-a1b9-932836d9193b")!
     let sut = makeSUT()
 

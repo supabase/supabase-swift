@@ -104,9 +104,13 @@ temp_coverage
 
 .cursor
 .serena/
+docs/superpowers/
 
 # Node.js
 node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# superpowers scratch docs (design specs/plans, not project documentation)
+/docs/superpowers/

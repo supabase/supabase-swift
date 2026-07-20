@@ -2,6 +2,7 @@ import ConcurrencyExtras
 import XCTest
 
 @testable import Realtime
+@testable import RealtimeV2
 
 final class ChannelStateManagerTests: XCTestCase {
   /// Helper that returns a `ChannelStateManager` wired up with controllable
@@ -36,6 +37,7 @@ final class ChannelStateManagerTests: XCTestCase {
       logger: nil,
       maxRetryAttempts: maxRetryAttempts,
       timeoutInterval: timeoutInterval,
+      clock: ContinuousClock(),
       makeRef: {
         ref.withValue { $0 += 1 }
         return "\(ref.value)"

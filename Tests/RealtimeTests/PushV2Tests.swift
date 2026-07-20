@@ -10,6 +10,7 @@ import Foundation
 import XCTest
 
 @testable import Realtime
+@testable import RealtimeV2
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -298,7 +299,11 @@ private final class MockRealtimeClient: RealtimeClientProtocol, @unchecked Senda
   private let _status = LockIsolated<RealtimeClientStatus>(.connected)
   let options: RealtimeClientOptions
   let http: any HTTPClientType = MockHTTPClient()
-  let broadcastURL = URL(string: "https://test.supabase.co/api/broadcast")!
+  let clock: any Clock<Duration> = ContinuousClock()
+
+  func broadcastURL(topic: String, event: String, isPrivate: Bool) -> URL {
+    URL(string: "https://test.supabase.co/api/broadcast")!
+  }
 
   var status: RealtimeClientStatus {
     _status.value

@@ -23,9 +23,9 @@ This is the official Supabase SDK for Swift, mirroring the design of supabase-js
 
 ### Requirements
 
-- Xcode 15.3+ (supports versions eligible for App Store submission)
-- Swift 5.10+
-- Supported platforms: iOS 13.0+, macOS 10.15+, tvOS 13+, watchOS 6+, visionOS 1+
+- Xcode 16.4+ (supports versions eligible for App Store submission)
+- Swift 6.1+
+- Supported platforms: iOS 16.0+, macOS 13.0+, tvOS 16+, watchOS 9+, visionOS 1+
 - Linux is supported for building but not officially supported for production use
 
 ### Build Commands
@@ -39,11 +39,11 @@ swift build -c debug
 swift build -c release
 
 # Build with library evolution
-make build-for-library-evolution
+./scripts/build-for-library-evolution.sh
 
 # Build using Xcode
-make PLATFORM=IOS xcodebuild
-make PLATFORM=MACOS xcodebuild
+PLATFORM=IOS ./scripts/xcodebuild.sh
+PLATFORM=MACOS ./scripts/xcodebuild.sh
 ```
 
 ### Testing Commands
@@ -57,29 +57,40 @@ swift test --filter AuthTests
 swift test --filter StorageTests
 
 # Run tests via Xcode
-make PLATFORM=IOS XCODEBUILD_ARGUMENT=test xcodebuild
+PLATFORM=IOS XCODEBUILD_ARGUMENT=test ./scripts/xcodebuild.sh
 
 # Run integration tests (requires Supabase instance)
-make test-integration
+./scripts/test-integration.sh
 
 # Generate code coverage
-make coverage
+DERIVED_DATA_PATH=~/.derivedData/Debug ./scripts/generate-coverage.sh
 ```
 
 ### Code Formatting
 
 ```bash
 # Format all Swift files
-make format
+./scripts/format.sh
 ```
 
 This uses `swift-format` to automatically format code. All code should be formatted before committing.
+
+### Spell Checking
+
+Spell-checking uses [cSpell](https://cspell.org), via Node/npm:
+
+```bash
+npm ci --prefix tools/node   # one-time setup (re-run only when tools/node/package-lock.json changes)
+./scripts/spell-check.sh     # cspell - Swift and Markdown sources
+```
+
+Legitimate technical terms and project-specific words go in `dictionary.txt` at the repository root.
 
 ### Documentation
 
 ```bash
 # Test documentation build
-make test-docs
+./scripts/test-docs.sh
 ```
 
 Ensures DocC documentation builds without warnings.
@@ -124,30 +135,38 @@ Use standard file headers with copyright:
 
 ### Testing Conventions
 
-- Use XCTest framework
+The test suite is migrating from XCTest to the [Swift Testing](https://developer.apple.com/documentation/testing) framework, module by module (tracked in [SDK-435](https://linear.app/supabase/issue/SDK-435)). New test files use Swift Testing; existing files keep working under XCTest until their module's migration phase lands — both coexist fine in the same target.
+
 - Test files should mirror source file structure (`Foo.swift` → `FooTests.swift`)
+- Suite naming: the type name matches the file name (`FooTests.swift` → `struct FooTests`), with an explicit `@Suite` attribute even when no custom name/tags are needed
+- Test function names drop the `test` prefix (the `@Test` attribute already conveys that) — `testFooBehavior()` becomes `fooBehavior()`
 - Use `@testable import` for internal access
-- Use snapshot testing for complex data structures (via swift-snapshot-testing)
-- Use Mocker for URLSession mocking in unit tests
+- Prefer `#expect`/`#require` over `XCTAssert*` family; `#expect(x != nil, "message")` reads the same as the old `XCTAssertNotNil(x, "message")`
+- `expectNoDifference` (CustomDump) and `withExpectedIssue`/`reportIssue` (IssueReporting) work under both frameworks unchanged — no conversion needed at call sites
+- Use snapshot testing for complex data structures (via swift-snapshot-testing); `assertSnapshot`/`assertInlineSnapshot` work inside `@Test` functions the same as `XCTestCase`
+- For HTTP mocking: modules already migrated to Swift Testing use [Replay](https://github.com/mattt/Replay) (`@Test(.replay(...))`, HAR fixtures or inline `.replay(stubs:)`) instead of Mocker — see SDK-435 phase issues for the migration order. Un-migrated modules keep using Mocker for URLSession mocking until their phase lands
 - Use CustomDump for test assertions with better output
 - Keep integration tests separate in `IntegrationTests` directory
+- Test targets get full Swift 6 language mode checking (matching production targets) once migrated — see the `swift6TestTargets` set in `Package.swift`
 
-Example test structure:
+Example test structure (Swift Testing):
 
 ```swift
-import XCTest
+import Testing
 @testable import ModuleName
 
-final class FeatureTests: XCTestCase {
-  func testFeatureBehavior() {
+@Suite
+struct FeatureTests {
+  @Test
+  func featureBehavior() {
     // Arrange
     let input = "test"
-    
+
     // Act
     let result = feature(input)
-    
+
     // Assert
-    XCTAssertEqual(result, expected)
+    #expect(result == expected)
   }
 }
 ```
@@ -251,7 +270,7 @@ Dropping support for older versions is NOT considered a breaking change and happ
 
 1. Create feature branch from `main`
 2. Implement feature with tests
-3. Run `make format` to format code
+3. Run `./scripts/format.sh` to format code
 4. Run `swift test` to verify tests pass
 5. Add documentation if needed
 6. Create PR with conventional commit title
@@ -285,7 +304,7 @@ supabase stop
 
 ## Important Notes for AI Coding Agents
 
-- Always run `make format` before committing Swift code
+- Always run `./scripts/format.sh` before committing Swift code
 - Ensure new public APIs have DocC documentation comments
 - Add tests for all new functionality
 - Keep changes minimal and focused

@@ -19,7 +19,7 @@
 // THE SOFTWARE.
 
 import ConcurrencyExtras
-import Foundation
+public import Foundation
 import HTTPTypes
 import Swift
 
@@ -196,7 +196,7 @@ public class RealtimeChannel {
     stateChangeRefs = []
     rejoinTimer = TimeoutTimer()
 
-    // Setup Timer delgation
+    // Setup Timer delegation
     rejoinTimer.callback
       .delegate(to: self) { (self) in
         if self.socket?.isConnected == true { self.rejoin() }
@@ -274,7 +274,7 @@ public class RealtimeChannel {
       if self.socket?.isConnected == true { self.rejoinTimer.scheduleTimeout() }
     }
 
-    /// Perfom when the RealtimeChannel has been closed
+    /// Perform when the RealtimeChannel has been closed
     delegateOnClose(to: self) { (self, _) in
       // Reset any timer that may be on-going
       self.rejoinTimer.reset()
@@ -289,11 +289,12 @@ public class RealtimeChannel {
       self.socket?.remove(self)
     }
 
-    /// Perfom when the RealtimeChannel errors
+    /// Perform when the RealtimeChannel errors
     delegateOnError(to: self) { (self, message) in
       // Log that the channel received an error
       self.socket?.logItems(
-        "channel", "error topic: \(self.topic) joinRef: \(self.joinRef ?? "nil") mesage: \(message)"
+        "channel",
+        "error topic: \(self.topic) joinRef: \(self.joinRef ?? "nil") message: \(message)"
       )
 
       // If error was received while joining, then reset the Push
@@ -867,7 +868,7 @@ public class RealtimeChannel {
     guard
       let safeJoinRef = message.joinRef,
       safeJoinRef != joinRef,
-      ChannelEvent.isLifecyleEvent(message.event)
+      ChannelEvent.isLifecycleEvent(message.event)
     else { return true }
 
     socket?.logItems(

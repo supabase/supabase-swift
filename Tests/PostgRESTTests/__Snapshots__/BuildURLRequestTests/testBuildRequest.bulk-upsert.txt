@@ -5,4 +5,4 @@ curl \
 	--header "Prefer: resolution=merge-duplicates,return=representation" \
 	--header "X-Client-Info: postgrest-swift/x.y.z" \
 	--data "[{\"email\":\"johndoe@supabase.io\"},{\"email\":\"johndoe2@supabase.io\",\"username\":\"johndoe2\"}]" \
-	"https://example.supabase.co/users?columns=email,username"
+	"https://example.supabase.co/users?columns=%22email%22,%22username%22"

@@ -82,6 +82,163 @@ final class StorageFileAPITests: XCTestCase {
     XCTAssertEqual(result[0].name, "test.txt")
   }
 
+  func testListFilesWithPartialSortByColumn() async throws {
+    Mock(
+      url: url.appendingPathComponent("object/list/bucket"),
+      statusCode: 200,
+      data: [.post: Data("[]".utf8)]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
+      	--header "Content-Length: 89" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: storage-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	--data "{\"limit\":100,\"offset\":0,\"prefix\":\"folder\",\"sortBy\":{\"column\":\"updated_at\",\"order\":\"asc\"}}" \
+      	"http://localhost:54321/storage/v1/object/list/bucket"
+      """#
+    }
+    .register()
+
+    _ = try await storage.from("bucket").list(
+      path: "folder",
+      options: SearchOptions(sortBy: SortBy(column: "updated_at"))
+    )
+  }
+
+  func testListFilesWithPartialSortByOrder() async throws {
+    Mock(
+      url: url.appendingPathComponent("object/list/bucket"),
+      statusCode: 200,
+      data: [.post: Data("[]".utf8)]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
+      	--header "Content-Length: 84" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: storage-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	--data "{\"limit\":100,\"offset\":0,\"prefix\":\"folder\",\"sortBy\":{\"column\":\"name\",\"order\":\"desc\"}}" \
+      	"http://localhost:54321/storage/v1/object/list/bucket"
+      """#
+    }
+    .register()
+
+    _ = try await storage.from("bucket").list(
+      path: "folder",
+      options: SearchOptions(sortBy: SortBy(order: .descending))
+    )
+  }
+
+  func testListFilesWithFullSortByOverride() async throws {
+    Mock(
+      url: url.appendingPathComponent("object/list/bucket"),
+      statusCode: 200,
+      data: [.post: Data("[]".utf8)]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
+      	--header "Content-Length: 90" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: storage-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	--data "{\"limit\":100,\"offset\":0,\"prefix\":\"folder\",\"sortBy\":{\"column\":\"updated_at\",\"order\":\"desc\"}}" \
+      	"http://localhost:54321/storage/v1/object/list/bucket"
+      """#
+    }
+    .register()
+
+    _ = try await storage.from("bucket").list(
+      path: "folder",
+      options: SearchOptions(sortBy: SortBy(column: "updated_at", order: .descending))
+    )
+  }
+
+  func testListFilesPreservesDefaultLimitWhenOnlyOffsetProvided() async throws {
+    Mock(
+      url: url.appendingPathComponent("object/list/bucket"),
+      statusCode: 200,
+      data: [.post: Data("[]".utf8)]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
+      	--header "Content-Length: 84" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: storage-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	--data "{\"limit\":100,\"offset\":10,\"prefix\":\"folder\",\"sortBy\":{\"column\":\"name\",\"order\":\"asc\"}}" \
+      	"http://localhost:54321/storage/v1/object/list/bucket"
+      """#
+    }
+    .register()
+
+    _ = try await storage.from("bucket").list(
+      path: "folder",
+      options: SearchOptions(offset: 10, sortBy: SortBy(column: "name", order: .ascending))
+    )
+  }
+
+  func testListFilesPreservesDefaultOffsetWhenOnlyLimitProvided() async throws {
+    Mock(
+      url: url.appendingPathComponent("object/list/bucket"),
+      statusCode: 200,
+      data: [.post: Data("[]".utf8)]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
+      	--header "Content-Length: 82" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: storage-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	--data "{\"limit\":50,\"offset\":0,\"prefix\":\"folder\",\"sortBy\":{\"column\":\"name\",\"order\":\"asc\"}}" \
+      	"http://localhost:54321/storage/v1/object/list/bucket"
+      """#
+    }
+    .register()
+
+    _ = try await storage.from("bucket").list(
+      path: "folder",
+      options: SearchOptions(limit: 50, sortBy: SortBy(column: "name", order: .ascending))
+    )
+  }
+
+  func testListFilesWithExplicitZeroLimitIsNotTreatedAsMissing() async throws {
+    Mock(
+      url: url.appendingPathComponent("object/list/bucket"),
+      statusCode: 200,
+      data: [.post: Data("[]".utf8)]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
+      	--header "Content-Length: 81" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: storage-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	--data "{\"limit\":0,\"offset\":5,\"prefix\":\"folder\",\"sortBy\":{\"column\":\"name\",\"order\":\"asc\"}}" \
+      	"http://localhost:54321/storage/v1/object/list/bucket"
+      """#
+    }
+    .register()
+
+    _ = try await storage.from("bucket").list(
+      path: "folder",
+      options: SearchOptions(
+        limit: 0, offset: 5, sortBy: SortBy(column: "name", order: .ascending))
+    )
+  }
+
   func testMove() async throws {
     Mock(
       url: url.appendingPathComponent("object/move"),
@@ -552,6 +709,88 @@ final class StorageFileAPITests: XCTestCase {
     XCTAssertEqual(response.fullPath, "bucket/file.txt")
   }
 
+  func testUploadReturnsCleanedPath() async throws {
+    Mock(
+      url: url.appendingPathComponent("object/bucket/folder/file.txt"),
+      statusCode: 200,
+      data: [
+        .post: Data(
+          """
+          {
+            "Id": "123",
+            "Key": "bucket/folder/file.txt"
+          }
+          """.utf8
+        )
+      ]
+    )
+    .register()
+
+    let response = try await storage.from("bucket")
+      .upload(
+        "/folder//file.txt",
+        data: Data("hello world!".utf8),
+        options: FileOptions(contentType: "text/plain")
+      )
+
+    XCTAssertEqual(response.path, "folder/file.txt")
+    XCTAssertEqual(response.fullPath, "bucket/folder/file.txt")
+  }
+
+  func testUploadFromURL_honorsContentType() async throws {
+    Mock(
+      url: url.appendingPathComponent("object/bucket/file.txt"),
+      statusCode: 200,
+      data: [
+        .post: Data(
+          """
+          {
+            "Id": "123",
+            "Key": "bucket/file.txt"
+          }
+          """.utf8
+        )
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
+      	--header "Cache-Control: max-age=3600" \
+      	--header "Content-Length: 284" \
+      	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.e56f43407f772505" \
+      	--header "X-Client-Info: storage-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	--header "x-upsert: false" \
+      	--data "--alamofire.boundary.e56f43407f772505\#r
+      Content-Disposition: form-data; name=\"cacheControl\"\#r
+      \#r
+      3600\#r
+      --alamofire.boundary.e56f43407f772505\#r
+      Content-Disposition: form-data; name=\"\"; filename=\"file.txt\"\#r
+      Content-Type: image/png\#r
+      \#r
+      hello world!
+      \#r
+      --alamofire.boundary.e56f43407f772505--\#r
+      " \
+      	"http://localhost:54321/storage/v1/object/bucket/file.txt"
+      """#
+    }
+    .register()
+
+    let response = try await storage.from("bucket")
+      .upload(
+        "file.txt",
+        fileURL: Bundle.module.url(forResource: "file", withExtension: "txt")!,
+        options: FileOptions(contentType: "image/png")
+      )
+
+    XCTAssertEqual(response.id, "123")
+    XCTAssertEqual(response.path, "file.txt")
+    XCTAssertEqual(response.fullPath, "bucket/file.txt")
+  }
+
   func testUpdateFromURL() async throws {
     Mock(
       url: url.appendingPathComponent("object/bucket/file.txt"),
@@ -703,6 +942,40 @@ final class StorageFileAPITests: XCTestCase {
       publicURL.absoluteString.contains("/render/image/"),
       "Non-empty transform should use /render/image/ path, got: \(publicURL.absoluteString)"
     )
+  }
+
+  func testGetPublicURLStripsLeadingSlash() throws {
+    let publicURL = try storage.from("bucket")
+      .getPublicURL(path: "/folder/image.png")
+
+    XCTAssertEqual(
+      publicURL.absoluteString,
+      "http://localhost:54321/storage/v1/object/public/bucket/folder/image.png"
+    )
+  }
+
+  func testDownloadStripsLeadingSlash() async throws {
+    Mock(
+      url: url.appendingPathComponent("object/bucket/file.txt"),
+      statusCode: 200,
+      data: [
+        .get: Data("hello world".utf8)
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--header "X-Client-Info: storage-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:54321/storage/v1/object/bucket/file.txt"
+      """#
+    }
+    .register()
+
+    let data = try await storage.from("bucket")
+      .download(path: "/file.txt")
+
+    XCTAssertEqual(data, Data("hello world".utf8))
   }
 
   func testDownload_withOptions() async throws {
@@ -913,6 +1186,85 @@ final class StorageFileAPITests: XCTestCase {
     XCTAssertEqual(
       response.signedURL.absoluteString,
       "http://localhost:54321/storage/v1/object/upload/sign/bucket/file.txt?token=abc.def.ghi")
+  }
+
+  func testCreateSignedUploadURLCleansPath() async throws {
+    Mock(
+      url: url.appendingPathComponent("object/upload/sign/bucket/folder/file.txt"),
+      statusCode: 200,
+      data: [
+        .post: Data(
+          """
+          {
+            "url": "object/upload/sign/bucket/folder/file.txt?token=abc.def.ghi"
+          }
+          """.utf8
+        )
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
+      	--header "X-Client-Info: storage-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:54321/storage/v1/object/upload/sign/bucket/folder/file.txt"
+      """#
+    }
+    .register()
+
+    let response = try await storage.from("bucket")
+      .createSignedUploadURL(path: "/folder//file.txt")
+
+    XCTAssertEqual(response.path, "folder/file.txt")
+    XCTAssertEqual(response.token, "abc.def.ghi")
+  }
+
+  func testUploadToSignedURLCleansPath() async throws {
+    Mock(
+      url: url.appendingPathComponent("object/upload/sign/bucket/folder/file.txt"),
+      ignoreQuery: true,
+      statusCode: 200,
+      data: [
+        .put: Data(
+          """
+          {
+            "Key": "bucket/folder/file.txt"
+          }
+          """.utf8)
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request PUT \
+      	--header "Cache-Control: max-age=3600" \
+      	--header "Content-Length: 297" \
+      	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.e56f43407f772505" \
+      	--header "X-Client-Info: storage-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	--header "x-upsert: false" \
+      	--data "--alamofire.boundary.e56f43407f772505\#r
+      Content-Disposition: form-data; name=\"cacheControl\"\#r
+      \#r
+      3600\#r
+      --alamofire.boundary.e56f43407f772505\#r
+      Content-Disposition: form-data; name=\"\"; filename=\"file.txt\"\#r
+      Content-Type: text/plain;charset=UTF-8\#r
+      \#r
+      hello world\#r
+      --alamofire.boundary.e56f43407f772505--\#r
+      " \
+      	"http://localhost:54321/storage/v1/object/upload/sign/bucket/folder/file.txt?token=abc.def.ghi"
+      """#
+    }
+    .register()
+
+    let response = try await storage.from("bucket")
+      .uploadToSignedURL("/folder//file.txt", token: "abc.def.ghi", data: Data("hello world".utf8))
+
+    XCTAssertEqual(response.path, "folder/file.txt")
+    XCTAssertEqual(response.fullPath, "bucket/folder/file.txt")
   }
 
   func testUploadToSignedURL() async throws {

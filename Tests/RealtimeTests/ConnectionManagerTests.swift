@@ -2,6 +2,7 @@ import ConcurrencyExtras
 import XCTest
 
 @testable import Realtime
+@testable import RealtimeV2
 
 final class ConnectionManagerTests: XCTestCase {
   private enum TestError: LocalizedError {
@@ -51,7 +52,8 @@ final class ConnectionManagerTests: XCTestCase {
       url: url,
       headers: headers,
       reconnectDelay: reconnectDelay,
-      logger: nil
+      logger: nil,
+      clock: ContinuousClock()
     )
   }
 

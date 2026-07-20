@@ -5,7 +5,8 @@
 //  Created by Guilherme Souza on 15/05/24.
 //
 
-import Foundation
+import ConcurrencyExtras
+public import Foundation
 
 extension SupabaseClient {
   /// Database client for Supabase.

@@ -4,6 +4,7 @@ import TestHelpers
 import XCTest
 
 @testable import Realtime
+@testable import RealtimeV2
 
 /// Regression tests for SDK-959: deaf-socket stalls on cold-start subscribe.
 ///
@@ -13,15 +14,9 @@ import XCTest
 /// queue) — instead of the synchronous delivery of `FakeWebSocket`, which
 /// masks the races involved. They run against the real clock with compressed
 /// intervals, deliberately NOT under `withMainSerialExecutor`.
-@available(macOS 13.0, iOS 16.0, watchOS 9.0, tvOS 16.0, *)
 final class RealtimeColdStartTests: XCTestCase {
   let url = URL(string: "http://localhost:54321/realtime/v1")!
   let apiKey = "anon.api.key"
-
-  override func setUp() {
-    super.setUp()
-    _clock = ContinuousClock()
-  }
 
   private func makeClient(socket: AsyncFakeWebSocket) -> RealtimeClientV2 {
     RealtimeClientV2(
@@ -40,7 +35,8 @@ final class RealtimeColdStartTests: XCTestCase {
         try await Task.sleep(nanoseconds: 20_000_000)
         return socket
       },
-      http: HTTPClientMock()
+      http: HTTPClientMock(),
+      clock: ContinuousClock()
     )
   }
 
@@ -126,7 +122,7 @@ final class RealtimeColdStartTests: XCTestCase {
   /// must re-send `phx_join` on the new socket. Before this fix,
   /// `ChannelStateManager.subscribe()` was a no-op for `.subscribed` channels,
   /// so `rejoinChannels()` silently skipped them — channels went deaf after
-  /// the first reconnect (reported by rpiacent on PR #1003).
+  /// the first reconnect (reported by rpiacent on PR #1003). // cspell:ignore rpiacent
   func testChannelsRejoinAfterReconnect() async throws {
     let sockets = LockIsolated<[AsyncFakeWebSocket]>([])
 
@@ -145,7 +141,8 @@ final class RealtimeColdStartTests: XCTestCase {
         sockets.withValue { $0.append(socket) }
         return socket
       },
-      http: HTTPClientMock()
+      http: HTTPClientMock(),
+      clock: ContinuousClock()
     )
     defer { sut.disconnect() }
 
@@ -191,7 +188,7 @@ final class RealtimeColdStartTests: XCTestCase {
   /// Detection strategy: instead of asserting on specific heartbeat statuses
   /// (which are sensitive to whether the reconnect was triggered by the
   /// malformed frame or by the heartbeat timer itself), we verify that after
-  /// the first reconnect the socket count stabilises. With the bug, socket 2's
+  /// the first reconnect the socket count stabilizes. With the bug, socket 2's
   /// first heartbeat immediately times out → a second reconnect → socket 3 →
   /// etc. With the fix, socket 2 stays connected.
   func testPendingHeartbeatDoesNotLeakAcrossReconnect() async throws {
@@ -216,7 +213,8 @@ final class RealtimeColdStartTests: XCTestCase {
         sockets.withValue { $0.append(socket) }
         return socket
       },
-      http: HTTPClientMock()
+      http: HTTPClientMock(),
+      clock: ContinuousClock()
     )
     defer { sut.disconnect() }
 

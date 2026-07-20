@@ -10,10 +10,10 @@ import TestHelpers
 import XCTest
 
 @testable import Realtime
+@testable import RealtimeV2
 
 #if !os(Android) && !os(Linux) && !os(Windows)
   @MainActor
-  @available(macOS 13.0, iOS 16.0, watchOS 9.0, tvOS 16.0, *)
   final class _PushTests: XCTestCase {
     var ws: FakeWebSocket!
     var socket: RealtimeClientV2!
@@ -30,7 +30,8 @@ import XCTest
           headers: ["apiKey": "apikey"]
         ),
         wsTransport: { _, _ in client },
-        http: HTTPClientMock()
+        http: HTTPClientMock(),
+        clock: ContinuousClock()
       )
     }
 

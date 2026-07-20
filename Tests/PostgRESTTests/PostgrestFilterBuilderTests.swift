@@ -288,6 +288,60 @@ final class PostgrestFilterBuilderTests: PostgrestQueryTests {
       .execute()
   }
 
+  func testNotInFilter() async throws {
+    Mock(
+      url: url.appendingPathComponent("users"),
+      ignoreQuery: true,
+      statusCode: 200,
+      data: [.get: Data("[]".utf8)]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--header "Accept: application/json" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:54321/rest/v1/users?select=*&status=not.in.(archived,deleted)"
+      """#
+    }
+    .register()
+
+    _ =
+      try await sut
+      .from("users")
+      .select()
+      .notIn("status", values: ["archived", "deleted"])
+      .execute()
+  }
+
+  func testInFilterQuotesValuesWithReservedCharacters() async throws {
+    Mock(
+      url: url.appendingPathComponent("users"),
+      ignoreQuery: true,
+      statusCode: 200,
+      data: [.get: Data("[]".utf8)]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--header "Accept: application/json" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:54321/rest/v1/users?select=*&tags=in.(%22a,b%22,%22c(d)%22,plain)"
+      """#
+    }
+    .register()
+
+    _ =
+      try await sut
+      .from("users")
+      .select()
+      .in("tags", values: ["a,b", "c(d)", "plain"])
+      .execute()
+  }
+
   func testContainedByFilter() async throws {
     Mock(
       url: url.appendingPathComponent("users"),

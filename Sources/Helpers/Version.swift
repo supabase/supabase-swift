@@ -1,7 +1,7 @@
 import Foundation
 import XCTestDynamicOverlay
 
-private let _version = "2.48.0"  // {x-release-please-version}
+private let _version = "2.52.0"  // {x-release-please-version}
 
 #if DEBUG
   package let version = isTesting ? "0.0.0" : _version
@@ -18,7 +18,7 @@ private let _platform: String? = {
     #if targetEnvironment(macCatalyst)
       return "macCatalyst"
     #else
-      if #available(iOS 14.0, *), ProcessInfo.processInfo.isiOSAppOnMac {
+      if ProcessInfo.processInfo.isiOSAppOnMac {
         return "iOSAppOnMac"
       }
       return "iOS"

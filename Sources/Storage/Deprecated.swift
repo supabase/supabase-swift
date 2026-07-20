@@ -5,7 +5,7 @@
 //  Created by Guilherme Souza on 16/01/24.
 //
 
-import Foundation
+public import Foundation
 
 extension StorageClientConfiguration {
   @available(
@@ -284,7 +284,7 @@ extension BucketOptions {
     message: "Use `init(isPublic:fileSizeLimit:allowedMimeTypes:)` with StorageByteCount instead."
   )
   public init(
-    isPublic: Bool = false,
+    isPublic: Bool,
     fileSizeLimit: String? = nil,
     allowedMimeTypes: [String]? = nil
   ) {
@@ -296,6 +296,7 @@ extension BucketOptions {
 }
 
 extension SortBy {
+  @_disfavoredOverload
   @available(*, deprecated, message: "Use `init` with `SortOrder` instead.")
   public init(column: String? = nil, order: String? = nil) {
     self.column = column

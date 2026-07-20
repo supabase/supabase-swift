@@ -5,12 +5,13 @@
 //  Created by Guilherme Souza on 19/04/24.
 //
 
-import Foundation
+package import Foundation
 
 @discardableResult
 package func withTimeout<R: Sendable>(
   interval: TimeInterval,
-  @_inheritActorContext operation: @escaping @Sendable () async -> R
+  clock: any Clock<Duration> = ContinuousClock(),
+  @_inheritActorContext operation: @escaping @Sendable () async throws -> R
 ) async throws -> R {
   try await withThrowingTaskGroup(of: R.self) { group in
     defer {
@@ -20,13 +21,13 @@ package func withTimeout<R: Sendable>(
     let deadline = Date(timeIntervalSinceNow: interval)
 
     group.addTask {
-      await operation()
+      try await operation()
     }
 
     group.addTask {
       let interval = deadline.timeIntervalSinceNow
       if interval > 0 {
-        try await _clock.sleep(for: interval)
+        try await clock.sleep(for: .seconds(interval))
       }
       try Task.checkCancellation()
       throw TimeoutError()

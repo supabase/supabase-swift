@@ -5,7 +5,7 @@
 //  Created by Guilherme Souza on 23/04/24.
 //
 
-import Foundation
+package import Foundation
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking

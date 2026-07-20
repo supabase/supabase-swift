@@ -157,6 +157,43 @@ final class PostgrestQueryBuilderTests: PostgrestQueryTests {
     XCTAssertEqual(count, 10)
   }
 
+  func testSelectWithExistingPreferHeader() async throws {
+    Mock(
+      url: url.appendingPathComponent("users"),
+      ignoreQuery: true,
+      statusCode: 200,
+      data: [
+        .head: Data()
+      ],
+      additionalHeaders: [
+        "Content-Range": "0-9/10"
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--head \
+      	--header "Accept: application/json" \
+      	--header "Content-Type: application/json" \
+      	--header "Prefer: existing=value,count=exact" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:54321/rest/v1/users?select=*"
+      """#
+    }
+    .register()
+
+    let count =
+      try await sut
+      .from("users")
+      .setHeader(name: "Prefer", value: "existing=value")
+      .select(head: true, count: .exact)
+      .execute()
+      .count
+
+    XCTAssertEqual(count, 10)
+  }
+
   func testInsert() async throws {
     Mock(
       url: url.appendingPathComponent("users"),
@@ -177,7 +214,7 @@ final class PostgrestQueryBuilderTests: PostgrestQueryTests {
       	--header "X-Client-Info: postgrest-swift/0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--data "[{\"id\":1,\"username\":\"supabase\"},{\"id\":1,\"username\":\"supa\"}]" \
-      	"http://localhost:54321/rest/v1/users?columns=id,username"
+      	"http://localhost:54321/rest/v1/users?columns=%22id%22,%22username%22"
       """#
     }
     .register()
@@ -192,6 +229,37 @@ final class PostgrestQueryBuilderTests: PostgrestQueryTests {
         returning: .minimal,
         count: .estimated
       )
+      .execute()
+  }
+
+  func testInsertQuotesColumnNameContainingReservedCharacter() async throws {
+    Mock(
+      url: url.appendingPathComponent("users"),
+      ignoreQuery: true,
+      statusCode: 201,
+      data: [
+        .post: Data()
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
+      	--header "Accept: application/json" \
+      	--header "Content-Length: 11" \
+      	--header "Content-Type: application/json" \
+      	--header "Prefer: return=minimal" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	--data "[{\"a,b\":1}]" \
+      	"http://localhost:54321/rest/v1/users?columns=%22a,b%22"
+      """#
+    }
+    .register()
+
+    try await sut
+      .from("users")
+      .insert([["a,b": 1]], returning: .minimal)
       .execute()
   }
 
@@ -279,7 +347,7 @@ final class PostgrestQueryBuilderTests: PostgrestQueryTests {
       	--header "X-Client-Info: postgrest-swift/0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--data "[{\"id\":1,\"username\":\"admin\"},{\"id\":2,\"username\":\"supabase\"}]" \
-      	"http://localhost:54321/rest/v1/users?columns=id,username&on_conflict=username"
+      	"http://localhost:54321/rest/v1/users?columns=%22id%22,%22username%22&on_conflict=username"
       """#
     }
     .register()

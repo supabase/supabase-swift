@@ -5,7 +5,7 @@
 //  Created by Guilherme Souza on 27/01/24.
 //
 
-import Foundation
+public import Foundation
 
 public struct PostgrestError: Error, Codable, Sendable {
   public let detail: String?

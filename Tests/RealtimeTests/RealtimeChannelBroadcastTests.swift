@@ -11,6 +11,7 @@ import TestHelpers
 import XCTest
 
 @testable import Realtime
+@testable import RealtimeV2
 
 #if os(Linux)
   @available(
@@ -20,8 +21,7 @@ import XCTest
   final class RealtimeChannelBroadcastTests: XCTestCase {}
 #else
 
-  @available(macOS 13.0, iOS 16.0, watchOS 9.0, tvOS 16.0, *)
-  final class RealtimeChannelBroadcastTests: XCTestCase {
+  final class RealtimeChannelBroadcastTests: XCTestCase, @unchecked Sendable {
     let url = URL(string: "http://localhost:54321/realtime/v1")!
     let apiKey = "publishable.api.key"
 
@@ -46,7 +46,8 @@ import XCTest
           }
         ),
         wsTransport: { _, _ in self.client },
-        http: http
+        http: http,
+        clock: ContinuousClock()
       )
     }
 
@@ -244,6 +245,37 @@ import XCTest
       XCTAssertEqual(payload?["type"]?.stringValue, "broadcast")
       XCTAssertEqual(payload?["event"]?.stringValue, "evt")
       XCTAssertEqual(payload?["payload"]?.objectValue?["key"]?.stringValue, "value")
+    }
+
+    // MARK: - REST broadcast URL uses the sub-topic (without `realtime:` prefix)
+
+    func testHttpSend_urlUsesSubTopicWithoutRealtimePrefix() async throws {
+      await http.any { _ in
+        HTTPResponse(
+          data: Data(),
+          response: HTTPURLResponse(
+            url: self.url,
+            statusCode: 202,
+            httpVersion: nil,
+            headerFields: nil
+          )!
+        )
+      }
+
+      let channel = sut.channel("test")
+      XCTAssertEqual(channel.topic, "realtime:test")
+
+      try await channel.httpSend(
+        event: "my_event", message: ["hello": .string("world")] as JSONObject
+      )
+
+      let request = await http.receivedRequests.last
+      let url = try XCTUnwrap(request?.url)
+      XCTAssertEqual(url.path, "/realtime/v1/api/broadcast/test/events/my_event")
+
+      let body = try XCTUnwrap(request?.body)
+      let json = try JSONSerialization.jsonObject(with: body) as? [String: Any]
+      XCTAssertEqual(json?["hello"] as? String, "world")
     }
 
     // MARK: - End-to-end binary frame via WebSocket

@@ -6,17 +6,38 @@ import HTTPTypes
   import FoundationNetworking
 #endif
 
-/// The builder class for creating and executing requests to a PostgREST server.
+/// The base builder class for all PostgREST requests.
 ///
-/// - Note: Thread Safety: This class is `@unchecked Sendable` because all mutable state
-///   is protected by `LockIsolated`. Access to `mutableState` is always through `withValue`.
+/// ``PostgrestBuilder`` holds the shared HTTP request state and provides the ``execute(options:)-96tpd``
+/// methods that send the request to the PostgREST server. You typically interact with one of its
+/// subclasses — ``PostgrestQueryBuilder``, ``PostgrestFilterBuilder``, or
+/// ``PostgrestTransformBuilder`` — rather than instantiating ``PostgrestBuilder`` directly.
 ///
-/// - Important: While this class is `Sendable`, individual builder instances should not be
-///   modified concurrently from multiple tasks. Create separate builder chains for concurrent operations.
+/// > Note: Thread Safety: This class is `@unchecked Sendable` because all mutable state
+/// > is protected by `LockIsolated`. Access to `mutableState` is always through its `withValue` API.
+///
+/// > Important: While this class is `Sendable`, individual builder instances should not be
+/// > modified concurrently from multiple tasks. Create separate builder chains for concurrent operations.
+///
+/// ## Topics
+///
+/// ### Setting Headers
+///
+/// - ``setHeader(name:value:)``
+///
+/// ### Configuring Retries
+///
+/// - ``retry(enabled:)``
+///
+/// ### Executing the Request
+///
+/// - ``execute(options:)-96tpd``
+/// - ``execute(options:)-6mk2u``
 public class PostgrestBuilder: @unchecked Sendable {
   /// The configuration for the PostgREST client.
   let configuration: PostgrestClient.Configuration
   let http: any HTTPClientType
+  let clock: any Clock<Duration>
 
   struct MutableState {
     var request: Helpers.HTTPRequest
@@ -26,15 +47,20 @@ public class PostgrestBuilder: @unchecked Sendable {
 
     /// An error to throw when execute() is called, set when an invalid method combination is detected.
     var pendingError: String?
+
+    /// Whether a `PGRST116` error should be returned as a `nil` value instead of being thrown.
+    var isMaybeSingle: Bool = false
   }
 
   let mutableState: LockIsolated<MutableState>
 
   init(
     configuration: PostgrestClient.Configuration,
-    request: Helpers.HTTPRequest
+    request: Helpers.HTTPRequest,
+    clock: any Clock<Duration>
   ) {
     self.configuration = configuration
+    self.clock = clock
 
     var interceptors: [any HTTPClientInterceptor] = []
     if let logger = configuration.logger {
@@ -54,12 +80,21 @@ public class PostgrestBuilder: @unchecked Sendable {
   convenience init(_ other: PostgrestBuilder) {
     self.init(
       configuration: other.configuration,
-      request: other.mutableState.value.request
+      request: other.mutableState.value.request,
+      clock: other.clock
     )
     mutableState.withValue { $0.retryEnabled = other.mutableState.value.retryEnabled }
   }
 
-  /// Set a HTTP header for the request.
+  /// Adds or replaces a custom HTTP header on the request.
+  ///
+  /// Use this method to attach arbitrary headers — for example, to pass custom PostgREST
+  /// `Prefer` values or to forward user-supplied metadata.
+  ///
+  /// - Parameters:
+  ///   - name: The header field name.
+  ///   - value: The header field value.
+  /// - Returns: The same builder instance so calls can be chained.
   @discardableResult
   public func setHeader(name: String, value: String) -> Self {
     return self.setHeader(name: .init(name)!, value: value)
@@ -74,21 +109,30 @@ public class PostgrestBuilder: @unchecked Sendable {
     return self
   }
 
-  /// Controls whether automatic retries are enabled for this request.
+  /// Controls whether automatic retries are enabled for this specific request.
   ///
-  /// When enabled, the request will be retried up to 3 times with exponential backoff on
-  /// transient errors (HTTP 503, 520, network errors) for idempotent methods (GET, HEAD).
+  /// When enabled, GET and HEAD requests that receive an HTTP 503 or 520 response, or encounter a
+  /// network error, are retried up to three times with exponential back-off. The global default is
+  /// set via ``PostgrestClient/Configuration/retryEnabled``; this method overrides it per request.
+  ///
   /// - Parameter enabled: Pass `false` to disable retries for this request.
+  /// - Returns: The same builder instance so calls can be chained.
   @discardableResult
   public func retry(enabled: Bool) -> Self {
     mutableState.withValue { $0.retryEnabled = enabled }
     return self
   }
 
-  /// Executes the request and returns a response of type Void.
-  /// - Parameters:
-  ///   - options: Options for querying Supabase.
-  /// - Returns: A `PostgrestResponse<Void>` instance representing the response.
+  /// Executes the request and discards the response body.
+  ///
+  /// Use this overload for mutations (INSERT, UPDATE, DELETE) when you do not need the
+  /// affected rows, or when you have already called ``PostgrestTransformBuilder/csv()`` or
+  /// a similar method that changes the response format.
+  ///
+  /// - Parameter options: Options controlling whether to include a row count and whether to
+  ///   use the HEAD method. Defaults to ``FetchOptions/init(head:count:)``.
+  /// - Returns: A ``PostgrestResponse`` whose `value` is `Void`.
+  /// - Throws: ``PostgrestError`` if PostgREST returns an error response, or any error thrown by the fetch handler.
   @discardableResult
   public func execute(
     options: FetchOptions = FetchOptions()
@@ -96,10 +140,21 @@ public class PostgrestBuilder: @unchecked Sendable {
     try await execute(options: options) { _ in () }
   }
 
-  /// Executes the request and returns a response of the specified type.
-  /// - Parameters:
-  ///   - options: Options for querying Supabase.
-  /// - Returns: A `PostgrestResponse<T>` instance representing the response.
+  /// Executes the request and decodes the response body into the inferred type.
+  ///
+  /// ```swift
+  /// let todos: [Todo] = try await client
+  ///   .from("todos")
+  ///   .select()
+  ///   .execute()
+  ///   .value
+  /// ```
+  ///
+  /// - Parameter options: Options controlling whether to include a row count and whether to
+  ///   use the HEAD method. Defaults to ``FetchOptions/init(head:count:)``.
+  /// - Returns: A ``PostgrestResponse`` whose `value` is the decoded `T`.
+  /// - Throws: ``PostgrestError`` if PostgREST returns an error response, a decoding error if the
+  ///   response body cannot be decoded as `T`, or any error thrown by the fetch handler.
   @discardableResult
   public func execute<T: Decodable>(
     options: FetchOptions = FetchOptions()
@@ -118,11 +173,11 @@ public class PostgrestBuilder: @unchecked Sendable {
     options: FetchOptions,
     decode: @Sendable (Data) throws -> T
   ) async throws -> PostgrestResponse<T> {
-    let (baseRequest, retryEnabled) = try mutableState.withValue {
+    let (baseRequest, retryEnabled, isMaybeSingle) = try mutableState.withValue {
       if let message = $0.pendingError {
         throw PostgrestError(message: message)
       }
-      return ($0.request, $0.retryEnabled)
+      return ($0.request, $0.retryEnabled, $0.isMaybeSingle)
     }
     var request = baseRequest
 
@@ -165,7 +220,7 @@ public class PostgrestBuilder: @unchecked Sendable {
           request: currentRequest, response: nil, error: error, retryEnabled: retryEnabled,
           attempt: attempt)
         {
-          try await _clock.sleep(for: retryDelay(attempt: attempt))
+          try await clock.sleep(for: .seconds(retryDelay(attempt: attempt)))
           attempt += 1
           continue
         }
@@ -182,12 +237,18 @@ public class PostgrestBuilder: @unchecked Sendable {
         request: currentRequest, response: response, error: nil, retryEnabled: retryEnabled,
         attempt: attempt)
       {
-        try await _clock.sleep(for: retryDelay(attempt: attempt))
+        try await clock.sleep(for: .seconds(retryDelay(attempt: attempt)))
         attempt += 1
         continue
       }
 
       if let error = try? configuration.decoder.decode(PostgrestError.self, from: response.data) {
+        // `maybeSingle()` turns the "no/too many rows" error (PGRST116) into a `nil` value.
+        if isMaybeSingle, error.code == "PGRST116" {
+          let value = try decode(Data("null".utf8))
+          return PostgrestResponse(
+            data: response.data, response: response.underlyingResponse, value: value)
+        }
         throw error
       }
       throw HTTPError(data: response.data, response: response.underlyingResponse)

@@ -1,14 +1,39 @@
 import Foundation
+import HTTPTypes
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
 #endif
 
-/// Storage Bucket API for bucket management operations.
+/// Storage API for bucket management operations.
 ///
-/// - Note: Thread Safety: Inherits immutable design from `StorageApi`. No additional mutable state.
+/// ``StorageBucketApi`` provides methods to list, create, update, empty, and delete Storage
+/// buckets. It is the superclass of ``SupabaseStorageClient``.
+///
+/// > Note: This class is `@unchecked Sendable` and inherits the thread-safe design of
+/// > ``StorageApi``. No additional mutable state is introduced.
+///
+/// ## Topics
+///
+/// ### Listing and inspecting buckets
+///
+/// - ``listBuckets()``
+/// - ``getBucket(_:)``
+///
+/// ### Creating and updating buckets
+///
+/// - ``createBucket(_:options:)``
+/// - ``updateBucket(_:options:)``
+///
+/// ### Removing buckets
+///
+/// - ``emptyBucket(_:)``
+/// - ``deleteBucket(_:)``
 public class StorageBucketApi: StorageApi, @unchecked Sendable {
-  /// Retrieves the details of all Storage buckets within an existing project.
+  /// Retrieves the details of all Storage buckets within the project.
+  ///
+  /// - Returns: An array of ``Bucket`` objects, one for each bucket in the project.
+  /// - Throws: ``StorageError`` if the request fails or the caller is not authorized.
   public func listBuckets() async throws -> [Bucket] {
     try await execute(
       HTTPRequest(
@@ -20,8 +45,10 @@ public class StorageBucketApi: StorageApi, @unchecked Sendable {
   }
 
   /// Retrieves the details of an existing Storage bucket.
-  /// - Parameters:
-  ///   - id: The unique identifier of the bucket you would like to retrieve.
+  ///
+  /// - Parameter id: The unique identifier of the bucket to retrieve.
+  /// - Returns: The ``Bucket`` with the given identifier.
+  /// - Throws: ``StorageError`` if the bucket does not exist or the caller is not authorized.
   public func getBucket(_ id: String) async throws -> Bucket {
     try await execute(
       HTTPRequest(
@@ -41,9 +68,20 @@ public class StorageBucketApi: StorageApi, @unchecked Sendable {
   }
 
   /// Creates a new Storage bucket.
+  ///
+  /// ```swift
+  /// try await storage.createBucket(
+  ///   "avatars",
+  ///   options: BucketOptions(isPublic: true, fileSizeLimit: .megabytes(5))
+  /// )
+  /// ```
+  ///
   /// - Parameters:
-  ///   - id: A unique identifier for the bucket you are creating.
-  ///   - options: Options for creating the bucket.
+  ///   - id: A unique identifier for the bucket. This also becomes the bucket name.
+  ///   - options: Options that control visibility, file-size limits, and allowed MIME types.
+  ///     Defaults to a private bucket with no size or type restrictions.
+  /// - Throws: ``StorageError`` if a bucket with the same identifier already exists, or if the
+  ///   caller is not authorized.
   public func createBucket(_ id: String, options: BucketOptions = BucketOptions(isPublic: false))
     async throws
   {
@@ -64,10 +102,19 @@ public class StorageBucketApi: StorageApi, @unchecked Sendable {
     )
   }
 
-  /// Updates a Storage bucket.
+  /// Updates an existing Storage bucket's settings.
+  ///
+  /// ```swift
+  /// try await storage.updateBucket(
+  ///   "avatars",
+  ///   options: BucketOptions(isPublic: false, allowedMimeTypes: ["image/png", "image/jpeg"])
+  /// )
+  /// ```
+  ///
   /// - Parameters:
-  ///   - id: A unique identifier for the bucket you are updating.
-  ///   - options: Options for updating the bucket.
+  ///   - id: The unique identifier of the bucket to update.
+  ///   - options: The new options to apply to the bucket.
+  /// - Throws: ``StorageError`` if the bucket does not exist or the caller is not authorized.
   public func updateBucket(_ id: String, options: BucketOptions) async throws {
     try await execute(
       HTTPRequest(
@@ -86,9 +133,13 @@ public class StorageBucketApi: StorageApi, @unchecked Sendable {
     )
   }
 
-  /// Removes all objects inside a single bucket.
-  /// - Parameters:
-  ///   - id: The unique identifier of the bucket you would like to empty.
+  /// Removes all objects inside a bucket without deleting the bucket itself.
+  ///
+  /// > Important: This operation is irreversible. All files in the bucket will be permanently
+  /// > deleted.
+  ///
+  /// - Parameter id: The unique identifier of the bucket to empty.
+  /// - Throws: ``StorageError`` if the bucket does not exist or the caller is not authorized.
   public func emptyBucket(_ id: String) async throws {
     try await execute(
       HTTPRequest(
@@ -98,10 +149,14 @@ public class StorageBucketApi: StorageApi, @unchecked Sendable {
     )
   }
 
-  /// Deletes an existing bucket. A bucket can't be deleted with existing objects inside it.
-  /// You must first `empty()` the bucket.
-  /// - Parameters:
-  ///   - id: The unique identifier of the bucket you would like to delete.
+  /// Deletes an existing bucket.
+  ///
+  /// > Important: A bucket cannot be deleted while it contains objects. Call ``emptyBucket(_:)``
+  /// > first to remove all files, then delete the bucket.
+  ///
+  /// - Parameter id: The unique identifier of the bucket to delete.
+  /// - Throws: ``StorageError`` if the bucket is not empty, does not exist, or the caller is not
+  ///   authorized.
   public func deleteBucket(_ id: String) async throws {
     try await execute(
       HTTPRequest(

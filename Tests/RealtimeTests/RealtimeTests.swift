@@ -7,6 +7,7 @@ import TestHelpers
 import XCTest
 
 @testable import Realtime
+@testable import RealtimeV2
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -17,7 +18,6 @@ import XCTest
   final class RealtimeTests: XCTestCase {}
 #else
 
-  @available(macOS 13.0, iOS 16.0, watchOS 9.0, tvOS 16.0, *)
   final class RealtimeTests: XCTestCase {
     let url = URL(string: "http://localhost:54321/realtime/v1")!
     let apiKey = "publishable.api.key"
@@ -46,7 +46,6 @@ import XCTest
       (client, server) = FakeWebSocket.fakes()
       http = HTTPClientMock()
       testClock = TestClock()
-      _clock = testClock
 
       sut = RealtimeClientV2(
         url: url,
@@ -57,7 +56,8 @@ import XCTest
           }
         ),
         wsTransport: { _, _ in self.client },
-        http: http
+        http: http,
+        clock: testClock
       )
     }
 
@@ -84,7 +84,8 @@ import XCTest
           }
           return FakeWebSocket.fakes().0
         },
-        http: http
+        http: http,
+        clock: testClock
       )
 
       await client.connect()
@@ -175,6 +176,7 @@ import XCTest
                 "config" : {
                   "broadcast" : {
                     "ack" : false,
+                    "replication_ready" : false,
                     "self" : false
                   },
                   "postgres_changes" : [
@@ -267,6 +269,7 @@ import XCTest
               "config" : {
                 "broadcast" : {
                   "ack" : false,
+                  "replication_ready" : false,
                   "self" : false
                 },
                 "postgres_changes" : [
@@ -291,6 +294,7 @@ import XCTest
               "config" : {
                 "broadcast" : {
                   "ack" : false,
+                  "replication_ready" : false,
                   "self" : false
                 },
                 "postgres_changes" : [
@@ -566,6 +570,51 @@ import XCTest
       )
     }
 
+    /// Regression test for SDK-1330: a heartbeat tick that lands while the
+    /// client is mid-reconnect (external close, not one triggered by the
+    /// heartbeat timer itself) must not publish `.disconnected` to
+    /// `onHeartbeat(_:)`/`heartbeat` consumers — it's an internal bookkeeping
+    /// signal, not a heartbeat outcome.
+    func testHeartbeat_doesNotLeakDisconnectedStatus() async throws {
+      let (client, server) = FakeWebSocket.fakes()
+      let sut = RealtimeClientV2(
+        url: url,
+        options: RealtimeClientOptions(
+          headers: ["apikey": apiKey],
+          heartbeatInterval: 1,
+          reconnectDelay: 10,
+          accessToken: { "custom.access.token" }
+        ),
+        wsTransport: { _, _ in client },
+        http: http,
+        clock: testClock
+      )
+      defer { sut.disconnect() }
+
+      let heartbeatStatuses = LockIsolated<[HeartbeatStatus]>([])
+      let subscription = sut.onHeartbeat { status in
+        heartbeatStatuses.withValue { $0.append(status) }
+      }
+      defer { subscription.cancel() }
+
+      await sut.connect()
+
+      // Server drops the connection out from under us — unrelated to the
+      // heartbeat timer, which is still sleeping out its first interval.
+      server.close(code: nil, reason: "boom")
+      await Task.megaYield()
+
+      // The heartbeat timer ticks while the reconnect is still sleeping out
+      // its 10s `reconnectDelay` — the still-alive old heartbeat task must
+      // not observe `status != .connected` and publish `.disconnected`.
+      await testClock.advance(by: .seconds(1))
+
+      XCTAssertFalse(
+        heartbeatStatuses.value.contains(.disconnected),
+        "heartbeat status leaked .disconnected to consumers: \(heartbeatStatuses.value)"
+      )
+    }
+
     func testHeartbeat_timeout() async throws {
       let heartbeatStatuses = LockIsolated<[HeartbeatStatus]>([])
       let s1 = sut.onHeartbeat { status in
@@ -647,12 +696,12 @@ import XCTest
 
     func testBroadcastWithHTTP() async throws {
       await http.when {
-        $0.url.path.hasSuffix("broadcast")
+        $0.url.path.contains("/api/broadcast/")
       } return: { _ in
         HTTPResponse(
           data: "{}".data(using: .utf8)!,
           response: HTTPURLResponse(
-            url: self.sut.broadcastURL,
+            url: self.url,
             statusCode: 200,
             httpVersion: nil,
             headerFields: nil
@@ -674,8 +723,8 @@ import XCTest
         	--header "Authorization: Bearer custom.access.token" \
         	--header "Content-Type: application/json" \
         	--header "apiKey: publishable.api.key" \
-        	--data "{\"messages\":[{\"event\":\"test\",\"payload\":{\"value\":42},\"private\":false,\"topic\":\"realtime:public:messages\"}]}" \
-        	"http://localhost:54321/realtime/v1/api/broadcast"
+        	--data "{\"value\":42}" \
+        	"http://localhost:54321/realtime/v1/api/broadcast/public%3Amessages/events/test"
         """#
       }
     }
@@ -691,6 +740,99 @@ import XCTest
     func testSetAuthWithNonJWT() async throws {
       let token = "sb-token"
       await sut.setAuth(token)
+    }
+
+    func testSetAuthKeepsCurrentTokenWhenAccessTokenFetchFails() async {
+      struct FetchError: Error {}
+
+      let sut = RealtimeClientV2(
+        url: url,
+        options: RealtimeClientOptions(
+          headers: ["apikey": apiKey],
+          accessToken: { throw FetchError() }
+        ),
+        wsTransport: { _, _ in self.client },
+        http: http,
+        clock: testClock
+      )
+      defer { sut.disconnect() }
+
+      let validToken =
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyLCJleHAiOjY0MDkyMjExMjAwfQ.GfiEKLl36X8YWcatHg31jRbilovlGecfUKnOyXMSX9c"
+      await sut.setAuth(validToken)
+      XCTAssertEqual(sut.mutableState.accessToken, validToken)
+
+      await sut.setAuth()
+
+      XCTAssertEqual(sut.mutableState.accessToken, validToken)
+    }
+
+    func testSetAuthDoesNotPushNullTokenToChannelsWhenFetchFails() async throws {
+      struct FetchError: Error {}
+
+      let validToken =
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyLCJleHAiOjY0MDkyMjExMjAwfQ.GfiEKLl36X8YWcatHg31jRbilovlGecfUKnOyXMSX9c"
+      let shouldThrow = LockIsolated(false)
+
+      let sut = RealtimeClientV2(
+        url: url,
+        options: RealtimeClientOptions(
+          headers: ["apikey": apiKey],
+          accessToken: {
+            if shouldThrow.value { throw FetchError() }
+            return validToken
+          }
+        ),
+        wsTransport: { _, _ in self.client },
+        http: http,
+        clock: testClock
+      )
+      defer { sut.disconnect() }
+
+      let serverTask = Task { @Sendable [server = server!] in
+        for await event in server.events {
+          guard let msg = event.realtimeMessage else { continue }
+          if msg.event == "heartbeat" {
+            server.send(
+              RealtimeMessageV2(
+                joinRef: msg.joinRef, ref: msg.ref, topic: "phoenix",
+                event: "phx_reply", payload: ["response": [:]]
+              )
+            )
+          } else if msg.event == "phx_join" {
+            server.send(
+              RealtimeMessageV2(
+                joinRef: msg.joinRef, ref: msg.ref, topic: msg.topic,
+                event: "phx_reply",
+                payload: ["response": ["postgres_changes": .array([])], "status": "ok"]
+              )
+            )
+          }
+        }
+      }
+      defer { serverTask.cancel() }
+
+      await sut.connect()
+      await sut.setAuth(validToken)
+      XCTAssertEqual(sut.mutableState.accessToken, validToken)
+
+      let channel = sut.channel("room")
+      try await channel.subscribeWithError()
+
+      let sentBefore = client.sentEvents.count
+      shouldThrow.setValue(true)
+      await sut.setAuth()
+
+      let accessTokenPushes =
+        client.sentEvents
+        .dropFirst(sentBefore)
+        .compactMap { $0.realtimeMessage }
+        .filter { $0.event == ChannelEvent.accessToken }
+      XCTAssertTrue(
+        accessTokenPushes.isEmpty,
+        "No access_token update should be pushed to channels when the token fetch fails"
+      )
+      XCTAssertEqual(sut.mutableState.accessToken, validToken)
     }
 
     // MARK: - Task Lifecycle Tests
@@ -920,7 +1062,8 @@ import XCTest
           disconnectOnEmptyChannelsAfter: delay
         ),
         wsTransport: { _, _ in self.client },
-        http: http
+        http: http,
+        clock: testClock
       )
     }
 
