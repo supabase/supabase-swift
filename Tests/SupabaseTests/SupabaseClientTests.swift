@@ -199,6 +199,52 @@ struct SupabaseClientTests {
   }
 
   @Test
+  func globalSessionPropagatedToRealtimeWebSocket() {
+    let localStorage = AuthLocalStorageMock()
+    let customSession = URLSession(configuration: .ephemeral)
+    let client = SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      options: SupabaseClientOptions(
+        auth: SupabaseClientOptions.AuthOptions(
+          storage: localStorage,
+          autoRefreshToken: false
+        ),
+        global: SupabaseClientOptions.GlobalOptions(session: customSession)
+      )
+    )
+
+    #expect(
+      client.realtimeV2.options.session === customSession,
+      "global URLSession should be propagated to Realtime's WebSocket transport for certificate pinning"
+    )
+  }
+
+  @Test
+  func userProvidedRealtimeSessionIsNotOverridden() {
+    let localStorage = AuthLocalStorageMock()
+    let globalSession = URLSession(configuration: .ephemeral)
+    let realtimeSpecificSession = URLSession(configuration: .default)
+    let client = SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      options: SupabaseClientOptions(
+        auth: SupabaseClientOptions.AuthOptions(
+          storage: localStorage,
+          autoRefreshToken: false
+        ),
+        global: SupabaseClientOptions.GlobalOptions(session: globalSession),
+        realtime: RealtimeClientOptions(session: realtimeSpecificSession)
+      )
+    )
+
+    #expect(
+      client.realtimeV2.options.session === realtimeSpecificSession,
+      "user-provided realtime session should be preserved"
+    )
+  }
+
+  @Test
   func clientInitWithCustomAccessToken() async {
     let localStorage = AuthLocalStorageMock()
 

@@ -507,6 +507,10 @@ public final class SupabaseClient: Sendable {
       }
     }
 
+    if realtimeOptions.session == nil {
+      realtimeOptions.session = options.global.session
+    }
+
     if realtimeOptions.accessToken == nil {
       realtimeOptions.accessToken = { [weak self] in
         try await self?._getAccessToken()

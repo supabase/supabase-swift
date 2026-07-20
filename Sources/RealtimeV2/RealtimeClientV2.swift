@@ -226,7 +226,8 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       wsTransport: { url, headers in
         return try await URLSessionWebSocket.connect(
           to: url,
-          headers: headers
+          headers: headers,
+          session: options.session
         )
       },
       http: HTTPClient(

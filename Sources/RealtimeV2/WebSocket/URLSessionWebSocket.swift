@@ -15,7 +15,7 @@ import Foundation
 /// All operations are protected by internal synchronization mechanisms.
 ///
 /// ## Connection Management
-/// The connection is established asynchronously using the `connect(to:protocols:configuration:)` method.
+/// The connection is established asynchronously using the `connect(to:protocols:headers:session:)` method.
 /// Once connected, you can send text/binary messages and listen for events through the `events` stream.
 ///
 /// ## Error Handling
@@ -26,6 +26,8 @@ final class URLSessionWebSocket: WebSocket {
   /// - Parameters:
   ///   - _task: The underlying `URLSessionWebSocketTask` for this connection.
   ///   - _protocol: The negotiated WebSocket subprotocol, empty string if none.
+  ///   - session: The dedicated internal session `connect` created for this connection.
+  ///     Always owned by this instance, so it's always safe to invalidate on close.
   private init(
     _task: URLSessionWebSocketTask,
     _protocol: String,
@@ -51,15 +53,21 @@ final class URLSessionWebSocket: WebSocket {
   ///   - headers: Optional HTTP headers to include in the WebSocket upgrade request.
   ///              These are set on the URLRequest rather than on URLSessionConfiguration's
   ///              httpAdditionalHeaders, which can interfere with the WebSocket upgrade handshake.
-  ///   - configuration: Optional `URLSessionConfiguration` for customizing the connection.
-  ///                   Defaults to `.default` if not provided.
+  ///   - session: A template `URLSession` to read configuration and delegate from. `connect`
+  ///             never uses this session object directly — it always creates its own
+  ///             dedicated internal session (copying `session`'s `configuration`), so it's
+  ///             unaffected by process-wide `URLSession` state and can always safely
+  ///             invalidate what it created on close. If `session` has a `delegate`, its
+  ///             auth-challenge callback (if implemented) is forwarded to, enabling
+  ///             certificate pinning and other server-trust customization. Defaults to `nil`
+  ///             (equivalent to `.default` configuration with no delegate to forward).
   /// - Returns: A connected `URLSessionWebSocket` instance.
   /// - Throws: `WebSocketError.connection` if the connection fails or times out.
   static func connect(
     to url: URL,
     protocols: [String]? = nil,
     headers: [String: String]? = nil,
-    configuration: URLSessionConfiguration? = nil
+    session: URLSession? = nil
   ) async throws -> URLSessionWebSocket {
     guard url.scheme == "ws" || url.scheme == "wss" else {
       preconditionFailure("only ws: and wss: schemes are supported")
@@ -72,72 +80,92 @@ final class URLSessionWebSocket: WebSocket {
 
     let mutableState = LockIsolated(MutableState())
 
-    let session = URLSession.sessionWithConfiguration(
-      configuration ?? .default,
-      onComplete: { session, task, error in
-        mutableState.withValue {
-          if let webSocket = $0.webSocket {
-            // There are three possibilities here:
-            // 1. the peer sent a close Frame, `onWebSocketTaskClosed` was already
-            //    called and `_connectionClosed` is a no-op.
-            // 2. we sent a close Frame (through `close()`) and `_connectionClosed`
-            //    is a no-op.
-            // 3. an error occurred (e.g. network failure) and `_connectionClosed`
-            //    will signal that and close `event`.
-            webSocket._connectionClosed(
-              code: 1006,
-              reason: Data("abnormal close".utf8)
+    let onComplete: @Sendable (URLSession, URLSessionTask, (any Error)?) -> Void = {
+      session, task, error in
+      mutableState.withValue {
+        if let webSocket = $0.webSocket {
+          // There are three possibilities here:
+          // 1. the peer sent a close Frame, `onWebSocketTaskClosed` was already
+          //    called and `_connectionClosed` is a no-op.
+          // 2. we sent a close Frame (through `close()`) and `_connectionClosed`
+          //    is a no-op.
+          // 3. an error occurred (e.g. network failure) and `_connectionClosed`
+          //    will signal that and close `event`.
+          webSocket._connectionClosed(
+            code: 1006,
+            reason: Data("abnormal close".utf8)
+          )
+        } else if let error {
+          $0.continuation.resume(
+            throwing: WebSocketError.connection(
+              message: "connection ended unexpectedly",
+              error: error
             )
-          } else if let error {
-            $0.continuation.resume(
-              throwing: WebSocketError.connection(
-                message: "connection ended unexpectedly",
-                error: error
-              )
-            )
-          } else {
-            // `onWebSocketTaskOpened` should have been called and resumed continuation.
-            // So either there was an error creating the connection or a logic error.
-            assertionFailure(
-              "expected an error or `onWebSocketTaskOpened` to have been called first"
-            )
+          )
+        } else {
+          // `onWebSocketTaskOpened` should have been called and resumed continuation.
+          // So either there was an error creating the connection or a logic error.
+          assertionFailure(
+            "expected an error or `onWebSocketTaskOpened` to have been called first"
+          )
+        }
+      }
+    }
+    let onWebSocketTaskOpened: @Sendable (URLSession, URLSessionWebSocketTask, String?) -> Void = {
+      session, task, `protocol` in
+      mutableState.withValue {
+        $0.webSocket = URLSessionWebSocket(
+          _task: task, _protocol: `protocol` ?? "", session: session)
+        $0.continuation.resume(returning: $0.webSocket!)
+      }
+    }
+    let onWebSocketTaskClosed:
+      @Sendable (URLSession, URLSessionWebSocketTask, Int?, Data?) -> Void =
+        { session, task, code, reason in
+          mutableState.withValue {
+            assert($0.webSocket != nil, "connection should exist by this time")
+            $0.webSocket!._connectionClosed(code: code, reason: reason)
           }
         }
-      },
-      onWebSocketTaskOpened: { session, task, `protocol` in
-        mutableState.withValue {
-          $0.webSocket = URLSessionWebSocket(
-            _task: task, _protocol: `protocol` ?? "", session: session)
-          $0.continuation.resume(returning: $0.webSocket!)
-        }
-      },
-      onWebSocketTaskClosed: { session, task, code, reason in
-        mutableState.withValue {
-          assert($0.webSocket != nil, "connection should exist by this time")
-          $0.webSocket!._connectionClosed(code: code, reason: reason)
-        }
-      }
-    )
 
-    let task: URLSessionWebSocketTask
-    if let headers, !headers.isEmpty {
-      // Use URLRequest to set headers instead of httpAdditionalHeaders on the
-      // URLSessionConfiguration. Setting httpAdditionalHeaders can interfere with
-      // the WebSocket upgrade handshake on iOS, causing -1005 errors.
-      var request = URLRequest(url: url)
-      for (key, value) in headers {
-        request.setValue(value, forHTTPHeaderField: key)
+    func makeTask(on session: URLSession) -> URLSessionWebSocketTask {
+      if let headers, !headers.isEmpty {
+        // Use URLRequest to set headers instead of httpAdditionalHeaders on the
+        // URLSessionConfiguration. Setting httpAdditionalHeaders can interfere with
+        // the WebSocket upgrade handshake on iOS, causing -1005 errors.
+        var request = URLRequest(url: url)
+        for (key, value) in headers {
+          request.setValue(value, forHTTPHeaderField: key)
+        }
+        // session.webSocketTask(with: URLRequest) doesn't accept a protocols
+        // parameter, so set the Sec-WebSocket-Protocol header manually.
+        if let protocols, !protocols.isEmpty {
+          request.setValue(
+            protocols.joined(separator: ", "), forHTTPHeaderField: "Sec-WebSocket-Protocol")
+        }
+        return session.webSocketTask(with: request)
+      } else {
+        return session.webSocketTask(with: url, protocols: protocols ?? [])
       }
-      // session.webSocketTask(with: URLRequest) doesn't accept a protocols
-      // parameter, so set the Sec-WebSocket-Protocol header manually.
-      if let protocols, !protocols.isEmpty {
-        request.setValue(
-          protocols.joined(separator: ", "), forHTTPHeaderField: "Sec-WebSocket-Protocol")
-      }
-      task = session.webSocketTask(with: request)
-    } else {
-      task = session.webSocketTask(with: url, protocols: protocols ?? [])
     }
+
+    // Always create a dedicated internal session — copying `session`'s configuration (if
+    // any was supplied) and forwarding its delegate's auth-challenge callback — rather than
+    // ever using `session` directly. This keeps the connection immune to process-wide
+    // `URLSession` state (e.g. an app's own globally-registered `URLProtocol`) and
+    // guarantees this instance always owns (and can safely invalidate) its session.
+    let dedicatedSession = URLSession.sessionWithConfiguration(
+      session?.configuration ?? .default,
+      onComplete: onComplete,
+      onWebSocketTaskOpened: onWebSocketTaskOpened,
+      onWebSocketTaskClosed: onWebSocketTaskClosed,
+      wrappedDelegate: session?.delegate
+    )
+    let task = makeTask(on: dedicatedSession)
+    // Give the delegate a reference to the task it's serving, so its challenge-forwarding
+    // method can supply a real task to `wrappedDelegate`'s task-level implementation (see
+    // `_Delegate.associatedTask`).
+    (dedicatedSession.delegate as? _Delegate)?.associatedTask.setValue(task)
 
     return try await withCheckedThrowingContinuation { continuation in
       mutableState.withValue {
@@ -312,6 +340,8 @@ final class URLSessionWebSocket: WebSocket {
       return false
     }
 
+    // This instance always owns `session` (a dedicated internal session `connect` created
+    // for it), so it's always safe to invalidate here.
     if shouldInvalidate {
       session.finishTasksAndInvalidate()
     }
@@ -407,13 +437,15 @@ extension URLSession {
     onWebSocketTaskOpened: (@Sendable (URLSession, URLSessionWebSocketTask, String?) -> Void)? =
       nil,
     onWebSocketTaskClosed: (@Sendable (URLSession, URLSessionWebSocketTask, Int?, Data?) -> Void)? =
-      nil
+      nil,
+    wrappedDelegate: (any URLSessionDelegate)? = nil
   ) -> URLSession {
     let queue = OperationQueue()
     queue.maxConcurrentOperationCount = 1
 
     let hasDelegate =
       onComplete != nil || onWebSocketTaskOpened != nil || onWebSocketTaskClosed != nil
+      || wrappedDelegate != nil
 
     if hasDelegate {
       return URLSession(
@@ -421,7 +453,8 @@ extension URLSession {
         delegate: _Delegate(
           onComplete: onComplete,
           onWebSocketTaskOpened: onWebSocketTaskOpened,
-          onWebSocketTaskClosed: onWebSocketTaskClosed
+          onWebSocketTaskClosed: onWebSocketTaskClosed,
+          wrappedDelegate: wrappedDelegate
         ),
         delegateQueue: queue
       )
@@ -436,7 +469,10 @@ extension URLSession {
 /// Internal URLSession delegate for handling WebSocket events.
 ///
 /// This delegate handles the various WebSocket lifecycle events and forwards them
-/// to the appropriate callbacks provided during URLSession creation.
+/// to the appropriate callbacks provided during URLSession creation. It also forwards
+/// TLS/auth-challenge callbacks to a wrapped delegate (typically the caller's own
+/// session delegate), so apps can pin certificates on the Realtime WebSocket connection
+/// using the same `URLSessionDelegate` they already use elsewhere.
 final class _Delegate: NSObject, URLSessionDelegate, URLSessionDataDelegate, URLSessionTaskDelegate,
   URLSessionWebSocketDelegate
 {
@@ -446,6 +482,16 @@ final class _Delegate: NSObject, URLSessionDelegate, URLSessionDataDelegate, URL
   let onWebSocketTaskOpened: (@Sendable (URLSession, URLSessionWebSocketTask, String?) -> Void)?
   /// Callback for WebSocket connection closed events.
   let onWebSocketTaskClosed: (@Sendable (URLSession, URLSessionWebSocketTask, Int?, Data?) -> Void)?
+  /// The delegate captured from the caller's own `URLSession` (if any), consulted for
+  /// auth-challenge forwarding only. Read-only after `init`; only ever invoked from the
+  /// URLSession delegate queue, the same way `URLSession` itself would call it.
+  private let wrappedDelegate: (any URLSessionDelegate)?
+  /// The task `connect` creates for this connection, set once right after creation (the
+  /// delegate must exist before the task can be created, since the session needs a
+  /// delegate at construction time). Used to forward auth challenges to `wrappedDelegate`'s
+  /// task-level implementation with a real task reference, even though the challenge itself
+  /// arrives through this delegate's session-level callback.
+  let associatedTask = LockIsolated<URLSessionTask?>(nil)
 
   init(
     onComplete: (@Sendable (URLSession, URLSessionTask, (any Error)?) -> Void)?,
@@ -454,11 +500,13 @@ final class _Delegate: NSObject, URLSessionDelegate, URLSessionDataDelegate, URL
     )?,
     onWebSocketTaskClosed: (
       @Sendable (URLSession, URLSessionWebSocketTask, Int?, Data?) -> Void
-    )?
+    )?,
+    wrappedDelegate: (any URLSessionDelegate)? = nil
   ) {
     self.onComplete = onComplete
     self.onWebSocketTaskOpened = onWebSocketTaskOpened
     self.onWebSocketTaskClosed = onWebSocketTaskClosed
+    self.wrappedDelegate = wrappedDelegate
   }
 
   /// Called when a task completes, with or without error.
@@ -487,5 +535,58 @@ final class _Delegate: NSObject, URLSessionDelegate, URLSessionDataDelegate, URL
     reason: Data?
   ) {
     onWebSocketTaskClosed?(session, webSocketTask, closeCode.rawValue, reason)
+  }
+
+  /// Forwards the auth challenge to `wrappedDelegate`, trying its task-level implementation
+  /// first (the modern, recommended form since iOS 15/macOS 12), then falling back to its
+  /// session-level implementation, then to default handling. Always calls
+  /// `completionHandler` exactly once.
+  ///
+  /// This delegate is only ever attached at the session level (see `connect`), so the OS
+  /// always calls this method — never the task-level overload — even when `wrappedDelegate`
+  /// itself only implements the task-level one. `associatedTask` supplies a real task
+  /// reference for that forwarding attempt despite this method itself not receiving one.
+  ///
+  /// The `#selector`/`responds(to:)` checks require the Objective-C runtime, unavailable in
+  /// swift-corelibs-foundation (Linux) — guarded accordingly. `wrappedDelegate` may still be
+  /// populated on Linux (`connect` doesn't special-case it), but this method ignores it there
+  /// and always falls through to default handling: certificate pinning isn't supported on
+  /// Linux (build-only, not a production-supported platform for this package).
+  func urlSession(
+    _ session: URLSession,
+    didReceive challenge: URLAuthenticationChallenge,
+    completionHandler:
+      @escaping @Sendable (URLSession.AuthChallengeDisposition, URLCredential?) ->
+      Void
+  ) {
+    #if canImport(FoundationNetworking)
+      completionHandler(.performDefaultHandling, nil)
+    #else
+      guard let wrappedDelegate else {
+        completionHandler(.performDefaultHandling, nil)
+        return
+      }
+
+      if let task = associatedTask.value,
+        let taskDelegate = wrappedDelegate as? any URLSessionTaskDelegate,
+        wrappedDelegate.responds(
+          to: #selector(
+            (any URLSessionTaskDelegate).urlSession(_:task:didReceive:completionHandler:)))
+      {
+        taskDelegate.urlSession?(
+          session, task: task, didReceive: challenge, completionHandler: completionHandler)
+        return
+      }
+
+      if wrappedDelegate.responds(
+        to: #selector((any URLSessionDelegate).urlSession(_:didReceive:completionHandler:)))
+      {
+        wrappedDelegate.urlSession?(
+          session, didReceive: challenge, completionHandler: completionHandler)
+        return
+      }
+
+      completionHandler(.performDefaultHandling, nil)
+    #endif
   }
 }
