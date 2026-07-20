@@ -46,7 +46,7 @@ struct APIKeyFormatTests {
   }
 
   @Test
-  func shouldWarnGroupsUnparseableSubtypesTogether() {
+  func shouldWarnGroupsUnparsableSubtypesTogether() {
     // Keys with no second underscore share the 'unknown' dedup bucket.
     #expect(APIKeyFormat.shouldWarn(for: "sb_"))
     #expect(!APIKeyFormat.shouldWarn(for: "sb_uniqueunparseabletype"))

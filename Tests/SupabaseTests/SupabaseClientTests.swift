@@ -231,7 +231,8 @@ struct SupabaseClientTests {
   func functionsOmitsAuthorizationBearerForNewFormatKey() {
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
-      supabaseKey: "sb_publishable_abc123"
+      supabaseKey: "sb_publishable_abc123",
+      options: SupabaseClientOptions()
     )
 
     #expect(client.functions.headers.dictionary["Authorization"] == nil)
@@ -242,7 +243,8 @@ struct SupabaseClientTests {
   func functionsKeepsAuthorizationBearerForLegacyKey() {
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
-      supabaseKey: "legacy-jwt-key"
+      supabaseKey: "legacy-jwt-key",
+      options: SupabaseClientOptions()
     )
 
     #expect(client.functions.headers.dictionary["Authorization"] == "Bearer legacy-jwt-key")
