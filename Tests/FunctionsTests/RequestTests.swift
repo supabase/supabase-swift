@@ -56,7 +56,7 @@ struct RequestTests {
   }
 
   func snapshot(
-    record: Bool = false,
+    record: SnapshotTestingConfiguration.Record? = nil,
     _ test: (FunctionsClient) async throws -> Void,
     fileID: StaticString = #fileID,
     file filePath: StaticString = #filePath,
