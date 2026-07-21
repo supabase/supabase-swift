@@ -5,203 +5,217 @@
 //  Created by Guilherme Souza on 21/01/25.
 //
 
-import InlineSnapshotTesting
+import Foundation
 import Mocker
 import PostgREST
-import XCTest
+import TestHelpers
+import Testing
 
-final class PostgrestRpcBuilderTests: PostgrestQueryTests {
-  func testRpc() async throws {
-    Mock(
-      url: url.appendingPathComponent("rpc/list_stored_countries"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [
-        .post: Data(
-          """
-          {
-            "id": 1,
-            "name": "France"
-          }
-          """.utf8)
-      ]
-    )
-    .snapshotRequest {
-      #"""
-      curl \
-      	--request POST \
-      	--header "Accept: application/vnd.pgrst.object+json" \
-      	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
-      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	"http://localhost:54321/rest/v1/rpc/list_stored_countries?id=eq.1"
-      """#
-    }
-    .register()
+extension PostgrestMockerTests {
+  struct PostgrestRpcBuilderTests {
+    let fixture = PostgrestQueryFixture()
+    var url: URL { fixture.url }
+    var sut: PostgrestClient { fixture.sut }
 
-    let country =
-      try await sut
-      .rpc("list_stored_countries")
-      .eq("id", value: 1)
-      .single()
-      .execute()
-      .value as JSONObject
+    @Test
+    func rpc() async throws {
+      Mock(
+        url: url.appendingPathComponent("rpc/list_stored_countries"),
+        ignoreQuery: true,
+        statusCode: 200,
+        data: [
+          .post: Data(
+            """
+            {
+              "id": 1,
+              "name": "France"
+            }
+            """.utf8)
+        ]
+      )
+      .snapshotRequest {
+        #"""
+        curl \
+        	--request POST \
+        	--header "Accept: application/vnd.pgrst.object+json" \
+        	--header "Content-Type: application/json" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	"http://localhost:54321/rest/v1/rpc/list_stored_countries?id=eq.1"
+        """#
+      }
+      .register()
 
-    XCTAssertEqual(country["name"]?.stringValue, "France")
-  }
-
-  func testRpcReadOnly() async throws {
-    Mock(
-      url: url.appendingPathComponent("rpc/hello_world"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [
-        .get: Data("Hello World".utf8)
-      ]
-    )
-    .snapshotRequest {
-      #"""
-      curl \
-      	--header "Accept: application/json" \
-      	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
-      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	"http://localhost:54321/rest/v1/rpc/hello_world"
-      """#
-    }
-    .register()
-
-    try await sut
-      .rpc("hello_world", get: true)
-      .execute()
-  }
-
-  func testRpcWithGetMethodAndNonJSONObjectShouldThrowError() async throws {
-    do {
-      try await sut
-        .rpc("hello", params: [1, 2, 3], get: true)
+      let country =
+        try await sut
+        .rpc("list_stored_countries")
+        .eq("id", value: 1)
+        .single()
         .execute()
-    } catch let error as PostgrestError {
-      XCTAssertEqual(
-        error.message, "Params should be a key-value type when using `GET` or `HEAD` options.")
-    }
-  }
+        .value as JSONObject
 
-  func testRpcWithHeadMethodAndNonJSONObjectShouldThrowError() async throws {
-    do {
+      #expect(country["name"]?.stringValue == "France")
+    }
+
+    @Test
+    func rpcReadOnly() async throws {
+      Mock(
+        url: url.appendingPathComponent("rpc/hello_world"),
+        ignoreQuery: true,
+        statusCode: 200,
+        data: [
+          .get: Data("Hello World".utf8)
+        ]
+      )
+      .snapshotRequest {
+        #"""
+        curl \
+        	--header "Accept: application/json" \
+        	--header "Content-Type: application/json" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	"http://localhost:54321/rest/v1/rpc/hello_world"
+        """#
+      }
+      .register()
+
       try await sut
-        .rpc("hello", params: [1, 2, 3], head: true)
+        .rpc("hello_world", get: true)
         .execute()
-    } catch let error as PostgrestError {
-      XCTAssertEqual(
-        error.message, "Params should be a key-value type when using `GET` or `HEAD` options.")
     }
-  }
 
-  func testRpcWithGetMethodAndJSONObjectShouldCleanArray() async throws {
-    Mock(
-      url: url.appendingPathComponent("rpc/sum"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [
-        .get: Data(
-          """
-          {
-            "sum": 6
-          }
-          """.utf8
+    @Test
+    func rpcWithGetMethodAndNonJSONObjectShouldThrowError() async throws {
+      do {
+        try await sut
+          .rpc("hello", params: [1, 2, 3], get: true)
+          .execute()
+      } catch let error as PostgrestError {
+        #expect(
+          error.message == "Params should be a key-value type when using `GET` or `HEAD` options.")
+      }
+    }
+
+    @Test
+    func rpcWithHeadMethodAndNonJSONObjectShouldThrowError() async throws {
+      do {
+        try await sut
+          .rpc("hello", params: [1, 2, 3], head: true)
+          .execute()
+      } catch let error as PostgrestError {
+        #expect(
+          error.message == "Params should be a key-value type when using `GET` or `HEAD` options.")
+      }
+    }
+
+    @Test
+    func rpcWithGetMethodAndJSONObjectShouldCleanArray() async throws {
+      Mock(
+        url: url.appendingPathComponent("rpc/sum"),
+        ignoreQuery: true,
+        statusCode: 200,
+        data: [
+          .get: Data(
+            """
+            {
+              "sum": 6
+            }
+            """.utf8
+          )
+        ]
+      )
+      .snapshotRequest {
+        #"""
+        curl \
+        	--header "Accept: application/json" \
+        	--header "Content-Type: application/json" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	"http://localhost:54321/rest/v1/rpc/sum?key=value&numbers=%7B1,2,3%7D"
+        """#
+      }
+      .register()
+
+      struct Response: Decodable {
+        let sum: Int
+      }
+
+      let response =
+        try await sut
+        .rpc(
+          "sum",
+          params: [
+            "numbers": [1, 2, 3],
+            "key": "value",
+          ] as JSONObject,
+          get: true
         )
-      ]
-    )
-    .snapshotRequest {
-      #"""
-      curl \
-      	--header "Accept: application/json" \
-      	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
-      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	"http://localhost:54321/rest/v1/rpc/sum?key=value&numbers=%7B1,2,3%7D"
-      """#
-    }
-    .register()
+        .execute()
+        .value as Response
 
-    struct Response: Decodable {
-      let sum: Int
+      #expect(response.sum == 6)
     }
 
-    let response =
+    @Test
+    func rpcWithGetMethodEncodesScalarParamsByJSONType() async throws {
+      Mock(
+        url: url.appendingPathComponent("rpc/scalar"),
+        ignoreQuery: true,
+        statusCode: 200,
+        data: [
+          .get: Data("{}".utf8)
+        ]
+      )
+      .snapshotRequest {
+        #"""
+        curl \
+        	--header "Accept: application/json" \
+        	--header "Content-Type: application/json" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	"http://localhost:54321/rest/v1/rpc/scalar?disabled=false&enabled=true&flags=%7Btrue,false,null%7D&maybe=null&nested=%7B%22a%22:1%7D&number=42"
+        """#
+      }
+      .register()
+
       try await sut
-      .rpc(
-        "sum",
-        params: [
-          "numbers": [1, 2, 3],
-          "key": "value",
-        ] as JSONObject,
-        get: true
-      )
-      .execute()
-      .value as Response
-
-    XCTAssertEqual(response.sum, 6)
-  }
-
-  func testRpcWithGetMethodEncodesScalarParamsByJSONType() async throws {
-    Mock(
-      url: url.appendingPathComponent("rpc/scalar"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [
-        .get: Data("{}".utf8)
-      ]
-    )
-    .snapshotRequest {
-      #"""
-      curl \
-      	--header "Accept: application/json" \
-      	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
-      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	"http://localhost:54321/rest/v1/rpc/scalar?disabled=false&enabled=true&flags=%7Btrue,false,null%7D&maybe=null&nested=%7B%22a%22:1%7D&number=42"
-      """#
+        .rpc(
+          "scalar",
+          params: [
+            "enabled": true,
+            "disabled": false,
+            "number": 42,
+            "maybe": .null,
+            "nested": ["a": 1],
+            "flags": [true, false, .null],
+          ] as JSONObject,
+          get: true
+        )
+        .execute()
     }
-    .register()
 
-    try await sut
-      .rpc(
-        "scalar",
-        params: [
-          "enabled": true,
-          "disabled": false,
-          "number": 42,
-          "maybe": .null,
-          "nested": ["a": 1],
-          "flags": [true, false, .null],
-        ] as JSONObject,
-        get: true
+    @Test
+    func rpcWithCount() async throws {
+      Mock(
+        url: url.appendingPathComponent("rpc/hello"),
+        statusCode: 200,
+        data: [.post: Data()]
       )
-      .execute()
-  }
+      .snapshotRequest {
+        #"""
+        curl \
+        	--request POST \
+        	--header "Accept: application/json" \
+        	--header "Content-Type: application/json" \
+        	--header "Prefer: count=estimated" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	"http://localhost:54321/rest/v1/rpc/hello"
+        """#
+      }
+      .register()
 
-  func testRpcWithCount() async throws {
-    Mock(
-      url: url.appendingPathComponent("rpc/hello"),
-      statusCode: 200,
-      data: [.post: Data()]
-    )
-    .snapshotRequest {
-      #"""
-      curl \
-      	--request POST \
-      	--header "Accept: application/json" \
-      	--header "Content-Type: application/json" \
-      	--header "Prefer: count=estimated" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
-      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	"http://localhost:54321/rest/v1/rpc/hello"
-      """#
+      try await sut.rpc("hello", count: .estimated).execute()
     }
-    .register()
-
-    try await sut.rpc("hello", count: .estimated).execute()
   }
 }
