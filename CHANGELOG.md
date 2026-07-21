@@ -1,5 +1,22 @@
 # Changelog
 
+## [2.53.0](https://github.com/supabase/supabase-swift/compare/v2.52.0...v2.53.0) (2026-07-21)
+
+
+### Features
+
+* **auth:** add OAuth 2.1 authorization server support ([#1115](https://github.com/supabase/supabase-swift/issues/1115)) ([4132009](https://github.com/supabase/supabase-swift/commit/4132009258a1320095c89ccc299f902fdfeee7ca))
+* **postgrest:** add notIn filter, dryRun and maybeSingle modifiers ([#1114](https://github.com/supabase/supabase-swift/issues/1114)) ([0bbdbec](https://github.com/supabase/supabase-swift/commit/0bbdbecba9b4161e1936f0d1032ff0901f0359f1))
+* **realtime:** support certificate pinning on the WebSocket connection ([#1123](https://github.com/supabase/supabase-swift/issues/1123)) ([b74a8fa](https://github.com/supabase/supabase-swift/commit/b74a8fac4c7792bc741ca90592e0b01784399dbe))
+
+
+### Bug Fixes
+
+* **client,functions:** warn instead of throw on unrecognized sb_ key subtype; never send new-format key as Bearer ([#1130](https://github.com/supabase/supabase-swift/issues/1130)) ([286ce5f](https://github.com/supabase/supabase-swift/commit/286ce5f1d19f9b42bcf9256993d42c44612a0184))
+* **helpers:** await full retry backoff delay instead of truncating to whole seconds ([#1125](https://github.com/supabase/supabase-swift/issues/1125)) ([f6d39cb](https://github.com/supabase/supabase-swift/commit/f6d39cb1a05ea27ccc58bb1a259ad2a3b7844acf))
+* **realtime:** don't leak disconnected heartbeat status to consumers ([#1129](https://github.com/supabase/supabase-swift/issues/1129)) ([dc37cd6](https://github.com/supabase/supabase-swift/commit/dc37cd612c718adc7ceb45b7b2cefe5b4bf82e62))
+* **realtime:** invalidate dedicated session when connect fails before opening ([#1134](https://github.com/supabase/supabase-swift/issues/1134)) ([bbf3533](https://github.com/supabase/supabase-swift/commit/bbf3533241eb8f8ed4f5873679356e6682b6d90a))
+
 ## [2.52.0](https://github.com/supabase/supabase-swift/compare/v2.51.0...v2.52.0) (2026-07-13)
 
 
