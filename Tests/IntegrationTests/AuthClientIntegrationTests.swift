@@ -280,6 +280,39 @@ final class AuthClientIntegrationTests: XCTestCase {
     XCTAssertTrue(passkeys.isEmpty)
   }
 
+  func testAdminListPasskeysReturnsSeededPasskey() async throws {
+    let email = mockEmail()
+    let password = mockPassword()
+    try await signUpIfNeededOrSignIn(email: email, password: password)
+    let session = try await authClient.session
+
+    let passkeyId = try seedPasskey(
+      userId: session.user.id, friendlyName: "Integration Test Passkey")
+
+    let client = Self.makeClient(serviceRole: true)
+    let passkeys = try await client.admin.listPasskeys(userId: session.user.id)
+
+    XCTAssertEqual(passkeys.count, 1)
+    XCTAssertEqual(passkeys[0].id, passkeyId)
+    XCTAssertEqual(passkeys[0].friendlyName, "Integration Test Passkey")
+    XCTAssertNil(passkeys[0].lastUsedAt)
+  }
+
+  func testAdminDeletePasskeySucceeds() async throws {
+    let email = mockEmail()
+    let password = mockPassword()
+    try await signUpIfNeededOrSignIn(email: email, password: password)
+    let session = try await authClient.session
+
+    let passkeyId = try seedPasskey(userId: session.user.id, friendlyName: "To Delete")
+
+    let client = Self.makeClient(serviceRole: true)
+    try await client.admin.deletePasskey(userId: session.user.id, passkeyId: passkeyId)
+
+    let passkeys = try await client.admin.listPasskeys(userId: session.user.id)
+    XCTAssertTrue(passkeys.isEmpty)
+  }
+
   func testAdminDeletePasskeyNotFound() async throws {
     let email = mockEmail()
     let password = mockPassword()
@@ -373,6 +406,50 @@ final class AuthClientIntegrationTests: XCTestCase {
   //
   //    expectNoDifference(link.properties.verificationType, .invite)
   //  }
+
+  /// Inserts a `webauthn_credentials` row directly via the Supabase CLI, mirroring
+  /// `PasskeyTestSuite.createTestPasskey` in supabase/auth (internal/api/passkey_manage_test.go).
+  /// There's no HTTP endpoint to seed a passkey without a real WebAuthn ceremony, so — just like
+  /// the Go test suite inserts straight into its test DB — this shells out to `supabase db query`
+  /// since `auth.webauthn_credentials` isn't exposed over PostgREST.
+  @discardableResult
+  private func seedPasskey(userId: UUID, friendlyName: String) throws -> UUID {
+    let passkeyId = UUID()
+    let credentialId = "cred-\(UUID().uuidString.prefix(8))"
+
+    let sql = """
+      insert into auth.webauthn_credentials
+        (id, user_id, credential_id, public_key, attestation_type, friendly_name, backup_eligible, backed_up)
+      values
+        ('\(passkeyId.uuidString)', '\(userId.uuidString)', '\(credentialId)', 'test-public-key', 'none', '\(friendlyName)', true, false);
+      """
+
+    let workdir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().path
+
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+    process.arguments = ["supabase", "db", "query", "--local", "--workdir", workdir, sql]
+
+    let stderrPipe = Pipe()
+    process.standardError = stderrPipe
+
+    try process.run()
+    process.waitUntilExit()
+
+    guard process.terminationStatus == 0 else {
+      let message =
+        String(
+          data: stderrPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8
+        ) ?? "unknown error"
+      throw NSError(
+        domain: "AuthClientIntegrationTests",
+        code: Int(process.terminationStatus),
+        userInfo: [NSLocalizedDescriptionKey: "supabase db query failed: \(message)"]
+      )
+    }
+
+    return passkeyId
+  }
 
   @discardableResult
   private func signUpIfNeededOrSignIn(

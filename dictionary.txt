@@ -181,6 +181,7 @@ Websearch
 whatsapp
 WhatsApp
 wfts
+workdir
 workos
 WorkOS
 Wwta
