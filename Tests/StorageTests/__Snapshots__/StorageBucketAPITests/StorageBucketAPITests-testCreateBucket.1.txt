@@ -1,6 +1,0 @@
-curl \
-	--request POST \
-	--header "Content-Type: application/json" \
-	--header "X-Client-Info: storage-swift/2.24.4" \
-	--data "{\"public\":true,\"id\":\"newbucket\",\"name\":\"newbucket\"}" \
-	"http://example.com/bucket"

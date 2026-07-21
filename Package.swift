@@ -180,15 +180,11 @@ let package = Package(
     .testTarget(
       name: "StorageTests",
       dependencies: [
-        .product(name: "CustomDump", package: "swift-custom-dump"),
         .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
         "Mocker",
         "TestHelpers",
         "Storage",
-      ],
-      exclude: [
-        "__Snapshots__"
       ],
       resources: [
         .copy("sadcat.jpg"),
@@ -247,7 +243,7 @@ let package = Package(
 // Test targets migrated to Swift Testing get full Swift 6 checking, same as
 // production targets. Everything else stays pinned to v5 until its migration
 // phase lands (see SDK-435).
-let swift6TestTargets: Set<String> = ["SupabaseTests", "HelpersTests"]
+let swift6TestTargets: Set<String> = ["SupabaseTests", "HelpersTests", "StorageTests"]
 
 for target in package.targets {
   // Test targets never opted into `ExistentialAny` below, so bumping swift-tools-version
