@@ -261,13 +261,10 @@ struct URLOpenerTests {
   // MARK: - Sendable Conformance Tests
 
   @Test
-  func urlOpenerIsSendable() {
+  func urlOpenerIsSendable() async {
     let opener = URLOpener { @Sendable _ in }
 
-    // Test that it can be used in async context
-    Task {
-      let url = URL(string: "https://example.com")!
-      await opener.open(url)
-    }
+    let url = URL(string: "https://example.com")!
+    await opener.open(url)
   }
 }

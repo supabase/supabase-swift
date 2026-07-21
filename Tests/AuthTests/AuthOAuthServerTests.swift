@@ -27,6 +27,10 @@ extension AuthMockerTests {
 
     let storage = InMemoryLocalStorage()
 
+    init() {
+      Mocker.removeAll()
+    }
+
     private func makeSUT() -> AuthClient {
       let sessionConfiguration = URLSessionConfiguration.default
       sessionConfiguration.protocolClasses = [MockingURLProtocol.self]
