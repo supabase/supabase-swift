@@ -73,6 +73,7 @@ let package = Package(
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
         "Auth",
         "Helpers",
+        "Mocker",
         "TestHelpers",
       ],
       exclude: [
@@ -243,7 +244,7 @@ let package = Package(
 // production targets. Everything else stays pinned to v5 until its migration
 // phase lands (see SDK-435).
 let swift6TestTargets: Set<String> = [
-  "SupabaseTests", "HelpersTests", "StorageTests", "PostgRESTTests",
+  "SupabaseTests", "HelpersTests", "StorageTests", "PostgRESTTests", "AuthTests",
 ]
 
 for target in package.targets {

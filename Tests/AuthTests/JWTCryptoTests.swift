@@ -5,17 +5,20 @@
 //  Created by Coverage Tests
 //
 
-import XCTest
+import Foundation
+import Testing
 
 @testable import Auth
 @testable import Helpers
 
 #if canImport(Security)
-  final class JWTCryptoTests: XCTestCase {
+  @Suite
+  struct JWTCryptoTests {
 
     // MARK: - JWK+RSA Tests
 
-    func testRSAPublishKeyGeneration() {
+    @Test
+    func rsaPublishKeyGeneration() {
       // Test data from a real RS256 JWT (modulus and exponent)
       // This is a sample RSA256 public key
       let jwk = JWK(
@@ -34,10 +37,11 @@ import XCTest
 
       // Test valid RSA key generation
       let rsaKey = jwk.rsaPublishKey
-      XCTAssertNotNil(rsaKey, "RSA public key should be generated successfully")
+      #expect(rsaKey != nil, "RSA public key should be generated successfully")
     }
 
-    func testRSAPublishKeyInvalidAlgorithm() {
+    @Test
+    func rsaPublishKeyInvalidAlgorithm() {
       // Test with invalid algorithm
       let jwk = JWK(
         kty: "RSA",
@@ -53,10 +57,11 @@ import XCTest
       )
 
       let rsaKey = jwk.rsaPublishKey
-      XCTAssertNil(rsaKey, "RSA public key should be nil with wrong algorithm")
+      #expect(rsaKey == nil, "RSA public key should be nil with wrong algorithm")
     }
 
-    func testRSAPublishKeyInvalidKeyType() {
+    @Test
+    func rsaPublishKeyInvalidKeyType() {
       // Test with invalid key type
       let jwk = JWK(
         kty: "EC",  // Wrong type - should be RSA
@@ -72,10 +77,11 @@ import XCTest
       )
 
       let rsaKey = jwk.rsaPublishKey
-      XCTAssertNil(rsaKey, "RSA public key should be nil with wrong key type")
+      #expect(rsaKey == nil, "RSA public key should be nil with wrong key type")
     }
 
-    func testRSAPublishKeyMissingModulus() {
+    @Test
+    func rsaPublishKeyMissingModulus() {
       // Test with missing modulus
       let jwk = JWK(
         kty: "RSA",
@@ -91,10 +97,11 @@ import XCTest
       )
 
       let rsaKey = jwk.rsaPublishKey
-      XCTAssertNil(rsaKey, "RSA public key should be nil with missing modulus")
+      #expect(rsaKey == nil, "RSA public key should be nil with missing modulus")
     }
 
-    func testRSAPublishKeyMissingExponent() {
+    @Test
+    func rsaPublishKeyMissingExponent() {
       // Test with missing exponent
       let jwk = JWK(
         kty: "RSA",
@@ -110,10 +117,11 @@ import XCTest
       )
 
       let rsaKey = jwk.rsaPublishKey
-      XCTAssertNil(rsaKey, "RSA public key should be nil with missing exponent")
+      #expect(rsaKey == nil, "RSA public key should be nil with missing exponent")
     }
 
-    func testRSAPublishKeyInvalidBase64() {
+    @Test
+    func rsaPublishKeyInvalidBase64() {
       // Test with invalid Base64URL data
       let jwk = JWK(
         kty: "RSA",
@@ -129,10 +137,11 @@ import XCTest
       )
 
       let rsaKey = jwk.rsaPublishKey
-      XCTAssertNil(rsaKey, "RSA public key should be nil with invalid base64 modulus")
+      #expect(rsaKey == nil, "RSA public key should be nil with invalid base64 modulus")
     }
 
-    func testRS256VerifyDoesNotCrashOnMalformedModulus() {
+    @Test
+    func rs256VerifyDoesNotCrashOnMalformedModulus() {
       let jwk = JWK(
         kty: "RSA",
         keyOps: nil,
@@ -146,7 +155,7 @@ import XCTest
         k: nil
       )
 
-      XCTAssertNil(jwk.rsaPublishKey, "Malformed modulus should not produce a key")
+      #expect(jwk.rsaPublishKey == nil, "Malformed modulus should not produce a key")
 
       let header = #"{"alg":"RS256","typ":"JWT"}"#
       let payload = #"{"sub":"1234567890"}"#
@@ -156,51 +165,49 @@ import XCTest
       let jwtString = "\(headerB64).\(payloadB64).\(signatureB64)"
 
       guard let decoded = JWT.decode(jwtString) else {
-        XCTFail("Failed to decode JWT")
+        Issue.record("Failed to decode JWT")
         return
       }
 
       let isValid = JWTAlgorithm.rs256.verify(jwt: decoded, jwk: jwk)
-      XCTAssertFalse(isValid, "Verification with a malformed key should return false, not crash")
+      #expect(!isValid, "Verification with a malformed key should return false, not crash")
     }
 
     // MARK: - DER Encoding Tests
 
-    func testDEREncodeLongFormLengthWithInteriorZero() {
+    @Test
+    func derEncodeLongFormLengthWithInteriorZero() {
       let content = [UInt8](repeating: 0xAB, count: 256)
       let encoded = content.derEncode(as: 2)
 
-      XCTAssertEqual(encoded[0], 0x02, "Data type tag")
-      XCTAssertEqual(encoded[1], 0x82, "Long form with 2 length bytes")
-      XCTAssertEqual(encoded[2], 0x01, "High-order length byte")
-      XCTAssertEqual(encoded[3], 0x00, "Low-order length byte")
-      XCTAssertEqual(encoded.count, 4 + 256, "Header (4) + content (256)")
+      #expect(encoded[0] == 0x02, "Data type tag")
+      #expect(encoded[1] == 0x82, "Long form with 2 length bytes")
+      #expect(encoded[2] == 0x01, "High-order length byte")
+      #expect(encoded[3] == 0x00, "Low-order length byte")
+      #expect(encoded.count == 4 + 256, "Header (4) + content (256)")
     }
 
-    func testDEREncodeShortFormLength() {
+    @Test
+    func derEncodeShortFormLength() {
       let content = [UInt8](repeating: 0xAB, count: 5)
       let encoded = content.derEncode(as: 2)
 
-      XCTAssertEqual(encoded[0], 0x02, "Data type tag")
-      XCTAssertEqual(encoded[1], 0x05, "Short form length")
-      XCTAssertEqual(encoded.count, 2 + 5, "Header (2) + content (5)")
+      #expect(encoded[0] == 0x02, "Data type tag")
+      #expect(encoded[1] == 0x05, "Short form length")
+      #expect(encoded.count == 2 + 5, "Header (2) + content (5)")
     }
 
     // MARK: - JWTAlgorithm Tests
 
-    func testRS256VerificationWithValidSignature() {
+    @Test
+    func rs256VerificationWithValidSignature() throws {
       // Create a sample JWT token (this would normally come from a real auth server)
       // For testing, we'll use a known-good JWT
       let header = #"{"alg":"RS256","typ":"JWT"}"#
       let payload = #"{"sub":"1234567890","name":"Test User","iat":1516239022}"#
 
-      guard
-        let headerData = header.data(using: .utf8),
-        let payloadData = payload.data(using: .utf8)
-      else {
-        XCTFail("Failed to create test data")
-        return
-      }
+      let headerData = try #require(header.data(using: .utf8), "Failed to create test data")
+      let payloadData = try #require(payload.data(using: .utf8), "Failed to create test data")
 
       let headerB64 = Base64URL.encode(headerData)
       let payloadB64 = Base64URL.encode(payloadData)
@@ -212,19 +219,17 @@ import XCTest
       let jwtString = "\(headerB64).\(payloadB64).\(signatureB64)"
 
       // Decode the JWT
-      guard let decoded = JWT.decode(jwtString) else {
-        XCTFail("Failed to decode JWT")
-        return
-      }
+      let decoded = try #require(JWT.decode(jwtString), "Failed to decode JWT")
 
-      XCTAssertEqual(decoded.raw.header, headerB64)
-      XCTAssertEqual(decoded.raw.payload, payloadB64)
-      XCTAssertEqual(decoded.signature, mockSignature)
+      #expect(decoded.raw.header == headerB64)
+      #expect(decoded.raw.payload == payloadB64)
+      #expect(decoded.signature == mockSignature)
     }
 
-    func testRS256AlgorithmType() {
+    @Test
+    func rs256AlgorithmType() {
       let algorithm = JWTAlgorithm.rs256
-      XCTAssertEqual(algorithm.rawValue, "RS256")
+      #expect(algorithm.rawValue == "RS256")
     }
 
   }
