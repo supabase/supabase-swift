@@ -5,7 +5,7 @@
 //  Created by Guilherme Souza on 11/06/26.
 //
 
-import Foundation
+public import Foundation
 import HTTPTypes
 
 #if canImport(AuthenticationServices)
