@@ -288,7 +288,7 @@ final class AuthClientIntegrationTests: XCTestCase {
 
     let client = Self.makeClient(serviceRole: true)
     do {
-      try await client.admin.deletePasskey(userId: session.user.id, passkeyId: UUID())
+      try await client.admin.deletePasskey(userId: session.user.id, passkeyId: UUID().uuidString)
       XCTFail("Expected deletePasskey to throw for a nonexistent passkey")
     } catch {
       // Backend returns 404 when the passkey doesn't exist or belongs to another user.

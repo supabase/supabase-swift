@@ -384,7 +384,7 @@ struct RequestsTests {
     let sut = makeSUT()
 
     let userId = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
-    let passkeyId = UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B")!
+    let passkeyId = "859F402D-B3DE-4105-A1B9-932836D9193B"
     await assert {
       try await sut.admin.deletePasskey(userId: userId, passkeyId: passkeyId)
     }

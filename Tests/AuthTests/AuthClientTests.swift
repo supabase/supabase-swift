@@ -1561,7 +1561,7 @@ extension AuthMockerTests {
     @Test
     func adminDeletePasskey() async throws {
       let userId = UUID(uuidString: "859f402d-b3de-4105-a1b9-932836d9193b")!
-      let passkeyId = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
+      let passkeyId = "E621E1F8-C36C-495A-93FC-0C247A3E6E5F"
 
       Mock(
         url: clientURL.appendingPathComponent("admin/users/\(userId)/passkeys/\(passkeyId)"),
