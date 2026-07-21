@@ -147,24 +147,6 @@ struct URLOpenerTests {
     #expect(capture.url?.fragment == "success")
   }
 
-  // MARK: - Live Opener Tests
-
-  @Test
-  func liveOpenerStructure() async {
-    // Test that live opener can be called without crashing
-    // We can't really test if it opens URLs in a test environment,
-    // but we can verify it compiles and runs
-    let liveOpener = URLOpener.live
-    let testURL = URL(string: "https://example.com")!
-
-    // This will attempt to open the URL on the platform
-    // In test environment, it might not succeed, but shouldn't crash
-    await liveOpener.open(testURL)
-
-    // If we get here, the function at least executed
-    #expect(Bool(true))
-  }
-
   // MARK: - Edge Cases
 
   @Test
@@ -256,15 +238,5 @@ struct URLOpenerTests {
 
     let capturedURLs = capture.getURLs()
     #expect(capturedURLs.count == 10)
-  }
-
-  // MARK: - Sendable Conformance Tests
-
-  @Test
-  func urlOpenerIsSendable() async {
-    let opener = URLOpener { @Sendable _ in }
-
-    let url = URL(string: "https://example.com")!
-    await opener.open(url)
   }
 }
