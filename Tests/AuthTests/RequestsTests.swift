@@ -5,10 +5,11 @@
 //  Created by Guilherme Souza on 07/10/23.
 //
 
+import Foundation
 import InlineSnapshotTesting
 import SnapshotTesting
 import TestHelpers
-import XCTest
+import Testing
 
 @_spi(Experimental) @testable import Auth
 
@@ -18,8 +19,10 @@ import XCTest
 
 struct UnimplementedError: Error {}
 
-final class RequestsTests: XCTestCase {
-  func testSignUpWithEmailAndPassword() async {
+@Suite
+struct RequestsTests {
+  @Test
+  func signUpWithEmailAndPassword() async {
     let sut = makeSUT()
 
     await assert {
@@ -33,7 +36,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testSignUpWithPhoneAndPassword() async {
+  @Test
+  func signUpWithPhoneAndPassword() async {
     let sut = makeSUT()
 
     await assert {
@@ -46,7 +50,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testSignInWithEmailAndPassword() async {
+  @Test
+  func signInWithEmailAndPassword() async {
     let sut = makeSUT()
 
     await assert {
@@ -58,7 +63,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testSignInWithPhoneAndPassword() async {
+  @Test
+  func signInWithPhoneAndPassword() async {
     let sut = makeSUT()
 
     await assert {
@@ -70,7 +76,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testSignInWithIdToken() async {
+  @Test
+  func signInWithIdToken() async {
     let sut = makeSUT()
 
     await assert {
@@ -88,7 +95,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testSignInWithOTPUsingEmail() async {
+  @Test
+  func signInWithOTPUsingEmail() async {
     let sut = makeSUT()
 
     await assert {
@@ -102,7 +110,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testSignInWithOTPUsingPhone() async {
+  @Test
+  func signInWithOTPUsingPhone() async {
     let sut = makeSUT()
 
     await assert {
@@ -115,23 +124,25 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testGetOAuthSignInURL() async throws {
+  @Test
+  func getOAuthSignInURL() async throws {
     let sut = makeSUT()
     let url = try sut.getOAuthSignInURL(
       provider: .github, scopes: "read,write",
       redirectTo: URL(string: "https://dummy-url.com/redirect")!,
       queryParams: [("extra_key", "extra_value")]
     )
-    XCTAssertEqual(
-      url,
-      URL(
-        string:
-          "http://localhost:54321/auth/v1/authorize?provider=github&scopes=read,write&redirect_to=https://dummy-url.com/redirect&extra_key=extra_value"
-      )!
+    #expect(
+      url
+        == URL(
+          string:
+            "http://localhost:54321/auth/v1/authorize?provider=github&scopes=read,write&redirect_to=https://dummy-url.com/redirect&extra_key=extra_value"
+        )!
     )
   }
 
-  func testRefreshSession() async {
+  @Test
+  func refreshSession() async {
     let sut = makeSUT()
     await assert {
       try await sut.refreshSession(refreshToken: "refresh-token")
@@ -139,10 +150,11 @@ final class RequestsTests: XCTestCase {
   }
 
   #if !os(Linux) && !os(Windows) && !os(Android)
-    func testSessionFromURL() async throws {
+    @Test
+    func sessionFromURL() async throws {
       let sut = makeSUT(fetch: { request in
         let authorizationHeader = request.allHTTPHeaderFields?["Authorization"]
-        XCTAssertEqual(authorizationHeader, "bearer accesstoken")
+        #expect(authorizationHeader == "bearer accesstoken")
         return (json(named: "user"), HTTPURLResponse.stub())
       })
 
@@ -164,11 +176,12 @@ final class RequestsTests: XCTestCase {
         refreshToken: "refreshtoken",
         user: User(fromMockNamed: "user")
       )
-      XCTAssertEqual(session, expectedSession)
+      #expect(session == expectedSession)
     }
   #endif
 
-  func testSessionFromURLWithMissingComponent() async {
+  @Test
+  func sessionFromURLWithMissingComponent() async {
     let sut = makeSUT()
 
     let url = URL(
@@ -190,7 +203,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testSetSessionWithAFutureExpirationDate() async throws {
+  @Test
+  func setSessionWithAFutureExpirationDate() async throws {
     let sut = makeSUT()
     Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
@@ -202,7 +216,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testSetSessionWithAExpiredToken() async throws {
+  @Test
+  func setSessionWithAExpiredToken() async throws {
     let sut = makeSUT()
 
     let accessToken =
@@ -213,7 +228,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testSignOut() async throws {
+  @Test
+  func signOut() async throws {
     let sut = makeSUT()
     Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
@@ -222,7 +238,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testSignOutWithLocalScope() async throws {
+  @Test
+  func signOutWithLocalScope() async throws {
     let sut = makeSUT()
     Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
@@ -231,7 +248,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testSignOutWithOthersScope() async throws {
+  @Test
+  func signOutWithOthersScope() async throws {
     let sut = makeSUT()
 
     Dependencies[sut.clientID].sessionStorage.store(.validSession)
@@ -241,7 +259,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testVerifyOTPUsingEmail() async {
+  @Test
+  func verifyOTPUsingEmail() async {
     let sut = makeSUT()
 
     await assert {
@@ -255,7 +274,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testVerifyOTPUsingPhone() async {
+  @Test
+  func verifyOTPUsingPhone() async {
     let sut = makeSUT()
 
     await assert {
@@ -268,7 +288,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testVerifyOTPUsingTokenHash() async {
+  @Test
+  func verifyOTPUsingTokenHash() async {
     let sut = makeSUT()
 
     await assert {
@@ -279,7 +300,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testUpdateUser() async throws {
+  @Test
+  func updateUser() async throws {
     let sut = makeSUT()
 
     Dependencies[sut.clientID].sessionStorage.store(.validSession)
@@ -298,7 +320,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testResetPasswordForEmail() async {
+  @Test
+  func resetPasswordForEmail() async {
     let sut = makeSUT()
     await assert {
       try await sut.resetPasswordForEmail(
@@ -309,7 +332,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testResendEmail() async {
+  @Test
+  func resendEmail() async {
     let sut = makeSUT()
 
     await assert {
@@ -322,7 +346,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testResendPhone() async {
+  @Test
+  func resendPhone() async {
     let sut = makeSUT()
 
     await assert {
@@ -334,7 +359,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testDeleteUser() async {
+  @Test
+  func deleteUser() async {
     let sut = makeSUT()
 
     let id = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
@@ -343,7 +369,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testReauthenticate() async throws {
+  @Test
+  func reauthenticate() async throws {
     let sut = makeSUT()
 
     Dependencies[sut.clientID].sessionStorage.store(.validSession)
@@ -353,7 +380,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testUnlinkIdentity() async throws {
+  @Test
+  func unlinkIdentity() async throws {
     let sut = makeSUT()
 
     Dependencies[sut.clientID].sessionStorage.store(.validSession)
@@ -374,7 +402,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testSignInWithSSOUsingDomain() async {
+  @Test
+  func signInWithSSOUsingDomain() async {
     let sut = makeSUT()
 
     await assert {
@@ -386,7 +415,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testSignInWithSSOUsingProviderId() async {
+  @Test
+  func signInWithSSOUsingProviderId() async {
     let sut = makeSUT()
 
     await assert {
@@ -398,7 +428,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testSignInAnonymously() async {
+  @Test
+  func signInAnonymously() async {
     let sut = makeSUT()
 
     await assert {
@@ -409,7 +440,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testGetLinkIdentityURL() async throws {
+  @Test
+  func getLinkIdentityURL() async throws {
     let sut = makeSUT()
 
     Dependencies[sut.clientID].sessionStorage.store(.validSession)
@@ -424,7 +456,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testMFAEnrollLegacy() async throws {
+  @Test
+  func mfaEnrollLegacy() async throws {
     let sut = makeSUT()
 
     Dependencies[sut.clientID].sessionStorage.store(.validSession)
@@ -435,7 +468,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testMFAEnrollTotp() async throws {
+  @Test
+  func mfaEnrollTotp() async throws {
     let sut = makeSUT()
 
     Dependencies[sut.clientID].sessionStorage.store(.validSession)
@@ -445,7 +479,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testMFAEnrollPhone() async throws {
+  @Test
+  func mfaEnrollPhone() async throws {
     let sut = makeSUT()
 
     Dependencies[sut.clientID].sessionStorage.store(.validSession)
@@ -455,7 +490,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testMFAChallenge() async throws {
+  @Test
+  func mfaChallenge() async throws {
     let sut = makeSUT()
 
     Dependencies[sut.clientID].sessionStorage.store(.validSession)
@@ -465,7 +501,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testMFAChallengePhone() async throws {
+  @Test
+  func mfaChallengePhone() async throws {
     let sut = makeSUT()
 
     Dependencies[sut.clientID].sessionStorage.store(.validSession)
@@ -475,7 +512,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testMFAVerify() async throws {
+  @Test
+  func mfaVerify() async throws {
     let sut = makeSUT()
 
     Dependencies[sut.clientID].sessionStorage.store(.validSession)
@@ -486,7 +524,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testMFAUnenroll() async throws {
+  @Test
+  func mfaUnenroll() async throws {
     let sut = makeSUT()
 
     Dependencies[sut.clientID].sessionStorage.store(.validSession)
@@ -496,7 +535,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testMFAEnrollWebAuthn() async throws {
+  @Test
+  func mfaEnrollWebAuthn() async throws {
     let sut = makeSUT()
 
     Dependencies[sut.clientID].sessionStorage.store(.validSession)
@@ -506,7 +546,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testMFAChallengeWebAuthn() async throws {
+  @Test
+  func mfaChallengeWebAuthn() async throws {
     let sut = makeSUT()
 
     Dependencies[sut.clientID].sessionStorage.store(.validSession)
@@ -521,7 +562,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testMFAVerifyWebAuthn() async throws {
+  @Test
+  func mfaVerifyWebAuthn() async throws {
     let sut = makeSUT()
 
     Dependencies[sut.clientID].sessionStorage.store(.validSession)
@@ -547,7 +589,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testGetPasskeyRegistrationOptions() async throws {
+  @Test
+  func getPasskeyRegistrationOptions() async throws {
     let sut = makeSUT()
 
     Dependencies[sut.clientID].sessionStorage.store(.validSession)
@@ -557,7 +600,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testVerifyPasskeyRegistration() async throws {
+  @Test
+  func verifyPasskeyRegistration() async throws {
     let sut = makeSUT()
 
     Dependencies[sut.clientID].sessionStorage.store(.validSession)
@@ -578,7 +622,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testGetPasskeyAuthenticationOptions() async throws {
+  @Test
+  func getPasskeyAuthenticationOptions() async throws {
     let sut = makeSUT()
 
     // No session stored: passkey authentication options must not require auth.
@@ -587,7 +632,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testVerifyPasskeyAuthentication() async throws {
+  @Test
+  func verifyPasskeyAuthentication() async throws {
     let sut = makeSUT()
 
     await assert {
@@ -608,7 +654,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testListPasskeys() async throws {
+  @Test
+  func listPasskeys() async throws {
     let sut = makeSUT()
 
     Dependencies[sut.clientID].sessionStorage.store(.validSession)
@@ -618,7 +665,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testRenamePasskey() async throws {
+  @Test
+  func renamePasskey() async throws {
     let sut = makeSUT()
 
     Dependencies[sut.clientID].sessionStorage.store(.validSession)
@@ -628,7 +676,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testDeletePasskey() async throws {
+  @Test
+  func deletePasskey() async throws {
     let sut = makeSUT()
 
     Dependencies[sut.clientID].sessionStorage.store(.validSession)
@@ -643,7 +692,7 @@ final class RequestsTests: XCTestCase {
       try await block()
     } catch is UnimplementedError {
     } catch {
-      XCTFail("Unexpected error: \(error)")
+      Issue.record("Unexpected error: \(error)")
     }
   }
 
@@ -651,7 +700,7 @@ final class RequestsTests: XCTestCase {
     record: Bool = false,
     flowType: AuthFlowType = .implicit,
     fetch: AuthClient.FetchHandler? = nil,
-    file: StaticString = #file,
+    file: StaticString = #filePath,
     testName: String = #function,
     line: UInt = #line
   ) -> AuthClient {
@@ -666,7 +715,7 @@ final class RequestsTests: XCTestCase {
       logger: nil,
       encoder: encoder,
       fetch: { request in
-        DispatchQueue.main.sync {
+        await MainActor.run {
           assertSnapshot(
             of: request, as: ._curl, record: record, file: file, testName: testName, line: line
           )
