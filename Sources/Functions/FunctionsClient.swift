@@ -243,13 +243,13 @@ public final class FunctionsClient: Sendable {
     let request = buildRequest(functionName: functionName, options: invokeOptions)
     let response = try await http.send(request)
 
-    guard 200..<300 ~= response.statusCode else {
-      throw FunctionsError.httpError(code: response.statusCode, data: response.data)
-    }
-
     let isRelayError = response.headers[.xRelayError] == "true"
     if isRelayError {
       throw FunctionsError.relayError
+    }
+
+    guard 200..<300 ~= response.statusCode else {
+      throw FunctionsError.httpError(code: response.statusCode, data: response.data)
     }
 
     return response
@@ -342,6 +342,12 @@ final class StreamResponseDelegate: NSObject, URLSessionDataDelegate, Sendable {
       return
     }
 
+    let isRelayError = httpResponse.value(forHTTPHeaderField: "x-relay-error") == "true"
+    if isRelayError {
+      continuation.finish(throwing: FunctionsError.relayError)
+      return
+    }
+
     guard 200..<300 ~= httpResponse.statusCode else {
       let error = FunctionsError.httpError(
         code: httpResponse.statusCode,
@@ -349,11 +355,6 @@ final class StreamResponseDelegate: NSObject, URLSessionDataDelegate, Sendable {
       )
       continuation.finish(throwing: error)
       return
-    }
-
-    let isRelayError = httpResponse.value(forHTTPHeaderField: "x-relay-error") == "true"
-    if isRelayError {
-      continuation.finish(throwing: FunctionsError.relayError)
     }
   }
 }
