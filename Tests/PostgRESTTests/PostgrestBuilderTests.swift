@@ -63,6 +63,7 @@ extension PostgrestMockerTests {
           .from("users")
           .select()
           .execute()
+        Issue.record("Expected error to be thrown")
       } catch let error as PostgrestError {
         #expect(error.message == "Bad Request")
       }
@@ -85,6 +86,7 @@ extension PostgrestMockerTests {
           .from("users")
           .select()
           .execute()
+        Issue.record("Expected error to be thrown")
       } catch let error as HTTPError {
         #expect(error.data == Data("Bad Request".utf8))
         #expect(error.response.statusCode == 400)

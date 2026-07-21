@@ -360,7 +360,7 @@ extension PostgrestMockerTests {
     }
 
     @Test
-    func cSV() async throws {
+    func csv() async throws {
       Mock(
         url: url.appendingPathComponent("countries"),
         ignoreQuery: true,
@@ -709,7 +709,7 @@ extension PostgrestMockerTests {
     }
 
     @Test
-    func cSVWithStripNullsThrowsError() async throws {
+    func csvWithStripNullsThrowsError() async throws {
       do {
         try await sut
           .from("countries")

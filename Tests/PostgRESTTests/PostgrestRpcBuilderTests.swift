@@ -91,6 +91,7 @@ extension PostgrestMockerTests {
         try await sut
           .rpc("hello", params: [1, 2, 3], get: true)
           .execute()
+        Issue.record("Expected error to be thrown")
       } catch let error as PostgrestError {
         #expect(
           error.message == "Params should be a key-value type when using `GET` or `HEAD` options.")
@@ -103,6 +104,7 @@ extension PostgrestMockerTests {
         try await sut
           .rpc("hello", params: [1, 2, 3], head: true)
           .execute()
+        Issue.record("Expected error to be thrown")
       } catch let error as PostgrestError {
         #expect(
           error.message == "Params should be a key-value type when using `GET` or `HEAD` options.")
