@@ -6,4 +6,4 @@ curl \
 	--header "X-Client-Info: gotrue-swift/x.y.z" \
 	--header "X-Supabase-Api-Version: 2024-01-01" \
 	--data "{\"friendly_name\":\"Renamed Passkey\"}" \
-	"http://localhost:54321/auth/v1/passkeys/passkey-1"
+	"http://localhost:54321/auth/v1/passkeys/859F402D-B3DE-4105-A1B9-932836D9193B"

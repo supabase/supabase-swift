@@ -134,7 +134,7 @@ extension AuthClient {
   /// - Returns: The updated passkey.
   @_spi(Experimental)
   @discardableResult
-  public func renamePasskey(id: String, friendlyName: String) async throws -> PasskeyListItem {
+  public func renamePasskey(id: UUID, friendlyName: String) async throws -> PasskeyListItem {
     try await Dependencies[clientID].api.authorizedExecute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("passkeys/\(id)"),
@@ -150,7 +150,7 @@ extension AuthClient {
   ///
   /// - Parameter id: The ID of the passkey to remove.
   @_spi(Experimental)
-  public func deletePasskey(id: String) async throws {
+  public func deletePasskey(id: UUID) async throws {
     try await Dependencies[clientID].api.authorizedExecute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("passkeys/\(id)"),

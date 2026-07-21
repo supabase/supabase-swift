@@ -30,7 +30,7 @@ extension AuthAdmin {
   ///   - passkeyId: The passkey's unique identifier.
   /// - Warning: Never expose your `secret` key on the client.
   @_spi(Experimental)
-  public func deletePasskey(userId: UUID, passkeyId: String) async throws {
+  public func deletePasskey(userId: UUID, passkeyId: UUID) async throws {
     _ = try await api.execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent(
