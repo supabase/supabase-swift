@@ -992,6 +992,7 @@ extension AuthMockerTests {
 
       do {
         try await sut.session(from: url)
+        Issue.record("Expected implicitGrantRedirect error")
       } catch let AuthError.implicitGrantRedirect(message) {
         expectNoDifference(message, "Not a valid implicit grant flow URL: \(url)")
       }
@@ -1008,6 +1009,7 @@ extension AuthMockerTests {
 
       do {
         try await sut.session(from: url)
+        Issue.record("Expected implicitGrantRedirect error")
       } catch let AuthError.implicitGrantRedirect(message) {
         expectNoDifference(message, "Invalid code")
       }
@@ -1109,6 +1111,7 @@ extension AuthMockerTests {
 
       do {
         try await sut.session(from: url)
+        Issue.record("Expected pkceGrantCodeExchange error")
       } catch let AuthError.pkceGrantCodeExchange(message, error, code) {
         expectNoDifference(message, "Invalid code")
         expectNoDifference(error, "invalid_grant")
@@ -1127,6 +1130,7 @@ extension AuthMockerTests {
 
       do {
         try await sut.session(from: url)
+        Issue.record("Expected pkceGrantCodeExchange error")
       } catch let AuthError.pkceGrantCodeExchange(message, error, code) {
         expectNoDifference(message, "Error in URL with unspecified error_description.")
         expectNoDifference(error, "invalid_grant")

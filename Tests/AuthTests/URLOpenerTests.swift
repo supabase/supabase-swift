@@ -150,12 +150,6 @@ struct URLOpenerTests {
   // MARK: - Live Opener Tests
 
   @Test
-  func liveOpenerExists() {
-    let liveOpener = URLOpener.live
-    #expect(liveOpener != nil)
-  }
-
-  @Test
   func liveOpenerStructure() async {
     // Test that live opener can be called without crashing
     // We can't really test if it opens URLs in a test environment,
