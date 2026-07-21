@@ -1,7 +1,8 @@
-import InlineSnapshotTesting
+import ConcurrencyExtras
+import Foundation
 import Mocker
 import TestHelpers
-import XCTest
+import Testing
 
 @testable import Storage
 
@@ -9,24 +10,26 @@ import XCTest
   import FoundationNetworking
 #endif
 
-final class StorageFileAPITests: XCTestCase {
+/// `.serialized`: Mocker registers stubs in a process-global table with no per-test isolation, so
+/// tests that stub overlapping URLs (e.g. `object/move`) would otherwise race against each other
+/// under Swift Testing's default parallel execution.
+@Suite(.serialized)
+struct StorageFileAPITests {
   let url = URL(string: "http://localhost:54321/storage/v1")!
-  var storage: SupabaseStorageClient!
 
-  override func setUp() {
-    super.setUp()
-
+  init() {
     testingBoundary.setValue("alamofire.boundary.e56f43407f772505")
 
     JSONEncoder.defaultStorageEncoder.outputFormatting = [.sortedKeys]
     JSONEncoder.unconfiguredEncoder.outputFormatting = [.sortedKeys]
+  }
 
-    let configuration = URLSessionConfiguration.default
+  private func makeSUT() -> SupabaseStorageClient {
+    let configuration = URLSessionConfiguration.ephemeral
     configuration.protocolClasses = [MockingURLProtocol.self]
-
     let session = URLSession(configuration: configuration)
 
-    storage = SupabaseStorageClient(
+    return SupabaseStorageClient(
       configuration: StorageClientConfiguration(
         url: url,
         headers: [
@@ -42,7 +45,10 @@ final class StorageFileAPITests: XCTestCase {
     )
   }
 
-  func testListFiles() async throws {
+  @Test
+  func listFiles() async throws {
+    let storage = makeSUT()
+
     Mock(
       url: url.appendingPathComponent("object/list/bucket"),
       statusCode: 200,
@@ -78,11 +84,14 @@ final class StorageFileAPITests: XCTestCase {
     .register()
 
     let result = try await storage.from("bucket").list(path: "folder")
-    XCTAssertEqual(result.count, 1)
-    XCTAssertEqual(result[0].name, "test.txt")
+    #expect(result.count == 1)
+    #expect(result[0].name == "test.txt")
   }
 
-  func testListFilesWithPartialSortByColumn() async throws {
+  @Test
+  func listFilesWithPartialSortByColumn() async throws {
+    let storage = makeSUT()
+
     Mock(
       url: url.appendingPathComponent("object/list/bucket"),
       statusCode: 200,
@@ -108,7 +117,10 @@ final class StorageFileAPITests: XCTestCase {
     )
   }
 
-  func testListFilesWithPartialSortByOrder() async throws {
+  @Test
+  func listFilesWithPartialSortByOrder() async throws {
+    let storage = makeSUT()
+
     Mock(
       url: url.appendingPathComponent("object/list/bucket"),
       statusCode: 200,
@@ -134,7 +146,10 @@ final class StorageFileAPITests: XCTestCase {
     )
   }
 
-  func testListFilesWithFullSortByOverride() async throws {
+  @Test
+  func listFilesWithFullSortByOverride() async throws {
+    let storage = makeSUT()
+
     Mock(
       url: url.appendingPathComponent("object/list/bucket"),
       statusCode: 200,
@@ -160,7 +175,10 @@ final class StorageFileAPITests: XCTestCase {
     )
   }
 
-  func testListFilesPreservesDefaultLimitWhenOnlyOffsetProvided() async throws {
+  @Test
+  func listFilesPreservesDefaultLimitWhenOnlyOffsetProvided() async throws {
+    let storage = makeSUT()
+
     Mock(
       url: url.appendingPathComponent("object/list/bucket"),
       statusCode: 200,
@@ -186,7 +204,10 @@ final class StorageFileAPITests: XCTestCase {
     )
   }
 
-  func testListFilesPreservesDefaultOffsetWhenOnlyLimitProvided() async throws {
+  @Test
+  func listFilesPreservesDefaultOffsetWhenOnlyLimitProvided() async throws {
+    let storage = makeSUT()
+
     Mock(
       url: url.appendingPathComponent("object/list/bucket"),
       statusCode: 200,
@@ -212,7 +233,10 @@ final class StorageFileAPITests: XCTestCase {
     )
   }
 
-  func testListFilesWithExplicitZeroLimitIsNotTreatedAsMissing() async throws {
+  @Test
+  func listFilesWithExplicitZeroLimitIsNotTreatedAsMissing() async throws {
+    let storage = makeSUT()
+
     Mock(
       url: url.appendingPathComponent("object/list/bucket"),
       statusCode: 200,
@@ -239,7 +263,10 @@ final class StorageFileAPITests: XCTestCase {
     )
   }
 
-  func testMove() async throws {
+  @Test
+  func move() async throws {
+    let storage = makeSUT()
+
     Mock(
       url: url.appendingPathComponent("object/move"),
       statusCode: 200,
@@ -267,7 +294,10 @@ final class StorageFileAPITests: XCTestCase {
     )
   }
 
-  func testCopy() async throws {
+  @Test
+  func copy() async throws {
+    let storage = makeSUT()
+
     Mock(
       url: url.appendingPathComponent("object/copy"),
       statusCode: 200,
@@ -300,10 +330,13 @@ final class StorageFileAPITests: XCTestCase {
       to: "dest/file.txt"
     )
 
-    XCTAssertEqual(key, "object/dest/file.txt")
+    #expect(key == "object/dest/file.txt")
   }
 
-  func testCreateSignedURL() async throws {
+  @Test
+  func createSignedURL() async throws {
+    let storage = makeSUT()
+
     Mock(
       url: url.appendingPathComponent("object/sign/bucket/file.txt"),
       statusCode: 200,
@@ -335,11 +368,14 @@ final class StorageFileAPITests: XCTestCase {
       path: "file.txt",
       expiresIn: 3600
     )
-    XCTAssertEqual(
-      url.absoluteString, "\(self.url)/object/upload/sign/bucket/file.txt?token=abc.def.ghi")
+    #expect(
+      url.absoluteString == "\(self.url)/object/upload/sign/bucket/file.txt?token=abc.def.ghi")
   }
 
-  func testCreateSignedURL_download() async throws {
+  @Test
+  func createSignedURL_download() async throws {
+    let storage = makeSUT()
+
     Mock(
       url: url.appendingPathComponent("object/sign/bucket/file.txt"),
       statusCode: 200,
@@ -372,12 +408,15 @@ final class StorageFileAPITests: XCTestCase {
       expiresIn: 3600,
       download: true
     )
-    XCTAssertEqual(
-      url.absoluteString,
-      "\(self.url)/object/upload/sign/bucket/file.txt?token=abc.def.ghi&download=")
+    #expect(
+      url.absoluteString
+        == "\(self.url)/object/upload/sign/bucket/file.txt?token=abc.def.ghi&download=")
   }
 
-  func testCreateSignedURLs() async throws {
+  @Test
+  func createSignedURLs() async throws {
+    let storage = makeSUT()
+
     Mock(
       url: url.appendingPathComponent("object/sign/bucket"),
       statusCode: 200,
@@ -417,24 +456,27 @@ final class StorageFileAPITests: XCTestCase {
       paths: paths,
       expiresIn: 3600
     )
-    XCTAssertEqual(results.count, 2)
+    #expect(results.count == 2)
     guard case .success(let path0, let url0) = results[0] else {
-      return XCTFail("Expected success for file.txt")
+      Issue.record("Expected success for file.txt")
+      return
     }
-    XCTAssertEqual(path0, "file.txt")
-    XCTAssertEqual(
-      url0.absoluteString,
-      "\(self.url)/object/upload/sign/bucket/file.txt?token=abc.def.ghi")
+    #expect(path0 == "file.txt")
+    #expect(
+      url0.absoluteString == "\(self.url)/object/upload/sign/bucket/file.txt?token=abc.def.ghi")
     guard case .success(let path1, let url1) = results[1] else {
-      return XCTFail("Expected success for file2.txt")
+      Issue.record("Expected success for file2.txt")
+      return
     }
-    XCTAssertEqual(path1, "file2.txt")
-    XCTAssertEqual(
-      url1.absoluteString,
-      "\(self.url)/object/upload/sign/bucket/file2.txt?token=abc.def.ghi")
+    #expect(path1 == "file2.txt")
+    #expect(
+      url1.absoluteString == "\(self.url)/object/upload/sign/bucket/file2.txt?token=abc.def.ghi")
   }
 
-  func testCreateSignedURLs_download() async throws {
+  @Test
+  func createSignedURLs_download() async throws {
+    let storage = makeSUT()
+
     Mock(
       url: url.appendingPathComponent("object/sign/bucket"),
       statusCode: 200,
@@ -475,22 +517,27 @@ final class StorageFileAPITests: XCTestCase {
       expiresIn: 3600,
       download: true
     )
-    XCTAssertEqual(results.count, 2)
+    #expect(results.count == 2)
     guard case .success(_, let url0) = results[0] else {
-      return XCTFail("Expected success for file.txt")
+      Issue.record("Expected success for file.txt")
+      return
     }
-    XCTAssertEqual(
-      url0.absoluteString,
-      "\(self.url)/object/upload/sign/bucket/file.txt?token=abc.def.ghi&download=")
+    #expect(
+      url0.absoluteString
+        == "\(self.url)/object/upload/sign/bucket/file.txt?token=abc.def.ghi&download=")
     guard case .success(_, let url1) = results[1] else {
-      return XCTFail("Expected success for file2.txt")
+      Issue.record("Expected success for file2.txt")
+      return
     }
-    XCTAssertEqual(
-      url1.absoluteString,
-      "\(self.url)/object/upload/sign/bucket/file2.txt?token=abc.def.ghi&download=")
+    #expect(
+      url1.absoluteString
+        == "\(self.url)/object/upload/sign/bucket/file2.txt?token=abc.def.ghi&download=")
   }
 
-  func testCreateSignedURLs_withNullSignedURL() async throws {
+  @Test
+  func createSignedURLs_withNullSignedURL() async throws {
+    let storage = makeSUT()
+
     Mock(
       url: url.appendingPathComponent("object/sign/bucket"),
       statusCode: 200,
@@ -518,19 +565,24 @@ final class StorageFileAPITests: XCTestCase {
       paths: ["file.txt", "missing.txt"],
       expiresIn: 3600
     )
-    XCTAssertEqual(results.count, 2)
+    #expect(results.count == 2)
     guard case .success(let path0, _) = results[0] else {
-      return XCTFail("Expected success for file.txt")
+      Issue.record("Expected success for file.txt")
+      return
     }
-    XCTAssertEqual(path0, "file.txt")
+    #expect(path0 == "file.txt")
     guard case .failure(let path1, let error1) = results[1] else {
-      return XCTFail("Expected failure for missing.txt")
+      Issue.record("Expected failure for missing.txt")
+      return
     }
-    XCTAssertEqual(path1, "missing.txt")
-    XCTAssertEqual(error1, "Either the object does not exist or you do not have access to it")
+    #expect(path1 == "missing.txt")
+    #expect(error1 == "Either the object does not exist or you do not have access to it")
   }
 
-  func testRemove() async throws {
+  @Test
+  func remove() async throws {
+    let storage = makeSUT()
+
     Mock(
       url: url.appendingPathComponent("object/bucket"),
       statusCode: 204,
@@ -576,11 +628,14 @@ final class StorageFileAPITests: XCTestCase {
       paths: ["file1.txt", "file2.txt"]
     )
 
-    XCTAssertEqual(objects[0].name, "file1.txt")
-    XCTAssertEqual(objects[1].name, "file2.txt")
+    #expect(objects[0].name == "file1.txt")
+    #expect(objects[1].name == "file2.txt")
   }
 
-  func testNonSuccessStatusCode() async throws {
+  @Test
+  func nonSuccessStatusCode() async throws {
+    let storage = makeSUT()
+
     Mock(
       url: url.appendingPathComponent("object/move"),
       statusCode: 400,
@@ -611,13 +666,16 @@ final class StorageFileAPITests: XCTestCase {
     do {
       try await storage.from("bucket")
         .move(from: "source", to: "destination")
-      XCTFail()
+      Issue.record()
     } catch let error as StorageError {
-      XCTAssertEqual(error.message, "Error")
+      #expect(error.message == "Error")
     }
   }
 
-  func testNonSuccessStatusCodeWithNonJSONResponse() async throws {
+  @Test
+  func nonSuccessStatusCodeWithNonJSONResponse() async throws {
+    let storage = makeSUT()
+
     Mock(
       url: url.appendingPathComponent("object/move"),
       statusCode: 412,
@@ -642,14 +700,17 @@ final class StorageFileAPITests: XCTestCase {
     do {
       try await storage.from("bucket")
         .move(from: "source", to: "destination")
-      XCTFail()
+      Issue.record()
     } catch let error as HTTPError {
-      XCTAssertEqual(error.data, Data("error".utf8))
-      XCTAssertEqual(error.response.statusCode, 412)
+      #expect(error.data == Data("error".utf8))
+      #expect(error.response.statusCode == 412)
     }
   }
 
-  func testUpdateFromData() async throws {
+  @Test
+  func updateFromData() async throws {
+    let storage = makeSUT()
+
     Mock(
       url: url.appendingPathComponent("object/bucket/file.txt"),
       statusCode: 200,
@@ -704,12 +765,15 @@ final class StorageFileAPITests: XCTestCase {
         )
       )
 
-    XCTAssertEqual(response.id, "123")
-    XCTAssertEqual(response.path, "file.txt")
-    XCTAssertEqual(response.fullPath, "bucket/file.txt")
+    #expect(response.id == "123")
+    #expect(response.path == "file.txt")
+    #expect(response.fullPath == "bucket/file.txt")
   }
 
-  func testUploadReturnsCleanedPath() async throws {
+  @Test
+  func uploadReturnsCleanedPath() async throws {
+    let storage = makeSUT()
+
     Mock(
       url: url.appendingPathComponent("object/bucket/folder/file.txt"),
       statusCode: 200,
@@ -733,11 +797,14 @@ final class StorageFileAPITests: XCTestCase {
         options: FileOptions(contentType: "text/plain")
       )
 
-    XCTAssertEqual(response.path, "folder/file.txt")
-    XCTAssertEqual(response.fullPath, "bucket/folder/file.txt")
+    #expect(response.path == "folder/file.txt")
+    #expect(response.fullPath == "bucket/folder/file.txt")
   }
 
-  func testUploadFromURL_honorsContentType() async throws {
+  @Test
+  func uploadFromURL_honorsContentType() async throws {
+    let storage = makeSUT()
+
     Mock(
       url: url.appendingPathComponent("object/bucket/file.txt"),
       statusCode: 200,
@@ -786,12 +853,15 @@ final class StorageFileAPITests: XCTestCase {
         options: FileOptions(contentType: "image/png")
       )
 
-    XCTAssertEqual(response.id, "123")
-    XCTAssertEqual(response.path, "file.txt")
-    XCTAssertEqual(response.fullPath, "bucket/file.txt")
+    #expect(response.id == "123")
+    #expect(response.path == "file.txt")
+    #expect(response.fullPath == "bucket/file.txt")
   }
 
-  func testUpdateFromURL() async throws {
+  @Test
+  func updateFromURL() async throws {
+    let storage = makeSUT()
+
     Mock(
       url: url.appendingPathComponent("object/bucket/file.txt"),
       statusCode: 200,
@@ -847,12 +917,15 @@ final class StorageFileAPITests: XCTestCase {
         )
       )
 
-    XCTAssertEqual(response.id, "123")
-    XCTAssertEqual(response.path, "file.txt")
-    XCTAssertEqual(response.fullPath, "bucket/file.txt")
+    #expect(response.id == "123")
+    #expect(response.path == "file.txt")
+    #expect(response.fullPath == "bucket/file.txt")
   }
 
-  func testDownload() async throws {
+  @Test
+  func download() async throws {
+    let storage = makeSUT()
+
     Mock(
       url: url.appendingPathComponent("object/bucket/file.txt"),
       statusCode: 200,
@@ -873,10 +946,13 @@ final class StorageFileAPITests: XCTestCase {
     let data = try await storage.from("bucket")
       .download(path: "file.txt")
 
-    XCTAssertEqual(data, Data("hello world".utf8))
+    #expect(data == Data("hello world".utf8))
   }
 
-  func testDownloadWithAdditionalQuery() async throws {
+  @Test
+  func downloadWithAdditionalQuery() async throws {
+    let storage = makeSUT()
+
     Mock(
       url: url.appendingPathComponent("object/bucket/file.txt"),
       ignoreQuery: true,
@@ -901,10 +977,13 @@ final class StorageFileAPITests: XCTestCase {
         query: [URLQueryItem(name: "version", value: "1")]
       )
 
-    XCTAssertEqual(data, Data("hello world".utf8))
+    #expect(data == Data("hello world".utf8))
   }
 
-  func testDownload_withEmptyTransformOptions() async throws {
+  @Test
+  func download_withEmptyTransformOptions() async throws {
+    let storage = makeSUT()
+
     Mock(
       url: url.appendingPathComponent("object/bucket/file.txt"),
       statusCode: 200,
@@ -917,44 +996,56 @@ final class StorageFileAPITests: XCTestCase {
     let data = try await storage.from("bucket")
       .download(path: "file.txt", options: TransformOptions())
 
-    XCTAssertEqual(data, Data("hello world".utf8))
+    #expect(data == Data("hello world".utf8))
   }
 
-  func testGetPublicURL_withEmptyTransformOptions() throws {
+  @Test
+  func getPublicURL_withEmptyTransformOptions() throws {
+    let storage = makeSUT()
+
     let publicURL = try storage.from("bucket")
       .getPublicURL(path: "image.png", options: TransformOptions())
 
-    XCTAssertTrue(
+    #expect(
       publicURL.absoluteString.contains("/object/public/"),
       "Empty transform should use /object/public/ path, got: \(publicURL.absoluteString)"
     )
-    XCTAssertFalse(
-      publicURL.absoluteString.contains("/render/image/"),
+    #expect(
+      !publicURL.absoluteString.contains("/render/image/"),
       "Empty transform should not use /render/image/ path, got: \(publicURL.absoluteString)"
     )
   }
 
-  func testGetPublicURL_withActualTransformOptions() throws {
+  @Test
+  func getPublicURL_withActualTransformOptions() throws {
+    let storage = makeSUT()
+
     let publicURL = try storage.from("bucket")
       .getPublicURL(path: "image.png", options: TransformOptions(width: 200))
 
-    XCTAssertTrue(
+    #expect(
       publicURL.absoluteString.contains("/render/image/"),
       "Non-empty transform should use /render/image/ path, got: \(publicURL.absoluteString)"
     )
   }
 
-  func testGetPublicURLStripsLeadingSlash() throws {
+  @Test
+  func getPublicURLStripsLeadingSlash() throws {
+    let storage = makeSUT()
+
     let publicURL = try storage.from("bucket")
       .getPublicURL(path: "/folder/image.png")
 
-    XCTAssertEqual(
-      publicURL.absoluteString,
-      "http://localhost:54321/storage/v1/object/public/bucket/folder/image.png"
+    #expect(
+      publicURL.absoluteString
+        == "http://localhost:54321/storage/v1/object/public/bucket/folder/image.png"
     )
   }
 
-  func testDownloadStripsLeadingSlash() async throws {
+  @Test
+  func downloadStripsLeadingSlash() async throws {
+    let storage = makeSUT()
+
     Mock(
       url: url.appendingPathComponent("object/bucket/file.txt"),
       statusCode: 200,
@@ -975,10 +1066,13 @@ final class StorageFileAPITests: XCTestCase {
     let data = try await storage.from("bucket")
       .download(path: "/file.txt")
 
-    XCTAssertEqual(data, Data("hello world".utf8))
+    #expect(data == Data("hello world".utf8))
   }
 
-  func testDownload_withOptions() async throws {
+  @Test
+  func download_withOptions() async throws {
+    let storage = makeSUT()
+
     let imageData = try! Data(
       contentsOf: Bundle.module.url(forResource: "sadcat", withExtension: "jpg")!)
 
@@ -1006,10 +1100,13 @@ final class StorageFileAPITests: XCTestCase {
         options: TransformOptions(format: "cover")
       )
 
-    XCTAssertEqual(data, imageData)
+    #expect(data == imageData)
   }
 
-  func testInfo() async throws {
+  @Test
+  func info() async throws {
+    let storage = makeSUT()
+
     Mock(
       url: url.appendingPathComponent("object/info/bucket/file.txt"),
       statusCode: 200,
@@ -1037,10 +1134,13 @@ final class StorageFileAPITests: XCTestCase {
 
     let info = try await storage.from("bucket").info(path: "file.txt")
 
-    XCTAssertEqual(info.name, "file.txt")
+    #expect(info.name == "file.txt")
   }
 
-  func testExists() async throws {
+  @Test
+  func exists() async throws {
+    let storage = makeSUT()
+
     Mock(
       url: url.appendingPathComponent("object/bucket/file.txt"),
       statusCode: 200,
@@ -1061,10 +1161,13 @@ final class StorageFileAPITests: XCTestCase {
 
     let exists = try await storage.from("bucket").exists(path: "file.txt")
 
-    XCTAssertTrue(exists)
+    #expect(exists)
   }
 
-  func testExists_400_error() async throws {
+  @Test
+  func exists_400_error() async throws {
+    let storage = makeSUT()
+
     Mock(
       url: url.appendingPathComponent("object/bucket/file.txt"),
       statusCode: 400,
@@ -1085,10 +1188,13 @@ final class StorageFileAPITests: XCTestCase {
 
     let exists = try await storage.from("bucket").exists(path: "file.txt")
 
-    XCTAssertFalse(exists)
+    #expect(!exists)
   }
 
-  func testExists_404_error() async throws {
+  @Test
+  func exists_404_error() async throws {
+    let storage = makeSUT()
+
     Mock(
       url: url.appendingPathComponent("object/bucket/file.txt"),
       statusCode: 404,
@@ -1109,10 +1215,13 @@ final class StorageFileAPITests: XCTestCase {
 
     let exists = try await storage.from("bucket").exists(path: "file.txt")
 
-    XCTAssertFalse(exists)
+    #expect(!exists)
   }
 
-  func testCreateSignedUploadURL() async throws {
+  @Test
+  func createSignedUploadURL() async throws {
+    let storage = makeSUT()
+
     Mock(
       url: url.appendingPathComponent("object/upload/sign/bucket/file.txt"),
       statusCode: 200,
@@ -1140,14 +1249,17 @@ final class StorageFileAPITests: XCTestCase {
     let response = try await storage.from("bucket")
       .createSignedUploadURL(path: "file.txt")
 
-    XCTAssertEqual(response.path, "file.txt")
-    XCTAssertEqual(response.token, "abc.def.ghi")
-    XCTAssertEqual(
-      response.signedURL.absoluteString,
-      "http://localhost:54321/storage/v1/object/upload/sign/bucket/file.txt?token=abc.def.ghi")
+    #expect(response.path == "file.txt")
+    #expect(response.token == "abc.def.ghi")
+    #expect(
+      response.signedURL.absoluteString
+        == "http://localhost:54321/storage/v1/object/upload/sign/bucket/file.txt?token=abc.def.ghi")
   }
 
-  func testCreateSignedUploadURL_withUpsert() async throws {
+  @Test
+  func createSignedUploadURL_withUpsert() async throws {
+    let storage = makeSUT()
+
     Mock(
       url: url.appendingPathComponent("object/upload/sign/bucket/file.txt"),
       statusCode: 200,
@@ -1181,14 +1293,17 @@ final class StorageFileAPITests: XCTestCase {
         )
       )
 
-    XCTAssertEqual(response.path, "file.txt")
-    XCTAssertEqual(response.token, "abc.def.ghi")
-    XCTAssertEqual(
-      response.signedURL.absoluteString,
-      "http://localhost:54321/storage/v1/object/upload/sign/bucket/file.txt?token=abc.def.ghi")
+    #expect(response.path == "file.txt")
+    #expect(response.token == "abc.def.ghi")
+    #expect(
+      response.signedURL.absoluteString
+        == "http://localhost:54321/storage/v1/object/upload/sign/bucket/file.txt?token=abc.def.ghi")
   }
 
-  func testCreateSignedUploadURLCleansPath() async throws {
+  @Test
+  func createSignedUploadURLCleansPath() async throws {
+    let storage = makeSUT()
+
     Mock(
       url: url.appendingPathComponent("object/upload/sign/bucket/folder/file.txt"),
       statusCode: 200,
@@ -1216,11 +1331,14 @@ final class StorageFileAPITests: XCTestCase {
     let response = try await storage.from("bucket")
       .createSignedUploadURL(path: "/folder//file.txt")
 
-    XCTAssertEqual(response.path, "folder/file.txt")
-    XCTAssertEqual(response.token, "abc.def.ghi")
+    #expect(response.path == "folder/file.txt")
+    #expect(response.token == "abc.def.ghi")
   }
 
-  func testUploadToSignedURLCleansPath() async throws {
+  @Test
+  func uploadToSignedURLCleansPath() async throws {
+    let storage = makeSUT()
+
     Mock(
       url: url.appendingPathComponent("object/upload/sign/bucket/folder/file.txt"),
       ignoreQuery: true,
@@ -1263,11 +1381,14 @@ final class StorageFileAPITests: XCTestCase {
     let response = try await storage.from("bucket")
       .uploadToSignedURL("/folder//file.txt", token: "abc.def.ghi", data: Data("hello world".utf8))
 
-    XCTAssertEqual(response.path, "folder/file.txt")
-    XCTAssertEqual(response.fullPath, "bucket/folder/file.txt")
+    #expect(response.path == "folder/file.txt")
+    #expect(response.fullPath == "bucket/folder/file.txt")
   }
 
-  func testUploadToSignedURL() async throws {
+  @Test
+  func uploadToSignedURL() async throws {
+    let storage = makeSUT()
+
     Mock(
       url: url.appendingPathComponent("object/upload/sign/bucket/file.txt"),
       ignoreQuery: true,
@@ -1310,11 +1431,14 @@ final class StorageFileAPITests: XCTestCase {
     let response = try await storage.from("bucket")
       .uploadToSignedURL("file.txt", token: "abc.def.ghi", data: Data("hello world".utf8))
 
-    XCTAssertEqual(response.path, "file.txt")
-    XCTAssertEqual(response.fullPath, "bucket/file.txt")
+    #expect(response.path == "file.txt")
+    #expect(response.fullPath == "bucket/file.txt")
   }
 
-  func testUploadToSignedURL_fromFileURL() async throws {
+  @Test
+  func uploadToSignedURL_fromFileURL() async throws {
+    let storage = makeSUT()
+
     Mock(
       url: url.appendingPathComponent("object/upload/sign/bucket/file.txt"),
       ignoreQuery: true,
@@ -1366,11 +1490,14 @@ final class StorageFileAPITests: XCTestCase {
         )
       )
 
-    XCTAssertEqual(response.path, "file.txt")
-    XCTAssertEqual(response.fullPath, "bucket/file.txt")
+    #expect(response.path == "file.txt")
+    #expect(response.fullPath == "bucket/file.txt")
   }
 
-  func testCreateSignedURL_cacheNonce() async throws {
+  @Test
+  func createSignedURL_cacheNonce() async throws {
+    let storage = makeSUT()
+
     Mock(
       url: url.appendingPathComponent("object/sign/bucket/file.txt"),
       statusCode: 200,
@@ -1391,12 +1518,15 @@ final class StorageFileAPITests: XCTestCase {
       expiresIn: 3600,
       cacheNonce: "abc123"
     )
-    XCTAssertEqual(
-      url.absoluteString,
-      "\(self.url)/object/upload/sign/bucket/file.txt?token=abc.def.ghi&cacheNonce=abc123")
+    #expect(
+      url.absoluteString
+        == "\(self.url)/object/upload/sign/bucket/file.txt?token=abc.def.ghi&cacheNonce=abc123")
   }
 
-  func testCreateSignedURLs_cacheNonce() async throws {
+  @Test
+  func createSignedURLs_cacheNonce() async throws {
+    let storage = makeSUT()
+
     Mock(
       url: url.appendingPathComponent("object/sign/bucket"),
       statusCode: 200,
@@ -1421,24 +1551,30 @@ final class StorageFileAPITests: XCTestCase {
       cacheNonce: "abc123"
     )
     guard case .success(_, let url) = results[0] else {
-      return XCTFail("Expected success for file.txt")
+      Issue.record("Expected success for file.txt")
+      return
     }
-    XCTAssertEqual(
-      url.absoluteString,
-      "\(self.url)/object/upload/sign/bucket/file.txt?token=abc.def.ghi&cacheNonce=abc123")
+    #expect(
+      url.absoluteString
+        == "\(self.url)/object/upload/sign/bucket/file.txt?token=abc.def.ghi&cacheNonce=abc123")
   }
 
-  func testGetPublicURL_cacheNonce() throws {
+  @Test
+  func getPublicURL_cacheNonce() throws {
+    let storage = makeSUT()
+
     let url = try storage.from("bucket").getPublicURL(
       path: "file.txt",
       cacheNonce: "abc123"
     )
-    XCTAssertEqual(
-      url.absoluteString,
-      "\(self.url)/object/public/bucket/file.txt?cacheNonce=abc123")
+    #expect(
+      url.absoluteString == "\(self.url)/object/public/bucket/file.txt?cacheNonce=abc123")
   }
 
-  func testDownload_cacheNonce() async throws {
+  @Test
+  func download_cacheNonce() async throws {
+    let storage = makeSUT()
+
     Mock(
       url: url.appendingPathComponent("object/bucket/file.txt"),
       ignoreQuery: true,
@@ -1460,6 +1596,6 @@ final class StorageFileAPITests: XCTestCase {
     let data = try await storage.from("bucket")
       .download(path: "file.txt", cacheNonce: "abc123")
 
-    XCTAssertEqual(data, Data("hello world".utf8))
+    #expect(data == Data("hello world".utf8))
   }
 }

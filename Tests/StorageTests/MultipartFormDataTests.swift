@@ -1,24 +1,29 @@
-import XCTest
+import Foundation
+import Testing
 
 @testable import Storage
 
-final class MultipartFormDataTests: XCTestCase {
-  func testBoundaryGeneration() {
+@Suite
+struct MultipartFormDataTests {
+  @Test
+  func boundaryGeneration() {
     let formData = MultipartFormData()
-    XCTAssertFalse(formData.boundary.isEmpty)
-    XCTAssertTrue(formData.contentType.contains("multipart/form-data; boundary="))
+    #expect(!formData.boundary.isEmpty)
+    #expect(formData.contentType.contains("multipart/form-data; boundary="))
   }
 
-  func testAppendingData() {
+  @Test
+  func appendingData() {
     let formData = MultipartFormData()
     let testData = "Hello World".data(using: .utf8)!
 
     formData.append(testData, withName: "test", fileName: "test.txt", mimeType: "text/plain")
 
-    XCTAssertGreaterThan(formData.contentLength, 0)
+    #expect(formData.contentLength > 0)
   }
 
-  func testContentHeaders() {
+  @Test
+  func contentHeaders() {
     let formData = MultipartFormData()
     let testData = "Test".data(using: .utf8)!
 
@@ -29,27 +34,30 @@ final class MultipartFormDataTests: XCTestCase {
       mimeType: "text/plain"
     )
 
-    XCTAssertTrue(formData.contentType.hasPrefix("multipart/form-data"))
+    #expect(formData.contentType.hasPrefix("multipart/form-data"))
   }
 
-  func testCustomBoundary() {
+  @Test
+  func customBoundary() {
     let customBoundary = "test-boundary-12345"
     let formData = MultipartFormData(boundary: customBoundary)
 
-    XCTAssertEqual(formData.boundary, customBoundary)
-    XCTAssertTrue(formData.contentType.contains(customBoundary))
+    #expect(formData.boundary == customBoundary)
+    #expect(formData.contentType.contains(customBoundary))
   }
 
-  func testAppendDataWithoutFileName() {
+  @Test
+  func appendDataWithoutFileName() {
     let formData = MultipartFormData()
     let testData = "Test data".data(using: .utf8)!
 
     formData.append(testData, withName: "field")
 
-    XCTAssertGreaterThan(formData.contentLength, 0)
+    #expect(formData.contentLength > 0)
   }
 
-  func testMultipleAppends() {
+  @Test
+  func multipleAppends() {
     let formData = MultipartFormData()
     let data1 = "First".data(using: .utf8)!
     let data2 = "Second".data(using: .utf8)!
@@ -57,25 +65,27 @@ final class MultipartFormDataTests: XCTestCase {
     formData.append(data1, withName: "field1", fileName: "file1.txt", mimeType: "text/plain")
     formData.append(data2, withName: "field2", fileName: "file2.txt", mimeType: "text/plain")
 
-    XCTAssertEqual(formData.contentLength, UInt64(data1.count + data2.count))
+    #expect(formData.contentLength == UInt64(data1.count + data2.count))
   }
 
-  func testEncodeFormData() throws {
+  @Test
+  func encodeFormData() throws {
     let formData = MultipartFormData()
     let testData = "Test content".data(using: .utf8)!
 
     formData.append(testData, withName: "file", fileName: "test.txt", mimeType: "text/plain")
 
     let encoded = try formData.encode()
-    XCTAssertGreaterThan(encoded.count, 0)
+    #expect(encoded.count > 0)
 
     // Verify encoded data contains boundary
     let encodedString = String(data: encoded, encoding: .utf8)
-    XCTAssertNotNil(encodedString)
-    XCTAssertTrue(encodedString!.contains(formData.boundary))
+    #expect(encodedString != nil)
+    #expect(encodedString!.contains(formData.boundary))
   }
 
-  func testAppendFileURL() throws {
+  @Test
+  func appendFileURL() throws {
     let formData = MultipartFormData()
 
     // Create a temporary file
@@ -88,10 +98,11 @@ final class MultipartFormDataTests: XCTestCase {
 
     formData.append(fileURL, withName: "upload")
 
-    XCTAssertGreaterThan(formData.contentLength, 0)
+    #expect(formData.contentLength > 0)
   }
 
-  func testAppendFileURLWithCustomMetadata() throws {
+  @Test
+  func appendFileURLWithCustomMetadata() throws {
     let formData = MultipartFormData()
 
     // Create a temporary file
@@ -105,31 +116,38 @@ final class MultipartFormDataTests: XCTestCase {
     formData.append(
       fileURL, withName: "data", fileName: "custom.json", mimeType: "application/json")
 
-    XCTAssertGreaterThan(formData.contentLength, 0)
+    #expect(formData.contentLength > 0)
   }
 
   #if !os(Linux) && !os(Windows) && !os(Android)
-    func testAppendInvalidFileURL() {
+    @Test
+    func appendInvalidFileURL() {
       let formData = MultipartFormData()
       let invalidURL = URL(fileURLWithPath: "/nonexistent/path/file.txt")
 
       formData.append(invalidURL, withName: "file")
 
       // Should fail during encoding
-      XCTAssertThrowsError(try formData.encode())
+      #expect(throws: (any Error).self) {
+        try formData.encode()
+      }
     }
 
-    func testAppendNonFileURL() {
+    @Test
+    func appendNonFileURL() {
       let formData = MultipartFormData()
       let httpURL = URL(string: "https://example.com/file.txt")!
 
       formData.append(httpURL, withName: "file", fileName: "file.txt", mimeType: "text/plain")
 
       // Should fail during encoding
-      XCTAssertThrowsError(try formData.encode())
+      #expect(throws: (any Error).self) {
+        try formData.encode()
+      }
     }
 
-    func testAppendDirectory() throws {
+    @Test
+    func appendDirectory() throws {
       let formData = MultipartFormData()
 
       // Use a known directory
@@ -138,11 +156,14 @@ final class MultipartFormDataTests: XCTestCase {
       formData.append(dirURL, withName: "dir")
 
       // Should fail during encoding
-      XCTAssertThrowsError(try formData.encode())
+      #expect(throws: (any Error).self) {
+        try formData.encode()
+      }
     }
   #endif
 
-  func testAppendInputStream() {
+  @Test
+  func appendInputStream() {
     let formData = MultipartFormData()
     let testData = "Stream data".data(using: .utf8)!
     let stream = InputStream(data: testData)
@@ -155,18 +176,20 @@ final class MultipartFormDataTests: XCTestCase {
       mimeType: "text/plain"
     )
 
-    XCTAssertEqual(formData.contentLength, UInt64(testData.count))
+    #expect(formData.contentLength == UInt64(testData.count))
   }
 
-  func testEmptyFormData() throws {
+  @Test
+  func emptyFormData() throws {
     let formData = MultipartFormData()
 
     // Encoding empty form data should succeed
     let encoded = try formData.encode()
-    XCTAssertEqual(encoded.count, 0)
+    #expect(encoded.count == 0)
   }
 
-  func testLargeData() throws {
+  @Test
+  func largeData() throws {
     let formData = MultipartFormData()
 
     // Create 1MB of data
@@ -175,10 +198,11 @@ final class MultipartFormDataTests: XCTestCase {
       largeData, withName: "large", fileName: "large.bin", mimeType: "application/octet-stream")
 
     let encoded = try formData.encode()
-    XCTAssertGreaterThan(encoded.count, largeData.count)
+    #expect(encoded.count > largeData.count)
   }
 
-  func testWriteEncodedDataToFile() throws {
+  @Test
+  func writeEncodedDataToFile() throws {
     let formData = MultipartFormData()
     let testData = "Test file write".data(using: .utf8)!
 
@@ -190,13 +214,14 @@ final class MultipartFormDataTests: XCTestCase {
 
     try formData.writeEncodedData(to: outputURL)
 
-    XCTAssertTrue(FileManager.default.fileExists(atPath: outputURL.path))
+    #expect(FileManager.default.fileExists(atPath: outputURL.path))
 
     let written = try Data(contentsOf: outputURL)
-    XCTAssertGreaterThan(written.count, 0)
+    #expect(written.count > 0)
   }
 
-  func testWriteToExistingFile() throws {
+  @Test
+  func writeToExistingFile() throws {
     let formData = MultipartFormData()
     let testData = "Test".data(using: .utf8)!
 
@@ -210,10 +235,13 @@ final class MultipartFormDataTests: XCTestCase {
     defer { try? FileManager.default.removeItem(at: outputURL) }
 
     // Should throw because file already exists
-    XCTAssertThrowsError(try formData.writeEncodedData(to: outputURL))
+    #expect(throws: (any Error).self) {
+      try formData.writeEncodedData(to: outputURL)
+    }
   }
 
-  func testWriteToNonFileURL() throws {
+  @Test
+  func writeToNonFileURL() throws {
     let formData = MultipartFormData()
     let testData = "Test".data(using: .utf8)!
 
@@ -222,26 +250,31 @@ final class MultipartFormDataTests: XCTestCase {
     let httpURL = URL(string: "https://example.com/output.txt")!
 
     // Should throw because URL is not a file URL
-    XCTAssertThrowsError(try formData.writeEncodedData(to: httpURL))
+    #expect(throws: (any Error).self) {
+      try formData.writeEncodedData(to: httpURL)
+    }
   }
 
-  func testMultipartFormDataErrorUnderlyingError() {
+  @Test
+  func multipartFormDataErrorUnderlyingError() {
     let nsError = NSError(domain: "test", code: 1, userInfo: nil)
     let error = MultipartFormDataError.inputStreamReadFailed(error: nsError)
 
-    XCTAssertNotNil(error.underlyingError)
-    XCTAssertNil(error.url)
+    #expect(error.underlyingError != nil)
+    #expect(error.url == nil)
   }
 
-  func testMultipartFormDataErrorURL() {
+  @Test
+  func multipartFormDataErrorURL() {
     let url = URL(fileURLWithPath: "/test/file.txt")
     let error = MultipartFormDataError.bodyPartFileNotReachable(at: url)
 
-    XCTAssertNotNil(error.url)
-    XCTAssertNil(error.underlyingError)
+    #expect(error.url != nil)
+    #expect(error.underlyingError == nil)
   }
 
-  func testContentLengthCalculation() {
+  @Test
+  func contentLengthCalculation() {
     let formData = MultipartFormData()
     let data1 = "Part 1".data(using: .utf8)!
     let data2 = "Part 2".data(using: .utf8)!
@@ -250,6 +283,6 @@ final class MultipartFormDataTests: XCTestCase {
     formData.append(data2, withName: "part2")
 
     let expectedLength = UInt64(data1.count + data2.count)
-    XCTAssertEqual(formData.contentLength, expectedLength)
+    #expect(formData.contentLength == expectedLength)
   }
 }
