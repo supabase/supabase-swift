@@ -12,8 +12,11 @@ import Testing
 
 /// `.serialized`: Mocker registers stubs in a process-global table with no per-test isolation, so
 /// tests that stub overlapping URLs (e.g. `hello-world`) would otherwise race against each other
-/// under Swift Testing's default parallel execution.
-@Suite(.serialized)
+/// under Swift Testing's default parallel execution. `.mockerSerialized` (see
+/// `TestHelpers/MockerSerialization.swift`) extends that guarantee across test *targets* too --
+/// StorageTests and PostgRESTTests have their own Mocker-backed suites, and without it this suite
+/// can still run concurrently with theirs and race on Mocker's shared registry.
+@Suite(.serialized, .mockerSerialized)
 struct FunctionsClientTests {
   let url = URL(string: "http://localhost:5432/functions/v1")!
   let apiKey =
