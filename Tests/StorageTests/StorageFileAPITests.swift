@@ -11,6 +11,7 @@ import Testing
 #endif
 
 extension StorageMockerTests {
+  @Suite(.mockerSerialized)
   struct StorageFileAPITests {
     let url = URL(string: "http://localhost:54321/storage/v1")!
 

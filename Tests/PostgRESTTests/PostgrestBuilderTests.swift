@@ -20,6 +20,7 @@ import Testing
 #endif
 
 extension PostgrestMockerTests {
+  @Suite(.mockerSerialized)
   struct PostgrestBuilderTests {
     let fixture = PostgrestQueryFixture()
     var url: URL { fixture.url }

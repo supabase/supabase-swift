@@ -12,6 +12,7 @@ import TestHelpers
 import Testing
 
 extension PostgrestMockerTests {
+  @Suite(.mockerSerialized)
   struct PostgrestQueryBuilderTests {
     let fixture = PostgrestQueryFixture()
     var url: URL { fixture.url }

@@ -19,7 +19,11 @@ import Testing
 /// registry is process-global, and these suites stub overlapping URLs (e.g. `users`, `rpc/*`), so
 /// running them concurrently would let one suite's stub satisfy another's request. `.serialized`
 /// on a suite applies recursively to its nested suites, so nesting all of them under this empty
-/// namespace serializes them against each other.
+/// namespace serializes them against each other within this target. Each nested suite also carries
+/// `.mockerSerialized` (see `TestHelpers/MockerSerialization.swift`) to extend that guarantee
+/// across test *targets* too -- StorageTests has its own Mocker-backed suites, and without it the
+/// two targets' suites can still run concurrently with each other and race on Mocker's shared
+/// registry.
 @Suite(.serialized)
 enum PostgrestMockerTests {}
 

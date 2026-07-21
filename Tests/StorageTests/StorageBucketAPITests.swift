@@ -14,11 +14,16 @@ import Testing
 /// serialize their own tests internally, they must never run concurrently *with each other* either
 /// -- otherwise one suite's `Mocker.removeAll()` (see `makeSUT()`) can wipe out mocks the other
 /// suite just registered. `.serialized` on a suite applies recursively to its nested suites, so
-/// nesting both under this empty namespace enforces that.
+/// nesting both under this empty namespace enforces that within this target. Each nested suite
+/// also carries `.mockerSerialized` (see `TestHelpers/MockerSerialization.swift`) to extend that
+/// guarantee across test *targets* too -- PostgRESTTests has its own Mocker-backed suites, and
+/// without it the two targets' suites can still run concurrently with each other and race on
+/// Mocker's shared registry.
 @Suite(.serialized)
 enum StorageMockerTests {}
 
 extension StorageMockerTests {
+  @Suite(.mockerSerialized)
   struct StorageBucketAPITests {
     let url = URL(string: "http://localhost:54321/storage/v1")!
 
