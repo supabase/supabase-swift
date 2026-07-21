@@ -96,6 +96,10 @@ final class URLSessionWebSocket: WebSocket {
             reason: Data("abnormal close".utf8)
           )
         } else if let error {
+          // No `URLSessionWebSocket` was ever created to own this session (connection
+          // failed before `onWebSocketTaskOpened`), so invalidate it here — otherwise
+          // it (and its task/delegate) leak.
+          session.finishTasksAndInvalidate()
           $0.continuation.resume(
             throwing: WebSocketError.connection(
               message: "connection ended unexpectedly",
