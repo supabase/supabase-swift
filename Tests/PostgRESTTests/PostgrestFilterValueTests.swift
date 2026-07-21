@@ -8,6 +8,38 @@ final class PostgrestFilterValue: XCTestCase {
     XCTAssertEqual(queryValue, "{is:online,faction:red}")
   }
 
+  func testArrayQuotesElementsContainingReservedCharacters() {
+    XCTAssertEqual(["a,b"].rawValue, "{\"a,b\"}")
+    XCTAssertEqual(["a", "b,c", "d"].rawValue, "{a,\"b,c\",d}")
+    XCTAssertEqual(["a{b"].rawValue, "{\"a{b\"}")
+  }
+
+  func testArrayEscapesQuotesAndBackslashes() {
+    XCTAssertEqual([#"a"b"#].rawValue, #"{"a\"b"}"#)
+    XCTAssertEqual([#"a\b"#].rawValue, #"{"a\\b"}"#)
+  }
+
+  func testArrayQuotesWhitespaceEmptyAndNullElements() {
+    XCTAssertEqual([" a"].rawValue, "{\" a\"}")
+    XCTAssertEqual([""].rawValue, "{\"\"}")
+    XCTAssertEqual(["NULL"].rawValue, "{\"NULL\"}")
+    XCTAssertEqual(["null"].rawValue, "{\"null\"}")
+  }
+
+  func testArrayLeavesSafeAndNumericElementsUnquoted() {
+    XCTAssertEqual([1, 2, 3].rawValue, "{1,2,3}")
+    XCTAssertEqual(["admin", "user"].rawValue, "{admin,user}")
+    XCTAssertEqual(["9:00", "17:00"].rawValue, "{9:00,17:00}")
+  }
+
+  func testArrayPreservesNestedArrayLiterals() {
+    XCTAssertEqual([[1, 2], [3, 4]].rawValue, "{{1,2},{3,4}}")
+  }
+
+  func testAnyJSONArrayEscapesReservedCharacters() {
+    XCTAssertEqual(AnyJSON.array(["a,b"]).rawValue, "{\"a,b\"}")
+  }
+
   func testAnyJSON() {
     XCTAssertEqual(
       AnyJSON.array(["is:online", "faction:red"]).rawValue,
