@@ -370,6 +370,27 @@ struct RequestsTests {
   }
 
   @Test
+  func adminListPasskeys() async throws {
+    let sut = makeSUT()
+
+    let userId = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
+    await assert {
+      _ = try await sut.admin.listPasskeys(userId: userId)
+    }
+  }
+
+  @Test
+  func adminDeletePasskey() async throws {
+    let sut = makeSUT()
+
+    let userId = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
+    let passkeyId = UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B")!
+    await assert {
+      try await sut.admin.deletePasskey(userId: userId, passkeyId: passkeyId)
+    }
+  }
+
+  @Test
   func reauthenticate() async throws {
     let sut = makeSUT()
 

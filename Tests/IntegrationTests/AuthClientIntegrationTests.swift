@@ -11,7 +11,7 @@ import InlineSnapshotTesting
 import TestHelpers
 import XCTest
 
-@testable import Auth
+@_spi(Experimental) @testable import Auth
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -267,6 +267,32 @@ final class AuthClientIntegrationTests: XCTestCase {
     XCTAssertEqual(pagination.users.count, 10)
     XCTAssertEqual(pagination.aud, "authenticated")
     XCTAssertEqual(pagination.nextPage, 2)
+  }
+
+  func testAdminListPasskeysEmptyForNewUser() async throws {
+    let email = mockEmail()
+    let password = mockPassword()
+    try await signUpIfNeededOrSignIn(email: email, password: password)
+    let session = try await authClient.session
+
+    let client = Self.makeClient(serviceRole: true)
+    let passkeys = try await client.admin.listPasskeys(userId: session.user.id)
+    XCTAssertTrue(passkeys.isEmpty)
+  }
+
+  func testAdminDeletePasskeyNotFound() async throws {
+    let email = mockEmail()
+    let password = mockPassword()
+    try await signUpIfNeededOrSignIn(email: email, password: password)
+    let session = try await authClient.session
+
+    let client = Self.makeClient(serviceRole: true)
+    do {
+      try await client.admin.deletePasskey(userId: session.user.id, passkeyId: UUID())
+      XCTFail("Expected deletePasskey to throw for a nonexistent passkey")
+    } catch {
+      // Backend returns 404 when the passkey doesn't exist or belongs to another user.
+    }
   }
 
   func testSignOut() async throws {
