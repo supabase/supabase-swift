@@ -795,6 +795,43 @@ extension AuthMockerTests {
     }
 
     @Test
+    func signInWithWeb3Ethereum() async throws {
+      Mock(
+        url: clientURL.appendingPathComponent("token"),
+        ignoreQuery: true,
+        statusCode: 200,
+        data: [.post: MockData.session]
+      )
+      .snapshotRequest {
+        #"""
+        curl \
+        	--request POST \
+        	--header "Content-Length: 448" \
+        	--header "Content-Type: application/json" \
+        	--header "X-Client-Info: auth-swift/0.0.0" \
+        	--header "X-Supabase-Api-Version: 2024-01-01" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	--data "{\"chain\":\"ethereum\",\"gotrue_meta_security\":{\"captcha_token\":\"captcha-token\"},\"message\":\"example.com wants you to sign in with your Ethereum account:\n0x2c7536E3605D9C16a7a3D7b1898e529396a65c23\n\nURI: https:\/\/example.com\nVersion: 1\nChain ID: 1\nNonce: abc123\nIssued At: 2026-01-01T00:00:00.000Z\",\"signature\":\"0x468cc42ece552183597cbbbd0418a5d3efff707a1021a222ad16e55124327ee670d363a8ee08976b5bd5f7af5e3ac53a4e43983a9ac7f4853a75423fcc387ddc1c\"}" \
+        	"http://localhost:54321/auth/v1/token?grant_type=web3"
+        """#
+      }
+      .register()
+
+      let sut = makeSUT()
+
+      try await sut.signInWithWeb3(
+        credentials: Web3Credentials(
+          chain: .ethereum,
+          message:
+            "example.com wants you to sign in with your Ethereum account:\n0x2c7536E3605D9C16a7a3D7b1898e529396a65c23\n\nURI: https://example.com\nVersion: 1\nChain ID: 1\nNonce: abc123\nIssued At: 2026-01-01T00:00:00.000Z",
+          signature:
+            "0x468cc42ece552183597cbbbd0418a5d3efff707a1021a222ad16e55124327ee670d363a8ee08976b5bd5f7af5e3ac53a4e43983a9ac7f4853a75423fcc387ddc1c",
+          captchaToken: "captcha-token"
+        )
+      )
+    }
+
+    @Test
     func signInWithOTPUsingEmail() async throws {
       Mock(
         url: clientURL.appendingPathComponent("otp"),
