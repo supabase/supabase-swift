@@ -832,6 +832,76 @@ extension AuthMockerTests {
     }
 
     @Test
+    func signInWithWeb3Solana() async throws {
+      Mock(
+        url: clientURL.appendingPathComponent("token"),
+        ignoreQuery: true,
+        statusCode: 200,
+        data: [.post: MockData.session]
+      )
+      .snapshotRequest {
+        #"""
+        curl \
+        	--request POST \
+        	--header "Content-Length: 305" \
+        	--header "Content-Type: application/json" \
+        	--header "X-Client-Info: auth-swift/0.0.0" \
+        	--header "X-Supabase-Api-Version: 2024-01-01" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	--data "{\"chain\":\"solana\",\"message\":\"example.com wants you to sign in with your Solana account:\n4Cw1koUQtqybLFem7uqhzMBznMPGARbFS4cjaYbM9RnR\n\nURI: https:\/\/example.com\nVersion: 1\nIssued At: 2026-01-01T00:00:00.000Z\",\"signature\":\"dGVzdC1zaWduYXR1cmUtYnl0ZXMtdGhhdC1hcmUtNjQtYnl0ZXMtbG9uZy1mb3ItdGVzdGluZw==\"}" \
+        	"http://localhost:54321/auth/v1/token?grant_type=web3"
+        """#
+      }
+      .register()
+
+      let sut = makeSUT()
+
+      try await sut.signInWithWeb3(
+        credentials: Web3Credentials(
+          chain: .solana,
+          message:
+            "example.com wants you to sign in with your Solana account:\n4Cw1koUQtqybLFem7uqhzMBznMPGARbFS4cjaYbM9RnR\n\nURI: https://example.com\nVersion: 1\nIssued At: 2026-01-01T00:00:00.000Z",
+          signature: "dGVzdC1zaWduYXR1cmUtYnl0ZXMtdGhhdC1hcmUtNjQtYnl0ZXMtbG9uZy1mb3ItdGVzdGluZw=="
+        )
+      )
+    }
+
+    @Test
+    func signInWithWeb3UnsupportedChainError() async throws {
+      Mock(
+        url: clientURL.appendingPathComponent("token"),
+        ignoreQuery: true,
+        statusCode: 400,
+        data: [
+          .post: Data(
+            """
+            {
+              "error_code": "web3_unsupported_chain",
+              "msg": "Unsupported chain"
+            }
+            """.utf8
+          )
+        ]
+      )
+      .register()
+
+      let sut = makeSUT()
+
+      do {
+        _ = try await sut.signInWithWeb3(
+          credentials: Web3Credentials(
+            chain: "bitcoin",
+            message: "irrelevant",
+            signature: "irrelevant"
+          )
+        )
+        Issue.record("Expected AuthError.api")
+      } catch let AuthError.api(_, errorCode, _, _) {
+        #expect(errorCode == .web3UnsupportedChain)
+      }
+    }
+
+    @Test
     func signInWithOTPUsingEmail() async throws {
       Mock(
         url: clientURL.appendingPathComponent("otp"),
