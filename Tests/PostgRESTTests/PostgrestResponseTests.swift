@@ -1,4 +1,5 @@
-import XCTest
+import Foundation
+import Testing
 
 @testable import PostgREST
 
@@ -6,8 +7,10 @@ import XCTest
   import FoundationNetworking
 #endif
 
-class PostgrestResponseTests: XCTestCase {
-  func testInit() {
+@Suite
+struct PostgrestResponseTests {
+  @Test
+  func initWithCount() {
     // Prepare data and response
     let data = Data()
     let response = HTTPURLResponse(
@@ -22,14 +25,15 @@ class PostgrestResponseTests: XCTestCase {
     let postgrestResponse = PostgrestResponse(data: data, response: response, value: value)
 
     // Assert the properties
-    XCTAssertEqual(postgrestResponse.data, data)
-    XCTAssertEqual(postgrestResponse.response, response)
-    XCTAssertEqual(postgrestResponse.value, value)
-    XCTAssertEqual(postgrestResponse.status, 200)
-    XCTAssertEqual(postgrestResponse.count, 200)
+    #expect(postgrestResponse.data == data)
+    #expect(postgrestResponse.response == response)
+    #expect(postgrestResponse.value == value)
+    #expect(postgrestResponse.status == 200)
+    #expect(postgrestResponse.count == 200)
   }
 
-  func testInitWithNoCount() {
+  @Test
+  func initWithNoCount() {
     // Prepare data and response
     let data = Data()
     let response = HTTPURLResponse(
@@ -44,10 +48,10 @@ class PostgrestResponseTests: XCTestCase {
     let postgrestResponse = PostgrestResponse(data: data, response: response, value: value)
 
     // Assert the properties
-    XCTAssertEqual(postgrestResponse.data, data)
-    XCTAssertEqual(postgrestResponse.response, response)
-    XCTAssertEqual(postgrestResponse.value, value)
-    XCTAssertEqual(postgrestResponse.status, 200)
-    XCTAssertNil(postgrestResponse.count)
+    #expect(postgrestResponse.data == data)
+    #expect(postgrestResponse.response == response)
+    #expect(postgrestResponse.value == value)
+    #expect(postgrestResponse.status == 200)
+    #expect(postgrestResponse.count == nil)
   }
 }

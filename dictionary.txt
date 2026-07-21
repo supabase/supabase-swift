@@ -138,6 +138,7 @@ sourcery
 Sourcery
 spotify
 Spotify
+subclassing
 subheadline
 Subview
 subview

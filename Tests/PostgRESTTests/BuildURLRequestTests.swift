@@ -1,7 +1,7 @@
 import ConcurrencyExtras
 import Foundation
 import SnapshotTesting
-import XCTest
+import Testing
 
 @testable import PostgREST
 
@@ -9,13 +9,14 @@ import XCTest
   import FoundationNetworking
 #endif
 
-struct User: Encodable {
-  var email: String
-  var username: String?
-}
-
-final class BuildURLRequestTests: XCTestCase {
+@Suite
+struct BuildURLRequestTests {
   let url = URL(string: "https://example.supabase.co")!
+
+  struct RequestUser: Encodable {
+    var email: String
+    var username: String?
+  }
 
   struct TestCase: Sendable {
     let name: String
@@ -27,7 +28,7 @@ final class BuildURLRequestTests: XCTestCase {
     init(
       name: String,
       record: Bool = false,
-      file: StaticString = #file,
+      file: StaticString = #filePath,
       line: UInt = #line,
       build: @escaping @Sendable (PostgrestClient) async throws -> PostgrestBuilder
     ) {
@@ -39,7 +40,8 @@ final class BuildURLRequestTests: XCTestCase {
     }
   }
 
-  func testBuildRequest() async throws {
+  @Test
+  func buildRequest() async throws {
     let runningTestCase = LockIsolated(TestCase?.none)
 
     let encoder = PostgrestClient.Configuration.jsonEncoder
@@ -52,7 +54,7 @@ final class BuildURLRequestTests: XCTestCase {
       logger: nil,
       fetch: { request in
         guard let runningTestCase = runningTestCase.value else {
-          XCTFail("execute called without a runningTestCase set.")
+          Issue.record("execute called without a runningTestCase set.")
           return (Data(), URLResponse.empty())
         }
 
@@ -82,14 +84,14 @@ final class BuildURLRequestTests: XCTestCase {
       },
       TestCase(name: "insert new user") { client in
         try client.from("users")
-          .insert(User(email: "johndoe@supabase.io"))
+          .insert(RequestUser(email: "johndoe@supabase.io"))
       },
       TestCase(name: "bulk insert users") { client in
         try client.from("users")
           .insert(
             [
-              User(email: "johndoe@supabase.io"),
-              User(email: "johndoe2@supabase.io", username: "johndoe2"),
+              RequestUser(email: "johndoe@supabase.io"),
+              RequestUser(email: "johndoe2@supabase.io", username: "johndoe2"),
             ]
           )
       },
@@ -130,14 +132,14 @@ final class BuildURLRequestTests: XCTestCase {
       },
       TestCase(name: "test upsert not ignoring duplicates") { client in
         try client.from("users")
-          .upsert(User(email: "johndoe@supabase.io"))
+          .upsert(RequestUser(email: "johndoe@supabase.io"))
       },
       TestCase(name: "bulk upsert") { client in
         try client.from("users")
           .upsert(
             [
-              User(email: "johndoe@supabase.io"),
-              User(email: "johndoe2@supabase.io", username: "johndoe2"),
+              RequestUser(email: "johndoe@supabase.io"),
+              RequestUser(email: "johndoe2@supabase.io", username: "johndoe2"),
             ]
           )
       },
@@ -145,8 +147,8 @@ final class BuildURLRequestTests: XCTestCase {
         try client.from("users")
           .upsert(
             [
-              User(email: "johndoe@supabase.io"),
-              User(email: "johndoe2@supabase.io"),
+              RequestUser(email: "johndoe@supabase.io"),
+              RequestUser(email: "johndoe2@supabase.io"),
             ],
             onConflict: "username"
           )
@@ -154,7 +156,7 @@ final class BuildURLRequestTests: XCTestCase {
       },
       TestCase(name: "test upsert ignoring duplicates") { client in
         try client.from("users")
-          .upsert(User(email: "johndoe@supabase.io"), ignoreDuplicates: true)
+          .upsert(RequestUser(email: "johndoe@supabase.io"), ignoreDuplicates: true)
       },
       TestCase(name: "query with + character") { client in
         client.from("users")
@@ -174,7 +176,7 @@ final class BuildURLRequestTests: XCTestCase {
       },
       TestCase(name: "select after an insert") { client in
         try client.from("users")
-          .insert(User(email: "johndoe@supabase.io"))
+          .insert(RequestUser(email: "johndoe@supabase.io"))
           .select("id,email")
       },
       TestCase(name: "query if nil value") { client in
@@ -249,12 +251,12 @@ final class BuildURLRequestTests: XCTestCase {
     }
   }
 
-  func testSessionConfiguration() {
+  @Test
+  func sessionConfiguration() {
     let client = PostgrestClient(url: url, schema: nil, logger: nil)
     let clientInfoHeader = client.configuration.headers["X-Client-Info"]
-    XCTAssertNotNil(clientInfoHeader)
+    #expect(clientInfoHeader != nil)
   }
-
 }
 
 extension URLResponse {
