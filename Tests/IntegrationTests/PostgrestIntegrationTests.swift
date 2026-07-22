@@ -34,7 +34,10 @@ struct User: Codable, Hashable {
   let email: String
 }
 
-@Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil))
+@Suite(
+  .serialized,
+  .enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil)
+)
 struct PostgrestIntegrationTests {
   let client = PostgrestClient(
     url: URL(string: "\(DotEnv.SUPABASE_URL)/rest/v1")!,
