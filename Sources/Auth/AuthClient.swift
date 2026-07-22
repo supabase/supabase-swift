@@ -519,6 +519,32 @@ public actor AuthClient {
     )
   }
 
+  /// Signs in a user via a signed Sign in with Ethereum (EIP-4361) or Sign in with Solana message.
+  ///
+  /// The app is responsible for building the message and obtaining the signature from the user's
+  /// wallet (e.g. via a WalletConnect session or native wallet SDK) before calling this method.
+  ///
+  /// ```swift
+  /// let session = try await client.auth.signInWithWeb3(
+  ///   credentials: Web3Credentials(
+  ///     chain: .ethereum,
+  ///     message: siweMessage,
+  ///     signature: signatureHex
+  ///   )
+  /// )
+  /// ```
+  @discardableResult
+  public func signInWithWeb3(credentials: Web3Credentials) async throws -> Session {
+    try await _signIn(
+      request: .init(
+        url: configuration.url.appendingPathComponent("token"),
+        method: .post,
+        query: [URLQueryItem(name: "grant_type", value: "web3")],
+        body: configuration.encoder.encode(credentials)
+      )
+    )
+  }
+
   /// Creates a new anonymous user.
   /// - Parameters:
   ///   - data: A custom data object to store the user's metadata. This maps to the

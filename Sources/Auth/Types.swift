@@ -511,6 +511,66 @@ public struct AuthMetaSecurity: Codable, Hashable, Sendable {
   }
 }
 
+/// A Web3 chain supported by Sign in with Web3.
+public struct Web3Chain: RawRepresentable, Codable, Hashable, Sendable, ExpressibleByStringLiteral {
+  public let rawValue: String
+
+  /// Creates a ``Web3Chain`` from a raw string value.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  /// Creates a ``Web3Chain`` from a string literal.
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
+  /// The Ethereum chain, authenticated via Sign in with Ethereum (EIP-4361).
+  public static let ethereum: Web3Chain = "ethereum"
+
+  /// The Solana chain, authenticated via Sign in with Solana.
+  public static let solana: Web3Chain = "solana"
+}
+
+/// Credentials for signing in with a Web3 wallet (Sign in with Ethereum / Sign in with Solana).
+///
+/// The caller is responsible for constructing a spec-compliant SIWE (EIP-4361) or SIWS message and
+/// obtaining a signature over it from the user's wallet (e.g. via WalletConnect or a native wallet
+/// SDK) — this type only carries the already-signed result to the server for verification.
+public struct Web3Credentials: Codable, Hashable, Sendable {
+  public var chain: Web3Chain
+
+  /// The SIWE- or SIWS-formatted message that was signed.
+  public var message: String
+
+  /// The signature over `message`.
+  /// - Ethereum: `0x`-prefixed 65-byte secp256k1 signature, hex-encoded (130 hex chars after `0x`).
+  /// - Solana: base64 (standard or URL-safe, padded or not) encoding of the 64-byte Ed25519 signature.
+  public var signature: String
+
+  /// Verification token received when the user completes the captcha on the site.
+  public var gotrueMetaSecurity: AuthMetaSecurity?
+
+  /// Creates Web3 credentials for sign-in.
+  ///
+  /// - Parameters:
+  ///   - chain: The Web3 chain the message was signed for.
+  ///   - message: The SIWE/SIWS-formatted message that was signed.
+  ///   - signature: The signature over `message`.
+  ///   - captchaToken: Optional captcha verification token.
+  public init(
+    chain: Web3Chain,
+    message: String,
+    signature: String,
+    captchaToken: String? = nil
+  ) {
+    self.chain = chain
+    self.message = message
+    self.signature = signature
+    self.gotrueMetaSecurity = captchaToken.map(AuthMetaSecurity.init(captchaToken:))
+  }
+}
+
 struct OTPParams: Codable, Hashable, Sendable {
   var email: String?
   var phone: String?

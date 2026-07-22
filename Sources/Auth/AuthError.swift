@@ -204,6 +204,10 @@ extension ErrorCode {
   public static let invalidCredentials = ErrorCode("invalid_credentials")
   /// The email address is not on the allow-list for this project.
   public static let emailAddressNotAuthorized = ErrorCode("email_address_not_authorized")
+  /// The Web3 provider for the requested chain is disabled for this project.
+  public static let web3ProviderDisabled = ErrorCode("web3_provider_disabled")
+  /// The requested Web3 chain is not supported.
+  public static let web3UnsupportedChain = ErrorCode("web3_unsupported_chain")
   /// The provided JWT is invalid (malformed, bad signature, or expired).
   public static let invalidJWT = ErrorCode("invalid_jwt")
   /// No pending OAuth authorization request exists with the given ID, it has expired, or it belongs to a different user.

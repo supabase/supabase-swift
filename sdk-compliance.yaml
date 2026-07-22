@@ -36,7 +36,24 @@ features:
     status: implemented
     symbols:
       - AuthClient.signInAnonymously
-  auth.sign_in.sign_in_with_web3: not_implemented
+  auth.sign_in.sign_in_with_web3:
+    status: implemented
+    note: "Passthrough only: the caller supplies an already-signed SIWE/SIWS message; no native wallet integration (no browser wallet detection, no message building, no signing) ships in the SDK."
+    symbols:
+      - AuthClient.signInWithWeb3
+      - Web3Credentials
+      - Web3Credentials.init
+      - Web3Credentials.chain
+      - Web3Credentials.message
+      - Web3Credentials.signature
+      - Web3Credentials.gotrueMetaSecurity
+      - Web3Chain
+      - Web3Chain.init
+      - Web3Chain.rawValue
+      - Web3Chain.ethereum
+      - Web3Chain.solana
+      - ErrorCode.web3ProviderDisabled
+      - ErrorCode.web3UnsupportedChain
   auth.sign_in.verify_otp:
     status: implemented
     symbols:
