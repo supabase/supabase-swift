@@ -103,7 +103,13 @@
     }
 
     private func siweMessage(address: String, chainId: String) -> String {
-      let domain = "supabase.com"
+      // The backend validates this URI against the target Supabase project's Site URL /
+      // Additional Redirect URLs allow-list — it must match something the project owner has
+      // explicitly allowed, or the request is rejected with "invalid_grant". `localhost:3000`
+      // is exempt from the usual https-only requirement and is the same placeholder already
+      // documented for this example's setup (see Examples/README.md) — add
+      // `http://localhost:3000` to your Supabase project's Additional Redirect URLs.
+      let domain = "localhost:3000"
       let nonce = String((0..<12).map { _ in "0123456789abcdef".randomElement()! })
       let issuedAt = ISO8601DateFormatter().string(from: Date())
       let decimalChainId = decimalChainId(from: chainId)
@@ -113,7 +119,7 @@
 
         Sign in to the Supabase Examples app.
 
-        URI: https://\(domain)
+        URI: http://\(domain)
         Version: 1
         Chain ID: \(decimalChainId)
         Nonce: \(nonce)

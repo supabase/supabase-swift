@@ -319,8 +319,9 @@ Apple Sign-In should work out of the box on iOS devices. Ensure:
 
 The Web3 MetaMask sign-in example requires:
 1. **Supabase Configuration**: Enable the `[auth.web3.ethereum]` authentication method in your Supabase project settings
-2. **Physical Device**: Install the [MetaMask Mobile app](https://metamask.io/download/) on a physical test device — the MetaMask app-to-app handoff isn't usable on the iOS Simulator
-3. **App-to-App Deep Linking**: The example reaches MetaMask directly via the MetaMask SDK's deep links, not a browser redirect
+2. **Redirect URL allow-list**: Add `http://localhost:3000` to your Supabase project's Authentication → URL Configuration → Additional Redirect URLs. The signed SIWE message's `URI` is hardcoded to this value in `SignInWithMetaMask.swift` — the backend rejects the message with `invalid_grant` if this exact URL isn't allow-listed on the target project (it does **not** need to be a URL your app actually serves; it's only checked as an allow-listed string)
+3. **Physical Device**: Install the [MetaMask Mobile app](https://metamask.io/download/) on a physical test device — the MetaMask app-to-app handoff isn't usable on the iOS Simulator
+4. **App-to-App Deep Linking**: The example reaches MetaMask directly via the MetaMask SDK's deep links, not a browser redirect
 
 The custom URL scheme `com.supabase.swift-examples.metamask` is already configured in the app's `Info.plist` for the MetaMask SDK callback — no manual setup is needed.
 
