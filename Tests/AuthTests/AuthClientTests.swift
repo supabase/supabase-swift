@@ -1519,6 +1519,78 @@ extension AuthMockerTests {
     }
 
     @Test
+    func adminListPasskeysReturnsItems() async throws {
+      let userId = UUID(uuidString: "859f402d-b3de-4105-a1b9-932836d9193b")!
+
+      Mock(
+        url: clientURL.appendingPathComponent("admin/users/\(userId)/passkeys"),
+        statusCode: 200,
+        data: [
+          .get: Data(
+            """
+            [
+              {
+                "id": "11111111-1111-1111-1111-111111111111",
+                "friendly_name": "Work Laptop",
+                "created_at": "2024-01-15T10:00:00.000Z",
+                "last_used_at": "2024-02-01T08:30:00.000Z"
+              },
+              {
+                "id": "22222222-2222-2222-2222-222222222222",
+                "friendly_name": null,
+                "created_at": "2024-01-16T10:00:00.000Z",
+                "last_used_at": null
+              }
+            ]
+            """.utf8
+          )
+        ]
+      )
+      .register()
+
+      let sut = makeSUT()
+
+      let passkeys = try await sut.admin.listPasskeys(userId: userId)
+
+      expectNoDifference(
+        passkeys.map(\.id),
+        [
+          UUID(uuidString: "11111111-1111-1111-1111-111111111111")!,
+          UUID(uuidString: "22222222-2222-2222-2222-222222222222")!,
+        ]
+      )
+      expectNoDifference(passkeys[0].friendlyName, "Work Laptop")
+      expectNoDifference(passkeys[1].friendlyName, nil)
+      expectNoDifference(passkeys[1].lastUsedAt, nil)
+    }
+
+    @Test
+    func adminDeletePasskey() async throws {
+      let userId = UUID(uuidString: "859f402d-b3de-4105-a1b9-932836d9193b")!
+      let passkeyId = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
+
+      Mock(
+        url: clientURL.appendingPathComponent("admin/users/\(userId)/passkeys/\(passkeyId)"),
+        statusCode: 204,
+        data: [.delete: Data()]
+      )
+      .snapshotRequest {
+        #"""
+        curl \
+        	--request DELETE \
+        	--header "X-Client-Info: auth-swift/0.0.0" \
+        	--header "X-Supabase-Api-Version: 2024-01-01" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	"http://localhost:54321/auth/v1/admin/users/\#(userId)/passkeys/\#(passkeyId)"
+        """#
+      }
+      .register()
+
+      let sut = makeSUT()
+      try await sut.admin.deletePasskey(userId: userId, passkeyId: passkeyId)
+    }
+
+    @Test
     func reauthenticate() async throws {
       Mock(
         url: clientURL.appendingPathComponent("reauthenticate"),
@@ -2209,13 +2281,13 @@ extension AuthMockerTests {
             """
             [
               {
-                "id": "p1",
+                "id": "11111111-1111-1111-1111-111111111111",
                 "friendly_name": "Work Laptop",
                 "created_at": "2024-01-15T10:00:00.000Z",
                 "last_used_at": "2024-02-01T08:30:00.000Z"
               },
               {
-                "id": "p2",
+                "id": "22222222-2222-2222-2222-222222222222",
                 "friendly_name": null,
                 "created_at": "2024-01-16T10:00:00.000Z",
                 "last_used_at": null
@@ -2232,7 +2304,13 @@ extension AuthMockerTests {
 
       let passkeys = try await sut.listPasskeys()
 
-      expectNoDifference(passkeys.map(\.id), ["p1", "p2"])
+      expectNoDifference(
+        passkeys.map(\.id),
+        [
+          UUID(uuidString: "11111111-1111-1111-1111-111111111111")!,
+          UUID(uuidString: "22222222-2222-2222-2222-222222222222")!,
+        ]
+      )
       expectNoDifference(passkeys[0].friendlyName, "Work Laptop")
       expectNoDifference(passkeys[1].friendlyName, nil)
       expectNoDifference(passkeys[1].lastUsedAt, nil)
@@ -2364,7 +2442,7 @@ extension AuthMockerTests {
           statusCode: 200,
           data: [
             .post: Data(
-              #"{"id":"p1","friendly_name":"My Passkey","created_at":"2024-01-15T10:00:00.000Z","last_used_at":null}"#
+              #"{"id":"11111111-1111-1111-1111-111111111111","friendly_name":"My Passkey","created_at":"2024-01-15T10:00:00.000Z","last_used_at":null}"#
                 .utf8)
           ]
         )
@@ -2388,7 +2466,7 @@ extension AuthMockerTests {
           authenticator: authenticator
         )
 
-        expectNoDifference(passkey.id, "p1")
+        expectNoDifference(passkey.id, UUID(uuidString: "11111111-1111-1111-1111-111111111111")!)
         expectNoDifference(passkey.friendlyName, "My Passkey")
       }
 

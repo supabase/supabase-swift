@@ -83,7 +83,7 @@ public struct WebAuthnChallengeResponseData: Decodable, Hashable, Sendable {
 @_spi(Experimental)
 public struct PasskeyListItem: Codable, Identifiable, Hashable, Sendable {
   /// Unique identifier of the passkey.
-  public let id: String
+  public let id: UUID
 
   /// Human readable name assigned to the passkey.
   public let friendlyName: String?
@@ -94,7 +94,7 @@ public struct PasskeyListItem: Codable, Identifiable, Hashable, Sendable {
   /// When the passkey was last used to authenticate, if ever.
   public let lastUsedAt: Date?
 
-  public init(id: String, friendlyName: String?, createdAt: Date, lastUsedAt: Date?) {
+  public init(id: UUID, friendlyName: String?, createdAt: Date, lastUsedAt: Date?) {
     self.id = id
     self.friendlyName = friendlyName
     self.createdAt = createdAt
