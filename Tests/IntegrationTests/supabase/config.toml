@@ -261,6 +261,10 @@ skip_nonce_check = false
 [auth.web3.solana]
 enabled = true
 
+# Enable Sign in with Ethereum (SIWE) for integration tests.
+[auth.web3.ethereum]
+enabled = true
+
 # Use Firebase Auth as a third-party provider alongside Supabase Auth.
 [auth.third_party.firebase]
 enabled = false

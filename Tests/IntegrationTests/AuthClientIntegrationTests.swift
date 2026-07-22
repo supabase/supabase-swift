@@ -7,8 +7,10 @@
 
 import ConcurrencyExtras
 import Crypto
+import CryptoSwift
 import CustomDump
 import InlineSnapshotTesting
+import P256K
 import TestHelpers
 import XCTest
 
@@ -110,6 +112,40 @@ final class AuthClientIntegrationTests: XCTestCase {
           chain: .solana,
           message: message,
           signature: signature.base64EncodedString()
+        )
+      )
+
+      XCTAssertFalse(session.accessToken.isEmpty)
+    }
+  }
+
+  func testSignInWithWeb3Ethereum() async throws {
+    try await XCTAssertAuthChangeEvents([.initialSession, .signedIn]) {
+      // Throwaway test-only key, never used outside this test, no funds associated.
+      let privateKeyHex = "4c0883a69102937d6231471b5dbb6204fe5129617082792ae468d01a3f362318"
+      let address = "0x2c7536E3605D9C16a7a3D7b1898e529396a65c23"
+      let issuedAt = ISO8601DateFormatter().string(from: Date())
+
+      let message = """
+        localhost:3000 wants you to sign in with your Ethereum account:
+        \(address)
+
+        I accept the Terms of Service
+
+        URI: http://localhost:3000
+        Version: 1
+        Chain ID: 1
+        Nonce: supabaseswiftintegrationtest
+        Issued At: \(issuedAt)
+        """
+
+      let signature = try signEthereumPersonalMessage(message, privateKeyHex: privateKeyHex)
+
+      let session = try await authClient.signInWithWeb3(
+        credentials: Web3Credentials(
+          chain: .ethereum,
+          message: message,
+          signature: signature
         )
       )
 
@@ -487,4 +523,17 @@ private func base58Encode(_ input: Data) -> String {
   let prefix = String(repeating: "1", count: zerosCount)
   let encoded = String(result.reversed().map { base58Alphabet[Int($0)] })
   return prefix + encoded
+}
+
+private func signEthereumPersonalMessage(_ message: String, privateKeyHex: String) throws -> String
+{
+  let privateKey = try P256K.Recovery.PrivateKey(dataRepresentation: Data(hex: privateKeyHex))
+
+  let prefixed = "\u{19}Ethereum Signed Message:\n\(message.utf8.count)\(message)"
+  let hash = SHA3(variant: .keccak256).calculate(for: Array(prefixed.utf8))
+  let signature = privateKey.signature(for: HashDigest(hash))
+  let compact = signature.compactRepresentation
+
+  let v = UInt8(compact.recoveryId) + 27
+  return "0x" + compact.signature.toHexString() + String(format: "%02x", v)
 }
