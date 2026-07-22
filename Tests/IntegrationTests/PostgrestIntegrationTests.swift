@@ -1,5 +1,6 @@
+import Foundation
 import PostgREST
-import XCTest
+import Testing
 
 struct Todo: Codable, Hashable {
   let id: UUID
@@ -33,7 +34,11 @@ struct User: Codable, Hashable {
   let email: String
 }
 
-final class IntegrationTests: XCTestCase {
+@Suite(
+  .serialized,
+  .enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil)
+)
+struct PostgrestIntegrationTests {
   let client = PostgrestClient(
     url: URL(string: "\(DotEnv.SUPABASE_URL)/rest/v1")!,
     headers: [
@@ -42,14 +47,7 @@ final class IntegrationTests: XCTestCase {
     logger: nil
   )
 
-  override func setUp() async throws {
-    try await super.setUp()
-
-    try XCTSkipUnless(
-      ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil,
-      "INTEGRATION_TESTS not defined."
-    )
-
+  init() async throws {
     // Run fresh test by deleting test data. Delete without a where clause isn't supported, so have
     // to do this `neq` trick to delete all data. For users, only delete rows with email (test data),
     // leaving seed data with username intact.
@@ -58,9 +56,10 @@ final class IntegrationTests: XCTestCase {
       .execute()
   }
 
-  func testIntegration() async throws {
+  @Test
+  func integration() async throws {
     var todos: [Todo] = try await client.from("todos").select().execute().value
-    XCTAssertEqual(todos, [])
+    #expect(todos == [])
 
     let insertedTodo: Todo = try await client.from("todos")
       .insert(
@@ -75,7 +74,7 @@ final class IntegrationTests: XCTestCase {
       .value
 
     todos = try await client.from("todos").select().execute().value
-    XCTAssertEqual(todos, [insertedTodo])
+    #expect(todos == [insertedTodo])
 
     let insertedTodos: [Todo] = try await client.from("todos")
       .insert(
@@ -89,7 +88,7 @@ final class IntegrationTests: XCTestCase {
       .value
 
     todos = try await client.from("todos").select().execute().value
-    XCTAssertEqual(todos, [insertedTodo] + insertedTodos)
+    #expect(todos == [insertedTodo] + insertedTodos)
 
     let drinkCoffeeTodo = insertedTodos[1]
     let updatedTodo: Todo = try await client.from("todos")
@@ -98,25 +97,26 @@ final class IntegrationTests: XCTestCase {
       .single()
       .execute()
       .value
-    XCTAssertTrue(updatedTodo.isComplete)
+    #expect(updatedTodo.isComplete)
 
     let completedTodos: [Todo] = try await client.from("todos")
       .select()
       .eq("is_complete", value: true)
       .execute()
       .value
-    XCTAssertEqual(completedTodos, [updatedTodo])
+    #expect(completedTodos == [updatedTodo])
 
     try await client.from("todos").delete().eq("is_complete", value: true).execute()
     todos = try await client.from("todos").select().execute().value
-    XCTAssertTrue(completedTodos.allSatisfy { todo in !todos.contains(todo) })
+    #expect(completedTodos.allSatisfy { todo in !todos.contains(todo) })
 
     let todosWithSpecificTag: [Todo] = try await client.from("todos").select()
       .contains("tags", value: ["tag 01"]).execute().value
-    XCTAssertEqual(todosWithSpecificTag, [insertedTodo, insertedTodos[0]])
+    #expect(todosWithSpecificTag == [insertedTodo, insertedTodos[0]])
   }
 
-  func testQueryWithPlusSign() async throws {
+  @Test
+  func queryWithPlusSign() async throws {
     let users = [
       User(email: "johndoe@mail.com"),
       User(email: "johndoe+test1@mail.com"),
@@ -127,9 +127,6 @@ final class IntegrationTests: XCTestCase {
 
     let fetchedUsers: [User] = try await client.from("users").select()
       .ilike("email", value: "johndoe+test%").execute().value
-    XCTAssertEqual(
-      fetchedUsers[...],
-      users[1...2]
-    )
+    #expect(fetchedUsers[...] == users[1...2])
   }
 }

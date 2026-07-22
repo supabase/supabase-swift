@@ -5,11 +5,13 @@
 //  Created by Guilherme Souza on 06/05/24.
 //
 
+import Foundation
 import InlineSnapshotTesting
 import PostgREST
-import XCTest
+import Testing
 
-final class PostgrestBasicTests: XCTestCase {
+@Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil))
+struct PostgrestBasicTests {
   let client = PostgrestClient(
     configuration: PostgrestClient.Configuration(
       url: URL(string: "\(DotEnv.SUPABASE_URL)/rest/v1")!,
@@ -20,14 +22,7 @@ final class PostgrestBasicTests: XCTestCase {
     )
   )
 
-  override func setUp() async throws {
-    try await super.setUp()
-
-    try XCTSkipUnless(
-      ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil,
-      "INTEGRATION_TESTS not defined."
-    )
-
+  init() async throws {
     // Clean up test data before running tests.
     // Delete users with email (test data), preserving seed data (users with username only).
     try await client.from("users").delete().not("email", operator: .is, value: AnyJSON.null)
@@ -36,7 +31,8 @@ final class PostgrestBasicTests: XCTestCase {
     try await client.from("messages").delete().gt("id", value: 2).execute()
   }
 
-  func testBasicSelectTable() async throws {
+  @Test
+  func basicSelectTable() async throws {
     let response =
       try await client.from("users").select("age_range,catchphrase,data,status,username").execute()
       .value as AnyJSON
@@ -76,7 +72,8 @@ final class PostgrestBasicTests: XCTestCase {
     }
   }
 
-  func testBasicSelectView() async throws {
+  @Test
+  func basicSelectView() async throws {
     let response = try await client.from("updatable_view").select().execute().value as AnyJSON
     assertInlineSnapshot(of: response, as: .json) {
       """
@@ -102,7 +99,8 @@ final class PostgrestBasicTests: XCTestCase {
     }
   }
 
-  func testRPC() async throws {
+  @Test
+  func rpc() async throws {
     let response =
       try await client.rpc("get_status", params: ["name_param": "supabot"]).execute().value
       as AnyJSON
@@ -113,12 +111,14 @@ final class PostgrestBasicTests: XCTestCase {
     }
   }
 
-  func testRPCReturnsVoid() async throws {
+  @Test
+  func rPCReturnsVoid() async throws {
     let response = try await client.rpc("void_func").execute().data
-    XCTAssertEqual(response, Data())
+    #expect(response == Data())
   }
 
-  func testIgnoreDuplicates_upsert() async throws {
+  @Test
+  func ignoreDuplicates_upsert() async throws {
     let response =
       try await client.from("users")
       .upsert(["username": "dragarcia"], onConflict: "username", ignoreDuplicates: true)
@@ -132,7 +132,8 @@ final class PostgrestBasicTests: XCTestCase {
     }
   }
 
-  func testBasicInsertUpdateAndDelete() async throws {
+  @Test
+  func basicInsertUpdateAndDelete() async throws {
     // Basic insert
     var response =
       try await client.from("messages")

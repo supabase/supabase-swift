@@ -7,9 +7,10 @@
 
 import ConcurrencyExtras
 import CustomDump
+import Foundation
 import InlineSnapshotTesting
 import TestHelpers
-import XCTest
+import Testing
 
 @_spi(Experimental) @testable import Auth
 
@@ -17,17 +18,9 @@ import XCTest
   import FoundationNetworking
 #endif
 
-final class AuthClientIntegrationTests: XCTestCase {
+@Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil))
+struct AuthClientIntegrationTests {
   let authClient = makeClient()
-
-  override func setUp() async throws {
-    try await super.setUp()
-
-    try XCTSkipUnless(
-      ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil,
-      "INTEGRATION_TESTS not defined."
-    )
-  }
 
   static func makeClient(serviceRole: Bool = false) -> AuthClient {
     let key = serviceRole ? DotEnv.SUPABASE_SECRET_KEY : DotEnv.SUPABASE_PUBLISHABLE_KEY
@@ -44,7 +37,8 @@ final class AuthClientIntegrationTests: XCTestCase {
     )
   }
 
-  func testMultipleAuthInstances() async throws {
+  @Test
+  func multipleAuthInstances() async throws {
     try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
 
     let client2 = Self.makeClient()
@@ -60,8 +54,9 @@ final class AuthClientIntegrationTests: XCTestCase {
     expectNoDifference(sessionFromClient1.expiresAt, sessionFromClient2.expiresAt)
   }
 
-  func testSignUpAndSignInWithEmail() async throws {
-    try await XCTAssertAuthChangeEvents([.initialSession, .signedIn, .signedOut, .signedIn]) {
+  @Test
+  func signUpAndSignInWithEmail() async throws {
+    try await expectAuthChangeEvents([.initialSession, .signedIn, .signedOut, .signedIn]) {
       let email = mockEmail()
       let password = mockPassword()
 
@@ -75,9 +70,9 @@ final class AuthClientIntegrationTests: XCTestCase {
         data: metadata
       )
 
-      XCTAssertNotNil(response.session)
-      XCTAssertEqual(response.user.email, email)
-      XCTAssertEqual(response.user.userMetadata["test"], 42)
+      #expect(response.session != nil)
+      #expect(response.user.email == email)
+      #expect(response.user.userMetadata["test"] == 42)
 
       try await authClient.signOut()
 
@@ -103,18 +98,19 @@ final class AuthClientIntegrationTests: XCTestCase {
   //    }
   //  }
 
-  func testSignInWithEmail_invalidEmail() async throws {
+  @Test
+  func signInWithEmail_invalidEmail() async throws {
     let email = mockEmail()
     let password = mockPassword()
 
     do {
       try await authClient.signIn(email: email, password: password)
-      XCTFail("Expect failure")
+      Issue.record("Expect failure")
     } catch {
       if let error = error as? AuthError {
-        XCTAssertEqual(error.localizedDescription, "Invalid login credentials")
+        #expect(error.localizedDescription == "Invalid login credentials")
       } else {
-        XCTFail("Unexpected error: \(error)")
+        Issue.record("Unexpected error: \(error)")
       }
     }
   }
@@ -126,8 +122,9 @@ final class AuthClientIntegrationTests: XCTestCase {
   //    try await authClient.verifyOTP(email: email, token: "123456", type: .magiclink)
   //  }
 
-  func testSignOut_otherScope_shouldSignOutLocally() async throws {
-    try await XCTAssertAuthChangeEvents([.initialSession, .signedIn]) {
+  @Test
+  func signOut_otherScope_shouldSignOutLocally() async throws {
+    try await expectAuthChangeEvents([.initialSession, .signedIn]) {
       let email = mockEmail()
       let password = mockPassword()
 
@@ -136,7 +133,8 @@ final class AuthClientIntegrationTests: XCTestCase {
     }
   }
 
-  func testReauthenticate() async throws {
+  @Test
+  func reauthenticate() async throws {
     let email = mockEmail()
     let password = mockPassword()
 
@@ -144,16 +142,18 @@ final class AuthClientIntegrationTests: XCTestCase {
     try await authClient.reauthenticate()
   }
 
-  func testUser() async throws {
+  @Test
+  func user() async throws {
     let email = mockEmail()
     let password = mockPassword()
 
     try await signUpIfNeededOrSignIn(email: email, password: password)
     let user = try await authClient.user()
-    XCTAssertEqual(user.email, email)
+    #expect(user.email == email)
   }
 
-  func testUserWithCustomJWT() async throws {
+  @Test
+  func userWithCustomJWT() async throws {
     let firstUserSession = try await signUpIfNeededOrSignIn(
       email: mockEmail(),
       password: mockPassword()
@@ -165,20 +165,22 @@ final class AuthClientIntegrationTests: XCTestCase {
 
     let user = try await authClient.user(jwt: firstUserSession?.accessToken)
 
-    XCTAssertEqual(user.id, firstUserSession?.user.id)
-    XCTAssertNotEqual(user.id, secondUserSession.user.id)
+    #expect(user.id == firstUserSession?.user.id)
+    #expect(user.id != secondUserSession.user.id)
   }
 
-  func testUpdateUser() async throws {
-    try await XCTAssertAuthChangeEvents([.initialSession, .signedIn, .userUpdated]) {
+  @Test
+  func updateUser() async throws {
+    try await expectAuthChangeEvents([.initialSession, .signedIn, .userUpdated]) {
       try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
 
       let updatedUser = try await authClient.update(user: .init(data: ["test": .integer(42)]))
-      XCTAssertEqual(updatedUser.userMetadata["test"], 42)
+      #expect(updatedUser.userMetadata["test"] == 42)
     }
   }
 
-  func testUserIdentities() async throws {
+  @Test
+  func userIdentities() async throws {
     let session = try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
     let identities = try await authClient.userIdentities()
     expectNoDifference(
@@ -187,56 +189,62 @@ final class AuthClientIntegrationTests: XCTestCase {
     )
   }
 
-  func testUnlinkIdentity_withOnlyOneIdentity() async throws {
+  @Test
+  func unlinkIdentity_withOnlyOneIdentity() async throws {
     let identities = try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
       .user.identities
-    let identity = try XCTUnwrap(identities?.first)
+    let identity = try #require(identities?.first)
 
     do {
       try await authClient.unlinkIdentity(identity)
-      XCTFail("Expect failure")
+      Issue.record("Expect failure")
     } catch let error as AuthError {
-      XCTAssertEqual(error.errorCode, .singleIdentityNotDeletable)
+      #expect(error.errorCode == .singleIdentityNotDeletable)
     }
   }
 
-  func testResetPasswordForEmail() async throws {
+  @Test
+  func resetPasswordForEmail() async throws {
     let email = mockEmail()
     try await authClient.resetPasswordForEmail(email)
   }
 
-  func testRefreshToken() async throws {
-    try await XCTAssertAuthChangeEvents([.initialSession, .signedIn, .tokenRefreshed]) {
+  @Test
+  func refreshToken() async throws {
+    try await expectAuthChangeEvents([.initialSession, .signedIn, .tokenRefreshed]) {
       try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
 
       let refreshedSession = try await authClient.refreshSession()
       let currentStoredSession = try await authClient.session
 
-      XCTAssertEqual(currentStoredSession.accessToken, refreshedSession.accessToken)
+      #expect(currentStoredSession.accessToken == refreshedSession.accessToken)
     }
   }
 
-  func testSignInAnonymous() async throws {
-    try await XCTAssertAuthChangeEvents([.initialSession, .signedIn]) {
+  @Test
+  func signInAnonymous() async throws {
+    try await expectAuthChangeEvents([.initialSession, .signedIn]) {
       try await authClient.signInAnonymously()
     }
   }
 
-  func testSignInAnonymousAndLinkUserWithEmail() async throws {
-    try await XCTAssertAuthChangeEvents([.initialSession, .signedIn, .userUpdated]) {
+  @Test
+  func signInAnonymousAndLinkUserWithEmail() async throws {
+    try await expectAuthChangeEvents([.initialSession, .signedIn, .userUpdated]) {
       try await authClient.signInAnonymously()
 
       let email = mockEmail()
       let user = try await authClient.update(user: UserAttributes(email: email))
 
-      XCTAssertEqual(user.email, email)
+      #expect(user.email == email)
     }
   }
 
-  func testDeleteAccountAndSignOut() async throws {
+  @Test
+  func deleteAccountAndSignOut() async throws {
     let response = try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
 
-    let session = try XCTUnwrap(response.session)
+    let session = try #require(response.session)
 
     var request = URLRequest(url: URL(string: "\(DotEnv.SUPABASE_URL)/rest/v1/rpc/delete_user")!)
     request.httpMethod = "POST"
@@ -245,31 +253,31 @@ final class AuthClientIntegrationTests: XCTestCase {
 
     _ = try await URLSession.shared.data(for: request)
 
-    try await XCTAssertAuthChangeEvents([.initialSession, .signedOut]) {
+    try await expectAuthChangeEvents([.initialSession, .signedOut]) {
       try await authClient.signOut()
     }
   }
 
-  func testLinkIdentity() async throws {
+  @Test
+  func linkIdentity() async throws {
     try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
 
     try await authClient.linkIdentity(provider: .apple) { url in
-      XCTAssertTrue(url.absoluteString.contains("apple.com"))
+      #expect(url.absoluteString.contains("apple.com"))
     }
   }
 
-  func testListUsers() async throws {
-    // Skip: Requires pre-seeded users and secret key configuration
-    // that may not be available in all CI environments
-    try XCTSkipIf(true, "Requires secret key and pre-seeded users")
+  @Test(.disabled("Requires secret key and pre-seeded users"))
+  func listUsers() async throws {
     let client = Self.makeClient(serviceRole: true)
     let pagination = try await client.admin.listUsers(params: PageParams(perPage: 10))
-    XCTAssertEqual(pagination.users.count, 10)
-    XCTAssertEqual(pagination.aud, "authenticated")
-    XCTAssertEqual(pagination.nextPage, 2)
+    #expect(pagination.users.count == 10)
+    #expect(pagination.aud == "authenticated")
+    #expect(pagination.nextPage == 2)
   }
 
-  func testAdminListPasskeysEmptyForNewUser() async throws {
+  @Test
+  func adminListPasskeysEmptyForNewUser() async throws {
     let email = mockEmail()
     let password = mockPassword()
     try await signUpIfNeededOrSignIn(email: email, password: password)
@@ -277,10 +285,11 @@ final class AuthClientIntegrationTests: XCTestCase {
 
     let client = Self.makeClient(serviceRole: true)
     let passkeys = try await client.admin.listPasskeys(userId: session.user.id)
-    XCTAssertTrue(passkeys.isEmpty)
+    #expect(passkeys.isEmpty)
   }
 
-  func testAdminDeletePasskeyNotFound() async throws {
+  @Test
+  func adminDeletePasskeyNotFound() async throws {
     let email = mockEmail()
     let password = mockPassword()
     try await signUpIfNeededOrSignIn(email: email, password: password)
@@ -289,33 +298,34 @@ final class AuthClientIntegrationTests: XCTestCase {
     let client = Self.makeClient(serviceRole: true)
     do {
       try await client.admin.deletePasskey(userId: session.user.id, passkeyId: UUID())
-      XCTFail("Expected deletePasskey to throw for a nonexistent passkey")
+      Issue.record("Expected deletePasskey to throw for a nonexistent passkey")
     } catch let error as AuthError {
       guard case .api(_, _, _, let response) = error else {
-        XCTFail("Expected AuthError.api, got \(error)")
+        Issue.record("Expected AuthError.api, got \(error)")
         return
       }
       // Backend returns 404 when the passkey doesn't exist or belongs to another user.
-      XCTAssertEqual(response.statusCode, 404)
+      #expect(response.statusCode == 404)
     }
   }
 
-  func testSignOut() async throws {
-    try await XCTAssertAuthChangeEvents([.initialSession, .signedIn, .signedOut]) {
+  @Test
+  func signOut() async throws {
+    try await expectAuthChangeEvents([.initialSession, .signedIn, .signedOut]) {
       try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
 
       _ = try await authClient.session
-      XCTAssertNotNil(authClient.currentSession)
+      #expect(authClient.currentSession != nil)
 
       try await authClient.signOut()
 
       do {
         _ = try await authClient.session
-        XCTFail("Expected to throw AuthError.sessionMissing")
+        Issue.record("Expected to throw AuthError.sessionMissing")
       } catch let error as AuthError {
-        XCTAssertEqual(error, .sessionMissing)
+        #expect(error == .sessionMissing)
       }
-      XCTAssertNil(authClient.currentSession)
+      #expect(authClient.currentSession == nil)
     }
   }
 
@@ -432,27 +442,25 @@ final class AuthClientIntegrationTests: XCTestCase {
     return password
   }
 
-  private func XCTAssertAuthChangeEvents(
+  private func expectAuthChangeEvents(
     _ events: [AuthChangeEvent],
-    function: StaticString = #function,
     block: () async throws -> Void
   ) async rethrows {
-    let expectation = expectation(description: "\(function)-onAuthStateChange")
-    expectation.expectedFulfillmentCount = events.count
-
     let receivedEvents = LockIsolated<[AuthChangeEvent]>([])
 
     let token = await authClient.onAuthStateChange { event, _ in
       receivedEvents.withValue {
         $0.append(event)
       }
-
-      expectation.fulfill()
     }
 
     try await block()
 
-    await fulfillment(of: [expectation], timeout: 0.5)
+    // Poll until we've collected the expected number of events or time out.
+    let deadline = Date().addingTimeInterval(0.5)
+    while receivedEvents.value.count < events.count, Date() < deadline {
+      try? await Task.sleep(nanoseconds: 10_000_000)  // 10ms
+    }
 
     expectNoDifference(events, receivedEvents.value)
 

@@ -5,11 +5,13 @@
 //  Created by Guilherme Souza on 07/05/24.
 //
 
+import Foundation
 import InlineSnapshotTesting
 import PostgREST
-import XCTest
+import Testing
 
-final class PostgrestResourceEmbeddingTests: XCTestCase {
+@Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil))
+struct PostgrestResourceEmbeddingTests {
   let client = PostgrestClient(
     configuration: PostgrestClient.Configuration(
       url: URL(string: "\(DotEnv.SUPABASE_URL)/rest/v1")!,
@@ -20,21 +22,15 @@ final class PostgrestResourceEmbeddingTests: XCTestCase {
     )
   )
 
-  override func setUp() async throws {
-    try await super.setUp()
-
-    try XCTSkipUnless(
-      ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil,
-      "INTEGRATION_TESTS not defined."
-    )
-
+  init() async throws {
     // Clean up test data before running tests.
     // Delete users with email (test data), preserving seed data (users with username only).
     try await client.from("users").delete().not("email", operator: .is, value: AnyJSON.null)
       .execute()
   }
 
-  func testEmbeddedSelect() async throws {
+  @Test
+  func embeddedSelect() async throws {
     let res = try await client.from("users").select("messages(*)").execute().value as AnyJSON
 
     assertInlineSnapshot(of: res, as: .json) {
@@ -78,7 +74,8 @@ final class PostgrestResourceEmbeddingTests: XCTestCase {
     }
   }
 
-  func testEmbeddedEq() async throws {
+  @Test
+  func embeddedEq() async throws {
     let res =
       try await client.from("users")
       .select("messages(*)")
@@ -119,7 +116,8 @@ final class PostgrestResourceEmbeddingTests: XCTestCase {
     }
   }
 
-  func testEmbeddedOr() async throws {
+  @Test
+  func embeddedOr() async throws {
     let res =
       try await client.from("users")
       .select("messages(*)")
@@ -167,7 +165,8 @@ final class PostgrestResourceEmbeddingTests: XCTestCase {
     }
   }
 
-  func testEmbeddedOrWithAnd() async throws {
+  @Test
+  func embeddedOrWithAnd() async throws {
     let res =
       try await client.from("users")
       .select("messages(*)")
@@ -218,7 +217,8 @@ final class PostgrestResourceEmbeddingTests: XCTestCase {
     }
   }
 
-  func testEmbeddedOrder() async throws {
+  @Test
+  func embeddedOrder() async throws {
     let res =
       try await client.from("users")
       .select("messages(*)")
@@ -266,7 +266,8 @@ final class PostgrestResourceEmbeddingTests: XCTestCase {
     }
   }
 
-  func testEmbeddedOrderOnMultipleColumns() async throws {
+  @Test
+  func embeddedOrderOnMultipleColumns() async throws {
     let res =
       try await client.from("users")
       .select("messages(*)")
@@ -315,7 +316,8 @@ final class PostgrestResourceEmbeddingTests: XCTestCase {
     }
   }
 
-  func testEmbeddedLimit() async throws {
+  @Test
+  func embeddedLimit() async throws {
     let res =
       try await client.from("users")
       .select("messages(*)")
@@ -356,7 +358,8 @@ final class PostgrestResourceEmbeddingTests: XCTestCase {
     }
   }
 
-  func testEmbeddedRange() async throws {
+  @Test
+  func embeddedRange() async throws {
     let res =
       try await client.from("users")
       .select("messages(*)")

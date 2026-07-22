@@ -177,7 +177,7 @@ jobs:
       - name: "Run Integration Tests"
         env:
           INTEGRATION_TESTS: 1
-        run: swift test --filter IntegrationTests
+        run: swift test --filter IntegrationTests --no-parallel
       - name: "Stop Supabase"
         working-directory: Tests/IntegrationTests
         if: always()
