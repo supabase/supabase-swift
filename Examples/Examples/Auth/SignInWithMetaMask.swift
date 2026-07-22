@@ -60,7 +60,7 @@
       switch result {
       case .success(let accounts):
         guard let address = accounts.first else {
-          error = RequestError.responseError
+          error = RequestError(from: ["code": -1, "message": "No accounts returned by MetaMask"])
           state = .disconnected
           return
         }
@@ -106,6 +106,7 @@
       let domain = "supabase.com"
       let nonce = String((0..<12).map { _ in "0123456789abcdef".randomElement()! })
       let issuedAt = ISO8601DateFormatter().string(from: Date())
+      let decimalChainId = decimalChainId(from: chainId)
       return """
         \(domain) wants you to sign in with your Ethereum account:
         \(address)
@@ -114,10 +115,17 @@
 
         URI: https://\(domain)
         Version: 1
-        Chain ID: \(chainId)
+        Chain ID: \(decimalChainId)
         Nonce: \(nonce)
         Issued At: \(issuedAt)
         """
+    }
+
+    private func decimalChainId(from chainId: String) -> String {
+      if chainId.hasPrefix("0x"), let value = Int(chainId.dropFirst(2), radix: 16) {
+        return String(value)
+      }
+      return chainId
     }
   }
 

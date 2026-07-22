@@ -319,10 +319,10 @@ Apple Sign-In should work out of the box on iOS devices. Ensure:
 
 The Web3 MetaMask sign-in example requires:
 1. **Supabase Configuration**: Enable the `[auth.web3.ethereum]` authentication method in your Supabase project settings
-2. **Test Device/Simulator**: Install the [MetaMask Mobile app](https://metamask.io/download/) on your test device or simulator
-3. **Browser Deep Linking**: The example uses Web3 auth which redirects through a browser and returns via app deep links
+2. **Physical Device**: Install the [MetaMask Mobile app](https://metamask.io/download/) on a physical test device — the MetaMask app-to-app handoff isn't usable on the iOS Simulator
+3. **App-to-App Deep Linking**: The example reaches MetaMask directly via the MetaMask SDK's deep links, not a browser redirect
 
-Ensure the custom URL scheme `com.supabase.swift-examples://` is properly configured in the app's `Info.plist` for auth callbacks.
+The custom URL scheme `com.supabase.swift-examples.metamask` is already configured in the app's `Info.plist` for the MetaMask SDK callback — no manual setup is needed.
 
 ## Project Structure
 
