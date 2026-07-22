@@ -83,8 +83,9 @@ struct AuthClientIntegrationTests {
     }
   }
 
-  func testSignInWithWeb3Solana() async throws {
-    try await XCTAssertAuthChangeEvents([.initialSession, .signedIn]) {
+  @Test
+  func signInWithWeb3Solana() async throws {
+    try await expectAuthChangeEvents([.initialSession, .signedIn]) {
       let privateKey = Curve25519.Signing.PrivateKey()
       let address = base58Encode(privateKey.publicKey.rawRepresentation)
       let issuedAt = ISO8601DateFormatter().string(from: Date())
@@ -110,12 +111,13 @@ struct AuthClientIntegrationTests {
         )
       )
 
-      XCTAssertFalse(session.accessToken.isEmpty)
+      #expect(!session.accessToken.isEmpty)
     }
   }
 
-  func testSignInWithWeb3Ethereum() async throws {
-    try await XCTAssertAuthChangeEvents([.initialSession, .signedIn]) {
+  @Test
+  func signInWithWeb3Ethereum() async throws {
+    try await expectAuthChangeEvents([.initialSession, .signedIn]) {
       // Throwaway test-only key, never used outside this test, no funds associated.
       let privateKeyHex = "4c0883a69102937d6231471b5dbb6204fe5129617082792ae468d01a3f362318"
       let address = "0x2c7536E3605D9C16a7a3D7b1898e529396a65c23"
@@ -144,12 +146,12 @@ struct AuthClientIntegrationTests {
         )
       )
 
-      XCTAssertFalse(session.accessToken.isEmpty)
+      #expect(!session.accessToken.isEmpty)
     }
   }
 
   //  func testSignUpAndSignInWithPhone() async throws {
-  //    try await XCTAssertAuthChangeEvents([.initialSession, .signedIn, .signedOut, .signedIn]) {
+  //    try await expectAuthChangeEvents([.initialSession, .signedIn, .signedOut, .signedIn]) {
   //      let phone = mockPhoneNumber()
   //      let password = mockPassword()
   //      let metadata: [String: AnyJSON] = [
