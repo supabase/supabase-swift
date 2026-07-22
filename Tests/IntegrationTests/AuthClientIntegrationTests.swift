@@ -6,6 +6,7 @@
 //
 
 import ConcurrencyExtras
+import Crypto
 import CustomDump
 import InlineSnapshotTesting
 import TestHelpers
@@ -82,6 +83,37 @@ final class AuthClientIntegrationTests: XCTestCase {
       try await authClient.signOut()
 
       try await authClient.signIn(email: email, password: password)
+    }
+  }
+
+  func testSignInWithWeb3Solana() async throws {
+    try await XCTAssertAuthChangeEvents([.initialSession, .signedIn]) {
+      let privateKey = Curve25519.Signing.PrivateKey()
+      let address = base58Encode(privateKey.publicKey.rawRepresentation)
+      let issuedAt = ISO8601DateFormatter().string(from: Date())
+
+      let message = """
+        localhost:3000 wants you to sign in with your Solana account:
+        \(address)
+
+        I accept the Terms of Service
+
+        URI: http://localhost:3000
+        Version: 1
+        Issued At: \(issuedAt)
+        """
+
+      let signature = try privateKey.signature(for: Data(message.utf8))
+
+      let session = try await authClient.signInWithWeb3(
+        credentials: Web3Credentials(
+          chain: .solana,
+          message: message,
+          signature: signature.base64EncodedString()
+        )
+      )
+
+      XCTAssertFalse(session.accessToken.isEmpty)
     }
   }
 
@@ -427,4 +459,32 @@ final class AuthClientIntegrationTests: XCTestCase {
 
     token.remove()
   }
+}
+
+private let base58Alphabet = Array("123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz")
+
+private func base58Encode(_ input: Data) -> String {
+  let bytes = Array(input)
+  var zerosCount = 0
+  for byte in bytes {
+    if byte == 0 { zerosCount += 1 } else { break }
+  }
+  var integerBytes = bytes
+  var result = [UInt8]()
+  var startIndex = zerosCount
+  while startIndex < integerBytes.count {
+    var remainder = 0
+    for i in startIndex..<integerBytes.count {
+      let value = remainder * 256 + Int(integerBytes[i])
+      integerBytes[i] = UInt8(value / 58)
+      remainder = value % 58
+    }
+    result.append(UInt8(remainder))
+    while startIndex < integerBytes.count, integerBytes[startIndex] == 0 {
+      startIndex += 1
+    }
+  }
+  let prefix = String(repeating: "1", count: zerosCount)
+  let encoded = String(result.reversed().map { base58Alphabet[Int($0)] })
+  return prefix + encoded
 }
