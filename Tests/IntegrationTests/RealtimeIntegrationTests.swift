@@ -22,7 +22,10 @@
   // the same local Supabase instance — Swift Testing runs `@Test`s in the same suite concurrently
   // by default, unlike XCTest's implicit one-class-at-a-time execution. Use a class (not a
   // struct) so `deinit` can disconnect both clients afterward, mirroring the old `tearDown()`.
-  @Suite(.serialized)
+  @Suite(
+    .serialized,
+    .enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil)
+  )
   final class RealtimeIntegrationTests: Sendable {
     let testClock = TestClock<Duration>()
 
