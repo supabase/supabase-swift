@@ -92,10 +92,8 @@ let package = Package(
     .testTarget(
       name: "FunctionsTests",
       dependencies: [
-        .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
-        .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
+        .product(name: "HTTPTypes", package: "swift-http-types"),
         .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
-        .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
         "Functions",
         "Mocker",
         "TestHelpers",
@@ -244,7 +242,7 @@ let package = Package(
 // production targets. Everything else stays pinned to v5 until its migration
 // phase lands (see SDK-435).
 let swift6TestTargets: Set<String> = [
-  "SupabaseTests", "HelpersTests", "StorageTests", "PostgRESTTests", "AuthTests",
+  "SupabaseTests", "HelpersTests", "StorageTests", "PostgRESTTests", "AuthTests", "FunctionsTests",
 ]
 
 for target in package.targets {
