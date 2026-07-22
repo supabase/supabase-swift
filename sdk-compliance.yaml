@@ -43,7 +43,13 @@ features:
       - AuthClient.signInWithWeb3
       - Web3Credentials
       - Web3Credentials.init
+      - Web3Credentials.chain
+      - Web3Credentials.message
+      - Web3Credentials.signature
+      - Web3Credentials.gotrueMetaSecurity
       - Web3Chain
+      - Web3Chain.init
+      - Web3Chain.rawValue
       - Web3Chain.ethereum
       - Web3Chain.solana
       - ErrorCode.web3ProviderDisabled
