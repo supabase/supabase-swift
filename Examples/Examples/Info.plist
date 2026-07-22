@@ -26,6 +26,14 @@
       <string>fb{{ FACEBOOK APP ID }}</string>
     </array>
     </dict>
+	    <dict>
+	      <key>CFBundleTypeRole</key>
+	      <string>Editor</string>
+	      <key>CFBundleURLSchemes</key>
+	      <array>
+	        <string>com.supabase.swift-examples.metamask</string>
+	      </array>
+	    </dict>
 	</array>
 	<key>GIDClientID</key>
 	<string>{{ YOUR_IOS_CLIENT_ID }}</string>
@@ -41,6 +49,7 @@
   <array>
     <string>fbapi</string>
     <string>fb-messenger-share-api</string>
+    <string>metamask</string>
   </array>
 </dict>
 </plist>

@@ -29,11 +29,13 @@ cloudflare
 confirmer
 corelibs
 CREDENTIALW
+dapp
 datastructure
 Dedup
 dedup
 dedupe
 decoratee
+deeplinking
 discardable
 dollarsign
 dont
@@ -87,8 +89,10 @@ LinkedIn
 lnbm
 magiclink
 magnifyingglass
+metamask
 metas
 Metas
+mmsdk
 newbucket
 newkey
 niled
