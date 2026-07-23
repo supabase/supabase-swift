@@ -5,16 +5,19 @@
 //  Created by Guilherme Souza on 29/07/25.
 //
 
-import XCTest
+import Foundation
+import Testing
 
 @testable import Realtime
 @testable import RealtimeV2
 
-final class RealtimeJoinConfigTests: XCTestCase {
+@Suite
+struct RealtimeJoinConfigTests {
 
   // MARK: - RealtimeJoinPayload Tests
 
-  func testRealtimeJoinPayloadInit() {
+  @Test
+  func realtimeJoinPayloadInit() {
     let config = RealtimeJoinConfig()
     let payload = RealtimeJoinPayload(
       config: config,
@@ -22,12 +25,13 @@ final class RealtimeJoinConfigTests: XCTestCase {
       version: "1.0"
     )
 
-    XCTAssertEqual(payload.config, config)
-    XCTAssertEqual(payload.accessToken, "token123")
-    XCTAssertEqual(payload.version, "1.0")
+    #expect(payload.config == config)
+    #expect(payload.accessToken == "token123")
+    #expect(payload.version == "1.0")
   }
 
-  func testRealtimeJoinPayloadCodingKeys() throws {
+  @Test
+  func realtimeJoinPayloadCodingKeys() throws {
     let config = RealtimeJoinConfig()
     let payload = RealtimeJoinPayload(
       config: config,
@@ -39,12 +43,13 @@ final class RealtimeJoinConfigTests: XCTestCase {
     let data = try encoder.encode(payload)
 
     let jsonObject = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-    XCTAssertNotNil(jsonObject?["config"])
-    XCTAssertEqual(jsonObject?["access_token"] as? String, "token123")
-    XCTAssertEqual(jsonObject?["version"] as? String, "1.0")
+    #expect(jsonObject?["config"] != nil)
+    #expect(jsonObject?["access_token"] as? String == "token123")
+    #expect(jsonObject?["version"] as? String == "1.0")
   }
 
-  func testRealtimeJoinPayloadDecoding() throws {
+  @Test
+  func realtimeJoinPayloadDecoding() throws {
     let jsonData = """
       {
         "config": {
@@ -61,25 +66,27 @@ final class RealtimeJoinConfigTests: XCTestCase {
     let decoder = JSONDecoder()
     let payload = try decoder.decode(RealtimeJoinPayload.self, from: jsonData)
 
-    XCTAssertEqual(payload.accessToken, "token123")
-    XCTAssertEqual(payload.version, "1.0")
-    XCTAssertFalse(payload.config.isPrivate)
+    #expect(payload.accessToken == "token123")
+    #expect(payload.version == "1.0")
+    #expect(!payload.config.isPrivate)
   }
 
   // MARK: - RealtimeJoinConfig Tests
 
-  func testRealtimeJoinConfigDefaults() {
+  @Test
+  func realtimeJoinConfigDefaults() {
     let config = RealtimeJoinConfig()
 
-    XCTAssertFalse(config.broadcast.acknowledgeBroadcasts)
-    XCTAssertFalse(config.broadcast.receiveOwnBroadcasts)
-    XCTAssertEqual(config.presence.key, "")
-    XCTAssertFalse(config.presence.enabled)
-    XCTAssertTrue(config.postgresChanges.isEmpty)
-    XCTAssertFalse(config.isPrivate)
+    #expect(!config.broadcast.acknowledgeBroadcasts)
+    #expect(!config.broadcast.receiveOwnBroadcasts)
+    #expect(config.presence.key == "")
+    #expect(!config.presence.enabled)
+    #expect(config.postgresChanges.isEmpty)
+    #expect(!config.isPrivate)
   }
 
-  func testRealtimeJoinConfigCustomValues() {
+  @Test
+  func realtimeJoinConfigCustomValues() {
     var config = RealtimeJoinConfig()
     config.broadcast.acknowledgeBroadcasts = true
     config.broadcast.receiveOwnBroadcasts = true
@@ -90,37 +97,40 @@ final class RealtimeJoinConfigTests: XCTestCase {
       PostgresJoinConfig(event: .insert, schema: "public", table: "users", filter: nil, id: 1)
     ]
 
-    XCTAssertTrue(config.broadcast.acknowledgeBroadcasts)
-    XCTAssertTrue(config.broadcast.receiveOwnBroadcasts)
-    XCTAssertEqual(config.presence.key, "user123")
-    XCTAssertTrue(config.presence.enabled)
-    XCTAssertTrue(config.isPrivate)
-    XCTAssertEqual(config.postgresChanges.count, 1)
+    #expect(config.broadcast.acknowledgeBroadcasts)
+    #expect(config.broadcast.receiveOwnBroadcasts)
+    #expect(config.presence.key == "user123")
+    #expect(config.presence.enabled)
+    #expect(config.isPrivate)
+    #expect(config.postgresChanges.count == 1)
   }
 
-  func testRealtimeJoinConfigEquality() {
+  @Test
+  func realtimeJoinConfigEquality() {
     let config1 = RealtimeJoinConfig()
     var config2 = RealtimeJoinConfig()
     config2.isPrivate = false
 
-    XCTAssertEqual(config1, config2)
+    #expect(config1 == config2)
 
     config2.isPrivate = true
-    XCTAssertNotEqual(config1, config2)
+    #expect(config1 != config2)
   }
 
-  func testRealtimeJoinConfigHashable() {
+  @Test
+  func realtimeJoinConfigHashable() {
     let config1 = RealtimeJoinConfig()
     var config2 = RealtimeJoinConfig()
     config2.isPrivate = false
 
-    XCTAssertEqual(config1.hashValue, config2.hashValue)
+    #expect(config1.hashValue == config2.hashValue)
 
     config2.isPrivate = true
-    XCTAssertNotEqual(config1.hashValue, config2.hashValue)
+    #expect(config1.hashValue != config2.hashValue)
   }
 
-  func testRealtimeJoinConfigCodingKeys() throws {
+  @Test
+  func realtimeJoinConfigCodingKeys() throws {
     var config = RealtimeJoinConfig()
     config.isPrivate = true
     config.postgresChanges = [
@@ -131,32 +141,35 @@ final class RealtimeJoinConfigTests: XCTestCase {
     let data = try encoder.encode(config)
 
     let jsonObject = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-    XCTAssertNotNil(jsonObject?["broadcast"])
-    XCTAssertNotNil(jsonObject?["presence"])
-    XCTAssertNotNil(jsonObject?["postgres_changes"])
-    XCTAssertEqual(jsonObject?["private"] as? Bool, true)
+    #expect(jsonObject?["broadcast"] != nil)
+    #expect(jsonObject?["presence"] != nil)
+    #expect(jsonObject?["postgres_changes"] != nil)
+    #expect(jsonObject?["private"] as? Bool == true)
   }
 
   // MARK: - BroadcastJoinConfig Tests
 
-  func testBroadcastJoinConfigDefaults() {
+  @Test
+  func broadcastJoinConfigDefaults() {
     let config = BroadcastJoinConfig()
 
-    XCTAssertFalse(config.acknowledgeBroadcasts)
-    XCTAssertFalse(config.receiveOwnBroadcasts)
+    #expect(!config.acknowledgeBroadcasts)
+    #expect(!config.receiveOwnBroadcasts)
   }
 
-  func testBroadcastJoinConfigCustomValues() {
+  @Test
+  func broadcastJoinConfigCustomValues() {
     let config = BroadcastJoinConfig(
       acknowledgeBroadcasts: true,
       receiveOwnBroadcasts: true
     )
 
-    XCTAssertTrue(config.acknowledgeBroadcasts)
-    XCTAssertTrue(config.receiveOwnBroadcasts)
+    #expect(config.acknowledgeBroadcasts)
+    #expect(config.receiveOwnBroadcasts)
   }
 
-  func testBroadcastJoinConfigCodingKeys() throws {
+  @Test
+  func broadcastJoinConfigCodingKeys() throws {
     let config = BroadcastJoinConfig(
       acknowledgeBroadcasts: true,
       receiveOwnBroadcasts: true
@@ -166,11 +179,12 @@ final class RealtimeJoinConfigTests: XCTestCase {
     let data = try encoder.encode(config)
 
     let jsonObject = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-    XCTAssertEqual(jsonObject?["ack"] as? Bool, true)
-    XCTAssertEqual(jsonObject?["self"] as? Bool, true)
+    #expect(jsonObject?["ack"] as? Bool == true)
+    #expect(jsonObject?["self"] as? Bool == true)
   }
 
-  func testBroadcastJoinConfigDecoding() throws {
+  @Test
+  func broadcastJoinConfigDecoding() throws {
     let jsonData = """
       {
         "ack": true,
@@ -182,35 +196,39 @@ final class RealtimeJoinConfigTests: XCTestCase {
     let decoder = JSONDecoder()
     let config = try decoder.decode(BroadcastJoinConfig.self, from: jsonData)
 
-    XCTAssertTrue(config.acknowledgeBroadcasts)
-    XCTAssertFalse(config.receiveOwnBroadcasts)
+    #expect(config.acknowledgeBroadcasts)
+    #expect(!config.receiveOwnBroadcasts)
   }
 
-  func testBroadcastJoinConfigReplicationReadyDefaultsFalse() {
+  @Test
+  func broadcastJoinConfigReplicationReadyDefaultsFalse() {
     let config = BroadcastJoinConfig()
 
-    XCTAssertFalse(config.replicationReady)
+    #expect(!config.replicationReady)
   }
 
-  func testBroadcastJoinConfigEncodesReplicationReadyWhenFalse() throws {
+  @Test
+  func broadcastJoinConfigEncodesReplicationReadyWhenFalse() throws {
     let config = BroadcastJoinConfig()
 
     let data = try JSONEncoder().encode(config)
     let jsonObject = try JSONSerialization.jsonObject(with: data) as? [String: Any]
 
-    XCTAssertEqual(jsonObject?["replication_ready"] as? Bool, false)
+    #expect(jsonObject?["replication_ready"] as? Bool == false)
   }
 
-  func testBroadcastJoinConfigEncodesReplicationReadyWhenTrue() throws {
+  @Test
+  func broadcastJoinConfigEncodesReplicationReadyWhenTrue() throws {
     let config = BroadcastJoinConfig(replicationReady: true)
 
     let data = try JSONEncoder().encode(config)
     let jsonObject = try JSONSerialization.jsonObject(with: data) as? [String: Any]
 
-    XCTAssertEqual(jsonObject?["replication_ready"] as? Bool, true)
+    #expect(jsonObject?["replication_ready"] as? Bool == true)
   }
 
-  func testBroadcastJoinConfigDecodesReplicationReady() throws {
+  @Test
+  func broadcastJoinConfigDecodesReplicationReady() throws {
     let jsonData = """
       {
         "ack": false,
@@ -221,28 +239,31 @@ final class RealtimeJoinConfigTests: XCTestCase {
 
     let config = try JSONDecoder().decode(BroadcastJoinConfig.self, from: jsonData)
 
-    XCTAssertTrue(config.replicationReady)
+    #expect(config.replicationReady)
   }
 
   // MARK: - PresenceJoinConfig Tests
 
-  func testPresenceJoinConfigDefaults() {
+  @Test
+  func presenceJoinConfigDefaults() {
     let config = PresenceJoinConfig()
 
-    XCTAssertEqual(config.key, "")
-    XCTAssertFalse(config.enabled)
+    #expect(config.key == "")
+    #expect(!config.enabled)
   }
 
-  func testPresenceJoinConfigCustomValues() {
+  @Test
+  func presenceJoinConfigCustomValues() {
     var config = PresenceJoinConfig()
     config.key = "user123"
     config.enabled = true
 
-    XCTAssertEqual(config.key, "user123")
-    XCTAssertTrue(config.enabled)
+    #expect(config.key == "user123")
+    #expect(config.enabled)
   }
 
-  func testPresenceJoinConfigCodable() throws {
+  @Test
+  func presenceJoinConfigCodable() throws {
     var config = PresenceJoinConfig()
     config.key = "user123"
     config.enabled = true
@@ -253,28 +274,31 @@ final class RealtimeJoinConfigTests: XCTestCase {
     let decoder = JSONDecoder()
     let decodedConfig = try decoder.decode(PresenceJoinConfig.self, from: data)
 
-    XCTAssertEqual(decodedConfig.key, "user123")
-    XCTAssertTrue(decodedConfig.enabled)
+    #expect(decodedConfig.key == "user123")
+    #expect(decodedConfig.enabled)
   }
 
   // MARK: - PostgresChangeEvent Tests
 
-  func testPostgresChangeEventRawValues() {
-    XCTAssertEqual(PostgresChangeEvent.insert.rawValue, "INSERT")
-    XCTAssertEqual(PostgresChangeEvent.update.rawValue, "UPDATE")
-    XCTAssertEqual(PostgresChangeEvent.delete.rawValue, "DELETE")
-    XCTAssertEqual(PostgresChangeEvent.all.rawValue, "*")
+  @Test
+  func postgresChangeEventRawValues() {
+    #expect(PostgresChangeEvent.insert.rawValue == "INSERT")
+    #expect(PostgresChangeEvent.update.rawValue == "UPDATE")
+    #expect(PostgresChangeEvent.delete.rawValue == "DELETE")
+    #expect(PostgresChangeEvent.all.rawValue == "*")
   }
 
-  func testPostgresChangeEventFromRawValue() {
-    XCTAssertEqual(PostgresChangeEvent(rawValue: "INSERT"), .insert)
-    XCTAssertEqual(PostgresChangeEvent(rawValue: "UPDATE"), .update)
-    XCTAssertEqual(PostgresChangeEvent(rawValue: "DELETE"), .delete)
-    XCTAssertEqual(PostgresChangeEvent(rawValue: "*"), .all)
-    XCTAssertNil(PostgresChangeEvent(rawValue: "INVALID"))
+  @Test
+  func postgresChangeEventFromRawValue() {
+    #expect(PostgresChangeEvent(rawValue: "INSERT") == .insert)
+    #expect(PostgresChangeEvent(rawValue: "UPDATE") == .update)
+    #expect(PostgresChangeEvent(rawValue: "DELETE") == .delete)
+    #expect(PostgresChangeEvent(rawValue: "*") == .all)
+    #expect(PostgresChangeEvent(rawValue: "INVALID") == nil)
   }
 
-  func testPostgresChangeEventCodable() throws {
+  @Test
+  func postgresChangeEventCodable() throws {
     let events: [PostgresChangeEvent] = [.insert, .update, .delete, .all]
 
     let encoder = JSONEncoder()
@@ -283,23 +307,25 @@ final class RealtimeJoinConfigTests: XCTestCase {
     let decoder = JSONDecoder()
     let decodedEvents = try decoder.decode([PostgresChangeEvent].self, from: data)
 
-    XCTAssertEqual(decodedEvents, events)
+    #expect(decodedEvents == events)
   }
 
   // MARK: - PostgresJoinConfig Additional Tests
 
-  func testPostgresJoinConfigDefaults() {
+  @Test
+  func postgresJoinConfigDefaults() {
     let config = PostgresJoinConfig(
       event: .insert, schema: "public", table: "users", filter: nil, id: 0)
 
-    XCTAssertEqual(config.event, .insert)
-    XCTAssertEqual(config.schema, "public")
-    XCTAssertEqual(config.table, "users")
-    XCTAssertNil(config.filter)
-    XCTAssertEqual(config.id, 0)
+    #expect(config.event == .insert)
+    #expect(config.schema == "public")
+    #expect(config.table == "users")
+    #expect(config.filter == nil)
+    #expect(config.id == 0)
   }
 
-  func testPostgresJoinConfigCustomEncoding() throws {
+  @Test
+  func postgresJoinConfigCustomEncoding() throws {
     let config = PostgresJoinConfig(
       event: .insert,
       schema: "public",
@@ -312,14 +338,15 @@ final class RealtimeJoinConfigTests: XCTestCase {
     let data = try encoder.encode(config)
 
     let jsonObject = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-    XCTAssertEqual(jsonObject?["event"] as? String, "INSERT")
-    XCTAssertEqual(jsonObject?["schema"] as? String, "public")
-    XCTAssertEqual(jsonObject?["table"] as? String, "users")
-    XCTAssertEqual(jsonObject?["filter"] as? String, "id=1")
-    XCTAssertEqual(jsonObject?["id"] as? Int, 123)
+    #expect(jsonObject?["event"] as? String == "INSERT")
+    #expect(jsonObject?["schema"] as? String == "public")
+    #expect(jsonObject?["table"] as? String == "users")
+    #expect(jsonObject?["filter"] as? String == "id=1")
+    #expect(jsonObject?["id"] as? Int == 123)
   }
 
-  func testPostgresJoinConfigEncodingWithZeroId() throws {
+  @Test
+  func postgresJoinConfigEncodingWithZeroId() throws {
     let config = PostgresJoinConfig(
       event: .insert,
       schema: "public",
@@ -332,10 +359,11 @@ final class RealtimeJoinConfigTests: XCTestCase {
     let data = try encoder.encode(config)
 
     let jsonObject = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-    XCTAssertNil(jsonObject?["id"])  // Should not encode id when it's 0
+    #expect(jsonObject?["id"] == nil)  // Should not encode id when it's 0
   }
 
-  func testPostgresJoinConfigEncodingWithNilValues() throws {
+  @Test
+  func postgresJoinConfigEncodingWithNilValues() throws {
     let config = PostgresJoinConfig(
       event: .insert,
       schema: "public",
@@ -348,7 +376,7 @@ final class RealtimeJoinConfigTests: XCTestCase {
     let data = try encoder.encode(config)
 
     let jsonObject = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-    XCTAssertNil(jsonObject?["table"])  // Should not encode nil table
-    XCTAssertNil(jsonObject?["filter"])  // Should not encode nil filter
+    #expect(jsonObject?["table"] == nil)  // Should not encode nil table
+    #expect(jsonObject?["filter"] == nil)  // Should not encode nil filter
   }
 }

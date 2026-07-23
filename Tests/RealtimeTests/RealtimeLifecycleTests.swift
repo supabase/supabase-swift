@@ -9,28 +9,25 @@ import Clocks
 import ConcurrencyExtras
 import Foundation
 import TestHelpers
-import XCTest
+import Testing
 
 @testable import Realtime
 @testable import RealtimeV2
 
 #if os(Linux)
-  @available(
-    *, unavailable, message: "RealtimeLifecycleTests are disabled on Linux due to timing flakiness"
-  )
-  final class RealtimeLifecycleTests: XCTestCase {}
+  // RealtimeLifecycleTests are disabled on Linux due to timing flakiness.
 #else
 
-  final class RealtimeLifecycleTests: XCTestCase {
+  @Suite
+  struct RealtimeLifecycleTests {
     let url = URL(string: "http://localhost:54321/realtime/v1")!
     let apiKey = "publishable.api.key"
 
-    var http: HTTPClientMock!
-    var testClock: TestClock<Duration>!
-    var servers: LockIsolated<[FakeWebSocket]>!
+    let http: HTTPClientMock
+    let testClock: TestClock<Duration>
+    let servers: LockIsolated<[FakeWebSocket]>
 
-    override func setUp() {
-      super.setUp()
+    init() {
       http = HTTPClientMock()
       testClock = TestClock()
       servers = LockIsolated([])
@@ -48,7 +45,7 @@ import XCTest
           let (client, server) = FakeWebSocket.fakes()
           // Auto-respond to heartbeats and phx_join so subscribe() completes.
           // Retain the server so `client.other` (a weak ref) stays valid.
-          servers?.withValue { $0.append(server) }
+          servers.withValue { $0.append(server) }
           Task { [server] in
             for await event in server.events {
               guard let msg = event.realtimeMessage else { continue }
@@ -89,7 +86,8 @@ import XCTest
       )
     }
 
-    func testHandleAppForegroundWhileConnectedIsNoOp() async throws {
+    @Test
+    func handleAppForegroundWhileConnectedIsNoOp() async throws {
       let sut = makeClient()
       let channel = sut.channel("public:messages")
       try await channel.subscribeWithError()
@@ -100,31 +98,34 @@ import XCTest
       sut.handleAppBackground()
       await sut.handleAppForeground()
 
-      XCTAssertEqual(sut.status, statusBefore)
-      XCTAssertEqual(channel.status, channelStatusBefore)
+      #expect(sut.status == statusBefore)
+      #expect(channel.status == channelStatusBefore)
     }
 
-    func testHandleAppForegroundWithoutPriorBackgroundIsNoOp() async {
+    @Test
+    func handleAppForegroundWithoutPriorBackgroundIsNoOp() async {
       let sut = makeClient()
-      XCTAssertEqual(sut.status, .disconnected)
+      #expect(sut.status == .disconnected)
 
       await sut.handleAppForeground()
-      XCTAssertEqual(sut.status, .disconnected)
+      #expect(sut.status == .disconnected)
     }
 
-    func testHandleAppForegroundDoesNotConnectIfNotConnectedBeforeBackground() async {
+    @Test
+    func handleAppForegroundDoesNotConnectIfNotConnectedBeforeBackground() async {
       let sut = makeClient()
-      XCTAssertEqual(sut.status, .disconnected)
+      #expect(sut.status == .disconnected)
 
       sut.handleAppBackground()
       await sut.handleAppForeground()
-      XCTAssertEqual(sut.status, .disconnected)
+      #expect(sut.status == .disconnected)
     }
 
-    func testHandleAppForegroundReconnectsWhenBackgroundedWhileConnected() async throws {
+    @Test
+    func handleAppForegroundReconnectsWhenBackgroundedWhileConnected() async throws {
       let sut = makeClient()
       await sut.connect()
-      XCTAssertEqual(sut.status, .connected)
+      #expect(sut.status == .connected)
 
       sut.handleAppBackground()
       // Subscribe before the OS close so the buffered .disconnected event is
@@ -139,20 +140,21 @@ import XCTest
       // auto-reconnect task wakes and performConnection() runs.
       await testClock.advance(by: .seconds(8))
       _ = await statusUpdates.first { $0 == .connected }
-      XCTAssertEqual(sut.status, .connected)
+      #expect(sut.status == .connected)
 
       // handleAppForeground is a no-op: the auto-reconnect already recovered
       // the connection and the state observer will rejoin channels.
       await sut.handleAppForeground()
-      XCTAssertEqual(sut.status, .connected)
+      #expect(sut.status == .connected)
     }
 
-    func testHandleAppForegroundResubscribesChannelsWhenBackgroundedWhileConnected() async throws {
+    @Test
+    func handleAppForegroundResubscribesChannelsWhenBackgroundedWhileConnected() async throws {
       let sut = makeClient()
       let channel = sut.channel("public:messages")
       try await channel.subscribeWithError()
-      XCTAssertEqual(sut.status, .connected)
-      XCTAssertEqual(channel.status, .subscribed)
+      #expect(sut.status == .connected)
+      #expect(channel.status == .subscribed)
 
       sut.handleAppBackground()
       let statusUpdates = sut.statusChange
@@ -161,47 +163,49 @@ import XCTest
 
       await testClock.advance(by: .seconds(8))
       _ = await statusUpdates.first { $0 == .connected }
-      XCTAssertEqual(sut.status, .connected)
+      #expect(sut.status == .connected)
 
       // rejoinChannels() is launched as a fire-and-forget Task from the state
       // observer's handleConnected(isReconnect: true) path. Poll until it
       // completes (FakeWebSocket delivers phx_reply synchronously but the task
       // needs scheduler turns to run).
-      let deadline = Date().addingTimeInterval(5)
-      while channel.status != .subscribed, Date() < deadline {
-        try? await Task.sleep(nanoseconds: 10_000_000)  // 10 ms
-      }
-      XCTAssertEqual(channel.status, .subscribed)
+      await waitUntil(timeout: 5) { channel.status == .subscribed }
+      #expect(channel.status == .subscribed)
 
       // handleAppForeground is a no-op: already reconnected with channel resubscribed.
       await sut.handleAppForeground()
-      XCTAssertEqual(sut.status, .connected)
-      XCTAssertEqual(channel.status, .subscribed)
+      #expect(sut.status == .connected)
+      #expect(channel.status == .subscribed)
     }
 
-    func testExplicitDisconnectWhileBackgroundedDoesNotReconnectOnForeground() async throws {
+    @Test
+    func explicitDisconnectWhileBackgroundedDoesNotReconnectOnForeground() async throws {
       let sut = makeClient()
       await sut.connect()
-      XCTAssertEqual(sut.status, .connected)
+      #expect(sut.status == .connected)
 
       sut.handleAppBackground()
       // Explicit developer disconnect (e.g. sign-out) must clear the lifecycle flag so
       // handleAppForeground() does not silently undo it.
       sut.disconnect()
-      XCTAssertEqual(sut.status, .disconnected)
+      #expect(sut.status == .disconnected)
 
       await sut.handleAppForeground()
-      XCTAssertEqual(sut.status, .disconnected)
+      #expect(sut.status == .disconnected)
     }
 
-    func testHeartbeatTaskDoesNotRetainClient() async throws {
-      weak var weakClient: RealtimeClientV2?
+    @Test
+    func heartbeatTaskDoesNotRetainClient() async throws {
+      final class WeakBox: @unchecked Sendable {
+        weak var client: RealtimeClientV2?
+      }
+      let box = WeakBox()
 
       func scope() async {
         let sut = makeClient()
-        weakClient = sut
+        box.client = sut
         await sut.connect()
-        XCTAssertEqual(sut.status, .connected)
+        #expect(sut.status == .connected)
 
         await testClock.advance(by: .seconds(30))
 
@@ -209,27 +213,25 @@ import XCTest
       }
       await scope()
 
-      let deadline = Date().addingTimeInterval(5)
-      while weakClient != nil, Date() < deadline {
-        await Task.yield()
-        try? await Task.sleep(nanoseconds: 10_000_000)
-      }
+      await waitUntil(timeout: 5) { box.client == nil }
 
-      XCTAssertNil(
-        weakClient,
+      #expect(
+        box.client == nil,
         "RealtimeClientV2 leaked: the heartbeat task retained self, preventing deinit."
       )
     }
 
-    func testHandleAppLifecycleFalseDoesNotInstallLifecycleManager() {
+    @Test
+    func handleAppLifecycleFalseDoesNotInstallLifecycleManager() {
       let sut = makeClient(handleAppLifecycle: false)
-      XCTAssertNil(sut.mutableState.lifecycleManager)
+      #expect(sut.mutableState.lifecycleManager == nil)
     }
 
     #if os(iOS) || os(tvOS) || os(visionOS) || os(macOS)
-      func testHandleAppLifecycleTrueInstallsLifecycleManager() {
+      @Test
+      func handleAppLifecycleTrueInstallsLifecycleManager() {
         let sut = makeClient(handleAppLifecycle: true)
-        XCTAssertNotNil(sut.mutableState.lifecycleManager)
+        #expect(sut.mutableState.lifecycleManager != nil)
         _ = sut
       }
     #endif

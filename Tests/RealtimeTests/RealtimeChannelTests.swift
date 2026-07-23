@@ -5,10 +5,12 @@
 //  Created by Guilherme Souza on 09/09/24.
 //
 
+import ConcurrencyExtras
 import Foundation
+import HTTPTypes
 import InlineSnapshotTesting
 import TestHelpers
-import XCTest
+import Testing
 import XCTestDynamicOverlay
 
 @testable import Realtime
@@ -18,7 +20,8 @@ import XCTestDynamicOverlay
   import FoundationNetworking
 #endif
 
-final class RealtimeChannelTests: XCTestCase {
+@Suite
+struct RealtimeChannelTests {
   let sut = RealtimeChannelV2(
     topic: "topic",
     config: RealtimeChannelConfig(
@@ -33,7 +36,8 @@ final class RealtimeChannelTests: XCTestCase {
     logger: nil
   )
 
-  func testTypedFilterAndSelectAreBufferedIntoPostgresJoinConfig() {
+  @Test
+  func typedFilterAndSelectAreBufferedIntoPostgresJoinConfig() {
     let subscription = sut.onPostgresChange(
       UpdateAction.self,
       table: "orders",
@@ -46,18 +50,19 @@ final class RealtimeChannelTests: XCTestCase {
     defer { subscription.cancel() }
 
     let changes = sut.clientChanges.value
-    XCTAssertEqual(changes.count, 1)
-    XCTAssertEqual(changes.first?.event, .update)
-    XCTAssertEqual(changes.first?.table, "orders")
-    XCTAssertEqual(changes.first?.filter, "amount=gt.100,status=not.in.(draft)")
-    XCTAssertEqual(changes.first?.select, ["id", "name"])
+    #expect(changes.count == 1)
+    #expect(changes.first?.event == .update)
+    #expect(changes.first?.table == "orders")
+    #expect(changes.first?.filter == "amount=gt.100,status=not.in.(draft)")
+    #expect(changes.first?.select == ["id", "name"])
   }
 
   // MARK: - Callback rejection tests
 
   #if canImport(Darwin)
+    @Test
     @MainActor
-    func testPresenceChangeCallbackRejectedWhileSubscribing() async {
+    func presenceChangeCallbackRejectedWhileSubscribing() async {
       let (client, server) = FakeWebSocket.fakes()
       let socket = RealtimeClientV2(
         url: URL(string: "https://localhost:54321/realtime/v1")!,
@@ -96,7 +101,7 @@ final class RealtimeChannelTests: XCTestCase {
       let subscribeTask = Task { try? await channel.subscribeWithError() }
 
       await waitForChannelStatus(.subscribing, channel: channel, timeout: 2.0)
-      XCTAssertEqual(channel.status, .subscribing)
+      #expect(channel.status == .subscribing)
 
       let callbackCountBefore = channel.callbackManager.callbacks.count
 
@@ -104,7 +109,7 @@ final class RealtimeChannelTests: XCTestCase {
         _ = channel.onPresenceChange { _ in }
       }
 
-      XCTAssertEqual(channel.callbackManager.callbacks.count, callbackCountBefore)
+      #expect(channel.callbackManager.callbacks.count == callbackCountBefore)
 
       subscribeTask.cancel()
       socket.disconnect()
@@ -112,8 +117,9 @@ final class RealtimeChannelTests: XCTestCase {
   #endif
 
   #if canImport(Darwin)
+    @Test
     @MainActor
-    func testPresenceChangeCallbackRejectedWhileSubscribed() async {
+    func presenceChangeCallbackRejectedWhileSubscribed() async {
       let (client, server) = FakeWebSocket.fakes()
       let socket = RealtimeClientV2(
         url: URL(string: "https://localhost:54321/realtime/v1")!,
@@ -151,7 +157,7 @@ final class RealtimeChannelTests: XCTestCase {
 
       await socket.connect()
       try? await channel.subscribeWithError()
-      XCTAssertEqual(channel.status, .subscribed)
+      #expect(channel.status == .subscribed)
 
       let callbackCountBefore = channel.callbackManager.callbacks.count
 
@@ -159,15 +165,16 @@ final class RealtimeChannelTests: XCTestCase {
         _ = channel.onPresenceChange { _ in }
       }
 
-      XCTAssertEqual(channel.callbackManager.callbacks.count, callbackCountBefore)
+      #expect(channel.callbackManager.callbacks.count == callbackCountBefore)
 
       socket.disconnect()
     }
   #endif
 
   #if canImport(Darwin)
+    @Test
     @MainActor
-    func testPostgresChangeCallbackRejectedWhileSubscribing() async {
+    func postgresChangeCallbackRejectedWhileSubscribing() async {
       let (client, server) = FakeWebSocket.fakes()
       let socket = RealtimeClientV2(
         url: URL(string: "https://localhost:54321/realtime/v1")!,
@@ -206,7 +213,7 @@ final class RealtimeChannelTests: XCTestCase {
       let subscribeTask = Task { try? await channel.subscribeWithError() }
 
       await waitForChannelStatus(.subscribing, channel: channel, timeout: 2.0)
-      XCTAssertEqual(channel.status, .subscribing)
+      #expect(channel.status == .subscribing)
 
       let callbackCountBefore = channel.callbackManager.callbacks.count
 
@@ -214,7 +221,7 @@ final class RealtimeChannelTests: XCTestCase {
         _ = channel.onPostgresChange(AnyAction.self, schema: "public") { _ in }
       }
 
-      XCTAssertEqual(channel.callbackManager.callbacks.count, callbackCountBefore)
+      #expect(channel.callbackManager.callbacks.count == callbackCountBefore)
 
       subscribeTask.cancel()
       socket.disconnect()
@@ -222,8 +229,9 @@ final class RealtimeChannelTests: XCTestCase {
   #endif
 
   #if canImport(Darwin)
+    @Test
     @MainActor
-    func testPostgresChangeCallbackRejectedWhileSubscribed() async {
+    func postgresChangeCallbackRejectedWhileSubscribed() async {
       let (client, server) = FakeWebSocket.fakes()
       let socket = RealtimeClientV2(
         url: URL(string: "https://localhost:54321/realtime/v1")!,
@@ -261,7 +269,7 @@ final class RealtimeChannelTests: XCTestCase {
 
       await socket.connect()
       try? await channel.subscribeWithError()
-      XCTAssertEqual(channel.status, .subscribed)
+      #expect(channel.status == .subscribed)
 
       let callbackCountBefore = channel.callbackManager.callbacks.count
 
@@ -269,13 +277,14 @@ final class RealtimeChannelTests: XCTestCase {
         _ = channel.onPostgresChange(AnyAction.self, schema: "public") { _ in }
       }
 
-      XCTAssertEqual(channel.callbackManager.callbacks.count, callbackCountBefore)
+      #expect(channel.callbackManager.callbacks.count == callbackCountBefore)
 
       socket.disconnect()
     }
   #endif
 
-  func testAttachCallbacks() {
+  @Test
+  func attachCallbacks() {
     var subscriptions = Set<RealtimeSubscription>()
 
     sut.onPostgresChange(
@@ -382,8 +391,9 @@ final class RealtimeChannelTests: XCTestCase {
     }
   }
 
+  @Test
   @MainActor
-  func testPresenceEnabledDuringSubscribe() async {
+  func presenceEnabledDuringSubscribe() async {
     // Create fake WebSocket for testing
     let (client, server) = FakeWebSocket.fakes()
 
@@ -402,7 +412,7 @@ final class RealtimeChannelTests: XCTestCase {
     let channel = socket.channel("test-topic")
 
     // Initially presence should be disabled
-    XCTAssertFalse(channel.config.presence.enabled)
+    #expect(!channel.config.presence.enabled)
 
     // Connect the socket
     await socket.connect()
@@ -411,7 +421,7 @@ final class RealtimeChannelTests: XCTestCase {
     let presenceSubscription = channel.onPresenceChange { _ in }
 
     // Verify that presence callback exists
-    XCTAssertTrue(channel.callbackManager.callbacks.contains(where: { $0.isPresence }))
+    #expect(channel.callbackManager.callbacks.contains(where: { $0.isPresence }))
 
     // Start subscription process
     Task {
@@ -426,7 +436,7 @@ final class RealtimeChannelTests: XCTestCase {
     )
 
     // Should have at least one join event
-    XCTAssertGreaterThan(joinEvents.count, 0)
+    #expect(joinEvents.count > 0)
 
     // Check that the presence enabled flag is set to true in the join payload
     if let joinEvent = joinEvents.first,
@@ -434,9 +444,9 @@ final class RealtimeChannelTests: XCTestCase {
       let presence = config["presence"]?.objectValue,
       let enabled = presence["enabled"]?.boolValue
     {
-      XCTAssertTrue(enabled, "Presence should be enabled when presence callback exists")
+      #expect(enabled, "Presence should be enabled when presence callback exists")
     } else {
-      XCTFail("Could not find presence enabled flag in join payload")
+      Issue.record("Could not find presence enabled flag in join payload")
     }
 
     // Clean up
@@ -448,7 +458,8 @@ final class RealtimeChannelTests: XCTestCase {
     // The subscription is still in progress when we clean up
   }
 
-  func testHttpSendThrowsWhenAccessTokenIsMissing() async {
+  @Test
+  func httpSendThrowsWhenAccessTokenIsMissing() async {
     let httpClient = HTTPClientMock()
     let (client, _) = FakeWebSocket.fakes()
 
@@ -464,13 +475,14 @@ final class RealtimeChannelTests: XCTestCase {
 
     do {
       try await channel.httpSend(event: "test", message: ["data": "test"])
-      XCTFail("Expected httpSend to throw an error when access token is missing")
+      Issue.record("Expected httpSend to throw an error when access token is missing")
     } catch {
-      XCTAssertEqual(error.localizedDescription, "Access token is required for httpSend()")
+      #expect(error.localizedDescription == "Access token is required for httpSend()")
     }
   }
 
-  func testHttpSendSucceedsOn202Status() async throws {
+  @Test
+  func httpSendSucceedsOn202Status() async throws {
     let httpClient = HTTPClientMock()
     await httpClient.when({ _ in true }) { _ in
       HTTPResponse(
@@ -503,23 +515,24 @@ final class RealtimeChannelTests: XCTestCase {
     try await channel.httpSend(event: "test-event", message: ["data": "explicit"])
 
     let requests = await httpClient.receivedRequests
-    XCTAssertEqual(requests.count, 1)
+    #expect(requests.count == 1)
 
     let request = requests[0]
-    XCTAssertEqual(
-      request.url.absoluteString,
-      "https://localhost:54321/realtime/v1/api/broadcast/test-topic/events/test-event?private=true"
+    #expect(
+      request.url.absoluteString
+        == "https://localhost:54321/realtime/v1/api/broadcast/test-topic/events/test-event?private=true"
     )
-    XCTAssertEqual(request.method, .post)
-    XCTAssertEqual(request.headers[.authorization], "Bearer test-token")
-    XCTAssertEqual(request.headers[.apiKey], "test-key")
-    XCTAssertEqual(request.headers[.contentType], "application/json")
+    #expect(request.method == .post)
+    #expect(request.headers[.authorization] == "Bearer test-token")
+    #expect(request.headers[.apiKey] == "test-key")
+    #expect(request.headers[.contentType] == "application/json")
 
     let body = try JSONDecoder().decode([String: String].self, from: request.body ?? Data())
-    XCTAssertEqual(body, ["data": "explicit"])
+    #expect(body == ["data": "explicit"])
   }
 
-  func testHttpSendPercentEncodesTopicAndEventInURL() async throws {
+  @Test
+  func httpSendPercentEncodesTopicAndEventInURL() async throws {
     let httpClient = HTTPClientMock()
     await httpClient.when({ _ in true }) { _ in
       HTTPResponse(
@@ -550,13 +563,14 @@ final class RealtimeChannelTests: XCTestCase {
     try await channel.httpSend(event: "cursor move", message: ["x": 1])
 
     let requests = await httpClient.receivedRequests
-    XCTAssertEqual(
-      requests[0].url.absoluteString,
-      "https://localhost:54321/realtime/v1/api/broadcast/room%2Fone/events/cursor%20move"
+    #expect(
+      requests[0].url.absoluteString
+        == "https://localhost:54321/realtime/v1/api/broadcast/room%2Fone/events/cursor%20move"
     )
   }
 
-  func testHttpSendWithBinaryDataSendsOctetStream() async throws {
+  @Test
+  func httpSendWithBinaryDataSendsOctetStream() async throws {
     let httpClient = HTTPClientMock()
     await httpClient.when({ _ in true }) { _ in
       HTTPResponse(
@@ -588,18 +602,19 @@ final class RealtimeChannelTests: XCTestCase {
     try await channel.httpSend(event: "binary-event", data: payload)
 
     let requests = await httpClient.receivedRequests
-    XCTAssertEqual(requests.count, 1)
+    #expect(requests.count == 1)
 
     let request = requests[0]
-    XCTAssertEqual(
-      request.url.absoluteString,
-      "https://localhost:54321/realtime/v1/api/broadcast/test-topic/events/binary-event"
+    #expect(
+      request.url.absoluteString
+        == "https://localhost:54321/realtime/v1/api/broadcast/test-topic/events/binary-event"
     )
-    XCTAssertEqual(request.headers[.contentType], "application/octet-stream")
-    XCTAssertEqual(request.body, payload)
+    #expect(request.headers[.contentType] == "application/octet-stream")
+    #expect(request.body == payload)
   }
 
-  func testHttpSendWithBinaryDataThrowsWhenAccessTokenIsMissing() async {
+  @Test
+  func httpSendWithBinaryDataThrowsWhenAccessTokenIsMissing() async {
     let httpClient = HTTPClientMock()
     let (client, _) = FakeWebSocket.fakes()
 
@@ -615,13 +630,14 @@ final class RealtimeChannelTests: XCTestCase {
 
     do {
       try await channel.httpSend(event: "test", data: Data([0x01]))
-      XCTFail("Expected httpSend to throw an error when access token is missing")
+      Issue.record("Expected httpSend to throw an error when access token is missing")
     } catch {
-      XCTAssertEqual(error.localizedDescription, "Access token is required for httpSend()")
+      #expect(error.localizedDescription == "Access token is required for httpSend()")
     }
   }
 
-  func testHttpSendThrowsOnNon202Status() async {
+  @Test
+  func httpSendThrowsOnNon202Status() async {
     let httpClient = HTTPClientMock()
     await httpClient.when({ _ in true }) { _ in
       let errorBody = try JSONEncoder().encode(["error": "Server error"])
@@ -652,13 +668,14 @@ final class RealtimeChannelTests: XCTestCase {
 
     do {
       try await channel.httpSend(event: "test", message: ["data": "test"])
-      XCTFail("Expected httpSend to throw an error on non-202 status")
+      Issue.record("Expected httpSend to throw an error on non-202 status")
     } catch {
-      XCTAssertEqual(error.localizedDescription, "Server error")
+      #expect(error.localizedDescription == "Server error")
     }
   }
 
-  func testHttpSendRespectsCustomTimeout() async throws {
+  @Test
+  func httpSendRespectsCustomTimeout() async throws {
     let httpClient = HTTPClientMock()
     await httpClient.when({ _ in true }) { _ in
       HTTPResponse(
@@ -691,10 +708,11 @@ final class RealtimeChannelTests: XCTestCase {
     try await channel.httpSend(event: "test", message: ["data": "test"], timeout: 3.0)
 
     let requests = await httpClient.receivedRequests
-    XCTAssertEqual(requests.count, 1)
+    #expect(requests.count == 1)
   }
 
-  func testHttpSendUsesDefaultTimeoutWhenNotSpecified() async throws {
+  @Test
+  func httpSendUsesDefaultTimeoutWhenNotSpecified() async throws {
     let httpClient = HTTPClientMock()
     await httpClient.when({ _ in true }) { _ in
       HTTPResponse(
@@ -727,10 +745,11 @@ final class RealtimeChannelTests: XCTestCase {
     try await channel.httpSend(event: "test", message: ["data": "test"])
 
     let requests = await httpClient.receivedRequests
-    XCTAssertEqual(requests.count, 1)
+    #expect(requests.count == 1)
   }
 
-  func testHttpSendFallsBackToStatusTextWhenErrorBodyHasNoErrorField() async {
+  @Test
+  func httpSendFallsBackToStatusTextWhenErrorBodyHasNoErrorField() async {
     let httpClient = HTTPClientMock()
     await httpClient.when({ _ in true }) { _ in
       let errorBody = try JSONEncoder().encode(["message": "Invalid request"])
@@ -761,13 +780,14 @@ final class RealtimeChannelTests: XCTestCase {
 
     do {
       try await channel.httpSend(event: "test", message: ["data": "test"])
-      XCTFail("Expected httpSend to throw an error on 400 status")
+      Issue.record("Expected httpSend to throw an error on 400 status")
     } catch {
-      XCTAssertEqual(error.localizedDescription, "Invalid request")
+      #expect(error.localizedDescription == "Invalid request")
     }
   }
 
-  func testHttpSendFallsBackToStatusTextWhenJSONParsingFails() async {
+  @Test
+  func httpSendFallsBackToStatusTextWhenJSONParsingFails() async {
     let httpClient = HTTPClientMock()
     await httpClient.when({ _ in true }) { _ in
       HTTPResponse(
@@ -797,11 +817,11 @@ final class RealtimeChannelTests: XCTestCase {
 
     do {
       try await channel.httpSend(event: "test", message: ["data": "test"])
-      XCTFail("Expected httpSend to throw an error on 503 status")
+      Issue.record("Expected httpSend to throw an error on 503 status")
     } catch {
       // Should fall back to localized status text (case-insensitive)
       let description = error.localizedDescription.lowercased()
-      XCTAssertTrue(
+      #expect(
         description.contains("503") || description.contains("unavailable"),
         "Expected status text fallback, got '\(error.localizedDescription)'"
       )
@@ -809,8 +829,9 @@ final class RealtimeChannelTests: XCTestCase {
   }
 
   #if canImport(Darwin)
+    @Test
     @MainActor
-    func testChannelErrorResetsSubscribedStatus() async {
+    func channelErrorResetsSubscribedStatus() async {
       let (client, server) = FakeWebSocket.fakes()
       let socket = RealtimeClientV2(
         url: URL(string: "https://localhost:54321/realtime/v1")!,
@@ -848,7 +869,7 @@ final class RealtimeChannelTests: XCTestCase {
 
       await socket.connect()
       try? await channel.subscribeWithError()
-      XCTAssertEqual(channel.status, .subscribed)
+      #expect(channel.status == .subscribed)
 
       server.send(
         RealtimeMessageV2(
@@ -861,7 +882,7 @@ final class RealtimeChannelTests: XCTestCase {
       )
 
       await waitForChannelStatus(.unsubscribed, channel: channel, timeout: 2.0)
-      XCTAssertEqual(channel.status, .unsubscribed)
+      #expect(channel.status == .unsubscribed)
 
       socket.disconnect()
     }
@@ -876,10 +897,8 @@ extension RealtimeChannelTests {
     timeout: TimeInterval,
     pollInterval: UInt64 = 10_000_000
   ) async {
-    let deadline = Date().addingTimeInterval(timeout)
-    while Date() < deadline {
-      if channel.status == status { return }
-      try? await Task.sleep(nanoseconds: pollInterval)
+    await Testing_waitUntil(timeout: timeout, pollInterval: pollInterval) {
+      channel.status == status
     }
   }
 
@@ -905,5 +924,21 @@ extension RealtimeChannelTests {
     }
 
     return []
+  }
+}
+
+/// `@MainActor`-safe wrapper around the shared, non-isolated `waitUntil` helper —
+/// avoids a "passing a `@MainActor`-isolated closure as a `@Sendable` closure" diagnostic
+/// when the condition captures main-actor-isolated state (e.g. `RealtimeChannelV2.status`).
+@MainActor
+private func Testing_waitUntil(
+  timeout: TimeInterval,
+  pollInterval: UInt64,
+  condition: @MainActor @escaping () -> Bool
+) async {
+  let deadline = Date().addingTimeInterval(timeout)
+  while Date() < deadline {
+    if condition() { return }
+    try? await Task.sleep(nanoseconds: pollInterval)
   }
 }

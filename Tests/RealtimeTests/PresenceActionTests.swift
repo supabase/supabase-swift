@@ -5,16 +5,19 @@
 //  Created by Guilherme Souza on 29/07/25.
 //
 
-import XCTest
+import Foundation
+import Testing
 
 @testable import Realtime
 @testable import RealtimeV2
 
-final class PresenceActionTests: XCTestCase {
+@Suite
+struct PresenceActionTests {
 
   // MARK: - PresenceV2 Tests
 
-  func testPresenceV2Initialization() {
+  @Test
+  func presenceV2Initialization() {
     let ref = "test_ref_123"
     let state: JSONObject = [
       "user_id": .string("user_123"),
@@ -24,28 +27,30 @@ final class PresenceActionTests: XCTestCase {
 
     let presence = PresenceV2(ref: ref, state: state)
 
-    XCTAssertEqual(presence.ref, ref)
-    XCTAssertEqual(presence.state["user_id"]?.stringValue, "user_123")
-    XCTAssertEqual(presence.state["username"]?.stringValue, "testuser")
-    XCTAssertEqual(presence.state["status"]?.stringValue, "online")
+    #expect(presence.ref == ref)
+    #expect(presence.state["user_id"]?.stringValue == "user_123")
+    #expect(presence.state["username"]?.stringValue == "testuser")
+    #expect(presence.state["status"]?.stringValue == "online")
   }
 
-  func testPresenceV2Hashable() {
+  @Test
+  func presenceV2Hashable() {
     let state: JSONObject = ["key": .string("value")]
     let presence1 = PresenceV2(ref: "ref1", state: state)
     let presence2 = PresenceV2(ref: "ref1", state: state)
     let presence3 = PresenceV2(ref: "ref2", state: state)
 
-    XCTAssertEqual(presence1, presence2)
-    XCTAssertNotEqual(presence1, presence3)
+    #expect(presence1 == presence2)
+    #expect(presence1 != presence3)
 
     let set = Set([presence1, presence2, presence3])
-    XCTAssertEqual(set.count, 2)  // presence1 and presence2 are equal
+    #expect(set.count == 2)  // presence1 and presence2 are equal
   }
 
   // MARK: - PresenceV2 Codable Tests
 
-  func testPresenceV2DecodingValidData() throws {
+  @Test
+  func presenceV2DecodingValidData() throws {
     let jsonData = """
       {
         "metas": [
@@ -62,17 +67,18 @@ final class PresenceActionTests: XCTestCase {
 
     let presence = try JSONDecoder().decode(PresenceV2.self, from: jsonData)
 
-    XCTAssertEqual(presence.ref, "presence_ref_123")
-    XCTAssertEqual(presence.state["user_id"]?.stringValue, "user_456")
-    XCTAssertEqual(presence.state["username"]?.stringValue, "johndoe")
-    XCTAssertEqual(presence.state["status"]?.stringValue, "active")
-    XCTAssertEqual(presence.state["extra_field"]?.stringValue, "extra_value")
+    #expect(presence.ref == "presence_ref_123")
+    #expect(presence.state["user_id"]?.stringValue == "user_456")
+    #expect(presence.state["username"]?.stringValue == "johndoe")
+    #expect(presence.state["status"]?.stringValue == "active")
+    #expect(presence.state["extra_field"]?.stringValue == "extra_value")
 
     // Ensure phx_ref is not in the state
-    XCTAssertNil(presence.state["phx_ref"])
+    #expect(presence.state["phx_ref"] == nil)
   }
 
-  func testPresenceV2DecodingWithMultipleMetas() throws {
+  @Test
+  func presenceV2DecodingWithMultipleMetas() throws {
     // Should use the first meta object
     let jsonData = """
       {
@@ -91,51 +97,54 @@ final class PresenceActionTests: XCTestCase {
 
     let presence = try JSONDecoder().decode(PresenceV2.self, from: jsonData)
 
-    XCTAssertEqual(presence.ref, "first_ref")
-    XCTAssertEqual(presence.state["user_id"]?.stringValue, "first_user")
+    #expect(presence.ref == "first_ref")
+    #expect(presence.state["user_id"]?.stringValue == "first_user")
   }
 
-  func testPresenceV2DecodingMissingMetas() {
+  @Test
+  func presenceV2DecodingMissingMetas() {
     let jsonData = """
       {
         "other_field": "value"
       }
       """.data(using: .utf8)!
 
-    XCTAssertThrowsError(try JSONDecoder().decode(PresenceV2.self, from: jsonData)) { error in
+    #expect {
+      try JSONDecoder().decode(PresenceV2.self, from: jsonData)
+    } throws: { error in
       guard let decodingError = error as? DecodingError,
         case .typeMismatch(let type, let context) = decodingError
       else {
-        XCTFail("Expected DecodingError.typeMismatch, got \(error)")
-        return
+        return false
       }
-
-      XCTAssertTrue(type == JSONObject.self)
-      XCTAssertEqual(context.debugDescription, "A presence should at least have a phx_ref.")
+      return type == JSONObject.self
+        && context.debugDescription == "A presence should at least have a phx_ref."
     }
   }
 
-  func testPresenceV2DecodingEmptyMetas() {
+  @Test
+  func presenceV2DecodingEmptyMetas() {
     let jsonData = """
       {
         "metas": []
       }
       """.data(using: .utf8)!
 
-    XCTAssertThrowsError(try JSONDecoder().decode(PresenceV2.self, from: jsonData)) { error in
+    #expect {
+      try JSONDecoder().decode(PresenceV2.self, from: jsonData)
+    } throws: { error in
       guard let decodingError = error as? DecodingError,
         case .typeMismatch(let type, let context) = decodingError
       else {
-        XCTFail("Expected DecodingError.typeMismatch, got \(error)")
-        return
+        return false
       }
-
-      XCTAssertTrue(type == JSONObject.self)
-      XCTAssertEqual(context.debugDescription, "A presence should at least have a phx_ref.")
+      return type == JSONObject.self
+        && context.debugDescription == "A presence should at least have a phx_ref."
     }
   }
 
-  func testPresenceV2DecodingMissingPhxRef() {
+  @Test
+  func presenceV2DecodingMissingPhxRef() {
     let jsonData = """
       {
         "metas": [
@@ -147,20 +156,21 @@ final class PresenceActionTests: XCTestCase {
       }
       """.data(using: .utf8)!
 
-    XCTAssertThrowsError(try JSONDecoder().decode(PresenceV2.self, from: jsonData)) { error in
+    #expect {
+      try JSONDecoder().decode(PresenceV2.self, from: jsonData)
+    } throws: { error in
       guard let decodingError = error as? DecodingError,
         case .typeMismatch(let type, let context) = decodingError
       else {
-        XCTFail("Expected DecodingError.typeMismatch, got \(error)")
-        return
+        return false
       }
-
-      XCTAssertTrue(type == String.self)
-      XCTAssertEqual(context.debugDescription, "A presence should at least have a phx_ref.")
+      return type == String.self
+        && context.debugDescription == "A presence should at least have a phx_ref."
     }
   }
 
-  func testPresenceV2DecodingNonStringPhxRef() {
+  @Test
+  func presenceV2DecodingNonStringPhxRef() {
     let jsonData = """
       {
         "metas": [
@@ -172,20 +182,21 @@ final class PresenceActionTests: XCTestCase {
       }
       """.data(using: .utf8)!
 
-    XCTAssertThrowsError(try JSONDecoder().decode(PresenceV2.self, from: jsonData)) { error in
+    #expect {
+      try JSONDecoder().decode(PresenceV2.self, from: jsonData)
+    } throws: { error in
       guard let decodingError = error as? DecodingError,
         case .typeMismatch(let type, let context) = decodingError
       else {
-        XCTFail("Expected DecodingError.typeMismatch, got \(error)")
-        return
+        return false
       }
-
-      XCTAssertTrue(type == String.self)
-      XCTAssertEqual(context.debugDescription, "A presence should at least have a phx_ref.")
+      return type == String.self
+        && context.debugDescription == "A presence should at least have a phx_ref."
     }
   }
 
-  func testPresenceV2Encoding() throws {
+  @Test
+  func presenceV2Encoding() throws {
     let state: JSONObject = [
       "user_id": .string("user_789"),
       "status": .string("online"),
@@ -196,14 +207,14 @@ final class PresenceActionTests: XCTestCase {
     let encodedData = try JSONEncoder().encode(presence)
     let decodedDict = try JSONSerialization.jsonObject(with: encodedData) as? [String: Any]
 
-    XCTAssertNotNil(decodedDict)
-    XCTAssertEqual(decodedDict?["phx_ref"] as? String, "test_ref")
+    #expect(decodedDict != nil)
+    #expect(decodedDict?["phx_ref"] as? String == "test_ref")
 
     let stateDict = decodedDict?["state"] as? [String: Any]
-    XCTAssertNotNil(stateDict)
-    XCTAssertEqual(stateDict?["user_id"] as? String, "user_789")
-    XCTAssertEqual(stateDict?["status"] as? String, "online")
-    XCTAssertEqual(stateDict?["count"] as? Int, 42)
+    #expect(stateDict != nil)
+    #expect(stateDict?["user_id"] as? String == "user_789")
+    #expect(stateDict?["status"] as? String == "online")
+    #expect(stateDict?["count"] as? Int == 42)
   }
 
   // MARK: - PresenceV2 decodeState Tests
@@ -214,7 +225,8 @@ final class PresenceActionTests: XCTestCase {
     let age: Int
   }
 
-  func testDecodeStateSuccess() throws {
+  @Test
+  func decodeStateSuccess() throws {
     let state: JSONObject = [
       "id": .string("user_123"),
       "name": .string("John Doe"),
@@ -224,12 +236,13 @@ final class PresenceActionTests: XCTestCase {
 
     let user = try presence.decodeState(as: TestUser.self)
 
-    XCTAssertEqual(user.id, "user_123")
-    XCTAssertEqual(user.name, "John Doe")
-    XCTAssertEqual(user.age, 30)
+    #expect(user.id == "user_123")
+    #expect(user.name == "John Doe")
+    #expect(user.age == 30)
   }
 
-  func testDecodeStateWithCustomDecoder() throws {
+  @Test
+  func decodeStateWithCustomDecoder() throws {
     let customDecoder = JSONDecoder()
     customDecoder.keyDecodingStrategy = .convertFromSnakeCase
 
@@ -248,12 +261,13 @@ final class PresenceActionTests: XCTestCase {
 
     let user = try presence.decodeState(as: SnakeCaseUser.self, decoder: customDecoder)
 
-    XCTAssertEqual(user.userId, "user_456")
-    XCTAssertEqual(user.userName, "Jane Doe")
-    XCTAssertEqual(user.userAge, 25)
+    #expect(user.userId == "user_456")
+    #expect(user.userName == "Jane Doe")
+    #expect(user.userAge == 25)
   }
 
-  func testDecodeStateFailure() {
+  @Test
+  func decodeStateFailure() {
     let state: JSONObject = [
       "id": .string("user_123"),
       "name": .string("John Doe"),
@@ -261,7 +275,9 @@ final class PresenceActionTests: XCTestCase {
     ]
     let presence = PresenceV2(ref: "ref", state: state)
 
-    XCTAssertThrowsError(try presence.decodeState(as: TestUser.self))
+    #expect(throws: (any Error).self) {
+      try presence.decodeState(as: TestUser.self)
+    }
   }
 
   // MARK: - PresenceAction Protocol Extension Tests
@@ -272,7 +288,8 @@ final class PresenceActionTests: XCTestCase {
     let rawMessage: RealtimeMessageV2
   }
 
-  func testDecodeJoinsWithIgnoreOtherTypes() throws {
+  @Test
+  func decodeJoinsWithIgnoreOtherTypes() throws {
     let validState1: JSONObject = [
       "id": .string("user_1"),
       "name": .string("Alice"),
@@ -303,12 +320,13 @@ final class PresenceActionTests: XCTestCase {
 
     // With ignoreOtherTypes = true (default), should return only valid users
     let users = try action.decodeJoins(as: TestUser.self)
-    XCTAssertEqual(users.count, 2)
-    XCTAssertTrue(users.contains(TestUser(id: "user_1", name: "Alice", age: 25)))
-    XCTAssertTrue(users.contains(TestUser(id: "user_2", name: "Bob", age: 30)))
+    #expect(users.count == 2)
+    #expect(users.contains(TestUser(id: "user_1", name: "Alice", age: 25)))
+    #expect(users.contains(TestUser(id: "user_2", name: "Bob", age: 30)))
   }
 
-  func testDecodeJoinsWithoutIgnoreOtherTypes() {
+  @Test
+  func decodeJoinsWithoutIgnoreOtherTypes() {
     let validState: JSONObject = [
       "id": .string("user_1"),
       "name": .string("Alice"),
@@ -332,10 +350,13 @@ final class PresenceActionTests: XCTestCase {
     let action = MockPresenceAction(joins: joins, leaves: [:], rawMessage: rawMessage)
 
     // With ignoreOtherTypes = false, should throw on invalid data
-    XCTAssertThrowsError(try action.decodeJoins(as: TestUser.self, ignoreOtherTypes: false))
+    #expect(throws: (any Error).self) {
+      try action.decodeJoins(as: TestUser.self, ignoreOtherTypes: false)
+    }
   }
 
-  func testDecodeLeavesWithIgnoreOtherTypes() throws {
+  @Test
+  func decodeLeavesWithIgnoreOtherTypes() throws {
     let validState1: JSONObject = [
       "id": .string("user_1"),
       "name": .string("Alice"),
@@ -366,12 +387,13 @@ final class PresenceActionTests: XCTestCase {
 
     // With ignoreOtherTypes = true (default), should return only valid users
     let users = try action.decodeLeaves(as: TestUser.self)
-    XCTAssertEqual(users.count, 2)
-    XCTAssertTrue(users.contains(TestUser(id: "user_1", name: "Alice", age: 25)))
-    XCTAssertTrue(users.contains(TestUser(id: "user_2", name: "Bob", age: 30)))
+    #expect(users.count == 2)
+    #expect(users.contains(TestUser(id: "user_1", name: "Alice", age: 25)))
+    #expect(users.contains(TestUser(id: "user_2", name: "Bob", age: 30)))
   }
 
-  func testDecodeLeavesWithoutIgnoreOtherTypes() {
+  @Test
+  func decodeLeavesWithoutIgnoreOtherTypes() {
     let validState: JSONObject = [
       "id": .string("user_1"),
       "name": .string("Alice"),
@@ -395,10 +417,13 @@ final class PresenceActionTests: XCTestCase {
     let action = MockPresenceAction(joins: [:], leaves: leaves, rawMessage: rawMessage)
 
     // With ignoreOtherTypes = false, should throw on invalid data
-    XCTAssertThrowsError(try action.decodeLeaves(as: TestUser.self, ignoreOtherTypes: false))
+    #expect(throws: (any Error).self) {
+      try action.decodeLeaves(as: TestUser.self, ignoreOtherTypes: false)
+    }
   }
 
-  func testDecodeJoinsWithCustomDecoder() throws {
+  @Test
+  func decodeJoinsWithCustomDecoder() throws {
     let customDecoder = JSONDecoder()
     customDecoder.keyDecodingStrategy = .convertFromSnakeCase
 
@@ -425,13 +450,14 @@ final class PresenceActionTests: XCTestCase {
     }
 
     let users = try action.decodeJoins(as: SnakeCaseUser.self, decoder: customDecoder)
-    XCTAssertEqual(users.count, 1)
-    XCTAssertEqual(users.first?.userId, "user_123")
-    XCTAssertEqual(users.first?.userName, "Test User")
-    XCTAssertEqual(users.first?.userAge, 28)
+    #expect(users.count == 1)
+    #expect(users.first?.userId == "user_123")
+    #expect(users.first?.userName == "Test User")
+    #expect(users.first?.userAge == 28)
   }
 
-  func testDecodeEmptyJoinsAndLeaves() throws {
+  @Test
+  func decodeEmptyJoinsAndLeaves() throws {
     let rawMessage = RealtimeMessageV2(
       joinRef: nil, ref: nil, topic: "test", event: "test", payload: [:]
     )
@@ -441,13 +467,14 @@ final class PresenceActionTests: XCTestCase {
     let joinUsers = try action.decodeJoins(as: TestUser.self)
     let leaveUsers = try action.decodeLeaves(as: TestUser.self)
 
-    XCTAssertEqual(joinUsers.count, 0)
-    XCTAssertEqual(leaveUsers.count, 0)
+    #expect(joinUsers.count == 0)
+    #expect(leaveUsers.count == 0)
   }
 
   // MARK: - PresenceActionImpl Tests
 
-  func testPresenceActionImplInitialization() {
+  @Test
+  func presenceActionImplInitialization() {
     let joins: [String: PresenceV2] = [
       "user1": PresenceV2(ref: "ref1", state: ["name": .string("User 1")])
     ]
@@ -461,15 +488,16 @@ final class PresenceActionTests: XCTestCase {
 
     let impl = PresenceActionImpl(joins: joins, leaves: leaves, rawMessage: rawMessage)
 
-    XCTAssertEqual(impl.joins.count, 1)
-    XCTAssertEqual(impl.leaves.count, 1)
-    XCTAssertEqual(impl.joins["user1"]?.ref, "ref1")
-    XCTAssertEqual(impl.leaves["user2"]?.ref, "ref2")
-    XCTAssertEqual(impl.rawMessage.topic, "topic")
-    XCTAssertEqual(impl.rawMessage.event, "event")
+    #expect(impl.joins.count == 1)
+    #expect(impl.leaves.count == 1)
+    #expect(impl.joins["user1"]?.ref == "ref1")
+    #expect(impl.leaves["user2"]?.ref == "ref2")
+    #expect(impl.rawMessage.topic == "topic")
+    #expect(impl.rawMessage.event == "event")
   }
 
-  func testPresenceActionImplConformsToProtocol() {
+  @Test
+  func presenceActionImplConformsToProtocol() {
     let rawMessage = RealtimeMessageV2(
       joinRef: nil, ref: nil, topic: "test", event: "test", payload: [:]
     )
@@ -478,14 +506,15 @@ final class PresenceActionTests: XCTestCase {
 
     // Test that it can be used as PresenceAction
     let presenceAction: any PresenceAction = impl
-    XCTAssertEqual(presenceAction.joins.count, 0)
-    XCTAssertEqual(presenceAction.leaves.count, 0)
-    XCTAssertEqual(presenceAction.rawMessage.topic, "test")
+    #expect(presenceAction.joins.count == 0)
+    #expect(presenceAction.leaves.count == 0)
+    #expect(presenceAction.rawMessage.topic == "test")
   }
 
   // MARK: - Edge Cases and Complex Scenarios
 
-  func testPresenceV2WithComplexNestedState() throws {
+  @Test
+  func presenceV2WithComplexNestedState() throws {
     let complexState: JSONObject = [
       "user": .object([
         "id": .string("123"),
@@ -506,22 +535,23 @@ final class PresenceActionTests: XCTestCase {
 
     let presence = PresenceV2(ref: "complex_ref", state: complexState)
 
-    XCTAssertEqual(presence.ref, "complex_ref")
-    XCTAssertEqual(presence.state["user"]?.objectValue?["id"]?.stringValue, "123")
-    XCTAssertEqual(
-      presence.state["user"]?.objectValue?["profile"]?.objectValue?["name"]?.stringValue,
-      "John"
+    #expect(presence.ref == "complex_ref")
+    #expect(presence.state["user"]?.objectValue?["id"]?.stringValue == "123")
+    #expect(
+      presence.state["user"]?.objectValue?["profile"]?.objectValue?["name"]?.stringValue
+        == "John"
     )
-    XCTAssertEqual(
+    #expect(
       presence.state["user"]?.objectValue?["profile"]?.objectValue?["preferences"]?.objectValue?[
-        "theme"]?.stringValue,
-      "dark"
+        "theme"]?.stringValue
+        == "dark"
     )
-    XCTAssertEqual(presence.state["user"]?.objectValue?["tags"]?.arrayValue?.count, 2)
-    XCTAssertEqual(presence.state["metadata"]?.objectValue?["connection_count"]?.intValue, 3)
+    #expect(presence.state["user"]?.objectValue?["tags"]?.arrayValue?.count == 2)
+    #expect(presence.state["metadata"]?.objectValue?["connection_count"]?.intValue == 3)
   }
 
-  func testPresenceV2RoundTripCoding() throws {
+  @Test
+  func presenceV2RoundTripCoding() throws {
     let originalState: JSONObject = [
       "user_id": .string("user_789"),
       "status": .string("online"),
@@ -548,16 +578,17 @@ final class PresenceActionTests: XCTestCase {
     let serverData = try JSONSerialization.data(withJSONObject: serverFormat)
     let decodedPresence = try JSONDecoder().decode(PresenceV2.self, from: serverData)
 
-    XCTAssertEqual(decodedPresence.ref, originalPresence.ref)
-    XCTAssertEqual(decodedPresence.state["user_id"]?.stringValue, "user_789")
-    XCTAssertEqual(decodedPresence.state["status"]?.stringValue, "online")
-    XCTAssertEqual(decodedPresence.state["score"]?.doubleValue, 98.5)
-    XCTAssertEqual(decodedPresence.state["active"]?.boolValue, true)
-    XCTAssertEqual(decodedPresence.state["tags"]?.arrayValue?.count, 2)
-    XCTAssertNotNil(decodedPresence.state["metadata"]?.objectValue)
+    #expect(decodedPresence.ref == originalPresence.ref)
+    #expect(decodedPresence.state["user_id"]?.stringValue == "user_789")
+    #expect(decodedPresence.state["status"]?.stringValue == "online")
+    #expect(decodedPresence.state["score"]?.doubleValue == 98.5)
+    #expect(decodedPresence.state["active"]?.boolValue == true)
+    #expect(decodedPresence.state["tags"]?.arrayValue?.count == 2)
+    #expect(decodedPresence.state["metadata"]?.objectValue != nil)
   }
 
-  func testPresenceActionWithMixedValidAndInvalidData() throws {
+  @Test
+  func presenceActionWithMixedValidAndInvalidData() throws {
     struct PartialUser: Codable {
       let id: String
       let name: String?
@@ -590,9 +621,9 @@ final class PresenceActionTests: XCTestCase {
 
     // With ignoreOtherTypes = true, should get valid and partial users
     let users = try action.decodeJoins(as: PartialUser.self, ignoreOtherTypes: true)
-    XCTAssertEqual(users.count, 2)
+    #expect(users.count == 2)
 
     let userIds = users.map(\.id).sorted()
-    XCTAssertEqual(userIds, ["partial_user", "valid_user"])
+    #expect(userIds == ["partial_user", "valid_user"])
   }
 }

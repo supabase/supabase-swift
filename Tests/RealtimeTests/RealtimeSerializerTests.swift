@@ -5,17 +5,20 @@
 //  Created by Guilherme Souza on 12/02/26.
 //
 
-import XCTest
+import Foundation
+import Testing
 
 @testable import Realtime
 @testable import RealtimeV2
 
-final class RealtimeSerializerTests: XCTestCase {
+@Suite
+struct RealtimeSerializerTests {
   let serializer = RealtimeSerializer()
 
   // MARK: - Text Encoding
 
-  func testEncodeText_withAllFields() throws {
+  @Test
+  func encodeText_withAllFields() throws {
     let message = RealtimeMessageV2(
       joinRef: "1",
       ref: "2",
@@ -27,15 +30,16 @@ final class RealtimeSerializerTests: XCTestCase {
     let text = try serializer.encodeText(message)
     let array = try JSONDecoder().decode([AnyJSON].self, from: Data(text.utf8))
 
-    XCTAssertEqual(array.count, 5)
-    XCTAssertEqual(array[0].stringValue, "1")
-    XCTAssertEqual(array[1].stringValue, "2")
-    XCTAssertEqual(array[2].stringValue, "realtime:public:messages")
-    XCTAssertEqual(array[3].stringValue, "phx_join")
-    XCTAssertEqual(array[4].objectValue?["key"]?.stringValue, "value")
+    #expect(array.count == 5)
+    #expect(array[0].stringValue == "1")
+    #expect(array[1].stringValue == "2")
+    #expect(array[2].stringValue == "realtime:public:messages")
+    #expect(array[3].stringValue == "phx_join")
+    #expect(array[4].objectValue?["key"]?.stringValue == "value")
   }
 
-  func testEncodeText_withNilRefs() throws {
+  @Test
+  func encodeText_withNilRefs() throws {
     let message = RealtimeMessageV2(
       joinRef: nil,
       ref: nil,
@@ -47,44 +51,50 @@ final class RealtimeSerializerTests: XCTestCase {
     let text = try serializer.encodeText(message)
     let array = try JSONDecoder().decode([AnyJSON].self, from: Data(text.utf8))
 
-    XCTAssertEqual(array.count, 5)
-    XCTAssertNil(array[0].stringValue)
-    XCTAssertNil(array[1].stringValue)
-    XCTAssertEqual(array[2].stringValue, "phoenix")
-    XCTAssertEqual(array[3].stringValue, "heartbeat")
+    #expect(array.count == 5)
+    #expect(array[0].stringValue == nil)
+    #expect(array[1].stringValue == nil)
+    #expect(array[2].stringValue == "phoenix")
+    #expect(array[3].stringValue == "heartbeat")
   }
 
   // MARK: - Text Decoding
 
-  func testDecodeText_withAllFields() throws {
+  @Test
+  func decodeText_withAllFields() throws {
     let text = #"["1","2","realtime:test","phx_reply",{"status":"ok"}]"#
     let message = try serializer.decodeText(text)
 
-    XCTAssertEqual(message.joinRef, "1")
-    XCTAssertEqual(message.ref, "2")
-    XCTAssertEqual(message.topic, "realtime:test")
-    XCTAssertEqual(message.event, "phx_reply")
-    XCTAssertEqual(message.payload["status"]?.stringValue, "ok")
+    #expect(message.joinRef == "1")
+    #expect(message.ref == "2")
+    #expect(message.topic == "realtime:test")
+    #expect(message.event == "phx_reply")
+    #expect(message.payload["status"]?.stringValue == "ok")
   }
 
-  func testDecodeText_withNullRefs() throws {
+  @Test
+  func decodeText_withNullRefs() throws {
     let text = #"[null,null,"phoenix","heartbeat",{}]"#
     let message = try serializer.decodeText(text)
 
-    XCTAssertNil(message.joinRef)
-    XCTAssertNil(message.ref)
-    XCTAssertEqual(message.topic, "phoenix")
-    XCTAssertEqual(message.event, "heartbeat")
+    #expect(message.joinRef == nil)
+    #expect(message.ref == nil)
+    #expect(message.topic == "phoenix")
+    #expect(message.event == "heartbeat")
   }
 
-  func testDecodeText_tooFewElements() {
+  @Test
+  func decodeText_tooFewElements() {
     let text = #"["1","2","topic"]"#
-    XCTAssertThrowsError(try serializer.decodeText(text))
+    #expect(throws: (any Error).self) {
+      try serializer.decodeText(text)
+    }
   }
 
   // MARK: - Text Round-trip
 
-  func testTextRoundTrip() throws {
+  @Test
+  func textRoundTrip() throws {
     let original = RealtimeMessageV2(
       joinRef: "join-1",
       ref: "ref-42",
@@ -99,16 +109,17 @@ final class RealtimeSerializerTests: XCTestCase {
     let text = try serializer.encodeText(original)
     let decoded = try serializer.decodeText(text)
 
-    XCTAssertEqual(decoded.joinRef, original.joinRef)
-    XCTAssertEqual(decoded.ref, original.ref)
-    XCTAssertEqual(decoded.topic, original.topic)
-    XCTAssertEqual(decoded.event, original.event)
-    XCTAssertEqual(decoded.payload, original.payload)
+    #expect(decoded.joinRef == original.joinRef)
+    #expect(decoded.ref == original.ref)
+    #expect(decoded.topic == original.topic)
+    #expect(decoded.event == original.event)
+    #expect(decoded.payload == original.payload)
   }
 
   // MARK: - Binary Encoding (type 0x03)
 
-  func testEncodeBroadcastPush_jsonPayload() throws {
+  @Test
+  func encodeBroadcastPush_jsonPayload() throws {
     let data = try serializer.encodeBroadcastPush(
       joinRef: "1",
       ref: "2",
@@ -120,13 +131,13 @@ final class RealtimeSerializerTests: XCTestCase {
     // Verify header
     let topicLen = "realtime:test".utf8.count  // 13
     let eventLen = "my_event".utf8.count  // 8
-    XCTAssertEqual(data[0], RealtimeSerializer.BinaryKind.userBroadcastPush.rawValue)
-    XCTAssertEqual(data[1], 1)  // joinRef length
-    XCTAssertEqual(data[2], 1)  // ref length
-    XCTAssertEqual(data[3], UInt8(topicLen))
-    XCTAssertEqual(data[4], UInt8(eventLen))
-    XCTAssertEqual(data[5], 0)  // metadata length
-    XCTAssertEqual(data[6], RealtimeSerializer.PayloadEncoding.json.rawValue)
+    #expect(data[0] == RealtimeSerializer.BinaryKind.userBroadcastPush.rawValue)
+    #expect(data[1] == 1)  // joinRef length
+    #expect(data[2] == 1)  // ref length
+    #expect(data[3] == UInt8(topicLen))
+    #expect(data[4] == UInt8(eventLen))
+    #expect(data[5] == 0)  // metadata length
+    #expect(data[6] == RealtimeSerializer.PayloadEncoding.json.rawValue)
 
     // Verify string fields
     let headerSize = 7
@@ -136,18 +147,19 @@ final class RealtimeSerializerTests: XCTestCase {
     let eventStart = topicStart + topicLen
     let payloadStart = eventStart + eventLen
 
-    XCTAssertEqual(String(data: data[joinRefStart..<refStart], encoding: .utf8), "1")
-    XCTAssertEqual(String(data: data[refStart..<topicStart], encoding: .utf8), "2")
-    XCTAssertEqual(String(data: data[topicStart..<eventStart], encoding: .utf8), "realtime:test")
-    XCTAssertEqual(String(data: data[eventStart..<payloadStart], encoding: .utf8), "my_event")
+    #expect(String(data: data[joinRefStart..<refStart], encoding: .utf8) == "1")
+    #expect(String(data: data[refStart..<topicStart], encoding: .utf8) == "2")
+    #expect(String(data: data[topicStart..<eventStart], encoding: .utf8) == "realtime:test")
+    #expect(String(data: data[eventStart..<payloadStart], encoding: .utf8) == "my_event")
 
     // Verify payload is valid JSON
     let payloadData = data[payloadStart...]
     let json = try JSONDecoder().decode(JSONObject.self, from: Data(payloadData))
-    XCTAssertEqual(json["hello"]?.stringValue, "world")
+    #expect(json["hello"]?.stringValue == "world")
   }
 
-  func testEncodeBroadcastPush_binaryPayload() throws {
+  @Test
+  func encodeBroadcastPush_binaryPayload() throws {
     let binaryPayload = Data([0x01, 0x02, 0x03, 0xFF])
     let data = try serializer.encodeBroadcastPush(
       joinRef: nil,
@@ -157,10 +169,10 @@ final class RealtimeSerializerTests: XCTestCase {
       binaryPayload: binaryPayload
     )
 
-    XCTAssertEqual(data[0], RealtimeSerializer.BinaryKind.userBroadcastPush.rawValue)
-    XCTAssertEqual(data[1], 0)  // joinRef length (nil)
-    XCTAssertEqual(data[2], 0)  // ref length (nil)
-    XCTAssertEqual(data[6], RealtimeSerializer.PayloadEncoding.binary.rawValue)
+    #expect(data[0] == RealtimeSerializer.BinaryKind.userBroadcastPush.rawValue)
+    #expect(data[1] == 0)  // joinRef length (nil)
+    #expect(data[2] == 0)  // ref length (nil)
+    #expect(data[6] == RealtimeSerializer.PayloadEncoding.binary.rawValue)
 
     // Extract payload
     let headerSize = 7
@@ -170,10 +182,11 @@ final class RealtimeSerializerTests: XCTestCase {
     let payloadStart = headerSize + 0 + 0 + topicLen + eventLen + metaLen
     let extractedPayload = Data(data[payloadStart...])
 
-    XCTAssertEqual(extractedPayload, binaryPayload)
+    #expect(extractedPayload == binaryPayload)
   }
 
-  func testEncodeBroadcastPush_nilRefs() throws {
+  @Test
+  func encodeBroadcastPush_nilRefs() throws {
     let data = try serializer.encodeBroadcastPush(
       joinRef: nil,
       ref: nil,
@@ -182,13 +195,14 @@ final class RealtimeSerializerTests: XCTestCase {
       jsonPayload: [:]
     )
 
-    XCTAssertEqual(data[1], 0)  // joinRef length
-    XCTAssertEqual(data[2], 0)  // ref length
+    #expect(data[1] == 0)  // joinRef length
+    #expect(data[2] == 0)  // ref length
   }
 
   // MARK: - Binary Decoding (type 0x04)
 
-  func testDecodeBinary_jsonPayload() throws {
+  @Test
+  func decodeBinary_jsonPayload() throws {
     let topic = "realtime:test"
     let event = "my_event"
     let jsonPayload: JSONObject = ["count": .integer(42)]
@@ -208,16 +222,17 @@ final class RealtimeSerializerTests: XCTestCase {
     frame.append(payloadData)
 
     let broadcast = try serializer.decodeBinary(frame)
-    XCTAssertEqual(broadcast.topic, "realtime:test")
-    XCTAssertEqual(broadcast.event, "my_event")
+    #expect(broadcast.topic == "realtime:test")
+    #expect(broadcast.event == "my_event")
     if case .json(let json) = broadcast.payload {
-      XCTAssertEqual(json["count"]?.intValue, 42)
+      #expect(json["count"]?.intValue == 42)
     } else {
-      XCTFail("Expected JSON payload")
+      Issue.record("Expected JSON payload")
     }
   }
 
-  func testDecodeBinary_binaryPayload() throws {
+  @Test
+  func decodeBinary_binaryPayload() throws {
     let topic = "realtime:test"
     let event = "bin"
     let binaryPayload = Data([0xDE, 0xAD, 0xBE, 0xEF])
@@ -236,21 +251,25 @@ final class RealtimeSerializerTests: XCTestCase {
     frame.append(binaryPayload)
 
     let broadcast = try serializer.decodeBinary(frame)
-    XCTAssertEqual(broadcast.topic, "realtime:test")
-    XCTAssertEqual(broadcast.event, "bin")
+    #expect(broadcast.topic == "realtime:test")
+    #expect(broadcast.event == "bin")
     if case .binary(let data) = broadcast.payload {
-      XCTAssertEqual(data, binaryPayload)
+      #expect(data == binaryPayload)
     } else {
-      XCTFail("Expected binary payload")
+      Issue.record("Expected binary payload")
     }
   }
 
-  func testDecodeBinary_frameTooShort() {
+  @Test
+  func decodeBinary_frameTooShort() {
     let data = Data([0x04, 0x01])
-    XCTAssertThrowsError(try serializer.decodeBinary(data))
+    #expect(throws: (any Error).self) {
+      try serializer.decodeBinary(data)
+    }
   }
 
-  func testDecodeBinary_wrongKind() {
+  @Test
+  func decodeBinary_wrongKind() {
     var frame = Data()
     frame.append(0x01)  // wrong kind
     frame.append(0)
@@ -258,10 +277,13 @@ final class RealtimeSerializerTests: XCTestCase {
     frame.append(0)
     frame.append(RealtimeSerializer.PayloadEncoding.json.rawValue)
 
-    XCTAssertThrowsError(try serializer.decodeBinary(frame))
+    #expect(throws: (any Error).self) {
+      try serializer.decodeBinary(frame)
+    }
   }
 
-  func testDecodeBinary_unknownEncoding() {
+  @Test
+  func decodeBinary_unknownEncoding() {
     var frame = Data()
     frame.append(RealtimeSerializer.BinaryKind.userBroadcast.rawValue)
     frame.append(0)
@@ -269,20 +291,24 @@ final class RealtimeSerializerTests: XCTestCase {
     frame.append(0)
     frame.append(0xFF)  // unknown encoding
 
-    XCTAssertThrowsError(try serializer.decodeBinary(frame))
+    #expect(throws: (any Error).self) {
+      try serializer.decodeBinary(frame)
+    }
   }
 
   // MARK: - Edge Cases
 
-  func testEncodeText_emptyPayload() throws {
+  @Test
+  func encodeText_emptyPayload() throws {
     let message = RealtimeMessageV2(
       joinRef: nil, ref: nil, topic: "t", event: "e", payload: [:])
     let text = try serializer.encodeText(message)
     let decoded = try serializer.decodeText(text)
-    XCTAssertEqual(decoded.payload, [:])
+    #expect(decoded.payload == [:])
   }
 
-  func testDecodeBinary_emptyPayload() throws {
+  @Test
+  func decodeBinary_emptyPayload() throws {
     let topic = "t"
     let event = "e"
 
@@ -298,13 +324,14 @@ final class RealtimeSerializerTests: XCTestCase {
 
     let broadcast = try serializer.decodeBinary(frame)
     if case .binary(let data) = broadcast.payload {
-      XCTAssertTrue(data.isEmpty)
+      #expect(data.isEmpty)
     } else {
-      XCTFail("Expected binary payload")
+      Issue.record("Expected binary payload")
     }
   }
 
-  func testDecodeBinary_withMetadata() throws {
+  @Test
+  func decodeBinary_withMetadata() throws {
     let topic = "realtime:test"
     let event = "evt"
     let metadata = Data("{\"key\":\"val\"}".utf8)
@@ -325,12 +352,12 @@ final class RealtimeSerializerTests: XCTestCase {
     frame.append(binaryPayload)
 
     let broadcast = try serializer.decodeBinary(frame)
-    XCTAssertEqual(broadcast.topic, "realtime:test")
-    XCTAssertEqual(broadcast.event, "evt")
+    #expect(broadcast.topic == "realtime:test")
+    #expect(broadcast.event == "evt")
     if case .binary(let data) = broadcast.payload {
-      XCTAssertEqual(data, Data([0x01]))
+      #expect(data == Data([0x01]))
     } else {
-      XCTFail("Expected binary payload")
+      Issue.record("Expected binary payload")
     }
   }
 }

@@ -5,49 +5,55 @@
 //  Created by Guilherme Souza on 29/07/25.
 //
 
-import XCTest
+import Foundation
+import Testing
 
 @testable import Realtime
 @testable import RealtimeV2
 
-final class RealtimeErrorTests: XCTestCase {
-  func testRealtimeErrorInitialization() {
+@Suite
+struct RealtimeErrorTests {
+  @Test
+  func realtimeErrorInitialization() {
     let errorMessage = "Connection failed"
     let error = RealtimeError(errorMessage)
 
-    XCTAssertEqual(error.errorDescription, errorMessage)
+    #expect(error.errorDescription == errorMessage)
   }
 
-  func testRealtimeErrorLocalizedDescription() {
+  @Test
+  func realtimeErrorLocalizedDescription() {
     let errorMessage = "Test error message"
     let error = RealtimeError(errorMessage)
 
     // LocalizedError protocol provides localizedDescription
-    XCTAssertEqual(error.localizedDescription, errorMessage)
+    #expect(error.localizedDescription == errorMessage)
   }
 
-  func testRealtimeErrorWithEmptyMessage() {
+  @Test
+  func realtimeErrorWithEmptyMessage() {
     let error = RealtimeError("")
-    XCTAssertEqual(error.errorDescription, "")
+    #expect(error.errorDescription == "")
   }
 
-  func testRealtimeErrorAsError() {
+  @Test
+  func realtimeErrorAsError() {
     let errorMessage = "Network timeout"
     let realtimeError = RealtimeError(errorMessage)
     let error: Error = realtimeError
 
     // Test that it can be used as a general Error
-    XCTAssertNotNil(error)
-    XCTAssertEqual(error.localizedDescription, errorMessage)
+    #expect(error.localizedDescription == errorMessage)
   }
 
-  func testRealtimeErrorEquality() {
+  @Test
+  func realtimeErrorEquality() {
     let error1 = RealtimeError("Same message")
     let error2 = RealtimeError("Same message")
     let error3 = RealtimeError("Different message")
 
     // Since RealtimeError doesn't implement Equatable, we test the description
-    XCTAssertEqual(error1.errorDescription, error2.errorDescription)
-    XCTAssertNotEqual(error1.errorDescription, error3.errorDescription)
+    #expect(error1.errorDescription == error2.errorDescription)
+    #expect(error1.errorDescription != error3.errorDescription)
   }
 }
