@@ -215,3 +215,4 @@ cskm
 vízrajzi
 állomás
 áéíóú
+deinits

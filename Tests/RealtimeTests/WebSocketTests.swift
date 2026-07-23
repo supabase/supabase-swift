@@ -296,7 +296,7 @@ struct WebSocketTests {
 
     @Test
     func challengeForwardedToTaskLevelWrappedDelegate() async {
-      final class TaskDelegate: NSObject, URLSessionTaskDelegate {
+      final class TaskDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
         var receivedChallenge: URLAuthenticationChallenge?
         var receivedTask: URLSessionTask?
         func urlSession(
@@ -339,7 +339,7 @@ struct WebSocketTests {
 
     @Test
     func challengeForwardedToSessionLevelWrappedDelegateWhenTaskLevelNotImplemented() async {
-      final class RecordingDelegate: NSObject, URLSessionDelegate {
+      final class RecordingDelegate: NSObject, URLSessionDelegate, @unchecked Sendable {
         var receivedChallenge: URLAuthenticationChallenge?
         func urlSession(
           _ session: URLSession,

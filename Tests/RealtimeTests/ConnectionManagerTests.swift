@@ -121,7 +121,8 @@ struct ConnectionManagerTests {
       secondConnectFinished.setValue(true)
     }
 
-    try await Task.sleep(nanoseconds: 50_000_000)
+    let transportCalled = await waitUntil { transportCallCount.value == 1 }
+    #expect(transportCalled, "Transport should be invoked while first connect is in progress")
     #expect(!secondConnectFinished.value)
     #expect(
       transportCallCount.value == 1,
