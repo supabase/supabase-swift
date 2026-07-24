@@ -5,165 +5,185 @@
 //  Created by Lucas Abijmil on 20/02/2025.
 //
 
-import XCTest
+import Testing
 
 @testable import Realtime
 @testable import RealtimeV2
 
-final class RealtimePostgresFilterTests: XCTestCase {
+@Suite
+struct RealtimePostgresFilterTests {
 
-  func testEq() {
+  @Test
+  func eq() {
     let value = "value"
     let column = "column"
     let filter: RealtimePostgresFilter = .eq(column, value: value)
 
-    XCTAssertEqual(filter.value, "column=eq.value")
+    #expect(filter.value == "column=eq.value")
   }
 
-  func testNeq() {
+  @Test
+  func neq() {
     let value = "value"
     let column = "column"
     let filter: RealtimePostgresFilter = .neq(column, value: value)
 
-    XCTAssertEqual(filter.value, "column=neq.value")
+    #expect(filter.value == "column=neq.value")
   }
 
-  func testGt() {
+  @Test
+  func gt() {
     let value = "value"
     let column = "column"
     let filter: RealtimePostgresFilter = .gt(column, value: value)
 
-    XCTAssertEqual(filter.value, "column=gt.value")
+    #expect(filter.value == "column=gt.value")
   }
 
-  func testGte() {
+  @Test
+  func gte() {
     let value = "value"
     let column = "column"
     let filter: RealtimePostgresFilter = .gte(column, value: value)
 
-    XCTAssertEqual(filter.value, "column=gte.value")
+    #expect(filter.value == "column=gte.value")
   }
 
-  func testLt() {
+  @Test
+  func lt() {
     let value = "value"
     let column = "column"
     let filter: RealtimePostgresFilter = .lt(column, value: value)
 
-    XCTAssertEqual(filter.value, "column=lt.value")
+    #expect(filter.value == "column=lt.value")
   }
 
-  func testLte() {
+  @Test
+  func lte() {
     let value = "value"
     let column = "column"
     let filter: RealtimePostgresFilter = .lte(column, value: value)
 
-    XCTAssertEqual(filter.value, "column=lte.value")
+    #expect(filter.value == "column=lte.value")
   }
 
-  func testIn() {
+  @Test
+  func `in`() {
     let values = ["value1", "value2"]
     let column = "column"
     let filter: RealtimePostgresFilter = .in(column, values: values)
 
-    XCTAssertEqual(filter.value, "column=in.(value1,value2)")
+    #expect(filter.value == "column=in.(value1,value2)")
   }
 
-  func testInDeduplicatesValues() {
+  @Test
+  func inDeduplicatesValues() {
     let filter: RealtimePostgresFilter = .in("status", values: ["a", "b", "a"])
 
-    XCTAssertEqual(filter.value, "status=in.(a,b)")
+    #expect(filter.value == "status=in.(a,b)")
   }
 
-  func testLike() {
+  @Test
+  func like() {
     let filter: RealtimePostgresFilter = .like("title", value: "%foo%")
 
-    XCTAssertEqual(filter.value, "title=like.%foo%")
+    #expect(filter.value == "title=like.%foo%")
   }
 
-  func testILike() {
+  @Test
+  func iLike() {
     let filter: RealtimePostgresFilter = .ilike("title", value: "%foo%")
 
-    XCTAssertEqual(filter.value, "title=ilike.%foo%")
+    #expect(filter.value == "title=ilike.%foo%")
   }
 
-  func testMatch() {
+  @Test
+  func match() {
     let filter: RealtimePostgresFilter = .match("title", value: "^foo")
 
-    XCTAssertEqual(filter.value, "title=match.^foo")
+    #expect(filter.value == "title=match.^foo")
   }
 
-  func testIMatch() {
+  @Test
+  func iMatch() {
     let filter: RealtimePostgresFilter = .imatch("title", value: "^foo")
 
-    XCTAssertEqual(filter.value, "title=imatch.^foo")
+    #expect(filter.value == "title=imatch.^foo")
   }
 
-  func testIs() {
-    XCTAssertEqual(
-      (.is("deleted_at", value: .null) as RealtimePostgresFilter).value, "deleted_at=is.null")
-    XCTAssertEqual((.is("active", value: .true) as RealtimePostgresFilter).value, "active=is.true")
-    XCTAssertEqual(
-      (.is("active", value: .false) as RealtimePostgresFilter).value, "active=is.false")
-    XCTAssertEqual(
-      (.is("state", value: .unknown) as RealtimePostgresFilter).value, "state=is.unknown")
+  @Test
+  func `is`() {
+    #expect(
+      (.is("deleted_at", value: .null) as RealtimePostgresFilter).value == "deleted_at=is.null")
+    #expect((.is("active", value: .true) as RealtimePostgresFilter).value == "active=is.true")
+    #expect((.is("active", value: .false) as RealtimePostgresFilter).value == "active=is.false")
+    #expect((.is("state", value: .unknown) as RealtimePostgresFilter).value == "state=is.unknown")
   }
 
-  func testIsDistinct() {
+  @Test
+  func isDistinct() {
     let filter: RealtimePostgresFilter = .isDistinct("value", value: 1)
 
-    XCTAssertEqual(filter.value, "value=isdistinct.1")
+    #expect(filter.value == "value=isdistinct.1")
   }
 
-  func testNot() {
+  @Test
+  func not() {
     let filter: RealtimePostgresFilter = .not(.eq("id", value: 1))
 
-    XCTAssertEqual(filter.value, "id=not.eq.1")
+    #expect(filter.value == "id=not.eq.1")
   }
 
-  func testNotIn() {
+  @Test
+  func notIn() {
     let filter: RealtimePostgresFilter = .not(.in("status", values: ["draft", "archived"]))
 
-    XCTAssertEqual(filter.value, "status=not.in.(draft,archived)")
+    #expect(filter.value == "status=not.in.(draft,archived)")
   }
 
-  func testAnd() {
+  @Test
+  func and() {
     let filter: RealtimePostgresFilter = .and([
       .gt("amount", value: 100),
       .in("status", values: ["open", "pending"]),
     ])
 
-    XCTAssertEqual(filter.value, "amount=gt.100,status=in.(open,pending)")
+    #expect(filter.value == "amount=gt.100,status=in.(open,pending)")
   }
 
-  func testAndWithNot() {
+  @Test
+  func andWithNot() {
     let filter: RealtimePostgresFilter = .and([
       .gt("amount", value: 100),
       .not(.in("status", values: ["draft", "archived"])),
       .like("title", value: "%foo%"),
     ])
 
-    XCTAssertEqual(
-      filter.value,
-      "amount=gt.100,status=not.in.(draft,archived),title=like.%foo%"
+    #expect(
+      filter.value
+        == "amount=gt.100,status=not.in.(draft,archived),title=like.%foo%"
     )
   }
 
-  func testReservedCharacterQuoting() {
-    XCTAssertEqual((.eq("name", value: "a,b") as RealtimePostgresFilter).value, #"name=eq."a,b""#)
-    XCTAssertEqual((.eq("name", value: "a(b)") as RealtimePostgresFilter).value, #"name=eq."a(b)""#)
-    XCTAssertEqual((.eq("name", value: " a") as RealtimePostgresFilter).value, #"name=eq." a""#)
+  @Test
+  func reservedCharacterQuoting() {
+    #expect((.eq("name", value: "a,b") as RealtimePostgresFilter).value == #"name=eq."a,b""#)
+    #expect((.eq("name", value: "a(b)") as RealtimePostgresFilter).value == #"name=eq."a(b)""#)
+    #expect((.eq("name", value: " a") as RealtimePostgresFilter).value == #"name=eq." a""#)
   }
 
-  func testReservedCharacterQuotingEscapesQuotesAndBackslashes() {
-    XCTAssertEqual(
-      (.eq("name", value: #"a"b\c"#) as RealtimePostgresFilter).value,
-      #"name=eq."a\"b\\c""#
+  @Test
+  func reservedCharacterQuotingEscapesQuotesAndBackslashes() {
+    #expect(
+      (.eq("name", value: #"a"b\c"#) as RealtimePostgresFilter).value
+        == #"name=eq."a\"b\\c""#
     )
   }
 
-  func testReservedCharacterQuotingInList() {
+  @Test
+  func reservedCharacterQuotingInList() {
     let filter: RealtimePostgresFilter = .in("tag", values: ["a,b", "c"])
 
-    XCTAssertEqual(filter.value, #"tag=in.("a,b",c)"#)
+    #expect(filter.value == #"tag=in.("a,b",c)"#)
   }
 }

@@ -6,21 +6,21 @@
 //
 
 import ConcurrencyExtras
+import Foundation
 import TestHelpers
-import XCTest
+import Testing
 
 @testable import Realtime
 @testable import RealtimeV2
 
 #if !os(Android) && !os(Linux) && !os(Windows)
+  @Suite
   @MainActor
-  final class _PushTests: XCTestCase {
-    var ws: FakeWebSocket!
-    var socket: RealtimeClientV2!
+  struct _PushTests {
+    let ws: FakeWebSocket
+    let socket: RealtimeClientV2
 
-    override func setUp() {
-      super.setUp()
-
+    init() {
       let (client, server) = FakeWebSocket.fakes()
       ws = server
 
@@ -35,7 +35,8 @@ import XCTest
       )
     }
 
-    func testPushWithoutAck() async {
+    @Test
+    func pushWithoutAck() async {
       let channel = RealtimeChannelV2(
         topic: "realtime:users",
         config: RealtimeChannelConfig(
@@ -58,10 +59,11 @@ import XCTest
       )
 
       let status = await push.send()
-      XCTAssertEqual(status, .ok)
+      #expect(status == .ok)
     }
 
-    func testPushWithAck() async {
+    @Test
+    func pushWithAck() async {
       let channel = RealtimeChannelV2(
         topic: "realtime:users",
         config: RealtimeChannelConfig(
@@ -90,7 +92,7 @@ import XCTest
       push.didReceive(status: .ok)
 
       let status = await task.value
-      XCTAssertEqual(status, .ok)
+      #expect(status == .ok)
     }
   }
 #endif

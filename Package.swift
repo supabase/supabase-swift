@@ -247,7 +247,7 @@ let package = Package(
 // phase lands (see SDK-435).
 let swift6TestTargets: Set<String> = [
   "SupabaseTests", "HelpersTests", "StorageTests", "PostgRESTTests", "AuthTests", "FunctionsTests",
-  "IntegrationTests",
+  "IntegrationTests", "RealtimeTests",
 ]
 
 for target in package.targets {
