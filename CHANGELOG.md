@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.54.0](https://github.com/supabase/supabase-swift/compare/v2.53.0...v2.54.0) (2026-07-22)
+
+
+### Features
+
+* **auth:** add admin passkey list/delete methods ([#1137](https://github.com/supabase/supabase-swift/issues/1137)) ([99114ee](https://github.com/supabase/supabase-swift/commit/99114eeed0c6fd965d471d52622de79db20c08e3))
+* **auth:** add signInWithWeb3 (Sign in with Ethereum / Solana) ([#1138](https://github.com/supabase/supabase-swift/issues/1138)) ([d364154](https://github.com/supabase/supabase-swift/commit/d3641540c792e797460fbce5a8bab3695b71654c))
+* **functions:** replace FunctionRegion enum with open struct ([#1053](https://github.com/supabase/supabase-swift/issues/1053)) ([102eaf7](https://github.com/supabase/supabase-swift/commit/102eaf71ab76750ee145f4354cacd87fc977bf3a))
+
+
+### Bug Fixes
+
+* **functions:** check x-relay-error before response status ([#1112](https://github.com/supabase/supabase-swift/issues/1112)) ([ee58fc3](https://github.com/supabase/supabase-swift/commit/ee58fc36b9094b4f9dc7d8cdaf87f6868a667917))
+* **test:** align Web3 integration tests with Swift Testing migration ([#1140](https://github.com/supabase/supabase-swift/issues/1140)) ([bfb761b](https://github.com/supabase/supabase-swift/commit/bfb761bfe1ae27094a3d3858e9e03b49dd13248e))
+
 ## [2.53.0](https://github.com/supabase/supabase-swift/compare/v2.52.0...v2.53.0) (2026-07-21)
 
 
