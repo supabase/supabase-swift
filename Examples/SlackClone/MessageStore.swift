@@ -7,8 +7,8 @@
 
 import Foundation
 import IdentifiedCollections
+import PostgrestMacros
 import Supabase
-import SupabaseSwiftMacros
 
 struct Messages {
   private(set) var sections: [Section]

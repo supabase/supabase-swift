@@ -7,8 +7,8 @@
 
 import Foundation
 import OSLog
+import PostgrestMacros
 import Supabase
-import SupabaseSwiftMacros
 
 @MainActor
 @Observable

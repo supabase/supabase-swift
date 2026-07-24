@@ -5,9 +5,9 @@
 //  Created by Guilherme Souza on 27/12/23.
 //
 
+import PostgrestMacros
 import Realtime
 import Supabase
-import SupabaseSwiftMacros
 import SwiftUI
 
 struct MessagesView: View {

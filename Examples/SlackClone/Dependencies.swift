@@ -6,8 +6,8 @@
 //
 
 import Foundation
+import PostgrestMacros
 import Supabase
-import SupabaseSwiftMacros
 
 @MainActor
 class Dependencies {
@@ -62,7 +62,7 @@ struct UserPresence: Codable, Hashable {
 extension SupabaseClient {
   // MARK: Messages
   func fetchMessages(channelId: Channel.ID) async throws -> [MessageWithDetails] {
-    try await from(Message.self)
+    try await database.from(Message.self)
       .select(MessageWithDetails.self)
       .eq(\.channelId, value: channelId)
       .order(\.insertedAt, ascending: true)
@@ -71,14 +71,14 @@ extension SupabaseClient {
   }
 
   func sendMessage(_ text: String, userId: UUID, channelId: Channel.ID) async throws {
-    try await from(Message.self)
+    try await database.from(Message.self)
       .insert(Message.Insert(message: text, userId: userId, channelId: channelId))
       .execute()
   }
 
   // MARK: Users
   func fetchUser(id: User.ID) async throws -> User {
-    try await from(User.self)
+    try await database.from(User.self)
       .select()
       .eq(\.id, value: id)
       .single()
@@ -88,14 +88,14 @@ extension SupabaseClient {
 
   // MARK: Channels
   func fetchChannels() async throws -> [Channel] {
-    try await from(Channel.self)
+    try await database.from(Channel.self)
       .select()
       .execute()
       .value
   }
 
   func fetchChannel(id: Channel.ID) async throws -> Channel {
-    try await from(Channel.self)
+    try await database.from(Channel.self)
       .select()
       .eq(\.id, value: id)
       .single()
@@ -104,7 +104,7 @@ extension SupabaseClient {
   }
 
   func addChannel(slug: String, createdBy: UUID) async throws {
-    try await from(Channel.self)
+    try await database.from(Channel.self)
       .insert(Channel.Insert(slug: slug, createdBy: createdBy))
       .execute()
   }

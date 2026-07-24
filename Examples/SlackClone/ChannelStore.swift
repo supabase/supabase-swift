@@ -6,8 +6,8 @@
 //
 
 import Foundation
+import PostgrestMacros
 import Supabase
-import SupabaseSwiftMacros
 
 @MainActor
 @Observable
