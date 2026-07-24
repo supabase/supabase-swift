@@ -5,7 +5,8 @@
 //  Created by Guilherme Souza on 10/07/26.
 //
 
-import XCTest
+import Foundation
+import Testing
 
 @testable import Auth
 
@@ -13,17 +14,9 @@ import XCTest
   import FoundationNetworking
 #endif
 
-final class AuthOAuthServerIntegrationTests: XCTestCase {
+@Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil))
+struct AuthOAuthServerIntegrationTests {
   let authClient = AuthClientIntegrationTests.makeClient()
-
-  override func setUp() async throws {
-    try await super.setUp()
-
-    try XCTSkipUnless(
-      ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil,
-      "INTEGRATION_TESTS not defined."
-    )
-  }
 
   /// Performs a raw GET to `/oauth/authorize` with PKCE params, capturing the
   /// `authorization_id` from the 302 redirect's `Location` header — the
@@ -66,14 +59,15 @@ final class AuthOAuthServerIntegrationTests: XCTestCase {
         $0.name == "authorization_id"
       })?.value
     else {
-      XCTFail("Expected a redirect with an authorization_id query param, got \(response)")
+      Issue.record("Expected a redirect with an authorization_id query param, got \(response)")
       throw AuthError.sessionMissing
     }
 
     return authorizationId
   }
 
-  func testApproveAuthorizationFlow() async throws {
+  @Test
+  func approveAuthorizationFlow() async throws {
     let email = mockEmail()
     let password = mockPassword()
     try await signUpIfNeededOrSignIn(email: email, password: password)
@@ -100,28 +94,29 @@ final class AuthOAuthServerIntegrationTests: XCTestCase {
     )
 
     guard case .details(let details) = detailsResponse else {
-      XCTFail("Expected pending .details, got \(detailsResponse)")
+      Issue.record("Expected pending .details, got \(detailsResponse)")
       return
     }
-    XCTAssertEqual(details.client.id, oauthClient.clientId)
-    XCTAssertEqual(details.scope, "email")
+    #expect(details.client.id == oauthClient.clientId)
+    #expect(details.scope == "email")
 
     let approveRedirect = try await authClient.oauthServer.approveAuthorization(
       authorizationId: authorizationId
     )
-    XCTAssertEqual(approveRedirect.redirectURL.query?.contains("code="), true)
+    #expect(approveRedirect.redirectURL.query?.contains("code=") == true)
     let grants = try await authClient.oauthServer.listGrants()
-    XCTAssertTrue(grants.contains { $0.client.id == oauthClient.clientId })
+    #expect(grants.contains { $0.client.id == oauthClient.clientId })
 
     try await authClient.oauthServer.revokeGrant(clientId: oauthClient.clientId)
 
     let grantsAfterRevoke = try await authClient.oauthServer.listGrants()
-    XCTAssertFalse(grantsAfterRevoke.contains { $0.client.id == oauthClient.clientId })
+    #expect(!grantsAfterRevoke.contains { $0.client.id == oauthClient.clientId })
 
     try await serviceRoleClient.admin.oauth.deleteClient(clientId: oauthClient.clientId)
   }
 
-  func testDenyAuthorizationFlow() async throws {
+  @Test
+  func denyAuthorizationFlow() async throws {
     let email = mockEmail()
     let password = mockPassword()
     try await signUpIfNeededOrSignIn(email: email, password: password)
@@ -154,7 +149,7 @@ final class AuthOAuthServerIntegrationTests: XCTestCase {
     let denyRedirect = try await authClient.oauthServer.denyAuthorization(
       authorizationId: authorizationId
     )
-    XCTAssertEqual(denyRedirect.redirectURL.query?.contains("error=access_denied"), true)
+    #expect(denyRedirect.redirectURL.query?.contains("error=access_denied") == true)
 
     try await serviceRoleClient.admin.oauth.deleteClient(clientId: oauthClient.clientId)
   }
