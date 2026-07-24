@@ -6,7 +6,7 @@
 //
 
 import Foundation
-import PostgREST
+public import PostgREST
 
 /// Wraps PostgrestFilterBuilder with typed KeyPath-based filter methods.
 /// Table is constrained to ReadOnlyTableRepresentable (the shared base) so this builder

@@ -9,6 +9,7 @@ import Foundation
 import InlineSnapshotTesting
 import Mocker
 import SupabaseSwiftMacros
+import TestHelpers
 import Testing
 
 @testable import PostgREST

@@ -6,7 +6,7 @@
 //
 
 import Foundation
-import PostgREST
+public import PostgREST
 
 /// Entry point returned by PostgrestClient.from(_ table: T.Type).
 /// Mirrors PostgrestQueryBuilder with typed Insert/Update/Delete operations.

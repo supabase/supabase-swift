@@ -293,9 +293,18 @@ for target in package.targets {
     .enableUpcomingFeature("ExistentialAny"),
     .enableUpcomingFeature("ImmutableWeakCaptures"),
     .enableUpcomingFeature("InferIsolatedConformances"),
-    .enableUpcomingFeature("InternalImportsByDefault"),
-    .enableUpcomingFeature("MemberImportVisibility"),
   ]
+
+  // The `SupabaseMacros` compiler-plugin target must declare its macro types
+  // `public` to satisfy SwiftSyntax's `CompilerPlugin`/`PeerMacro` protocols,
+  // which is incompatible with `InternalImportsByDefault` (a public conformance
+  // to a protocol from an internally-imported module is rejected). Compiler
+  // plugins run at build time and ship no distributable API, so the
+  // import-visibility features gain nothing there — enable them everywhere else.
+  if target.name != "SupabaseMacros" {
+    swiftSettings.append(.enableUpcomingFeature("InternalImportsByDefault"))
+    swiftSettings.append(.enableUpcomingFeature("MemberImportVisibility"))
+  }
 
   // The `Realtime` target hosts the legacy pre-async/await Phoenix client under
   // `Deprecated/`, which predates Swift concurrency and isn't safe under Swift 6's

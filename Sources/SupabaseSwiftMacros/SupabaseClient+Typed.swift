@@ -5,8 +5,8 @@
 //  Created by Guilherme Souza on 25/06/25.
 //
 
-import PostgREST
-import Supabase
+public import PostgREST
+public import Supabase
 
 extension SupabaseClient {
   /// Performs a typed query on a table.

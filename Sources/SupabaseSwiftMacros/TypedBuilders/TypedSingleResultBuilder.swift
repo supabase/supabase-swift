@@ -6,7 +6,7 @@
 //
 
 import Foundation
-import PostgREST
+public import PostgREST
 
 /// Wraps a PostgrestTransformBuilder after .single() has been called.
 /// execute() returns a single decoded value rather than an array.

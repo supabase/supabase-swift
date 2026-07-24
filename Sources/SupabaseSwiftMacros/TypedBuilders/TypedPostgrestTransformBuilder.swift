@@ -6,7 +6,7 @@
 //
 
 import Foundation
-import PostgREST
+public import PostgREST
 
 /// Wraps PostgrestTransformBuilder with typed column ordering.
 public struct TypedPostgrestTransformBuilder<
