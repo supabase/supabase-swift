@@ -1,6 +1,7 @@
 // swift-tools-version:6.1
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
+import CompilerPluginSupport
 import Foundation
 import PackageDescription
 
@@ -20,6 +21,7 @@ let package = Package(
     .library(name: "Realtime", targets: ["Realtime"]),
     .library(name: "Storage", targets: ["Storage"]),
     .library(name: "Supabase", targets: ["Supabase"]),
+    .library(name: "PostgrestMacros", targets: ["PostgrestMacros"]),
   ],
   traits: [
     // Enables W3C traceparent header propagation using opentelemetry-swift's active span.
@@ -37,6 +39,10 @@ let package = Package(
     .package(url: "https://github.com/WeTransfer/Mocker", from: "3.0.0"),
     .package(url: "https://github.com/21-DOT-DEV/swift-secp256k1.git", from: "0.23.2"),
     .package(url: "https://github.com/krzyzanowskim/CryptoSwift.git", from: "1.10.0"),
+    // Lower bound matches the package's minimum Swift version (5.10 → 510.x).
+    // Upper bound matches swift-macro-testing 0.6.x compatibility ceiling.
+    .package(url: "https://github.com/swiftlang/swift-syntax", "510.0.0"..<"605.0.0"),
+    .package(url: "https://github.com/pointfreeco/swift-macro-testing", from: "0.6.0"),
   ],
   targets: [
     .target(
@@ -136,6 +142,7 @@ let package = Package(
         "Helpers",
         "Mocker",
         "PostgREST",
+        "PostgrestMacros",
         "TestHelpers",
       ],
       exclude: [
@@ -239,6 +246,28 @@ let package = Package(
         "Mocker",
       ]
     ),
+    .macro(
+      name: "PostgrestMacrosPlugin",
+      dependencies: [
+        .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
+        .product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
+      ]
+    ),
+    .target(
+      name: "PostgrestMacros",
+      dependencies: [
+        .target(name: "PostgrestMacrosPlugin"),
+        "PostgREST",
+      ]
+    ),
+    .testTarget(
+      name: "PostgrestMacrosTests",
+      dependencies: [
+        .target(name: "PostgrestMacrosPlugin"),
+        .target(name: "PostgrestMacros"),
+        .product(name: "MacroTesting", package: "swift-macro-testing"),
+      ]
+    ),
   ]
 )
 
@@ -263,9 +292,18 @@ for target in package.targets {
     .enableUpcomingFeature("ExistentialAny"),
     .enableUpcomingFeature("ImmutableWeakCaptures"),
     .enableUpcomingFeature("InferIsolatedConformances"),
-    .enableUpcomingFeature("InternalImportsByDefault"),
-    .enableUpcomingFeature("MemberImportVisibility"),
   ]
+
+  // The `PostgrestMacrosPlugin` compiler-plugin target must declare its macro types
+  // `public` to satisfy SwiftSyntax's `CompilerPlugin`/`PeerMacro` protocols,
+  // which is incompatible with `InternalImportsByDefault` (a public conformance
+  // to a protocol from an internally-imported module is rejected). Compiler
+  // plugins run at build time and ship no distributable API, so the
+  // import-visibility features gain nothing there — enable them everywhere else.
+  if target.name != "PostgrestMacrosPlugin" {
+    swiftSettings.append(.enableUpcomingFeature("InternalImportsByDefault"))
+    swiftSettings.append(.enableUpcomingFeature("MemberImportVisibility"))
+  }
 
   // The `Realtime` target hosts the legacy pre-async/await Phoenix client under
   // `Deprecated/`, which predates Swift concurrency and isn't safe under Swift 6's
