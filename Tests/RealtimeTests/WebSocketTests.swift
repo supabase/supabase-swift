@@ -133,8 +133,10 @@ struct WebSocketTests {
         }
 
         // Give ARC a chance to actually run the deinits before the
-        // confirmation scope closes and its count is checked.
-        try await Task.sleep(for: .milliseconds(200))
+        // confirmation scope closes and its count is checked. The iOS
+        // Simulator runs noticeably slower than a native macOS host under
+        // CI load, so this needs more margin than a quick local run suggests.
+        try await Task.sleep(for: .seconds(1))
       }
     }
 
