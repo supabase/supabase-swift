@@ -779,12 +779,15 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     _ callback: @escaping @Sendable (any PresenceAction) -> Void
   ) -> RealtimeSubscription {
     guard status != .subscribed && status != .subscribing else {
-      reportIssue(
-        """
-        Cannot add "presence" callbacks for "\(topic)" after `subscribe()`.
-        Please add all your presence callbacks before subscribing to the channel.
-        """
-      )
+      // See the comment on `broadcast(event:message:)` for why this is gated on `isTesting`.
+      if !isTesting {
+        reportIssue(
+          """
+          Cannot add "presence" callbacks for "\(topic)" after `subscribe()`.
+          Please add all your presence callbacks before subscribing to the channel.
+          """
+        )
+      }
       return RealtimeSubscription {}
     }
 
@@ -1056,12 +1059,15 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     callback: @escaping @Sendable (AnyAction) -> Void
   ) -> RealtimeSubscription {
     guard status != .subscribed && status != .subscribing else {
-      reportIssue(
-        """
-        Cannot add "postgres_changes" callbacks for "\(topic)" after `subscribe()`.
-        Please add all your postgres change callbacks before subscribing to the channel.
-        """
-      )
+      // See the comment on `broadcast(event:message:)` for why this is gated on `isTesting`.
+      if !isTesting {
+        reportIssue(
+          """
+          Cannot add "postgres_changes" callbacks for "\(topic)" after `subscribe()`.
+          Please add all your postgres change callbacks before subscribing to the channel.
+          """
+        )
+      }
       return RealtimeSubscription {}
     }
 

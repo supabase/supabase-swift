@@ -11,7 +11,6 @@ import HTTPTypes
 import InlineSnapshotTesting
 import TestHelpers
 import Testing
-import XCTestDynamicOverlay
 
 @testable import Realtime
 @testable import RealtimeV2
@@ -105,9 +104,7 @@ struct RealtimeChannelTests {
 
       let callbackCountBefore = channel.callbackManager.callbacks.count
 
-      withExpectedIssue {
-        _ = channel.onPresenceChange { _ in }
-      }
+      _ = channel.onPresenceChange { _ in }
 
       #expect(channel.callbackManager.callbacks.count == callbackCountBefore)
 
@@ -161,9 +158,7 @@ struct RealtimeChannelTests {
 
       let callbackCountBefore = channel.callbackManager.callbacks.count
 
-      withExpectedIssue {
-        _ = channel.onPresenceChange { _ in }
-      }
+      _ = channel.onPresenceChange { _ in }
 
       #expect(channel.callbackManager.callbacks.count == callbackCountBefore)
 
@@ -217,9 +212,7 @@ struct RealtimeChannelTests {
 
       let callbackCountBefore = channel.callbackManager.callbacks.count
 
-      withExpectedIssue {
-        _ = channel.onPostgresChange(AnyAction.self, schema: "public") { _ in }
-      }
+      _ = channel.onPostgresChange(AnyAction.self, schema: "public") { _ in }
 
       #expect(channel.callbackManager.callbacks.count == callbackCountBefore)
 
@@ -273,9 +266,7 @@ struct RealtimeChannelTests {
 
       let callbackCountBefore = channel.callbackManager.callbacks.count
 
-      withExpectedIssue {
-        _ = channel.onPostgresChange(AnyAction.self, schema: "public") { _ in }
-      }
+      _ = channel.onPostgresChange(AnyAction.self, schema: "public") { _ in }
 
       #expect(channel.callbackManager.callbacks.count == callbackCountBefore)
 
@@ -941,4 +932,5 @@ private func Testing_waitUntil(
     if condition() { return }
     try? await Task.sleep(nanoseconds: pollInterval)
   }
+  _ = condition()
 }
