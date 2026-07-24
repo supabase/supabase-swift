@@ -8,6 +8,7 @@
 import Foundation
 import IdentifiedCollections
 import Supabase
+import SupabaseSwiftMacros
 
 struct Messages {
   private(set) var sections: [Section]
@@ -16,7 +17,7 @@ struct Messages {
     var id: AnyHashable { self }
 
     var author: User
-    var messages: IdentifiedArrayOf<Message>
+    var messages: IdentifiedArrayOf<MessageWithDetails>
   }
 
   init(sections: [Section]) {
@@ -29,9 +30,9 @@ struct Messages {
     }
   }
 
-  private var messageToSectionLookupTable: [Message.ID: Int] = [:]
+  private var messageToSectionLookupTable: [MessageWithDetails.ID: Int] = [:]
 
-  mutating func appendOrUpdate(_ message: Message) {
+  mutating func appendOrUpdate(_ message: MessageWithDetails) {
     if let sectionIndex = messageToSectionLookupTable[message.id],
       let messageIndex = sections[sectionIndex].messages
         .firstIndex(where: { $0.id == message.id })
@@ -42,7 +43,7 @@ struct Messages {
     }
   }
 
-  mutating func remove(id: Message.ID) {
+  mutating func remove(id: MessageWithDetails.ID) {
     if let index = messageToSectionLookupTable[id] {
       sections[index].messages.remove(id: id)
       messageToSectionLookupTable[id] = nil
@@ -53,7 +54,7 @@ struct Messages {
     }
   }
 
-  private mutating func append(_ message: Message) {
+  private mutating func append(_ message: MessageWithDetails) {
     if var section = sections.last, section.author.id == message.user.id {
       section.messages.append(message)
       sections[sections.endIndex - 1] = section
@@ -77,7 +78,7 @@ struct Messages {
 }
 
 extension Messages {
-  init(_ messages: [Message]) {
+  init(_ messages: [MessageWithDetails]) {
     self.init(sections: [])
 
     for message in messages {
@@ -95,7 +96,7 @@ final class MessageStore {
 
   struct Section {
     var author: User
-    var messages: [Message]
+    var messages: [MessageWithDetails]
   }
 
   var users: UserStore { Dependencies.shared.users }
@@ -146,18 +147,20 @@ final class MessageStore {
 
   private func handleInsertedOrUpdatedMessage(_ action: HasRecord) async {
     do {
-      let decodedMessage = try action.decodeRecord(decoder: decoder) as MessagePayload
-      let message = try await Message(
-        id: decodedMessage.id,
-        insertedAt: decodedMessage.insertedAt,
-        message: decodedMessage.message,
-        user: users.fetchUser(id: decodedMessage.userId),
-        channel: channel.fetchChannel(id: decodedMessage.channelId)
+      let payload = try action.decodeRecord(decoder: decoder) as Message
+      let user = try await users.fetchUser(id: payload.userId)
+      let channel = try await self.channel.fetchChannel(id: payload.channelId)
+      let message = MessageWithDetails(
+        id: payload.id,
+        insertedAt: payload.insertedAt,
+        message: payload.message,
+        user: user,
+        channel: channel
       )
 
-      var channelMessages = messages[decodedMessage.channelId] ?? Messages(sections: [])
+      var channelMessages = messages[payload.channelId] ?? Messages(sections: [])
       channelMessages.appendOrUpdate(message)
-      messages[decodedMessage.channelId] = channelMessages
+      messages[payload.channelId] = channelMessages
     } catch {
       dump(error)
     }
@@ -174,22 +177,8 @@ final class MessageStore {
     }
   }
 
-  /// Fetch all messages and their authors.
-  private func fetchMessages(_ channelId: Channel.ID) async throws -> [Message] {
-    try await supabase
-      .from("messages")
-      .select("*,user:user_id(*),channel:channel_id(*)")
-      .eq("channel_id", value: channelId)
-      .order("inserted_at", ascending: true)
-      .execute()
-      .value
+  /// Fetch all messages joined with their author and channel.
+  private func fetchMessages(_ channelId: Channel.ID) async throws -> [MessageWithDetails] {
+    try await supabase.fetchMessages(channelId: channelId)
   }
-}
-
-private struct MessagePayload: Decodable {
-  let id: Int
-  let message: String
-  let insertedAt: Date
-  let userId: UUID
-  let channelId: Int
 }
