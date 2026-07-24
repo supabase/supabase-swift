@@ -8,11 +8,17 @@
 import Foundation
 import Supabase
 
-// @Table-annotated types carry explicit snake_case CodingKeys, so no key
-// conversion strategies are needed — the encoder/decoder can work as plain JSON.
-let encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder
+let encoder: JSONEncoder = {
+  let encoder = PostgrestClient.Configuration.jsonEncoder
+  encoder.keyEncodingStrategy = .convertToSnakeCase
+  return encoder
+}()
 
-let decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder
+let decoder: JSONDecoder = {
+  let decoder = PostgrestClient.Configuration.jsonDecoder
+  decoder.keyDecodingStrategy = .convertFromSnakeCase
+  return decoder
+}()
 
 let supabase = SupabaseClient(
   supabaseURL: URL(string: "http://127.0.0.1:54321")!,
