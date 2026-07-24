@@ -216,6 +216,49 @@ struct ChannelStateManagerTests {
     }
   }
 
+  /// Issue #1145 (defect 2): a socket connect failure aborted the whole
+  /// subscribe on attempt 1 — only timeouts entered the retry ladder. A
+  /// transient connect failure must be retried like a timeout.
+  @Test
+  func subscribeRetriesWhenSocketConnectFailsTransiently() async throws {
+    let h = makeHarness(timeoutInterval: 1.0, maxRetryAttempts: 3, retryDelay: { _ in 0.05 })
+    h.ensureConnected.setValue(false)
+
+    // The "network" comes back shortly after the first failed attempt.
+    let recovery = Task { [h] in
+      try? await Task.sleep(nanoseconds: 20_000_000)
+      h.ensureConnected.setValue(true)
+    }
+    let confirmer = confirmSubscribeOnJoin(h)
+
+    try await h.sut.subscribe()
+    _ = await recovery.value
+    _ = await confirmer.value
+
+    let state = await h.sut.state
+    guard case .subscribed = state else {
+      Issue.record("Expected .subscribed after transient connect failure, got \(state)")
+      return
+    }
+  }
+
+  /// Issue #1145 (defect 2): connect failures were manufactured as
+  /// `Swift.CancellationError`, indistinguishable from the caller's own task
+  /// cancellation. They must surface as a typed error instead.
+  @Test
+  func connectFailureDoesNotSurfaceAsCancellationError() async {
+    let h = makeHarness(timeoutInterval: 0.2, maxRetryAttempts: 2, retryDelay: { _ in 0.01 })
+    h.ensureConnected.setValue(false)
+
+    do {
+      try await h.sut.subscribe()
+      Issue.record("Expected subscribe to throw when socket is not connected")
+    } catch {
+      #expect(!(error is CancellationError), "Connect failure surfaced as CancellationError")
+      #expect(error is RealtimeError)
+    }
+  }
+
   // MARK: - Unsubscribe
 
   @Test

@@ -294,6 +294,12 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
             Self.yieldStatusIfChanged(statusSubject, .connected)
           }
         case .disconnected:
+          // A failed auto-reconnect lands here (.reconnecting → .connecting →
+          // .disconnected). Clear the latch so a later successful `connect()`
+          // (e.g. from `connectOnSubscribe`) isn't misclassified as a
+          // reconnect completion — `rejoinChannels()` would reset every
+          // channel and cancel the very join that connect was performing.
+          sawReconnecting = false
           Self.yieldStatusIfChanged(statusSubject, .disconnected)
         case .connecting:
           // Skip — `connect()` yields .connecting/.connected synchronously

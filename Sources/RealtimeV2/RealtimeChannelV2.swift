@@ -200,6 +200,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
         await socket.connect()
         return socket.status == .connected
       },
+      isSocketConnected: { [weak socket] in socket?.status == .connected },
       getClientChanges: { clientChanges.value },
       joinOperation: { [weakSelfRef] ref, changes in
         guard let channel = weakSelfRef.value else { return }
@@ -710,6 +711,21 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
         callbackManager.triggerBroadcast(event: event, json: payload)
 
       case .close:
+        // Phoenix tags `phx_close` with the `join_ref` of the join it closes.
+        // A close for a previous incarnation of this topic (e.g. a join
+        // abandoned during a reconnect) must not tear down the current
+        // subscription (issue #1145, defect 3). Closes without a `join_ref`
+        // are processed unconditionally.
+        if let closeJoinRef = message.joinRef {
+          let currentJoinRef = await stateManager.joinRef
+          guard closeJoinRef == currentJoinRef else {
+            logger?.debug(
+              "Ignoring phx_close for stale join_ref \(closeJoinRef) on '\(topic)' "
+                + "(current: \(currentJoinRef ?? "<none>"))"
+            )
+            return
+          }
+        }
         socket._remove(self)
         await stateManager.didReceiveClose()
 
