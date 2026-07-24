@@ -81,13 +81,13 @@ extension PostgrestClient {
   }
 }
 
-extension PostgrestFilterBuilder {
+extension TypedPostgrestFilterBuilder {
 
   @available(*, deprecated, renamed: "like(_:pattern:)")
   public func like(
     _ column: String,
     value: any PostgrestFilterValue
-  ) -> PostgrestFilterBuilder {
+  ) -> TypedPostgrestFilterBuilder<Table, Selection> {
     like(column, pattern: value)
   }
 
@@ -95,7 +95,7 @@ extension PostgrestFilterBuilder {
   public func `in`(
     _ column: String,
     value: [any PostgrestFilterValue]
-  ) -> PostgrestFilterBuilder {
+  ) -> TypedPostgrestFilterBuilder<Table, Selection> {
     `in`(column, values: value)
   }
 
@@ -104,7 +104,7 @@ extension PostgrestFilterBuilder {
     _ column: String,
     query: any PostgrestFilterValue,
     config: String? = nil
-  ) -> PostgrestFilterBuilder {
+  ) -> TypedPostgrestFilterBuilder<Table, Selection> {
     textSearch(column, query: query, config: config, type: .plain)
   }
 
@@ -113,7 +113,7 @@ extension PostgrestFilterBuilder {
     _ column: String,
     query: any PostgrestFilterValue,
     config: String? = nil
-  ) -> PostgrestFilterBuilder {
+  ) -> TypedPostgrestFilterBuilder<Table, Selection> {
     textSearch(column, query: query, config: config, type: .phrase)
   }
 
@@ -122,7 +122,7 @@ extension PostgrestFilterBuilder {
     _ column: String,
     query: any PostgrestFilterValue,
     config: String? = nil
-  ) -> PostgrestFilterBuilder {
+  ) -> TypedPostgrestFilterBuilder<Table, Selection> {
     textSearch(column, query: query, config: config, type: .websearch)
   }
 
@@ -130,12 +130,12 @@ extension PostgrestFilterBuilder {
   public func ilike(
     _ column: String,
     value: any PostgrestFilterValue
-  ) -> PostgrestFilterBuilder {
+  ) -> TypedPostgrestFilterBuilder<Table, Selection> {
     ilike(column, pattern: value)
   }
 }
 
-extension PostgrestTransformBuilder {
+extension TypedPostgrestTransformBuilder {
   /// Return `data` as the EXPLAIN plan for the query, using a string `format`.
   @available(
     *, deprecated, message: "Use the `ExplainFormat` overload, e.g. `explain(format: .json)`."
@@ -147,7 +147,7 @@ extension PostgrestTransformBuilder {
     buffers: Bool = false,
     wal: Bool = false,
     format: String
-  ) -> PostgrestTransformBuilder {
+  ) -> TypedPostgrestTransformBuilder<Table, Selection> {
     explain(
       analyze: analyze,
       verbose: verbose,

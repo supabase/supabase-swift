@@ -154,7 +154,7 @@ struct TypedPostgrestFilterBuilderSnapshotTests {
     .register()
 
     let client = makeClient()
-    _ = try await client.from(TestTodo.self)
+    let _: PostgrestResponse<[TestTodo]> = try await client.from(TestTodo.self)
       .select()
       .eq(\.isComplete, value: false)
       .execute()
@@ -181,7 +181,7 @@ struct TypedPostgrestFilterBuilderSnapshotTests {
     .register()
 
     let client = makeClient()
-    _ = try await client.from(TestTodo.self)
+    let _: PostgrestResponse<[TodoSummary]> = try await client.from(TestTodo.self)
       .select(TodoSummary.self)
       .execute()
   }
@@ -207,7 +207,7 @@ struct TypedPostgrestFilterBuilderSnapshotTests {
     .register()
 
     let client = makeClient()
-    _ = try await client.from(TestTodo.self)
+    let _: PostgrestResponse<[TestTodo]> = try await client.from(TestTodo.self)
       .select()
       .or("is_complete.eq.true,title.eq.Buy milk")
       .execute()

@@ -1,3 +1,8 @@
+// Re-export PostgREST so that code using `@Table`/`@SelectionOf` sees the
+// `TableRepresentable`/`SelectionRepresentable` protocols and the typed builders
+// without a separate `import PostgREST`.
+@_exported public import PostgREST
+
 /// Marks a struct as a PostgREST table.
 ///
 /// Synthesizes:

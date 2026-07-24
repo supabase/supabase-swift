@@ -169,7 +169,7 @@ public class PostgrestBuilder: @unchecked Sendable {
     }
   }
 
-  private func execute<T>(
+  func execute<T>(
     options: FetchOptions,
     decode: @Sendable (Data) throws -> T
   ) async throws -> PostgrestResponse<T> {

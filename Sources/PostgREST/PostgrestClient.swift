@@ -273,6 +273,29 @@ public final class PostgrestClient: Sendable {
     )
   }
 
+  /// Returns a typed query builder for the given table or view.
+  ///
+  /// The table name and schema come from the type's ``ReadOnlyTableRepresentable`` conformance.
+  /// A read-write ``TableRepresentable`` additionally unlocks the typed `insert`/`update`/`upsert`
+  /// methods on the returned builder.
+  ///
+  /// - Parameter table: The table (or view) type, e.g. `Todo.self`.
+  /// - Returns: A ``TypedPostgrestQueryBuilder`` specialized to `Table`.
+  public func from<Table: ReadOnlyTableRepresentable>(
+    _ table: Table.Type
+  ) -> TypedPostgrestQueryBuilder<Table> {
+    let client = Table.schema == "public" ? self : self.schema(Table.schema)
+    return TypedPostgrestQueryBuilder(
+      configuration: client.configuration,
+      request: .init(
+        url: client.configuration.url.appendingPathComponent(Table.tableName),
+        method: .get,
+        headers: HTTPFields(client.configuration.headers)
+      ),
+      clock: client.clock
+    )
+  }
+
   /// Calls a PostgreSQL stored function (RPC) with parameters.
   ///
   /// ```swift
