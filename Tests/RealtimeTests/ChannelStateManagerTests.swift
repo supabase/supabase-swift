@@ -327,6 +327,66 @@ struct ChannelStateManagerTests {
 
   // MARK: - Server-close while subscribed
 
+  /// A server close that aborts an in-flight subscribe must surface as
+  /// `RealtimeError.channelClosedByServer` — never as `CancellationError`
+  /// (which callers must be able to attribute to their own task) and never
+  /// as `maxRetryAttemptsReached` (which can otherwise mask a close landing
+  /// on the final retry attempt).
+  @Test
+  func serverCloseDuringSubscribeSurfacesTypedError() async {
+    let h = makeHarness(timeoutInterval: 5.0, maxRetryAttempts: 1)
+
+    let subscribeTask = Task { try await h.sut.subscribe() }
+
+    // Wait until the join is in flight, then the server closes the channel.
+    while h.joinCallCount.value == 0 {
+      try? await Task.sleep(nanoseconds: 5_000_000)
+    }
+    await h.sut.didReceiveClose()
+
+    do {
+      try await subscribeTask.value
+      Issue.record("Expected subscribe to throw after server close")
+    } catch {
+      #expect(!(error is CancellationError), "Server close surfaced as CancellationError")
+      #expect(
+        (error as? RealtimeError)?.errorDescription
+          == RealtimeError.channelClosedByServer.errorDescription,
+        "Expected channelClosedByServer, got \(error)"
+      )
+    }
+  }
+
+  /// A close carrying a `join_ref` that doesn't match the current join must
+  /// be ignored — the check runs on the actor, atomically with the close.
+  @Test
+  func didReceiveCloseIgnoresStaleJoinRef() async throws {
+    let h = makeHarness()
+
+    let confirmer = confirmSubscribeOnJoin(h)
+    try await h.sut.subscribe()
+    _ = await confirmer.value
+
+    let applied = await h.sut.didReceiveClose(joinRef: "stale-join-ref")
+    #expect(!applied, "Close for a stale join_ref must be ignored")
+
+    let state = await h.sut.state
+    guard case .subscribed = state else {
+      Issue.record("Stale close changed state to \(state)")
+      return
+    }
+
+    let currentJoinRef = await h.sut.joinRef
+    let appliedCurrent = await h.sut.didReceiveClose(joinRef: currentJoinRef)
+    #expect(appliedCurrent, "Close for the current join_ref must be applied")
+
+    let finalState = await h.sut.state
+    guard case .unsubscribed = finalState else {
+      Issue.record("Expected .unsubscribed after matching close, got \(finalState)")
+      return
+    }
+  }
+
   @Test
   func didReceiveCloseTransitionsToUnsubscribed() async throws {
     let h = makeHarness()

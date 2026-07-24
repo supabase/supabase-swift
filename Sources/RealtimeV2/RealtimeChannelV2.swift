@@ -714,20 +714,13 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
         // Phoenix tags `phx_close` with the `join_ref` of the join it closes.
         // A close for a previous incarnation of this topic (e.g. a join
         // abandoned during a reconnect) must not tear down the current
-        // subscription (issue #1145, defect 3). Closes without a `join_ref`
-        // are processed unconditionally.
-        if let closeJoinRef = message.joinRef {
-          let currentJoinRef = await stateManager.joinRef
-          guard closeJoinRef == currentJoinRef else {
-            logger?.debug(
-              "Ignoring phx_close for stale join_ref \(closeJoinRef) on '\(topic)' "
-                + "(current: \(currentJoinRef ?? "<none>"))"
-            )
-            return
-          }
+        // subscription (issue #1145, defect 3). The join_ref check runs on
+        // the state-manager actor, atomically with the close, so a concurrent
+        // subscribe attempt can't swap `joinRef` in between.
+        guard await stateManager.didReceiveClose(joinRef: message.joinRef) else {
+          return
         }
         socket._remove(self)
-        await stateManager.didReceiveClose()
 
       case .error:
         logger?.error(

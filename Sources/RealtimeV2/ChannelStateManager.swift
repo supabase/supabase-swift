@@ -263,7 +263,25 @@ actor ChannelStateManager {
 
   /// Called when the server closes the channel (phx_close or system error
   /// that should drop the channel).
-  func didReceiveClose() {
+  ///
+  /// When `expectedJoinRef` is provided (Phoenix tags `phx_close` with the
+  /// `join_ref` of the join it closes), the close is only applied if it still
+  /// matches the current ``joinRef`` — checked here, on the actor, so a
+  /// concurrent subscribe attempt can't swap `joinRef` between the caller's
+  /// check and the close (issue #1145, defect 3). Closes without a `join_ref`
+  /// are applied unconditionally.
+  ///
+  /// Returns `true` if the close was applied; `false` if it belonged to a
+  /// stale join and was ignored.
+  @discardableResult
+  func didReceiveClose(joinRef expectedJoinRef: String? = nil) -> Bool {
+    if let expectedJoinRef, expectedJoinRef != joinRef {
+      logger?.debug(
+        "Ignoring close for stale join_ref \(expectedJoinRef) on '\(topic)' "
+          + "(current: \(joinRef ?? "<none>"))"
+      )
+      return false
+    }
     logger?.debug("Server closed channel '\(topic)'")
     joinRef = nil
     pushes = [:]
@@ -275,6 +293,7 @@ actor ChannelStateManager {
       task.cancel()
     }
     updateState(.unsubscribed)
+    return true
   }
 
   // MARK: - Private
@@ -309,10 +328,14 @@ actor ChannelStateManager {
         updateState(.unsubscribed)
       }
 
-      // The task was cancelled by `didReceiveClose()`, not by the caller —
-      // translate to a typed error so it isn't mistaken for a caller-side
-      // cancellation.
-      if closedByServer, error is CancellationError {
+      // The subscribe was aborted by `didReceiveClose()`, not by the caller.
+      // Depending on how the cancellation is observed, the task can exit with
+      // `CancellationError`, `SubscribeFailure.channelClosed`, or — when the
+      // close lands on the final retry attempt — `maxRetryAttemptsReached`.
+      // All of them are consequences of the server close, so translate
+      // unconditionally; a genuine caller-side cancellation never sets the
+      // flag and still propagates as `CancellationError`.
+      if closedByServer {
         throw RealtimeError.channelClosedByServer
       }
       throw error
