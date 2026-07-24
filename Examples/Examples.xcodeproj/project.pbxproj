@@ -47,6 +47,7 @@
 		79D884D22B3C18840009EA4A /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 79D884D12B3C18840009EA4A /* Preview Assets.xcassets */; };
 		79D884D72B3C18DB0009EA4A /* Supabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79D884D62B3C18DB0009EA4A /* Supabase.swift */; };
 		79D884D92B3C18E90009EA4A /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 79D884D82B3C18E90009EA4A /* Supabase */; };
+		79D884E02B3C19500009EA4A /* PostgrestMacros in Frameworks */ = {isa = PBXBuildFile; productRef = 79D884E12B3C19500009EA4A /* PostgrestMacros */; };
 		79D884DB2B3C191F0009EA4A /* ChannelListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79D884DA2B3C191F0009EA4A /* ChannelListView.swift */; };
 		79D884DD2B3C19320009EA4A /* MessagesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79D884DC2B3C19320009EA4A /* MessagesView.swift */; };
 		79E2B5582B97890F0042CD21 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 79E2B5572B97890F0042CD21 /* GoogleSignIn */; };
@@ -234,6 +235,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				79D884D92B3C18E90009EA4A /* Supabase in Frameworks */,
+				79D884E02B3C19500009EA4A /* PostgrestMacros in Frameworks */,
 				79B8F4242B5FED7C0000E839 /* IdentifiedCollections in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -428,6 +430,7 @@
 			name = SlackClone;
 			packageProductDependencies = (
 				79D884D82B3C18E90009EA4A /* Supabase */,
+				79D884E12B3C19500009EA4A /* PostgrestMacros */,
 				79B8F4232B5FED7C0000E839 /* IdentifiedCollections */,
 			);
 			productName = SlackClone;
@@ -485,6 +488,7 @@
 			);
 			mainGroup = 793895BD2954ABFF0044F2B8;
 			packageReferences = (
+				79AABBCC2B3C20000009EA4A /* XCLocalSwiftPackageReference ".." */,
 				7956406B2955B3500088A06F /* XCRemoteSwiftPackageReference "swiftui-navigation" */,
 				7956406E2955B5190088A06F /* XCRemoteSwiftPackageReference "swift-identified-collections" */,
 				7962989B2AEBC6F9000AA957 /* XCRemoteSwiftPackageReference "SVGView" */,
@@ -814,6 +818,7 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = SlackClone/Info.plist;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = "";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -856,6 +861,7 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = SlackClone/Info.plist;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = "";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -1005,6 +1011,13 @@
 		};
 /* End XCConfigurationList section */
 
+/* Begin XCLocalSwiftPackageReference section */
+		79AABBCC2B3C20000009EA4A /* XCLocalSwiftPackageReference ".." */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = "..";
+		};
+/* End XCLocalSwiftPackageReference section */
+
 /* Begin XCRemoteSwiftPackageReference section */
 		6C93F238922618E376616E2E /* XCRemoteSwiftPackageReference "metamask-ios-sdk" */ = {
 			isa = XCRemoteSwiftPackageReference;
@@ -1087,6 +1100,7 @@
 		};
 		79719ECD2ADF26C400737804 /* Supabase */ = {
 			isa = XCSwiftPackageProductDependency;
+			package = 79AABBCC2B3C20000009EA4A /* XCLocalSwiftPackageReference ".." */;
 			productName = Supabase;
 		};
 		79B8F4232B5FED7C0000E839 /* IdentifiedCollections */ = {
@@ -1101,7 +1115,13 @@
 		};
 		79D884D82B3C18E90009EA4A /* Supabase */ = {
 			isa = XCSwiftPackageProductDependency;
+			package = 79AABBCC2B3C20000009EA4A /* XCLocalSwiftPackageReference ".." */;
 			productName = Supabase;
+		};
+		79D884E12B3C19500009EA4A /* PostgrestMacros */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 79AABBCC2B3C20000009EA4A /* XCLocalSwiftPackageReference ".." */;
+			productName = PostgrestMacros;
 		};
 		79E2B5572B97890F0042CD21 /* GoogleSignIn */ = {
 			isa = XCSwiftPackageProductDependency;
@@ -1115,6 +1135,7 @@
 		};
 		79FEFFBB2B07874000D36347 /* Supabase */ = {
 			isa = XCSwiftPackageProductDependency;
+			package = 79AABBCC2B3C20000009EA4A /* XCLocalSwiftPackageReference ".." */;
 			productName = Supabase;
 		};
 		82A0B5B97246DF189941A2A7 /* metamask-ios-sdk */ = {
