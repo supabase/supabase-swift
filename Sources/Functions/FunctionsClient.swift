@@ -48,6 +48,8 @@ public final class FunctionsClient: Sendable {
     )
 
   /// The maximum time an Edge Function may run before the gateway returns a 504 error (150 seconds).
+  ///
+  /// Can be overridden per-invocation via ``FunctionInvokeOptions/timeoutInterval``.
   public static let requestIdleTimeout: TimeInterval = 150
 
   /// The base URL for the functions.
@@ -301,7 +303,7 @@ public final class FunctionsClient: Sendable {
       query: query,
       headers: mutableState.headers.merging(with: options.headers),
       body: options.body,
-      timeoutInterval: FunctionsClient.requestIdleTimeout
+      timeoutInterval: options.timeoutInterval ?? FunctionsClient.requestIdleTimeout
     )
 
     if let region = options.region ?? region {
