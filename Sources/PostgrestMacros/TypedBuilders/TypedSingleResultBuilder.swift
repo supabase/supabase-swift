@@ -1,6 +1,6 @@
 //
 //  TypedSingleResultBuilder.swift
-//  SupabaseSwiftMacros
+//  PostgrestMacros
 //
 //  Created by Guilherme Souza on 24/06/25.
 //

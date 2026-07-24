@@ -2,7 +2,7 @@ import SwiftCompilerPlugin
 import SwiftSyntaxMacros
 
 @main
-struct SupabaseMacrosPlugin: CompilerPlugin {
+struct PostgrestMacrosPlugin: CompilerPlugin {
   let providingMacros: [any Macro.Type] = [
     PrimaryKeyMacro.self,
     DefaultMacro.self,

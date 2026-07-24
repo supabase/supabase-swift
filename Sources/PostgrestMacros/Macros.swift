@@ -23,7 +23,7 @@ public macro Table(
   _ tableName: String,
   schema: String = "public",
   readOnly: Bool = false
-) = #externalMacro(module: "SupabaseMacros", type: "TableMacro")
+) = #externalMacro(module: "PostgrestMacrosPlugin", type: "TableMacro")
 
 /// Marks a struct as a partial column projection of table T.
 ///
@@ -42,28 +42,28 @@ public macro Table(
   extension, conformances: SelectionRepresentable, names: named(selectString))
 public macro SelectionOf(_ table: Any.Type) =
   #externalMacro(
-    module: "SupabaseMacros", type: "SelectionOfMacro")
+    module: "PostgrestMacrosPlugin", type: "SelectionOfMacro")
 
 /// Marks a stored property as the table primary key.
 /// Excluded from the synthesized Insert and Update types.
 @attached(peer)
 public macro PrimaryKey() =
   #externalMacro(
-    module: "SupabaseMacros", type: "PrimaryKeyMacro")
+    module: "PostgrestMacrosPlugin", type: "PrimaryKeyMacro")
 
 /// Marks a stored property as having a database-side default value.
 /// The property becomes Optional with `= nil` in the synthesized Insert type.
 @attached(peer)
 public macro Default() =
   #externalMacro(
-    module: "SupabaseMacros", type: "DefaultMacro")
+    module: "PostgrestMacrosPlugin", type: "DefaultMacro")
 
 /// Overrides the snake_case-derived column name for a stored property.
 /// - Parameter name: The exact PostgREST column name.
 @attached(peer)
 public macro Column(_ name: String) =
   #externalMacro(
-    module: "SupabaseMacros", type: "ColumnMacro")
+    module: "PostgrestMacrosPlugin", type: "ColumnMacro")
 
 /// Declares a foreign-key join in a `@SelectionOf` struct.
 /// Not allowed in `@Table` structs — the table row type has no embedded relationships.
@@ -75,4 +75,4 @@ public macro Column(_ name: String) =
 ///   Use the explicit root form `\Message.senderId` to identify which table owns the FK.
 @attached(peer)
 public macro Relationship(_ keyPath: AnyKeyPath) =
-  #externalMacro(module: "SupabaseMacros", type: "RelationshipMacro")
+  #externalMacro(module: "PostgrestMacrosPlugin", type: "RelationshipMacro")

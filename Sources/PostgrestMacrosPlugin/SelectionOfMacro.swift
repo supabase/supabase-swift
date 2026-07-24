@@ -258,9 +258,9 @@ enum SelectionOfDiagnostic: DiagnosticMessage {
   var diagnosticID: MessageID {
     switch self {
     case .notAStruct:
-      return .init(domain: "SupabaseMacros", id: "notAStruct")
+      return .init(domain: "PostgrestMacrosPlugin", id: "notAStruct")
     case .nonPrimitiveRequiresRelationship:
-      return .init(domain: "SupabaseMacros", id: "nonPrimitiveRequiresRelationship")
+      return .init(domain: "PostgrestMacrosPlugin", id: "nonPrimitiveRequiresRelationship")
     }
   }
   var severity: DiagnosticSeverity { .error }

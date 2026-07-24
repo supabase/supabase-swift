@@ -1,7 +1,7 @@
 import MacroTesting
 import XCTest
 
-@testable import SupabaseMacros
+@testable import PostgrestMacrosPlugin
 
 final class TableMacroTests: XCTestCase {
   override func invokeTest() {

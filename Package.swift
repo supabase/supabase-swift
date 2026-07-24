@@ -21,7 +21,7 @@ let package = Package(
     .library(name: "Realtime", targets: ["Realtime"]),
     .library(name: "Storage", targets: ["Storage"]),
     .library(name: "Supabase", targets: ["Supabase"]),
-    .library(name: "SupabaseSwiftMacros", targets: ["SupabaseSwiftMacros"]),
+    .library(name: "PostgrestMacros", targets: ["PostgrestMacros"]),
   ],
   traits: [
     // Enables W3C traceparent header propagation using opentelemetry-swift's active span.
@@ -142,7 +142,7 @@ let package = Package(
         "Helpers",
         "Mocker",
         "PostgREST",
-        "SupabaseSwiftMacros",
+        "PostgrestMacros",
         "TestHelpers",
       ],
       exclude: [
@@ -247,25 +247,24 @@ let package = Package(
       ]
     ),
     .macro(
-      name: "SupabaseMacros",
+      name: "PostgrestMacrosPlugin",
       dependencies: [
         .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
         .product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
       ]
     ),
     .target(
-      name: "SupabaseSwiftMacros",
+      name: "PostgrestMacros",
       dependencies: [
-        .target(name: "SupabaseMacros"),
+        .target(name: "PostgrestMacrosPlugin"),
         "PostgREST",
-        "Supabase",
       ]
     ),
     .testTarget(
-      name: "SupabaseMacrosTests",
+      name: "PostgrestMacrosTests",
       dependencies: [
-        .target(name: "SupabaseMacros"),
-        .target(name: "SupabaseSwiftMacros"),
+        .target(name: "PostgrestMacrosPlugin"),
+        .target(name: "PostgrestMacros"),
         .product(name: "MacroTesting", package: "swift-macro-testing"),
       ]
     ),
@@ -295,13 +294,13 @@ for target in package.targets {
     .enableUpcomingFeature("InferIsolatedConformances"),
   ]
 
-  // The `SupabaseMacros` compiler-plugin target must declare its macro types
+  // The `PostgrestMacrosPlugin` compiler-plugin target must declare its macro types
   // `public` to satisfy SwiftSyntax's `CompilerPlugin`/`PeerMacro` protocols,
   // which is incompatible with `InternalImportsByDefault` (a public conformance
   // to a protocol from an internally-imported module is rejected). Compiler
   // plugins run at build time and ship no distributable API, so the
   // import-visibility features gain nothing there — enable them everywhere else.
-  if target.name != "SupabaseMacros" {
+  if target.name != "PostgrestMacrosPlugin" {
     swiftSettings.append(.enableUpcomingFeature("InternalImportsByDefault"))
     swiftSettings.append(.enableUpcomingFeature("MemberImportVisibility"))
   }

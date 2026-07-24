@@ -215,7 +215,7 @@ enum TableMacroDiagnostic: DiagnosticMessage {
       return "@Table requires stored properties to use 'var', not 'let'"
     }
   }
-  var diagnosticID: MessageID { .init(domain: "SupabaseMacros", id: "\(self)") }
+  var diagnosticID: MessageID { .init(domain: "PostgrestMacrosPlugin", id: "\(self)") }
   var severity: DiagnosticSeverity { .error }
 }
 

@@ -8,7 +8,7 @@
 import Foundation
 import InlineSnapshotTesting
 import Mocker
-import SupabaseSwiftMacros
+import PostgrestMacros
 import TestHelpers
 import Testing
 
