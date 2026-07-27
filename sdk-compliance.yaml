@@ -115,6 +115,7 @@ features:
     symbols:
       - AuthClient.startAutoRefresh
       - AuthClient.stopAutoRefresh
+  auth.session.sign_out_reason: not_implemented
 
   auth.identities.link_identity:
     status: implemented
@@ -535,6 +536,8 @@ features:
   storage.file_buckets.upload_with_metadata: implemented
   storage.file_buckets.url_cache_nonce: implemented
   storage.file_buckets.download_as_stream: not_implemented
+  storage.file_buckets.purge_bucket_cache: not_implemented
+  storage.file_buckets.purge_cache: not_implemented
 
   # ── Storage — Vector Buckets ───────────────────────────────────────────────
 
