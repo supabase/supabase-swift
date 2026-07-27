@@ -24,13 +24,19 @@ package protocol APIError: Error, Sendable, Decodable {}
 extension HTTPResponse {
   /// Validates the status code, decoding a modeled error when the status
   /// matches one of the provided error types.
+  ///
+  /// `catchAll` handles statuses the spec does not model explicitly. When it is
+  /// omitted — as it is for operations whose spec declares no error schema at
+  /// all — an unmodeled failure surfaces as ``HTTPError/unexpectedResponse``.
   package func checkStatus(
     errorTypes: [Int: any APIError.Type],
-    catchAll defaultError: any APIError.Type
+    catchAll defaultError: (any APIError.Type)? = nil
   ) throws {
     guard !head.isSuccess else { return }
 
-    let errorType = errorTypes[head.status] ?? defaultError
+    guard let errorType = errorTypes[head.status] ?? defaultError else {
+      throw HTTPError.unexpectedResponse(response: self)
+    }
 
     let decodedError: any APIError
     do {

@@ -17,12 +17,23 @@ import Testing
 struct FakeTransport: HTTPTransport {
   var onSend: @Sendable (HTTPRequest) throws -> HTTPResponse
 
-  func send(_ request: HTTPRequest, uploadProgress: ProgressHandler?) async throws -> HTTPResponse {
-    try onSend(request)
+  func send(_ request: HTTPRequest, uploadProgress: ProgressHandler?) async throws(HTTPError)
+    -> HTTPResponse
+  {
+    do {
+      return try onSend(request)
+    } catch {
+      throw HTTPError.transport(error)
+    }
   }
 
-  func stream(_ request: HTTPRequest) async throws -> HTTPResponseStream {
-    let response = try onSend(request)
+  func stream(_ request: HTTPRequest) async throws(HTTPError) -> HTTPResponseStream {
+    let response: HTTPResponse
+    do {
+      response = try onSend(request)
+    } catch {
+      throw HTTPError.transport(error)
+    }
     return HTTPResponseStream(
       head: response.head,
       body: AsyncThrowingStream { continuation in
