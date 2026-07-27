@@ -7,7 +7,7 @@
 
 import ConcurrencyExtras
 import Foundation
-import XCTest
+import Testing
 
 @testable import Realtime
 @testable import RealtimeV2
@@ -16,23 +16,27 @@ import XCTest
   import FoundationNetworking
 #endif
 
-final class PushV2Tests: XCTestCase {
+@Suite
+struct PushV2Tests {
 
-  func testPushStatusValues() {
-    XCTAssertEqual(PushStatus.ok.rawValue, "ok")
-    XCTAssertEqual(PushStatus.error.rawValue, "error")
-    XCTAssertEqual(PushStatus.timeout.rawValue, "timeout")
+  @Test
+  func pushStatusValues() {
+    #expect(PushStatus.ok.rawValue == "ok")
+    #expect(PushStatus.error.rawValue == "error")
+    #expect(PushStatus.timeout.rawValue == "timeout")
   }
 
-  func testPushStatusFromRawValue() {
-    XCTAssertEqual(PushStatus(rawValue: "ok"), .ok)
-    XCTAssertEqual(PushStatus(rawValue: "error"), .error)
-    XCTAssertEqual(PushStatus(rawValue: "timeout"), .timeout)
-    XCTAssertNil(PushStatus(rawValue: "invalid"))
+  @Test
+  func pushStatusFromRawValue() {
+    #expect(PushStatus(rawValue: "ok") == .ok)
+    #expect(PushStatus(rawValue: "error") == .error)
+    #expect(PushStatus(rawValue: "timeout") == .timeout)
+    #expect(PushStatus(rawValue: "invalid") == nil)
   }
 
+  @Test
   @MainActor
-  func testPushV2InitializationWithNilChannel() {
+  func pushV2InitializationWithNilChannel() {
     let sampleMessage = RealtimeMessageV2(
       joinRef: "ref1",
       ref: "ref2",
@@ -43,12 +47,13 @@ final class PushV2Tests: XCTestCase {
 
     let push = PushV2(channel: nil, message: sampleMessage)
 
-    XCTAssertEqual(push.message.topic, "test:channel")
-    XCTAssertEqual(push.message.event, "broadcast")
+    #expect(push.message.topic == "test:channel")
+    #expect(push.message.event == "broadcast")
   }
 
+  @Test
   @MainActor
-  func testSendWithNilChannelReturnsError() async {
+  func sendWithNilChannelReturnsError() async {
     let sampleMessage = RealtimeMessageV2(
       joinRef: "ref1",
       ref: "ref2",
@@ -61,11 +66,12 @@ final class PushV2Tests: XCTestCase {
 
     let status = await push.send()
 
-    XCTAssertEqual(status, .error)
+    #expect(status == .error)
   }
 
+  @Test
   @MainActor
-  func testSendWithAckDisabledReturnsOkImmediately() async {
+  func sendWithAckDisabledReturnsOkImmediately() async {
     let mockSocket = MockRealtimeClient()
     let config = RealtimeChannelConfig(
       broadcast: BroadcastJoinConfig(acknowledgeBroadcasts: false, receiveOwnBroadcasts: false),
@@ -90,14 +96,15 @@ final class PushV2Tests: XCTestCase {
     let push = PushV2(channel: mockChannel, message: sampleMessage)
     let status = await push.send()
 
-    XCTAssertEqual(status, PushStatus.ok)
-    XCTAssertEqual(mockSocket.pushedMessages.count, 1)
-    XCTAssertEqual(mockSocket.pushedMessages.first?.topic, "test:channel")
-    XCTAssertEqual(mockSocket.pushedMessages.first?.event, "broadcast")
+    #expect(status == PushStatus.ok)
+    #expect(mockSocket.pushedMessages.count == 1)
+    #expect(mockSocket.pushedMessages.first?.topic == "test:channel")
+    #expect(mockSocket.pushedMessages.first?.event == "broadcast")
   }
 
+  @Test
   @MainActor
-  func testSendWithAckEnabledWaitsForResponse() async {
+  func sendWithAckEnabledWaitsForResponse() async {
     let mockSocket = MockRealtimeClient()
     let config = RealtimeChannelConfig(
       broadcast: BroadcastJoinConfig(acknowledgeBroadcasts: true, receiveOwnBroadcasts: false),
@@ -132,12 +139,13 @@ final class PushV2Tests: XCTestCase {
     push.didReceive(status: PushStatus.ok)
 
     let status = await sendTask.value
-    XCTAssertEqual(status, PushStatus.ok)
-    XCTAssertEqual(mockSocket.pushedMessages.count, 1)
+    #expect(status == PushStatus.ok)
+    #expect(mockSocket.pushedMessages.count == 1)
   }
 
+  @Test
   @MainActor
-  func testChannelConfigurationForAcknowledgment() {
+  func channelConfigurationForAcknowledgment() {
     // Test that the channel configuration is properly checked for acknowledgment settings
     let mockSocket = MockRealtimeClient()
 
@@ -153,7 +161,7 @@ final class PushV2Tests: XCTestCase {
       socket: mockSocket,
       logger: nil
     )
-    XCTAssertFalse(channelAckDisabled.config.broadcast.acknowledgeBroadcasts)
+    #expect(!channelAckDisabled.config.broadcast.acknowledgeBroadcasts)
 
     // Test acknowledgment enabled
     let configAckEnabled = RealtimeChannelConfig(
@@ -167,11 +175,12 @@ final class PushV2Tests: XCTestCase {
       socket: mockSocket,
       logger: nil
     )
-    XCTAssertTrue(channelAckEnabled.config.broadcast.acknowledgeBroadcasts)
+    #expect(channelAckEnabled.config.broadcast.acknowledgeBroadcasts)
   }
 
+  @Test
   @MainActor
-  func testSendWithAckEnabledReceivesError() async {
+  func sendWithAckEnabledReceivesError() async {
     let mockSocket = MockRealtimeClient()
     let config = RealtimeChannelConfig(
       broadcast: BroadcastJoinConfig(acknowledgeBroadcasts: true, receiveOwnBroadcasts: false),
@@ -206,12 +215,13 @@ final class PushV2Tests: XCTestCase {
     push.didReceive(status: PushStatus.error)
 
     let status = await sendTask.value
-    XCTAssertEqual(status, PushStatus.error)
-    XCTAssertEqual(mockSocket.pushedMessages.count, 1)
+    #expect(status == PushStatus.error)
+    #expect(mockSocket.pushedMessages.count == 1)
   }
 
+  @Test
   @MainActor
-  func testDidReceiveStatusWithoutWaitingDoesNothing() {
+  func didReceiveStatusWithoutWaitingDoesNothing() {
     let sampleMessage = RealtimeMessageV2(
       joinRef: "ref1",
       ref: "ref2",
@@ -228,8 +238,9 @@ final class PushV2Tests: XCTestCase {
     push.didReceive(status: PushStatus.timeout)
   }
 
+  @Test
   @MainActor
-  func testMultipleDidReceiveCallsOnlyFirstMatters() async {
+  func multipleDidReceiveCallsOnlyFirstMatters() async {
     let mockSocket = MockRealtimeClient()
     let config = RealtimeChannelConfig(
       broadcast: BroadcastJoinConfig(acknowledgeBroadcasts: true, receiveOwnBroadcasts: false),
@@ -268,7 +279,7 @@ final class PushV2Tests: XCTestCase {
     push.didReceive(status: PushStatus.timeout)
 
     let status = await sendTask.value
-    XCTAssertEqual(status, PushStatus.ok)  // Should be .ok, not .error or .timeout
+    #expect(status == PushStatus.ok)  // Should be .ok, not .error or .timeout
   }
 }
 

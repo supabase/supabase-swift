@@ -16,7 +16,7 @@ extension Decodable {
 }
 
 extension Dependencies {
-  static var mock = Dependencies(
+  static let mock = Dependencies(
     configuration: AuthClient.Configuration(
       url: URL(string: "https://project-id.supabase.com")!,
       localStorage: InMemoryLocalStorage(),

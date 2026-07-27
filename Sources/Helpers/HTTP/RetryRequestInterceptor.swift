@@ -63,6 +63,8 @@ package actor RetryRequestInterceptor: HTTPClientInterceptor {
   package let retryableHTTPStatusCodes: Set<Int>
   /// The set of retryable URL error codes.
   package let retryableErrorCodes: Set<URLError.Code>
+  /// The clock used to wait between retries.
+  package let clock: any Clock<Duration>
 
   /// Creates a `RetryRequestInterceptor` instance.
   ///
@@ -73,6 +75,7 @@ package actor RetryRequestInterceptor: HTTPClientInterceptor {
   ///   - retryableHTTPMethods: The set of retryable HTTP methods. Default includes common methods.
   ///   - retryableHTTPStatusCodes: The set of retryable HTTP status codes. Default includes common status codes.
   ///   - retryableErrorCodes: The set of retryable URL error codes. Default includes common error codes.
+  ///   - clock: The clock used to wait between retries. Default is `ContinuousClock()`.
   package init(
     retryLimit: Int = RetryRequestInterceptor.defaultRetryLimit,
     exponentialBackoffBase: UInt = RetryRequestInterceptor.defaultExponentialBackoffBase,
@@ -80,7 +83,8 @@ package actor RetryRequestInterceptor: HTTPClientInterceptor {
     retryableHTTPMethods: Set<HTTPTypes.HTTPRequest.Method> = RetryRequestInterceptor
       .defaultRetryableHTTPMethods,
     retryableHTTPStatusCodes: Set<Int> = RetryRequestInterceptor.defaultRetryableHTTPStatusCodes,
-    retryableErrorCodes: Set<URLError.Code> = RetryRequestInterceptor.defaultRetryableURLErrorCodes
+    retryableErrorCodes: Set<URLError.Code> = RetryRequestInterceptor.defaultRetryableURLErrorCodes,
+    clock: any Clock<Duration> = ContinuousClock()
   ) {
     precondition(
       exponentialBackoffBase >= 2,
@@ -93,6 +97,7 @@ package actor RetryRequestInterceptor: HTTPClientInterceptor {
     self.retryableHTTPMethods = retryableHTTPMethods
     self.retryableHTTPStatusCodes = retryableHTTPStatusCodes
     self.retryableErrorCodes = retryableErrorCodes
+    self.clock = clock
   }
 
   /// Intercepts an HTTP request and automatically retries it in case of failure.
@@ -143,8 +148,7 @@ package actor RetryRequestInterceptor: HTTPClientInterceptor {
           Double(retryCount)
         ) * exponentialBackoffScale
 
-      let nanoseconds = UInt64(retryDelay)
-      try? await Task.sleep(nanoseconds: NSEC_PER_SEC * nanoseconds)
+      try? await clock.sleep(for: .seconds(retryDelay))
 
       if !Task.isCancelled {
         return try await retry(request, retryCount: retryCount + 1, next: next)

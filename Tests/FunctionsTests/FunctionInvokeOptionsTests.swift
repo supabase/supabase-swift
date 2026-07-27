@@ -1,31 +1,37 @@
+import Foundation
 import HTTPTypes
-import XCTest
+import Testing
 
 @testable import Functions
 
-final class FunctionInvokeOptionsTests: XCTestCase {
-  func test_initWithStringBody() {
+@Suite
+struct FunctionInvokeOptionsTests {
+  @Test
+  func initWithStringBody() {
     let options = FunctionInvokeOptions(body: "string value")
-    XCTAssertEqual(options.headers[.contentType], "text/plain")
-    XCTAssertNotNil(options.body)
+    #expect(options.headers[.contentType] == "text/plain")
+    #expect(options.body != nil)
   }
 
-  func test_initWithDataBody() {
+  @Test
+  func initWithDataBody() {
     let options = FunctionInvokeOptions(body: "binary value".data(using: .utf8)!)
-    XCTAssertEqual(options.headers[.contentType], "application/octet-stream")
-    XCTAssertNotNil(options.body)
+    #expect(options.headers[.contentType] == "application/octet-stream")
+    #expect(options.body != nil)
   }
 
-  func test_initWithEncodableBody() {
+  @Test
+  func initWithEncodableBody() {
     struct Body: Encodable {
       let value: String
     }
     let options = FunctionInvokeOptions(body: Body(value: "value"))
-    XCTAssertEqual(options.headers[.contentType], "application/json")
-    XCTAssertNotNil(options.body)
+    #expect(options.headers[.contentType] == "application/json")
+    #expect(options.body != nil)
   }
 
-  func test_initWithEncodableBodyAndCustomEncoder() {
+  @Test
+  func initWithEncodableBodyAndCustomEncoder() {
     struct Body: Encodable {
       let userName: String
     }
@@ -34,25 +40,27 @@ final class FunctionInvokeOptionsTests: XCTestCase {
     encoder.keyEncodingStrategy = .convertToSnakeCase
 
     let options = FunctionInvokeOptions(body: Body(userName: "test"), encoder: encoder)
-    XCTAssertEqual(options.headers[.contentType], "application/json")
+    #expect(options.headers[.contentType] == "application/json")
 
     let json = try! JSONSerialization.jsonObject(with: options.body!) as! [String: Any]
-    XCTAssertNotNil(json["user_name"])
-    XCTAssertNil(json["userName"])
+    #expect(json["user_name"] != nil)
+    #expect(json["userName"] == nil)
   }
 
-  func test_initWithCustomContentType() {
+  @Test
+  func initWithCustomContentType() {
     let boundary = "Boundary-\(UUID().uuidString)"
     let contentType = "multipart/form-data; boundary=\(boundary)"
     let options = FunctionInvokeOptions(
       headers: ["Content-Type": contentType],
       body: "binary value".data(using: .utf8)!
     )
-    XCTAssertEqual(options.headers[.contentType], contentType)
-    XCTAssertNotNil(options.body)
+    #expect(options.headers[.contentType] == contentType)
+    #expect(options.body != nil)
   }
 
-  func testMethod() {
+  @Test
+  func method() {
     let testCases: [FunctionInvokeOptions.Method: HTTPTypes.HTTPRequest.Method] = [
       .get: .get,
       .post: .post,
@@ -62,7 +70,7 @@ final class FunctionInvokeOptionsTests: XCTestCase {
     ]
 
     for (method, expected) in testCases {
-      XCTAssertEqual(FunctionInvokeOptions.httpMethod(method), expected)
+      #expect(FunctionInvokeOptions.httpMethod(method) == expected)
     }
   }
 }

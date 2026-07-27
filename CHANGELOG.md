@@ -1,5 +1,57 @@
 # Changelog
 
+## [2.54.0](https://github.com/supabase/supabase-swift/compare/v2.53.0...v2.54.0) (2026-07-27)
+
+
+### Features
+
+* **auth:** add admin generateLink and signOut ([#1152](https://github.com/supabase/supabase-swift/issues/1152)) ([f82b248](https://github.com/supabase/supabase-swift/commit/f82b2481b944342f9149cc6d43f64ceda5515711))
+* **auth:** add admin passkey list/delete methods ([#1137](https://github.com/supabase/supabase-swift/issues/1137)) ([99114ee](https://github.com/supabase/supabase-swift/commit/99114eeed0c6fd965d471d52622de79db20c08e3))
+* **auth:** add signInWithWeb3 (Sign in with Ethereum / Solana) ([#1138](https://github.com/supabase/supabase-swift/issues/1138)) ([d364154](https://github.com/supabase/supabase-swift/commit/d3641540c792e797460fbce5a8bab3695b71654c))
+* **functions:** add per-invocation timeout override ([#1144](https://github.com/supabase/supabase-swift/issues/1144)) ([9453077](https://github.com/supabase/supabase-swift/commit/9453077cb80f3b636fdcde745adee579f4e59fa3))
+* **functions:** replace FunctionRegion enum with open struct ([#1053](https://github.com/supabase/supabase-swift/issues/1053)) ([102eaf7](https://github.com/supabase/supabase-swift/commit/102eaf71ab76750ee145f4354cacd87fc977bf3a))
+
+
+### Bug Fixes
+
+* **functions:** check x-relay-error before response status ([#1112](https://github.com/supabase/supabase-swift/issues/1112)) ([ee58fc3](https://github.com/supabase/supabase-swift/commit/ee58fc36b9094b4f9dc7d8cdaf87f6868a667917))
+* **realtime:** make subscribe converge after a failed auto-reconnect ([#1146](https://github.com/supabase/supabase-swift/issues/1146)) ([1e0fe6f](https://github.com/supabase/supabase-swift/commit/1e0fe6f313b2c0c2a318d304e27c7e17064b8599)), closes [#1148](https://github.com/supabase/supabase-swift/issues/1148)
+* **test:** align Web3 integration tests with Swift Testing migration ([#1140](https://github.com/supabase/supabase-swift/issues/1140)) ([bfb761b](https://github.com/supabase/supabase-swift/commit/bfb761bfe1ae27094a3d3858e9e03b49dd13248e))
+
+## [2.53.0](https://github.com/supabase/supabase-swift/compare/v2.52.0...v2.53.0) (2026-07-21)
+
+
+### Features
+
+* **auth:** add OAuth 2.1 authorization server support ([#1115](https://github.com/supabase/supabase-swift/issues/1115)) ([4132009](https://github.com/supabase/supabase-swift/commit/4132009258a1320095c89ccc299f902fdfeee7ca))
+* **postgrest:** add notIn filter, dryRun and maybeSingle modifiers ([#1114](https://github.com/supabase/supabase-swift/issues/1114)) ([0bbdbec](https://github.com/supabase/supabase-swift/commit/0bbdbecba9b4161e1936f0d1032ff0901f0359f1))
+* **realtime:** support certificate pinning on the WebSocket connection ([#1123](https://github.com/supabase/supabase-swift/issues/1123)) ([b74a8fa](https://github.com/supabase/supabase-swift/commit/b74a8fac4c7792bc741ca90592e0b01784399dbe))
+
+
+### Bug Fixes
+
+* **client,functions:** warn instead of throw on unrecognized sb_ key subtype; never send new-format key as Bearer ([#1130](https://github.com/supabase/supabase-swift/issues/1130)) ([286ce5f](https://github.com/supabase/supabase-swift/commit/286ce5f1d19f9b42bcf9256993d42c44612a0184))
+* **helpers:** await full retry backoff delay instead of truncating to whole seconds ([#1125](https://github.com/supabase/supabase-swift/issues/1125)) ([f6d39cb](https://github.com/supabase/supabase-swift/commit/f6d39cb1a05ea27ccc58bb1a259ad2a3b7844acf))
+* **realtime:** don't leak disconnected heartbeat status to consumers ([#1129](https://github.com/supabase/supabase-swift/issues/1129)) ([dc37cd6](https://github.com/supabase/supabase-swift/commit/dc37cd612c718adc7ceb45b7b2cefe5b4bf82e62))
+* **realtime:** invalidate dedicated session when connect fails before opening ([#1134](https://github.com/supabase/supabase-swift/issues/1134)) ([bbf3533](https://github.com/supabase/supabase-swift/commit/bbf3533241eb8f8ed4f5873679356e6682b6d90a))
+
+## [2.52.0](https://github.com/supabase/supabase-swift/compare/v2.51.0...v2.52.0) (2026-07-13)
+
+
+### Features
+
+* **supabase:** add W3C trace context propagation via OpenTelemetry trait ([#1101](https://github.com/supabase/supabase-swift/issues/1101)) ([8f147ec](https://github.com/supabase/supabase-swift/commit/8f147ecc9ff5f64746203f58c342b06587e0f354))
+
+
+### Bug Fixes
+
+* **postgrest:** preserve existing Prefer header in select(count:) ([#1107](https://github.com/supabase/supabase-swift/issues/1107)) ([6ff542a](https://github.com/supabase/supabase-swift/commit/6ff542a955c12cc3a0397e2168cb1f008f8f85e2))
+* **realtime:** reset channel state on phx_error ([#1109](https://github.com/supabase/supabase-swift/issues/1109)) ([a4b0f04](https://github.com/supabase/supabase-swift/commit/a4b0f042b0e22188fcaef58fb53b5ef705a0c60f))
+* **storage:** clean path in signed upload URL and response ([#1108](https://github.com/supabase/supabase-swift/issues/1108)) ([ebef170](https://github.com/supabase/supabase-swift/commit/ebef170a4a6820d064e5909dd4f54e4341f12eb5))
+* **storage:** honor options.contentType for fileURL uploads ([#1124](https://github.com/supabase/supabase-swift/issues/1124)) ([bd33aad](https://github.com/supabase/supabase-swift/commit/bd33aadd570837cf50d3091e26503bca3aed2499))
+* **storage:** return cleaned path in upload response ([#1104](https://github.com/supabase/supabase-swift/issues/1104)) ([ba23665](https://github.com/supabase/supabase-swift/commit/ba2366564ef983de765f654d14d198e1cc57e896))
+* **storage:** strip leading slash from object paths ([#1111](https://github.com/supabase/supabase-swift/issues/1111)) ([ae8c467](https://github.com/supabase/supabase-swift/commit/ae8c4678691c3ce96e24b58bf2f14ff94f783949))
+
 ## [2.51.0](https://github.com/supabase/supabase-swift/compare/v2.50.0...v2.51.0) (2026-07-08)
 
 

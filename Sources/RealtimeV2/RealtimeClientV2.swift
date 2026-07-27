@@ -226,7 +226,8 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       wsTransport: { url, headers in
         return try await URLSessionWebSocket.connect(
           to: url,
-          headers: headers
+          headers: headers,
+          session: options.session
         )
       },
       http: HTTPClient(
@@ -293,6 +294,12 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
             Self.yieldStatusIfChanged(statusSubject, .connected)
           }
         case .disconnected:
+          // A failed auto-reconnect lands here (.reconnecting → .connecting →
+          // .disconnected). Clear the latch so a later successful `connect()`
+          // (e.g. from `connectOnSubscribe`) isn't misclassified as a
+          // reconnect completion — `rejoinChannels()` would reset every
+          // channel and cancel the very join that connect was performing.
+          sawReconnecting = false
           Self.yieldStatusIfChanged(statusSubject, .disconnected)
         case .connecting:
           // Skip — `connect()` yields .connecting/.connected synchronously
@@ -619,7 +626,8 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
 
   private func sendHeartbeat() async {
     if status != .connected {
-      heartbeatSubject.yield(.disconnected)
+      // Don't leak `.disconnected` to `heartbeat`/`onHeartbeat(_:)` consumers — it's not
+      // a heartbeat outcome, just this cycle bailing out early.
       return
     }
 

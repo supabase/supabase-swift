@@ -5,13 +5,16 @@
 //  Created by Guilherme Souza on 26/12/23.
 //
 
-import XCTest
+import Foundation
+import Testing
 
 @testable import Realtime
 @testable import RealtimeV2
 
-final class PostgresJoinConfigTests: XCTestCase {
-  func testSameConfigButDifferentIdAreEqual() {
+@Suite
+struct PostgresJoinConfigTests {
+  @Test
+  func sameConfigButDifferentIdAreEqual() {
     let config1 = PostgresJoinConfig(
       event: .insert,
       schema: "public",
@@ -27,67 +30,11 @@ final class PostgresJoinConfigTests: XCTestCase {
       id: 2
     )
 
-    XCTAssertEqual(config1, config2)
+    #expect(config1 == config2)
   }
 
-  func testSameConfigWithGlobEventAreEqual() {
-    let config1 = PostgresJoinConfig(
-      event: .insert,
-      schema: "public",
-      table: "users",
-      filter: "id=1",
-      id: 1
-    )
-    let config2 = PostgresJoinConfig(
-      event: .all,
-      schema: "public",
-      table: "users",
-      filter: "id=1",
-      id: 2
-    )
-
-    XCTAssertEqual(config1, config2)
-  }
-
-  func testNonEqualConfig() {
-    let config1 = PostgresJoinConfig(
-      event: .insert,
-      schema: "public",
-      table: "users",
-      filter: "id=1",
-      id: 1
-    )
-    let config2 = PostgresJoinConfig(
-      event: .update,
-      schema: "public",
-      table: "users",
-      filter: "id=1",
-      id: 2
-    )
-
-    XCTAssertNotEqual(config1, config2)
-  }
-
-  func testSameConfigButDifferentIdHaveEqualHash() {
-    let config1 = PostgresJoinConfig(
-      event: .insert,
-      schema: "public",
-      table: "users",
-      filter: "id=1",
-      id: 1
-    )
-    let config2 = PostgresJoinConfig(
-      event: .insert,
-      schema: "public",
-      table: "users",
-      filter: "id=1",
-      id: 2
-    )
-
-    XCTAssertEqual(config1.hashValue, config2.hashValue)
-  }
-
-  func testSameConfigWithGlobEventHaveDiffHash() {
+  @Test
+  func sameConfigWithGlobEventAreEqual() {
     let config1 = PostgresJoinConfig(
       event: .insert,
       schema: "public",
@@ -103,10 +50,11 @@ final class PostgresJoinConfigTests: XCTestCase {
       id: 2
     )
 
-    XCTAssertNotEqual(config1.hashValue, config2.hashValue)
+    #expect(config1 == config2)
   }
 
-  func testNonEqualConfigHaveDiffHash() {
+  @Test
+  func nonEqualConfig() {
     let config1 = PostgresJoinConfig(
       event: .insert,
       schema: "public",
@@ -122,10 +70,71 @@ final class PostgresJoinConfigTests: XCTestCase {
       id: 2
     )
 
-    XCTAssertNotEqual(config1.hashValue, config2.hashValue)
+    #expect(config1 != config2)
   }
 
-  func testConfigDifferingOnlyBySelectAreEqual() {
+  @Test
+  func sameConfigButDifferentIdHaveEqualHash() {
+    let config1 = PostgresJoinConfig(
+      event: .insert,
+      schema: "public",
+      table: "users",
+      filter: "id=1",
+      id: 1
+    )
+    let config2 = PostgresJoinConfig(
+      event: .insert,
+      schema: "public",
+      table: "users",
+      filter: "id=1",
+      id: 2
+    )
+
+    #expect(config1.hashValue == config2.hashValue)
+  }
+
+  @Test
+  func sameConfigWithGlobEventHaveDiffHash() {
+    let config1 = PostgresJoinConfig(
+      event: .insert,
+      schema: "public",
+      table: "users",
+      filter: "id=1",
+      id: 1
+    )
+    let config2 = PostgresJoinConfig(
+      event: .all,
+      schema: "public",
+      table: "users",
+      filter: "id=1",
+      id: 2
+    )
+
+    #expect(config1.hashValue != config2.hashValue)
+  }
+
+  @Test
+  func nonEqualConfigHaveDiffHash() {
+    let config1 = PostgresJoinConfig(
+      event: .insert,
+      schema: "public",
+      table: "users",
+      filter: "id=1",
+      id: 1
+    )
+    let config2 = PostgresJoinConfig(
+      event: .update,
+      schema: "public",
+      table: "users",
+      filter: "id=1",
+      id: 2
+    )
+
+    #expect(config1.hashValue != config2.hashValue)
+  }
+
+  @Test
+  func configDifferingOnlyBySelectAreEqual() {
     let config1 = PostgresJoinConfig(
       event: .insert,
       schema: "public",
@@ -143,11 +152,12 @@ final class PostgresJoinConfigTests: XCTestCase {
       id: 1
     )
 
-    XCTAssertEqual(config1, config2)
-    XCTAssertEqual(config1.hashValue, config2.hashValue)
+    #expect(config1 == config2)
+    #expect(config1.hashValue == config2.hashValue)
   }
 
-  func testSelectEncodesAsArray() throws {
+  @Test
+  func selectEncodesAsArray() throws {
     let config = PostgresJoinConfig(
       event: .insert,
       schema: "public",
@@ -160,10 +170,11 @@ final class PostgresJoinConfigTests: XCTestCase {
     let data = try JSONEncoder().encode(config)
     let jsonObject = try JSONSerialization.jsonObject(with: data) as? [String: Any]
 
-    XCTAssertEqual(jsonObject?["select"] as? [String], ["id", "first_name"])
+    #expect(jsonObject?["select"] as? [String] == ["id", "first_name"])
   }
 
-  func testSelectOmittedWhenNil() throws {
+  @Test
+  func selectOmittedWhenNil() throws {
     let config = PostgresJoinConfig(
       event: .insert,
       schema: "public",
@@ -176,6 +187,6 @@ final class PostgresJoinConfigTests: XCTestCase {
     let data = try JSONEncoder().encode(config)
     let jsonObject = try JSONSerialization.jsonObject(with: data) as? [String: Any]
 
-    XCTAssertNil(jsonObject?["select"])
+    #expect(jsonObject?["select"] == nil)
   }
 }
