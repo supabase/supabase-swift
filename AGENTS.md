@@ -205,6 +205,22 @@ All public types should conform to `Sendable` where appropriate for Swift 6 comp
 
 Uses modern `HTTPTypes` for request/response handling. Custom `StorageHTTPSession` abstraction allows for testing and custom implementations.
 
+### Generated OpenAPI Clients
+
+Some modules ship a low-level HTTP client generated from an OpenAPI spec, living under `Sources/<Module>/Generated/` (e.g. `Sources/Storage/Generated/`). These files are produced by `tools/openapi-codegen`, a standalone SwiftPM CLI tool in this repo (not published), from a spec in `openapi/<module>.json`.
+
+To regenerate all clients:
+
+```bash
+./scripts/generate-openapi-clients.sh
+```
+
+This rebuilds `tools/openapi-codegen`, regenerates `Models.swift` and `Client.swift` for each module listed in the script's `MODULES` array, and runs `./scripts/format.sh` on the output. Never hand-edit files under a `Generated/` directory — edit the OpenAPI spec and regenerate instead.
+
+Generated declarations are nested under a per-module namespace enum (e.g. `enum StorageBackendAPI { ... }`, with the client at `StorageBackendAPI.Client`) so schema-derived type names can never collide with hand-written public types in the same module, regardless of what the spec names things.
+
+To wire up a new module: add `openapi/<module>.json`, add the module name to `MODULES` in `scripts/generate-openapi-clients.sh`, and run the script.
+
 ### Configuration
 
 Uses option builder pattern for client configuration:
