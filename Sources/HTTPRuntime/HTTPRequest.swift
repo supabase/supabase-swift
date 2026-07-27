@@ -75,14 +75,24 @@ package struct HTTPRequestBuilder: Sendable {
     headers[canonicalKey(for: name)] = value
   }
 
-  /// Appends to an existing header value (joined with `"; "`) instead of
-  /// replacing it, e.g. repeated `Prefer` directives. Header names are
-  /// matched case-insensitively per HTTP semantics.
-  package mutating func addHeader(_ name: String, value: String?) {
+  /// Appends to an existing header value (joined with `separator`, `","` by
+  /// default per RFC 7240's `Prefer` directive list) instead of replacing it.
+  /// If `value` shares a directive key (the part before `=`) with an existing
+  /// component, it replaces that component instead of duplicating it. Header
+  /// names are matched case-insensitively per HTTP semantics.
+  package mutating func addHeader(_ name: String, value: String?, separator: String = ",") {
     guard let value else { return }
     let key = canonicalKey(for: name)
     if let existing = headers[key] {
-      headers[key] = "\(existing); \(value)"
+      var components = existing.components(separatedBy: separator)
+      if let directiveKey = value.split(separator: "=").first,
+        let index = components.firstIndex(where: { $0.hasPrefix("\(directiveKey)=") })
+      {
+        components[index] = value
+      } else {
+        components.append(value)
+      }
+      headers[key] = components.joined(separator: separator)
     } else {
       headers[key] = value
     }

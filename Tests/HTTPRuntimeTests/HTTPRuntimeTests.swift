@@ -45,7 +45,18 @@ struct HTTPRuntimeTests {
     builder.addHeader("Prefer", value: "returning=minimal")
     builder.addHeader("Prefer", value: "count=exact")
     let request = try builder.build()
-    #expect(request.headers["Prefer"] == "returning=minimal; count=exact")
+    #expect(request.headers["Prefer"] == "returning=minimal,count=exact")
+  }
+
+  @Test
+  func addHeaderReplacesMatchingDirectiveKey() throws {
+    var builder = HTTPRequestBuilder(
+      method: .get, baseURL: URL(string: "https://example.com")!, path: "/x")
+    builder.addHeader("Prefer", value: "count=exact")
+    builder.addHeader("Prefer", value: "returning=minimal")
+    builder.addHeader("Prefer", value: "count=planned")
+    let request = try builder.build()
+    #expect(request.headers["Prefer"] == "count=planned,returning=minimal")
   }
 
   @Test
@@ -65,7 +76,7 @@ struct HTTPRuntimeTests {
     builder.addHeader("prefer", value: "count=exact")
     let request = try builder.build()
     #expect(request.headers.count == 1)
-    #expect(request.headers["Prefer"] == "returning=minimal; count=exact")
+    #expect(request.headers["Prefer"] == "returning=minimal,count=exact")
   }
 
   @Test
