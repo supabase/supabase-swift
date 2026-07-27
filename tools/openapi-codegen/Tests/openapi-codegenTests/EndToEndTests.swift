@@ -64,8 +64,9 @@ struct EndToEndTests {
     let document = try JSONDecoder().decode(OpenAPI.Document.self, from: Data(json.utf8))
     let irDocument = try OpenAPIParsing.parseDocument(document)
 
-    let models = SwiftEmitter.emitModels(irDocument)
-    let client = SwiftEmitter.emitClient(irDocument, clientName: "StorageOpenAPIClient")
+    let models = SwiftEmitter.emitModels(irDocument, namespace: "TestAPI")
+    let client = SwiftEmitter.emitClient(
+      irDocument, namespace: "TestAPI")
 
     assertInlineSnapshot(of: models, as: .lines) {
       """
@@ -74,24 +75,26 @@ struct EndToEndTests {
       import Foundation
       import HTTPRuntime
 
-      internal struct BucketSchema: Codable, Sendable, Hashable {
-        internal var id: String
-        internal var `public`: Bool
+      internal enum TestAPI {
+        internal struct BucketSchema: Codable, Sendable, Hashable {
+          internal var id: String
+          internal var `public`: Bool
 
-        enum CodingKeys: String, CodingKey {
-          case id = "id"
-          case `public` = "public"
+          enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case `public` = "public"
+          }
         }
-      }
 
-      internal struct ErrorSchema: Codable, Sendable, Hashable, APIError {
-        internal var message: String
+        internal struct ErrorSchema: Codable, Sendable, Hashable, APIError {
+          internal var message: String
 
-        enum CodingKeys: String, CodingKey {
-          case message = "message"
+          enum CodingKeys: String, CodingKey {
+            case message = "message"
+          }
         }
-      }
 
+      }
       """
     }
     assertInlineSnapshot(of: client, as: .lines) {
@@ -101,20 +104,22 @@ struct EndToEndTests {
       import Foundation
       import HTTPRuntime
 
-      internal struct StorageOpenAPIClient: Sendable {
-        private let baseURL: URL
-        private let transport: any HTTPTransport
+      internal extension TestAPI {
+        internal struct Client: Sendable {
+          private let baseURL: URL
+          private let transport: any HTTPTransport
 
-        internal init(baseURL: URL, transport: any HTTPTransport = URLSessionTransport()) {
-          self.baseURL = baseURL
-          self.transport = transport
-        }
+          internal init(baseURL: URL, transport: any HTTPTransport = URLSessionTransport()) {
+            self.baseURL = baseURL
+            self.transport = transport
+          }
 
-        internal func getBucket(bucketId: String) async throws -> BucketSchema {
-          var builder = HTTPRequestBuilder(method: .get, baseURL: baseURL, path: "/bucket/\(PathEncoding.segment(bucketId))")
-          let response = try await transport.send(try builder.build())
-          try response.checkStatus(errorTypes: [404: ErrorSchema.self])
-          return try JSONCoding.decoder.decode(BucketSchema.self, from: response.body)
+          internal func getBucket(bucketId: String) async throws -> BucketSchema {
+            let builder = HTTPRequestBuilder(method: .get, baseURL: baseURL, path: "/bucket/\(PathEncoding.segment(bucketId))")
+            let response = try await transport.send(try builder.build())
+            try response.checkStatus(errorTypes: [404: ErrorSchema.self])
+            return try JSONCoding.decoder.decode(BucketSchema.self, from: response.body)
+          }
         }
       }
       """#

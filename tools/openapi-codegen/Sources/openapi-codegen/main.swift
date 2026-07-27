@@ -16,8 +16,8 @@ struct OpenAPICodegen: ParsableCommand {
   @Option(help: "Directory to write the generated Swift files into.")
   var output: String
 
-  @Option(help: "Name of the generated module (used to derive the client type name).")
-  var module: String
+  @Option(help: "Name of the enum namespace generated declarations are nested under.")
+  var namespace: String
 
   @Option(
     help:
@@ -40,15 +40,15 @@ struct OpenAPICodegen: ParsableCommand {
 
     try FileManager.default.createDirectory(at: outputURL, withIntermediateDirectories: true)
 
-    let models = SwiftEmitter.emitModels(irDocument, accessLevel: accessLevel)
+    let models = SwiftEmitter.emitModels(
+      irDocument, namespace: namespace, accessLevel: accessLevel)
     try models.write(
       to: outputURL.appendingPathComponent("Models.swift"), atomically: true, encoding: .utf8)
 
-    let clientName = "\(module)Client"
     let client = SwiftEmitter.emitClient(
-      irDocument, clientName: clientName, accessLevel: accessLevel)
+      irDocument, namespace: namespace, accessLevel: accessLevel)
     try client.write(
-      to: outputURL.appendingPathComponent("\(clientName).swift"), atomically: true,
+      to: outputURL.appendingPathComponent("Client.swift"), atomically: true,
       encoding: .utf8)
 
     print(

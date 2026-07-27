@@ -200,6 +200,7 @@ let package = Package(
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
         "Helpers",
+        "HTTPRuntime",
       ]
     ),
     .testTarget(
@@ -214,19 +215,6 @@ let package = Package(
       resources: [
         .copy("sadcat.jpg"),
         .process("Fixtures"),
-      ]
-    ),
-    .target(
-      name: "StorageOpenAPI",
-      dependencies: [
-        "HTTPRuntime"
-      ]
-    ),
-    .testTarget(
-      name: "StorageOpenAPITests",
-      dependencies: [
-        "StorageOpenAPI",
-        "HTTPRuntime",
       ]
     ),
     .target(

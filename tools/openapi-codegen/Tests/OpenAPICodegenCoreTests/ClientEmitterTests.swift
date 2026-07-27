@@ -31,7 +31,8 @@ struct ClientEmitterTests {
       ]
     )
 
-    let output = SwiftEmitter.emitClient(document, clientName: "StorageOpenAPIClient")
+    let output = SwiftEmitter.emitClient(
+      document, namespace: "TestAPI")
 
     assertInlineSnapshot(of: output, as: .lines) {
       #"""
@@ -40,20 +41,22 @@ struct ClientEmitterTests {
       import Foundation
       import HTTPRuntime
 
-      internal struct StorageOpenAPIClient: Sendable {
-        private let baseURL: URL
-        private let transport: any HTTPTransport
+      internal extension TestAPI {
+        internal struct Client: Sendable {
+          private let baseURL: URL
+          private let transport: any HTTPTransport
 
-        internal init(baseURL: URL, transport: any HTTPTransport = URLSessionTransport()) {
-          self.baseURL = baseURL
-          self.transport = transport
-        }
+          internal init(baseURL: URL, transport: any HTTPTransport = URLSessionTransport()) {
+            self.baseURL = baseURL
+            self.transport = transport
+          }
 
-        internal func getBucket(bucketId: String) async throws -> BucketSchema {
-          var builder = HTTPRequestBuilder(method: .get, baseURL: baseURL, path: "/bucket/\(PathEncoding.segment(bucketId))")
-          let response = try await transport.send(try builder.build())
-          try response.checkStatus(errorTypes: [404: ErrorSchema.self])
-          return try JSONCoding.decoder.decode(BucketSchema.self, from: response.body)
+          internal func getBucket(bucketId: String) async throws -> BucketSchema {
+            let builder = HTTPRequestBuilder(method: .get, baseURL: baseURL, path: "/bucket/\(PathEncoding.segment(bucketId))")
+            let response = try await transport.send(try builder.build())
+            try response.checkStatus(errorTypes: [404: ErrorSchema.self])
+            return try JSONCoding.decoder.decode(BucketSchema.self, from: response.body)
+          }
         }
       }
       """#
@@ -83,7 +86,8 @@ struct ClientEmitterTests {
       ]
     )
 
-    let output = SwiftEmitter.emitClient(document, clientName: "StorageOpenAPIClient")
+    let output = SwiftEmitter.emitClient(
+      document, namespace: "TestAPI")
 
     assertInlineSnapshot(of: output, as: .lines) {
       #"""
@@ -92,24 +96,26 @@ struct ClientEmitterTests {
       import Foundation
       import HTTPRuntime
 
-      internal struct StorageOpenAPIClient: Sendable {
-        private let baseURL: URL
-        private let transport: any HTTPTransport
+      internal extension TestAPI {
+        internal struct Client: Sendable {
+          private let baseURL: URL
+          private let transport: any HTTPTransport
 
-        internal init(baseURL: URL, transport: any HTTPTransport = URLSessionTransport()) {
-          self.baseURL = baseURL
-          self.transport = transport
-        }
+          internal init(baseURL: URL, transport: any HTTPTransport = URLSessionTransport()) {
+            self.baseURL = baseURL
+            self.transport = transport
+          }
 
-        internal func createObject(bucketId: String, file: URL, cacheControl: String) async throws {
-          var builder = HTTPRequestBuilder(method: .post, baseURL: baseURL, path: "/object/\(PathEncoding.segment(bucketId))")
-          let formData = MultipartFormData()
-            .addFile(name: "file", fileURL: file, fileName: file.lastPathComponent, mimeType: "application/octet-stream")
-            .addText(name: "cacheControl", value: String(describing: cacheControl))
-          builder.setHeader("Content-Type", formData.contentType)
-          builder.setBody(.multipart(formData))
-          let response = try await transport.send(try builder.build())
-          try response.checkStatus(errorTypes: [:])
+          internal func createObject(bucketId: String, file: URL, cacheControl: String) async throws {
+            var builder = HTTPRequestBuilder(method: .post, baseURL: baseURL, path: "/object/\(PathEncoding.segment(bucketId))")
+            let formData = MultipartFormData()
+              .addFile(name: "file", fileURL: file, fileName: file.lastPathComponent, mimeType: "application/octet-stream")
+              .addText(name: "cacheControl", value: String(describing: cacheControl))
+            builder.setHeader("Content-Type", formData.contentType)
+            builder.setBody(.multipart(formData))
+            let response = try await transport.send(try builder.build())
+            try response.checkStatus(errorTypes: [:])
+          }
         }
       }
       """#
@@ -134,7 +140,8 @@ struct ClientEmitterTests {
       ]
     )
 
-    let output = SwiftEmitter.emitClient(document, clientName: "StorageOpenAPIClient")
+    let output = SwiftEmitter.emitClient(
+      document, namespace: "TestAPI")
 
     assertInlineSnapshot(of: output, as: .lines) {
       #"""
@@ -143,22 +150,24 @@ struct ClientEmitterTests {
       import Foundation
       import HTTPRuntime
 
-      internal struct StorageOpenAPIClient: Sendable {
-        private let baseURL: URL
-        private let transport: any HTTPTransport
+      internal extension TestAPI {
+        internal struct Client: Sendable {
+          private let baseURL: URL
+          private let transport: any HTTPTransport
 
-        internal init(baseURL: URL, transport: any HTTPTransport = URLSessionTransport()) {
-          self.baseURL = baseURL
-          self.transport = transport
-        }
-
-        internal func download(bucketId: String) async throws -> AsyncThrowingStream<Data, any Error> {
-          var builder = HTTPRequestBuilder(method: .get, baseURL: baseURL, path: "/object/\(PathEncoding.segment(bucketId))")
-          let stream = try await transport.stream(try builder.build())
-          guard stream.head.isSuccess else {
-            throw HTTPError.unexpectedStatus(status: stream.head.status, body: Data())
+          internal init(baseURL: URL, transport: any HTTPTransport = URLSessionTransport()) {
+            self.baseURL = baseURL
+            self.transport = transport
           }
-          return stream.body
+
+          internal func download(bucketId: String) async throws -> AsyncThrowingStream<Data, any Error> {
+            let builder = HTTPRequestBuilder(method: .get, baseURL: baseURL, path: "/object/\(PathEncoding.segment(bucketId))")
+            let stream = try await transport.stream(try builder.build())
+            guard stream.head.isSuccess else {
+              throw HTTPError.unexpectedStatus(status: stream.head.status, body: Data())
+            }
+            return stream.body
+          }
         }
       }
       """#
@@ -187,7 +196,8 @@ struct ClientEmitterTests {
       ]
     )
 
-    let output = SwiftEmitter.emitClient(document, clientName: "StorageOpenAPIClient")
+    let output = SwiftEmitter.emitClient(
+      document, namespace: "TestAPI")
 
     assertInlineSnapshot(of: output, as: .lines) {
       """
@@ -196,21 +206,23 @@ struct ClientEmitterTests {
       import Foundation
       import HTTPRuntime
 
-      internal struct StorageOpenAPIClient: Sendable {
-        private let baseURL: URL
-        private let transport: any HTTPTransport
+      internal extension TestAPI {
+        internal struct Client: Sendable {
+          private let baseURL: URL
+          private let transport: any HTTPTransport
 
-        internal init(baseURL: URL, transport: any HTTPTransport = URLSessionTransport()) {
-          self.baseURL = baseURL
-          self.transport = transport
-        }
+          internal init(baseURL: URL, transport: any HTTPTransport = URLSessionTransport()) {
+            self.baseURL = baseURL
+            self.transport = transport
+          }
 
-        internal func listBuckets(sortColumn: BucketListSortColumn? = nil) async throws -> BucketSchema {
-          var builder = HTTPRequestBuilder(method: .get, baseURL: baseURL, path: "/bucket")
-          builder.addQuery("sortColumn", sortColumn?.rawValue)
-          let response = try await transport.send(try builder.build())
-          try response.checkStatus(errorTypes: [:])
-          return try JSONCoding.decoder.decode(BucketSchema.self, from: response.body)
+          internal func listBuckets(sortColumn: BucketListSortColumn? = nil) async throws -> BucketSchema {
+            var builder = HTTPRequestBuilder(method: .get, baseURL: baseURL, path: "/bucket")
+            builder.addQuery("sortColumn", sortColumn?.rawValue)
+            let response = try await transport.send(try builder.build())
+            try response.checkStatus(errorTypes: [:])
+            return try JSONCoding.decoder.decode(BucketSchema.self, from: response.body)
+          }
         }
       }
       """
@@ -235,7 +247,8 @@ struct ClientEmitterTests {
       ]
     )
 
-    let output = SwiftEmitter.emitClient(document, clientName: "StorageOpenAPIClient")
+    let output = SwiftEmitter.emitClient(
+      document, namespace: "TestAPI")
 
     assertInlineSnapshot(of: output, as: .lines) {
       """
@@ -244,20 +257,22 @@ struct ClientEmitterTests {
       import Foundation
       import HTTPRuntime
 
-      internal struct StorageOpenAPIClient: Sendable {
-        private let baseURL: URL
-        private let transport: any HTTPTransport
+      internal extension TestAPI {
+        internal struct Client: Sendable {
+          private let baseURL: URL
+          private let transport: any HTTPTransport
 
-        internal init(baseURL: URL, transport: any HTTPTransport = URLSessionTransport()) {
-          self.baseURL = baseURL
-          self.transport = transport
-        }
+          internal init(baseURL: URL, transport: any HTTPTransport = URLSessionTransport()) {
+            self.baseURL = baseURL
+            self.transport = transport
+          }
 
-        internal func listItems(tags: [String]? = nil) async throws {
-          var builder = HTTPRequestBuilder(method: .get, baseURL: baseURL, path: "/items")
-          builder.addQuery("tags", tags)
-          let response = try await transport.send(try builder.build())
-          try response.checkStatus(errorTypes: [:])
+          internal func listItems(tags: [String]? = nil) async throws {
+            var builder = HTTPRequestBuilder(method: .get, baseURL: baseURL, path: "/items")
+            builder.addQuery("tags", tags)
+            let response = try await transport.send(try builder.build())
+            try response.checkStatus(errorTypes: [:])
+          }
         }
       }
       """
@@ -282,7 +297,8 @@ struct ClientEmitterTests {
       ]
     )
 
-    let output = SwiftEmitter.emitClient(document, clientName: "StorageOpenAPIClient")
+    let output = SwiftEmitter.emitClient(
+      document, namespace: "TestAPI")
 
     assertInlineSnapshot(of: output, as: .lines) {
       """
@@ -291,20 +307,22 @@ struct ClientEmitterTests {
       import Foundation
       import HTTPRuntime
 
-      internal struct StorageOpenAPIClient: Sendable {
-        private let baseURL: URL
-        private let transport: any HTTPTransport
+      internal extension TestAPI {
+        internal struct Client: Sendable {
+          private let baseURL: URL
+          private let transport: any HTTPTransport
 
-        internal init(baseURL: URL, transport: any HTTPTransport = URLSessionTransport()) {
-          self.baseURL = baseURL
-          self.transport = transport
-        }
+          internal init(baseURL: URL, transport: any HTTPTransport = URLSessionTransport()) {
+            self.baseURL = baseURL
+            self.transport = transport
+          }
 
-        internal func listItems(ids: [Int]? = nil) async throws {
-          var builder = HTTPRequestBuilder(method: .get, baseURL: baseURL, path: "/items")
-          builder.addQuery("ids", ids?.map(String.init))
-          let response = try await transport.send(try builder.build())
-          try response.checkStatus(errorTypes: [:])
+          internal func listItems(ids: [Int]? = nil) async throws {
+            var builder = HTTPRequestBuilder(method: .get, baseURL: baseURL, path: "/items")
+            builder.addQuery("ids", ids?.map(String.init))
+            let response = try await transport.send(try builder.build())
+            try response.checkStatus(errorTypes: [:])
+          }
         }
       }
       """
@@ -330,7 +348,7 @@ struct ClientEmitterTests {
     )
 
     let output = SwiftEmitter.emitClient(
-      document, clientName: "StorageOpenAPIClient", accessLevel: .public)
+      document, namespace: "TestAPI", accessLevel: .public)
 
     assertInlineSnapshot(of: output, as: .lines) {
       #"""
@@ -339,19 +357,21 @@ struct ClientEmitterTests {
       public import Foundation
       public import HTTPRuntime
 
-      public struct StorageOpenAPIClient: Sendable {
-        private let baseURL: URL
-        private let transport: any HTTPTransport
+      public extension TestAPI {
+        public struct Client: Sendable {
+          private let baseURL: URL
+          private let transport: any HTTPTransport
 
-        public init(baseURL: URL, transport: any HTTPTransport = URLSessionTransport()) {
-          self.baseURL = baseURL
-          self.transport = transport
-        }
+          public init(baseURL: URL, transport: any HTTPTransport = URLSessionTransport()) {
+            self.baseURL = baseURL
+            self.transport = transport
+          }
 
-        public func getBucket(bucketId: String) async throws {
-          var builder = HTTPRequestBuilder(method: .get, baseURL: baseURL, path: "/bucket/\(PathEncoding.segment(bucketId))")
-          let response = try await transport.send(try builder.build())
-          try response.checkStatus(errorTypes: [:])
+          public func getBucket(bucketId: String) async throws {
+            let builder = HTTPRequestBuilder(method: .get, baseURL: baseURL, path: "/bucket/\(PathEncoding.segment(bucketId))")
+            let response = try await transport.send(try builder.build())
+            try response.checkStatus(errorTypes: [:])
+          }
         }
       }
       """#

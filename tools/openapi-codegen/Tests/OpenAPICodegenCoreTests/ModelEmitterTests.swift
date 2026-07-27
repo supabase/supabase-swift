@@ -25,7 +25,7 @@ struct ModelEmitterTests {
       operations: []
     )
 
-    let output = SwiftEmitter.emitModels(document)
+    let output = SwiftEmitter.emitModels(document, namespace: "TestAPI")
 
     assertInlineSnapshot(of: output, as: .lines) {
       """
@@ -34,16 +34,18 @@ struct ModelEmitterTests {
       import Foundation
       import HTTPRuntime
 
-      internal struct BucketSchema: Codable, Sendable, Hashable {
-        internal var id: String
-        internal var fileSizeLimit: Int?
+      internal enum TestAPI {
+        internal struct BucketSchema: Codable, Sendable, Hashable {
+          internal var id: String
+          internal var fileSizeLimit: Int?
 
-        enum CodingKeys: String, CodingKey {
-          case id = "id"
-          case fileSizeLimit = "file_size_limit"
+          enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case fileSizeLimit = "file_size_limit"
+          }
         }
-      }
 
+      }
       """
     }
   }
@@ -55,7 +57,7 @@ struct ModelEmitterTests {
       operations: []
     )
 
-    let output = SwiftEmitter.emitModels(document)
+    let output = SwiftEmitter.emitModels(document, namespace: "TestAPI")
 
     assertInlineSnapshot(of: output, as: .lines) {
       """
@@ -64,11 +66,13 @@ struct ModelEmitterTests {
       import Foundation
       import HTTPRuntime
 
-      internal enum Visibility: String, Codable, Sendable, Hashable {
-        case `public` = "public"
-        case `private` = "private"
-      }
+      internal enum TestAPI {
+        internal enum Visibility: String, Codable, Sendable, Hashable {
+          case `public` = "public"
+          case `private` = "private"
+        }
 
+      }
       """
     }
   }
@@ -96,7 +100,7 @@ struct ModelEmitterTests {
       ]
     )
 
-    let output = SwiftEmitter.emitModels(document)
+    let output = SwiftEmitter.emitModels(document, namespace: "TestAPI")
 
     assertInlineSnapshot(of: output, as: .lines) {
       """
@@ -105,14 +109,16 @@ struct ModelEmitterTests {
       import Foundation
       import HTTPRuntime
 
-      internal struct ErrorSchema: Codable, Sendable, Hashable, APIError {
-        internal var message: String
+      internal enum TestAPI {
+        internal struct ErrorSchema: Codable, Sendable, Hashable, APIError {
+          internal var message: String
 
-        enum CodingKeys: String, CodingKey {
-          case message = "message"
+          enum CodingKeys: String, CodingKey {
+            case message = "message"
+          }
         }
-      }
 
+      }
       """
     }
   }
@@ -132,7 +138,7 @@ struct ModelEmitterTests {
       operations: []
     )
 
-    let output = SwiftEmitter.emitModels(document)
+    let output = SwiftEmitter.emitModels(document, namespace: "TestAPI")
 
     assertInlineSnapshot(of: output, as: .lines) {
       """
@@ -141,35 +147,37 @@ struct ModelEmitterTests {
       import Foundation
       import HTTPRuntime
 
-      internal enum BucketCreateFileSizeLimit: Codable, Sendable, Hashable {
-        case integer(Int)
-        case string(String)
+      internal enum TestAPI {
+        internal enum BucketCreateFileSizeLimit: Codable, Sendable, Hashable {
+          case integer(Int)
+          case string(String)
 
-        internal init(from decoder: any Decoder) throws {
-          let container = try decoder.singleValueContainer()
-          if let value = try? container.decode(Int.self) {
-            self = .integer(value)
-            return
+          internal init(from decoder: any Decoder) throws {
+            let container = try decoder.singleValueContainer()
+            if let value = try? container.decode(Int.self) {
+              self = .integer(value)
+              return
+            }
+            if let value = try? container.decode(String.self) {
+              self = .string(value)
+              return
+            }
+            throw DecodingError.typeMismatch(
+              BucketCreateFileSizeLimit.self,
+              DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "no matching case")
+            )
           }
-          if let value = try? container.decode(String.self) {
-            self = .string(value)
-            return
+
+          internal func encode(to encoder: any Encoder) throws {
+            var container = encoder.singleValueContainer()
+            switch self {
+            case .integer(let value): try container.encode(value)
+            case .string(let value): try container.encode(value)
+            }
           }
-          throw DecodingError.typeMismatch(
-            BucketCreateFileSizeLimit.self,
-            DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "no matching case")
-          )
         }
 
-        internal func encode(to encoder: any Encoder) throws {
-          var container = encoder.singleValueContainer()
-          switch self {
-          case .integer(let value): try container.encode(value)
-          case .string(let value): try container.encode(value)
-          }
-        }
       }
-
       """
     }
   }
@@ -188,7 +196,7 @@ struct ModelEmitterTests {
       operations: []
     )
 
-    let output = SwiftEmitter.emitModels(document, accessLevel: .public)
+    let output = SwiftEmitter.emitModels(document, namespace: "TestAPI", accessLevel: .public)
 
     assertInlineSnapshot(of: output, as: .lines) {
       """
@@ -197,14 +205,16 @@ struct ModelEmitterTests {
       import Foundation
       public import HTTPRuntime
 
-      public struct BucketSchema: Codable, Sendable, Hashable {
-        public var id: String
+      public enum TestAPI {
+        public struct BucketSchema: Codable, Sendable, Hashable {
+          public var id: String
 
-        enum CodingKeys: String, CodingKey {
-          case id = "id"
+          enum CodingKeys: String, CodingKey {
+            case id = "id"
+          }
         }
-      }
 
+      }
       """
     }
   }
