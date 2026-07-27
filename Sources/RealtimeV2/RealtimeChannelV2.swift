@@ -726,7 +726,12 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
         logger?.error(
           "Received an error in channel \(message.topic). That could be as a result of an invalid access token"
         )
-        await stateManager.didReceiveClose()
+        // Like `phx_close`, `phx_error` is tagged with the `join_ref` of the
+        // join it belongs to — an error from a stale join must not tear down
+        // the current subscription (#1148). Errors without a `join_ref`
+        // (e.g. auth errors before a join completes) are applied
+        // unconditionally.
+        await stateManager.didReceiveClose(joinRef: message.joinRef)
 
       case .presenceDiff:
         let joins = try message.payload["joins"]?.decode(as: [String: PresenceV2].self) ?? [:]

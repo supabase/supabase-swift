@@ -148,6 +148,60 @@ struct RealtimeReconnectRecoveryTests {
     #expect(channel.status == .unsubscribed)
   }
 
+  /// Issue #1148 (follow-up to #1145 defect 3): `phx_error` was routed by
+  /// topic only, like `phx_close`. An error belonging to a stale join must
+  /// not kill the current subscription; a ref-less error still must.
+  @Test
+  func stalePhxErrorDoesNotKillCurrentSubscription() async throws {
+    let sockets = LockIsolated<[AsyncFakeWebSocket]>([])
+
+    let sut = RealtimeClientV2(
+      url: url,
+      options: makeOptions(),
+      wsTransport: { _, _ in
+        let socket = AsyncFakeWebSocket()
+        socket.serverResponder = AsyncFakeWebSocket.realtimeServerResponder()
+        sockets.withValue { $0.append(socket) }
+        return socket
+      },
+      http: HTTPClientMock(),
+      clock: ContinuousClock()
+    )
+    defer { sut.disconnect() }
+
+    let channel = sut.channel("room-error")
+    try await channel.subscribeWithError()
+    #expect(channel.status == .subscribed)
+
+    // A phx_error for a *different* join_ref (a stale incarnation) arrives.
+    let socket = sockets.value[0]
+    socket.reply(
+      RealtimeMessageV2(
+        joinRef: "stale-join-ref",
+        ref: nil,
+        topic: channel.topic,
+        event: "phx_error",
+        payload: [:]
+      )
+    )
+
+    try? await Task.sleep(nanoseconds: 300_000_000)
+    #expect(channel.status == .subscribed, "Stale phx_error killed the current subscription")
+
+    // A phx_error without a join_ref (e.g. an auth error) still applies.
+    socket.reply(
+      RealtimeMessageV2(
+        joinRef: nil,
+        ref: nil,
+        topic: channel.topic,
+        event: "phx_error",
+        payload: [:]
+      )
+    )
+    await waitUntil(timeout: 2) { channel.status == .unsubscribed }
+    #expect(channel.status == .unsubscribed)
+  }
+
   /// Hazard 4 in #1145: `unsubscribe()` on a dead socket pushed `phx_leave`
   /// into the send buffer (flushed verbatim into the next connection) and
   /// waited the full timeout for a `phx_close` that could never arrive.
