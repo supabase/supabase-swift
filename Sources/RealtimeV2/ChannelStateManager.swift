@@ -32,8 +32,24 @@ actor ChannelStateManager {
     }
   }
 
+  /// Typed failure for a single subscribe attempt. These are lifecycle
+  /// failures — not task cancellations — so the retry ladder treats them
+  /// like timeouts and callers never see a spurious `CancellationError`
+  /// (issue #1145, defect 2).
+  enum SubscribeFailure: Error {
+    /// The socket could not be connected (or reconnected) for this attempt.
+    case socketNotConnected
+    /// The channel transitioned to `.unsubscribed` while waiting for the
+    /// join confirmation.
+    case channelClosed
+  }
+
   typealias MakeRef = @Sendable () -> String
   typealias EnsureSocketConnected = @Sendable () async -> Bool
+  /// Synchronous socket-status probe. Unlike ``EnsureSocketConnected`` it
+  /// never attempts to connect — used to decide whether `phx_leave` can be
+  /// delivered at all.
+  typealias IsSocketConnected = @Sendable () -> Bool
   typealias GetClientChanges = @Sendable () -> [PostgresJoinConfig]
   typealias JoinOperation =
     @Sendable (_ joinRef: String, _ clientChanges: [PostgresJoinConfig])
@@ -71,10 +87,16 @@ actor ChannelStateManager {
 
   private let makeRef: MakeRef
   private let ensureSocketConnected: EnsureSocketConnected
+  private let isSocketConnected: IsSocketConnected
   private let getClientChanges: GetClientChanges
   private let joinOperation: JoinOperation
   private let leaveOperation: LeaveOperation
   private let retryDelay: RetryDelay
+
+  /// Set by ``didReceiveClose()`` when the server closes the channel while a
+  /// subscribe is in flight, so ``beginSubscribe()`` can surface a typed
+  /// error instead of the bare `CancellationError` from the cancelled task.
+  private var closedByServerWhileSubscribing = false
 
   init(
     topic: String,
@@ -84,6 +106,7 @@ actor ChannelStateManager {
     clock: any Clock<Duration>,
     makeRef: @escaping MakeRef,
     ensureSocketConnected: @escaping EnsureSocketConnected,
+    isSocketConnected: @escaping IsSocketConnected = { true },
     getClientChanges: @escaping GetClientChanges,
     joinOperation: @escaping JoinOperation,
     leaveOperation: @escaping LeaveOperation,
@@ -97,6 +120,7 @@ actor ChannelStateManager {
     self.clock = clock
     self.makeRef = makeRef
     self.ensureSocketConnected = ensureSocketConnected
+    self.isSocketConnected = isSocketConnected
     self.getClientChanges = getClientChanges
     self.joinOperation = joinOperation
     self.leaveOperation = leaveOperation
@@ -181,12 +205,18 @@ actor ChannelStateManager {
       task.cancel()
       // Subscribe hadn't completed yet, so the server may not recognize the
       // channel and will likely never send `phx_close`. Don't wait for it.
-      await beginUnsubscribe(waitForServerClose: false)
+      await beginUnsubscribe(waitForServerClose: false, sendLeave: isSocketConnected())
 
     case .subscribed:
       // We had a live subscription; wait (bounded) for the server's
       // `phx_close` to arrive so observers see the full status trail.
-      await beginUnsubscribe(waitForServerClose: true)
+      //
+      // Unless the socket is dead: the server-side channel died with the
+      // connection, `phx_leave` would only be buffered into the *next*
+      // connection as a stale frame, and `phx_close` can never arrive —
+      // waiting would stall for the full timeout (issue #1145, hazard 4).
+      let socketConnected = isSocketConnected()
+      await beginUnsubscribe(waitForServerClose: socketConnected, sendLeave: socketConnected)
     }
   }
 
@@ -233,20 +263,44 @@ actor ChannelStateManager {
 
   /// Called when the server closes the channel (phx_close or system error
   /// that should drop the channel).
-  func didReceiveClose() {
+  ///
+  /// When `expectedJoinRef` is provided (Phoenix tags `phx_close` with the
+  /// `join_ref` of the join it closes), the close is only applied if it still
+  /// matches the current ``joinRef`` — checked here, on the actor, so a
+  /// concurrent subscribe attempt can't swap `joinRef` between the caller's
+  /// check and the close (issue #1145, defect 3). Closes without a `join_ref`
+  /// are applied unconditionally.
+  ///
+  /// Returns `true` if the close was applied; `false` if it belonged to a
+  /// stale join and was ignored.
+  @discardableResult
+  func didReceiveClose(joinRef expectedJoinRef: String? = nil) -> Bool {
+    if let expectedJoinRef, expectedJoinRef != joinRef {
+      logger?.debug(
+        "Ignoring close for stale join_ref \(expectedJoinRef) on '\(topic)' "
+          + "(current: \(joinRef ?? "<none>"))"
+      )
+      return false
+    }
     logger?.debug("Server closed channel '\(topic)'")
     joinRef = nil
     pushes = [:]
     if case .subscribing(let task) = state {
+      // Record why the task is being cancelled so `beginSubscribe` can
+      // rethrow a typed error — the caller must be able to tell a server
+      // close apart from its own task cancellation (issue #1145, defect 2).
+      closedByServerWhileSubscribing = true
       task.cancel()
     }
     updateState(.unsubscribed)
+    return true
   }
 
   // MARK: - Private
 
   private func beginSubscribe() async throws {
     logger?.debug("Beginning subscribe flow for channel '\(topic)'")
+    closedByServerWhileSubscribing = false
     let task = Task<Void, any Error> { [weak self] in
       guard let self else { return }
       try await self.runSubscribeAttempts()
@@ -263,12 +317,26 @@ actor ChannelStateManager {
         task.cancel()
       }
     } catch {
+      let closedByServer = closedByServerWhileSubscribing
+      closedByServerWhileSubscribing = false
+
       // If the subscribe attempt didn't transition us to .subscribed, make
       // sure external observers see .unsubscribed.
       if case .subscribing = state {
         joinRef = nil
         pushes = [:]
         updateState(.unsubscribed)
+      }
+
+      // The subscribe was aborted by `didReceiveClose()`, not by the caller.
+      // Depending on how the cancellation is observed, the task can exit with
+      // `CancellationError`, `SubscribeFailure.channelClosed`, or — when the
+      // close lands on the final retry attempt — `maxRetryAttemptsReached`.
+      // All of them are consequences of the server close, so translate
+      // unconditionally; a genuine caller-side cancellation never sets the
+      // flag and still propagates as `CancellationError`.
+      if closedByServer {
+        throw RealtimeError.channelClosedByServer
       }
       throw error
     }
@@ -291,9 +359,10 @@ actor ChannelStateManager {
 
         logger?.debug("Subscribe succeeded for channel '\(topic)'")
         return
-      } catch is TimeoutError {
+      } catch let error where error is TimeoutError || error is SubscribeFailure {
         logger?.debug(
-          "Subscribe timed out for channel '\(topic)' (attempt \(attempts)/\(maxRetryAttempts))"
+          "Subscribe attempt failed for channel '\(topic)' "
+            + "(attempt \(attempts)/\(maxRetryAttempts)): \(error)"
         )
 
         guard attempts < maxRetryAttempts else {
@@ -308,15 +377,10 @@ actor ChannelStateManager {
           "Retrying subscribe for '\(topic)' in \(String(format: "%.2f", delay))s"
         )
 
-        do {
-          try await clock.sleep(for: .seconds(delay))
-          if !(await ensureSocketConnected()) {
-            logger?.debug("Socket disconnected during retry delay for '\(topic)'")
-            throw CancellationError()
-          }
-        } catch {
-          throw CancellationError()
-        }
+        // A genuine cancellation of this task propagates out of `sleep` as
+        // `CancellationError`; the next attempt re-checks the socket itself,
+        // so no extra connectivity probe is needed here.
+        try await clock.sleep(for: .seconds(delay))
       }
     }
 
@@ -325,7 +389,7 @@ actor ChannelStateManager {
 
   private func runOneSubscribeAttempt() async throws {
     guard await ensureSocketConnected() else {
-      throw CancellationError()
+      throw SubscribeFailure.socketNotConnected
     }
 
     let ref = makeRef()
@@ -346,31 +410,34 @@ actor ChannelStateManager {
         // Channel was closed (by server or unsubscribe) while we were
         // waiting. Abort this attempt; the outer flow decides whether to
         // retry or propagate.
-        throw CancellationError()
+        throw SubscribeFailure.channelClosed
       case .subscribing, .unsubscribing:
         continue
       }
     }
-    throw CancellationError()
+    throw SubscribeFailure.channelClosed
   }
 
-  private func beginUnsubscribe(waitForServerClose: Bool) async {
+  private func beginUnsubscribe(waitForServerClose: Bool, sendLeave: Bool) async {
     logger?.debug("Beginning unsubscribe flow for channel '\(topic)'")
     let task = Task<Void, Never> { [weak self] in
       guard let self else { return }
-      await self.runUnsubscribe(waitForServerClose: waitForServerClose)
+      await self.runUnsubscribe(waitForServerClose: waitForServerClose, sendLeave: sendLeave)
     }
     updateState(.unsubscribing(task))
     await task.value
   }
 
-  private func runUnsubscribe(waitForServerClose: Bool) async {
-    // Send `phx_leave`. When `waitForServerClose` is true, wait (bounded by
-    // `timeoutInterval`) for the server's `phx_close` to transition us to
-    // `.unsubscribed` via `didReceiveClose()`. Otherwise transition
-    // immediately — this is the fire-and-forget path used when we abort an
-    // in-flight subscribe.
-    await leaveOperation()
+  private func runUnsubscribe(waitForServerClose: Bool, sendLeave: Bool) async {
+    // Send `phx_leave` (skipped when the socket is dead — it could never be
+    // delivered, only buffered into the next connection as a stale frame).
+    // When `waitForServerClose` is true, wait (bounded by `timeoutInterval`)
+    // for the server's `phx_close` to transition us to `.unsubscribed` via
+    // `didReceiveClose()`. Otherwise transition immediately — this is the
+    // fire-and-forget path used when we abort an in-flight subscribe.
+    if sendLeave {
+      await leaveOperation()
+    }
 
     if waitForServerClose {
       let stateSubject = self.stateSubject

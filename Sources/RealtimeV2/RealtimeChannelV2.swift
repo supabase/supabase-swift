@@ -200,6 +200,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
         await socket.connect()
         return socket.status == .connected
       },
+      isSocketConnected: { [weak socket] in socket?.status == .connected },
       getClientChanges: { clientChanges.value },
       joinOperation: { [weakSelfRef] ref, changes in
         guard let channel = weakSelfRef.value else { return }
@@ -710,14 +711,27 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
         callbackManager.triggerBroadcast(event: event, json: payload)
 
       case .close:
+        // Phoenix tags `phx_close` with the `join_ref` of the join it closes.
+        // A close for a previous incarnation of this topic (e.g. a join
+        // abandoned during a reconnect) must not tear down the current
+        // subscription (issue #1145, defect 3). The join_ref check runs on
+        // the state-manager actor, atomically with the close, so a concurrent
+        // subscribe attempt can't swap `joinRef` in between.
+        guard await stateManager.didReceiveClose(joinRef: message.joinRef) else {
+          return
+        }
         socket._remove(self)
-        await stateManager.didReceiveClose()
 
       case .error:
         logger?.error(
           "Received an error in channel \(message.topic). That could be as a result of an invalid access token"
         )
-        await stateManager.didReceiveClose()
+        // Like `phx_close`, `phx_error` is tagged with the `join_ref` of the
+        // join it belongs to — an error from a stale join must not tear down
+        // the current subscription (#1148). Errors without a `join_ref`
+        // (e.g. auth errors before a join completes) are applied
+        // unconditionally.
+        await stateManager.didReceiveClose(joinRef: message.joinRef)
 
       case .presenceDiff:
         let joins = try message.payload["joins"]?.decode(as: [String: PresenceV2].self) ?? [:]

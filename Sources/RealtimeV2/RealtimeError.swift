@@ -20,4 +20,9 @@ extension RealtimeError {
   static var maxRetryAttemptsReached: Self {
     Self("Maximum retry attempts reached.")
   }
+
+  /// The server closed the channel while a subscribe was in flight.
+  static var channelClosedByServer: Self {
+    Self("Channel was closed by the server while subscribing.")
+  }
 }

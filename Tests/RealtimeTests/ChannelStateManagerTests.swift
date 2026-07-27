@@ -216,6 +216,49 @@ struct ChannelStateManagerTests {
     }
   }
 
+  /// Issue #1145 (defect 2): a socket connect failure aborted the whole
+  /// subscribe on attempt 1 — only timeouts entered the retry ladder. A
+  /// transient connect failure must be retried like a timeout.
+  @Test
+  func subscribeRetriesWhenSocketConnectFailsTransiently() async throws {
+    let h = makeHarness(timeoutInterval: 1.0, maxRetryAttempts: 3, retryDelay: { _ in 0.05 })
+    h.ensureConnected.setValue(false)
+
+    // The "network" comes back shortly after the first failed attempt.
+    let recovery = Task { [h] in
+      try? await Task.sleep(nanoseconds: 20_000_000)
+      h.ensureConnected.setValue(true)
+    }
+    let confirmer = confirmSubscribeOnJoin(h)
+
+    try await h.sut.subscribe()
+    _ = await recovery.value
+    _ = await confirmer.value
+
+    let state = await h.sut.state
+    guard case .subscribed = state else {
+      Issue.record("Expected .subscribed after transient connect failure, got \(state)")
+      return
+    }
+  }
+
+  /// Issue #1145 (defect 2): connect failures were manufactured as
+  /// `Swift.CancellationError`, indistinguishable from the caller's own task
+  /// cancellation. They must surface as a typed error instead.
+  @Test
+  func connectFailureDoesNotSurfaceAsCancellationError() async {
+    let h = makeHarness(timeoutInterval: 0.2, maxRetryAttempts: 2, retryDelay: { _ in 0.01 })
+    h.ensureConnected.setValue(false)
+
+    do {
+      try await h.sut.subscribe()
+      Issue.record("Expected subscribe to throw when socket is not connected")
+    } catch {
+      #expect(!(error is CancellationError), "Connect failure surfaced as CancellationError")
+      #expect(error is RealtimeError)
+    }
+  }
+
   // MARK: - Unsubscribe
 
   @Test
@@ -283,6 +326,66 @@ struct ChannelStateManagerTests {
   }
 
   // MARK: - Server-close while subscribed
+
+  /// A server close that aborts an in-flight subscribe must surface as
+  /// `RealtimeError.channelClosedByServer` — never as `CancellationError`
+  /// (which callers must be able to attribute to their own task) and never
+  /// as `maxRetryAttemptsReached` (which can otherwise mask a close landing
+  /// on the final retry attempt).
+  @Test
+  func serverCloseDuringSubscribeSurfacesTypedError() async {
+    let h = makeHarness(timeoutInterval: 5.0, maxRetryAttempts: 1)
+
+    let subscribeTask = Task { try await h.sut.subscribe() }
+
+    // Wait until the join is in flight, then the server closes the channel.
+    while h.joinCallCount.value == 0 {
+      try? await Task.sleep(nanoseconds: 5_000_000)
+    }
+    await h.sut.didReceiveClose()
+
+    do {
+      try await subscribeTask.value
+      Issue.record("Expected subscribe to throw after server close")
+    } catch {
+      #expect(!(error is CancellationError), "Server close surfaced as CancellationError")
+      #expect(
+        (error as? RealtimeError)?.errorDescription
+          == RealtimeError.channelClosedByServer.errorDescription,
+        "Expected channelClosedByServer, got \(error)"
+      )
+    }
+  }
+
+  /// A close carrying a `join_ref` that doesn't match the current join must
+  /// be ignored — the check runs on the actor, atomically with the close.
+  @Test
+  func didReceiveCloseIgnoresStaleJoinRef() async throws {
+    let h = makeHarness()
+
+    let confirmer = confirmSubscribeOnJoin(h)
+    try await h.sut.subscribe()
+    _ = await confirmer.value
+
+    let applied = await h.sut.didReceiveClose(joinRef: "stale-join-ref")
+    #expect(!applied, "Close for a stale join_ref must be ignored")
+
+    let state = await h.sut.state
+    guard case .subscribed = state else {
+      Issue.record("Stale close changed state to \(state)")
+      return
+    }
+
+    let currentJoinRef = await h.sut.joinRef
+    let appliedCurrent = await h.sut.didReceiveClose(joinRef: currentJoinRef)
+    #expect(appliedCurrent, "Close for the current join_ref must be applied")
+
+    let finalState = await h.sut.state
+    guard case .unsubscribed = finalState else {
+      Issue.record("Expected .unsubscribed after matching close, got \(finalState)")
+      return
+    }
+  }
 
   @Test
   func didReceiveCloseTransitionsToUnsubscribed() async throws {
