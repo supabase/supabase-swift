@@ -408,7 +408,6 @@ features:
     status: implemented
     symbols:
       - FunctionsClient.requestIdleTimeout
-      - FunctionInvokeOptions.timeoutInterval
 
   # ── Realtime ───────────────────────────────────────────────────────────────
 
