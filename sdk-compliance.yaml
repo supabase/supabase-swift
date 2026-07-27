@@ -405,8 +405,10 @@ features:
       - FunctionRegion.usWest2
   functions.invocation.request_cancellation: implemented
   functions.invocation.timeout:
-    status: partially_implemented
-    note: "Default idle timeout is a hardcoded 150 s constant; no per-invocation override is exposed."
+    status: implemented
+    symbols:
+      - FunctionsClient.requestIdleTimeout
+      - FunctionInvokeOptions.timeoutInterval
 
   # ── Realtime ───────────────────────────────────────────────────────────────
 
