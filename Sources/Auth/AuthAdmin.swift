@@ -24,6 +24,8 @@ import HTTPTypes
 /// - ``inviteUserByEmail(_:data:redirectTo:)``
 /// - ``deleteUser(id:shouldSoftDelete:)``
 /// - ``listUsers(params:)``
+/// - ``generateLink(params:)``
+/// - ``signOut(jwt:scope:)``
 ///
 /// ### OAuth 2.1 clients
 /// - ``oauth``
@@ -148,6 +150,27 @@ public struct AuthAdmin: Sendable {
     )
   }
 
+  /// Signs out a user's session(s) using their access token.
+  ///
+  /// Unlike ``AuthClient/signOut(scope:)``, which signs out the *current* client's session, this
+  /// lets a server holding another user's access token force that session (or all/other sessions
+  /// for that user) to be revoked.
+  ///
+  /// - Parameters:
+  ///   - jwt: The access token of the session(s) to sign out.
+  ///   - scope: Specifies which sessions should be logged out.
+  /// - Warning: Never expose your `secret` key on the client.
+  public func signOut(jwt: String, scope: SignOutScope = .global) async throws {
+    _ = try await api.execute(
+      HTTPRequest(
+        url: configuration.url.appendingPathComponent("logout"),
+        method: .post,
+        query: [URLQueryItem(name: "scope", value: scope.rawValue)],
+        headers: [.authorization: "Bearer \(jwt)"]
+      )
+    )
+  }
+
   /// Get a list of users.
   ///
   /// This function should only be called on a server.
@@ -198,10 +221,6 @@ public struct AuthAdmin: Sendable {
     return pagination
   }
 
-  /*
-   Generate link is commented out temporarily due issues with they Auth's decoding is configured.
-   Will revisit it later.
-
   /// Generates email links and OTPs to be sent via a custom email provider.
   ///
   /// - Parameter params: The parameters for the link generation.
@@ -210,22 +229,20 @@ public struct AuthAdmin: Sendable {
   public func generateLink(params: GenerateLinkParams) async throws -> GenerateLinkResponse {
     try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("admin/generate_link").appendingQueryItems(
-          [
-            (params.redirectTo ?? configuration.redirectToURL).map {
-              URLQueryItem(
-                name: "redirect_to",
-                value: $0.absoluteString
-              )
-            }
-          ].compactMap { $0 }
-        ),
+        url: configuration.url.appendingPathComponent("admin/generate_link"),
         method: .post,
+        query: [
+          (params.redirectTo ?? configuration.redirectToURL).map {
+            URLQueryItem(
+              name: "redirect_to",
+              value: $0.absoluteString
+            )
+          }
+        ].compactMap { $0 },
         body: encoder.encode(params.body)
       )
     ).decoded(decoder: configuration.decoder)
   }
-   */
 }
 
 extension HTTPField.Name {
