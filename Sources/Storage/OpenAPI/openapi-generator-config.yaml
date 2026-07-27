@@ -1,0 +1,21 @@
+generate:
+  - types
+  - client
+accessModifier: internal
+filter:
+  operations:
+    - icebergBucketCreate
+    - icebergBucketDelete
+    - icebergBucketList
+    - icebergConfigGet
+    - icebergNamespaceCreate
+    - icebergNamespaceDrop
+    - icebergNamespaceList
+    - icebergNamespaceLoad
+    - icebergNamespaceExists
+    - icebergTableList
+    - icebergTableLoad
+    - icebergTableExists
+    - icebergTableCreate
+    - icebergTableDrop
+    - icebergTableCommit

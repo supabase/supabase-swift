@@ -28,6 +28,7 @@ let package = Package(
   dependencies: [
     .package(url: "https://github.com/apple/swift-crypto.git", "3.0.0"..<"5.0.0"),
     .package(url: "https://github.com/apple/swift-http-types.git", from: "1.3.0"),
+    .package(url: "https://github.com/apple/swift-openapi-runtime", from: "1.6.0"),
     .package(url: "https://github.com/open-telemetry/opentelemetry-swift-core.git", from: "2.5.0"),
     .package(url: "https://github.com/pointfreeco/swift-clocks", from: "1.0.0"),
     .package(url: "https://github.com/pointfreeco/swift-concurrency-extras", from: "1.1.0"),
@@ -176,8 +177,10 @@ let package = Package(
       dependencies: [
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
+        .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
         "Helpers",
-      ]
+      ],
+      exclude: ["OpenAPI"]
     ),
     .testTarget(
       name: "StorageTests",
