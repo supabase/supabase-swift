@@ -10,6 +10,16 @@ import Testing
   import FoundationNetworking
 #endif
 
+/// Captures the last `URLRequest` seen by a custom fetch handler, for tests that need to inspect
+/// properties (like `timeoutInterval`) not surfaced by Mocker's `snapshotRequest` curl output.
+private actor CapturedRequestBox {
+  var request: URLRequest?
+
+  func set(_ request: URLRequest) {
+    self.request = request
+  }
+}
+
 /// `.serialized`: Mocker registers stubs in a process-global table with no per-test isolation, so
 /// tests that stub overlapping URLs (e.g. `hello-world`) would otherwise race against each other
 /// under Swift Testing's default parallel execution. `.mockerSerialized` (see
@@ -376,6 +386,48 @@ struct FunctionsClientTests {
     } catch {
       Issue.record("Unexpected error thrown \(error)")
     }
+  }
+
+  @Test
+  func invokeWithTimeoutOverride() async throws {
+    let box = CapturedRequestBox()
+    let sut = FunctionsClient(
+      url: url,
+      headers: ["apikey": apiKey],
+      fetch: { request in
+        await box.set(request)
+        return (
+          Data(),
+          HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+        )
+      }
+    )
+
+    try await sut.invoke("hello-world", options: .init(timeoutInterval: 30))
+
+    let capturedRequest = await box.request
+    #expect(capturedRequest?.timeoutInterval == 30)
+  }
+
+  @Test
+  func invokeWithDefaultTimeout() async throws {
+    let box = CapturedRequestBox()
+    let sut = FunctionsClient(
+      url: url,
+      headers: ["apikey": apiKey],
+      fetch: { request in
+        await box.set(request)
+        return (
+          Data(),
+          HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+        )
+      }
+    )
+
+    try await sut.invoke("hello-world")
+
+    let capturedRequest = await box.request
+    #expect(capturedRequest?.timeoutInterval == FunctionsClient.requestIdleTimeout)
   }
 
   @Test
