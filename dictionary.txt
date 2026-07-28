@@ -107,6 +107,7 @@ nullslast
 oauthserver
 oidc
 OIDC
+posix
 omitempty
 openssl
 opentelemetry
@@ -210,9 +211,13 @@ XVCJ
 
 # Terms from HTTPRuntime (Sources/HTTPRuntime) and its tests.
 corelibs
+reencoded
+subdata
+Subrange
+TESTBOUNDARY
 
 # Terms from the OpenAPI-to-Swift code generator (tools/openapi-codegen) and
-# the generated Storage HTTP client (Sources/StorageOpenAPI).
+# the generated Storage HTTP client (Sources/Storage/Generated).
 associatedtype
 claude
 Codegen
@@ -227,10 +232,6 @@ IRHTTP
 nullable
 openapi
 ramanujan
-reencoded
-subdata
-Subrange
-TESTBOUNDARY
 
 # Terms from HTTPRuntimeTestHelpers planning and scheme configuration.
 parallelizable
