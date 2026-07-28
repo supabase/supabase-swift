@@ -102,9 +102,11 @@ package struct MultipartFormData: Sendable {
     let tempFile = tempDir.appendingPathComponent(UUID().uuidString)
 
     // Create temp file
-    guard FileManager.default.createFile(
-      atPath: tempFile.path, contents: nil, attributes: [.posixPermissions: 0o600]
-    ) else {
+    guard
+      FileManager.default.createFile(
+        atPath: tempFile.path, contents: nil, attributes: [.posixPermissions: 0o600]
+      )
+    else {
       throw MultipartFormatDataError.createTempFileFailed
     }
 
