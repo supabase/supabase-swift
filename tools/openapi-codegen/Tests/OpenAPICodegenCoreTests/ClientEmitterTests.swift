@@ -108,11 +108,11 @@ struct ClientEmitterTests {
 
           internal func createObject(bucketId: String, file: URL, cacheControl: String) async throws {
             var builder = HTTPRequestBuilder(method: .post, baseURL: baseURL, path: "/object/\(PathEncoding.segment(bucketId))")
-            let formData = MultipartFormData()
+            let formData = HTTPRuntime.MultipartFormData()
               .addFile(name: "file", fileURL: file, fileName: file.lastPathComponent, mimeType: "application/octet-stream")
               .addText(name: "cacheControl", value: String(describing: cacheControl))
             builder.setHeader("Content-Type", formData.contentType)
-            builder.setBody(.multipart(formData))
+            builder.setBody(.file(try formData.buildToTempFile()))
             let response = try await transport.send(try builder.build())
             try response.checkStatus(errorTypes: [:])
           }

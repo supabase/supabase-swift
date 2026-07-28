@@ -37,12 +37,16 @@
           },
           "message": {
             "type": "string"
+          },
+          "code": {
+            "type": "string"
           }
         },
         "required": [
           "statusCode",
           "error",
-          "message"
+          "message",
+          "code"
         ]
       },
       "bucketSchema": {
@@ -171,6 +175,57 @@
             "size": 1234
           }
         }
+      },
+      "vectorBucketSchema": {
+        "type": "object",
+        "properties": {
+          "vectorBucketName": {
+            "type": "string"
+          },
+          "creationTime": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Unix timestamp (seconds) of when the bucket was created, if known."
+          }
+        },
+        "required": [
+          "vectorBucketName"
+        ],
+        "additionalProperties": false,
+        "example": {
+          "vectorBucketName": "embeddings-prod",
+          "creationTime": 1735689600
+        }
+      },
+      "getVectorBucketResponse": {
+        "type": "object",
+        "properties": {
+          "vectorBucket": {
+            "$ref": "#/components/schemas/vectorBucketSchema"
+          }
+        },
+        "required": [
+          "vectorBucket"
+        ],
+        "additionalProperties": false
+      },
+      "listVectorBucketsResponse": {
+        "type": "object",
+        "properties": {
+          "vectorBuckets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/vectorBucketSchema"
+            }
+          },
+          "nextToken": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "vectorBuckets"
+        ],
+        "additionalProperties": false
       }
     }
   },
@@ -179,14 +234,48 @@
       "get": {
         "responses": {
           "200": {
-            "description": "Default Response"
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Default Response"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
           }
         }
       },
       "head": {
         "responses": {
           "200": {
-            "description": "Default Response"
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Default Response"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
           }
         }
       }
@@ -224,6 +313,16 @@
                 }
               }
             }
+          },
+          "4XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
           }
         }
       },
@@ -236,7 +335,24 @@
         "description": "Handle OPTIONS request for TUS Resumable uploads",
         "responses": {
           "200": {
-            "description": "Default Response"
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Default Response"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
           }
         }
       }
@@ -277,6 +393,16 @@
           },
           "403": {
             "description": "Access denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error response",
             "content": {
               "application/json": {
                 "schema": {
@@ -329,6 +455,16 @@
                 }
               }
             }
+          },
+          "4XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
           }
         }
       },
@@ -367,6 +503,16 @@
           },
           "403": {
             "description": "Access denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error response",
             "content": {
               "application/json": {
                 "schema": {
@@ -419,6 +565,16 @@
                 }
               }
             }
+          },
+          "4XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
           }
         }
       },
@@ -464,6 +620,16 @@
                 }
               }
             }
+          },
+          "4XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
           }
         }
       },
@@ -486,7 +652,24 @@
         ],
         "responses": {
           "200": {
-            "description": "Default Response"
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Default Response"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
           }
         }
       }
@@ -501,7 +684,24 @@
         "description": "Creates a new resumable upload and returns its Location URL; the sign/ variant authorizes via the x-signature header from a presigned token instead of a JWT",
         "responses": {
           "200": {
-            "description": "Default Response"
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Default Response"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
           }
         }
       },
@@ -514,7 +714,24 @@
         "description": "Handle OPTIONS request for TUS Resumable uploads",
         "responses": {
           "200": {
-            "description": "Default Response"
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Default Response"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
           }
         }
       }
@@ -539,7 +756,24 @@
         ],
         "responses": {
           "200": {
-            "description": "Default Response"
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Default Response"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
           }
         }
       },
@@ -562,7 +796,24 @@
         ],
         "responses": {
           "200": {
-            "description": "Default Response"
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Default Response"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
           }
         }
       },
@@ -585,7 +836,24 @@
         ],
         "responses": {
           "200": {
-            "description": "Default Response"
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Default Response"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
           }
         }
       },
@@ -608,7 +876,24 @@
         ],
         "responses": {
           "200": {
-            "description": "Default Response"
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Default Response"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
           }
         }
       },
@@ -631,7 +916,24 @@
         ],
         "responses": {
           "200": {
-            "description": "Default Response"
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Default Response"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
           }
         }
       },
@@ -654,7 +956,24 @@
         ],
         "responses": {
           "200": {
-            "description": "Default Response"
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Default Response"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
           }
         }
       }
@@ -712,6 +1031,16 @@
             }
           },
           "4XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
+          },
+          "5XX": {
             "description": "Error response",
             "content": {
               "application/json": {
@@ -844,6 +1173,16 @@
                 }
               }
             }
+          },
+          "5XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
           }
         }
       },
@@ -892,6 +1231,7 @@
                       },
                       {
                         "type": "string",
+                        "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[gG][bB]|[mM][bB]|[kK][bB]|[bB])$",
                         "examples": [
                           "100MB"
                         ],
@@ -955,6 +1295,16 @@
             }
           },
           "4XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
+          },
+          "5XX": {
             "description": "Error response",
             "content": {
               "application/json": {
@@ -1085,6 +1435,16 @@
                 }
               }
             }
+          },
+          "5XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
           }
         }
       }
@@ -1135,6 +1495,16 @@
             }
           },
           "4XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
+          },
+          "5XX": {
             "description": "Error response",
             "content": {
               "application/json": {
@@ -1199,6 +1569,16 @@
                 }
               }
             }
+          },
+          "5XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
           }
         }
       },
@@ -1233,6 +1613,7 @@
                       },
                       {
                         "type": "string",
+                        "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[gG][bB]|[mM][bB]|[kK][bB]|[bB])$",
                         "examples": [
                           "100MB"
                         ],
@@ -1311,6 +1692,16 @@
                 }
               }
             }
+          },
+          "5XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
           }
         }
       },
@@ -1366,6 +1757,16 @@
             }
           },
           "4XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
+          },
+          "5XX": {
             "description": "Error response",
             "content": {
               "application/json": {
@@ -1448,6 +1849,16 @@
                 }
               }
             }
+          },
+          "5XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
           }
         }
       },
@@ -1495,7 +1906,17 @@
             }
           },
           "4XX": {
-            "description": "Default Response",
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error response",
             "content": {
               "application/json": {
                 "schema": {
@@ -1513,6 +1934,32 @@
           "object"
         ],
         "description": "Always overwrites the object at the given key, in contrast to the create-object endpoint which requires x-upsert to overwrite",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "cacheControl": {
+                    "type": "string"
+                  },
+                  "metadata": {
+                    "type": "string"
+                  },
+                  "file": {
+                    "type": "string",
+                    "contentEncoding": "binary"
+                  }
+                },
+                "required": [
+                  "cacheControl",
+                  "file"
+                ]
+              }
+            }
+          }
+        },
         "parameters": [
           {
             "schema": {
@@ -1573,6 +2020,16 @@
             }
           },
           "4XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
+          },
+          "5XX": {
             "description": "Error response",
             "content": {
               "application/json": {
@@ -1684,7 +2141,17 @@
             }
           },
           "4XX": {
-            "description": "Default Response",
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error response",
             "content": {
               "application/json": {
                 "schema": {
@@ -1702,6 +2169,32 @@
           "object"
         ],
         "description": "Fails if an object already exists at the given key unless the x-upsert header is set to true",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "cacheControl": {
+                    "type": "string"
+                  },
+                  "metadata": {
+                    "type": "string"
+                  },
+                  "file": {
+                    "type": "string",
+                    "contentEncoding": "binary"
+                  }
+                },
+                "required": [
+                  "cacheControl",
+                  "file"
+                ]
+              }
+            }
+          }
+        },
         "parameters": [
           {
             "schema": {
@@ -1762,6 +2255,16 @@
             }
           },
           "4XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
+          },
+          "5XX": {
             "description": "Error response",
             "content": {
               "application/json": {
@@ -1859,6 +2362,16 @@
                 }
               }
             }
+          },
+          "5XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
           }
         }
       }
@@ -1924,6 +2437,16 @@
             }
           },
           "4XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
+          },
+          "5XX": {
             "description": "Error response",
             "content": {
               "application/json": {
@@ -2043,6 +2566,16 @@
                 }
               }
             }
+          },
+          "5XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
           }
         }
       }
@@ -2123,6 +2656,16 @@
                 }
               }
             }
+          },
+          "5XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
           }
         }
       },
@@ -2133,6 +2676,32 @@
           "object"
         ],
         "description": "Verifies the token query parameter instead of requiring an authorization header, and does not need the caller to have direct bucket access",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "cacheControl": {
+                    "type": "string"
+                  },
+                  "metadata": {
+                    "type": "string"
+                  },
+                  "file": {
+                    "type": "string",
+                    "contentEncoding": "binary"
+                  }
+                },
+                "required": [
+                  "cacheControl",
+                  "file"
+                ]
+              }
+            }
+          }
+        },
         "parameters": [
           {
             "schema": {
@@ -2184,6 +2753,16 @@
             }
           },
           "4XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
+          },
+          "5XX": {
             "description": "Error response",
             "content": {
               "application/json": {
@@ -2325,6 +2904,16 @@
                 }
               }
             }
+          },
+          "5XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
           }
         }
       },
@@ -2390,6 +2979,16 @@
                 }
               }
             }
+          },
+          "5XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
           }
         }
       },
@@ -2447,6 +3046,16 @@
         ],
         "responses": {
           "4XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
+          },
+          "5XX": {
             "description": "Error response",
             "content": {
               "application/json": {
@@ -2571,6 +3180,16 @@
                 }
               }
             }
+          },
+          "5XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
           }
         }
       }
@@ -2661,6 +3280,16 @@
                 }
               }
             }
+          },
+          "5XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
           }
         }
       }
@@ -2739,18 +3368,28 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Default Response",
+          "403": {
+            "description": "Access denied",
             "content": {
               "application/json": {
                 "schema": {
-                  "description": "Default Response"
+                  "$ref": "#/components/schemas/errorSchema"
                 }
               }
             }
           },
-          "403": {
-            "description": "Access denied",
+          "4XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error response",
             "content": {
               "application/json": {
                 "schema": {
@@ -2875,6 +3514,16 @@
                 }
               }
             }
+          },
+          "5XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
           }
         }
       }
@@ -2980,6 +3629,16 @@
             }
           },
           "4XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
+          },
+          "5XX": {
             "description": "Error response",
             "content": {
               "application/json": {
@@ -3099,6 +3758,16 @@
                 }
               }
             }
+          },
+          "5XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
           }
         }
       }
@@ -3204,7 +3873,17 @@
             }
           },
           "4XX": {
-            "description": "Default Response",
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error response",
             "content": {
               "application/json": {
                 "schema": {
@@ -3315,7 +3994,17 @@
             }
           },
           "4XX": {
-            "description": "Default Response",
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error response",
             "content": {
               "application/json": {
                 "schema": {
@@ -3475,6 +4164,16 @@
                 }
               }
             }
+          },
+          "5XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
           }
         }
       }
@@ -3525,6 +4224,16 @@
         ],
         "responses": {
           "4XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
+          },
+          "5XX": {
             "description": "Error response",
             "content": {
               "application/json": {
@@ -3621,7 +4330,17 @@
         ],
         "responses": {
           "4XX": {
-            "description": "Default Response",
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error response",
             "content": {
               "application/json": {
                 "schema": {
@@ -3719,7 +4438,17 @@
         ],
         "responses": {
           "4XX": {
-            "description": "Default Response",
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error response",
             "content": {
               "application/json": {
                 "schema": {
@@ -3849,6 +4578,16 @@
                 }
               }
             }
+          },
+          "5XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
           }
         }
       },
@@ -3969,6 +4708,16 @@
                 }
               }
             }
+          },
+          "5XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
           }
         }
       }
@@ -4029,6 +4778,16 @@
                 }
               }
             }
+          },
+          "5XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
           }
         }
       },
@@ -4079,6 +4838,16 @@
         ],
         "responses": {
           "4XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
+          },
+          "5XX": {
             "description": "Error response",
             "content": {
               "application/json": {
@@ -4194,6 +4963,16 @@
                 }
               }
             }
+          },
+          "5XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
           }
         }
       },
@@ -4299,6 +5078,16 @@
                 }
               }
             }
+          },
+          "5XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
           }
         }
       }
@@ -4355,6 +5144,16 @@
             }
           },
           "4XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
+          },
+          "5XX": {
             "description": "Error response",
             "content": {
               "application/json": {
@@ -4428,6 +5227,16 @@
             }
           },
           "4XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
+          },
+          "5XX": {
             "description": "Error response",
             "content": {
               "application/json": {
@@ -4519,6 +5328,16 @@
                 }
               }
             }
+          },
+          "5XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
           }
         }
       }
@@ -4556,6 +5375,16 @@
                 }
               }
             }
+          },
+          "4XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
           }
         }
       },
@@ -4584,6 +5413,16 @@
           },
           "403": {
             "description": "Access denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errorSchema"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error response",
             "content": {
               "application/json": {
                 "schema": {

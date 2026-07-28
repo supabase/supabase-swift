@@ -299,7 +299,9 @@ public enum SwiftEmitter {
         "    builder.setBody(.data(try JSONCoding.encoder.encode(payload)))",
       ]
     case .multipart(let fields):
-      var formDataExpression = "MultipartFormData()"
+      // Module-qualified: the target module may declare its own unrelated
+      // `MultipartFormData` type, which would otherwise shadow HTTPRuntime's.
+      var formDataExpression = "HTTPRuntime.MultipartFormData()"
       for field in fields {
         let name = SwiftNames.propertyName(field.name)
         if field.isFile {
@@ -313,7 +315,7 @@ public enum SwiftEmitter {
       return [
         "    let formData = \(formDataExpression)",
         "    builder.setHeader(\"Content-Type\", formData.contentType)",
-        "    builder.setBody(.multipart(formData))",
+        "    builder.setBody(.file(try formData.buildToTempFile()))",
       ]
     }
   }

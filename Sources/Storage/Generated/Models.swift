@@ -217,14 +217,34 @@ internal enum StorageBackendAPI {
   }
 
   internal struct ErrorSchema: Codable, Sendable, Hashable, APIError {
+    internal var code: String
     internal var error: String
     internal var message: String
     internal var statusCode: String
 
     enum CodingKeys: String, CodingKey {
+      case code = "code"
       case error = "error"
       case message = "message"
       case statusCode = "statusCode"
+    }
+  }
+
+  internal struct GetVectorBucketResponse: Codable, Sendable, Hashable {
+    internal var vectorBucket: VectorBucketSchema
+
+    enum CodingKeys: String, CodingKey {
+      case vectorBucket = "vectorBucket"
+    }
+  }
+
+  internal struct ListVectorBucketsResponse: Codable, Sendable, Hashable {
+    internal var nextToken: String?
+    internal var vectorBuckets: [VectorBucketSchema]
+
+    enum CodingKeys: String, CodingKey {
+      case nextToken = "nextToken"
+      case vectorBuckets = "vectorBuckets"
     }
   }
 
@@ -681,6 +701,16 @@ internal enum StorageBackendAPI {
     case cover = "cover"
     case contain = "contain"
     case fill = "fill"
+  }
+
+  internal struct VectorBucketSchema: Codable, Sendable, Hashable {
+    internal var creationTime: Int?
+    internal var vectorBucketName: String
+
+    enum CodingKeys: String, CodingKey {
+      case creationTime = "creationTime"
+      case vectorBucketName = "vectorBucketName"
+    }
   }
 
 }

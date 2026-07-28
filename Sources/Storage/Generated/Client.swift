@@ -391,9 +391,7 @@ extension StorageBackendAPI {
       return try JSONCoding.decoder.decode([ObjectSchema].self, from: response.body)
     }
 
-    internal func objectListV2(bucketName: String, payload: ObjectListV2RequestBody) async throws
-      -> [String: JSONValue]
-    {
+    internal func objectListV2(bucketName: String, payload: ObjectListV2RequestBody) async throws {
       var builder = HTTPRequestBuilder(
         method: .post, baseURL: baseURL, path: "/object/list-v2/\(PathEncoding.segment(bucketName))"
       )
@@ -401,7 +399,6 @@ extension StorageBackendAPI {
       builder.setBody(.data(try JSONCoding.encoder.encode(payload)))
       let response = try await transport.send(try builder.build())
       try response.checkStatus(errorTypes: [403: ErrorSchema.self])
-      return try JSONCoding.decoder.decode([String: JSONValue].self, from: response.body)
     }
 
     internal func objectMove(payload: ObjectMoveRequestBody) async throws -> ObjectMoveResponse200 {
@@ -452,37 +449,56 @@ extension StorageBackendAPI {
       return try JSONCoding.decoder.decode(ObjectSignUploadUrlResponse200.self, from: response.body)
     }
 
-    internal func objectUpload(bucketName: String, wildcard: String) async throws
-      -> ObjectUploadResponse200
-    {
-      let builder = HTTPRequestBuilder(
+    internal func objectUpload(
+      bucketName: String, wildcard: String, cacheControl: String, file: String, metadata: String
+    ) async throws -> ObjectUploadResponse200 {
+      var builder = HTTPRequestBuilder(
         method: .post, baseURL: baseURL,
         path: "/object/\(PathEncoding.segment(bucketName))/\(PathEncoding.segment(wildcard))")
+      let formData = HTTPRuntime.MultipartFormData()
+        .addText(name: "cacheControl", value: String(describing: cacheControl))
+        .addText(name: "file", value: String(describing: file))
+        .addText(name: "metadata", value: String(describing: metadata))
+      builder.setHeader("Content-Type", formData.contentType)
+      builder.setBody(.file(try formData.buildToTempFile()))
       let response = try await transport.send(try builder.build())
       try response.checkStatus(errorTypes: [403: ErrorSchema.self])
       return try JSONCoding.decoder.decode(ObjectUploadResponse200.self, from: response.body)
     }
 
-    internal func objectUploadSigned(bucketName: String, token: String, wildcard: String)
-      async throws -> ObjectUploadSignedResponse200
-    {
+    internal func objectUploadSigned(
+      bucketName: String, token: String, wildcard: String, cacheControl: String, file: String,
+      metadata: String
+    ) async throws -> ObjectUploadSignedResponse200 {
       var builder = HTTPRequestBuilder(
         method: .put, baseURL: baseURL,
         path:
           "/object/upload/sign/\(PathEncoding.segment(bucketName))/\(PathEncoding.segment(wildcard))"
       )
       builder.addQuery("token", token)
+      let formData = HTTPRuntime.MultipartFormData()
+        .addText(name: "cacheControl", value: String(describing: cacheControl))
+        .addText(name: "file", value: String(describing: file))
+        .addText(name: "metadata", value: String(describing: metadata))
+      builder.setHeader("Content-Type", formData.contentType)
+      builder.setBody(.file(try formData.buildToTempFile()))
       let response = try await transport.send(try builder.build())
       try response.checkStatus(errorTypes: [:])
       return try JSONCoding.decoder.decode(ObjectUploadSignedResponse200.self, from: response.body)
     }
 
-    internal func objectUploadUpdate(bucketName: String, wildcard: String) async throws
-      -> ObjectUploadUpdateResponse200
-    {
-      let builder = HTTPRequestBuilder(
+    internal func objectUploadUpdate(
+      bucketName: String, wildcard: String, cacheControl: String, file: String, metadata: String
+    ) async throws -> ObjectUploadUpdateResponse200 {
+      var builder = HTTPRequestBuilder(
         method: .put, baseURL: baseURL,
         path: "/object/\(PathEncoding.segment(bucketName))/\(PathEncoding.segment(wildcard))")
+      let formData = HTTPRuntime.MultipartFormData()
+        .addText(name: "cacheControl", value: String(describing: cacheControl))
+        .addText(name: "file", value: String(describing: file))
+        .addText(name: "metadata", value: String(describing: metadata))
+      builder.setHeader("Content-Type", formData.contentType)
+      builder.setBody(.file(try formData.buildToTempFile()))
       let response = try await transport.send(try builder.build())
       try response.checkStatus(errorTypes: [403: ErrorSchema.self])
       return try JSONCoding.decoder.decode(ObjectUploadUpdateResponse200.self, from: response.body)
@@ -596,34 +612,38 @@ extension StorageBackendAPI {
       try response.checkStatus(errorTypes: [:])
     }
 
-    internal func tusOptions() async throws {
+    internal func tusOptions() async throws -> [String: JSONValue] {
       let builder = HTTPRequestBuilder(
         method: .options, baseURL: baseURL, path: "/upload/resumable/")
       let response = try await transport.send(try builder.build())
       try response.checkStatus(errorTypes: [:])
+      return try JSONCoding.decoder.decode([String: JSONValue].self, from: response.body)
     }
 
-    internal func tusOptionsOptions(wildcard: String) async throws {
+    internal func tusOptionsOptions(wildcard: String) async throws -> [String: JSONValue] {
       let builder = HTTPRequestBuilder(
         method: .options, baseURL: baseURL,
         path: "/upload/resumable/\(PathEncoding.segment(wildcard))")
       let response = try await transport.send(try builder.build())
       try response.checkStatus(errorTypes: [:])
+      return try JSONCoding.decoder.decode([String: JSONValue].self, from: response.body)
     }
 
-    internal func tusOptionsSigned() async throws {
+    internal func tusOptionsSigned() async throws -> [String: JSONValue] {
       let builder = HTTPRequestBuilder(
         method: .options, baseURL: baseURL, path: "/upload/resumable/sign/")
       let response = try await transport.send(try builder.build())
       try response.checkStatus(errorTypes: [:])
+      return try JSONCoding.decoder.decode([String: JSONValue].self, from: response.body)
     }
 
-    internal func tusOptionsSignedOptions(wildcard: String) async throws {
+    internal func tusOptionsSignedOptions(wildcard: String) async throws -> [String: JSONValue] {
       let builder = HTTPRequestBuilder(
         method: .options, baseURL: baseURL,
         path: "/upload/resumable/sign/\(PathEncoding.segment(wildcard))")
       let response = try await transport.send(try builder.build())
       try response.checkStatus(errorTypes: [:])
+      return try JSONCoding.decoder.decode([String: JSONValue].self, from: response.body)
     }
 
     internal func tusUploadCreate() async throws -> [String: JSONValue] {
@@ -642,19 +662,21 @@ extension StorageBackendAPI {
       return try JSONCoding.decoder.decode([String: JSONValue].self, from: response.body)
     }
 
-    internal func tusUploadCreateSigned() async throws {
+    internal func tusUploadCreateSigned() async throws -> [String: JSONValue] {
       let builder = HTTPRequestBuilder(
         method: .post, baseURL: baseURL, path: "/upload/resumable/sign/")
       let response = try await transport.send(try builder.build())
       try response.checkStatus(errorTypes: [:])
+      return try JSONCoding.decoder.decode([String: JSONValue].self, from: response.body)
     }
 
-    internal func tusUploadCreateSignedPost(wildcard: String) async throws {
+    internal func tusUploadCreateSignedPost(wildcard: String) async throws -> [String: JSONValue] {
       let builder = HTTPRequestBuilder(
         method: .post, baseURL: baseURL,
         path: "/upload/resumable/sign/\(PathEncoding.segment(wildcard))")
       let response = try await transport.send(try builder.build())
       try response.checkStatus(errorTypes: [:])
+      return try JSONCoding.decoder.decode([String: JSONValue].self, from: response.body)
     }
 
     internal func tusUploadDelete(wildcard: String) async throws -> [String: JSONValue] {
@@ -666,12 +688,13 @@ extension StorageBackendAPI {
       return try JSONCoding.decoder.decode([String: JSONValue].self, from: response.body)
     }
 
-    internal func tusUploadDeleteSigned(wildcard: String) async throws {
+    internal func tusUploadDeleteSigned(wildcard: String) async throws -> [String: JSONValue] {
       let builder = HTTPRequestBuilder(
         method: .delete, baseURL: baseURL,
         path: "/upload/resumable/sign/\(PathEncoding.segment(wildcard))")
       let response = try await transport.send(try builder.build())
       try response.checkStatus(errorTypes: [:])
+      return try JSONCoding.decoder.decode([String: JSONValue].self, from: response.body)
     }
 
     internal func tusUploadGet(wildcard: String) async throws -> [String: JSONValue] {
@@ -683,12 +706,13 @@ extension StorageBackendAPI {
       return try JSONCoding.decoder.decode([String: JSONValue].self, from: response.body)
     }
 
-    internal func tusUploadGetSigned(wildcard: String) async throws {
+    internal func tusUploadGetSigned(wildcard: String) async throws -> [String: JSONValue] {
       let builder = HTTPRequestBuilder(
         method: .head, baseURL: baseURL,
         path: "/upload/resumable/sign/\(PathEncoding.segment(wildcard))")
       let response = try await transport.send(try builder.build())
       try response.checkStatus(errorTypes: [:])
+      return try JSONCoding.decoder.decode([String: JSONValue].self, from: response.body)
     }
 
     internal func tusUploadPart(wildcard: String) async throws -> [String: JSONValue] {
@@ -708,20 +732,22 @@ extension StorageBackendAPI {
       return try JSONCoding.decoder.decode([String: JSONValue].self, from: response.body)
     }
 
-    internal func tusUploadPartSigned(wildcard: String) async throws {
+    internal func tusUploadPartSigned(wildcard: String) async throws -> [String: JSONValue] {
       let builder = HTTPRequestBuilder(
         method: .put, baseURL: baseURL,
         path: "/upload/resumable/sign/\(PathEncoding.segment(wildcard))")
       let response = try await transport.send(try builder.build())
       try response.checkStatus(errorTypes: [:])
+      return try JSONCoding.decoder.decode([String: JSONValue].self, from: response.body)
     }
 
-    internal func tusUploadPartSignedPatch(wildcard: String) async throws {
+    internal func tusUploadPartSignedPatch(wildcard: String) async throws -> [String: JSONValue] {
       let builder = HTTPRequestBuilder(
         method: .patch, baseURL: baseURL,
         path: "/upload/resumable/sign/\(PathEncoding.segment(wildcard))")
       let response = try await transport.send(try builder.build())
       try response.checkStatus(errorTypes: [:])
+      return try JSONCoding.decoder.decode([String: JSONValue].self, from: response.body)
     }
   }
 }
