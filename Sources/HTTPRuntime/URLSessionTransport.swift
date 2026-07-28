@@ -65,6 +65,7 @@ package struct URLSessionTransport: HTTPTransport {
     // (`bytes(for:)`/`AsyncBytes`), so on Linux the response is buffered in
     // full and delivered as a single chunk instead of streamed incrementally.
     package func stream(_ request: HTTPRequest) async throws(HTTPError) -> HTTPResponseStream {
+      try Self.rejectFileBody(request)
       let urlRequest = Self.makeURLRequest(request)
       let data: Data
       let response: URLResponse
@@ -81,6 +82,7 @@ package struct URLSessionTransport: HTTPTransport {
     }
   #else
     package func stream(_ request: HTTPRequest) async throws(HTTPError) -> HTTPResponseStream {
+      try Self.rejectFileBody(request)
       let urlRequest = Self.makeURLRequest(request)
       let bytes: URLSession.AsyncBytes
       let response: URLResponse
@@ -117,6 +119,18 @@ package struct URLSessionTransport: HTTPTransport {
   #endif
 
   // MARK: - Helpers
+
+  /// `stream(_:)` uses `session.data(for:)`/`bytes(for:)`, neither of which
+  /// takes a file URL, so a `.file` body would silently transmit empty
+  /// instead of the file's contents. Reject it up front rather than send(_:)
+  /// which knows how to upload file bodies.
+  private static func rejectFileBody(_ request: HTTPRequest) throws(HTTPError) {
+    if case .file = request.body {
+      throw HTTPError.unsupportedRequestBody(
+        "stream(_:) does not support file-backed request bodies; use send(_:uploadProgress:) instead."
+      )
+    }
+  }
 
   private static func makeURLRequest(_ request: HTTPRequest) -> URLRequest {
     var urlRequest = URLRequest(url: request.url)

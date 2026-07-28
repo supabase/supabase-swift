@@ -13,6 +13,9 @@ package enum HTTPError: Error, Sendable {
   case transport(any Error & Sendable)
   case decoding(any Error & Sendable)
   // case encoding(any Error)
+  /// A request shape the transport can't carry out, e.g. a file-backed body
+  /// passed to `stream(_:)`, which only sends buffered/in-memory bodies.
+  case unsupportedRequestBody(String)
   /// A non-success status whose body did not decode to any modeled error.
   case unexpectedResponse(response: HTTPResponse, underlyingError: (any Error & Sendable)? = nil)
 }
