@@ -81,32 +81,21 @@ public class StorageBucketApi: StorageApi, @unchecked Sendable {
   public func createBucket(_ id: String, options: BucketOptions = BucketOptions(isPublic: false))
     async throws
   {
-    let output = try await openAPIClient.bucketCreate(
-      .init(
-        body: .json(
-          .init(
-            name: id,
+    try await execute(
+      HTTPRequest(
+        url: configuration.url.appendingPathComponent("bucket"),
+        method: .post,
+        body: configuration.encoder.encode(
+          BucketParameters(
             id: id,
-            _public: options.isPublic,
-            file_size_limit: options.fileSizeLimit.map { limit in
-              if let intValue = Int64(limit) {
-                Operations.bucketCreate.Input.Body.jsonPayload.file_size_limitPayload(
-                  value1: Int(intValue)
-                )
-              } else {
-                Operations.bucketCreate.Input.Body.jsonPayload.file_size_limitPayload(
-                  value2: limit
-                )
-              }
-            },
-            allowed_mime_types: options.allowedMimeTypes
+            name: id,
+            public: options.isPublic,
+            fileSizeLimit: options.fileSizeLimit.map { StorageByteCount(stringLiteral: $0) },
+            allowedMimeTypes: options.allowedMimeTypes
           )
         )
       )
     )
-    guard case .ok = output else {
-      throw StorageError(statusCode: nil, message: "Unexpected response from Storage API")
-    }
   }
 
   /// Updates an existing Storage bucket's settings.
