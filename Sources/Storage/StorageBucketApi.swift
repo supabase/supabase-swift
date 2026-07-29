@@ -36,20 +36,10 @@ public class StorageBucketApi: StorageApi, @unchecked Sendable {
   /// - Throws: ``StorageError`` if the request fails or the caller is not authorized.
   public func listBuckets() async throws -> [Bucket] {
     let output = try await openAPIClient.bucketList(.init())
-    switch output {
-    case .ok(let response):
-      guard case .json(let buckets) = response.body else {
-        throw StorageError.unexpectedResponse()
-      }
-      return buckets.map(Bucket.init(fromGenerated:))
-    case .forbidden(let response):
-      throw try StorageError(decoding: response.body.json)
-    case .clientError(let statusCode, let response):
-      throw try StorageError(statusCode: statusCode, decoding: response.body.json)
-    case .undocumented(let statusCode, let payload):
-      throw await StorageError(
-        statusCode: statusCode, undocumented: payload, decoder: configuration.decoder)
+    guard case .ok(let response) = output, case .json(let buckets) = response.body else {
+      throw StorageError(statusCode: nil, message: "Unexpected response from Storage API")
     }
+    return buckets.map(Bucket.init(fromGenerated:))
   }
 
   /// Retrieves the details of an existing Storage bucket.
@@ -59,20 +49,10 @@ public class StorageBucketApi: StorageApi, @unchecked Sendable {
   /// - Throws: ``StorageError`` if the bucket does not exist or the caller is not authorized.
   public func getBucket(_ id: String) async throws -> Bucket {
     let output = try await openAPIClient.bucketGet(.init(path: .init(bucketId: id)))
-    switch output {
-    case .ok(let response):
-      guard case .json(let bucket) = response.body else {
-        throw StorageError.unexpectedResponse()
-      }
-      return Bucket(fromGenerated: bucket)
-    case .forbidden(let response):
-      throw try StorageError(decoding: response.body.json)
-    case .clientError(let statusCode, let response):
-      throw try StorageError(statusCode: statusCode, decoding: response.body.json)
-    case .undocumented(let statusCode, let payload):
-      throw await StorageError(
-        statusCode: statusCode, undocumented: payload, decoder: configuration.decoder)
+    guard case .ok(let response) = output, case .json(let bucket) = response.body else {
+      throw StorageError(statusCode: nil, message: "Unexpected response from Storage API")
     }
+    return Bucket(fromGenerated: bucket)
   }
 
   /// Creates a new Storage bucket.
@@ -116,16 +96,8 @@ public class StorageBucketApi: StorageApi, @unchecked Sendable {
         )
       )
     )
-    switch output {
-    case .ok:
-      return
-    case .forbidden(let response):
-      throw try StorageError(decoding: response.body.json)
-    case .clientError(let statusCode, let response):
-      throw try StorageError(statusCode: statusCode, decoding: response.body.json)
-    case .undocumented(let statusCode, let payload):
-      throw await StorageError(
-        statusCode: statusCode, undocumented: payload, decoder: configuration.decoder)
+    guard case .ok = output else {
+      throw StorageError(statusCode: nil, message: "Unexpected response from Storage API")
     }
   }
 
@@ -165,16 +137,8 @@ public class StorageBucketApi: StorageApi, @unchecked Sendable {
         )
       )
     )
-    switch output {
-    case .ok:
-      return
-    case .forbidden(let response):
-      throw try StorageError(decoding: response.body.json)
-    case .clientError(let statusCode, let response):
-      throw try StorageError(statusCode: statusCode, decoding: response.body.json)
-    case .undocumented(let statusCode, let payload):
-      throw await StorageError(
-        statusCode: statusCode, undocumented: payload, decoder: configuration.decoder)
+    guard case .ok = output else {
+      throw StorageError(statusCode: nil, message: "Unexpected response from Storage API")
     }
   }
 
@@ -187,16 +151,8 @@ public class StorageBucketApi: StorageApi, @unchecked Sendable {
   /// - Throws: ``StorageError`` if the bucket does not exist or the caller is not authorized.
   public func emptyBucket(_ id: String) async throws {
     let output = try await openAPIClient.bucketEmpty(.init(path: .init(bucketId: id)))
-    switch output {
-    case .ok:
-      return
-    case .forbidden(let response):
-      throw try StorageError(decoding: response.body.json)
-    case .clientError(let statusCode, let response):
-      throw try StorageError(statusCode: statusCode, decoding: response.body.json)
-    case .undocumented(let statusCode, let payload):
-      throw await StorageError(
-        statusCode: statusCode, undocumented: payload, decoder: configuration.decoder)
+    guard case .ok = output else {
+      throw StorageError(statusCode: nil, message: "Unexpected response from Storage API")
     }
   }
 
@@ -210,16 +166,8 @@ public class StorageBucketApi: StorageApi, @unchecked Sendable {
   ///   authorized.
   public func deleteBucket(_ id: String) async throws {
     let output = try await openAPIClient.bucketDelete(.init(path: .init(bucketId: id)))
-    switch output {
-    case .ok:
-      return
-    case .forbidden(let response):
-      throw try StorageError(decoding: response.body.json)
-    case .clientError(let statusCode, let response):
-      throw try StorageError(statusCode: statusCode, decoding: response.body.json)
-    case .undocumented(let statusCode, let payload):
-      throw await StorageError(
-        statusCode: statusCode, undocumented: payload, decoder: configuration.decoder)
+    guard case .ok = output else {
+      throw StorageError(statusCode: nil, message: "Unexpected response from Storage API")
     }
   }
 }
