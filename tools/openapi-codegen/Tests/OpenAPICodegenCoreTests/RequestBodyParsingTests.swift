@@ -3,7 +3,7 @@
 //
 
 import Foundation
-import OpenAPIKit30
+import OpenAPIKit
 import Testing
 
 @testable import OpenAPICodegenCore
@@ -12,7 +12,7 @@ import Testing
 struct RequestBodyParsingTests {
 
   private func requestBody(_ json: String) throws -> Either<
-    JSONReference<OpenAPI.Request>, OpenAPI.Request
+    OpenAPI.Reference<OpenAPI.Request>, OpenAPI.Request
   > {
     let request = try JSONDecoder().decode(OpenAPI.Request.self, from: Data(json.utf8))
     return .b(request)

@@ -3,7 +3,7 @@
 //
 
 import Foundation
-import OpenAPIKit30
+import OpenAPIKit
 import Testing
 
 @testable import OpenAPICodegenCore
@@ -137,7 +137,7 @@ struct ResponseParsingTests {
   func parsesFullDocumentEndToEnd() throws {
     let json = """
       {
-        "openapi": "3.0.3",
+        "openapi": "3.1.0",
         "info": {"title": "Storage", "version": "1.0.0"},
         "paths": {
           "/bucket/{bucketId}": {
@@ -183,7 +183,7 @@ struct ResponseParsingTests {
   func skipsOperationsWithoutAnOperationId() throws {
     let json = """
       {
-        "openapi": "3.0.3",
+        "openapi": "3.1.0",
         "info": {"title": "Storage", "version": "1.0.0"},
         "paths": {
           "/bucket/{bucketId}": {

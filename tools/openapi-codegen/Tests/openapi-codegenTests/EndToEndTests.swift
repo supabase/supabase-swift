@@ -4,7 +4,7 @@
 
 import Foundation
 import InlineSnapshotTesting
-import OpenAPIKit30
+import OpenAPIKit
 import Testing
 
 @testable import OpenAPICodegenCore
@@ -16,7 +16,7 @@ struct EndToEndTests {
   func generatesModelsAndClientFromAMinimalStorageLikeSpec() throws {
     let json = """
       {
-        "openapi": "3.0.3",
+        "openapi": "3.1.0",
         "info": {"title": "Storage", "version": "1.0.0"},
         "paths": {
           "/bucket/{bucketId}": {

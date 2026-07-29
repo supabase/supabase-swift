@@ -16,7 +16,7 @@ let package = Package(
     .target(
       name: "OpenAPICodegenCore",
       dependencies: [
-        .product(name: "OpenAPIKit30", package: "OpenAPIKit")
+        .product(name: "OpenAPIKit", package: "OpenAPIKit")
       ]
     ),
     .executableTarget(
@@ -37,7 +37,7 @@ let package = Package(
       name: "openapi-codegenTests",
       dependencies: [
         "OpenAPICodegenCore",
-        .product(name: "OpenAPIKit30", package: "OpenAPIKit"),
+        .product(name: "OpenAPIKit", package: "OpenAPIKit"),
         .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
       ]
     ),

@@ -3,7 +3,7 @@
 //
 
 import Foundation
-import OpenAPIKit30
+import OpenAPIKit
 import Testing
 
 @testable import OpenAPICodegenCore

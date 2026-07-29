@@ -5,7 +5,7 @@
 import ArgumentParser
 import Foundation
 import OpenAPICodegenCore
-import OpenAPIKit30
+import OpenAPIKit
 
 struct OpenAPICodegen: ParsableCommand {
   static let configuration = CommandConfiguration(commandName: "openapi-codegen")
@@ -35,7 +35,8 @@ struct OpenAPICodegen: ParsableCommand {
     let outputURL = URL(fileURLWithPath: output, isDirectory: true)
 
     let data = try Data(contentsOf: specURL)
-    let document = try JSONDecoder().decode(OpenAPI.Document.self, from: data)
+    let normalizedData = try SpecNormalization.dropValidationOnlyUnions(data)
+    let document = try JSONDecoder().decode(OpenAPI.Document.self, from: normalizedData)
     let irDocument = try OpenAPIParsing.parseDocument(document)
 
     try FileManager.default.createDirectory(at: outputURL, withIntermediateDirectories: true)

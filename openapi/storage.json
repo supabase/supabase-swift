@@ -1,5 +1,5 @@
 {
-  "openapi": "3.0.3",
+  "openapi": "3.2.0",
   "info": {
     "title": "Supabase Storage API",
     "description": "API documentation for Supabase Storage",
@@ -14,7 +14,7 @@
       }
     },
     "schemas": {
-      "authSchema": {
+      "def-0": {
         "type": "object",
         "properties": {
           "authorization": {
@@ -24,9 +24,10 @@
         },
         "required": [
           "authorization"
-        ]
+        ],
+        "title": "authSchema"
       },
-      "errorSchema": {
+      "def-1": {
         "type": "object",
         "properties": {
           "statusCode": {
@@ -47,185 +48,8 @@
           "error",
           "message",
           "code"
-        ]
-      },
-      "bucketSchema": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "owner": {
-            "type": "string"
-          },
-          "owner_id": {
-            "type": "string"
-          },
-          "public": {
-            "type": "boolean"
-          },
-          "type": {
-            "type": "string",
-            "enum": [
-              "STANDARD",
-              "ANALYTICS"
-            ]
-          },
-          "file_size_limit": {
-            "type": "integer",
-            "nullable": true
-          },
-          "allowed_mime_types": {
-            "type": "array",
-            "nullable": true,
-            "items": {
-              "type": "string"
-            }
-          },
-          "created_at": {
-            "type": "string"
-          },
-          "updated_at": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "name"
         ],
-        "additionalProperties": false,
-        "example": {
-          "id": "bucket2",
-          "name": "bucket2",
-          "public": false,
-          "file_size_limit": 1000000,
-          "allowed_mime_types": [
-            "image/png",
-            "image/jpeg"
-          ],
-          "owner": "4d56e902-f0a0-4662-8448-a4d9e643c142",
-          "created_at": "2021-02-17T04:43:32.770206+00:00",
-          "updated_at": "2021-02-17T04:43:32.770206+00:00"
-        }
-      },
-      "objectSchema": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "bucket_id": {
-            "type": "string"
-          },
-          "owner": {
-            "type": "string"
-          },
-          "owner_id": {
-            "type": "string"
-          },
-          "version": {
-            "type": "string"
-          },
-          "id": {
-            "type": "string",
-            "nullable": true
-          },
-          "updated_at": {
-            "type": "string",
-            "nullable": true
-          },
-          "created_at": {
-            "type": "string",
-            "nullable": true
-          },
-          "last_accessed_at": {
-            "type": "string",
-            "nullable": true
-          },
-          "metadata": {
-            "type": "object",
-            "additionalProperties": true,
-            "nullable": true
-          },
-          "user_metadata": {
-            "type": "object",
-            "additionalProperties": true,
-            "nullable": true
-          },
-          "buckets": {
-            "$ref": "#/components/schemas/bucketSchema"
-          }
-        },
-        "required": [
-          "name"
-        ],
-        "additionalProperties": false,
-        "example": {
-          "name": "folder/cat.png",
-          "bucket_id": "avatars",
-          "owner": "317eadce-631a-4429-a0bb-f19a7a517b4a",
-          "id": "eaa8bdb5-2e00-4767-b5a9-d2502efe2196",
-          "updated_at": "2021-04-06T16:30:35.394674+00:00",
-          "created_at": "2021-04-06T16:30:35.394674+00:00",
-          "last_accessed_at": "2021-04-06T16:30:35.394674+00:00",
-          "metadata": {
-            "size": 1234
-          }
-        }
-      },
-      "vectorBucketSchema": {
-        "type": "object",
-        "properties": {
-          "vectorBucketName": {
-            "type": "string"
-          },
-          "creationTime": {
-            "type": "integer",
-            "nullable": true,
-            "description": "Unix timestamp (seconds) of when the bucket was created, if known."
-          }
-        },
-        "required": [
-          "vectorBucketName"
-        ],
-        "additionalProperties": false,
-        "example": {
-          "vectorBucketName": "embeddings-prod",
-          "creationTime": 1735689600
-        }
-      },
-      "getVectorBucketResponse": {
-        "type": "object",
-        "properties": {
-          "vectorBucket": {
-            "$ref": "#/components/schemas/vectorBucketSchema"
-          }
-        },
-        "required": [
-          "vectorBucket"
-        ],
-        "additionalProperties": false
-      },
-      "listVectorBucketsResponse": {
-        "type": "object",
-        "properties": {
-          "vectorBuckets": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/vectorBucketSchema"
-            }
-          },
-          "nextToken": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "vectorBuckets"
-        ],
-        "additionalProperties": false
+        "title": "errorSchema"
       }
     }
   },
@@ -234,60 +58,24 @@
       "get": {
         "responses": {
           "200": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "description": "Default Response"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "description": "Error response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
+            "description": "Default Response"
           }
         }
       },
       "head": {
         "responses": {
           "200": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "description": "Default Response"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "description": "Error response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
+            "description": "Default Response"
           }
         }
       }
     },
     "/upload/resumable/": {
       "post": {
-        "operationId": "tusUploadCreate",
         "summary": "Handle POST request for TUS Resumable uploads",
         "tags": [
           "resumable"
         ],
-        "description": "Creates a new resumable upload and returns its Location URL; the sign/ variant authorizes via the x-signature header from a presigned token instead of a JWT",
         "security": [
           {
             "bearerAuth": []
@@ -295,39 +83,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "description": "Default Response"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Access denied",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "description": "Error response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
+            "description": "Default Response"
           }
         }
       },
       "options": {
-        "operationId": "tusOptions",
         "summary": "Handle OPTIONS request for TUS Resumable uploads",
         "tags": [
           "resumable"
@@ -335,36 +95,17 @@
         "description": "Handle OPTIONS request for TUS Resumable uploads",
         "responses": {
           "200": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "description": "Default Response"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "description": "Error response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
+            "description": "Default Response"
           }
         }
       }
     },
-    "/upload/resumable/{wildcard}": {
+    "/upload/resumable/{*}": {
       "post": {
-        "operationId": "tusUploadCreatePost",
         "summary": "Handle POST request for TUS Resumable uploads",
         "tags": [
           "resumable"
         ],
-        "description": "Creates a new resumable upload and returns its Location URL; the sign/ variant authorizes via the x-signature header from a presigned token instead of a JWT",
         "security": [
           {
             "bearerAuth": []
@@ -376,50 +117,21 @@
               "type": "string"
             },
             "in": "path",
-            "name": "wildcard",
+            "name": "*",
             "required": true
           }
         ],
         "responses": {
           "200": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "description": "Default Response"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Access denied",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "description": "Error response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
+            "description": "Default Response"
           }
         }
       },
       "put": {
-        "operationId": "tusUploadPart",
         "summary": "Handle PUT request for TUS Resumable uploads",
         "tags": [
           "resumable"
         ],
-        "description": "Appends a chunk of upload data at the given Upload-Offset to an in-progress resumable upload created by the POST step",
         "security": [
           {
             "bearerAuth": []
@@ -431,50 +143,21 @@
               "type": "string"
             },
             "in": "path",
-            "name": "wildcard",
+            "name": "*",
             "required": true
           }
         ],
         "responses": {
           "200": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "description": "Default Response"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Access denied",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "description": "Error response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
+            "description": "Default Response"
           }
         }
       },
       "patch": {
-        "operationId": "tusUploadPartPatch",
         "summary": "Handle PATCH request for TUS Resumable uploads",
         "tags": [
           "resumable"
         ],
-        "description": "Appends a chunk of upload data at the given Upload-Offset to an in-progress resumable upload, per the standard TUS PATCH semantics",
         "security": [
           {
             "bearerAuth": []
@@ -486,50 +169,21 @@
               "type": "string"
             },
             "in": "path",
-            "name": "wildcard",
+            "name": "*",
             "required": true
           }
         ],
         "responses": {
           "200": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "description": "Default Response"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Access denied",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "description": "Error response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
+            "description": "Default Response"
           }
         }
       },
       "head": {
-        "operationId": "tusUploadGet",
         "summary": "Handle HEAD request for TUS Resumable uploads",
         "tags": [
           "resumable"
         ],
-        "description": "Returns the current Upload-Offset and Upload-Length of an in-progress upload without transferring any data, and does not require authorization",
         "security": [
           {
             "bearerAuth": []
@@ -541,50 +195,21 @@
               "type": "string"
             },
             "in": "path",
-            "name": "wildcard",
+            "name": "*",
             "required": true
           }
         ],
         "responses": {
           "200": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "description": "Default Response"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Access denied",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "description": "Error response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
+            "description": "Default Response"
           }
         }
       },
       "delete": {
-        "operationId": "tusUploadDelete",
         "summary": "Handle DELETE request for TUS Resumable uploads",
         "tags": [
           "resumable"
         ],
-        "description": "Cancels an in-progress resumable upload and discards any data received so far",
         "security": [
           {
             "bearerAuth": []
@@ -596,45 +221,17 @@
               "type": "string"
             },
             "in": "path",
-            "name": "wildcard",
+            "name": "*",
             "required": true
           }
         ],
         "responses": {
           "200": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "description": "Default Response"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Access denied",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "description": "Error response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
+            "description": "Default Response"
           }
         }
       },
       "options": {
-        "operationId": "tusOptionsOptions",
         "summary": "Handle OPTIONS request for TUS Resumable uploads",
         "tags": [
           "resumable"
@@ -646,67 +243,30 @@
               "type": "string"
             },
             "in": "path",
-            "name": "wildcard",
+            "name": "*",
             "required": true
           }
         ],
         "responses": {
           "200": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "description": "Default Response"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "description": "Error response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
+            "description": "Default Response"
           }
         }
       }
     },
     "/upload/resumable/sign/": {
       "post": {
-        "operationId": "tusUploadCreateSigned",
         "summary": "Handle POST request for TUS Resumable uploads",
         "tags": [
           "resumable"
         ],
-        "description": "Creates a new resumable upload and returns its Location URL; the sign/ variant authorizes via the x-signature header from a presigned token instead of a JWT",
         "responses": {
           "200": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "description": "Default Response"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "description": "Error response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
+            "description": "Default Response"
           }
         }
       },
       "options": {
-        "operationId": "tusOptionsSigned",
         "summary": "Handle OPTIONS request for TUS Resumable uploads",
         "tags": [
           "resumable"
@@ -714,231 +274,118 @@
         "description": "Handle OPTIONS request for TUS Resumable uploads",
         "responses": {
           "200": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "description": "Default Response"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "description": "Error response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
+            "description": "Default Response"
           }
         }
       }
     },
-    "/upload/resumable/sign/{wildcard}": {
+    "/upload/resumable/sign/{*}": {
       "post": {
-        "operationId": "tusUploadCreateSignedPost",
         "summary": "Handle POST request for TUS Resumable uploads",
         "tags": [
           "resumable"
         ],
-        "description": "Creates a new resumable upload and returns its Location URL; the sign/ variant authorizes via the x-signature header from a presigned token instead of a JWT",
         "parameters": [
           {
             "schema": {
               "type": "string"
             },
             "in": "path",
-            "name": "wildcard",
+            "name": "*",
             "required": true
           }
         ],
         "responses": {
           "200": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "description": "Default Response"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "description": "Error response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
+            "description": "Default Response"
           }
         }
       },
       "put": {
-        "operationId": "tusUploadPartSigned",
         "summary": "Handle PUT request for TUS Resumable uploads",
         "tags": [
           "resumable"
         ],
-        "description": "Appends a chunk of upload data at the given Upload-Offset to an in-progress resumable upload created by the POST step",
         "parameters": [
           {
             "schema": {
               "type": "string"
             },
             "in": "path",
-            "name": "wildcard",
+            "name": "*",
             "required": true
           }
         ],
         "responses": {
           "200": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "description": "Default Response"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "description": "Error response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
+            "description": "Default Response"
           }
         }
       },
       "patch": {
-        "operationId": "tusUploadPartSignedPatch",
         "summary": "Handle PATCH request for TUS Resumable uploads",
         "tags": [
           "resumable"
         ],
-        "description": "Appends a chunk of upload data at the given Upload-Offset to an in-progress resumable upload, per the standard TUS PATCH semantics",
         "parameters": [
           {
             "schema": {
               "type": "string"
             },
             "in": "path",
-            "name": "wildcard",
+            "name": "*",
             "required": true
           }
         ],
         "responses": {
           "200": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "description": "Default Response"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "description": "Error response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
+            "description": "Default Response"
           }
         }
       },
       "head": {
-        "operationId": "tusUploadGetSigned",
         "summary": "Handle HEAD request for TUS Resumable uploads",
         "tags": [
           "resumable"
         ],
-        "description": "Returns the current Upload-Offset and Upload-Length of an in-progress upload without transferring any data, and does not require authorization",
         "parameters": [
           {
             "schema": {
               "type": "string"
             },
             "in": "path",
-            "name": "wildcard",
+            "name": "*",
             "required": true
           }
         ],
         "responses": {
           "200": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "description": "Default Response"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "description": "Error response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
+            "description": "Default Response"
           }
         }
       },
       "delete": {
-        "operationId": "tusUploadDeleteSigned",
         "summary": "Handle DELETE request for TUS Resumable uploads",
         "tags": [
           "resumable"
         ],
-        "description": "Cancels an in-progress resumable upload and discards any data received so far",
         "parameters": [
           {
             "schema": {
               "type": "string"
             },
             "in": "path",
-            "name": "wildcard",
+            "name": "*",
             "required": true
           }
         ],
         "responses": {
           "200": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "description": "Default Response"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "description": "Error response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
+            "description": "Default Response"
           }
         }
       },
       "options": {
-        "operationId": "tusOptionsSignedOptions",
         "summary": "Handle OPTIONS request for TUS Resumable uploads",
         "tags": [
           "resumable"
@@ -950,249 +397,23 @@
               "type": "string"
             },
             "in": "path",
-            "name": "wildcard",
+            "name": "*",
             "required": true
           }
         ],
         "responses": {
           "200": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "description": "Default Response"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "description": "Error response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
+            "description": "Default Response"
           }
         }
       }
     },
-    "/bucket/{bucketId}/empty": {
+    "/bucket/": {
       "post": {
-        "operationId": "bucketEmpty",
-        "summary": "Empty a bucket",
-        "tags": [
-          "bucket"
-        ],
-        "description": "Queues asynchronous deletion of all objects inside the bucket without deleting the bucket itself, which may take up to an hour to complete",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string"
-            },
-            "example": "avatars",
-            "in": "path",
-            "name": "bucketId",
-            "required": true
-          }
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "description": "Successful response",
-                  "type": "object",
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                      "example": "Empty bucket has been queued. Completion may take up to an hour."
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Access denied",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "description": "Error response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
-          },
-          "5XX": {
-            "description": "Error response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/bucket": {
-      "head": {
-        "operationId": "bucketListHead",
-        "summary": "Gets all buckets",
-        "tags": [
-          "bucket"
-        ],
-        "description": "Returns buckets owned by the authenticated user, supporting pagination via limit/offset plus sorting and search filters",
-        "parameters": [
-          {
-            "schema": {
-              "type": "integer",
-              "minimum": 1
-            },
-            "example": 10,
-            "in": "query",
-            "name": "limit",
-            "required": false
-          },
-          {
-            "schema": {
-              "type": "integer",
-              "minimum": 0
-            },
-            "example": 0,
-            "in": "query",
-            "name": "offset",
-            "required": false
-          },
-          {
-            "schema": {
-              "type": "string",
-              "enum": [
-                "id",
-                "name",
-                "created_at",
-                "updated_at"
-              ]
-            },
-            "in": "query",
-            "name": "sortColumn",
-            "required": false
-          },
-          {
-            "schema": {
-              "type": "string",
-              "enum": [
-                "asc",
-                "desc"
-              ]
-            },
-            "in": "query",
-            "name": "sortOrder",
-            "required": false
-          },
-          {
-            "schema": {
-              "type": "string"
-            },
-            "example": "my-bucket",
-            "in": "query",
-            "name": "search",
-            "required": false
-          }
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "description": "Successful response",
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/bucketSchema"
-                  }
-                },
-                "example": [
-                  {
-                    "id": "avatars",
-                    "type": "STANDARD",
-                    "name": "avatars",
-                    "owner": "4d56e902-f0a0-4662-8448-a4d9e643c142",
-                    "public": false,
-                    "file_size_limit": 1000000,
-                    "allowed_mime_types": [
-                      "image/png",
-                      "image/jpeg"
-                    ],
-                    "created_at": "2021-02-17T04:43:32.770206+00:00",
-                    "updated_at": "2021-02-17T04:43:32.770206+00:00"
-                  }
-                ]
-              }
-            }
-          },
-          "403": {
-            "description": "Access denied",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "description": "Error response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
-          },
-          "5XX": {
-            "description": "Error response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "operationId": "bucketCreate",
         "summary": "Create a bucket",
         "tags": [
           "bucket"
         ],
-        "description": "The bucket id defaults to the given name when not provided, and the owner is set from the authenticated caller",
         "requestBody": {
           "required": true,
           "content": {
@@ -1222,26 +443,32 @@
                   "file_size_limit": {
                     "anyOf": [
                       {
-                        "type": "integer",
+                        "type": [
+                          "integer",
+                          "null"
+                        ],
                         "examples": [
                           1000
                         ],
-                        "nullable": true,
                         "minimum": 0
                       },
                       {
-                        "type": "string",
+                        "type": [
+                          "string",
+                          "null"
+                        ],
                         "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[gG][bB]|[mM][bB]|[kK][bB]|[bB])$",
                         "examples": [
                           "100MB"
-                        ],
-                        "nullable": true
+                        ]
                       }
                     ]
                   },
                   "allowed_mime_types": {
-                    "type": "array",
-                    "nullable": true,
+                    "type": [
+                      "array",
+                      "null"
+                    ],
                     "items": {
                       "type": "string"
                     },
@@ -1284,22 +511,12 @@
               }
             }
           },
-          "403": {
-            "description": "Access denied",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
-          },
           "4XX": {
             "description": "Error response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -1309,7 +526,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -1317,12 +534,10 @@
         }
       },
       "get": {
-        "operationId": "bucketList",
         "summary": "Gets all buckets",
         "tags": [
           "bucket"
         ],
-        "description": "Returns buckets owned by the authenticated user, supporting pagination via limit/offset plus sorting and search filters",
         "parameters": [
           {
             "schema": {
@@ -1394,7 +609,71 @@
                   "description": "Successful response",
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/bucketSchema"
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "owner": {
+                        "type": "string"
+                      },
+                      "owner_id": {
+                        "type": "string"
+                      },
+                      "public": {
+                        "type": "boolean"
+                      },
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "STANDARD",
+                          "ANALYTICS"
+                        ]
+                      },
+                      "file_size_limit": {
+                        "type": [
+                          "null",
+                          "integer"
+                        ]
+                      },
+                      "allowed_mime_types": {
+                        "type": [
+                          "null",
+                          "array"
+                        ],
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "created_at": {
+                        "type": "string"
+                      },
+                      "updated_at": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name"
+                    ],
+                    "additionalProperties": false,
+                    "title": "bucketSchema",
+                    "example": {
+                      "id": "bucket2",
+                      "name": "bucket2",
+                      "public": false,
+                      "file_size_limit": 1000000,
+                      "allowed_mime_types": [
+                        "image/png",
+                        "image/jpeg"
+                      ],
+                      "owner": "4d56e902-f0a0-4662-8448-a4d9e643c142",
+                      "created_at": "2021-02-17T04:43:32.770206+00:00",
+                      "updated_at": "2021-02-17T04:43:32.770206+00:00"
+                    }
                   }
                 },
                 "example": [
@@ -1416,22 +695,12 @@
               }
             }
           },
-          "403": {
-            "description": "Access denied",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
-          },
           "4XX": {
             "description": "Error response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -1441,7 +710,438 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
+                }
+              }
+            }
+          }
+        }
+      },
+      "head": {
+        "summary": "Gets all buckets",
+        "tags": [
+          "bucket"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "example": 10,
+            "in": "query",
+            "name": "limit",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "example": 0,
+            "in": "query",
+            "name": "offset",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "id",
+                "name",
+                "created_at",
+                "updated_at"
+              ]
+            },
+            "in": "query",
+            "name": "sortColumn",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            },
+            "in": "query",
+            "name": "sortOrder",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "example": "my-bucket",
+            "in": "query",
+            "name": "search",
+            "required": false
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Successful response",
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "owner": {
+                        "type": "string"
+                      },
+                      "owner_id": {
+                        "type": "string"
+                      },
+                      "public": {
+                        "type": "boolean"
+                      },
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "STANDARD",
+                          "ANALYTICS"
+                        ]
+                      },
+                      "file_size_limit": {
+                        "type": [
+                          "null",
+                          "integer"
+                        ]
+                      },
+                      "allowed_mime_types": {
+                        "type": [
+                          "null",
+                          "array"
+                        ],
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "created_at": {
+                        "type": "string"
+                      },
+                      "updated_at": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name"
+                    ],
+                    "additionalProperties": false,
+                    "example": {
+                      "id": "bucket2",
+                      "name": "bucket2",
+                      "public": false,
+                      "file_size_limit": 1000000,
+                      "allowed_mime_types": [
+                        "image/png",
+                        "image/jpeg"
+                      ],
+                      "owner": "4d56e902-f0a0-4662-8448-a4d9e643c142",
+                      "created_at": "2021-02-17T04:43:32.770206+00:00",
+                      "updated_at": "2021-02-17T04:43:32.770206+00:00"
+                    }
+                  }
+                },
+                "example": [
+                  {
+                    "id": "avatars",
+                    "type": "STANDARD",
+                    "name": "avatars",
+                    "owner": "4d56e902-f0a0-4662-8448-a4d9e643c142",
+                    "public": false,
+                    "file_size_limit": 1000000,
+                    "allowed_mime_types": [
+                      "image/png",
+                      "image/jpeg"
+                    ],
+                    "created_at": "2021-02-17T04:43:32.770206+00:00",
+                    "updated_at": "2021-02-17T04:43:32.770206+00:00"
+                  }
+                ]
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-1"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-1"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/bucket/{bucketId}/empty": {
+      "post": {
+        "summary": "Empty a bucket",
+        "tags": [
+          "bucket"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "example": "avatars",
+            "in": "path",
+            "name": "bucketId",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Successful response",
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "Empty bucket has been queued. Completion may take up to an hour."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-1"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-1"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/bucket": {
+      "head": {
+        "summary": "Gets all buckets",
+        "tags": [
+          "bucket"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "example": 10,
+            "in": "query",
+            "name": "limit",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "example": 0,
+            "in": "query",
+            "name": "offset",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "id",
+                "name",
+                "created_at",
+                "updated_at"
+              ]
+            },
+            "in": "query",
+            "name": "sortColumn",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            },
+            "in": "query",
+            "name": "sortOrder",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "example": "my-bucket",
+            "in": "query",
+            "name": "search",
+            "required": false
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Successful response",
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "owner": {
+                        "type": "string"
+                      },
+                      "owner_id": {
+                        "type": "string"
+                      },
+                      "public": {
+                        "type": "boolean"
+                      },
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "STANDARD",
+                          "ANALYTICS"
+                        ]
+                      },
+                      "file_size_limit": {
+                        "type": [
+                          "null",
+                          "integer"
+                        ]
+                      },
+                      "allowed_mime_types": {
+                        "type": [
+                          "null",
+                          "array"
+                        ],
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "created_at": {
+                        "type": "string"
+                      },
+                      "updated_at": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name"
+                    ],
+                    "additionalProperties": false,
+                    "example": {
+                      "id": "bucket2",
+                      "name": "bucket2",
+                      "public": false,
+                      "file_size_limit": 1000000,
+                      "allowed_mime_types": [
+                        "image/png",
+                        "image/jpeg"
+                      ],
+                      "owner": "4d56e902-f0a0-4662-8448-a4d9e643c142",
+                      "created_at": "2021-02-17T04:43:32.770206+00:00",
+                      "updated_at": "2021-02-17T04:43:32.770206+00:00"
+                    }
+                  }
+                },
+                "example": [
+                  {
+                    "id": "avatars",
+                    "type": "STANDARD",
+                    "name": "avatars",
+                    "owner": "4d56e902-f0a0-4662-8448-a4d9e643c142",
+                    "public": false,
+                    "file_size_limit": 1000000,
+                    "allowed_mime_types": [
+                      "image/png",
+                      "image/jpeg"
+                    ],
+                    "created_at": "2021-02-17T04:43:32.770206+00:00",
+                    "updated_at": "2021-02-17T04:43:32.770206+00:00"
+                  }
+                ]
+              }
+            }
+          },
+          "4XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-1"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -1451,12 +1151,10 @@
     },
     "/bucket/{bucketId}": {
       "get": {
-        "operationId": "bucketGet",
         "summary": "Get details of a bucket",
         "tags": [
           "bucket"
         ],
-        "description": "Requires the caller to have access to the bucket via RLS policies, unlike the public bucket listing",
         "parameters": [
           {
             "schema": {
@@ -1479,17 +1177,71 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/bucketSchema"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Access denied",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "description": "Successful response",
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "owner": {
+                      "type": "string"
+                    },
+                    "owner_id": {
+                      "type": "string"
+                    },
+                    "public": {
+                      "type": "boolean"
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "STANDARD",
+                        "ANALYTICS"
+                      ]
+                    },
+                    "file_size_limit": {
+                      "type": [
+                        "null",
+                        "integer"
+                      ]
+                    },
+                    "allowed_mime_types": {
+                      "type": [
+                        "null",
+                        "array"
+                      ],
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "updated_at": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name"
+                  ],
+                  "additionalProperties": false
+                },
+                "example": {
+                  "id": "bucket2",
+                  "name": "bucket2",
+                  "public": false,
+                  "file_size_limit": 1000000,
+                  "allowed_mime_types": [
+                    "image/png",
+                    "image/jpeg"
+                  ],
+                  "owner": "4d56e902-f0a0-4662-8448-a4d9e643c142",
+                  "created_at": "2021-02-17T04:43:32.770206+00:00",
+                  "updated_at": "2021-02-17T04:43:32.770206+00:00"
                 }
               }
             }
@@ -1499,7 +1251,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -1509,7 +1261,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -1517,12 +1269,10 @@
         }
       },
       "head": {
-        "operationId": "bucketGetHead",
         "summary": "Get details of a bucket",
         "tags": [
           "bucket"
         ],
-        "description": "Requires the caller to have access to the bucket via RLS policies, unlike the public bucket listing",
         "parameters": [
           {
             "schema": {
@@ -1545,17 +1295,71 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/bucketSchema"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Access denied",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "description": "Successful response",
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "owner": {
+                      "type": "string"
+                    },
+                    "owner_id": {
+                      "type": "string"
+                    },
+                    "public": {
+                      "type": "boolean"
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "STANDARD",
+                        "ANALYTICS"
+                      ]
+                    },
+                    "file_size_limit": {
+                      "type": [
+                        "null",
+                        "integer"
+                      ]
+                    },
+                    "allowed_mime_types": {
+                      "type": [
+                        "null",
+                        "array"
+                      ],
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "updated_at": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name"
+                  ],
+                  "additionalProperties": false
+                },
+                "example": {
+                  "id": "bucket2",
+                  "name": "bucket2",
+                  "public": false,
+                  "file_size_limit": 1000000,
+                  "allowed_mime_types": [
+                    "image/png",
+                    "image/jpeg"
+                  ],
+                  "owner": "4d56e902-f0a0-4662-8448-a4d9e643c142",
+                  "created_at": "2021-02-17T04:43:32.770206+00:00",
+                  "updated_at": "2021-02-17T04:43:32.770206+00:00"
                 }
               }
             }
@@ -1565,7 +1369,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -1575,7 +1379,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -1583,12 +1387,10 @@
         }
       },
       "put": {
-        "operationId": "bucketUpdate",
         "summary": "Update properties of a bucket",
         "tags": [
           "bucket"
         ],
-        "description": "Requires at least one of public, file_size_limit or allowed_mime_types in the body, and only the fields provided are changed",
         "requestBody": {
           "required": true,
           "content": {
@@ -1604,35 +1406,60 @@
                   "file_size_limit": {
                     "anyOf": [
                       {
-                        "type": "integer",
+                        "type": [
+                          "integer",
+                          "null"
+                        ],
                         "examples": [
                           1000
                         ],
-                        "nullable": true,
                         "minimum": 0
                       },
                       {
-                        "type": "string",
+                        "type": [
+                          "string",
+                          "null"
+                        ],
                         "pattern": "^[0-9]+(?:\\.[0-9]+)?(?:[gG][bB]|[mM][bB]|[kK][bB]|[bB])$",
                         "examples": [
                           "100MB"
-                        ],
-                        "nullable": true
+                        ]
                       }
                     ]
                   },
                   "allowed_mime_types": {
-                    "type": "array",
-                    "nullable": true,
+                    "type": [
+                      "array",
+                      "null"
+                    ],
                     "items": {
                       "type": "string",
-                      "example": [
-                        "image/png",
-                        "image/jpg"
+                      "examples": [
+                        [
+                          "image/png",
+                          "image/jpg"
+                        ]
                       ]
                     }
                   }
-                }
+                },
+                "anyOf": [
+                  {
+                    "required": [
+                      "public"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "file_size_limit"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "allowed_mime_types"
+                    ]
+                  }
+                ]
               }
             }
           }
@@ -1673,22 +1500,12 @@
               }
             }
           },
-          "403": {
-            "description": "Access denied",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
-          },
           "4XX": {
             "description": "Error response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -1698,7 +1515,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -1706,12 +1523,10 @@
         }
       },
       "delete": {
-        "operationId": "bucketDelete",
         "summary": "Delete a bucket",
         "tags": [
           "bucket"
         ],
-        "description": "Fails if the bucket still contains objects, so it must be emptied first",
         "parameters": [
           {
             "schema": {
@@ -1746,22 +1561,12 @@
               }
             }
           },
-          "403": {
-            "description": "Access denied",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
-          },
           "4XX": {
             "description": "Error response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -1771,7 +1576,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -1779,14 +1584,12 @@
         }
       }
     },
-    "/object/{bucketName}/{wildcard}": {
+    "/object/{bucketName}/{*}": {
       "delete": {
-        "operationId": "objectDelete",
         "summary": "Delete an object",
         "tags": [
           "object"
         ],
-        "description": "Deletes a single object by its exact key, unlike the bulk-delete endpoint which accepts multiple prefixes",
         "parameters": [
           {
             "schema": {
@@ -1803,7 +1606,7 @@
             },
             "example": "folder/cat.png",
             "in": "path",
-            "name": "wildcard",
+            "name": "*",
             "required": true
           }
         ],
@@ -1830,22 +1633,12 @@
               }
             }
           },
-          "403": {
-            "description": "Access denied",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
-          },
           "4XX": {
             "description": "Error response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -1855,7 +1648,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -1863,7 +1656,6 @@
         }
       },
       "get": {
-        "operationId": "objectGetAuthenticatedGet",
         "summary": "Get object",
         "tags": [
           "object"
@@ -1885,7 +1677,7 @@
             },
             "example": "folder/cat.png",
             "in": "path",
-            "name": "wildcard",
+            "name": "*",
             "required": true
           }
         ],
@@ -1895,22 +1687,12 @@
           }
         ],
         "responses": {
-          "403": {
-            "description": "Access denied",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
-          },
           "4XX": {
             "description": "Error response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -1920,7 +1702,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -1928,38 +1710,10 @@
         }
       },
       "put": {
-        "operationId": "objectUploadUpdate",
         "summary": "Update the object at an existing key",
         "tags": [
           "object"
         ],
-        "description": "Always overwrites the object at the given key, in contrast to the create-object endpoint which requires x-upsert to overwrite",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "multipart/form-data": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "cacheControl": {
-                    "type": "string"
-                  },
-                  "metadata": {
-                    "type": "string"
-                  },
-                  "file": {
-                    "type": "string",
-                    "contentEncoding": "binary"
-                  }
-                },
-                "required": [
-                  "cacheControl",
-                  "file"
-                ]
-              }
-            }
-          }
-        },
         "parameters": [
           {
             "schema": {
@@ -1976,7 +1730,7 @@
             },
             "example": "folder/cat.png",
             "in": "path",
-            "name": "wildcard",
+            "name": "*",
             "required": true
           }
         ],
@@ -2009,22 +1763,12 @@
               }
             }
           },
-          "403": {
-            "description": "Access denied",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
-          },
           "4XX": {
             "description": "Error response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -2034,7 +1778,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -2042,7 +1786,6 @@
         }
       },
       "head": {
-        "operationId": "objectHeadAuthenticatedInfoHead",
         "summary": "Retrieve object info",
         "tags": [
           "object"
@@ -2120,7 +1863,7 @@
             },
             "example": "folder/cat.png",
             "in": "path",
-            "name": "wildcard",
+            "name": "*",
             "required": true
           }
         ],
@@ -2130,22 +1873,12 @@
           }
         ],
         "responses": {
-          "403": {
-            "description": "Access denied",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
-          },
           "4XX": {
             "description": "Error response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -2155,7 +1888,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -2163,38 +1896,10 @@
         }
       },
       "post": {
-        "operationId": "objectUpload",
         "summary": "Upload a new object",
         "tags": [
           "object"
         ],
-        "description": "Fails if an object already exists at the given key unless the x-upsert header is set to true",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "multipart/form-data": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "cacheControl": {
-                    "type": "string"
-                  },
-                  "metadata": {
-                    "type": "string"
-                  },
-                  "file": {
-                    "type": "string",
-                    "contentEncoding": "binary"
-                  }
-                },
-                "required": [
-                  "cacheControl",
-                  "file"
-                ]
-              }
-            }
-          }
-        },
         "parameters": [
           {
             "schema": {
@@ -2211,7 +1916,7 @@
             },
             "example": "folder/cat.png",
             "in": "path",
-            "name": "wildcard",
+            "name": "*",
             "required": true
           }
         ],
@@ -2244,22 +1949,12 @@
               }
             }
           },
-          "403": {
-            "description": "Access denied",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
-          },
           "4XX": {
             "description": "Error response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -2269,7 +1964,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -2279,12 +1974,10 @@
     },
     "/object/{bucketName}": {
       "delete": {
-        "operationId": "objectDeleteMany",
         "summary": "Delete multiple objects",
         "tags": [
           "object"
         ],
-        "description": "Accepts a list of object prefixes to delete in one request, capped by a configurable per-request limit",
         "requestBody": {
           "required": true,
           "content": {
@@ -2337,18 +2030,170 @@
                   "description": "Successful response",
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/objectSchema"
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "bucket_id": {
+                        "type": "string"
+                      },
+                      "owner": {
+                        "type": "string"
+                      },
+                      "owner_id": {
+                        "type": "string"
+                      },
+                      "version": {
+                        "type": "string"
+                      },
+                      "id": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "updated_at": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "created_at": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "last_accessed_at": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "metadata": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "additionalProperties": true
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "user_metadata": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "additionalProperties": true
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "buckets": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "owner": {
+                            "type": "string"
+                          },
+                          "owner_id": {
+                            "type": "string"
+                          },
+                          "public": {
+                            "type": "boolean"
+                          },
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "STANDARD",
+                              "ANALYTICS"
+                            ]
+                          },
+                          "file_size_limit": {
+                            "type": [
+                              "null",
+                              "integer"
+                            ]
+                          },
+                          "allowed_mime_types": {
+                            "type": [
+                              "null",
+                              "array"
+                            ],
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "created_at": {
+                            "type": "string"
+                          },
+                          "updated_at": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name"
+                        ],
+                        "additionalProperties": false,
+                        "example": {
+                          "id": "bucket2",
+                          "name": "bucket2",
+                          "public": false,
+                          "file_size_limit": 1000000,
+                          "allowed_mime_types": [
+                            "image/png",
+                            "image/jpeg"
+                          ],
+                          "owner": "4d56e902-f0a0-4662-8448-a4d9e643c142",
+                          "created_at": "2021-02-17T04:43:32.770206+00:00",
+                          "updated_at": "2021-02-17T04:43:32.770206+00:00"
+                        }
+                      }
+                    },
+                    "required": [
+                      "name"
+                    ],
+                    "additionalProperties": false,
+                    "title": "objectSchema",
+                    "example": {
+                      "name": "folder/cat.png",
+                      "bucket_id": "avatars",
+                      "owner": "317eadce-631a-4429-a0bb-f19a7a517b4a",
+                      "id": "eaa8bdb5-2e00-4767-b5a9-d2502efe2196",
+                      "updated_at": "2021-04-06T16:30:35.394674+00:00",
+                      "created_at": "2021-04-06T16:30:35.394674+00:00",
+                      "last_accessed_at": "2021-04-06T16:30:35.394674+00:00",
+                      "metadata": {
+                        "size": 1234
+                      }
+                    }
                   }
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Access denied",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
                 }
               }
             }
@@ -2358,7 +2203,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -2368,7 +2213,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -2376,14 +2221,12 @@
         }
       }
     },
-    "/object/authenticated/{bucketName}/{wildcard}": {
+    "/object/authenticated/{bucketName}/{*}": {
       "get": {
-        "operationId": "objectGetAuthenticated",
         "summary": "Retrieve an object",
         "tags": [
           "object"
         ],
-        "description": "Requires a valid auth token and checks bucket/object access via RLS, regardless of whether the bucket is public",
         "parameters": [
           {
             "schema": {
@@ -2416,7 +2259,7 @@
             },
             "example": "folder/cat.png",
             "in": "path",
-            "name": "wildcard",
+            "name": "*",
             "required": true
           }
         ],
@@ -2426,22 +2269,12 @@
           }
         ],
         "responses": {
-          "403": {
-            "description": "Access denied",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
-          },
           "4XX": {
             "description": "Error response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -2451,7 +2284,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -2459,12 +2292,10 @@
         }
       },
       "head": {
-        "operationId": "objectHeadAuthenticatedInfo",
         "summary": "Retrieve object info",
         "tags": [
           "object"
         ],
-        "description": "Returns object metadata in headers only, with no body, and requires a valid auth token even for public buckets",
         "parameters": [
           {
             "schema": {
@@ -2537,7 +2368,7 @@
             },
             "example": "folder/cat.png",
             "in": "path",
-            "name": "wildcard",
+            "name": "*",
             "required": true
           }
         ],
@@ -2547,22 +2378,12 @@
           }
         ],
         "responses": {
-          "403": {
-            "description": "Access denied",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
-          },
           "4XX": {
             "description": "Error response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -2572,7 +2393,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -2580,14 +2401,12 @@
         }
       }
     },
-    "/object/upload/sign/{bucketName}/{wildcard}": {
+    "/object/upload/sign/{bucketName}/{*}": {
       "post": {
-        "operationId": "objectSignUploadUrl",
         "summary": "Generate a presigned url to upload an object",
         "tags": [
           "object"
         ],
-        "description": "The returned token is valid for the configured upload signed URL expiration time and must be submitted to the presigned upload endpoint; set x-upsert to allow overwriting an existing object",
         "parameters": [
           {
             "schema": {
@@ -2604,7 +2423,7 @@
             },
             "example": "folder/cat.png",
             "in": "path",
-            "name": "wildcard",
+            "name": "*",
             "required": true
           }
         ],
@@ -2637,22 +2456,12 @@
               }
             }
           },
-          "403": {
-            "description": "Access denied",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
-          },
           "4XX": {
             "description": "Error response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -2662,7 +2471,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -2670,38 +2479,10 @@
         }
       },
       "put": {
-        "operationId": "objectUploadSigned",
         "summary": "Uploads an object via a presigned URL",
         "tags": [
           "object"
         ],
-        "description": "Verifies the token query parameter instead of requiring an authorization header, and does not need the caller to have direct bucket access",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "multipart/form-data": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "cacheControl": {
-                    "type": "string"
-                  },
-                  "metadata": {
-                    "type": "string"
-                  },
-                  "file": {
-                    "type": "string",
-                    "contentEncoding": "binary"
-                  }
-                },
-                "required": [
-                  "cacheControl",
-                  "file"
-                ]
-              }
-            }
-          }
-        },
         "parameters": [
           {
             "schema": {
@@ -2727,7 +2508,7 @@
             },
             "example": "folder/cat.png",
             "in": "path",
-            "name": "wildcard",
+            "name": "*",
             "required": true
           }
         ],
@@ -2757,7 +2538,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -2767,7 +2548,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -2775,14 +2556,12 @@
         }
       }
     },
-    "/object/sign/{bucketName}/{wildcard}": {
+    "/object/sign/{bucketName}/{*}": {
       "post": {
-        "operationId": "objectSign",
         "summary": "Generate a presigned url to retrieve an object",
         "tags": [
           "object"
         ],
-        "description": "Returns a URL valid for the given expiresIn seconds; optional transform options are baked into the signed token so the download URL applies image transformations without further authorization",
         "requestBody": {
           "required": true,
           "content": {
@@ -2855,7 +2634,7 @@
             },
             "example": "folder/cat.png",
             "in": "path",
-            "name": "wildcard",
+            "name": "*",
             "required": true
           }
         ],
@@ -2885,22 +2664,12 @@
               }
             }
           },
-          "403": {
-            "description": "Access denied",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
-          },
           "4XX": {
             "description": "Error response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -2910,7 +2679,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -2918,12 +2687,10 @@
         }
       },
       "get": {
-        "operationId": "objectGetSigned",
         "summary": "Retrieve an object via a presigned URL",
         "tags": [
           "object"
         ],
-        "description": "Requires no authorization header, relying instead on the signed token query parameter, and streams the object bytes rather than metadata",
         "parameters": [
           {
             "schema": {
@@ -2965,7 +2732,7 @@
             },
             "example": "folder/cat.png",
             "in": "path",
-            "name": "wildcard",
+            "name": "*",
             "required": true
           }
         ],
@@ -2975,7 +2742,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -2985,7 +2752,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -2993,12 +2760,10 @@
         }
       },
       "head": {
-        "operationId": "objectGetSignedHead",
         "summary": "Retrieve an object via a presigned URL",
         "tags": [
           "object"
         ],
-        "description": "Requires no authorization header, relying instead on the signed token query parameter, and streams the object bytes rather than metadata",
         "parameters": [
           {
             "schema": {
@@ -3040,7 +2805,7 @@
             },
             "example": "folder/cat.png",
             "in": "path",
-            "name": "wildcard",
+            "name": "*",
             "required": true
           }
         ],
@@ -3050,7 +2815,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -3060,7 +2825,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -3070,12 +2835,10 @@
     },
     "/object/sign/{bucketName}": {
       "post": {
-        "operationId": "objectSignMany",
         "summary": "Generate presigned urls to retrieve objects",
         "tags": [
           "object"
         ],
-        "description": "Batches signed URL generation for multiple paths up to the configured max objects per request, returning a per-path error instead of failing the whole request when a path is inaccessible",
         "requestBody": {
           "required": true,
           "content": {
@@ -3137,8 +2900,10 @@
                     "type": "object",
                     "properties": {
                       "error": {
-                        "type": "string",
-                        "nullable": true,
+                        "type": [
+                          "null",
+                          "string"
+                        ],
                         "example": "Either the object does not exist or you do not have access to it"
                       },
                       "path": {
@@ -3146,8 +2911,10 @@
                         "example": "folder/cat.png"
                       },
                       "signedURL": {
-                        "type": "string",
-                        "nullable": true,
+                        "type": [
+                          "null",
+                          "string"
+                        ],
                         "example": "/object/sign/avatars/folder/cat.png?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1cmwiOiJhdmF0YXJzL2ZvbGRlci9jYXQucG5nIiwiaWF0IjoxNjE3NzI2MjczLCJleHAiOjE2MTc3MjcyNzN9.s7Gt8ME80iREVxPhH01ZNv8oUn4XtaWsmiQ5csiUHn4"
                       }
                     },
@@ -3161,22 +2928,12 @@
               }
             }
           },
-          "403": {
-            "description": "Access denied",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
-          },
           "4XX": {
             "description": "Error response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -3186,7 +2943,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -3196,12 +2953,10 @@
     },
     "/object/move": {
       "post": {
-        "operationId": "objectMove",
         "summary": "Moves an object",
         "tags": [
           "object"
         ],
-        "description": "Renames the object within the same bucket, or relocates it to destinationBucket when provided, without re-uploading the file content",
         "requestBody": {
           "required": true,
           "content": {
@@ -3261,22 +3016,12 @@
               }
             }
           },
-          "403": {
-            "description": "Access denied",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
-          },
           "4XX": {
             "description": "Error response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -3286,7 +3031,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -3296,12 +3041,10 @@
     },
     "/object/list-v2/{bucketName}": {
       "post": {
-        "operationId": "objectListV2",
         "summary": "Search for objects under a prefix",
         "tags": [
           "object"
         ],
-        "description": "Uses cursor-based pagination instead of limit/offset, and supports an optional delimiter to group results like folders, unlike the legacy list endpoint",
         "requestBody": {
           "required": true,
           "content": {
@@ -3368,22 +3111,12 @@
           }
         ],
         "responses": {
-          "403": {
-            "description": "Access denied",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
-          },
           "4XX": {
             "description": "Error response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -3393,7 +3126,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -3403,12 +3136,10 @@
     },
     "/object/list/{bucketName}": {
       "post": {
-        "operationId": "objectList",
         "summary": "Search for objects under a prefix",
         "tags": [
           "object"
         ],
-        "description": "Legacy listing endpoint using limit/offset pagination and a required prefix, without the cursor-based pagination or delimiter grouping supported by list-v2",
         "requestBody": {
           "required": true,
           "content": {
@@ -3489,28 +3220,179 @@
                   "description": "Successful response",
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/objectSchema"
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "bucket_id": {
+                        "type": "string"
+                      },
+                      "owner": {
+                        "type": "string"
+                      },
+                      "owner_id": {
+                        "type": "string"
+                      },
+                      "version": {
+                        "type": "string"
+                      },
+                      "id": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "updated_at": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "created_at": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "last_accessed_at": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "metadata": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "additionalProperties": true
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "user_metadata": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "additionalProperties": true
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "buckets": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "owner": {
+                            "type": "string"
+                          },
+                          "owner_id": {
+                            "type": "string"
+                          },
+                          "public": {
+                            "type": "boolean"
+                          },
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "STANDARD",
+                              "ANALYTICS"
+                            ]
+                          },
+                          "file_size_limit": {
+                            "type": [
+                              "null",
+                              "integer"
+                            ]
+                          },
+                          "allowed_mime_types": {
+                            "type": [
+                              "null",
+                              "array"
+                            ],
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "created_at": {
+                            "type": "string"
+                          },
+                          "updated_at": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name"
+                        ],
+                        "additionalProperties": false,
+                        "example": {
+                          "id": "bucket2",
+                          "name": "bucket2",
+                          "public": false,
+                          "file_size_limit": 1000000,
+                          "allowed_mime_types": [
+                            "image/png",
+                            "image/jpeg"
+                          ],
+                          "owner": "4d56e902-f0a0-4662-8448-a4d9e643c142",
+                          "created_at": "2021-02-17T04:43:32.770206+00:00",
+                          "updated_at": "2021-02-17T04:43:32.770206+00:00"
+                        }
+                      }
+                    },
+                    "required": [
+                      "name"
+                    ],
+                    "additionalProperties": false,
+                    "example": {
+                      "name": "folder/cat.png",
+                      "bucket_id": "avatars",
+                      "owner": "317eadce-631a-4429-a0bb-f19a7a517b4a",
+                      "id": "eaa8bdb5-2e00-4767-b5a9-d2502efe2196",
+                      "updated_at": "2021-04-06T16:30:35.394674+00:00",
+                      "created_at": "2021-04-06T16:30:35.394674+00:00",
+                      "last_accessed_at": "2021-04-06T16:30:35.394674+00:00",
+                      "metadata": {
+                        "size": 1234
+                      }
+                    }
                   }
                 }
               }
             }
           },
-          "403": {
-            "description": "Access denied",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
-          },
           "4XX": {
             "description": "Error response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -3520,7 +3402,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -3528,14 +3410,12 @@
         }
       }
     },
-    "/object/info/authenticated/{bucketName}/{wildcard}": {
+    "/object/info/authenticated/{bucketName}/{*}": {
       "get": {
-        "operationId": "objectGetAuthenticatedInfo",
         "summary": "Retrieve object info",
         "tags": [
           "object"
         ],
-        "description": "Returns object metadata as a JSON body rather than headers only, and requires a valid auth token even for public buckets",
         "parameters": [
           {
             "schema": {
@@ -3608,7 +3488,7 @@
             },
             "example": "folder/cat.png",
             "in": "path",
-            "name": "wildcard",
+            "name": "*",
             "required": true
           }
         ],
@@ -3618,22 +3498,12 @@
           }
         ],
         "responses": {
-          "403": {
-            "description": "Access denied",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
-          },
           "4XX": {
             "description": "Error response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -3643,7 +3513,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -3651,12 +3521,10 @@
         }
       },
       "head": {
-        "operationId": "objectGetAuthenticatedInfoHead",
         "summary": "Retrieve object info",
         "tags": [
           "object"
         ],
-        "description": "Returns object metadata as a JSON body rather than headers only, and requires a valid auth token even for public buckets",
         "parameters": [
           {
             "schema": {
@@ -3729,7 +3597,7 @@
             },
             "example": "folder/cat.png",
             "in": "path",
-            "name": "wildcard",
+            "name": "*",
             "required": true
           }
         ],
@@ -3739,22 +3607,12 @@
           }
         ],
         "responses": {
-          "403": {
-            "description": "Access denied",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
-          },
           "4XX": {
             "description": "Error response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -3764,7 +3622,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -3772,9 +3630,8 @@
         }
       }
     },
-    "/object/info/{bucketName}/{wildcard}": {
+    "/object/info/{bucketName}/{*}": {
       "get": {
-        "operationId": "objectGetAuthenticatedInfoGet",
         "summary": "Retrieve object info",
         "tags": [
           "object"
@@ -3852,7 +3709,7 @@
             },
             "example": "folder/cat.png",
             "in": "path",
-            "name": "wildcard",
+            "name": "*",
             "required": true
           }
         ],
@@ -3862,22 +3719,12 @@
           }
         ],
         "responses": {
-          "403": {
-            "description": "Access denied",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
-          },
           "4XX": {
             "description": "Error response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -3887,7 +3734,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -3895,7 +3742,6 @@
         }
       },
       "head": {
-        "operationId": "objectGetAuthenticatedInfo2",
         "summary": "Retrieve object info",
         "tags": [
           "object"
@@ -3973,7 +3819,7 @@
             },
             "example": "folder/cat.png",
             "in": "path",
-            "name": "wildcard",
+            "name": "*",
             "required": true
           }
         ],
@@ -3983,22 +3829,12 @@
           }
         ],
         "responses": {
-          "403": {
-            "description": "Access denied",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
-          },
           "4XX": {
             "description": "Error response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -4008,7 +3844,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -4018,12 +3854,10 @@
     },
     "/object/copy": {
       "post": {
-        "operationId": "objectCopy",
         "summary": "Copies an object",
         "tags": [
           "object"
         ],
-        "description": "Copies metadata along with the object content by default (override via copyMetadata), can target a different destinationBucket, and requires x-upsert to overwrite an existing destination key",
         "requestBody": {
           "required": true,
           "content": {
@@ -4109,33 +3943,132 @@
                       "type": "string"
                     },
                     "id": {
-                      "type": "string",
-                      "nullable": true
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     },
                     "updated_at": {
-                      "type": "string",
-                      "nullable": true
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     },
                     "created_at": {
-                      "type": "string",
-                      "nullable": true
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     },
                     "last_accessed_at": {
-                      "type": "string",
-                      "nullable": true
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     },
                     "metadata": {
-                      "type": "object",
-                      "additionalProperties": true,
-                      "nullable": true
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "additionalProperties": true
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     },
                     "user_metadata": {
-                      "type": "object",
-                      "additionalProperties": true,
-                      "nullable": true
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "additionalProperties": true
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     },
                     "buckets": {
-                      "$ref": "#/components/schemas/bucketSchema"
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "owner": {
+                          "type": "string"
+                        },
+                        "owner_id": {
+                          "type": "string"
+                        },
+                        "public": {
+                          "type": "boolean"
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "STANDARD",
+                            "ANALYTICS"
+                          ]
+                        },
+                        "file_size_limit": {
+                          "type": [
+                            "null",
+                            "integer"
+                          ]
+                        },
+                        "allowed_mime_types": {
+                          "type": [
+                            "null",
+                            "array"
+                          ],
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "created_at": {
+                          "type": "string"
+                        },
+                        "updated_at": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name"
+                      ],
+                      "additionalProperties": false,
+                      "example": {
+                        "id": "bucket2",
+                        "name": "bucket2",
+                        "public": false,
+                        "file_size_limit": 1000000,
+                        "allowed_mime_types": [
+                          "image/png",
+                          "image/jpeg"
+                        ],
+                        "owner": "4d56e902-f0a0-4662-8448-a4d9e643c142",
+                        "created_at": "2021-02-17T04:43:32.770206+00:00",
+                        "updated_at": "2021-02-17T04:43:32.770206+00:00"
+                      }
                     }
                   },
                   "required": [
@@ -4145,22 +4078,12 @@
               }
             }
           },
-          "403": {
-            "description": "Access denied",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
-          },
           "4XX": {
             "description": "Error response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -4170,7 +4093,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -4178,14 +4101,12 @@
         }
       }
     },
-    "/object/public/{bucketName}/{wildcard}": {
+    "/object/public/{bucketName}/{*}": {
       "get": {
-        "operationId": "objectGetPublic",
         "summary": "Retrieve an object from a public bucket",
         "tags": [
           "object"
         ],
-        "description": "Requires no authorization header but errors if the bucket is not marked public, unlike the authenticated retrieval endpoint",
         "parameters": [
           {
             "schema": {
@@ -4218,7 +4139,7 @@
             },
             "example": "folder/cat.png",
             "in": "path",
-            "name": "wildcard",
+            "name": "*",
             "required": true
           }
         ],
@@ -4228,7 +4149,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -4238,7 +4159,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -4246,7 +4167,6 @@
         }
       },
       "head": {
-        "operationId": "objectInfoPublic",
         "summary": "Get object info",
         "tags": [
           "object"
@@ -4324,7 +4244,7 @@
             },
             "example": "folder/cat.png",
             "in": "path",
-            "name": "wildcard",
+            "name": "*",
             "required": true
           }
         ],
@@ -4334,7 +4254,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -4344,7 +4264,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -4352,9 +4272,8 @@
         }
       }
     },
-    "/object/info/public/{bucketName}/{wildcard}": {
+    "/object/info/public/{bucketName}/{*}": {
       "get": {
-        "operationId": "objectInfoPublicGet",
         "summary": "Get object info",
         "tags": [
           "object"
@@ -4432,7 +4351,7 @@
             },
             "example": "folder/cat.png",
             "in": "path",
-            "name": "wildcard",
+            "name": "*",
             "required": true
           }
         ],
@@ -4442,7 +4361,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -4452,7 +4371,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -4460,14 +4379,12 @@
         }
       }
     },
-    "/render/image/authenticated/{bucketName}/{wildcard}": {
+    "/render/image/authenticated/{bucketName}/{*}": {
       "get": {
-        "operationId": "renderImageAuthenticated",
         "summary": "Render an authenticated image with the given transformations",
         "tags": [
           "transformation"
         ],
-        "description": "Requires a valid auth token and checks RLS access to the object, with transformation options passed directly as query parameters",
         "parameters": [
           {
             "schema": {
@@ -4549,7 +4466,7 @@
             },
             "example": "folder/cat.png",
             "in": "path",
-            "name": "wildcard",
+            "name": "*",
             "required": true
           }
         ],
@@ -4559,22 +4476,12 @@
           }
         ],
         "responses": {
-          "403": {
-            "description": "Access denied",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
-          },
           "4XX": {
             "description": "Error response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -4584,7 +4491,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -4592,12 +4499,10 @@
         }
       },
       "head": {
-        "operationId": "renderImageAuthenticatedHead",
         "summary": "Render an authenticated image with the given transformations",
         "tags": [
           "transformation"
         ],
-        "description": "Requires a valid auth token and checks RLS access to the object, with transformation options passed directly as query parameters",
         "parameters": [
           {
             "schema": {
@@ -4679,7 +4584,7 @@
             },
             "example": "folder/cat.png",
             "in": "path",
-            "name": "wildcard",
+            "name": "*",
             "required": true
           }
         ],
@@ -4689,22 +4594,12 @@
           }
         ],
         "responses": {
-          "403": {
-            "description": "Access denied",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
-          },
           "4XX": {
             "description": "Error response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -4714,7 +4609,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -4722,14 +4617,12 @@
         }
       }
     },
-    "/render/image/sign/{bucketName}/{wildcard}": {
+    "/render/image/sign/{bucketName}/{*}": {
       "get": {
-        "operationId": "renderImageSign",
         "summary": "Render an authenticated image with the given transformations",
         "tags": [
           "transformation"
         ],
-        "description": "Requires no authorization header, verifying the token query parameter instead, with the transformations already encoded in the signed token rather than passed as separate query parameters",
         "parameters": [
           {
             "schema": {
@@ -4764,7 +4657,7 @@
             },
             "example": "folder/cat.png",
             "in": "path",
-            "name": "wildcard",
+            "name": "*",
             "required": true
           }
         ],
@@ -4774,7 +4667,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -4784,7 +4677,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -4792,12 +4685,10 @@
         }
       },
       "head": {
-        "operationId": "renderImageSignHead",
         "summary": "Render an authenticated image with the given transformations",
         "tags": [
           "transformation"
         ],
-        "description": "Requires no authorization header, verifying the token query parameter instead, with the transformations already encoded in the signed token rather than passed as separate query parameters",
         "parameters": [
           {
             "schema": {
@@ -4832,7 +4723,7 @@
             },
             "example": "folder/cat.png",
             "in": "path",
-            "name": "wildcard",
+            "name": "*",
             "required": true
           }
         ],
@@ -4842,7 +4733,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -4852,7 +4743,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -4860,14 +4751,12 @@
         }
       }
     },
-    "/render/image/public/{bucketName}/{wildcard}": {
+    "/render/image/public/{bucketName}/{*}": {
       "get": {
-        "operationId": "renderImagePublic",
         "summary": "Render a public image with the given transformations",
         "tags": [
           "transformation"
         ],
-        "description": "Requires no authorization header but errors if the bucket is not marked public, with transformations passed as query parameters",
         "parameters": [
           {
             "schema": {
@@ -4949,7 +4838,7 @@
             },
             "example": "folder/cat.png",
             "in": "path",
-            "name": "wildcard",
+            "name": "*",
             "required": true
           }
         ],
@@ -4959,7 +4848,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -4969,7 +4858,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -4977,12 +4866,10 @@
         }
       },
       "head": {
-        "operationId": "renderImagePublicHead",
         "summary": "Render a public image with the given transformations",
         "tags": [
           "transformation"
         ],
-        "description": "Requires no authorization header but errors if the bucket is not marked public, with transformations passed as query parameters",
         "parameters": [
           {
             "schema": {
@@ -5064,7 +4951,7 @@
             },
             "example": "folder/cat.png",
             "in": "path",
-            "name": "wildcard",
+            "name": "*",
             "required": true
           }
         ],
@@ -5074,7 +4961,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -5084,22 +4971,378 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/s3/{Bucket}/{*}": {
+      "put": {
+        "tags": [
+          "s3"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "Bucket",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "*",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "head": {
+        "tags": [
+          "s3"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "Bucket",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "*",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "s3"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "Bucket",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "*",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "s3"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "Bucket",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "*",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "s3"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "Bucket",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "*",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/s3/{Bucket}": {
+      "delete": {
+        "tags": [
+          "s3"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "Bucket",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "s3"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "Bucket",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "s3"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "Bucket",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "s3"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "Bucket",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "head": {
+        "tags": [
+          "s3"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "Bucket",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/s3/{Bucket}/": {
+      "delete": {
+        "tags": [
+          "s3"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "Bucket",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "s3"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "Bucket",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "s3"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "Bucket",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "s3"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "Bucket",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "head": {
+        "tags": [
+          "s3"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "Bucket",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/s3/": {
+      "get": {
+        "tags": [
+          "s3"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
           }
         }
       }
     },
     "/cdn/": {
       "delete": {
-        "operationId": "cdnPurgeTenantCache",
         "summary": "Purge cache for entire tenant or tenant transformations",
         "tags": [
           "cdn"
         ],
-        "description": "Pass transformations=true in the query string to purge only cached image transformation renditions instead of the whole tenant cache",
         "parameters": [
           {
             "schema": {
@@ -5133,22 +5376,12 @@
               }
             }
           },
-          "403": {
-            "description": "Access denied",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
-          },
           "4XX": {
             "description": "Error response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -5158,7 +5391,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -5168,12 +5401,10 @@
     },
     "/cdn/{bucketName}": {
       "delete": {
-        "operationId": "cdnPurgeBucketCache",
         "summary": "Purge cache for an entire bucket or bucket transformations",
         "tags": [
           "cdn"
         ],
-        "description": "Pass transformations=true in the query string to purge only cached image transformation renditions for the bucket instead of all of its cached responses",
         "parameters": [
           {
             "schema": {
@@ -5216,22 +5447,12 @@
               }
             }
           },
-          "403": {
-            "description": "Access denied",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
-          },
           "4XX": {
             "description": "Error response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -5241,7 +5462,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -5249,14 +5470,12 @@
         }
       }
     },
-    "/cdn/{bucketName}/{wildcard}": {
+    "/cdn/{bucketName}/{*}": {
       "delete": {
-        "operationId": "cdnPurgeObjectCache",
         "summary": "Purge cache for an object or object transformations",
         "tags": [
           "cdn"
         ],
-        "description": "Pass transformations=true in the query string to purge only cached image transformation renditions of the object instead of its plain cached response",
         "parameters": [
           {
             "schema": {
@@ -5282,7 +5501,7 @@
             },
             "example": "folder/cat.png",
             "in": "path",
-            "name": "wildcard",
+            "name": "*",
             "required": true
           }
         ],
@@ -5309,22 +5528,12 @@
               }
             }
           },
-          "403": {
-            "description": "Access denied",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
-          },
           "4XX": {
             "description": "Error response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -5334,7 +5543,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
+                  "$ref": "#/components/schemas/def-1"
                 }
               }
             }
@@ -5342,14 +5551,12 @@
         }
       }
     },
-    "/health": {
-      "head": {
-        "operationId": "healthcheck-head",
+    "/health/": {
+      "get": {
         "summary": "healthcheck",
         "tags": [
           "health"
         ],
-        "description": "Checks database connectivity and always responds with HTTP 200, reporting healthy: false in the body rather than an error status when the check fails",
         "security": [
           {
             "bearerAuth": []
@@ -5357,44 +5564,15 @@
         ],
         "responses": {
           "200": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "description": "Default Response"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Access denied",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "description": "Error response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
+            "description": "Default Response"
           }
         }
       },
-      "get": {
-        "operationId": "healthcheck",
+      "head": {
         "summary": "healthcheck",
         "tags": [
           "health"
         ],
-        "description": "Checks database connectivity and always responds with HTTP 200, reporting healthy: false in the body rather than an error status when the check fails",
         "security": [
           {
             "bearerAuth": []
@@ -5402,34 +5580,25 @@
         ],
         "responses": {
           "200": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "description": "Default Response"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Access denied",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "description": "Error response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errorSchema"
-                }
-              }
-            }
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/health": {
+      "head": {
+        "summary": "healthcheck",
+        "tags": [
+          "health"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
           }
         }
       }
@@ -5446,7 +5615,7 @@
     },
     {
       "name": "s3",
-      "description": "S3-compatible protocol. Not enumerated here: each operation is dispatched by query string/header on a handful of shared routes, which OpenAPI cannot express as distinct operations. See src/http/routes/s3/commands for the per-command request/response contract, or use any S3 SDK against this endpoint."
+      "description": "S3 end-points"
     },
     {
       "name": "transformation",

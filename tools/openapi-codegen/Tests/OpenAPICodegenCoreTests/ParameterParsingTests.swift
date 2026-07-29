@@ -3,7 +3,7 @@
 //
 
 import Foundation
-import OpenAPIKit30
+import OpenAPIKit
 import Testing
 
 @testable import OpenAPICodegenCore
@@ -12,7 +12,7 @@ import Testing
 struct ParameterParsingTests {
 
   private func parameter(_ json: String) throws -> Either<
-    JSONReference<OpenAPI.Parameter>, OpenAPI.Parameter
+    OpenAPI.Reference<OpenAPI.Parameter>, OpenAPI.Parameter
   > {
     let param = try JSONDecoder().decode(OpenAPI.Parameter.self, from: Data(json.utf8))
     return .b(param)

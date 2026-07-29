@@ -2,7 +2,7 @@
 //  OpenAPIParsing.swift
 //
 
-import OpenAPIKit30
+import OpenAPIKit
 
 /// Thrown when the input spec uses a construct this generator deliberately
 /// doesn't support (see the plan's Global Constraints for the full list).
@@ -110,6 +110,11 @@ public enum OpenAPIParsing {
     case .any(let schemas, _): branches = schemas
     default: return nil
     }
+    // `anyOf`/`oneOf: [X, {"type": "null"}]` is the JSON Schema nullable idiom,
+    // not a real tagged union. Don't hoist a fake union — let the caller fall
+    // through to `parseType`, which collapses it to `X`; the outer schema's
+    // `.nullable` already carries the optionality (see `isOptional` above).
+    if nonNullBranch(among: branches) != nil { return nil }
     var cases: [IRUnionCase] = []
     var usedNames: [String: Int] = [:]
     for (index, branch) in branches.enumerated() {
@@ -166,6 +171,20 @@ public enum OpenAPIParsing {
     return (.schemaRef(name), hoisted)
   }
 
+  /// Detects the JSON Schema nullable idiom `anyOf`/`oneOf: [X, {"type":
+  /// "null"}]` (in either order). Returns the non-null branch `X` when the
+  /// union has exactly two branches and exactly one is the dedicated `.null`
+  /// schema; returns `nil` for any other shape (including genuine unions).
+  private static func nonNullBranch(among branches: [JSONSchema]) -> JSONSchema? {
+    guard branches.count == 2 else { return nil }
+    let nullIndices = branches.indices.filter {
+      if case .null = branches[$0].value { return true }
+      return false
+    }
+    guard nullIndices.count == 1 else { return nil }
+    return branches[1 - nullIndices[0]]
+  }
+
   private static func unionCaseName(for type: IRType) -> String {
     switch type {
     case .string: return "string"
@@ -209,6 +228,14 @@ public enum OpenAPIParsing {
           location: location, reason: "external reference without a resolvable name")
       }
       return .schemaRef(name)
+    case .one(let branches, _), .any(let branches, _):
+      // Only the nullable idiom (`[X, {"type": "null"}]`) reaches here — every
+      // callsite tries `hoistUnionIfPresent` first, which hoists genuine unions
+      // and bails only for this shape. Collapse to the real branch `X`.
+      guard let branch = nonNullBranch(among: branches) else {
+        throw UnsupportedSpecConstruct(location: location, reason: "unsupported schema shape")
+      }
+      return try parseType(branch, location: location)
     default:
       throw UnsupportedSpecConstruct(location: location, reason: "unsupported schema shape")
     }
@@ -217,7 +244,7 @@ public enum OpenAPIParsing {
   // MARK: - Parameters
 
   static func parseParameter(
-    _ either: Either<JSONReference<OpenAPI.Parameter>, OpenAPI.Parameter>,
+    _ either: Either<OpenAPI.Reference<OpenAPI.Parameter>, OpenAPI.Parameter>,
     location: String
   ) throws -> (parameter: IRParameter, hoisted: [IRSchema]) {
     guard let parameter = either.parameterValue else {
@@ -232,6 +259,9 @@ public enum OpenAPIParsing {
     case .cookie:
       throw UnsupportedSpecConstruct(
         location: parameterLocation, reason: "cookie parameters aren't supported")
+    case .querystring:
+      throw UnsupportedSpecConstruct(
+        location: parameterLocation, reason: "querystring parameters aren't supported")
     }
     guard let schema = parameter.schemaOrContent.schemaValue else {
       throw UnsupportedSpecConstruct(
@@ -278,28 +308,10 @@ public enum OpenAPIParsing {
     return (irParameter, [])
   }
 
-  // MARK: - Schema references in content bodies
-
-  static func resolveSchema(
-    _ either: Either<JSONReference<JSONSchema>, JSONSchema>,
-    location: String
-  ) throws -> IRType {
-    switch either {
-    case .a(let reference):
-      guard let name = reference.name else {
-        throw UnsupportedSpecConstruct(
-          location: location, reason: "external schema reference without a resolvable name")
-      }
-      return .schemaRef(name)
-    case .b(let schema):
-      return try parseType(schema, location: location)
-    }
-  }
-
   // MARK: - Request bodies
 
   static func parseRequestBody(
-    _ either: Either<JSONReference<OpenAPI.Request>, OpenAPI.Request>,
+    _ either: Either<OpenAPI.Reference<OpenAPI.Request>, OpenAPI.Request>,
     location: String
   ) throws -> (body: IRRequestBody, hoisted: [IRSchema]) {
     guard let request = either.requestValue else {
@@ -307,36 +319,32 @@ public enum OpenAPIParsing {
     }
     if let jsonContent = request.content.first(where: {
       $0.key.typeAndSubtype == "application/json"
-    })?.value {
-      guard let schemaEither = jsonContent.schema else {
+    })?.value.contentValue {
+      guard let schema = jsonContent.schema else {
         throw UnsupportedSpecConstruct(
           location: location, reason: "JSON request body without a schema")
       }
-      if case .b(let inlineSchema) = schemaEither,
-        let (type, objectHoisted) = try hoistInlineObjectIfPresent(
-          name: "\(location)_requestBody", schema: inlineSchema, location: "\(location)_requestBody"
-        )
+      if let (type, objectHoisted) = try hoistInlineObjectIfPresent(
+        name: "\(location)_requestBody", schema: schema, location: "\(location)_requestBody")
       {
         return (.json(type), objectHoisted)
       }
-      if case .b(let inlineSchema) = schemaEither,
-        let (type, hoistedSchema) = try hoistUnionIfPresent(
-          name: "\(location)_requestBody", schema: inlineSchema, location: location)
+      if let (type, hoistedSchema) = try hoistUnionIfPresent(
+        name: "\(location)_requestBody", schema: schema, location: location)
       {
         return (.json(type), [hoistedSchema])
       }
-      if case .b(let inlineSchema) = schemaEither,
-        let (type, arrayHoisted) = try hoistArrayOfObjectIfPresent(
-          name: "\(location)_requestBody", schema: inlineSchema, location: location)
+      if let (type, arrayHoisted) = try hoistArrayOfObjectIfPresent(
+        name: "\(location)_requestBody", schema: schema, location: location)
       {
         return (.json(type), arrayHoisted)
       }
-      return (.json(try resolveSchema(schemaEither, location: location)), [])
+      return (.json(try parseType(schema, location: location)), [])
     }
     if let multipartContent = request.content.first(where: {
       $0.key.typeAndSubtype == "multipart/form-data"
-    })?.value {
-      guard let schemaEither = multipartContent.schema, case .b(let objectSchema) = schemaEither,
+    })?.value.contentValue {
+      guard let objectSchema = multipartContent.schema,
         case .object(_, let objectContext) = objectSchema.value
       else {
         throw UnsupportedSpecConstruct(
@@ -345,7 +353,11 @@ public enum OpenAPIParsing {
       var fields: [IRMultipartField] = []
       for (fieldName, fieldSchema) in objectContext.properties.sorted(by: { $0.key < $1.key }) {
         var isFile = false
-        if case .string(let core, _) = fieldSchema.value, core.format == .binary {
+        if case .string(let core, let stringContext) = fieldSchema.value,
+          core.format.rawValue == "binary" || stringContext.contentEncoding == .binary
+        {
+          // OpenAPI 3.0 spelled binary payloads `format: binary`; 3.1 moved to
+          // `contentEncoding: binary`. Accept either so file fields still map.
           isFile = true
         }
         fields.append(
@@ -396,30 +408,27 @@ public enum OpenAPIParsing {
     location: String
   ) throws -> (body: IRResponseBody, hoisted: [IRSchema]) {
     if let jsonContent = content.first(where: { $0.key.typeAndSubtype == "application/json" })?
-      .value
+      .value.contentValue
     {
-      guard let schemaEither = jsonContent.schema else { return (.none, []) }
-      if case .b(let inlineSchema) = schemaEither,
-        let (type, objectHoisted) = try hoistInlineObjectIfPresent(
-          name: "\(operationId)_response\(statusCode)",
-          schema: inlineSchema,
-          location: "\(operationId)_response\(statusCode)")
+      guard let schema = jsonContent.schema else { return (.none, []) }
+      if let (type, objectHoisted) = try hoistInlineObjectIfPresent(
+        name: "\(operationId)_response\(statusCode)",
+        schema: schema,
+        location: "\(operationId)_response\(statusCode)")
       {
         return (.json(type), objectHoisted)
       }
-      if case .b(let inlineSchema) = schemaEither,
-        let (type, hoistedSchema) = try hoistUnionIfPresent(
-          name: "\(operationId)_response\(statusCode)", schema: inlineSchema, location: location)
+      if let (type, hoistedSchema) = try hoistUnionIfPresent(
+        name: "\(operationId)_response\(statusCode)", schema: schema, location: location)
       {
         return (.json(type), [hoistedSchema])
       }
-      if case .b(let inlineSchema) = schemaEither,
-        let (type, arrayHoisted) = try hoistArrayOfObjectIfPresent(
-          name: "\(operationId)_response\(statusCode)", schema: inlineSchema, location: location)
+      if let (type, arrayHoisted) = try hoistArrayOfObjectIfPresent(
+        name: "\(operationId)_response\(statusCode)", schema: schema, location: location)
       {
         return (.json(type), arrayHoisted)
       }
-      return (.json(try resolveSchema(schemaEither, location: location)), [])
+      return (.json(try parseType(schema, location: location)), [])
     }
     return (content.isEmpty ? .none : .binary, [])
   }
