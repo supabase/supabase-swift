@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.54.1](https://github.com/supabase/supabase-swift/compare/v2.54.0...v2.54.1) (2026-07-29)
+
+
+### Bug Fixes
+
+* **realtime:** fix AsyncValueSubject deadlock, then inline and delete it ([#1155](https://github.com/supabase/supabase-swift/issues/1155)) ([0e91b2f](https://github.com/supabase/supabase-swift/commit/0e91b2f00cfe8aaa4dd5f489a7f22c4abcfc8a2d))
+* **realtime:** resume WebSocket continuations outside the lock ([#1156](https://github.com/supabase/supabase-swift/issues/1156)) ([625a278](https://github.com/supabase/supabase-swift/commit/625a278d49050507c5616be27fed93bb735d4f99))
+
 ## [2.54.0](https://github.com/supabase/supabase-swift/compare/v2.53.0...v2.54.0) (2026-07-27)
 
 
