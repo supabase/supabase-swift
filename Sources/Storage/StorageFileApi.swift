@@ -1023,44 +1023,37 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     options: FileOptions?
   ) async throws -> SignedURLUploadResponse {
     let options = options ?? defaultFileOptions
+    var headers = options.headers.map { HTTPFields($0) } ?? HTTPFields()
 
-    var extraHeaders = options.headers.map { HTTPFields($0) } ?? HTTPFields()
-    extraHeaders[.xUpsert] = "\(options.upsert)"
-    extraHeaders[.duplex] = options.duplex
+    headers[.xUpsert] = "\(options.upsert)"
+    headers[.duplex] = options.duplex
 
-    let filePart = try _fileMultipartRawPart(path: path, file: file, options: options)
+    #if DEBUG
+      let formData = MultipartFormData(boundary: testingBoundary.value)
+    #else
+      let formData = MultipartFormData()
+    #endif
+    file.encode(to: formData, withPath: path, options: options)
 
-    var parts: [Operations.objectUploadSigned.Input.Body.multipartFormPayload] = [
-      .cacheControl(.init(payload: .init(body: HTTPBody(options.cacheControl))))
-    ]
-    if let metadata = options.metadata {
-      parts.append(.metadata(.init(payload: .init(body: HTTPBody(encodeMetadata(metadata))))))
+    struct UploadResponse: Decodable {
+      let Key: String
     }
-    parts.append(.undocumented(filePart))
 
-    let input = Operations.objectUploadSigned.Input(
-      path: .init(bucketName: bucketId, wildcard: path),
-      query: .init(token: token),
-      headers: .init(),
-      body: .multipartForm(.init(parts))
+    let fullPath = try await execute(
+      HTTPRequest(
+        url: configuration.url
+          .appendingPathComponent("object/upload/sign/\(bucketId)/\(path)"),
+        method: .put,
+        query: [URLQueryItem(name: "token", value: token)],
+        formData: formData,
+        options: options,
+        headers: headers
+      )
     )
+    .decoded(as: UploadResponse.self, decoder: configuration.decoder)
+    .Key
 
-    let output = try await StorageApi.$extraHeadersForCurrentRequest.withValue(extraHeaders) {
-      try await openAPIClient.objectUploadSigned(input)
-    }
-
-    switch output {
-    case .ok(let response):
-      guard case .json(let body) = response.body else {
-        throw StorageError.unexpectedResponse()
-      }
-      return SignedURLUploadResponse(path: path, fullPath: body.Key)
-    case .clientError(let statusCode, let response):
-      throw try StorageError(statusCode: statusCode, decoding: response.body.json)
-    case .undocumented(let statusCode, let payload):
-      throw await StorageError(
-        statusCode: statusCode, undocumented: payload, decoder: configuration.decoder)
-    }
+    return SignedURLUploadResponse(path: path, fullPath: fullPath)
   }
 
   private func _getFinalPath(_ path: String) -> String {
