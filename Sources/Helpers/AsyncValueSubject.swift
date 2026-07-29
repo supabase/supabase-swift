@@ -16,15 +16,24 @@ package final class AsyncValueSubject<Value: Sendable>: Sendable {
   package typealias BufferingPolicy = AsyncStream<Value>.Continuation.BufferingPolicy
 
   /// Internal state container for the subject.
-  struct MutableState {
+  private struct MutableState {
     var value: Value
     var continuations: [UInt: AsyncStream<Value>.Continuation] = [:]
     var count: UInt = 0
     var finished = false
+    /// Monotonic counter handed out under this same lock, so its order always
+    /// matches the order `yield`/`finish`/subscribe calls were serialized in.
+    /// Used by `deliveryOrder` to resume continuations in that same order,
+    /// even though the resume itself happens outside this lock.
+    var nextTicket: UInt = 0
   }
 
-  let bufferingPolicy: UncheckedSendable<BufferingPolicy>
-  let mutableState: LockIsolated<MutableState>
+  private let bufferingPolicy: UncheckedSendable<BufferingPolicy>
+  private let mutableState: LockIsolated<MutableState>
+
+  /// Delivers continuation resumes in the exact order their tickets were
+  /// handed out — see `deliver(ticket:)`.
+  private let deliveryOrder = TicketTurnstile()
 
   /// Creates a new AsyncValueSubject with an initial value.
   /// - Parameters:
@@ -51,19 +60,21 @@ package final class AsyncValueSubject<Value: Sendable>: Sendable {
   ///
   /// This can be called more than once and returns to the caller immediately without blocking for any awaiting consumption from the iteration.
   package func yield(_ value: Value) {
-    // Snapshot the continuations under the lock, then resume them outside of it.
-    // Resuming a continuation can synchronously reach into the Swift runtime's
-    // task status-record lock; holding our own lock at the same time inverts
-    // lock order with cancellation (which takes the status-record lock first,
-    // then calls back into `remove`/`insert`), causing a deadlock.
-    let continuations: [AsyncStream<Value>.Continuation] = mutableState.withValue {
-      guard !$0.finished else { return [] }
+    guard
+      let (ticket, continuations) = mutableState.withValue({
+        state -> (UInt, [AsyncStream<Value>.Continuation])? in
+        guard !state.finished else { return nil }
+        state.value = value
+        let ticket = state.nextTicket
+        state.nextTicket += 1
+        return (ticket, Array(state.continuations.values))
+      })
+    else { return }
 
-      $0.value = value
-      return Array($0.continuations.values)
-    }
-    for continuation in continuations {
-      continuation.yield(value)
+    deliveryOrder.deliver(ticket: ticket) {
+      for continuation in continuations {
+        continuation.yield(value)
+      }
     }
   }
 
@@ -74,16 +85,21 @@ package final class AsyncValueSubject<Value: Sendable>: Sendable {
   /// finish, the stream enters a terminal state and doesn't produce any
   /// additional elements.
   package func finish() {
-    // See the comment in `yield` for why continuations must be resumed
-    // outside of the lock.
-    let continuations: [AsyncStream<Value>.Continuation] = mutableState.withValue {
-      guard $0.finished == false else { return [] }
+    guard
+      let (ticket, continuations) = mutableState.withValue({
+        state -> (UInt, [AsyncStream<Value>.Continuation])? in
+        guard !state.finished else { return nil }
+        state.finished = true
+        let ticket = state.nextTicket
+        state.nextTicket += 1
+        return (ticket, Array(state.continuations.values))
+      })
+    else { return }
 
-      $0.finished = true
-      return Array($0.continuations.values)
-    }
-    for continuation in continuations {
-      continuation.finish()
+    deliveryOrder.deliver(ticket: ticket) {
+      for continuation in continuations {
+        continuation.finish()
+      }
     }
   }
 
@@ -117,25 +133,58 @@ package final class AsyncValueSubject<Value: Sendable>: Sendable {
 
   /// Adds a new continuation to the subject and yields the current value.
   private func insert(_ continuation: AsyncStream<Value>.Continuation) {
-    // See the comment in `yield` for why continuations must be resumed
-    // outside of the lock.
-    let (id, currentValue) = mutableState.withValue { state -> (UInt, Value) in
+    // Taking the ticket under the same lock that registers this continuation
+    // keeps the initial replay correctly ordered against concurrent
+    // `yield`/`finish` calls — see `deliveryOrder`.
+    let (id, ticket, currentValue) = mutableState.withValue { state -> (UInt, UInt, Value) in
       let id = state.count + 1
       state.count = id
       state.continuations[id] = continuation
-      return (id, state.value)
+
+      let ticket = state.nextTicket
+      state.nextTicket += 1
+      return (id, ticket, state.value)
     }
 
     continuation.onTermination = { [weak self] _ in
       self?.remove(continuation: id)
     }
-    continuation.yield(currentValue)
+
+    deliveryOrder.deliver(ticket: ticket) {
+      continuation.yield(currentValue)
+    }
   }
 
   /// Removes a continuation when it's terminated.
   private func remove(continuation id: UInt) {
     mutableState.withValue {
       _ = $0.continuations.removeValue(forKey: id)
+    }
+  }
+
+  /// Resumes continuations in the exact order their tickets were handed out,
+  /// without requiring the caller to hold any lock while resuming.
+  ///
+  /// Resuming a continuation can synchronously reach into the Swift runtime's
+  /// task status-record lock. Task cancellation takes the opposite order: it
+  /// holds that status-record lock first, then calls back into `remove` for
+  /// `mutableState`'s lock. If a resume were performed while still holding
+  /// `mutableState`'s lock, those two orders would invert and deadlock (see
+  /// supabase-swift#1154). `TicketTurnstile` only ever guards the resume
+  /// itself — never `mutableState` — so `remove` can never be blocked by it.
+  private final class TicketTurnstile: @unchecked Sendable {
+    private let condition = NSCondition()
+    private var nowServing: UInt = 0
+
+    func deliver(ticket: UInt, _ work: () -> Void) {
+      condition.lock()
+      while nowServing != ticket {
+        condition.wait()
+      }
+      work()
+      nowServing += 1
+      condition.broadcast()
+      condition.unlock()
     }
   }
 }
