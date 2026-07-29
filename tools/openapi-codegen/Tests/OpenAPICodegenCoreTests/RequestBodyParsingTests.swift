@@ -35,6 +35,23 @@ struct RequestBodyParsingTests {
   }
 
   @Test
+  func parsesWildcardContentTypeAsBinaryRequestBody() throws {
+    let json = """
+      {
+        "content": {
+          "application/json": {"schema": {"type": "object", "additionalProperties": true}},
+          "*/*": {"schema": {}}
+        }
+      }
+      """
+    let (body, hoisted) = try OpenAPIParsing.parseRequestBody(
+      requestBody(json), location: "invokeFunction")
+
+    #expect(body == .binary)
+    #expect(hoisted.isEmpty)
+  }
+
+  @Test
   func parsesMultipartRequestBodyWithFileField() throws {
     let json = """
       {

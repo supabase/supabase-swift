@@ -232,7 +232,8 @@ public enum SwiftEmitter {
       lines.append("    let stream = try await transport.stream(try builder.build())")
       lines.append("    guard stream.head.isSuccess else {")
       lines.append(
-        "      throw HTTPError.unexpectedStatus(status: stream.head.status, body: Data())")
+        "      throw HTTPError.unexpectedResponse(response: HTTPResponse(head: stream.head, body: Data()))"
+      )
       lines.append("    }")
       lines.append("    return stream.body")
     } else {
@@ -288,6 +289,8 @@ public enum SwiftEmitter {
         let type = field.isFile ? "URL" : SwiftNames.typeReference(field.type, isOptional: false)
         return "\(name): \(type)"
       }
+    case .binary:
+      return ["body: Data", "contentType: String? = nil"]
     }
   }
 
@@ -316,6 +319,11 @@ public enum SwiftEmitter {
         "    let formData = \(formDataExpression)",
         "    builder.setHeader(\"Content-Type\", formData.contentType)",
         "    builder.setBody(.file(try formData.buildToTempFile()))",
+      ]
+    case .binary:
+      return [
+        "    builder.setHeader(\"Content-Type\", contentType)",
+        "    builder.setBody(.data(body))",
       ]
     }
   }

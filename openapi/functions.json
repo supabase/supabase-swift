@@ -1,0 +1,238 @@
+{
+  "openapi": "3.2.0",
+  "info": {
+    "title": "Supabase Edge Functions",
+    "version": "0.1.0",
+    "description": "HTTP contract for invoking Supabase Edge Functions. Documents the\nplatform-level request envelope (headers, status codes, error shape)\nconsumed by client SDKs (e.g. `@supabase/functions-js`). Function\nresponse bodies are user-defined and are passed through opaquely;\nthis spec describes the protocol surface, not the function payload.\n\nInternal `/_internal/*` routes (health, liveness, metrics, model cache)\nare intentionally omitted: they are platform infrastructure, not part\nof the SDK contract.\n"
+  },
+  "servers": [
+    {
+      "url": "https://{project_ref}.supabase.co/functions/v1",
+      "description": "Production",
+      "variables": {
+        "project_ref": {
+          "default": "your-project-ref",
+          "description": "Supabase project reference"
+        }
+      }
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "APIKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "apikey",
+        "description": "Project anon or service-role key. Required for all invocations.\n"
+      },
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "End-user JWT for user-scoped invocations. When present, the\nfunction receives the user identity in `req.headers.authorization`.\n"
+      }
+    },
+    "headers": {
+      "SbDeploymentId": {
+        "description": "Deployment ID that served the request.",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    "schemas": {
+      "ErrorResponse": {
+        "type": "object",
+        "description": "Platform-level error envelope returned by the ingress when the\nrequest cannot reach the function or fails at the platform layer\n(auth, routing, rate limiting, execution failure). User functions\nreturn their own response shapes and are not described here.\n",
+        "required": [
+          "code"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Machine-readable error code. One of the documented\nplatform error codes.\n",
+            "enum": [
+              "RATE_LIMIT_EXCEEDED",
+              "INVALID_DENO_SUBHOST",
+              "UNAUTHORIZED_LEGACY_JWT",
+              "UNAUTHORIZED_ASYMMETRIC_JWT",
+              "UNAUTHORIZED_INVALID_JWT_FORMAT",
+              "UNAUTHORIZED_UNSUPPORTED_TOKEN_ALGORITHM",
+              "UNAUTHORIZED_NO_AUTH_HEADER",
+              "INVALID_URL",
+              "BOOT_ERROR",
+              "LOAD_FUNCTION_ERROR",
+              "LOAD_FUNCTION_METADATA_ERROR",
+              "LOAD_FUNCTION_INVALID_ENTRYPOINT_PATH_ERROR",
+              "NOT_FOUND",
+              "EDGE_FUNCTION_ERROR",
+              "INVALID_RESPONSE_STATUS_CODE",
+              "WORKER_ERROR",
+              "WORKER_RESOURCE_LIMIT",
+              "IDLE_TIMEOUT",
+              "SUPABASE_EDGE_RUNTIME_ERROR",
+              "SUPABASE_EDGE_RUNTIME_SERVICE_DEGRADED"
+            ]
+          },
+          "ref": {
+            "type": "string",
+            "description": "Correlation identifier; include in support requests so the\nplatform team can trace the failing invocation.\n"
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable error description."
+          }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/{function_name}": {
+      "parameters": [
+        {
+          "name": "function_name",
+          "in": "path",
+          "required": true,
+          "description": "Slug of the deployed Edge Function.",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "summary": "Invoke an Edge Function",
+        "description": "Invoke the named function with an arbitrary request body. Headers\nand body are forwarded to the function worker; the function's\nresponse (status, headers, body) is passed back to the caller\nunchanged unless a platform-level failure intercepts the request\n(see the documented error codes).\n",
+        "operationId": "invokeFunction",
+        "security": [
+          {
+            "APIKeyAuth": []
+          },
+          {
+            "APIKeyAuth": [],
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-region",
+            "in": "header",
+            "required": false,
+            "description": "Pin invocation to a specific region.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-client-info",
+            "in": "header",
+            "required": false,
+            "description": "SDK identifier and version.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "Arbitrary JSON payload forwarded to the function. The schema is\nfunction-specific and not part of the platform contract.\n",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            },
+            "*/*": {
+              "schema": {}
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Function executed successfully. Response body and content\ntype are user-defined.\n",
+            "headers": {
+              "sb-deploymentid": {
+                "$ref": "#/components/headers/SbDeploymentId"
+              }
+            },
+            "content": {
+              "*/*": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, malformed, or unsupported JWT.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Function not found for the given project/name.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Function execution failed (boot error, metadata load\nfailure, worker error, or generic runtime error).\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Edge runtime is degraded or shedding load. Retry with backoff.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Function exceeded its idle or wall-clock timeout. The\ninvocation was aborted.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "options": {
+        "summary": "CORS preflight",
+        "description": "CORS preflight handler. Returns standard CORS headers to allow\ncross-origin invocation from browser clients.\n",
+        "operationId": "invokeFunctionPreflight",
+        "responses": {
+          "204": {
+            "description": "Preflight accepted."
+          }
+        }
+      }
+    }
+  }
+}

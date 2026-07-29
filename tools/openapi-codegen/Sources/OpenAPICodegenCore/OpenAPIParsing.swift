@@ -317,6 +317,12 @@ public enum OpenAPIParsing {
     guard let request = either.requestValue else {
       throw UnsupportedSpecConstruct(location: location, reason: "external request body reference")
     }
+    if request.content.keys.contains(where: { $0.typeAndSubtype == "*/*" }) {
+      // A `*/*` content type means the body accepts any content, superseding
+      // any narrower content type (e.g. `application/json`) declared
+      // alongside it. Model it as a raw, caller-supplied payload.
+      return (.binary, [])
+    }
     if let jsonContent = request.content.first(where: {
       $0.key.typeAndSubtype == "application/json"
     })?.value.contentValue {

@@ -67,6 +67,7 @@ public struct IRParameter: Equatable {
 public enum IRRequestBody: Equatable {
   case json(IRType)
   case multipart(fields: [IRMultipartField])
+  case binary
 }
 
 public struct IRMultipartField: Equatable {
