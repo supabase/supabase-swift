@@ -80,9 +80,16 @@ final class URLSessionWebSocket: WebSocket {
 
     let mutableState = LockIsolated(MutableState())
 
+    // `onComplete`/`onWebSocketTaskOpened` compute what to do while holding
+    // `mutableState`'s lock, then run it (resuming the continuation or
+    // invoking `_connectionClosed`) only after the lock is released. Resuming
+    // a continuation can synchronously reach into the Swift runtime's task
+    // status-record lock; doing that while still holding our own lock risks
+    // a lock-order inversion with cancellation (see the fix for the
+    // equivalent bug in `AsyncValueSubject`, supabase/supabase-swift#1154).
     let onComplete: @Sendable (URLSession, URLSessionTask, (any Error)?) -> Void = {
       session, task, error in
-      mutableState.withValue {
+      let afterUnlock: @Sendable () -> Void = mutableState.withValue {
         if let webSocket = $0.webSocket {
           // There are three possibilities here:
           // 1. the peer sent a close Frame, `onWebSocketTaskClosed` was already
@@ -91,37 +98,48 @@ final class URLSessionWebSocket: WebSocket {
           //    is a no-op.
           // 3. an error occurred (e.g. network failure) and `_connectionClosed`
           //    will signal that and close `event`.
-          webSocket._connectionClosed(
-            code: 1006,
-            reason: Data("abnormal close".utf8)
-          )
+          return {
+            webSocket._connectionClosed(
+              code: 1006,
+              reason: Data("abnormal close".utf8)
+            )
+          }
         } else if let error {
           // No `URLSessionWebSocket` was ever created to own this session (connection
           // failed before `onWebSocketTaskOpened`), so invalidate it here — otherwise
           // it (and its task/delegate) leak.
           session.finishTasksAndInvalidate()
-          $0.continuation.resume(
-            throwing: WebSocketError.connection(
-              message: "connection ended unexpectedly",
-              error: error
+          let continuation = $0.continuation!
+          return {
+            continuation.resume(
+              throwing: WebSocketError.connection(
+                message: "connection ended unexpectedly",
+                error: error
+              )
             )
-          )
+          }
         } else {
           // `onWebSocketTaskOpened` should have been called and resumed continuation.
           // So either there was an error creating the connection or a logic error.
-          assertionFailure(
-            "expected an error or `onWebSocketTaskOpened` to have been called first"
-          )
+          return {
+            assertionFailure(
+              "expected an error or `onWebSocketTaskOpened` to have been called first"
+            )
+          }
         }
       }
+      afterUnlock()
     }
     let onWebSocketTaskOpened: @Sendable (URLSession, URLSessionWebSocketTask, String?) -> Void = {
       session, task, `protocol` in
-      mutableState.withValue {
-        $0.webSocket = URLSessionWebSocket(
+      let (webSocket, continuation) = mutableState.withValue {
+        state -> (URLSessionWebSocket, CheckedContinuation<URLSessionWebSocket, any Error>) in
+        let webSocket = URLSessionWebSocket(
           _task: task, _protocol: `protocol` ?? "", session: session)
-        $0.continuation.resume(returning: $0.webSocket!)
+        state.webSocket = webSocket
+        return (webSocket, state.continuation!)
       }
+      continuation.resume(returning: webSocket)
     }
     let onWebSocketTaskClosed:
       @Sendable (URLSession, URLSessionWebSocketTask, Int?, Data?) -> Void =
@@ -330,9 +348,9 @@ final class URLSessionWebSocket: WebSocket {
   /// Triggers a WebSocket event and updates internal state if needed.
   /// - Parameter event: The event to trigger.
   private func _trigger(_ event: WebSocketEvent) {
+    // Update state under the lock, but yield the continuation only after
+    // releasing it — see the comment on `onComplete` above for why.
     let shouldInvalidate = mutableState.withValue {
-      eventsContinuation.yield(event)
-
       // Update state when connection closes
       if case .close(let code, let reason) = event {
         let wasClosed = $0.isClosed
@@ -343,6 +361,8 @@ final class URLSessionWebSocket: WebSocket {
       }
       return false
     }
+
+    eventsContinuation.yield(event)
 
     // This instance always owns `session` (a dedicated internal session `connect` created
     // for it), so it's always safe to invalidate here.
