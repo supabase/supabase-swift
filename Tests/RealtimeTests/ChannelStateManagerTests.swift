@@ -421,8 +421,12 @@ struct ChannelStateManagerTests {
     let sawSubscribed = LockIsolated(false)
     let sawUnsubscribing = LockIsolated(false)
     let observerReadyFired = LockIsolated(false)
-    let observer = Task { [h] in
-      for await state in h.sut.stateChanges {
+    // Subscribe before spawning the Task — `stateChanges` crosses the actor
+    // boundary, so deferring the `await` into the Task would let state
+    // transitions race ahead of the observer actually registering.
+    let stateChanges = await h.sut.stateChanges
+    let observer = Task { [stateChanges] in
+      for await state in stateChanges {
         if !observerReadyFired.value {
           observerReadyFired.setValue(true)
           observerReady.setValue(true)

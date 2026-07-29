@@ -1,4 +1,3 @@
-import ConcurrencyExtras
 import Foundation
 
 /// Owns the subscription state machine for ``RealtimeChannelV2``.
@@ -62,37 +61,33 @@ actor ChannelStateManager {
   /// sees the latest value.
   typealias StateDidChange = @Sendable (State) -> Void
 
-  /// Lock-protected because ``stateChanges`` is `nonisolated` — subscribers
-  /// register from outside the actor, so this can't rely on actor isolation.
-  private struct StateChangesStorage {
-    var state: State = .unsubscribed
-    var continuations: [(UUID, AsyncStream<State>.Continuation)] = []
-  }
-  private let stateStorage = LockIsolated(StateChangesStorage())
+  private(set) var state: State = .unsubscribed
+  private var stateChangeContinuations: [(UUID, AsyncStream<State>.Continuation)] = []
   private let stateDidChange: StateDidChange?
 
-  /// Current state. Reading from outside the actor crosses the actor boundary.
-  var state: State { stateStorage.value.state }
-
   /// Publishes every state transition, replaying the current state to new
-  /// subscribers.
-  nonisolated var stateChanges: AsyncStream<State> {
+  /// subscribers. Reading from outside the actor crosses the actor boundary.
+  var stateChanges: AsyncStream<State> {
     let id = UUID()
     let (stream, continuation) = AsyncStream<State>.makeStream()
-    let lastState = stateStorage.withValue { storage in
-      storage.continuations.append((id, continuation))
-      return storage.state
-    }
+    stateChangeContinuations.append((id, continuation))
 
+    // `onTermination`'s closure is synchronous — it can't `await` back into
+    // the actor to remove the entry, so hop through a Task instead. This is
+    // fire-and-forget: `updateState` may yield to an already-terminated
+    // continuation once or twice before the removal runs, which is a
+    // harmless no-op.
     continuation.onTermination = { [weak self] _ in
-      self?.stateStorage.withValue {
-        $0.continuations.removeAll { $0.0 == id }
-      }
+      Task { await self?.removeStateChangeContinuation(id) }
     }
 
-    continuation.yield(lastState)
+    continuation.yield(state)
 
     return stream
+  }
+
+  private func removeStateChangeContinuation(_ id: UUID) {
+    stateChangeContinuations.removeAll { $0.0 == id }
   }
 
   // MARK: - Per-subscription mutable state
@@ -480,16 +475,8 @@ actor ChannelStateManager {
 
   private func updateState(_ newState: State) {
     logger?.debug("State transition for '\(topic)': \(state) → \(newState)")
-    // Snapshot subscribers under the lock, then resume them outside of it —
-    // resuming a continuation can synchronously reach into the Swift
-    // runtime's task status-record lock, and holding our own lock at the
-    // same time would invert lock order with cancellation and deadlock
-    // (see supabase-swift#1154).
-    let continuations = stateStorage.withValue { storage in
-      storage.state = newState
-      return storage.continuations.map { $1 }
-    }
-    for continuation in continuations {
+    state = newState
+    for (_, continuation) in stateChangeContinuations {
       continuation.yield(newState)
     }
     // Invoke the synchronous observer after the subject is updated so the
@@ -498,11 +485,7 @@ actor ChannelStateManager {
   }
 
   deinit {
-    let continuations = stateStorage.withValue { storage -> [AsyncStream<State>.Continuation] in
-      defer { storage.continuations.removeAll() }
-      return storage.continuations.map { $1 }
-    }
-    for continuation in continuations {
+    for (_, continuation) in stateChangeContinuations {
       continuation.finish()
     }
   }
