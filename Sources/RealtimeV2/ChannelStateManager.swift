@@ -62,15 +62,38 @@ actor ChannelStateManager {
   /// sees the latest value.
   typealias StateDidChange = @Sendable (State) -> Void
 
-  private let stateSubject = AsyncValueSubject<State>(.unsubscribed)
+  /// Lock-protected because ``stateChanges`` is `nonisolated` — subscribers
+  /// register from outside the actor, so this can't rely on actor isolation.
+  private struct StateChangesStorage {
+    var state: State = .unsubscribed
+    var continuations: [(UUID, AsyncStream<State>.Continuation)] = []
+  }
+  private let stateStorage = LockIsolated(StateChangesStorage())
   private let stateDidChange: StateDidChange?
 
   /// Current state. Reading from outside the actor crosses the actor boundary.
-  var state: State { stateSubject.value }
+  var state: State { stateStorage.value.state }
 
   /// Publishes every state transition, replaying the current state to new
   /// subscribers.
-  nonisolated var stateChanges: AsyncStream<State> { stateSubject.values }
+  nonisolated var stateChanges: AsyncStream<State> {
+    let id = UUID()
+    let (stream, continuation) = AsyncStream<State>.makeStream()
+    let lastState = stateStorage.withValue { storage in
+      storage.continuations.append((id, continuation))
+      return storage.state
+    }
+
+    continuation.onTermination = { [weak self] _ in
+      self?.stateStorage.withValue {
+        $0.continuations.removeAll { $0.0 == id }
+      }
+    }
+
+    continuation.yield(lastState)
+
+    return stream
+  }
 
   // MARK: - Per-subscription mutable state
 
@@ -232,7 +255,7 @@ actor ChannelStateManager {
   /// sent on the new connection.
   ///
   /// For `.unsubscribing`, the wait loop in ``runUnsubscribe`` polls
-  /// `stateSubject.values`. Transitioning to `.unsubscribed` here wakes it up
+  /// `stateChanges`. Transitioning to `.unsubscribed` here wakes it up
   /// immediately — the server's `phx_close` won't arrive on the dead socket
   /// anyway.
   func resetForReconnect() {
@@ -401,7 +424,7 @@ actor ChannelStateManager {
 
     await joinOperation(ref, changes)
 
-    for await observed in stateSubject.values {
+    for await observed in stateChanges {
       try Task.checkCancellation()
       switch observed {
       case .subscribed:
@@ -440,9 +463,9 @@ actor ChannelStateManager {
     }
 
     if waitForServerClose {
-      let stateSubject = self.stateSubject
+      let stream = stateChanges
       _ = try? await withTimeout(interval: timeoutInterval, clock: clock) {
-        for await observed in stateSubject.values {
+        for await observed in stream {
           if case .unsubscribed = observed { return }
         }
       }
@@ -457,10 +480,31 @@ actor ChannelStateManager {
 
   private func updateState(_ newState: State) {
     logger?.debug("State transition for '\(topic)': \(state) → \(newState)")
-    stateSubject.yield(newState)
+    // Snapshot subscribers under the lock, then resume them outside of it —
+    // resuming a continuation can synchronously reach into the Swift
+    // runtime's task status-record lock, and holding our own lock at the
+    // same time would invert lock order with cancellation and deadlock
+    // (see supabase-swift#1154).
+    let continuations = stateStorage.withValue { storage in
+      storage.state = newState
+      return storage.continuations.map { $1 }
+    }
+    for continuation in continuations {
+      continuation.yield(newState)
+    }
     // Invoke the synchronous observer after the subject is updated so the
     // callback sees the new value via ``state`` as well.
     stateDidChange?(newState)
+  }
+
+  deinit {
+    let continuations = stateStorage.withValue { storage -> [AsyncStream<State>.Continuation] in
+      defer { storage.continuations.removeAll() }
+      return storage.continuations.map { $1 }
+    }
+    for continuation in continuations {
+      continuation.finish()
+    }
   }
 
   // MARK: - Defaults

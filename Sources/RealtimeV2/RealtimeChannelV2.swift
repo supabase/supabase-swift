@@ -136,34 +136,9 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   /// a subsequent `subscribe()` call and sometimes lose the filter.
   let clientChanges = LockIsolated<[PostgresJoinConfig]>([])
 
-  private let statusSubject = AsyncValueSubject<RealtimeChannelStatus>(.unsubscribed)
-
-  /// The current subscription status of the channel.
-  public private(set) var status: RealtimeChannelStatus {
-    get { statusSubject.value }
-    set { statusSubject.yield(newValue) }
-  }
-
-  /// An async stream that emits channel subscription status changes.
-  ///
-  /// The stream emits the current status immediately upon iteration and then each
-  /// subsequent change. Use ``onStatusChange(_:)`` for a closure-based alternative.
-  public var statusChange: AsyncStream<RealtimeChannelStatus> {
-    statusSubject.values
-  }
-
-  /// Registers a closure to be called whenever the channel subscription status changes.
-  ///
-  /// - Parameter listener: A `@Sendable` closure called with the new ``RealtimeChannelStatus`` on every change.
-  /// - Returns: A ``RealtimeSubscription`` token. Retain it — the subscription is cancelled when the token is deallocated.
-  ///
-  /// > Note: Use ``statusChange`` if you prefer async iteration over closures.
-  public func onStatusChange(
-    _ listener: @escaping @Sendable (RealtimeChannelStatus) -> Void
-  ) -> RealtimeSubscription {
-    let task = statusSubject.onChange { listener($0) }
-    return RealtimeSubscription { task.cancel() }
-  }
+  /// Lock-protected status + subscribers for ``status``/``statusChange``/``onStatusChange(_:)``.
+  /// See `RealtimeChannel+Status.swift`.
+  let statusStorage = LockIsolated(StatusStorage())
 
   init(
     topic: String,
@@ -179,7 +154,6 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     self.socket = socket
 
     let weakSelfRef = WeakChannelRef()
-    let statusSubject = self.statusSubject
     let clientChanges = self.clientChanges
     self.stateManager = ChannelStateManager(
       topic: topic,
@@ -210,12 +184,12 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
         guard let channel = weakSelfRef.value else { return }
         await channel.push(ChannelEvent.leave)
       },
-      stateDidChange: { state in
+      stateDidChange: { [weakSelfRef] state in
         // Forward every state-machine transition to the public status
-        // subject synchronously. Running this on the actor avoids the
+        // storage synchronously. Running this on the actor avoids the
         // async observer-Task delay, so reads of ``status`` right after
         // ``subscribe()`` returns see the latest value.
-        statusSubject.yield(Self.mapState(state))
+        weakSelfRef.value?.yieldStatus(Self.mapState(state))
       }
     )
 
@@ -224,6 +198,14 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
 
   deinit {
     callbackManager.reset()
+    let continuations = statusStorage.withValue {
+      storage -> [AsyncStream<RealtimeChannelStatus>.Continuation] in
+      defer { storage.continuations.removeAll() }
+      return storage.continuations.map { $1 }
+    }
+    for continuation in continuations {
+      continuation.finish()
+    }
   }
 
   private static func mapState(_ state: ChannelStateManager.State) -> RealtimeChannelStatus {
