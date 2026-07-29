@@ -35,11 +35,13 @@ public class StorageBucketApi: StorageApi, @unchecked Sendable {
   /// - Returns: An array of ``Bucket`` objects, one for each bucket in the project.
   /// - Throws: ``StorageError`` if the request fails or the caller is not authorized.
   public func listBuckets() async throws -> [Bucket] {
-    let output = try await openAPIClient.bucketList(.init())
-    guard case .ok(let response) = output, case .json(let buckets) = response.body else {
-      throw StorageError(statusCode: nil, message: "Unexpected response from Storage API")
-    }
-    return buckets.map(Bucket.init(fromGenerated:))
+    try await execute(
+      HTTPRequest(
+        url: configuration.url.appendingPathComponent("bucket"),
+        method: .get
+      )
+    )
+    .decoded(decoder: configuration.decoder)
   }
 
   /// Retrieves the details of an existing Storage bucket.
