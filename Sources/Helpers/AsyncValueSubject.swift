@@ -51,13 +51,19 @@ package final class AsyncValueSubject<Value: Sendable>: Sendable {
   ///
   /// This can be called more than once and returns to the caller immediately without blocking for any awaiting consumption from the iteration.
   package func yield(_ value: Value) {
-    mutableState.withValue {
-      guard !$0.finished else { return }
+    // Snapshot the continuations under the lock, then resume them outside of it.
+    // Resuming a continuation can synchronously reach into the Swift runtime's
+    // task status-record lock; holding our own lock at the same time inverts
+    // lock order with cancellation (which takes the status-record lock first,
+    // then calls back into `remove`/`insert`), causing a deadlock.
+    let continuations: [AsyncStream<Value>.Continuation] = mutableState.withValue {
+      guard !$0.finished else { return [] }
 
       $0.value = value
-      for (_, continuation) in $0.continuations {
-        continuation.yield(value)
-      }
+      return Array($0.continuations.values)
+    }
+    for continuation in continuations {
+      continuation.yield(value)
     }
   }
 
@@ -68,14 +74,16 @@ package final class AsyncValueSubject<Value: Sendable>: Sendable {
   /// finish, the stream enters a terminal state and doesn't produce any
   /// additional elements.
   package func finish() {
-    mutableState.withValue {
-      guard $0.finished == false else { return }
+    // See the comment in `yield` for why continuations must be resumed
+    // outside of the lock.
+    let continuations: [AsyncStream<Value>.Continuation] = mutableState.withValue {
+      guard $0.finished == false else { return [] }
 
       $0.finished = true
-
-      for (_, continuation) in $0.continuations {
-        continuation.finish()
-      }
+      return Array($0.continuations.values)
+    }
+    for continuation in continuations {
+      continuation.finish()
     }
   }
 
@@ -109,16 +117,19 @@ package final class AsyncValueSubject<Value: Sendable>: Sendable {
 
   /// Adds a new continuation to the subject and yields the current value.
   private func insert(_ continuation: AsyncStream<Value>.Continuation) {
-    mutableState.withValue { state in
-      continuation.yield(state.value)
+    // See the comment in `yield` for why continuations must be resumed
+    // outside of the lock.
+    let (id, currentValue) = mutableState.withValue { state -> (UInt, Value) in
       let id = state.count + 1
       state.count = id
       state.continuations[id] = continuation
-
-      continuation.onTermination = { [weak self] _ in
-        self?.remove(continuation: id)
-      }
+      return (id, state.value)
     }
+
+    continuation.onTermination = { [weak self] _ in
+      self?.remove(continuation: id)
+    }
+    continuation.yield(currentValue)
   }
 
   /// Removes a continuation when it's terminated.
