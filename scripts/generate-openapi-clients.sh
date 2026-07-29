@@ -6,7 +6,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-MODULES=(Storage Functions)
+MODULES=(Storage)
 
 for module in "${MODULES[@]}"; do
   spec="openapi/$(tr '[:upper:]' '[:lower:]' <<<"$module").json"
