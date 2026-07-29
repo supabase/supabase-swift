@@ -204,8 +204,9 @@ public struct File: Hashable, Equatable {
 @available(
   *,
   deprecated,
+  renamed: "MultipartFormData",
   message:
-    "FormData is deprecated and isn't used in the package anymore, if you're using it on your application, consider replacing it as it will be removed on the next major release."
+    "FormData was deprecated in favor of MultipartFormData, and it isn't used in the package anymore, if you're using it on your application, consider replacing it as it will be removed on the next major release."
 )
 public class FormData {
   var files: [File] = []
