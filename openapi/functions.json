@@ -99,10 +99,506 @@
           }
         }
       ],
+      "get": {
+        "summary": "Invoke an Edge Function (GET)",
+        "description": "Invoke the named function with an arbitrary request body. Headers\nand body are forwarded to the function worker; the function's\nresponse (status, headers, body) is passed back to the caller\nunchanged unless a platform-level failure intercepts the request\n(see the documented error codes).\n",
+        "operationId": "invokeFunctionGet",
+        "security": [
+          {
+            "APIKeyAuth": []
+          },
+          {
+            "APIKeyAuth": [],
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-region",
+            "in": "header",
+            "required": false,
+            "description": "Pin invocation to a specific region.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-client-info",
+            "in": "header",
+            "required": false,
+            "description": "SDK identifier and version.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "Arbitrary JSON payload forwarded to the function. The schema is\nfunction-specific and not part of the platform contract.\n",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            },
+            "*/*": {
+              "schema": {}
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Function executed successfully. Response body and content\ntype are user-defined.\n",
+            "headers": {
+              "sb-deploymentid": {
+                "$ref": "#/components/headers/SbDeploymentId"
+              }
+            },
+            "content": {
+              "*/*": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, malformed, or unsupported JWT.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Function not found for the given project/name.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Function execution failed (boot error, metadata load\nfailure, worker error, or generic runtime error).\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Edge runtime is degraded or shedding load. Retry with backoff.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Function exceeded its idle or wall-clock timeout. The\ninvocation was aborted.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
       "post": {
         "summary": "Invoke an Edge Function",
         "description": "Invoke the named function with an arbitrary request body. Headers\nand body are forwarded to the function worker; the function's\nresponse (status, headers, body) is passed back to the caller\nunchanged unless a platform-level failure intercepts the request\n(see the documented error codes).\n",
         "operationId": "invokeFunction",
+        "security": [
+          {
+            "APIKeyAuth": []
+          },
+          {
+            "APIKeyAuth": [],
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-region",
+            "in": "header",
+            "required": false,
+            "description": "Pin invocation to a specific region.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-client-info",
+            "in": "header",
+            "required": false,
+            "description": "SDK identifier and version.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "Arbitrary JSON payload forwarded to the function. The schema is\nfunction-specific and not part of the platform contract.\n",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            },
+            "*/*": {
+              "schema": {}
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Function executed successfully. Response body and content\ntype are user-defined.\n",
+            "headers": {
+              "sb-deploymentid": {
+                "$ref": "#/components/headers/SbDeploymentId"
+              }
+            },
+            "content": {
+              "*/*": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, malformed, or unsupported JWT.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Function not found for the given project/name.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Function execution failed (boot error, metadata load\nfailure, worker error, or generic runtime error).\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Edge runtime is degraded or shedding load. Retry with backoff.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Function exceeded its idle or wall-clock timeout. The\ninvocation was aborted.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Invoke an Edge Function (PUT)",
+        "description": "Invoke the named function with an arbitrary request body. Headers\nand body are forwarded to the function worker; the function's\nresponse (status, headers, body) is passed back to the caller\nunchanged unless a platform-level failure intercepts the request\n(see the documented error codes).\n",
+        "operationId": "invokeFunctionPut",
+        "security": [
+          {
+            "APIKeyAuth": []
+          },
+          {
+            "APIKeyAuth": [],
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-region",
+            "in": "header",
+            "required": false,
+            "description": "Pin invocation to a specific region.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-client-info",
+            "in": "header",
+            "required": false,
+            "description": "SDK identifier and version.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "Arbitrary JSON payload forwarded to the function. The schema is\nfunction-specific and not part of the platform contract.\n",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            },
+            "*/*": {
+              "schema": {}
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Function executed successfully. Response body and content\ntype are user-defined.\n",
+            "headers": {
+              "sb-deploymentid": {
+                "$ref": "#/components/headers/SbDeploymentId"
+              }
+            },
+            "content": {
+              "*/*": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, malformed, or unsupported JWT.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Function not found for the given project/name.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Function execution failed (boot error, metadata load\nfailure, worker error, or generic runtime error).\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Edge runtime is degraded or shedding load. Retry with backoff.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Function exceeded its idle or wall-clock timeout. The\ninvocation was aborted.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Invoke an Edge Function (PATCH)",
+        "description": "Invoke the named function with an arbitrary request body. Headers\nand body are forwarded to the function worker; the function's\nresponse (status, headers, body) is passed back to the caller\nunchanged unless a platform-level failure intercepts the request\n(see the documented error codes).\n",
+        "operationId": "invokeFunctionPatch",
+        "security": [
+          {
+            "APIKeyAuth": []
+          },
+          {
+            "APIKeyAuth": [],
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-region",
+            "in": "header",
+            "required": false,
+            "description": "Pin invocation to a specific region.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-client-info",
+            "in": "header",
+            "required": false,
+            "description": "SDK identifier and version.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "Arbitrary JSON payload forwarded to the function. The schema is\nfunction-specific and not part of the platform contract.\n",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            },
+            "*/*": {
+              "schema": {}
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Function executed successfully. Response body and content\ntype are user-defined.\n",
+            "headers": {
+              "sb-deploymentid": {
+                "$ref": "#/components/headers/SbDeploymentId"
+              }
+            },
+            "content": {
+              "*/*": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, malformed, or unsupported JWT.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Function not found for the given project/name.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Function execution failed (boot error, metadata load\nfailure, worker error, or generic runtime error).\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Edge runtime is degraded or shedding load. Retry with backoff.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Function exceeded its idle or wall-clock timeout. The\ninvocation was aborted.\n",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Invoke an Edge Function (DELETE)",
+        "description": "Invoke the named function with an arbitrary request body. Headers\nand body are forwarded to the function worker; the function's\nresponse (status, headers, body) is passed back to the caller\nunchanged unless a platform-level failure intercepts the request\n(see the documented error codes).\n",
+        "operationId": "invokeFunctionDelete",
         "security": [
           {
             "APIKeyAuth": []

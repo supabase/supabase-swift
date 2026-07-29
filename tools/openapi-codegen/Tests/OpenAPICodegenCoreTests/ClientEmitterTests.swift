@@ -162,14 +162,12 @@ struct ClientEmitterTests {
             self.transport = transport
           }
 
-          internal func invokeFunction(functionName: String, body: Data, contentType: String? = nil) async throws -> AsyncThrowingStream<Data, any Error> {
+          internal func invokeFunction(functionName: String, body: HTTPRuntime.HTTPBody, contentType: String? = nil) async throws -> AsyncThrowingStream<Data, any Error> {
             var builder = HTTPRequestBuilder(method: .post, baseURL: baseURL, path: "/\(PathEncoding.segment(functionName))")
             builder.setHeader("Content-Type", contentType)
-            builder.setBody(.data(body))
+            builder.setBody(body)
             let stream = try await transport.stream(try builder.build())
-            guard stream.head.isSuccess else {
-              throw HTTPError.unexpectedResponse(response: HTTPResponse(head: stream.head, body: Data()))
-            }
+            try await stream.checkStatus(errorTypes: [:])
             return stream.body
           }
         }
@@ -219,9 +217,7 @@ struct ClientEmitterTests {
           internal func download(bucketId: String) async throws -> AsyncThrowingStream<Data, any Error> {
             let builder = HTTPRequestBuilder(method: .get, baseURL: baseURL, path: "/object/\(PathEncoding.segment(bucketId))")
             let stream = try await transport.stream(try builder.build())
-            guard stream.head.isSuccess else {
-              throw HTTPError.unexpectedResponse(response: HTTPResponse(head: stream.head, body: Data()))
-            }
+            try await stream.checkStatus(errorTypes: [:])
             return stream.body
           }
         }

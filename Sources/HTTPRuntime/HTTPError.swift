@@ -46,3 +46,37 @@ extension HTTPResponse {
     throw decodedError
   }
 }
+
+extension HTTPResponseStream {
+  /// Validates the status code, decoding a modeled error when the status
+  /// matches one of the provided error types. A status with no matching
+  /// entry surfaces as ``HTTPError/unexpectedResponse``.
+  package func checkStatus(
+    errorTypes: [Int: any APIError.Type]
+  ) async throws {
+    guard !head.isSuccess else { return }
+
+    var data = Data()
+    do {
+      for try await chunk in body {
+        data.append(chunk)
+      }
+    } catch {
+      throw HTTPError.transport(error)
+    }
+
+    let response = HTTPResponse(head: head, body: data)
+
+    guard let errorType = errorTypes[head.status] else {
+      throw HTTPError.unexpectedResponse(response: response)
+    }
+
+    let decodedError: any APIError
+    do {
+      decodedError = try JSONCoding.decoder.decode(errorType, from: data)
+    } catch {
+      throw HTTPError.unexpectedResponse(response: response, underlyingError: error)
+    }
+    throw decodedError
+  }
+}

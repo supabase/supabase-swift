@@ -230,11 +230,9 @@ public enum SwiftEmitter {
     }
     if let successResponse, case .binary = successResponse.body {
       lines.append("    let stream = try await transport.stream(try builder.build())")
-      lines.append("    guard stream.head.isSuccess else {")
       lines.append(
-        "      throw HTTPError.unexpectedResponse(response: HTTPResponse(head: stream.head, body: Data()))"
+        "    try await stream.checkStatus(errorTypes: \(errorTypesLiteral(operation, errorSchemaNames: errorSchemaNames)))"
       )
-      lines.append("    }")
       lines.append("    return stream.body")
     } else {
       lines.append("    let response = try await transport.send(try builder.build())")
@@ -290,7 +288,12 @@ public enum SwiftEmitter {
         return "\(name): \(type)"
       }
     case .binary:
-      return ["body: Data", "contentType: String? = nil"]
+      // Module-qualified: the target module may declare its own unrelated
+      // `HTTPBody` type, which would otherwise shadow HTTPRuntime's. Exposed
+      // as `HTTPBody` (rather than `Data`) so callers can pass `.file(url)`
+      // to stream a request body (e.g. uploading a file) without buffering
+      // it into memory.
+      return ["body: HTTPRuntime.HTTPBody", "contentType: String? = nil"]
     }
   }
 
@@ -323,7 +326,7 @@ public enum SwiftEmitter {
     case .binary:
       return [
         "    builder.setHeader(\"Content-Type\", contentType)",
-        "    builder.setBody(.data(body))",
+        "    builder.setBody(body)",
       ]
     }
   }

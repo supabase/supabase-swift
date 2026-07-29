@@ -14,19 +14,74 @@ extension FunctionsBackendAPI {
     }
 
     internal func invokeFunction(
-      functionName: String, xClientInfo: String? = nil, xRegion: String? = nil, body: Data,
-      contentType: String? = nil
+      functionName: String, xClientInfo: String? = nil, xRegion: String? = nil,
+      body: HTTPRuntime.HTTPBody, contentType: String? = nil
     ) async throws -> AsyncThrowingStream<Data, any Error> {
       var builder = HTTPRequestBuilder(
         method: .post, baseURL: baseURL, path: "/\(PathEncoding.segment(functionName))")
       builder.setHeader("x-client-info", xClientInfo)
       builder.setHeader("x-region", xRegion)
       builder.setHeader("Content-Type", contentType)
-      builder.setBody(.data(body))
+      builder.setBody(body)
       let stream = try await transport.stream(try builder.build())
-      guard stream.head.isSuccess else {
-        throw HTTPError.unexpectedResponse(response: HTTPResponse(head: stream.head, body: Data()))
-      }
+      try await stream.checkStatus(errorTypes: [
+        401: ErrorResponse.self, 404: ErrorResponse.self, 429: ErrorResponse.self,
+        500: ErrorResponse.self, 503: ErrorResponse.self, 504: ErrorResponse.self,
+      ])
+      return stream.body
+    }
+
+    internal func invokeFunctionDelete(
+      functionName: String, xClientInfo: String? = nil, xRegion: String? = nil,
+      body: HTTPRuntime.HTTPBody, contentType: String? = nil
+    ) async throws -> AsyncThrowingStream<Data, any Error> {
+      var builder = HTTPRequestBuilder(
+        method: .delete, baseURL: baseURL, path: "/\(PathEncoding.segment(functionName))")
+      builder.setHeader("x-client-info", xClientInfo)
+      builder.setHeader("x-region", xRegion)
+      builder.setHeader("Content-Type", contentType)
+      builder.setBody(body)
+      let stream = try await transport.stream(try builder.build())
+      try await stream.checkStatus(errorTypes: [
+        401: ErrorResponse.self, 404: ErrorResponse.self, 429: ErrorResponse.self,
+        500: ErrorResponse.self, 503: ErrorResponse.self, 504: ErrorResponse.self,
+      ])
+      return stream.body
+    }
+
+    internal func invokeFunctionGet(
+      functionName: String, xClientInfo: String? = nil, xRegion: String? = nil,
+      body: HTTPRuntime.HTTPBody, contentType: String? = nil
+    ) async throws -> AsyncThrowingStream<Data, any Error> {
+      var builder = HTTPRequestBuilder(
+        method: .get, baseURL: baseURL, path: "/\(PathEncoding.segment(functionName))")
+      builder.setHeader("x-client-info", xClientInfo)
+      builder.setHeader("x-region", xRegion)
+      builder.setHeader("Content-Type", contentType)
+      builder.setBody(body)
+      let stream = try await transport.stream(try builder.build())
+      try await stream.checkStatus(errorTypes: [
+        401: ErrorResponse.self, 404: ErrorResponse.self, 429: ErrorResponse.self,
+        500: ErrorResponse.self, 503: ErrorResponse.self, 504: ErrorResponse.self,
+      ])
+      return stream.body
+    }
+
+    internal func invokeFunctionPatch(
+      functionName: String, xClientInfo: String? = nil, xRegion: String? = nil,
+      body: HTTPRuntime.HTTPBody, contentType: String? = nil
+    ) async throws -> AsyncThrowingStream<Data, any Error> {
+      var builder = HTTPRequestBuilder(
+        method: .patch, baseURL: baseURL, path: "/\(PathEncoding.segment(functionName))")
+      builder.setHeader("x-client-info", xClientInfo)
+      builder.setHeader("x-region", xRegion)
+      builder.setHeader("Content-Type", contentType)
+      builder.setBody(body)
+      let stream = try await transport.stream(try builder.build())
+      try await stream.checkStatus(errorTypes: [
+        401: ErrorResponse.self, 404: ErrorResponse.self, 429: ErrorResponse.self,
+        500: ErrorResponse.self, 503: ErrorResponse.self, 504: ErrorResponse.self,
+      ])
       return stream.body
     }
 
@@ -35,6 +90,24 @@ extension FunctionsBackendAPI {
         method: .options, baseURL: baseURL, path: "/\(PathEncoding.segment(functionName))")
       let response = try await transport.send(try builder.build())
       try response.checkStatus(errorTypes: [:])
+    }
+
+    internal func invokeFunctionPut(
+      functionName: String, xClientInfo: String? = nil, xRegion: String? = nil,
+      body: HTTPRuntime.HTTPBody, contentType: String? = nil
+    ) async throws -> AsyncThrowingStream<Data, any Error> {
+      var builder = HTTPRequestBuilder(
+        method: .put, baseURL: baseURL, path: "/\(PathEncoding.segment(functionName))")
+      builder.setHeader("x-client-info", xClientInfo)
+      builder.setHeader("x-region", xRegion)
+      builder.setHeader("Content-Type", contentType)
+      builder.setBody(body)
+      let stream = try await transport.stream(try builder.build())
+      try await stream.checkStatus(errorTypes: [
+        401: ErrorResponse.self, 404: ErrorResponse.self, 429: ErrorResponse.self,
+        500: ErrorResponse.self, 503: ErrorResponse.self, 504: ErrorResponse.self,
+      ])
+      return stream.body
     }
   }
 }
