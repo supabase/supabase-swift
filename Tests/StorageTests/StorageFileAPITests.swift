@@ -1410,7 +1410,7 @@ extension StorageMockerTests {
         curl \
         	--request PUT \
         	--header "Cache-Control: max-age=3600" \
-        	--header "Content-Length: 297" \
+        	--header "Content-Length: 283" \
         	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.e56f43407f772505" \
         	--header "X-Client-Info: storage-swift/0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
@@ -1421,7 +1421,7 @@ extension StorageMockerTests {
         3600\#r
         --alamofire.boundary.e56f43407f772505\#r
         Content-Disposition: form-data; name=\"\"; filename=\"file.txt\"\#r
-        Content-Type: text/plain;charset=UTF-8\#r
+        Content-Type: text/plain\#r
         \#r
         hello world\#r
         --alamofire.boundary.e56f43407f772505--\#r
@@ -1436,6 +1436,71 @@ extension StorageMockerTests {
 
       #expect(response.path == "file.txt")
       #expect(response.fullPath == "bucket/file.txt")
+    }
+
+    /// Captures the request body directly instead of using `snapshotRequest`, so the assertion
+    /// actually fails when the emitted `Content-Type` is wrong.
+    private func makeBodyCapturingSUT(
+      body: LockIsolated<Data>
+    ) -> SupabaseStorageClient {
+      let respond: @Sendable (URLRequest) -> (Data, URLResponse) = { request in
+        (
+          Data(#"{"Key":"bucket/cat.png"}"#.utf8),
+          HTTPURLResponse(
+            url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil
+          )!
+        )
+      }
+
+      return SupabaseStorageClient(
+        configuration: StorageClientConfiguration(
+          url: url,
+          headers: [:],
+          session: StorageHTTPSession(
+            fetch: { request in
+              body.setValue(request.httpBody ?? Data())
+              return respond(request)
+            },
+            upload: { request, data in
+              body.setValue(data)
+              return respond(request)
+            }
+          ),
+          logger: nil
+        )
+      )
+    }
+
+    @Test
+    func uploadToSignedURLDerivesContentTypeFromPathExtensionWhenOptionsOmitted() async throws {
+      let body = LockIsolated(Data())
+      let storage = makeBodyCapturingSUT(body: body)
+
+      _ = try await storage.from("bucket")
+        .uploadToSignedURL(
+          "cat.png",
+          token: "abc.def.ghi",
+          data: Data("not-really-a-png".utf8)
+        )
+
+      #expect(body.value.containsBytes(of: "Content-Type: image/png"))
+      #expect(!body.value.containsBytes(of: "text/plain"))
+    }
+
+    @Test
+    func uploadToSignedURLFromFileURLDerivesContentTypeWhenOptionsOmitted() async throws {
+      let body = LockIsolated(Data())
+      let storage = makeBodyCapturingSUT(body: body)
+
+      _ = try await storage.from("bucket")
+        .uploadToSignedURL(
+          "cat.jpg",
+          token: "abc.def.ghi",
+          fileURL: Bundle.module.url(forResource: "sadcat", withExtension: "jpg")!
+        )
+
+      #expect(body.value.containsBytes(of: "Content-Type: image/jpeg"))
+      #expect(!body.value.containsBytes(of: "text/plain"))
     }
 
     @Test
@@ -1601,5 +1666,13 @@ extension StorageMockerTests {
 
       #expect(data == Data("hello world".utf8))
     }
+  }
+}
+
+extension Data {
+  /// Searches the raw bytes for `string`, so bodies containing non-UTF-8 file content
+  /// (e.g. a real JPEG) can still be asserted on.
+  fileprivate func containsBytes(of string: String) -> Bool {
+    range(of: Data(string.utf8)) != nil
   }
 }
