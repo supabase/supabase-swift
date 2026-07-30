@@ -24,6 +24,13 @@ public struct PostgrestError: Error, Codable, Sendable {
     self.code = code
     self.message = message
   }
+
+  enum CodingKeys: String, CodingKey {
+    case detail = "details"
+    case hint
+    case code
+    case message
+  }
 }
 
 extension PostgrestError: LocalizedError {
