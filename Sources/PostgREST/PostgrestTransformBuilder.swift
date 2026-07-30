@@ -27,6 +27,7 @@ import HTTPTypes
 /// ### Response Format
 ///
 /// - ``single()``
+/// - ``maybeSingle()``
 /// - ``csv()``
 /// - ``geojson()``
 /// - ``stripNulls()``
@@ -38,6 +39,10 @@ import HTTPTypes
 /// ### Limiting Affected Rows
 ///
 /// - ``maxAffected(_:)``
+///
+/// ### Testing Mutations
+///
+/// - ``dryRun()``
 public class PostgrestTransformBuilder: PostgrestBuilder, @unchecked Sendable {
   /// Requests that the server return the modified rows from a write operation.
   ///
@@ -197,6 +202,36 @@ public class PostgrestTransformBuilder: PostgrestBuilder, @unchecked Sendable {
     return self
   }
 
+  /// Instructs PostgREST to return a single JSON object, returning `nil` when no row matches.
+  ///
+  /// Like ``single()``, this sets the `application/vnd.pgrst.object+json` accept header so the
+  /// server enforces a single result. Unlike ``single()``, when the query does not match exactly
+  /// one row the resulting `PGRST116` error is not thrown — ``PostgrestResponse/value`` is `nil`
+  /// instead. Decode into an optional type to observe the `nil`.
+  ///
+  /// > Note: PostgREST returns `PGRST116` both when zero rows match and when more than one row
+  /// > matches. This method returns `nil` for either case; use ``single()`` for the strict variant
+  /// > that always throws when the query does not match exactly one row.
+  ///
+  /// ```swift
+  /// let todo: Todo? = try await client
+  ///   .from("todos")
+  ///   .select()
+  ///   .eq("id", value: 42)
+  ///   .maybeSingle()
+  ///   .execute()
+  ///   .value
+  /// ```
+  ///
+  /// - Returns: The same builder instance so calls can be chained.
+  public func maybeSingle() -> PostgrestTransformBuilder {
+    mutableState.withValue {
+      $0.request.headers[.accept] = "application/vnd.pgrst.object+json"
+      $0.isMaybeSingle = true
+    }
+    return self
+  }
+
   /// Sets the response format to CSV.
   ///
   /// The raw CSV text is available in ``PostgrestResponse/data``. Convert it to a `String`
@@ -314,6 +349,34 @@ public class PostgrestTransformBuilder: PostgrestBuilder, @unchecked Sendable {
     mutableState.withValue {
       $0.request.headers.appendOrUpdate(.prefer, value: "handling=strict")
       $0.request.headers.appendOrUpdate(.prefer, value: "max-affected=\(value)")
+    }
+    return self
+  }
+
+  /// Executes the query but rolls back the transaction instead of committing it.
+  ///
+  /// The mutation runs and its result (including any side effects such as triggers) is returned
+  /// in the response, but the transaction is rolled back afterward, so no changes are persisted.
+  /// This is useful for testing mutations without touching real data.
+  ///
+  /// Requires PostgREST's `db-tx-end` setting to allow client-controlled transaction rollback.
+  ///
+  /// ```swift
+  /// let wouldBeUpdated: [Todo] = try await client
+  ///   .from("todos")
+  ///   .update(["done": true])
+  ///   .eq("id", value: 1)
+  ///   .select()
+  ///   .dryRun()
+  ///   .execute()
+  ///   .value
+  /// // Row is not actually updated in the database.
+  /// ```
+  ///
+  /// - Returns: The same builder instance so calls can be chained.
+  public func dryRun() -> PostgrestTransformBuilder {
+    mutableState.withValue {
+      $0.request.headers.appendOrUpdate(.prefer, value: "tx=rollback")
     }
     return self
   }

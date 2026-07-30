@@ -1,3 +1,6 @@
+-- Allow Prefer: tx=rollback to actually roll back (default stays commit).
+ALTER ROLE authenticator SET pgrst.db_tx_end TO 'commit-allow-override';
+
 -- Create custom types
 CREATE TYPE user_status AS ENUM ('ONLINE', 'OFFLINE');
 

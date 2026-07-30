@@ -48,6 +48,8 @@ public final class FunctionsClient: Sendable {
     )
 
   /// The maximum time an Edge Function may run before the gateway returns a 504 error (150 seconds).
+  ///
+  /// Can be overridden per-invocation via ``FunctionInvokeOptions/timeoutInterval``.
   public static let requestIdleTimeout: TimeInterval = 150
 
   /// The base URL for the functions.
@@ -243,13 +245,13 @@ public final class FunctionsClient: Sendable {
     let request = buildRequest(functionName: functionName, options: invokeOptions)
     let response = try await http.send(request)
 
-    guard 200..<300 ~= response.statusCode else {
-      throw FunctionsError.httpError(code: response.statusCode, data: response.data)
-    }
-
     let isRelayError = response.headers[.xRelayError] == "true"
     if isRelayError {
       throw FunctionsError.relayError
+    }
+
+    guard 200..<300 ~= response.statusCode else {
+      throw FunctionsError.httpError(code: response.statusCode, data: response.data)
     }
 
     return response
@@ -301,7 +303,7 @@ public final class FunctionsClient: Sendable {
       query: query,
       headers: mutableState.headers.merging(with: options.headers),
       body: options.body,
-      timeoutInterval: FunctionsClient.requestIdleTimeout
+      timeoutInterval: options.timeoutInterval ?? FunctionsClient.requestIdleTimeout
     )
 
     if let region = options.region ?? region {
@@ -342,6 +344,12 @@ final class StreamResponseDelegate: NSObject, URLSessionDataDelegate, Sendable {
       return
     }
 
+    let isRelayError = httpResponse.value(forHTTPHeaderField: "x-relay-error") == "true"
+    if isRelayError {
+      continuation.finish(throwing: FunctionsError.relayError)
+      return
+    }
+
     guard 200..<300 ~= httpResponse.statusCode else {
       let error = FunctionsError.httpError(
         code: httpResponse.statusCode,
@@ -349,11 +357,6 @@ final class StreamResponseDelegate: NSObject, URLSessionDataDelegate, Sendable {
       )
       continuation.finish(throwing: error)
       return
-    }
-
-    let isRelayError = httpResponse.value(forHTTPHeaderField: "x-relay-error") == "true"
-    if isRelayError {
-      continuation.finish(throwing: FunctionsError.relayError)
     }
   }
 }

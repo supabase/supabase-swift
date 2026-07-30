@@ -35,6 +35,7 @@ import Helpers
 /// - ``is(_:value:)``
 /// - ``isDistinct(_:value:)``
 /// - ``in(_:values:)``
+/// - ``notIn(_:values:)``
 /// - ``match(_:)-6h9ou``
 ///
 /// ### Comparison Filters
@@ -595,6 +596,35 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
         URLQueryItem(
           name: column,
           value: "in.(\(queryValues.joined(separator: ",")))"
+        )
+      )
+    }
+    return self
+  }
+
+  /// Matches only rows where `column` is not one of the values in `values`.
+  ///
+  /// The negation of ``in(_:values:)``.
+  ///
+  /// ```swift
+  /// // Rows where status is NOT "archived" or "deleted"
+  /// .notIn("status", values: ["archived", "deleted"])
+  /// ```
+  ///
+  /// - Parameters:
+  ///   - column: The column to filter on.
+  ///   - values: The list of values to exclude.
+  /// - Returns: The same builder instance so calls can be chained.
+  public func notIn(
+    _ column: String,
+    values: [any PostgrestFilterValue]
+  ) -> PostgrestFilterBuilder {
+    let queryValues = values.map { escapePostgRESTFilterValue($0.rawValue) }
+    mutableState.withValue {
+      $0.request.query.append(
+        URLQueryItem(
+          name: column,
+          value: "not.in.(\(queryValues.joined(separator: ",")))"
         )
       )
     }

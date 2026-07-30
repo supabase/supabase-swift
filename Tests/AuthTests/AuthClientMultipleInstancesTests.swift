@@ -5,13 +5,16 @@
 //  Created by Guilherme Souza on 05/07/24.
 //
 
+import Foundation
 import TestHelpers
-import XCTest
+import Testing
 
 @testable import Auth
 
-final class AuthClientMultipleInstancesTests: XCTestCase {
-  func testMultipleAuthClientInstances() {
+@Suite
+struct AuthClientMultipleInstancesTests {
+  @Test
+  func multipleAuthClientInstances() {
     let url = URL(string: "http://localhost:54321/auth")!
 
     let client1Storage = InMemoryLocalStorage()
@@ -33,15 +36,15 @@ final class AuthClientMultipleInstancesTests: XCTestCase {
       )
     )
 
-    XCTAssertNotEqual(client1.clientID, client2.clientID)
+    #expect(client1.clientID != client2.clientID)
 
-    XCTAssertIdentical(
-      Dependencies[client1.clientID].configuration.localStorage as? InMemoryLocalStorage,
-      client1Storage
+    #expect(
+      Dependencies[client1.clientID].configuration.localStorage as? InMemoryLocalStorage
+        === client1Storage
     )
-    XCTAssertIdentical(
-      Dependencies[client2.clientID].configuration.localStorage as? InMemoryLocalStorage,
-      client2Storage
+    #expect(
+      Dependencies[client2.clientID].configuration.localStorage as? InMemoryLocalStorage
+        === client2Storage
     )
   }
 }

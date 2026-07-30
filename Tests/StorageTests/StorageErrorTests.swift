@@ -1,31 +1,36 @@
-import XCTest
+import Foundation
+import Testing
 
 @testable import Storage
 
-final class StorageErrorTests: XCTestCase {
-  func testErrorInitialization() {
+@Suite
+struct StorageErrorTests {
+  @Test
+  func errorInitialization() {
     let error = StorageError(
       statusCode: "404",
       message: "File not found",
       error: "NotFound"
     )
 
-    XCTAssertEqual(error.statusCode, "404")
-    XCTAssertEqual(error.message, "File not found")
-    XCTAssertEqual(error.error, "NotFound")
+    #expect(error.statusCode == "404")
+    #expect(error.message == "File not found")
+    #expect(error.error == "NotFound")
   }
 
-  func testLocalizedError() {
+  @Test
+  func localizedError() {
     let error = StorageError(
       statusCode: "500",
       message: "Internal server error",
       error: nil
     )
 
-    XCTAssertEqual(error.errorDescription, "Internal server error")
+    #expect(error.errorDescription == "Internal server error")
   }
 
-  func testDecoding() throws {
+  @Test
+  func decoding() throws {
     let json = """
       {
           "statusCode": "403",
@@ -36,8 +41,8 @@ final class StorageErrorTests: XCTestCase {
 
     let error = try JSONDecoder().decode(StorageError.self, from: json)
 
-    XCTAssertEqual(error.statusCode, "403")
-    XCTAssertEqual(error.message, "Unauthorized access")
-    XCTAssertEqual(error.error, "Forbidden")
+    #expect(error.statusCode == "403")
+    #expect(error.message == "Unauthorized access")
+    #expect(error.error == "Forbidden")
   }
 }
