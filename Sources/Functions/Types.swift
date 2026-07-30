@@ -32,6 +32,9 @@ public struct FunctionInvokeOptions: Sendable {
   let region: String?
   /// The query to be included in the function invocation.
   let query: [URLQueryItem]
+  /// A per-invocation override for the request timeout. Defaults to
+  /// ``FunctionsClient/requestIdleTimeout`` when `nil`.
+  let timeoutInterval: TimeInterval?
 
   /// Creates options for a function invocation with an encodable body.
   /// - Parameters:
@@ -42,6 +45,8 @@ public struct FunctionInvokeOptions: Sendable {
   ///   - body: The body to encode and send. Strings are sent as `text/plain`, `Data` as
   ///     `application/octet-stream`, and all other `Encodable` values as JSON.
   ///   - encoder: The JSON encoder used when `body` is encoded as JSON.
+  ///   - timeoutInterval: A per-invocation override for the request timeout. Defaults to
+  ///     ``FunctionsClient/requestIdleTimeout`` when `nil`.
   @_disfavoredOverload
   public init(
     method: Method? = nil,
@@ -49,7 +54,8 @@ public struct FunctionInvokeOptions: Sendable {
     headers: [String: String] = [:],
     region: String? = nil,
     body: some Encodable,
-    encoder: JSONEncoder = JSONEncoder()
+    encoder: JSONEncoder = JSONEncoder(),
+    timeoutInterval: TimeInterval? = nil
   ) {
     var defaultHeaders = HTTPFields()
 
@@ -69,6 +75,7 @@ public struct FunctionInvokeOptions: Sendable {
     self.headers = defaultHeaders.merging(with: HTTPFields(headers))
     self.region = region
     self.query = query
+    self.timeoutInterval = timeoutInterval
   }
 
   /// Creates options for a function invocation with no body.
@@ -77,17 +84,21 @@ public struct FunctionInvokeOptions: Sendable {
   ///   - query: Query items appended to the function URL.
   ///   - headers: Additional headers to include in the request.
   ///   - region: The region string to invoke the function in.
+  ///   - timeoutInterval: A per-invocation override for the request timeout. Defaults to
+  ///     ``FunctionsClient/requestIdleTimeout`` when `nil`.
   @_disfavoredOverload
   public init(
     method: Method? = nil,
     query: [URLQueryItem] = [],
     headers: [String: String] = [:],
-    region: String? = nil
+    region: String? = nil,
+    timeoutInterval: TimeInterval? = nil
   ) {
     self.method = method
     self.headers = HTTPFields(headers)
     self.region = region
     self.query = query
+    self.timeoutInterval = timeoutInterval
     body = nil
   }
 
@@ -123,36 +134,46 @@ public struct FunctionInvokeOptions: Sendable {
   }
 }
 
-/// A Supabase Edge Function deployment region.
-public enum FunctionRegion: String, Sendable {
-  /// Asia Pacific (Tokyo).
-  case apNortheast1 = "ap-northeast-1"
-  /// Asia Pacific (Seoul).
-  case apNortheast2 = "ap-northeast-2"
-  /// Asia Pacific (Mumbai).
-  case apSouth1 = "ap-south-1"
-  /// Asia Pacific (Singapore).
-  case apSoutheast1 = "ap-southeast-1"
-  /// Asia Pacific (Sydney).
-  case apSoutheast2 = "ap-southeast-2"
-  /// Canada (Central).
-  case caCentral1 = "ca-central-1"
-  /// Europe (Frankfurt).
-  case euCentral1 = "eu-central-1"
-  /// Europe (Ireland).
-  case euWest1 = "eu-west-1"
-  /// Europe (London).
-  case euWest2 = "eu-west-2"
-  /// Europe (Paris).
-  case euWest3 = "eu-west-3"
-  /// South America (São Paulo).
-  case saEast1 = "sa-east-1"
-  /// US East (N. Virginia).
-  case usEast1 = "us-east-1"
-  /// US West (N. California).
-  case usWest1 = "us-west-1"
-  /// US West (Oregon).
-  case usWest2 = "us-west-2"
+/// A Supabase Edge Network region identifier.
+///
+/// Use the predefined static constants for known regions, or supply a custom value
+/// for regions not listed here:
+///
+/// ```swift
+/// // predefined
+/// let options = FunctionInvokeOptions(region: .usEast1)
+/// // custom region
+/// let options2 = FunctionInvokeOptions(region: FunctionRegion(rawValue: "custom-region"))
+/// let options3 = FunctionInvokeOptions(region: "custom-region")
+/// ```
+public struct FunctionRegion: RawRepresentable, Hashable, Sendable {
+  /// The raw region string sent in the request.
+  public let rawValue: String
+
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  public static let apNortheast1 = FunctionRegion(rawValue: "ap-northeast-1")
+  public static let apNortheast2 = FunctionRegion(rawValue: "ap-northeast-2")
+  public static let apSouth1 = FunctionRegion(rawValue: "ap-south-1")
+  public static let apSoutheast1 = FunctionRegion(rawValue: "ap-southeast-1")
+  public static let apSoutheast2 = FunctionRegion(rawValue: "ap-southeast-2")
+  public static let caCentral1 = FunctionRegion(rawValue: "ca-central-1")
+  public static let euCentral1 = FunctionRegion(rawValue: "eu-central-1")
+  public static let euWest1 = FunctionRegion(rawValue: "eu-west-1")
+  public static let euWest2 = FunctionRegion(rawValue: "eu-west-2")
+  public static let euWest3 = FunctionRegion(rawValue: "eu-west-3")
+  public static let saEast1 = FunctionRegion(rawValue: "sa-east-1")
+  public static let usEast1 = FunctionRegion(rawValue: "us-east-1")
+  public static let usWest1 = FunctionRegion(rawValue: "us-west-1")
+  public static let usWest2 = FunctionRegion(rawValue: "us-west-2")
+}
+
+extension FunctionRegion: ExpressibleByStringLiteral {
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
 }
 
 extension FunctionInvokeOptions {
@@ -163,19 +184,23 @@ extension FunctionInvokeOptions {
   ///   - region: The region to invoke the function in.
   ///   - body: The body to encode and send.
   ///   - encoder: The JSON encoder used when `body` is encoded as JSON.
+  ///   - timeoutInterval: A per-invocation override for the request timeout. Defaults to
+  ///     ``FunctionsClient/requestIdleTimeout`` when `nil`.
   public init(
     method: Method? = nil,
     headers: [String: String] = [:],
     region: FunctionRegion? = nil,
     body: some Encodable,
-    encoder: JSONEncoder = JSONEncoder()
+    encoder: JSONEncoder = JSONEncoder(),
+    timeoutInterval: TimeInterval? = nil
   ) {
     self.init(
       method: method,
       headers: headers,
       region: region?.rawValue,
       body: body,
-      encoder: encoder
+      encoder: encoder,
+      timeoutInterval: timeoutInterval
     )
   }
 
@@ -184,11 +209,15 @@ extension FunctionInvokeOptions {
   ///   - method: The HTTP method to use. Defaults to POST when `nil`.
   ///   - headers: Additional headers to include in the request.
   ///   - region: The region to invoke the function in.
+  ///   - timeoutInterval: A per-invocation override for the request timeout. Defaults to
+  ///     ``FunctionsClient/requestIdleTimeout`` when `nil`.
   public init(
     method: Method? = nil,
     headers: [String: String] = [:],
-    region: FunctionRegion? = nil
+    region: FunctionRegion? = nil,
+    timeoutInterval: TimeInterval? = nil
   ) {
-    self.init(method: method, headers: headers, region: region?.rawValue)
+    self.init(
+      method: method, headers: headers, region: region?.rawValue, timeoutInterval: timeoutInterval)
   }
 }

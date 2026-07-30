@@ -511,6 +511,66 @@ public struct AuthMetaSecurity: Codable, Hashable, Sendable {
   }
 }
 
+/// A Web3 chain supported by Sign in with Web3.
+public struct Web3Chain: RawRepresentable, Codable, Hashable, Sendable, ExpressibleByStringLiteral {
+  public let rawValue: String
+
+  /// Creates a ``Web3Chain`` from a raw string value.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  /// Creates a ``Web3Chain`` from a string literal.
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
+  /// The Ethereum chain, authenticated via Sign in with Ethereum (EIP-4361).
+  public static let ethereum: Web3Chain = "ethereum"
+
+  /// The Solana chain, authenticated via Sign in with Solana.
+  public static let solana: Web3Chain = "solana"
+}
+
+/// Credentials for signing in with a Web3 wallet (Sign in with Ethereum / Sign in with Solana).
+///
+/// The caller is responsible for constructing a spec-compliant SIWE (EIP-4361) or SIWS message and
+/// obtaining a signature over it from the user's wallet (e.g. via WalletConnect or a native wallet
+/// SDK) — this type only carries the already-signed result to the server for verification.
+public struct Web3Credentials: Codable, Hashable, Sendable {
+  public var chain: Web3Chain
+
+  /// The SIWE- or SIWS-formatted message that was signed.
+  public var message: String
+
+  /// The signature over `message`.
+  /// - Ethereum: `0x`-prefixed 65-byte secp256k1 signature, hex-encoded (130 hex chars after `0x`).
+  /// - Solana: base64 (standard or URL-safe, padded or not) encoding of the 64-byte Ed25519 signature.
+  public var signature: String
+
+  /// Verification token received when the user completes the captcha on the site.
+  public var gotrueMetaSecurity: AuthMetaSecurity?
+
+  /// Creates Web3 credentials for sign-in.
+  ///
+  /// - Parameters:
+  ///   - chain: The Web3 chain the message was signed for.
+  ///   - message: The SIWE/SIWS-formatted message that was signed.
+  ///   - signature: The signature over `message`.
+  ///   - captchaToken: Optional captcha verification token.
+  public init(
+    chain: Web3Chain,
+    message: String,
+    signature: String,
+    captchaToken: String? = nil
+  ) {
+    self.chain = chain
+    self.message = message
+    self.signature = signature
+    self.gotrueMetaSecurity = captchaToken.map(AuthMetaSecurity.init(captchaToken:))
+  }
+}
+
 struct OTPParams: Codable, Hashable, Sendable {
   var email: String?
   var phone: String?
@@ -1275,126 +1335,170 @@ public struct ListUsersPaginatedResponse: Hashable, Sendable {
   public var total: Int
 }
 
-//public struct GenerateLinkParams: Sendable {
-//  struct Body: Encodable {
-//    var type: GenerateLinkType
-//    var email: String
-//    var password: String?
-//    var newEmail: String?
-//    var data: [String: AnyJSON]?
-//  }
-//  var body: Body
-//  var redirectTo: URL?
-//
-//  /// Generates a signup link.
-//  public static func signUp(
-//    email: String,
-//    password: String,
-//    data: [String: AnyJSON]? = nil,
-//    redirectTo: URL? = nil
-//  ) -> GenerateLinkParams {
-//    GenerateLinkParams(
-//      body: .init(
-//        type: .signup,
-//        email: email,
-//        password: password,
-//        data: data
-//      ),
-//      redirectTo: redirectTo
-//    )
-//  }
-//
-//  /// Generates an invite link.
-//  public static func invite(
-//    email: String,
-//    data: [String: AnyJSON]? = nil,
-//    redirectTo: URL? = nil
-//  ) -> GenerateLinkParams {
-//    GenerateLinkParams(
-//      body: .init(
-//        type: .invite,
-//        email: email,
-//        data: data
-//      ),
-//      redirectTo: redirectTo
-//    )
-//  }
-//
-//  /// Generates a magic link.
-//  public static func magicLink(
-//    email: String,
-//    data: [String: AnyJSON]? = nil,
-//    redirectTo: URL? = nil
-//  ) -> GenerateLinkParams {
-//    GenerateLinkParams(
-//      body: .init(
-//        type: .magiclink,
-//        email: email,
-//        data: data
-//      ),
-//      redirectTo: redirectTo
-//    )
-//  }
-//
-//  /// Generates a recovery link.
-//  public static func recovery(
-//    email: String,
-//    redirectTo: URL? = nil
-//  ) -> GenerateLinkParams {
-//    GenerateLinkParams(
-//      body: .init(
-//        type: .recovery,
-//        email: email
-//      ),
-//      redirectTo: redirectTo
-//    )
-//  }
-//
-//}
-//
-///// The response from the ``AuthAdmin/generateLink(params:)`` function.
-//public struct GenerateLinkResponse: Hashable, Sendable, Decodable {
-//  /// The properties related to the email link generated.
-//  public let properties: GenerateLinkProperties
-//  /// The user that the email link is associated to.
-//  public let user: User
-//
-//  public init(from decoder: any Decoder) throws {
-//    self.properties = try GenerateLinkProperties(from: decoder)
-//    self.user = try User(from: decoder)
-//  }
-//}
-//
-///// The properties related to the email link generated.
-//public struct GenerateLinkProperties: Decodable, Hashable, Sendable {
-//  /// The email link to send to the users.
-//  /// The action link follows the following format: auth/v1/verify?type={verification_type}&token={hashed_token}&redirect_to={redirect_to}
-//  public let actionLink: URL
-//  /// The raw email OTP.
-//  /// You should send this in the email if you want your users to verify using an OTP instead of the action link.
-//  public let emailOTP: String
-//  /// The hashed token appended to the action link.
-//  public let hashedToken: String
-//  /// The URL appended to the action link.
-//  public let redirectTo: URL
-//  /// The verification type that the emaillink is associated to.
-//  public let verificationType: GenerateLinkType
-//}
-//
-//public struct GenerateLinkType: RawRepresentable, Codable, Hashable, Sendable {
-//  public let rawValue: String
-//
-//  public init(rawValue: String) {
-//    self.rawValue = rawValue
-//  }
-//
-//  public static let signup = GenerateLinkType(rawValue: "signup")
-//  public static let invite = GenerateLinkType(rawValue: "invite")
-//  public static let magiclink = GenerateLinkType(rawValue: "magiclink")
-//  public static let recovery = GenerateLinkType(rawValue: "recovery")
-//  public static let emailChangeCurrent = GenerateLinkType(rawValue: "email_change_current")
-//  public static let emailChangeNew = GenerateLinkType(rawValue: "email_change_new")
-//}
+/// The parameters for ``AuthAdmin/generateLink(params:)``.
+public struct GenerateLinkParams: Sendable {
+  struct Body: Encodable {
+    var type: GenerateLinkType
+    var email: String
+    var password: String?
+    var newEmail: String?
+    var data: [String: AnyJSON]?
+  }
+  var body: Body
+  var redirectTo: URL?
+
+  /// Generates a signup link.
+  public static func signUp(
+    email: String,
+    password: String,
+    data: [String: AnyJSON]? = nil,
+    redirectTo: URL? = nil
+  ) -> GenerateLinkParams {
+    GenerateLinkParams(
+      body: .init(
+        type: .signup,
+        email: email,
+        password: password,
+        data: data
+      ),
+      redirectTo: redirectTo
+    )
+  }
+
+  /// Generates an invite link.
+  public static func invite(
+    email: String,
+    data: [String: AnyJSON]? = nil,
+    redirectTo: URL? = nil
+  ) -> GenerateLinkParams {
+    GenerateLinkParams(
+      body: .init(
+        type: .invite,
+        email: email,
+        data: data
+      ),
+      redirectTo: redirectTo
+    )
+  }
+
+  /// Generates a magic link.
+  public static func magicLink(
+    email: String,
+    data: [String: AnyJSON]? = nil,
+    redirectTo: URL? = nil
+  ) -> GenerateLinkParams {
+    GenerateLinkParams(
+      body: .init(
+        type: .magiclink,
+        email: email,
+        data: data
+      ),
+      redirectTo: redirectTo
+    )
+  }
+
+  /// Generates a recovery link.
+  public static func recovery(
+    email: String,
+    redirectTo: URL? = nil
+  ) -> GenerateLinkParams {
+    GenerateLinkParams(
+      body: .init(
+        type: .recovery,
+        email: email
+      ),
+      redirectTo: redirectTo
+    )
+  }
+
+  /// Generates a link to change the current email address of a user.
+  public static func emailChangeCurrent(
+    email: String,
+    newEmail: String,
+    redirectTo: URL? = nil
+  ) -> GenerateLinkParams {
+    GenerateLinkParams(
+      body: .init(
+        type: .emailChangeCurrent,
+        email: email,
+        newEmail: newEmail
+      ),
+      redirectTo: redirectTo
+    )
+  }
+
+  /// Generates a link to change the email address of a user to a new one.
+  public static func emailChangeNew(
+    email: String,
+    newEmail: String,
+    redirectTo: URL? = nil
+  ) -> GenerateLinkParams {
+    GenerateLinkParams(
+      body: .init(
+        type: .emailChangeNew,
+        email: email,
+        newEmail: newEmail
+      ),
+      redirectTo: redirectTo
+    )
+  }
+}
+
+/// The response from the ``AuthAdmin/generateLink(params:)`` function.
+public struct GenerateLinkResponse: Hashable, Sendable, Decodable {
+  /// The properties related to the email link generated.
+  public let properties: GenerateLinkProperties
+  /// The user that the email link is associated to.
+  public let user: User
+
+  public init(from decoder: any Decoder) throws {
+    self.properties = try GenerateLinkProperties(from: decoder)
+    self.user = try User(from: decoder)
+  }
+}
+
+/// The properties related to the email link generated.
+public struct GenerateLinkProperties: Decodable, Hashable, Sendable {
+  /// The email link to send to the users.
+  /// The action link follows the following format: auth/v1/verify?type={verification_type}&token={hashed_token}&redirect_to={redirect_to}
+  public let actionLink: URL
+  /// The raw email OTP.
+  /// You should send this in the email if you want your users to verify using an OTP instead of the action link.
+  public let emailOTP: String
+  /// The hashed token appended to the action link.
+  public let hashedToken: String
+  /// The URL appended to the action link.
+  public let redirectTo: URL
+  /// The verification type that the emaillink is associated to.
+  public let verificationType: GenerateLinkType
+
+  private enum CodingKeys: String, CodingKey {
+    case actionLink
+    // The decoder's `.convertFromSnakeCase` strategy converts the JSON key
+    // "email_otp" to "emailOtp" (not "emailOTP") before matching against this
+    // raw value, since it doesn't know to capitalize the "OTP" acronym.
+    case emailOTP = "emailOtp"
+    case hashedToken
+    case redirectTo
+    case verificationType
+  }
+}
+
+/// The type of link generated by ``AuthAdmin/generateLink(params:)``.
+public struct GenerateLinkType: RawRepresentable, Codable, Hashable, Sendable {
+  public let rawValue: String
+
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  public static let signup = GenerateLinkType(rawValue: "signup")
+  public static let invite = GenerateLinkType(rawValue: "invite")
+  public static let magiclink = GenerateLinkType(rawValue: "magiclink")
+  public static let recovery = GenerateLinkType(rawValue: "recovery")
+  public static let emailChangeCurrent = GenerateLinkType(rawValue: "email_change_current")
+  public static let emailChangeNew = GenerateLinkType(rawValue: "email_change_new")
+}
 
 // MARK: - OAuth Client Types
 
@@ -1646,6 +1750,115 @@ public struct ListOAuthClientsPaginatedResponse: Hashable, Sendable {
 
   /// The total number of OAuth clients.
   public var total: Int
+}
+
+// MARK: - OAuth Authorization Server Types
+
+/// Details about the OAuth client requesting authorization.
+/// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
+public struct OAuthAuthorizationClient: Codable, Hashable, Sendable {
+  /// Unique identifier for the OAuth client.
+  public let id: UUID
+
+  /// Human-readable name of the OAuth client.
+  public let name: String
+
+  /// URI of the OAuth client's homepage.
+  public let uri: URL?
+
+  /// URL of the OAuth client's logo.
+  public let logoUri: URL?
+}
+
+/// The authenticated user considering the authorization request.
+/// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
+public struct OAuthAuthorizationUser: Codable, Hashable, Sendable {
+  /// Unique identifier for the user.
+  public let id: UUID
+
+  /// The user's email address.
+  public let email: String
+}
+
+/// Details about a pending OAuth authorization request, returned by
+/// ``AuthOAuthServer/getAuthorizationDetails(authorizationId:)`` when the
+/// request still requires the user's consent.
+/// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
+public struct OAuthAuthorizationDetails: Codable, Hashable, Sendable {
+  /// Opaque identifier for this authorization request.
+  public let authorizationId: String
+
+  /// The redirect URI the client registered for this request.
+  public let redirectUri: URL
+
+  /// The OAuth client requesting authorization.
+  public let client: OAuthAuthorizationClient
+
+  /// The user considering the request.
+  public let user: OAuthAuthorizationUser
+
+  /// The requested scope.
+  public let scope: String
+}
+
+/// A redirect URL returned after approving or denying an OAuth authorization
+/// request, or in place of ``OAuthAuthorizationDetails`` when the server
+/// auto-approves a request the user has already consented to.
+/// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
+public struct OAuthRedirect: Codable, Hashable, Sendable {
+  /// The URL the client app should be redirected to. On denial, this URL's
+  /// query string carries an `error=access_denied` parameter (RFC 6749) —
+  /// denial is a successful API call, not a thrown error.
+  public let redirectURL: URL
+
+  private enum CodingKeys: String, CodingKey {
+    // The decoder's `.convertFromSnakeCase` strategy converts the JSON key
+    // "redirect_url" to "redirectUrl" (not "redirectURL") before matching
+    // against this raw value, since it doesn't know to capitalize the "URL"
+    // acronym.
+    case redirectURL = "redirectUrl"
+  }
+}
+
+/// The response from ``AuthOAuthServer/getAuthorizationDetails(authorizationId:)``.
+///
+/// The server auto-approves an authorization request if the user already has
+/// an active consent covering the requested scopes for that client, returning
+/// ``redirect(_:)`` instead of ``details(_:)``.
+/// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
+public enum OAuthAuthorizationDetailsResponse: Hashable, Sendable {
+  /// The authorization is pending; present these details to the user for consent.
+  case details(OAuthAuthorizationDetails)
+
+  /// The authorization was already approved automatically; redirect the user.
+  case redirect(OAuthRedirect)
+}
+
+extension OAuthAuthorizationDetailsResponse: Decodable {
+  public init(from decoder: any Decoder) throws {
+    // Neither shape decoding failing surfaces both underlying errors, instead
+    // of a naive try?/fallback silently discarding a genuine decoding
+    // failure in .details (not just "this is the .redirect shape") in favor
+    // of the (less useful) .redirect error.
+    self = try decodeOneOf(
+      { .details(try OAuthAuthorizationDetails(from: decoder)) },
+      { .redirect(try OAuthRedirect(from: decoder)) }
+    )
+  }
+}
+
+/// An OAuth grant the user has given to a third-party client app, returned by
+/// ``AuthOAuthServer/listGrants()``.
+/// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
+public struct OAuthGrant: Codable, Hashable, Sendable {
+  /// The OAuth client the grant was given to.
+  public let client: OAuthAuthorizationClient
+
+  /// The scopes granted to the client.
+  public let scopes: [String]
+
+  /// When the grant was given.
+  public let grantedAt: Date
 }
 
 // MARK: - JWT Claims

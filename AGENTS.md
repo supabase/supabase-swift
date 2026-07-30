@@ -135,19 +135,19 @@ Use standard file headers with copyright:
 
 ### Testing Conventions
 
-The test suite is migrating from XCTest to the [Swift Testing](https://developer.apple.com/documentation/testing) framework, module by module (tracked in [SDK-435](https://linear.app/supabase/issue/SDK-435)). New test files use Swift Testing; existing files keep working under XCTest until their module's migration phase lands — both coexist fine in the same target.
+This project uses the [Swift Testing](https://developer.apple.com/documentation/testing) framework, and only Swift Testing — do not use XCTest or `XCTestCase`.
 
 - Test files should mirror source file structure (`Foo.swift` → `FooTests.swift`)
 - Suite naming: the type name matches the file name (`FooTests.swift` → `struct FooTests`), with an explicit `@Suite` attribute even when no custom name/tags are needed
-- Test function names drop the `test` prefix (the `@Test` attribute already conveys that) — `testFooBehavior()` becomes `fooBehavior()`
+- Test function names drop the `test` prefix (the `@Test` attribute already conveys that) — write `fooBehavior()`, not `testFooBehavior()`
 - Use `@testable import` for internal access
-- Prefer `#expect`/`#require` over `XCTAssert*` family; `#expect(x != nil, "message")` reads the same as the old `XCTAssertNotNil(x, "message")`
-- `expectNoDifference` (CustomDump) and `withExpectedIssue`/`reportIssue` (IssueReporting) work under both frameworks unchanged — no conversion needed at call sites
-- Use snapshot testing for complex data structures (via swift-snapshot-testing); `assertSnapshot`/`assertInlineSnapshot` work inside `@Test` functions the same as `XCTestCase`
-- For HTTP mocking: modules already migrated to Swift Testing use [Replay](https://github.com/mattt/Replay) (`@Test(.replay(...))`, HAR fixtures or inline `.replay(stubs:)`) instead of Mocker — see SDK-435 phase issues for the migration order. Un-migrated modules keep using Mocker for URLSession mocking until their phase lands
+- Prefer `#expect`/`#require` for assertions; `#expect(x != nil, "message")` reads the same as `XCTAssertNotNil(x, "message")` did
+- `expectNoDifference` (CustomDump) and `withExpectedIssue`/`reportIssue` (IssueReporting) work unchanged at call sites
+- Use snapshot testing for complex data structures (via swift-snapshot-testing); `assertSnapshot`/`assertInlineSnapshot` work inside `@Test` functions
+- Use Mocker for URLSession mocking
 - Use CustomDump for test assertions with better output
 - Keep integration tests separate in `IntegrationTests` directory
-- Test targets get full Swift 6 language mode checking (matching production targets) once migrated — see the `swift6TestTargets` set in `Package.swift`
+- Test targets get full Swift 6 language mode checking, matching production targets
 
 Example test structure (Swift Testing):
 

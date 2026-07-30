@@ -5,12 +5,15 @@
 //  Created by Guilherme Souza on 01/07/24.
 //
 
-import XCTest
+import Foundation
+import Testing
 
 @testable import PostgREST
 
-final class JSONTests: XCTestCase {
-  func testDecodeJSON() throws {
+@Suite
+struct JSONTests {
+  @Test
+  func decodeJSON() throws {
     let json = """
       {
         "created_at": "2024-06-15T18:12:04+00:00"

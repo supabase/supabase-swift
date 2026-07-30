@@ -152,4 +152,46 @@ struct RetryRequestInterceptorTests {
     #expect(response.statusCode == 520)
     #expect(callCount.value == 2, "Should not exceed retryLimit")
   }
+
+  // MARK: - Backoff delay
+
+  @Test
+  func awaitsFullFractionalBackoffDelay() async throws {
+    let clock = RecordingClock()
+    let interceptor = RetryRequestInterceptor(
+      retryLimit: 2,
+      exponentialBackoffBase: 2,
+      exponentialBackoffScale: 0.3,
+      clock: clock
+    )
+
+    let callCount = LockIsolated(0)
+    let response = try await interceptor.intercept(makeRequest()) { _ in
+      callCount.withValue { $0 += 1 }
+      return self.makeResponse(statusCode: callCount.value < 2 ? 503 : 200)
+    }
+
+    #expect(response.statusCode == 200)
+    #expect(callCount.value == 2)
+    #expect(clock.durations.value == [.seconds(pow(2.0, 1.0) * 0.3)])
+  }
+}
+
+/// A clock that records the durations it is asked to sleep for, without
+/// waiting. `now` is fixed so recorded durations are exact.
+struct RecordingClock: Clock {
+  let anchor: ContinuousClock.Instant
+  let durations: LockIsolated<[Duration]>
+
+  init() {
+    anchor = ContinuousClock().now
+    durations = LockIsolated([])
+  }
+
+  var now: ContinuousClock.Instant { anchor }
+  var minimumResolution: Duration { .zero }
+
+  func sleep(until deadline: ContinuousClock.Instant, tolerance: Duration?) async throws {
+    durations.withValue { $0.append(anchor.duration(to: deadline)) }
+  }
 }

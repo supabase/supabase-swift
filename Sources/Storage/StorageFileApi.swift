@@ -44,7 +44,12 @@ enum FileUpload {
       )
 
     case .url(let url):
-      formData.append(url, withName: "")
+      formData.append(
+        url,
+        withName: "",
+        fileName: url.lastPathComponent,
+        mimeType: options.contentType ?? mimeType(forPathExtension: url.pathExtension)
+      )
     }
   }
 }

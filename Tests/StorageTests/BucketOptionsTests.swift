@@ -1,97 +1,113 @@
-import XCTest
+import Testing
 
 @testable import Storage
 
-final class BucketOptionsTests: XCTestCase {
-  func testDefaultInitialization() {
+@Suite
+struct BucketOptionsTests {
+  @Test
+  func defaultInitialization() {
     let options = BucketOptions(isPublic: false)
 
-    XCTAssertFalse(options.public)
-    XCTAssertNil(options.fileSizeLimit)
-    XCTAssertNil(options.allowedMimeTypes)
+    #expect(!options.public)
+    #expect(options.fileSizeLimit == nil)
+    #expect(options.allowedMimeTypes == nil)
   }
 
-  func testCustomInitialization() {
+  @Test
+  func customInitialization() {
     let options = BucketOptions(
       public: true,
       fileSizeLimit: "5000000",
       allowedMimeTypes: ["image/jpeg", "image/png"]
     )
 
-    XCTAssertTrue(options.public)
-    XCTAssertEqual(options.fileSizeLimit, "5000000")
-    XCTAssertEqual(options.allowedMimeTypes, ["image/jpeg", "image/png"])
+    #expect(options.public)
+    #expect(options.fileSizeLimit == "5000000")
+    #expect(options.allowedMimeTypes == ["image/jpeg", "image/png"])
   }
 
-  func testIsPublicRename() {
+  @Test
+  func isPublicRename() {
     let options = BucketOptions(isPublic: true)
-    XCTAssertTrue(options.isPublic)
+    #expect(options.isPublic)
   }
 
-  func testFileSizeLimitInteger() {
+  @Test
+  func fileSizeLimitInteger() {
     let options = BucketOptions(isPublic: false, fileSizeLimit: StorageByteCount(5_000_000))
-    XCTAssertEqual(options.fileSizeLimit, "5000000")
+    #expect(options.fileSizeLimit == "5000000")
   }
 
-  func testFileSizeLimitMegabytes() {
+  @Test
+  func fileSizeLimitMegabytes() {
     let options = BucketOptions(isPublic: false, fileSizeLimit: .megabytes(1.5))
-    XCTAssertEqual(options.fileSizeLimit, "1.5mb")
+    #expect(options.fileSizeLimit == "1.5mb")
   }
 
-  func testFileSizeLimitIntegerLiteral() {
+  @Test
+  func fileSizeLimitIntegerLiteral() {
     let options = BucketOptions(fileSizeLimit: 5_000_000)
-    XCTAssertEqual(options.fileSizeLimit, "5000000")
+    #expect(options.fileSizeLimit == "5000000")
   }
 
-  func testDeprecatedPublicBridge() {
+  @Test
+  func deprecatedPublicBridge() {
     var options = BucketOptions(isPublic: false)
     options.public = true  // deprecated setter
-    XCTAssertTrue(options.isPublic)
-    XCTAssertTrue(options.public)  // deprecated getter
+    #expect(options.isPublic)
+    #expect(options.public)  // deprecated getter
   }
 
-  func testDeprecatedStringFileSizeLimitBridge() {
+  @Test
+  func deprecatedStringFileSizeLimitBridge() {
     let options = BucketOptions(public: false, fileSizeLimit: "5242880")
-    XCTAssertEqual(options.fileSizeLimit, "5242880")
+    #expect(options.fileSizeLimit == "5242880")
   }
 
-  func testDeprecatedStringFileSizeLimitNil() {
+  @Test
+  func deprecatedStringFileSizeLimitNil() {
     let options = BucketOptions(public: false, fileSizeLimit: nil)
-    XCTAssertNil(options.fileSizeLimit)
+    #expect(options.fileSizeLimit == nil)
   }
 
-  func testStringLiteralHumanReadable() {
+  @Test
+  func stringLiteralHumanReadable() {
     let options = BucketOptions(isPublic: false, fileSizeLimit: "1mb")
-    XCTAssertEqual(options.fileSizeLimit, "1mb")
+    #expect(options.fileSizeLimit == "1mb")
   }
 
-  func testStringLiteralNumeric() {
+  @Test
+  func stringLiteralNumeric() {
     let options = BucketOptions(isPublic: false, fileSizeLimit: "5242880")
-    XCTAssertEqual(options.fileSizeLimit, "5242880")
+    #expect(options.fileSizeLimit == "5242880")
   }
 
-  func testDeprecatedStringBridgeHumanReadable() {
+  @Test
+  func deprecatedStringBridgeHumanReadable() {
     let options = BucketOptions(public: false, fileSizeLimit: "1mb")
-    XCTAssertEqual(options.fileSizeLimit, "1mb")
+    #expect(options.fileSizeLimit == "1mb")
   }
 
-  func testDeprecatedStringFileSizeLimitVariable() {
+  @Test
+  func deprecatedStringFileSizeLimitVariable() {
     let limit: String? = "1mb"
     let options = BucketOptions(fileSizeLimit: limit)
-    XCTAssertEqual(options.fileSizeLimit, "1mb")
+    #expect(options.fileSizeLimit == "1mb")
   }
 
-  func testDeprecatedIsPublicStringFileSizeLimitVariable() {
+  @Test
+  func deprecatedIsPublicStringFileSizeLimitVariable() {
     let limit: String? = "1mb"
     let options = BucketOptions(isPublic: true, fileSizeLimit: limit)
-    XCTAssertTrue(options.isPublic)
-    XCTAssertEqual(options.fileSizeLimit, "1mb")
+    #expect(options.isPublic)
+    #expect(options.fileSizeLimit == "1mb")
   }
 
-  func testAllowedMimeTypesOnly() {
+  @Test
+  func allowedMimeTypesOnly() {
     let options = BucketOptions(allowedMimeTypes: ["image/png"])
-    XCTAssertFalse(options.isPublic)
-    XCTAssertNil(options.fileSizeLimit)
-    XCTAssertEqual(options.allowedMimeTypes, ["image/png"])
+    #expect(!options.isPublic)
+    #expect(options.fileSizeLimit == nil)
+    #expect(options.allowedMimeTypes == ["image/png"])
   }
 }

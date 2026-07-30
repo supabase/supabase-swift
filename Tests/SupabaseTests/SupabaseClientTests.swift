@@ -199,6 +199,52 @@ struct SupabaseClientTests {
   }
 
   @Test
+  func globalSessionPropagatedToRealtimeWebSocket() {
+    let localStorage = AuthLocalStorageMock()
+    let customSession = URLSession(configuration: .ephemeral)
+    let client = SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      options: SupabaseClientOptions(
+        auth: SupabaseClientOptions.AuthOptions(
+          storage: localStorage,
+          autoRefreshToken: false
+        ),
+        global: SupabaseClientOptions.GlobalOptions(session: customSession)
+      )
+    )
+
+    #expect(
+      client.realtimeV2.options.session === customSession,
+      "global URLSession should be propagated to Realtime's WebSocket transport for certificate pinning"
+    )
+  }
+
+  @Test
+  func userProvidedRealtimeSessionIsNotOverridden() {
+    let localStorage = AuthLocalStorageMock()
+    let globalSession = URLSession(configuration: .ephemeral)
+    let realtimeSpecificSession = URLSession(configuration: .default)
+    let client = SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      options: SupabaseClientOptions(
+        auth: SupabaseClientOptions.AuthOptions(
+          storage: localStorage,
+          autoRefreshToken: false
+        ),
+        global: SupabaseClientOptions.GlobalOptions(session: globalSession),
+        realtime: RealtimeClientOptions(session: realtimeSpecificSession)
+      )
+    )
+
+    #expect(
+      client.realtimeV2.options.session === realtimeSpecificSession,
+      "user-provided realtime session should be preserved"
+    )
+  }
+
+  @Test
   func clientInitWithCustomAccessToken() async {
     let localStorage = AuthLocalStorageMock()
 
@@ -225,5 +271,29 @@ struct SupabaseClientTests {
     // is used. Reproduced locally via `xcodebuild test`; does not reproduce under `swift test`.
     // Tracked as a migration-wide risk in SDK-435 for any later phase whose tests exercise
     // `reportIssue`-instrumented production code.
+  }
+
+  @Test
+  func functionsOmitsAuthorizationBearerForNewFormatKey() {
+    let client = SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "sb_publishable_abc123",
+      options: SupabaseClientOptions(auth: .init(storage: AuthLocalStorageMock()))
+    )
+
+    #expect(client.functions.headers.dictionary["Authorization"] == nil)
+    #expect(client.functions.headers.dictionary["Apikey"] == "sb_publishable_abc123")
+  }
+
+  @Test
+  func functionsKeepsAuthorizationBearerForLegacyKey() {
+    let client = SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "legacy-jwt-key",
+      options: SupabaseClientOptions(auth: .init(storage: AuthLocalStorageMock()))
+    )
+
+    #expect(client.functions.headers.dictionary["Authorization"] == "Bearer legacy-jwt-key")
+    #expect(client.functions.headers.dictionary["Apikey"] == "legacy-jwt-key")
   }
 }

@@ -35,6 +35,8 @@ let package = Package(
     .package(url: "https://github.com/pointfreeco/swift-snapshot-testing", from: "1.17.0"),
     .package(url: "https://github.com/pointfreeco/xctest-dynamic-overlay", from: "1.2.2"),
     .package(url: "https://github.com/WeTransfer/Mocker", from: "3.0.0"),
+    .package(url: "https://github.com/21-DOT-DEV/swift-secp256k1.git", from: "0.23.2"),
+    .package(url: "https://github.com/krzyzanowskim/CryptoSwift.git", from: "1.10.0"),
   ],
   targets: [
     .target(
@@ -52,6 +54,29 @@ let package = Package(
       dependencies: [
         .product(name: "CustomDump", package: "swift-custom-dump"),
         "Helpers",
+      ]
+    ),
+    .target(
+      name: "HTTPRuntime"
+    ),
+    .testTarget(
+      name: "HTTPRuntimeTests",
+      dependencies: [
+        "HTTPRuntime"
+      ]
+    ),
+    .target(
+      name: "HTTPRuntimeTestHelpers",
+      dependencies: [
+        "HTTPRuntime",
+        .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
+      ]
+    ),
+    .testTarget(
+      name: "HTTPRuntimeTestHelpersTests",
+      dependencies: [
+        "HTTPRuntime",
+        "HTTPRuntimeTestHelpers",
       ]
     ),
     .target(
@@ -73,6 +98,7 @@ let package = Package(
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
         "Auth",
         "Helpers",
+        "Mocker",
         "TestHelpers",
       ],
       exclude: [
@@ -91,10 +117,8 @@ let package = Package(
     .testTarget(
       name: "FunctionsTests",
       dependencies: [
-        .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
-        .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
+        .product(name: "HTTPTypes", package: "swift-http-types"),
         .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
-        .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
         "Functions",
         "Mocker",
         "TestHelpers",
@@ -109,6 +133,8 @@ let package = Package(
         .product(name: "CustomDump", package: "swift-custom-dump"),
         .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
+        .product(name: "P256K", package: "swift-secp256k1"),
+        .product(name: "CryptoSwift", package: "CryptoSwift"),
         "Helpers",
         "Supabase",
         "TestHelpers",
@@ -129,7 +155,6 @@ let package = Package(
     .testTarget(
       name: "PostgRESTTests",
       dependencies: [
-        .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
         .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
         "Helpers",
         "Mocker",
@@ -180,15 +205,11 @@ let package = Package(
     .testTarget(
       name: "StorageTests",
       dependencies: [
-        .product(name: "CustomDump", package: "swift-custom-dump"),
         .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
         "Mocker",
         "TestHelpers",
         "Storage",
-      ],
-      exclude: [
-        "__Snapshots__"
       ],
       resources: [
         .copy("sadcat.jpg"),
@@ -244,20 +265,7 @@ let package = Package(
   ]
 )
 
-// Test targets migrated to Swift Testing get full Swift 6 checking, same as
-// production targets. Everything else stays pinned to v5 until its migration
-// phase lands (see SDK-435).
-let swift6TestTargets: Set<String> = ["SupabaseTests", "HelpersTests"]
-
 for target in package.targets {
-  // Test targets never opted into `ExistentialAny` below, so bumping swift-tools-version
-  // to 6.1 must not silently switch their *default* language mode to Swift 6 either —
-  // pin the rest to v5 to preserve their pre-6.1 compilation behavior exactly.
-  if target.isTest, !swift6TestTargets.contains(target.name) {
-    target.swiftSettings = [.swiftLanguageMode(.v5)]
-    continue
-  }
-
   var swiftSettings: [SwiftSetting] = [
     .enableUpcomingFeature("ExistentialAny"),
     .enableUpcomingFeature("ImmutableWeakCaptures"),
