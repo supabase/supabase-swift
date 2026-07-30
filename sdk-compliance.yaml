@@ -36,7 +36,24 @@ features:
     status: implemented
     symbols:
       - AuthClient.signInAnonymously
-  auth.sign_in.sign_in_with_web3: not_implemented
+  auth.sign_in.sign_in_with_web3:
+    status: implemented
+    note: "Passthrough only: the caller supplies an already-signed SIWE/SIWS message; no native wallet integration (no browser wallet detection, no message building, no signing) ships in the SDK."
+    symbols:
+      - AuthClient.signInWithWeb3
+      - Web3Credentials
+      - Web3Credentials.init
+      - Web3Credentials.chain
+      - Web3Credentials.message
+      - Web3Credentials.signature
+      - Web3Credentials.gotrueMetaSecurity
+      - Web3Chain
+      - Web3Chain.init
+      - Web3Chain.rawValue
+      - Web3Chain.ethereum
+      - Web3Chain.solana
+      - ErrorCode.web3ProviderDisabled
+      - ErrorCode.web3UnsupportedChain
   auth.sign_in.verify_otp:
     status: implemented
     symbols:
@@ -98,6 +115,7 @@ features:
     symbols:
       - AuthClient.startAutoRefresh
       - AuthClient.stopAutoRefresh
+  auth.session.sign_out_reason: not_implemented
 
   auth.identities.link_identity:
     status: implemented
@@ -118,7 +136,6 @@ features:
     status: implemented
     symbols:
       - AuthMFA.enroll
-      - AuthMFA.enrollWebAuthnFactor
   auth.mfa.challenge:
     status: implemented
     symbols:
@@ -127,7 +144,6 @@ features:
     status: implemented
     symbols:
       - AuthMFA.verify
-      - AuthMFA.verifyWebAuthnFactor
   auth.mfa.unenroll:
     status: implemented
     symbols:
@@ -169,8 +185,41 @@ features:
     status: implemented
     symbols:
       - AuthAdmin.inviteUserByEmail
-  auth.admin.sign_out: not_implemented
-  auth.admin.generate_link: not_implemented
+  auth.admin.sign_out:
+    status: implemented
+    symbols:
+      - AuthAdmin.signOut
+  auth.admin.generate_link:
+    status: implemented
+    symbols:
+      - AuthAdmin.generateLink
+      - GenerateLinkParams
+      - GenerateLinkParams.signUp
+      - GenerateLinkParams.invite
+      - GenerateLinkParams.magicLink
+      - GenerateLinkParams.recovery
+      - GenerateLinkParams.emailChangeCurrent
+      - GenerateLinkParams.emailChangeNew
+      - GenerateLinkResponse
+      - GenerateLinkResponse.properties
+      - GenerateLinkResponse.user
+      - GenerateLinkResponse.init
+      - GenerateLinkProperties
+      - GenerateLinkProperties.init
+      - GenerateLinkProperties.actionLink
+      - GenerateLinkProperties.emailOTP
+      - GenerateLinkProperties.hashedToken
+      - GenerateLinkProperties.redirectTo
+      - GenerateLinkProperties.verificationType
+      - GenerateLinkType
+      - GenerateLinkType.rawValue
+      - GenerateLinkType.init
+      - GenerateLinkType.signup
+      - GenerateLinkType.invite
+      - GenerateLinkType.magiclink
+      - GenerateLinkType.recovery
+      - GenerateLinkType.emailChangeCurrent
+      - GenerateLinkType.emailChangeNew
   auth.admin.list_mfa_factors: not_implemented
   auth.admin.delete_mfa_factor: not_implemented
   auth.admin.create_provider: not_implemented
@@ -179,27 +228,68 @@ features:
   auth.admin.get_provider: not_implemented
   auth.admin.list_providers: not_implemented
 
-  auth.passkey.register_passkey:
-    status: implemented
-    symbols:
-      - AuthClient.registerPasskey
-      - AuthClient.getPasskeyRegistrationOptions
-      - AuthClient.verifyPasskeyRegistration
-  auth.passkey.sign_in_with_passkey:
-    status: implemented
-    symbols:
-      - AuthClient.signInWithPasskey
-      - AuthClient.getPasskeyAuthenticationOptions
-      - AuthClient.verifyPasskeyAuthentication
+  # AuthClient+Passkey.swift methods are all @_spi(Experimental), so the public
+  # symbol graph the compliance scanner reads from never contains them.
+  auth.passkey.register_passkey: implemented
+  auth.passkey.sign_in_with_passkey: implemented
 
   auth.passkey_admin.list_passkeys: not_implemented
   auth.passkey_admin.delete_passkey: not_implemented
 
-  auth.oauth_server.approve_authorization: not_implemented
-  auth.oauth_server.deny_authorization: not_implemented
-  auth.oauth_server.get_authorization_details: not_implemented
-  auth.oauth_server.list_grants: not_implemented
-  auth.oauth_server.revoke_grant: not_implemented
+  auth.oauth_server.get_authorization_details:
+    status: implemented
+    symbols:
+      - AuthClient.oauthServer
+      - AuthOAuthServer
+      - AuthOAuthServer.getAuthorizationDetails
+      - OAuthAuthorizationDetailsResponse
+      - OAuthAuthorizationDetailsResponse.details
+      - OAuthAuthorizationDetailsResponse.redirect
+      - OAuthAuthorizationDetailsResponse.init
+      - OAuthAuthorizationDetails
+      - OAuthAuthorizationDetails.authorizationId
+      - OAuthAuthorizationDetails.redirectUri
+      - OAuthAuthorizationDetails.client
+      - OAuthAuthorizationDetails.user
+      - OAuthAuthorizationDetails.scope
+      - OAuthAuthorizationDetails.init
+      - OAuthAuthorizationClient
+      - OAuthAuthorizationClient.id
+      - OAuthAuthorizationClient.name
+      - OAuthAuthorizationClient.uri
+      - OAuthAuthorizationClient.logoUri
+      - OAuthAuthorizationClient.init
+      - OAuthAuthorizationUser
+      - OAuthAuthorizationUser.id
+      - OAuthAuthorizationUser.email
+      - OAuthAuthorizationUser.init
+  auth.oauth_server.approve_authorization:
+    status: implemented
+    symbols:
+      - AuthOAuthServer.approveAuthorization
+      - OAuthRedirect
+      - OAuthRedirect.redirectURL
+      - OAuthRedirect.init
+  auth.oauth_server.deny_authorization:
+    status: implemented
+    symbols:
+      - AuthOAuthServer.denyAuthorization
+      - ErrorCode.oauthAuthorizationNotFound
+      - ErrorCode.featureDisabled
+  auth.oauth_server.list_grants:
+    status: implemented
+    symbols:
+      - AuthOAuthServer.listGrants
+      - OAuthGrant
+      - OAuthGrant.client
+      - OAuthGrant.scopes
+      - OAuthGrant.grantedAt
+      - OAuthGrant.init
+  auth.oauth_server.revoke_grant:
+    status: implemented
+    symbols:
+      - AuthOAuthServer.revokeGrant
+      - ErrorCode.oauthConsentNotFound
 
   auth.oauth_admin.create_client:
     status: implemented
@@ -284,7 +374,10 @@ features:
   database.using_filters.regex: implemented
   database.using_filters.regex_icase: implemented
   database.using_filters.is_distinct: implemented
-  database.using_filters.not_in: not_implemented
+  database.using_filters.not_in:
+    status: implemented
+    symbols:
+      - PostgrestFilterBuilder.notIn
   database.using_filters.like_all: implemented
   database.using_filters.like_any: implemented
   database.using_filters.ilike_all: implemented
@@ -294,7 +387,10 @@ features:
   database.using_modifiers.limit: implemented
   database.using_modifiers.range: implemented
   database.using_modifiers.single_row: implemented
-  database.using_modifiers.maybe_single_row: not_implemented
+  database.using_modifiers.maybe_single_row:
+    status: implemented
+    symbols:
+      - PostgrestTransformBuilder.maybeSingle
   database.using_modifiers.strip_nulls: implemented
   database.using_modifiers.format_csv: implemented
   database.using_modifiers.format_geojson: implemented
@@ -307,7 +403,10 @@ features:
   database.using_modifiers.relationship_embed:
     status: partially_implemented
     note: "Supported via query-string syntax in select() (e.g. 'user(*)'); no dedicated relationship builder API."
-  database.using_modifiers.dry_run: not_implemented
+  database.using_modifiers.dry_run:
+    status: implemented
+    symbols:
+      - PostgrestTransformBuilder.dryRun
 
   database.configuration.auto_retry: implemented
   database.configuration.request_timeout: not_implemented
@@ -318,11 +417,31 @@ features:
   functions.invocation.set_auth_token: implemented
   functions.invocation.method_override: implemented
   functions.invocation.streaming_response: implemented
-  functions.invocation.region_selection: implemented
+  functions.invocation.region_selection:
+    status: implemented
+    symbols:
+      - FunctionRegion
+      - FunctionRegion.init
+      - FunctionRegion.rawValue
+      - FunctionRegion.apNortheast1
+      - FunctionRegion.apNortheast2
+      - FunctionRegion.apSouth1
+      - FunctionRegion.apSoutheast1
+      - FunctionRegion.apSoutheast2
+      - FunctionRegion.caCentral1
+      - FunctionRegion.euCentral1
+      - FunctionRegion.euWest1
+      - FunctionRegion.euWest2
+      - FunctionRegion.euWest3
+      - FunctionRegion.saEast1
+      - FunctionRegion.usEast1
+      - FunctionRegion.usWest1
+      - FunctionRegion.usWest2
   functions.invocation.request_cancellation: implemented
   functions.invocation.timeout:
-    status: partially_implemented
-    note: "Default idle timeout is a hardcoded 150 s constant; no per-invocation override is exposed."
+    status: implemented
+    symbols:
+      - FunctionsClient.requestIdleTimeout
 
   # ── Realtime ───────────────────────────────────────────────────────────────
 
@@ -345,7 +464,6 @@ features:
     status: implemented
     symbols:
       - BroadcastJoinConfig.replicationReady
-      - BroadcastJoinConfig.encode
   realtime.subscriptions.postgres_changes: implemented
   realtime.subscriptions.subscribe_presence: implemented
   realtime.subscriptions.postgres_changes_filter:
@@ -452,6 +570,8 @@ features:
   storage.file_buckets.upload_with_metadata: implemented
   storage.file_buckets.url_cache_nonce: implemented
   storage.file_buckets.download_as_stream: not_implemented
+  storage.file_buckets.purge_bucket_cache: not_implemented
+  storage.file_buckets.purge_cache: not_implemented
 
   # ── Storage — Vector Buckets ───────────────────────────────────────────────
 

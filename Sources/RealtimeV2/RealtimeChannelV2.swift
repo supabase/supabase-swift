@@ -136,34 +136,9 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   /// a subsequent `subscribe()` call and sometimes lose the filter.
   let clientChanges = LockIsolated<[PostgresJoinConfig]>([])
 
-  private let statusSubject = AsyncValueSubject<RealtimeChannelStatus>(.unsubscribed)
-
-  /// The current subscription status of the channel.
-  public private(set) var status: RealtimeChannelStatus {
-    get { statusSubject.value }
-    set { statusSubject.yield(newValue) }
-  }
-
-  /// An async stream that emits channel subscription status changes.
-  ///
-  /// The stream emits the current status immediately upon iteration and then each
-  /// subsequent change. Use ``onStatusChange(_:)`` for a closure-based alternative.
-  public var statusChange: AsyncStream<RealtimeChannelStatus> {
-    statusSubject.values
-  }
-
-  /// Registers a closure to be called whenever the channel subscription status changes.
-  ///
-  /// - Parameter listener: A `@Sendable` closure called with the new ``RealtimeChannelStatus`` on every change.
-  /// - Returns: A ``RealtimeSubscription`` token. Retain it — the subscription is cancelled when the token is deallocated.
-  ///
-  /// > Note: Use ``statusChange`` if you prefer async iteration over closures.
-  public func onStatusChange(
-    _ listener: @escaping @Sendable (RealtimeChannelStatus) -> Void
-  ) -> RealtimeSubscription {
-    let task = statusSubject.onChange { listener($0) }
-    return RealtimeSubscription { task.cancel() }
-  }
+  /// Lock-protected status + subscribers for ``status``/``statusChange``/``onStatusChange(_:)``.
+  /// See `RealtimeChannel+Status.swift`.
+  let statusStorage = LockIsolated(StatusStorage())
 
   init(
     topic: String,
@@ -179,7 +154,6 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     self.socket = socket
 
     let weakSelfRef = WeakChannelRef()
-    let statusSubject = self.statusSubject
     let clientChanges = self.clientChanges
     self.stateManager = ChannelStateManager(
       topic: topic,
@@ -200,6 +174,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
         await socket.connect()
         return socket.status == .connected
       },
+      isSocketConnected: { [weak socket] in socket?.status == .connected },
       getClientChanges: { clientChanges.value },
       joinOperation: { [weakSelfRef] ref, changes in
         guard let channel = weakSelfRef.value else { return }
@@ -209,12 +184,12 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
         guard let channel = weakSelfRef.value else { return }
         await channel.push(ChannelEvent.leave)
       },
-      stateDidChange: { state in
+      stateDidChange: { [weakSelfRef] state in
         // Forward every state-machine transition to the public status
-        // subject synchronously. Running this on the actor avoids the
+        // storage synchronously. Running this on the actor avoids the
         // async observer-Task delay, so reads of ``status`` right after
         // ``subscribe()`` returns see the latest value.
-        statusSubject.yield(Self.mapState(state))
+        weakSelfRef.value?.yieldStatus(Self.mapState(state))
       }
     )
 
@@ -223,6 +198,14 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
 
   deinit {
     callbackManager.reset()
+    let continuations = statusStorage.withValue {
+      storage -> [AsyncStream<RealtimeChannelStatus>.Continuation] in
+      defer { storage.continuations.removeAll() }
+      return storage.continuations.map { $1 }
+    }
+    for continuation in continuations {
+      continuation.finish()
+    }
   }
 
   private static func mapState(_ state: ChannelStateManager.State) -> RealtimeChannelStatus {
@@ -710,13 +693,27 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
         callbackManager.triggerBroadcast(event: event, json: payload)
 
       case .close:
+        // Phoenix tags `phx_close` with the `join_ref` of the join it closes.
+        // A close for a previous incarnation of this topic (e.g. a join
+        // abandoned during a reconnect) must not tear down the current
+        // subscription (issue #1145, defect 3). The join_ref check runs on
+        // the state-manager actor, atomically with the close, so a concurrent
+        // subscribe attempt can't swap `joinRef` in between.
+        guard await stateManager.didReceiveClose(joinRef: message.joinRef) else {
+          return
+        }
         socket._remove(self)
-        await stateManager.didReceiveClose()
 
       case .error:
         logger?.error(
           "Received an error in channel \(message.topic). That could be as a result of an invalid access token"
         )
+        // Like `phx_close`, `phx_error` is tagged with the `join_ref` of the
+        // join it belongs to — an error from a stale join must not tear down
+        // the current subscription (#1148). Errors without a `join_ref`
+        // (e.g. auth errors before a join completes) are applied
+        // unconditionally.
+        await stateManager.didReceiveClose(joinRef: message.joinRef)
 
       case .presenceDiff:
         let joins = try message.payload["joins"]?.decode(as: [String: PresenceV2].self) ?? [:]
@@ -778,12 +775,15 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     _ callback: @escaping @Sendable (any PresenceAction) -> Void
   ) -> RealtimeSubscription {
     guard status != .subscribed && status != .subscribing else {
-      reportIssue(
-        """
-        Cannot add "presence" callbacks for "\(topic)" after `subscribe()`.
-        Please add all your presence callbacks before subscribing to the channel.
-        """
-      )
+      // See the comment on `broadcast(event:message:)` for why this is gated on `isTesting`.
+      if !isTesting {
+        reportIssue(
+          """
+          Cannot add "presence" callbacks for "\(topic)" after `subscribe()`.
+          Please add all your presence callbacks before subscribing to the channel.
+          """
+        )
+      }
       return RealtimeSubscription {}
     }
 
@@ -1055,12 +1055,15 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     callback: @escaping @Sendable (AnyAction) -> Void
   ) -> RealtimeSubscription {
     guard status != .subscribed && status != .subscribing else {
-      reportIssue(
-        """
-        Cannot add "postgres_changes" callbacks for "\(topic)" after `subscribe()`.
-        Please add all your postgres change callbacks before subscribing to the channel.
-        """
-      )
+      // See the comment on `broadcast(event:message:)` for why this is gated on `isTesting`.
+      if !isTesting {
+        reportIssue(
+          """
+          Cannot add "postgres_changes" callbacks for "\(topic)" after `subscribe()`.
+          Please add all your postgres change callbacks before subscribing to the channel.
+          """
+        )
+      }
       return RealtimeSubscription {}
     }
 

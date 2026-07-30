@@ -5,44 +5,48 @@
 
 import Foundation
 import Storage
-import XCTest
+import Testing
 
-final class DownloadBehaviorURLTests: XCTestCase {
-  var bucket: StorageFileApi!
+@Suite
+struct DownloadBehaviorURLTests {
+  let bucket: StorageFileApi
 
-  override func setUp() {
-    super.setUp()
+  init() {
     bucket = SupabaseStorageClient.test(
       supabaseURL: "http://localhost:54321/storage/v1",
       apiKey: "test-api-key"
     ).from("test-bucket")
   }
 
-  func testGetPublicURL_noDownload() throws {
+  @Test
+  func getPublicURL_noDownload() throws {
     let url = try bucket.getPublicURL(path: "image.png")
     let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
     let downloadItem = components?.queryItems?.first { $0.name == "download" }
-    XCTAssertNil(downloadItem)
+    #expect(downloadItem == nil)
   }
 
-  func testGetPublicURL_withOriginalName() throws {
+  @Test
+  func getPublicURL_withOriginalName() throws {
     let url = try bucket.getPublicURL(path: "image.png", download: .withOriginalName)
     let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
     let downloadItem = components?.queryItems?.first { $0.name == "download" }
-    XCTAssertEqual(downloadItem?.value, "")
+    #expect(downloadItem?.value == "")
   }
 
-  func testGetPublicURL_namedDownload() throws {
+  @Test
+  func getPublicURL_namedDownload() throws {
     let url = try bucket.getPublicURL(path: "image.png", download: .named("photo.jpg"))
     let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
     let downloadItem = components?.queryItems?.first { $0.name == "download" }
-    XCTAssertEqual(downloadItem?.value, "photo.jpg")
+    #expect(downloadItem?.value == "photo.jpg")
   }
 
-  func testGetPublicURL_nilDownload() throws {
+  @Test
+  func getPublicURL_nilDownload() throws {
     let url = try bucket.getPublicURL(path: "image.png", download: Optional<DownloadBehavior>.none)
     let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
     let downloadItem = components?.queryItems?.first { $0.name == "download" }
-    XCTAssertNil(downloadItem)
+    #expect(downloadItem == nil)
   }
 }
