@@ -567,7 +567,10 @@ struct FunctionsClientTests {
     }
   }
 
-  func testInvokeWithStreamedResponseInvalidatesSession() async throws {
+  @Test
+  func invokeWithStreamedResponseInvalidatesSession() async throws {
+    let sut = makeSUT()
+
     Mock(
       url: url.appendingPathComponent("stream"),
       statusCode: 200,
@@ -578,7 +581,7 @@ struct FunctionsClientTests {
     weak var weakDelegate: StreamResponseDelegate?
 
     do {
-      let (stream, delegate) = sut.streamResponse("stream", options: .init())
+      let (stream, delegate) = sut.streamResponse("stream", options: FunctionInvokeOptions())
       weakDelegate = delegate
       for try await _ in stream {}
     }
@@ -589,6 +592,6 @@ struct FunctionsClientTests {
       try await Task.sleep(nanoseconds: 10_000_000)
     }
 
-    XCTAssertNil(weakDelegate, "URLSession was not invalidated; its delegate leaked")
+    #expect(weakDelegate == nil, "URLSession was not invalidated; its delegate leaked")
   }
 }
