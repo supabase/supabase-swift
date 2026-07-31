@@ -31,15 +31,15 @@ struct PostgrestErrorTests {
 
     let error = try JSONDecoder().decode(PostgrestError.self, from: Data(json.utf8))
 
-    #expect(error.detail == "Key (id)=(1) already exists.")
+    #expect(error.details == "Key (id)=(1) already exists.")
     #expect(error.hint == "Use a different id.")
     #expect(error.code == "23505")
     #expect(error.message == "duplicate key value violates unique constraint \"users_pkey\"")
   }
 
   @Test
-  func encodesDetailToWireKey() throws {
-    let error = PostgrestError(detail: "a detail", message: "a message")
+  func encodesDetailsToWireKey() throws {
+    let error = PostgrestError(details: "a detail", message: "a message")
 
     let data = try JSONEncoder().encode(error)
     let object = try #require(
@@ -48,5 +48,12 @@ struct PostgrestErrorTests {
 
     #expect(object["details"] as? String == "a detail")
     #expect(object["detail"] == nil)
+  }
+
+  @Test
+  @available(*, deprecated)
+  func deprecatedDetailForwardsToDetails() {
+    let error = PostgrestError(details: "a detail", message: "a message")
+    #expect(error.detail == "a detail")
   }
 }

@@ -8,28 +8,35 @@
 public import Foundation
 
 public struct PostgrestError: Error, Codable, Sendable {
-  public let detail: String?
+  /// Additional detail about the error, as returned by PostgREST in the `details` field.
+  public let details: String?
   public let hint: String?
   public let code: String?
   public let message: String
 
+  @available(*, deprecated, renamed: "details")
+  public var detail: String? { details }
+
   public init(
-    detail: String? = nil,
+    details: String? = nil,
     hint: String? = nil,
     code: String? = nil,
     message: String
   ) {
     self.hint = hint
-    self.detail = detail
+    self.details = details
     self.code = code
     self.message = message
   }
 
-  enum CodingKeys: String, CodingKey {
-    case detail = "details"
-    case hint
-    case code
-    case message
+  @available(*, deprecated, renamed: "init(details:hint:code:message:)")
+  public init(
+    detail: String?,
+    hint: String? = nil,
+    code: String? = nil,
+    message: String
+  ) {
+    self.init(details: detail, hint: hint, code: code, message: message)
   }
 }
 
