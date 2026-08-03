@@ -6,6 +6,7 @@
 import ConcurrencyExtras
 import CustomDump
 import Foundation
+import Helpers
 import InlineSnapshotTesting
 import Mocker
 import TestHelpers
@@ -27,7 +28,11 @@ extension AuthMockerTests {
       sessionConfiguration.protocolClasses = [MockingURLProtocol.self]
       let session = URLSession(configuration: sessionConfiguration)
 
-      let encoder = AuthClient.Configuration.jsonEncoder
+      // Build a test-owned encoder instead of mutating the process-wide
+      // `AuthClient.Configuration.jsonEncoder` singleton, which other concurrently
+      // running suites share.
+      let encoder = JSONEncoder.supabase()
+      encoder.keyEncodingStrategy = .convertToSnakeCase
       encoder.outputFormatting = [.sortedKeys]
 
       let configuration = AuthClient.Configuration(
