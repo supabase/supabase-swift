@@ -185,8 +185,41 @@ features:
     status: implemented
     symbols:
       - AuthAdmin.inviteUserByEmail
-  auth.admin.sign_out: not_implemented
-  auth.admin.generate_link: not_implemented
+  auth.admin.sign_out:
+    status: implemented
+    symbols:
+      - AuthAdmin.signOut
+  auth.admin.generate_link:
+    status: implemented
+    symbols:
+      - AuthAdmin.generateLink
+      - GenerateLinkParams
+      - GenerateLinkParams.signUp
+      - GenerateLinkParams.invite
+      - GenerateLinkParams.magicLink
+      - GenerateLinkParams.recovery
+      - GenerateLinkParams.emailChangeCurrent
+      - GenerateLinkParams.emailChangeNew
+      - GenerateLinkResponse
+      - GenerateLinkResponse.properties
+      - GenerateLinkResponse.user
+      - GenerateLinkResponse.init
+      - GenerateLinkProperties
+      - GenerateLinkProperties.init
+      - GenerateLinkProperties.actionLink
+      - GenerateLinkProperties.emailOTP
+      - GenerateLinkProperties.hashedToken
+      - GenerateLinkProperties.redirectTo
+      - GenerateLinkProperties.verificationType
+      - GenerateLinkType
+      - GenerateLinkType.rawValue
+      - GenerateLinkType.init
+      - GenerateLinkType.signup
+      - GenerateLinkType.invite
+      - GenerateLinkType.magiclink
+      - GenerateLinkType.recovery
+      - GenerateLinkType.emailChangeCurrent
+      - GenerateLinkType.emailChangeNew
   auth.admin.list_mfa_factors: not_implemented
   auth.admin.delete_mfa_factor: not_implemented
   auth.admin.create_provider: not_implemented

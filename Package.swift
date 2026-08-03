@@ -57,6 +57,29 @@ let package = Package(
       ]
     ),
     .target(
+      name: "HTTPRuntime"
+    ),
+    .testTarget(
+      name: "HTTPRuntimeTests",
+      dependencies: [
+        "HTTPRuntime"
+      ]
+    ),
+    .target(
+      name: "HTTPRuntimeTestHelpers",
+      dependencies: [
+        "HTTPRuntime",
+        .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
+      ]
+    ),
+    .testTarget(
+      name: "HTTPRuntimeTestHelpersTests",
+      dependencies: [
+        "HTTPRuntime",
+        "HTTPRuntimeTestHelpers",
+      ]
+    ),
+    .target(
       name: "Auth",
       dependencies: [
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),

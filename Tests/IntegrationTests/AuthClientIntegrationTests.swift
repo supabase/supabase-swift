@@ -399,60 +399,77 @@ struct AuthClientIntegrationTests {
     }
   }
 
-  //  func testGenerateLink_signUp() async throws {
-  //    let client = Self.makeClient(serviceRole: true)
-  //    let email = mockEmail()
-  //    let password = mockPassword()
-  //
-  //    let link = try await client.admin.generateLink(
-  //      params: .signUp(
-  //        email: email,
-  //        password: password,
-  //        data: ["full_name": "John Doe"]
-  //      )
-  //    )
-  //
-  //    expectNoDifference(link.properties.actionLink.path, "/auth/v1/verify")
-  //    expectNoDifference(link.properties.verificationType, .signup)
-  //    expectNoDifference(link.user.email, email)
-  //  }
-  //
-  //  func testGenerateLink_magicLink() async throws {
-  //    let client = Self.makeClient(serviceRole: true)
-  //    let email = mockEmail()
-  //    let password = mockPassword()
-  //
-  //    // first create a user
-  //    try await client.admin.createUser(
-  //      attributes: AdminUserAttributes(email: email, password: password)
-  //    )
-  //
-  //    // generate a magic link for the created user
-  //    let link = try await client.admin.generateLink(params: .magicLink(email: email))
-  //
-  //    expectNoDifference(link.properties.verificationType, .magiclink)
-  //  }
+  @Test
+  func generateLinkSignUp() async throws {
+    let client = Self.makeClient(serviceRole: true)
+    let email = mockEmail()
+    let password = mockPassword()
 
-  // func testGenerateLink_recovery() async throws {
-  //   let client = Self.makeClient(serviceRole: true)
-  //   let email = mockEmail()
-  //   let password = mockPassword()
+    let link = try await client.admin.generateLink(
+      params: .signUp(
+        email: email,
+        password: password,
+        data: ["full_name": "John Doe"]
+      )
+    )
 
-  //   _ = try await client.signUp(email: email, password: password)
+    expectNoDifference(link.properties.actionLink.path, "/auth/v1/verify")
+    expectNoDifference(link.properties.verificationType, .signup)
+    expectNoDifference(link.user.email, email)
+  }
 
-  //   let link = try await client.admin.generateLink(params: .recovery(email: email))
+  @Test
+  func generateLinkMagicLink() async throws {
+    let client = Self.makeClient(serviceRole: true)
+    let email = mockEmail()
+    let password = mockPassword()
 
-  //   expectNoDifference(link.properties.verificationType, .recovery)
-  // }
+    // first create a user
+    try await client.admin.createUser(
+      attributes: AdminUserAttributes(email: email, password: password)
+    )
 
-  //  func testGenerateLink_invite() async throws {
-  //    let client = Self.makeClient(serviceRole: true)
-  //    let email = mockEmail()
-  //
-  //    let link = try await client.admin.generateLink(params: .invite(email: email))
-  //
-  //    expectNoDifference(link.properties.verificationType, .invite)
-  //  }
+    // generate a magic link for the created user
+    let link = try await client.admin.generateLink(params: .magicLink(email: email))
+
+    expectNoDifference(link.properties.verificationType, .magiclink)
+  }
+
+  @Test
+  func generateLinkRecovery() async throws {
+    let client = Self.makeClient(serviceRole: true)
+    let email = mockEmail()
+    let password = mockPassword()
+
+    _ = try await client.signUp(email: email, password: password)
+
+    let link = try await client.admin.generateLink(params: .recovery(email: email))
+
+    expectNoDifference(link.properties.verificationType, .recovery)
+  }
+
+  @Test
+  func generateLinkInvite() async throws {
+    let client = Self.makeClient(serviceRole: true)
+    let email = mockEmail()
+
+    let link = try await client.admin.generateLink(params: .invite(email: email))
+
+    expectNoDifference(link.properties.verificationType, .invite)
+  }
+
+  @Test
+  func adminSignOut() async throws {
+    let email = mockEmail()
+    let password = mockPassword()
+
+    let session = try await signUpIfNeededOrSignIn(email: email, password: password).session
+    let accessToken = try #require(session?.accessToken)
+
+    // Should complete without throwing: the admin client is authenticating with
+    // the target user's access token, not its own secret key.
+    try await Self.makeClient(serviceRole: true).admin.signOut(jwt: accessToken)
+  }
 
   @discardableResult
   private func signUpIfNeededOrSignIn(
