@@ -5,12 +5,14 @@
 //  Created by Guilherme Souza on 29/07/25.
 //
 
-import XCTest
+import Foundation
+import Testing
 
 @testable import Realtime
 @testable import RealtimeV2
 
-final class PostgresActionTests: XCTestCase {
+@Suite
+struct PostgresActionTests {
   private let sampleMessage = RealtimeMessageV2(
     joinRef: nil,
     ref: nil,
@@ -27,20 +29,23 @@ final class PostgresActionTests: XCTestCase {
 
   private let sampleDate = Date(timeIntervalSince1970: 1_722_246_000)  // Fixed timestamp for consistency
 
-  func testColumnEquality() {
+  @Test
+  func columnEquality() {
     let column1 = Column(name: "id", type: "int8")
     let column2 = Column(name: "id", type: "int8")
     let column3 = Column(name: "email", type: "text")
 
-    XCTAssertEqual(column1, column2)
-    XCTAssertNotEqual(column1, column3)
+    #expect(column1 == column2)
+    #expect(column1 != column3)
   }
 
-  func testInsertActionEventType() {
-    XCTAssertEqual(InsertAction.eventType, .insert)
+  @Test
+  func insertActionEventType() {
+    #expect(InsertAction.eventType == .insert)
   }
 
-  func testInsertActionProperties() {
+  @Test
+  func insertActionProperties() {
     let record: JSONObject = ["id": .string("123"), "name": .string("John")]
     let insertAction = InsertAction(
       columns: sampleColumns,
@@ -49,17 +54,19 @@ final class PostgresActionTests: XCTestCase {
       rawMessage: sampleMessage
     )
 
-    XCTAssertEqual(insertAction.columns, sampleColumns)
-    XCTAssertEqual(insertAction.commitTimestamp, sampleDate)
-    XCTAssertEqual(insertAction.record, record)
-    XCTAssertEqual(insertAction.rawMessage.topic, "test:table")
+    #expect(insertAction.columns == sampleColumns)
+    #expect(insertAction.commitTimestamp == sampleDate)
+    #expect(insertAction.record == record)
+    #expect(insertAction.rawMessage.topic == "test:table")
   }
 
-  func testUpdateActionEventType() {
-    XCTAssertEqual(UpdateAction.eventType, .update)
+  @Test
+  func updateActionEventType() {
+    #expect(UpdateAction.eventType == .update)
   }
 
-  func testUpdateActionProperties() {
+  @Test
+  func updateActionProperties() {
     let record: JSONObject = ["id": .string("123"), "name": .string("John Updated")]
     let oldRecord: JSONObject = ["id": .string("123"), "name": .string("John")]
 
@@ -71,18 +78,20 @@ final class PostgresActionTests: XCTestCase {
       rawMessage: sampleMessage
     )
 
-    XCTAssertEqual(updateAction.columns, sampleColumns)
-    XCTAssertEqual(updateAction.commitTimestamp, sampleDate)
-    XCTAssertEqual(updateAction.record, record)
-    XCTAssertEqual(updateAction.oldRecord, oldRecord)
-    XCTAssertEqual(updateAction.rawMessage.topic, "test:table")
+    #expect(updateAction.columns == sampleColumns)
+    #expect(updateAction.commitTimestamp == sampleDate)
+    #expect(updateAction.record == record)
+    #expect(updateAction.oldRecord == oldRecord)
+    #expect(updateAction.rawMessage.topic == "test:table")
   }
 
-  func testDeleteActionEventType() {
-    XCTAssertEqual(DeleteAction.eventType, .delete)
+  @Test
+  func deleteActionEventType() {
+    #expect(DeleteAction.eventType == .delete)
   }
 
-  func testDeleteActionProperties() {
+  @Test
+  func deleteActionProperties() {
     let oldRecord: JSONObject = ["id": .string("123"), "name": .string("John")]
 
     let deleteAction = DeleteAction(
@@ -92,17 +101,19 @@ final class PostgresActionTests: XCTestCase {
       rawMessage: sampleMessage
     )
 
-    XCTAssertEqual(deleteAction.columns, sampleColumns)
-    XCTAssertEqual(deleteAction.commitTimestamp, sampleDate)
-    XCTAssertEqual(deleteAction.oldRecord, oldRecord)
-    XCTAssertEqual(deleteAction.rawMessage.topic, "test:table")
+    #expect(deleteAction.columns == sampleColumns)
+    #expect(deleteAction.commitTimestamp == sampleDate)
+    #expect(deleteAction.oldRecord == oldRecord)
+    #expect(deleteAction.rawMessage.topic == "test:table")
   }
 
-  func testAnyActionEventType() {
-    XCTAssertEqual(AnyAction.eventType, .all)
+  @Test
+  func anyActionEventType() {
+    #expect(AnyAction.eventType == .all)
   }
 
-  func testAnyActionInsertCase() {
+  @Test
+  func anyActionInsertCase() {
     let record: JSONObject = ["id": .string("123"), "name": .string("John")]
     let insertAction = InsertAction(
       columns: sampleColumns,
@@ -112,16 +123,17 @@ final class PostgresActionTests: XCTestCase {
     )
 
     let anyAction = AnyAction.insert(insertAction)
-    XCTAssertEqual(anyAction.rawMessage.topic, "test:table")
+    #expect(anyAction.rawMessage.topic == "test:table")
 
     if case .insert(let wrappedAction) = anyAction {
-      XCTAssertEqual(wrappedAction.record, record)
+      #expect(wrappedAction.record == record)
     } else {
-      XCTFail("Expected insert case")
+      Issue.record("Expected insert case")
     }
   }
 
-  func testAnyActionUpdateCase() {
+  @Test
+  func anyActionUpdateCase() {
     let record: JSONObject = ["id": .string("123"), "name": .string("John Updated")]
     let oldRecord: JSONObject = ["id": .string("123"), "name": .string("John")]
 
@@ -134,17 +146,18 @@ final class PostgresActionTests: XCTestCase {
     )
 
     let anyAction = AnyAction.update(updateAction)
-    XCTAssertEqual(anyAction.rawMessage.topic, "test:table")
+    #expect(anyAction.rawMessage.topic == "test:table")
 
     if case .update(let wrappedAction) = anyAction {
-      XCTAssertEqual(wrappedAction.record, record)
-      XCTAssertEqual(wrappedAction.oldRecord, oldRecord)
+      #expect(wrappedAction.record == record)
+      #expect(wrappedAction.oldRecord == oldRecord)
     } else {
-      XCTFail("Expected update case")
+      Issue.record("Expected update case")
     }
   }
 
-  func testAnyActionDeleteCase() {
+  @Test
+  func anyActionDeleteCase() {
     let oldRecord: JSONObject = ["id": .string("123"), "name": .string("John")]
 
     let deleteAction = DeleteAction(
@@ -155,16 +168,17 @@ final class PostgresActionTests: XCTestCase {
     )
 
     let anyAction = AnyAction.delete(deleteAction)
-    XCTAssertEqual(anyAction.rawMessage.topic, "test:table")
+    #expect(anyAction.rawMessage.topic == "test:table")
 
     if case .delete(let wrappedAction) = anyAction {
-      XCTAssertEqual(wrappedAction.oldRecord, oldRecord)
+      #expect(wrappedAction.oldRecord == oldRecord)
     } else {
-      XCTFail("Expected delete case")
+      Issue.record("Expected delete case")
     }
   }
 
-  func testAnyActionEquality() {
+  @Test
+  func anyActionEquality() {
     let record: JSONObject = ["id": .string("123")]
     let insertAction1 = InsertAction(
       columns: sampleColumns,
@@ -182,10 +196,11 @@ final class PostgresActionTests: XCTestCase {
     let anyAction1 = AnyAction.insert(insertAction1)
     let anyAction2 = AnyAction.insert(insertAction2)
 
-    XCTAssertEqual(anyAction1, anyAction2)
+    #expect(anyAction1 == anyAction2)
   }
 
-  func testDecodeRecord() throws {
+  @Test
+  func decodeRecord() throws {
     struct TestRecord: Codable, Equatable {
       let id: String
       let name: String
@@ -209,10 +224,11 @@ final class PostgresActionTests: XCTestCase {
     let decodedRecord = try insertAction.decodeRecord(as: TestRecord.self, decoder: decoder)
 
     let expectedRecord = TestRecord(id: "123", name: "John", email: "john@example.com")
-    XCTAssertEqual(decodedRecord, expectedRecord)
+    #expect(decodedRecord == expectedRecord)
   }
 
-  func testDecodeOldRecord() throws {
+  @Test
+  func decodeOldRecord() throws {
     struct TestRecord: Codable, Equatable {
       let id: String
       let name: String
@@ -233,10 +249,11 @@ final class PostgresActionTests: XCTestCase {
     let decodedOldRecord = try updateAction.decodeOldRecord(as: TestRecord.self, decoder: decoder)
 
     let expectedOldRecord = TestRecord(id: "123", name: "John")
-    XCTAssertEqual(decodedOldRecord, expectedOldRecord)
+    #expect(decodedOldRecord == expectedOldRecord)
   }
 
-  func testDecodeRecordError() {
+  @Test
+  func decodeRecordError() {
     struct TestRecord: Codable {
       let id: Int  // This will cause decode error since we're passing string
       let name: String
@@ -255,6 +272,8 @@ final class PostgresActionTests: XCTestCase {
     )
 
     let decoder = JSONDecoder()
-    XCTAssertThrowsError(try insertAction.decodeRecord(as: TestRecord.self, decoder: decoder))
+    #expect(throws: (any Error).self) {
+      try insertAction.decodeRecord(as: TestRecord.self, decoder: decoder)
+    }
   }
 }

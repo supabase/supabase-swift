@@ -1,10 +1,12 @@
 import ConcurrencyExtras
-import XCTest
+import Foundation
+import Testing
 
 @testable import Realtime
 @testable import RealtimeV2
 
-final class ChannelStateManagerTests: XCTestCase {
+@Suite
+struct ChannelStateManagerTests {
   /// Helper that returns a `ChannelStateManager` wired up with controllable
   /// fakes for every injected operation, plus spies so tests can assert what
   /// the state machine did.
@@ -83,20 +85,23 @@ final class ChannelStateManagerTests: XCTestCase {
 
   // MARK: - Initial state
 
-  func testInitialStateIsUnsubscribed() async {
+  @Test
+  func initialStateIsUnsubscribed() async {
     let h = makeHarness()
     let state = await h.sut.state
     guard case .unsubscribed = state else {
-      return XCTFail("Expected .unsubscribed, got \(state)")
+      Issue.record("Expected .unsubscribed, got \(state)")
+      return
     }
 
     let joinRef = await h.sut.joinRef
-    XCTAssertNil(joinRef)
+    #expect(joinRef == nil)
   }
 
   // MARK: - Subscribe
 
-  func testSubscribePushesJoinAndTransitionsOnConfirmation() async throws {
+  @Test
+  func subscribePushesJoinAndTransitionsOnConfirmation() async throws {
     let h = makeHarness()
 
     // Server-side confirmation arrives shortly after the join is pushed.
@@ -113,13 +118,15 @@ final class ChannelStateManagerTests: XCTestCase {
 
     let state = await h.sut.state
     guard case .subscribed = state else {
-      return XCTFail("Expected .subscribed, got \(state)")
+      Issue.record("Expected .subscribed, got \(state)")
+      return
     }
-    XCTAssertEqual(h.joinCallCount.value, 1)
-    XCTAssertEqual(h.lastJoinRef.value, "1")
+    #expect(h.joinCallCount.value == 1)
+    #expect(h.lastJoinRef.value == "1")
   }
 
-  func testSubscribeWhileAlreadySubscribedIsNoOp() async throws {
+  @Test
+  func subscribeWhileAlreadySubscribedIsNoOp() async throws {
     let h = makeHarness()
 
     let confirmer = confirmSubscribeOnJoin(h)
@@ -128,10 +135,11 @@ final class ChannelStateManagerTests: XCTestCase {
 
     try await h.sut.subscribe()
 
-    XCTAssertEqual(h.joinCallCount.value, 1, "Second subscribe should be a no-op")
+    #expect(h.joinCallCount.value == 1, "Second subscribe should be a no-op")
   }
 
-  func testConcurrentSubscribesDedup() async throws {
+  @Test
+  func concurrentSubscribesDedup() async throws {
     let h = makeHarness()
 
     async let first: Void = h.sut.subscribe()
@@ -144,10 +152,11 @@ final class ChannelStateManagerTests: XCTestCase {
     try await first
     try await second
 
-    XCTAssertEqual(h.joinCallCount.value, 1, "Only one phx_join should be pushed")
+    #expect(h.joinCallCount.value == 1, "Only one phx_join should be pushed")
   }
 
-  func testSubscribeRetriesOnTimeoutThenSucceeds() async throws {
+  @Test
+  func subscribeRetriesOnTimeoutThenSucceeds() async throws {
     let h = makeHarness(timeoutInterval: 0.05, maxRetryAttempts: 3)
 
     // Wait for the second join attempt before confirming.
@@ -163,59 +172,110 @@ final class ChannelStateManagerTests: XCTestCase {
 
     let state = await h.sut.state
     guard case .subscribed = state else {
-      return XCTFail("Expected .subscribed, got \(state)")
+      Issue.record("Expected .subscribed, got \(state)")
+      return
     }
-    XCTAssertGreaterThanOrEqual(h.joinCallCount.value, 2)
+    #expect(h.joinCallCount.value >= 2)
   }
 
-  func testSubscribeThrowsAfterMaxRetries() async {
+  @Test
+  func subscribeThrowsAfterMaxRetries() async {
     let h = makeHarness(timeoutInterval: 0.05, maxRetryAttempts: 2)
 
     do {
       try await h.sut.subscribe()
-      XCTFail("Expected subscribe to throw after max retries")
+      Issue.record("Expected subscribe to throw after max retries")
     } catch {
-      XCTAssertTrue(error is RealtimeError)
+      #expect(error is RealtimeError)
     }
 
     let state = await h.sut.state
     guard case .unsubscribed = state else {
-      return XCTFail("State should reset to .unsubscribed after failure, got \(state)")
+      Issue.record("State should reset to .unsubscribed after failure, got \(state)")
+      return
     }
-    XCTAssertEqual(h.joinCallCount.value, 2)
+    #expect(h.joinCallCount.value == 2)
   }
 
-  func testSubscribeFailsWhenSocketCannotConnect() async {
+  @Test
+  func subscribeFailsWhenSocketCannotConnect() async {
     let h = makeHarness(timeoutInterval: 0.2, maxRetryAttempts: 1)
     h.ensureConnected.setValue(false)
 
     do {
       try await h.sut.subscribe()
-      XCTFail("Expected subscribe to throw when socket is not connected")
+      Issue.record("Expected subscribe to throw when socket is not connected")
     } catch {
       // Expected
     }
 
     let state = await h.sut.state
     guard case .unsubscribed = state else {
-      return XCTFail("Expected .unsubscribed, got \(state)")
+      Issue.record("Expected .unsubscribed, got \(state)")
+      return
+    }
+  }
+
+  /// Issue #1145 (defect 2): a socket connect failure aborted the whole
+  /// subscribe on attempt 1 — only timeouts entered the retry ladder. A
+  /// transient connect failure must be retried like a timeout.
+  @Test
+  func subscribeRetriesWhenSocketConnectFailsTransiently() async throws {
+    let h = makeHarness(timeoutInterval: 1.0, maxRetryAttempts: 3, retryDelay: { _ in 0.05 })
+    h.ensureConnected.setValue(false)
+
+    // The "network" comes back shortly after the first failed attempt.
+    let recovery = Task { [h] in
+      try? await Task.sleep(nanoseconds: 20_000_000)
+      h.ensureConnected.setValue(true)
+    }
+    let confirmer = confirmSubscribeOnJoin(h)
+
+    try await h.sut.subscribe()
+    _ = await recovery.value
+    _ = await confirmer.value
+
+    let state = await h.sut.state
+    guard case .subscribed = state else {
+      Issue.record("Expected .subscribed after transient connect failure, got \(state)")
+      return
+    }
+  }
+
+  /// Issue #1145 (defect 2): connect failures were manufactured as
+  /// `Swift.CancellationError`, indistinguishable from the caller's own task
+  /// cancellation. They must surface as a typed error instead.
+  @Test
+  func connectFailureDoesNotSurfaceAsCancellationError() async {
+    let h = makeHarness(timeoutInterval: 0.2, maxRetryAttempts: 2, retryDelay: { _ in 0.01 })
+    h.ensureConnected.setValue(false)
+
+    do {
+      try await h.sut.subscribe()
+      Issue.record("Expected subscribe to throw when socket is not connected")
+    } catch {
+      #expect(!(error is CancellationError), "Connect failure surfaced as CancellationError")
+      #expect(error is RealtimeError)
     }
   }
 
   // MARK: - Unsubscribe
 
-  func testUnsubscribeFromUnsubscribedIsNoOp() async {
+  @Test
+  func unsubscribeFromUnsubscribedIsNoOp() async {
     let h = makeHarness()
     await h.sut.unsubscribe()
 
     let state = await h.sut.state
     guard case .unsubscribed = state else {
-      return XCTFail("Expected .unsubscribed, got \(state)")
+      Issue.record("Expected .unsubscribed, got \(state)")
+      return
     }
-    XCTAssertEqual(h.leaveCallCount.value, 0)
+    #expect(h.leaveCallCount.value == 0)
   }
 
-  func testUnsubscribeFromSubscribedPushesLeaveAndWaitsForClose() async throws {
+  @Test
+  func unsubscribeFromSubscribedPushesLeaveAndWaitsForClose() async throws {
     let h = makeHarness()
 
     let confirmer = confirmSubscribeOnJoin(h)
@@ -226,15 +286,17 @@ final class ChannelStateManagerTests: XCTestCase {
 
     let state = await h.sut.state
     guard case .unsubscribed = state else {
-      return XCTFail("Expected .unsubscribed, got \(state)")
+      Issue.record("Expected .unsubscribed, got \(state)")
+      return
     }
-    XCTAssertEqual(h.leaveCallCount.value, 1)
+    #expect(h.leaveCallCount.value == 1)
 
     let joinRef = await h.sut.joinRef
-    XCTAssertNil(joinRef, "joinRef should be cleared after phx_leave")
+    #expect(joinRef == nil, "joinRef should be cleared after phx_leave")
   }
 
-  func testUnsubscribeWhileSubscribingCancelsSubscribe() async throws {
+  @Test
+  func unsubscribeWhileSubscribingCancelsSubscribe() async throws {
     let h = makeHarness(timeoutInterval: 5.0, maxRetryAttempts: 1)
 
     let subscribeTask = Task { try? await h.sut.subscribe() }
@@ -258,13 +320,75 @@ final class ChannelStateManagerTests: XCTestCase {
 
     let state = await h.sut.state
     guard case .unsubscribed = state else {
-      return XCTFail("Expected .unsubscribed, got \(state)")
+      Issue.record("Expected .unsubscribed, got \(state)")
+      return
     }
   }
 
   // MARK: - Server-close while subscribed
 
-  func testDidReceiveCloseTransitionsToUnsubscribed() async throws {
+  /// A server close that aborts an in-flight subscribe must surface as
+  /// `RealtimeError.channelClosedByServer` — never as `CancellationError`
+  /// (which callers must be able to attribute to their own task) and never
+  /// as `maxRetryAttemptsReached` (which can otherwise mask a close landing
+  /// on the final retry attempt).
+  @Test
+  func serverCloseDuringSubscribeSurfacesTypedError() async {
+    let h = makeHarness(timeoutInterval: 5.0, maxRetryAttempts: 1)
+
+    let subscribeTask = Task { try await h.sut.subscribe() }
+
+    // Wait until the join is in flight, then the server closes the channel.
+    while h.joinCallCount.value == 0 {
+      try? await Task.sleep(nanoseconds: 5_000_000)
+    }
+    await h.sut.didReceiveClose()
+
+    do {
+      try await subscribeTask.value
+      Issue.record("Expected subscribe to throw after server close")
+    } catch {
+      #expect(!(error is CancellationError), "Server close surfaced as CancellationError")
+      #expect(
+        (error as? RealtimeError)?.errorDescription
+          == RealtimeError.channelClosedByServer.errorDescription,
+        "Expected channelClosedByServer, got \(error)"
+      )
+    }
+  }
+
+  /// A close carrying a `join_ref` that doesn't match the current join must
+  /// be ignored — the check runs on the actor, atomically with the close.
+  @Test
+  func didReceiveCloseIgnoresStaleJoinRef() async throws {
+    let h = makeHarness()
+
+    let confirmer = confirmSubscribeOnJoin(h)
+    try await h.sut.subscribe()
+    _ = await confirmer.value
+
+    let applied = await h.sut.didReceiveClose(joinRef: "stale-join-ref")
+    #expect(!applied, "Close for a stale join_ref must be ignored")
+
+    let state = await h.sut.state
+    guard case .subscribed = state else {
+      Issue.record("Stale close changed state to \(state)")
+      return
+    }
+
+    let currentJoinRef = await h.sut.joinRef
+    let appliedCurrent = await h.sut.didReceiveClose(joinRef: currentJoinRef)
+    #expect(appliedCurrent, "Close for the current join_ref must be applied")
+
+    let finalState = await h.sut.state
+    guard case .unsubscribed = finalState else {
+      Issue.record("Expected .unsubscribed after matching close, got \(finalState)")
+      return
+    }
+  }
+
+  @Test
+  func didReceiveCloseTransitionsToUnsubscribed() async throws {
     let h = makeHarness()
 
     let confirmer = confirmSubscribeOnJoin(h)
@@ -275,47 +399,53 @@ final class ChannelStateManagerTests: XCTestCase {
 
     let state = await h.sut.state
     guard case .unsubscribed = state else {
-      return XCTFail("Expected .unsubscribed, got \(state)")
+      Issue.record("Expected .unsubscribed, got \(state)")
+      return
     }
     let joinRef = await h.sut.joinRef
-    XCTAssertNil(joinRef)
+    #expect(joinRef == nil)
   }
 
   // MARK: - State stream
 
-  func testStateChangesEmitsTransitions() async throws {
+  @Test
+  func stateChangesEmitsTransitions() async throws {
     let h = makeHarness()
 
-    let observerReady = expectation(description: "observer subscribed")
-    let subscribingSeen = expectation(description: "subscribing observed")
-    let subscribedSeen = expectation(description: "subscribed observed")
-    let unsubscribingSeen = expectation(description: "unsubscribing observed")
-    let unsubscribedAfterSubscribe = expectation(description: "unsubscribed observed (final)")
+    let observerReady = LockIsolated(false)
+    let subscribingSeen = LockIsolated(false)
+    let subscribedSeen = LockIsolated(false)
+    let unsubscribingSeen = LockIsolated(false)
+    let unsubscribedAfterSubscribe = LockIsolated(false)
 
     let sawSubscribed = LockIsolated(false)
     let sawUnsubscribing = LockIsolated(false)
     let observerReadyFired = LockIsolated(false)
-    let observer = Task { [h] in
-      for await state in h.sut.stateChanges {
+    // Subscribe before spawning the Task — `stateChanges` crosses the actor
+    // boundary, so deferring the `await` into the Task would let state
+    // transitions race ahead of the observer actually registering.
+    let stateChanges = await h.sut.stateChanges
+    let observer = Task { [stateChanges] in
+      for await state in stateChanges {
         if !observerReadyFired.value {
           observerReadyFired.setValue(true)
-          observerReady.fulfill()
+          observerReady.setValue(true)
         }
         switch state {
-        case .subscribing: subscribingSeen.fulfill()
+        case .subscribing: subscribingSeen.setValue(true)
         case .subscribed:
           if !sawSubscribed.value {
             sawSubscribed.setValue(true)
-            subscribedSeen.fulfill()
+            subscribedSeen.setValue(true)
           }
         case .unsubscribing:
           if !sawUnsubscribing.value {
             sawUnsubscribing.setValue(true)
-            unsubscribingSeen.fulfill()
+            unsubscribingSeen.setValue(true)
           }
         case .unsubscribed:
           if sawSubscribed.value {
-            unsubscribedAfterSubscribe.fulfill()
+            unsubscribedAfterSubscribe.setValue(true)
             return
           }
         }
@@ -325,7 +455,8 @@ final class ChannelStateManagerTests: XCTestCase {
     // Wait for the observer to actually subscribe to the stream — otherwise
     // fast state transitions below can race ahead of it and the `.subscribing`
     // replay is missed.
-    await fulfillment(of: [observerReady], timeout: 1)
+    let becameReady = await waitUntil(timeout: 1) { observerReady.value }
+    #expect(becameReady, "observer subscribed")
 
     let confirmer = confirmSubscribeOnJoin(h)
     try await h.sut.subscribe()
@@ -333,16 +464,18 @@ final class ChannelStateManagerTests: XCTestCase {
 
     await h.sut.unsubscribe()
 
-    await fulfillment(
-      of: [subscribingSeen, subscribedSeen, unsubscribingSeen, unsubscribedAfterSubscribe],
-      timeout: 2
-    )
+    let sawAllTransitions = await waitUntil(timeout: 2) {
+      subscribingSeen.value && subscribedSeen.value && unsubscribingSeen.value
+        && unsubscribedAfterSubscribe.value
+    }
+    #expect(sawAllTransitions, "expected all state transitions to be observed")
     observer.cancel()
   }
 
   // MARK: - Client changes & pushes
 
-  func testClientChangesAreForwardedToJoinOperation() async throws {
+  @Test
+  func clientChangesAreForwardedToJoinOperation() async throws {
     let h = makeHarness()
     let config = PostgresJoinConfig(event: .insert, schema: "public", table: "users", filter: nil)
     // The channel owns the buffer — the actor reads it through the injected
@@ -361,12 +494,13 @@ final class ChannelStateManagerTests: XCTestCase {
     try await h.sut.subscribe()
     _ = await confirmer.value
 
-    XCTAssertEqual(h.lastJoinChanges.value.count, 1)
-    XCTAssertEqual(h.lastJoinChanges.value.first?.table, "users")
+    #expect(h.lastJoinChanges.value.count == 1)
+    #expect(h.lastJoinChanges.value.first?.table == "users")
   }
 
+  @Test
   @MainActor
-  func testStorePushIfJoinRefMatchesStoresWhenJoinRefMatches() async throws {
+  func storePushIfJoinRefMatchesStoresWhenJoinRefMatches() async throws {
     let h = makeHarness()
     let confirmer = confirmSubscribeOnJoin(h)
     try await h.sut.subscribe()
@@ -379,14 +513,15 @@ final class ChannelStateManagerTests: XCTestCase {
     let push = PushV2(channel: nil, message: message)
 
     let stored = await h.sut.storePushIfJoinRefMatches(push, ref: "r1", joinRef: joinRef)
-    XCTAssertTrue(stored)
+    #expect(stored)
 
     let fetched = await h.sut.removePush(ref: "r1")
-    XCTAssertTrue(fetched === push)
+    #expect(fetched === push)
   }
 
+  @Test
   @MainActor
-  func testStorePushIfJoinRefMatchesSkipsWhenJoinRefChanged() async throws {
+  func storePushIfJoinRefMatchesSkipsWhenJoinRefChanged() async throws {
     let h = makeHarness()
     let confirmer = confirmSubscribeOnJoin(h)
     try await h.sut.subscribe()
@@ -406,14 +541,15 @@ final class ChannelStateManagerTests: XCTestCase {
     let stored = await h.sut.storePushIfJoinRefMatches(
       push, ref: "r1", joinRef: staleJoinRef
     )
-    XCTAssertFalse(stored, "Push from a stale join cycle must not be registered")
+    #expect(!stored, "Push from a stale join cycle must not be registered")
 
     let fetched = await h.sut.removePush(ref: "r1")
-    XCTAssertNil(fetched, "Stale push must not leak into the pushes dict")
+    #expect(fetched == nil, "Stale push must not leak into the pushes dict")
   }
 
+  @Test
   @MainActor
-  func testDidReceiveCloseClearsStoredPushes() async throws {
+  func didReceiveCloseClearsStoredPushes() async throws {
     let h = makeHarness()
     let confirmer = confirmSubscribeOnJoin(h)
     try await h.sut.subscribe()
@@ -429,6 +565,6 @@ final class ChannelStateManagerTests: XCTestCase {
     await h.sut.didReceiveClose()
 
     let fetched = await h.sut.removePush(ref: "r1")
-    XCTAssertNil(fetched, "Pushes should be cleared after didReceiveClose")
+    #expect(fetched == nil, "Pushes should be cleared after didReceiveClose")
   }
 }

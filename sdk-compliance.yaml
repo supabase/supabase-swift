@@ -115,6 +115,7 @@ features:
     symbols:
       - AuthClient.startAutoRefresh
       - AuthClient.stopAutoRefresh
+  auth.session.sign_out_reason: not_implemented
 
   auth.identities.link_identity:
     status: implemented
@@ -184,8 +185,41 @@ features:
     status: implemented
     symbols:
       - AuthAdmin.inviteUserByEmail
-  auth.admin.sign_out: not_implemented
-  auth.admin.generate_link: not_implemented
+  auth.admin.sign_out:
+    status: implemented
+    symbols:
+      - AuthAdmin.signOut
+  auth.admin.generate_link:
+    status: implemented
+    symbols:
+      - AuthAdmin.generateLink
+      - GenerateLinkParams
+      - GenerateLinkParams.signUp
+      - GenerateLinkParams.invite
+      - GenerateLinkParams.magicLink
+      - GenerateLinkParams.recovery
+      - GenerateLinkParams.emailChangeCurrent
+      - GenerateLinkParams.emailChangeNew
+      - GenerateLinkResponse
+      - GenerateLinkResponse.properties
+      - GenerateLinkResponse.user
+      - GenerateLinkResponse.init
+      - GenerateLinkProperties
+      - GenerateLinkProperties.init
+      - GenerateLinkProperties.actionLink
+      - GenerateLinkProperties.emailOTP
+      - GenerateLinkProperties.hashedToken
+      - GenerateLinkProperties.redirectTo
+      - GenerateLinkProperties.verificationType
+      - GenerateLinkType
+      - GenerateLinkType.rawValue
+      - GenerateLinkType.init
+      - GenerateLinkType.signup
+      - GenerateLinkType.invite
+      - GenerateLinkType.magiclink
+      - GenerateLinkType.recovery
+      - GenerateLinkType.emailChangeCurrent
+      - GenerateLinkType.emailChangeNew
   auth.admin.list_mfa_factors: not_implemented
   auth.admin.delete_mfa_factor: not_implemented
   auth.admin.create_provider: not_implemented
@@ -405,8 +439,9 @@ features:
       - FunctionRegion.usWest2
   functions.invocation.request_cancellation: implemented
   functions.invocation.timeout:
-    status: partially_implemented
-    note: "Default idle timeout is a hardcoded 150 s constant; no per-invocation override is exposed."
+    status: implemented
+    symbols:
+      - FunctionsClient.requestIdleTimeout
 
   # ── Realtime ───────────────────────────────────────────────────────────────
 
@@ -535,6 +570,8 @@ features:
   storage.file_buckets.upload_with_metadata: implemented
   storage.file_buckets.url_cache_nonce: implemented
   storage.file_buckets.download_as_stream: not_implemented
+  storage.file_buckets.purge_bucket_cache: not_implemented
+  storage.file_buckets.purge_cache: not_implemented
 
   # ── Storage — Vector Buckets ───────────────────────────────────────────────
 

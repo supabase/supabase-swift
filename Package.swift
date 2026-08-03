@@ -57,6 +57,29 @@ let package = Package(
       ]
     ),
     .target(
+      name: "HTTPRuntime"
+    ),
+    .testTarget(
+      name: "HTTPRuntimeTests",
+      dependencies: [
+        "HTTPRuntime"
+      ]
+    ),
+    .target(
+      name: "HTTPRuntimeTestHelpers",
+      dependencies: [
+        "HTTPRuntime",
+        .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
+      ]
+    ),
+    .testTarget(
+      name: "HTTPRuntimeTestHelpersTests",
+      dependencies: [
+        "HTTPRuntime",
+        "HTTPRuntimeTestHelpers",
+      ]
+    ),
+    .target(
       name: "Auth",
       dependencies: [
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
@@ -242,23 +265,7 @@ let package = Package(
   ]
 )
 
-// Test targets migrated to Swift Testing get full Swift 6 checking, same as
-// production targets. Everything else stays pinned to v5 until its migration
-// phase lands (see SDK-435).
-let swift6TestTargets: Set<String> = [
-  "SupabaseTests", "HelpersTests", "StorageTests", "PostgRESTTests", "AuthTests", "FunctionsTests",
-  "IntegrationTests",
-]
-
 for target in package.targets {
-  // Test targets never opted into `ExistentialAny` below, so bumping swift-tools-version
-  // to 6.1 must not silently switch their *default* language mode to Swift 6 either —
-  // pin the rest to v5 to preserve their pre-6.1 compilation behavior exactly.
-  if target.isTest, !swift6TestTargets.contains(target.name) {
-    target.swiftSettings = [.swiftLanguageMode(.v5)]
-    continue
-  }
-
   var swiftSettings: [SwiftSetting] = [
     .enableUpcomingFeature("ExistentialAny"),
     .enableUpcomingFeature("ImmutableWeakCaptures"),

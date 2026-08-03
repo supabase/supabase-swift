@@ -29,11 +29,13 @@ cloudflare
 confirmer
 corelibs
 CREDENTIALW
+dapp
 datastructure
 Dedup
 dedup
 dedupe
 decoratee
+deeplinking
 discardable
 dollarsign
 dont
@@ -87,8 +89,10 @@ LinkedIn
 lnbm
 magiclink
 magnifyingglass
+metamask
 metas
 Metas
+mmsdk
 newbucket
 newkey
 niled
@@ -103,6 +107,7 @@ nullslast
 oauthserver
 oidc
 OIDC
+posix
 omitempty
 openssl
 opentelemetry
@@ -204,6 +209,22 @@ xcodeproj
 xctest
 XVCJ
 
+# Terms from HTTPRuntime (Sources/HTTPRuntime) and its tests.
+corelibs
+reencoded
+subdata
+Subrange
+TESTBOUNDARY
+
+# Terms from HTTPRuntimeTestHelpers planning and scheme configuration.
+fileprivate
+parallelizable
+Testables
+xcscheme
+xcschemes
+xcshareddata
+xcworkspace
+
 # Non-ASCII fixture data used to exercise Unicode-handling and URL-encoding
 # edge cases (BuildURLRequestTests, HTTPErrorTests).
 Cigányka
@@ -211,3 +232,4 @@ cskm
 vízrajzi
 állomás
 áéíóú
+deinits

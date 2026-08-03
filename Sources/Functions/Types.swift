@@ -32,6 +32,9 @@ public struct FunctionInvokeOptions: Sendable {
   let region: String?
   /// The query to be included in the function invocation.
   let query: [URLQueryItem]
+  /// A per-invocation override for the request timeout. Defaults to
+  /// ``FunctionsClient/requestIdleTimeout`` when `nil`.
+  let timeoutInterval: TimeInterval?
 
   /// Creates options for a function invocation with an encodable body.
   /// - Parameters:
@@ -42,6 +45,8 @@ public struct FunctionInvokeOptions: Sendable {
   ///   - body: The body to encode and send. Strings are sent as `text/plain`, `Data` as
   ///     `application/octet-stream`, and all other `Encodable` values as JSON.
   ///   - encoder: The JSON encoder used when `body` is encoded as JSON.
+  ///   - timeoutInterval: A per-invocation override for the request timeout. Defaults to
+  ///     ``FunctionsClient/requestIdleTimeout`` when `nil`.
   @_disfavoredOverload
   public init(
     method: Method? = nil,
@@ -49,7 +54,8 @@ public struct FunctionInvokeOptions: Sendable {
     headers: [String: String] = [:],
     region: String? = nil,
     body: some Encodable,
-    encoder: JSONEncoder = JSONEncoder()
+    encoder: JSONEncoder = JSONEncoder(),
+    timeoutInterval: TimeInterval? = nil
   ) {
     var defaultHeaders = HTTPFields()
 
@@ -69,6 +75,7 @@ public struct FunctionInvokeOptions: Sendable {
     self.headers = defaultHeaders.merging(with: HTTPFields(headers))
     self.region = region
     self.query = query
+    self.timeoutInterval = timeoutInterval
   }
 
   /// Creates options for a function invocation with no body.
@@ -77,17 +84,21 @@ public struct FunctionInvokeOptions: Sendable {
   ///   - query: Query items appended to the function URL.
   ///   - headers: Additional headers to include in the request.
   ///   - region: The region string to invoke the function in.
+  ///   - timeoutInterval: A per-invocation override for the request timeout. Defaults to
+  ///     ``FunctionsClient/requestIdleTimeout`` when `nil`.
   @_disfavoredOverload
   public init(
     method: Method? = nil,
     query: [URLQueryItem] = [],
     headers: [String: String] = [:],
-    region: String? = nil
+    region: String? = nil,
+    timeoutInterval: TimeInterval? = nil
   ) {
     self.method = method
     self.headers = HTTPFields(headers)
     self.region = region
     self.query = query
+    self.timeoutInterval = timeoutInterval
     body = nil
   }
 
@@ -173,19 +184,23 @@ extension FunctionInvokeOptions {
   ///   - region: The region to invoke the function in.
   ///   - body: The body to encode and send.
   ///   - encoder: The JSON encoder used when `body` is encoded as JSON.
+  ///   - timeoutInterval: A per-invocation override for the request timeout. Defaults to
+  ///     ``FunctionsClient/requestIdleTimeout`` when `nil`.
   public init(
     method: Method? = nil,
     headers: [String: String] = [:],
     region: FunctionRegion? = nil,
     body: some Encodable,
-    encoder: JSONEncoder = JSONEncoder()
+    encoder: JSONEncoder = JSONEncoder(),
+    timeoutInterval: TimeInterval? = nil
   ) {
     self.init(
       method: method,
       headers: headers,
       region: region?.rawValue,
       body: body,
-      encoder: encoder
+      encoder: encoder,
+      timeoutInterval: timeoutInterval
     )
   }
 
@@ -194,11 +209,15 @@ extension FunctionInvokeOptions {
   ///   - method: The HTTP method to use. Defaults to POST when `nil`.
   ///   - headers: Additional headers to include in the request.
   ///   - region: The region to invoke the function in.
+  ///   - timeoutInterval: A per-invocation override for the request timeout. Defaults to
+  ///     ``FunctionsClient/requestIdleTimeout`` when `nil`.
   public init(
     method: Method? = nil,
     headers: [String: String] = [:],
-    region: FunctionRegion? = nil
+    region: FunctionRegion? = nil,
+    timeoutInterval: TimeInterval? = nil
   ) {
-    self.init(method: method, headers: headers, region: region?.rawValue)
+    self.init(
+      method: method, headers: headers, region: region?.rawValue, timeoutInterval: timeoutInterval)
   }
 }
