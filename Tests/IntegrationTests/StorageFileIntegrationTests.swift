@@ -79,7 +79,9 @@ final class StorageFileIntegrationTests {
   func signURL() async throws {
     _ = try await storage.from(bucketName).upload(uploadPath, data: file)
 
-    let url = try await storage.from(bucketName).createSignedURL(path: uploadPath, expiresIn: 2000)
+    let url = try await retryOnTransientStorageError {
+      try await storage.from(bucketName).createSignedURL(path: uploadPath, expiresIn: 2000)
+    }
     #expect(
       url.absoluteString.contains(
         "\(DotEnv.SUPABASE_URL)/storage/v1/object/sign/\(bucketName)/\(uploadPath)")
@@ -90,8 +92,10 @@ final class StorageFileIntegrationTests {
   func signURL_withDownloadQueryString() async throws {
     _ = try await storage.from(bucketName).upload(uploadPath, data: file)
 
-    let url = try await storage.from(bucketName).createSignedURL(
-      path: uploadPath, expiresIn: 2000, download: true)
+    let url = try await retryOnTransientStorageError {
+      try await storage.from(bucketName).createSignedURL(
+        path: uploadPath, expiresIn: 2000, download: true)
+    }
     #expect(
       url.absoluteString.contains(
         "\(DotEnv.SUPABASE_URL)/storage/v1/object/sign/\(bucketName)/\(uploadPath)")
@@ -103,8 +107,10 @@ final class StorageFileIntegrationTests {
   func signURL_withCustomFilenameForDownload() async throws {
     _ = try await storage.from(bucketName).upload(uploadPath, data: file)
 
-    let url = try await storage.from(bucketName).createSignedURL(
-      path: uploadPath, expiresIn: 2000, download: "test.jpg")
+    let url = try await retryOnTransientStorageError {
+      try await storage.from(bucketName).createSignedURL(
+        path: uploadPath, expiresIn: 2000, download: "test.jpg")
+    }
     #expect(
       url.absoluteString.contains(
         "\(DotEnv.SUPABASE_URL)/storage/v1/object/sign/\(bucketName)/\(uploadPath)")
@@ -118,7 +124,9 @@ final class StorageFileIntegrationTests {
 
     try await storage.from(bucketName).upload(uploadPath, data: file)
 
-    let res = try await storage.from(bucketName).update(uploadPath, data: file2)
+    let res = try await retryOnTransientStorageError {
+      try await storage.from(bucketName).update(uploadPath, data: file2)
+    }
     #expect(res.path == uploadPath)
   }
 
@@ -262,7 +270,9 @@ final class StorageFileIntegrationTests {
   @Test
   func listObjects() async throws {
     try await storage.from(bucketName).upload(uploadPath, data: file)
-    let res = try await storage.from(bucketName).list(path: "testpath")
+    let res = try await retryOnTransientStorageError {
+      try await storage.from(bucketName).list(path: "testpath")
+    }
 
     #expect(res.count == 1)
     #expect(res[0].name == uploadPath.replacingOccurrences(of: "testpath/", with: ""))
@@ -273,7 +283,9 @@ final class StorageFileIntegrationTests {
     let newPath = "testpath/file-moved-\(UUID().uuidString).txt"
     try await storage.from(bucketName).upload(uploadPath, data: file)
 
-    try await storage.from(bucketName).move(from: uploadPath, to: newPath)
+    try await retryOnTransientStorageError {
+      try await storage.from(bucketName).move(from: uploadPath, to: newPath)
+    }
   }
 
   @Test
@@ -284,13 +296,17 @@ final class StorageFileIntegrationTests {
     let newPath = "testpath/file-to-move-\(UUID().uuidString).txt"
     try await storage.from(bucketName).upload(uploadPath, data: file)
 
-    try await storage.from(bucketName).move(
-      from: uploadPath,
-      to: newPath,
-      options: DestinationOptions(destinationBucket: newBucketName)
-    )
+    try await retryOnTransientStorageError {
+      try await storage.from(bucketName).move(
+        from: uploadPath,
+        to: newPath,
+        options: DestinationOptions(destinationBucket: newBucketName)
+      )
+    }
 
-    _ = try await storage.from(newBucketName).download(path: newPath)
+    _ = try await retryOnTransientStorageError {
+      try await storage.from(newBucketName).download(path: newPath)
+    }
   }
 
   @Test
@@ -298,7 +314,9 @@ final class StorageFileIntegrationTests {
     let newPath = "testpath/file-moved-\(UUID().uuidString).txt"
     try await storage.from(bucketName).upload(uploadPath, data: file)
 
-    try await storage.from(bucketName).copy(from: uploadPath, to: newPath)
+    try await retryOnTransientStorageError {
+      try await storage.from(bucketName).copy(from: uploadPath, to: newPath)
+    }
   }
 
   @Test
@@ -309,20 +327,26 @@ final class StorageFileIntegrationTests {
     let newPath = "testpath/file-to-copy-\(UUID().uuidString).txt"
     try await storage.from(bucketName).upload(uploadPath, data: file)
 
-    try await storage.from(bucketName).copy(
-      from: uploadPath,
-      to: newPath,
-      options: DestinationOptions(destinationBucket: newBucketName)
-    )
+    try await retryOnTransientStorageError {
+      try await storage.from(bucketName).copy(
+        from: uploadPath,
+        to: newPath,
+        options: DestinationOptions(destinationBucket: newBucketName)
+      )
+    }
 
-    _ = try await storage.from(newBucketName).download(path: newPath)
+    _ = try await retryOnTransientStorageError {
+      try await storage.from(newBucketName).download(path: newPath)
+    }
   }
 
   @Test
   func downloadsAnObject() async throws {
     try await storage.from(bucketName).upload(uploadPath, data: file)
 
-    let res = try await storage.from(bucketName).download(path: uploadPath)
+    let res = try await retryOnTransientStorageError {
+      try await storage.from(bucketName).download(path: uploadPath)
+    }
     #expect(res.count > 0)
   }
 
@@ -330,7 +354,9 @@ final class StorageFileIntegrationTests {
   func removesAnObject() async throws {
     try await storage.from(bucketName).upload(uploadPath, data: file)
 
-    let res = try await storage.from(bucketName).remove(paths: [uploadPath])
+    let res = try await retryOnTransientStorageError {
+      try await storage.from(bucketName).remove(paths: [uploadPath])
+    }
     #expect(res.count == 1)
     #expect(res[0].bucketId == bucketName)
     #expect(res[0].name == uploadPath)
@@ -358,7 +384,9 @@ final class StorageFileIntegrationTests {
     let path = "empty-folder/.placeholder"
     try await storage.from(bucketName).upload(path, data: Data())
 
-    let files = try await storage.from(bucketName).list()
+    let files = try await retryOnTransientStorageError {
+      try await storage.from(bucketName).list()
+    }
     assertInlineSnapshot(of: files, as: .json) {
       """
       [
@@ -380,7 +408,9 @@ final class StorageFileIntegrationTests {
       )
     )
 
-    let info = try await storage.from(bucketName).info(path: uploadPath)
+    let info = try await retryOnTransientStorageError {
+      try await storage.from(bucketName).info(path: uploadPath)
+    }
     #expect(info.name == uploadPath)
     #expect(info.metadata == ["value": 42])
   }
@@ -389,7 +419,9 @@ final class StorageFileIntegrationTests {
   func exists() async throws {
     try await storage.from(bucketName).upload(uploadPath, data: file)
 
-    var exists = try await storage.from(bucketName).exists(path: uploadPath)
+    var exists = try await retryOnTransientStorageError {
+      try await storage.from(bucketName).exists(path: uploadPath)
+    }
     #expect(exists)
 
     exists = try await storage.from(bucketName).exists(path: "invalid.jpg")
@@ -420,7 +452,9 @@ final class StorageFileIntegrationTests {
     try await storage.from(bucketName)
       .upload(uploadPath, fileURL: uploadFileURL("sadcat.jpg"))
 
-    let uploadedFile = try await storage.from(bucketName).download(path: uploadPath)
+    let uploadedFile = try await retryOnTransientStorageError {
+      try await storage.from(bucketName).download(path: uploadPath)
+    }
 
     #expect(uploadedFile == file)
   }
@@ -452,5 +486,27 @@ final class StorageFileIntegrationTests {
       .deletingLastPathComponent()
       .appendingPathComponent("Fixtures/Upload")
       .appendingPathComponent(fileName)
+  }
+
+  // storage-api can be eventually-consistent right after an `upload(...)` response returns, so
+  // operations on the just-uploaded object may transiently 500. Retry a few times before failing.
+  @discardableResult
+  private func retryOnTransientStorageError<T>(
+    attempts: Int = 3,
+    delay: Duration = .milliseconds(200),
+    _ operation: () async throws -> T
+  ) async throws -> T {
+    var lastError: (any Error)!
+    for attempt in 0..<attempts {
+      do {
+        return try await operation()
+      } catch let error as StorageError where error.statusCode == "500" {
+        lastError = error
+        if attempt < attempts - 1 {
+          try await Task.sleep(for: delay)
+        }
+      }
+    }
+    throw lastError
   }
 }
