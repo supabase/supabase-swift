@@ -181,6 +181,104 @@ extension AuthClient.Configuration {
       emitLocalSessionAsInitialSession: emitLocalSessionAsInitialSession
     )
   }
+
+  /// Initializes a AuthClient Configuration with a custom JSON encoder.
+  ///
+  /// - Parameters:
+  ///   - url: The base URL of the Auth server.
+  ///   - headers: Custom headers to be included in requests.
+  ///   - flowType: The authentication flow type.
+  ///   - redirectToURL: Default URL to be used for redirect on the flows that requires it.
+  ///   - storageKey: Optional key name used for storing tokens in local storage.
+  ///   - localStorage: The storage mechanism for local data.
+  ///   - logger: The logger to use.
+  ///   - encoder: The JSON encoder to use for encoding requests.
+  ///   - fetch: The asynchronous fetch handler for network requests.
+  ///   - autoRefreshToken: Set to `true` if you want to automatically refresh the token before expiring.
+  ///   - emitLocalSessionAsInitialSession: When `true`, emits the locally stored session immediately as the initial session.
+  @available(
+    *,
+    deprecated,
+    message:
+      "Customizing Auth's JSON encoding is no longer supported. Remove the encoder argument; this initializer will be removed in a future major version."
+  )
+  public init(
+    url: URL? = nil,
+    headers: [String: String] = [:],
+    flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
+    redirectToURL: URL? = nil,
+    storageKey: String? = nil,
+    localStorage: any AuthLocalStorage,
+    logger: (any SupabaseLogger)? = nil,
+    encoder: JSONEncoder,
+    fetch: @escaping AuthClient.FetchHandler = { try await URLSession.shared.data(for: $0) },
+    autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken,
+    emitLocalSessionAsInitialSession: Bool = false
+  ) {
+    self.init(
+      url: url,
+      headers: headers,
+      flowType: flowType,
+      redirectToURL: redirectToURL,
+      storageKey: storageKey,
+      localStorage: localStorage,
+      logger: logger,
+      resolvedEncoder: encoder,
+      resolvedDecoder: AuthClient.Configuration.jsonDecoder,
+      fetch: fetch,
+      autoRefreshToken: autoRefreshToken,
+      emitLocalSessionAsInitialSession: emitLocalSessionAsInitialSession
+    )
+  }
+
+  /// Initializes a AuthClient Configuration with a custom JSON decoder.
+  ///
+  /// - Parameters:
+  ///   - url: The base URL of the Auth server.
+  ///   - headers: Custom headers to be included in requests.
+  ///   - flowType: The authentication flow type.
+  ///   - redirectToURL: Default URL to be used for redirect on the flows that requires it.
+  ///   - storageKey: Optional key name used for storing tokens in local storage.
+  ///   - localStorage: The storage mechanism for local data.
+  ///   - logger: The logger to use.
+  ///   - decoder: The JSON decoder to use for decoding responses.
+  ///   - fetch: The asynchronous fetch handler for network requests.
+  ///   - autoRefreshToken: Set to `true` if you want to automatically refresh the token before expiring.
+  ///   - emitLocalSessionAsInitialSession: When `true`, emits the locally stored session immediately as the initial session.
+  @available(
+    *,
+    deprecated,
+    message:
+      "Customizing Auth's JSON decoding is no longer supported. Remove the decoder argument; this initializer will be removed in a future major version."
+  )
+  public init(
+    url: URL? = nil,
+    headers: [String: String] = [:],
+    flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
+    redirectToURL: URL? = nil,
+    storageKey: String? = nil,
+    localStorage: any AuthLocalStorage,
+    logger: (any SupabaseLogger)? = nil,
+    decoder: JSONDecoder,
+    fetch: @escaping AuthClient.FetchHandler = { try await URLSession.shared.data(for: $0) },
+    autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken,
+    emitLocalSessionAsInitialSession: Bool = false
+  ) {
+    self.init(
+      url: url,
+      headers: headers,
+      flowType: flowType,
+      redirectToURL: redirectToURL,
+      storageKey: storageKey,
+      localStorage: localStorage,
+      logger: logger,
+      resolvedEncoder: AuthClient.Configuration.jsonEncoder,
+      resolvedDecoder: decoder,
+      fetch: fetch,
+      autoRefreshToken: autoRefreshToken,
+      emitLocalSessionAsInitialSession: emitLocalSessionAsInitialSession
+    )
+  }
 }
 
 extension AuthClient {
@@ -229,6 +327,108 @@ extension AuthClient {
         localStorage: localStorage,
         logger: logger,
         resolvedEncoder: encoder,
+        resolvedDecoder: decoder,
+        fetch: fetch,
+        autoRefreshToken: autoRefreshToken,
+        emitLocalSessionAsInitialSession: emitLocalSessionAsInitialSession
+      )
+    )
+  }
+
+  /// Initializes a AuthClient with a custom JSON encoder.
+  ///
+  /// - Parameters:
+  ///   - url: The base URL of the Auth server.
+  ///   - headers: Custom headers to be included in requests.
+  ///   - flowType: The authentication flow type.
+  ///   - redirectToURL: Default URL to be used for redirect on the flows that requires it.
+  ///   - storageKey: Optional key name used for storing tokens in local storage.
+  ///   - localStorage: The storage mechanism for local data.
+  ///   - logger: The logger to use.
+  ///   - encoder: The JSON encoder to use for encoding requests.
+  ///   - fetch: The asynchronous fetch handler for network requests.
+  ///   - autoRefreshToken: Set to `true` if you want to automatically refresh the token before expiring.
+  ///   - emitLocalSessionAsInitialSession: When `true`, emits the locally stored session immediately as the initial session.
+  @available(
+    *,
+    deprecated,
+    message:
+      "Customizing Auth's JSON encoding is no longer supported. Remove the encoder argument; this initializer will be removed in a future major version."
+  )
+  public init(
+    url: URL? = nil,
+    headers: [String: String] = [:],
+    flowType: AuthFlowType = Configuration.defaultFlowType,
+    redirectToURL: URL? = nil,
+    storageKey: String? = nil,
+    localStorage: any AuthLocalStorage,
+    logger: (any SupabaseLogger)? = nil,
+    encoder: JSONEncoder,
+    fetch: @escaping AuthClient.FetchHandler = { try await URLSession.shared.data(for: $0) },
+    autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken,
+    emitLocalSessionAsInitialSession: Bool = false
+  ) {
+    self.init(
+      configuration: Configuration(
+        url: url,
+        headers: headers,
+        flowType: flowType,
+        redirectToURL: redirectToURL,
+        storageKey: storageKey,
+        localStorage: localStorage,
+        logger: logger,
+        resolvedEncoder: encoder,
+        resolvedDecoder: AuthClient.Configuration.jsonDecoder,
+        fetch: fetch,
+        autoRefreshToken: autoRefreshToken,
+        emitLocalSessionAsInitialSession: emitLocalSessionAsInitialSession
+      )
+    )
+  }
+
+  /// Initializes a AuthClient with a custom JSON decoder.
+  ///
+  /// - Parameters:
+  ///   - url: The base URL of the Auth server.
+  ///   - headers: Custom headers to be included in requests.
+  ///   - flowType: The authentication flow type.
+  ///   - redirectToURL: Default URL to be used for redirect on the flows that requires it.
+  ///   - storageKey: Optional key name used for storing tokens in local storage.
+  ///   - localStorage: The storage mechanism for local data.
+  ///   - logger: The logger to use.
+  ///   - decoder: The JSON decoder to use for decoding responses.
+  ///   - fetch: The asynchronous fetch handler for network requests.
+  ///   - autoRefreshToken: Set to `true` if you want to automatically refresh the token before expiring.
+  ///   - emitLocalSessionAsInitialSession: When `true`, emits the locally stored session immediately as the initial session.
+  @available(
+    *,
+    deprecated,
+    message:
+      "Customizing Auth's JSON decoding is no longer supported. Remove the decoder argument; this initializer will be removed in a future major version."
+  )
+  public init(
+    url: URL? = nil,
+    headers: [String: String] = [:],
+    flowType: AuthFlowType = Configuration.defaultFlowType,
+    redirectToURL: URL? = nil,
+    storageKey: String? = nil,
+    localStorage: any AuthLocalStorage,
+    logger: (any SupabaseLogger)? = nil,
+    decoder: JSONDecoder,
+    fetch: @escaping AuthClient.FetchHandler = { try await URLSession.shared.data(for: $0) },
+    autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken,
+    emitLocalSessionAsInitialSession: Bool = false
+  ) {
+    self.init(
+      configuration: Configuration(
+        url: url,
+        headers: headers,
+        flowType: flowType,
+        redirectToURL: redirectToURL,
+        storageKey: storageKey,
+        localStorage: localStorage,
+        logger: logger,
+        resolvedEncoder: AuthClient.Configuration.jsonEncoder,
         resolvedDecoder: decoder,
         fetch: fetch,
         autoRefreshToken: autoRefreshToken,
