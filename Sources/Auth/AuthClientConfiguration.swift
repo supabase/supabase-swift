@@ -70,10 +70,28 @@ extension AuthClient {
     public let logger: (any SupabaseLogger)?
 
     /// The JSON encoder used to serialize request bodies sent to the Auth server.
-    public let encoder: JSONEncoder
+    let resolvedEncoder: JSONEncoder
 
     /// The JSON decoder used to deserialize responses received from the Auth server.
-    public let decoder: JSONDecoder
+    let resolvedDecoder: JSONDecoder
+
+    /// The JSON encoder used to serialize request bodies sent to the Auth server.
+    @available(
+      *,
+      deprecated,
+      message:
+        "Customizing Auth's JSON encoding is no longer supported and this property will be removed in a future major version."
+    )
+    public var encoder: JSONEncoder { resolvedEncoder }
+
+    /// The JSON decoder used to deserialize responses received from the Auth server.
+    @available(
+      *,
+      deprecated,
+      message:
+        "Customizing Auth's JSON decoding is no longer supported and this property will be removed in a future major version."
+    )
+    public var decoder: JSONDecoder { resolvedDecoder }
 
     /// A custom fetch implementation.
     public let fetch: FetchHandler
@@ -101,8 +119,6 @@ extension AuthClient {
     ///   - storageKey: Optional key name used for storing tokens in local storage.
     ///   - localStorage: The storage mechanism for local data.
     ///   - logger: The logger to use.
-    ///   - encoder: The JSON encoder to use for encoding requests.
-    ///   - decoder: The JSON decoder to use for decoding responses.
     ///   - fetch: The asynchronous fetch handler for network requests.
     ///   - autoRefreshToken: Set to `true` if you want to automatically refresh the token before expiring.
     ///   - emitLocalSessionAsInitialSession: When `true`, emits the locally stored session immediately as the initial session.
@@ -114,8 +130,41 @@ extension AuthClient {
       storageKey: String? = nil,
       localStorage: any AuthLocalStorage,
       logger: (any SupabaseLogger)? = nil,
-      encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
-      decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
+      fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
+      autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken,
+      emitLocalSessionAsInitialSession: Bool = false
+    ) {
+      self.init(
+        url: url,
+        headers: headers,
+        flowType: flowType,
+        redirectToURL: redirectToURL,
+        storageKey: storageKey,
+        localStorage: localStorage,
+        logger: logger,
+        resolvedEncoder: AuthClient.Configuration.jsonEncoder,
+        resolvedDecoder: AuthClient.Configuration.jsonDecoder,
+        fetch: fetch,
+        autoRefreshToken: autoRefreshToken,
+        emitLocalSessionAsInitialSession: emitLocalSessionAsInitialSession
+      )
+    }
+
+    /// Designated initializer that stores the resolved JSON encoder/decoder.
+    ///
+    /// Kept internal so the (deprecated) initializers that still accept custom
+    /// `encoder`/`decoder` values can share the field-assignment logic without
+    /// exposing the customization point publicly.
+    init(
+      url: URL? = nil,
+      headers: [String: String] = [:],
+      flowType: AuthFlowType = Configuration.defaultFlowType,
+      redirectToURL: URL? = nil,
+      storageKey: String? = nil,
+      localStorage: any AuthLocalStorage,
+      logger: (any SupabaseLogger)? = nil,
+      resolvedEncoder: JSONEncoder,
+      resolvedDecoder: JSONDecoder,
       fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
       autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken,
       emitLocalSessionAsInitialSession: Bool = false
@@ -129,8 +178,8 @@ extension AuthClient {
       self.storageKey = storageKey
       self.localStorage = localStorage
       self.logger = logger
-      self.encoder = encoder
-      self.decoder = decoder
+      self.resolvedEncoder = resolvedEncoder
+      self.resolvedDecoder = resolvedDecoder
       self.fetch = fetch
       self.autoRefreshToken = autoRefreshToken
       self.emitLocalSessionAsInitialSession = emitLocalSessionAsInitialSession
@@ -147,8 +196,6 @@ extension AuthClient {
   ///   - storageKey: Optional key name used for storing tokens in local storage.
   ///   - localStorage: The storage mechanism for local data..
   ///   - logger: The logger to use.
-  ///   - encoder: The JSON encoder to use for encoding requests.
-  ///   - decoder: The JSON decoder to use for decoding responses.
   ///   - fetch: The asynchronous fetch handler for network requests.
   ///   - autoRefreshToken: Set to `true` if you want to automatically refresh the token before expiring.
   ///   - emitLocalSessionAsInitialSession: When `true`, emits the locally stored session immediately as the initial session.
@@ -160,8 +207,6 @@ extension AuthClient {
     storageKey: String? = nil,
     localStorage: any AuthLocalStorage,
     logger: (any SupabaseLogger)? = nil,
-    encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
-    decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
     fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
     autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken,
     emitLocalSessionAsInitialSession: Bool = false
@@ -175,8 +220,6 @@ extension AuthClient {
         storageKey: storageKey,
         localStorage: localStorage,
         logger: logger,
-        encoder: encoder,
-        decoder: decoder,
         fetch: fetch,
         autoRefreshToken: autoRefreshToken,
         emitLocalSessionAsInitialSession: emitLocalSessionAsInitialSession

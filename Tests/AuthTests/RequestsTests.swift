@@ -729,20 +729,12 @@ struct RequestsTests {
     testName: String = #function,
     line: UInt = #line
   ) -> AuthClient {
-    // Build a test-owned encoder instead of mutating the process-wide
-    // `AuthClient.Configuration.jsonEncoder` singleton, which other concurrently
-    // running suites share.
-    let encoder = JSONEncoder.supabase()
-    encoder.keyEncodingStrategy = .convertToSnakeCase
-    encoder.outputFormatting = [.sortedKeys]
-
     let configuration = AuthClient.Configuration(
       url: clientURL,
       headers: ["Apikey": "dummy.api.key", "X-Client-Info": "gotrue-swift/x.y.z"],
       flowType: flowType,
       localStorage: InMemoryLocalStorage(),
       logger: nil,
-      encoder: encoder,
       fetch: { request in
         await MainActor.run {
           assertSnapshot(

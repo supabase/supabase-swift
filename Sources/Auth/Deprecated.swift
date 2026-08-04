@@ -130,6 +130,114 @@ extension AuthClient {
   }
 }
 
+extension AuthClient.Configuration {
+  /// Initializes a AuthClient Configuration with a custom JSON encoder/decoder.
+  ///
+  /// - Parameters:
+  ///   - url: The base URL of the Auth server.
+  ///   - headers: Custom headers to be included in requests.
+  ///   - flowType: The authentication flow type.
+  ///   - redirectToURL: Default URL to be used for redirect on the flows that requires it.
+  ///   - storageKey: Optional key name used for storing tokens in local storage.
+  ///   - localStorage: The storage mechanism for local data.
+  ///   - logger: The logger to use.
+  ///   - encoder: The JSON encoder to use for encoding requests.
+  ///   - decoder: The JSON decoder to use for decoding responses.
+  ///   - fetch: The asynchronous fetch handler for network requests.
+  ///   - autoRefreshToken: Set to `true` if you want to automatically refresh the token before expiring.
+  ///   - emitLocalSessionAsInitialSession: When `true`, emits the locally stored session immediately as the initial session.
+  @available(
+    *,
+    deprecated,
+    message:
+      "Customizing Auth's JSON encoding/decoding is no longer supported. Remove the encoder/decoder arguments; this initializer will be removed in a future major version."
+  )
+  public init(
+    url: URL? = nil,
+    headers: [String: String] = [:],
+    flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
+    redirectToURL: URL? = nil,
+    storageKey: String? = nil,
+    localStorage: any AuthLocalStorage,
+    logger: (any SupabaseLogger)? = nil,
+    encoder: JSONEncoder,
+    decoder: JSONDecoder,
+    fetch: @escaping AuthClient.FetchHandler = { try await URLSession.shared.data(for: $0) },
+    autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken,
+    emitLocalSessionAsInitialSession: Bool = false
+  ) {
+    self.init(
+      url: url,
+      headers: headers,
+      flowType: flowType,
+      redirectToURL: redirectToURL,
+      storageKey: storageKey,
+      localStorage: localStorage,
+      logger: logger,
+      resolvedEncoder: encoder,
+      resolvedDecoder: decoder,
+      fetch: fetch,
+      autoRefreshToken: autoRefreshToken,
+      emitLocalSessionAsInitialSession: emitLocalSessionAsInitialSession
+    )
+  }
+}
+
+extension AuthClient {
+  /// Initializes a AuthClient with a custom JSON encoder/decoder.
+  ///
+  /// - Parameters:
+  ///   - url: The base URL of the Auth server.
+  ///   - headers: Custom headers to be included in requests.
+  ///   - flowType: The authentication flow type.
+  ///   - redirectToURL: Default URL to be used for redirect on the flows that requires it.
+  ///   - storageKey: Optional key name used for storing tokens in local storage.
+  ///   - localStorage: The storage mechanism for local data.
+  ///   - logger: The logger to use.
+  ///   - encoder: The JSON encoder to use for encoding requests.
+  ///   - decoder: The JSON decoder to use for decoding responses.
+  ///   - fetch: The asynchronous fetch handler for network requests.
+  ///   - autoRefreshToken: Set to `true` if you want to automatically refresh the token before expiring.
+  ///   - emitLocalSessionAsInitialSession: When `true`, emits the locally stored session immediately as the initial session.
+  @available(
+    *,
+    deprecated,
+    message:
+      "Customizing Auth's JSON encoding/decoding is no longer supported. Remove the encoder/decoder arguments; this initializer will be removed in a future major version."
+  )
+  public init(
+    url: URL? = nil,
+    headers: [String: String] = [:],
+    flowType: AuthFlowType = Configuration.defaultFlowType,
+    redirectToURL: URL? = nil,
+    storageKey: String? = nil,
+    localStorage: any AuthLocalStorage,
+    logger: (any SupabaseLogger)? = nil,
+    encoder: JSONEncoder,
+    decoder: JSONDecoder,
+    fetch: @escaping AuthClient.FetchHandler = { try await URLSession.shared.data(for: $0) },
+    autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken,
+    emitLocalSessionAsInitialSession: Bool = false
+  ) {
+    self.init(
+      configuration: Configuration(
+        url: url,
+        headers: headers,
+        flowType: flowType,
+        redirectToURL: redirectToURL,
+        storageKey: storageKey,
+        localStorage: localStorage,
+        logger: logger,
+        resolvedEncoder: encoder,
+        resolvedDecoder: decoder,
+        fetch: fetch,
+        autoRefreshToken: autoRefreshToken,
+        emitLocalSessionAsInitialSession: emitLocalSessionAsInitialSession
+      )
+    )
+  }
+}
+
 @available(*, deprecated, message: "Use MFATotpEnrollParams or MFAPhoneEnrollParams instead.")
 public typealias MFAEnrollParams = MFATotpEnrollParams
 
