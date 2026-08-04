@@ -25,7 +25,7 @@ import Testing
 #endif
 
 extension AuthMockerTests {
-  @Suite(.mockerSerialized)
+  @Suite(.mockerSerialized, .mainSerialExecutorSerialized)
   struct AuthClientTests {
     let storage = InMemoryLocalStorage()
 
