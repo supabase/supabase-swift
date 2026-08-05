@@ -54,17 +54,6 @@ if [[ -n "$XCODEBUILD_ARGUMENT" ]]; then
 fi
 XCODEBUILD_ARGS+=("${XCODEBUILD_FLAGS[@]}")
 
-# `withMainSerialExecutor` (ConcurrencyExtras) hooks a process-wide task-enqueue global, not just
-# the calling suite's own tasks. Swift Testing's default parallel execution runs unrelated suites
-# concurrently in the same process, so while any withMainSerialExecutor-gated suite holds that
-# hook, every other suite's tasks get silently forced onto the same serial queue too -- under a
-# loaded CI simulator this backs up enough to blow through hardcoded test timeouts (e.g.
-# AuthClientTests' assertAuthStateChanges) with spurious failures. Disable parallel test execution
-# for `test` actions so no two suites run concurrently in the first place.
-if [[ "$XCODEBUILD_ARGUMENT" == "test" ]]; then
-  XCODEBUILD_ARGS+=(-parallel-testing-enabled NO)
-fi
-
 if command -v xcbeautify >/dev/null 2>&1; then
   xcodebuild "${XCODEBUILD_ARGS[@]}" | xcbeautify
 else
