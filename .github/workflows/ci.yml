@@ -389,7 +389,7 @@ jobs:
     # release-please (release.yml) only runs after a *successful* CI run on main,
     # so a red main blocks it silently (no new release PR, no update to the open
     # one) unless someone happens to look at Actions. Alert instead of relying on that.
-    if: always() && github.ref == 'refs/heads/main' && needs.ci-success.result == 'failure'
+    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.ci-success.result == 'failure'
     runs-on: ubuntu-latest
     steps:
       - name: Send Slack alert
@@ -436,4 +436,4 @@ jobs:
           EOF
           )
 
-          curl -sf -X POST -H 'Content-type: application/json' --data "$payload" "${{ secrets.SLACK_CLIENT_LIBS_WEBHOOK }}"
+          curl --proto '=https' -sf -X POST -H 'Content-type: application/json' --data "$payload" "${{ secrets.SLACK_CLIENT_LIBS_WEBHOOK }}"
