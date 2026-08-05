@@ -24,6 +24,7 @@
   // struct) so `deinit` can disconnect both clients afterward, mirroring the old `tearDown()`.
   @Suite(
     .serialized,
+    .mainSerialExecutorSerialized,
     .enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil)
   )
   final class RealtimeIntegrationTests: Sendable {
