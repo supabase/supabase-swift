@@ -3439,7 +3439,12 @@ extension AuthMockerTests {
       action: () async throws -> T,
       expectedEvents: [AuthChangeEvent],
       expectedSessions: [Session?]? = nil,
-      timeout: TimeInterval = 2,
+      // `withMainSerialExecutor` hijacks a process-wide task-enqueue hook, so while this or any
+      // other suite serialized against it (.mainSerialExecutorSerialized) holds it, every
+      // concurrently-running suite in the process gets its own task scheduling funneled onto the
+      // same queue too. Under CI's loaded simulator that queue can back up well past what a fast
+      // local run would ever see — 30s gives real headroom without masking a genuinely stuck test.
+      timeout: TimeInterval = 30,
       fileID: StaticString = #fileID,
       filePath: StaticString = #filePath,
       line: UInt = #line,
