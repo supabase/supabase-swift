@@ -28,13 +28,6 @@ extension AuthMockerTests {
       sessionConfiguration.protocolClasses = [MockingURLProtocol.self]
       let session = URLSession(configuration: sessionConfiguration)
 
-      // Build a test-owned encoder instead of mutating the process-wide
-      // `AuthClient.Configuration.jsonEncoder` singleton, which other concurrently
-      // running suites share.
-      let encoder = JSONEncoder.supabase()
-      encoder.keyEncodingStrategy = .convertToSnakeCase
-      encoder.outputFormatting = [.sortedKeys]
-
       let configuration = AuthClient.Configuration(
         url: clientURL,
         headers: [
@@ -43,7 +36,6 @@ extension AuthMockerTests {
         ],
         localStorage: storage,
         logger: nil,
-        encoder: encoder,
         fetch: { request in
           try await session.data(for: request)
         }

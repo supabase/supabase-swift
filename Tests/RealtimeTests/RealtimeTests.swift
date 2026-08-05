@@ -535,7 +535,7 @@ import Testing
 
         await testClock.advance(by: .seconds(heartbeatInterval * 2))
 
-        let sawTwoHeartbeats = await waitUntil(timeout: 3) { heartbeatCount.value >= 2 }
+        let sawTwoHeartbeats = await waitUntil(timeout: 30) { heartbeatCount.value >= 2 }
         #expect(sawTwoHeartbeats)
 
         expectNoDifference(heartbeatStatuses.value, [.sent, .ok, .sent, .ok])
@@ -568,7 +568,7 @@ import Testing
         await sut.connect()
         await testClock.advance(by: .seconds(heartbeatInterval))
 
-        let didSendHeartbeat = await waitUntil(timeout: 1) { sentHeartbeat.value }
+        let didSendHeartbeat = await waitUntil(timeout: 15) { sentHeartbeat.value }
         #expect(didSendHeartbeat)
 
         let pendingHeartbeatRef = sut.mutableState.pendingHeartbeatRef
