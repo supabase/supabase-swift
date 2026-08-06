@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 05/07/24.
 //
 
+import ConcurrencyExtras
 import Foundation
 import TestHelpers
 import Testing
@@ -46,5 +47,29 @@ struct AuthClientMultipleInstancesTests {
       Dependencies[client2.clientID].configuration.localStorage as? InMemoryLocalStorage
         === client2Storage
     )
+  }
+
+  @Test
+  func deinitRemovesDependenciesEntry() async {
+    let url = URL(string: "http://localhost:54321/auth")!
+
+    let clientID: AuthClientID
+    do {
+      let client = AuthClient(
+        configuration: AuthClient.Configuration(
+          url: url,
+          localStorage: InMemoryLocalStorage(),
+          logger: nil
+        )
+      )
+      clientID = client.clientID
+      #expect(Dependencies.instances.value[clientID] != nil)
+    }
+
+    // `init` kicks off a `Task { @MainActor in ... }` that briefly holds a
+    // strong reference to `self`; let it run so `client` can actually deinit.
+    await Task.megaYield()
+
+    #expect(Dependencies.instances.value[clientID] == nil)
   }
 }

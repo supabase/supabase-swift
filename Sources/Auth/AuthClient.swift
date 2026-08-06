@@ -181,6 +181,11 @@ public actor AuthClient {
   nonisolated private var sessionStorage: SessionStorage { Dependencies[clientID].sessionStorage }
   nonisolated private var pkce: PKCE { Dependencies[clientID].pkce }
 
+  #if canImport(ObjectiveC) && canImport(Combine)
+    @MainActor
+    private var appLifecycleCancellables = Set<AnyCancellable>()
+  #endif
+
   /// Returns the session, refreshing it if necessary.
   ///
   /// If no session can be found, a ``AuthError/sessionMissing`` error is thrown.
@@ -243,6 +248,10 @@ public actor AuthClient {
     Task { @MainActor in observeAppLifecycleChanges() }
   }
 
+  deinit {
+    Dependencies.instances.withValue { $0.removeValue(forKey: clientID) }
+  }
+
   #if canImport(ObjectiveC) && canImport(Combine)
     @MainActor
     private func observeAppLifecycleChanges() {
@@ -263,37 +272,23 @@ public actor AuthClient {
       #endif
 
       if let didBecomeActiveNotification, let willResignActiveNotification {
-        var cancellables = Set<AnyCancellable>()
-
         NotificationCenter.default
           .publisher(for: didBecomeActiveNotification)
-          .sink(
-            receiveCompletion: { _ in
-              // hold ref to cancellable until it completes
-              _ = cancellables
-            },
-            receiveValue: { [weak self] _ in
-              Task {
-                await self?.handleDidBecomeActive()
-              }
+          .sink { [weak self] _ in
+            Task {
+              await self?.handleDidBecomeActive()
             }
-          )
-          .store(in: &cancellables)
+          }
+          .store(in: &appLifecycleCancellables)
 
         NotificationCenter.default
           .publisher(for: willResignActiveNotification)
-          .sink(
-            receiveCompletion: { _ in
-              // hold ref to cancellable until it completes
-              _ = cancellables
-            },
-            receiveValue: { [weak self] _ in
-              Task {
-                await self?.handleWillResignActive()
-              }
+          .sink { [weak self] _ in
+            Task {
+              await self?.handleWillResignActive()
             }
-          )
-          .store(in: &cancellables)
+          }
+          .store(in: &appLifecycleCancellables)
       }
 
     }
