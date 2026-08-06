@@ -14,12 +14,6 @@ import Testing
 
 @Suite
 struct StoredSessionTests {
-  // Unique negative clientID per usage so this suite's process-global `Dependencies` entries can't
-  // be clobbered by another suite running concurrently, nor by this suite's own two tests (which
-  // Swift Testing runs in parallel). `AuthClient`'s generator only hands out positive ids, so
-  // negatives are collision-free.
-  let clientID: AuthClientID = -2
-
   @Test
   func get_withCorruptedJSON_returnsNil() throws {
     let localStorage = InMemoryLocalStorage()
@@ -28,22 +22,24 @@ struct StoredSessionTests {
       value: Data("not-valid-json".utf8)
     )
 
-    let testClientID: AuthClientID = -3
-    Dependencies[testClientID] = Dependencies(
-      configuration: AuthClient.Configuration(
-        url: URL(string: "http://localhost")!,
-        storageKey: "supabase.auth.token",
-        localStorage: localStorage,
-        logger: nil
-      ),
-      http: HTTPClientMock(),
-      api: .init(clientID: testClientID),
-      codeVerifierStorage: .mock,
-      sessionStorage: .live(clientID: testClientID),
-      sessionManager: .live(clientID: testClientID)
+    let dependencies = DependenciesContainer()
+    dependencies.bootstrap(
+      Dependencies(
+        configuration: AuthClient.Configuration(
+          url: URL(string: "http://localhost")!,
+          storageKey: "supabase.auth.token",
+          localStorage: localStorage,
+          logger: nil
+        ),
+        http: HTTPClientMock(),
+        api: .init(dependencies: dependencies),
+        codeVerifierStorage: .mock,
+        sessionStorage: .live(dependencies: dependencies),
+        sessionManager: .live(dependencies: dependencies)
+      )
     )
 
-    let sut = Dependencies[testClientID].sessionStorage
+    let sut = dependencies.value.sessionStorage
     #expect(sut.get() == nil)
   }
 
@@ -53,21 +49,24 @@ struct StoredSessionTests {
     )
   )
   func storedSession() throws {
-    Dependencies[clientID] = Dependencies(
-      configuration: AuthClient.Configuration(
-        url: URL(string: "http://localhost")!,
-        storageKey: "supabase.auth.token",
-        localStorage: try! DiskTestStorage(),
-        logger: nil
-      ),
-      http: HTTPClientMock(),
-      api: .init(clientID: clientID),
-      codeVerifierStorage: .mock,
-      sessionStorage: .live(clientID: clientID),
-      sessionManager: .live(clientID: clientID)
+    let dependencies = DependenciesContainer()
+    dependencies.bootstrap(
+      Dependencies(
+        configuration: AuthClient.Configuration(
+          url: URL(string: "http://localhost")!,
+          storageKey: "supabase.auth.token",
+          localStorage: try! DiskTestStorage(),
+          logger: nil
+        ),
+        http: HTTPClientMock(),
+        api: .init(dependencies: dependencies),
+        codeVerifierStorage: .mock,
+        sessionStorage: .live(dependencies: dependencies),
+        sessionManager: .live(dependencies: dependencies)
+      )
     )
 
-    let sut = Dependencies[clientID].sessionStorage
+    let sut = dependencies.value.sessionStorage
 
     #expect(sut.get() != nil)
 

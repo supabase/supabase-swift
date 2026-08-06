@@ -20,14 +20,14 @@ import HTTPTypes
 /// - ``listFactors()``
 /// - ``getAuthenticatorAssuranceLevel()``
 public struct AuthMFA: Sendable {
-  let clientID: AuthClientID
+  let dependencies: DependenciesContainer
 
-  var configuration: AuthClient.Configuration { Dependencies[clientID].configuration }
-  var api: APIClient { Dependencies[clientID].api }
-  var encoder: JSONEncoder { Dependencies[clientID].resolvedEncoder }
-  var decoder: JSONDecoder { Dependencies[clientID].resolvedDecoder }
-  var sessionManager: SessionManager { Dependencies[clientID].sessionManager }
-  var eventEmitter: AuthStateChangeEventEmitter { Dependencies[clientID].eventEmitter }
+  var configuration: AuthClient.Configuration { dependencies.value.configuration }
+  var api: APIClient { dependencies.value.api }
+  var encoder: JSONEncoder { dependencies.value.resolvedEncoder }
+  var decoder: JSONDecoder { dependencies.value.resolvedDecoder }
+  var sessionManager: SessionManager { dependencies.value.sessionManager }
+  var eventEmitter: AuthStateChangeEventEmitter { dependencies.value.eventEmitter }
 
   /// Starts the enrollment process for a new Multi-Factor Authentication (MFA) factor. This method
   /// creates a new `unverified` factor.

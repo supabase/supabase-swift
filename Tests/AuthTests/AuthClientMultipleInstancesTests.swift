@@ -39,11 +39,11 @@ struct AuthClientMultipleInstancesTests {
     #expect(client1.clientID != client2.clientID)
 
     #expect(
-      Dependencies[client1.clientID].configuration.localStorage as? InMemoryLocalStorage
+      client1.dependencies.value.configuration.localStorage as? InMemoryLocalStorage
         === client1Storage
     )
     #expect(
-      Dependencies[client2.clientID].configuration.localStorage as? InMemoryLocalStorage
+      client2.dependencies.value.configuration.localStorage as? InMemoryLocalStorage
         === client2Storage
     )
   }

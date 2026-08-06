@@ -59,9 +59,9 @@ struct DeprecatedTests {
       encoder: encoder
     )
 
-    #expect(Dependencies[sut.clientID].configuration.resolvedEncoder === encoder)
+    #expect(sut.dependencies.value.configuration.resolvedEncoder === encoder)
     #expect(
-      Dependencies[sut.clientID].configuration.resolvedDecoder
+      sut.dependencies.value.configuration.resolvedDecoder
         === AuthClient.Configuration
         .jsonDecoder
     )
@@ -79,10 +79,10 @@ struct DeprecatedTests {
     )
 
     #expect(
-      Dependencies[sut.clientID].configuration.resolvedEncoder
+      sut.dependencies.value.configuration.resolvedEncoder
         === AuthClient.Configuration
         .jsonEncoder
     )
-    #expect(Dependencies[sut.clientID].configuration.resolvedDecoder === decoder)
+    #expect(sut.dependencies.value.configuration.resolvedDecoder === decoder)
   }
 }

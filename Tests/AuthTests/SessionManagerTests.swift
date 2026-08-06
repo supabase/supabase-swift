@@ -25,28 +25,26 @@ import Testing
 @Suite(.serialized, .mainSerialExecutorSerialized)
 struct SessionManagerTests {
   let http = HTTPClientMock()
-  // Unique negative clientID so this suite's process-global `Dependencies` entry can't be
-  // clobbered by another suite running concurrently (Swift Testing runs suites in parallel;
-  // `AuthClientID` is an `Int` and `AuthClient`'s own generator only ever hands out positive ids,
-  // so negatives are collision-free).
-  let clientID: AuthClientID = -1
+  let dependencies = DependenciesContainer()
 
   var sut: SessionManager {
-    Dependencies[clientID].sessionManager
+    dependencies.value.sessionManager
   }
 
   init() {
-    Dependencies[clientID] = .init(
-      configuration: .init(
-        url: clientURL,
-        localStorage: InMemoryLocalStorage(),
-        autoRefreshToken: false
-      ),
-      http: http,
-      api: APIClient(clientID: clientID),
-      codeVerifierStorage: .mock,
-      sessionStorage: SessionStorage.live(clientID: clientID),
-      sessionManager: SessionManager.live(clientID: clientID)
+    dependencies.bootstrap(
+      Dependencies(
+        configuration: .init(
+          url: clientURL,
+          localStorage: InMemoryLocalStorage(),
+          autoRefreshToken: false
+        ),
+        http: http,
+        api: APIClient(dependencies: dependencies),
+        codeVerifierStorage: .mock,
+        sessionStorage: SessionStorage.live(dependencies: dependencies),
+        sessionManager: SessionManager.live(dependencies: dependencies)
+      )
     )
   }
 
@@ -71,7 +69,7 @@ struct SessionManagerTests {
   func session_shouldReturnValidSession() async throws {
     try await withMainSerialExecutor {
       let session = Session.validSession
-      Dependencies[clientID].sessionStorage.store(session)
+      dependencies.value.sessionStorage.store(session)
 
       let returnedSession = try await sut.session()
       expectNoDifference(returnedSession, session)
@@ -82,7 +80,7 @@ struct SessionManagerTests {
   func session_shouldRefreshSession_whenCurrentSessionExpired() async throws {
     try await withMainSerialExecutor {
       let currentSession = Session.expiredSession
-      Dependencies[clientID].sessionStorage.store(currentSession)
+      dependencies.value.sessionStorage.store(currentSession)
 
       let validSession = Session.validSession
 

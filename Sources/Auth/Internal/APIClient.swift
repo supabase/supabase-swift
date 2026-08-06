@@ -21,22 +21,22 @@ extension HTTPClient {
 }
 
 struct APIClient: Sendable {
-  let clientID: AuthClientID
+  let dependencies: DependenciesContainer
 
   var configuration: AuthClient.Configuration {
-    Dependencies[clientID].configuration
+    dependencies.value.configuration
   }
 
   var sessionManager: SessionManager {
-    Dependencies[clientID].sessionManager
+    dependencies.value.sessionManager
   }
 
   var eventEmitter: AuthStateChangeEventEmitter {
-    Dependencies[clientID].eventEmitter
+    dependencies.value.eventEmitter
   }
 
   var http: any HTTPClientType {
-    Dependencies[clientID].http
+    dependencies.value.http
   }
 
   /// Error codes that should clean up local session.
@@ -66,10 +66,6 @@ struct APIClient: Sendable {
 
   @discardableResult
   func authorizedExecute(_ request: Helpers.HTTPRequest) async throws -> Helpers.HTTPResponse {
-    var sessionManager: SessionManager {
-      Dependencies[clientID].sessionManager
-    }
-
     let session = try await sessionManager.session()
 
     var request = request

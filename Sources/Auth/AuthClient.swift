@@ -162,24 +162,26 @@ public actor AuthClient {
 
   nonisolated let clientID: AuthClientID
 
-  nonisolated private var api: APIClient { Dependencies[clientID].api }
+  nonisolated let dependencies: DependenciesContainer
 
-  nonisolated var configuration: AuthClient.Configuration { Dependencies[clientID].configuration }
+  nonisolated private var api: APIClient { dependencies.value.api }
+
+  nonisolated var configuration: AuthClient.Configuration { dependencies.value.configuration }
 
   nonisolated private var codeVerifierStorage: CodeVerifierStorage {
-    Dependencies[clientID].codeVerifierStorage
+    dependencies.value.codeVerifierStorage
   }
 
-  nonisolated private var date: @Sendable () -> Date { Dependencies[clientID].date }
-  nonisolated private var sessionManager: SessionManager { Dependencies[clientID].sessionManager }
+  nonisolated private var date: @Sendable () -> Date { dependencies.value.date }
+  nonisolated private var sessionManager: SessionManager { dependencies.value.sessionManager }
   nonisolated private var eventEmitter: AuthStateChangeEventEmitter {
-    Dependencies[clientID].eventEmitter
+    dependencies.value.eventEmitter
   }
   nonisolated private var logger: (any SupabaseLogger)? {
-    Dependencies[clientID].configuration.logger
+    dependencies.value.configuration.logger
   }
-  nonisolated private var sessionStorage: SessionStorage { Dependencies[clientID].sessionStorage }
-  nonisolated private var pkce: PKCE { Dependencies[clientID].pkce }
+  nonisolated private var sessionStorage: SessionStorage { dependencies.value.sessionStorage }
+  nonisolated private var pkce: PKCE { dependencies.value.pkce }
 
   /// Returns the session, refreshing it if necessary.
   ///
@@ -206,19 +208,19 @@ public actor AuthClient {
 
   /// Namespace for accessing multi-factor authentication API.
   nonisolated public var mfa: AuthMFA {
-    AuthMFA(clientID: clientID)
+    AuthMFA(dependencies: dependencies)
   }
 
   /// Namespace for the GoTrue admin methods.
   /// - Warning: This methods requires `secret` key, be careful to never expose `secret`
   /// key in the client.
   nonisolated public var admin: AuthAdmin {
-    AuthAdmin(clientID: clientID)
+    AuthAdmin(dependencies: dependencies)
   }
 
   /// Namespace for the OAuth 2.1 authorization server consent and grant-management API.
   nonisolated public var oauthServer: AuthOAuthServer {
-    AuthOAuthServer(clientID: clientID)
+    AuthOAuthServer(dependencies: dependencies)
   }
 
   /// Initializes a AuthClient with a specific configuration.
@@ -228,16 +230,24 @@ public actor AuthClient {
   public init(configuration: Configuration) {
     clientID = AuthClient.nextClientID()
 
-    Dependencies[clientID] = Dependencies(
-      configuration: configuration,
-      http: HTTPClient(configuration: configuration),
-      api: APIClient(clientID: clientID),
-      codeVerifierStorage: .live(clientID: clientID),
-      sessionStorage: .live(clientID: clientID),
-      sessionManager: .live(clientID: clientID),
-      logger: configuration.logger.map {
-        AuthClientLoggerDecorator(clientID: clientID, decoratee: $0)
-      }
+    // Empty box first — nothing may read `.value` until `bootstrap` runs below.
+    let dependencies = DependenciesContainer()
+    self.dependencies = dependencies
+
+    // Every factory *stores* the box and resolves lazily; none reads `.value` here.
+    // `bootstrap` runs after all argument expressions are evaluated, closing the cycle.
+    dependencies.bootstrap(
+      Dependencies(
+        configuration: configuration,
+        http: HTTPClient(configuration: configuration),
+        api: APIClient(dependencies: dependencies),
+        codeVerifierStorage: .live(dependencies: dependencies),
+        sessionStorage: .live(dependencies: dependencies),
+        sessionManager: .live(dependencies: dependencies),
+        logger: configuration.logger.map {
+          AuthClientLoggerDecorator(clientID: clientID, decoratee: $0)
+        }
+      )
     )
 
     Task { @MainActor in observeAppLifecycleChanges() }
@@ -1409,7 +1419,7 @@ public actor AuthClient {
       scopes: scopes,
       redirectTo: redirectTo,
       queryParams: queryParams,
-      launchURL: { Dependencies[clientID].urlOpener.open($0) }
+      launchURL: { dependencies.value.urlOpener.open($0) }
     )
   }
 

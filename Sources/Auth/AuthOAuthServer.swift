@@ -31,12 +31,12 @@ import HTTPTypes
 /// - ``listGrants()``
 /// - ``revokeGrant(clientId:)``
 public struct AuthOAuthServer: Sendable {
-  let clientID: AuthClientID
+  let dependencies: DependenciesContainer
 
-  var configuration: AuthClient.Configuration { Dependencies[clientID].configuration }
-  var api: APIClient { Dependencies[clientID].api }
-  var encoder: JSONEncoder { Dependencies[clientID].resolvedEncoder }
-  var decoder: JSONDecoder { Dependencies[clientID].resolvedDecoder }
+  var configuration: AuthClient.Configuration { dependencies.value.configuration }
+  var api: APIClient { dependencies.value.api }
+  var encoder: JSONEncoder { dependencies.value.resolvedEncoder }
+  var decoder: JSONDecoder { dependencies.value.resolvedDecoder }
 
   /// Fetches details about a pending OAuth authorization request, to present
   /// a consent screen to the user.
