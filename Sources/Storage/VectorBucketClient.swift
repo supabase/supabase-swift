@@ -5,7 +5,7 @@
 //  Created by Guilherme Souza on 06/08/26.
 //
 
-import Foundation
+public import Foundation
 import HTTPTypes
 
 #if canImport(FoundationNetworking)
@@ -372,8 +372,8 @@ public struct VectorIndex: Codable, Sendable, Hashable {
   /// Configuration for which metadata keys are excluded from filtering, if any.
   public var metadataConfiguration: VectorIndexMetadataConfiguration?
 
-  /// Unix timestamp (seconds) of when the index was created, if known.
-  public var creationTime: Int?
+  /// UNIX timestamp (seconds) of when the index was created, if known.
+  public var creationTime: TimeInterval?
 }
 
 /// A summary of a vector index, as returned by
@@ -388,8 +388,8 @@ public struct VectorIndexSummary: Codable, Sendable, Hashable {
   /// The name of the vector bucket this index belongs to.
   public var vectorBucketName: String
 
-  /// Unix timestamp (seconds) of when the index was created, if known.
-  public var creationTime: Int?
+  /// UNIX timestamp (seconds) of when the index was created, if known.
+  public var creationTime: TimeInterval?
 }
 
 /// A page of vector indexes, as returned by
