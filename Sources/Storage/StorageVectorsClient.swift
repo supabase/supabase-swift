@@ -5,7 +5,7 @@
 //  Created by Guilherme Souza on 27/07/26.
 //
 
-import Foundation
+public import Foundation
 import HTTPTypes
 
 #if canImport(FoundationNetworking)
@@ -186,8 +186,8 @@ public struct VectorBucket: Codable, Sendable, Hashable {
   /// The name of the vector bucket.
   public var vectorBucketName: String
 
-  /// Unix timestamp (seconds) of when the bucket was created, if known.
-  public var creationTime: Int?
+  /// UNIX timestamp (seconds) of when the bucket was created, if known.
+  public var creationTime: TimeInterval?
 }
 
 /// A page of vector buckets, as returned by
