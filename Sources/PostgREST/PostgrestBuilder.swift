@@ -243,8 +243,10 @@ public class PostgrestBuilder: @unchecked Sendable {
       }
 
       if let error = try? configuration.decoder.decode(PostgrestError.self, from: response.data) {
-        // `maybeSingle()` turns the "no/too many rows" error (PGRST116) into a `nil` value.
-        if isMaybeSingle, error.code == "PGRST116" {
+        // `maybeSingle()` turns the "no rows" variant of PGRST116 into a `nil` value, but
+        // rethrows the "multiple rows" variant since that indicates a query that should have
+        // been scoped to match at most one row.
+        if isMaybeSingle, error.code == "PGRST116", error.matchedZeroRows {
           let value = try decode(Data("null".utf8))
           return PostgrestResponse(
             data: response.data, response: response.underlyingResponse, value: value)
@@ -289,4 +291,21 @@ extension HTTPField.Name {
   static let acceptProfile = Self("Accept-Profile")!
   static let contentProfile = Self("Content-Profile")!
   static let xRetryCount = Self("X-Retry-Count")!
+}
+
+extension PostgrestError {
+  /// Whether a `PGRST116` error was caused by the query matching zero rows, as opposed to more
+  /// than one row.
+  ///
+  /// PostgREST reports both cases with the same error code; the row count is only distinguishable
+  /// via the `details` message, e.g. "Results contain 0 rows, application/vnd.pgrst.object+json
+  /// requires 1 row".
+  fileprivate var matchedZeroRows: Bool {
+    guard let details,
+      let rangeAfterPrefix = details.range(of: "Results contain "),
+      let rangeOfRowsSuffix = details.range(
+        of: " row", range: rangeAfterPrefix.upperBound..<details.endIndex)
+    else { return false }
+    return details[rangeAfterPrefix.upperBound..<rangeOfRowsSuffix.lowerBound] == "0"
+  }
 }

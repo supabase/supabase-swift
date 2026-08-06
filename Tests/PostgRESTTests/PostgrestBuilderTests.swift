@@ -104,6 +104,7 @@ extension PostgrestMockerTests {
             """
             {
               "code": "PGRST116",
+              "details": "Results contain 0 rows, application/vnd.pgrst.object+json requires 1 row",
               "message": "JSON object requested, multiple (or no) rows returned"
             }
             """.utf8
@@ -121,6 +122,40 @@ extension PostgrestMockerTests {
         .value
 
       #expect(user == nil)
+    }
+
+    @Test
+    func maybeSingleThrowsOnMultipleRows() async throws {
+      Mock(
+        url: url.appendingPathComponent("users"),
+        ignoreQuery: true,
+        statusCode: 406,
+        data: [
+          .get: Data(
+            """
+            {
+              "code": "PGRST116",
+              "details": "Results contain 2 rows, application/vnd.pgrst.object+json requires 1 row",
+              "message": "JSON object requested, multiple (or no) rows returned"
+            }
+            """.utf8
+          )
+        ]
+      )
+      .register()
+
+      do {
+        let _: User? =
+          try await sut
+          .from("users")
+          .select()
+          .maybeSingle()
+          .execute()
+          .value
+        Issue.record("Expected error to be thrown")
+      } catch let error as PostgrestError {
+        #expect(error.code == "PGRST116")
+      }
     }
 
     @Test
