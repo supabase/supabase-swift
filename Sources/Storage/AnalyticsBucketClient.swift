@@ -40,13 +40,15 @@ import HTTPTypes
 ///
 /// - ``namespace(_:)``
 @_spi(Experimental)
-public class AnalyticsBucketClient: StorageApi, @unchecked Sendable {
+public struct AnalyticsBucketClient: Sendable {
   /// The name of the analytics bucket this client operates on.
   public let bucketName: String
 
-  init(bucketName: String, configuration: StorageClientConfiguration) {
+  private let api: StorageApi
+
+  init(bucketName: String, api: StorageApi) {
     self.bucketName = bucketName
-    super.init(configuration: configuration)
+    self.api = api
   }
 
   /// Creates a new namespace in this bucket.
@@ -66,9 +68,9 @@ public class AnalyticsBucketClient: StorageApi, @unchecked Sendable {
     _ name: String,
     properties: [String: String]? = nil
   ) async throws -> IcebergNamespace {
-    try await execute(
+    try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("iceberg/v1/\(bucketName)/namespaces"),
+        url: api.configuration.url.appendingPathComponent("iceberg/v1/\(bucketName)/namespaces"),
         method: .post,
         body: JSONEncoder.unconfiguredEncoder.encode(
           CreateNamespaceBody(namespace: name, properties: properties)
@@ -90,9 +92,9 @@ public class AnalyticsBucketClient: StorageApi, @unchecked Sendable {
   /// - Returns: The matching ``IcebergNamespace``.
   /// - Throws: ``StorageError`` when the API rejects the request.
   public func getNamespace(_ name: String) async throws -> IcebergNamespace {
-    try await execute(
+    try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent(
+        url: api.configuration.url.appendingPathComponent(
           "iceberg/v1/\(bucketName)/namespaces/\(name)"),
         method: .get
       )
@@ -131,9 +133,9 @@ public class AnalyticsBucketClient: StorageApi, @unchecked Sendable {
     if let pageSize { query.append(URLQueryItem(name: "pageSize", value: String(pageSize))) }
     if let pageToken { query.append(URLQueryItem(name: "pageToken", value: pageToken)) }
 
-    let response: ListNamespacesResponseBody = try await execute(
+    let response: ListNamespacesResponseBody = try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("iceberg/v1/\(bucketName)/namespaces"),
+        url: api.configuration.url.appendingPathComponent("iceberg/v1/\(bucketName)/namespaces"),
         method: .get,
         query: query
       )
@@ -160,9 +162,9 @@ public class AnalyticsBucketClient: StorageApi, @unchecked Sendable {
   /// - Throws: ``StorageError`` for any failure other than the namespace not existing.
   public func namespaceExists(_ name: String) async throws -> Bool {
     do {
-      try await execute(
+      try await api.execute(
         HTTPRequest(
-          url: configuration.url.appendingPathComponent(
+          url: api.configuration.url.appendingPathComponent(
             "iceberg/v1/\(bucketName)/namespaces/\(name)"),
           method: .head
         )
@@ -189,9 +191,9 @@ public class AnalyticsBucketClient: StorageApi, @unchecked Sendable {
   /// - Parameter name: The name of the namespace to delete.
   /// - Throws: ``StorageError`` when the API rejects the request.
   public func deleteNamespace(_ name: String) async throws {
-    try await execute(
+    try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent(
+        url: api.configuration.url.appendingPathComponent(
           "iceberg/v1/\(bucketName)/namespaces/\(name)"),
         method: .delete
       )
@@ -213,7 +215,7 @@ public class AnalyticsBucketClient: StorageApi, @unchecked Sendable {
     IcebergNamespaceClient(
       bucketName: bucketName,
       namespaceName: name,
-      configuration: configuration
+      api: api
     )
   }
 }

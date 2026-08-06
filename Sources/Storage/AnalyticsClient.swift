@@ -38,7 +38,13 @@ import HTTPTypes
 ///
 /// - ``from(_:)``
 @_spi(Experimental)
-public class AnalyticsClient: StorageApi, @unchecked Sendable {
+public struct AnalyticsClient: Sendable {
+  private let api: StorageApi
+
+  init(api: StorageApi) {
+    self.api = api
+  }
+
   /// Creates a new analytics bucket.
   ///
   /// ```swift
@@ -51,9 +57,9 @@ public class AnalyticsClient: StorageApi, @unchecked Sendable {
   /// - Returns: The newly created ``AnalyticBucket``.
   /// - Throws: ``StorageError`` when the API rejects the request.
   public func createBucket(_ name: String) async throws -> AnalyticBucket {
-    try await execute(
+    try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("iceberg/bucket"),
+        url: api.configuration.url.appendingPathComponent("iceberg/bucket"),
         method: .post,
         body: JSONEncoder.unconfiguredEncoder.encode(CreateAnalyticBucketBody(name: name))
       )
@@ -94,9 +100,9 @@ public class AnalyticsClient: StorageApi, @unchecked Sendable {
     if let sortOrder { query.append(URLQueryItem(name: "sortOrder", value: sortOrder.rawValue)) }
     if let search { query.append(URLQueryItem(name: "search", value: search)) }
 
-    return try await execute(
+    return try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("iceberg/bucket"),
+        url: api.configuration.url.appendingPathComponent("iceberg/bucket"),
         method: .get,
         query: query
       )
@@ -118,9 +124,9 @@ public class AnalyticsClient: StorageApi, @unchecked Sendable {
   /// - Parameter name: The name of the bucket to delete.
   /// - Throws: ``StorageError`` when the API rejects the request.
   public func deleteBucket(_ name: String) async throws {
-    try await execute(
+    try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("iceberg/bucket/\(name)"),
+        url: api.configuration.url.appendingPathComponent("iceberg/bucket/\(name)"),
         method: .delete
       )
     )
@@ -139,7 +145,7 @@ public class AnalyticsClient: StorageApi, @unchecked Sendable {
   /// - Parameter bucketName: The name of the analytics bucket to operate on.
   /// - Returns: An ``AnalyticsBucketClient`` configured for the given bucket.
   public func from(_ bucketName: String) -> AnalyticsBucketClient {
-    AnalyticsBucketClient(bucketName: bucketName, configuration: configuration)
+    AnalyticsBucketClient(bucketName: bucketName, api: api)
   }
 }
 

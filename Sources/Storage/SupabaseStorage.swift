@@ -149,6 +149,6 @@ public class SupabaseStorageClient: StorageBucketApi, @unchecked Sendable {
   /// - Warning: Experimental. See ``AnalyticsClient``.
   @_spi(Experimental)
   public var analytics: AnalyticsClient {
-    AnalyticsClient(configuration: configuration)
+    AnalyticsClient(api: self)
   }
 }

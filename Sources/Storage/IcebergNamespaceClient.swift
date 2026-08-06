@@ -42,17 +42,19 @@ import HTTPTypes
 /// - ``tableExists(_:)``
 /// - ``deleteTable(_:purge:)``
 @_spi(Experimental)
-public class IcebergNamespaceClient: StorageApi, @unchecked Sendable {
+public struct IcebergNamespaceClient: Sendable {
   /// The name of the analytics bucket containing ``namespaceName``.
   public let bucketName: String
 
   /// The name of the namespace this client operates on.
   public let namespaceName: String
 
-  init(bucketName: String, namespaceName: String, configuration: StorageClientConfiguration) {
+  private let api: StorageApi
+
+  init(bucketName: String, namespaceName: String, api: StorageApi) {
     self.bucketName = bucketName
     self.namespaceName = namespaceName
-    super.init(configuration: configuration)
+    self.api = api
   }
 
   /// Creates a new Iceberg table in this namespace.
@@ -93,9 +95,9 @@ public class IcebergNamespaceClient: StorageApi, @unchecked Sendable {
     writeOrder: IcebergSortOrder? = nil,
     stageCreate: Bool = false
   ) async throws -> IcebergLoadTableResult {
-    try await execute(
+    try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent(
+        url: api.configuration.url.appendingPathComponent(
           "iceberg/v1/\(bucketName)/namespaces/\(namespaceName)/tables"),
         method: .post,
         body: JSONEncoder.unconfiguredEncoder.encode(
@@ -127,9 +129,9 @@ public class IcebergNamespaceClient: StorageApi, @unchecked Sendable {
   /// - Returns: The table's metadata.
   /// - Throws: ``StorageError`` when the API rejects the request.
   public func getTable(_ name: String) async throws -> IcebergLoadTableResult {
-    try await execute(
+    try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent(
+        url: api.configuration.url.appendingPathComponent(
           "iceberg/v1/\(bucketName)/namespaces/\(namespaceName)/tables/\(name)"),
         method: .get
       )
@@ -164,9 +166,9 @@ public class IcebergNamespaceClient: StorageApi, @unchecked Sendable {
     if let pageToken { query.append(URLQueryItem(name: "pageToken", value: pageToken)) }
     if let pageSize { query.append(URLQueryItem(name: "pageSize", value: String(pageSize))) }
 
-    let response: ListTablesResponseBody = try await execute(
+    let response: ListTablesResponseBody = try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent(
+        url: api.configuration.url.appendingPathComponent(
           "iceberg/v1/\(bucketName)/namespaces/\(namespaceName)/tables"),
         method: .get,
         query: query
@@ -194,9 +196,9 @@ public class IcebergNamespaceClient: StorageApi, @unchecked Sendable {
   /// - Throws: ``StorageError`` for any failure other than the table not existing.
   public func tableExists(_ name: String) async throws -> Bool {
     do {
-      try await execute(
+      try await api.execute(
         HTTPRequest(
-          url: configuration.url.appendingPathComponent(
+          url: api.configuration.url.appendingPathComponent(
             "iceberg/v1/\(bucketName)/namespaces/\(namespaceName)/tables/\(name)"),
           method: .head
         )
@@ -224,9 +226,9 @@ public class IcebergNamespaceClient: StorageApi, @unchecked Sendable {
   ///     (the default), the table is dropped from the catalog but its data is retained.
   /// - Throws: ``StorageError`` when the API rejects the request.
   public func deleteTable(_ name: String, purge: Bool = false) async throws {
-    try await execute(
+    try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent(
+        url: api.configuration.url.appendingPathComponent(
           "iceberg/v1/\(bucketName)/namespaces/\(namespaceName)/tables/\(name)"),
         method: .delete,
         query: [URLQueryItem(name: "purgeRequested", value: purge ? "true" : "false")]
