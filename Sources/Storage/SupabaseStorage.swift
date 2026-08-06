@@ -136,7 +136,7 @@ public class SupabaseStorageClient: StorageBucketApi, @unchecked Sendable {
   /// - Warning: Experimental. See ``StorageVectorsClient``.
   @_spi(Experimental)
   public var vectors: StorageVectorsClient {
-    StorageVectorsClient(configuration: configuration)
+    StorageVectorsClient(api: self)
   }
 
   /// A client for managing analytics (Iceberg-backed) buckets.

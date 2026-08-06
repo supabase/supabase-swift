@@ -38,7 +38,13 @@ import HTTPTypes
 ///
 /// - ``from(_:)``
 @_spi(Experimental)
-public class StorageVectorsClient: StorageApi, @unchecked Sendable {
+public struct StorageVectorsClient: Sendable {
+  private let api: StorageApi
+
+  init(api: StorageApi) {
+    self.api = api
+  }
+
   /// Returns a client scoped to the given vector bucket, for managing its indexes and vector data.
   ///
   /// ```swift
@@ -51,7 +57,7 @@ public class StorageVectorsClient: StorageApi, @unchecked Sendable {
   /// - Parameter vectorBucketName: The name of the vector bucket to operate on.
   /// - Returns: A ``VectorBucketClient`` configured for the given bucket.
   public func from(_ vectorBucketName: String) -> VectorBucketClient {
-    VectorBucketClient(vectorBucketName: vectorBucketName, configuration: configuration)
+    VectorBucketClient(vectorBucketName: vectorBucketName, api: api)
   }
   /// Creates a new vector bucket.
   ///
@@ -64,9 +70,9 @@ public class StorageVectorsClient: StorageApi, @unchecked Sendable {
   /// - Parameter name: The name of the vector bucket to create.
   /// - Throws: ``StorageError`` when the API rejects the request.
   public func createBucket(_ name: String) async throws {
-    try await execute(
+    try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("vector/CreateVectorBucket"),
+        url: api.configuration.url.appendingPathComponent("vector/CreateVectorBucket"),
         method: .post,
         body: JSONEncoder.unconfiguredEncoder.encode(VectorBucketNameBody(vectorBucketName: name))
       )
@@ -86,9 +92,9 @@ public class StorageVectorsClient: StorageApi, @unchecked Sendable {
   /// - Returns: The matching ``VectorBucket``.
   /// - Throws: ``StorageError`` when the API rejects the request.
   public func getBucket(_ name: String) async throws -> VectorBucket {
-    let response: GetVectorBucketResponseBody = try await execute(
+    let response: GetVectorBucketResponseBody = try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("vector/GetVectorBucket"),
+        url: api.configuration.url.appendingPathComponent("vector/GetVectorBucket"),
         method: .post,
         body: JSONEncoder.unconfiguredEncoder.encode(VectorBucketNameBody(vectorBucketName: name))
       )
@@ -122,9 +128,9 @@ public class StorageVectorsClient: StorageApi, @unchecked Sendable {
     maxResults: Int? = nil,
     nextToken: String? = nil
   ) async throws -> ListVectorBucketsResponse {
-    let response: ListVectorBucketsResponseBody = try await execute(
+    let response: ListVectorBucketsResponseBody = try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("vector/ListVectorBuckets"),
+        url: api.configuration.url.appendingPathComponent("vector/ListVectorBuckets"),
         method: .post,
         body: JSONEncoder.unconfiguredEncoder.encode(
           VectorBucketListBody(maxResults: maxResults, nextToken: nextToken, prefix: prefix)
@@ -149,9 +155,9 @@ public class StorageVectorsClient: StorageApi, @unchecked Sendable {
   /// - Parameter name: The name of the vector bucket to delete.
   /// - Throws: ``StorageError`` when the API rejects the request.
   public func deleteBucket(_ name: String) async throws {
-    try await execute(
+    try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("vector/DeleteVectorBucket"),
+        url: api.configuration.url.appendingPathComponent("vector/DeleteVectorBucket"),
         method: .post,
         body: JSONEncoder.unconfiguredEncoder.encode(VectorBucketNameBody(vectorBucketName: name))
       )

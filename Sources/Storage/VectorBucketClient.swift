@@ -39,13 +39,15 @@ import HTTPTypes
 ///
 /// - ``index(_:)``
 @_spi(Experimental)
-public class VectorBucketClient: StorageApi, @unchecked Sendable {
+public struct VectorBucketClient: Sendable {
   /// The name of the vector bucket this client operates on.
   public let vectorBucketName: String
 
-  init(vectorBucketName: String, configuration: StorageClientConfiguration) {
+  private let api: StorageApi
+
+  init(vectorBucketName: String, api: StorageApi) {
     self.vectorBucketName = vectorBucketName
-    super.init(configuration: configuration)
+    self.api = api
   }
 
   /// Creates a new vector index within this bucket.
@@ -79,9 +81,9 @@ public class VectorBucketClient: StorageApi, @unchecked Sendable {
     dataType: VectorDataType = .float32,
     metadataConfiguration: VectorIndexMetadataConfiguration? = nil
   ) async throws {
-    try await execute(
+    try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("vector/CreateIndex"),
+        url: api.configuration.url.appendingPathComponent("vector/CreateIndex"),
         method: .post,
         body: JSONEncoder.unconfiguredEncoder.encode(
           CreateIndexBody(
@@ -110,9 +112,9 @@ public class VectorBucketClient: StorageApi, @unchecked Sendable {
   /// - Returns: The matching ``VectorIndex``.
   /// - Throws: ``StorageError`` when the API rejects the request.
   public func getIndex(_ indexName: String) async throws -> VectorIndex {
-    let response: GetIndexResponseBody = try await execute(
+    let response: GetIndexResponseBody = try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("vector/GetIndex"),
+        url: api.configuration.url.appendingPathComponent("vector/GetIndex"),
         method: .post,
         body: JSONEncoder.unconfiguredEncoder.encode(
           VectorBucketIndexNameBody(vectorBucketName: vectorBucketName, indexName: indexName)
@@ -149,9 +151,9 @@ public class VectorBucketClient: StorageApi, @unchecked Sendable {
     maxResults: Int? = nil,
     nextToken: String? = nil
   ) async throws -> ListVectorIndexesResponse {
-    let response: ListIndexesResponseBody = try await execute(
+    let response: ListIndexesResponseBody = try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("vector/ListIndexes"),
+        url: api.configuration.url.appendingPathComponent("vector/ListIndexes"),
         method: .post,
         body: JSONEncoder.unconfiguredEncoder.encode(
           ListIndexesBody(
@@ -178,9 +180,9 @@ public class VectorBucketClient: StorageApi, @unchecked Sendable {
   /// - Parameter indexName: The name of the index to delete.
   /// - Throws: ``StorageError`` when the API rejects the request.
   public func deleteIndex(_ indexName: String) async throws {
-    try await execute(
+    try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("vector/DeleteIndex"),
+        url: api.configuration.url.appendingPathComponent("vector/DeleteIndex"),
         method: .post,
         body: JSONEncoder.unconfiguredEncoder.encode(
           VectorBucketIndexNameBody(vectorBucketName: vectorBucketName, indexName: indexName)
@@ -206,7 +208,7 @@ public class VectorBucketClient: StorageApi, @unchecked Sendable {
     VectorIndexClient(
       vectorBucketName: vectorBucketName,
       indexName: indexName,
-      configuration: configuration
+      api: api
     )
   }
 }
