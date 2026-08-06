@@ -217,10 +217,29 @@ subdata
 Subrange
 TESTBOUNDARY
 
-# Terms from HTTPRuntimeTestHelpers planning and scheme configuration.
+# Terms from the OpenAPI-to-Swift code generator (tools/openapi-codegen) and
+# the generated Storage HTTP client (Sources/Storage/Generated).
+associatedtype
+claude
+Codegen
+codegen
+conformances
+deinit
 fileprivate
+grdsdev
+guilherme
+healthcheck
+IRHTTP
+nullable
+openapi
+ramanujan
+
+# Terms from HTTPRuntimeTestHelpers planning and scheme configuration.
 parallelizable
 Testables
+typealias
+Typeless
+uppercased
 xcscheme
 xcschemes
 xcshareddata

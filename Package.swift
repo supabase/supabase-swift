@@ -200,6 +200,7 @@ let package = Package(
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
         "Helpers",
+        "HTTPRuntime",
       ]
     ),
     .testTarget(
