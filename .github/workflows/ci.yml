@@ -382,3 +382,58 @@ jobs:
             echo ""
             echo "✅ All CI jobs passed successfully"
           fi
+
+  notify-slack-on-failure:
+    name: Notify Slack on CI failure
+    needs: [ci-success]
+    # release-please (release.yml) only runs after a *successful* CI run on main,
+    # so a red main blocks it silently (no new release PR, no update to the open
+    # one) unless someone happens to look at Actions. Alert instead of relying on that.
+    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.ci-success.result == 'failure'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Slack alert
+        env:
+          GITHUB_REPO: ${{ github.repository }}
+          GITHUB_ACTOR: ${{ github.actor }}
+        run: |
+          payload=$(cat <<EOF
+          {
+            "text": "❌ CI failed on main in ${GITHUB_REPO}",
+            "blocks": [
+              {
+                "type": "header",
+                "text": { "type": "plain_text", "text": "❌ CI failed on main", "emoji": true }
+              },
+              {
+                "type": "section",
+                "text": { "type": "mrkdwn", "text": "This blocks release-please from creating/updating the release PR until it's fixed." }
+              },
+              {
+                "type": "section",
+                "fields": [
+                  { "type": "mrkdwn", "text": "*Repository*\n${GITHUB_REPO}" },
+                  { "type": "mrkdwn", "text": "*Actor*\n${GITHUB_ACTOR}" }
+                ]
+              },
+              {
+                "type": "actions",
+                "elements": [
+                  {
+                    "type": "button",
+                    "text": { "type": "plain_text", "text": "View Run" },
+                    "url": "https://github.com/${GITHUB_REPO}/actions/runs/${{ github.run_id }}"
+                  },
+                  {
+                    "type": "button",
+                    "text": { "type": "plain_text", "text": "View Commit" },
+                    "url": "https://github.com/${GITHUB_REPO}/commit/${{ github.sha }}"
+                  }
+                ]
+              }
+            ]
+          }
+          EOF
+          )
+
+          curl --proto '=https' -sf -X POST -H 'Content-type: application/json' --data "$payload" "${{ secrets.SLACK_CLIENT_LIBS_WEBHOOK }}"
