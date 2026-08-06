@@ -38,7 +38,7 @@ public struct AuthAdmin: Sendable {
 
   var configuration: AuthClient.Configuration { Dependencies[clientID].configuration }
   var api: APIClient { Dependencies[clientID].api }
-  var encoder: JSONEncoder { Dependencies[clientID].encoder }
+  var encoder: JSONEncoder { Dependencies[clientID].resolvedEncoder }
 
   /// Contains all OAuth client administration methods.
   /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
@@ -57,7 +57,7 @@ public struct AuthAdmin: Sendable {
         url: configuration.url.appendingPathComponent("admin/users/\(uid)"),
         method: .get
       )
-    ).decoded(decoder: configuration.decoder)
+    ).decoded(decoder: configuration.resolvedDecoder)
   }
 
   /// Updates the user data.
@@ -70,9 +70,9 @@ public struct AuthAdmin: Sendable {
       HTTPRequest(
         url: configuration.url.appendingPathComponent("admin/users/\(uid)"),
         method: .put,
-        body: configuration.encoder.encode(attributes)
+        body: configuration.resolvedEncoder.encode(attributes)
       )
-    ).decoded(decoder: configuration.decoder)
+    ).decoded(decoder: configuration.resolvedDecoder)
   }
 
   /// Creates a new user.
@@ -90,7 +90,7 @@ public struct AuthAdmin: Sendable {
         body: encoder.encode(attributes)
       )
     )
-    .decoded(decoder: configuration.decoder)
+    .decoded(decoder: configuration.resolvedDecoder)
   }
 
   /// Sends an invite link to an email address.
@@ -128,7 +128,7 @@ public struct AuthAdmin: Sendable {
         )
       )
     )
-    .decoded(decoder: configuration.decoder)
+    .decoded(decoder: configuration.resolvedDecoder)
   }
 
   /// Delete a user. Requires `secret` key.
@@ -193,7 +193,8 @@ public struct AuthAdmin: Sendable {
       )
     )
 
-    let response = try httpResponse.decoded(as: Response.self, decoder: configuration.decoder)
+    let response = try httpResponse.decoded(
+      as: Response.self, decoder: configuration.resolvedDecoder)
 
     var pagination = ListUsersPaginatedResponse(
       users: response.users,
@@ -241,7 +242,7 @@ public struct AuthAdmin: Sendable {
         ].compactMap { $0 },
         body: encoder.encode(params.body)
       )
-    ).decoded(decoder: configuration.decoder)
+    ).decoded(decoder: configuration.resolvedDecoder)
   }
 }
 

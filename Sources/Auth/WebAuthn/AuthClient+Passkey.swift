@@ -37,7 +37,7 @@ extension AuthClient {
         method: .post
       )
     )
-    .decoded(decoder: configuration.decoder)
+    .decoded(decoder: configuration.resolvedDecoder)
   }
 
   /// Stores a newly created passkey for the current user.
@@ -62,7 +62,7 @@ extension AuthClient {
         ])
       )
     )
-    .decoded(decoder: configuration.decoder)
+    .decoded(decoder: configuration.resolvedDecoder)
   }
 
   /// Fetches assertion options to authenticate with a passkey.
@@ -79,7 +79,7 @@ extension AuthClient {
         method: .post
       )
     )
-    .decoded(decoder: configuration.decoder)
+    .decoded(decoder: configuration.resolvedDecoder)
   }
 
   /// Verifies a passkey assertion and establishes a session.
@@ -104,7 +104,7 @@ extension AuthClient {
         ])
       )
     )
-    .decoded(decoder: configuration.decoder)
+    .decoded(decoder: configuration.resolvedDecoder)
 
     if let session = response.session {
       await Dependencies[clientID].sessionManager.update(session)
@@ -123,7 +123,7 @@ extension AuthClient {
         method: .get
       )
     )
-    .decoded(decoder: configuration.decoder)
+    .decoded(decoder: configuration.resolvedDecoder)
   }
 
   /// Renames a passkey.
@@ -140,10 +140,10 @@ extension AuthClient {
         url: configuration.url.appendingPathComponent("passkeys/\(id)"),
         method: .patch,
         // Dictionary keys are not transformed by the snake_case strategy, so spell it out.
-        body: configuration.encoder.encode(["friendly_name": friendlyName])
+        body: configuration.resolvedEncoder.encode(["friendly_name": friendlyName])
       )
     )
-    .decoded(decoder: configuration.decoder)
+    .decoded(decoder: configuration.resolvedDecoder)
   }
 
   /// Removes a passkey.

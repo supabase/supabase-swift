@@ -20,6 +20,9 @@ final class PushV2 {
   let message: RealtimeMessageV2
 
   private var receivedContinuation: CheckedContinuation<PushStatus, Never>?
+  /// Buffers a status delivered via ``didReceive(status:)`` before ``send()`` has
+  /// registered its continuation, so an ack that arrives early isn't dropped.
+  private var receivedStatus: PushStatus?
 
   init(channel: (any RealtimeChannelProtocol)?, message: RealtimeMessageV2) {
     self.channel = channel
@@ -44,7 +47,12 @@ final class PushV2 {
         interval: channel.socket.options.timeoutInterval, clock: channel.socket.clock
       ) {
         await withCheckedContinuation { continuation in
-          self.receivedContinuation = continuation
+          if let status = self.receivedStatus {
+            self.receivedStatus = nil
+            continuation.resume(returning: status)
+          } else {
+            self.receivedContinuation = continuation
+          }
         }
       }
     } catch is TimeoutError {
@@ -57,7 +65,13 @@ final class PushV2 {
   }
 
   func didReceive(status: PushStatus) {
-    receivedContinuation?.resume(returning: status)
-    receivedContinuation = nil
+    if let receivedContinuation {
+      receivedContinuation.resume(returning: status)
+      self.receivedContinuation = nil
+    } else {
+      // The ack arrived before `send()` registered its continuation; buffer it
+      // so `send()` can resume immediately instead of timing out.
+      receivedStatus = status
+    }
   }
 }

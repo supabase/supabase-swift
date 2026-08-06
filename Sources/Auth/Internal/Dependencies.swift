@@ -16,8 +16,8 @@ struct Dependencies: Sendable {
   var pkce: PKCE = .live
   var logger: (any SupabaseLogger)?
 
-  var encoder: JSONEncoder { configuration.encoder }
-  var decoder: JSONDecoder { configuration.decoder }
+  var resolvedEncoder: JSONEncoder { configuration.resolvedEncoder }
+  var resolvedDecoder: JSONDecoder { configuration.resolvedDecoder }
 }
 
 extension Dependencies {
