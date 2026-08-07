@@ -70,11 +70,17 @@ struct AuthClientMultipleInstancesTests {
       #expect(Dependencies.instances.value[clientID] != nil)
     }
 
-    // `init` kicks off a `Task { @MainActor in ... }` that briefly holds a
-    // strong reference to `self`; let it run so `client` can actually deinit.
-    await Task.megaYield()
+    // `init` kicks off a `Task { @MainActor in ... }` that briefly holds a strong reference to
+    // `self`, and `deinit` itself hops off to a detached task to stop auto-refresh; poll instead
+    // of asserting after a single yield; the number of hops needed to actually deinit isn't fixed
+    // and grows under scheduler load (e.g. on Linux CI with a small cooperative thread pool).
+    var instance = Dependencies.instances.value[clientID]
+    for _ in 0..<100 where instance != nil {
+      try? await Task.sleep(nanoseconds: NSEC_PER_MSEC * 10)
+      instance = Dependencies.instances.value[clientID]
+    }
 
-    #expect(Dependencies.instances.value[clientID] == nil)
+    #expect(instance == nil)
   }
 
   @Test
