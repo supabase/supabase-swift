@@ -12,6 +12,44 @@ struct PostgrestFilterValueTests {
   }
 
   @Test
+  func arrayQuotesElementsContainingReservedCharacters() {
+    #expect(["a,b"].rawValue == "{\"a,b\"}")
+    #expect(["a", "b,c", "d"].rawValue == "{a,\"b,c\",d}")
+    #expect(["a{b"].rawValue == "{\"a{b\"}")
+  }
+
+  @Test
+  func arrayEscapesQuotesAndBackslashes() {
+    #expect([#"a"b"#].rawValue == #"{"a\"b"}"#)
+    #expect([#"a\b"#].rawValue == #"{"a\\b"}"#)
+  }
+
+  @Test
+  func arrayQuotesWhitespaceEmptyAndNullElements() {
+    #expect([" a"].rawValue == "{\" a\"}")
+    #expect([""].rawValue == "{\"\"}")
+    #expect(["NULL"].rawValue == "{\"NULL\"}")
+    #expect(["null"].rawValue == "{\"null\"}")
+  }
+
+  @Test
+  func arrayLeavesSafeAndNumericElementsUnquoted() {
+    #expect([1, 2, 3].rawValue == "{1,2,3}")
+    #expect(["admin", "user"].rawValue == "{admin,user}")
+    #expect(["9:00", "17:00"].rawValue == "{9:00,17:00}")
+  }
+
+  @Test
+  func arrayPreservesNestedArrayLiterals() {
+    #expect([[1, 2], [3, 4]].rawValue == "{{1,2},{3,4}}")
+  }
+
+  @Test
+  func anyJSONArrayEscapesReservedCharacters() {
+    #expect(AnyJSON.array(["a,b"]).rawValue == "{\"a,b\"}")
+  }
+
+  @Test
   func anyJSON() {
     #expect(
       AnyJSON.array(["is:online", "faction:red"]).rawValue == "{is:online,faction:red}"

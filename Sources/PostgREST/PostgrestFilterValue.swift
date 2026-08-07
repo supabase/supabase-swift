@@ -1,4 +1,5 @@
 public import Foundation
+import Helpers
 
 /// A value that can be used as a filter operand in PostgREST queries.
 ///
@@ -67,7 +68,14 @@ extension Date: PostgrestFilterValue {
 /// The raw value is a PostgreSQL array literal, e.g. `{a,b,c}`.
 extension Array: PostgrestFilterValue where Element: PostgrestFilterValue {
   public var rawValue: String {
-    "{\(map(\.rawValue).joined(separator: ","))}"
+    let elements = map { element -> String in
+      let raw = element.rawValue
+      if raw.hasPrefix("{"), raw.hasSuffix("}") {
+        return raw
+      }
+      return escapePostgRESTArrayLiteralElement(raw)
+    }
+    return "{\(elements.joined(separator: ","))}"
   }
 }
 
