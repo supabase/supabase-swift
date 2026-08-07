@@ -1,7 +1,0 @@
-{
-  "tool_name": "Read",
-  "tool_input_preview": "{\"file_path\":\"/Users/guilherme/work/supabase-swift/.claude/worktrees/agent-a466a5dba3f5e75bd/Sources/RealtimeV2/WebSocket.swift\"}",
-  "error": "File does not exist. Note: your current working directory is /Users/guilherme/work/supabase-swift/.claude/worktrees/agent-a466a5dba3f5e75bd. Did you mean WebSocket?",
-  "timestamp": "2026-08-07T14:49:53.675Z",
-  "retry_count": 1
-}
