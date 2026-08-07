@@ -33,12 +33,31 @@ import HTTPTypes
 /// - ``getBucket(_:)``
 /// - ``listBuckets(prefix:maxResults:nextToken:)``
 /// - ``deleteBucket(_:)``
+///
+/// ### Managing indexes and vector data
+///
+/// - ``from(_:)``
 @_spi(Experimental)
 public struct StorageVectorsClient: Sendable {
   private let api: StorageApi
 
   init(api: StorageApi) {
     self.api = api
+  }
+
+  /// Returns a client scoped to the given vector bucket, for managing its indexes and vector data.
+  ///
+  /// ```swift
+  /// let bucket = client.storage.vectors.from("documents")
+  /// try await bucket.createIndex("embeddings", dimension: 1536, distanceMetric: .cosine)
+  /// ```
+  ///
+  /// - Warning: Experimental. See ``StorageVectorsClient``.
+  ///
+  /// - Parameter vectorBucketName: The name of the vector bucket to operate on.
+  /// - Returns: A ``VectorBucketClient`` configured for the given bucket.
+  public func from(_ vectorBucketName: String) -> VectorBucketClient {
+    VectorBucketClient(vectorBucketName: vectorBucketName, api: api)
   }
 
   /// Creates a new vector bucket.
