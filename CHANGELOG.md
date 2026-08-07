@@ -1,5 +1,25 @@
 # Changelog
 
+## [2.55.0](https://github.com/supabase/supabase-swift/compare/v2.54.1...v2.55.0) (2026-08-07)
+
+
+### Features
+
+* **storage:** add vector bucket CRUD (alpha) ([#1153](https://github.com/supabase/supabase-swift/issues/1153)) ([a4ad8af](https://github.com/supabase/supabase-swift/commit/a4ad8af5077453056adfd7805392ee81bb0764ca))
+* **storage:** add vector index and vector data operations (alpha) ([#1181](https://github.com/supabase/supabase-swift/issues/1181)) ([3882e79](https://github.com/supabase/supabase-swift/commit/3882e7901cbcca98c5ec3eb82b519143a3aa1a0d))
+
+
+### Bug Fixes
+
+* **auth:** remove AuthClient from Dependencies registry on deinit ([#1176](https://github.com/supabase/supabase-swift/issues/1176)) ([0826b28](https://github.com/supabase/supabase-swift/commit/0826b287b85ee7999cc25bb5b07ba5637984a439))
+* **auth:** stop auto-refresh task on AuthClient deinit ([#1193](https://github.com/supabase/supabase-swift/issues/1193)) ([c6a5d99](https://github.com/supabase/supabase-swift/commit/c6a5d99a204c17da2f4db8555edcc27f46b8f2cd))
+* flaky CI in AuthTests and RealtimeTests ([#1164](https://github.com/supabase/supabase-swift/issues/1164)) ([3585688](https://github.com/supabase/supabase-swift/commit/358568852992c3b5cc05567f11f6d885a0d52eba))
+* **helpers:** extend Swift version detection ladder, drop unsupported floors ([#1160](https://github.com/supabase/supabase-swift/issues/1160)) ([186daf0](https://github.com/supabase/supabase-swift/commit/186daf067cdfa3c6361514a66303b2cd61465b6e))
+* **postgrest:** decode PostgrestError details field ([#1159](https://github.com/supabase/supabase-swift/issues/1159)) ([b9296f6](https://github.com/supabase/supabase-swift/commit/b9296f62344db6678f5f7562062d4ddc8f2ff796))
+* **realtime:** close WebSocket connection on RealtimeClientV2 deinit ([#1192](https://github.com/supabase/supabase-swift/issues/1192)) ([c7d17c7](https://github.com/supabase/supabase-swift/commit/c7d17c7d4df7dba14893a61c89393d8981adeb63))
+* **realtime:** rejoin channels concurrently on reconnect ([#1110](https://github.com/supabase/supabase-swift/issues/1110)) ([3a47076](https://github.com/supabase/supabase-swift/commit/3a470765efc442e5ea92f89011bef370c59e3b60))
+* **supabase:** stop listenForAuthEvents task from leaking SupabaseClient ([#1191](https://github.com/supabase/supabase-swift/issues/1191)) ([99cb526](https://github.com/supabase/supabase-swift/commit/99cb526312e1c4ff496ed5152153af95d5e6e2c0)), closes [#1187](https://github.com/supabase/supabase-swift/issues/1187)
+
 ## [2.54.1](https://github.com/supabase/supabase-swift/compare/v2.54.0...v2.54.1) (2026-07-29)
 
 
