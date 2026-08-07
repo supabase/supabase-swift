@@ -10,7 +10,7 @@ import InlineSnapshotTesting
 @_spi(Experimental) import Storage
 import Testing
 
-@Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil))
+@Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil), .serialized)
 struct StorageVectorsClientIntegrationTests {
   let vectors = SupabaseStorageClient(
     configuration: StorageClientConfiguration(
