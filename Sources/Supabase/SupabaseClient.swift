@@ -188,10 +188,6 @@ public final class SupabaseClient: Sendable {
 
   let mutableState = LockIsolated(MutableState())
 
-  private var session: URLSession {
-    options.global.session
-  }
-
   #if !os(Linux) && !os(Android)
     /// Creates a client with default options.
     /// - Parameters:
@@ -425,41 +421,73 @@ public final class SupabaseClient: Sendable {
     mutableState.listenForAuthEventsTask?.cancel()
   }
 
-  @Sendable
-  private func fetchWithAuth(_ request: URLRequest) async throws -> (Data, URLResponse) {
-    try await session.data(for: adapt(request: request))
-  }
-
-  @Sendable
-  private func uploadWithAuth(
-    _ request: URLRequest,
-    from data: Data
-  ) async throws -> (Data, URLResponse) {
-    try await session.upload(for: adapt(request: request), from: data)
-  }
-
-  private func adapt(request: URLRequest) async -> URLRequest {
-    let token = try? await _getAccessToken()
-
-    var request = TraceContext.inject(into: request)
-    if let token {
-      request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+  /// The `fetch` closure handed to the REST, Storage and Functions sub-clients.
+  ///
+  /// Captures only the dependencies it needs — never `self`. Each sub-client stores this closure
+  /// for its whole lifetime and is itself cached in ``mutableState``, so capturing `self` would
+  /// form a `self -> mutableState -> sub-client -> closure -> self` retain cycle that keeps
+  /// ``deinit`` from ever running.
+  private var fetchWithAuth: @Sendable (_ request: URLRequest) async throws -> (Data, URLResponse) {
+    { [session = options.global.session, adapt = adaptRequest] request in
+      try await session.data(for: adapt(request))
     }
-    return request
+  }
+
+  /// The `upload` closure handed to the Storage sub-client.
+  ///
+  /// Same no-`self`-capture rationale as ``fetchWithAuth``.
+  private var uploadWithAuth:
+    @Sendable (_ request: URLRequest, _ data: Data) async throws -> (Data, URLResponse)
+  {
+    { [session = options.global.session, adapt = adaptRequest] request, data in
+      try await session.upload(for: adapt(request), from: data)
+    }
+  }
+
+  /// Builds a request adapter that injects trace context and the current access token.
+  ///
+  /// The returned closure captures its auth dependencies by value instead of `self`. `AuthClient`
+  /// holds no reference back to ``SupabaseClient``, so no cycle is formed.
+  private var adaptRequest: @Sendable (_ request: URLRequest) async -> URLRequest {
+    { [getAccessToken = accessTokenProvider] request in
+      let token = try? await getAccessToken()
+
+      var request = TraceContext.inject(into: request)
+      if let token {
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+      }
+      return request
+    }
+  }
+
+  /// Resolves the access token to send on outgoing requests, without capturing `self`.
+  private var accessTokenProvider: @Sendable () async throws -> String? {
+    { [accessToken = options.auth.accessToken, auth = _auth] in
+      if let accessToken {
+        try await accessToken()
+      } else {
+        try await auth.session.accessToken
+      }
+    }
   }
 
   private func _getAccessToken() async throws -> String? {
-    if let accessToken = options.auth.accessToken {
-      try await accessToken()
-    } else {
-      try await auth.session.accessToken
-    }
+    try await accessTokenProvider()
   }
 
   private func listenForAuthEvents() {
-    let task = Task {
-      for await (event, session) in auth.authStateChanges {
-        await handleTokenChanged(event: event, session: session)
+    // Grab the stream up front so the task doesn't need to capture `self` just to reach `auth`.
+    // `authStateChanges` never finishes on its own, so a strong `self` capture here would keep
+    // the client alive forever and `deinit` — the only place that cancels this task — would
+    // never run.
+    let authStateChanges = auth.authStateChanges
+
+    let task = Task { [weak self] in
+      for await (event, session) in authStateChanges {
+        // `handleTokenChanged` needs a live client; once it's gone there is nothing left to
+        // update, so stop observing.
+        guard let self else { return }
+        await self.handleTokenChanged(event: event, session: session)
       }
     }
     mutableState.withValue {

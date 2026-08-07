@@ -296,4 +296,33 @@ struct SupabaseClientTests {
     #expect(client.functions.headers.dictionary["Authorization"] == "Bearer legacy-jwt-key")
     #expect(client.functions.headers.dictionary["Apikey"] == "legacy-jwt-key")
   }
+
+  @Test
+  func clientIsDeallocatedAfterSubClientsAreCreated() {
+    weak var weakClient: SupabaseClient?
+
+    do {
+      let client = SupabaseClient(
+        supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+        supabaseKey: "PUBLISHABLE_KEY",
+        options: SupabaseClientOptions(
+          auth: SupabaseClientOptions.AuthOptions(
+            storage: AuthLocalStorageMock(),
+            autoRefreshToken: false
+          )
+        )
+      )
+      weakClient = client
+
+      // Force lazy initialization of every sub-client that receives a `fetch`/`upload` closure.
+      _ = client.rest
+      _ = client.storage
+      _ = client.functions
+    }
+
+    #expect(
+      weakClient == nil,
+      "SupabaseClient should not be retained by its own rest/storage/functions sub-clients"
+    )
+  }
 }
