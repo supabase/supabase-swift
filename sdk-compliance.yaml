@@ -62,7 +62,7 @@ features:
     status: implemented
     symbols:
       - AuthClient.resend
-  auth.sign_in.reset_password:
+  auth.sign_in.send_password_reset_email:
     status: implemented
     symbols:
       - AuthClient.resetPasswordForEmail
@@ -457,7 +457,7 @@ features:
 
   realtime.channel.subscribe: implemented
   realtime.channel.unsubscribe: implemented
-  realtime.channel.send: implemented
+  realtime.channel.broadcast: implemented
   realtime.channel.broadcast_http: implemented
 
   realtime.subscriptions.broadcast:
@@ -547,7 +547,6 @@ features:
   storage.file_buckets.update_file: implemented
   storage.file_buckets.file_exists: implemented
   storage.file_buckets.file_info: implemented
-  storage.file_buckets.list_files_paginated: implemented
   storage.file_buckets.download_with_transform:
     status: implemented
     symbols:
@@ -595,5 +594,12 @@ features:
   storage.analytics.create_analytics_bucket: not_implemented
   storage.analytics.list_analytics_buckets: not_implemented
   storage.analytics.delete_analytics_bucket: not_implemented
-  storage.analytics.iceberg_namespace: not_implemented
-  storage.analytics.iceberg_table: not_implemented
+  storage.analytics.create_namespace: not_implemented
+  storage.analytics.list_namespaces: not_implemented
+  storage.analytics.delete_namespace: not_implemented
+  storage.analytics.create_table: not_implemented
+  storage.analytics.list_tables: not_implemented
+  storage.analytics.load_table: not_implemented
+  storage.analytics.update_table: not_implemented
+  storage.analytics.rename_table: not_implemented
+  storage.analytics.delete_table: not_implemented
