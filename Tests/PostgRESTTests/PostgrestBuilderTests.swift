@@ -125,6 +125,37 @@ extension PostgrestMockerTests {
     }
 
     @Test
+    func maybeSingleReturnsNilOnZeroRowsWithNewerPostgrestWording() async throws {
+      Mock(
+        url: url.appendingPathComponent("users"),
+        ignoreQuery: true,
+        statusCode: 406,
+        data: [
+          .get: Data(
+            """
+            {
+              "code": "PGRST116",
+              "details": "The result contains 0 rows",
+              "message": "Cannot coerce the result to a single JSON object"
+            }
+            """.utf8
+          )
+        ]
+      )
+      .register()
+
+      let user: User? =
+        try await sut
+        .from("users")
+        .select()
+        .maybeSingle()
+        .execute()
+        .value
+
+      #expect(user == nil)
+    }
+
+    @Test
     func maybeSingleThrowsOnMultipleRows() async throws {
       Mock(
         url: url.appendingPathComponent("users"),
