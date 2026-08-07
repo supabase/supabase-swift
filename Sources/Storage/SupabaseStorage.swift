@@ -104,6 +104,7 @@ public struct StorageClientConfiguration: Sendable {
 ///
 /// - ``from(_:)``
 /// - ``vectors``
+/// - ``analytics``
 ///
 /// ### Bucket management
 ///
@@ -136,5 +137,18 @@ public class SupabaseStorageClient: StorageBucketApi, @unchecked Sendable {
   @_spi(Experimental)
   public var vectors: StorageVectorsClient {
     StorageVectorsClient(api: self)
+  }
+
+  /// A client for managing analytics (Iceberg-backed) buckets.
+  ///
+  /// ```swift
+  /// try await client.storage.analytics.createBucket("events")
+  /// let buckets = try await client.storage.analytics.listBuckets()
+  /// ```
+  ///
+  /// - Warning: Experimental. See ``AnalyticsClient``.
+  @_spi(Experimental)
+  public var analytics: AnalyticsClient {
+    AnalyticsClient(api: self)
   }
 }

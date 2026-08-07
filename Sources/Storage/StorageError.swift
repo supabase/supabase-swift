@@ -13,7 +13,7 @@ public import Foundation
 ///   print(error.statusCode ?? "unknown", error.message)
 /// }
 /// ```
-public struct StorageError: Error, Decodable, Sendable {
+public struct StorageError: Error, Sendable {
   /// The HTTP status code returned by the API, represented as a string (e.g. `"404"`).
   public var statusCode: String?
 
@@ -33,6 +33,41 @@ public struct StorageError: Error, Decodable, Sendable {
     self.statusCode = statusCode
     self.message = message
     self.error = error
+  }
+}
+
+extension StorageError: Decodable {
+  /// The flat `{ statusCode, message, error }` shape used by most Storage endpoints.
+  private struct FlatBody: Decodable {
+    var statusCode: String?
+    var message: String
+    var error: String?
+  }
+
+  /// The `{ error: { message, type, code } }` shape used by the analytics/Iceberg endpoints,
+  /// which run through a different error formatter on the backend.
+  private struct NestedBody: Decodable {
+    struct Inner: Decodable {
+      var message: String
+      var type: String?
+      var code: Int?
+    }
+
+    var error: Inner
+  }
+
+  public init(from decoder: any Decoder) throws {
+    if let flat = try? FlatBody(from: decoder) {
+      self.init(statusCode: flat.statusCode, message: flat.message, error: flat.error)
+      return
+    }
+
+    let nested = try NestedBody(from: decoder)
+    self.init(
+      statusCode: nested.error.code.map(String.init),
+      message: nested.error.message,
+      error: nested.error.type
+    )
   }
 }
 
