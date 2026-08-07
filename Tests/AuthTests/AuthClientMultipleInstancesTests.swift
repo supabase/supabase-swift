@@ -7,12 +7,16 @@
 
 import ConcurrencyExtras
 import Foundation
+import Helpers
 import TestHelpers
 import Testing
 
 @testable import Auth
 
-@Suite
+// These tests assert on client deallocation, which only happens after the `Task { @MainActor in ...
+// }` scheduled by `AuthClient.init` releases its strong reference to the client. Running them
+// concurrently makes them race for the main actor, so serialize the suite.
+@Suite(.serialized)
 struct AuthClientMultipleInstancesTests {
   @Test
   func multipleAuthClientInstances() {
@@ -71,5 +75,39 @@ struct AuthClientMultipleInstancesTests {
     await Task.megaYield()
 
     #expect(Dependencies.instances.value[clientID] == nil)
+  }
+
+  @Test
+  func deinitStopsAutoRefreshTask() async {
+    let url = URL(string: "http://localhost:54321/auth")!
+
+    // Held on purpose, so the auto-refresh state is still observable after the client is gone.
+    let sessionManager: SessionManager
+
+    do {
+      let client = AuthClient(
+        configuration: AuthClient.Configuration(
+          url: url,
+          localStorage: InMemoryLocalStorage(),
+          logger: nil
+        )
+      )
+      sessionManager = Dependencies[client.clientID].sessionManager
+
+      await client.startAutoRefresh()
+      await Task.megaYield()
+
+      #expect(await sessionManager.isAutoRefreshRunning())
+    }
+
+    // `deinit` stops the auto-refresh loop from a detached task, so poll instead of asserting
+    // right away.
+    var isAutoRefreshRunning = await sessionManager.isAutoRefreshRunning()
+    for _ in 0..<100 where isAutoRefreshRunning {
+      try? await Task.sleep(nanoseconds: NSEC_PER_MSEC * 10)
+      isAutoRefreshRunning = await sessionManager.isAutoRefreshRunning()
+    }
+
+    #expect(isAutoRefreshRunning == false)
   }
 }
