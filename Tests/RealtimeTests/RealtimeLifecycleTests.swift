@@ -300,6 +300,64 @@ import Testing
     }
 
     @Test
+    func deinitClosesLiveWebSocketConnection() async throws {
+      final class WeakBox: @unchecked Sendable {
+        weak var client: RealtimeClientV2?
+      }
+      let box = WeakBox()
+
+      func scope() async {
+        let sut = makeClient()
+        box.client = sut
+        await sut.connect()
+        #expect(sut.status == .connected)
+        // Deliberately no `disconnect()` — dropping a connected client must still tear
+        // down the socket.
+      }
+      await scope()
+
+      // The fake pair is cross-linked, so the server peer flips to closed only when the
+      // client-side socket is actually closed (not merely deallocated).
+      let server = try #require(servers.value.last)
+      await waitUntil(timeout: 5) { box.client == nil && server.isClosed }
+
+      #expect(
+        box.client == nil,
+        "RealtimeClientV2 leaked: a task retained self while connected, preventing deinit."
+      )
+      #expect(
+        server.isClosed,
+        "WebSocket was left open after the connected client was deallocated."
+      )
+    }
+
+    @Test
+    func connectionManagerDeinitClosesLiveWebSocketConnection() async throws {
+      let (client, server) = FakeWebSocket.fakes()
+
+      func scope() async throws {
+        let sut = ConnectionManager(
+          transport: { _, _ in client },
+          url: URL(string: "ws://localhost")!,
+          headers: [:],
+          reconnectDelay: 0.1,
+          logger: nil,
+          clock: testClock
+        )
+        try await sut.connect()
+        #expect(client.isClosed == false)
+      }
+      try await scope()
+
+      await waitUntil(timeout: 5) { server.isClosed }
+
+      #expect(
+        server.isClosed,
+        "WebSocket was left open after the connected ConnectionManager was deallocated."
+      )
+    }
+
+    @Test
     func handleAppLifecycleFalseDoesNotInstallLifecycleManager() {
       let sut = makeClient(handleAppLifecycle: false)
       #expect(sut.mutableState.lifecycleManager == nil)
