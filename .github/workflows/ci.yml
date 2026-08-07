@@ -25,7 +25,7 @@ permissions:
 jobs:
   macos:
     name: xcodebuild (macOS latest)
-    runs-on: macos-26
+    runs-on: blacksmith-6vcpu-macos-latest
     timeout-minutes: 30
     strategy:
       matrix:
@@ -116,7 +116,7 @@ jobs:
         run: CONFIG=Release PLATFORM="${{ matrix.platform }}" XCODEBUILD_ARGUMENT="${{ matrix.command }}" ./scripts/xcodebuild.sh
 
   spm:
-    runs-on: macos-26
+    runs-on: blacksmith-6vcpu-macos-latest
     timeout-minutes: 30
     strategy:
       matrix:
@@ -200,7 +200,7 @@ jobs:
 
   library-evolution:
     name: Library (evolution)
-    runs-on: macos-26
+    runs-on: blacksmith-6vcpu-macos-latest
     timeout-minutes: 30
     strategy:
       matrix:
@@ -223,7 +223,7 @@ jobs:
 
   examples:
     name: Examples (${{ matrix.scheme }})
-    runs-on: macos-26
+    runs-on: blacksmith-6vcpu-macos-latest
     timeout-minutes: 30
     strategy:
       matrix:
@@ -250,7 +250,7 @@ jobs:
 
   examples-spm:
     name: Examples SPM (${{ matrix.example }})
-    runs-on: macos-26
+    runs-on: blacksmith-6vcpu-macos-latest
     timeout-minutes: 30
     strategy:
       matrix:
@@ -283,7 +283,7 @@ jobs:
 
   docs:
     name: Test docs
-    runs-on: macos-26
+    runs-on: blacksmith-6vcpu-macos-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -301,7 +301,7 @@ jobs:
   format-check:
     name: Format check (changed files only)
     if: github.event_name == 'pull_request'
-    runs-on: macos-26
+    runs-on: blacksmith-6vcpu-macos-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
