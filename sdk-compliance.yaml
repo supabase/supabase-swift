@@ -337,7 +337,10 @@ features:
 
   # ── Database ───────────────────────────────────────────────────────────────
 
-  database.query.from_table: implemented
+  database.query.from_table:
+    status: implemented
+    symbols:
+      - PostgrestError.details
   database.query.select: implemented
   database.query.schema_selection: implemented
   database.query.rpc: implemented

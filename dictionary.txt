@@ -126,6 +126,7 @@ phraseto
 pkce
 PKCE
 pkcs
+pkey
 plainto
 plfts
 postalcode
