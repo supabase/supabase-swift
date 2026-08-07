@@ -1,3 +1,4 @@
+import ConcurrencyExtras
 import Foundation
 import HTTPTypes
 
@@ -9,6 +10,9 @@ struct SessionManager: Sendable {
 
   var startAutoRefresh: @Sendable () async -> Void
   var stopAutoRefresh: @Sendable () async -> Void
+
+  /// Whether the auto-refresh loop is currently scheduled.
+  var isAutoRefreshRunning: @Sendable () async -> Bool
 }
 
 extension SessionManager {
@@ -20,7 +24,8 @@ extension SessionManager {
       update: { await instance.update($0) },
       remove: { await instance.remove() },
       startAutoRefresh: { await instance.startAutoRefreshToken() },
-      stopAutoRefresh: { await instance.stopAutoRefreshToken() }
+      stopAutoRefresh: { await instance.stopAutoRefreshToken() },
+      isAutoRefreshRunning: { await instance.isAutoRefreshTokenRunning() }
     )
   }
 }
@@ -29,7 +34,9 @@ private actor LiveSessionManager {
   private var configuration: AuthClient.Configuration { Dependencies[clientID].configuration }
   private var sessionStorage: SessionStorage { Dependencies[clientID].sessionStorage }
   private var eventEmitter: AuthStateChangeEventEmitter { Dependencies[clientID].eventEmitter }
-  private var logger: (any SupabaseLogger)? { Dependencies[clientID].logger }
+  // Looked up leniently, as the session manager outlives its client while the auto-refresh loop is
+  // torn down from `AuthClient.deinit`, at which point the dependencies entry is already gone.
+  private var logger: (any SupabaseLogger)? { Dependencies.instances.value[clientID]?.logger }
   private var api: APIClient { Dependencies[clientID].api }
 
   private var inFlightRefreshTask: Task<Session, any Error>?
@@ -127,6 +134,10 @@ private actor LiveSessionManager {
     logger?.debug("stop auto refresh token")
     startAutoRefreshTokenTask?.cancel()
     startAutoRefreshTokenTask = nil
+  }
+
+  func isAutoRefreshTokenRunning() -> Bool {
+    startAutoRefreshTokenTask != nil
   }
 
   private func autoRefreshTokenTick() async {
