@@ -38,10 +38,12 @@ decoratee
 deeplinking
 discardable
 dollarsign
+dotproduct
 dont
 dragarcia
 dummysignature
 ecdsa
+halfvec
 emaillink
 entrancy
 etag
@@ -118,6 +120,7 @@ Passwordless
 Pathable
 PCREDENTIALW
 pgrst
+pgvector
 phfts
 phraseto
 pkce
