@@ -59,6 +59,7 @@ public struct StorageVectorsClient: Sendable {
   public func from(_ vectorBucketName: String) -> VectorBucketClient {
     VectorBucketClient(vectorBucketName: vectorBucketName, api: api)
   }
+
   /// Creates a new vector bucket.
   ///
   /// ```swift
