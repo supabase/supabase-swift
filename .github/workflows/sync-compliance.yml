@@ -12,11 +12,6 @@ jobs:
       pull-requests: write
     uses: supabase/sdk/.github/workflows/sync-sdk-compliance.yml@d9f43f5be4056adc33c65fe54f1c9ed1714d67e0
     with:
-      # supabase/sdk is internal (same org/review process), so tracking main
-      # is fine here. The reusable workflow's own baked-in sdk-ref default is
-      # a one-time pin upstream never refreshes, so pinning ours to a fixed
-      # SHA would just recreate the same staleness bug (supabase/sdk#74)
-      # later, with no auto-bump signal available (supabase/sdk has no tags).
       sdk-ref: main
     secrets:
       app-id: ${{ secrets.APP_ID }}
