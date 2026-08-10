@@ -8,6 +8,7 @@ apikey
 Apikey
 AQAB
 Ascii
+associatedtype
 autocapitalization
 Autocapitalization
 autocorrection
@@ -28,6 +29,7 @@ Cloudflare
 cloudflare
 conformances
 confirmer
+conformances
 corelibs
 CREDENTIALW
 dapp
@@ -77,6 +79,7 @@ Imatch
 Inbucket
 initializers
 inkey
+inspectable
 isdistinct
 johndoe
 jwks
@@ -168,6 +171,7 @@ sourcery
 Sourcery
 spotify
 Spotify
+Stringly
 subclassing
 subheadline
 Subview
@@ -198,6 +202,7 @@ Unenroll
 unenrolling
 unicode
 uniquing
+unrepresentable
 unsubscription
 untracks
 upserted
