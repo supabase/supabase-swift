@@ -12,10 +12,12 @@ jobs:
       pull-requests: write
     uses: supabase/sdk/.github/workflows/sync-sdk-compliance.yml@d9f43f5be4056adc33c65fe54f1c9ed1714d67e0
     with:
-      # Keep in sync with supabase/sdk main; the reusable workflow's baked-in
-      # default lagged behind a capability-ID rename (supabase/sdk#74) and
-      # caused already-renamed IDs to be resynced as spurious "new" entries.
-      sdk-ref: c73e9fa23d050b2d2e84a86574884a6b1e7434ff
+      # supabase/sdk is internal (same org/review process), so tracking main
+      # is fine here. The reusable workflow's own baked-in sdk-ref default is
+      # a one-time pin upstream never refreshes, so pinning ours to a fixed
+      # SHA would just recreate the same staleness bug (supabase/sdk#74)
+      # later, with no auto-bump signal available (supabase/sdk has no tags).
+      sdk-ref: main
     secrets:
       app-id: ${{ secrets.APP_ID }}
       private-key: ${{ secrets.PRIVATE_KEY }}
