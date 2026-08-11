@@ -353,8 +353,15 @@ accept call syntax, so every call site would need parentheses.
 This matches today's chained `.eq().gt()` behavior. It is worth stating because SQL has a single
 WHERE clause, so the singular name invites the opposite reading.
 
-**`nil` must never reach an `eq` operator.** `deleted_at=eq.null` is never true in SQL, so a nil
-comparison has to render `is.null`. Two consequences:
+**`nil` must never reach an `eq` operator.** Verified against PostgREST 14.15 (§9), and the failure is
+worse than "matches nothing":
+
+| Column type | `column=eq.null` | Result |
+|---|---|---|
+| `integer` | HTTP 400 | `22P02 invalid input syntax for type integer: "null"` |
+| `text` | HTTP 200 | Returns the row whose value is the **literal string** `'null'` — not the NULL row |
+
+On a text column it silently returns the *wrong row*. So this is not a cosmetic nicety:
 
 - `.eq(\.deletedAt, nil)` must not compile. The value parameter is non-optional, forcing `.is`.
 - When the operator layer lands, `\.deletedAt == nil` must render `is.null` and `!= nil` must render
@@ -362,7 +369,7 @@ comparison has to render `is.null`. Two consequences:
   same mechanism `x == nil` uses today.
 
 Today's API sidesteps this by only offering `is(_:value:)`. Adding sugar means inheriting the
-obligation, and getting it wrong returns silently empty results rather than an error.
+obligation.
 
 Escaping via `escapePostgRESTFilterValue` applies to every operand at render time, not only to list
 operators. This is a behavior fix, not just a refactor.
@@ -763,14 +770,9 @@ can turn it into a compile error with an explicit opt-out:
 This is the most destructive footgun in the API and closing it is cheap. Left open because it is a
 deliberate ergonomic tax on a legitimate operation, and that trade is a judgement call.
 
-**Two server behaviors to verify before the renderer depends on them.** Both need a running PostgREST,
-not a documentation reading:
-
-1. **Nested negation.** The renderer assumes `not.or=(…)` at top level and `not.and(…)` nested inside
-   `or=(…)`. The top-level forms are documented; the nested one is not.
-2. **Combining hints.** `!inner` (§4.4) and `!<fk>` (§4.5) occupy the same `!` slot. The docs show
-   neither combined, so whether `comments!todo_id!inner(…)` is legal is unknown. Any query needing
-   both a disambiguated foreign key and parent filtering depends on it.
+*The two server behaviors previously listed here — nested negation, and combining the `!<fk>` and
+`!inner` hints — are now verified against a live PostgREST 14.15. Both are supported. See §9. Neither
+is an open question any more.*
 
 **`@Table(readOnly: true)` for a view reads oddly.** A view is not a table. A `@View("active_todos")`
 alias expanding to the same conformance would read better, at the cost of a second attribute users
@@ -811,3 +813,59 @@ relations that cover views by protocol refinement rather than a `readOnly:` flag
 Two caveats on the PR as it stands: it is roughly seven weeks stale, and its description names the
 modules `SupabaseSwiftMacros` / `SupabaseMacros` while the code says `PostgrestMacros` /
 `PostgrestMacrosPlugin`.
+
+## 9. Server behavior verification
+
+Run 2026-08-11 against PostgREST **14.15** (`public.ecr.aws/supabase/postgrest:v14.15`) on Postgres
+17.6, in a throwaway container pair. Schema: `channels` ← `messages.channel_id` for the single-foreign-key
+case, and `airports` ← `flights.origin_id` / `flights.destination_id` for the genuinely ambiguous
+two-foreign-key case.
+
+### 9.1 Negation grammar — all supported
+
+Every form the renderer needs works, and every result matched the expected boolean logic.
+
+| Query | Result |
+|---|---|
+| `not.and=(approved.eq.false,channel_id.eq.1)` | 200 — correct |
+| `not.or=(approved.eq.false,channel_id.eq.2)` | 200 — correct |
+| `or=(and(approved.eq.true,channel_id.eq.1),channel_id.eq.2)` | 200 — correct |
+| `or=(not.and(approved.eq.false,channel_id.eq.1),channel_id.eq.99)` | 200 — correct |
+| `and=(not.or(approved.eq.false,channel_id.eq.2),id.gt.0)` | 200 — correct |
+
+Nested negation inside `or(…)` and `and(…)` — the undocumented case the renderer depends on — works.
+
+### 9.2 Embedding hints — combinable, in either order
+
+| Select | Effect |
+|---|---|
+| `messages(id)` + `messages.approved=eq.true` | **All** parents returned; only nested rows filtered |
+| `messages!inner(id)` + same filter | Only parents with a match |
+| `messages!channel_id(id)` | Foreign key hint alone; no parent filtering |
+| `messages!channel_id!inner(id)` + same filter | **Both** — disambiguated *and* parents filtered |
+| `flights!origin_id!inner(id)` on the two-FK schema | Correct: only airports that are the origin of a non-cancelled flight |
+| `flights!inner!origin_id(id)` | Same result — **hint order does not matter** |
+
+Two consequences for the design:
+
+- The `embedded` / `requiring` split in §4.4 is sound: the default really does return every parent
+  row, confirmed directly.
+- Omitting the foreign key hint on an ambiguous relationship returns **HTTP 300 `PGRST201`**, listing
+  the candidate relationships. Because `@Relationship` requires the foreign key KeyPath, the generated
+  select always carries the hint, so this design cannot produce `PGRST201` at all. That makes the
+  foreign-key requirement a correctness feature, not just compile-time sugar.
+
+### 9.3 Null handling — worse than expected
+
+| Column type | `column=eq.null` | Result |
+|---|---|---|
+| `integer` | HTTP 400 | `22P02 invalid input syntax for type integer: "null"` |
+| `text` | HTTP 200 | Matched the row whose value is the literal string `'null'`, **not** the NULL row |
+
+`is.null` and `not.is.null` behave correctly in both cases. The text-column result is the reason
+§4.3 bars `nil` from `eq` outright: the failure is a silently wrong row, not an empty result.
+
+### 9.4 Embedded scope parameters
+
+`messages.or=(…)`, `messages.order=id.desc` and `messages.limit=1` all apply correctly within an
+embedded scope, including combined with `!inner`. The §4.4 scope construct is expressible as designed.
