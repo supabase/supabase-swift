@@ -810,9 +810,65 @@ What this document keeps that PR #1036 does not have: value semantics, the filte
 `or` and nesting, the `embedded` / `requiring` scope, the transport protocol, the error struct, and
 relations that cover views by protocol refinement rather than a `readOnly:` flag.
 
-Two caveats on the PR as it stands: it is roughly seven weeks stale, and its description names the
-modules `SupabaseSwiftMacros` / `SupabaseMacros` while the code says `PostgrestMacros` /
-`PostgrestMacrosPlugin`.
+### 8.1 Disposition: close the PR, re-land the implementation as stage 1
+
+The implementation is adopted. The pull request is not merged. Four reasons:
+
+1. **It does not merge.** GitHub reports `CONFLICTING` / `DIRTY`, and the branch is 31 commits behind
+   `main`. A rebase is required no matter what else is decided.
+2. **Two structural changes touch every file in it.** The protocols must move from `PostgrestMacros`
+   into `PostgREST`, because the query API is defined in terms of them and stage 2's value-typed core
+   cannot depend on the macro module. And they must be renamed to `PostgrestSelection` /
+   `PostgrestRelation` / `PostgrestWritableRelation`. That is not a rebase; it is a rewrite of the
+   public surface.
+3. **Merging as-is would publish names we have already rejected.** `SelectionRepresentable` and
+   `TableRepresentable` would ship publicly from the wrong module and then have to be moved and
+   renamed. Under `-enable-library-evolution` that is exactly the class of break
+   [ADR 0001](../adr/0001-public-error-types-are-structs.md) exists to avoid.
+4. **Its history is noisy.** 28 commits including two large design documents added and later removed,
+   and a description naming modules `SupabaseSwiftMacros` / `SupabaseMacros` that the code does not
+   use.
+
+A fresh branch gives one reviewable stage-1 PR. The value in #1036 is its design and its tests, both
+of which are captured here and can be lifted file by file.
+
+### 8.2 Salvaged from the branch's design spec
+
+The branch also carries a 712-line design spec and a 1,857-line implementation plan, committed to
+`docs/superpowers/` before that path was gitignored and removed from the branch tip. Three things from
+it that this document was missing:
+
+**The user-facing command is `supabase gen types swift`.** Stage 5 rewrites the postgres-meta template,
+but that is the implementation; the command is what users type, and it should use the same schema
+introspection as `--lang typescript`.
+
+**Generated enums must conform to `PostgrestFilterValue`.** A Postgres enum becomes a Swift
+`enum Name: String, Codable, PostgrestFilterValue`. Without that conformance a generated enum cannot be
+used as a filter operand, which would make typed filters unusable on exactly the columns where they
+matter most.
+
+**The Postgres to Swift type mapping**, which stage 5 needs to agree with the macro path:
+
+| Postgres | Swift |
+|---|---|
+| `uuid` | `UUID` |
+| `text`, `varchar`, `char` | `String` |
+| `bool` | `Bool` |
+| `int2`, `int4`, `int8` | `Int` |
+| `float4`, `float8` | `Double` |
+| `numeric` | `Decimal` |
+| `timestamptz`, `timestamp`, `date` | `Date` |
+| `json`, `jsonb` | `AnyJSON` |
+| `_type` (array) | `[SwiftType]` |
+| custom enum | generated `enum` |
+
+Note one divergence to resolve in favour of the code: that spec used a string form,
+`@Relationship("fk_col", references: Other.self)`, while the later implementation uses the KeyPath form
+`@Relationship(\Message.senderID)`. The KeyPath form is compiler-checked and is the one adopted in §4.5.
+
+Its "out of scope for v1" list — RPC wrappers, `or` and complex filter expressions, and column
+narrowing without a declared selection — matches the staging in §5, which is a useful independent
+check on where the stage boundaries fall.
 
 ## 9. Server behavior verification
 
