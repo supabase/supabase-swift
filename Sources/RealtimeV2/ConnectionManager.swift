@@ -200,4 +200,15 @@ actor ConnectionManager {
     self.state = state
     self.stateContinuation.yield(state)
   }
+
+  deinit {
+    // A manager released while still connected must tear down its socket, otherwise the
+    // underlying WebSocket (and the dedicated URLSession backing it, along with its
+    // self-rescheduling receive loop) stays alive forever. `deinit` only runs once no other
+    // code can reference the actor, so reading isolated state here is safe.
+    if case .connected(let conn) = state {
+      conn.close(code: nil, reason: "Deallocated")
+    }
+    stateContinuation.finish()
+  }
 }

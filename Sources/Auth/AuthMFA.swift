@@ -24,8 +24,8 @@ public struct AuthMFA: Sendable {
 
   var configuration: AuthClient.Configuration { Dependencies[clientID].configuration }
   var api: APIClient { Dependencies[clientID].api }
-  var encoder: JSONEncoder { Dependencies[clientID].encoder }
-  var decoder: JSONDecoder { Dependencies[clientID].decoder }
+  var encoder: JSONEncoder { Dependencies[clientID].resolvedEncoder }
+  var decoder: JSONDecoder { Dependencies[clientID].resolvedDecoder }
   var sessionManager: SessionManager { Dependencies[clientID].sessionManager }
   var eventEmitter: AuthStateChangeEventEmitter { Dependencies[clientID].eventEmitter }
 

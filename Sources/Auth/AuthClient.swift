@@ -181,6 +181,11 @@ public actor AuthClient {
   nonisolated private var sessionStorage: SessionStorage { Dependencies[clientID].sessionStorage }
   nonisolated private var pkce: PKCE { Dependencies[clientID].pkce }
 
+  #if canImport(ObjectiveC) && canImport(Combine)
+    @MainActor
+    private var appLifecycleCancellables = Set<AnyCancellable>()
+  #endif
+
   /// Returns the session, refreshing it if necessary.
   ///
   /// If no session can be found, a ``AuthError/sessionMissing`` error is thrown.
@@ -243,6 +248,19 @@ public actor AuthClient {
     Task { @MainActor in observeAppLifecycleChanges() }
   }
 
+  deinit {
+    // Grab the session manager before dropping the dependencies entry, and capture only it in the
+    // task below, capturing `self` would resurrect this client while it is being deallocated.
+    let sessionManager = Dependencies.instances.value[clientID]?.sessionManager
+
+    Dependencies.instances.withValue { $0.removeValue(forKey: clientID) }
+
+    // The auto-refresh loop retains the session manager, so it keeps ticking forever unless it is
+    // explicitly stopped. `observeAppLifecycleChanges()` only stops it when the app resigns active,
+    // which never happens for short-lived clients, or when auto-refresh was started manually.
+    Task { await sessionManager?.stopAutoRefresh() }
+  }
+
   #if canImport(ObjectiveC) && canImport(Combine)
     @MainActor
     private func observeAppLifecycleChanges() {
@@ -263,37 +281,23 @@ public actor AuthClient {
       #endif
 
       if let didBecomeActiveNotification, let willResignActiveNotification {
-        var cancellables = Set<AnyCancellable>()
-
         NotificationCenter.default
           .publisher(for: didBecomeActiveNotification)
-          .sink(
-            receiveCompletion: { _ in
-              // hold ref to cancellable until it completes
-              _ = cancellables
-            },
-            receiveValue: { [weak self] _ in
-              Task {
-                await self?.handleDidBecomeActive()
-              }
+          .sink { [weak self] _ in
+            Task {
+              await self?.handleDidBecomeActive()
             }
-          )
-          .store(in: &cancellables)
+          }
+          .store(in: &appLifecycleCancellables)
 
         NotificationCenter.default
           .publisher(for: willResignActiveNotification)
-          .sink(
-            receiveCompletion: { _ in
-              // hold ref to cancellable until it completes
-              _ = cancellables
-            },
-            receiveValue: { [weak self] _ in
-              Task {
-                await self?.handleWillResignActive()
-              }
+          .sink { [weak self] _ in
+            Task {
+              await self?.handleWillResignActive()
             }
-          )
-          .store(in: &cancellables)
+          }
+          .store(in: &appLifecycleCancellables)
       }
 
     }
@@ -391,7 +395,7 @@ public actor AuthClient {
             )
           }
         ].compactMap { $0 },
-        body: configuration.encoder.encode(
+        body: configuration.resolvedEncoder.encode(
           SignUpRequest(
             email: email,
             password: password,
@@ -424,7 +428,7 @@ public actor AuthClient {
       request: .init(
         url: configuration.url.appendingPathComponent("signup"),
         method: .post,
-        body: configuration.encoder.encode(
+        body: configuration.resolvedEncoder.encode(
           SignUpRequest(
             password: password,
             phone: phone,
@@ -440,7 +444,7 @@ public actor AuthClient {
   private func _signUp(request: HTTPRequest) async throws -> AuthResponse {
     let response = try await api.execute(request).decoded(
       as: AuthResponse.self,
-      decoder: configuration.decoder
+      decoder: configuration.resolvedDecoder
     )
 
     if let session = response.session {
@@ -467,7 +471,7 @@ public actor AuthClient {
         url: configuration.url.appendingPathComponent("token"),
         method: .post,
         query: [URLQueryItem(name: "grant_type", value: "password")],
-        body: configuration.encoder.encode(
+        body: configuration.resolvedEncoder.encode(
           UserCredentials(
             email: email,
             password: password,
@@ -494,7 +498,7 @@ public actor AuthClient {
         url: configuration.url.appendingPathComponent("token"),
         method: .post,
         query: [URLQueryItem(name: "grant_type", value: "password")],
-        body: configuration.encoder.encode(
+        body: configuration.resolvedEncoder.encode(
           UserCredentials(
             password: password,
             phone: phone,
@@ -514,7 +518,7 @@ public actor AuthClient {
         url: configuration.url.appendingPathComponent("token"),
         method: .post,
         query: [URLQueryItem(name: "grant_type", value: "id_token")],
-        body: configuration.encoder.encode(credentials)
+        body: configuration.resolvedEncoder.encode(credentials)
       )
     )
   }
@@ -540,7 +544,7 @@ public actor AuthClient {
         url: configuration.url.appendingPathComponent("token"),
         method: .post,
         query: [URLQueryItem(name: "grant_type", value: "web3")],
-        body: configuration.encoder.encode(credentials)
+        body: configuration.resolvedEncoder.encode(credentials)
       )
     )
   }
@@ -560,7 +564,7 @@ public actor AuthClient {
       request: HTTPRequest(
         url: configuration.url.appendingPathComponent("signup"),
         method: .post,
-        body: configuration.encoder.encode(
+        body: configuration.resolvedEncoder.encode(
           SignUpRequest(
             data: data,
             gotrueMetaSecurity: captchaToken.map { AuthMetaSecurity(captchaToken: $0) }
@@ -573,7 +577,7 @@ public actor AuthClient {
   private func _signIn(request: HTTPRequest) async throws -> Session {
     let session = try await api.execute(request).decoded(
       as: Session.self,
-      decoder: configuration.decoder
+      decoder: configuration.resolvedDecoder
     )
 
     await sessionManager.update(session)
@@ -614,7 +618,7 @@ public actor AuthClient {
             )
           }
         ].compactMap { $0 },
-        body: configuration.encoder.encode(
+        body: configuration.resolvedEncoder.encode(
           OTPParams(
             email: email,
             createUser: shouldCreateUser,
@@ -649,7 +653,7 @@ public actor AuthClient {
       .init(
         url: configuration.url.appendingPathComponent("otp"),
         method: .post,
-        body: configuration.encoder.encode(
+        body: configuration.resolvedEncoder.encode(
           OTPParams(
             phone: phone,
             createUser: shouldCreateUser,
@@ -679,7 +683,7 @@ public actor AuthClient {
       HTTPRequest(
         url: configuration.url.appendingPathComponent("sso"),
         method: .post,
-        body: configuration.encoder.encode(
+        body: configuration.resolvedEncoder.encode(
           SignInWithSSORequest(
             providerId: nil,
             domain: domain,
@@ -691,7 +695,7 @@ public actor AuthClient {
         )
       )
     )
-    .decoded(decoder: configuration.decoder)
+    .decoded(decoder: configuration.resolvedDecoder)
   }
 
   /// Attempts a single-sign on using an enterprise Identity Provider.
@@ -712,7 +716,7 @@ public actor AuthClient {
       HTTPRequest(
         url: configuration.url.appendingPathComponent("sso"),
         method: .post,
-        body: configuration.encoder.encode(
+        body: configuration.resolvedEncoder.encode(
           SignInWithSSORequest(
             providerId: providerId,
             domain: nil,
@@ -724,7 +728,7 @@ public actor AuthClient {
         )
       )
     )
-    .decoded(decoder: configuration.decoder)
+    .decoded(decoder: configuration.resolvedDecoder)
   }
 
   /// Log in an existing user by exchanging an Auth Code issued during the PKCE flow.
@@ -742,7 +746,7 @@ public actor AuthClient {
         url: configuration.url.appendingPathComponent("token"),
         method: .post,
         query: [URLQueryItem(name: "grant_type", value: "pkce")],
-        body: configuration.encoder.encode(
+        body: configuration.resolvedEncoder.encode(
           [
             "auth_code": authCode,
             "code_verifier": codeVerifier,
@@ -750,7 +754,7 @@ public actor AuthClient {
         )
       )
     )
-    .decoded(decoder: configuration.decoder)
+    .decoded(decoder: configuration.resolvedDecoder)
 
     codeVerifierStorage.set(nil)
 
@@ -998,7 +1002,7 @@ public actor AuthClient {
         method: .get,
         headers: [.authorization: "\(tokenType) \(accessToken)"]
       )
-    ).decoded(as: User.self, decoder: configuration.decoder)
+    ).decoded(as: User.self, decoder: configuration.resolvedDecoder)
 
     let session = Session(
       providerToken: providerToken,
@@ -1134,7 +1138,7 @@ public actor AuthClient {
             )
           }
         ].compactMap { $0 },
-        body: configuration.encoder.encode(
+        body: configuration.resolvedEncoder.encode(
           VerifyOTPParams.email(
             VerifyEmailOTPParams(
               email: email,
@@ -1160,7 +1164,7 @@ public actor AuthClient {
       request: .init(
         url: configuration.url.appendingPathComponent("verify"),
         method: .post,
-        body: configuration.encoder.encode(
+        body: configuration.resolvedEncoder.encode(
           VerifyOTPParams.mobile(
             VerifyMobileOTPParams(
               phone: phone,
@@ -1184,7 +1188,7 @@ public actor AuthClient {
       request: .init(
         url: configuration.url.appendingPathComponent("verify"),
         method: .post,
-        body: configuration.encoder.encode(
+        body: configuration.resolvedEncoder.encode(
           VerifyOTPParams.tokenHash(
             VerifyTokenHashParams(tokenHash: tokenHash, type: type)
           )
@@ -1196,7 +1200,7 @@ public actor AuthClient {
   private func _verifyOTP(request: HTTPRequest) async throws -> AuthResponse {
     let response = try await api.execute(request).decoded(
       as: AuthResponse.self,
-      decoder: configuration.decoder
+      decoder: configuration.resolvedDecoder
     )
 
     if let session = response.session {
@@ -1231,7 +1235,7 @@ public actor AuthClient {
             )
           }
         ].compactMap { $0 },
-        body: configuration.encoder.encode(
+        body: configuration.resolvedEncoder.encode(
           ResendEmailParams(
             type: type,
             email: email,
@@ -1260,7 +1264,7 @@ public actor AuthClient {
       HTTPRequest(
         url: configuration.url.appendingPathComponent("resend"),
         method: .post,
-        body: configuration.encoder.encode(
+        body: configuration.resolvedEncoder.encode(
           ResendMobileParams(
             type: type,
             phone: phone,
@@ -1269,7 +1273,7 @@ public actor AuthClient {
         )
       )
     )
-    .decoded(decoder: configuration.decoder)
+    .decoded(decoder: configuration.resolvedDecoder)
   }
 
   /// Sends a re-authentication OTP to the user's email or phone number.
@@ -1292,10 +1296,10 @@ public actor AuthClient {
 
     if let jwt {
       request.headers[.authorization] = "Bearer \(jwt)"
-      return try await api.execute(request).decoded(decoder: configuration.decoder)
+      return try await api.execute(request).decoded(decoder: configuration.resolvedDecoder)
     }
 
-    return try await api.authorizedExecute(request).decoded(decoder: configuration.decoder)
+    return try await api.authorizedExecute(request).decoded(decoder: configuration.resolvedDecoder)
   }
 
   /// Updates user data, if there is a logged in user.
@@ -1322,9 +1326,9 @@ public actor AuthClient {
             )
           }
         ].compactMap { $0 },
-        body: configuration.encoder.encode(user)
+        body: configuration.resolvedEncoder.encode(user)
       )
-    ).decoded(as: User.self, decoder: configuration.decoder)
+    ).decoded(as: User.self, decoder: configuration.resolvedDecoder)
     session.user = updatedUser
     await sessionManager.update(session)
     eventEmitter.emit(.userUpdated, session: session)
@@ -1350,9 +1354,9 @@ public actor AuthClient {
         method: .post,
         query: [URLQueryItem(name: "grant_type", value: "id_token")],
         headers: [.authorization: "Bearer \(session.accessToken)"],
-        body: configuration.encoder.encode(credentials)
+        body: configuration.resolvedEncoder.encode(credentials)
       )
-    ).decoded(as: Session.self, decoder: configuration.decoder)
+    ).decoded(as: Session.self, decoder: configuration.resolvedDecoder)
 
     await sessionManager.update(session)
     eventEmitter.emit(.userUpdated, session: session)
@@ -1447,7 +1451,7 @@ public actor AuthClient {
         method: .get
       )
     )
-    .decoded(as: Response.self, decoder: configuration.decoder)
+    .decoded(as: Response.self, decoder: configuration.resolvedDecoder)
 
     return OAuthResponse(provider: provider, url: response.url)
   }
@@ -1483,7 +1487,7 @@ public actor AuthClient {
             )
           }
         ].compactMap { $0 },
-        body: configuration.encoder.encode(
+        body: configuration.resolvedEncoder.encode(
           RecoverParams(
             email: email,
             gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:)),
@@ -1666,7 +1670,7 @@ public actor AuthClient {
       )
     )
 
-    let fetchedJWKS = try response.decoded(as: JWKS.self, decoder: configuration.decoder)
+    let fetchedJWKS = try response.decoded(as: JWKS.self, decoder: configuration.resolvedDecoder)
 
     // Return nil if JWKS is empty (will fallback to getUser)
     guard !fetchedJWKS.keys.isEmpty else {
@@ -1751,11 +1755,11 @@ public actor AuthClient {
     else {
       _ = try await user(jwt: token)
       // getUser succeeds, so claims can be trusted
-      let claims = try configuration.decoder.decode(
+      let claims = try configuration.resolvedDecoder.decode(
         JWTClaims.self,
         from: JSONSerialization.data(withJSONObject: decodedJWT.payload)
       )
-      let header = try configuration.decoder.decode(
+      let header = try configuration.resolvedDecoder.decode(
         JWTHeader.self,
         from: JSONSerialization.data(withJSONObject: decodedJWT.header)
       )
@@ -1769,11 +1773,11 @@ public actor AuthClient {
     }
 
     // Decode claims and header
-    let claims = try configuration.decoder.decode(
+    let claims = try configuration.resolvedDecoder.decode(
       JWTClaims.self,
       from: JSONSerialization.data(withJSONObject: decodedJWT.payload)
     )
-    let header = try configuration.decoder.decode(
+    let header = try configuration.resolvedDecoder.decode(
       JWTHeader.self,
       from: JSONSerialization.data(withJSONObject: decodedJWT.header)
     )

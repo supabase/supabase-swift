@@ -274,6 +274,81 @@ struct SupabaseClientTests {
   }
 
   @Test
+  func listenForAuthEventsTaskDoesNotRetainClient() async {
+    final class WeakBox: @unchecked Sendable {
+      weak var client: SupabaseClient?
+    }
+    let box = WeakBox()
+
+    // Narrow scope so ARC drops the last strong reference when it returns.
+    func scope() {
+      let client = SupabaseClient(
+        supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+        supabaseKey: "PUBLISHABLE_KEY",
+        options: SupabaseClientOptions(
+          auth: SupabaseClientOptions.AuthOptions(
+            storage: AuthLocalStorageMock(),
+            autoRefreshToken: false
+          )
+        )
+      )
+      box.client = client
+
+      #expect(
+        client.mutableState.listenForAuthEventsTask != nil,
+        "test precondition: client should be listening for internal auth events"
+      )
+    }
+    scope()
+
+    // Let the auth-state-change plumbing drain before asserting.
+    await Task.megaYield()
+
+    #expect(
+      box.client == nil,
+      "SupabaseClient leaked: the listenForAuthEvents task retained self, preventing deinit."
+    )
+  }
+
+  @Test
+  func subClientsDoNotRetainClient() async {
+    final class WeakBox: @unchecked Sendable {
+      weak var client: SupabaseClient?
+    }
+    let box = WeakBox()
+
+    // Narrow scope so ARC drops the last strong reference when it returns.
+    func scope() {
+      let client = SupabaseClient(
+        supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+        supabaseKey: "PUBLISHABLE_KEY",
+        options: SupabaseClientOptions(
+          auth: SupabaseClientOptions.AuthOptions(
+            storage: AuthLocalStorageMock(),
+            autoRefreshToken: false
+          )
+        )
+      )
+      box.client = client
+
+      // Materialize every lazily-built sub-client: each one caches the `fetch`/`upload` closures
+      // in `mutableState`, so a `self` capture there would form a retain cycle.
+      _ = client.rest
+      _ = client.storage
+      _ = client.functions
+      _ = client.realtimeV2
+    }
+    scope()
+
+    await Task.megaYield()
+
+    #expect(
+      box.client == nil,
+      "SupabaseClient leaked: a cached sub-client retained self, preventing deinit."
+    )
+  }
+
+  @Test
   func functionsOmitsAuthorizationBearerForNewFormatKey() {
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,

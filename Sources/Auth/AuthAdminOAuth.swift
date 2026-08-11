@@ -30,7 +30,7 @@ public struct AuthAdminOAuth: Sendable {
 
   var configuration: AuthClient.Configuration { Dependencies[clientID].configuration }
   var api: APIClient { Dependencies[clientID].api }
-  var encoder: JSONEncoder { Dependencies[clientID].encoder }
+  var encoder: JSONEncoder { Dependencies[clientID].resolvedEncoder }
 
   /// Lists all OAuth clients with optional pagination.
   /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
@@ -55,7 +55,8 @@ public struct AuthAdminOAuth: Sendable {
       )
     )
 
-    let response = try httpResponse.decoded(as: Response.self, decoder: configuration.decoder)
+    let response = try httpResponse.decoded(
+      as: Response.self, decoder: configuration.resolvedDecoder)
 
     var pagination = ListOAuthClientsPaginatedResponse(
       clients: response.clients,
@@ -96,7 +97,7 @@ public struct AuthAdminOAuth: Sendable {
         body: encoder.encode(params)
       )
     )
-    .decoded(decoder: configuration.decoder)
+    .decoded(decoder: configuration.resolvedDecoder)
   }
 
   /// Gets details of a specific OAuth client.
@@ -111,7 +112,7 @@ public struct AuthAdminOAuth: Sendable {
         method: .get
       )
     )
-    .decoded(decoder: configuration.decoder)
+    .decoded(decoder: configuration.resolvedDecoder)
   }
 
   /// Updates an existing OAuth client registration. Only the provided fields will be updated.
@@ -128,10 +129,10 @@ public struct AuthAdminOAuth: Sendable {
       HTTPRequest(
         url: configuration.url.appendingPathComponent("admin/oauth/clients/\(clientId)"),
         method: .put,
-        body: configuration.encoder.encode(params)
+        body: configuration.resolvedEncoder.encode(params)
       )
     )
-    .decoded(decoder: configuration.decoder)
+    .decoded(decoder: configuration.resolvedDecoder)
   }
 
   /// Deletes an OAuth client.
@@ -162,6 +163,6 @@ public struct AuthAdminOAuth: Sendable {
         method: .post
       )
     )
-    .decoded(decoder: configuration.decoder)
+    .decoded(decoder: configuration.resolvedDecoder)
   }
 }

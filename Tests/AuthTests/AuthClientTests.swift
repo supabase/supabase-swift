@@ -8,6 +8,7 @@
 import ConcurrencyExtras
 import CustomDump
 import Foundation
+import Helpers
 import InlineSnapshotTesting
 import Mocker
 import TestHelpers
@@ -24,7 +25,7 @@ import Testing
 #endif
 
 extension AuthMockerTests {
-  @Suite(.mockerSerialized)
+  @Suite(.mockerSerialized, .mainSerialExecutorSerialized)
   struct AuthClientTests {
     let storage = InMemoryLocalStorage()
 
@@ -3399,9 +3400,6 @@ extension AuthMockerTests {
       sessionConfiguration.protocolClasses = [MockingURLProtocol.self]
       let session = URLSession(configuration: sessionConfiguration)
 
-      let encoder = AuthClient.Configuration.jsonEncoder
-      encoder.outputFormatting = [.sortedKeys]
-
       let configuration = AuthClient.Configuration(
         url: clientURL,
         headers: [
@@ -3411,7 +3409,6 @@ extension AuthMockerTests {
         flowType: flowType,
         localStorage: storage,
         logger: nil,
-        encoder: encoder,
         fetch: { request in
           try await session.data(for: request)
         },
@@ -3442,7 +3439,12 @@ extension AuthMockerTests {
       action: () async throws -> T,
       expectedEvents: [AuthChangeEvent],
       expectedSessions: [Session?]? = nil,
-      timeout: TimeInterval = 2,
+      // `withMainSerialExecutor` hijacks a process-wide task-enqueue hook, so while this or any
+      // other suite serialized against it (.mainSerialExecutorSerialized) holds it, every
+      // concurrently-running suite in the process gets its own task scheduling funneled onto the
+      // same queue too. Under CI's loaded simulator that queue can back up well past what a fast
+      // local run would ever see — 30s gives real headroom without masking a genuinely stuck test.
+      timeout: TimeInterval = 30,
       fileID: StaticString = #fileID,
       filePath: StaticString = #filePath,
       line: UInt = #line,

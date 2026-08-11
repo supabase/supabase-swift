@@ -16,7 +16,7 @@ import Foundation
 /// this helper to observe it.
 @discardableResult
 func waitUntil(
-  timeout: TimeInterval = 1.0,
+  timeout: TimeInterval = 10.0,
   pollInterval: UInt64 = 10_000_000,
   condition: @escaping @Sendable () -> Bool
 ) async -> Bool {

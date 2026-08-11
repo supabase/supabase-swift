@@ -18,8 +18,11 @@ import Testing
 // `uncheckedUseMainSerialExecutor`) to force deterministic task scheduling within its closure.
 // Swift Testing runs tests in the same suite concurrently by default, so two tests racing to
 // flip that global would interfere with each other — serialize this suite, mirroring the
-// `_clock`-swap precedent in PostgrestBuilderTests (PR #1095).
-@Suite(.serialized)
+// `_clock`-swap precedent in PostgrestBuilderTests (PR #1095). `.mainSerialExecutorSerialized`
+// additionally prevents this suite from interleaving with any other suite (in this or another
+// target) that also calls `withMainSerialExecutor`, since `.serialized` alone only serializes a
+// suite's own tests.
+@Suite(.serialized, .mainSerialExecutorSerialized)
 struct SessionManagerTests {
   let http = HTTPClientMock()
   // Unique negative clientID so this suite's process-global `Dependencies` entry can't be
