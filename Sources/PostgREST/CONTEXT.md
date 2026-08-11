@@ -21,15 +21,26 @@ _Avoid_: mutable relation, editable table
 A single record belonging to a relation.
 _Avoid_: record, item, object
 
-**Projection**:
-A named subset of a relation's columns, possibly including embedded resources. A projection
+**Selection**:
+A named subset of a relation's columns, possibly including embedded resources. A selection
 selects from a relation; it is never itself a relation.
-_Avoid_: DTO, select shape, view, partial
+_Avoid_: projection, DTO, select shape, view, partial
+
+**Relationship**:
+A named link between two relations, identified by the foreign key column that defines it. The
+foreign key is a column; the relationship is the link that column establishes.
+_Avoid_: join, foreign key (that is the column), association
 
 **Embedded Resource**:
 Rows of a related relation returned nested inside a parent relation's rows. PostgREST's own
 term, and it applies to the filters, ordering and limits scoped to that nested relation.
 _Avoid_: join, include, referenced table, nested table
+
+**Required Embed**:
+An embedded resource that also constrains its parent, so parent rows with no matching
+embedded row are dropped. Distinct from a plain embedded resource, where filtering narrows
+only the nested rows and every parent is still returned.
+_Avoid_: inner join, mandatory embed
 
 **Database Function**:
 A Postgres function invoked by name with arguments, producing rows. A function is not a

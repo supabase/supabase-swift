@@ -47,6 +47,7 @@ dont
 dragarcia
 dummysignature
 ecdsa
+footgun
 halfvec
 emaillink
 entrancy

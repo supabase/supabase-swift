@@ -1,11 +1,16 @@
 # PostgREST v3 — design
 
-Date: 2026-08-10. Revised: 2026-08-11 after a design review.
+Date: 2026-08-10. Revised: 2026-08-11 after a design review, and again after absorbing
+[PR #1036](https://github.com/supabase/supabase-swift/pull/1036).
 Status: design only. No implementation plan and no code yet.
 
+PR #1036 is a working typed-query layer (1,930 lines, tests passing) that arrived independently
+at the same protocol refinement described in §4.2. This document adopts its macro design, its
+module architecture and its delivery order; see §8.
+
 Vocabulary for this context is defined in [`Sources/PostgREST/CONTEXT.md`](../../Sources/PostgREST/CONTEXT.md).
-This document uses those terms precisely — in particular *relation*, *projection*, *source*,
-*server error* and *request error*.
+This document uses those terms precisely — in particular *relation*, *selection*, *source*,
+*relationship*, *required embed*, *server error* and *request error*.
 
 ## 1. Goal
 
@@ -83,29 +88,43 @@ inserting into a materialized view is a runtime 405 rather than a compile error.
 |---|---|
 | Compatibility | New API beside the old one. Old classes deprecated, removed next major. |
 | Type safety | Fully typed by default, string fallback available at every level. |
-| Naming | Every public type prefixed `Postgrest`. No bare generic names. |
+| Naming | Public types in `PostgREST` are prefixed `Postgrest`. Macro attributes in the opt-in module are bare. |
 | Data sources | `PostgrestRelation` covers tables, views and materialized views; `PostgrestWritableRelation` refines it. |
 | Write capability | One capability, not separate insert / update / delete protocols. |
-| Partial select | Declared projection types, plus ad-hoc KeyPath and raw-string tiers. |
-| Column names | Derived from `CodingKeys`. No second source of truth. |
+| Partial select | Declared selection types, plus ad-hoc KeyPath and raw-string tiers. |
+| Column names | Generated from `@Column` and the snake-case default, which produce `CodingKeys` and the column mapping together. |
+| Filter surface | Methods first (`.eq(\.done, false)`, `.and`, `.or`). Operators are a later, additive layer. |
+| Embedded filters | Two methods — `embedded` narrows nested rows, `requiring` also drops unmatched parents. |
 | JSON coders | Not configurable. See [ADR 0002](../adr/0002-postgrest-exposes-no-public-json-coders.md). |
 | Errors | A struct with an extensible kind, not an enum. See [ADR 0001](../adr/0001-public-error-types-are-structs.md). |
-| Macro | Optional sugar, deferred to stage 3. Never a load-bearing dependency. |
+| Macro | Ships in a separate opt-in module, so `PostgREST` never depends on swift-syntax. |
+| Delivery order | Typed layer first over today's builders, then the value-typed core beneath it. See §5. |
 | Schema source | Both: a macro for hand-written types, and a rewritten postgres-meta generator. |
 | This document | Design only. Implementation is staged and planned separately. |
 
-Two decisions deserve their reasoning up front, because both look arbitrary otherwise.
+Three decisions deserve their reasoning up front, because all three look arbitrary otherwise.
 
-**Prefixing.** `Sources/RealtimeV2/PostgresAction.swift` already declares a public `struct Column`,
-which `Supabase` re-exports. Bare `Column` is therefore unavailable, and a mixed convention — bare
-`Filter` beside prefixed `PostgrestColumn` — would be a rule no reader can infer. Consistency is
-worth the verbosity, especially since users write `client.from(Todo.self).select()` far more often
-than they write these type names.
+**Prefixing, and its one exception.** `Sources/RealtimeV2/PostgresAction.swift` already declares a
+public `struct Column`, which `Supabase` re-exports. Bare `Column` is therefore unavailable, and a
+mixed convention inside one exported module would be a rule no reader can infer. So every public type
+in `PostgREST` is prefixed.
 
-**The macro is optional.** The relation contract is a plain protocol that a human can hand-write and
-a generator can emit. The macro only removes boilerplate, so `swift-syntax` is an ergonomics
-purchase rather than a structural dependency, and it can be dropped at stage 3 without redesigning
-anything above it.
+The macro attributes are the deliberate exception. `@Table`, `@SelectionOf`, `@Column`, `@PrimaryKey`,
+`@Default` and `@Relationship` live in `PostgrestMacros`, which nothing re-exports — a user opts in
+with an explicit `import`. Bare names are defensible exactly there, and prefixed attribute names would
+be noise on every field of every model. The known cost: swift-structured-queries also defines a macro
+named `Table`, so anyone using both must disambiguate at the import site.
+
+**The macro is architecturally optional, not optional by promise.** `PostgrestMacrosPlugin` is the
+compiler plugin and `PostgrestMacros` is a thin library depending on `PostgREST`. Neither `PostgREST`
+nor `Supabase` depends on either, so swift-syntax is compiled only for users who import the macro
+module — and a test asserts that `import PostgREST` alone does not pull it in.
+
+**Filters ship as methods before operators.** Operator overloads on `==`, `&&`, `||` and the
+comparisons are global: `PostgREST` is `@_exported` from `Supabase`, and Swift cannot scope operator
+visibility per import, so every expression in every file of every consuming app gains them to
+overload-resolve against. Prior art exists, but the type-check cost is real and unmeasured. Methods
+carry no such cost, so they ship first and the operator layer is added later once measured.
 
 The existing postgres-meta Swift template
 (`src/server/templates/swift.ts`) is not actively used and may be rewritten freely. Today it emits a
@@ -167,19 +186,31 @@ Four problems disappear structurally:
 ### 4.2 The relation contract
 
 ```swift
-public protocol PostgrestRelation: Decodable, Sendable {
+public protocol PostgrestSelection: Decodable, Sendable {
+  static var selectString: String { get }
+}
+
+public protocol PostgrestRelation: PostgrestSelection {
   static var relationName: String { get }
-  static var columnNames: [PartialKeyPath<Self>: String] { get }
+  static var schema: String { get }
+  static func columnName<V>(for keyPath: KeyPath<Self, V>) -> String
 }
 
 public protocol PostgrestWritableRelation: PostgrestRelation {
-  associatedtype Insert: Encodable & Sendable = Self
-  associatedtype Update: Encodable & Sendable = Self
+  associatedtype Insert: Encodable & Sendable
+  associatedtype Update: Encodable & Sendable
 }
 ```
 
-`KeyPath` is `Hashable`, so the KeyPath-to-column mapping is a plain dictionary. The query layer
-needs no macro and no reflection.
+Three points on the shape, all adopted from PR #1036 in preference to an earlier draft:
+
+- **`selectString` is computed at macro-expansion time**, not assembled from KeyPaths at runtime. The
+  select expression for a given shape never varies, so computing it once is both cheaper and simpler.
+- **`columnName<V>(for:)` replaces a `[PartialKeyPath<Self>: String]` dictionary.** It preserves `V`,
+  allocates nothing, and the dictionary's only real advantage — enumerating every column — is served
+  better by `selectString`.
+- **A relation *is* a selection.** Selecting a whole row is the degenerate selection, so
+  `PostgrestRelation` refines `PostgrestSelection` rather than sitting beside it.
 
 Writes are a constrained extension, which is what makes read-only relations safe:
 
@@ -191,9 +222,16 @@ extension PostgrestSource where R: PostgrestWritableRelation {
 }
 ```
 
-`Insert` and `Update` default to `Self`, so hand-written types need nothing extra. The generator
-supplies real variants, which is what makes nullable-with-default columns correct on insert and
-all-optional columns correct on update.
+`Insert` and `Update` have **no defaults**, because `= Self` would mean inserting the primary key.
+Both paths synthesize them properly instead:
+
+- The macro derives them from field attributes — `@PrimaryKey` fields are excluded from `Insert`,
+  `@Default` and nullable fields become optional, and every field is optional in `Update`.
+- The generator derives them from column metadata, which already carries identity, default and
+  nullability.
+
+This is the correction PR #1036 forced: an earlier draft defaulted `Insert = Self` for hand-written
+types, which quietly gave them worse insert semantics than generated ones.
 
 The generator's mapping follows directly from what postgres-meta exposes:
 
@@ -214,23 +252,31 @@ Two ways to satisfy the contract. The query API cannot tell them apart.
 
 ```swift
 // Macro path — hand-written
-@PostgrestTable("todos", naming: .snakeCase)
-struct Todo: Codable, Sendable {
-  let id: Int
+@Table("todos")
+struct Todo {
+  @PrimaryKey var id: UUID        // excluded from Todo.Insert
   var task: String
-  var isDone: Bool        // CodingKeys "is_done" AND column "is_done", from one source
+  @Default var isDone: Bool       // optional in Todo.Insert
+  @Column("due_at") var dueDate: Date?
 }
+
+// A view: select-only. Writes are not offered at all.
+@Table("active_todos", readOnly: true)
+struct ActiveTodo { var id: UUID; var task: String }
 
 // Generator path — macro-free, emitted by postgres-meta
 struct Todo: PostgrestWritableRelation, Codable, Hashable, Sendable, Identifiable { /* explicit */ }
 ```
 
-**Column names come from `CodingKeys`.** The encoder already uses `CodingKeys` to build insert and
-update bodies. Deriving filter columns from anything else would let the write path and the filter
-path disagree about the same column — you could update `is_done` while filtering on `isDone`. The
-`naming:` argument therefore generates the `CodingKeys` *and* the column names together rather than
-being a second, independent convention. A hand-written `columnNames` overrides derivation entirely,
-which is the escape hatch for anything the convention cannot express.
+**Column names and `CodingKeys` are generated together, from one input.** Field names convert
+camelCase to snake_case by default, and `@Column("due_at")` overrides a single field. The macro emits
+`CodingKeys` *and* the column mapping from that same input, so the write path and the filter path
+cannot disagree — you can never update `due_at` while filtering on `dueDate`.
+
+An earlier draft dropped a per-column attribute on the grounds that `CodingKeys` already owned the
+name. That had the dependency backwards. `@Column` is the *input* from which `CodingKeys` is
+generated, not a competing second source, so it is safe and it is the escape hatch for any name the
+convention cannot produce.
 
 This is why the configuration exposes no `JSONEncoder` or `JSONDecoder`; see
 [ADR 0002](../adr/0002-postgrest-exposes-no-public-json-coders.md).
@@ -252,8 +298,10 @@ public struct PostgrestFilter<R>: Sendable {
 }
 ```
 
-`&&`, `||` and `!` build the tree and flatten associatively. Rendering happens once, at
-request-build time, and picks the wire form appropriate to the node's position.
+The tree is built by methods — `.and(_:)`, `.or(_:)`, `.not(_:)` — and flattens associatively.
+Rendering happens once, at request-build time, and picks the wire form appropriate to the node's
+position. The table below shows the operator spelling because it is easier to read; operators are a
+later additive layer over the same tree, and the wire output is identical either way.
 
 | Expression | Rendered |
 |---|---|
@@ -301,6 +349,21 @@ String construction produces the same type, so the untyped path is not a separat
 Extending `KeyPath` with methods (`\.name.like("Jo%")`) was rejected: key-path expressions do not
 accept call syntax, so every call site would need parentheses.
 
+**Repeated `where` accumulates.** Two `.where(…)` calls AND together; neither replaces the other.
+This matches today's chained `.eq().gt()` behavior. It is worth stating because SQL has a single
+WHERE clause, so the singular name invites the opposite reading.
+
+**`nil` must never reach an `eq` operator.** `deleted_at=eq.null` is never true in SQL, so a nil
+comparison has to render `is.null`. Two consequences:
+
+- `.eq(\.deletedAt, nil)` must not compile. The value parameter is non-optional, forcing `.is`.
+- When the operator layer lands, `\.deletedAt == nil` must render `is.null` and `!= nil` must render
+  `not.is.null`, via an overload against the standard library's `_OptionalNilComparisonType` — the
+  same mechanism `x == nil` uses today.
+
+Today's API sidesteps this by only offering `is(_:value:)`. Adding sugar means inheriting the
+obligation, and getting it wrong returns silently empty results rather than an error.
+
 Escaping via `escapePostgRESTFilterValue` applies to every operand at render time, not only to list
 operators. This is a behavior fix, not just a refactor.
 
@@ -310,34 +373,66 @@ operators. This is a behavior fix, not just a refactor.
 appears today on `or`, `order`, `limit` and `range`. Plain filters have no such parameter, so
 scoping one means writing the prefix into the column name by hand (`.eq("comments.body", value: "x")`).
 
-All four collapse into one construct:
+All four collapse into a scope construct — but the scope comes in **two spellings**, and that is the
+most important detail in this section.
+
+#### The default is a no-op on parent rows
+
+Per the [PostgREST documentation](https://docs.postgrest.org/en/v12/references/api/resource_embedding.html):
+
+> "By default, Embedded Filters don't change the top-level resource (`films`) rows at all… In order to
+> filter the top level rows you need to add `!inner` to the embedded resource."
+
+So a single `embedded` method is a trap. Everyone writes this expecting "todos that have an approved
+comment":
+
+```swift
+.embedded(\.comments) { $0.where(.eq(\.approved, true)) }
+```
+
+and gets **every** todo, some with an empty `comments` array. A `join:` parameter with a default does
+not fix it — whichever default is chosen is silently wrong half the time. Two methods make the choice
+unavoidable at the call site:
 
 ```swift
 try await client.from(Todo.self)
   .select(TodoWithComments.self)
-  .where(\.done == false)
-  .embedded(\.comments) {
-    $0.where(\.approved == true || \.authorID == me)
+  .where(.eq(\.done, false))
+  .requiring(\.comments) {                       // !inner — drops todos with no match
+    $0.where(.or(.eq(\.approved, true), .eq(\.authorID, me)))
       .order(by: \.createdAt, .descending)
       .limit(5)
   }
   .execute()
 
-// select=…&done=eq.false
+// select=…,comments!inner(…)&done=eq.false
 //   &comments.or=(approved.eq.true,author_id.eq.<me>)
 //   &comments.order=created_at.desc.nullslast
 //   &comments.limit=5
 ```
 
-Untyped form: `.embedded("comments") { $0.where(.eq("approved", true)) }`.
+`embedded(_:_:)` narrows only the nested rows. `requiring(_:_:)` also constrains the parent. Untyped
+forms take a string: `.embedded("comments") { … }`.
 
-Two properties worth stating:
+#### The scope's KeyPath is rooted on the selection
 
-- **An impossible query becomes unrepresentable.** PostgREST cannot OR a parent filter against an
-  embedded one, because they are separate query parameters and therefore always ANDed. Keeping
-  scope on the query rather than inside the filter tree means `\.done == false || (embedded filter)`
-  cannot be written. The current string-based `or` offers no such protection.
-- **Nesting composes.** PostgREST accepts dotted paths, so nested `embedded` calls render
+`.embedded(\.comments)` roots on `TodoWithComments`, **not** on `Todo`. A generated relation type has
+columns only, so `Todo.comments` does not exist — the `comments` property is declared by the
+selection. That has a useful consequence: `embedded` and `requiring` are only available once a
+selection declaring embeds has been chosen, so a whole-row `select()` does not offer them at all,
+which is correct because it selects no embeds.
+
+Filters *inside* the scope target the embedded relation's columns, not the nested selection's, so you
+can filter on a column you did not select. The scope's type parameter therefore comes from the
+`@Relationship` declaration described in §4.5.
+
+#### Two further properties
+
+- **An impossible query stays unrepresentable.** PostgREST cannot OR a parent filter against an
+  embedded one, because they are separate query parameters and therefore always ANDed. Keeping scope
+  on the query rather than inside the filter tree means that combination cannot be written. The
+  current string-based `or` offers no such protection.
+- **Nesting composes.** PostgREST accepts dotted paths, so nested scopes render
   `comments.replies.limit=3`.
 
 ### 4.5 Select tiers
@@ -348,7 +443,7 @@ Four ways to select, each strictly less checked than the one above it.
 // Whole row
 .select()                                  // -> [Todo]
 
-// Tier 1 — declared projection, fully checked
+// Tier 1 — declared selection, fully checked
 .select(TodoSummary.self)                  // -> [TodoSummary]
 
 // Tier 2 — ad-hoc columns, caller names the decode type
@@ -358,27 +453,41 @@ Four ways to select, each strictly less checked than the one above it.
 .select("id, task, cost::text, comments(*)")
 ```
 
-Tier 1 is the main path. A projection is a separate protocol from a relation — it can be decoded
-from, it can never be written to, and it must name the relation it selects from:
+Tier 1 is the main path. A selection names the relation it selects from, and declares embeds by their
+**foreign key column**:
 
 ```swift
-@PostgrestSelection(from: Todo.self)
-struct TodoSummary {
-  let id: Int
-  let task: String
-  @PostgrestEmbed(\Todo.comments) let comments: [CommentBody]
+@SelectionOf(Todo.self)
+struct TodoWithComments {
+  var id: UUID
+  var task: String
+  @Relationship(\Comment.todoID) var comments: [CommentBody]
 }
 
-// Expansion includes, among other things:
-//   static let columnKeyPaths: [PartialKeyPath<Todo>] = [\Todo.id, \Todo.task]
-// A typo in `task` is a compile error on that emitted line.
+// TodoWithComments.selectString == "id,task,comments:comments!todo_id(id,body)"
 ```
 
-The macro cannot inspect `Todo`'s members — macros see syntax only. Cross-type checking works
-because the macro *emits* references to `Todo`'s members, and the compiler checks the expansion.
+The foreign key is the key insight, taken from PR #1036. An earlier draft tried to identify a
+relationship by name (`@PostgrestEmbed("comments", of: Comment.self)`) on the theory that
+relationships cannot be KeyPaths, since postgres-meta emits columns only. That was wrong: **the
+foreign key is itself a column**, so the KeyPath already exists, in both directions —
+`\Comment.todoID` for one-to-many, and `\Message.senderID` for many-to-one. It is compiler-checked,
+it disambiguates when two foreign keys join the same pair of relations, and it needs no new metadata
+from the generator.
 
-Keeping projections out of `PostgrestRelation` matters: otherwise every projection would carry a
-vacuous `Insert`/`Update`, and `TodoSummary` would type-check where `from(_:)` expects a relation.
+The macro cannot inspect `Todo`'s members — macros see syntax only. Cross-type checking works because
+the macro *emits* references to those members, and the compiler checks the expansion. A typo in a
+field name fails on the emitted line.
+
+Keeping selections and relations distinct matters: otherwise every selection would carry a vacuous
+`Insert`/`Update`, and `TodoWithComments` would type-check where `from(_:)` expects a relation. The
+macros enforce the boundary — `@Relationship` on a `@Table` field is a compile error, because embeds
+belong to selections.
+
+**Macro diagnostics are part of the design, not an afterthought.** At minimum: `@Relationship` on a
+`@Table` field, a non-primitive `@SelectionOf` field with no `@Relationship`, and a `let` binding
+where a `var` is required must each be an error with a message that says what to do instead. A macro
+whose failure mode is an unreadable expansion error is worse than no macro.
 
 Tier 1 gives plain dot-syntax (`rows[0].task`), working embeds, and a name for a shape reused across
 call sites. Its cost is one declaration per distinct shape, which tiers 2 and 3 cover for one-off
@@ -386,7 +495,7 @@ queries.
 
 Two alternatives were considered and rejected:
 
-- **Parameter packs.** `select(\.id, \.task)` returning a projection read by KeyPath subscript. Loses
+- **Parameter packs.** `select(\.id, \.task)` returning a selection read by KeyPath subscript. Loses
   dot-syntax on every partial query, gives poor diagnostics when one KeyPath is wrong, makes
   `Identifiable` and `Hashable` conformances awkward, and still needs a separate path for embeds.
 - **A select result builder.** Swift cannot synthesize a nominal type from a result builder, so the
@@ -400,7 +509,7 @@ ordering, projections and `execute()` all operate on the rows it produces, so bo
 same `PostgrestQuery`.
 
 ```swift
-@PostgrestFunction("search_todos")
+@Function("search_todos")
 struct SearchTodos: Codable, Sendable {
   typealias Result = [Todo]
   var keyword: String
@@ -524,8 +633,9 @@ the `URLQueryRepresentable` typealias.
 From the new configuration: `encoder` and `decoder`. `SupabaseClientOptions.DatabaseOptions` keeps
 both, untouched, for the deprecated API.
 
-A per-column attribute. An earlier draft had `@PostgrestColumn("is_done")`; it is dropped because
-`CodingKeys` already owns that name and a second source of truth could contradict it.
+Not removed, contrary to an earlier draft: a per-column attribute. `@Column("due_at")` stays, because
+it is the *input* the macro generates `CodingKeys` from rather than a competing second source of
+truth. See §4.2.
 
 ### 4.11 Module layout
 
@@ -543,7 +653,7 @@ Sources/PostgREST/
   Filters/PostgrestFilter+Render.swift
   Filters/PostgrestFilterValue.swift
   Relations/PostgrestRelation.swift
-  Relations/PostgrestProjection.swift
+  Relations/PostgrestSelection.swift
   Relations/AnyPostgrestRelation.swift
   Functions/PostgrestFunction.swift
   Request/PostgrestRequest.swift          // pure request model plus rendering
@@ -552,8 +662,27 @@ Sources/PostgREST/
   Response/PostgrestResponse.swift
   Errors/PostgrestRequestError.swift
   Legacy/                                 // today's 10 files, deprecated, untouched
-Sources/PostgRESTMacros/                  // stage 3 only
+
+Sources/PostgrestMacrosPlugin/            // .macro target — depends on swift-syntax
+  Plugin.swift
+  TableMacro.swift
+  SelectionOfMacro.swift
+  MarkerMacros.swift                      // @PrimaryKey, @Default, @Column, @Relationship
+  Support/CamelToSnake.swift
+
+Sources/PostgrestMacros/                  // opt-in library — depends on PostgREST + the plugin
+  Macros.swift                            // @Table, @SelectionOf, and the marker declarations
 ```
+
+**Nothing re-exports `PostgrestMacros`.** `PostgREST` and `Supabase` do not depend on it, so
+swift-syntax is compiled only for users who write `import PostgrestMacros`. The protocols themselves
+live in `PostgREST`, because the query API is defined in terms of them and must not depend on the
+macro module.
+
+One build gotcha, documented in PR #1036 and worth carrying over: the plugin target must be excluded
+from `InternalImportsByDefault` and `MemberImportVisibility`, because a public conformance to a
+protocol from an internally-imported module is rejected, and the plugin must declare its macro types
+public to satisfy SwiftSyntax's `CompilerPlugin` protocols.
 
 ### 4.12 Testing
 
@@ -562,19 +691,42 @@ executing, so most of today's 3,384 lines of snapshot tests become direct assert
 request. Filter rendering is tested as a pure tree-to-string function, with no client and no
 network. A `PostgrestMockTransport` covers response handling, retry and error mapping.
 
+Three test kinds the macro layer needs, all present in PR #1036:
+
+- **Expansion tests** via `swift-macro-testing`, asserting the exact synthesized source. This is the
+  only way to keep `CodingKeys`, `Insert`, `Update` and `selectString` from drifting.
+- **Diagnostic tests**, asserting each documented misuse produces its error rather than a confusing
+  expansion failure.
+- **A dependency-isolation test** asserting `import PostgREST` alone does not pull in swift-syntax.
+  Without it, the module boundary is an intention rather than a guarantee.
+
+End-to-end, the KeyPath-to-column translation is best verified by snapshotting the actual request URL,
+which is what makes the whole chain — attribute, `CodingKeys`, column name, query string — testable in
+one assertion.
+
 ## 5. Staging
+
+Delivery order is inverted from an earlier draft, adopting PR #1036's approach: **ship the typed layer
+first over today's builders, then replace the internals beneath it.**
 
 | Stage | Delivers |
 |---|---|
-| 1 | Request model, transport, response, errors, filter tree, string-column API |
-| 2 | `PostgrestRelation`, typed sources, projections, `Insert` / `Update` variants |
-| 3 | `@PostgrestTable` / `@PostgrestSelection` / `@PostgrestFunction` macros — optional |
+| 1 | Typed protocols in `PostgREST`, plus `PostgrestMacros` with `@Table` / `@SelectionOf` / `@Relationship` / `@Column` / `@PrimaryKey` / `@Default`, layered over today's builders — essentially PR #1036 |
+| 2 | Value-typed core swapped in beneath stage 1: request model, transport, response, errors, filter tree |
+| 3 | `where`, `embedded` / `requiring` scope, `@Function`; operator layer once measured |
 | 4 | Deprecate today's classes |
 | 5 | Rewrite the postgres-meta Swift template (separate repository) |
 
-Each stage gets its own implementation plan. Stages 1 and 2 must compile with hand-written and
-generated conformances only, so `swift-syntax` never becomes load-bearing and stage 3 stays
-cancellable.
+Why this order. Wrapping today's builders puts compile-time column and table safety in users' hands
+in one release, without waiting on the value-typed core. The internals can then be replaced with
+callers noticing nothing, because the typed surface does not expose them.
+
+What it costs. Stage 1 inherits the aliasing bug and cannot express `or`, nesting or embedded scope —
+those arrive in stages 2 and 3. Stage 1's typed filter methods (`.eq(\.senderID, value:)`) must
+therefore be designed to **survive into the final API as sugar**, so that early adopters are not
+migrated twice. `where` and the filter tree are then purely additive.
+
+Each stage gets its own implementation plan.
 
 ## 6. Migration
 
@@ -598,18 +750,64 @@ instead. That is more typing, and it is the price of column names being correct 
 
 ## 7. Open questions
 
-**Nested negation grammar.** The renderer assumes PostgREST accepts `not.or=(…)` at top level and
-`not.and(…)` nested inside `or=(…)`. The top-level forms are documented. The nested form must be
-verified against a running server before the renderer depends on it.
+**Should an unfiltered `update` or `delete` compile?** `.delete().execute()` deletes every row in the
+relation. Today that is a documentation warning only, and supabase-js cannot do better. Phase types
+can turn it into a compile error with an explicit opt-out:
 
-**Which naming conventions to offer.** `.snakeCase` covers the common case. Whether to offer others,
-or to accept an arbitrary transform, is undecided. An arbitrary transform is risky: it must be
-applied identically to `CodingKeys` and to column names, and a closure cannot be evaluated by a
-macro at expansion time.
+```swift
+.delete().where(.eq(\.id, id)).execute()   // fine
+.delete().all().execute()                  // explicit, deliberate
+.delete().execute()                        // does not compile
+```
+
+This is the most destructive footgun in the API and closing it is cheap. Left open because it is a
+deliberate ergonomic tax on a legitimate operation, and that trade is a judgement call.
+
+**Two server behaviors to verify before the renderer depends on them.** Both need a running PostgREST,
+not a documentation reading:
+
+1. **Nested negation.** The renderer assumes `not.or=(…)` at top level and `not.and(…)` nested inside
+   `or=(…)`. The top-level forms are documented; the nested one is not.
+2. **Combining hints.** `!inner` (§4.4) and `!<fk>` (§4.5) occupy the same `!` slot. The docs show
+   neither combined, so whether `comments!todo_id!inner(…)` is legal is unknown. Any query needing
+   both a disambiguated foreign key and parent filtering depends on it.
+
+**`@Table(readOnly: true)` for a view reads oddly.** A view is not a table. A `@View("active_todos")`
+alias expanding to the same conformance would read better, at the cost of a second attribute users
+must know about. Cosmetic, decidable later.
 
 **`AsyncSequence` pagination.** `.pages(of:)` over `range` is cheap to add and useful, but it is not
 required by anything today. Deferred until asked for.
 
-**Generated projection types.** The generator currently emits one `Select` struct per relation.
-Whether it should also emit projections, and how a user would name them, is undecided. Not needed for
+**Generated selection types.** The generator currently emits one `Select` struct per relation.
+Whether it should also emit selections, and how a user would name them, is undecided. Not needed for
 stages 1 to 4.
+
+## 8. What came from PR #1036
+
+[PR #1036](https://github.com/supabase/supabase-swift/pull/1036) is a working typed-query layer that
+predates this document and reached several conclusions independently. It is adopted rather than
+superseded. Taken from it:
+
+| Adopted | Instead of |
+|---|---|
+| Separate `.macro` plugin plus opt-in library, with a test proving no swift-syntax leak | "The macro is optional" as a staging promise |
+| `@Relationship(\Comment.todoID)` — the foreign key column as the KeyPath | A relationship-name string plus new generator metadata |
+| `@PrimaryKey` / `@Default` synthesizing `Insert` and `Update` | `Insert = Self` by default |
+| `selectString` computed at expansion time | Assembling the select from KeyPaths at runtime |
+| `columnName<V>(for:)` | A `[PartialKeyPath<Self>: String]` dictionary |
+| `@Column` as the input that generates `CodingKeys` | Dropping a per-column attribute entirely |
+| Macro diagnostics as a named requirement | Silence on the subject |
+| `swift-macro-testing` expansion tests | Silence on the subject |
+| Typed layer first, internals rewritten beneath | Value-typed core first |
+
+It also independently arrived at the read-only/writable protocol refinement in §4.2, which is
+reassuring for a decision that was otherwise argued from postgres-meta metadata alone.
+
+What this document keeps that PR #1036 does not have: value semantics, the filter expression tree with
+`or` and nesting, the `embedded` / `requiring` scope, the transport protocol, the error struct, and
+relations that cover views by protocol refinement rather than a `readOnly:` flag.
+
+Two caveats on the PR as it stands: it is roughly seven weeks stale, and its description names the
+modules `SupabaseSwiftMacros` / `SupabaseMacros` while the code says `PostgrestMacros` /
+`PostgrestMacrosPlugin`.
