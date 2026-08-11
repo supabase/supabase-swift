@@ -211,6 +211,7 @@ upserted
 URLAPI
 uuid
 UUID
+varchar
 WASI
 web3
 Web3
