@@ -158,7 +158,9 @@ let package = Package(
         .product(name: "HTTPTypes", package: "swift-http-types"),
         .product(name: "Logging", package: "swift-log"),
         "Helpers",
-      ]
+      ],
+      // Context glossary, not a source or resource. See CONTEXT-MAP.md.
+      exclude: ["CONTEXT.md"]
     ),
     .testTarget(
       name: "PostgRESTTests",

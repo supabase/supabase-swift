@@ -113,3 +113,8 @@ yarn-error.log*
 
 # superpowers scratch docs (design specs/plans, not project documentation)
 /docs/superpowers/
+# Compiler intermediates that can land in the repo root
+/*.d
+/*.dia
+/*.swiftdeps
+/*.swiftmodule
