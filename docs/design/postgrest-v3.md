@@ -139,6 +139,55 @@ column exists. It emits no relation-name constants. The SDK team owns this contr
 Every type is a `Sendable` struct holding an immutable request value. No inheritance. Each phase is
 a distinct type, so illegal chains fail to compile.
 
+```mermaid
+stateDiagram-v2
+    direction LR
+
+    state "PostgrestClient" as Client
+    state "PostgrestSource" as Source
+    state "PostgrestQuery" as Query
+    state "PostgrestQuery, single row" as Single
+    state "PostgrestMutation" as Mutation
+    state "PostgrestRawQuery" as Raw
+    state "Result" as Result
+
+    [*] --> Client
+
+    Client --> Source : from(Todo.self) / from("todos")
+    Client --> Query : rpc(SearchTodos(...))
+
+    Source --> Query : select(...)
+    Source --> Mutation : insert / upsert / update / delete
+
+    Query --> Query : where / order / limit / range / embedded / requiring
+    Query --> Single : single() / maybeSingle()
+    Query --> Raw : csv / geojson / explain
+    Query --> Result : execute() / executeWithResponse() / count(.exact)
+
+    Mutation --> Mutation : where / maxAffected / dryRun
+    Mutation --> Query : returning()
+    Mutation --> Result : execute()
+
+    Single --> Result : execute()
+    Raw --> Result : execute()
+```
+
+Five things the diagram is meant to make obvious:
+
+- **`Source` has no edge to `Result`.** A bare GET cannot be sent; an operation must be chosen first.
+- **The four write edges out of `Source` exist only where `R` is a `PostgrestWritableRelation`.** On a
+  read-only view those methods are absent, so the mutation path is unreachable at compile time.
+- **`Raw` has no edge back to `Query`.** That is what makes the `csv` + `stripNulls` conflict
+  unrepresentable rather than a deferred runtime error.
+- **`Mutation` reaches `Query` only through `returning()`,** so asking for rows back from a write is
+  always explicit.
+- **The self-loops are the order-free modifiers.** `where` and `order` sit on the same state, so no
+  ordering trap exists — unlike today, where `select()` drops every filter method.
+
+`single()` and `maybeSingle()` get their own state because they change the output type, from `[T]` to
+`T` and `T?` respectively. That is the whole reason the PGRST116 case needs no hidden flag. The listing
+below carries the exact generic parameters, which a state diagram cannot express.
+
 ```
 PostgrestClient
   .from(Todo.self)         -> PostgrestSource<Todo>                    // table
