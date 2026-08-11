@@ -82,7 +82,7 @@ struct APIClient: Sendable {
     guard
       let error = try? response.decoded(
         as: _RawAPIErrorResponse.self,
-        decoder: configuration.decoder
+        decoder: configuration.resolvedDecoder
       )
     else {
       return .api(

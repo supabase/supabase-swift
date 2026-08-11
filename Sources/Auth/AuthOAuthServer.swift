@@ -35,8 +35,8 @@ public struct AuthOAuthServer: Sendable {
 
   var configuration: AuthClient.Configuration { Dependencies[clientID].configuration }
   var api: APIClient { Dependencies[clientID].api }
-  var encoder: JSONEncoder { Dependencies[clientID].encoder }
-  var decoder: JSONDecoder { Dependencies[clientID].decoder }
+  var encoder: JSONEncoder { Dependencies[clientID].resolvedEncoder }
+  var decoder: JSONDecoder { Dependencies[clientID].resolvedDecoder }
 
   /// Fetches details about a pending OAuth authorization request, to present
   /// a consent screen to the user.

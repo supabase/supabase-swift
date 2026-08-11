@@ -8,6 +8,7 @@
 import ConcurrencyExtras
 import CustomDump
 import Foundation
+import Helpers
 import InlineSnapshotTesting
 import Mocker
 import TestHelpers
@@ -36,9 +37,6 @@ extension AuthMockerTests {
       sessionConfiguration.protocolClasses = [MockingURLProtocol.self]
       let session = URLSession(configuration: sessionConfiguration)
 
-      let encoder = AuthClient.Configuration.jsonEncoder
-      encoder.outputFormatting = [.sortedKeys]
-
       let configuration = AuthClient.Configuration(
         url: clientURL,
         headers: [
@@ -46,7 +44,6 @@ extension AuthMockerTests {
         ],
         localStorage: storage,
         logger: nil,
-        encoder: encoder,
         fetch: { request in
           try await session.data(for: request)
         }

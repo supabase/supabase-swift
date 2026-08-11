@@ -38,10 +38,12 @@ decoratee
 deeplinking
 discardable
 dollarsign
+dotproduct
 dont
 dragarcia
 dummysignature
 ecdsa
+halfvec
 emaillink
 entrancy
 etag
@@ -69,6 +71,7 @@ ilike
 imatch
 Imatch
 Inbucket
+initializers
 inkey
 isdistinct
 johndoe
@@ -117,11 +120,13 @@ Passwordless
 Pathable
 PCREDENTIALW
 pgrst
+pgvector
 phfts
 phraseto
 pkce
 PKCE
 pkcs
+pkey
 plainto
 plfts
 postalcode

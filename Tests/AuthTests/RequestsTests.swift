@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Helpers
 import InlineSnapshotTesting
 import SnapshotTesting
 import TestHelpers
@@ -728,16 +729,12 @@ struct RequestsTests {
     testName: String = #function,
     line: UInt = #line
   ) -> AuthClient {
-    let encoder = AuthClient.Configuration.jsonEncoder
-    encoder.outputFormatting = .sortedKeys
-
     let configuration = AuthClient.Configuration(
       url: clientURL,
       headers: ["Apikey": "dummy.api.key", "X-Client-Info": "gotrue-swift/x.y.z"],
       flowType: flowType,
       localStorage: InMemoryLocalStorage(),
       logger: nil,
-      encoder: encoder,
       fetch: { request in
         await MainActor.run {
           assertSnapshot(

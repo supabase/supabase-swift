@@ -20,7 +20,7 @@ extension AuthAdmin {
         url: configuration.url.appendingPathComponent("admin/users/\(userId)/passkeys"),
         method: .get
       )
-    ).decoded(decoder: configuration.decoder)
+    ).decoded(decoder: configuration.resolvedDecoder)
   }
 
   /// Deletes a passkey belonging to a user.
