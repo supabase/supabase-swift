@@ -649,20 +649,14 @@ public enum EmailOTPType: String, Encodable, CaseIterable, Sendable {
   case email
 }
 
-/// The response from sign-up and OTP-verification calls that may return a session, a user, or
-/// neither, depending on whether email confirmation is required.
+/// The response from sign-up and passkey calls that may return either a session or a user,
+/// depending on whether email confirmation is required.
 public enum AuthResponse: Codable, Hashable, Sendable {
   /// A full session was created, meaning the user is immediately signed in.
   case session(Session)
 
   /// Only a user record was returned, meaning email confirmation is still pending.
   case user(User)
-
-  /// Neither a session nor a user was returned. This is also the fallback for any response body
-  /// that doesn't match a ``Session`` or ``User`` shape. GoTrue returns this shape for
-  /// intermediate confirmation steps that don't carry user data, e.g. the first of the two
-  /// confirmations required for a secure email change.
-  case none
 
   public init(from decoder: any Decoder) throws {
     let container = try decoder.singleValueContainer()
@@ -671,7 +665,10 @@ public enum AuthResponse: Codable, Hashable, Sendable {
     } else if let value = try? container.decode(User.self) {
       self = .user(value)
     } else {
-      self = .none
+      throw DecodingError.dataCorruptedError(
+        in: container,
+        debugDescription: "Data could not be decoded as any of the expected types (Session, User)."
+      )
     }
   }
 
@@ -680,25 +677,63 @@ public enum AuthResponse: Codable, Hashable, Sendable {
     switch self {
     case .session(let value): try container.encode(value)
     case .user(let value): try container.encode(value)
-    case .none: try container.encodeNil()
     }
   }
 
-  /// The user in either case of the response, or `nil` if neither a session nor a user was
-  /// returned.
-  public var user: User? {
+  /// The user in either case of the response.
+  public var user: User {
     switch self {
     case .session(let session): session.user
     case .user(let user): user
-    case .none: nil
     }
   }
 
-  /// The session, or `nil` if only a user was returned (confirmation pending) or neither was
-  /// returned.
+  /// The session, or `nil` if only a user was returned (confirmation pending).
   public var session: Session? {
     if case .session(let session) = self { return session }
     return nil
+  }
+}
+
+/// The response from ``AuthClient/verifyOTP(tokenHash:type:)`` and its overloads.
+public enum VerifyOTPResponse: Decodable, Hashable, Sendable {
+  /// A full session was created, meaning the user is signed in.
+  case session(Session)
+
+  /// Neither a session nor a user was returned. GoTrue sends this for the first of the two
+  /// confirmations required by a secure email change: the new email address still needs to
+  /// confirm its own link before the change takes effect and a session is issued.
+  case emailChangeConfirmationPending(EmailChangeConfirmation)
+
+  public init(from decoder: any Decoder) throws {
+    let container = try decoder.singleValueContainer()
+    if let value = try? container.decode(Session.self) {
+      self = .session(value)
+    } else {
+      self = .emailChangeConfirmationPending(try container.decode(EmailChangeConfirmation.self))
+    }
+  }
+
+  /// The session, or `nil` if the email change is still pending its other confirmation. Access
+  /// the user through ``session``, e.g. `response.session?.user`.
+  public var session: Session? {
+    if case .session(let session) = self { return session }
+    return nil
+  }
+}
+
+/// The body GoTrue returns for the first of the two confirmations required by a secure email
+/// change, before a session can be issued.
+public struct EmailChangeConfirmation: Decodable, Hashable, Sendable {
+  /// A human-readable description of what happened, meant for display.
+  public let message: String
+
+  /// The HTTP status code of the response, as a string.
+  public let code: String
+
+  private enum CodingKeys: String, CodingKey {
+    case message = "msg"
+    case code
   }
 }
 

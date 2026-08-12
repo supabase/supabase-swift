@@ -1125,7 +1125,7 @@ public actor AuthClient {
     type: EmailOTPType,
     redirectTo: URL? = nil,
     captchaToken: String? = nil
-  ) async throws -> AuthResponse {
+  ) async throws -> VerifyOTPResponse {
     try await _verifyOTP(
       request: .init(
         url: configuration.url.appendingPathComponent("verify"),
@@ -1159,7 +1159,7 @@ public actor AuthClient {
     token: String,
     type: MobileOTPType,
     captchaToken: String? = nil
-  ) async throws -> AuthResponse {
+  ) async throws -> VerifyOTPResponse {
     try await _verifyOTP(
       request: .init(
         url: configuration.url.appendingPathComponent("verify"),
@@ -1183,7 +1183,7 @@ public actor AuthClient {
   public func verifyOTP(
     tokenHash: String,
     type: EmailOTPType
-  ) async throws -> AuthResponse {
+  ) async throws -> VerifyOTPResponse {
     try await _verifyOTP(
       request: .init(
         url: configuration.url.appendingPathComponent("verify"),
@@ -1197,9 +1197,9 @@ public actor AuthClient {
     )
   }
 
-  private func _verifyOTP(request: HTTPRequest) async throws -> AuthResponse {
+  private func _verifyOTP(request: HTTPRequest) async throws -> VerifyOTPResponse {
     let response = try await api.execute(request).decoded(
-      as: AuthResponse.self,
+      as: VerifyOTPResponse.self,
       decoder: configuration.resolvedDecoder
     )
 
