@@ -242,7 +242,6 @@ Every breaking change needs a migration guide before it merges.
 
 - Mark the change as breaking the usual conventional-commits way: `!` after the type/scope (`feat!:`, `fix(auth)!:`) or a `BREAKING CHANGE:` footer in the commit body. This is the same marker release-please and the API stability check already key off to bump majors and flag reviewers.
 - Add or update a guide under `docs/migrations/` explaining what changed, why, and how to adapt calling code. Prefer one running guide per major version (e.g. `docs/migrations/V3 Migration Guide.md`) when landing a major incrementally — append to it rather than starting a new file per PR. Use a dedicated per-area guide (e.g. `docs/migrations/RealtimeV2 Migration Guide.md`) for a self-contained breaking change outside a major-version effort.
-- CI enforces this on `main` and `release/*`: a PR whose title or commits carry a breaking marker but touches no file under `docs/migrations/` fails the "Migration guide required" check.
 
 ## CI/CD
 
