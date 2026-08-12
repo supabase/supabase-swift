@@ -205,13 +205,15 @@ public class PostgrestTransformBuilder: PostgrestBuilder, @unchecked Sendable {
   /// Instructs PostgREST to return a single JSON object, returning `nil` when no row matches.
   ///
   /// Like ``single()``, this sets the `application/vnd.pgrst.object+json` accept header so the
-  /// server enforces a single result. Unlike ``single()``, when the query does not match exactly
-  /// one row the resulting `PGRST116` error is not thrown — ``PostgrestResponse/value`` is `nil`
-  /// instead. Decode into an optional type to observe the `nil`.
+  /// server enforces a single result. Unlike ``single()``, when the query matches zero rows the
+  /// resulting `PGRST116` error is not thrown — ``PostgrestResponse/value`` is `nil` instead.
+  /// Decode into an optional type to observe the `nil`.
   ///
   /// > Note: PostgREST returns `PGRST116` both when zero rows match and when more than one row
-  /// > matches. This method returns `nil` for either case; use ``single()`` for the strict variant
-  /// > that always throws when the query does not match exactly one row.
+  /// > matches. Only the zero-row case is turned into `nil`; a match of more than one row still
+  /// > throws, since it indicates the query should have been scoped to match at most one row.
+  /// > Use ``single()`` for the strict variant that always throws when the query does not match
+  /// > exactly one row.
   ///
   /// ```swift
   /// let todo: Todo? = try await client
