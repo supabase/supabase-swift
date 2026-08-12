@@ -1,5 +1,16 @@
 # Changelog
 
+## [3.0.0](https://github.com/supabase/supabase-swift/compare/v2.55.0...v3.0.0) (2026-08-12)
+
+
+### ⚠ BREAKING CHANGES
+
+* ) must touch a file under docs/migrations/.
+
+### Miscellaneous Chores
+
+* configure v3 beta prereleases and document migration-guide policy ([#1199](https://github.com/supabase/supabase-swift/issues/1199)) ([f6687c5](https://github.com/supabase/supabase-swift/commit/f6687c522d545ecb4a9b98470a1e2f7ecac61d0b))
+
 ## [2.55.0](https://github.com/supabase/supabase-swift/compare/v2.54.1...v2.55.0) (2026-08-12)
 
 
