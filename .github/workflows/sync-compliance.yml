@@ -10,7 +10,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-    uses: supabase/sdk/.github/workflows/sync-sdk-compliance.yml@72fda7c9e4e7cc18f896397f8b08d675cc509348
+    uses: supabase/sdk/.github/workflows/sync-sdk-compliance.yml@93b52588ffda761e61b22cebfc3e5e29aa3cb3f4 # v1.0.0
     secrets:
       app-id: ${{ secrets.APP_ID }}
       private-key: ${{ secrets.PRIVATE_KEY }}
