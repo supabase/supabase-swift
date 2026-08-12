@@ -566,4 +566,32 @@ struct FunctionsClientTests {
     } catch FunctionsError.relayError {
     }
   }
+
+  @Test
+  func invokeWithStreamedResponseInvalidatesSession() async throws {
+    let sut = makeSUT()
+
+    Mock(
+      url: url.appendingPathComponent("stream"),
+      statusCode: 200,
+      data: [.post: Data("hello world".utf8)]
+    )
+    .register()
+
+    weak var weakDelegate: StreamResponseDelegate?
+
+    do {
+      let (stream, delegate) = sut.streamResponse("stream", options: FunctionInvokeOptions())
+      weakDelegate = delegate
+      for try await _ in stream {}
+    }
+
+    // URLSession releases its delegate asynchronously after invalidation.
+    let deadline = Date().addingTimeInterval(5)
+    while weakDelegate != nil, Date() < deadline {
+      try await Task.sleep(nanoseconds: 10_000_000)
+    }
+
+    #expect(weakDelegate == nil, "URLSession was not invalidated; its delegate leaked")
+  }
 }
