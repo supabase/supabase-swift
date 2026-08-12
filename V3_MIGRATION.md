@@ -40,11 +40,16 @@ call site using the result needs updating.
 ```swift
 // Before
 let response: AuthResponse = try await client.verifyOTP(tokenHash: hash, type: .emailChange)
-let email = response.user?.email
+let email = response.user.email
 
 // After
 let response: VerifyOTPResponse = try await client.verifyOTP(tokenHash: hash, type: .emailChange)
-let email = response.session?.user.email
+switch response {
+case .session(let session):
+  let email = session.user.email
+case .emailChangeConfirmationPending(let confirmation):
+  print("\(confirmation.message) (code: \(confirmation.code))")
+}
 ```
 
 `AuthResponse` itself is unchanged: `signUp` and the Passkey methods still return it, and `user` is
