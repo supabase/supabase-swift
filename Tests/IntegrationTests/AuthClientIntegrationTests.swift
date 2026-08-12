@@ -488,9 +488,13 @@ struct AuthClientIntegrationTests {
     }
     #expect(confirmation.code == "200")
 
-    // Confirming the other email completes the change and returns a session.
+    // Confirming the other email completes the change and returns a session. GoTrue's
+    // admin/generate_link response has a bug for `email_change_new`: `hashedToken` is computed
+    // from the current email, not the new one, so it never matches what's actually stored. The
+    // raw `emailOTP` is correct, so use the email+token overload instead of tokenHash here.
     let secondConfirmation = try await client.verifyOTP(
-      tokenHash: newEmailLink.properties.hashedToken,
+      email: newEmail,
+      token: newEmailLink.properties.emailOTP,
       type: .emailChange
     )
     let session = try #require(secondConfirmation.session)
