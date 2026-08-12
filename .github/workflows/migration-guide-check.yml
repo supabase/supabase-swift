@@ -1,0 +1,72 @@
+name: Migration Guide Required
+
+on:
+  pull_request:
+    branches:
+      - main
+      - release/*
+
+permissions:
+  contents: read
+
+jobs:
+  migration-guide-check:
+    name: Migration guide required for breaking changes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Check breaking changes include a migration guide
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          git fetch origin ${{ github.base_ref }}
+
+          # Same breaking-change detection as api-stability.yml: '!' after the
+          # type/scope, or a 'BREAKING CHANGE:' marker, in the PR title or in
+          # any commit's subject/body.
+          BREAKING=false
+
+          if echo "$PR_TITLE" | grep -qE '^[a-z]+(\([^)]+\))?!:'; then
+            BREAKING=true
+          fi
+          if echo "$PR_TITLE" | grep -qi 'BREAKING CHANGE:'; then
+            BREAKING=true
+          fi
+
+          COMMIT_SUBJECTS=$(git log --format=%s "origin/${{ github.base_ref }}..HEAD")
+          COMMIT_BODIES=$(git log --format=%b "origin/${{ github.base_ref }}..HEAD")
+
+          if echo "$COMMIT_SUBJECTS" | grep -qE '^[a-z]+(\([^)]+\))?!:'; then
+            BREAKING=true
+          fi
+          if echo "$COMMIT_SUBJECTS" | grep -qi 'BREAKING CHANGE:'; then
+            BREAKING=true
+          fi
+          if echo "$COMMIT_BODIES" | grep -qi 'BREAKING CHANGE:'; then
+            BREAKING=true
+          fi
+
+          if [ "$BREAKING" != true ]; then
+            echo "No breaking-change marker found, nothing to check."
+            exit 0
+          fi
+
+          echo "Breaking change detected — checking for a migration guide under docs/migrations/..."
+
+          CHANGED_FILES=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")
+
+          if echo "$CHANGED_FILES" | grep -qE '^docs/migrations/.*\.md$'; then
+            echo "✅ Migration guide found:"
+            echo "$CHANGED_FILES" | grep -E '^docs/migrations/.*\.md$'
+            exit 0
+          fi
+
+          echo "❌ This PR's title or a commit carries a breaking-change marker ('!' or 'BREAKING CHANGE:')"
+          echo "   but no file under docs/migrations/ was added or updated."
+          echo ""
+          echo "   Add or update the relevant guide — e.g. docs/migrations/V3 Migration Guide.md —"
+          echo "   describing what changed and how to adapt calling code. See AGENTS.md > Breaking Changes."
+          exit 1
