@@ -236,14 +236,6 @@ This project uses [Conventional Commits](https://www.conventionalcommits.org/) w
 
 Example: `feat(auth): add PKCE flow support`
 
-### Migration Guides
-
-Every breaking change requires an entry in that module's migration guide in `docs/migrations/`,
-named `<Module> Migration Guide.md` (e.g. `Auth Migration Guide.md`) — one file per module, not
-per change. Add a new `###` section for each breaking change rather than creating a new file; see
-`docs/migrations/Auth Migration Guide.md` for the format. Cover what changed, why, and how to
-update call sites, with before/after code examples. Link the guide from the PR description.
-
 ## CI/CD
 
 ### GitHub Actions Workflows
