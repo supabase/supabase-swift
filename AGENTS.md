@@ -236,6 +236,9 @@ This project uses [Conventional Commits](https://www.conventionalcommits.org/) w
 
 Example: `feat(auth): add PKCE flow support`
 
+Every `feat!:`/`fix!:` or `BREAKING CHANGE:` commit requires an entry in the root
+`V<N>_MIGRATION.md` — see the writing-migration-guides skill for the format.
+
 ## CI/CD
 
 ### GitHub Actions Workflows
