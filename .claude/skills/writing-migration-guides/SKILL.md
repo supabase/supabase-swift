@@ -2,8 +2,9 @@
 name: writing-migration-guides
 description: >
   Use when a change is a breaking change — a `fix!:`/`feat!:` commit, a `BREAKING CHANGE:`
-  footer, or any edit that changes a public API's shape or behavior — and needs an entry in
-  docs/migrations/. Also use when reviewing a PR that has one, to check it against this format.
+  footer, or any edit that changes a public API's shape or behavior — and needs an entry in the
+  root `V<N>_MIGRATION.md` file. Also use when reviewing a PR that has one, to check it against
+  this format.
 ---
 
 # Writing Migration Guides
@@ -23,23 +24,25 @@ would need to touch their code because of it.
 
 ## Step 2: Find the file, don't create a new one
 
-supabase-swift keeps one migration guide **per module per upcoming major version**, not one per
-change:
+supabase-swift keeps a single migration guide **per upcoming major version**, at the repo root,
+covering every module:
 
 ```
-docs/migrations/<Module> V<N> Migration Guide.md
+V<N>_MIGRATION.md
 ```
 
-`<Module>` is the target's module name (`Auth`, `Storage`, `Realtime`, ...). `<N>` is the next
-major version above the latest release tag — check it with `git tag --sort=-v:refname | head -1`;
-if the latest tag is `v2.55.0`, `<N>` is `3`.
+`<N>` is the next major version above the latest release tag — check it with
+`git tag --sort=-v:refname | head -1`; if the latest tag is `v2.55.0`, `<N>` is `3`, so the file is
+`V3_MIGRATION.md`.
 
-If the file for this module and version already exists (because someone already landed a breaking
-change for the upcoming major release), append a new `##` section to it. Only create a new file
-when none exists yet for that module/version pair.
+If `V<N>_MIGRATION.md` already exists (because someone already landed a breaking change for the
+upcoming major release), append a new `##` section to it. Only create the file when none exists
+yet for that version. Once v`<N>` ships, the file stays as the historical record for that release;
+the next breaking change starts a new `V<N+1>_MIGRATION.md`.
 
-This is unrelated to one-off feature-migration guides like `RealtimeV2 Migration Guide.md`, which
-document moving from an old API to a new parallel one, not a version bump — leave those as they are.
+This is unrelated to one-off feature-migration guides like `docs/migrations/RealtimeV2 Migration
+Guide.md`, which document moving from an old API to a new parallel one, not a version bump —
+leave those as they are.
 
 Completion criterion: you know the exact file path, and whether you are creating it or appending
 to it.
@@ -75,6 +78,10 @@ Then, in order:
 5. **Escape hatch, if any.** If the old behavior is still reachable (an explicit parameter, a
    different call), show it.
 
+Since the file covers every module, only name the module explicitly when it isn't obvious from the
+symbol itself — `AuthResponse` and `RealtimeClient` don't need it, but a change to something
+module-agnostic-sounding like `HTTPMethod` does.
+
 When a change enumerates more than two or three renames or replacements, use a table instead of
 prose:
 
@@ -102,7 +109,7 @@ section per distinct breaking change keeps each one independently linkable.
   already used in `Sources/Realtime/Deprecated/*.swift`:
 
   ```swift
-  @available(*, deprecated, message: "Use X instead. See migration guide: https://github.com/supabase-community/supabase-swift/blob/main/docs/migrations/<Module>%20V<N>%20Migration%20Guide.md")
+  @available(*, deprecated, message: "Use X instead. See migration guide: https://github.com/supabase-community/supabase-swift/blob/main/V<N>_MIGRATION.md")
   ```
 
 - Run `./scripts/spell-check.sh` — migration guides are Markdown and get spell-checked with
@@ -117,9 +124,10 @@ description.
 
 | Mistake | Fix |
 |---|---|
-| Creating a new file per breaking change | Append a `##` section to the existing `<Module> V<N> Migration Guide.md` |
+| Creating a new file per breaking change | Append a `##` section to the existing `V<N>_MIGRATION.md` |
+| Creating a per-module file (e.g. `docs/migrations/Auth Migration Guide.md`) | One root file per major version, covering every module |
 | "For consistency" / "to improve the API" as the whole reason | Name the concrete cause: a bug, a server behavior, a mismatch with another SDK |
 | Pseudocode in Before/After | Use real, compiling Swift from an actual call site |
 | Not saying whether it's a compile error | Always call it out — readers need to know whether their build will catch it or not |
 | Prose listing many renames | Use a `\| Before \| After \|` table |
-| Renaming an unrelated one-off guide (e.g. `RealtimeV2 Migration Guide.md`) to fit the `<Module> V<N>` pattern | Leave feature-migration guides alone; the versioned pattern is only for major-version breaking changes |
+| Renaming an unrelated one-off guide (e.g. `docs/migrations/RealtimeV2 Migration Guide.md`) to fit the `V<N>_MIGRATION.md` pattern | Leave feature-migration guides alone; the versioned pattern is only for major-version breaking changes |

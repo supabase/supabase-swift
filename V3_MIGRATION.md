@@ -1,10 +1,11 @@
-# Auth V3 Migration Guide
+# V3 Migration Guide
 
-This document describes the breaking changes in Auth you need to be aware of when upgrading to
-v3, together with the steps required to migrate your code.
+This document describes the breaking changes you need to be aware of when upgrading to v3 of the
+Supabase Swift SDK, together with the steps required to migrate your code. All modules
+(`Auth`, `Storage`, `Realtime`, `PostgREST`, `Functions`, `Supabase`) are covered here.
 
 > [!NOTE]
-> v3 has not been released yet. This section is updated as breaking changes land on `main`, so
+> v3 has not been released yet. This document is updated as breaking changes land on `main`, so
 > treat it as the running list rather than the final one.
 
 ## `AuthResponse.user` is now optional
