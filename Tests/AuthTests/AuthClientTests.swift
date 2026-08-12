@@ -705,12 +705,12 @@ extension AuthMockerTests {
       let sut = makeSUT()
 
       let response = try await sut.signUp(
-        email: "guilherme@grds.dev",
+        email: "jane@example.com",
         password: "the.pass"
       )
 
       #expect(response.session == nil)
-      #expect(response.user != nil)
+      #expect(response.user.email == "jane@example.com")
     }
 
     @Test
@@ -1465,7 +1465,15 @@ extension AuthMockerTests {
       )
 
       #expect(response.session == nil)
-      #expect(response.user == nil)
+      guard case .emailChangeConfirmationPending(let confirmation) = response else {
+        Issue.record("Expected .emailChangeConfirmationPending, got \(response)")
+        return
+      }
+      #expect(confirmation.code == "200")
+      #expect(
+        confirmation.message
+          == "Confirmation link accepted. Please proceed to confirm link sent to the other email"
+      )
     }
 
     @Test

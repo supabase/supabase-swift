@@ -74,8 +74,8 @@ struct AuthClientIntegrationTests {
       )
 
       #expect(response.session != nil)
-      #expect(response.user?.email == email)
-      #expect(response.user?.userMetadata["test"] == 42)
+      #expect(response.user.email == email)
+      #expect(response.user.userMetadata["test"] == 42)
 
       try await authClient.signOut()
 
@@ -236,7 +236,7 @@ struct AuthClientIntegrationTests {
     let user = try await authClient.user(jwt: firstUserSession?.accessToken)
 
     #expect(user.id == firstUserSession?.user.id)
-    #expect(user.id != secondUserSession.user?.id)
+    #expect(user.id != secondUserSession.user.id)
   }
 
   @Test
@@ -254,7 +254,7 @@ struct AuthClientIntegrationTests {
     let session = try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
     let identities = try await authClient.userIdentities()
     expectNoDifference(
-      session.user?.identities?.map(\.identityId) ?? [],
+      session.user.identities?.map(\.identityId) ?? [],
       identities.map(\.identityId)
     )
   }
@@ -262,7 +262,7 @@ struct AuthClientIntegrationTests {
   @Test
   func unlinkIdentity_withOnlyOneIdentity() async throws {
     let identities = try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
-      .user?.identities
+      .user.identities
     let identity = try #require(identities?.first)
 
     do {
@@ -456,6 +456,43 @@ struct AuthClientIntegrationTests {
     let link = try await client.admin.generateLink(params: .invite(email: email))
 
     expectNoDifference(link.properties.verificationType, .invite)
+  }
+
+  @Test
+  func verifyOTPForSecureEmailChange() async throws {
+    let client = Self.makeClient(serviceRole: true)
+    let email = mockEmail()
+    let newEmail = mockEmail()
+    let password = mockPassword()
+
+    _ = try await client.signUp(email: email, password: password)
+
+    // The current and new email each get their own confirmation link, mirroring the two emails
+    // GoTrue sends for a secure email change.
+    let currentEmailLink = try await client.admin.generateLink(
+      params: .emailChangeCurrent(email: email, newEmail: newEmail)
+    )
+    let newEmailLink = try await client.admin.generateLink(
+      params: .emailChangeNew(email: email, newEmail: newEmail)
+    )
+
+    let firstConfirmation = try await client.verifyOTP(
+      tokenHash: currentEmailLink.properties.hashedToken,
+      type: .emailChange
+    )
+    guard case .emailChangeConfirmationPending(let confirmation) = firstConfirmation else {
+      Issue.record("Expected .emailChangeConfirmationPending, got \(firstConfirmation)")
+      return
+    }
+    #expect(confirmation.code == "200")
+
+    // Confirming the other email completes the change and returns a session.
+    let secondConfirmation = try await client.verifyOTP(
+      tokenHash: newEmailLink.properties.hashedToken,
+      type: .emailChange
+    )
+    let session = try #require(secondConfirmation.session)
+    expectNoDifference(session.user.email, newEmail)
   }
 
   @Test

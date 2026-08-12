@@ -2,7 +2,7 @@
   "id": "859f402d-b3de-4105-a1b9-932836d9193b",
   "aud": "authenticated",
   "role": "authenticated",
-  "email": "guilherme@grds.dev",
+  "email": "jane@example.com",
   "phone": "",
   "confirmation_sent_at": "2022-04-09T11:57:01.710600634Z",
   "app_metadata": {
