@@ -293,6 +293,17 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   }
 
   deinit {
+    // Close the live socket first: cancelling the bookkeeping tasks alone leaves the
+    // underlying WebSocket (and its URLSession) open when a connected client is released
+    // without calling `disconnect()`. `connectionManager` closes it on its own `deinit`
+    // too, but that only happens once its observers release it, so close it here to make
+    // the teardown deterministic.
+    let connection = mutableState.withValue { state -> (any WebSocket)? in
+      defer { state.connection = nil }
+      return state.connection
+    }
+    connection?.close(code: nil, reason: "Client deallocated")
+
     let (statusContinuations, heartbeatStatusContinuations) = mutableState.withValue {
       state -> (
         [AsyncStream<RealtimeClientStatus>.Continuation],
@@ -489,9 +500,13 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   }
 
   private func rejoinChannels() async {
-    for channel in channels.values {
-      await channel.resetForReconnect()
-      try? await channel.subscribeWithError()
+    await withTaskGroup(of: Void.self) { group in
+      for channel in channels.values {
+        group.addTask {
+          await channel.resetForReconnect()
+          try? await channel.subscribeWithError()
+        }
+      }
     }
   }
 
@@ -499,12 +514,16 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     let stream = conn.events
     mutableState.withValue {
       $0.messageTask?.cancel()
-      $0.messageTask = Task { [weak self] in
-        guard let self else { return }
-
+      // Only `options` and `connectionManager` (both `Sendable`) are captured up front —
+      // `self` is resolved per iteration. Binding a strong `self` outside the `for await`
+      // would keep the client alive for as long as the socket's event stream stays open,
+      // so a released client would never reach `deinit` while connected, leaking the
+      // client, the socket and its `URLSession`.
+      $0.messageTask = Task { [weak self, options, connectionManager] in
         do {
           for await event in stream {
             if Task.isCancelled { return }
+            guard let self else { return }
 
             switch event {
             case .binary(let data):

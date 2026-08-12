@@ -955,7 +955,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     file: FileUpload,
     options: FileOptions?
   ) async throws -> SignedURLUploadResponse {
-    let options = options ?? defaultFileOptions
+    let options = options ?? FileOptions()
     var headers = options.headers.map { HTTPFields($0) } ?? HTTPFields()
 
     headers[.xUpsert] = "\(options.upsert)"

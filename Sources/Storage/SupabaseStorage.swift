@@ -103,6 +103,7 @@ public struct StorageClientConfiguration: Sendable {
 /// ### Accessing buckets
 ///
 /// - ``from(_:)``
+/// - ``vectors``
 ///
 /// ### Bucket management
 ///
@@ -122,5 +123,18 @@ public class SupabaseStorageClient: StorageBucketApi, @unchecked Sendable {
   /// - Returns: A ``StorageFileApi`` configured for the given bucket.
   public func from(_ id: String) -> StorageFileApi {
     StorageFileApi(bucketId: id, configuration: configuration)
+  }
+
+  /// A client for managing vector buckets.
+  ///
+  /// ```swift
+  /// try await client.storage.vectors.createBucket("documents")
+  /// let buckets = try await client.storage.vectors.listBuckets().vectorBuckets
+  /// ```
+  ///
+  /// - Warning: Experimental. See ``StorageVectorsClient``.
+  @_spi(Experimental)
+  public var vectors: StorageVectorsClient {
+    StorageVectorsClient(api: self)
   }
 }

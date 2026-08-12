@@ -468,7 +468,9 @@ struct AuthClientIntegrationTests {
 
     // Should complete without throwing: the admin client is authenticating with
     // the target user's access token, not its own secret key.
-    try await Self.makeClient(serviceRole: true).admin.signOut(jwt: accessToken)
+    let adminClient = Self.makeClient(serviceRole: true)
+    try await adminClient.admin.signOut(jwt: accessToken)
+    withExtendedLifetime(adminClient) {}
   }
 
   @discardableResult
