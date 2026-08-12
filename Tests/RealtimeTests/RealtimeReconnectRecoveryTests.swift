@@ -34,6 +34,14 @@ struct RealtimeReconnectRecoveryTests {
   /// channel's `connectOnSubscribe` — was misclassified as a reconnect
   /// completion. The resulting `rejoinChannels()` reset cancelled the very
   /// join that connect was performing, surfacing as `CancellationError`.
+  ///
+  /// Issue #1147 closed the underlying window this defect needed: auto-reconnect
+  /// used to be single-shot, so a failed attempt parked the client in
+  /// `.disconnected` and needed an external trigger (like the workaround this
+  /// test used to exercise) to recover — that's exactly the state where the
+  /// stale latch could bite. Now `ConnectionManager` keeps retrying with
+  /// backoff and never surfaces `.disconnected` mid-retry, so recovery (and
+  /// the resulting `rejoinChannels()`) happens automatically.
   @Test
   func subscribeConvergesAfterFailedAutoReconnect() async throws {
     let sockets = LockIsolated<[AsyncFakeWebSocket]>([])
@@ -47,7 +55,8 @@ struct RealtimeReconnectRecoveryTests {
           count += 1
           return count
         }
-        // Attempt 2 is the automatic reconnect — the network is still down.
+        // Attempt 2 is the first automatic reconnect — the network is still
+        // down. Attempt 3, a later automatic retry, succeeds once it recovers.
         if attempt == 2 {
           throw RealtimeError("network down")
         }
@@ -65,28 +74,16 @@ struct RealtimeReconnectRecoveryTests {
     try await channel.subscribeWithError()
     #expect(channel.status == .subscribed)
 
-    // Outage: the socket errors out, the single auto-reconnect attempt fails.
+    // Outage: the socket errors out and the first auto-reconnect attempt fails.
     sockets.value[0].receiveFromServer(.text("not a valid frame"))
-    let parkedDisconnected = await waitUntil(timeout: 5) {
-      connectAttempts.value >= 2 && sut.status == .disconnected
-    }
-    guard parkedDisconnected else {
-      Issue.record("Client did not settle in .disconnected after failed reconnect")
-      return
-    }
 
-    // Network is back. A supervisor rebuilds with a fresh channel;
-    // `connectOnSubscribe` brings the socket up. Before the fix, the stale
-    // latch fired `rejoinChannels()`, whose reset cancelled this in-flight
-    // join (`CancellationError`).
-    let channel2 = sut.channel("room-2")
-    do {
-      try await channel2.subscribeWithError()
-    } catch {
-      Issue.record("Subscribe after failed auto-reconnect threw: \(error)")
-      return
+    // No external trigger (no new channel, no manual `connect()`): the client
+    // must retry on its own until the network recovers, then rejoin the
+    // existing channel automatically.
+    let recovered = await waitUntil(timeout: 5) {
+      connectAttempts.value >= 3 && sut.status == .connected && channel.status == .subscribed
     }
-    #expect(channel2.status == .subscribed)
+    #expect(recovered, "Client did not recover automatically after a failed auto-reconnect attempt")
   }
 
   /// Defect 3 in #1145: `phx_close` was routed by topic only. A close
