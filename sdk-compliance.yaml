@@ -58,6 +58,15 @@ features:
     status: implemented
     symbols:
       - AuthClient.verifyOTP
+    supporting_symbols:
+      - VerifyOTPResponse
+      - VerifyOTPResponse.session
+      - VerifyOTPResponse.emailChangeConfirmationPending
+      - VerifyOTPResponse.init
+      - EmailChangeConfirmation
+      - EmailChangeConfirmation.message
+      - EmailChangeConfirmation.code
+      - EmailChangeConfirmation.init
   auth.sign_in.resend_confirmation:
     status: implemented
     symbols:

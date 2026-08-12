@@ -300,8 +300,22 @@ cd Tests/IntegrationTests
 supabase start
 supabase db reset
 cd ../..
-swift test --filter IntegrationTests
+swift test --filter IntegrationTests --skip verifyOTPForSecureEmailChange
 cd Tests/IntegrationTests
+supabase stop
+```
+
+`verifyOTPForSecureEmailChange` needs `auth.email.enable_confirmations = true` to reach GoTrue's
+secure-email-change "single confirmation" response, which every other integration test relies on
+being `false` (so `signUp`/`signIn` resolve without confirming an email). It runs against a
+second, minimal project instead of forking that setting for the whole suite:
+
+```bash
+cd Tests/IntegrationTests/supabase-secure-email-change
+supabase start
+cd ../../..
+swift test --filter verifyOTPForSecureEmailChange
+cd Tests/IntegrationTests/supabase-secure-email-change
 supabase stop
 ```
 

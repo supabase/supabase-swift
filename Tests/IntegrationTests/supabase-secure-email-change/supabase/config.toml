@@ -1,0 +1,105 @@
+# A second, minimal local Supabase project used only by
+# AuthClientIntegrationTests.verifyOTPForSecureEmailChange.
+#
+# That test needs GoTrue's secure-email-change "single confirmation" response, which only
+# happens when auth.email.enable_confirmations is true (GOTRUE_MAILER_AUTOCONFIRM=false).
+# Every other integration test relies on enable_confirmations = false in ../supabase/config.toml
+# so signUp/signIn resolve immediately without confirming an email, so this one setting can't be
+# flipped in the shared project without breaking the rest of the suite. Non-Auth services are
+# disabled here since this project only exists to run that one test.
+#
+# See docs/superpowers/ or AGENTS.md for how this is wired into CI and local runs.
+project_id = "IntegrationTestsSecureEmailChange"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[api.tls]
+enabled = false
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 15
+
+[db.pooler]
+enabled = false
+
+[db.migrations]
+schema_paths = []
+
+[db.seed]
+enabled = false
+
+[realtime]
+enabled = false
+
+[studio]
+enabled = false
+
+[inbucket]
+enabled = false
+
+[storage]
+enabled = false
+
+[auth]
+enabled = true
+site_url = "http://127.0.0.1:3000"
+additional_redirect_urls = ["https://127.0.0.1:3000", "http://localhost:3000"]
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+refresh_token_reuse_interval = 10
+enable_signup = true
+enable_anonymous_sign_ins = true
+enable_manual_linking = true
+minimum_password_length = 6
+password_requirements = ""
+
+[auth.rate_limit]
+email_sent = 100
+sms_sent = 30
+anonymous_users = 30
+token_refresh = 150
+sign_in_sign_ups = 100
+token_verifications = 100
+
+[auth.email]
+enable_signup = true
+# The setting this whole project exists to flip relative to ../supabase/config.toml.
+double_confirm_changes = true
+enable_confirmations = true
+secure_password_change = false
+max_frequency = "1s"
+otp_length = 6
+otp_expiry = 3600
+
+[auth.sms]
+enable_signup = false
+enable_confirmations = false
+template = "Your code is {{ .Code }}"
+max_frequency = "5s"
+
+[auth.mfa]
+max_enrolled_factors = 10
+
+[auth.mfa.totp]
+enroll_enabled = false
+verify_enabled = false
+
+[auth.mfa.phone]
+enroll_enabled = false
+verify_enabled = false
+otp_length = 6
+template = "Your code is {{ .Code }}"
+max_frequency = "5s"
+
+[edge_runtime]
+enabled = false
+
+[analytics]
+enabled = false
