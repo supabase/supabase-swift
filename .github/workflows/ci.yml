@@ -177,9 +177,26 @@ jobs:
       - name: "Run Integration Tests"
         env:
           INTEGRATION_TESTS: 1
-        run: swift test --filter IntegrationTests --no-parallel
+        run: swift test --filter IntegrationTests --skip verifyOTPForSecureEmailChange --no-parallel
       - name: "Stop Supabase"
         working-directory: Tests/IntegrationTests
+        if: always()
+        run: supabase stop
+      # verifyOTPForSecureEmailChange needs auth.email.enable_confirmations = true to reach
+      # GoTrue's secure-email-change "single confirmation" response, which every other
+      # integration test relies on being false (so signUp/signIn resolve without confirming an
+      # email). Rather than forking the whole suite's behavior, it runs alone against a second,
+      # minimal project with that one setting flipped. See
+      # Tests/IntegrationTests/supabase-secure-email-change/supabase/config.toml.
+      - name: "Start Supabase (secure email change)"
+        working-directory: Tests/IntegrationTests/supabase-secure-email-change
+        run: supabase start
+      - name: "Run Secure Email Change Integration Test"
+        env:
+          INTEGRATION_TESTS: 1
+        run: swift test --filter verifyOTPForSecureEmailChange --no-parallel
+      - name: "Stop Supabase (secure email change)"
+        working-directory: Tests/IntegrationTests/supabase-secure-email-change
         if: always()
         run: supabase stop
 

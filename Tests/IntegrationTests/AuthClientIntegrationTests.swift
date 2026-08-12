@@ -458,6 +458,8 @@ struct AuthClientIntegrationTests {
     expectNoDifference(link.properties.verificationType, .invite)
   }
 
+  // Requires the isolated Supabase project at Tests/IntegrationTests/supabase-secure-email-change,
+  // which enables auth.email.enable_confirmations. See that project's config.toml for why.
   @Test
   func verifyOTPForSecureEmailChange() async throws {
     let client = Self.makeClient(serviceRole: true)
