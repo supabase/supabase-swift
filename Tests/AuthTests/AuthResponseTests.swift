@@ -23,21 +23,23 @@ struct AuthResponseTests {
     #expect(response.session == nil)
   }
 
-  func testSignUpConfirmationRequired() throws {
+  @Test
+  func signUpConfirmationRequired() throws {
     let response = try AuthClient.Configuration.jsonDecoder.decode(
       AuthResponse.self,
       from: json(named: "signup-response")
     )
-    XCTAssertNil(response.session)
-    XCTAssertNotNil(response.user)
+    #expect(response.session == nil)
+    #expect(response.user != nil)
   }
 
-  func testEmailChangeSingleConfirmation() throws {
+  @Test
+  func emailChangeSingleConfirmation() throws {
     let response = try AuthClient.Configuration.jsonDecoder.decode(
       AuthResponse.self,
       from: json(named: "email-change-single-confirmation")
     )
-    XCTAssertNil(response.session)
-    XCTAssertNil(response.user)
+    #expect(response.session == nil)
+    #expect(response.user == nil)
   }
 }
