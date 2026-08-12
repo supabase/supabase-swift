@@ -45,6 +45,21 @@ struct PostgrestFilterValueTests {
   }
 
   @Test
+  func arrayQuotesScalarStringsThatLookLikeArrayLiterals() {
+    #expect(["{a,b}"].rawValue == "{\"{a,b}\"}")
+  }
+
+  @Test
+  func arrayEncodesNilOptionalElementsAsRealNull() {
+    #expect([Optional(1), nil].rawValue == "{1,NULL}")
+  }
+
+  @Test
+  func arrayEncodesAnyJSONNullElementsAsRealNull() {
+    #expect(AnyJSON.array([.integer(1), .null]).rawValue == "{1,NULL}")
+  }
+
+  @Test
   func anyJSONArrayEscapesReservedCharacters() {
     #expect(AnyJSON.array(["a,b"]).rawValue == "{\"a,b\"}")
   }

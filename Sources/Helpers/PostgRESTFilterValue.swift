@@ -46,3 +46,17 @@ package func escapePostgRESTArrayLiteralElement(_ raw: String) -> String {
     .replacingOccurrences(of: "\"", with: "\\\"")
   return "\"\(escaped)\""
 }
+
+/// A type that knows how to encode itself as an element of a PostgREST array
+/// literal, for cases where its plain `rawValue` string is not enough to tell
+/// its semantics apart from a similarly-shaped scalar. Without this, a real
+/// SQL `NULL` is indistinguishable from the string `"NULL"`, and a nested array
+/// literal (from a `[Element]` element) is indistinguishable from a `String`
+/// element that merely looks like one (e.g. `"{a,b}"`).
+///
+/// Types that don't conform fall back to escaping their `rawValue` as a plain
+/// scalar, which is always correct for them.
+package protocol PostgrestArrayLiteralElementEncodable {
+  /// This value's encoding when embedded inside a PostgREST array literal.
+  var postgrestArrayLiteralElement: String { get }
+}

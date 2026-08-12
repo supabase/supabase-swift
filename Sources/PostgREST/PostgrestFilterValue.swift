@@ -69,14 +69,20 @@ extension Date: PostgrestFilterValue {
 extension Array: PostgrestFilterValue where Element: PostgrestFilterValue {
   public var rawValue: String {
     let elements = map { element -> String in
-      let raw = element.rawValue
-      if raw.hasPrefix("{"), raw.hasSuffix("}") {
-        return raw
+      if let element = element as? any PostgrestArrayLiteralElementEncodable {
+        return element.postgrestArrayLiteralElement
       }
-      return escapePostgRESTArrayLiteralElement(raw)
+      return escapePostgRESTArrayLiteralElement(element.rawValue)
     }
     return "{\(elements.joined(separator: ","))}"
   }
+}
+
+/// An array of ``PostgrestFilterValue`` elements is itself a nested array literal
+/// (e.g. `{1,2}`) when it appears as an element of another array, so it's passed
+/// through unescaped rather than quoted as a scalar string.
+extension Array: PostgrestArrayLiteralElementEncodable where Element: PostgrestFilterValue {
+  package var postgrestArrayLiteralElement: String { rawValue }
 }
 
 /// `AnyJSON` can be used directly as a PostgREST filter value.
@@ -94,6 +100,19 @@ extension AnyJSON: PostgrestFilterValue {
   }
 }
 
+/// `.null` is an actual SQL `NULL` array member, not the string `"NULL"`, and
+/// `.array` is a nested array literal, not a scalar string — both are passed
+/// through unescaped rather than quoted as a scalar.
+extension AnyJSON: PostgrestArrayLiteralElementEncodable {
+  package var postgrestArrayLiteralElement: String {
+    switch self {
+    case .array(let array): array.postgrestArrayLiteralElement
+    case .null: "NULL"
+    case .object, .string, .double, .integer, .bool: escapePostgRESTArrayLiteralElement(rawValue)
+    }
+  }
+}
+
 /// An optional ``PostgrestFilterValue`` is itself a ``PostgrestFilterValue``.
 ///
 /// When the optional is `nil`, the raw value is `"NULL"`.
@@ -104,6 +123,18 @@ extension Optional: PostgrestFilterValue where Wrapped: PostgrestFilterValue {
     }
 
     return "NULL"
+  }
+}
+
+/// A `nil` optional is an actual SQL `NULL` array member, not the string
+/// `"NULL"`, so it's passed through unescaped rather than quoted as a scalar.
+extension Optional: PostgrestArrayLiteralElementEncodable where Wrapped: PostgrestFilterValue {
+  package var postgrestArrayLiteralElement: String {
+    guard let value = self else { return "NULL" }
+    if let value = value as? any PostgrestArrayLiteralElementEncodable {
+      return value.postgrestArrayLiteralElement
+    }
+    return escapePostgRESTArrayLiteralElement(value.rawValue)
   }
 }
 
