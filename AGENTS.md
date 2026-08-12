@@ -236,12 +236,12 @@ This project uses [Conventional Commits](https://www.conventionalcommits.org/) w
 
 Example: `feat(auth): add PKCE flow support`
 
-## Breaking Changes
+### Migration Guides
 
-Every breaking change needs a migration guide before it merges.
-
-- Mark the change as breaking the usual conventional-commits way: `!` after the type/scope (`feat!:`, `fix(auth)!:`) or a `BREAKING CHANGE:` footer in the commit body. This is the same marker release-please and the API stability check already key off to bump majors and flag reviewers.
-- Add or update a guide under `docs/migrations/` explaining what changed, why, and how to adapt calling code. Prefer one running guide per major version (e.g. `docs/migrations/V3 Migration Guide.md`) when landing a major incrementally — append to it rather than starting a new file per PR. Use a dedicated per-area guide (e.g. `docs/migrations/RealtimeV2 Migration Guide.md`) for a self-contained breaking change outside a major-version effort.
+Every breaking change requires a migration guide in `docs/migrations/`, named `<Feature>
+Migration Guide.md` (see `docs/migrations/RealtimeV2 Migration Guide.md` for the format). Cover
+what changed, why, and how to update call sites, with before/after code examples. Link the guide
+from the PR description.
 
 ## CI/CD
 
