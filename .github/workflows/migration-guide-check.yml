@@ -56,7 +56,7 @@ jobs:
 
           echo "Breaking change detected — checking for a migration guide under docs/migrations/..."
 
-          CHANGED_FILES=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")
+          CHANGED_FILES=$(git diff --name-only --diff-filter=AM "origin/${{ github.base_ref }}...HEAD")
 
           if echo "$CHANGED_FILES" | grep -qE '^docs/migrations/.*\.md$'; then
             echo "✅ Migration guide found:"
