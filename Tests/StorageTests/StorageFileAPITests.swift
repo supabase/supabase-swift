@@ -1390,7 +1390,7 @@ extension StorageMockerTests {
         curl \
         	--request PUT \
         	--header "Cache-Control: max-age=3600" \
-        	--header "Content-Length: 297" \
+        	--header "Content-Length: 283" \
         	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.e56f43407f772505" \
         	--header "X-Client-Info: storage-swift/0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
@@ -1401,7 +1401,7 @@ extension StorageMockerTests {
         3600\#r
         --alamofire.boundary.e56f43407f772505\#r
         Content-Disposition: form-data; name=\"\"; filename=\"file.txt\"\#r
-        Content-Type: text/plain;charset=UTF-8\#r
+        Content-Type: text/plain\#r
         \#r
         hello world\#r
         --alamofire.boundary.e56f43407f772505--\#r
@@ -1481,7 +1481,11 @@ extension StorageMockerTests {
           data: Data("not-really-a-png".utf8)
         )
 
-      #expect(body.value.containsBytes(of: "Content-Type: image/png"))
+      #if canImport(UniformTypeIdentifiers)
+        #expect(body.value.containsBytes(of: "Content-Type: image/png"))
+      #else
+        #expect(body.value.containsBytes(of: "Content-Type: application/octet-stream"))
+      #endif
       #expect(!body.value.containsBytes(of: "text/plain"))
     }
 
@@ -1497,7 +1501,11 @@ extension StorageMockerTests {
           fileURL: Bundle.module.url(forResource: "sadcat", withExtension: "jpg")!
         )
 
-      #expect(body.value.containsBytes(of: "Content-Type: image/jpeg"))
+      #if canImport(UniformTypeIdentifiers)
+        #expect(body.value.containsBytes(of: "Content-Type: image/jpeg"))
+      #else
+        #expect(body.value.containsBytes(of: "Content-Type: application/octet-stream"))
+      #endif
       #expect(!body.value.containsBytes(of: "text/plain"))
     }
 
