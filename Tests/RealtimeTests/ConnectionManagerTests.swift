@@ -338,6 +338,46 @@ struct ConnectionManagerTests {
   }
 
   @Test
+  func handleErrorKeepsRetryingReconnectAfterAFailedAttempt() async throws {
+    // Issue #1147: the original auto-reconnect scheduled exactly one attempt.
+    // If that attempt failed (network still down), nothing scheduled another
+    // one and the client stayed parked in `.disconnected` forever.
+    let connectionCount = LockIsolated(0)
+    let ws = self.ws
+
+    let sut = makeSUT(
+      reconnectDelay: 0.01,
+      transport: { _, _ in
+        let attempt = connectionCount.withValue { count -> Int in
+          count += 1
+          return count
+        }
+        // Attempt 1 is the initial `connect()`. Attempt 2 (the first
+        // automatic reconnect) fails, simulating an outage still in
+        // progress. Attempt 3 succeeds once the network recovers.
+        if attempt == 2 {
+          throw TestError.sample
+        }
+        return ws
+      }
+    )
+
+    try await sut.connect()
+    await sut.handleError(TestError.sample)
+
+    let recoveredWithoutExternalHelp = await waitUntil(timeout: 5) {
+      connectionCount.value >= 3
+    }
+    #expect(
+      recoveredWithoutExternalHelp,
+      "ConnectionManager should retry the reconnect after a failed attempt instead of giving up"
+    )
+
+    let isConnected = await sut.connection != nil
+    #expect(isConnected)
+  }
+
+  @Test
   func handleCloseDoesNotReconnectForApplicationCloseCode() async throws {
     let sut = makeSUT(reconnectDelay: 0.01)
     try await sut.connect()

@@ -186,14 +186,68 @@ actor ConnectionManager {
     }
   }
 
+  /// Keep retrying the reconnect with exponential backoff until a connection
+  /// is established or the task is cancelled (`disconnect()`/`deinit`).
+  ///
+  /// State stays `.reconnecting` for every attempt — unlike `performConnection()`,
+  /// a failed attempt here does not flip state to `.disconnected`. That would
+  /// make `RealtimeClientV2`'s reconnect-completion latch see a `.disconnected`
+  /// mid-retry and misclassify the eventual success as a fresh `connect()`
+  /// instead of a reconnect, skipping `rejoinChannels()` (issue #1147).
   private func initiateReconnect(reason: String) {
-    let reconnectTask = Task {
-      try await clock.sleep(for: .seconds(reconnectDelay))
-      logger?.debug("Attempting to reconnect...")
-      try await performConnection()
+    // Captured by value so the sleep below doesn't need `self` at all — held
+    // only while actually attempting a connection, not for the whole backoff
+    // wait. Otherwise a released client would keep this actor (and everything
+    // it captures) alive for up to the current attempt's delay.
+    let clock = self.clock
+    let baseDelay = reconnectDelay
+    let logger = self.logger
+
+    let reconnectTask = Task { [weak self] in
+      var attempt = 0
+      while true {
+        attempt += 1
+        let delay = Self.reconnectBackoffDelay(attempt: attempt, baseDelay: baseDelay)
+        try await clock.sleep(for: .seconds(delay))
+
+        guard let self else { return }
+        logger?.debug("Attempting to reconnect (attempt \(attempt))...")
+
+        do {
+          try await self.performReconnectAttempt()
+          return
+        } catch is CancellationError {
+          throw CancellationError()
+        } catch {
+          logger?.debug(
+            "Reconnect attempt \(attempt) failed: \(error.localizedDescription). Retrying with backoff."
+          )
+        }
+      }
     }
 
     updateState(.reconnecting(reconnectTask, reason: reason))
+  }
+
+  /// A single reconnect attempt. Only updates state on success (`.connected`);
+  /// a failure is left for `initiateReconnect`'s loop to retry, so the outer
+  /// `.reconnecting` state is preserved across attempts.
+  private func performReconnectAttempt() async throws {
+    let conn = try await transport(url, headers)
+    try Task.checkCancellation()
+    updateState(.connected(conn))
+  }
+
+  /// Exponential backoff capped at 30s (phoenix.js's `reconnectAfterMs` ladder
+  /// is the same shape: a growing delay that levels off rather than giving up).
+  /// Deliberately no jitter — unlike `ChannelStateManager.defaultRetryDelay`,
+  /// this backoff has no bounded attempt count to spread out, and jitter would
+  /// make the delay before any given attempt unpredictable for callers using a
+  /// manual/test clock.
+  private static func reconnectBackoffDelay(attempt: Int, baseDelay: TimeInterval) -> TimeInterval {
+    let maxDelay: TimeInterval = 30
+    let exponentialDelay = baseDelay * pow(2.0, Double(attempt - 1))
+    return min(exponentialDelay, maxDelay)
   }
 
   private func updateState(_ state: State) {
@@ -206,8 +260,17 @@ actor ConnectionManager {
     // underlying WebSocket (and the dedicated URLSession backing it, along with its
     // self-rescheduling receive loop) stays alive forever. `deinit` only runs once no other
     // code can reference the actor, so reading isolated state here is safe.
-    if case .connected(let conn) = state {
+    switch state {
+    case .connected(let conn):
       conn.close(code: nil, reason: "Deallocated")
+    case .reconnecting(let task, _):
+      // The retry loop only holds `self` while actually attempting a
+      // connection, not while sleeping out the backoff — so this actor can
+      // reach `deinit` while a reconnect is still pending. Cancel it instead
+      // of leaving it to wake up, find `self` gone, and exit on its own.
+      task.cancel()
+    case .connecting, .disconnected:
+      break
     }
     stateContinuation.finish()
   }
