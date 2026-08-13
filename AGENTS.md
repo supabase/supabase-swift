@@ -260,17 +260,6 @@ Tests run on:
 
 Coverage is automatically generated for iOS tests on the main CI job and uploaded to Coveralls.
 
-### Compiler Warnings
-
-Every `xcodebuild` job compiles the same sources, so a single warning would otherwise be
-annotated once per matrix leg. Instead, when `WARNINGS_FILE` is set, `scripts/xcodebuild.sh`
-suppresses xcbeautify's warning annotations and appends the warnings to that file via
-`scripts/collect-warnings.sh`. Each job uploads the file as a `warnings-*` artifact, and the
-`warnings` job merges them and calls `scripts/annotate-warnings.sh`, which annotates each
-unique `file:line:column:message` exactly once and writes the full list to the job summary.
-
-Locally, with `WARNINGS_FILE` unset, `scripts/xcodebuild.sh` behaves as before.
-
 ## Support Policy
 
 - **Xcode**: Only versions eligible for App Store submission

@@ -211,7 +211,6 @@ wfts
 workos
 WorkOS
 Wwta
-xcbeautify
 xcodeproj
 xctest
 XVCJ
