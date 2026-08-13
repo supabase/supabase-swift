@@ -287,8 +287,9 @@ an already-absent key is no longer an error and is treated as a no-op.
 defaulting to `false`. This is additive — existing call sites keep compiling and keep their
 current behavior — but it's documented here because it's the fix for a common source of
 confusion: on macOS, the legacy file-based Keychain that `KeychainLocalStorage` targets by default
-shows the user a consent prompt naming `supabase.gotrue.swift`, even after the service-namespacing
-change above, because the prompt is tied to the Keychain implementation, not the service name.
+still shows the user a consent prompt tied to your app's designated requirement, regardless of the
+service name — the service-namespacing change above does not affect it, since the ACL that
+triggers the prompt is governed by code-signing identity, not by `kSecAttrService` (see [Apple TN3137](https://developer.apple.com/documentation/technotes/tn3137-on-mac-keychains)).
 Passing `useDataProtectionKeychain: true` moves storage to the data-protection Keychain, which
 does not show that prompt.
 
