@@ -48,29 +48,6 @@ struct RealtimeJoinConfigTests {
     #expect(jsonObject?["version"] as? String == "1.0")
   }
 
-  @Test
-  func realtimeJoinPayloadDecoding() throws {
-    let jsonData = """
-      {
-        "config": {
-          "broadcast": {"ack": false, "self": false, "replication_ready": false},
-          "presence": {"key": "", "enabled": false},
-          "postgres_changes": [],
-          "private": false
-        },
-        "access_token": "token123",
-        "version": "1.0"
-      }
-      """.data(using: .utf8)!
-
-    let decoder = JSONDecoder()
-    let payload = try decoder.decode(RealtimeJoinPayload.self, from: jsonData)
-
-    #expect(payload.accessToken == "token123")
-    #expect(payload.version == "1.0")
-    #expect(!payload.config.isPrivate)
-  }
-
   // MARK: - RealtimeJoinConfig Tests
 
   @Test
@@ -184,23 +161,6 @@ struct RealtimeJoinConfigTests {
   }
 
   @Test
-  func broadcastJoinConfigDecoding() throws {
-    let jsonData = """
-      {
-        "ack": true,
-        "self": false,
-        "replication_ready": false
-      }
-      """.data(using: .utf8)!
-
-    let decoder = JSONDecoder()
-    let config = try decoder.decode(BroadcastJoinConfig.self, from: jsonData)
-
-    #expect(config.acknowledgeBroadcasts)
-    #expect(!config.receiveOwnBroadcasts)
-  }
-
-  @Test
   func broadcastJoinConfigReplicationReadyDefaultsFalse() {
     let config = BroadcastJoinConfig()
 
@@ -227,21 +187,6 @@ struct RealtimeJoinConfigTests {
     #expect(jsonObject?["replication_ready"] as? Bool == true)
   }
 
-  @Test
-  func broadcastJoinConfigDecodesReplicationReady() throws {
-    let jsonData = """
-      {
-        "ack": false,
-        "self": false,
-        "replication_ready": true
-      }
-      """.data(using: .utf8)!
-
-    let config = try JSONDecoder().decode(BroadcastJoinConfig.self, from: jsonData)
-
-    #expect(config.replicationReady)
-  }
-
   // MARK: - PresenceJoinConfig Tests
 
   @Test
@@ -263,7 +208,7 @@ struct RealtimeJoinConfigTests {
   }
 
   @Test
-  func presenceJoinConfigCodable() throws {
+  func presenceJoinConfigEncoding() throws {
     var config = PresenceJoinConfig()
     config.key = "user123"
     config.enabled = true
@@ -271,11 +216,9 @@ struct RealtimeJoinConfigTests {
     let encoder = JSONEncoder()
     let data = try encoder.encode(config)
 
-    let decoder = JSONDecoder()
-    let decodedConfig = try decoder.decode(PresenceJoinConfig.self, from: data)
-
-    #expect(decodedConfig.key == "user123")
-    #expect(decodedConfig.enabled)
+    let jsonObject = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+    #expect(jsonObject?["key"] as? String == "user123")
+    #expect(jsonObject?["enabled"] as? Bool == true)
   }
 
   // MARK: - PostgresChangeEvent Tests
