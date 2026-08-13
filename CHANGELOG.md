@@ -2,11 +2,6 @@
 
 ## [2.55.1](https://github.com/supabase/supabase-swift/compare/v2.55.0...v2.55.1) (2026-08-13)
 
-
-### ⚠ BREAKING CHANGES
-
-* ) must touch a file under docs/migrations/.
-
 ### Bug Fixes
 
 * **release:** select the prerelease versioning strategy ([#1202](https://github.com/supabase/supabase-swift/issues/1202)) ([9212b0d](https://github.com/supabase/supabase-swift/commit/9212b0dcd25d4be28dd41f0b9ff3252ce36c8908))
