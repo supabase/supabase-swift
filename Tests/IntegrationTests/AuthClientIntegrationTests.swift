@@ -34,8 +34,7 @@ struct AuthClientIntegrationTests {
           "apikey": key,
           "Authorization": "Bearer \(key)",
         ],
-        localStorage: InMemoryLocalStorage(),
-        logger: nil
+        localStorage: InMemoryLocalStorage()
       )
     )
   }
