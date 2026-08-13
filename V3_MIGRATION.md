@@ -206,3 +206,99 @@ removed:
 `ObservationToken.remove()` has been removed — use `.cancel()` instead. `PostgrestError.detail`
 and `PostgrestError.init(detail:hint:code:message:)` have been removed — use `.details` and
 `init(details:hint:code:message:)`.
+
+## `KeychainLocalStorage`'s default Keychain service is now the host app's bundle identifier
+
+`KeychainLocalStorage()` no longer stores sessions under the fixed service
+`"supabase.gotrue.swift"`. It now defaults to `Bundle.main.bundleIdentifier`, falling back to the
+old constant only when there is no bundle identifier to read (command-line tools, some test
+bundles).
+
+The fixed string put every app that embeds the SDK in the same Keychain namespace: two unrelated
+apps on the same device, or two apps sharing an access group, could read and overwrite each
+other's session under that one service name. Scoping the service to the bundle identifier gives
+each app its own Keychain location by default.
+
+Existing sessions are not lost. On the first `retrieve` after upgrading, `KeychainLocalStorage`
+probes the old `"supabase.gotrue.swift"` location, moves whatever it finds to the new
+per-app location, and returns it — so users stay signed in. This is a behavior change, not a
+compile error: nothing in the type signature changed, but the on-disk Keychain location did. If
+you rely on the exact service name (for example, to inspect the Keychain from another tool, or
+because several of your own apps intentionally shared the old namespace), pass it explicitly to
+keep the pre-v3 location:
+
+```swift
+// Before (implicit, shared "supabase.gotrue.swift" service)
+let storage = KeychainLocalStorage()
+
+// After: keeps the pre-v3 location, no migration performed
+let storage = KeychainLocalStorage(service: "supabase.gotrue.swift")
+```
+
+Note that passing `service:` explicitly — whether the old constant or a new value of your own —
+selects the second, non-migrating initializer: `init(service:accessGroup:useDataProtectionKeychain:)`.
+Only the parameterless-service initializer, `init(accessGroup:useDataProtectionKeychain:)`, probes
+the legacy location.
+
+## `AuthLocalStorage.retrieve` returns `nil` for a missing key instead of throwing
+
+`AuthLocalStorage.retrieve(key:)` has always been documented as returning `nil` when the key is
+absent, but `KeychainLocalStorage` didn't honor that: a missing item made the underlying
+`SecItemCopyMatching` call return `errSecItemNotFound`, and that status was surfaced as a thrown
+`KeychainError`, not as `nil`. `retrieve` now matches its own documentation and returns `nil` for
+a missing item, throwing only when the Keychain read itself fails for another reason.
+
+Two consequences of the old behavior made this worth fixing rather than just documenting: every
+app launch with no stored session threw and typically got logged as an error, since "no session
+yet" is the normal state on a fresh install; and call sites that wrapped the read in `try?` to
+treat "no session" as `nil` also swallowed genuine Keychain failures (for example
+`errSecInteractionNotAllowed` when the device is locked) into that same `nil`, turning a real error
+into a silent, incorrect sign-out.
+
+This is a behavior change, not a compile error — `retrieve`'s signature is unchanged. Search your
+code for places that catch an error from `AuthLocalStorage.retrieve`/`KeychainLocalStorage.retrieve`
+specifically to detect a missing session; that error no longer occurs, and you should instead
+check the returned value for `nil`:
+
+```swift
+// Before
+do {
+  let data = try storage.retrieve(key: "supabase.session")
+  // handle existing session
+} catch {
+  // this also ran for a plain "no session yet", not just real failures
+}
+
+// After
+if let data = try storage.retrieve(key: "supabase.session") {
+  // handle existing session
+} else {
+  // no session stored — the normal case on first launch
+}
+```
+
+If you have a custom `AuthLocalStorage` implementation, update it to return `nil` when the key is
+absent and reserve `throw` for genuine failures. `remove(key:)` was changed the same way: deleting
+an already-absent key is no longer an error and is treated as a no-op.
+
+## Opt-in macOS data-protection Keychain
+
+`KeychainLocalStorage`'s two initializers gained a `useDataProtectionKeychain` parameter,
+defaulting to `false`. This is additive — existing call sites keep compiling and keep their
+current behavior — but it's documented here because it's the fix for a common source of
+confusion: on macOS, the legacy file-based Keychain that `KeychainLocalStorage` targets by default
+shows the user a consent prompt naming `supabase.gotrue.swift`, even after the service-namespacing
+change above, because the prompt is tied to the Keychain implementation, not the service name.
+Passing `useDataProtectionKeychain: true` moves storage to the data-protection Keychain, which
+does not show that prompt.
+
+```swift
+let storage = KeychainLocalStorage(useDataProtectionKeychain: true)
+```
+
+This has a real requirement, not just a flag flip: the data-protection Keychain only works in an
+app signed with entitlements authorized by a provisioning profile. Without them, every Keychain
+operation fails with `errSecMissingEntitlement` (`-34018`) instead of storing anything. Verify the
+flag works with your app's actual signing configuration — a debug build run from Xcode with the
+right entitlements is not the same guarantee as your release signing — before enabling it in
+production. The parameter has no effect on platforms other than macOS.

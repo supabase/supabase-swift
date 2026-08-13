@@ -26,7 +26,7 @@
     ///   - accessGroup: An optional Keychain access group for sharing items between apps.
     ///   - useDataProtectionKeychain: Targets the macOS data-protection Keychain instead of the
     ///     legacy file-based one. This removes the macOS consent prompt, but requires the app to
-    ///     be signed with entitlements authorised by a provisioning profile — otherwise Keychain
+    ///     be signed with entitlements authorized by a provisioning profile — otherwise Keychain
     ///     operations fail with `errSecMissingEntitlement` (-34018). Has no effect on platforms
     ///     other than macOS. Defaults to `false`.
     public init(accessGroup: String? = nil, useDataProtectionKeychain: Bool = false) {
