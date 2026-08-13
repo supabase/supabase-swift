@@ -529,7 +529,7 @@ struct PresenceActionTests {
   }
 
   @Test
-  func presenceV2RoundTripCoding() throws {
+  func presenceV2DecodesRealisticServerPayload() throws {
     let originalState: JSONObject = [
       "user_id": .string("user_789"),
       "status": .string("online"),

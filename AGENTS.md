@@ -134,11 +134,14 @@ Use standard file headers with copyright:
   only when the same type is genuinely used in both directions (e.g. a type
   the SDK both sends and receives over the wire, or persists to disk via
   `JSONEncoder`/`JSONDecoder`, like Auth's `Session`).
-- Before widening a type from `Decodable`/`Encodable` to `Codable`, check
-  every stored property is at least as conformant — a `Decodable` type
-  embedding an `Encodable`-only type (or vice versa) won't compile, so
-  narrowing/widening a shared nested type can ripple into its container
-  types.
+- Before narrowing a type from `Codable` to `Decodable`/`Encodable`, check
+  whether any other type embeds it and relies on synthesized `Codable` — a
+  container relying on synthesized conformance stops compiling the moment a
+  field it holds drops the direction the container needs, so the container
+  must narrow the same way (or gain its own hand-written coder). The same
+  check applies in reverse when widening a type back toward `Codable`: every
+  stored property must be at least as conformant as the type you're widening
+  to.
 - Don't hand-write `encode(to:)`/`init(from:)` for the unused direction "for
   symmetry" — dead coders accumulate and mislead readers about how the type
   is actually used. See `V3_MIGRATION.md` for prior cleanup along these

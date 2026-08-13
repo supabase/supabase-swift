@@ -395,7 +395,7 @@ public struct DestinationOptions: Sendable {
 ///
 /// - ``metadata``
 /// - ``buckets``
-public struct FileObject: Identifiable, Hashable, Codable, Sendable {
+public struct FileObject: Identifiable, Hashable, Decodable, Sendable {
   /// The name of the file, including its extension.
   public var name: String
 
@@ -581,7 +581,7 @@ public struct FileObjectV2: Identifiable, Hashable, Decodable, Sendable {
 ///
 /// - ``createdAt``
 /// - ``updatedAt``
-public struct Bucket: Identifiable, Hashable, Codable, Sendable {
+public struct Bucket: Identifiable, Hashable, Decodable, Sendable {
   /// The unique identifier of the bucket.
   public var id: String
 

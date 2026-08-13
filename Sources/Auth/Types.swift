@@ -1295,7 +1295,7 @@ struct DeleteUserRequest: Encodable {
 }
 
 /// The messaging channel used to deliver OTPs.
-public enum MessagingChannel: String, Codable, Sendable {
+public enum MessagingChannel: String, Encodable, Sendable {
   /// Deliver the OTP via SMS.
   case sms
 
@@ -1326,6 +1326,16 @@ public struct OAuthResponse: Hashable, Sendable {
 
   /// The URL to open in order to start the OAuth flow.
   public let url: URL
+
+  /// Creates an ``OAuthResponse``.
+  ///
+  /// - Parameters:
+  ///   - provider: The OAuth provider.
+  ///   - url: The URL to open in order to start the OAuth flow.
+  public init(provider: Provider, url: URL) {
+    self.provider = provider
+    self.url = url
+  }
 }
 
 /// Pagination parameters for list endpoints.

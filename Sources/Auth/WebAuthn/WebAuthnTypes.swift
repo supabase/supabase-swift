@@ -55,7 +55,7 @@ public struct WebAuthnChallengeOptions: Encodable, Hashable, Sendable {
 ///
 /// - Warning: Experimental. See ``MFAWebAuthnEnrollParams``.
 @_spi(Experimental)
-public enum WebAuthnChallengeType: String, Codable, Hashable, Sendable {
+public enum WebAuthnChallengeType: String, Decodable, Hashable, Sendable {
   /// A registration ceremony (`navigator.credentials.create`).
   case create
   /// An authentication ceremony (`navigator.credentials.get`).

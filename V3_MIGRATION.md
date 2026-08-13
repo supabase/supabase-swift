@@ -65,17 +65,17 @@ deleted along with it.
 **Narrowed to `Decodable`-only** (no longer `Encodable`): `AuthResponse`, `SSOResponse`,
 `OAuthClient`, `OAuthClientType`, `OAuthClientRegistrationType`, `OAuthAuthorizationClient`,
 `OAuthAuthorizationUser`, `OAuthAuthorizationDetails`, `OAuthRedirect`, `OAuthGrant`, `JWK`, `JWKS`,
-`JWTHeader`, `JWTClaims`, `AudienceClaim`, `PasskeyListItem` (Auth); `VectorBucket`, `VectorIndex`,
-`VectorIndexSummary`, `VectorMatch` (Storage); `Column`, `PresenceV2` (Realtime); `PostgrestError`
-(shared).
+`JWTHeader`, `JWTClaims`, `AudienceClaim`, `PasskeyListItem` (Auth); `FileObject`, `Bucket`,
+`VectorBucket`, `VectorIndex`, `VectorIndexSummary`, `VectorMatch` (Storage); `Column`, `PresenceV2`
+(Realtime); `PostgrestError` (shared).
 
 **No longer conform to `Codable` at all** (never encoded or decoded through Codable machinery in
 the first place): `OAuthResponse`, `Provider` (Auth).
 
 **Narrowed to `Encodable`-only** (no longer `Decodable`): `OpenIDConnectCredentials`,
-`AuthMetaSecurity`, `Web3Credentials`, `Web3Chain`, `UserAttributes` (Auth); `ReplayOption`,
-`BroadcastJoinConfig`, `PresenceJoinConfig` (Realtime); `VectorEntry`, `ResizeMode`, `ImageFormat`,
-`SortOrder` (Storage).
+`OpenIDConnectCredentials.Provider`, `AuthMetaSecurity`, `Web3Credentials`, `Web3Chain`,
+`UserAttributes`, `MessagingChannel` (Auth); `ReplayOption`, `BroadcastJoinConfig`,
+`PresenceJoinConfig` (Realtime); `VectorEntry`, `ResizeMode`, `ImageFormat`, `SortOrder` (Storage).
 
 If you were relying on encoding one of the `Decodable`-only types (or decoding one of the
 `Encodable`-only types) yourself — e.g. to persist it to disk or pass it through your own
@@ -91,6 +91,22 @@ struct MyOAuthClientCache: Codable {
   let clientName: String
   // ...the fields you actually need to persist
 }
+```
+
+The mirror case — decoding an `Encodable`-only type from stored JSON instead of constructing it
+directly — needs the same wrapper:
+
+```swift
+// Before: decoding a request type from stored JSON
+let credentials = try JSONDecoder().decode(OpenIDConnectCredentials.self, from: data)
+
+// After: decode into your own Codable type, then construct the request type from it
+struct MyStoredCredentials: Codable {
+  let provider: String
+  let idToken: String
+}
+let stored = try JSONDecoder().decode(MyStoredCredentials.self, from: data)
+let credentials = OpenIDConnectCredentials(provider: .init(rawValue: stored.provider)!, idToken: stored.idToken)
 ```
 
 ## All previously-deprecated APIs have been removed
