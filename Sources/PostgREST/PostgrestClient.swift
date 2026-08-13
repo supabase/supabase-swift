@@ -1,6 +1,7 @@
 import ConcurrencyExtras
 public import Foundation
 public import HTTPTypes
+public import Logging
 
 #if canImport(FoundationNetworking)
   public import FoundationNetworking
@@ -137,7 +138,7 @@ public final class PostgrestClient: Sendable {
     /// requests can also override this via ``PostgrestBuilder/retry(enabled:)``.
     public var retryEnabled: Bool
 
-    let logger: (any SupabaseLogger)?
+    let logger: Logging.Logger
 
     /// Creates a new ``Configuration``.
     ///
@@ -145,7 +146,7 @@ public final class PostgrestClient: Sendable {
     ///   - url: The base URL of the PostgREST endpoint.
     ///   - schema: The PostgreSQL schema to use. Defaults to `nil` (PostgREST default).
     ///   - headers: Additional HTTP headers sent with every request.
-    ///   - logger: A logger for diagnostic output. Defaults to `nil`.
+    ///   - logger: A logger for diagnostic output. Defaults to a build-config-aware logger.
     ///   - fetch: The HTTP transport closure. Defaults to `URLSession.shared.data(for:)`.
     ///   - encoder: The `JSONEncoder` used for request bodies. Defaults to ``jsonEncoder``.
     ///   - decoder: The `JSONDecoder` used for response bodies. Defaults to ``jsonDecoder``.
@@ -154,7 +155,7 @@ public final class PostgrestClient: Sendable {
       url: URL,
       schema: String? = nil,
       headers: [String: String] = [:],
-      logger: (any SupabaseLogger)? = nil,
+      logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.postgrest"),
       fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
       encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
       decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder,
@@ -205,7 +206,7 @@ public final class PostgrestClient: Sendable {
   ///   - url: The base URL of the PostgREST endpoint.
   ///   - schema: The PostgreSQL schema to use. Defaults to `nil` (PostgREST default).
   ///   - headers: Additional HTTP headers sent with every request.
-  ///   - logger: A logger for diagnostic output. Defaults to `nil`.
+  ///   - logger: A logger for diagnostic output. Defaults to a build-config-aware logger.
   ///   - fetch: The HTTP transport closure. Defaults to `URLSession.shared.data(for:)`.
   ///   - encoder: The `JSONEncoder` used for request bodies. Defaults to ``Configuration/jsonEncoder``.
   ///   - decoder: The `JSONDecoder` used for response bodies. Defaults to ``Configuration/jsonDecoder``.
@@ -214,7 +215,7 @@ public final class PostgrestClient: Sendable {
     url: URL,
     schema: String? = nil,
     headers: [String: String] = [:],
-    logger: (any SupabaseLogger)? = nil,
+    logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.postgrest"),
     fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
     encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
     decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder,
