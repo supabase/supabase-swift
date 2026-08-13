@@ -20,10 +20,18 @@
       }
     }
 
-    func data(forKey key: String) throws -> Data {
-      let query = getOneQuery(byKey: key)
-      var result: AnyObject?
-      try assertSuccess(forStatus: SecItemCopyMatching(query as CFDictionary, &result))
+    /// Maps a `SecItemCopyMatching` status and its result into a value.
+    ///
+    /// - Returns: The stored bytes, or `nil` when the item does not exist.
+    /// - Throws: ``KeychainError`` for any status other than success or not-found.
+    static func mapReadStatus(_ status: OSStatus, result: AnyObject?) throws -> Data? {
+      if status == errSecItemNotFound {
+        return nil
+      }
+
+      if status != errSecSuccess {
+        throw KeychainError(code: KeychainError.Code(rawValue: status))
+      }
 
       guard let data = result as? Data else {
         let message = "Unable to cast the retrieved item to a Data value"
@@ -31,6 +39,24 @@
       }
 
       return data
+    }
+
+    /// Maps a `SecItemDelete` status, treating a missing item as success.
+    ///
+    /// - Throws: ``KeychainError`` for any status other than success or not-found.
+    static func mapDeleteStatus(_ status: OSStatus) throws {
+      if status == errSecItemNotFound || status == errSecSuccess {
+        return
+      }
+
+      throw KeychainError(code: KeychainError.Code(rawValue: status))
+    }
+
+    func data(forKey key: String) throws -> Data? {
+      let query = getOneQuery(byKey: key)
+      var result: AnyObject?
+      let status = SecItemCopyMatching(query as CFDictionary, &result)
+      return try Self.mapReadStatus(status, result: result)
     }
 
     func set(_ data: Data, forKey key: String) throws {
@@ -50,7 +76,7 @@
 
     func deleteItem(forKey key: String) throws {
       let query = baseQuery(withKey: key)
-      try assertSuccess(forStatus: SecItemDelete(query as CFDictionary))
+      try Self.mapDeleteStatus(SecItemDelete(query as CFDictionary))
     }
 
     private func baseQuery(withKey key: String? = nil, data: Data? = nil) -> [String: Any] {
