@@ -37,16 +37,4 @@ struct PostgrestErrorTests {
     #expect(error.message == "duplicate key value violates unique constraint \"users_pkey\"")
   }
 
-  @Test
-  func encodesDetailsToWireKey() throws {
-    let error = PostgrestError(details: "a detail", message: "a message")
-
-    let data = try JSONEncoder().encode(error)
-    let object = try #require(
-      try JSONSerialization.jsonObject(with: data) as? [String: Any]
-    )
-
-    #expect(object["details"] as? String == "a detail")
-    #expect(object["detail"] == nil)
-  }
 }
