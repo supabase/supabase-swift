@@ -28,16 +28,14 @@ struct AuthClientMultipleInstancesTests {
     let client1 = AuthClient(
       configuration: AuthClient.Configuration(
         url: url,
-        localStorage: client1Storage,
-        logger: nil
+        localStorage: client1Storage
       )
     )
 
     let client2 = AuthClient(
       configuration: AuthClient.Configuration(
         url: url,
-        localStorage: client2Storage,
-        logger: nil
+        localStorage: client2Storage
       )
     )
 
@@ -62,8 +60,7 @@ struct AuthClientMultipleInstancesTests {
       let client = AuthClient(
         configuration: AuthClient.Configuration(
           url: url,
-          localStorage: InMemoryLocalStorage(),
-          logger: nil
+          localStorage: InMemoryLocalStorage()
         )
       )
       clientID = client.clientID
@@ -94,8 +91,7 @@ struct AuthClientMultipleInstancesTests {
       let client = AuthClient(
         configuration: AuthClient.Configuration(
           url: url,
-          localStorage: InMemoryLocalStorage(),
-          logger: nil
+          localStorage: InMemoryLocalStorage()
         )
       )
       sessionManager = Dependencies[client.clientID].sessionManager

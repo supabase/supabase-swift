@@ -1,5 +1,6 @@
 import ConcurrencyExtras
 import Foundation
+import Logging
 import TestHelpers
 
 @testable import Auth
@@ -19,14 +20,14 @@ extension Dependencies {
   static let mock = Dependencies(
     configuration: AuthClient.Configuration(
       url: URL(string: "https://project-id.supabase.com")!,
-      localStorage: InMemoryLocalStorage(),
-      logger: nil
+      localStorage: InMemoryLocalStorage()
     ),
     http: HTTPClientMock(),
     api: APIClient(clientID: AuthClientID()),
     codeVerifierStorage: CodeVerifierStorage.mock,
     sessionStorage: SessionStorage.live(clientID: AuthClientID()),
-    sessionManager: SessionManager.live(clientID: AuthClientID())
+    sessionManager: SessionManager.live(clientID: AuthClientID()),
+    logger: supabaseDefaultLogger(label: "io.supabase.auth")
   )
 }
 

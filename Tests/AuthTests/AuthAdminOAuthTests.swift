@@ -48,7 +48,6 @@ extension AuthMockerTests {
           "Authorization": "Bearer supabase.secret.key",
         ],
         localStorage: storage,
-        logger: nil,
         fetch: { request in
           try await session.data(for: request)
         }

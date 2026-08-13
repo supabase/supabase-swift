@@ -3,6 +3,7 @@ public import Foundation
 import HTTPTypes
 import Helpers
 import IssueReporting
+import Logging
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -48,7 +49,7 @@ public struct RealtimeChannelConfig: Sendable {
 protocol RealtimeChannelProtocol: AnyObject, Sendable {
   @MainActor var config: RealtimeChannelConfig { get }
   var topic: String { get }
-  var logger: (any SupabaseLogger)? { get }
+  var logger: Logging.Logger { get }
 
   var socket: any RealtimeClientProtocol { get }
 }
@@ -120,7 +121,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   /// Reflects the options passed to ``RealtimeClientV2/channel(_:options:)``.
   @MainActor public private(set) var config: RealtimeChannelConfig
 
-  let logger: (any SupabaseLogger)?
+  let logger: Logging.Logger
   let socket: any RealtimeClientProtocol
 
   let stateManager: ChannelStateManager
@@ -141,7 +142,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     topic: String,
     config: RealtimeChannelConfig,
     socket: any RealtimeClientProtocol,
-    logger: (any SupabaseLogger)?
+    logger: Logging.Logger
   ) {
     self.topic = topic
     self.subTopic =
@@ -221,13 +222,13 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   ///
   /// - Throws: A ``RealtimeError`` if the subscribe attempt fails or times out.
   public func subscribeWithError() async throws {
-    logger?.debug("Subscribe requested for channel '\(topic)'")
+    logger.debug("Subscribe requested for channel '\(topic)'")
     try await stateManager.subscribe()
   }
 
   /// Leaves the Realtime topic and transitions the channel to ``RealtimeChannelStatus/unsubscribed``.
   public func unsubscribe() async {
-    logger?.debug("Unsubscribe requested for channel '\(topic)'")
+    logger.debug("Unsubscribe requested for channel '\(topic)'")
     await stateManager.unsubscribe()
   }
 
@@ -240,7 +241,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   /// closure at the moment the state machine is ready to join.
   @MainActor
   private func performJoin(ref: String, clientChanges: [PostgresJoinConfig]) async {
-    logger?.debug("Sending phx_join for channel '\(topic)' (ref: \(ref))")
+    logger.debug("Sending phx_join for channel '\(topic)' (ref: \(ref))")
 
     config.presence.enabled = callbackManager.callbacks.contains(where: { $0.isPresence })
 
@@ -563,7 +564,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   func onMessage(_ message: RealtimeMessageV2) async {
     do {
       guard let eventType = message._eventType else {
-        logger?.debug("Received message without event type: \(message)")
+        logger.debug("Received message without event type: \(message)")
         return
       }
 
@@ -572,7 +573,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
         if message.status == .ok {
           await stateManager.didReceiveSubscribedOK()
         } else {
-          logger?.debug(
+          logger.debug(
             "Failed to subscribe to channel \(message.topic): \(message.payload)"
           )
         }
@@ -602,7 +603,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
 
       case .postgresChanges:
         guard let data = message.payload["data"] else {
-          logger?.debug("Expected \"data\" key in message payload.")
+          logger.debug("Expected \"data\" key in message payload.")
           return
         }
 
@@ -671,7 +672,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
         socket._remove(self)
 
       case .error:
-        logger?.error(
+        logger.error(
           "Received an error in channel \(message.topic). That could be as a result of an invalid access token"
         )
         // Like `phx_close`, `phx_error` is tagged with the `join_ref` of the
@@ -691,7 +692,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
         callbackManager.triggerPresenceDiffs(joins: joins, leaves: [:], rawMessage: message)
       }
     } catch {
-      logger?.debug("Failed: \(error)")
+      logger.debug("Failed: \(error)")
     }
   }
 
@@ -715,9 +716,8 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       if callbackManager.hasBroadcastDataCallbacks(for: event) {
         callbackManager.triggerBroadcastData(event: event, data: data)
       } else {
-        logger?.warning(
-          "Received binary broadcast for event '\(event)' but no Data callbacks are registered. "
-            + "Register a callback with onBroadcastData(event:callback:) to receive Data."
+        logger.warning(
+          "Received binary broadcast for event '\(event)' but no Data callbacks are registered. Register a callback with onBroadcastData(event:callback:) to receive Data."
         )
       }
     }
@@ -756,7 +756,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     let id = callbackManager.addPresenceCallback(callback: callback)
 
     return RealtimeSubscription { [weak callbackManager, logger] in
-      logger?.debug("Removing presence callback with id: \(id)")
+      logger.debug("Removing presence callback with id: \(id)")
       callbackManager?.removeCallback(id: id)
     }
   }
@@ -1049,7 +1049,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
 
     let id = callbackManager.addPostgresCallback(filter: config, callback: callback)
     return RealtimeSubscription { [weak callbackManager, logger] in
-      logger?.debug("Removing postgres callback with id: \(id)")
+      logger.debug("Removing postgres callback with id: \(id)")
       callbackManager?.removeCallback(id: id)
     }
   }
@@ -1074,7 +1074,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   ) -> RealtimeSubscription {
     let id = callbackManager.addBroadcastCallback(event: event, callback: callback)
     return RealtimeSubscription { [weak callbackManager, logger] in
-      logger?.debug("Removing broadcast callback with id: \(id)")
+      logger.debug("Removing broadcast callback with id: \(id)")
       callbackManager?.removeCallback(id: id)
     }
   }
@@ -1102,7 +1102,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   ) -> RealtimeSubscription {
     let id = callbackManager.addBroadcastDataCallback(event: event, callback: callback)
     return RealtimeSubscription { [weak callbackManager, logger] in
-      logger?.debug("Removing broadcast data callback with id: \(id)")
+      logger.debug("Removing broadcast data callback with id: \(id)")
       callbackManager?.removeCallback(id: id)
     }
   }
@@ -1126,7 +1126,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   ) -> RealtimeSubscription {
     let id = callbackManager.addSystemCallback(callback: callback)
     return RealtimeSubscription { [weak callbackManager, logger] in
-      logger?.debug("Removing system callback with id: \(id)")
+      logger.debug("Removing system callback with id: \(id)")
       callbackManager?.removeCallback(id: id)
     }
   }
@@ -1167,7 +1167,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
         push, ref: ref, joinRef: joinRef
       )
       guard stored else {
-        logger?.debug(
+        logger.debug(
           "Abandoning stale push for '\(topic)': channel closed between joinRef snapshot and store"
         )
         return .error

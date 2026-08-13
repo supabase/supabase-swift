@@ -43,7 +43,6 @@ extension AuthMockerTests {
           "apikey": "supabase.publishable.key"
         ],
         localStorage: storage,
-        logger: nil,
         fetch: { request in
           try await session.data(for: request)
         }

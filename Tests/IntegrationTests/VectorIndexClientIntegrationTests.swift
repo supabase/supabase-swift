@@ -20,8 +20,7 @@ final class VectorIndexClientIntegrationTests {
       url: URL(string: "\(DotEnv.SUPABASE_URL)/storage/v1")!,
       headers: [
         "Authorization": "Bearer \(DotEnv.SUPABASE_SECRET_KEY)"
-      ],
-      logger: nil
+      ]
     )
   ).vectors
 

@@ -1,4 +1,5 @@
 public import Foundation
+public import Logging
 
 /// Configuration for the Supabase Storage client.
 ///
@@ -44,8 +45,8 @@ public struct StorageClientConfiguration: Sendable {
   /// The HTTP session abstraction used to execute requests.
   public let session: StorageHTTPSession
 
-  /// An optional logger for debugging HTTP interactions.
-  public let logger: (any SupabaseLogger)?
+  /// The logger used for debugging HTTP interactions. Defaults to a build-config-aware logger.
+  public let logger: Logging.Logger
 
   /// When `true`, rewrites `project.supabase.co` hostnames to `project.storage.supabase.co`,
   /// which disables request buffering and enables uploads larger than 50 GB.
@@ -60,7 +61,8 @@ public struct StorageClientConfiguration: Sendable {
   ///   - decoder: The JSON decoder for response bodies. Defaults to a decoder configured for the
   ///     Supabase API's date format.
   ///   - session: The HTTP session used for networking. Defaults to a session backed by `URLSession.shared`.
-  ///   - logger: An optional logger. Pass `nil` to disable logging.
+  ///   - logger: The logger to use. Defaults to a build-config-aware logger; pass a logger backed by
+  ///     `SwiftLogNoOpLogHandler` to disable logging entirely.
   ///   - useNewHostname: When `true`, the storage-specific hostname is used, enabling uploads over 50 GB.
   public init(
     url: URL,
@@ -68,7 +70,7 @@ public struct StorageClientConfiguration: Sendable {
     encoder: JSONEncoder? = nil,
     decoder: JSONDecoder? = nil,
     session: StorageHTTPSession = .init(),
-    logger: (any SupabaseLogger)? = nil,
+    logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.storage"),
     useNewHostname: Bool = false
   ) {
     self.url = url
@@ -76,6 +78,8 @@ public struct StorageClientConfiguration: Sendable {
     self.encoder = encoder ?? .storageEncoder
     self.decoder = decoder ?? .supabase()
     self.session = session
+    var logger = logger
+    logger[metadataKey: "system"] = "storage"
     self.logger = logger
     self.useNewHostname = useNewHostname
   }

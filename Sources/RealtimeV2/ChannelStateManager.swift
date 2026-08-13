@@ -1,4 +1,5 @@
 import Foundation
+import Logging
 
 /// Owns the subscription state machine for ``RealtimeChannelV2``.
 ///
@@ -97,7 +98,7 @@ actor ChannelStateManager {
 
   // MARK: - Config & injected operations
 
-  private let logger: (any SupabaseLogger)?
+  private let logger: Logging.Logger
   private let topic: String
   private let maxRetryAttempts: Int
   private let timeoutInterval: TimeInterval
@@ -118,7 +119,7 @@ actor ChannelStateManager {
 
   init(
     topic: String,
-    logger: (any SupabaseLogger)?,
+    logger: Logging.Logger,
     maxRetryAttempts: Int,
     timeoutInterval: TimeInterval,
     clock: any Clock<Duration>,
@@ -181,16 +182,16 @@ actor ChannelStateManager {
   func subscribe() async throws {
     switch state {
     case .subscribed:
-      logger?.debug("Subscribe no-op for channel '\(topic)': already subscribed")
+      logger.debug("Subscribe no-op for channel '\(topic)': already subscribed")
       return
 
     case .subscribing(let task):
-      logger?.debug("Subscribe already in progress for channel '\(topic)', awaiting…")
+      logger.debug("Subscribe already in progress for channel '\(topic)', awaiting…")
       try await task.value
       return
 
     case .unsubscribing(let task):
-      logger?.debug("Waiting for in-flight unsubscribe on '\(topic)' before subscribing")
+      logger.debug("Waiting for in-flight unsubscribe on '\(topic)' before subscribing")
       await task.value
       // Re-dispatch through `subscribe()` rather than calling `beginSubscribe()`
       // directly — under actor re-entrancy, another caller may have flipped
@@ -210,16 +211,16 @@ actor ChannelStateManager {
   func unsubscribe() async {
     switch state {
     case .unsubscribed:
-      logger?.debug("Unsubscribe no-op for channel '\(topic)': already unsubscribed")
+      logger.debug("Unsubscribe no-op for channel '\(topic)': already unsubscribed")
       return
 
     case .unsubscribing(let task):
-      logger?.debug("Unsubscribe already in progress for channel '\(topic)', awaiting…")
+      logger.debug("Unsubscribe already in progress for channel '\(topic)', awaiting…")
       await task.value
       return
 
     case .subscribing(let task):
-      logger?.debug("Cancelling in-flight subscribe to unsubscribe '\(topic)'")
+      logger.debug("Cancelling in-flight subscribe to unsubscribe '\(topic)'")
       task.cancel()
       // Subscribe hadn't completed yet, so the server may not recognize the
       // channel and will likely never send `phx_close`. Don't wait for it.
@@ -275,7 +276,7 @@ actor ChannelStateManager {
   /// with `postgres_changes`).
   func didReceiveSubscribedOK() {
     guard case .subscribing = state else { return }
-    logger?.debug("Server confirmed subscribe for channel '\(topic)'")
+    logger.debug("Server confirmed subscribe for channel '\(topic)'")
     updateState(.subscribed)
   }
 
@@ -294,13 +295,12 @@ actor ChannelStateManager {
   @discardableResult
   func didReceiveClose(joinRef expectedJoinRef: String? = nil) -> Bool {
     if let expectedJoinRef, expectedJoinRef != joinRef {
-      logger?.debug(
-        "Ignoring close for stale join_ref \(expectedJoinRef) on '\(topic)' "
-          + "(current: \(joinRef ?? "<none>"))"
+      logger.debug(
+        "Ignoring close for stale join_ref \(expectedJoinRef) on '\(topic)' (current: \(joinRef ?? "<none>"))"
       )
       return false
     }
-    logger?.debug("Server closed channel '\(topic)'")
+    logger.debug("Server closed channel '\(topic)'")
     joinRef = nil
     pushes = [:]
     if case .subscribing(let task) = state {
@@ -317,7 +317,7 @@ actor ChannelStateManager {
   // MARK: - Private
 
   private func beginSubscribe() async throws {
-    logger?.debug("Beginning subscribe flow for channel '\(topic)'")
+    logger.debug("Beginning subscribe flow for channel '\(topic)'")
     closedByServerWhileSubscribing = false
     let task = Task<Void, any Error> { [weak self] in
       guard let self else { return }
@@ -367,7 +367,7 @@ actor ChannelStateManager {
 
       do {
         try Task.checkCancellation()
-        logger?.debug(
+        logger.debug(
           "Subscribe attempt \(attempts)/\(maxRetryAttempts) for channel '\(topic)'"
         )
 
@@ -375,23 +375,22 @@ actor ChannelStateManager {
           [self] in try await runOneSubscribeAttempt()
         }
 
-        logger?.debug("Subscribe succeeded for channel '\(topic)'")
+        logger.debug("Subscribe succeeded for channel '\(topic)'")
         return
       } catch let error where error is TimeoutError || error is SubscribeFailure {
-        logger?.debug(
-          "Subscribe attempt failed for channel '\(topic)' "
-            + "(attempt \(attempts)/\(maxRetryAttempts)): \(error)"
+        logger.debug(
+          "Subscribe attempt failed for channel '\(topic)' (attempt \(attempts)/\(maxRetryAttempts)): \(error)"
         )
 
         guard attempts < maxRetryAttempts else {
-          logger?.error(
+          logger.error(
             "Failed to subscribe to channel '\(topic)' after \(maxRetryAttempts) attempts"
           )
           throw RealtimeError.maxRetryAttemptsReached
         }
 
         let delay = retryDelay(attempts)
-        logger?.debug(
+        logger.debug(
           "Retrying subscribe for '\(topic)' in \(String(format: "%.2f", delay))s"
         )
 
@@ -437,7 +436,7 @@ actor ChannelStateManager {
   }
 
   private func beginUnsubscribe(waitForServerClose: Bool, sendLeave: Bool) async {
-    logger?.debug("Beginning unsubscribe flow for channel '\(topic)'")
+    logger.debug("Beginning unsubscribe flow for channel '\(topic)'")
     let task = Task<Void, Never> { [weak self] in
       guard let self else { return }
       await self.runUnsubscribe(waitForServerClose: waitForServerClose, sendLeave: sendLeave)
@@ -474,7 +473,7 @@ actor ChannelStateManager {
   }
 
   private func updateState(_ newState: State) {
-    logger?.debug("State transition for '\(topic)': \(state) → \(newState)")
+    logger.debug("State transition for '\(topic)': \(state) → \(newState)")
     state = newState
     for (_, continuation) in stateChangeContinuations {
       continuation.yield(newState)

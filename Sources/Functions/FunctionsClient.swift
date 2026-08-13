@@ -2,6 +2,7 @@ import ConcurrencyExtras
 public import Foundation
 import HTTPTypes
 public import Helpers
+public import Logging
 
 #if canImport(FoundationNetworking)
   public import FoundationNetworking
@@ -79,7 +80,7 @@ public final class FunctionsClient: Sendable {
   ///   - url: The base URL of the Functions endpoint.
   ///   - headers: Additional headers to include in every request.
   ///   - region: The region string to invoke functions in.
-  ///   - logger: A logger for request and response diagnostics.
+  ///   - logger: A logger for request and response diagnostics. Defaults to a build-config-aware logger.
   ///   - fetch: A custom fetch handler. Defaults to `URLSession.shared`.
   ///   - decoder: The JSON decoder used to decode response bodies.
   @_disfavoredOverload
@@ -87,7 +88,7 @@ public final class FunctionsClient: Sendable {
     url: URL,
     headers: [String: String] = [:],
     region: String? = nil,
-    logger: (any SupabaseLogger)? = nil,
+    logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.functions"),
     fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
     decoder: JSONDecoder = JSONDecoder()
   ) {
@@ -106,15 +107,16 @@ public final class FunctionsClient: Sendable {
     url: URL,
     headers: [String: String] = [:],
     region: String? = nil,
-    logger: (any SupabaseLogger)? = nil,
+    logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.functions"),
     fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
     decoder: JSONDecoder = JSONDecoder(),
     sessionConfiguration: URLSessionConfiguration
   ) {
-    var interceptors: [any HTTPClientInterceptor] = []
-    if let logger {
-      interceptors.append(LoggerInterceptor(logger: logger))
-    }
+    var logger = logger
+    logger[metadataKey: "system"] = "functions"
+    let interceptors: [any HTTPClientInterceptor] = [
+      LoggerInterceptor(logger: logger)
+    ]
 
     let http = HTTPClient(fetch: fetch, interceptors: interceptors)
 
@@ -155,14 +157,14 @@ public final class FunctionsClient: Sendable {
   ///   - url: The base URL of the Functions endpoint.
   ///   - headers: Additional headers to include in every request.
   ///   - region: The region to invoke functions in.
-  ///   - logger: A logger for request and response diagnostics.
+  ///   - logger: A logger for request and response diagnostics. Defaults to a build-config-aware logger.
   ///   - fetch: A custom fetch handler. Defaults to `URLSession.shared`.
   ///   - decoder: The JSON decoder used to decode response bodies.
   public convenience init(
     url: URL,
     headers: [String: String] = [:],
     region: FunctionRegion? = nil,
-    logger: (any SupabaseLogger)? = nil,
+    logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.functions"),
     fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
     decoder: JSONDecoder = JSONDecoder()
   ) {

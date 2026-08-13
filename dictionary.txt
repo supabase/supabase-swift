@@ -37,6 +37,7 @@ dedupe
 decoratee
 deeplinking
 discardable
+docc
 dollarsign
 dotproduct
 dont
@@ -96,6 +97,7 @@ metamask
 metas
 Metas
 mmsdk
+myapp
 newbucket
 newkey
 niled

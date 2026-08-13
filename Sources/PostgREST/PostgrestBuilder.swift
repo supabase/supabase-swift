@@ -1,6 +1,7 @@
 import ConcurrencyExtras
 import Foundation
 import HTTPTypes
+import Logging
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -62,10 +63,9 @@ public class PostgrestBuilder: @unchecked Sendable {
     self.configuration = configuration
     self.clock = clock
 
-    var interceptors: [any HTTPClientInterceptor] = []
-    if let logger = configuration.logger {
-      interceptors.append(LoggerInterceptor(logger: logger))
-    }
+    let interceptors: [any HTTPClientInterceptor] = [
+      LoggerInterceptor(logger: configuration.logger)
+    ]
 
     http = HTTPClient(fetch: configuration.fetch, interceptors: interceptors)
 
@@ -163,7 +163,7 @@ public class PostgrestBuilder: @unchecked Sendable {
       do {
         return try configuration.decoder.decode(T.self, from: data)
       } catch {
-        configuration.logger?.error("Failed to decode type '\(T.self) with error: \(error)")
+        configuration.logger.error("Failed to decode type '\(T.self) with error: \(error)")
         throw error
       }
     }

@@ -1,5 +1,6 @@
 import ConcurrencyExtras
 import Foundation
+import Logging
 
 struct Dependencies: Sendable {
   var configuration: AuthClient.Configuration
@@ -14,7 +15,7 @@ struct Dependencies: Sendable {
 
   var urlOpener: URLOpener = .live
   var pkce: PKCE = .live
-  var logger: (any SupabaseLogger)?
+  var logger: Logging.Logger
 
   var resolvedEncoder: JSONEncoder { configuration.resolvedEncoder }
   var resolvedDecoder: JSONDecoder { configuration.resolvedDecoder }
