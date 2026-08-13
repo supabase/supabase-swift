@@ -22,8 +22,7 @@ extension SupabaseStorageClient {
           "Apikey": apiKey,
           "X-Client-Info": "storage-swift/x.y.z",
         ],
-        session: session,
-        logger: nil
+        session: session
       )
     )
   }
