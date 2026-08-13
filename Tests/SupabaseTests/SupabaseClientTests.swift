@@ -139,6 +139,28 @@ struct SupabaseClientTests {
     )
   }
 
+  @Test
+  func realtimeLoggerIsTaggedWithSystemMetadataEvenThoughGlobalLoggerOverridesIt() {
+    // Uses a plain Logger (not SwiftLogNoOpLogHandler) because a no-op handler's metadata
+    // subscript always reads back nil, which would make this assertion untestable.
+    let logger = Logging.Logger(label: "test")
+
+    let client = SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      options: SupabaseClientOptions(
+        auth: SupabaseClientOptions.AuthOptions(
+          storage: AuthLocalStorageMock(),
+          autoRefreshToken: false
+        ),
+        global: SupabaseClientOptions.GlobalOptions(logger: logger)
+      )
+    )
+
+    let realtimeOptions = client.realtimeV2.options
+    #expect(realtimeOptions.logger[metadataKey: "system"] == "realtime")
+  }
+
   #if !os(Linux) && !os(Android)
     @Test
     func clientInitWithDefaultOptionsShouldBeAvailableInNonLinux() {
