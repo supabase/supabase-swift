@@ -206,3 +206,63 @@ removed:
 `ObservationToken.remove()` has been removed — use `.cancel()` instead. `PostgrestError.detail`
 and `PostgrestError.init(detail:hint:code:message:)` have been removed — use `.details` and
 `init(details:hint:code:message:)`.
+
+## Logging: `SupabaseLogger` replaced with swift-log
+
+`SupabaseLogger`, `SupabaseLogMessage`, `SupabaseLogLevel`, and `OSLogSupabaseLogger` are removed.
+Every `logger:` parameter across `SupabaseClient`, `AuthClient`, `PostgrestClient`,
+`SupabaseStorageClient`, `RealtimeClientOptions`, and `FunctionsClient` now takes a
+[`Logging.Logger`](https://github.com/apple/swift-log) instead of a `SupabaseLogger`. The SDK had
+been carrying its own logging protocol since before swift-log was a viable dependency for a
+library this size; now that swift-log is the ecosystem standard, a bespoke protocol only meant
+every consumer had to write an adapter to plug the SDK's logs into whatever logging backend
+(OSLog, swift-log itself, a custom sink) their app already used. Taking `Logging.Logger` directly
+removes that adapter entirely — any existing swift-log-based setup now works unmodified.
+
+This is a compile error, not a silent behavior change: `logger:` parameters have a new type, so any
+call site passing a `SupabaseLogger` conformance no longer compiles.
+
+```swift
+// Before
+let client = SupabaseClient(
+  supabaseURL: url,
+  supabaseKey: key,
+  options: .init(global: .init(logger: MyCustomLogger()))
+)
+
+// After
+var logger = Logger(label: "myapp")
+logger.logLevel = .debug
+let client = SupabaseClient(
+  supabaseURL: url,
+  supabaseKey: key,
+  options: .init(global: .init(logger: logger))
+)
+```
+
+**Default behavior changed.** Previously, omitting `logger:` meant fully silent output, in both
+debug and release builds. Now, debug builds log warning-and-above to stderr by default, so you may
+see new console output after upgrading even without passing a logger yourself; release builds
+remain fully silent by default, matching the old behavior. To silence the debug-build default,
+pass a `Logger` backed by `SwiftLogNoOpLogHandler`:
+
+```swift
+logger: Logger(label: "myapp") { _ in SwiftLogNoOpLogHandler() }
+```
+
+**OSLog parity.** `OSLogSupabaseLogger`'s zero-config OSLog/Console.app integration is replaced by
+`OSLogHandler`, constructed explicitly and installed as the backing handler for a `Logger`:
+
+```swift
+logger: Logger(label: "myapp") { OSLogHandler(label: $0) }
+```
+
+**`SupabaseClient` + `RealtimeClientOptions.logger`.** If you construct a `RealtimeClientOptions`
+with an explicit `logger:` and pass it to `SupabaseClientOptions(realtime:)`, `SupabaseClient` now
+always overrides it with `SupabaseClientOptions.GlobalOptions.logger` — matching how the
+Auth/PostgREST/Storage/Functions sub-clients already behaved, so Realtime is no longer the odd one
+out. This is a silent behavior change, not a compile error: search your codebase for
+`RealtimeClientOptions(` call sites that also set `logger:` and are passed through
+`SupabaseClientOptions(realtime:)` — that logger is now ignored in favor of the global one.
+Construct `RealtimeClientV2` directly (not through `SupabaseClient`) if you need a
+Realtime-specific logger distinct from the rest of the client.
