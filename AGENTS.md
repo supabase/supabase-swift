@@ -126,6 +126,24 @@ Use standard file headers with copyright:
 - Keep module dependencies minimal
 - Prefer protocol-oriented design
 
+### Codable Conformance
+
+- Only conform a type to the direction the SDK actually uses: a type the SDK
+  only decodes from a server response gets `Decodable`, a type the SDK only
+  encodes into a request body gets `Encodable`. Conform to full `Codable`
+  only when the same type is genuinely used in both directions (e.g. a type
+  the SDK both sends and receives over the wire, or persists to disk via
+  `JSONEncoder`/`JSONDecoder`, like Auth's `Session`).
+- Before widening a type from `Decodable`/`Encodable` to `Codable`, check
+  every stored property is at least as conformant — a `Decodable` type
+  embedding an `Encodable`-only type (or vice versa) won't compile, so
+  narrowing/widening a shared nested type can ripple into its container
+  types.
+- Don't hand-write `encode(to:)`/`init(from:)` for the unused direction "for
+  symmetry" — dead coders accumulate and mislead readers about how the type
+  is actually used. See `V3_MIGRATION.md` for prior cleanup along these
+  lines (`VerifyOTPResponse`, and the broader SDK-1473 pass).
+
 ### Error Handling
 
 - Use strongly-typed errors conforming to `Error` protocol
