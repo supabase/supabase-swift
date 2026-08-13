@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.55.1](https://github.com/supabase/supabase-swift/compare/v2.55.0...v2.55.1) (2026-08-13)
+
+### Bug Fixes
+
+* **release:** select the prerelease versioning strategy ([#1202](https://github.com/supabase/supabase-swift/issues/1202)) ([9212b0d](https://github.com/supabase/supabase-swift/commit/9212b0dcd25d4be28dd41f0b9ff3252ce36c8908))
+
+
+### Miscellaneous Chores
+
+* configure v3 beta prereleases and document migration-guide policy ([#1199](https://github.com/supabase/supabase-swift/issues/1199)) ([f6687c5](https://github.com/supabase/supabase-swift/commit/f6687c522d545ecb4a9b98470a1e2f7ecac61d0b))
+
 ## [2.55.0](https://github.com/supabase/supabase-swift/compare/v2.54.1...v2.55.0) (2026-08-12)
 
 
