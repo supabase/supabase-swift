@@ -150,13 +150,18 @@
     }
 
     @Test
-    func retrieveToleratesFailingLegacyProbe() throws {
+    func retrievePropagatesLegacyProbeFailure() {
       struct ProbeFailure: Error {}
       let storage = KeychainLocalStorage(
         keychain: FakeKeychain(),
         legacyKeychains: [FakeKeychain(readError: ProbeFailure())]
       )
-      #expect(try storage.retrieve(key: "key") == nil)
+
+      // A genuine legacy failure must surface rather than read as "no session" — an absent
+      // item already returns nil, so a throw here is never just a miss.
+      #expect(throws: ProbeFailure.self) {
+        try storage.retrieve(key: "key")
+      }
     }
 
     @Test

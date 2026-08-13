@@ -245,7 +245,7 @@ selects the second, non-migrating initializer: `init(service:accessGroup:useData
 Only the parameterless-service initializer, `init(accessGroup:useDataProtectionKeychain:)`, probes
 the legacy location.
 
-## `AuthLocalStorage.retrieve` returns `nil` for a missing key instead of throwing
+## `KeychainLocalStorage.retrieve` returns `nil` for a missing key instead of throwing
 
 `AuthLocalStorage.retrieve(key:)` has always been documented as returning `nil` when the key is
 absent, but `KeychainLocalStorage` didn't honor that: a missing item made the underlying
@@ -259,6 +259,15 @@ yet" is the normal state on a fresh install; and call sites that wrapped the rea
 treat "no session" as `nil` also swallowed genuine Keychain failures (for example
 `errSecInteractionNotAllowed` when the device is locked) into that same `nil`, turning a real error
 into a silent, incorrect sign-out.
+
+This fixes the Apple-platform implementation only. `WinCredLocalStorage`, the default on Windows,
+still throws `WinCredLocalStorageError.windows` when `CredReadW` reports `ERROR_NOT_FOUND`, and its
+`remove` is likewise not idempotent — so on Windows the protocol's documented contract is still not
+honored. That implementation is being dropped in v3 in favor of requiring Windows callers to supply
+their own `AuthLocalStorage`, tracked separately.
+
+If you implement `AuthLocalStorage` yourself, follow the documented contract: return `nil` for an
+absent key, and throw only on a genuine failure.
 
 This is a behavior change, not a compile error — `retrieve`'s signature is unchanged. Search your
 code for places that catch an error from `AuthLocalStorage.retrieve`/`KeychainLocalStorage.retrieve`
@@ -301,6 +310,12 @@ does not show that prompt.
 ```swift
 let storage = KeychainLocalStorage(useDataProtectionKeychain: true)
 ```
+
+One qualification for existing installs: items do not move between the two Keychain
+implementations, so the first read after you enable the flag still probes the old file-based
+location to migrate the session across. Reading an ACL-protected item there can show the prompt
+one final time. Once the value has migrated, the file-based location is no longer read and the
+prompt stops.
 
 This has a real requirement, not just a flag flip: the data-protection Keychain only works in an
 app signed with entitlements authorized by a provisioning profile. Without them, every Keychain

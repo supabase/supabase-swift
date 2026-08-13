@@ -84,17 +84,18 @@
     ///
     /// - Parameter key: The Keychain item key.
     /// - Returns: The stored bytes, or `nil` if the item does not exist.
-    /// - Throws: A Keychain error if the read from the current location fails. Failures while
-    ///   probing or migrating from a legacy location are ignored — a value that was read is
-    ///   always returned.
+    /// - Throws: A Keychain error if reading the current location fails, or if probing a legacy
+    ///   location fails. A failure to write the migrated value is not thrown — the value that was
+    ///   read is returned and the migration is retried on the next read.
     public func retrieve(key: String) throws -> Data? {
       if let data = try keychain.data(forKey: key) {
         return data
       }
 
       for legacy in legacyKeychains {
-        // A failing probe must not break a fresh install, so failures are ignored here.
-        guard let data = try? legacy.data(forKey: key) else { continue }
+        // An absent legacy item reads as nil, so anything thrown here is a genuine failure —
+        // a locked Keychain, a denied ACL prompt — and must not be reported as "no session".
+        guard let data = try legacy.data(forKey: key) else { continue }
 
         do {
           try keychain.set(data, forKey: key)
