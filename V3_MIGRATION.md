@@ -222,8 +222,27 @@ removes that adapter entirely — any existing swift-log-based setup now works u
 This is a compile error, not a silent behavior change: `logger:` parameters have a new type, so any
 call site passing a `SupabaseLogger` conformance no longer compiles.
 
+We don't re-export the `Logging` module, so constructing or spelling a `Logging.Logger` value in
+your own app or package requires two things of your own target, same as any other transitive
+dependency you want to use directly:
+
+- an explicit `import Logging` in the file that constructs the `Logger`
+- `swift-log` declared as an explicit dependency, e.g. in `Package.swift`:
+
+  ```swift
+  .package(url: "https://github.com/apple/swift-log.git", from: "1.5.0"),
+  ```
+
+  and on the relevant target:
+
+  ```swift
+  .product(name: "Logging", package: "swift-log"),
+  ```
+
 ```swift
 // Before
+import Supabase
+
 let client = SupabaseClient(
   supabaseURL: url,
   supabaseKey: key,
@@ -231,6 +250,9 @@ let client = SupabaseClient(
 )
 
 // After
+import Logging
+import Supabase
+
 var logger = Logger(label: "myapp")
 logger.logLevel = .debug
 let client = SupabaseClient(
@@ -244,18 +266,39 @@ let client = SupabaseClient(
 debug and release builds. Now, debug builds log warning-and-above to stderr by default, so you may
 see new console output after upgrading even without passing a logger yourself; release builds
 remain fully silent by default, matching the old behavior. To silence the debug-build default,
-pass a `Logger` backed by `SwiftLogNoOpLogHandler`:
+pass a `Logger` backed by `SwiftLogNoOpLogHandler` (add `import Logging` to this file):
 
 ```swift
 logger: Logger(label: "myapp") { _ in SwiftLogNoOpLogHandler() }
 ```
 
 **OSLog parity.** `OSLogSupabaseLogger`'s zero-config OSLog/Console.app integration is replaced by
-`OSLogHandler`, constructed explicitly and installed as the backing handler for a `Logger`:
+`OSLogHandler`, constructed explicitly and installed as the backing handler for a `Logger` (add
+`import Logging` to this file):
 
 ```swift
 logger: Logger(label: "myapp") { OSLogHandler(label: $0) }
 ```
+
+`OSLogHandler` forwards every level by default (`logLevel` defaults to `.trace`), matching
+`OSLogSupabaseLogger`'s old always-forward behavior — use Console.app's own filtering, or set
+`logger.logLevel` yourself, to narrow what's emitted.
+
+If this file also has `import OSLog` — which it will if you're wiring up `OSLogHandler` alongside
+your app's own OSLog-based logging — you'll hit a `'Logger' is ambiguous for type lookup` compile
+error, because both `Logging.Logger` and `os.Logger` are now in scope unqualified in that file.
+Fix it by fully qualifying whichever type you mean less often, e.g. `os.Logger` for OSLog's own
+type:
+
+```swift
+import Logging
+import OSLog
+
+let appLogger = os.Logger(subsystem: "myapp", category: "app")
+let supabaseLogger = Logging.Logger(label: "myapp") { OSLogHandler(label: $0) }
+```
+
+or keep the two imports in separate files so the ambiguity never arises.
 
 **`SupabaseClient` + `RealtimeClientOptions.logger`.** If you construct a `RealtimeClientOptions`
 with an explicit `logger:` and pass it to `SupabaseClientOptions(realtime:)`, `SupabaseClient` now
