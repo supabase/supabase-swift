@@ -1,4 +1,5 @@
 import Foundation
+import Logging
 import Testing
 
 @testable import RealtimeV2
@@ -23,5 +24,16 @@ struct RealtimeClientOptionsTests {
       session: customSession
     )
     #expect(options.session === customSession)
+  }
+
+  @Test
+  func loggerIsTaggedWithSystemMetadata() {
+    // The `@_disfavoredOverload` initializer preserving the pre-`vsn` signature delegates to this
+    // primary initializer via `self.init(...)`, so tagging here covers both entry points.
+    let options = RealtimeClientOptions(
+      headers: ["apikey": "test-key"],
+      logger: Logging.Logger(label: "test")
+    )
+    #expect(options.logger[metadataKey: "system"] == "realtime")
   }
 }

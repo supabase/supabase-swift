@@ -159,6 +159,8 @@ extension AuthClient {
       self.redirectToURL = redirectToURL
       self.storageKey = storageKey
       self.localStorage = localStorage
+      var logger = logger
+      logger[metadataKey: "system"] = "auth"
       self.logger = logger
       self.resolvedEncoder = resolvedEncoder
       self.resolvedDecoder = resolvedDecoder

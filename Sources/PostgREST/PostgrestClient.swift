@@ -164,6 +164,8 @@ public final class PostgrestClient: Sendable {
       self.url = url
       self.schema = schema
       self.headers = headers
+      var logger = logger
+      logger[metadataKey: "system"] = "postgrest"
       self.logger = logger
       self.fetch = fetch
       self.encoder = encoder

@@ -112,6 +112,8 @@ public final class FunctionsClient: Sendable {
     decoder: JSONDecoder = JSONDecoder(),
     sessionConfiguration: URLSessionConfiguration
   ) {
+    var logger = logger
+    logger[metadataKey: "system"] = "functions"
     let interceptors: [any HTTPClientInterceptor] = [
       LoggerInterceptor(logger: logger)
     ]

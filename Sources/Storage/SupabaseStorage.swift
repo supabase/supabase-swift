@@ -78,6 +78,8 @@ public struct StorageClientConfiguration: Sendable {
     self.encoder = encoder ?? .storageEncoder
     self.decoder = decoder ?? .supabase()
     self.session = session
+    var logger = logger
+    logger[metadataKey: "system"] = "storage"
     self.logger = logger
     self.useNewHostname = useNewHostname
   }

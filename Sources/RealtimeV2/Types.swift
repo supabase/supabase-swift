@@ -193,6 +193,8 @@ public struct RealtimeClientOptions: Sendable {
     self.logLevel = logLevel
     self.fetch = fetch
     self.accessToken = accessToken
+    var logger = logger
+    logger[metadataKey: "system"] = "realtime"
     self.logger = logger
     self.session = session
   }
