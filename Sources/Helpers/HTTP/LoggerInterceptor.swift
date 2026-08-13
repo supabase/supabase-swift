@@ -39,7 +39,12 @@ package struct LoggerInterceptor: HTTPClientInterceptor {
     do {
       let response = try await next(request)
       logger.trace(
-        "Response: Status code: \(response.statusCode) Body: \(stringify(response.data))"
+        """
+        Response: Status code: \(response.statusCode) Content-Length: \(
+          response.underlyingResponse.expectedContentLength
+        )
+        Body: \(stringify(response.data))
+        """
       )
       return response
     } catch {
