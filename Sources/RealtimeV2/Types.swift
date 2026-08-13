@@ -7,6 +7,7 @@
 
 public import Foundation
 package import HTTPTypes
+public import Logging
 
 #if canImport(FoundationNetworking)
   public import FoundationNetworking
@@ -94,7 +95,7 @@ public struct RealtimeClientOptions: Sendable {
   var logLevel: LogLevel?
   package var fetch: (@Sendable (_ request: URLRequest) async throws -> (Data, URLResponse))?
   package var accessToken: (@Sendable () async throws -> String?)?
-  package var logger: (any SupabaseLogger)?
+  package var logger: Logging.Logger
 
   /// A template `URLSession` used to configure the Realtime WebSocket connection.
   ///
@@ -159,7 +160,7 @@ public struct RealtimeClientOptions: Sendable {
   ///   - logLevel: Optional log level for Realtime log output.
   ///   - fetch: Optional custom HTTP fetch function used for REST broadcast calls.
   ///   - accessToken: Optional async closure that returns the current access token.
-  ///   - logger: Optional logger conforming to `SupabaseLogger`.
+  ///   - logger: The logger used for Realtime client diagnostics. Defaults to a logger labeled `"io.supabase.realtime"`.
   ///   - session: A template `URLSession` to configure the WebSocket connection from. Defaults to `nil`.
   ///   - handleAppLifecycle: Whether to automatically reconnect on app foreground. Defaults to ``defaultHandleAppLifecycle``.
   public init(
@@ -175,7 +176,7 @@ public struct RealtimeClientOptions: Sendable {
     logLevel: LogLevel? = nil,
     fetch: (@Sendable (_ request: URLRequest) async throws -> (Data, URLResponse))? = nil,
     accessToken: (@Sendable () async throws -> String?)? = nil,
-    logger: (any SupabaseLogger)? = nil,
+    logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.realtime"),
     session: URLSession? = nil,
     handleAppLifecycle: Bool = Self.defaultHandleAppLifecycle
   ) {
@@ -211,7 +212,7 @@ public struct RealtimeClientOptions: Sendable {
     logLevel: LogLevel? = nil,
     fetch: (@Sendable (_ request: URLRequest) async throws -> (Data, URLResponse))? = nil,
     accessToken: (@Sendable () async throws -> String?)? = nil,
-    logger: (any SupabaseLogger)? = nil
+    logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.realtime")
   ) {
     self.init(
       headers: headers,

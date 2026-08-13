@@ -1,5 +1,6 @@
 import ConcurrencyExtras
 import Foundation
+import Logging
 
 actor ConnectionManager {
   enum State: Sendable {
@@ -16,7 +17,7 @@ actor ConnectionManager {
   private let url: URL
   private let headers: [String: String]
   private let reconnectDelay: TimeInterval
-  private let logger: (any SupabaseLogger)?
+  private let logger: Logging.Logger
   let clock: any Clock<Duration>
 
   /// Get current connection if connected, nil otherwise.
@@ -34,7 +35,7 @@ actor ConnectionManager {
     url: URL,
     headers: [String: String],
     reconnectDelay: TimeInterval,
-    logger: (any SupabaseLogger)?,
+    logger: Logging.Logger,
     clock: any Clock<Duration>
   ) {
     self.transport = transport
@@ -47,15 +48,15 @@ actor ConnectionManager {
 
   @discardableResult
   func connect() async throws -> any WebSocket {
-    logger?.debug("current state: \(state)")
+    logger.debug("current state: \(state)")
 
     switch state {
     case .connected(let conn):
-      logger?.debug("Already connected")
+      logger.debug("Already connected")
       return conn
 
     case .connecting(let task):
-      logger?.debug("Connection already in progress, waiting...")
+      logger.debug("Connection already in progress, waiting...")
       try await task.value
       // After waiting, get the connection from state
       guard case .connected(let conn) = state else {
@@ -65,7 +66,7 @@ actor ConnectionManager {
       return conn
 
     case .disconnected:
-      logger?.debug("Initiating new connection")
+      logger.debug("Initiating new connection")
       try await performConnection()
       guard case .connected(let conn) = state else {
         throw WebSocketError.connection(
@@ -74,7 +75,7 @@ actor ConnectionManager {
       return conn
 
     case .reconnecting(let task, _):
-      logger?.debug("Reconnection in progress, waiting...")
+      logger.debug("Reconnection in progress, waiting...")
       try await task.value
       guard case .connected(let conn) = state else {
         throw WebSocketError.connection(
@@ -85,21 +86,21 @@ actor ConnectionManager {
   }
 
   func disconnect(reason: String? = nil) {
-    logger?.debug("current state: \(state)")
+    logger.debug("current state: \(state)")
 
     switch state {
     case .connected(let conn):
-      logger?.debug("Disconnecting from WebSocket: \(reason ?? "no reason")")
+      logger.debug("Disconnecting from WebSocket: \(reason ?? "no reason")")
       conn.close(code: nil, reason: reason)
       updateState(.disconnected)
 
     case .connecting(let task), .reconnecting(let task, _):
-      logger?.debug("Cancelling connection attempt: \(reason ?? "no reason")")
+      logger.debug("Cancelling connection attempt: \(reason ?? "no reason")")
       task.cancel()
       updateState(.disconnected)
 
     case .disconnected:
-      logger?.debug("Already disconnected")
+      logger.debug("Already disconnected")
     }
   }
 
@@ -113,21 +114,21 @@ actor ConnectionManager {
   ///     ignored so it can't tear down a healthy connection.
   func handleError(_ error: any Error, from conn: (any WebSocket)? = nil) {
     guard !(error is CancellationError) else {
-      logger?.debug("CancellationError do not trigger reconnects.")
+      logger.debug("CancellationError do not trigger reconnects.")
       return
     }
 
     guard case .connected(let current) = state else {
-      logger?.debug("Ignoring error in non-connected state: \(error)")
+      logger.debug("Ignoring error in non-connected state: \(error)")
       return
     }
 
     if let conn, conn !== current {
-      logger?.debug("Ignoring error from stale connection: \(error)")
+      logger.debug("Ignoring error from stale connection: \(error)")
       return
     }
 
-    logger?.debug("Connection error, initiating reconnect: \(error.localizedDescription)")
+    logger.debug("Connection error, initiating reconnect: \(error.localizedDescription)")
 
     // Close the connection and update to disconnected before reconnecting
     current.close(code: nil, reason: "error: \(error.localizedDescription)")
@@ -150,11 +151,11 @@ actor ConnectionManager {
   ///     disconnected.
   func handleClose(code: Int?, reason: String?, from conn: (any WebSocket)? = nil) {
     let closeReason = "code: \(code?.description ?? "none"), reason: \(reason ?? "none")"
-    logger?.debug("Connection closed by remote: \(closeReason)")
+    logger.debug("Connection closed by remote: \(closeReason)")
 
     if case .connected(let current) = state {
       if let conn, conn !== current {
-        logger?.debug("Ignoring close from stale connection: \(closeReason)")
+        logger.debug("Ignoring close from stale connection: \(closeReason)")
         return
       }
       updateState(.disconnected)
@@ -162,7 +163,7 @@ actor ConnectionManager {
       // protocol errors. Reconnecting with the same bad token would loop;
       // the caller must re-authenticate before reconnecting.
       guard code.map({ $0 < 4000 }) ?? true else {
-        logger?.debug("Skipping reconnect for application close code \(code!)")
+        logger.debug("Skipping reconnect for application close code \(code!)")
         return
       }
       initiateReconnect(reason: closeReason)
@@ -211,7 +212,7 @@ actor ConnectionManager {
         try await clock.sleep(for: .seconds(delay))
 
         guard let self else { return }
-        logger?.debug("Attempting to reconnect (attempt \(attempt))...")
+        logger.debug("Attempting to reconnect (attempt \(attempt))...")
 
         do {
           try await self.performReconnectAttempt()
@@ -219,7 +220,7 @@ actor ConnectionManager {
         } catch is CancellationError {
           throw CancellationError()
         } catch {
-          logger?.debug(
+          logger.debug(
             "Reconnect attempt \(attempt) failed: \(error.localizedDescription). Retrying with backoff."
           )
         }

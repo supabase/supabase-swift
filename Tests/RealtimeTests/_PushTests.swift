@@ -7,6 +7,7 @@
 
 import ConcurrencyExtras
 import Foundation
+import Logging
 import TestHelpers
 import Testing
 
@@ -45,7 +46,7 @@ import Testing
           isPrivate: false
         ),
         socket: socket,
-        logger: nil
+        logger: supabaseDefaultLogger(label: "io.supabase.realtime")
       )
       let push = PushV2(
         channel: channel,
@@ -72,7 +73,7 @@ import Testing
           isPrivate: false
         ),
         socket: socket,
-        logger: nil
+        logger: supabaseDefaultLogger(label: "io.supabase.realtime")
       )
       let push = PushV2(
         channel: channel,
