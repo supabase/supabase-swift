@@ -54,14 +54,13 @@ protocol RealtimeClientProtocol: AnyObject, Sendable {
 /// await client.connect()
 ///
 /// let channel = client.channel("room:lobby")
-/// try await channel.subscribe()
+/// try await channel.subscribeWithError()
 /// ```
 ///
 /// ## Topics
 /// ### Channels
 /// - ``channels``
 /// - ``channel(_:options:)``
-/// - ``addChannel(_:)``
 /// - ``removeChannel(_:)``
 /// - ``removeAllChannels()``
 /// ### Connection Status
@@ -401,22 +400,6 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       $0.channels[realtimeTopic] = channel
 
       return channel
-    }
-  }
-
-  /// Registers an externally-created channel with this client.
-  ///
-  /// > Warning: The client now manages channels automatically via ``channel(_:options:)``.
-  /// > This method will be removed in the next major release.
-  @available(
-    *,
-    deprecated,
-    message:
-      "Client handles channels automatically, this method will be removed on the next major release."
-  )
-  public func addChannel(_ channel: RealtimeChannelV2) {
-    mutableState.withValue {
-      $0.channels[channel.topic] = channel
     }
   }
 

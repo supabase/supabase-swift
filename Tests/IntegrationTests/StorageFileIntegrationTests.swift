@@ -58,7 +58,8 @@ final class StorageFileIntegrationTests {
 
   @Test
   func getPublicURLWithDownloadQueryString() throws {
-    let publicURL = try storage.from(bucketName).getPublicURL(path: uploadPath, download: true)
+    let publicURL = try storage.from(bucketName).getPublicURL(
+      path: uploadPath, download: .withOriginalName)
     #expect(
       publicURL.absoluteString
         == "\(DotEnv.SUPABASE_URL)/storage/v1/object/public/\(bucketName)/\(uploadPath)?download="
@@ -91,7 +92,7 @@ final class StorageFileIntegrationTests {
     _ = try await storage.from(bucketName).upload(uploadPath, data: file)
 
     let url = try await storage.from(bucketName).createSignedURL(
-      path: uploadPath, expiresIn: 2000, download: true)
+      path: uploadPath, expiresIn: 2000, download: .withOriginalName)
     #expect(
       url.absoluteString.contains(
         "\(DotEnv.SUPABASE_URL)/storage/v1/object/sign/\(bucketName)/\(uploadPath)")
@@ -161,7 +162,7 @@ final class StorageFileIntegrationTests {
   func uploadFileWithValidMimeType() async throws {
     bucketName = try await newBucket(
       prefix: "with-mimetype",
-      options: BucketOptions(public: true, allowedMimeTypes: ["image/jpeg"])
+      options: BucketOptions(isPublic: true, allowedMimeTypes: ["image/jpeg"])
     )
 
     try await storage.from(bucketName).upload(
@@ -177,7 +178,7 @@ final class StorageFileIntegrationTests {
   func uploadFileWithInvalidMimeType() async throws {
     bucketName = try await newBucket(
       prefix: "with-mimetype",
-      options: BucketOptions(public: true, allowedMimeTypes: ["image/png"])
+      options: BucketOptions(isPublic: true, allowedMimeTypes: ["image/png"])
     )
 
     do {
@@ -427,7 +428,7 @@ final class StorageFileIntegrationTests {
 
   private func newBucket(
     prefix: String = "",
-    options: BucketOptions = BucketOptions(public: true)
+    options: BucketOptions = BucketOptions(isPublic: true)
   ) async throws -> String {
     let bucketName = "\(!prefix.isEmpty ? prefix + "-" : "")bucket-\(UUID().uuidString)"
     return try await findOrCreateBucket(name: bucketName, options: options)
@@ -436,7 +437,7 @@ final class StorageFileIntegrationTests {
   @discardableResult
   private func findOrCreateBucket(
     name: String,
-    options: BucketOptions = BucketOptions(public: true)
+    options: BucketOptions = BucketOptions(isPublic: true)
   ) async throws -> String {
     do {
       _ = try await storage.getBucket(name)

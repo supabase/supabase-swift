@@ -34,8 +34,6 @@ extension AuthClient {
   /// - ``storageKey``
   ///
   /// ### Encoding / decoding
-  /// - ``encoder``
-  /// - ``decoder``
   /// - ``jsonEncoder``
   /// - ``jsonDecoder``
   ///
@@ -74,24 +72,6 @@ extension AuthClient {
 
     /// The JSON decoder used to deserialize responses received from the Auth server.
     let resolvedDecoder: JSONDecoder
-
-    /// The JSON encoder used to serialize request bodies sent to the Auth server.
-    @available(
-      *,
-      deprecated,
-      message:
-        "Customizing Auth's JSON encoding is no longer supported and this property will be removed in a future major version."
-    )
-    public var encoder: JSONEncoder { resolvedEncoder }
-
-    /// The JSON decoder used to deserialize responses received from the Auth server.
-    @available(
-      *,
-      deprecated,
-      message:
-        "Customizing Auth's JSON decoding is no longer supported and this property will be removed in a future major version."
-    )
-    public var decoder: JSONDecoder { resolvedDecoder }
 
     /// A custom fetch implementation.
     public let fetch: FetchHandler
@@ -152,9 +132,8 @@ extension AuthClient {
 
     /// Designated initializer that stores the resolved JSON encoder/decoder.
     ///
-    /// Kept internal so the (deprecated) initializers that still accept custom
-    /// `encoder`/`decoder` values can share the field-assignment logic without
-    /// exposing the customization point publicly.
+    /// Kept internal since customizing Auth's JSON encoding/decoding is not a
+    /// publicly supported customization point.
     init(
       url: URL? = nil,
       headers: [String: String] = [:],

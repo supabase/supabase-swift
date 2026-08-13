@@ -49,11 +49,4 @@ struct PostgrestErrorTests {
     #expect(object["details"] as? String == "a detail")
     #expect(object["detail"] == nil)
   }
-
-  @Test
-  @available(*, deprecated)
-  func deprecatedDetailForwardsToDetails() {
-    let error = PostgrestError(details: "a detail", message: "a message")
-    #expect(error.detail == "a detail")
-  }
 }

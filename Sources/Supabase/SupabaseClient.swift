@@ -133,8 +133,6 @@ public final class SupabaseClient: Sendable {
     }
   }
 
-  let _realtime: UncheckedSendable<RealtimeClient>
-
   /// The Realtime client for subscribing to database changes and broadcasting presence events.
   public var realtimeV2: RealtimeClientV2 {
     mutableState.withValue {
@@ -264,22 +262,12 @@ public final class SupabaseClient: Sendable {
       storageKey: options.auth.storageKey ?? defaultStorageKey,
       localStorage: options.auth.storage,
       logger: options.global.logger,
-      encoder: options.auth.encoder,
-      decoder: options.auth.decoder,
       fetch: {
         // DON'T use `fetchWithAuth` method within the AuthClient as it may cause a deadlock.
         try await options.global.session.data(for: TraceContext.inject(into: $0))
       },
       autoRefreshToken: options.auth.autoRefreshToken,
       emitLocalSessionAsInitialSession: options.auth.emitLocalSessionAsInitialSession
-    )
-
-    _realtime = UncheckedSendable(
-      RealtimeClient(
-        supabaseURL.appendingPathComponent("/realtime/v1").absoluteString,
-        headers: _headers.dictionary,
-        params: _headers.dictionary
-      )
     )
 
     if options.auth.accessToken == nil {
@@ -333,7 +321,7 @@ public final class SupabaseClient: Sendable {
 
   /// All active Realtime channels.
   public var channels: [RealtimeChannelV2] {
-    Array(realtimeV2.subscriptions.values)
+    Array(realtimeV2.channels.values)
   }
 
   /// Creates a Realtime channel with support for Broadcast, Presence, and Postgres Changes.
@@ -475,7 +463,7 @@ public final class SupabaseClient: Sendable {
     try await accessTokenProvider()
   }
 
-  /// Mirrors Auth state onto the Functions and Realtime sub-clients for the client's lifetime.
+  /// Mirrors Auth state onto the Functions and Realtime V2 sub-clients for the client's lifetime.
   ///
   /// `authStateChanges` never finishes on its own, so the observing task must not capture `self`
   /// strongly: it would keep the client alive forever, and ``deinit`` — the only place that
@@ -515,7 +503,6 @@ public final class SupabaseClient: Sendable {
       functions.setAuth(
         token: APIKeyFormat.functionsBearerToken(accessToken: accessToken, supabaseKey: supabaseKey)
       )
-      realtime.setAuth(accessToken)
       await realtimeV2.setAuth(accessToken)
     }
   }

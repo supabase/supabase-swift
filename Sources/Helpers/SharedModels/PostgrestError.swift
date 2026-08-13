@@ -14,9 +14,6 @@ public struct PostgrestError: Error, Codable, Sendable {
   public let code: String?
   public let message: String
 
-  @available(*, deprecated, renamed: "details")
-  public var detail: String? { details }
-
   public init(
     details: String? = nil,
     hint: String? = nil,
@@ -27,16 +24,6 @@ public struct PostgrestError: Error, Codable, Sendable {
     self.details = details
     self.code = code
     self.message = message
-  }
-
-  @available(*, deprecated, renamed: "init(details:hint:code:message:)")
-  public init(
-    detail: String?,
-    hint: String? = nil,
-    code: String? = nil,
-    message: String
-  ) {
-    self.init(details: detail, hint: hint, code: code, message: message)
   }
 }
 

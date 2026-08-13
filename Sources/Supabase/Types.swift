@@ -60,12 +60,6 @@ public struct SupabaseClientOptions: Sendable {
     /// applications.
     public let flowType: AuthFlowType
 
-    /// The JSON encoder to use for encoding requests.
-    public let encoder: JSONEncoder
-
-    /// The JSON decoder to use for decoding responses.
-    public let decoder: JSONDecoder
-
     /// Set to `true` if you want to automatically refresh the token before expiring.
     public let autoRefreshToken: Bool
 
@@ -87,8 +81,6 @@ public struct SupabaseClientOptions: Sendable {
       redirectToURL: URL? = nil,
       storageKey: String? = nil,
       flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
-      encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
-      decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
       autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken,
       emitLocalSessionAsInitialSession: Bool = false,
       accessToken: (@Sendable () async throws -> String?)? = nil
@@ -97,8 +89,6 @@ public struct SupabaseClientOptions: Sendable {
       self.redirectToURL = redirectToURL
       self.storageKey = storageKey
       self.flowType = flowType
-      self.encoder = encoder
-      self.decoder = decoder
       self.autoRefreshToken = autoRefreshToken
       self.emitLocalSessionAsInitialSession = emitLocalSessionAsInitialSession
       self.accessToken = accessToken
@@ -212,8 +202,6 @@ extension SupabaseClientOptions.AuthOptions {
       redirectToURL: URL? = nil,
       storageKey: String? = nil,
       flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
-      encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
-      decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
       autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken,
       emitLocalSessionAsInitialSession: Bool = false,
       accessToken: (@Sendable () async throws -> String?)? = nil
@@ -223,8 +211,6 @@ extension SupabaseClientOptions.AuthOptions {
         redirectToURL: redirectToURL,
         storageKey: storageKey,
         flowType: flowType,
-        encoder: encoder,
-        decoder: decoder,
         autoRefreshToken: autoRefreshToken,
         emitLocalSessionAsInitialSession: emitLocalSessionAsInitialSession,
         accessToken: accessToken

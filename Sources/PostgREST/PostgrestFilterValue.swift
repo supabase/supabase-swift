@@ -24,11 +24,6 @@ public protocol PostgrestFilterValue {
   var rawValue: String { get }
 }
 
-extension PostgrestFilterValue {
-  @available(*, deprecated, renamed: "rawValue")
-  public var queryValue: String { rawValue }
-}
-
 /// `String` can be used directly as a PostgREST filter value.
 extension String: PostgrestFilterValue {
   public var rawValue: String { self }

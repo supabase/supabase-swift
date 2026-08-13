@@ -16,7 +16,11 @@ public protocol AuthStateChangeListenerRegistration: Sendable {
   func remove()
 }
 
-extension ObservationToken: AuthStateChangeListenerRegistration {}
+extension ObservationToken: AuthStateChangeListenerRegistration {
+  public func remove() {
+    cancel()
+  }
+}
 
 /// A closure called whenever the authentication state changes.
 ///

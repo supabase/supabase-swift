@@ -15,7 +15,6 @@ import Foundation
 /// - ``payload``
 /// - ``status``
 /// ### Event Classification
-/// - ``eventType``
 /// - ``EventType``
 /// ### Initialization
 /// - ``init(joinRef:ref:topic:event:payload:)``
@@ -64,15 +63,6 @@ public struct RealtimeMessageV2: Hashable, Codable, Sendable {
       .flatMap(PushStatus.init(rawValue:))
   }
 
-  /// The semantic event type parsed from ``event``.
-  ///
-  /// > Warning: Access to the structured event type will be removed in a future release. Inspect the raw ``event`` string directly instead.
-  @available(
-    *, deprecated,
-    message: "Access to event type will be removed, please inspect raw event value instead."
-  )
-  public var eventType: EventType? { _eventType }
-
   var _eventType: EventType? {
     switch event {
     case ChannelEvent.system: .system
@@ -97,9 +87,6 @@ public struct RealtimeMessageV2: Hashable, Codable, Sendable {
 
   /// A structured representation of the channel event type.
   ///
-  /// > Warning: This enum is associated with the deprecated ``eventType`` property.
-  /// > Inspect the raw ``event`` string instead of pattern-matching on this type.
-  ///
   /// ## Topics
   /// ### Cases
   /// - ``system``
@@ -109,7 +96,6 @@ public struct RealtimeMessageV2: Hashable, Codable, Sendable {
   /// - ``error``
   /// - ``presenceDiff``
   /// - ``presenceState``
-  /// - ``tokenExpired``
   /// - ``reply``
   public enum EventType {
     /// A channel-level system message (e.g. subscribe confirmation).
@@ -132,14 +118,6 @@ public struct RealtimeMessageV2: Hashable, Codable, Sendable {
 
     /// A full presence state snapshot.
     case presenceState
-
-    /// Token expiration event — now surfaced as a `system` event; check the payload for details.
-    @available(
-      *, deprecated,
-      message:
-        "tokenExpired gets returned as system, check payload for verifying if is a token expiration."
-    )
-    case tokenExpired
 
     /// A reply to a client-originated push.
     case reply

@@ -95,21 +95,6 @@ struct SortByTests {
     let sortBy = SortBy(column: "name", order: .ascending)
     #expect(sortBy.order == "asc")
   }
-
-  @Test
-  func deprecatedInitWithStringVariable() {
-    let order: String? = "desc"
-    let sortBy = SortBy(column: "name", order: order)
-    #expect(sortBy.order == "desc")
-  }
-
-  @Test
-  func deprecatedInitWithOrderVariableOnly() {
-    let order: String? = "asc"
-    let sortBy = SortBy(order: order)
-    #expect(sortBy.column == nil)
-    #expect(sortBy.order == "asc")
-  }
 }
 
 // MARK: - ResizeMode
