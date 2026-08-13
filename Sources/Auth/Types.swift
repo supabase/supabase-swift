@@ -507,7 +507,8 @@ public struct AuthMetaSecurity: Encodable, Hashable, Sendable {
 }
 
 /// A Web3 chain supported by Sign in with Web3.
-public struct Web3Chain: RawRepresentable, Encodable, Hashable, Sendable, ExpressibleByStringLiteral {
+public struct Web3Chain: RawRepresentable, Encodable, Hashable, Sendable, ExpressibleByStringLiteral
+{
   public let rawValue: String
 
   /// Creates a ``Web3Chain`` from a raw string value.

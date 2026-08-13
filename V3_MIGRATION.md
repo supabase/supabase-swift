@@ -55,6 +55,44 @@ case .emailChangeConfirmationPending(let confirmation):
 `AuthResponse` itself is unchanged: `signUp` and the Passkey methods still return it, and `user` is
 still non-optional there, since neither endpoint can produce the confirmation-pending shape.
 
+## Several public types narrowed from `Codable` to `Decodable` or `Encodable`
+
+Many public types only ever get used in one direction — either decoded from a server response, or
+encoded into a request body — but declared full `Codable` anyway. That's now narrowed to match
+actual usage, and a couple of hand-rolled coders that only existed for the unused direction were
+deleted along with it.
+
+**Narrowed to `Decodable`-only** (no longer `Encodable`): `AuthResponse`, `SSOResponse`,
+`OAuthClient`, `OAuthClientType`, `OAuthClientRegistrationType`, `OAuthAuthorizationClient`,
+`OAuthAuthorizationUser`, `OAuthAuthorizationDetails`, `OAuthRedirect`, `OAuthGrant`, `JWK`, `JWKS`,
+`JWTHeader`, `JWTClaims`, `AudienceClaim`, `PasskeyListItem` (Auth); `VectorBucket`, `VectorIndex`,
+`VectorIndexSummary`, `VectorMatch` (Storage); `Column`, `PresenceV2` (Realtime); `PostgrestError`
+(shared).
+
+**No longer conform to `Codable` at all** (never encoded or decoded through Codable machinery in
+the first place): `OAuthResponse`, `Provider` (Auth).
+
+**Narrowed to `Encodable`-only** (no longer `Decodable`): `OpenIDConnectCredentials`,
+`AuthMetaSecurity`, `Web3Credentials`, `Web3Chain`, `UserAttributes` (Auth); `ReplayOption`,
+`BroadcastJoinConfig`, `PresenceJoinConfig` (Realtime); `VectorEntry`, `ResizeMode`, `ImageFormat`,
+`SortOrder` (Storage).
+
+If you were relying on encoding one of the `Decodable`-only types (or decoding one of the
+`Encodable`-only types) yourself — e.g. to persist it to disk or pass it through your own
+`Codable`-based pipeline — wrap it in your own type instead:
+
+```swift
+// Before: encoding a response type directly
+let data = try JSONEncoder().encode(oauthClient)
+
+// After: wrap it in your own Codable type if you need to round-trip it
+struct MyOAuthClientCache: Codable {
+  let clientId: UUID
+  let clientName: String
+  // ...the fields you actually need to persist
+}
+```
+
 ## All previously-deprecated APIs have been removed
 
 Every API that carried an `@available(*, deprecated, ...)` annotation ahead of v3 has now been

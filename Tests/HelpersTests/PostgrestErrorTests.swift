@@ -36,5 +36,4 @@ struct PostgrestErrorTests {
     #expect(error.code == "23505")
     #expect(error.message == "duplicate key value violates unique constraint \"users_pkey\"")
   }
-
 }
