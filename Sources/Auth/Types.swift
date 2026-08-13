@@ -701,16 +701,23 @@ public enum VerifyOTPResponse: Decodable, Hashable, Sendable {
   case session(Session)
 
   /// Neither a session nor a user was returned. GoTrue sends this for the first of the two
-  /// confirmations required by a secure email change: the new email address still needs to
-  /// confirm its own link before the change takes effect and a session is issued.
+  /// confirmations required by a secure email change: whichever of the current or new email
+  /// address hasn't confirmed its link yet still needs to, before the change takes effect and a
+  /// session is issued.
   case emailChangeConfirmationPending(EmailChangeConfirmation)
 
   public init(from decoder: any Decoder) throws {
     let container = try decoder.singleValueContainer()
     if let value = try? container.decode(Session.self) {
       self = .session(value)
+    } else if let value = try? container.decode(EmailChangeConfirmation.self) {
+      self = .emailChangeConfirmationPending(value)
     } else {
-      self = .emailChangeConfirmationPending(try container.decode(EmailChangeConfirmation.self))
+      throw DecodingError.dataCorruptedError(
+        in: container,
+        debugDescription:
+          "Data could not be decoded as any of the expected types (Session, EmailChangeConfirmation)."
+      )
     }
   }
 
