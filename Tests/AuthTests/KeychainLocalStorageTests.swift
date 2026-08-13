@@ -128,12 +128,15 @@
     func retrieveProbesLegacyLocationsInOrder() throws {
       let first = FakeKeychain(items: ["key": Data("first".utf8)])
       let second = FakeKeychain(items: ["key": Data("second".utf8)])
+      let primary = FakeKeychain()
       let storage = KeychainLocalStorage(
-        keychain: FakeKeychain(),
+        keychain: primary,
         legacyKeychains: [first, second]
       )
 
       #expect(try storage.retrieve(key: "key") == Data("first".utf8))
+      #expect(primary.items.value["key"] == Data("first".utf8))
+      #expect(first.items.value["key"] == nil)
       #expect(second.items.value["key"] == Data("second".utf8))
     }
 
@@ -179,15 +182,50 @@
       #expect(primary.items.value["key"] == nil)
       #expect(legacy.items.value["key"] == nil)
     }
+
+    @Test
+    func removeClearsLegacyLocationsEvenWhenPrimaryDeleteFails() {
+      struct DeleteFailure: Error {}
+      let primary = FakeKeychain(items: ["key": Data()], deleteError: DeleteFailure())
+      let legacy = FakeKeychain(items: ["key": Data()])
+      let storage = KeychainLocalStorage(keychain: primary, legacyKeychains: [legacy])
+
+      #expect(throws: DeleteFailure.self) {
+        try storage.remove(key: "key")
+      }
+      #expect(legacy.items.value["key"] == nil)
+    }
+
+    @Test
+    func retrieveReturnsLegacyValueAndKeepsItWhenPrimaryWriteFails() throws {
+      struct WriteFailure: Error {}
+      let legacyValue = Data("session".utf8)
+      let primary = FakeKeychain(writeError: WriteFailure())
+      let legacy = FakeKeychain(items: ["key": legacyValue])
+      let storage = KeychainLocalStorage(keychain: primary, legacyKeychains: [legacy])
+
+      #expect(try storage.retrieve(key: "key") == legacyValue)
+      #expect(legacy.items.value["key"] == legacyValue)
+      #expect(primary.items.value["key"] == nil)
+    }
   }
 
   final class FakeKeychain: KeychainProtocol, @unchecked Sendable {
     let items: LockIsolated<[String: Data]>
     let readError: (any Error)?
+    let writeError: (any Error)?
+    let deleteError: (any Error)?
 
-    init(items: [String: Data] = [:], readError: (any Error)? = nil) {
+    init(
+      items: [String: Data] = [:],
+      readError: (any Error)? = nil,
+      writeError: (any Error)? = nil,
+      deleteError: (any Error)? = nil
+    ) {
       self.items = LockIsolated(items)
       self.readError = readError
+      self.writeError = writeError
+      self.deleteError = deleteError
     }
 
     func data(forKey key: String) throws -> Data? {
@@ -198,10 +236,16 @@
     }
 
     func set(_ data: Data, forKey key: String) throws {
+      if let writeError {
+        throw writeError
+      }
       items.withValue { $0[key] = data }
     }
 
     func deleteItem(forKey key: String) throws {
+      if let deleteError {
+        throw deleteError
+      }
       items.withValue { $0[key] = nil }
     }
   }

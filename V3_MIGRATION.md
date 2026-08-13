@@ -214,10 +214,15 @@ and `PostgrestError.init(detail:hint:code:message:)` have been removed — use `
 old constant only when there is no bundle identifier to read (command-line tools, some test
 bundles).
 
-The fixed string put every app that embeds the SDK in the same Keychain namespace: two unrelated
-apps on the same device, or two apps sharing an access group, could read and overwrite each
-other's session under that one service name. Scoping the service to the bundle identifier gives
-each app its own Keychain location by default.
+The fixed string put every app that embeds the SDK in the same Keychain namespace. On
+iOS/iPadOS/tvOS/watchOS/visionOS this was not a cross-app collision risk, since items are
+implicitly scoped to the app's own default access group
+(`$(AppIdentifierPrefix)$(CFBundleIdentifier)`), so unrelated apps could not read or overwrite each
+other's session there. On macOS's file-based login Keychain, and for any apps deliberately sharing
+an access group on any platform, the shared service name was a real collision risk: two such apps
+could read and overwrite each other's session under that one service name. Either way, sharing a
+single hardcoded service name is poor namespacing hygiene. Scoping the service to the bundle
+identifier gives each app its own Keychain location by default.
 
 Existing sessions are not lost. On the first `retrieve` after upgrading, `KeychainLocalStorage`
 probes the old `"supabase.gotrue.swift"` location, moves whatever it finds to the new

@@ -84,7 +84,9 @@
     ///
     /// - Parameter key: The Keychain item key.
     /// - Returns: The stored bytes, or `nil` if the item does not exist.
-    /// - Throws: A Keychain error if the read fails.
+    /// - Throws: A Keychain error if the read from the current location fails. Failures while
+    ///   probing or migrating from a legacy location are ignored — a value that was read is
+    ///   always returned.
     public func retrieve(key: String) throws -> Data? {
       if let data = try keychain.data(forKey: key) {
         return data
@@ -94,8 +96,14 @@
         // A failing probe must not break a fresh install, so failures are ignored here.
         guard let data = try? legacy.data(forKey: key) else { continue }
 
-        try keychain.set(data, forKey: key)
-        try? legacy.deleteItem(forKey: key)
+        do {
+          try keychain.set(data, forKey: key)
+          // Only drop the legacy copy once the new one has landed.
+          try? legacy.deleteItem(forKey: key)
+        } catch {
+          // Leave the legacy copy in place; the next read retries the migration.
+        }
+
         return data
       }
 
@@ -105,12 +113,22 @@
     /// Removes the Keychain item for `key`, including any left in a legacy location.
     ///
     /// - Parameter key: The Keychain item key to delete.
-    /// - Throws: A Keychain error if the delete fails.
+    /// - Throws: A Keychain error if deleting from the current location fails. Legacy-location
+    ///   delete failures are ignored, with every location attempted regardless.
     public func remove(key: String) throws {
-      try keychain.deleteItem(forKey: key)
+      var primaryError: (any Error)?
+      do {
+        try keychain.deleteItem(forKey: key)
+      } catch {
+        primaryError = error
+      }
 
       for legacy in legacyKeychains {
         try? legacy.deleteItem(forKey: key)
+      }
+
+      if let primaryError {
+        throw primaryError
       }
     }
   }
