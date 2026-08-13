@@ -791,15 +791,10 @@ extension ResizeMode: ExpressibleByStringLiteral {
   public init(stringLiteral value: String) { self.init(rawValue: value) }
 }
 
-extension ResizeMode: Codable {
+extension ResizeMode: Encodable {
   public func encode(to encoder: any Encoder) throws {
     var container = encoder.singleValueContainer()
     try container.encode(rawValue)
-  }
-
-  public init(from decoder: any Decoder) throws {
-    let container = try decoder.singleValueContainer()
-    self.init(rawValue: try container.decode(String.self))
   }
 }
 
@@ -841,15 +836,10 @@ extension ImageFormat: ExpressibleByStringLiteral {
   public init(stringLiteral value: String) { self.init(rawValue: value) }
 }
 
-extension ImageFormat: Codable {
+extension ImageFormat: Encodable {
   public func encode(to encoder: any Encoder) throws {
     var container = encoder.singleValueContainer()
     try container.encode(rawValue)
-  }
-
-  public init(from decoder: any Decoder) throws {
-    let container = try decoder.singleValueContainer()
-    self.init(rawValue: try container.decode(String.self))
   }
 }
 
@@ -887,15 +877,10 @@ extension SortOrder: ExpressibleByStringLiteral {
   public init(stringLiteral value: String) { self.init(rawValue: value) }
 }
 
-extension SortOrder: Codable {
+extension SortOrder: Encodable {
   public func encode(to encoder: any Encoder) throws {
     var container = encoder.singleValueContainer()
     try container.encode(rawValue)
-  }
-
-  public init(from decoder: any Decoder) throws {
-    let container = try decoder.singleValueContainer()
-    self.init(rawValue: try container.decode(String.self))
   }
 }
 

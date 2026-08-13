@@ -125,13 +125,6 @@ struct ResizeModeTests {
     let encoded = try JSONEncoder().encode(ResizeMode.cover)
     #expect(String(data: encoded, encoding: .utf8) == "\"cover\"")
   }
-
-  @Test
-  func decodes() throws {
-    let data = "\"contain\"".data(using: .utf8)!
-    let mode = try JSONDecoder().decode(ResizeMode.self, from: data)
-    #expect(mode == .contain)
-  }
 }
 
 // MARK: - ImageFormat
@@ -155,13 +148,6 @@ struct ImageFormatTests {
   func encodes() throws {
     let encoded = try JSONEncoder().encode(ImageFormat.webp)
     #expect(String(data: encoded, encoding: .utf8) == "\"webp\"")
-  }
-
-  @Test
-  func decodes() throws {
-    let data = "\"avif\"".data(using: .utf8)!
-    let format = try JSONDecoder().decode(ImageFormat.self, from: data)
-    #expect(format == .avif)
   }
 }
 
