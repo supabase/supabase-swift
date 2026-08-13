@@ -13,16 +13,58 @@
 
   /// ``AuthLocalStorage`` implementation using Keychain. This is the default local storage used by the library.
   public struct KeychainLocalStorage: AuthLocalStorage {
-    private let keychain: Keychain
+    let keychain: any KeychainProtocol
+    let legacyKeychains: [any KeychainProtocol]
 
-    /// Creates a Keychain-backed storage instance.
+    /// Creates a Keychain-backed storage instance scoped to the host application.
+    ///
+    /// The Keychain service defaults to the host app's bundle identifier, so items are namespaced
+    /// per application. Sessions written by earlier SDK versions, which used a fixed
+    /// `"supabase.gotrue.swift"` service, migrate automatically on first read.
     ///
     /// - Parameters:
-    ///   - service: The Keychain service name used to namespace stored items.
-    ///     Defaults to `"supabase.gotrue.swift"`.
     ///   - accessGroup: An optional Keychain access group for sharing items between apps.
-    public init(service: String? = "supabase.gotrue.swift", accessGroup: String? = nil) {
-      keychain = Keychain(service: service, accessGroup: accessGroup)
+    ///   - useDataProtectionKeychain: Targets the macOS data-protection Keychain instead of the
+    ///     legacy file-based one. This removes the macOS consent prompt, but requires the app to
+    ///     be signed with entitlements authorised by a provisioning profile — otherwise Keychain
+    ///     operations fail with `errSecMissingEntitlement` (-34018). Has no effect on platforms
+    ///     other than macOS. Defaults to `false`.
+    public init(accessGroup: String? = nil, useDataProtectionKeychain: Bool = false) {
+      let primary = Self.primaryConfiguration(
+        bundleIdentifier: Bundle.main.bundleIdentifier,
+        accessGroup: accessGroup,
+        useDataProtectionKeychain: useDataProtectionKeychain
+      )
+
+      keychain = Keychain(primary)
+      legacyKeychains = Self.legacyConfigurations(primary: primary).map { Keychain($0) }
+    }
+
+    /// Creates a Keychain-backed storage instance with an explicit service.
+    ///
+    /// No migration is performed: the given service is used exactly as provided.
+    ///
+    /// - Parameters:
+    ///   - service: The Keychain service name used to namespace stored items. Pass `nil` to omit
+    ///     the attribute entirely.
+    ///   - accessGroup: An optional Keychain access group for sharing items between apps.
+    ///   - useDataProtectionKeychain: See ``init(accessGroup:useDataProtectionKeychain:)``.
+    public init(
+      service: String?,
+      accessGroup: String? = nil,
+      useDataProtectionKeychain: Bool = false
+    ) {
+      keychain = Keychain(
+        service: service,
+        accessGroup: accessGroup,
+        useDataProtectionKeychain: useDataProtectionKeychain
+      )
+      legacyKeychains = []
+    }
+
+    init(keychain: any KeychainProtocol, legacyKeychains: [any KeychainProtocol]) {
+      self.keychain = keychain
+      self.legacyKeychains = legacyKeychains
     }
 
     /// Stores `value` in the Keychain under `key`.
@@ -37,19 +79,39 @@
 
     /// Returns the data stored in the Keychain for `key`, or `nil` if not present.
     ///
+    /// If the item is absent but exists in a location used by an earlier SDK version, it is moved
+    /// to the current location and returned.
+    ///
     /// - Parameter key: The Keychain item key.
     /// - Returns: The stored bytes, or `nil` if the item does not exist.
     /// - Throws: A Keychain error if the read fails.
     public func retrieve(key: String) throws -> Data? {
-      try keychain.data(forKey: key)
+      if let data = try keychain.data(forKey: key) {
+        return data
+      }
+
+      for legacy in legacyKeychains {
+        // A failing probe must not break a fresh install, so failures are ignored here.
+        guard let data = try? legacy.data(forKey: key) else { continue }
+
+        try keychain.set(data, forKey: key)
+        try? legacy.deleteItem(forKey: key)
+        return data
+      }
+
+      return nil
     }
 
-    /// Removes the Keychain item for `key`.
+    /// Removes the Keychain item for `key`, including any left in a legacy location.
     ///
     /// - Parameter key: The Keychain item key to delete.
     /// - Throws: A Keychain error if the delete fails.
     public func remove(key: String) throws {
       try keychain.deleteItem(forKey: key)
+
+      for legacy in legacyKeychains {
+        try? legacy.deleteItem(forKey: key)
+      }
     }
   }
 

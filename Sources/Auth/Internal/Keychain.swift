@@ -17,6 +17,14 @@
       self.useDataProtectionKeychain = useDataProtectionKeychain
     }
 
+    init(_ configuration: KeychainConfiguration) {
+      self.init(
+        service: configuration.service,
+        accessGroup: configuration.accessGroup,
+        useDataProtectionKeychain: configuration.useDataProtectionKeychain
+      )
+    }
+
     private func assertSuccess(forStatus status: OSStatus) throws {
       if status != errSecSuccess {
         throw KeychainError(code: KeychainError.Code(rawValue: status))
@@ -271,4 +279,16 @@
       lhs.code == rhs.code && lhs.localizedDescription == rhs.localizedDescription
     }
   }
+
+  /// The Keychain operations ``KeychainLocalStorage`` depends on.
+  ///
+  /// Exists so the migration logic can be tested without reaching the real Keychain, which is
+  /// not available to an SPM test bundle.
+  protocol KeychainProtocol: Sendable {
+    func data(forKey key: String) throws -> Data?
+    func set(_ data: Data, forKey key: String) throws
+    func deleteItem(forKey key: String) throws
+  }
+
+  extension Keychain: KeychainProtocol {}
 #endif
