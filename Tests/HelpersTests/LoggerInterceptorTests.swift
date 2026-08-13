@@ -7,6 +7,7 @@
 
 import Foundation
 import HTTPTypes
+import Logging
 import Testing
 
 @testable import Helpers
@@ -22,20 +23,46 @@ struct LoggerInterceptorTests {
 
   // MARK: - Mock Logger
 
-  final class MockLogger: SupabaseLogger, @unchecked Sendable {
+  final class LogCapture: @unchecked Sendable {
     var verboseLogs: [String] = []
     var errorLogs: [String] = []
+  }
 
-    func log(message: SupabaseLogMessage) {
-      switch message.level {
-      case .verbose:
-        verboseLogs.append(message.message)
+  struct CapturingLogHandler: LogHandler {
+    let capture: LogCapture
+    var metadata: Logging.Logger.Metadata = [:]
+    var logLevel: Logging.Logger.Level = .trace
+
+    subscript(metadataKey key: String) -> Logging.Logger.Metadata.Value? {
+      get { metadata[key] }
+      set { metadata[key] = newValue }
+    }
+
+    func log(
+      level: Logging.Logger.Level,
+      message: Logging.Logger.Message,
+      metadata: Logging.Logger.Metadata?,
+      source: String,
+      file: String,
+      function: String,
+      line: UInt
+    ) {
+      switch level {
+      case .trace:
+        capture.verboseLogs.append("\(message)")
       case .error:
-        errorLogs.append(message.message)
-      case .debug, .warning:
+        capture.errorLogs.append("\(message)")
+      default:
         break
       }
     }
+  }
+
+  func makeLogger() -> (Logging.Logger, LogCapture) {
+    let capture = LogCapture()
+    var logger = Logging.Logger(label: "test") { _ in CapturingLogHandler(capture: capture) }
+    logger.logLevel = .trace
+    return (logger, capture)
   }
 
   // MARK: - Helper Methods
@@ -66,7 +93,7 @@ struct LoggerInterceptorTests {
 
   @Test
   func interceptorLogsRequest() async throws {
-    let logger = MockLogger()
+    let (logger, capture) = makeLogger()
     let interceptor = LoggerInterceptor(logger: logger)
 
     let request = createTestRequest(url: "https://api.example.com/users", method: .get)
@@ -77,14 +104,14 @@ struct LoggerInterceptorTests {
     }
 
     // Verify request was logged
-    #expect(logger.verboseLogs.count == 2)  // Request and response
-    #expect(logger.verboseLogs[0].contains("Request:"))
-    #expect(logger.verboseLogs[0].contains("/users"))
+    #expect(capture.verboseLogs.count == 2)  // Request and response
+    #expect(capture.verboseLogs[0].contains("Request:"))
+    #expect(capture.verboseLogs[0].contains("/users"))
   }
 
   @Test
   func interceptorLogsResponse() async throws {
-    let logger = MockLogger()
+    let (logger, capture) = makeLogger()
     let interceptor = LoggerInterceptor(logger: logger)
 
     let request = createTestRequest()
@@ -96,13 +123,13 @@ struct LoggerInterceptorTests {
     }
 
     // Verify response was logged
-    #expect(logger.verboseLogs.count == 2)
-    #expect(logger.verboseLogs[1].contains("Response: Status code: 200"))
+    #expect(capture.verboseLogs.count == 2)
+    #expect(capture.verboseLogs[1].contains("Response: Status code: 200"))
   }
 
   @Test
   func interceptorLogsError() async throws {
-    let logger = MockLogger()
+    let (logger, capture) = makeLogger()
     let interceptor = LoggerInterceptor(logger: logger)
 
     let request = createTestRequest()
@@ -119,13 +146,13 @@ struct LoggerInterceptorTests {
     }
 
     // Verify error was logged
-    #expect(logger.errorLogs.count == 1)
-    #expect(logger.errorLogs[0].contains("Response: Failure"))
+    #expect(capture.errorLogs.count == 1)
+    #expect(capture.errorLogs[0].contains("Response: Failure"))
   }
 
   @Test
   func interceptorWithJSONBody() async throws {
-    let logger = MockLogger()
+    let (logger, capture) = makeLogger()
     let interceptor = LoggerInterceptor(logger: logger)
 
     let jsonBody = #"{"name": "test", "value": 123}"#.data(using: .utf8)!
@@ -137,13 +164,13 @@ struct LoggerInterceptorTests {
     }
 
     // Verify JSON body was logged
-    #expect(logger.verboseLogs[0].contains("Body:"))
-    #expect(logger.verboseLogs[0].contains("name"))
+    #expect(capture.verboseLogs[0].contains("Body:"))
+    #expect(capture.verboseLogs[0].contains("name"))
   }
 
   @Test
   func interceptorWithEmptyBody() async throws {
-    let logger = MockLogger()
+    let (logger, capture) = makeLogger()
     let interceptor = LoggerInterceptor(logger: logger)
 
     let request = createTestRequest(method: .get, body: Data?.none)
@@ -154,7 +181,7 @@ struct LoggerInterceptorTests {
     }
 
     // Verify empty body handling
-    #expect(logger.verboseLogs[0].contains("<none>"))
+    #expect(capture.verboseLogs[0].contains("<none>"))
   }
 
   @Test
@@ -168,7 +195,7 @@ struct LoggerInterceptorTests {
     ]
 
     for (method, methodString) in methods {
-      let logger = MockLogger()
+      let (logger, capture) = makeLogger()
       let interceptor = LoggerInterceptor(logger: logger)
 
       let request = createTestRequest(method: method)
@@ -179,7 +206,7 @@ struct LoggerInterceptorTests {
       }
 
       #expect(
-        logger.verboseLogs[0].contains("Request:"),
+        capture.verboseLogs[0].contains("Request:"),
         "Should log \(methodString) request"
       )
     }
@@ -190,7 +217,7 @@ struct LoggerInterceptorTests {
     let statusCodes = [200, 201, 400, 401, 404, 500]
 
     for statusCode in statusCodes {
-      let logger = MockLogger()
+      let (logger, capture) = makeLogger()
       let interceptor = LoggerInterceptor(logger: logger)
 
       let request = createTestRequest()
@@ -201,7 +228,7 @@ struct LoggerInterceptorTests {
       }
 
       #expect(
-        logger.verboseLogs[1].contains("Status code: \(statusCode)"),
+        capture.verboseLogs[1].contains("Status code: \(statusCode)"),
         "Should log status code \(statusCode)"
       )
     }
@@ -303,7 +330,7 @@ struct LoggerInterceptorTests {
 
   @Test
   func interceptorPassesThroughResponse() async throws {
-    let logger = MockLogger()
+    let (logger, _) = makeLogger()
     let interceptor = LoggerInterceptor(logger: logger)
 
     let request = createTestRequest()
@@ -321,7 +348,7 @@ struct LoggerInterceptorTests {
 
   @Test
   func interceptorPassesThroughError() async throws {
-    let logger = MockLogger()
+    let (logger, _) = makeLogger()
     let interceptor = LoggerInterceptor(logger: logger)
 
     let request = createTestRequest()
