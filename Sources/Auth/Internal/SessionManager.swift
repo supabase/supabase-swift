@@ -38,7 +38,8 @@ private actor LiveSessionManager {
   // Looked up leniently, as the session manager outlives its client while the auto-refresh loop is
   // torn down from `AuthClient.deinit`, at which point the dependencies entry is already gone.
   private var logger: Logging.Logger {
-    Dependencies.instances.value[clientID]?.logger ?? supabaseDefaultLogger(label: "io.supabase.auth")
+    Dependencies.instances.value[clientID]?.logger
+      ?? supabaseDefaultLogger(label: "io.supabase.auth")
   }
   private var api: APIClient { Dependencies[clientID].api }
 
