@@ -81,7 +81,7 @@ public struct WebAuthnChallengeResponseData: Decodable, Hashable, Sendable {
 ///
 /// - Warning: Experimental. See ``MFAWebAuthnEnrollParams``.
 @_spi(Experimental)
-public struct PasskeyListItem: Codable, Identifiable, Hashable, Sendable {
+public struct PasskeyListItem: Decodable, Identifiable, Hashable, Sendable {
   /// Unique identifier of the passkey.
   public let id: UUID
 
