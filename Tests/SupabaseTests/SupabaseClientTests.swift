@@ -3,6 +3,7 @@ import CustomDump
 import Foundation
 import HTTPTypes
 import InlineSnapshotTesting
+import Logging
 import SnapshotTestingCustomDump
 import Testing
 
@@ -64,13 +65,7 @@ final class AuthLocalStorageMock: AuthLocalStorage {
 struct SupabaseClientTests {
   @Test
   func clientInitialization() async {
-    final class Logger: SupabaseLogger {
-      func log(message _: SupabaseLogMessage) {
-        // no-op
-      }
-    }
-
-    let logger = Logger()
+    let logger = Logging.Logger(label: "test") { _ in SwiftLogNoOpLogHandler() }
     let customSchema = "custom_schema"
     let localStorage = AuthLocalStorageMock()
     let customHeaders = ["header_field": "header_value"]
@@ -133,7 +128,7 @@ struct SupabaseClientTests {
     ]
     )
     expectNoDifference(realtimeOptions.headers, expectedRealtimeHeader)
-    #expect(realtimeOptions.logger as? Logger === logger)
+    #expect(realtimeOptions.logger.label == logger.label)
 
     #expect(!client.auth.configuration.autoRefreshToken)
     #expect(client.auth.configuration.storageKey == "sb-project-ref-auth-token")

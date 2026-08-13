@@ -511,9 +511,7 @@ public final class SupabaseClient: Sendable {
     var realtimeOptions = options.realtime
     realtimeOptions.headers.merge(with: _headers)
 
-    if realtimeOptions.logger == nil {
-      realtimeOptions.logger = options.global.logger
-    }
+    realtimeOptions.logger = options.global.logger
 
     if realtimeOptions.fetch == nil {
       realtimeOptions.fetch = { [session = options.global.session] request in
