@@ -8,7 +8,7 @@
 # flipped in the shared project without breaking the rest of the suite. Non-Auth services are
 # disabled here since this project only exists to run that one test.
 #
-# See docs/superpowers/ or AGENTS.md for how this is wired into CI and local runs.
+# See AGENTS.md for how this is wired into CI and local runs.
 project_id = "IntegrationTestsSecureEmailChange"
 
 [api]

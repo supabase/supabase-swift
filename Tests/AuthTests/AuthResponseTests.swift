@@ -60,4 +60,17 @@ struct AuthResponseTests {
       )
     }
   }
+
+  @Test
+  func bareUser_isNotAValidVerifyOTPResponse() {
+    // The /verify endpoint verifyOTP calls never returns a bare user with no session: unlike signUp,
+    // every verification type either issues a session or (for the first of the two secure
+    // email change confirmations) the emailChangeConfirmationPending shape above.
+    #expect(throws: (any Error).self) {
+      try AuthClient.Configuration.jsonDecoder.decode(
+        VerifyOTPResponse.self,
+        from: json(named: "user")
+      )
+    }
+  }
 }
