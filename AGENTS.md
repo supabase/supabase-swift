@@ -236,12 +236,8 @@ This project uses [Conventional Commits](https://www.conventionalcommits.org/) w
 
 Example: `feat(auth): add PKCE flow support`
 
-## Breaking Changes
-
-Every breaking change needs a migration guide before it merges.
-
-- Mark the change as breaking the usual conventional-commits way: `!` after the type/scope (`feat!:`, `fix(auth)!:`) or a `BREAKING CHANGE:` footer in the commit body. This is the same marker release-please and the API stability check already key off to bump majors and flag reviewers.
-- Add or update a guide under `docs/migrations/` explaining what changed, why, and how to adapt calling code. Prefer one running guide per major version (e.g. `docs/migrations/V3 Migration Guide.md`) when landing a major incrementally — append to it rather than starting a new file per PR. Use a dedicated per-area guide (e.g. `docs/migrations/RealtimeV2 Migration Guide.md`) for a self-contained breaking change outside a major-version effort.
+Every `feat!:`/`fix!:` or `BREAKING CHANGE:` commit requires an entry in the root
+`V<N>_MIGRATION.md` — see the writing-migration-guides skill for the format.
 
 ## CI/CD
 
@@ -304,8 +300,22 @@ cd Tests/IntegrationTests
 supabase start
 supabase db reset
 cd ../..
-swift test --filter IntegrationTests
+swift test --filter IntegrationTests --skip verifyOTPForSecureEmailChange
 cd Tests/IntegrationTests
+supabase stop
+```
+
+`verifyOTPForSecureEmailChange` needs `auth.email.enable_confirmations = true` to reach GoTrue's
+secure-email-change "single confirmation" response, which every other integration test relies on
+being `false` (so `signUp`/`signIn` resolve without confirming an email). It runs against a
+second, minimal project instead of forking that setting for the whole suite:
+
+```bash
+cd Tests/IntegrationTests/supabase-secure-email-change
+supabase start
+cd ../../..
+swift test --filter verifyOTPForSecureEmailChange
+cd Tests/IntegrationTests/supabase-secure-email-change
 supabase stop
 ```
 

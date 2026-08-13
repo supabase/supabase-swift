@@ -22,4 +22,42 @@ struct AuthResponseTests {
     )
     #expect(response.session == nil)
   }
+
+  @Test
+  func signUpConfirmationRequired() throws {
+    let response = try AuthClient.Configuration.jsonDecoder.decode(
+      AuthResponse.self,
+      from: json(named: "signup-response")
+    )
+    #expect(response.session == nil)
+    #expect(response.user.email == "jane@example.com")
+  }
+
+  @Test
+  func emailChangeSingleConfirmation() throws {
+    let response = try AuthClient.Configuration.jsonDecoder.decode(
+      VerifyOTPResponse.self,
+      from: json(named: "email-change-single-confirmation")
+    )
+    #expect(response.session == nil)
+    guard case .emailChangeConfirmationPending(let confirmation) = response else {
+      Issue.record("Expected .emailChangeConfirmationPending, got \(response)")
+      return
+    }
+    #expect(confirmation.code == "200")
+    #expect(
+      confirmation.message
+        == "Confirmation link accepted. Please proceed to confirm link sent to the other email"
+    )
+  }
+
+  @Test
+  func emailChangeSingleConfirmation_isNotAValidAuthResponse() {
+    #expect(throws: (any Error).self) {
+      try AuthClient.Configuration.jsonDecoder.decode(
+        AuthResponse.self,
+        from: json(named: "email-change-single-confirmation")
+      )
+    }
+  }
 }

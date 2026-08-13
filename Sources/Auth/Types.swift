@@ -649,8 +649,8 @@ public enum EmailOTPType: String, Encodable, CaseIterable, Sendable {
   case email
 }
 
-/// The response from sign-up and OTP-verification calls that may return either a session or a
-/// user depending on whether email confirmation is required.
+/// The response from sign-up and passkey calls that may return either a session or a user,
+/// depending on whether email confirmation is required.
 public enum AuthResponse: Codable, Hashable, Sendable {
   /// A full session was created, meaning the user is immediately signed in.
   case session(Session)
@@ -692,6 +692,48 @@ public enum AuthResponse: Codable, Hashable, Sendable {
   public var session: Session? {
     if case .session(let session) = self { return session }
     return nil
+  }
+}
+
+/// The response from ``AuthClient/verifyOTP(tokenHash:type:)`` and its overloads.
+public enum VerifyOTPResponse: Decodable, Hashable, Sendable {
+  /// A full session was created, meaning the user is signed in.
+  case session(Session)
+
+  /// Neither a session nor a user was returned. GoTrue sends this for the first of the two
+  /// confirmations required by a secure email change: the new email address still needs to
+  /// confirm its own link before the change takes effect and a session is issued.
+  case emailChangeConfirmationPending(EmailChangeConfirmation)
+
+  public init(from decoder: any Decoder) throws {
+    let container = try decoder.singleValueContainer()
+    if let value = try? container.decode(Session.self) {
+      self = .session(value)
+    } else {
+      self = .emailChangeConfirmationPending(try container.decode(EmailChangeConfirmation.self))
+    }
+  }
+
+  /// The session, or `nil` if the email change is still pending its other confirmation. Access
+  /// the user through ``session``, e.g. `response.session?.user`.
+  public var session: Session? {
+    if case .session(let session) = self { return session }
+    return nil
+  }
+}
+
+/// The body GoTrue returns for the first of the two confirmations required by a secure email
+/// change, before a session can be issued.
+public struct EmailChangeConfirmation: Decodable, Hashable, Sendable {
+  /// A human-readable description of what happened, meant for display.
+  public let message: String
+
+  /// The HTTP status code of the response, as a string.
+  public let code: String
+
+  private enum CodingKeys: String, CodingKey {
+    case message = "msg"
+    case code
   }
 }
 

@@ -458,6 +458,49 @@ struct AuthClientIntegrationTests {
     expectNoDifference(link.properties.verificationType, .invite)
   }
 
+  // Requires the isolated Supabase project at Tests/IntegrationTests/supabase-secure-email-change,
+  // which enables auth.email.enable_confirmations. See that project's config.toml for why.
+  @Test
+  func verifyOTPForSecureEmailChange() async throws {
+    let client = Self.makeClient(serviceRole: true)
+    let email = mockEmail()
+    let newEmail = mockEmail()
+    let password = mockPassword()
+
+    _ = try await client.signUp(email: email, password: password)
+
+    // The current and new email each get their own confirmation link, mirroring the two emails
+    // GoTrue sends for a secure email change.
+    let currentEmailLink = try await client.admin.generateLink(
+      params: .emailChangeCurrent(email: email, newEmail: newEmail)
+    )
+    let newEmailLink = try await client.admin.generateLink(
+      params: .emailChangeNew(email: email, newEmail: newEmail)
+    )
+
+    let firstConfirmation = try await client.verifyOTP(
+      tokenHash: currentEmailLink.properties.hashedToken,
+      type: .emailChange
+    )
+    guard case .emailChangeConfirmationPending(let confirmation) = firstConfirmation else {
+      Issue.record("Expected .emailChangeConfirmationPending, got \(firstConfirmation)")
+      return
+    }
+    #expect(confirmation.code == "200")
+
+    // Confirming the other email completes the change and returns a session. GoTrue's
+    // admin/generate_link response has a bug for `email_change_new`: `hashedToken` is computed
+    // from the current email, not the new one, so it never matches what's actually stored. The
+    // raw `emailOTP` is correct, so use the email+token overload instead of tokenHash here.
+    let secondConfirmation = try await client.verifyOTP(
+      email: newEmail,
+      token: newEmailLink.properties.emailOTP,
+      type: .emailChange
+    )
+    let session = try #require(secondConfirmation.session)
+    expectNoDifference(session.user.email, newEmail)
+  }
+
   @Test
   func adminSignOut() async throws {
     let email = mockEmail()
