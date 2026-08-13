@@ -56,24 +56,25 @@ public struct StorageClientConfiguration: Sendable {
   /// - Parameters:
   ///   - url: The base URL of the Storage API endpoint.
   ///   - headers: HTTP headers sent with every request.
-  ///   - encoder: The JSON encoder for request bodies. Defaults to ``JSONEncoder/defaultStorageEncoder``.
-  ///   - decoder: The JSON decoder for response bodies. Defaults to ``JSONDecoder/defaultStorageDecoder``.
+  ///   - encoder: The JSON encoder for request bodies. Defaults to a `snake_case`-converting encoder.
+  ///   - decoder: The JSON decoder for response bodies. Defaults to a decoder configured for the
+  ///     Supabase API's date format.
   ///   - session: The HTTP session used for networking. Defaults to a session backed by `URLSession.shared`.
   ///   - logger: An optional logger. Pass `nil` to disable logging.
   ///   - useNewHostname: When `true`, the storage-specific hostname is used, enabling uploads over 50 GB.
   public init(
     url: URL,
     headers: [String: String],
-    encoder: JSONEncoder = .defaultStorageEncoder,
-    decoder: JSONDecoder = .defaultStorageDecoder,
+    encoder: JSONEncoder? = nil,
+    decoder: JSONDecoder? = nil,
     session: StorageHTTPSession = .init(),
     logger: (any SupabaseLogger)? = nil,
     useNewHostname: Bool = false
   ) {
     self.url = url
     self.headers = headers
-    self.encoder = encoder
-    self.decoder = decoder
+    self.encoder = encoder ?? .storageEncoder
+    self.decoder = decoder ?? .supabase()
     self.session = session
     self.logger = logger
     self.useNewHostname = useNewHostname

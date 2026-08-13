@@ -274,13 +274,5 @@ for target in package.targets {
     .enableUpcomingFeature("MemberImportVisibility"),
   ]
 
-  // The `Realtime` target hosts the legacy pre-async/await Phoenix client under
-  // `Deprecated/`, which predates Swift concurrency and isn't safe under Swift 6's
-  // strict checking. Keep it on the Swift 5 language mode so it keeps compiling
-  // unchanged, while `RealtimeV2` (its replacement) gets full Swift 6 checking.
-  if target.name == "Realtime" {
-    swiftSettings.append(.swiftLanguageMode(.v5))
-  }
-
   target.swiftSettings = swiftSettings
 }

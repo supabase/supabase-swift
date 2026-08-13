@@ -52,26 +52,6 @@ extension RealtimeChannelV2 {
     .compactErase()
   }
 
-  /// Returns an async stream of ``InsertAction`` values for the given table using a raw filter string.
-  ///
-  /// > Warning: Use the ``RealtimePostgresFilter``-based overload instead.
-  @available(
-    *,
-    deprecated,
-    message: "Use the new filter syntax instead."
-  )
-  @_disfavoredOverload
-  public func postgresChange(
-    _: InsertAction.Type,
-    schema: String = "public",
-    table: String? = nil,
-    filter: String? = nil,
-    select: [String]? = nil
-  ) -> AsyncStream<InsertAction> {
-    postgresChange(event: .insert, schema: schema, table: table, filter: filter, select: select)
-      .compactErase()
-  }
-
   /// Returns an async stream of ``UpdateAction`` values for the given table.
   ///
   /// Register this stream before calling ``subscribeWithError()``.
@@ -93,26 +73,6 @@ extension RealtimeChannelV2 {
       event: .update, schema: schema, table: table, filter: filter?.value, select: select
     )
     .compactErase()
-  }
-
-  /// Returns an async stream of ``UpdateAction`` values for the given table using a raw filter string.
-  ///
-  /// > Warning: Use the ``RealtimePostgresFilter``-based overload instead.
-  @available(
-    *,
-    deprecated,
-    message: "Use the new filter syntax instead."
-  )
-  @_disfavoredOverload
-  public func postgresChange(
-    _: UpdateAction.Type,
-    schema: String = "public",
-    table: String? = nil,
-    filter: String? = nil,
-    select: [String]? = nil
-  ) -> AsyncStream<UpdateAction> {
-    postgresChange(event: .update, schema: schema, table: table, filter: filter, select: select)
-      .compactErase()
   }
 
   /// Returns an async stream of ``DeleteAction`` values for the given table.
@@ -138,26 +98,6 @@ extension RealtimeChannelV2 {
     .compactErase()
   }
 
-  /// Returns an async stream of ``DeleteAction`` values for the given table using a raw filter string.
-  ///
-  /// > Warning: Use the ``RealtimePostgresFilter``-based overload instead.
-  @available(
-    *,
-    deprecated,
-    message: "Use the new filter syntax instead."
-  )
-  @_disfavoredOverload
-  public func postgresChange(
-    _: DeleteAction.Type,
-    schema: String = "public",
-    table: String? = nil,
-    filter: String? = nil,
-    select: [String]? = nil
-  ) -> AsyncStream<DeleteAction> {
-    postgresChange(event: .delete, schema: schema, table: table, filter: filter, select: select)
-      .compactErase()
-  }
-
   /// Returns an async stream of ``AnyAction`` values for all change types on the given table.
   ///
   /// Register this stream before calling ``subscribeWithError()``.
@@ -178,25 +118,6 @@ extension RealtimeChannelV2 {
     postgresChange(
       event: .all, schema: schema, table: table, filter: filter?.value, select: select
     )
-  }
-
-  /// Returns an async stream of ``AnyAction`` values using a raw filter string.
-  ///
-  /// > Warning: Use the ``RealtimePostgresFilter``-based overload instead.
-  @available(
-    *,
-    deprecated,
-    message: "Use the new filter syntax instead."
-  )
-  @_disfavoredOverload
-  public func postgresChange(
-    _: AnyAction.Type,
-    schema: String = "public",
-    table: String? = nil,
-    filter: String? = nil,
-    select: [String]? = nil
-  ) -> AsyncStream<AnyAction> {
-    postgresChange(event: .all, schema: schema, table: table, filter: filter, select: select)
   }
 
   private func postgresChange(
@@ -280,14 +201,6 @@ extension RealtimeChannelV2 {
     }
 
     return stream
-  }
-
-  /// Returns an async stream of ``JSONObject`` broadcast payloads for the given event.
-  ///
-  /// > Warning: Renamed to ``broadcastStream(event:)``.
-  @available(*, deprecated, renamed: "broadcastStream(event:)")
-  public func broadcast(event: String) -> AsyncStream<JSONObject> {
-    broadcastStream(event: event)
   }
 }
 

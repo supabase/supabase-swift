@@ -183,6 +183,7 @@ traceparent
 tsquery
 tsvector
 Twilio
+typealias
 Typealiases
 unconfigured
 unenroll

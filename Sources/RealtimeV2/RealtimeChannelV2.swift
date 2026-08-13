@@ -57,7 +57,7 @@ protocol RealtimeChannelProtocol: AnyObject, Sendable {
 ///
 /// Obtain an instance from ``RealtimeClientV2/channel(_:options:)`` and call
 /// ``subscribeWithError()`` to start receiving events. Register all callbacks
-/// **before** subscribing — adding callbacks after ``subscribe()``/``subscribeWithError()``
+/// **before** subscribing — adding callbacks after ``subscribeWithError()``
 /// returns triggers a runtime warning.
 ///
 /// ```swift
@@ -83,7 +83,6 @@ protocol RealtimeChannelProtocol: AnyObject, Sendable {
 /// - ``onStatusChange(_:)``
 /// ### Lifecycle
 /// - ``subscribeWithError()``
-/// - ``subscribe()``
 /// - ``unsubscribe()``
 /// ### Broadcasting
 /// - ``broadcast(event:message:)-7xyf5``
@@ -108,8 +107,6 @@ protocol RealtimeChannelProtocol: AnyObject, Sendable {
 /// ### System Events
 /// - ``onSystem(callback:)-7cnrp``
 /// - ``onSystem(callback:)-7cno3``
-/// ### Deprecated
-/// - ``updateAuth(jwt:)``
 public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   /// The fully-qualified topic string sent to the Realtime server (e.g. `"realtime:room:lobby"`).
   public let topic: String
@@ -130,10 +127,10 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   let callbackManager = CallbackManager()
 
   /// Buffer of `postgres_changes` filters registered via
-  /// ``onPostgresChange`` prior to ``subscribe()``. Lives on the channel
+  /// ``onPostgresChange`` prior to ``subscribeWithError()``. Lives on the channel
   /// (not on ``stateManager``) so the synchronous `onPostgresChange` API
   /// can append without a fire-and-forget `Task` — which would race with
-  /// a subsequent `subscribe()` call and sometimes lose the filter.
+  /// a subsequent `subscribeWithError()` call and sometimes lose the filter.
   let clientChanges = LockIsolated<[PostgresJoinConfig]>([])
 
   /// Lock-protected status + subscribers for ``status``/``statusChange``/``onStatusChange(_:)``.
@@ -188,7 +185,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
         // Forward every state-machine transition to the public status
         // storage synchronously. Running this on the actor avoids the
         // async observer-Task delay, so reads of ``status`` right after
-        // ``subscribe()`` returns see the latest value.
+        // ``subscribeWithError()`` returns see the latest value.
         weakSelfRef.value?.yieldStatus(Self.mapState(state))
       }
     )
@@ -228,15 +225,6 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     try await stateManager.subscribe()
   }
 
-  /// Joins the Realtime topic, silently ignoring any errors.
-  ///
-  /// > Warning: Prefer ``subscribeWithError()`` so errors are surfaced to the caller.
-  @available(*, deprecated, message: "Use `subscribeWithError` instead")
-  @MainActor
-  public func subscribe() async {
-    try? await subscribeWithError()
-  }
-
   /// Leaves the Realtime topic and transitions the channel to ``RealtimeChannelStatus/unsubscribed``.
   public func unsubscribe() async {
     logger?.debug("Unsubscribe requested for channel '\(topic)'")
@@ -273,24 +261,6 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       ChannelEvent.join,
       ref: ref,
       payload: try! JSONObject(payload)
-    )
-  }
-
-  /// Updates the JWT token for this channel directly.
-  ///
-  /// > Warning: Updating the token per-channel is deprecated. Use
-  /// > ``RealtimeClientV2/setAuth(_:)`` on the client instead.
-  @available(
-    *,
-    deprecated,
-    message:
-      "manually updating auth token per channel is not recommended, please use `setAuth` in RealtimeClient instead."
-  )
-  public func updateAuth(jwt: String?) async {
-    logger?.debug("Updating auth token for channel \(topic)")
-    await push(
-      ChannelEvent.accessToken,
-      payload: ["access_token": jwt.map { .string($0) } ?? .null]
     )
   }
 
@@ -522,7 +492,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     if status != .subscribed {
       if !isTesting {
         reportIssue(
-          "You can only send binary broadcasts after subscribing to the channel. Did you forget to call `channel.subscribe()`?"
+          "You can only send binary broadcasts after subscribing to the channel. Did you forget to call `channel.subscribeWithError()`?"
         )
       }
       return
@@ -565,7 +535,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   public func track(state: JSONObject) async {
     if status != .subscribed {
       reportIssue(
-        "You can only track your presence after subscribing to the channel. Did you forget to call `channel.subscribe()`?"
+        "You can only track your presence after subscribing to the channel. Did you forget to call `channel.subscribeWithError()`?"
       )
     }
 
@@ -598,10 +568,6 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       }
 
       switch eventType {
-      case .tokenExpired:
-        // deprecated type
-        break
-
       case .system:
         if message.status == .ok {
           await stateManager.didReceiveSubscribedOK()
@@ -779,7 +745,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       if !isTesting {
         reportIssue(
           """
-          Cannot add "presence" callbacks for "\(topic)" after `subscribe()`.
+          Cannot add "presence" callbacks for "\(topic)" after `subscribeWithError()`.
           Please add all your presence callbacks before subscribing to the channel.
           """
         )
@@ -1059,7 +1025,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       if !isTesting {
         reportIssue(
           """
-          Cannot add "postgres_changes" callbacks for "\(topic)" after `subscribe()`.
+          Cannot add "postgres_changes" callbacks for "\(topic)" after `subscribeWithError()`.
           Please add all your postgres change callbacks before subscribing to the channel.
           """
         )

@@ -18,7 +18,7 @@ extension StorageMockerTests {
     init() {
       testingBoundary.setValue("alamofire.boundary.e56f43407f772505")
 
-      JSONEncoder.defaultStorageEncoder.outputFormatting = [.sortedKeys]
+      JSONEncoder.storageEncoder.outputFormatting = [.sortedKeys]
       JSONEncoder.unconfiguredEncoder.outputFormatting = [.sortedKeys]
     }
 
@@ -437,7 +437,7 @@ extension StorageMockerTests {
       let url = try await storage.from("bucket").createSignedURL(
         path: "file.txt",
         expiresIn: 3600,
-        download: true
+        download: .withOriginalName
       )
       #expect(
         url.absoluteString
@@ -546,7 +546,7 @@ extension StorageMockerTests {
       let results: [SignedURLResult] = try await storage.from("bucket").createSignedURLs(
         paths: paths,
         expiresIn: 3600,
-        download: true
+        download: .withOriginalName
       )
       #expect(results.count == 2)
       guard case .success(_, let url0) = results[0] else {

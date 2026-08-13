@@ -26,7 +26,7 @@ struct SupabaseStorageTests {
 
     let baseUrlWithDownload = try sut.from(bucketId).getPublicURL(
       path: path,
-      download: true
+      download: .withOriginalName
     )
     assertInlineSnapshot(of: baseUrlWithDownload, as: .description) {
       """

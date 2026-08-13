@@ -38,7 +38,7 @@ struct FileObjectDetailView: View {
               let url = try await api.createSignedURL(
                 path: fileObject.name,
                 expiresIn: 60,
-                download: true
+                download: .withOriginalName
               )
               lastActionResult = ("createSignedURL (download)", url)
               openURL(url)

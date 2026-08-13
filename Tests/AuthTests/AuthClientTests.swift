@@ -1488,12 +1488,12 @@ extension AuthMockerTests {
         curl \
         	--request PUT \
         	--header "Authorization: Bearer accesstoken" \
-        	--header "Content-Length: 258" \
+        	--header "Content-Length: 228" \
         	--header "Content-Type: application/json" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
         	--header "X-Supabase-Api-Version: 2024-01-01" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	--data "{\"code_challenge\":\"hgJeigklONUI1pKSS98MIAbtJGaNu0zJU1iSiFOn2lY\",\"code_challenge_method\":\"s256\",\"data\":{\"custom_key\":\"custom_value\"},\"email\":\"example@mail.com\",\"email_change_token\":\"123456\",\"nonce\":\"abcdef\",\"password\":\"another.pass\",\"phone\":\"+1 202-918-2132\"}" \
+        	--data "{\"code_challenge\":\"hgJeigklONUI1pKSS98MIAbtJGaNu0zJU1iSiFOn2lY\",\"code_challenge_method\":\"s256\",\"data\":{\"custom_key\":\"custom_value\"},\"email\":\"example@mail.com\",\"nonce\":\"abcdef\",\"password\":\"another.pass\",\"phone\":\"+1 202-918-2132\"}" \
         	"http://localhost:54321/auth/v1/user"
         """#
       }
@@ -1509,7 +1509,6 @@ extension AuthMockerTests {
           phone: "+1 202-918-2132",
           password: "another.pass",
           nonce: "abcdef",
-          emailChangeToken: "123456",
           data: ["custom_key": .string("custom_value")]
         )
       )
@@ -1916,7 +1915,7 @@ extension AuthMockerTests {
       Dependencies[sut.clientID].sessionStorage.store(.validSession)
 
       let response = try await sut.mfa.enroll(
-        params: MFAEnrollParams(
+        params: MFATotpEnrollParams(
           issuer: "supabase.com",
           friendlyName: "test"
         )

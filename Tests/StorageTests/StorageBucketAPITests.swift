@@ -28,7 +28,7 @@ extension StorageMockerTests {
     let url = URL(string: "http://localhost:54321/storage/v1")!
 
     init() {
-      JSONEncoder.defaultStorageEncoder.outputFormatting = [
+      JSONEncoder.storageEncoder.outputFormatting = [
         .sortedKeys
       ]
     }
@@ -231,7 +231,7 @@ extension StorageMockerTests {
       }
       .register()
 
-      let options = BucketOptions(public: true)
+      let options = BucketOptions(isPublic: true)
       try await storage.createBucket(
         "newbucket",
         options: options
@@ -274,7 +274,7 @@ extension StorageMockerTests {
       }
       .register()
 
-      let options = BucketOptions(public: true)
+      let options = BucketOptions(isPublic: true)
       try await storage.updateBucket(
         "bucket123",
         options: options

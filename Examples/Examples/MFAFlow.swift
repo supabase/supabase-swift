@@ -130,7 +130,7 @@ struct MFAEnrollView: View {
           code: """
             // Enroll in MFA
             let response = try await supabase.auth.mfa.enroll(
-              params: MFAEnrollParams()
+              params: .totp()
             )
 
             // response.totp contains:
