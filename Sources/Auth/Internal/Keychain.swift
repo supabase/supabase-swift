@@ -5,13 +5,16 @@
   struct Keychain {
     let service: String?
     let accessGroup: String?
+    let useDataProtectionKeychain: Bool
 
     init(
       service: String?,
-      accessGroup: String? = nil
+      accessGroup: String? = nil,
+      useDataProtectionKeychain: Bool = false
     ) {
       self.service = service
       self.accessGroup = accessGroup
+      self.useDataProtectionKeychain = useDataProtectionKeychain
     }
 
     private func assertSuccess(forStatus status: OSStatus) throws {
@@ -79,7 +82,7 @@
       try Self.mapDeleteStatus(SecItemDelete(query as CFDictionary))
     }
 
-    private func baseQuery(withKey key: String? = nil, data: Data? = nil) -> [String: Any] {
+    func baseQuery(withKey key: String? = nil, data: Data? = nil) -> [String: Any] {
       var query: [String: Any] = [:]
       query[kSecClass as String] = kSecClassGenericPassword
 
@@ -95,6 +98,11 @@
       if let accessGroup {
         query[kSecAttrAccessGroup as String] = accessGroup
       }
+      if useDataProtectionKeychain {
+        // Stored as a Swift Bool rather than kCFBooleanTrue so the value round-trips through
+        // `as? Bool` in tests. It bridges to a CFBoolean when the dictionary becomes a CFDictionary.
+        query[kSecUseDataProtectionKeychain as String] = true
+      }
 
       return query
     }
@@ -109,7 +117,16 @@
     func setQuery(forKey key: String, data: Data) -> [String: Any] {
       var query = baseQuery(withKey: key, data: data)
 
-      query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+      #if os(macOS)
+        // kSecAttrAccessible does not apply to the legacy file-based Keychain, which is what
+        // SecItem targets on macOS by default. Only send it once the data-protection Keychain
+        // is in use. https://developer.apple.com/documentation/security/ksecattraccessible
+        if useDataProtectionKeychain {
+          query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+        }
+      #else
+        query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+      #endif
 
       return query
     }

@@ -48,5 +48,52 @@
         try Keychain.mapDeleteStatus(errSecAuthFailed)
       }
     }
+
+    @Test
+    func baseQueryWithoutDataProtectionOmitsAttribute() {
+      let keychain = Keychain(service: "service")
+      let query = keychain.baseQuery(withKey: "key")
+      #expect(query[kSecUseDataProtectionKeychain as String] == nil)
+    }
+
+    @Test
+    func baseQueryWithDataProtectionSetsAttribute() {
+      let keychain = Keychain(service: "service", useDataProtectionKeychain: true)
+      let query = keychain.baseQuery(withKey: "key")
+      #expect(query[kSecUseDataProtectionKeychain as String] as? Bool == true)
+    }
+
+    @Test
+    func getOneQueryCarriesDataProtectionAttribute() {
+      let keychain = Keychain(service: "service", useDataProtectionKeychain: true)
+      let query = keychain.getOneQuery(byKey: "key")
+      #expect(query[kSecUseDataProtectionKeychain as String] as? Bool == true)
+    }
+
+    @Test
+    func setQueryCarriesDataProtectionAttribute() {
+      let keychain = Keychain(service: "service", useDataProtectionKeychain: true)
+      let query = keychain.setQuery(forKey: "key", data: Data())
+      #expect(query[kSecUseDataProtectionKeychain as String] as? Bool == true)
+    }
+
+    @Test
+    func setQueryAccessibilityDefault() {
+      let keychain = Keychain(service: "service")
+      let query = keychain.setQuery(forKey: "key", data: Data())
+      #if os(macOS)
+        // The file-based Keychain ignores kSecAttrAccessible, so we must not send it.
+        #expect(query[kSecAttrAccessible as String] == nil)
+      #else
+        #expect(query[kSecAttrAccessible as String] != nil)
+      #endif
+    }
+
+    @Test
+    func setQueryWithDataProtectionSetsAccessibility() {
+      let keychain = Keychain(service: "service", useDataProtectionKeychain: true)
+      let query = keychain.setQuery(forKey: "key", data: Data())
+      #expect(query[kSecAttrAccessible as String] != nil)
+    }
   }
 #endif
