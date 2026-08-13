@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Logging
 
 struct SessionStorage {
   var get: @Sendable () -> Session?
@@ -26,7 +27,7 @@ extension SessionStorage {
       Dependencies[clientID].configuration.localStorage
     }
 
-    var logger: (any SupabaseLogger)? {
+    var logger: Logging.Logger {
       Dependencies[clientID].configuration.logger
     }
 
@@ -46,7 +47,7 @@ extension SessionStorage {
           do {
             try migration.run()
           } catch {
-            logger?.error(
+            logger.error(
               "Storage migration '\(migration.name)' failed: \(error.localizedDescription)"
             )
           }
@@ -58,7 +59,7 @@ extension SessionStorage {
             try JSONDecoder().decode(Session.self, from: $0)
           }
         } catch {
-          logger?.error("Failed to retrieve session: \(error.localizedDescription)")
+          logger.error("Failed to retrieve session: \(error.localizedDescription)")
           return nil
         }
       },
@@ -69,14 +70,14 @@ extension SessionStorage {
             value: JSONEncoder().encode(session)
           )
         } catch {
-          logger?.error("Failed to store session: \(error.localizedDescription)")
+          logger.error("Failed to store session: \(error.localizedDescription)")
         }
       },
       delete: {
         do {
           try storage.remove(key: key)
         } catch {
-          logger?.error("Failed to delete session: \(error.localizedDescription)")
+          logger.error("Failed to delete session: \(error.localizedDescription)")
         }
       }
     )

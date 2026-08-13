@@ -6,6 +6,7 @@
 //
 
 public import Foundation
+public import Logging
 
 #if canImport(FoundationNetworking)
   public import FoundationNetworking
@@ -64,8 +65,10 @@ extension AuthClient {
     /// Provider your own local storage implementation to use instead of the default one.
     public let localStorage: any AuthLocalStorage
 
-    /// Custom SupabaseLogger implementation used to inspecting log messages from the Auth library.
-    public let logger: (any SupabaseLogger)?
+    /// The logger used by the Auth library. Defaults to a build-config-aware logger: visible
+    /// (warning+) in debug builds, silent in release builds. Pass your own `Logging.Logger` for
+    /// custom behavior — see swift-log's documentation for available `LogHandler`s.
+    public let logger: Logging.Logger
 
     /// The JSON encoder used to serialize request bodies sent to the Auth server.
     let resolvedEncoder: JSONEncoder
@@ -98,7 +101,7 @@ extension AuthClient {
     ///   - redirectToURL: Default URL to be used for redirect on the flows that requires it.
     ///   - storageKey: Optional key name used for storing tokens in local storage.
     ///   - localStorage: The storage mechanism for local data.
-    ///   - logger: The logger to use.
+    ///   - logger: The logger to use. Defaults to a build-config-aware logger — see `Configuration.logger`.
     ///   - fetch: The asynchronous fetch handler for network requests.
     ///   - autoRefreshToken: Set to `true` if you want to automatically refresh the token before expiring.
     ///   - emitLocalSessionAsInitialSession: When `true`, emits the locally stored session immediately as the initial session.
@@ -109,7 +112,7 @@ extension AuthClient {
       redirectToURL: URL? = nil,
       storageKey: String? = nil,
       localStorage: any AuthLocalStorage,
-      logger: (any SupabaseLogger)? = nil,
+      logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.auth"),
       fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
       autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken,
       emitLocalSessionAsInitialSession: Bool = false
@@ -141,7 +144,7 @@ extension AuthClient {
       redirectToURL: URL? = nil,
       storageKey: String? = nil,
       localStorage: any AuthLocalStorage,
-      logger: (any SupabaseLogger)? = nil,
+      logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.auth"),
       resolvedEncoder: JSONEncoder,
       resolvedDecoder: JSONDecoder,
       fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
@@ -174,7 +177,7 @@ extension AuthClient {
   ///   - redirectToURL: Default URL to be used for redirect on the flows that requires it.
   ///   - storageKey: Optional key name used for storing tokens in local storage.
   ///   - localStorage: The storage mechanism for local data..
-  ///   - logger: The logger to use.
+  ///   - logger: The logger to use. Defaults to a build-config-aware logger — see `Configuration.logger`.
   ///   - fetch: The asynchronous fetch handler for network requests.
   ///   - autoRefreshToken: Set to `true` if you want to automatically refresh the token before expiring.
   ///   - emitLocalSessionAsInitialSession: When `true`, emits the locally stored session immediately as the initial session.
@@ -185,7 +188,7 @@ extension AuthClient {
     redirectToURL: URL? = nil,
     storageKey: String? = nil,
     localStorage: any AuthLocalStorage,
-    logger: (any SupabaseLogger)? = nil,
+    logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.auth"),
     fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
     autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken,
     emitLocalSessionAsInitialSession: Bool = false

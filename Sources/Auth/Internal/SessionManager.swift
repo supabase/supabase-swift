@@ -1,6 +1,7 @@
 import ConcurrencyExtras
 import Foundation
 import HTTPTypes
+import Logging
 
 struct SessionManager: Sendable {
   var session: @Sendable () async throws -> Session
@@ -36,7 +37,9 @@ private actor LiveSessionManager {
   private var eventEmitter: AuthStateChangeEventEmitter { Dependencies[clientID].eventEmitter }
   // Looked up leniently, as the session manager outlives its client while the auto-refresh loop is
   // torn down from `AuthClient.deinit`, at which point the dependencies entry is already gone.
-  private var logger: (any SupabaseLogger)? { Dependencies.instances.value[clientID]?.logger }
+  private var logger: Logging.Logger {
+    Dependencies.instances.value[clientID]?.logger ?? supabaseDefaultLogger(label: "io.supabase.auth")
+  }
   private var api: APIClient { Dependencies[clientID].api }
 
   private var inFlightRefreshTask: Task<Session, any Error>?
@@ -51,7 +54,7 @@ private actor LiveSessionManager {
   func session() async throws -> Session {
     try await trace(using: logger) {
       guard let currentSession = sessionStorage.get() else {
-        logger?.debug("session missing")
+        logger.debug("session missing")
         throw AuthError.sessionMissing
       }
 
@@ -59,54 +62,54 @@ private actor LiveSessionManager {
         return currentSession
       }
 
-      logger?.debug("session expired")
+      logger.debug("session expired")
       return try await refreshSession(currentSession.refreshToken)
     }
   }
 
   func refreshSession(_ refreshToken: String) async throws -> Session {
-    try await SupabaseLoggerTaskLocal.$additionalContext.withValue(
-      merging: [
-        "refresh_id": .string(UUID().uuidString),
-        "refresh_token": .string(refreshToken),
-      ]
-    ) {
-      try await trace(using: logger) {
-        if let inFlightRefreshTask {
-          logger?.debug("Refresh already in flight")
-          return try await inFlightRefreshTask.value
+    let logger: Logging.Logger = {
+      var scopedLogger = self.logger
+      scopedLogger[metadataKey: "refresh_id"] = "\(UUID().uuidString)"
+      scopedLogger[metadataKey: "refresh_token"] = "\(refreshToken)"
+      return scopedLogger
+    }()
+
+    return try await trace(using: logger) {
+      if let inFlightRefreshTask {
+        logger.debug("Refresh already in flight")
+        return try await inFlightRefreshTask.value
+      }
+
+      inFlightRefreshTask = Task {
+        logger.debug("Refresh task started")
+
+        defer {
+          inFlightRefreshTask = nil
+          logger.debug("Refresh task ended")
         }
 
-        inFlightRefreshTask = Task {
-          logger?.debug("Refresh task started")
-
-          defer {
-            inFlightRefreshTask = nil
-            logger?.debug("Refresh task ended")
-          }
-
-          let session = try await api.execute(
-            HTTPRequest(
-              url: configuration.url.appendingPathComponent("token"),
-              method: .post,
-              query: [
-                URLQueryItem(name: "grant_type", value: "refresh_token")
-              ],
-              body: configuration.resolvedEncoder.encode(
-                UserCredentials(refreshToken: refreshToken)
-              )
+        let session = try await api.execute(
+          HTTPRequest(
+            url: configuration.url.appendingPathComponent("token"),
+            method: .post,
+            query: [
+              URLQueryItem(name: "grant_type", value: "refresh_token")
+            ],
+            body: configuration.resolvedEncoder.encode(
+              UserCredentials(refreshToken: refreshToken)
             )
           )
-          .decoded(as: Session.self, decoder: configuration.resolvedDecoder)
+        )
+        .decoded(as: Session.self, decoder: configuration.resolvedDecoder)
 
-          update(session)
-          eventEmitter.emit(.tokenRefreshed, session: session)
+        update(session)
+        eventEmitter.emit(.tokenRefreshed, session: session)
 
-          return session
-        }
-
-        return try await inFlightRefreshTask!.value
+        return session
       }
+
+      return try await inFlightRefreshTask!.value
     }
   }
 
@@ -119,7 +122,7 @@ private actor LiveSessionManager {
   }
 
   func startAutoRefreshToken() {
-    logger?.debug("start auto refresh token")
+    logger.debug("start auto refresh token")
 
     startAutoRefreshTokenTask?.cancel()
     startAutoRefreshTokenTask = Task {
@@ -131,7 +134,7 @@ private actor LiveSessionManager {
   }
 
   func stopAutoRefreshToken() {
-    logger?.debug("stop auto refresh token")
+    logger.debug("stop auto refresh token")
     startAutoRefreshTokenTask?.cancel()
     startAutoRefreshTokenTask = nil
   }
@@ -149,7 +152,7 @@ private actor LiveSessionManager {
       }
 
       let expiresInTicks = Int((session.expiresAt - now) / autoRefreshTickDuration)
-      logger?.debug(
+      logger.debug(
         "access token expires in \(expiresInTicks) ticks, a tick lasts \(autoRefreshTickDuration)s, refresh threshold is \(autoRefreshTickThreshold) ticks"
       )
 

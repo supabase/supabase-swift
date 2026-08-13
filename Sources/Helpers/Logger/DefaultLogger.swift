@@ -3,7 +3,7 @@
 //  Helpers
 //
 
-package import Logging
+public import Logging
 
 /// Builds the default `Logging.Logger` used when a module's `logger:` parameter is omitted.
 ///
@@ -17,6 +17,7 @@ package import Logging
 ///
 /// Callers who want different behavior pass their own configured `Logging.Logger` instead of
 /// relying on this default.
+@usableFromInline
 package func supabaseDefaultLogger(label: String) -> Logging.Logger {
   #if DEBUG
     var logger = Logging.Logger(label: label)

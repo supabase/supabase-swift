@@ -3455,7 +3455,6 @@ extension AuthMockerTests {
         ],
         flowType: flowType,
         localStorage: storage,
-        logger: nil,
         fetch: { request in
           try await session.data(for: request)
         },
