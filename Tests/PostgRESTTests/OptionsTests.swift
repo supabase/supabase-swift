@@ -23,4 +23,17 @@ struct OptionsTests {
     let count2: CountOption = "exact"
     #expect(count1 == count2)
   }
+
+  @Test
+  func returningOptionsStringLiteral() {
+    let returning: PostgrestReturningOptions = "future_returning_mode"
+    #expect(returning.rawValue == "future_returning_mode")
+  }
+
+  @Test
+  func returningOptionsHashability() {
+    let returning1: PostgrestReturningOptions = .minimal
+    let returning2: PostgrestReturningOptions = "minimal"
+    #expect(returning1 == returning2)
+  }
 }

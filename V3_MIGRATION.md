@@ -660,3 +660,30 @@ default: ...  // a count algorithm the SDK doesn't have a case for
 
 Compile error only if you have an exhaustive `switch` over `CountOption` — add a `default:` case.
 Passing `.exact` / `.planned` / `.estimated` as an argument works unchanged.
+
+## `PostgrestReturningOptions` is now a struct, not an enum
+
+`PostgrestReturningOptions` (passed to `insert`/`update`/`upsert`/`delete`) is a `RawRepresentable`
+struct instead of an `enum`.
+
+It's sent to PostgREST as part of a `Prefer` header, not decoded from a response, but it's part of
+the public API surface — as an `enum`, using a returning mode PostgREST added after this SDK
+version shipped required an SDK upgrade even though constructing the value doesn't need one.
+
+```swift
+// Before
+switch returning {
+case .minimal: ...
+case .representation: ...
+}
+
+// After
+switch returning {
+case .minimal: ...
+case .representation: ...
+default: ...  // a returning mode the SDK doesn't have a case for
+}
+```
+
+Compile error only if you have an exhaustive `switch` over `PostgrestReturningOptions` — add a
+`default:` case. Passing `.minimal` / `.representation` as an argument works unchanged.
