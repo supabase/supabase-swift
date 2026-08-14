@@ -98,6 +98,12 @@ struct TypesTests {
     #expect(provider1.hashValue == provider2.hashValue)
   }
 
+  @Test
+  func providerOIDCVariantRawValues() {
+    #expect(Provider.linkedinOIDC.rawValue == "linkedin_oidc")
+    #expect(Provider.slackOIDC.rawValue == "slack_oidc")
+  }
+
   private struct OIDCProviderContainer: Decodable {
     let provider: OpenIDConnectCredentials.Provider
   }

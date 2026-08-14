@@ -338,6 +338,20 @@ This is a compile error only if you have an exhaustive `switch` over `FactorStat
 `default:` case. Equality (`factor.status == .verified`) and construction from a literal
 (`let status: FactorStatus = "verified"`) work unchanged.
 
+`init(rawValue:)` is no longer failable — it now always succeeds, even for an unrecognized value.
+`if let x = FactorStatus(rawValue: someString) { ... }` no longer compiles ("Initializer for
+conditional binding must have Optional type") — replace it with
+`let x = FactorStatus(rawValue: someString)` directly. If your code used
+`FactorStatus(rawValue:) != nil` to validate a string, that check still compiles but is now always
+`true` — this is a silent behavior change, not a compile error, so search for that pattern and
+remove or replace it.
+
+String interpolation of a `FactorStatus` value also changes silently: `"\(FactorStatus.verified)"`-
+style interpolation used to print the case name (`verified`); it now prints the struct's default
+description (`FactorStatus(rawValue: "verified")`). If you log, build a URL, or send analytics
+using direct interpolation of a `FactorStatus` value, use `.rawValue` explicitly to get the bare
+string back.
+
 ## `MessagingChannel` is now a struct, not an enum
 
 `MessagingChannel` (the OTP delivery channel — SMS or WhatsApp) is a `RawRepresentable` struct
@@ -365,6 +379,20 @@ default: ...  // an unrecognized channel the SDK doesn't have a case for
 
 Compile error only if you have an exhaustive `switch` over `MessagingChannel` — add a `default:`
 case. Passing `.sms` / `.whatsapp` as an argument, and comparing with `==`, work unchanged.
+
+`init(rawValue:)` is no longer failable — it now always succeeds, even for an unrecognized value.
+`if let x = MessagingChannel(rawValue: someString) { ... }` no longer compiles ("Initializer for
+conditional binding must have Optional type") — replace it with
+`let x = MessagingChannel(rawValue: someString)` directly. If your code used
+`MessagingChannel(rawValue:) != nil` to validate a string, that check still compiles but is now
+always `true` — this is a silent behavior change, not a compile error, so search for that pattern
+and remove or replace it.
+
+String interpolation of a `MessagingChannel` value also changes silently:
+`"\(MessagingChannel.sms)"`-style interpolation used to print the case name (`sms`); it now prints
+the struct's default description (`MessagingChannel(rawValue: "sms")`). If you log, build a URL, or
+send analytics using direct interpolation of a `MessagingChannel` value, use `.rawValue` explicitly
+to get the bare string back.
 
 ## `Provider` is now a struct, not an enum
 
@@ -434,6 +462,18 @@ if provider == .apple { ... }
 if provider.rawValue == "apple" { ... }
 ```
 
+`init(rawValue:)` is no longer failable — it now always succeeds, even for an unrecognized value.
+`if let x = Provider(rawValue: someString) { ... }` no longer compiles ("Initializer for
+conditional binding must have Optional type") — replace it with `let x = Provider(rawValue:
+someString)` directly. If your code used `Provider(rawValue:) != nil` to validate a string, that
+check still compiles but is now always `true` — this is a silent behavior change, not a compile
+error, so search for that pattern and remove or replace it.
+
+String interpolation of a `Provider` value also changes silently: `"\(Provider.apple)"`-style
+interpolation used to print the case name (`apple`); it now prints the struct's default description
+(`Provider(rawValue: "apple")`). If you log, build a URL, or send analytics using direct
+interpolation of a `Provider` value, use `.rawValue` explicitly to get the bare string back.
+
 ## `OpenIDConnectCredentials.Provider` is now a struct, not an enum
 
 `OpenIDConnectCredentials.Provider` (the OIDC provider passed to `signInWithIdToken`) is a
@@ -463,6 +503,21 @@ Compile error only if you have an exhaustive `switch` over this type — add a `
 Constructing and comparing known providers (`OpenIDConnectCredentials(provider: .apple, ...)`,
 `provider == .google`) work unchanged.
 
+`init(rawValue:)` is no longer failable — it now always succeeds, even for an unrecognized value.
+`if let x = OpenIDConnectCredentials.Provider(rawValue: someString) { ... }` no longer compiles
+("Initializer for conditional binding must have Optional type") — replace it with
+`let x = OpenIDConnectCredentials.Provider(rawValue: someString)` directly. If your code used
+`OpenIDConnectCredentials.Provider(rawValue:) != nil` to validate a string, that check still
+compiles but is now always `true` — this is a silent behavior change, not a compile error, so
+search for that pattern and remove or replace it.
+
+String interpolation of an `OpenIDConnectCredentials.Provider` value also changes silently:
+`"\(OpenIDConnectCredentials.Provider.apple)"`-style interpolation used to print the case name
+(`apple`); it now prints the struct's default description
+(`OpenIDConnectCredentials.Provider(rawValue: "apple")`). If you log, build a URL, or send
+analytics using direct interpolation of an `OpenIDConnectCredentials.Provider` value, use
+`.rawValue` explicitly to get the bare string back.
+
 ## `MobileOTPType` is now a struct, not an enum
 
 `MobileOTPType` (the OTP kind passed to `verifyOTP` for phone-based flows) is a `RawRepresentable`
@@ -489,6 +544,20 @@ default: ...  // an OTP type the SDK doesn't have a case for
 
 Compile error only if you have an exhaustive `switch` over `MobileOTPType` — add a `default:` case.
 Passing `.sms` / `.phoneChange` as an argument works unchanged.
+
+`init(rawValue:)` is no longer failable — it now always succeeds, even for an unrecognized value.
+`if let x = MobileOTPType(rawValue: someString) { ... }` no longer compiles ("Initializer for
+conditional binding must have Optional type") — replace it with
+`let x = MobileOTPType(rawValue: someString)` directly. If your code used
+`MobileOTPType(rawValue:) != nil` to validate a string, that check still compiles but is now always
+`true` — this is a silent behavior change, not a compile error, so search for that pattern and
+remove or replace it.
+
+String interpolation of a `MobileOTPType` value also changes silently: `"\(MobileOTPType.sms)"`-
+style interpolation used to print the case name (`sms`); it now prints the struct's default
+description (`MobileOTPType(rawValue: "sms")`). If you log, build a URL, or send analytics using
+direct interpolation of a `MobileOTPType` value, use `.rawValue` explicitly to get the bare string
+back.
 
 ## `EmailOTPType` is now a struct, not an enum
 
@@ -520,6 +589,20 @@ Compile error only if you have an exhaustive `switch` over `EmailOTPType` — ad
 `EmailOTPType.allCases` no longer exists, with no built-in replacement — maintain your own array if
 you were relying on it.
 
+`init(rawValue:)` is no longer failable — it now always succeeds, even for an unrecognized value.
+`if let x = EmailOTPType(rawValue: someString) { ... }` no longer compiles ("Initializer for
+conditional binding must have Optional type") — replace it with
+`let x = EmailOTPType(rawValue: someString)` directly. If your code used
+`EmailOTPType(rawValue:) != nil` to validate a string, that check still compiles but is now always
+`true` — this is a silent behavior change, not a compile error, so search for that pattern and
+remove or replace it.
+
+String interpolation of an `EmailOTPType` value also changes silently: `"\(EmailOTPType.signup)"`-
+style interpolation used to print the case name (`signup`); it now prints the struct's default
+description (`EmailOTPType(rawValue: "signup")`). If you log, build a URL, or send analytics using
+direct interpolation of an `EmailOTPType` value, use `.rawValue` explicitly to get the bare string
+back.
+
 ## `ResendEmailType` is now a struct, not an enum
 
 `ResendEmailType` (the resend kind passed to `resend`) is a `RawRepresentable` struct instead of
@@ -546,6 +629,20 @@ default: ...  // a resend type the SDK doesn't have a case for
 
 Compile error only if you have an exhaustive `switch` over `ResendEmailType` — add a `default:`
 case. Passing `.signup` / `.emailChange` as an argument works unchanged.
+
+`init(rawValue:)` is no longer failable — it now always succeeds, even for an unrecognized value.
+`if let x = ResendEmailType(rawValue: someString) { ... }` no longer compiles ("Initializer for
+conditional binding must have Optional type") — replace it with
+`let x = ResendEmailType(rawValue: someString)` directly. If your code used
+`ResendEmailType(rawValue:) != nil` to validate a string, that check still compiles but is now
+always `true` — this is a silent behavior change, not a compile error, so search for that pattern
+and remove or replace it.
+
+String interpolation of a `ResendEmailType` value also changes silently:
+`"\(ResendEmailType.signup)"`-style interpolation used to print the case name (`signup`); it now
+prints the struct's default description (`ResendEmailType(rawValue: "signup")`). If you log, build
+a URL, or send analytics using direct interpolation of a `ResendEmailType` value, use `.rawValue`
+explicitly to get the bare string back.
 
 ## `ResendMobileType` is now a struct, not an enum
 
@@ -574,6 +671,20 @@ default: ...  // a resend type the SDK doesn't have a case for
 Compile error only if you have an exhaustive `switch` over `ResendMobileType` — add a `default:`
 case. Passing `.sms` / `.phoneChange` as an argument works unchanged.
 
+`init(rawValue:)` is no longer failable — it now always succeeds, even for an unrecognized value.
+`if let x = ResendMobileType(rawValue: someString) { ... }` no longer compiles ("Initializer for
+conditional binding must have Optional type") — replace it with
+`let x = ResendMobileType(rawValue: someString)` directly. If your code used
+`ResendMobileType(rawValue:) != nil` to validate a string, that check still compiles but is now
+always `true` — this is a silent behavior change, not a compile error, so search for that pattern
+and remove or replace it.
+
+String interpolation of a `ResendMobileType` value also changes silently:
+`"\(ResendMobileType.sms)"`-style interpolation used to print the case name (`sms`); it now prints
+the struct's default description (`ResendMobileType(rawValue: "sms")`). If you log, build a URL, or
+send analytics using direct interpolation of a `ResendMobileType` value, use `.rawValue` explicitly
+to get the bare string back.
+
 ## `SignOutScope` is now a struct, not an enum
 
 `SignOutScope` (passed to `signOut(scope:)`) is a `RawRepresentable` struct instead of an `enum`.
@@ -601,6 +712,20 @@ default: ...  // a scope the SDK doesn't have a case for
 
 Compile error only if you have an exhaustive `switch` over `SignOutScope` — add a `default:` case.
 Passing `.global` / `.local` / `.others` as an argument works unchanged.
+
+`init(rawValue:)` is no longer failable — it now always succeeds, even for an unrecognized value.
+`if let x = SignOutScope(rawValue: someString) { ... }` no longer compiles ("Initializer for
+conditional binding must have Optional type") — replace it with
+`let x = SignOutScope(rawValue: someString)` directly. If your code used
+`SignOutScope(rawValue:) != nil` to validate a string, that check still compiles but is now always
+`true` — this is a silent behavior change, not a compile error, so search for that pattern and
+remove or replace it.
+
+String interpolation of a `SignOutScope` value also changes silently: `"\(SignOutScope.global)"`-
+style interpolation used to print the case name (`global`); it now prints the struct's default
+description (`SignOutScope(rawValue: "global")`). If you log, build a URL, or send analytics using
+direct interpolation of a `SignOutScope` value, use `.rawValue` explicitly to get the bare string
+back.
 
 ## `PostgrestFilterBuilder.Operator` is now a struct, not an enum
 
@@ -632,6 +757,20 @@ Compile error only if you have an exhaustive `switch` over `Operator` — add a 
 `Operator.allCases` no longer exists, with no built-in replacement — maintain your own array if you
 were relying on it. Passing a known operator (`.eq`, `.gt`, ...) works unchanged.
 
+`init(rawValue:)` is no longer failable — it now always succeeds, even for an unrecognized value.
+`if let x = PostgrestFilterBuilder.Operator(rawValue: someString) { ... }` no longer compiles
+("Initializer for conditional binding must have Optional type") — replace it with
+`let x = PostgrestFilterBuilder.Operator(rawValue: someString)` directly. If your code used
+`PostgrestFilterBuilder.Operator(rawValue:) != nil` to validate a string, that check still compiles
+but is now always `true` — this is a silent behavior change, not a compile error, so search for
+that pattern and remove or replace it.
+
+String interpolation of a `PostgrestFilterBuilder.Operator` value also changes silently:
+`"\(PostgrestFilterBuilder.Operator.eq)"`-style interpolation used to print the case name (`eq`);
+it now prints the struct's default description (`PostgrestFilterBuilder.Operator(rawValue: "eq")`).
+If you log, build a URL, or send analytics using direct interpolation of a
+`PostgrestFilterBuilder.Operator` value, use `.rawValue` explicitly to get the bare string back.
+
 ## `CountOption` is now a struct, not an enum
 
 `CountOption` (passed to query methods like `select(_:head:count:)`) is a `RawRepresentable`
@@ -661,6 +800,19 @@ default: ...  // a count algorithm the SDK doesn't have a case for
 Compile error only if you have an exhaustive `switch` over `CountOption` — add a `default:` case.
 Passing `.exact` / `.planned` / `.estimated` as an argument works unchanged.
 
+`init(rawValue:)` is no longer failable — it now always succeeds, even for an unrecognized value.
+`if let x = CountOption(rawValue: someString) { ... }` no longer compiles ("Initializer for
+conditional binding must have Optional type") — replace it with
+`let x = CountOption(rawValue: someString)` directly. If your code used
+`CountOption(rawValue:) != nil` to validate a string, that check still compiles but is now always
+`true` — this is a silent behavior change, not a compile error, so search for that pattern and
+remove or replace it.
+
+String interpolation of a `CountOption` value also changes silently: `"\(CountOption.exact)"`-style
+interpolation used to print the case name (`exact`); it now prints the struct's default description
+(`CountOption(rawValue: "exact")`). If you log, build a URL, or send analytics using direct
+interpolation of a `CountOption` value, use `.rawValue` explicitly to get the bare string back.
+
 ## `PostgrestReturningOptions` is now a struct, not an enum
 
 `PostgrestReturningOptions` (passed to `insert`/`update`/`upsert`/`delete`) is a `RawRepresentable`
@@ -687,6 +839,21 @@ default: ...  // a returning mode the SDK doesn't have a case for
 
 Compile error only if you have an exhaustive `switch` over `PostgrestReturningOptions` — add a
 `default:` case. Passing `.minimal` / `.representation` as an argument works unchanged.
+
+`init(rawValue:)` is no longer failable — it now always succeeds, even for an unrecognized value.
+`if let x = PostgrestReturningOptions(rawValue: someString) { ... }` no longer compiles
+("Initializer for conditional binding must have Optional type") — replace it with
+`let x = PostgrestReturningOptions(rawValue: someString)` directly. If your code used
+`PostgrestReturningOptions(rawValue:) != nil` to validate a string, that check still compiles but
+is now always `true` — this is a silent behavior change, not a compile error, so search for that
+pattern and remove or replace it.
+
+String interpolation of a `PostgrestReturningOptions` value also changes silently:
+`"\(PostgrestReturningOptions.minimal)"`-style interpolation used to print the case name
+(`minimal`); it now prints the struct's default description
+(`PostgrestReturningOptions(rawValue: "minimal")`). If you log, build a URL, or send analytics
+using direct interpolation of a `PostgrestReturningOptions` value, use `.rawValue` explicitly to
+get the bare string back.
 
 ## `TextSearchType` is now a struct, not an enum
 
@@ -718,6 +885,21 @@ default: ...  // a search type the SDK doesn't have a case for
 Compile error only if you have an exhaustive `switch` over `TextSearchType` — add a `default:`
 case. Passing `.plain` / `.phrase` / `.websearch` as an argument works unchanged.
 
+`init(rawValue:)` is no longer failable — it now always succeeds, even for an unrecognized value.
+`if let x = TextSearchType(rawValue: someString) { ... }` no longer compiles ("Initializer for
+conditional binding must have Optional type") — replace it with
+`let x = TextSearchType(rawValue: someString)` directly. If your code used
+`TextSearchType(rawValue:) != nil` to validate a string, that check still compiles but is now
+always `true` — this is a silent behavior change, not a compile error, so search for that pattern
+and remove or replace it.
+
+String interpolation of a `TextSearchType` value also changes silently: `"\(TextSearchType.plain)"`
+-style interpolation used to print the case name (`plain`); it now prints the struct's default
+description (`TextSearchType(rawValue: "pl")`) — note this shows the underlying PostgREST raw
+value (`pl`), not the case name, since `TextSearchType`'s raw values don't match its case names. If
+you log, build a URL, or send analytics using direct interpolation of a `TextSearchType` value, use
+`.rawValue` explicitly to get the bare string back.
+
 ## `FunctionInvokeOptions.Method` is now a struct, not an enum
 
 `FunctionInvokeOptions.Method` (the HTTP method passed to `invoke`) is a `RawRepresentable` struct
@@ -743,3 +925,22 @@ default: ...  // a method the SDK doesn't have a case for
 
 Compile error only if you have an exhaustive `switch` over `Method` — add a `default:` case.
 Passing `.get` / `.post` / `.put` / `.patch` / `.delete` as an argument works unchanged.
+
+`init(rawValue:)` is no longer failable — it now always succeeds, even for an unrecognized value.
+`if let x = FunctionInvokeOptions.Method(rawValue: someString) { ... }` no longer compiles
+("Initializer for conditional binding must have Optional type") — replace it with
+`let x = FunctionInvokeOptions.Method(rawValue: someString)` directly. If your code used
+`FunctionInvokeOptions.Method(rawValue:) != nil` to validate a string, that check still compiles
+but is now always `true` — this is a silent behavior change, not a compile error, so search for
+that pattern and remove or replace it.
+
+String interpolation of a `FunctionInvokeOptions.Method` value also changes silently:
+`"\(FunctionInvokeOptions.Method.get)"`-style interpolation used to print the case name (`get`); it
+now prints the struct's default description (`FunctionInvokeOptions.Method(rawValue: "GET")`). If
+you log, build a URL, or send analytics using direct interpolation of a
+`FunctionInvokeOptions.Method` value, use `.rawValue` explicitly to get the bare string back.
+
+Constructing a `Method` from an arbitrary string is not validated at construction time — invalid
+HTTP method tokens are caught later, in `httpMethod(_:)`, which returns `nil` for a raw value that
+isn't a legal HTTP token (per RFC 9110). `FunctionsClient` falls back to `.post` when `httpMethod`
+returns `nil`, so an invalid custom `Method` silently becomes a POST request rather than throwing.
