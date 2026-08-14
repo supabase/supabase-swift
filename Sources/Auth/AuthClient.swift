@@ -1527,8 +1527,8 @@ public actor AuthClient {
 
     eventEmitter.emit(.initialSession, session: currentSession, token: token)
 
-    Task {
-      if currentSession.isExpired {
+    if currentSession.isExpired {
+      Task {
         _ = try? await sessionManager.refreshSession(currentSession.refreshToken)
         // No need to emit `tokenRefreshed` nor `signOut` event since the `refreshSession` does it already.
       }
