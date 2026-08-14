@@ -500,8 +500,25 @@ public struct OpenIDConnectCredentials: Codable, Hashable, Sendable {
   }
 
   /// Providers supported by the OIDC sign-in flow.
-  public enum Provider: String, Codable, Hashable, Sendable {
-    case google, apple, azure, facebook
+  public struct Provider: RawRepresentable, Codable, Hashable, Sendable,
+    ExpressibleByStringLiteral
+  {
+    public let rawValue: String
+
+    /// Creates a ``Provider`` from a raw string value.
+    public init(rawValue: String) {
+      self.rawValue = rawValue
+    }
+
+    /// Creates a ``Provider`` from a string literal.
+    public init(stringLiteral value: String) {
+      self.init(rawValue: value)
+    }
+
+    public static let google: Provider = "google"
+    public static let apple: Provider = "apple"
+    public static let azure: Provider = "azure"
+    public static let facebook: Provider = "facebook"
   }
 }
 

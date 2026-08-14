@@ -97,4 +97,28 @@ struct TypesTests {
     #expect(provider1 == provider2)
     #expect(provider1.hashValue == provider2.hashValue)
   }
+
+  private struct OIDCProviderContainer: Decodable {
+    let provider: OpenIDConnectCredentials.Provider
+  }
+
+  @Test
+  func oidcProviderDecodesUnknownValue() throws {
+    let json = Data(#"{"provider":"threads_2027"}"#.utf8)
+    let decoded = try JSONDecoder().decode(OIDCProviderContainer.self, from: json)
+    #expect(decoded.provider.rawValue == "threads_2027")
+  }
+
+  @Test
+  func oidcProviderDecodesKnownValue() throws {
+    let json = Data(#"{"provider":"apple"}"#.utf8)
+    let decoded = try JSONDecoder().decode(OIDCProviderContainer.self, from: json)
+    #expect(decoded.provider == .apple)
+  }
+
+  @Test
+  func oidcProviderStringLiteral() {
+    let provider: OpenIDConnectCredentials.Provider = "custom_oidc_provider"
+    #expect(provider.rawValue == "custom_oidc_provider")
+  }
 }

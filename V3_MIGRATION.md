@@ -433,3 +433,32 @@ let provider: Provider = "custom_provider"
 if provider == .apple { ... }
 if provider.rawValue == "apple" { ... }
 ```
+
+## `OpenIDConnectCredentials.Provider` is now a struct, not an enum
+
+`OpenIDConnectCredentials.Provider` (the OIDC provider passed to `signInWithIdToken`) is a
+`RawRepresentable` struct instead of an `enum`.
+
+It's sent to the backend, not decoded from it, but it's `Codable` and part of the public API
+surface, and the set of OIDC-capable providers can grow — as an `enum`, using a provider this SDK
+version didn't have a case for meant waiting on an SDK upgrade even though GoTrue might already
+support it.
+
+```swift
+// Before
+switch credentials.provider {
+case .apple: ...
+case .google: ...
+}
+
+// After
+switch credentials.provider {
+case .apple: ...
+case .google: ...
+default: ...  // a provider the SDK doesn't have a case for
+}
+```
+
+Compile error only if you have an exhaustive `switch` over this type — add a `default:` case.
+Constructing and comparing known providers (`OpenIDConnectCredentials(provider: .apple, ...)`,
+`provider == .google`) work unchanged.
