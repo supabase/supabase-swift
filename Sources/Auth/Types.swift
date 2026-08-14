@@ -1316,12 +1316,26 @@ struct DeleteUserRequest: Encodable {
 }
 
 /// The messaging channel used to deliver OTPs.
-public enum MessagingChannel: String, Codable, Sendable {
+public struct MessagingChannel: RawRepresentable, Codable, Hashable, Sendable,
+  ExpressibleByStringLiteral
+{
+  public let rawValue: String
+
+  /// Creates a ``MessagingChannel`` from a raw string value.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  /// Creates a ``MessagingChannel`` from a string literal.
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
   /// Deliver the OTP via SMS.
-  case sms
+  public static let sms: MessagingChannel = "sms"
 
   /// Deliver the OTP via WhatsApp.
-  case whatsapp
+  public static let whatsapp: MessagingChannel = "whatsapp"
 }
 
 struct SignInWithSSORequest: Encodable {

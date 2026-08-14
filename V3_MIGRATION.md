@@ -337,3 +337,31 @@ default: ...  // an unrecognized status the SDK doesn't have a case for
 This is a compile error only if you have an exhaustive `switch` over `FactorStatus` — add a
 `default:` case. Equality (`factor.status == .verified`) and construction from a literal
 (`let status: FactorStatus = "verified"`) work unchanged.
+
+## `MessagingChannel` is now a struct, not an enum
+
+`MessagingChannel` (the OTP delivery channel — SMS or WhatsApp) is a `RawRepresentable` struct
+instead of an `enum`.
+
+It's currently only ever sent as a request parameter, but it's `Codable` and part of the public
+API surface — if GoTrue starts echoing it back in a response (e.g. once a new channel like
+Telegram ships), an `enum` would fail to decode an unrecognized value instead of round-tripping it.
+Converting now closes that gap ahead of time rather than after a real decode failure.
+
+```swift
+// Before
+switch channel {
+case .sms: ...
+case .whatsapp: ...
+}
+
+// After
+switch channel {
+case .sms: ...
+case .whatsapp: ...
+default: ...  // an unrecognized channel the SDK doesn't have a case for
+}
+```
+
+Compile error only if you have an exhaustive `switch` over `MessagingChannel` — add a `default:`
+case. Passing `.sms` / `.whatsapp` as an argument, and comparing with `==`, work unchanged.
