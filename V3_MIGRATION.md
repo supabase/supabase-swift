@@ -601,3 +601,33 @@ default: ...  // a scope the SDK doesn't have a case for
 
 Compile error only if you have an exhaustive `switch` over `SignOutScope` — add a `default:` case.
 Passing `.global` / `.local` / `.others` as an argument works unchanged.
+
+## `PostgrestFilterBuilder.Operator` is now a struct, not an enum
+
+`PostgrestFilterBuilder.Operator` (passed to `not(_:operator:value:)`) is a `RawRepresentable`
+struct instead of an `enum`. It no longer conforms to `CaseIterable`.
+
+It's sent to PostgREST as part of a filter query string, not decoded from a response, but it's
+part of the public API surface — as an `enum`, using an operator PostgREST added after this SDK
+version shipped required an SDK upgrade even though constructing the value doesn't need one.
+
+```swift
+// Before
+switch op {
+case .eq: ...
+case .neq: ...
+// ...
+}
+
+// After
+switch op {
+case .eq: ...
+case .neq: ...
+// ...
+default: ...  // an operator the SDK doesn't have a case for
+}
+```
+
+Compile error only if you have an exhaustive `switch` over `Operator` — add a `default:` case.
+`Operator.allCases` no longer exists, with no built-in replacement — maintain your own array if you
+were relying on it. Passing a known operator (`.eq`, `.gt`, ...) works unchanged.
