@@ -464,7 +464,7 @@ public final class SupabaseClient: Sendable {
     try await accessTokenProvider()
   }
 
-  /// Mirrors Auth state onto the Functions and Realtime V2 sub-clients for the client's lifetime.
+  /// Mirrors Auth state onto the Realtime V2 sub-client for the client's lifetime.
   ///
   /// `authStateChanges` never finishes on its own, so the observing task must not capture `self`
   /// strongly: it would keep the client alive forever, and ``deinit`` — the only place that
@@ -501,9 +501,6 @@ public final class SupabaseClient: Sendable {
     }
 
     if let accessToken {
-      functions.setAuth(
-        token: APIKeyFormat.functionsBearerToken(accessToken: accessToken, supabaseKey: supabaseKey)
-      )
       await realtimeV2.setAuth(accessToken)
     }
   }
