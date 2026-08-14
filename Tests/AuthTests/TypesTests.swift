@@ -121,4 +121,23 @@ struct TypesTests {
     let provider: OpenIDConnectCredentials.Provider = "custom_oidc_provider"
     #expect(provider.rawValue == "custom_oidc_provider")
   }
+
+  @Test
+  func mobileOTPTypeEncodesAsRawString() throws {
+    let data = try JSONEncoder().encode(MobileOTPType.phoneChange)
+    #expect(String(decoding: data, as: UTF8.self) == "\"phone_change\"")
+  }
+
+  @Test
+  func mobileOTPTypeStringLiteral() {
+    let type: MobileOTPType = "new_channel"
+    #expect(type.rawValue == "new_channel")
+  }
+
+  @Test
+  func mobileOTPTypeHashability() {
+    let type1: MobileOTPType = .sms
+    let type2: MobileOTPType = "sms"
+    #expect(type1 == type2)
+  }
 }
