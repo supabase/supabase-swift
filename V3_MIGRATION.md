@@ -363,3 +363,45 @@ out. This is a silent behavior change, not a compile error: search your codebase
 `SupabaseClientOptions(realtime:)` — that logger is now ignored in favor of the global one.
 Construct `RealtimeClientV2` directly (not through `SupabaseClient`) if you need a
 Realtime-specific logger distinct from the rest of the client.
+
+## `WinCredLocalStorage` removed; no default `AuthLocalStorage` on Windows
+
+`WinCredLocalStorage` and `WinCredLocalStorageError` are removed, and
+`AuthClient.Configuration.defaultLocalStorage` is no longer defined on Windows. Windows callers now
+need to supply their own `AuthLocalStorage` explicitly, the same as Linux and Android already
+require.
+
+`WinCredLocalStorage` was the default local storage on Windows, but it could not persist a
+session: writes targeted a Windows Credential Manager entry named `service\key`, while reads and
+deletes targeted `service\key)` — a stray trailing `)` — so nothing this code wrote could ever be
+read back. It also stored the in-memory layout of the `Data` struct rather than the bytes it
+pointed to, escaped several pointers past the closures that made them valid, and threw instead of
+returning `nil` for a missing key. No Windows runner exists in this project's CI, and no test
+referenced the type, so none of this was ever caught. If you were relying on the default, you were
+already effectively running without session persistence on Windows.
+
+This is a compile error, not a silent behavior change: any call site building
+`AuthClient.Configuration` or `SupabaseClientOptions.AuthOptions` on Windows without passing
+`storage:`/`localStorage:` explicitly now fails to compile, since the default no longer exists for
+that platform.
+
+```swift
+// Before (Windows)
+let client = SupabaseClient(supabaseURL: url, supabaseKey: key)
+
+// After (Windows)
+struct MyLocalStorage: AuthLocalStorage {
+  func store(key: String, value: Data) throws { /* ... */ }
+  func retrieve(key: String) throws -> Data? { /* ... */ }
+  func remove(key: String) throws { /* ... */ }
+}
+
+let client = SupabaseClient(
+  supabaseURL: url,
+  supabaseKey: key,
+  options: .init(auth: .init(storage: MyLocalStorage()))
+)
+```
+
+There's no reference implementation to swap in — implement `AuthLocalStorage` against whatever
+storage mechanism suits your app.

@@ -39,10 +39,7 @@ extension AuthClient.Configuration {
   /// The platform-appropriate default local storage implementation.
   ///
   /// On Apple platforms this is a ``KeychainLocalStorage`` instance.
-  /// On Windows this is a ``WinCredLocalStorage`` instance.
   #if !os(Linux) && !os(Windows) && !os(Android)
     public static let defaultLocalStorage: any AuthLocalStorage = KeychainLocalStorage()
-  #elseif os(Windows)
-    public static let defaultLocalStorage: any AuthLocalStorage = WinCredLocalStorage()
   #endif
 }
