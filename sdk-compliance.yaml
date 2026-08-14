@@ -3,6 +3,33 @@ sdk: swift
 # Full declaration of all features from the supabase/sdk capability registry.
 # See https://github.com/supabase/sdk for the canonical feature registry.
 
+# JSONValue (formerly AnyJSON) is a JSON value type shared across Auth,
+# PostgREST, Storage, and Realtime rather than owned by a single feature.
+supporting_symbols:
+  - JSONValue
+  - JSONValue.init
+  - JSONValue.decode
+  - JSONValue.encode
+  - JSONValue.decoder
+  - JSONValue.encoder
+  - JSONValue.null
+  - JSONValue.bool
+  - JSONValue.integer
+  - JSONValue.double
+  - JSONValue.string
+  - JSONValue.object
+  - JSONValue.array
+  - JSONValue.value
+  - JSONValue.isNil
+  - JSONValue.boolValue
+  - JSONValue.objectValue
+  - JSONValue.arrayValue
+  - JSONValue.stringValue
+  - JSONValue.intValue
+  - JSONValue.doubleValue
+  - JSONValue.description
+  - JSONValue.rawValue
+
 features:
 
   # ── Auth ───────────────────────────────────────────────────────────────────
