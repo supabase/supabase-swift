@@ -88,57 +88,69 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   /// Most operators have dedicated convenience methods (e.g., ``eq(_:value:)``, ``gt(_:value:)``).
   /// Use ``Operator`` directly only when you need ``not(_:operator:value:)`` or the raw
   /// ``filter(_:operator:value:)`` escape hatch.
-  public enum Operator: String, CaseIterable, Sendable {
+  public struct Operator: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+    public let rawValue: String
+
+    /// Creates an ``Operator`` from a raw string value.
+    public init(rawValue: String) {
+      self.rawValue = rawValue
+    }
+
+    /// Creates an ``Operator`` from a string literal.
+    public init(stringLiteral value: String) {
+      self.init(rawValue: value)
+    }
+
     /// Equals (`=`).
-    case eq
+    public static let eq: Operator = "eq"
     /// Not equals (`!=`).
-    case neq
+    public static let neq: Operator = "neq"
     /// Greater than (`>`).
-    case gt
+    public static let gt: Operator = "gt"
     /// Greater than or equal (`>=`).
-    case gte
+    public static let gte: Operator = "gte"
     /// Less than (`<`).
-    case lt
+    public static let lt: Operator = "lt"
     /// Less than or equal (`<=`).
-    case lte
+    public static let lte: Operator = "lte"
     /// Case-sensitive LIKE pattern match.
-    case like
+    public static let like: Operator = "like"
     /// Case-insensitive ILIKE pattern match.
-    case ilike
+    public static let ilike: Operator = "ilike"
     /// Case-sensitive regex match.
-    case match
+    public static let match: Operator = "match"
     /// Case-insensitive regex match.
-    case imatch
+    public static let imatch: Operator = "imatch"
     /// IS (for NULL / boolean checks).
-    case `is`
+    public static let `is`: Operator = "is"
     /// IS DISTINCT FROM.
-    case isdistinct
+    public static let isdistinct: Operator = "isdistinct"
     /// IN — value is in a list.
-    case `in`
+    public static let `in`: Operator = "in"
     /// Contains (`@>`).
-    case cs
+    public static let cs: Operator = "cs"
     /// Contained by (`<@`).
-    case cd
+    public static let cd: Operator = "cd"
     /// Range strictly left of (`<<`).
-    case sl
+    public static let sl: Operator = "sl"
     /// Range strictly right of (`>>`).
-    case sr
+    public static let sr: Operator = "sr"
     /// Range does not extend to the left (`&>`).
-    case nxl
+    public static let nxl: Operator = "nxl"
     /// Range does not extend to the right (`&<`).
-    case nxr
+    public static let nxr: Operator = "nxr"
     /// Range is adjacent (`-|-`).
-    case adj
+    public static let adj: Operator = "adj"
     /// Overlaps (`&&`).
-    case ov
+    public static let ov: Operator = "ov"
     /// Full-text search using `to_tsquery`.
-    case fts
+    public static let fts: Operator = "fts"
     /// Full-text search using `plainto_tsquery`.
-    case plfts
+    public static let plfts: Operator = "plfts"
     /// Full-text search using `phraseto_tsquery`.
-    case phfts
+    public static let phfts: Operator = "phfts"
     /// Full-text search using `websearch_to_tsquery`.
-    case wfts
+    public static let wfts: Operator = "wfts"
   }
 
   // MARK: - Filters
