@@ -326,30 +326,31 @@ pass a `Logger` backed by `SwiftLogNoOpLogHandler` (add `import Logging` to this
 logger: Logger(label: "myapp") { _ in SwiftLogNoOpLogHandler() }
 ```
 
-**OSLog parity.** `OSLogSupabaseLogger`'s zero-config OSLog/Console.app integration is replaced by
-`OSLogHandler`, constructed explicitly and installed as the backing handler for a `Logger` (add
-`import Logging` to this file):
+**OSLog parity.** `OSLogSupabaseLogger`'s zero-config OSLog/Console.app integration has no
+replacement shipped by the SDK. Implement your own `LogHandler` conforming type that wraps an
+`os.Logger` and forwards each `Logging.Logger.Level` to the matching OSLog level, then install it
+as the backing handler for a `Logger` (add `import Logging` to this file):
 
 ```swift
-logger: Logger(label: "myapp") { OSLogHandler(label: $0) }
+logger: Logger(label: "myapp") { MyOSLogHandler(label: $0) }
 ```
 
-`OSLogHandler` forwards every level by default (`logLevel` defaults to `.trace`), matching
-`OSLogSupabaseLogger`'s old always-forward behavior — use Console.app's own filtering, or set
-`logger.logLevel` yourself, to narrow what's emitted.
+Default your handler's `logLevel` to `.trace` to match `OSLogSupabaseLogger`'s old always-forward
+behavior — use Console.app's own filtering, or set `logger.logLevel` yourself, to narrow what's
+emitted.
 
-If this file also has `import OSLog` — which it will if you're wiring up `OSLogHandler` alongside
-your app's own OSLog-based logging — you'll hit a `'Logger' is ambiguous for type lookup` compile
-error, because both `Logging.Logger` and `os.Logger` are now in scope unqualified in that file.
-Fix it by fully qualifying whichever type you mean less often, e.g. `os.Logger` for OSLog's own
-type:
+If this file also has `import OSLog` — which it will if you're implementing `MyOSLogHandler`
+alongside your app's own OSLog-based logging — you'll hit a `'Logger' is ambiguous for type
+lookup` compile error, because both `Logging.Logger` and `os.Logger` are now in scope unqualified
+in that file. Fix it by fully qualifying whichever type you mean less often, e.g. `os.Logger` for
+OSLog's own type:
 
 ```swift
 import Logging
 import OSLog
 
 let appLogger = os.Logger(subsystem: "myapp", category: "app")
-let supabaseLogger = Logging.Logger(label: "myapp") { OSLogHandler(label: $0) }
+let supabaseLogger = Logging.Logger(label: "myapp") { MyOSLogHandler(label: $0) }
 ```
 
 or keep the two imports in separate files so the ambiguity never arises.
