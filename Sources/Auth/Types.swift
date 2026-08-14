@@ -896,12 +896,26 @@ public enum AuthFlowType: Sendable {
 public typealias FactorType = String
 
 /// The enrollment status of an MFA factor.
-public enum FactorStatus: String, Codable, Sendable {
+public struct FactorStatus: RawRepresentable, Codable, Hashable, Sendable,
+  ExpressibleByStringLiteral
+{
+  public let rawValue: String
+
+  /// Creates a ``FactorStatus`` from a raw string value.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  /// Creates a ``FactorStatus`` from a string literal.
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
   /// The factor has been verified and is active.
-  case verified
+  public static let verified: FactorStatus = "verified"
 
   /// The factor has been enrolled but not yet verified.
-  case unverified
+  public static let unverified: FactorStatus = "unverified"
 }
 
 /// An MFA Factor.

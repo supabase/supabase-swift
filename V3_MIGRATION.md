@@ -309,3 +309,31 @@ out. This is a silent behavior change, not a compile error: search your codebase
 `SupabaseClientOptions(realtime:)` — that logger is now ignored in favor of the global one.
 Construct `RealtimeClientV2` directly (not through `SupabaseClient`) if you need a
 Realtime-specific logger distinct from the rest of the client.
+
+## `FactorStatus` is now a struct, not an enum
+
+`FactorStatus` (the enrollment status on an MFA `Factor`) is a `RawRepresentable` struct instead
+of an `enum`.
+
+GoTrue can add new factor statuses over time; as an `enum`, decoding a `Factor` with a status this
+SDK version didn't know about threw a `DecodingError` instead of surfacing the factor with its
+unrecognized status intact.
+
+```swift
+// Before
+switch factor.status {
+case .verified: ...
+case .unverified: ...
+}
+
+// After
+switch factor.status {
+case .verified: ...
+case .unverified: ...
+default: ...  // an unrecognized status the SDK doesn't have a case for
+}
+```
+
+This is a compile error only if you have an exhaustive `switch` over `FactorStatus` — add a
+`default:` case. Equality (`factor.status == .verified`) and construction from a literal
+(`let status: FactorStatus = "verified"`) work unchanged.
