@@ -65,4 +65,36 @@ struct TypesTests {
     let channel: MessagingChannel = "signal"
     #expect(channel.rawValue == "signal")
   }
+
+  private struct ProviderContainer: Decodable {
+    let provider: Provider
+  }
+
+  @Test
+  func providerDecodesUnknownValue() throws {
+    let json = Data(#"{"provider":"threads_2027"}"#.utf8)
+    let decoded = try JSONDecoder().decode(ProviderContainer.self, from: json)
+    #expect(decoded.provider.rawValue == "threads_2027")
+  }
+
+  @Test
+  func providerDecodesKnownValue() throws {
+    let json = Data(#"{"provider":"apple"}"#.utf8)
+    let decoded = try JSONDecoder().decode(ProviderContainer.self, from: json)
+    #expect(decoded.provider == .apple)
+  }
+
+  @Test
+  func providerStringLiteral() {
+    let provider: Provider = "custom_provider"
+    #expect(provider.rawValue == "custom_provider")
+  }
+
+  @Test
+  func providerHashability() {
+    let provider1: Provider = .apple
+    let provider2: Provider = "apple"
+    #expect(provider1 == provider2)
+    #expect(provider1.hashValue == provider2.hashValue)
+  }
 }

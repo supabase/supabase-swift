@@ -365,3 +365,74 @@ default: ...  // an unrecognized channel the SDK doesn't have a case for
 
 Compile error only if you have an exhaustive `switch` over `MessagingChannel` — add a `default:`
 case. Passing `.sms` / `.whatsapp` as an argument, and comparing with `==`, work unchanged.
+
+## `Provider` is now a struct, not an enum
+
+`Provider` (the OAuth provider used by `signInWithOAuth`/`linkIdentity`) is a `RawRepresentable`
+struct instead of an `enum`. It no longer conforms to `CaseIterable` or `Identifiable`.
+
+New OAuth providers are added by GoTrue on an ongoing basis, and `Provider` is `Codable` and part
+of the public API surface. As an `enum`, decoding a `Provider` value this SDK version didn't have
+a case for would throw a `DecodingError` instead of round-tripping the provider name — converting
+now closes that gap ahead of GoTrue actually returning one through a typed field.
+
+**Switch statements** — add a `default:` case:
+
+```swift
+// Before
+switch provider {
+case .apple: ...
+case .github: ...
+}
+
+// After
+switch provider {
+case .apple: ...
+case .github: ...
+default: ...  // a provider the SDK doesn't have a case for
+}
+```
+
+This is a compile error: the exhaustiveness check that previously guaranteed every case was
+handled is gone, so the compiler will flag a non-default switch as non-exhaustive only if you had
+a `default:` already; if you didn't and the switch now falls through unhandled, that's a silent
+behavior change — search your codebase for `switch` statements over `Provider` and add a
+`default:` explicitly.
+
+**`Provider.allCases`** — no longer exists, with no built-in replacement. `Provider` accepts any
+string, including ones the SDK has no static constant for, so an exhaustive list can't be part of
+the type itself; maintain your own array of the providers your app actually offers:
+
+```swift
+// Before
+Provider.allCases.forEach { ... }
+
+// After
+let myAppProviders: [Provider] = [.apple, .google, .github]  // whatever your app offers
+myAppProviders.forEach { ... }
+```
+
+This is a compile error (`allCases` no longer exists).
+
+**`Identifiable`** — no longer conforms. If you used `Provider` directly in a SwiftUI `ForEach` or
+`List` relying on its `Identifiable` conformance, supply an explicit `id:` — `Provider` is still
+`Hashable`, so `\.self` works:
+
+```swift
+// Before
+ForEach(providers) { provider in ... }
+
+// After
+ForEach(providers, id: \.self) { provider in ... }
+```
+
+This is a compile error (`ForEach`/`List` without an explicit `id:` require `Identifiable`).
+
+**Custom providers** — construct one from a string literal or `rawValue` the same way you would
+compare against a known one:
+
+```swift
+let provider: Provider = "custom_provider"
+if provider == .apple { ... }
+if provider.rawValue == "apple" { ... }
+```
