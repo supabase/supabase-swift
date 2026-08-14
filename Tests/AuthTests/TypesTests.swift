@@ -183,4 +183,17 @@ struct TypesTests {
     let type: ResendMobileType = "new_resend_kind"
     #expect(type.rawValue == "new_resend_kind")
   }
+
+  @Test
+  func signOutScopeStringLiteral() {
+    let scope: SignOutScope = "future_scope"
+    #expect(scope.rawValue == "future_scope")
+  }
+
+  @Test
+  func signOutScopeHashability() {
+    let scope1: SignOutScope = .global
+    let scope2: SignOutScope = "global"
+    #expect(scope1 == scope2)
+  }
 }
