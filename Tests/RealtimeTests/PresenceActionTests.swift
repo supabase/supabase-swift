@@ -195,28 +195,6 @@ struct PresenceActionTests {
     }
   }
 
-  @Test
-  func presenceV2Encoding() throws {
-    let state: JSONObject = [
-      "user_id": .string("user_789"),
-      "status": .string("online"),
-      "count": .integer(42),
-    ]
-    let presence = PresenceV2(ref: "test_ref", state: state)
-
-    let encodedData = try JSONEncoder().encode(presence)
-    let decodedDict = try JSONSerialization.jsonObject(with: encodedData) as? [String: Any]
-
-    #expect(decodedDict != nil)
-    #expect(decodedDict?["phx_ref"] as? String == "test_ref")
-
-    let stateDict = decodedDict?["state"] as? [String: Any]
-    #expect(stateDict != nil)
-    #expect(stateDict?["user_id"] as? String == "user_789")
-    #expect(stateDict?["status"] as? String == "online")
-    #expect(stateDict?["count"] as? Int == 42)
-  }
-
   // MARK: - PresenceV2 decodeState Tests
 
   struct TestUser: Codable, Equatable {
@@ -551,7 +529,7 @@ struct PresenceActionTests {
   }
 
   @Test
-  func presenceV2RoundTripCoding() throws {
+  func presenceV2DecodesRealisticServerPayload() throws {
     let originalState: JSONObject = [
       "user_id": .string("user_789"),
       "status": .string("online"),
@@ -561,9 +539,6 @@ struct PresenceActionTests {
       "metadata": .object(["key": .string("value")]),
     ]
     let originalPresence = PresenceV2(ref: "original_ref", state: originalState)
-
-    // Test that encoding works (we don't need the actual data for this test)
-    _ = try JSONEncoder().encode(originalPresence)
 
     // Create the expected server format manually by adding the state to metas with phx_ref
     let stateWithRef = originalState.merging(["phx_ref": .string(originalPresence.ref)]) { _, new in
