@@ -142,18 +142,32 @@ public struct CountOption: RawRepresentable, Hashable, Sendable, ExpressibleBySt
 ///
 /// See the [PostgREST documentation](https://postgrest.org/en/v9.0/api.html?highlight=PREFER#insertions-updates)
 /// for more detail.
-public enum PostgrestReturningOptions: String, Sendable {
+public struct PostgrestReturningOptions: RawRepresentable, Hashable, Sendable,
+  ExpressibleByStringLiteral
+{
+  public let rawValue: String
+
+  /// Creates a ``PostgrestReturningOptions`` from a raw string value.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  /// Creates a ``PostgrestReturningOptions`` from a string literal.
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
   /// Returns nothing from the server after the write.
   ///
   /// Use this option when you do not need the affected rows, as it avoids
   /// the overhead of serializing and transmitting them.
-  case minimal
+  public static let minimal: PostgrestReturningOptions = "minimal"
 
   /// Returns a copy of the written rows.
   ///
   /// Use this option (or chain `.select()` after the call) when you need the
   /// server-generated values such as `id`, `created_at`, or computed columns.
-  case representation
+  public static let representation: PostgrestReturningOptions = "representation"
 }
 
 /// The conversion strategy used to turn a plain-text search query into a `tsquery` expression.
