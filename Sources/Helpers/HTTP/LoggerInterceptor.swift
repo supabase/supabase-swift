@@ -6,15 +6,16 @@
 //
 
 import Foundation
+package import Logging
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
 #endif
 
 package struct LoggerInterceptor: HTTPClientInterceptor {
-  let logger: any SupabaseLogger
+  let logger: Logging.Logger
 
-  package init(logger: any SupabaseLogger) {
+  package init(logger: Logging.Logger) {
     self.logger = logger
   }
 
@@ -23,33 +24,32 @@ package struct LoggerInterceptor: HTTPClientInterceptor {
     next: @Sendable (HTTPRequest) async throws -> HTTPResponse
   ) async throws -> HTTPResponse {
     let id = UUID().uuidString
-    return try await SupabaseLoggerTaskLocal.$additionalContext.withValue(merging: [
-      "requestID": .string(id)
-    ]) {
-      let urlRequest = request.urlRequest
+    var logger = logger
+    logger[metadataKey: "requestID"] = "\(id)"
 
-      logger.verbose(
+    let urlRequest = request.urlRequest
+
+    logger.trace(
+      """
+      Request: \(urlRequest.httpMethod ?? "") \(urlRequest.url?.absoluteString.removingPercentEncoding ?? "")
+      Body: \(stringify(request.body))
+      """
+    )
+
+    do {
+      let response = try await next(request)
+      logger.trace(
         """
-        Request: \(urlRequest.httpMethod ?? "") \(urlRequest.url?.absoluteString.removingPercentEncoding ?? "")
-        Body: \(stringify(request.body))
+        Response: Status code: \(response.statusCode) Content-Length: \(
+          response.underlyingResponse.expectedContentLength
+        )
+        Body: \(stringify(response.data))
         """
       )
-
-      do {
-        let response = try await next(request)
-        logger.verbose(
-          """
-          Response: Status code: \(response.statusCode) Content-Length: \(
-            response.underlyingResponse.expectedContentLength
-          )
-          Body: \(stringify(response.data))
-          """
-        )
-        return response
-      } catch {
-        logger.error("Response: Failure \(error)")
-        throw error
-      }
+      return response
+    } catch {
+      logger.error("Response: Failure \(error)")
+      throw error
     }
   }
 }

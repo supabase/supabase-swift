@@ -1,5 +1,6 @@
 import ConcurrencyExtras
 import Foundation
+import Logging
 import Testing
 
 @testable import Realtime
@@ -42,7 +43,7 @@ struct ConnectionManagerTests {
       url: url,
       headers: headers,
       reconnectDelay: reconnectDelay,
-      logger: nil,
+      logger: supabaseDefaultLogger(label: "io.supabase.realtime"),
       clock: ContinuousClock()
     )
   }

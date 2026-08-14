@@ -21,8 +21,7 @@ final class StorageFileIntegrationTests {
       url: URL(string: "\(DotEnv.SUPABASE_URL)/storage/v1")!,
       headers: [
         "Authorization": "Bearer \(DotEnv.SUPABASE_SECRET_KEY)"
-      ],
-      logger: nil
+      ]
     )
   )
 
@@ -360,15 +359,8 @@ final class StorageFileIntegrationTests {
     try await storage.from(bucketName).upload(path, data: Data())
 
     let files = try await storage.from(bucketName).list()
-    assertInlineSnapshot(of: files, as: .json) {
-      """
-      [
-        {
-          "name" : "empty-folder"
-        }
-      ]
-      """
-    }
+    #expect(files.map(\.name) == ["empty-folder"])
+    #expect(files.allSatisfy { $0.id == nil })
   }
 
   @Test

@@ -9,6 +9,7 @@ import ConcurrencyExtras
 import CustomDump
 import Foundation
 import InlineSnapshotTesting
+import Logging
 import TestHelpers
 import Testing
 
@@ -46,7 +47,8 @@ struct SessionManagerTests {
       api: APIClient(clientID: clientID),
       codeVerifierStorage: .mock,
       sessionStorage: SessionStorage.live(clientID: clientID),
-      sessionManager: SessionManager.live(clientID: clientID)
+      sessionManager: SessionManager.live(clientID: clientID),
+      logger: supabaseDefaultLogger(label: "io.supabase.auth")
     )
   }
 

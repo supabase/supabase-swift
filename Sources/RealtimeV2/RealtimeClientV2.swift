@@ -9,6 +9,7 @@ import ConcurrencyExtras
 public import Foundation
 import HTTPTypes
 import Helpers
+import Logging
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -152,11 +153,9 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   /// targets of this package (e.g. `SupabaseClient`) can inject a test clock without
   /// exposing it publicly.
   package convenience init(url: URL, options: RealtimeClientOptions, clock: any Clock<Duration>) {
-    var interceptors: [any HTTPClientInterceptor] = []
-
-    if let logger = options.logger {
-      interceptors.append(LoggerInterceptor(logger: logger))
-    }
+    let interceptors: [any HTTPClientInterceptor] = [
+      LoggerInterceptor(logger: options.logger)
+    ]
 
     self.init(
       url: url,
@@ -337,12 +336,12 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   /// await client.connect()
   /// ```
   public func connect() async {
-    options.logger?.debug("Connecting...")
+    options.logger.debug("Connecting...")
     self.yieldStatusIfChanged(.connecting)
 
     do {
       let conn = try await connectionManager.connect()
-      options.logger?.debug("Connected to realtime WebSocket")
+      options.logger.debug("Connected to realtime WebSocket")
 
       // Set up message listening, heartbeating, and connection caching
       // synchronously so callers can rely on state being ready after connect()
@@ -350,7 +349,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       handleConnected(conn: conn, isReconnect: false)
       self.yieldStatusIfChanged(.connected)
     } catch {
-      options.logger?.error("Connection failed: \(error)")
+      options.logger.error("Connection failed: \(error)")
       self.yieldStatusIfChanged(.disconnected)
     }
   }
@@ -422,7 +421,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     }
 
     if shouldDisconnect {
-      options.logger?.debug("No more subscribed channel in socket")
+      options.logger.debug("No more subscribed channel in socket")
       let delay = options.disconnectOnEmptyChannelsAfter
       if delay <= 0 {
         disconnect()
@@ -512,7 +511,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
             case .binary(let data):
               switch self.options.vsn {
               case .v1:
-                options.logger?.warning(
+                options.logger.warning(
                   "Received binary frame but vsn is 1.0.0; binary frames are only supported in 2.0.0"
                 )
               case .v2:
@@ -520,7 +519,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
                   let broadcast = try serializer.decodeBinary(data)
                   await onBroadcast(broadcast)
                 } catch {
-                  options.logger?.error("Failed to decode binary frame: \(error)")
+                  options.logger.error("Failed to decode binary frame: \(error)")
                 }
               }
 
@@ -535,7 +534,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
               await onMessage(message)
 
             case .close(let code, let reason):
-              options.logger?.debug(
+              options.logger.debug(
                 "WebSocket closed. Code: \(code?.description ?? "<none>"), Reason: \(reason)"
               )
 
@@ -546,7 +545,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
           return
         } catch {
           if Task.isCancelled { return }
-          options.logger?
+          options.logger
             .debug(
               "WebSocket error \(error.localizedDescription). Trying again in \(options.reconnectDelay)"
             )
@@ -607,7 +606,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       await setAuth()
     } else {
       // Timeout: previous heartbeat was never acknowledged
-      options.logger?.debug("Heartbeat timeout - previous heartbeat not acknowledged")
+      options.logger.debug("Heartbeat timeout - previous heartbeat not acknowledged")
       yieldHeartbeatStatus(.timeout)
 
       // Clear the pending ref before reconnecting
@@ -631,7 +630,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   ///   - code: An optional numeric close code to send to the server.
   ///   - reason: An optional human-readable reason string.
   public func disconnect(code: Int? = nil, reason: String? = nil) {
-    options.logger?.debug("Closing WebSocket connection")
+    options.logger.debug("Closing WebSocket connection")
 
     mutableState.withValue {
       $0.ref = 0
@@ -708,7 +707,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       do {
         tokenToSend = try await options.accessToken?()
       } catch {
-        options.logger?.error("Failed to fetch access token: \(error)")
+        options.logger.error("Failed to fetch access token: \(error)")
         return
       }
     }
@@ -723,7 +722,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
 
     for channel in channels.values {
       if channel.status == .subscribed {
-        options.logger?.debug("Updating auth token for channel \(channel.topic)")
+        options.logger.debug("Updating auth token for channel \(channel.topic)")
         await channel.push(
           ChannelEvent.accessToken,
           payload: ["access_token": tokenToSend.map { .string($0) } ?? .null]
@@ -740,9 +739,9 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     let channel = mutableState.withValue {
       if let ref = message.ref, ref == $0.pendingHeartbeatRef {
         $0.pendingHeartbeatRef = nil
-        options.logger?.debug("heartbeat received")
+        options.logger.debug("heartbeat received")
       } else {
-        options.logger?
+        options.logger
           .debug("Received event \(message.event) for channel \(message.topic)")
       }
 
@@ -756,7 +755,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
 
   /// Routes a decoded binary broadcast to the appropriate channel.
   private func onBroadcast(_ broadcast: DecodedBroadcast) async {
-    options.logger?.debug(
+    options.logger.debug(
       "Received binary broadcast for topic \(broadcast.topic), event \(broadcast.event)"
     )
 
@@ -784,7 +783,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
         case .v1:
           let data = try JSONEncoder().encode(message)
           guard let encoded = String(data: data, encoding: .utf8) else {
-            client.options.logger?.error("Failed to encode message as UTF-8.")
+            client.options.logger.error("Failed to encode message as UTF-8.")
             return
           }
           text = encoded
@@ -795,7 +794,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
         let conn = client.mutableState.withValue { $0.connection }
         conn?.send(text)
       } catch {
-        client.options.logger?.error(
+        client.options.logger.error(
           """
           Failed to send message:
           \(message)
@@ -836,7 +835,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
         let conn = client.mutableState.withValue { $0.connection }
         conn?.send(data)
       } catch {
-        client.options.logger?.error(
+        client.options.logger.error(
           """
           Failed to send binary broadcast:
           topic=\(topic), event=\(event)
@@ -877,7 +876,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
         let conn = client.mutableState.withValue { $0.connection }
         conn?.send(data)
       } catch {
-        client.options.logger?.error(
+        client.options.logger.error(
           """
           Failed to send binary broadcast:
           topic=\(topic), event=\(event)

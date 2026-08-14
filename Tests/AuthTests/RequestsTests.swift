@@ -733,7 +733,6 @@ struct RequestsTests {
       headers: ["Apikey": "dummy.api.key", "X-Client-Info": "gotrue-swift/x.y.z"],
       flowType: flowType,
       localStorage: InMemoryLocalStorage(),
-      logger: nil,
       fetch: { request in
         await MainActor.run {
           assertSnapshot(

@@ -10,6 +10,7 @@
   import ConcurrencyExtras
   import CustomDump
   import Foundation
+  import Logging
   import OSLog
   import Supabase
   import TestHelpers
@@ -40,9 +41,9 @@
         options: SupabaseClientOptions(
           auth: .init(storage: InMemoryLocalStorage()),
           global: .init(
-            logger: OSLogSupabaseLogger(
-              Logger(subsystem: "realtime.integration.tests", category: "client1")
-            )
+            logger: Logging.Logger(label: "client1") {
+              OSLogHandler(label: $0, subsystem: "realtime.integration.tests")
+            }
           )
         ),
         clock: testClock
@@ -54,9 +55,9 @@
         options: SupabaseClientOptions(
           auth: .init(storage: InMemoryLocalStorage()),
           global: .init(
-            logger: OSLogSupabaseLogger(
-              Logger(subsystem: "realtime.integration.tests", category: "client2")
-            )
+            logger: Logging.Logger(label: "client2") {
+              OSLogHandler(label: $0, subsystem: "realtime.integration.tests")
+            }
           )
         ),
         clock: testClock

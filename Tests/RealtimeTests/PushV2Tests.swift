@@ -7,6 +7,7 @@
 
 import ConcurrencyExtras
 import Foundation
+import Logging
 import Testing
 
 @testable import Realtime
@@ -82,7 +83,7 @@ struct PushV2Tests {
       topic: "test:channel",
       config: config,
       socket: mockSocket,
-      logger: nil
+      logger: Logging.Logger(label: "test") { _ in SwiftLogNoOpLogHandler() }
     )
 
     let sampleMessage = RealtimeMessageV2(
@@ -115,7 +116,7 @@ struct PushV2Tests {
       topic: "test:channel",
       config: config,
       socket: mockSocket,
-      logger: nil
+      logger: Logging.Logger(label: "test") { _ in SwiftLogNoOpLogHandler() }
     )
 
     let sampleMessage = RealtimeMessageV2(
@@ -159,7 +160,7 @@ struct PushV2Tests {
       topic: "test:channel",
       config: configAckDisabled,
       socket: mockSocket,
-      logger: nil
+      logger: Logging.Logger(label: "test") { _ in SwiftLogNoOpLogHandler() }
     )
     #expect(!channelAckDisabled.config.broadcast.acknowledgeBroadcasts)
 
@@ -173,7 +174,7 @@ struct PushV2Tests {
       topic: "test:channel",
       config: configAckEnabled,
       socket: mockSocket,
-      logger: nil
+      logger: Logging.Logger(label: "test") { _ in SwiftLogNoOpLogHandler() }
     )
     #expect(channelAckEnabled.config.broadcast.acknowledgeBroadcasts)
   }
@@ -191,7 +192,7 @@ struct PushV2Tests {
       topic: "test:channel",
       config: config,
       socket: mockSocket,
-      logger: nil
+      logger: Logging.Logger(label: "test") { _ in SwiftLogNoOpLogHandler() }
     )
 
     let sampleMessage = RealtimeMessageV2(
@@ -251,7 +252,7 @@ struct PushV2Tests {
       topic: "test:channel",
       config: config,
       socket: mockSocket,
-      logger: nil
+      logger: Logging.Logger(label: "test") { _ in SwiftLogNoOpLogHandler() }
     )
 
     let sampleMessage = RealtimeMessageV2(
@@ -290,13 +291,13 @@ private final class MockRealtimeChannel: RealtimeChannelProtocol {
   let topic: String
   var config: RealtimeChannelConfig
   let socket: any RealtimeClientProtocol
-  let logger: (any SupabaseLogger)?
+  let logger: Logging.Logger
 
   init(
     topic: String,
     config: RealtimeChannelConfig,
     socket: any RealtimeClientProtocol,
-    logger: (any SupabaseLogger)?
+    logger: Logging.Logger
   ) {
     self.topic = topic
     self.config = config

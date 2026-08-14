@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Logging
 
 /// Represents the different status of a push
 public enum PushStatus: String, Sendable {
@@ -56,10 +57,10 @@ final class PushV2 {
         }
       }
     } catch is TimeoutError {
-      channel.logger?.debug("Push timed out.")
+      channel.logger.debug("Push timed out.")
       return .timeout
     } catch {
-      channel.logger?.error("Error sending push: \(error.localizedDescription)")
+      channel.logger.error("Error sending push: \(error.localizedDescription)")
       return .error
     }
   }

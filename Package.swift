@@ -28,6 +28,10 @@ let package = Package(
   dependencies: [
     .package(url: "https://github.com/apple/swift-crypto.git", "3.0.0"..<"5.0.0"),
     .package(url: "https://github.com/apple/swift-http-types.git", from: "1.3.0"),
+    // Pinned below 1.11.0: that version requires swift-tools-version 6.2, above this
+    // package's current floor (Xcode 16.4+ / Swift 6.1). Widening this range raises
+    // the effective minimum toolchain for every consumer — see SDK-1412.
+    .package(url: "https://github.com/apple/swift-log.git", "1.5.0"..<"1.11.0"),
     .package(url: "https://github.com/open-telemetry/opentelemetry-swift-core.git", from: "2.5.0"),
     .package(url: "https://github.com/pointfreeco/swift-clocks", from: "1.0.0"),
     .package(url: "https://github.com/pointfreeco/swift-concurrency-extras", from: "1.1.0"),
@@ -45,6 +49,7 @@ let package = Package(
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
         .product(name: "Clocks", package: "swift-clocks"),
+        .product(name: "Logging", package: "swift-log"),
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
         .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
       ]
@@ -86,6 +91,7 @@ let package = Package(
         .product(name: "Crypto", package: "swift-crypto"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
         .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
+        .product(name: "Logging", package: "swift-log"),
         "Helpers",
       ]
     ),
@@ -111,6 +117,7 @@ let package = Package(
       dependencies: [
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
+        .product(name: "Logging", package: "swift-log"),
         "Helpers",
       ]
     ),
@@ -149,6 +156,7 @@ let package = Package(
       dependencies: [
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
+        .product(name: "Logging", package: "swift-log"),
         "Helpers",
       ]
     ),
@@ -171,6 +179,7 @@ let package = Package(
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
         .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
+        .product(name: "Logging", package: "swift-log"),
         "Helpers",
       ]
     ),
@@ -199,6 +208,7 @@ let package = Package(
       dependencies: [
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
+        .product(name: "Logging", package: "swift-log"),
         "Helpers",
       ]
     ),
@@ -222,6 +232,7 @@ let package = Package(
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
         .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
+        .product(name: "Logging", package: "swift-log"),
         .product(
           name: "OpenTelemetryApi", package: "opentelemetry-swift-core",
           condition: .when(traits: ["OpenTelemetry"])

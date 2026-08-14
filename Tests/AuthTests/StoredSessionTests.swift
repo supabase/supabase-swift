@@ -1,5 +1,6 @@
 import ConcurrencyExtras
 import Foundation
+import Logging
 import SnapshotTesting
 import TestHelpers
 import Testing
@@ -33,14 +34,14 @@ struct StoredSessionTests {
       configuration: AuthClient.Configuration(
         url: URL(string: "http://localhost")!,
         storageKey: "supabase.auth.token",
-        localStorage: localStorage,
-        logger: nil
+        localStorage: localStorage
       ),
       http: HTTPClientMock(),
       api: .init(clientID: testClientID),
       codeVerifierStorage: .mock,
       sessionStorage: .live(clientID: testClientID),
-      sessionManager: .live(clientID: testClientID)
+      sessionManager: .live(clientID: testClientID),
+      logger: supabaseDefaultLogger(label: "io.supabase.auth")
     )
 
     let sut = Dependencies[testClientID].sessionStorage
@@ -57,14 +58,14 @@ struct StoredSessionTests {
       configuration: AuthClient.Configuration(
         url: URL(string: "http://localhost")!,
         storageKey: "supabase.auth.token",
-        localStorage: try! DiskTestStorage(),
-        logger: nil
+        localStorage: try! DiskTestStorage()
       ),
       http: HTTPClientMock(),
       api: .init(clientID: clientID),
       codeVerifierStorage: .mock,
       sessionStorage: .live(clientID: clientID),
-      sessionManager: .live(clientID: clientID)
+      sessionManager: .live(clientID: clientID),
+      logger: supabaseDefaultLogger(label: "io.supabase.auth")
     )
 
     let sut = Dependencies[clientID].sessionStorage

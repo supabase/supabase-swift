@@ -1,4 +1,5 @@
 public import Foundation
+public import Logging
 
 #if canImport(FoundationNetworking)
   public import FoundationNetworking
@@ -103,13 +104,14 @@ public struct SupabaseClientOptions: Sendable {
     /// A session to use for making requests, defaults to `URLSession.shared`.
     public let session: URLSession
 
-    /// The logger  to use across all Supabase sub-packages.
-    public let logger: (any SupabaseLogger)?
+    /// The logger to use across all Supabase sub-packages. Defaults to a build-config-aware
+    /// logger: visible (warning+) in debug builds, silent in release builds.
+    public let logger: Logging.Logger
 
     public init(
       headers: [String: String] = [:],
       session: URLSession = .shared,
-      logger: (any SupabaseLogger)? = nil
+      logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase")
     ) {
       self.headers = headers
       self.session = session

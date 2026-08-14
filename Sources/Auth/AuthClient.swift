@@ -1,6 +1,7 @@
 import ConcurrencyExtras
 public import Foundation
 import IssueReporting
+import Logging
 
 import struct HTTPTypes.HTTPFields
 
@@ -21,17 +22,6 @@ import struct HTTPTypes.HTTPFields
 #endif
 
 typealias AuthClientID = Int
-
-struct AuthClientLoggerDecorator: SupabaseLogger {
-  let clientID: AuthClientID
-  let decoratee: any SupabaseLogger
-
-  func log(message: SupabaseLogMessage) {
-    var message = message
-    message.additionalContext["client_id"] = .integer(clientID)
-    decoratee.log(message: message)
-  }
-}
 
 /// JWKS cache TTL (Time To Live) - 10 minutes
 private let JWKS_TTL: TimeInterval = 10 * 60
@@ -175,7 +165,7 @@ public actor AuthClient {
   nonisolated private var eventEmitter: AuthStateChangeEventEmitter {
     Dependencies[clientID].eventEmitter
   }
-  nonisolated private var logger: (any SupabaseLogger)? {
+  nonisolated private var logger: Logging.Logger {
     Dependencies[clientID].configuration.logger
   }
   nonisolated private var sessionStorage: SessionStorage { Dependencies[clientID].sessionStorage }
@@ -233,6 +223,12 @@ public actor AuthClient {
   public init(configuration: Configuration) {
     clientID = AuthClient.nextClientID()
 
+    let logger: Logging.Logger = {
+      var logger = configuration.logger
+      logger[metadataKey: "client_id"] = "\(clientID)"
+      return logger
+    }()
+
     Dependencies[clientID] = Dependencies(
       configuration: configuration,
       http: HTTPClient(configuration: configuration),
@@ -240,9 +236,8 @@ public actor AuthClient {
       codeVerifierStorage: .live(clientID: clientID),
       sessionStorage: .live(clientID: clientID),
       sessionManager: .live(clientID: clientID),
-      logger: configuration.logger.map {
-        AuthClientLoggerDecorator(clientID: clientID, decoratee: $0)
-      }
+      eventEmitter: AuthStateChangeEventEmitter(logger: logger),
+      logger: logger
     )
 
     Task { @MainActor in observeAppLifecycleChanges() }
@@ -736,7 +731,7 @@ public actor AuthClient {
     let codeVerifier = codeVerifierStorage.get()
 
     if codeVerifier == nil {
-      logger?.error(
+      logger.error(
         "code verifier not found, a code verifier should exist when calling this method."
       )
     }
@@ -947,7 +942,7 @@ public actor AuthClient {
       do {
         try await session(from: url)
       } catch {
-        logger?.error("Failure loading session from url '\(url)' error: \(error)")
+        logger.error("Failure loading session from url '\(url)' error: \(error)")
       }
     }
   }
@@ -955,7 +950,7 @@ public actor AuthClient {
   /// Gets the session data from a OAuth2 callback URL.
   @discardableResult
   public func session(from url: URL) async throws -> Session {
-    logger?.debug("Received URL: \(url)")
+    logger.debug("Received URL: \(url)")
 
     let params = extractParams(from: url)
 
@@ -1091,7 +1086,7 @@ public actor AuthClient {
   /// - Parameter scope: Specifies which sessions should be logged out.
   public func signOut(scope: SignOutScope = .global) async throws {
     guard let accessToken = currentSession?.accessToken else {
-      configuration.logger?.warning("signOut called without a session")
+      configuration.logger.warning("signOut called without a session")
       return
     }
 

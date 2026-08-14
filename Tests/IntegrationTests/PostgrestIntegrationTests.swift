@@ -43,8 +43,7 @@ struct PostgrestIntegrationTests {
     url: URL(string: "\(DotEnv.SUPABASE_URL)/rest/v1")!,
     headers: [
       "Apikey": DotEnv.SUPABASE_PUBLISHABLE_KEY
-    ],
-    logger: nil
+    ]
   )
 
   init() async throws {

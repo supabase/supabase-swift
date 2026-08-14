@@ -1,5 +1,6 @@
 import ConcurrencyExtras
 import Foundation
+import Logging
 import Testing
 
 @testable import Realtime
@@ -36,7 +37,7 @@ struct ChannelStateManagerTests {
 
     let sut = ChannelStateManager(
       topic: "test",
-      logger: nil,
+      logger: supabaseDefaultLogger(label: "io.supabase.realtime"),
       maxRetryAttempts: maxRetryAttempts,
       timeoutInterval: timeoutInterval,
       clock: ContinuousClock(),

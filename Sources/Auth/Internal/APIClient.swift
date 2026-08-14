@@ -3,10 +3,9 @@ import HTTPTypes
 
 extension HTTPClient {
   init(configuration: AuthClient.Configuration) {
-    var interceptors: [any HTTPClientInterceptor] = []
-    if let logger = configuration.logger {
-      interceptors.append(LoggerInterceptor(logger: logger))
-    }
+    var interceptors: [any HTTPClientInterceptor] = [
+      LoggerInterceptor(logger: configuration.logger)
+    ]
 
     interceptors.append(
       RetryRequestInterceptor(

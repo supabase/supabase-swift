@@ -1,5 +1,6 @@
 import ConcurrencyExtras
 import Foundation
+import Logging
 
 struct CodeVerifierStorage: Sendable {
   var get: @Sendable () -> String?
@@ -15,12 +16,12 @@ extension CodeVerifierStorage {
       get: {
         do {
           guard let data = try configuration.localStorage.retrieve(key: key) else {
-            configuration.logger?.debug("Code verifier not found.")
+            configuration.logger.debug("Code verifier not found.")
             return nil
           }
           return String(decoding: data, as: UTF8.self)
         } catch {
-          configuration.logger?.error(
+          configuration.logger.error(
             "Failure loading code verifier: \(error.localizedDescription)")
           return nil
         }
@@ -32,10 +33,10 @@ extension CodeVerifierStorage {
           } else if code == nil {
             try configuration.localStorage.remove(key: key)
           } else {
-            configuration.logger?.error("Code verifier is not a valid UTF8 string.")
+            configuration.logger.error("Code verifier is not a valid UTF8 string.")
           }
         } catch {
-          configuration.logger?.error(
+          configuration.logger.error(
             "Failure storing code verifier: \(error.localizedDescription)")
         }
       }

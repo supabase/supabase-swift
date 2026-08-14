@@ -74,10 +74,9 @@ public class StorageApi: @unchecked Sendable {
     self.configuration = configuration
     self.mutableState = LockIsolated(MutableState(headers: initialHeaders))
 
-    var interceptors: [any HTTPClientInterceptor] = []
-    if let logger = configuration.logger {
-      interceptors.append(LoggerInterceptor(logger: logger))
-    }
+    let interceptors: [any HTTPClientInterceptor] = [
+      LoggerInterceptor(logger: configuration.logger)
+    ]
 
     http = HTTPClient(
       fetch: configuration.session.fetch,

@@ -29,7 +29,7 @@ extension PostgrestMockerTests {
     @Test
     func customHeaderOnAPerCallBasis() throws {
       let url = URL(string: "http://localhost:54321/rest/v1")!
-      let postgrest1 = PostgrestClient(url: url, headers: ["apikey": "foo"], logger: nil)
+      let postgrest1 = PostgrestClient(url: url, headers: ["apikey": "foo"])
       let postgrest2 = try postgrest1.rpc("void_func").setHeader(
         name: .init("apikey")!, value: "bar")
 

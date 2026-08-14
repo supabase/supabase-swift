@@ -8,6 +8,7 @@
 import Clocks
 import ConcurrencyExtras
 import Foundation
+import Logging
 import TestHelpers
 import Testing
 
@@ -341,7 +342,7 @@ import Testing
           url: URL(string: "ws://localhost")!,
           headers: [:],
           reconnectDelay: 0.1,
-          logger: nil,
+          logger: supabaseDefaultLogger(label: "io.supabase.realtime"),
           clock: testClock
         )
         try await sut.connect()

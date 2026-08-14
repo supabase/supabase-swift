@@ -55,6 +55,60 @@ case .emailChangeConfirmationPending(let confirmation):
 `AuthResponse` itself is unchanged: `signUp` and the Passkey methods still return it, and `user` is
 still non-optional there, since neither endpoint can produce the confirmation-pending shape.
 
+## Several public types narrowed from `Codable` to `Decodable` or `Encodable`
+
+Many public types only ever get used in one direction — either decoded from a server response, or
+encoded into a request body — but declared full `Codable` anyway. That's now narrowed to match
+actual usage, and a couple of hand-rolled coders that only existed for the unused direction were
+deleted along with it.
+
+**Narrowed to `Decodable`-only** (no longer `Encodable`): `AuthResponse`, `SSOResponse`,
+`OAuthClient`, `OAuthClientType`, `OAuthClientRegistrationType`, `OAuthAuthorizationClient`,
+`OAuthAuthorizationUser`, `OAuthAuthorizationDetails`, `OAuthRedirect`, `OAuthGrant`, `JWK`, `JWKS`,
+`JWTHeader`, `JWTClaims`, `AudienceClaim`, `PasskeyListItem` (Auth); `FileObject`, `Bucket`,
+`VectorBucket`, `VectorIndex`, `VectorIndexSummary`, `VectorMatch` (Storage); `Column`, `PresenceV2`
+(Realtime); `PostgrestError` (shared).
+
+**No longer conform to `Codable` at all** (never encoded or decoded through Codable machinery in
+the first place): `OAuthResponse`, `Provider` (Auth).
+
+**Narrowed to `Encodable`-only** (no longer `Decodable`): `OpenIDConnectCredentials`,
+`OpenIDConnectCredentials.Provider`, `AuthMetaSecurity`, `Web3Credentials`, `Web3Chain`,
+`UserAttributes`, `MessagingChannel` (Auth); `ReplayOption`, `BroadcastJoinConfig`,
+`PresenceJoinConfig` (Realtime); `VectorEntry`, `ResizeMode`, `ImageFormat`, `SortOrder` (Storage).
+
+If you were relying on encoding one of the `Decodable`-only types (or decoding one of the
+`Encodable`-only types) yourself — e.g. to persist it to disk or pass it through your own
+`Codable`-based pipeline — wrap it in your own type instead:
+
+```swift
+// Before: encoding a response type directly
+let data = try JSONEncoder().encode(oauthClient)
+
+// After: wrap it in your own Codable type if you need to round-trip it
+struct MyOAuthClientCache: Codable {
+  let clientId: UUID
+  let clientName: String
+  // ...the fields you actually need to persist
+}
+```
+
+The mirror case — decoding an `Encodable`-only type from stored JSON instead of constructing it
+directly — needs the same wrapper:
+
+```swift
+// Before: decoding a request type from stored JSON
+let credentials = try JSONDecoder().decode(OpenIDConnectCredentials.self, from: data)
+
+// After: decode into your own Codable type, then construct the request type from it
+struct MyStoredCredentials: Codable {
+  let provider: String
+  let idToken: String
+}
+let stored = try JSONDecoder().decode(MyStoredCredentials.self, from: data)
+let credentials = OpenIDConnectCredentials(provider: .init(rawValue: stored.provider)!, idToken: stored.idToken)
+```
+
 ## All previously-deprecated APIs have been removed
 
 Every API that carried an `@available(*, deprecated, ...)` annotation ahead of v3 has now been
@@ -206,6 +260,109 @@ removed:
 `ObservationToken.remove()` has been removed — use `.cancel()` instead. `PostgrestError.detail`
 and `PostgrestError.init(detail:hint:code:message:)` have been removed — use `.details` and
 `init(details:hint:code:message:)`.
+
+## Logging: `SupabaseLogger` replaced with swift-log
+
+`SupabaseLogger`, `SupabaseLogMessage`, `SupabaseLogLevel`, and `OSLogSupabaseLogger` are removed.
+Every `logger:` parameter across `SupabaseClient`, `AuthClient`, `PostgrestClient`,
+`SupabaseStorageClient`, `RealtimeClientOptions`, and `FunctionsClient` now takes a
+[`Logging.Logger`](https://github.com/apple/swift-log) instead of a `SupabaseLogger`. The SDK had
+been carrying its own logging protocol since before swift-log was a viable dependency for a
+library this size; now that swift-log is the ecosystem standard, a bespoke protocol only meant
+every consumer had to write an adapter to plug the SDK's logs into whatever logging backend
+(OSLog, swift-log itself, a custom sink) their app already used. Taking `Logging.Logger` directly
+removes that adapter entirely — any existing swift-log-based setup now works unmodified.
+
+This is a compile error, not a silent behavior change: `logger:` parameters have a new type, so any
+call site passing a `SupabaseLogger` conformance no longer compiles.
+
+We don't re-export the `Logging` module, so constructing or spelling a `Logging.Logger` value in
+your own app or package requires two things of your own target, same as any other transitive
+dependency you want to use directly:
+
+- an explicit `import Logging` in the file that constructs the `Logger`
+- `swift-log` declared as an explicit dependency, e.g. in `Package.swift`:
+
+  ```swift
+  .package(url: "https://github.com/apple/swift-log.git", from: "1.5.0"),
+  ```
+
+  and on the relevant target:
+
+  ```swift
+  .product(name: "Logging", package: "swift-log"),
+  ```
+
+```swift
+// Before
+import Supabase
+
+let client = SupabaseClient(
+  supabaseURL: url,
+  supabaseKey: key,
+  options: .init(global: .init(logger: MyCustomLogger()))
+)
+
+// After
+import Logging
+import Supabase
+
+var logger = Logger(label: "myapp")
+logger.logLevel = .debug
+let client = SupabaseClient(
+  supabaseURL: url,
+  supabaseKey: key,
+  options: .init(global: .init(logger: logger))
+)
+```
+
+**Default behavior changed.** Previously, omitting `logger:` meant fully silent output, in both
+debug and release builds. Now, debug builds log warning-and-above to stderr by default, so you may
+see new console output after upgrading even without passing a logger yourself; release builds
+remain fully silent by default, matching the old behavior. To silence the debug-build default,
+pass a `Logger` backed by `SwiftLogNoOpLogHandler` (add `import Logging` to this file):
+
+```swift
+logger: Logger(label: "myapp") { _ in SwiftLogNoOpLogHandler() }
+```
+
+**OSLog parity.** `OSLogSupabaseLogger`'s zero-config OSLog/Console.app integration is replaced by
+`OSLogHandler`, constructed explicitly and installed as the backing handler for a `Logger` (add
+`import Logging` to this file):
+
+```swift
+logger: Logger(label: "myapp") { OSLogHandler(label: $0) }
+```
+
+`OSLogHandler` forwards every level by default (`logLevel` defaults to `.trace`), matching
+`OSLogSupabaseLogger`'s old always-forward behavior — use Console.app's own filtering, or set
+`logger.logLevel` yourself, to narrow what's emitted.
+
+If this file also has `import OSLog` — which it will if you're wiring up `OSLogHandler` alongside
+your app's own OSLog-based logging — you'll hit a `'Logger' is ambiguous for type lookup` compile
+error, because both `Logging.Logger` and `os.Logger` are now in scope unqualified in that file.
+Fix it by fully qualifying whichever type you mean less often, e.g. `os.Logger` for OSLog's own
+type:
+
+```swift
+import Logging
+import OSLog
+
+let appLogger = os.Logger(subsystem: "myapp", category: "app")
+let supabaseLogger = Logging.Logger(label: "myapp") { OSLogHandler(label: $0) }
+```
+
+or keep the two imports in separate files so the ambiguity never arises.
+
+**`SupabaseClient` + `RealtimeClientOptions.logger`.** If you construct a `RealtimeClientOptions`
+with an explicit `logger:` and pass it to `SupabaseClientOptions(realtime:)`, `SupabaseClient` now
+always overrides it with `SupabaseClientOptions.GlobalOptions.logger` — matching how the
+Auth/PostgREST/Storage/Functions sub-clients already behaved, so Realtime is no longer the odd one
+out. This is a silent behavior change, not a compile error: search your codebase for
+`RealtimeClientOptions(` call sites that also set `logger:` and are passed through
+`SupabaseClientOptions(realtime:)` — that logger is now ignored in favor of the global one.
+Construct `RealtimeClientV2` directly (not through `SupabaseClient`) if you need a
+Realtime-specific logger distinct from the rest of the client.
 
 ## `KeychainLocalStorage`'s default Keychain service is now the host app's bundle identifier
 

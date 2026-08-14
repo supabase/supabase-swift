@@ -2,6 +2,7 @@ import ConcurrencyExtras
 public import Foundation
 import HTTPTypes
 import IssueReporting
+import Logging
 
 #if canImport(FoundationNetworking)
   public import FoundationNetworking
@@ -511,9 +512,8 @@ public final class SupabaseClient: Sendable {
     var realtimeOptions = options.realtime
     realtimeOptions.headers.merge(with: _headers)
 
-    if realtimeOptions.logger == nil {
-      realtimeOptions.logger = options.global.logger
-    }
+    realtimeOptions.logger = options.global.logger
+    realtimeOptions.logger[metadataKey: "system"] = "realtime"
 
     if realtimeOptions.fetch == nil {
       realtimeOptions.fetch = { [session = options.global.session] request in

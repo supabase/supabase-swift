@@ -51,7 +51,6 @@ struct BuildURLRequestTests {
       url: url,
       schema: nil,
       headers: ["X-Client-Info": "postgrest-swift/x.y.z"],
-      logger: nil,
       fetch: { request in
         guard let runningTestCase = runningTestCase.value else {
           Issue.record("execute called without a runningTestCase set.")
@@ -253,7 +252,7 @@ struct BuildURLRequestTests {
 
   @Test
   func sessionConfiguration() {
-    let client = PostgrestClient(url: url, schema: nil, logger: nil)
+    let client = PostgrestClient(url: url, schema: nil)
     let clientInfoHeader = client.configuration.headers["X-Client-Info"]
     #expect(clientInfoHeader != nil)
   }

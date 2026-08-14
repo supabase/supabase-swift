@@ -17,8 +17,7 @@ struct PostgrestResourceEmbeddingTests {
       url: URL(string: "\(DotEnv.SUPABASE_URL)/rest/v1")!,
       headers: [
         "apikey": DotEnv.SUPABASE_PUBLISHABLE_KEY
-      ],
-      logger: nil
+      ]
     )
   )
 

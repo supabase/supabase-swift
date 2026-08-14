@@ -9,6 +9,7 @@ import ConcurrencyExtras
 import Foundation
 import HTTPTypes
 import InlineSnapshotTesting
+import Logging
 import TestHelpers
 import Testing
 
@@ -32,7 +33,7 @@ struct RealtimeChannelTests {
       url: URL(string: "https://localhost:54321/realtime/v1")!,
       options: RealtimeClientOptions(headers: ["apikey": "test-key"])
     ),
-    logger: nil
+    logger: supabaseDefaultLogger(label: "io.supabase.realtime")
   )
 
   @Test
