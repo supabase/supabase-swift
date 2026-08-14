@@ -140,4 +140,23 @@ struct TypesTests {
     let type2: MobileOTPType = "sms"
     #expect(type1 == type2)
   }
+
+  @Test
+  func emailOTPTypeEncodesAsRawString() throws {
+    let data = try JSONEncoder().encode(EmailOTPType.emailChange)
+    #expect(String(decoding: data, as: UTF8.self) == "\"email_change\"")
+  }
+
+  @Test
+  func emailOTPTypeStringLiteral() {
+    let type: EmailOTPType = "new_flow"
+    #expect(type.rawValue == "new_flow")
+  }
+
+  @Test
+  func emailOTPTypeHashability() {
+    let type1: EmailOTPType = .signup
+    let type2: EmailOTPType = "signup"
+    #expect(type1 == type2)
+  }
 }

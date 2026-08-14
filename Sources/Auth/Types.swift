@@ -667,24 +667,38 @@ public struct MobileOTPType: RawRepresentable, Encodable, Hashable, Sendable,
 }
 
 /// The OTP type used when verifying an email one-time password.
-public enum EmailOTPType: String, Encodable, CaseIterable, Sendable {
+public struct EmailOTPType: RawRepresentable, Encodable, Hashable, Sendable,
+  ExpressibleByStringLiteral
+{
+  public let rawValue: String
+
+  /// Creates an ``EmailOTPType`` from a raw string value.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  /// Creates an ``EmailOTPType`` from a string literal.
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
   /// OTP sent during initial sign-up email confirmation.
-  case signup
+  public static let signup: EmailOTPType = "signup"
 
   /// OTP sent when an admin invites a user by email.
-  case invite
+  public static let invite: EmailOTPType = "invite"
 
   /// OTP sent as part of a magic-link sign-in flow.
-  case magiclink
+  public static let magiclink: EmailOTPType = "magiclink"
 
   /// OTP sent when the user requests a password reset.
-  case recovery
+  public static let recovery: EmailOTPType = "recovery"
 
   /// OTP sent when the user requests an email address change.
-  case emailChange = "email_change"
+  public static let emailChange: EmailOTPType = "email_change"
 
   /// Generic email OTP.
-  case email
+  public static let email: EmailOTPType = "email"
 }
 
 /// The response from sign-up and passkey calls that may return either a session or a user,
