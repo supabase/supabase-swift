@@ -692,3 +692,30 @@ default: ...  // a provider the SDK doesn't have a case for
 Compile error only if you have an exhaustive `switch` over this type — add a `default:` case.
 Constructing and comparing known providers (`OpenIDConnectCredentials(provider: .apple, ...)`,
 `provider == .google`) work unchanged.
+
+## `MobileOTPType` is now a struct, not an enum
+
+`MobileOTPType` (the OTP kind passed to `verifyOTP` for phone-based flows) is a `RawRepresentable`
+struct instead of an `enum`.
+
+It's sent to the backend, not decoded from it, but it's part of the public API surface — as an
+`enum`, using an OTP type GoTrue added after this SDK version shipped required an SDK upgrade
+even though constructing the value doesn't need one.
+
+```swift
+// Before
+switch type {
+case .sms: ...
+case .phoneChange: ...
+}
+
+// After
+switch type {
+case .sms: ...
+case .phoneChange: ...
+default: ...  // an OTP type the SDK doesn't have a case for
+}
+```
+
+Compile error only if you have an exhaustive `switch` over `MobileOTPType` — add a `default:` case.
+Passing `.sms` / `.phoneChange` as an argument works unchanged.
