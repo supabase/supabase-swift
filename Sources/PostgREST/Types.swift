@@ -102,24 +102,36 @@ public struct PostgrestResponse<T> {
 /// | ``exact`` | Exact | Slow |
 /// | ``planned`` | Approximate | Fast |
 /// | ``estimated`` | Adaptive | Moderate |
-public enum CountOption: String, Sendable {
+public struct CountOption: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+  public let rawValue: String
+
+  /// Creates a ``CountOption`` from a raw string value.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  /// Creates a ``CountOption`` from a string literal.
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
   /// Performs a `COUNT(*)` under the hood for an exact row count.
   ///
   /// Use this when you need a precise total. It can be slow on large tables.
-  case exact
+  public static let exact: CountOption = "exact"
 
   /// Uses PostgreSQL statistics for a fast but approximate row count.
   ///
   /// The estimate is derived from `pg_class.reltuples` and may be inaccurate  // cspell:ignore reltuples
   /// if the table statistics are stale.
-  case planned
+  public static let planned: CountOption = "planned"
 
   /// Uses exact count for low numbers and planned count for high numbers.
   ///
   /// PostgREST switches to the approximate algorithm automatically when the
   /// estimated count exceeds a threshold, trading accuracy for performance
   /// on large result sets.
-  case estimated
+  public static let estimated: CountOption = "estimated"
 }
 
 /// Controls which rows PostgREST returns after a write operation.
