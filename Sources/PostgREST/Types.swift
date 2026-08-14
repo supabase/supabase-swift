@@ -174,25 +174,37 @@ public struct PostgrestReturningOptions: RawRepresentable, Hashable, Sendable,
 ///
 /// Pass a ``TextSearchType`` to ``PostgrestFilterBuilder/textSearch(_:query:config:type:)`` to
 /// control how user-supplied text is interpreted by PostgreSQL's full-text search engine.
-public enum TextSearchType: String, Sendable {
+public struct TextSearchType: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+  public let rawValue: String
+
+  /// Creates a ``TextSearchType`` from a raw string value.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  /// Creates a ``TextSearchType`` from a string literal.
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
   /// Converts the query using PostgreSQL's `plainto_tsquery` function.
   ///
   /// Words in the query are combined with the `&` (AND) operator. Punctuation
   /// and special characters are ignored.
-  case plain = "pl"
+  public static let plain: TextSearchType = "pl"
 
   /// Converts the query using PostgreSQL's `phraseto_tsquery` function.
   ///
   /// Words must appear in the specified order, making this suitable for
   /// exact phrase searches.
-  case phrase = "ph"
+  public static let phrase: TextSearchType = "ph"
 
   /// Converts the query using PostgreSQL's `websearch_to_tsquery` function.
   ///
   /// This function accepts a web-search–style syntax (`"exact phrase"`, `-exclude`,
   /// `OR`) and never raises syntax errors, making it safe to use with raw
   /// user-supplied input.
-  case websearch = "w"
+  public static let websearch: TextSearchType = "w"
 }
 
 /// The output format of a PostgREST EXPLAIN plan.
