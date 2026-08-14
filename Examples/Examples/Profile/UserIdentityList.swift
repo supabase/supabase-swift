@@ -104,7 +104,7 @@ struct UserIdentityList: View {
 
                 if let identityData = identity.identityData {
                   DisclosureGroup("Identity Data") {
-                    AnyJSONView(value: .object(identityData))
+                    JSONValueView(value: .object(identityData))
                       .font(.system(.caption, design: .monospaced))
                   }
                   .font(.caption)

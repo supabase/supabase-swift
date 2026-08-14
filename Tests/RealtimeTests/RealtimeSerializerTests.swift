@@ -28,7 +28,7 @@ struct RealtimeSerializerTests {
     )
 
     let text = try serializer.encodeText(message)
-    let array = try JSONDecoder().decode([AnyJSON].self, from: Data(text.utf8))
+    let array = try JSONDecoder().decode([JSONValue].self, from: Data(text.utf8))
 
     #expect(array.count == 5)
     #expect(array[0].stringValue == "1")
@@ -49,7 +49,7 @@ struct RealtimeSerializerTests {
     )
 
     let text = try serializer.encodeText(message)
-    let array = try JSONDecoder().decode([AnyJSON].self, from: Data(text.utf8))
+    let array = try JSONDecoder().decode([JSONValue].self, from: Data(text.utf8))
 
     #expect(array.count == 5)
     #expect(array[0].stringValue == nil)

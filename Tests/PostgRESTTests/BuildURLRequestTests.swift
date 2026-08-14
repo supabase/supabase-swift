@@ -237,7 +237,7 @@ struct BuildURLRequestTests {
       TestCase(name: "rpc call with get and params") { client in
         try client.rpc(
           "get_array_element",
-          params: ["array": [37, 420, 64], "index": 2] as AnyJSON,
+          params: ["array": [37, 420, 64], "index": 2] as JSONValue,
           get: true
         )
       },

@@ -25,7 +25,7 @@ struct PostgrestTransformsTests {
   init() async throws {
     // Clean up test data before running tests.
     // Delete users with email (test data), preserving seed data (users with username only).
-    try await client.from("users").delete().not("email", operator: .is, value: AnyJSON.null)
+    try await client.from("users").delete().not("email", operator: .is, value: JSONValue.null)
       .execute()
   }
 
@@ -35,7 +35,7 @@ struct PostgrestTransformsTests {
       try await client.from("users")
       .select("age_range,catchphrase,data,status,username")
       .order("username", ascending: false)
-      .execute().value as AnyJSON
+      .execute().value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """
@@ -80,7 +80,7 @@ struct PostgrestTransformsTests {
       .select()
       .order("channel_id", ascending: false)
       .order("username", ascending: false)
-      .execute().value as AnyJSON
+      .execute().value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """
@@ -110,7 +110,7 @@ struct PostgrestTransformsTests {
       try await client.from("users")
       .select("age_range,catchphrase,data,status,username")
       .limit(1)
-      .execute().value as AnyJSON
+      .execute().value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """
@@ -133,7 +133,7 @@ struct PostgrestTransformsTests {
       try await client.from("users")
       .select("age_range,catchphrase,data,status,username")
       .range(from: 1, to: 3)
-      .execute().value as AnyJSON
+      .execute().value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """
@@ -171,7 +171,7 @@ struct PostgrestTransformsTests {
       .select("age_range,catchphrase,data,status,username")
       .limit(1)
       .single()
-      .execute().value as AnyJSON
+      .execute().value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """
@@ -193,7 +193,7 @@ struct PostgrestTransformsTests {
       .select("age_range,catchphrase,data,status,username")
       .eq("username", value: "supabot")
       .maybeSingle()
-      .execute().value as AnyJSON
+      .execute().value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """
@@ -210,7 +210,7 @@ struct PostgrestTransformsTests {
 
   @Test
   func maybeSingleReturnsNilOnZeroRows() async throws {
-    let res: AnyJSON? =
+    let res: JSONValue? =
       try await client.from("users")
       .select("username")
       .eq("username", value: "does-not-exist")
@@ -240,7 +240,7 @@ struct PostgrestTransformsTests {
       .select("catchphrase")
       .eq("username", value: "dry-run-scratch")
       .single()
-      .execute().value as AnyJSON
+      .execute().value as JSONValue
 
     assertInlineSnapshot(of: after, as: .json) {
       """
@@ -258,7 +258,7 @@ struct PostgrestTransformsTests {
       .insert(["username": "foo"])
       .select("age_range,catchphrase,data,status,username")
       .single()
-      .execute().value as AnyJSON
+      .execute().value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """
@@ -284,7 +284,7 @@ struct PostgrestTransformsTests {
       try await client.from("users")
       .insert(["username": "foo"])
       .select("status")
-      .execute().value as AnyJSON
+      .execute().value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """
@@ -307,7 +307,7 @@ struct PostgrestTransformsTests {
     let res =
       try await client.rpc("get_username_and_status", params: ["name_param": "supabot"])
       .select("status")
-      .execute().value as AnyJSON
+      .execute().value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """

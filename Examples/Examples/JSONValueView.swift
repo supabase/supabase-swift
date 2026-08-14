@@ -1,5 +1,5 @@
 //
-//  AnyJSONView.swift
+//  JSONValueView.swift
 //  Examples
 //
 //  Created by Guilherme Souza on 21/03/24.
@@ -8,8 +8,8 @@
 import Supabase
 import SwiftUI
 
-struct AnyJSONView: View {
-  let value: AnyJSON
+struct JSONValueView: View {
+  let value: JSONValue
 
   var body: some View {
     switch value {
@@ -22,12 +22,12 @@ struct AnyJSONView: View {
       ForEach(0..<value.count, id: \.self) { index in
         if value[index].isPrimitive {
           LabeledContent("\(index)") {
-            AnyJSONView(value: value[index])
+            JSONValueView(value: value[index])
           }
         } else {
           NavigationLink("\(index)") {
             List {
-              AnyJSONView(value: value[index])
+              JSONValueView(value: value[index])
             }
             .navigationTitle("\(index)")
           }
@@ -38,12 +38,12 @@ struct AnyJSONView: View {
       ForEach(elements, id: \.key) { element in
         if element.value.isPrimitive {
           LabeledContent(element.key) {
-            AnyJSONView(value: element.value)
+            JSONValueView(value: element.value)
           }
         } else {
           NavigationLink(element.key) {
             List {
-              AnyJSONView(value: element.value)
+              JSONValueView(value: element.value)
             }
             .navigationTitle(element.key)
           }
@@ -53,7 +53,7 @@ struct AnyJSONView: View {
   }
 }
 
-extension AnyJSON {
+extension JSONValue {
   var isPrimitive: Bool {
     switch self {
     case .null, .bool, .integer, .double, .string:
@@ -64,15 +64,15 @@ extension AnyJSON {
   }
 }
 
-extension AnyJSONView {
+extension JSONValueView {
   init(rendering value: some Codable) {
-    self.init(value: try! AnyJSON(value))
+    self.init(value: try! JSONValue(value))
   }
 }
 
 #Preview {
   NavigationStack {
-    AnyJSONView(
+    JSONValueView(
       value: [
         "app_metadata": [
           "provider": "email",

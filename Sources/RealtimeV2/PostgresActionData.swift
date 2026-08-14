@@ -9,8 +9,8 @@ import Foundation
 
 struct PostgresActionData: Decodable {
   var type: String
-  var record: [String: AnyJSON]?
-  var oldRecord: [String: AnyJSON]?
+  var record: [String: JSONValue]?
+  var oldRecord: [String: JSONValue]?
   var columns: [Column]
   var commitTimestamp: Date
 

@@ -372,7 +372,7 @@ public actor AuthClient {
   public func signUp(
     email: String,
     password: String,
-    data: [String: AnyJSON]? = nil,
+    data: [String: JSONValue]? = nil,
     redirectTo: URL? = nil,
     captchaToken: String? = nil
   ) async throws -> AuthResponse {
@@ -416,7 +416,7 @@ public actor AuthClient {
     phone: String,
     password: String,
     channel: MessagingChannel = .sms,
-    data: [String: AnyJSON]? = nil,
+    data: [String: JSONValue]? = nil,
     captchaToken: String? = nil
   ) async throws -> AuthResponse {
     try await _signUp(
@@ -552,7 +552,7 @@ public actor AuthClient {
   ///   - captchaToken: Verification token received when the user completes the captcha.
   @discardableResult
   public func signInAnonymously(
-    data: [String: AnyJSON]? = nil,
+    data: [String: JSONValue]? = nil,
     captchaToken: String? = nil
   ) async throws -> Session {
     try await _signIn(
@@ -596,7 +596,7 @@ public actor AuthClient {
     email: String,
     redirectTo: URL? = nil,
     shouldCreateUser: Bool = true,
-    data: [String: AnyJSON]? = nil,
+    data: [String: JSONValue]? = nil,
     captchaToken: String? = nil
   ) async throws {
     let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
@@ -641,7 +641,7 @@ public actor AuthClient {
     phone: String,
     channel: MessagingChannel = .sms,
     shouldCreateUser: Bool = true,
-    data: [String: AnyJSON]? = nil,
+    data: [String: JSONValue]? = nil,
     captchaToken: String? = nil
   ) async throws {
     _ = try await api.execute(

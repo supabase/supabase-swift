@@ -78,7 +78,7 @@ public struct InsertAction: PostgresAction, HasRecord, HasRawMessage {
   public let commitTimestamp: Date
 
   /// The newly-inserted row's data, keyed by column name.
-  public let record: [String: AnyJSON]
+  public let record: [String: JSONValue]
 
   /// The raw Realtime message that delivered this event.
   public let rawMessage: RealtimeMessageV2
@@ -107,10 +107,10 @@ public struct UpdateAction: PostgresAction, HasRecord, HasOldRecord, HasRawMessa
   public let commitTimestamp: Date
 
   /// The updated row's new data, keyed by column name.
-  public let record: [String: AnyJSON]
+  public let record: [String: JSONValue]
 
   /// The row's data before the update was applied, keyed by column name.
-  public let oldRecord: [String: AnyJSON]
+  public let oldRecord: [String: JSONValue]
 
   /// The raw Realtime message that delivered this event.
   public let rawMessage: RealtimeMessageV2
@@ -138,7 +138,7 @@ public struct DeleteAction: PostgresAction, HasOldRecord, HasRawMessage {
   public let commitTimestamp: Date
 
   /// The deleted row's data before removal, keyed by column name.
-  public let oldRecord: [String: AnyJSON]
+  public let oldRecord: [String: JSONValue]
 
   /// The raw Realtime message that delivered this event.
   public let rawMessage: RealtimeMessageV2
@@ -200,7 +200,7 @@ extension HasRecord {
   ///
   /// - Parameters:
   ///   - type: The target `Decodable` type. Can be inferred from context.
-  ///   - decoder: A `JSONDecoder` to use for decoding. Defaults to `AnyJSON.decoder`.
+  ///   - decoder: A `JSONDecoder` to use for decoding. Defaults to `JSONValue.decoder`.
   /// - Returns: An instance of `T` decoded from the record data.
   /// - Throws: A `DecodingError` if the record cannot be decoded into `T`.
   public func decodeRecord<T: Decodable>(as _: T.Type = T.self, decoder: JSONDecoder) throws -> T {
@@ -213,7 +213,7 @@ extension HasOldRecord {
   ///
   /// - Parameters:
   ///   - type: The target `Decodable` type. Can be inferred from context.
-  ///   - decoder: A `JSONDecoder` to use for decoding. Defaults to `AnyJSON.decoder`.
+  ///   - decoder: A `JSONDecoder` to use for decoding. Defaults to `JSONValue.decoder`.
   /// - Returns: An instance of `T` decoded from the old record data.
   /// - Throws: A `DecodingError` if the old record cannot be decoded into `T`.
   public func decodeOldRecord<T: Decodable>(
