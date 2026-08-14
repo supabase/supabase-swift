@@ -717,3 +717,29 @@ default: ...  // a search type the SDK doesn't have a case for
 
 Compile error only if you have an exhaustive `switch` over `TextSearchType` — add a `default:`
 case. Passing `.plain` / `.phrase` / `.websearch` as an argument works unchanged.
+
+## `FunctionInvokeOptions.Method` is now a struct, not an enum
+
+`FunctionInvokeOptions.Method` (the HTTP method passed to `invoke`) is a `RawRepresentable` struct
+instead of an `enum`, matching `HTTPTypes.HTTPRequest.Method` from `swift-http-types`, which uses
+the same pattern.
+
+```swift
+// Before
+switch method {
+case .get: ...
+case .post: ...
+// ...
+}
+
+// After
+switch method {
+case .get: ...
+case .post: ...
+// ...
+default: ...  // a method the SDK doesn't have a case for
+}
+```
+
+Compile error only if you have an exhaustive `switch` over `Method` — add a `default:` case.
+Passing `.get` / `.post` / `.put` / `.patch` / `.delete` as an argument works unchanged.
