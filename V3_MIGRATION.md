@@ -393,11 +393,8 @@ default: ...  // a provider the SDK doesn't have a case for
 }
 ```
 
-This is a compile error: the exhaustiveness check that previously guaranteed every case was
-handled is gone, so the compiler will flag a non-default switch as non-exhaustive only if you had
-a `default:` already; if you didn't and the switch now falls through unhandled, that's a silent
-behavior change — search your codebase for `switch` statements over `Provider` and add a
-`default:` explicitly.
+This is a compile error only if you have an exhaustive `switch` over `Provider` — add a `default:`
+case.
 
 **`Provider.allCases`** — no longer exists, with no built-in replacement. `Provider` accepts any
 string, including ones the SDK has no static constant for, so an exhaustive list can't be part of
