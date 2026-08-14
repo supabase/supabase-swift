@@ -145,25 +145,22 @@ public final class SupabaseClient: Sendable {
   }
 
   /// The Functions client for invoking Supabase Edge Functions.
+  ///
+  /// `FunctionsClient` holds no mutable state, so this returns a new value on every access rather
+  /// than caching one in ``mutableState``.
   public var functions: FunctionsClient {
-    mutableState.withValue {
-      if $0.functions == nil {
-        var functionsHeaders = _headers
-        if APIKeyFormat.isNew(supabaseKey) {
-          functionsHeaders[.authorization] = nil
-        }
-        $0.functions = FunctionsClient(
-          url: functionsURL,
-          headers: functionsHeaders.dictionary,
-          region: options.functions.region,
-          logger: options.global.logger,
-          fetch: fetchWithAuth,
-          decoder: options.functions.decoder
-        )
-      }
-
-      return $0.functions!
+    var functionsHeaders = _headers
+    if APIKeyFormat.isNew(supabaseKey) {
+      functionsHeaders[.authorization] = nil
     }
+    return FunctionsClient(
+      url: functionsURL,
+      headers: functionsHeaders.dictionary,
+      region: options.functions.region,
+      logger: options.global.logger,
+      fetch: fetchWithAuth,
+      decoder: options.functions.decoder
+    )
   }
 
   let _headers: HTTPFields
@@ -179,7 +176,6 @@ public final class SupabaseClient: Sendable {
     var listenForAuthEventsTask: Task<Void, Never>?
     var storage: SupabaseStorageClient?
     var rest: PostgrestClient?
-    var functions: FunctionsClient?
     var realtime: RealtimeClientV2?
 
     var changedAccessToken: String?
