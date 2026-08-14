@@ -2957,51 +2957,6 @@ extension AuthMockerTests {
 
       Dependencies[sut.clientID].sessionStorage.store(.expiredSession)
 
-      let expectedEvents = [AuthChangeEvent.signedOut, .initialSession]
-
-      try await assertAuthStateChanges(
-        sut: sut,
-        action: {
-          do {
-            _ = try await sut.session
-            Issue.record("Expected failure")
-          } catch {
-            #expect(error as? AuthError == .sessionMissing)
-          }
-        },
-        expectedEvents: expectedEvents
-      )
-
-      #expect(Dependencies[sut.clientID].sessionStorage.get() == nil)
-    }
-
-    @Test
-    func
-      removeSessionAndSignoutIfRefreshTokenNotFoundErrorReturned_withEmitLocalSessionAsInitialSession()
-      async throws
-    {
-      let sut = makeSUT(emitLocalSessionAsInitialSession: true)
-
-      Mock(
-        url: clientURL.appendingPathComponent("token").appendingQueryItems([
-          URLQueryItem(name: "grant_type", value: "refresh_token")
-        ]),
-        statusCode: 403,
-        data: [
-          .post: Data(
-            """
-            {
-              "error_code": "refresh_token_not_found",
-              "message": "Invalid Refresh Token: Refresh Token Not Found"
-            }
-            """.utf8
-          )
-        ]
-      )
-      .register()
-
-      Dependencies[sut.clientID].sessionStorage.store(.expiredSession)
-
       let expectedEvents = [AuthChangeEvent.initialSession, .signedOut]
 
       try await assertAuthStateChanges(
@@ -3023,32 +2978,6 @@ extension AuthMockerTests {
     @Test
     func refreshToken() async throws {
       let sut = makeSUT()
-
-      Mock(
-        url: clientURL.appendingPathComponent("token").appendingQueryItems([
-          URLQueryItem(name: "grant_type", value: "refresh_token")
-        ]),
-        statusCode: 200,
-        data: [.post: try AuthClient.Configuration.jsonEncoder.encode(Session.validSession)]
-      )
-      .register()
-
-      Dependencies[sut.clientID].sessionStorage.store(.expiredSession)
-
-      let expectedEvents = [AuthChangeEvent.tokenRefreshed, .initialSession]
-
-      try await assertAuthStateChanges(
-        sut: sut,
-        action: {
-          _ = try await sut.session
-        },
-        expectedEvents: expectedEvents
-      )
-    }
-
-    @Test
-    func refreshToken_withEmitLocalSessionAsInitialSession() async throws {
-      let sut = makeSUT(emitLocalSessionAsInitialSession: true)
 
       Mock(
         url: clientURL.appendingPathComponent("token").appendingQueryItems([
@@ -3443,7 +3372,7 @@ extension AuthMockerTests {
     }
 
     private func makeSUT(
-      flowType: AuthFlowType = .pkce, emitLocalSessionAsInitialSession: Bool = false
+      flowType: AuthFlowType = .pkce
     ) -> AuthClient {
       let sessionConfiguration = URLSessionConfiguration.default
       sessionConfiguration.protocolClasses = [MockingURLProtocol.self]
@@ -3459,8 +3388,7 @@ extension AuthMockerTests {
         localStorage: storage,
         fetch: { request in
           try await session.data(for: request)
-        },
-        emitLocalSessionAsInitialSession: emitLocalSessionAsInitialSession
+        }
       )
 
       let sut = AuthClient(configuration: configuration)

@@ -55,6 +55,46 @@ case .emailChangeConfirmationPending(let confirmation):
 `AuthResponse` itself is unchanged: `signUp` and the Passkey methods still return it, and `user` is
 still non-optional there, since neither endpoint can produce the confirmation-pending shape.
 
+## `emitLocalSessionAsInitialSession` removed — the locally stored session is now always emitted as the initial session
+
+`AuthClient.Configuration.emitLocalSessionAsInitialSession` and the matching parameter on
+`AuthClient.init`/`SupabaseClientOptions.AuthOptions.init` are removed. The behavior it used to gate
+behind `true` is now the only behavior.
+
+Previously, the `.initialSession` auth state change event was emitted only after the SDK tried to
+refresh the locally stored session, silently swallowing the difference between a session that was
+merely expired (refreshable) and one whose refresh token was actually invalid (e.g. revoked or
+already used) — both surfaced the same way to listeners, and every launch paid the cost of a
+network round-trip before `.initialSession` fired at all. `.initialSession` now always fires
+immediately with whatever session is stored locally, and a best-effort refresh happens in the
+background if it's expired. See
+[#822](https://github.com/supabase/supabase-swift/pull/822) for the original discussion.
+
+This is a compile error for anyone passing `emitLocalSessionAsInitialSession:` explicitly — the
+parameter no longer exists. It's also a silent behavior change for everyone else: search your
+codebase for `onAuthStateChange`/`authStateChanges` handlers that switch on `.initialSession` and
+assume the session they receive is always valid. Since the initial session may now be expired,
+check `session.isExpired` yourself:
+
+```swift
+// Before
+for await (event, session) in client.auth.authStateChanges {
+  if event == .initialSession, let session {
+    signIn(user: session.user)
+  }
+}
+
+// After
+for await (event, session) in client.auth.authStateChanges {
+  if event == .initialSession, let session, !session.isExpired {
+    signIn(user: session.user)
+  }
+}
+```
+
+There's no escape hatch back to the old behavior — the SDK no longer performs a blocking refresh
+before the initial session fires.
+
 ## Several public types narrowed from `Codable` to `Decodable` or `Encodable`
 
 Many public types only ever get used in one direction — either decoded from a server response, or
