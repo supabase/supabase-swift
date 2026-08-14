@@ -631,3 +631,32 @@ default: ...  // an operator the SDK doesn't have a case for
 Compile error only if you have an exhaustive `switch` over `Operator` — add a `default:` case.
 `Operator.allCases` no longer exists, with no built-in replacement — maintain your own array if you
 were relying on it. Passing a known operator (`.eq`, `.gt`, ...) works unchanged.
+
+## `CountOption` is now a struct, not an enum
+
+`CountOption` (passed to query methods like `select(_:head:count:)`) is a `RawRepresentable`
+struct instead of an `enum`.
+
+It's sent to PostgREST as part of a `Prefer` header, not decoded from a response, but it's part of
+the public API surface — as an `enum`, using a count algorithm PostgREST added after this SDK
+version shipped required an SDK upgrade even though constructing the value doesn't need one.
+
+```swift
+// Before
+switch count {
+case .exact: ...
+case .planned: ...
+case .estimated: ...
+}
+
+// After
+switch count {
+case .exact: ...
+case .planned: ...
+case .estimated: ...
+default: ...  // a count algorithm the SDK doesn't have a case for
+}
+```
+
+Compile error only if you have an exhaustive `switch` over `CountOption` — add a `default:` case.
+Passing `.exact` / `.planned` / `.estimated` as an argument works unchanged.
