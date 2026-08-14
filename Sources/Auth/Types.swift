@@ -1317,12 +1317,26 @@ public enum SignOutScope: String, Sendable {
 }
 
 /// The type of email to resend when calling ``AuthClient/resend(email:type:emailRedirectTo:captchaToken:)``.
-public enum ResendEmailType: String, Hashable, Sendable, Encodable {
+public struct ResendEmailType: RawRepresentable, Encodable, Hashable, Sendable,
+  ExpressibleByStringLiteral
+{
+  public let rawValue: String
+
+  /// Creates a ``ResendEmailType`` from a raw string value.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  /// Creates a ``ResendEmailType`` from a string literal.
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
   /// Resends the initial sign-up confirmation email.
-  case signup
+  public static let signup: ResendEmailType = "signup"
 
   /// Resends the email-change confirmation email.
-  case emailChange = "email_change"
+  public static let emailChange: ResendEmailType = "email_change"
 }
 
 struct ResendEmailParams: Encodable {

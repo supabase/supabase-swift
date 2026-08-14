@@ -159,4 +159,16 @@ struct TypesTests {
     let type2: EmailOTPType = "signup"
     #expect(type1 == type2)
   }
+
+  @Test
+  func resendEmailTypeEncodesAsRawString() throws {
+    let data = try JSONEncoder().encode(ResendEmailType.emailChange)
+    #expect(String(decoding: data, as: UTF8.self) == "\"email_change\"")
+  }
+
+  @Test
+  func resendEmailTypeStringLiteral() {
+    let type: ResendEmailType = "new_resend_kind"
+    #expect(type.rawValue == "new_resend_kind")
+  }
 }

@@ -519,3 +519,30 @@ default: ...  // an OTP type the SDK doesn't have a case for
 Compile error only if you have an exhaustive `switch` over `EmailOTPType` — add a `default:` case.
 `EmailOTPType.allCases` no longer exists, with no built-in replacement — maintain your own array if
 you were relying on it.
+
+## `ResendEmailType` is now a struct, not an enum
+
+`ResendEmailType` (the resend kind passed to `resend`) is a `RawRepresentable` struct instead of
+an `enum`.
+
+It's sent to the backend, not decoded from it, but it's part of the public API surface — as an
+`enum`, using a resend type GoTrue added after this SDK version shipped required an SDK upgrade
+even though constructing the value doesn't need one.
+
+```swift
+// Before
+switch type {
+case .signup: ...
+case .emailChange: ...
+}
+
+// After
+switch type {
+case .signup: ...
+case .emailChange: ...
+default: ...  // a resend type the SDK doesn't have a case for
+}
+```
+
+Compile error only if you have an exhaustive `switch` over `ResendEmailType` — add a `default:`
+case. Passing `.signup` / `.emailChange` as an argument works unchanged.
