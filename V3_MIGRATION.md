@@ -546,3 +546,30 @@ default: ...  // a resend type the SDK doesn't have a case for
 
 Compile error only if you have an exhaustive `switch` over `ResendEmailType` — add a `default:`
 case. Passing `.signup` / `.emailChange` as an argument works unchanged.
+
+## `ResendMobileType` is now a struct, not an enum
+
+`ResendMobileType` (the resend kind passed to `resend` for phone-based flows) is a
+`RawRepresentable` struct instead of an `enum`.
+
+It's sent to the backend, not decoded from it, but it's part of the public API surface — as an
+`enum`, using a resend type GoTrue added after this SDK version shipped required an SDK upgrade
+even though constructing the value doesn't need one.
+
+```swift
+// Before
+switch type {
+case .sms: ...
+case .phoneChange: ...
+}
+
+// After
+switch type {
+case .sms: ...
+case .phoneChange: ...
+default: ...  // a resend type the SDK doesn't have a case for
+}
+```
+
+Compile error only if you have an exhaustive `switch` over `ResendMobileType` — add a `default:`
+case. Passing `.sms` / `.phoneChange` as an argument works unchanged.

@@ -171,4 +171,16 @@ struct TypesTests {
     let type: ResendEmailType = "new_resend_kind"
     #expect(type.rawValue == "new_resend_kind")
   }
+
+  @Test
+  func resendMobileTypeEncodesAsRawString() throws {
+    let data = try JSONEncoder().encode(ResendMobileType.phoneChange)
+    #expect(String(decoding: data, as: UTF8.self) == "\"phone_change\"")
+  }
+
+  @Test
+  func resendMobileTypeStringLiteral() {
+    let type: ResendMobileType = "new_resend_kind"
+    #expect(type.rawValue == "new_resend_kind")
+  }
 }
