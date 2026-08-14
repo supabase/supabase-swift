@@ -719,3 +719,33 @@ default: ...  // an OTP type the SDK doesn't have a case for
 
 Compile error only if you have an exhaustive `switch` over `MobileOTPType` — add a `default:` case.
 Passing `.sms` / `.phoneChange` as an argument works unchanged.
+
+## `EmailOTPType` is now a struct, not an enum
+
+`EmailOTPType` (the OTP kind passed to `verifyOTP` for email-based flows) is a `RawRepresentable`
+struct instead of an `enum`. It no longer conforms to `CaseIterable`.
+
+It's sent to the backend, not decoded from it, but it's part of the public API surface — as an
+`enum`, using an OTP type GoTrue added after this SDK version shipped required an SDK upgrade
+even though constructing the value doesn't need one.
+
+```swift
+// Before
+switch type {
+case .signup: ...
+case .recovery: ...
+// ...
+}
+
+// After
+switch type {
+case .signup: ...
+case .recovery: ...
+// ...
+default: ...  // an OTP type the SDK doesn't have a case for
+}
+```
+
+Compile error only if you have an exhaustive `switch` over `EmailOTPType` — add a `default:` case.
+`EmailOTPType.allCases` no longer exists, with no built-in replacement — maintain your own array if
+you were relying on it.
