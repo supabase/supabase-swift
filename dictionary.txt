@@ -242,3 +242,6 @@ vízrajzi
 állomás
 áéíóú
 deinits
+
+# Term from AGENTS.md's Enum-like Values section (describing non-failable init(rawValue:)).
+failable

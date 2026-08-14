@@ -326,30 +326,31 @@ pass a `Logger` backed by `SwiftLogNoOpLogHandler` (add `import Logging` to this
 logger: Logger(label: "myapp") { _ in SwiftLogNoOpLogHandler() }
 ```
 
-**OSLog parity.** `OSLogSupabaseLogger`'s zero-config OSLog/Console.app integration is replaced by
-`OSLogHandler`, constructed explicitly and installed as the backing handler for a `Logger` (add
-`import Logging` to this file):
+**OSLog parity.** `OSLogSupabaseLogger`'s zero-config OSLog/Console.app integration has no
+replacement shipped by the SDK. Implement your own `LogHandler` conforming type that wraps an
+`os.Logger` and forwards each `Logging.Logger.Level` to the matching OSLog level, then install it
+as the backing handler for a `Logger` (add `import Logging` to this file):
 
 ```swift
-logger: Logger(label: "myapp") { OSLogHandler(label: $0) }
+logger: Logger(label: "myapp") { MyOSLogHandler(label: $0) }
 ```
 
-`OSLogHandler` forwards every level by default (`logLevel` defaults to `.trace`), matching
-`OSLogSupabaseLogger`'s old always-forward behavior — use Console.app's own filtering, or set
-`logger.logLevel` yourself, to narrow what's emitted.
+Default your handler's `logLevel` to `.trace` to match `OSLogSupabaseLogger`'s old always-forward
+behavior — use Console.app's own filtering, or set `logger.logLevel` yourself, to narrow what's
+emitted.
 
-If this file also has `import OSLog` — which it will if you're wiring up `OSLogHandler` alongside
-your app's own OSLog-based logging — you'll hit a `'Logger' is ambiguous for type lookup` compile
-error, because both `Logging.Logger` and `os.Logger` are now in scope unqualified in that file.
-Fix it by fully qualifying whichever type you mean less often, e.g. `os.Logger` for OSLog's own
-type:
+If this file also has `import OSLog` — which it will if you're implementing `MyOSLogHandler`
+alongside your app's own OSLog-based logging — you'll hit a `'Logger' is ambiguous for type
+lookup` compile error, because both `Logging.Logger` and `os.Logger` are now in scope unqualified
+in that file. Fix it by fully qualifying whichever type you mean less often, e.g. `os.Logger` for
+OSLog's own type:
 
 ```swift
 import Logging
 import OSLog
 
 let appLogger = os.Logger(subsystem: "myapp", category: "app")
-let supabaseLogger = Logging.Logger(label: "myapp") { OSLogHandler(label: $0) }
+let supabaseLogger = Logging.Logger(label: "myapp") { MyOSLogHandler(label: $0) }
 ```
 
 or keep the two imports in separate files so the ambiguity never arises.
@@ -480,3 +481,45 @@ operation fails with `errSecMissingEntitlement` (`-34018`) instead of storing an
 flag works with your app's actual signing configuration — a debug build run from Xcode with the
 right entitlements is not the same guarantee as your release signing — before enabling it in
 production. The parameter has no effect on platforms other than macOS.
+
+## `WinCredLocalStorage` removed; no default `AuthLocalStorage` on Windows
+
+`WinCredLocalStorage` and `WinCredLocalStorageError` are removed, and
+`AuthClient.Configuration.defaultLocalStorage` is no longer defined on Windows. Windows callers now
+need to supply their own `AuthLocalStorage` explicitly, the same as Linux and Android already
+require.
+
+`WinCredLocalStorage` was the default local storage on Windows, but it could not persist a
+session: writes targeted a Windows Credential Manager entry named `service\key`, while reads and
+deletes targeted `service\key)` — a stray trailing `)` — so nothing this code wrote could ever be
+read back. It also stored the in-memory layout of the `Data` struct rather than the bytes it
+pointed to, escaped several pointers past the closures that made them valid, and threw instead of
+returning `nil` for a missing key. No Windows runner exists in this project's CI, and no test
+referenced the type, so none of this was ever caught. If you were relying on the default, you were
+already effectively running without session persistence on Windows.
+
+This is a compile error, not a silent behavior change: any call site building
+`AuthClient.Configuration` or `SupabaseClientOptions.AuthOptions` on Windows without passing
+`storage:`/`localStorage:` explicitly now fails to compile, since the default no longer exists for
+that platform.
+
+```swift
+// Before (Windows)
+let client = SupabaseClient(supabaseURL: url, supabaseKey: key)
+
+// After (Windows)
+struct MyLocalStorage: AuthLocalStorage {
+  func store(key: String, value: Data) throws { /* ... */ }
+  func retrieve(key: String) throws -> Data? { /* ... */ }
+  func remove(key: String) throws { /* ... */ }
+}
+
+let client = SupabaseClient(
+  supabaseURL: url,
+  supabaseKey: key,
+  options: .init(auth: .init(storage: MyLocalStorage()))
+)
+```
+
+There's no reference implementation to swap in — implement `AuthLocalStorage` against whatever
+storage mechanism suits your app.
