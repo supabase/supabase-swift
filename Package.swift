@@ -210,6 +210,7 @@ let package = Package(
         .product(name: "HTTPTypes", package: "swift-http-types"),
         .product(name: "Logging", package: "swift-log"),
         "Helpers",
+        "HTTPRuntime",
       ]
     ),
     .testTarget(

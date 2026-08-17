@@ -366,6 +366,72 @@ jobs:
             echo "✅ All changed Swift files are properly formatted"
           fi
 
+  openapi-codegen-changes:
+    name: Detect OpenAPI Codegen changes
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.check.outputs.changed }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+      - name: Check for relevant changes
+        id: check
+        run: |
+          git fetch origin ${{ github.base_ref }}
+          CHANGED=$(git diff --name-only origin/${{ github.base_ref }}...HEAD -- tools/openapi-codegen openapi scripts/generate-openapi-clients.sh .github/workflows/ci.yml)
+          if [ -n "$CHANGED" ]; then
+            echo "Relevant changes:"
+            echo "$CHANGED"
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No relevant changes"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  openapi-codegen-test:
+    name: OpenAPI Codegen / Test
+    needs: openapi-codegen-changes
+    if: always() && (github.event_name != 'pull_request' || needs.openapi-codegen-changes.outputs.changed == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: tools/openapi-codegen
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Cache Swift Package
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: tools/openapi-codegen/.build
+          key: ${{ runner.os }}-spm-openapi-codegen-${{ hashFiles('tools/openapi-codegen/Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-openapi-codegen-
+      - name: Build
+        run: swift build
+      - name: Test
+        run: swift test
+
+  openapi-codegen-regenerate-check:
+    name: OpenAPI Codegen / Generated clients are up to date
+    needs: openapi-codegen-changes
+    # macOS: generate-openapi-clients.sh's format.sh step shells out to `xcrun
+    # swift-format`, which isn't available on the Linux runner.
+    if: always() && (github.event_name != 'pull_request' || needs.openapi-codegen-changes.outputs.changed == 'true')
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Regenerate clients
+        run: ./scripts/generate-openapi-clients.sh
+      - name: Fail if regeneration produced a diff
+        run: |
+          if ! git diff --exit-code; then
+            echo "❌ Generated clients are out of date. Run ./scripts/generate-openapi-clients.sh and commit the result."
+            exit 1
+          fi
+
   ci-success:
     name: CI Success
     if: always()
@@ -381,6 +447,8 @@ jobs:
         spell-check,
         docs,
         format-check,
+        openapi-codegen-test,
+        openapi-codegen-regenerate-check,
       ]
     runs-on: ubuntu-latest
     steps:
