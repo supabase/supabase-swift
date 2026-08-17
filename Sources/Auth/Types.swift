@@ -645,12 +645,26 @@ struct VerifyMobileOTPParams: Encodable, Hashable {
 }
 
 /// The OTP type used when verifying a mobile (SMS/WhatsApp) one-time password.
-public enum MobileOTPType: String, Encodable, Sendable {
+public struct MobileOTPType: RawRepresentable, Encodable, Hashable, Sendable,
+  ExpressibleByStringLiteral
+{
+  public let rawValue: String
+
+  /// Creates a ``MobileOTPType`` from a raw string value.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  /// Creates a ``MobileOTPType`` from a string literal.
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
   /// A standard SMS OTP sent to the phone number.
-  case sms
+  public static let sms: MobileOTPType = "sms"
 
   /// An OTP used when confirming a phone number change.
-  case phoneChange = "phone_change"
+  public static let phoneChange: MobileOTPType = "phone_change"
 }
 
 /// The OTP type used when verifying an email one-time password.
