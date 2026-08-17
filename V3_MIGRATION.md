@@ -803,3 +803,31 @@ default: ...  // a resend type the SDK doesn't have a case for
 
 Compile error only if you have an exhaustive `switch` over `ResendMobileType` — add a `default:`
 case. Passing `.sms` / `.phoneChange` as an argument works unchanged.
+
+## `SignOutScope` is now a struct, not an enum
+
+`SignOutScope` (passed to `signOut(scope:)`) is a `RawRepresentable` struct instead of an `enum`.
+
+It's sent to the backend as a query parameter, not decoded from it, but it's part of the public
+API surface — as an `enum`, using a scope GoTrue added after this SDK version shipped required an
+SDK upgrade even though constructing the value doesn't need one.
+
+```swift
+// Before
+switch scope {
+case .global: ...
+case .local: ...
+case .others: ...
+}
+
+// After
+switch scope {
+case .global: ...
+case .local: ...
+case .others: ...
+default: ...  // a scope the SDK doesn't have a case for
+}
+```
+
+Compile error only if you have an exhaustive `switch` over `SignOutScope` — add a `default:` case.
+Passing `.global` / `.local` / `.others` as an argument works unchanged.

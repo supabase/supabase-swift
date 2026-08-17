@@ -1296,17 +1296,29 @@ public struct AuthMFAGetAuthenticatorAssuranceLevelResponse: Decodable, Hashable
 }
 
 /// The scope of a sign-out operation.
-public enum SignOutScope: String, Sendable {
+public struct SignOutScope: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+  public let rawValue: String
+
+  /// Creates a ``SignOutScope`` from a raw string value.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  /// Creates a ``SignOutScope`` from a string literal.
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
   /// All sessions by this account will be signed out.
-  case global
+  public static let global: SignOutScope = "global"
 
   /// Only this session will be signed out.
-  case local
+  public static let local: SignOutScope = "local"
 
   /// All other sessions except the current one will be signed out. When using
   /// ``SignOutScope/others``, there is no ``AuthChangeEvent/signedOut`` event fired on the current
   /// session.
-  case others
+  public static let others: SignOutScope = "others"
 }
 
 /// The type of email to resend when calling ``AuthClient/resend(email:type:emailRedirectTo:captchaToken:)``.
