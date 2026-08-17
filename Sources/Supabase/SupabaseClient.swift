@@ -148,6 +148,13 @@ public final class SupabaseClient: Sendable {
   ///
   /// `FunctionsClient` holds no mutable state, so this returns a new value on every access rather
   /// than caching one in ``mutableState``.
+  ///
+  /// Unlike `rest`/`storage`, this doesn't use `fetchWithAuth`: that closure overwrites
+  /// `Authorization` unconditionally with the live access token, which would clobber a
+  /// per-invocation header set via `FunctionInvokeOptions`. `FunctionsClient` resolves its own
+  /// bearer token instead (via `accessToken`, respecting that same per-invocation override), so
+  /// the `fetch` handler only needs to perform the transport and inject trace context — the same
+  /// split already used for `realtimeOptions.fetch`/`accessToken` below.
   public var functions: FunctionsClient {
     var functionsHeaders = _headers
     if APIKeyFormat.isNew(supabaseKey) {
@@ -158,8 +165,14 @@ public final class SupabaseClient: Sendable {
       headers: functionsHeaders.dictionary,
       region: options.functions.region,
       logger: options.global.logger,
-      fetch: fetchWithAuth,
-      decoder: options.functions.decoder
+      fetch: { [session = options.global.session] request in
+        try await session.data(for: TraceContext.inject(into: request))
+      },
+      decoder: options.functions.decoder,
+      accessToken: { [weak self] in
+        guard let self else { return nil }
+        return try? await self._getAccessToken()
+      }
     )
   }
 
