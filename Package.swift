@@ -31,7 +31,7 @@ let package = Package(
     // Pinned below 1.11.0: that version requires swift-tools-version 6.2, above this
     // package's current floor (Xcode 16.4+ / Swift 6.1). Widening this range raises
     // the effective minimum toolchain for every consumer — see SDK-1412.
-    .package(url: "https://github.com/apple/swift-log.git", "1.5.0"..<"1.11.0"),
+    .package(url: "https://github.com/apple/swift-log.git", "1.5.0"..<"2.0.0"),
     .package(url: "https://github.com/open-telemetry/opentelemetry-swift-core.git", from: "2.5.0"),
     .package(url: "https://github.com/pointfreeco/swift-clocks", from: "1.0.0"),
     .package(url: "https://github.com/pointfreeco/swift-concurrency-extras", from: "1.1.0"),
