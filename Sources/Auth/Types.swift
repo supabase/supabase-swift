@@ -408,36 +408,48 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
 }
 
 /// One of the providers supported by Auth.
-public enum Provider: String, Identifiable, CaseIterable, Sendable {
-  case apple
-  case azure
-  case bitbucket
-  case discord
-  case email
-  case facebook
-  case figma
-  case github
-  case gitlab
-  case google
-  case kakao
-  case keycloak
-  case linkedin
-  case linkedinOIDC = "linkedin_oidc"
-  case notion
-  case slack
-  case slackOIDC = "slack_oidc"
-  case spotify
-  case twitch
-  /// Uses OAuth 1.0a
-  case twitter
-  /// Uses OAuth 2.0
-  case x
-  case workos
-  case zoom
-  case fly
+public struct Provider: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+  public let rawValue: String
 
-  /// The raw string value of the provider, used as the stable identifier.
-  public var id: RawValue { rawValue }
+  /// Creates a ``Provider`` from a raw string value.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  /// Creates a ``Provider`` from a string literal.
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
+  public static let apple: Provider = "apple"
+  public static let azure: Provider = "azure"
+  public static let bitbucket: Provider = "bitbucket"
+  public static let discord: Provider = "discord"
+  public static let email: Provider = "email"
+  public static let facebook: Provider = "facebook"
+  public static let figma: Provider = "figma"
+  public static let github: Provider = "github"
+  public static let gitlab: Provider = "gitlab"
+  public static let google: Provider = "google"
+  public static let kakao: Provider = "kakao"
+  public static let keycloak: Provider = "keycloak"
+  public static let linkedin: Provider = "linkedin"
+  public static let linkedinOIDC: Provider = "linkedin_oidc"
+  public static let notion: Provider = "notion"
+  public static let slack: Provider = "slack"
+  public static let slackOIDC: Provider = "slack_oidc"
+  public static let spotify: Provider = "spotify"
+  public static let twitch: Provider = "twitch"
+
+  /// Uses OAuth 1.0a
+  public static let twitter: Provider = "twitter"
+
+  /// Uses OAuth 2.0
+  public static let x: Provider = "x"
+
+  public static let workos: Provider = "workos"
+  public static let zoom: Provider = "zoom"
+  public static let fly: Provider = "fly"
 }
 
 /// Credentials for signing in with an OpenID Connect (OIDC) ID token issued by a third-party.

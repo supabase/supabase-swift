@@ -53,4 +53,18 @@ struct TypesTests {
     let channel: MessagingChannel = "signal"
     #expect(channel.rawValue == "signal")
   }
+
+  @Test
+  func providerStringLiteral() {
+    let provider: Provider = "custom_provider"
+    #expect(provider.rawValue == "custom_provider")
+  }
+
+  @Test
+  func providerHashability() {
+    let provider1: Provider = .apple
+    let provider2: Provider = "apple"
+    #expect(provider1 == provider2)
+    #expect(provider1.hashValue == provider2.hashValue)
+  }
 }

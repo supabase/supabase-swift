@@ -593,3 +593,73 @@ default: ...  // an unrecognized channel the SDK doesn't have a case for
 
 Compile error only if you have an exhaustive `switch` over `MessagingChannel` — add a `default:`
 case. Passing `.sms` / `.whatsapp` as an argument, and comparing with `==`, work unchanged.
+
+## `Provider` is now a struct, not an enum
+
+`Provider` (the OAuth provider used by `signInWithOAuth`/`linkIdentity`) is a `RawRepresentable`
+struct instead of an `enum`. It no longer conforms to `CaseIterable`, `Identifiable`, or `Codable`
+(it never went through `JSONEncoder`/`JSONDecoder` to begin with — see "Several public types
+narrowed from `Codable` to `Decodable` or `Encodable`" above).
+
+New OAuth providers are added by GoTrue on an ongoing basis, and `Provider` is part of the public
+API surface — as an `enum`, constructing a `Provider` value this SDK version didn't have a case
+for required an SDK upgrade even though nothing about using it needs one. Converting now closes
+that gap.
+
+**Switch statements** — add a `default:` case:
+
+```swift
+// Before
+switch provider {
+case .apple: ...
+case .github: ...
+}
+
+// After
+switch provider {
+case .apple: ...
+case .github: ...
+default: ...  // a provider the SDK doesn't have a case for
+}
+```
+
+This is a compile error only if you have an exhaustive `switch` over `Provider` — add a `default:`
+case.
+
+**`Provider.allCases`** — no longer exists, with no built-in replacement. `Provider` accepts any
+string, including ones the SDK has no static constant for, so an exhaustive list can't be part of
+the type itself; maintain your own array of the providers your app actually offers:
+
+```swift
+// Before
+Provider.allCases.forEach { ... }
+
+// After
+let myAppProviders: [Provider] = [.apple, .google, .github]  // whatever your app offers
+myAppProviders.forEach { ... }
+```
+
+This is a compile error (`allCases` no longer exists).
+
+**`Identifiable`** — no longer conforms. If you used `Provider` directly in a SwiftUI `ForEach` or
+`List` relying on its `Identifiable` conformance, supply an explicit `id:` — `Provider` is still
+`Hashable`, so `\.self` works:
+
+```swift
+// Before
+ForEach(providers) { provider in ... }
+
+// After
+ForEach(providers, id: \.self) { provider in ... }
+```
+
+This is a compile error (`ForEach`/`List` without an explicit `id:` require `Identifiable`).
+
+**Custom providers** — construct one from a string literal or `rawValue` the same way you would
+compare against a known one:
+
+```swift
+let provider: Provider = "custom_provider"
+if provider == .apple { ... }
+if provider.rawValue == "apple" { ... }
+```

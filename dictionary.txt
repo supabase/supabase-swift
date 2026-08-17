@@ -63,6 +63,7 @@ gotrue
 GoTrue
 Guilherme
 Gxlbmdl
+Hashability
 heartbeating
 Heartbeating
 hostnames
