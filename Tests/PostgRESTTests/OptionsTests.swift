@@ -36,4 +36,17 @@ struct OptionsTests {
     let returning2: PostgrestReturningOptions = "minimal"
     #expect(returning1 == returning2)
   }
+
+  @Test
+  func textSearchTypeStringLiteral() {
+    let type: TextSearchType = "future_search_type"
+    #expect(type.rawValue == "future_search_type")
+  }
+
+  @Test
+  func textSearchTypeHashability() {
+    let type1: TextSearchType = .plain
+    let type2: TextSearchType = "pl"
+    #expect(type1 == type2)
+  }
 }

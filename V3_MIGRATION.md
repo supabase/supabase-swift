@@ -917,3 +917,33 @@ default: ...  // a returning mode the SDK doesn't have a case for
 
 Compile error only if you have an exhaustive `switch` over `PostgrestReturningOptions` — add a
 `default:` case. Passing `.minimal` / `.representation` as an argument works unchanged.
+
+## `TextSearchType` is now a struct, not an enum
+
+`TextSearchType` (passed to `textSearch(_:query:config:type:)`) is a `RawRepresentable` struct
+instead of an `enum`.
+
+It's sent to PostgREST as part of a filter query string, not decoded from a response, but it's
+part of the public API surface — as an `enum`, using a search conversion strategy PostgreSQL added
+after this SDK version shipped required an SDK upgrade even though constructing the value doesn't
+need one.
+
+```swift
+// Before
+switch type {
+case .plain: ...
+case .phrase: ...
+case .websearch: ...
+}
+
+// After
+switch type {
+case .plain: ...
+case .phrase: ...
+case .websearch: ...
+default: ...  // a search type the SDK doesn't have a case for
+}
+```
+
+Compile error only if you have an exhaustive `switch` over `TextSearchType` — add a `default:`
+case. Passing `.plain` / `.phrase` / `.websearch` as an argument works unchanged.
