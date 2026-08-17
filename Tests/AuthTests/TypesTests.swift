@@ -67,4 +67,16 @@ struct TypesTests {
     #expect(provider1 == provider2)
     #expect(provider1.hashValue == provider2.hashValue)
   }
+
+  @Test
+  func oidcProviderEncodesAsRawString() throws {
+    let data = try JSONEncoder().encode(OpenIDConnectCredentials.Provider.apple)
+    #expect(String(decoding: data, as: UTF8.self) == "\"apple\"")
+  }
+
+  @Test
+  func oidcProviderStringLiteral() {
+    let provider: OpenIDConnectCredentials.Provider = "custom_oidc_provider"
+    #expect(provider.rawValue == "custom_oidc_provider")
+  }
 }
