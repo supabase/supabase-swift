@@ -1341,12 +1341,26 @@ struct ResendEmailParams: Encodable {
 }
 
 /// The type of mobile OTP to resend when calling ``AuthClient/resend(phone:type:captchaToken:)``.
-public enum ResendMobileType: String, Hashable, Sendable, Encodable {
+public struct ResendMobileType: RawRepresentable, Encodable, Hashable, Sendable,
+  ExpressibleByStringLiteral
+{
+  public let rawValue: String
+
+  /// Creates a ``ResendMobileType`` from a raw string value.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  /// Creates a ``ResendMobileType`` from a string literal.
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
   /// Resends the SMS OTP for the current phone sign-in.
-  case sms
+  public static let sms: ResendMobileType = "sms"
 
   /// Resends the OTP for confirming a phone number change.
-  case phoneChange = "phone_change"
+  public static let phoneChange: ResendMobileType = "phone_change"
 }
 
 struct ResendMobileParams: Encodable {
