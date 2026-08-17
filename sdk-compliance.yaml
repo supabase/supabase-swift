@@ -83,6 +83,7 @@ features:
     status: implemented
     symbols:
       - AuthClient.exchangeCodeForSession
+  auth.sign_in.reset_password: not_implemented
 
   auth.session.get_session:
     status: implemented
@@ -471,6 +472,7 @@ features:
   realtime.channel.unsubscribe: implemented
   realtime.channel.broadcast: implemented
   realtime.channel.broadcast_http: implemented
+  realtime.channel.send: not_implemented
 
   realtime.subscriptions.broadcast:
     status: implemented
@@ -583,6 +585,7 @@ features:
   storage.file_buckets.download_as_stream: not_implemented
   storage.file_buckets.purge_bucket_cache: not_implemented
   storage.file_buckets.purge_cache: not_implemented
+  storage.file_buckets.list_files_paginated: not_implemented
 
   # ── Storage — Vector Buckets ───────────────────────────────────────────────
 
@@ -615,3 +618,5 @@ features:
   storage.analytics.update_table: not_implemented
   storage.analytics.rename_table: not_implemented
   storage.analytics.delete_table: not_implemented
+  storage.analytics.iceberg_namespace: not_implemented
+  storage.analytics.iceberg_table: not_implemented
