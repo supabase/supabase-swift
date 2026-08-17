@@ -565,3 +565,31 @@ style interpolation used to print the case name (`verified`); it now prints the 
 description (`FactorStatus(rawValue: "verified")`). If you log, build a URL, or send analytics
 using direct interpolation of a `FactorStatus` value, use `.rawValue` explicitly to get the bare
 string back.
+
+## `MessagingChannel` is now a struct, not an enum
+
+`MessagingChannel` (the OTP delivery channel — SMS or WhatsApp) is a `RawRepresentable` struct
+instead of an `enum`. It's `Encodable` only — it's never decoded from a response, so it gained no
+`Decodable` conformance.
+
+It's part of the public API surface — if GoTrue starts accepting a new channel (e.g. Telegram),
+constructing that value as an enum required an SDK upgrade even though nothing about sending it
+needs one. Converting now closes that gap ahead of time.
+
+```swift
+// Before
+switch channel {
+case .sms: ...
+case .whatsapp: ...
+}
+
+// After
+switch channel {
+case .sms: ...
+case .whatsapp: ...
+default: ...  // an unrecognized channel the SDK doesn't have a case for
+}
+```
+
+Compile error only if you have an exhaustive `switch` over `MessagingChannel` — add a `default:`
+case. Passing `.sms` / `.whatsapp` as an argument, and comparing with `==`, work unchanged.

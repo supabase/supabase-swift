@@ -149,6 +149,12 @@ features:
     status: implemented
     symbols:
       - AuthMFA.challenge
+    supporting_symbols:
+      - MessagingChannel
+      - MessagingChannel.init
+      - MessagingChannel.rawValue
+      - MessagingChannel.sms
+      - MessagingChannel.whatsapp
   auth.mfa.verify:
     status: implemented
     symbols:

@@ -41,4 +41,16 @@ struct TypesTests {
     let data = try JSONEncoder().encode(FactorStatus.unverified)
     #expect(String(decoding: data, as: UTF8.self) == "\"unverified\"")
   }
+
+  @Test
+  func messagingChannelEncodesAsRawString() throws {
+    let data = try JSONEncoder().encode(MessagingChannel.whatsapp)
+    #expect(String(decoding: data, as: UTF8.self) == "\"whatsapp\"")
+  }
+
+  @Test
+  func messagingChannelStringLiteral() {
+    let channel: MessagingChannel = "signal"
+    #expect(channel.rawValue == "signal")
+  }
 }
