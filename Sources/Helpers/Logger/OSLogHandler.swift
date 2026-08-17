@@ -3,42 +3,38 @@
 //  Helpers
 //
 
-public import Foundation
-public import Logging
+import Foundation
+import Logging
 
 #if canImport(OSLog)
   import OSLog
 
-  /// A `Logging.LogHandler` backed by `OSLog`, giving OSLog/Console.app integration to callers
-  /// who want it explicitly — construct it and pass the resulting `Logger` in, no process-wide
-  /// `LoggingSystem.bootstrap` required:
-  ///
-  /// ```swift
-  /// let logger = Logging.Logger(label: "io.supabase.auth") { OSLogHandler(label: $0) }
-  /// ```
-  public struct OSLogHandler: LogHandler {
+  /// A `Logging.LogHandler` backed by `OSLog`, used internally to exercise OSLog/Console.app
+  /// integration in tests. Not exposed publicly — customers who want this should write their own
+  /// minimal `LogHandler` backed by `OSLog`; see the "OSLog parity" section of `V3_MIGRATION.md`.
+  struct OSLogHandler: LogHandler {
     private let osLogger: os.Logger
 
-    public var metadata: Logging.Logger.Metadata = [:]
+    var metadata: Logging.Logger.Metadata = [:]
 
     /// Defaults to `.trace`, so every level is forwarded to OSLog by default — matching the old
     /// `OSLogSupabaseLogger`, which had no threshold at all and let Console.app's own UI handle
     /// level-based filtering on the viewing side. Set this to raise the threshold instead.
-    public var logLevel: Logging.Logger.Level = .trace
+    var logLevel: Logging.Logger.Level = .trace
 
     /// - Parameters:
     ///   - label: Used as the OSLog category.
     ///   - subsystem: The OSLog subsystem. Defaults to the host app's bundle identifier.
-    public init(label: String, subsystem: String = Bundle.main.bundleIdentifier ?? "") {
+    init(label: String, subsystem: String = Bundle.main.bundleIdentifier ?? "") {
       osLogger = os.Logger(subsystem: subsystem, category: label)
     }
 
-    public subscript(metadataKey key: String) -> Logging.Logger.Metadata.Value? {
+    subscript(metadataKey key: String) -> Logging.Logger.Metadata.Value? {
       get { metadata[key] }
       set { metadata[key] = newValue }
     }
 
-    public func log(
+    func log(
       level: Logging.Logger.Level,
       message: Logging.Logger.Message,
       metadata: Logging.Logger.Metadata?,

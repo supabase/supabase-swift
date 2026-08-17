@@ -337,7 +337,7 @@ public struct VectorData: Codable, Sendable, Hashable {
 ///
 /// - Warning: Experimental. See ``StorageVectorsClient``.
 @_spi(Experimental)
-public struct VectorEntry: Codable, Sendable, Hashable {
+public struct VectorEntry: Encodable, Sendable, Hashable {
   /// A unique identifier for the vector within its index.
   public var key: String
 
@@ -366,7 +366,7 @@ public struct VectorEntry: Codable, Sendable, Hashable {
 ///
 /// - Warning: Experimental. See ``StorageVectorsClient``.
 @_spi(Experimental)
-public struct VectorMatch: Codable, Sendable, Hashable {
+public struct VectorMatch: Decodable, Sendable, Hashable {
   /// The vector's unique key.
   public var key: String
 

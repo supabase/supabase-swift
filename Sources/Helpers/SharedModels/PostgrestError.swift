@@ -7,7 +7,7 @@
 
 public import Foundation
 
-public struct PostgrestError: Error, Codable, Sendable {
+public struct PostgrestError: Error, Decodable, Sendable {
   /// Additional detail about the error, as returned by PostgREST in the `details` field.
   public let details: String?
   public let hint: String?
