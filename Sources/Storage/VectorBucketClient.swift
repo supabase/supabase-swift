@@ -355,7 +355,7 @@ public struct VectorIndexMetadataConfiguration: Codable, Sendable, Hashable {
 ///
 /// - Warning: Experimental. See ``StorageVectorsClient``.
 @_spi(Experimental)
-public struct VectorIndex: Codable, Sendable, Hashable {
+public struct VectorIndex: Decodable, Sendable, Hashable {
   /// The name of the index.
   public var indexName: String
 
@@ -383,7 +383,7 @@ public struct VectorIndex: Codable, Sendable, Hashable {
 ///
 /// - Warning: Experimental. See ``StorageVectorsClient``.
 @_spi(Experimental)
-public struct VectorIndexSummary: Codable, Sendable, Hashable {
+public struct VectorIndexSummary: Decodable, Sendable, Hashable {
   /// The name of the index.
   public var indexName: String
 

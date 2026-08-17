@@ -189,7 +189,7 @@ private struct ListVectorBucketsResponseBody: Decodable {
 ///
 /// - Warning: Experimental. See ``StorageVectorsClient``.
 @_spi(Experimental)
-public struct VectorBucket: Codable, Sendable, Hashable {
+public struct VectorBucket: Decodable, Sendable, Hashable {
   /// The name of the vector bucket.
   public var vectorBucketName: String
 
