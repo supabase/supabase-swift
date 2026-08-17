@@ -8,7 +8,7 @@
 import Foundation
 
 // cspell:ignore pvzp
-struct RealtimeJoinPayload: Codable {
+struct RealtimeJoinPayload: Encodable {
   var config: RealtimeJoinConfig
   var accessToken: String?
   var version: String?
@@ -20,7 +20,7 @@ struct RealtimeJoinPayload: Codable {
   }
 }
 
-struct RealtimeJoinConfig: Codable, Hashable {
+struct RealtimeJoinConfig: Encodable, Hashable {
   var broadcast: BroadcastJoinConfig = .init()
   var presence: PresenceJoinConfig = .init()
   var postgresChanges: [PostgresJoinConfig] = []
@@ -45,7 +45,7 @@ struct RealtimeJoinConfig: Codable, Hashable {
 /// - ``limit``
 /// ### Initialization
 /// - ``init(since:limit:)``
-public struct ReplayOption: Codable, Hashable, Sendable {
+public struct ReplayOption: Encodable, Hashable, Sendable {
   /// Unix timestamp in milliseconds. Messages broadcast after this point will be replayed.
   public var since: Int
 
@@ -74,7 +74,7 @@ public struct ReplayOption: Codable, Hashable, Sendable {
 /// - ``replay``
 /// ### Initialization
 /// - ``init(acknowledgeBroadcasts:receiveOwnBroadcasts:replay:)``
-public struct BroadcastJoinConfig: Codable, Hashable, Sendable {
+public struct BroadcastJoinConfig: Encodable, Hashable, Sendable {
   /// When `true`, the server acknowledges each broadcast message before delivering it.
   ///
   /// Useful in combination with ``RealtimeChannelV2/broadcast(event:message:)-2pvzp``
@@ -132,7 +132,7 @@ public struct BroadcastJoinConfig: Codable, Hashable, Sendable {
 /// - ``key``
 /// ### Initialization
 /// - ``init(key:)``
-public struct PresenceJoinConfig: Codable, Hashable, Sendable {
+public struct PresenceJoinConfig: Encodable, Hashable, Sendable {
   /// The client-defined key used to identify this client's presence entry in the presence map.
   ///
   /// All clients sharing the same key are grouped together in ``PresenceAction/joins``
