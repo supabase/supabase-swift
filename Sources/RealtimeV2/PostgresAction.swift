@@ -13,7 +13,7 @@ public import Foundation
 /// ### Properties
 /// - ``name``
 /// - ``type``
-public struct Column: Equatable, Codable, Sendable {
+public struct Column: Equatable, Decodable, Sendable {
   /// The column name in the database.
   public let name: String
 

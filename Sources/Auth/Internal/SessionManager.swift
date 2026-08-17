@@ -72,7 +72,6 @@ private actor LiveSessionManager {
     let logger: Logging.Logger = {
       var scopedLogger = self.logger
       scopedLogger[metadataKey: "refresh_id"] = "\(UUID().uuidString)"
-      scopedLogger[metadataKey: "refresh_token"] = "\(refreshToken)"
       return scopedLogger
     }()
 
