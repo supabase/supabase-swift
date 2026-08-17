@@ -27,7 +27,7 @@ public enum AuthChangeEvent: String, Sendable {
   case mfaChallengeVerified = "MFA_CHALLENGE_VERIFIED"
 }
 
-struct UserCredentials: Codable, Hashable, Sendable {
+struct UserCredentials: Encodable, Hashable, Sendable {
   var email: String?
   var password: String?
   var phone: String?
@@ -49,7 +49,7 @@ struct UserCredentials: Codable, Hashable, Sendable {
   }
 }
 
-struct SignUpRequest: Codable, Hashable, Sendable {
+struct SignUpRequest: Encodable, Hashable, Sendable {
   var email: String?
   var password: String?
   var phone: String?
@@ -408,7 +408,7 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
 }
 
 /// One of the providers supported by Auth.
-public struct Provider: RawRepresentable, Codable, Hashable, Sendable, ExpressibleByStringLiteral {
+public struct Provider: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
   public let rawValue: String
 
   /// Creates a ``Provider`` from a raw string value.
@@ -453,7 +453,7 @@ public struct Provider: RawRepresentable, Codable, Hashable, Sendable, Expressib
 }
 
 /// Credentials for signing in with an OpenID Connect (OIDC) ID token issued by a third-party.
-public struct OpenIDConnectCredentials: Codable, Hashable, Sendable {
+public struct OpenIDConnectCredentials: Encodable, Hashable, Sendable {
   /// Provider name or OIDC `iss` value identifying which provider should be used to verify the
   /// provided token. Supported names: `google`, `apple`, `azure`, `facebook`.
   public var provider: Provider
@@ -500,7 +500,7 @@ public struct OpenIDConnectCredentials: Codable, Hashable, Sendable {
   }
 
   /// Providers supported by the OIDC sign-in flow.
-  public struct Provider: RawRepresentable, Codable, Hashable, Sendable,
+  public struct Provider: RawRepresentable, Encodable, Hashable, Sendable,
     ExpressibleByStringLiteral
   {
     public let rawValue: String
@@ -523,7 +523,7 @@ public struct OpenIDConnectCredentials: Codable, Hashable, Sendable {
 }
 
 /// A captcha verification token used to secure Auth endpoints.
-public struct AuthMetaSecurity: Codable, Hashable, Sendable {
+public struct AuthMetaSecurity: Encodable, Hashable, Sendable {
   /// The captcha token obtained after the user completes a captcha challenge.
   public var captchaToken: String
 
@@ -536,7 +536,8 @@ public struct AuthMetaSecurity: Codable, Hashable, Sendable {
 }
 
 /// A Web3 chain supported by Sign in with Web3.
-public struct Web3Chain: RawRepresentable, Codable, Hashable, Sendable, ExpressibleByStringLiteral {
+public struct Web3Chain: RawRepresentable, Encodable, Hashable, Sendable, ExpressibleByStringLiteral
+{
   public let rawValue: String
 
   /// Creates a ``Web3Chain`` from a raw string value.
@@ -561,7 +562,7 @@ public struct Web3Chain: RawRepresentable, Codable, Hashable, Sendable, Expressi
 /// The caller is responsible for constructing a spec-compliant SIWE (EIP-4361) or SIWS message and
 /// obtaining a signature over it from the user's wallet (e.g. via WalletConnect or a native wallet
 /// SDK) — this type only carries the already-signed result to the server for verification.
-public struct Web3Credentials: Codable, Hashable, Sendable {
+public struct Web3Credentials: Encodable, Hashable, Sendable {
   public var chain: Web3Chain
 
   /// The SIWE- or SIWS-formatted message that was signed.
@@ -595,7 +596,7 @@ public struct Web3Credentials: Codable, Hashable, Sendable {
   }
 }
 
-struct OTPParams: Codable, Hashable, Sendable {
+struct OTPParams: Encodable, Hashable, Sendable {
   var email: String?
   var phone: String?
   var createUser: Bool
@@ -689,7 +690,7 @@ public enum EmailOTPType: String, Encodable, CaseIterable, Sendable {
 
 /// The response from sign-up and passkey calls that may return either a session or a user,
 /// depending on whether email confirmation is required.
-public enum AuthResponse: Codable, Hashable, Sendable {
+public enum AuthResponse: Decodable, Hashable, Sendable {
   /// A full session was created, meaning the user is immediately signed in.
   case session(Session)
 
@@ -707,14 +708,6 @@ public enum AuthResponse: Codable, Hashable, Sendable {
         in: container,
         debugDescription: "Data could not be decoded as any of the expected types (Session, User)."
       )
-    }
-  }
-
-  public func encode(to encoder: any Encoder) throws {
-    var container = encoder.singleValueContainer()
-    switch self {
-    case .session(let value): try container.encode(value)
-    case .user(let value): try container.encode(value)
     }
   }
 
@@ -783,7 +776,7 @@ public struct EmailChangeConfirmation: Decodable, Hashable, Sendable {
 }
 
 /// Attributes that a user can update for their own account.
-public struct UserAttributes: Codable, Hashable, Sendable {
+public struct UserAttributes: Encodable, Hashable, Sendable {
   /// The user's email.
   public var email: String?
 
@@ -914,7 +907,7 @@ public struct AdminUserAttributes: Encodable, Hashable, Sendable {
   }
 }
 
-struct RecoverParams: Codable, Hashable, Sendable {
+struct RecoverParams: Encodable, Hashable, Sendable {
   var email: String
   var gotrueMetaSecurity: AuthMetaSecurity?
   var codeChallenge: String?
@@ -1359,7 +1352,7 @@ struct DeleteUserRequest: Encodable {
 }
 
 /// The messaging channel used to deliver OTPs.
-public struct MessagingChannel: RawRepresentable, Codable, Hashable, Sendable,
+public struct MessagingChannel: RawRepresentable, Encodable, Hashable, Sendable,
   ExpressibleByStringLiteral
 {
   public let rawValue: String
@@ -1391,19 +1384,29 @@ struct SignInWithSSORequest: Encodable {
 }
 
 /// The response from a single sign-on (SSO) initiation request.
-public struct SSOResponse: Codable, Hashable, Sendable {
+public struct SSOResponse: Decodable, Hashable, Sendable {
   /// URL to open in a browser which will complete the sign-in flow by taking the user to the
   /// identity provider's authentication flow.
   public let url: URL
 }
 
 /// The URL and provider returned when building an OAuth sign-in URL.
-public struct OAuthResponse: Codable, Hashable, Sendable {
+public struct OAuthResponse: Hashable, Sendable {
   /// The OAuth provider.
   public let provider: Provider
 
   /// The URL to open in order to start the OAuth flow.
   public let url: URL
+
+  /// Creates an ``OAuthResponse``.
+  ///
+  /// - Parameters:
+  ///   - provider: The OAuth provider.
+  ///   - url: The URL to open in order to start the OAuth flow.
+  public init(provider: Provider, url: URL) {
+    self.provider = provider
+    self.url = url
+  }
 }
 
 /// Pagination parameters for list endpoints.
@@ -1659,7 +1662,7 @@ public struct OAuthClientResponseType: RawRepresentable, Codable, Hashable, Send
 
 /// OAuth client type indicating whether the client can keep credentials confidential.
 /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
-public struct OAuthClientType: RawRepresentable, Codable, Hashable, Sendable,
+public struct OAuthClientType: RawRepresentable, Decodable, Hashable, Sendable,
   ExpressibleByStringLiteral
 {
   /// The raw string value of the client type.
@@ -1684,7 +1687,7 @@ public struct OAuthClientType: RawRepresentable, Codable, Hashable, Sendable,
 
 /// OAuth client registration type.
 /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
-public struct OAuthClientRegistrationType: RawRepresentable, Codable, Hashable, Sendable,
+public struct OAuthClientRegistrationType: RawRepresentable, Decodable, Hashable, Sendable,
   ExpressibleByStringLiteral
 {
   /// The raw string value of the registration type.
@@ -1709,7 +1712,7 @@ public struct OAuthClientRegistrationType: RawRepresentable, Codable, Hashable, 
 
 /// OAuth client object returned from the OAuth 2.1 server.
 /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
-public struct OAuthClient: Codable, Hashable, Sendable {
+public struct OAuthClient: Decodable, Hashable, Sendable {
   /// Unique identifier for the OAuth client
   public let clientId: UUID
 
@@ -1864,7 +1867,7 @@ public struct ListOAuthClientsPaginatedResponse: Hashable, Sendable {
 
 /// Details about the OAuth client requesting authorization.
 /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
-public struct OAuthAuthorizationClient: Codable, Hashable, Sendable {
+public struct OAuthAuthorizationClient: Decodable, Hashable, Sendable {
   /// Unique identifier for the OAuth client.
   public let id: UUID
 
@@ -1880,7 +1883,7 @@ public struct OAuthAuthorizationClient: Codable, Hashable, Sendable {
 
 /// The authenticated user considering the authorization request.
 /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
-public struct OAuthAuthorizationUser: Codable, Hashable, Sendable {
+public struct OAuthAuthorizationUser: Decodable, Hashable, Sendable {
   /// Unique identifier for the user.
   public let id: UUID
 
@@ -1892,7 +1895,7 @@ public struct OAuthAuthorizationUser: Codable, Hashable, Sendable {
 /// ``AuthOAuthServer/getAuthorizationDetails(authorizationId:)`` when the
 /// request still requires the user's consent.
 /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
-public struct OAuthAuthorizationDetails: Codable, Hashable, Sendable {
+public struct OAuthAuthorizationDetails: Decodable, Hashable, Sendable {
   /// Opaque identifier for this authorization request.
   public let authorizationId: String
 
@@ -1913,7 +1916,7 @@ public struct OAuthAuthorizationDetails: Codable, Hashable, Sendable {
 /// request, or in place of ``OAuthAuthorizationDetails`` when the server
 /// auto-approves a request the user has already consented to.
 /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
-public struct OAuthRedirect: Codable, Hashable, Sendable {
+public struct OAuthRedirect: Decodable, Hashable, Sendable {
   /// The URL the client app should be redirected to. On denial, this URL's
   /// query string carries an `error=access_denied` parameter (RFC 6749) —
   /// denial is a successful API call, not a thrown error.
@@ -1958,7 +1961,7 @@ extension OAuthAuthorizationDetailsResponse: Decodable {
 /// An OAuth grant the user has given to a third-party client app, returned by
 /// ``AuthOAuthServer/listGrants()``.
 /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
-public struct OAuthGrant: Codable, Hashable, Sendable {
+public struct OAuthGrant: Decodable, Hashable, Sendable {
   /// The OAuth client the grant was given to.
   public let client: OAuthAuthorizationClient
 
@@ -1972,7 +1975,7 @@ public struct OAuthGrant: Codable, Hashable, Sendable {
 // MARK: - JWT Claims
 
 /// JSON Web Key (JWK) representation.
-public struct JWK: Codable, Hashable, Sendable {
+public struct JWK: Decodable, Hashable, Sendable {
   /// Key type (e.g., `"RSA"`, `"EC"`, `"oct"`).
   public let kty: String
 
@@ -2021,13 +2024,13 @@ public struct JWK: Codable, Hashable, Sendable {
 }
 
 /// A JSON Web Key Set (JWKS) containing one or more JWKs.
-public struct JWKS: Codable, Hashable, Sendable {
+public struct JWKS: Decodable, Hashable, Sendable {
   /// The set of JSON Web Keys.
   public let keys: [JWK]
 }
 
 /// The header portion of a decoded JSON Web Token.
-public struct JWTHeader: Codable, Hashable, Sendable {
+public struct JWTHeader: Decodable, Hashable, Sendable {
   /// Algorithm (e.g., `"RS256"`, `"ES256"`, `"HS256"`).
   public let alg: String
 
@@ -2039,7 +2042,7 @@ public struct JWTHeader: Codable, Hashable, Sendable {
 }
 
 /// The decoded claims from a JSON Web Token.
-public struct JWTClaims: Codable, Hashable, Sendable {
+public struct JWTClaims: Decodable, Hashable, Sendable {
   /// Issuer (`iss` claim).
   public let iss: String?
 
@@ -2129,33 +2132,10 @@ public struct JWTClaims: Codable, Hashable, Sendable {
     }
     additionalClaims = additional
   }
-
-  public func encode(to encoder: any Encoder) throws {
-    var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encodeIfPresent(self.iss, forKey: .iss)
-    try container.encodeIfPresent(self.sub, forKey: .sub)
-    try container.encodeIfPresent(self.aud, forKey: .aud)
-    try container.encodeIfPresent(self.exp, forKey: .exp)
-    try container.encodeIfPresent(self.iat, forKey: .iat)
-    try container.encodeIfPresent(self.nbf, forKey: .nbf)
-    try container.encodeIfPresent(self.jti, forKey: .jti)
-    try container.encodeIfPresent(self.role, forKey: .role)
-    try container.encodeIfPresent(self.aal, forKey: .aal)
-    try container.encodeIfPresent(self.sessionId, forKey: .sessionId)
-    try container.encodeIfPresent(self.email, forKey: .email)
-    try container.encodeIfPresent(self.phone, forKey: .phone)
-    try container.encodeIfPresent(self.appMetadata, forKey: .appMetadata)
-    try container.encodeIfPresent(self.userMetadata, forKey: .userMetadata)
-
-    var additionalClaimsContainer = encoder.container(keyedBy: AnyCodingKey.self)
-    for (key, value) in additionalClaims {
-      try additionalClaimsContainer.encode(value, forKey: AnyCodingKey(stringValue: key)!)
-    }
-  }
 }
 
 /// A JWT `aud` (audience) claim that may be either a single string or an array of strings.
-public enum AudienceClaim: Codable, Hashable, Sendable {
+public enum AudienceClaim: Decodable, Hashable, Sendable {
   /// A single audience string.
   case string(String)
 
@@ -2176,16 +2156,6 @@ public enum AudienceClaim: Codable, Hashable, Sendable {
           debugDescription: "Expected String or [String] for audience claim"
         )
       )
-    }
-  }
-
-  public func encode(to encoder: any Encoder) throws {
-    var container = encoder.singleValueContainer()
-    switch self {
-    case .string(let value):
-      try container.encode(value)
-    case .array(let value):
-      try container.encode(value)
     }
   }
 }
