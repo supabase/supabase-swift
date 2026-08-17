@@ -5,13 +5,24 @@
   struct Keychain {
     let service: String?
     let accessGroup: String?
+    let useDataProtectionKeychain: Bool
 
     init(
       service: String?,
-      accessGroup: String? = nil
+      accessGroup: String? = nil,
+      useDataProtectionKeychain: Bool = false
     ) {
       self.service = service
       self.accessGroup = accessGroup
+      self.useDataProtectionKeychain = useDataProtectionKeychain
+    }
+
+    init(_ configuration: KeychainConfiguration) {
+      self.init(
+        service: configuration.service,
+        accessGroup: configuration.accessGroup,
+        useDataProtectionKeychain: configuration.useDataProtectionKeychain
+      )
     }
 
     private func assertSuccess(forStatus status: OSStatus) throws {
@@ -20,10 +31,18 @@
       }
     }
 
-    func data(forKey key: String) throws -> Data {
-      let query = getOneQuery(byKey: key)
-      var result: AnyObject?
-      try assertSuccess(forStatus: SecItemCopyMatching(query as CFDictionary, &result))
+    /// Maps a `SecItemCopyMatching` status and its result into a value.
+    ///
+    /// - Returns: The stored bytes, or `nil` when the item does not exist.
+    /// - Throws: ``KeychainError`` for any status other than success or not-found.
+    static func mapReadStatus(_ status: OSStatus, result: AnyObject?) throws -> Data? {
+      if status == errSecItemNotFound {
+        return nil
+      }
+
+      if status != errSecSuccess {
+        throw KeychainError(code: KeychainError.Code(rawValue: status))
+      }
 
       guard let data = result as? Data else {
         let message = "Unable to cast the retrieved item to a Data value"
@@ -31,6 +50,24 @@
       }
 
       return data
+    }
+
+    /// Maps a `SecItemDelete` status, treating a missing item as success.
+    ///
+    /// - Throws: ``KeychainError`` for any status other than success or not-found.
+    static func mapDeleteStatus(_ status: OSStatus) throws {
+      if status == errSecItemNotFound || status == errSecSuccess {
+        return
+      }
+
+      throw KeychainError(code: KeychainError.Code(rawValue: status))
+    }
+
+    func data(forKey key: String) throws -> Data? {
+      let query = getOneQuery(byKey: key)
+      var result: AnyObject?
+      let status = SecItemCopyMatching(query as CFDictionary, &result)
+      return try Self.mapReadStatus(status, result: result)
     }
 
     func set(_ data: Data, forKey key: String) throws {
@@ -50,10 +87,10 @@
 
     func deleteItem(forKey key: String) throws {
       let query = baseQuery(withKey: key)
-      try assertSuccess(forStatus: SecItemDelete(query as CFDictionary))
+      try Self.mapDeleteStatus(SecItemDelete(query as CFDictionary))
     }
 
-    private func baseQuery(withKey key: String? = nil, data: Data? = nil) -> [String: Any] {
+    func baseQuery(withKey key: String? = nil, data: Data? = nil) -> [String: Any] {
       var query: [String: Any] = [:]
       query[kSecClass as String] = kSecClassGenericPassword
 
@@ -69,6 +106,11 @@
       if let accessGroup {
         query[kSecAttrAccessGroup as String] = accessGroup
       }
+      if useDataProtectionKeychain {
+        // Stored as a Swift Bool rather than kCFBooleanTrue so the value round-trips through
+        // `as? Bool` in tests. It bridges to a CFBoolean when the dictionary becomes a CFDictionary.
+        query[kSecUseDataProtectionKeychain as String] = true
+      }
 
       return query
     }
@@ -83,7 +125,16 @@
     func setQuery(forKey key: String, data: Data) -> [String: Any] {
       var query = baseQuery(withKey: key, data: data)
 
-      query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+      #if os(macOS)
+        // kSecAttrAccessible does not apply to the legacy file-based Keychain, which is what
+        // SecItem targets on macOS by default. Only send it once the data-protection Keychain
+        // is in use. https://developer.apple.com/documentation/security/ksecattraccessible
+        if useDataProtectionKeychain {
+          query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+        }
+      #else
+        query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+      #endif
 
       return query
     }
@@ -228,4 +279,16 @@
       lhs.code == rhs.code && lhs.localizedDescription == rhs.localizedDescription
     }
   }
+
+  /// The Keychain operations ``KeychainLocalStorage`` depends on.
+  ///
+  /// Exists so the migration logic can be tested without reaching the real Keychain, which is
+  /// not available to an SPM test bundle.
+  protocol KeychainProtocol: Sendable {
+    func data(forKey key: String) throws -> Data?
+    func set(_ data: Data, forKey key: String) throws
+    func deleteItem(forKey key: String) throws
+  }
+
+  extension Keychain: KeychainProtocol {}
 #endif

@@ -55,7 +55,7 @@ public struct WebAuthnChallengeOptions: Encodable, Hashable, Sendable {
 ///
 /// - Warning: Experimental. See ``MFAWebAuthnEnrollParams``.
 @_spi(Experimental)
-public struct WebAuthnChallengeType: RawRepresentable, Codable, Hashable, Sendable,
+public struct WebAuthnChallengeType: RawRepresentable, Decodable, Hashable, Sendable,
   ExpressibleByStringLiteral
 {
   public let rawValue: String
@@ -96,7 +96,7 @@ public struct WebAuthnChallengeResponseData: Decodable, Hashable, Sendable {
 ///
 /// - Warning: Experimental. See ``MFAWebAuthnEnrollParams``.
 @_spi(Experimental)
-public struct PasskeyListItem: Codable, Identifiable, Hashable, Sendable {
+public struct PasskeyListItem: Decodable, Identifiable, Hashable, Sendable {
   /// Unique identifier of the passkey.
   public let id: UUID
 
