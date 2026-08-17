@@ -20,6 +20,34 @@ features:
     symbols:
       - AuthClient.signInWithOAuth
       - AuthClient.getOAuthSignInURL
+    supporting_symbols:
+      - Provider
+      - Provider.init
+      - Provider.rawValue
+      - Provider.apple
+      - Provider.azure
+      - Provider.bitbucket
+      - Provider.discord
+      - Provider.email
+      - Provider.facebook
+      - Provider.figma
+      - Provider.github
+      - Provider.gitlab
+      - Provider.google
+      - Provider.kakao
+      - Provider.keycloak
+      - Provider.linkedin
+      - Provider.linkedinOIDC
+      - Provider.notion
+      - Provider.slack
+      - Provider.slackOIDC
+      - Provider.spotify
+      - Provider.twitch
+      - Provider.twitter
+      - Provider.x
+      - Provider.workos
+      - Provider.zoom
+      - Provider.fly
   auth.sign_in.sign_in_with_otp:
     status: implemented
     symbols:
@@ -67,10 +95,35 @@ features:
       - EmailChangeConfirmation.message
       - EmailChangeConfirmation.code
       - EmailChangeConfirmation.init
+      - MobileOTPType
+      - MobileOTPType.init
+      - MobileOTPType.rawValue
+      - MobileOTPType.sms
+      - MobileOTPType.phoneChange
+      - EmailOTPType
+      - EmailOTPType.init
+      - EmailOTPType.rawValue
+      - EmailOTPType.signup
+      - EmailOTPType.invite
+      - EmailOTPType.magiclink
+      - EmailOTPType.recovery
+      - EmailOTPType.emailChange
+      - EmailOTPType.email
   auth.sign_in.resend_confirmation:
     status: implemented
     symbols:
       - AuthClient.resend
+    supporting_symbols:
+      - ResendEmailType
+      - ResendEmailType.init
+      - ResendEmailType.rawValue
+      - ResendEmailType.signup
+      - ResendEmailType.emailChange
+      - ResendMobileType
+      - ResendMobileType.init
+      - ResendMobileType.rawValue
+      - ResendMobileType.sms
+      - ResendMobileType.phoneChange
   auth.sign_in.send_password_reset_email:
     status: implemented
     symbols:
@@ -110,6 +163,13 @@ features:
     status: implemented
     symbols:
       - AuthClient.signOut
+    supporting_symbols:
+      - SignOutScope
+      - SignOutScope.init
+      - SignOutScope.rawValue
+      - SignOutScope.global
+      - SignOutScope.local
+      - SignOutScope.others
   auth.session.update_user:
     status: implemented
     symbols:
@@ -149,6 +209,12 @@ features:
     status: implemented
     symbols:
       - AuthMFA.challenge
+    supporting_symbols:
+      - MessagingChannel
+      - MessagingChannel.init
+      - MessagingChannel.rawValue
+      - MessagingChannel.sms
+      - MessagingChannel.whatsapp
   auth.mfa.verify:
     status: implemented
     symbols:
@@ -165,6 +231,12 @@ features:
     status: implemented
     symbols:
       - AuthMFA.listFactors
+    supporting_symbols:
+      - FactorStatus
+      - FactorStatus.init
+      - FactorStatus.rawValue
+      - FactorStatus.verified
+      - FactorStatus.unverified
   auth.mfa.get_authenticator_assurance_level:
     status: implemented
     symbols:
@@ -350,7 +422,17 @@ features:
     status: implemented
     symbols:
       - PostgrestError.details
-  database.query.select: implemented
+  database.query.select:
+    status: implemented
+    symbols:
+      - PostgrestQueryBuilder.select
+    supporting_symbols:
+      - CountOption
+      - CountOption.init
+      - CountOption.rawValue
+      - CountOption.exact
+      - CountOption.planned
+      - CountOption.estimated
   database.query.schema_selection: implemented
   database.query.rpc: implemented
 
@@ -358,7 +440,19 @@ features:
   database.mutate.update: implemented
   database.mutate.upsert: implemented
   database.mutate.delete: implemented
-  database.mutate.select_after_mutation: implemented
+  database.mutate.select_after_mutation:
+    status: implemented
+    symbols:
+      - PostgrestQueryBuilder.insert
+      - PostgrestQueryBuilder.update
+      - PostgrestQueryBuilder.upsert
+      - PostgrestQueryBuilder.delete
+    supporting_symbols:
+      - PostgrestReturningOptions
+      - PostgrestReturningOptions.init
+      - PostgrestReturningOptions.rawValue
+      - PostgrestReturningOptions.minimal
+      - PostgrestReturningOptions.representation
 
   database.using_filters.eq: implemented
   database.using_filters.neq: implemented
@@ -380,7 +474,39 @@ features:
   database.using_filters.overlaps: implemented
   database.using_filters.text_search: implemented
   database.using_filters.match: implemented
-  database.using_filters.not: implemented
+  database.using_filters.not:
+    status: implemented
+    symbols:
+      - PostgrestFilterBuilder.not
+    supporting_symbols:
+      - PostgrestFilterBuilder.Operator
+      - PostgrestFilterBuilder.Operator.init
+      - PostgrestFilterBuilder.Operator.rawValue
+      - PostgrestFilterBuilder.Operator.eq
+      - PostgrestFilterBuilder.Operator.neq
+      - PostgrestFilterBuilder.Operator.gt
+      - PostgrestFilterBuilder.Operator.gte
+      - PostgrestFilterBuilder.Operator.lt
+      - PostgrestFilterBuilder.Operator.lte
+      - PostgrestFilterBuilder.Operator.like
+      - PostgrestFilterBuilder.Operator.ilike
+      - PostgrestFilterBuilder.Operator.match
+      - PostgrestFilterBuilder.Operator.imatch
+      - PostgrestFilterBuilder.Operator.is
+      - PostgrestFilterBuilder.Operator.isdistinct
+      - PostgrestFilterBuilder.Operator.in
+      - PostgrestFilterBuilder.Operator.cs
+      - PostgrestFilterBuilder.Operator.cd
+      - PostgrestFilterBuilder.Operator.sl
+      - PostgrestFilterBuilder.Operator.sr
+      - PostgrestFilterBuilder.Operator.nxl
+      - PostgrestFilterBuilder.Operator.nxr
+      - PostgrestFilterBuilder.Operator.adj
+      - PostgrestFilterBuilder.Operator.ov
+      - PostgrestFilterBuilder.Operator.fts
+      - PostgrestFilterBuilder.Operator.plfts
+      - PostgrestFilterBuilder.Operator.phfts
+      - PostgrestFilterBuilder.Operator.wfts
   database.using_filters.or: implemented
   database.using_filters.raw: implemented
   database.using_filters.regex: implemented
