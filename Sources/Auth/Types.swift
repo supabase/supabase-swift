@@ -54,7 +54,7 @@ struct SignUpRequest: Encodable, Hashable, Sendable {
   var password: String?
   var phone: String?
   var channel: MessagingChannel?
-  var data: [String: AnyJSON]?
+  var data: [String: JSONValue]?
   var gotrueMetaSecurity: AuthMetaSecurity?
   var codeChallenge: String?
   var codeChallengeMethod: String?
@@ -147,10 +147,10 @@ public struct User: Codable, Hashable, Identifiable, Sendable {
   public var id: UUID
 
   /// Application-specific metadata stored by the administrator in `auth.users.app_metadata`.
-  public var appMetadata: [String: AnyJSON]
+  public var appMetadata: [String: JSONValue]
 
   /// User-supplied metadata stored in `auth.users.raw_user_meta_data`.
-  public var userMetadata: [String: AnyJSON]
+  public var userMetadata: [String: JSONValue]
 
   /// The audience claim (`aud`) of the user's JWT.
   public var aud: String
@@ -236,8 +236,8 @@ public struct User: Codable, Hashable, Identifiable, Sendable {
   ///   - factors: Registered MFA factors.
   public init(
     id: UUID,
-    appMetadata: [String: AnyJSON],
-    userMetadata: [String: AnyJSON],
+    appMetadata: [String: JSONValue],
+    userMetadata: [String: JSONValue],
     aud: String,
     confirmationSentAt: Date? = nil,
     recoverySentAt: Date? = nil,
@@ -285,9 +285,10 @@ public struct User: Codable, Hashable, Identifiable, Sendable {
   public init(from decoder: any Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     id = try container.decode(UUID.self, forKey: .id)
-    appMetadata = try container.decodeIfPresent([String: AnyJSON].self, forKey: .appMetadata) ?? [:]
+    appMetadata =
+      try container.decodeIfPresent([String: JSONValue].self, forKey: .appMetadata) ?? [:]
     userMetadata =
-      try container.decodeIfPresent([String: AnyJSON].self, forKey: .userMetadata) ?? [:]
+      try container.decodeIfPresent([String: JSONValue].self, forKey: .userMetadata) ?? [:]
     aud = try container.decode(String.self, forKey: .aud)
     confirmationSentAt = try container.decodeIfPresent(Date.self, forKey: .confirmationSentAt)
     recoverySentAt = try container.decodeIfPresent(Date.self, forKey: .recoverySentAt)
@@ -322,7 +323,7 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
   public var userId: UUID
 
   /// Provider-specific identity data returned by the third-party.
-  public var identityData: [String: AnyJSON]?
+  public var identityData: [String: JSONValue]?
 
   /// The name of the provider (e.g. `google`, `github`).
   public var provider: String
@@ -351,7 +352,7 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
     id: String,
     identityId: UUID,
     userId: UUID,
-    identityData: [String: AnyJSON],
+    identityData: [String: JSONValue],
     provider: String,
     createdAt: Date?,
     lastSignInAt: Date?,
@@ -386,7 +387,7 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
       try container.decodeIfPresent(UUID.self, forKey: .identityId)
       ?? UUID(uuidString: "00000000-0000-0000-0000-000000000000")!
     userId = try container.decode(UUID.self, forKey: .userId)
-    identityData = try container.decodeIfPresent([String: AnyJSON].self, forKey: .identityData)
+    identityData = try container.decodeIfPresent([String: JSONValue].self, forKey: .identityData)
     provider = try container.decode(String.self, forKey: .provider)
     createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt)
     lastSignInAt = try container.decodeIfPresent(Date.self, forKey: .lastSignInAt)
@@ -601,7 +602,7 @@ struct OTPParams: Encodable, Hashable, Sendable {
   var phone: String?
   var createUser: Bool
   var channel: MessagingChannel?
-  var data: [String: AnyJSON]?
+  var data: [String: JSONValue]?
   var gotrueMetaSecurity: AuthMetaSecurity?
   var codeChallenge: String?
   var codeChallengeMethod: String?
@@ -808,7 +809,7 @@ public struct UserAttributes: Encodable, Hashable, Sendable {
   /// A custom data object to store the user's metadata. This maps to the `auth.users.user_metadata`
   /// column. The `data` should be a JSON object that includes user-specific info, such as their
   /// first and last name.
-  public var data: [String: AnyJSON]?
+  public var data: [String: JSONValue]?
 
   var codeChallenge: String?
   var codeChallengeMethod: String?
@@ -826,7 +827,7 @@ public struct UserAttributes: Encodable, Hashable, Sendable {
     phone: String? = nil,
     password: String? = nil,
     nonce: String? = nil,
-    data: [String: AnyJSON]? = nil
+    data: [String: JSONValue]? = nil
   ) {
     self.email = email
     self.phone = phone
@@ -840,7 +841,7 @@ public struct UserAttributes: Encodable, Hashable, Sendable {
 public struct AdminUserAttributes: Encodable, Hashable, Sendable {
 
   /// A custom data object to store the user's application specific metadata. This maps to the `auth.users.app_metadata` column.
-  public var appMetadata: [String: AnyJSON]?
+  public var appMetadata: [String: JSONValue]?
 
   /// Determines how long a user is banned for.
   ///
@@ -875,7 +876,7 @@ public struct AdminUserAttributes: Encodable, Hashable, Sendable {
   public var role: String?
 
   /// A custom data object to store the user's metadata. This maps to the `auth.users.raw_user_meta_data` column.
-  public var userMetadata: [String: AnyJSON]?
+  public var userMetadata: [String: JSONValue]?
 
   /// Creates admin user attributes.
   ///
@@ -893,7 +894,7 @@ public struct AdminUserAttributes: Encodable, Hashable, Sendable {
   ///   - role: The JWT role claim.
   ///   - userMetadata: User-supplied metadata.
   public init(
-    appMetadata: [String: AnyJSON]? = nil,
+    appMetadata: [String: JSONValue]? = nil,
     banDuration: String? = nil,
     email: String? = nil,
     emailConfirm: Bool? = nil,
@@ -904,7 +905,7 @@ public struct AdminUserAttributes: Encodable, Hashable, Sendable {
     phone: String? = nil,
     phoneConfirm: Bool? = nil,
     role: String? = nil,
-    userMetadata: [String: AnyJSON]? = nil
+    userMetadata: [String: JSONValue]? = nil
   ) {
     self.appMetadata = appMetadata
     self.banDuration = banDuration
@@ -1149,7 +1150,7 @@ public struct MFAVerifyParams: Encodable, Hashable {
 
   /// The W3C credential (assertion) response produced by the authenticator. Used for `webauthn`
   /// factors. Forwarded verbatim to the backend, preserving the W3C field names.
-  @_spi(Experimental) public let credentialResponse: AnyJSON?
+  @_spi(Experimental) public let credentialResponse: JSONValue?
 
   /// Verifies a `totp` or `phone` factor using a user-provided code.
   ///
@@ -1171,7 +1172,7 @@ public struct MFAVerifyParams: Encodable, Hashable {
   ///   - challengeId: The challenge ID being verified.
   ///   - credentialResponse: The W3C assertion produced by the platform authenticator.
   @_spi(Experimental)
-  public init(factorId: String, challengeId: String, credentialResponse: AnyJSON) {
+  public init(factorId: String, challengeId: String, credentialResponse: JSONValue) {
     self.factorId = factorId
     self.challengeId = challengeId
     self.code = ""
@@ -1507,7 +1508,7 @@ public struct GenerateLinkParams: Sendable {
     var email: String
     var password: String?
     var newEmail: String?
-    var data: [String: AnyJSON]?
+    var data: [String: JSONValue]?
   }
   var body: Body
   var redirectTo: URL?
@@ -1516,7 +1517,7 @@ public struct GenerateLinkParams: Sendable {
   public static func signUp(
     email: String,
     password: String,
-    data: [String: AnyJSON]? = nil,
+    data: [String: JSONValue]? = nil,
     redirectTo: URL? = nil
   ) -> GenerateLinkParams {
     GenerateLinkParams(
@@ -1533,7 +1534,7 @@ public struct GenerateLinkParams: Sendable {
   /// Generates an invite link.
   public static func invite(
     email: String,
-    data: [String: AnyJSON]? = nil,
+    data: [String: JSONValue]? = nil,
     redirectTo: URL? = nil
   ) -> GenerateLinkParams {
     GenerateLinkParams(
@@ -1549,7 +1550,7 @@ public struct GenerateLinkParams: Sendable {
   /// Generates a magic link.
   public static func magicLink(
     email: String,
-    data: [String: AnyJSON]? = nil,
+    data: [String: JSONValue]? = nil,
     redirectTo: URL? = nil
   ) -> GenerateLinkParams {
     GenerateLinkParams(
@@ -2134,13 +2135,13 @@ public struct JWTClaims: Decodable, Hashable, Sendable {
   public let phone: String?
 
   /// Application metadata.
-  public let appMetadata: [String: AnyJSON]?
+  public let appMetadata: [String: JSONValue]?
 
   /// User metadata.
-  public let userMetadata: [String: AnyJSON]?
+  public let userMetadata: [String: JSONValue]?
 
   /// Any claims not recognized by the standard set of ``CodingKeys``.
-  public var additionalClaims: [String: AnyJSON] = [:]
+  public var additionalClaims: [String: JSONValue] = [:]
 
   enum CodingKeys: String, CodingKey {
     case iss
@@ -2173,14 +2174,14 @@ public struct JWTClaims: Decodable, Hashable, Sendable {
     sessionId = try container.decodeIfPresent(String.self, forKey: .sessionId)
     email = try container.decodeIfPresent(String.self, forKey: .email)
     phone = try container.decodeIfPresent(String.self, forKey: .phone)
-    appMetadata = try container.decodeIfPresent([String: AnyJSON].self, forKey: .appMetadata)
-    userMetadata = try container.decodeIfPresent([String: AnyJSON].self, forKey: .userMetadata)
+    appMetadata = try container.decodeIfPresent([String: JSONValue].self, forKey: .appMetadata)
+    userMetadata = try container.decodeIfPresent([String: JSONValue].self, forKey: .userMetadata)
 
     // Decode additional claims
     let allKeys = try decoder.container(keyedBy: AnyCodingKey.self)
-    var additional: [String: AnyJSON] = [:]
+    var additional: [String: JSONValue] = [:]
     for key in allKeys.allKeys where CodingKeys(stringValue: key.stringValue) == nil {
-      if let value = try? allKeys.decode(AnyJSON.self, forKey: key) {
+      if let value = try? allKeys.decode(JSONValue.self, forKey: key) {
         additional[key.stringValue] = value
       }
     }

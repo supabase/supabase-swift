@@ -80,8 +80,8 @@ extension Array: PostgrestArrayLiteralElementEncodable where Element: PostgrestF
   package var postgrestArrayLiteralElement: String { rawValue }
 }
 
-/// `AnyJSON` can be used directly as a PostgREST filter value.
-extension AnyJSON: PostgrestFilterValue {
+/// `JSONValue` can be used directly as a PostgREST filter value.
+extension JSONValue: PostgrestFilterValue {
   public var rawValue: String {
     switch self {
     case .array(let array): array.rawValue
@@ -98,7 +98,7 @@ extension AnyJSON: PostgrestFilterValue {
 /// `.null` is an actual SQL `NULL` array member, not the string `"NULL"`, and
 /// `.array` is a nested array literal, not a scalar string — both are passed
 /// through unescaped rather than quoted as a scalar.
-extension AnyJSON: PostgrestArrayLiteralElementEncodable {
+extension JSONValue: PostgrestArrayLiteralElementEncodable {
   package var postgrestArrayLiteralElement: String {
     switch self {
     case .array(let array): array.postgrestArrayLiteralElement

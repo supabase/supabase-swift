@@ -50,7 +50,7 @@ extension AuthClient {
   @discardableResult
   public func verifyPasskeyRegistration(
     challengeId: String,
-    credentialResponse: AnyJSON
+    credentialResponse: JSONValue
   ) async throws -> PasskeyListItem {
     try await Dependencies[clientID].api.authorizedExecute(
       HTTPRequest(
@@ -92,7 +92,7 @@ extension AuthClient {
   @discardableResult
   public func verifyPasskeyAuthentication(
     challengeId: String,
-    credentialResponse: AnyJSON
+    credentialResponse: JSONValue
   ) async throws -> AuthResponse {
     let response: AuthResponse = try await Dependencies[clientID].api.execute(
       HTTPRequest(

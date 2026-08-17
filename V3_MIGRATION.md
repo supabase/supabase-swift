@@ -524,6 +524,27 @@ let client = SupabaseClient(
 There's no reference implementation to swap in — implement `AuthLocalStorage` against whatever
 storage mechanism suits your app.
 
+## `AnyJSON` renamed to `JSONValue`
+
+The `Helpers` type `AnyJSON` is now `JSONValue`. `AnyJSON` described a Postgres/JSON column value
+long before the SDK had any other `Any`-prefixed types; `JSONValue` names what the type actually
+holds and matches the naming used for the same concept in supabase-js. `JSONObject` and
+`JSONArray` keep their names — only the enum itself is renamed.
+
+```swift
+// Before
+let json: AnyJSON = ["id": 1, "name": "Bo"]
+func decode(_ value: AnyJSON) throws -> User { try value.decode() }
+
+// After
+let json: JSONValue = ["id": 1, "name": "Bo"]
+func decode(_ value: JSONValue) throws -> User { try value.decode() }
+```
+
+This is a compile error everywhere `AnyJSON` is spelled out as a type — search your codebase for
+`AnyJSON` and replace it with `JSONValue`. Values and call sites that never name the type
+explicitly (e.g. `let json: JSONObject = [...]`, or `try SomeType(from: value)`) are unaffected.
+
 ## `FactorStatus` is now a struct, not an enum
 
 `FactorStatus` (the enrollment status on an MFA `Factor`) is a `RawRepresentable` struct instead

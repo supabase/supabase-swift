@@ -23,7 +23,7 @@ enum WebAuthnError: Error, Equatable {
 
 // MARK: - W3C options parsing (platform independent, testable)
 
-extension AnyJSON {
+extension JSONValue {
   /// Base64url-decodes the `challenge` field of W3C credential options.
   func webAuthnChallengeData() throws -> Data {
     try base64URLDecoded(at: ["challenge"])
@@ -58,8 +58,8 @@ extension AnyJSON {
     return id
   }
 
-  private func value(at path: [String]) -> AnyJSON? {
-    var current: AnyJSON? = self
+  private func value(at path: [String]) -> JSONValue? {
+    var current: JSONValue? = self
     for key in path {
       current = current?.objectValue?[key]
     }
@@ -91,14 +91,14 @@ extension AnyJSON {
     /// Presents the registration UI for the given W3C creation options and returns the resulting
     /// W3C credential JSON.
     var register:
-      @MainActor @Sendable (_ options: AnyJSON, _ rpId: String, _ anchor: ASPresentationAnchor)
-        async throws -> AnyJSON
+      @MainActor @Sendable (_ options: JSONValue, _ rpId: String, _ anchor: ASPresentationAnchor)
+        async throws -> JSONValue
 
     /// Presents the assertion UI for the given W3C request options and returns the resulting W3C
     /// credential JSON.
     var authenticate:
-      @MainActor @Sendable (_ options: AnyJSON, _ rpId: String, _ anchor: ASPresentationAnchor)
-        async throws -> AnyJSON
+      @MainActor @Sendable (_ options: JSONValue, _ rpId: String, _ anchor: ASPresentationAnchor)
+        async throws -> JSONValue
   }
 
   extension WebAuthnAuthenticator {
@@ -129,7 +129,7 @@ extension AnyJSON {
   }
 
   /// Serializes a platform registration credential into the W3C JSON shape the backend expects.
-  private func registrationCredentialJSON(from authorization: ASAuthorization) throws -> AnyJSON {
+  private func registrationCredentialJSON(from authorization: ASAuthorization) throws -> JSONValue {
     guard
       let credential = authorization.credential
         as? ASAuthorizationPlatformPublicKeyCredentialRegistration
@@ -148,7 +148,7 @@ extension AnyJSON {
   }
 
   /// Serializes a platform assertion credential into the W3C JSON shape the backend expects.
-  private func assertionCredentialJSON(from authorization: ASAuthorization) throws -> AnyJSON {
+  private func assertionCredentialJSON(from authorization: ASAuthorization) throws -> JSONValue {
     guard
       let credential = authorization.credential
         as? ASAuthorizationPlatformPublicKeyCredentialAssertion

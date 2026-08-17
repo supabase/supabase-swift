@@ -1,5 +1,5 @@
 //
-//  AnyJSON+Codable.swift
+//  JSONValue+Codable.swift
 //
 //
 //  Created by Guilherme Souza on 20/01/24.
@@ -7,18 +7,18 @@
 
 public import Foundation
 
-extension AnyJSON {
-  /// The decoder instance used for transforming AnyJSON to some Codable type.
+extension JSONValue {
+  /// The decoder instance used for transforming JSONValue to some Codable type.
   public static let decoder: JSONDecoder = JSONDecoder.supabase()
 
-  /// The encoder instance used for transforming AnyJSON to some Codable type.
+  /// The encoder instance used for transforming JSONValue to some Codable type.
   public static let encoder: JSONEncoder = JSONEncoder.supabase()
 }
 
-extension AnyJSON {
-  /// Initialize an ``AnyJSON`` from an ``Encodable`` value.
+extension JSONValue {
+  /// Initialize an ``JSONValue`` from an ``Encodable`` value.
   public init(_ value: some Encodable) throws {
-    if let value = value as? AnyJSON {
+    if let value = value as? JSONValue {
       self = value
     } else if let string = value as? String {
       self = .string(string)
@@ -29,17 +29,17 @@ extension AnyJSON {
     } else if let double = value as? Double {
       self = .double(double)
     } else {
-      let data = try AnyJSON.encoder.encode(value)
-      self = try AnyJSON.decoder.decode(AnyJSON.self, from: data)
+      let data = try JSONValue.encoder.encode(value)
+      self = try JSONValue.decoder.decode(JSONValue.self, from: data)
     }
   }
 
   /// Decodes self instance as `Decodable` type.
   public func decode<T: Decodable>(
     as type: T.Type = T.self,
-    decoder: JSONDecoder = AnyJSON.decoder
+    decoder: JSONDecoder = JSONValue.decoder
   ) throws -> T {
-    let data = try AnyJSON.encoder.encode(self)
+    let data = try JSONValue.encoder.encode(self)
     return try decoder.decode(type, from: data)
   }
 }
@@ -48,9 +48,9 @@ extension JSONArray {
   /// Decodes self instance as array of `Decodable` type.
   public func decode<T: Decodable>(
     as _: T.Type = T.self,
-    decoder: JSONDecoder = AnyJSON.decoder
+    decoder: JSONDecoder = JSONValue.decoder
   ) throws -> [T] {
-    try AnyJSON.array(self).decode(as: [T].self, decoder: decoder)
+    try JSONValue.array(self).decode(as: [T].self, decoder: decoder)
   }
 }
 
@@ -58,14 +58,14 @@ extension JSONObject {
   /// Decodes self instance as `Decodable` type.
   public func decode<T: Decodable>(
     as _: T.Type = T.self,
-    decoder: JSONDecoder = AnyJSON.decoder
+    decoder: JSONDecoder = JSONValue.decoder
   ) throws -> T {
-    try AnyJSON.object(self).decode(as: T.self, decoder: decoder)
+    try JSONValue.object(self).decode(as: T.self, decoder: decoder)
   }
 
   /// Initialize JSONObject from an `Encodable` type
   public init(_ value: some Encodable) throws {
-    guard let object = try AnyJSON(value).objectValue else {
+    guard let object = try JSONValue(value).objectValue else {
       throw DecodingError.typeMismatch(
         JSONObject.self,
         DecodingError.Context(

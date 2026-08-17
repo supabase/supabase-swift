@@ -2505,7 +2505,7 @@ extension AuthMockerTests {
 
     @Test
     func webAuthnCredentialOptionsParsing() throws {
-      let options: AnyJSON = [
+      let options: JSONValue = [
         "challenge": "Y2hhbGxlbmdl",
         "user": [
           "id": "dXNlci1pZA",
@@ -2527,7 +2527,7 @@ extension AuthMockerTests {
 
     @Test
     func webAuthnChallengeParsingThrowsWhenMissing() {
-      let options: AnyJSON = ["user": ["id": "dXNlci1pZA"]]
+      let options: JSONValue = ["user": ["id": "dXNlci1pZA"]]
       #expect(throws: (any Error).self) { try options.webAuthnChallengeData() }
     }
 
@@ -2553,7 +2553,7 @@ extension AuthMockerTests {
         .register()
 
         // Capture what the SDK hands to the authenticator to prove it forwards the backend options.
-        let forwardedOptions = LockIsolated<AnyJSON?>(nil)
+        let forwardedOptions = LockIsolated<JSONValue?>(nil)
         let authenticator = WebAuthnAuthenticator(
           register: { _, _, _ in [:] },
           authenticate: { options, _, _ in

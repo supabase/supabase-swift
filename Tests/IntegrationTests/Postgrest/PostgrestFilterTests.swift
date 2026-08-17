@@ -24,7 +24,7 @@ struct PostgrestFilterTests {
   init() async throws {
     // Clean up test data before running tests.
     // Delete users with email (test data), preserving seed data (users with username only).
-    try await client.from("users").delete().not("email", operator: .is, value: AnyJSON.null)
+    try await client.from("users").delete().not("email", operator: .is, value: JSONValue.null)
       .execute()
   }
 
@@ -35,7 +35,7 @@ struct PostgrestFilterTests {
       .select("status")
       .not("status", operator: .eq, value: "OFFLINE")
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
     assertInlineSnapshot(of: res, as: .json) {
       """
       [
@@ -60,7 +60,7 @@ struct PostgrestFilterTests {
       .select("status,username")
       .or("status.eq.OFFLINE,username.eq.supabot")
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
     assertInlineSnapshot(of: res, as: .json) {
       """
       [
@@ -84,7 +84,7 @@ struct PostgrestFilterTests {
       .select("username")
       .eq("username", value: "supabot")
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
     assertInlineSnapshot(of: res, as: .json) {
       """
       [
@@ -103,7 +103,7 @@ struct PostgrestFilterTests {
       .select("username")
       .neq("username", value: "supabot")
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
     assertInlineSnapshot(of: res, as: .json) {
       """
       [
@@ -128,7 +128,7 @@ struct PostgrestFilterTests {
       .select("id")
       .gt("id", value: 1)
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
     assertInlineSnapshot(of: res, as: .json) {
       """
       [
@@ -147,7 +147,7 @@ struct PostgrestFilterTests {
       .select("id")
       .gte("id", value: 1)
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
     assertInlineSnapshot(of: res, as: .json) {
       """
       [
@@ -169,7 +169,7 @@ struct PostgrestFilterTests {
       .select("id")
       .lt("id", value: 2)
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
     assertInlineSnapshot(of: res, as: .json) {
       """
       [
@@ -188,7 +188,7 @@ struct PostgrestFilterTests {
       .select("id")
       .lte("id", value: 2)
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
     assertInlineSnapshot(of: res, as: .json) {
       """
       [
@@ -210,7 +210,7 @@ struct PostgrestFilterTests {
       .select("username")
       .like("username", pattern: "%supa%")
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
     assertInlineSnapshot(of: res, as: .json) {
       """
       [
@@ -229,7 +229,7 @@ struct PostgrestFilterTests {
       .select("username")
       .likeAllOf("username", patterns: ["%supa%", "%bot%"])
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
     assertInlineSnapshot(of: res, as: .json) {
       """
       [
@@ -248,7 +248,7 @@ struct PostgrestFilterTests {
       .select("username")
       .likeAnyOf("username", patterns: ["%supa%", "%kiwi%"])
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
     assertInlineSnapshot(of: res, as: .json) {
       """
       [
@@ -270,7 +270,7 @@ struct PostgrestFilterTests {
       .select("username")
       .ilike("username", pattern: "%SUPA%")
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
     assertInlineSnapshot(of: res, as: .json) {
       """
       [
@@ -289,7 +289,7 @@ struct PostgrestFilterTests {
       .select("username")
       .iLikeAllOf("username", patterns: ["%SUPA%", "%bot%"])
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
     assertInlineSnapshot(of: res, as: .json) {
       """
       [
@@ -308,7 +308,7 @@ struct PostgrestFilterTests {
       .select("username")
       .iLikeAnyOf("username", patterns: ["%supa%", "%KIWI%"])
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
     assertInlineSnapshot(of: res, as: .json) {
       """
       [
@@ -328,7 +328,7 @@ struct PostgrestFilterTests {
     let res =
       try await client.from("users").select("data").is("data", value: nil)
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """
@@ -356,7 +356,7 @@ struct PostgrestFilterTests {
     let res =
       try await client.from("users").select("status").in("status", values: statuses)
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """
@@ -383,7 +383,7 @@ struct PostgrestFilterTests {
     let res =
       try await client.from("users").select("status").notIn("status", values: ["OFFLINE"])
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """
@@ -407,7 +407,7 @@ struct PostgrestFilterTests {
     let res =
       try await client.from("users").select("age_range").contains("age_range", value: "[1,2)")
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """
@@ -425,7 +425,7 @@ struct PostgrestFilterTests {
     let res =
       try await client.from("users").select("age_range").containedBy("age_range", value: "[1,2)")
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """
@@ -443,7 +443,7 @@ struct PostgrestFilterTests {
     let res =
       try await client.from("users").select("age_range").rangeLt("age_range", range: "[2,25)")
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """
@@ -461,7 +461,7 @@ struct PostgrestFilterTests {
     let res =
       try await client.from("users").select("age_range").rangeGt("age_range", range: "[2,25)")
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """
@@ -482,7 +482,7 @@ struct PostgrestFilterTests {
     let res =
       try await client.from("users").select("age_range").rangeLte("age_range", range: "[2,25)")
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """
@@ -500,7 +500,7 @@ struct PostgrestFilterTests {
     let res =
       try await client.from("users").select("age_range").rangeGte("age_range", range: "[2,25)")
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """
@@ -524,7 +524,7 @@ struct PostgrestFilterTests {
     let res =
       try await client.from("users").select("age_range").rangeAdjacent("age_range", range: "[2,25)")
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """
@@ -548,7 +548,7 @@ struct PostgrestFilterTests {
     let res =
       try await client.from("users").select("age_range").overlaps("age_range", value: "[2,25)")
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """
@@ -567,7 +567,7 @@ struct PostgrestFilterTests {
       try await client.from("users").select("catchphrase")
       .textSearch("catchphrase", query: "'fat' & 'cat'", config: "english")
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """
@@ -586,7 +586,7 @@ struct PostgrestFilterTests {
       try await client.from("users").select("catchphrase")
       .textSearch("catchphrase", query: "'fat' & 'cat'", config: "english", type: .plain)
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """
@@ -605,7 +605,7 @@ struct PostgrestFilterTests {
       try await client.from("users").select("catchphrase")
       .textSearch("catchphrase", query: "cat", config: "english", type: .phrase)
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """
@@ -627,7 +627,7 @@ struct PostgrestFilterTests {
       try await client.from("users").select("catchphrase")
       .textSearch("catchphrase", query: "'fat' & 'cat'", config: "english", type: .websearch)
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """
@@ -651,7 +651,7 @@ struct PostgrestFilterTests {
       .eq("status", value: "ONLINE")
       .textSearch("catchphrase", query: "cat")
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """
@@ -675,7 +675,7 @@ struct PostgrestFilterTests {
       .select("username")
       .filter("username", operator: "eq", value: "supabot")
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """
@@ -695,7 +695,7 @@ struct PostgrestFilterTests {
       .select("username,status")
       .match(["username": "supabot", "status": "ONLINE"])
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """
@@ -715,7 +715,7 @@ struct PostgrestFilterTests {
       try await client.rpc("get_username_and_status", params: ["name_param": "supabot"])
       .neq("status", value: "ONLINE")
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """

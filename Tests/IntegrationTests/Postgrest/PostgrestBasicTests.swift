@@ -24,7 +24,7 @@ struct PostgrestBasicTests {
   init() async throws {
     // Clean up test data before running tests.
     // Delete users with email (test data), preserving seed data (users with username only).
-    try await client.from("users").delete().not("email", operator: .is, value: AnyJSON.null)
+    try await client.from("users").delete().not("email", operator: .is, value: JSONValue.null)
       .execute()
     // Delete messages except seed data (id 1 and 2).
     try await client.from("messages").delete().gt("id", value: 2).execute()
@@ -34,7 +34,7 @@ struct PostgrestBasicTests {
   func basicSelectTable() async throws {
     let response =
       try await client.from("users").select("age_range,catchphrase,data,status,username").execute()
-      .value as AnyJSON
+      .value as JSONValue
     assertInlineSnapshot(of: response, as: .json) {
       """
       [
@@ -73,7 +73,7 @@ struct PostgrestBasicTests {
 
   @Test
   func basicSelectView() async throws {
-    let response = try await client.from("updatable_view").select().execute().value as AnyJSON
+    let response = try await client.from("updatable_view").select().execute().value as JSONValue
     assertInlineSnapshot(of: response, as: .json) {
       """
       [
@@ -102,7 +102,7 @@ struct PostgrestBasicTests {
   func rpc() async throws {
     let response =
       try await client.rpc("get_status", params: ["name_param": "supabot"]).execute().value
-      as AnyJSON
+      as JSONValue
     assertInlineSnapshot(of: response, as: .json) {
       """
       "ONLINE"
@@ -121,7 +121,7 @@ struct PostgrestBasicTests {
     let response =
       try await client.from("users")
       .upsert(["username": "dragarcia"], onConflict: "username", ignoreDuplicates: true)
-      .select().execute().value as AnyJSON
+      .select().execute().value as JSONValue
     assertInlineSnapshot(of: response, as: .json) {
       """
       [
@@ -136,10 +136,10 @@ struct PostgrestBasicTests {
     // Basic insert
     var response =
       try await client.from("messages")
-      .insert(AnyJSON.object(["message": "foo", "username": "supabot", "channel_id": 1]))
+      .insert(JSONValue.object(["message": "foo", "username": "supabot", "channel_id": 1]))
       .select("channel_id,data,message,username")
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
     assertInlineSnapshot(of: response, as: .json) {
       """
       [
@@ -185,7 +185,7 @@ struct PostgrestBasicTests {
     response =
       try await client.from("messages")
       .upsert(
-        AnyJSON.object(
+        JSONValue.object(
           [
             "id": 1000,
             "message": "foo",
@@ -196,7 +196,7 @@ struct PostgrestBasicTests {
       )
       .select("channel_id,data,message,username")
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
     assertInlineSnapshot(of: response, as: .json) {
       """
       [
@@ -247,7 +247,7 @@ struct PostgrestBasicTests {
 
     response = try await client.from("messages")
       .insert(
-        AnyJSON.array([
+        JSONValue.array([
           ["message": "foo", "username": "supabot", "channel_id": 1],
           ["message": "foo", "username": "supabot", "channel_id": 1],
         ])

@@ -21,8 +21,8 @@ struct ExportsTests {
     let jsonObject: JSONObject = [:]
     #expect(jsonObject.isEmpty)
 
-    // Test that we can access AnyJSON from Helpers via Realtime
-    let anyJSON: AnyJSON = .string("test")
+    // Test that we can access JSONValue from Helpers via Realtime
+    let anyJSON: JSONValue = .string("test")
     #expect(anyJSON == .string("test"))
 
     // Test that we can access ObservationToken from Helpers via Realtime

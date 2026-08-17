@@ -1,5 +1,5 @@
 //
-//  AnyJSONTests.swift
+//  JSONValueTests.swift
 //
 //
 //  Created by Guilherme Souza on 28/12/23.
@@ -11,7 +11,7 @@ import Helpers
 import Testing
 
 @Suite
-struct AnyJSONTests {
+struct JSONValueTests {
   let jsonString = """
     {
       "array" : [
@@ -46,7 +46,7 @@ struct AnyJSONTests {
     }
     """
 
-  let jsonObject: AnyJSON = [
+  let jsonObject: JSONValue = [
     "integer": 1,
     "double": 3.14,
     "string": "A string value",
@@ -67,14 +67,14 @@ struct AnyJSONTests {
   @Test
   func decode() throws {
     let data = try #require(jsonString.data(using: .utf8))
-    let decodedJSON = try AnyJSON.decoder.decode(AnyJSON.self, from: data)
+    let decodedJSON = try JSONValue.decoder.decode(JSONValue.self, from: data)
 
     expectNoDifference(decodedJSON, jsonObject)
   }
 
   @Test
   func encode() throws {
-    let encoder = AnyJSON.encoder
+    let encoder = JSONValue.encoder
     let originalFormatting = encoder.outputFormatting
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
     defer { encoder.outputFormatting = originalFormatting }
@@ -87,7 +87,7 @@ struct AnyJSONTests {
 
   @Test
   func initFromCodable() {
-    try expectNoDifference(AnyJSON(jsonObject), jsonObject)
+    try expectNoDifference(JSONValue(jsonObject), jsonObject)
 
     let codableValue = CodableValue(
       integer: 1,
@@ -99,7 +99,7 @@ struct AnyJSONTests {
       anyJSON: jsonObject
     )
 
-    let json: AnyJSON = [
+    let json: JSONValue = [
       "integer": 1,
       "double": 3.14,
       "string": "A String value",
@@ -109,7 +109,7 @@ struct AnyJSONTests {
       "any_json": jsonObject,
     ]
 
-    try expectNoDifference(AnyJSON(codableValue), json)
+    try expectNoDifference(JSONValue(codableValue), json)
     try expectNoDifference(codableValue, json.decode(as: CodableValue.self))
   }
 
@@ -118,28 +118,28 @@ struct AnyJSONTests {
   @Test
   func valueProperty() {
     // Test null value
-    #expect(AnyJSON.null.value is NSNull)
+    #expect(JSONValue.null.value is NSNull)
 
     // Test string value
-    #expect(AnyJSON.string("test").value as? String == "test")
+    #expect(JSONValue.string("test").value as? String == "test")
 
     // Test integer value
-    #expect(AnyJSON.integer(42).value as? Int == 42)
+    #expect(JSONValue.integer(42).value as? Int == 42)
 
     // Test double value
-    #expect(AnyJSON.double(3.14).value as? Double == 3.14)
+    #expect(JSONValue.double(3.14).value as? Double == 3.14)
 
     // Test bool value
-    #expect(AnyJSON.bool(true).value as? Bool == true)
-    #expect(AnyJSON.bool(false).value as? Bool == false)
+    #expect(JSONValue.bool(true).value as? Bool == true)
+    #expect(JSONValue.bool(false).value as? Bool == false)
 
     // Test object value
-    let object: AnyJSON = ["key": "value"]
+    let object: JSONValue = ["key": "value"]
     let objectValue = object.value as? [String: Any]
     #expect(objectValue?["key"] as? String == "value")
 
     // Test array value
-    let array: AnyJSON = [1, 2, 3]
+    let array: JSONValue = [1, 2, 3]
     let arrayValue = array.value as? [Any]
     #expect(arrayValue?[0] as? Int == 1)
     #expect(arrayValue?[1] as? Int == 2)
@@ -150,129 +150,129 @@ struct AnyJSONTests {
 
   @Test
   func isNil() {
-    #expect(AnyJSON.null.isNil)
-    #expect(!AnyJSON.string("test").isNil)
-    #expect(!AnyJSON.integer(42).isNil)
-    #expect(!AnyJSON.double(3.14).isNil)
-    #expect(!AnyJSON.bool(true).isNil)
-    #expect(!AnyJSON.object([:]).isNil)
-    #expect(!AnyJSON.array([]).isNil)
+    #expect(JSONValue.null.isNil)
+    #expect(!JSONValue.string("test").isNil)
+    #expect(!JSONValue.integer(42).isNil)
+    #expect(!JSONValue.double(3.14).isNil)
+    #expect(!JSONValue.bool(true).isNil)
+    #expect(!JSONValue.object([:]).isNil)
+    #expect(!JSONValue.array([]).isNil)
   }
 
   @Test
   func boolValue() {
-    #expect(AnyJSON.bool(true).boolValue == true)
-    #expect(AnyJSON.bool(false).boolValue == false)
-    #expect(AnyJSON.string("test").boolValue == nil)
-    #expect(AnyJSON.integer(42).boolValue == nil)
-    #expect(AnyJSON.double(3.14).boolValue == nil)
-    #expect(AnyJSON.null.boolValue == nil)
-    #expect(AnyJSON.object([:]).boolValue == nil)
-    #expect(AnyJSON.array([]).boolValue == nil)
+    #expect(JSONValue.bool(true).boolValue == true)
+    #expect(JSONValue.bool(false).boolValue == false)
+    #expect(JSONValue.string("test").boolValue == nil)
+    #expect(JSONValue.integer(42).boolValue == nil)
+    #expect(JSONValue.double(3.14).boolValue == nil)
+    #expect(JSONValue.null.boolValue == nil)
+    #expect(JSONValue.object([:]).boolValue == nil)
+    #expect(JSONValue.array([]).boolValue == nil)
   }
 
   @Test
   func stringValue() {
-    #expect(AnyJSON.string("test").stringValue == "test")
-    #expect(AnyJSON.bool(true).stringValue == nil)
-    #expect(AnyJSON.integer(42).stringValue == nil)
-    #expect(AnyJSON.double(3.14).stringValue == nil)
-    #expect(AnyJSON.null.stringValue == nil)
-    #expect(AnyJSON.object([:]).stringValue == nil)
-    #expect(AnyJSON.array([]).stringValue == nil)
+    #expect(JSONValue.string("test").stringValue == "test")
+    #expect(JSONValue.bool(true).stringValue == nil)
+    #expect(JSONValue.integer(42).stringValue == nil)
+    #expect(JSONValue.double(3.14).stringValue == nil)
+    #expect(JSONValue.null.stringValue == nil)
+    #expect(JSONValue.object([:]).stringValue == nil)
+    #expect(JSONValue.array([]).stringValue == nil)
   }
 
   @Test
   func intValue() {
-    #expect(AnyJSON.integer(42).intValue == 42)
-    #expect(AnyJSON.string("test").intValue == nil)
-    #expect(AnyJSON.bool(true).intValue == nil)
-    #expect(AnyJSON.double(3.14).intValue == nil)
-    #expect(AnyJSON.null.intValue == nil)
-    #expect(AnyJSON.object([:]).intValue == nil)
-    #expect(AnyJSON.array([]).intValue == nil)
+    #expect(JSONValue.integer(42).intValue == 42)
+    #expect(JSONValue.string("test").intValue == nil)
+    #expect(JSONValue.bool(true).intValue == nil)
+    #expect(JSONValue.double(3.14).intValue == nil)
+    #expect(JSONValue.null.intValue == nil)
+    #expect(JSONValue.object([:]).intValue == nil)
+    #expect(JSONValue.array([]).intValue == nil)
   }
 
   @Test
   func doubleValue() {
-    #expect(AnyJSON.double(3.14).doubleValue == 3.14)
-    #expect(AnyJSON.string("test").doubleValue == nil)
-    #expect(AnyJSON.bool(true).doubleValue == nil)
-    #expect(AnyJSON.integer(42).doubleValue == nil)
-    #expect(AnyJSON.null.doubleValue == nil)
-    #expect(AnyJSON.object([:]).doubleValue == nil)
-    #expect(AnyJSON.array([]).doubleValue == nil)
+    #expect(JSONValue.double(3.14).doubleValue == 3.14)
+    #expect(JSONValue.string("test").doubleValue == nil)
+    #expect(JSONValue.bool(true).doubleValue == nil)
+    #expect(JSONValue.integer(42).doubleValue == nil)
+    #expect(JSONValue.null.doubleValue == nil)
+    #expect(JSONValue.object([:]).doubleValue == nil)
+    #expect(JSONValue.array([]).doubleValue == nil)
   }
 
   @Test
   func objectValue() {
     let object: JSONObject = ["key": "value"]
-    #expect(AnyJSON.object(object).objectValue == object)
-    #expect(AnyJSON.string("test").objectValue == nil)
-    #expect(AnyJSON.bool(true).objectValue == nil)
-    #expect(AnyJSON.integer(42).objectValue == nil)
-    #expect(AnyJSON.double(3.14).objectValue == nil)
-    #expect(AnyJSON.null.objectValue == nil)
-    #expect(AnyJSON.array([]).objectValue == nil)
+    #expect(JSONValue.object(object).objectValue == object)
+    #expect(JSONValue.string("test").objectValue == nil)
+    #expect(JSONValue.bool(true).objectValue == nil)
+    #expect(JSONValue.integer(42).objectValue == nil)
+    #expect(JSONValue.double(3.14).objectValue == nil)
+    #expect(JSONValue.null.objectValue == nil)
+    #expect(JSONValue.array([]).objectValue == nil)
   }
 
   @Test
   func arrayValue() {
     let array: JSONArray = [1, 2, 3]
-    #expect(AnyJSON.array(array).arrayValue == array)
-    #expect(AnyJSON.string("test").arrayValue == nil)
-    #expect(AnyJSON.bool(true).arrayValue == nil)
-    #expect(AnyJSON.integer(42).arrayValue == nil)
-    #expect(AnyJSON.double(3.14).arrayValue == nil)
-    #expect(AnyJSON.null.arrayValue == nil)
-    #expect(AnyJSON.object([:]).arrayValue == nil)
+    #expect(JSONValue.array(array).arrayValue == array)
+    #expect(JSONValue.string("test").arrayValue == nil)
+    #expect(JSONValue.bool(true).arrayValue == nil)
+    #expect(JSONValue.integer(42).arrayValue == nil)
+    #expect(JSONValue.double(3.14).arrayValue == nil)
+    #expect(JSONValue.null.arrayValue == nil)
+    #expect(JSONValue.object([:]).arrayValue == nil)
   }
 
   // MARK: - ExpressibleByLiteral Tests
 
   @Test
   func expressibleByNilLiteral() {
-    let json: AnyJSON = nil
+    let json: JSONValue = nil
     #expect(json == .null)
   }
 
   @Test
   func expressibleByStringLiteral() {
-    let json: AnyJSON = "test string"
+    let json: JSONValue = "test string"
     #expect(json == .string("test string"))
   }
 
   @Test
   func expressibleByIntegerLiteral() {
-    let json: AnyJSON = 42
+    let json: JSONValue = 42
     #expect(json == .integer(42))
   }
 
   @Test
   func expressibleByFloatLiteral() {
-    let json: AnyJSON = 3.14
+    let json: JSONValue = 3.14
     #expect(json == .double(3.14))
   }
 
   @Test
   func expressibleByBooleanLiteral() {
-    let json: AnyJSON = true
+    let json: JSONValue = true
     #expect(json == .bool(true))
 
-    let jsonFalse: AnyJSON = false
+    let jsonFalse: JSONValue = false
     #expect(jsonFalse == .bool(false))
   }
 
   @Test
   func expressibleByArrayLiteral() {
-    let json: AnyJSON = [1, "test", true, nil]
+    let json: JSONValue = [1, "test", true, nil]
     #expect(json == .array([.integer(1), .string("test"), .bool(true), .null]))
   }
 
   @Test
   func expressibleByDictionaryLiteral() {
-    let json: AnyJSON = ["key1": "value1", "key2": 42, "key3": true]
-    let expected: AnyJSON = .object([
+    let json: JSONValue = ["key1": "value1", "key2": 42, "key3": true]
+    let expected: JSONValue = .object([
       "key1": .string("value1"),
       "key2": .integer(42),
       "key3": .bool(true),
@@ -284,20 +284,20 @@ struct AnyJSONTests {
 
   @Test
   func description() {
-    #expect(AnyJSON.null.description == "<null>")
-    #expect(AnyJSON.string("test").description == "test")
-    #expect(AnyJSON.integer(42).description == "42")
-    #expect(AnyJSON.double(3.14).description == "3.14")
-    #expect(AnyJSON.bool(true).description == "true")
-    #expect(AnyJSON.bool(false).description == "false")
+    #expect(JSONValue.null.description == "<null>")
+    #expect(JSONValue.string("test").description == "test")
+    #expect(JSONValue.integer(42).description == "42")
+    #expect(JSONValue.double(3.14).description == "3.14")
+    #expect(JSONValue.bool(true).description == "true")
+    #expect(JSONValue.bool(false).description == "false")
 
     // Test object description
-    let object: AnyJSON = ["key": "value"]
+    let object: JSONValue = ["key": "value"]
     #expect(object.description.contains("key"))
     #expect(object.description.contains("value"))
 
     // Test array description
-    let array: AnyJSON = [1, 2, 3]
+    let array: JSONValue = [1, 2, 3]
     #expect(array.description.contains("1"))
     #expect(array.description.contains("2"))
     #expect(array.description.contains("3"))
@@ -308,42 +308,42 @@ struct AnyJSONTests {
   @Test
   func equality() {
     // Test same values
-    #expect(AnyJSON.null == AnyJSON.null)
-    #expect(AnyJSON.string("test") == AnyJSON.string("test"))
-    #expect(AnyJSON.integer(42) == AnyJSON.integer(42))
-    #expect(AnyJSON.double(3.14) == AnyJSON.double(3.14))
-    #expect(AnyJSON.bool(true) == AnyJSON.bool(true))
-    #expect(AnyJSON.bool(false) == AnyJSON.bool(false))
+    #expect(JSONValue.null == JSONValue.null)
+    #expect(JSONValue.string("test") == JSONValue.string("test"))
+    #expect(JSONValue.integer(42) == JSONValue.integer(42))
+    #expect(JSONValue.double(3.14) == JSONValue.double(3.14))
+    #expect(JSONValue.bool(true) == JSONValue.bool(true))
+    #expect(JSONValue.bool(false) == JSONValue.bool(false))
 
     // Test different values
-    #expect(AnyJSON.string("test") != AnyJSON.string("different"))
-    #expect(AnyJSON.integer(42) != AnyJSON.integer(43))
-    #expect(AnyJSON.double(3.14) != AnyJSON.double(3.15))
-    #expect(AnyJSON.bool(true) != AnyJSON.bool(false))
+    #expect(JSONValue.string("test") != JSONValue.string("different"))
+    #expect(JSONValue.integer(42) != JSONValue.integer(43))
+    #expect(JSONValue.double(3.14) != JSONValue.double(3.15))
+    #expect(JSONValue.bool(true) != JSONValue.bool(false))
 
     // Test different types
-    #expect(AnyJSON.string("42") != AnyJSON.integer(42))
-    #expect(AnyJSON.integer(42) != AnyJSON.double(42.0))
-    #expect(AnyJSON.null != AnyJSON.string(""))
+    #expect(JSONValue.string("42") != JSONValue.integer(42))
+    #expect(JSONValue.integer(42) != JSONValue.double(42.0))
+    #expect(JSONValue.null != JSONValue.string(""))
 
     // Test objects
-    let object1: AnyJSON = ["key": "value"]
-    let object2: AnyJSON = ["key": "value"]
-    let object3: AnyJSON = ["key": "different"]
+    let object1: JSONValue = ["key": "value"]
+    let object2: JSONValue = ["key": "value"]
+    let object3: JSONValue = ["key": "different"]
     #expect(object1 == object2)
     #expect(object1 != object3)
 
     // Test arrays
-    let array1: AnyJSON = [1, 2, 3]
-    let array2: AnyJSON = [1, 2, 3]
-    let array3: AnyJSON = [1, 2, 4]
+    let array1: JSONValue = [1, 2, 3]
+    let array2: JSONValue = [1, 2, 3]
+    let array3: JSONValue = [1, 2, 4]
     #expect(array1 == array2)
     #expect(array1 != array3)
   }
 
   @Test
   func hashable() {
-    let set: Set<AnyJSON> = [
+    let set: Set<JSONValue> = [
       .null,
       .string("test"),
       .integer(42),
@@ -367,7 +367,7 @@ struct AnyJSONTests {
 
   @Test
   func jsonArrayDecode() throws {
-    let jsonArray: JSONArray = [AnyJSON.integer(1), AnyJSON.integer(2), AnyJSON.integer(3)]
+    let jsonArray: JSONArray = [JSONValue.integer(1), JSONValue.integer(2), JSONValue.integer(3)]
     // Decode each element individually since the JSONArray.decode method has issues
     let decoded: [Int] = try jsonArray.map { try $0.decode(as: Int.self) }
     #expect(decoded == [1, 2, 3])
@@ -375,7 +375,7 @@ struct AnyJSONTests {
 
   @Test
   func jsonObjectDecode() throws {
-    let jsonObject: JSONObject = ["name": AnyJSON.string("John"), "age": AnyJSON.integer(30)]
+    let jsonObject: JSONObject = ["name": JSONValue.string("John"), "age": JSONValue.integer(30)]
     let decoded: Person = try jsonObject.decode(as: Person.self)
     #expect(decoded.name == "John")
     #expect(decoded.age == 30)
@@ -410,7 +410,7 @@ struct AnyJSONTests {
     let data = invalidJSON.data(using: .utf8)!
 
     #expect(throws: (any Error).self) {
-      try AnyJSON.decoder.decode(AnyJSON.self, from: data)
+      try JSONValue.decoder.decode(JSONValue.self, from: data)
     }
   }
 
@@ -419,7 +419,7 @@ struct AnyJSONTests {
     let customDecoder = JSONDecoder()
     customDecoder.keyDecodingStrategy = .convertFromSnakeCase
 
-    let json: AnyJSON = ["user_name": "John", "user_age": 30]
+    let json: JSONValue = ["user_name": "John", "user_age": 30]
     let decoded: CustomPerson = try json.decode(as: CustomPerson.self, decoder: customDecoder)
     #expect(decoded.userName == "John")
     #expect(decoded.userAge == 30)
@@ -429,8 +429,8 @@ struct AnyJSONTests {
 
   @Test
   func emptyObjectAndArray() {
-    let emptyObject: AnyJSON = [:]
-    let emptyArray: AnyJSON = []
+    let emptyObject: JSONValue = [:]
+    let emptyArray: JSONValue = []
 
     #expect(emptyObject == .object([:]))
     #expect(emptyArray == .array([]))
@@ -441,7 +441,7 @@ struct AnyJSONTests {
 
   @Test
   func nestedStructures() {
-    let nested: AnyJSON = [
+    let nested: JSONValue = [
       "level1": [
         "level2": [
           "level3": [
@@ -461,7 +461,7 @@ struct AnyJSONTests {
 
   @Test
   func mixedArrayTypes() {
-    let mixedArray: AnyJSON = [1, "string", true, nil, ["nested": "value"]]
+    let mixedArray: JSONValue = [1, "string", true, nil, ["nested": "value"]]
 
     #expect(mixedArray.arrayValue?[0] == .integer(1))
     #expect(mixedArray.arrayValue?[1] == .string("string"))
@@ -472,8 +472,8 @@ struct AnyJSONTests {
 
   @Test
   func largeNumbers() {
-    let largeInt: AnyJSON = 9_223_372_036_854_775_807  // Int.max
-    let largeDouble: AnyJSON = 1.7976931348623157e+308  // Double.max
+    let largeInt: JSONValue = 9_223_372_036_854_775_807  // Int.max
+    let largeDouble: JSONValue = 1.7976931348623157e+308  // Double.max
 
     #expect(largeInt.intValue == 9_223_372_036_854_775_807)
     #expect(largeDouble.doubleValue == 1.7976931348623157e+308)
@@ -481,9 +481,9 @@ struct AnyJSONTests {
 
   @Test
   func specialStringValues() {
-    let emptyString: AnyJSON = ""
-    let unicodeString: AnyJSON = "Hello, 世界! 🌍"
-    let escapedString: AnyJSON = "Line 1\nLine 2\tTab"
+    let emptyString: JSONValue = ""
+    let unicodeString: JSONValue = "Hello, 世界! 🌍"
+    let escapedString: JSONValue = "Line 1\nLine 2\tTab"
 
     #expect(emptyString.stringValue == "")
     #expect(unicodeString.stringValue == "Hello, 世界! 🌍")
@@ -500,7 +500,7 @@ struct CodableValue: Codable, Equatable {
   let bool: Bool
   let array: [Int]
   let dictionary: [String: String]
-  let anyJSON: AnyJSON
+  let anyJSON: JSONValue
 
   enum CodingKeys: String, CodingKey {
     case integer

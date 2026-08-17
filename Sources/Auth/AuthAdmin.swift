@@ -105,7 +105,7 @@ public struct AuthAdmin: Sendable {
   @discardableResult
   public func inviteUserByEmail(
     _ email: String,
-    data: [String: AnyJSON]? = nil,
+    data: [String: JSONValue]? = nil,
     redirectTo: URL? = nil
   ) async throws -> User {
     try await api.execute(
@@ -123,7 +123,7 @@ public struct AuthAdmin: Sendable {
         body: encoder.encode(
           [
             "email": .string(email),
-            "data": data.map({ AnyJSON.object($0) }) ?? .null,
+            "data": data.map({ JSONValue.object($0) }) ?? .null,
           ]
         )
       )

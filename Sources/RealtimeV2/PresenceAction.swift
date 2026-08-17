@@ -89,12 +89,12 @@ extension PresenceV2: Decodable {
   ///
   /// - Parameters:
   ///   - type: The target `Decodable` type. Can be inferred from context.
-  ///   - decoder: A `JSONDecoder` to use. Defaults to `AnyJSON.decoder`.
+  ///   - decoder: A `JSONDecoder` to use. Defaults to `JSONValue.decoder`.
   /// - Returns: An instance of `T` decoded from the state data.
   /// - Throws: A `DecodingError` if the state cannot be decoded into `T`.
   public func decodeState<T: Decodable>(
     as _: T.Type = T.self,
-    decoder: JSONDecoder = AnyJSON.decoder
+    decoder: JSONDecoder = JSONValue.decoder
   ) throws -> T {
     try state.decode(as: T.self, decoder: decoder)
   }
@@ -129,13 +129,13 @@ extension PresenceAction {
   ///   - type: The target `Decodable` type. Can be inferred from context.
   ///   - ignoreOtherTypes: When `true`, presences whose state cannot be decoded to `T` are
   ///     silently skipped (e.g. your own presence without a state payload). Defaults to `true`.
-  ///   - decoder: A `JSONDecoder` to use. Defaults to `AnyJSON.decoder`.
+  ///   - decoder: A `JSONDecoder` to use. Defaults to `JSONValue.decoder`.
   /// - Returns: An array of `T` values decoded from the joined presences.
   /// - Throws: A `DecodingError` when `ignoreOtherTypes` is `false` and any presence cannot be decoded.
   public func decodeJoins<T: Decodable>(
     as _: T.Type = T.self,
     ignoreOtherTypes: Bool = true,
-    decoder: JSONDecoder = AnyJSON.decoder
+    decoder: JSONDecoder = JSONValue.decoder
   ) throws -> [T] {
     if ignoreOtherTypes {
       return joins.values.compactMap { try? $0.decodeState(as: T.self, decoder: decoder) }
@@ -150,13 +150,13 @@ extension PresenceAction {
   ///   - type: The target `Decodable` type. Can be inferred from context.
   ///   - ignoreOtherTypes: When `true`, presences whose state cannot be decoded to `T` are
   ///     silently skipped. Defaults to `true`.
-  ///   - decoder: A `JSONDecoder` to use. Defaults to `AnyJSON.decoder`.
+  ///   - decoder: A `JSONDecoder` to use. Defaults to `JSONValue.decoder`.
   /// - Returns: An array of `T` values decoded from the leaving presences.
   /// - Throws: A `DecodingError` when `ignoreOtherTypes` is `false` and any presence cannot be decoded.
   public func decodeLeaves<T: Decodable>(
     as _: T.Type = T.self,
     ignoreOtherTypes: Bool = true,
-    decoder: JSONDecoder = AnyJSON.decoder
+    decoder: JSONDecoder = JSONValue.decoder
   ) throws -> [T] {
     if ignoreOtherTypes {
       return leaves.values.compactMap { try? $0.decodeState(as: T.self, decoder: decoder) }

@@ -62,7 +62,7 @@ struct AuthClientIntegrationTests {
       let email = mockEmail()
       let password = mockPassword()
 
-      let metadata: [String: AnyJSON] = [
+      let metadata: [String: JSONValue] = [
         "test": .integer(42)
       ]
 
@@ -153,7 +153,7 @@ struct AuthClientIntegrationTests {
   //    try await expectAuthChangeEvents([.initialSession, .signedIn, .signedOut, .signedIn]) {
   //      let phone = mockPhoneNumber()
   //      let password = mockPassword()
-  //      let metadata: [String: AnyJSON] = [
+  //      let metadata: [String: JSONValue] = [
   //        "test": .integer(42),
   //      ]
   //      let response = try await authClient.signUp(phone: phone, password: password, data: metadata)

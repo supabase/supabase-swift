@@ -13,7 +13,7 @@
 		793D8EE32E983112006B6969 /* Debug.swift in Sources */ = {isa = PBXBuildFile; fileRef = 793D8EB52E983112006B6969 /* Debug.swift */; };
 		793D8EE62E983112006B6969 /* TodoListRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 793D8ED52E983112006B6969 /* TodoListRow.swift */; };
 		793D8EE82E983112006B6969 /* UIViewControllerWrapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 793D8ED82E983112006B6969 /* UIViewControllerWrapper.swift */; };
-		793D8EEC2E983112006B6969 /* AnyJSONView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 793D8EA12E983112006B6969 /* AnyJSONView.swift */; };
+		793D8EEC2E983112006B6969 /* JSONValueView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 793D8EA12E983112006B6969 /* JSONValueView.swift */; };
 		793D8EED2E983112006B6969 /* SupabaseConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 793D8ED32E983112006B6969 /* SupabaseConfig.swift */; };
 		793D8EEF2E983112006B6969 /* ActionState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 793D8E9F2E983112006B6969 /* ActionState.swift */; };
 		793D8EF12E983112006B6969 /* UIApplicationExtensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 793D8ED72E983112006B6969 /* UIApplicationExtensions.swift */; };
@@ -69,7 +69,7 @@
 		793895C62954ABFF0044F2B8 /* Examples.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Examples.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		793D8E9F2E983112006B6969 /* ActionState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionState.swift; sourceTree = "<group>"; };
 		793D8EA02E983112006B6969 /* AddTodoListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddTodoListView.swift; sourceTree = "<group>"; };
-		793D8EA12E983112006B6969 /* AnyJSONView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnyJSONView.swift; sourceTree = "<group>"; };
+		793D8EA12E983112006B6969 /* JSONValueView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSONValueView.swift; sourceTree = "<group>"; };
 		793D8EA22E983112006B6969 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		793D8EAE2E983112006B6969 /* Constants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Constants.swift; sourceTree = "<group>"; };
 		793D8EB52E983112006B6969 /* Debug.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Debug.swift; sourceTree = "<group>"; };
@@ -275,7 +275,7 @@
 			children = (
 				793D8E9F2E983112006B6969 /* ActionState.swift */,
 				793D8EA02E983112006B6969 /* AddTodoListView.swift */,
-				793D8EA12E983112006B6969 /* AnyJSONView.swift */,
+				793D8EA12E983112006B6969 /* JSONValueView.swift */,
 				793D8EA22E983112006B6969 /* Assets.xcassets */,
 				793D8EAD2E983112006B6969 /* Auth */,
 				793D8EAE2E983112006B6969 /* Constants.swift */,
@@ -545,7 +545,7 @@
 				793D8EE32E983112006B6969 /* Debug.swift in Sources */,
 				793D8EE62E983112006B6969 /* TodoListRow.swift in Sources */,
 				793D8EE82E983112006B6969 /* UIViewControllerWrapper.swift in Sources */,
-				793D8EEC2E983112006B6969 /* AnyJSONView.swift in Sources */,
+				793D8EEC2E983112006B6969 /* JSONValueView.swift in Sources */,
 				793D8EED2E983112006B6969 /* SupabaseConfig.swift in Sources */,
 				793D8EEF2E983112006B6969 /* ActionState.swift in Sources */,
 				793D8EF12E983112006B6969 /* UIApplicationExtensions.swift in Sources */,
