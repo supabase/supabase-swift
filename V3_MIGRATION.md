@@ -523,3 +523,45 @@ let client = SupabaseClient(
 
 There's no reference implementation to swap in — implement `AuthLocalStorage` against whatever
 storage mechanism suits your app.
+
+## `FactorStatus` is now a struct, not an enum
+
+`FactorStatus` (the enrollment status on an MFA `Factor`) is a `RawRepresentable` struct instead
+of an `enum`.
+
+GoTrue can add new factor statuses over time; as an `enum`, decoding a `Factor` with a status this
+SDK version didn't know about threw a `DecodingError` instead of surfacing the factor with its
+unrecognized status intact.
+
+```swift
+// Before
+switch factor.status {
+case .verified: ...
+case .unverified: ...
+}
+
+// After
+switch factor.status {
+case .verified: ...
+case .unverified: ...
+default: ...  // an unrecognized status the SDK doesn't have a case for
+}
+```
+
+This is a compile error only if you have an exhaustive `switch` over `FactorStatus` — add a
+`default:` case. Equality (`factor.status == .verified`) and construction from a literal
+(`let status: FactorStatus = "verified"`) work unchanged.
+
+`init(rawValue:)` is no longer failable — it now always succeeds, even for an unrecognized value.
+`if let x = FactorStatus(rawValue: someString) { ... }` no longer compiles ("Initializer for
+conditional binding must have Optional type") — replace it with
+`let x = FactorStatus(rawValue: someString)` directly. If your code used
+`FactorStatus(rawValue:) != nil` to validate a string, that check still compiles but is now always
+`true` — this is a silent behavior change, not a compile error, so search for that pattern and
+remove or replace it.
+
+String interpolation of a `FactorStatus` value also changes silently: `"\(FactorStatus.verified)"`-
+style interpolation used to print the case name (`verified`); it now prints the struct's default
+description (`FactorStatus(rawValue: "verified")`). If you log, build a URL, or send analytics
+using direct interpolation of a `FactorStatus` value, use `.rawValue` explicitly to get the bare
+string back.
