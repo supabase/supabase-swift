@@ -145,9 +145,6 @@ public final class SupabaseClient: Sendable {
   }
 
   /// The Functions client for invoking Supabase Edge Functions.
-  ///
-  /// `FunctionsClient` holds no mutable state, so this returns a new value on every access rather
-  /// than caching one in ``mutableState``.
   public var functions: FunctionsClient {
     var functionsHeaders = _headers
     if APIKeyFormat.isNew(supabaseKey) {
