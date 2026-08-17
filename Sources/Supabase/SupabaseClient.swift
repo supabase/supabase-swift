@@ -437,9 +437,20 @@ public final class SupabaseClient: Sendable {
   ///
   /// The returned closure captures the auth dependencies by value instead of `self`. `AuthClient`
   /// holds no reference back to ``SupabaseClient``, so no cycle is formed.
-  private var adaptRequest: @Sendable (_ request: URLRequest) async -> URLRequest {
+  ///
+  /// Only ``AuthError/sessionMissing`` is swallowed here — that's the expected "no signed-in
+  /// user" case, and the request should still go out under the anon key. Any other error
+  /// (a network failure refreshing the session, or one thrown by a configured
+  /// ``SupabaseClientOptions/AuthOptions/accessToken`` third-party auth provider) must fail the
+  /// request instead of silently downgrading it to an anonymous one.
+  private var adaptRequest: @Sendable (_ request: URLRequest) async throws -> URLRequest {
     { [getAccessToken = accessTokenProvider] request in
-      let token = try? await getAccessToken()
+      let token: String?
+      do {
+        token = try await getAccessToken()
+      } catch AuthError.sessionMissing {
+        token = nil
+      }
 
       var request = TraceContext.inject(into: request)
       if let token {
