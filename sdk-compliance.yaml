@@ -165,6 +165,12 @@ features:
     status: implemented
     symbols:
       - AuthMFA.listFactors
+    supporting_symbols:
+      - FactorStatus
+      - FactorStatus.init
+      - FactorStatus.rawValue
+      - FactorStatus.verified
+      - FactorStatus.unverified
   auth.mfa.get_authenticator_assurance_level:
     status: implemented
     symbols:
