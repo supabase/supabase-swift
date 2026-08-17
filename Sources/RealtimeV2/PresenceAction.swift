@@ -27,7 +27,7 @@ public struct PresenceV2: Hashable, Sendable {
   public let state: JSONObject
 }
 
-extension PresenceV2: Codable {
+extension PresenceV2: Decodable {
   struct _StringCodingKey: CodingKey {
     var stringValue: String
 
@@ -80,12 +80,6 @@ extension PresenceV2: Codable {
 
     meta["phx_ref"] = nil
     self = PresenceV2(ref: presenceRef, state: meta)
-  }
-
-  public func encode(to encoder: any Encoder) throws {
-    var container = encoder.container(keyedBy: _StringCodingKey.self)
-    try container.encode(ref, forKey: _StringCodingKey("phx_ref"))
-    try container.encode(state, forKey: _StringCodingKey("state"))
   }
 
   /// Decodes the ``state`` dictionary into a `Decodable` model.

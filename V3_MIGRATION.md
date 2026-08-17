@@ -55,6 +55,60 @@ case .emailChangeConfirmationPending(let confirmation):
 `AuthResponse` itself is unchanged: `signUp` and the Passkey methods still return it, and `user` is
 still non-optional there, since neither endpoint can produce the confirmation-pending shape.
 
+## Several public types narrowed from `Codable` to `Decodable` or `Encodable`
+
+Many public types only ever get used in one direction — either decoded from a server response, or
+encoded into a request body — but declared full `Codable` anyway. That's now narrowed to match
+actual usage, and a couple of hand-rolled coders that only existed for the unused direction were
+deleted along with it.
+
+**Narrowed to `Decodable`-only** (no longer `Encodable`): `AuthResponse`, `SSOResponse`,
+`OAuthClient`, `OAuthClientType`, `OAuthClientRegistrationType`, `OAuthAuthorizationClient`,
+`OAuthAuthorizationUser`, `OAuthAuthorizationDetails`, `OAuthRedirect`, `OAuthGrant`, `JWK`, `JWKS`,
+`JWTHeader`, `JWTClaims`, `AudienceClaim`, `PasskeyListItem` (Auth); `FileObject`, `Bucket`,
+`VectorBucket`, `VectorIndex`, `VectorIndexSummary`, `VectorMatch` (Storage); `Column`, `PresenceV2`
+(Realtime); `PostgrestError` (shared).
+
+**No longer conform to `Codable` at all** (never encoded or decoded through Codable machinery in
+the first place): `OAuthResponse`, `Provider` (Auth).
+
+**Narrowed to `Encodable`-only** (no longer `Decodable`): `OpenIDConnectCredentials`,
+`OpenIDConnectCredentials.Provider`, `AuthMetaSecurity`, `Web3Credentials`, `Web3Chain`,
+`UserAttributes`, `MessagingChannel` (Auth); `ReplayOption`, `BroadcastJoinConfig`,
+`PresenceJoinConfig` (Realtime); `VectorEntry`, `ResizeMode`, `ImageFormat`, `SortOrder` (Storage).
+
+If you were relying on encoding one of the `Decodable`-only types (or decoding one of the
+`Encodable`-only types) yourself — e.g. to persist it to disk or pass it through your own
+`Codable`-based pipeline — wrap it in your own type instead:
+
+```swift
+// Before: encoding a response type directly
+let data = try JSONEncoder().encode(oauthClient)
+
+// After: wrap it in your own Codable type if you need to round-trip it
+struct MyOAuthClientCache: Codable {
+  let clientId: UUID
+  let clientName: String
+  // ...the fields you actually need to persist
+}
+```
+
+The mirror case — decoding an `Encodable`-only type from stored JSON instead of constructing it
+directly — needs the same wrapper:
+
+```swift
+// Before: decoding a request type from stored JSON
+let credentials = try JSONDecoder().decode(OpenIDConnectCredentials.self, from: data)
+
+// After: decode into your own Codable type, then construct the request type from it
+struct MyStoredCredentials: Codable {
+  let provider: String
+  let idToken: String
+}
+let stored = try JSONDecoder().decode(MyStoredCredentials.self, from: data)
+let credentials = OpenIDConnectCredentials(provider: .init(rawValue: stored.provider)!, idToken: stored.idToken)
+```
+
 ## All previously-deprecated APIs have been removed
 
 Every API that carried an `@available(*, deprecated, ...)` annotation ahead of v3 has now been
@@ -272,30 +326,31 @@ pass a `Logger` backed by `SwiftLogNoOpLogHandler` (add `import Logging` to this
 logger: Logger(label: "myapp") { _ in SwiftLogNoOpLogHandler() }
 ```
 
-**OSLog parity.** `OSLogSupabaseLogger`'s zero-config OSLog/Console.app integration is replaced by
-`OSLogHandler`, constructed explicitly and installed as the backing handler for a `Logger` (add
-`import Logging` to this file):
+**OSLog parity.** `OSLogSupabaseLogger`'s zero-config OSLog/Console.app integration has no
+replacement shipped by the SDK. Implement your own `LogHandler` conforming type that wraps an
+`os.Logger` and forwards each `Logging.Logger.Level` to the matching OSLog level, then install it
+as the backing handler for a `Logger` (add `import Logging` to this file):
 
 ```swift
-logger: Logger(label: "myapp") { OSLogHandler(label: $0) }
+logger: Logger(label: "myapp") { MyOSLogHandler(label: $0) }
 ```
 
-`OSLogHandler` forwards every level by default (`logLevel` defaults to `.trace`), matching
-`OSLogSupabaseLogger`'s old always-forward behavior — use Console.app's own filtering, or set
-`logger.logLevel` yourself, to narrow what's emitted.
+Default your handler's `logLevel` to `.trace` to match `OSLogSupabaseLogger`'s old always-forward
+behavior — use Console.app's own filtering, or set `logger.logLevel` yourself, to narrow what's
+emitted.
 
-If this file also has `import OSLog` — which it will if you're wiring up `OSLogHandler` alongside
-your app's own OSLog-based logging — you'll hit a `'Logger' is ambiguous for type lookup` compile
-error, because both `Logging.Logger` and `os.Logger` are now in scope unqualified in that file.
-Fix it by fully qualifying whichever type you mean less often, e.g. `os.Logger` for OSLog's own
-type:
+If this file also has `import OSLog` — which it will if you're implementing `MyOSLogHandler`
+alongside your app's own OSLog-based logging — you'll hit a `'Logger' is ambiguous for type
+lookup` compile error, because both `Logging.Logger` and `os.Logger` are now in scope unqualified
+in that file. Fix it by fully qualifying whichever type you mean less often, e.g. `os.Logger` for
+OSLog's own type:
 
 ```swift
 import Logging
 import OSLog
 
 let appLogger = os.Logger(subsystem: "myapp", category: "app")
-let supabaseLogger = Logging.Logger(label: "myapp") { OSLogHandler(label: $0) }
+let supabaseLogger = Logging.Logger(label: "myapp") { MyOSLogHandler(label: $0) }
 ```
 
 or keep the two imports in separate files so the ambiguity never arises.
@@ -309,6 +364,165 @@ out. This is a silent behavior change, not a compile error: search your codebase
 `SupabaseClientOptions(realtime:)` — that logger is now ignored in favor of the global one.
 Construct `RealtimeClientV2` directly (not through `SupabaseClient`) if you need a
 Realtime-specific logger distinct from the rest of the client.
+
+## `KeychainLocalStorage`'s default Keychain service is now the host app's bundle identifier
+
+`KeychainLocalStorage()` no longer stores sessions under the fixed service
+`"supabase.gotrue.swift"`. It now defaults to `Bundle.main.bundleIdentifier`, falling back to the
+old constant only when there is no bundle identifier to read (command-line tools, some test
+bundles).
+
+The fixed string put every app that embeds the SDK in the same Keychain namespace. On
+iOS/iPadOS/tvOS/watchOS/visionOS this was not a cross-app collision risk, since items are
+implicitly scoped to the app's own default access group
+(`$(AppIdentifierPrefix)$(CFBundleIdentifier)`), so unrelated apps could not read or overwrite each
+other's session there. On macOS's file-based login Keychain, and for any apps deliberately sharing
+an access group on any platform, the shared service name was a real collision risk: two such apps
+could read and overwrite each other's session under that one service name. Either way, sharing a
+single hardcoded service name is poor namespacing hygiene. Scoping the service to the bundle
+identifier gives each app its own Keychain location by default.
+
+Existing sessions are not lost. On the first `retrieve` after upgrading, `KeychainLocalStorage`
+probes the old `"supabase.gotrue.swift"` location, moves whatever it finds to the new
+per-app location, and returns it — so users stay signed in. This is a behavior change, not a
+compile error: nothing in the type signature changed, but the on-disk Keychain location did. If
+you rely on the exact service name (for example, to inspect the Keychain from another tool, or
+because several of your own apps intentionally shared the old namespace), pass it explicitly to
+keep the pre-v3 location:
+
+```swift
+// Before (implicit, shared "supabase.gotrue.swift" service)
+let storage = KeychainLocalStorage()
+
+// After: keeps the pre-v3 location, no migration performed
+let storage = KeychainLocalStorage(service: "supabase.gotrue.swift")
+```
+
+Note that passing `service:` explicitly — whether the old constant or a new value of your own —
+selects the second, non-migrating initializer: `init(service:accessGroup:useDataProtectionKeychain:)`.
+Only the parameterless-service initializer, `init(accessGroup:useDataProtectionKeychain:)`, probes
+the legacy location.
+
+## `KeychainLocalStorage.retrieve` returns `nil` for a missing key instead of throwing
+
+`AuthLocalStorage.retrieve(key:)` has always been documented as returning `nil` when the key is
+absent, but `KeychainLocalStorage` didn't honor that: a missing item made the underlying
+`SecItemCopyMatching` call return `errSecItemNotFound`, and that status was surfaced as a thrown
+`KeychainError`, not as `nil`. `retrieve` now matches its own documentation and returns `nil` for
+a missing item, throwing only when the Keychain read itself fails for another reason.
+
+Two consequences of the old behavior made this worth fixing rather than just documenting: every
+app launch with no stored session threw and typically got logged as an error, since "no session
+yet" is the normal state on a fresh install; and call sites that wrapped the read in `try?` to
+treat "no session" as `nil` also swallowed genuine Keychain failures (for example
+`errSecInteractionNotAllowed` when the device is locked) into that same `nil`, turning a real error
+into a silent, incorrect sign-out.
+
+This fixes the Apple-platform implementation only. `WinCredLocalStorage`, the default on Windows,
+still throws `WinCredLocalStorageError.windows` when `CredReadW` reports `ERROR_NOT_FOUND`, and its
+`remove` is likewise not idempotent — so on Windows the protocol's documented contract is still not
+honored. That implementation is being dropped in v3 in favor of requiring Windows callers to supply
+their own `AuthLocalStorage`, tracked separately.
+
+If you implement `AuthLocalStorage` yourself, follow the documented contract: return `nil` for an
+absent key, and throw only on a genuine failure.
+
+This is a behavior change, not a compile error — `retrieve`'s signature is unchanged. Search your
+code for places that catch an error from `AuthLocalStorage.retrieve`/`KeychainLocalStorage.retrieve`
+specifically to detect a missing session; that error no longer occurs, and you should instead
+check the returned value for `nil`:
+
+```swift
+// Before
+do {
+  let data = try storage.retrieve(key: "supabase.session")
+  // handle existing session
+} catch {
+  // this also ran for a plain "no session yet", not just real failures
+}
+
+// After
+if let data = try storage.retrieve(key: "supabase.session") {
+  // handle existing session
+} else {
+  // no session stored — the normal case on first launch
+}
+```
+
+If you have a custom `AuthLocalStorage` implementation, update it to return `nil` when the key is
+absent and reserve `throw` for genuine failures. `remove(key:)` was changed the same way: deleting
+an already-absent key is no longer an error and is treated as a no-op.
+
+## Opt-in macOS data-protection Keychain
+
+`KeychainLocalStorage`'s two initializers gained a `useDataProtectionKeychain` parameter,
+defaulting to `false`. This is additive — existing call sites keep compiling and keep their
+current behavior — but it's documented here because it's the fix for a common source of
+confusion: on macOS, the legacy file-based Keychain that `KeychainLocalStorage` targets by default
+still shows the user a consent prompt tied to your app's designated requirement, regardless of the
+service name — the service-namespacing change above does not affect it, since the ACL that
+triggers the prompt is governed by code-signing identity, not by `kSecAttrService` (see [Apple TN3137](https://developer.apple.com/documentation/technotes/tn3137-on-mac-keychains)).
+Passing `useDataProtectionKeychain: true` moves storage to the data-protection Keychain, which
+does not show that prompt.
+
+```swift
+let storage = KeychainLocalStorage(useDataProtectionKeychain: true)
+```
+
+One qualification for existing installs: items do not move between the two Keychain
+implementations, so the first read after you enable the flag still probes the old file-based
+location to migrate the session across. Reading an ACL-protected item there can show the prompt
+one final time. Once the value has migrated, the file-based location is no longer read and the
+prompt stops.
+
+This has a real requirement, not just a flag flip: the data-protection Keychain only works in an
+app signed with entitlements authorized by a provisioning profile. Without them, every Keychain
+operation fails with `errSecMissingEntitlement` (`-34018`) instead of storing anything. Verify the
+flag works with your app's actual signing configuration — a debug build run from Xcode with the
+right entitlements is not the same guarantee as your release signing — before enabling it in
+production. The parameter has no effect on platforms other than macOS.
+
+## `WinCredLocalStorage` removed; no default `AuthLocalStorage` on Windows
+
+`WinCredLocalStorage` and `WinCredLocalStorageError` are removed, and
+`AuthClient.Configuration.defaultLocalStorage` is no longer defined on Windows. Windows callers now
+need to supply their own `AuthLocalStorage` explicitly, the same as Linux and Android already
+require.
+
+`WinCredLocalStorage` was the default local storage on Windows, but it could not persist a
+session: writes targeted a Windows Credential Manager entry named `service\key`, while reads and
+deletes targeted `service\key)` — a stray trailing `)` — so nothing this code wrote could ever be
+read back. It also stored the in-memory layout of the `Data` struct rather than the bytes it
+pointed to, escaped several pointers past the closures that made them valid, and threw instead of
+returning `nil` for a missing key. No Windows runner exists in this project's CI, and no test
+referenced the type, so none of this was ever caught. If you were relying on the default, you were
+already effectively running without session persistence on Windows.
+
+This is a compile error, not a silent behavior change: any call site building
+`AuthClient.Configuration` or `SupabaseClientOptions.AuthOptions` on Windows without passing
+`storage:`/`localStorage:` explicitly now fails to compile, since the default no longer exists for
+that platform.
+
+```swift
+// Before (Windows)
+let client = SupabaseClient(supabaseURL: url, supabaseKey: key)
+
+// After (Windows)
+struct MyLocalStorage: AuthLocalStorage {
+  func store(key: String, value: Data) throws { /* ... */ }
+  func retrieve(key: String) throws -> Data? { /* ... */ }
+  func remove(key: String) throws { /* ... */ }
+}
+
+let client = SupabaseClient(
+  supabaseURL: url,
+  supabaseKey: key,
+  options: .init(auth: .init(storage: MyLocalStorage()))
+)
+```
+
+There's no reference implementation to swap in — implement `AuthLocalStorage` against whatever
+storage mechanism suits your app.
 
 ## `FactorStatus` is now a struct, not an enum
 
@@ -338,15 +552,29 @@ This is a compile error only if you have an exhaustive `switch` over `FactorStat
 `default:` case. Equality (`factor.status == .verified`) and construction from a literal
 (`let status: FactorStatus = "verified"`) work unchanged.
 
+`init(rawValue:)` is no longer failable — it now always succeeds, even for an unrecognized value.
+`if let x = FactorStatus(rawValue: someString) { ... }` no longer compiles ("Initializer for
+conditional binding must have Optional type") — replace it with
+`let x = FactorStatus(rawValue: someString)` directly. If your code used
+`FactorStatus(rawValue:) != nil` to validate a string, that check still compiles but is now always
+`true` — this is a silent behavior change, not a compile error, so search for that pattern and
+remove or replace it.
+
+String interpolation of a `FactorStatus` value also changes silently: `"\(FactorStatus.verified)"`-
+style interpolation used to print the case name (`verified`); it now prints the struct's default
+description (`FactorStatus(rawValue: "verified")`). If you log, build a URL, or send analytics
+using direct interpolation of a `FactorStatus` value, use `.rawValue` explicitly to get the bare
+string back.
+
 ## `MessagingChannel` is now a struct, not an enum
 
 `MessagingChannel` (the OTP delivery channel — SMS or WhatsApp) is a `RawRepresentable` struct
-instead of an `enum`.
+instead of an `enum`. It's `Encodable` only — it's never decoded from a response, so it gained no
+`Decodable` conformance.
 
-It's currently only ever sent as a request parameter, but it's `Codable` and part of the public
-API surface — if GoTrue starts echoing it back in a response (e.g. once a new channel like
-Telegram ships), an `enum` would fail to decode an unrecognized value instead of round-tripping it.
-Converting now closes that gap ahead of time rather than after a real decode failure.
+It's part of the public API surface — if GoTrue starts accepting a new channel (e.g. Telegram),
+constructing that value as an enum required an SDK upgrade even though nothing about sending it
+needs one. Converting now closes that gap ahead of time.
 
 ```swift
 // Before

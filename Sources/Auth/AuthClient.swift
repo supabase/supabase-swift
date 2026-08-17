@@ -223,6 +223,12 @@ public actor AuthClient {
   public init(configuration: Configuration) {
     clientID = AuthClient.nextClientID()
 
+    let logger: Logging.Logger = {
+      var logger = configuration.logger
+      logger[metadataKey: "client_id"] = "\(clientID)"
+      return logger
+    }()
+
     Dependencies[clientID] = Dependencies(
       configuration: configuration,
       http: HTTPClient(configuration: configuration),
@@ -230,11 +236,8 @@ public actor AuthClient {
       codeVerifierStorage: .live(clientID: clientID),
       sessionStorage: .live(clientID: clientID),
       sessionManager: .live(clientID: clientID),
-      logger: {
-        var logger = configuration.logger
-        logger[metadataKey: "client_id"] = "\(clientID)"
-        return logger
-      }()
+      eventEmitter: AuthStateChangeEventEmitter(logger: logger),
+      logger: logger
     )
 
     Task { @MainActor in observeAppLifecycleChanges() }

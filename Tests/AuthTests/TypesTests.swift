@@ -42,22 +42,10 @@ struct TypesTests {
     #expect(String(decoding: data, as: UTF8.self) == "\"unverified\"")
   }
 
-  private struct MessagingChannelContainer: Decodable {
-    let channel: MessagingChannel
-  }
-
   @Test
-  func messagingChannelDecodesUnknownValue() throws {
-    let json = Data(#"{"channel":"telegram"}"#.utf8)
-    let decoded = try JSONDecoder().decode(MessagingChannelContainer.self, from: json)
-    #expect(decoded.channel.rawValue == "telegram")
-  }
-
-  @Test
-  func messagingChannelDecodesKnownValue() throws {
-    let json = Data(#"{"channel":"whatsapp"}"#.utf8)
-    let decoded = try JSONDecoder().decode(MessagingChannelContainer.self, from: json)
-    #expect(decoded.channel == .whatsapp)
+  func messagingChannelEncodesAsRawString() throws {
+    let data = try JSONEncoder().encode(MessagingChannel.whatsapp)
+    #expect(String(decoding: data, as: UTF8.self) == "\"whatsapp\"")
   }
 
   @Test
