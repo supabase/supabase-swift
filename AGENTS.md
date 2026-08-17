@@ -106,6 +106,32 @@ Ensures DocC documentation builds without warnings.
 - Prefer `async/await` over completion handlers
 - Mark types as `Sendable` where appropriate for concurrency safety
 
+### Enum-like Values
+
+- Use a Swift `enum` only when the value is genuinely closed: every case is fixed by the language or protocol itself (HTTP methods, a `CodingKeys` set) or the value is entirely client-side and never crosses the wire (e.g. `AuthChangeEvent`, `LogLevel`).
+- Any enum-like value sent to or received from the backend must be a `RawRepresentable` struct instead, so a value the backend adds later (or that this SDK just doesn't have a case for yet) round-trips through `.rawValue` instead of failing to decode or blocking construction until an SDK upgrade:
+
+  ```swift
+  public struct Provider: RawRepresentable, Codable, Hashable, Sendable, ExpressibleByStringLiteral {
+    public let rawValue: String
+
+    public init(rawValue: String) {
+      self.rawValue = rawValue
+    }
+
+    public init(stringLiteral value: String) {
+      self.init(rawValue: value)
+    }
+
+    public static let apple: Provider = "apple"
+    public static let github: Provider = "github"
+  }
+  ```
+
+- Conform to exactly what the value's actual usage needs — `Codable` only if it's ever decoded, `Encodable`-only if it's write-only, no `Codable`/`Encodable` at all if it's read via `.rawValue` directly into a header or query string (never through `JSONEncoder`/`JSONDecoder`). Don't upgrade a type's conformance just because a sibling type in the same file has more.
+- Don't add a `CaseIterable`/`Identifiable` replacement (a `knownCases` array, a custom `Identifiable`) to the SDK type unless something inside this package actually needs one — a consuming app can keep its own list of the values it cares about (see `Examples/Examples/Auth/KnownProviders.swift`).
+- `init(rawValue:)` is intentionally non-failable — it always succeeds, which is what makes constructing/decoding an unrecognized value safe instead of an error. Any breaking-change migration note for a type like this must call out that `if let x = X(rawValue:)` goes from compiling to a compile error, and that interpolating the value directly (`"\(x)"`) silently stops printing the case name.
+
 ### File Headers
 
 Use standard file headers with copyright:
@@ -125,6 +151,27 @@ Use standard file headers with copyright:
 - Use `@_exported import` in main Supabase module to re-export all sub-modules
 - Keep module dependencies minimal
 - Prefer protocol-oriented design
+
+### Codable Conformance
+
+- Only conform a type to the direction the SDK actually uses: a type the SDK
+  only decodes from a server response gets `Decodable`, a type the SDK only
+  encodes into a request body gets `Encodable`. Conform to full `Codable`
+  only when the same type is genuinely used in both directions (e.g. a type
+  the SDK both sends and receives over the wire, or persists to disk via
+  `JSONEncoder`/`JSONDecoder`, like Auth's `Session`).
+- Before narrowing a type from `Codable` to `Decodable`/`Encodable`, check
+  whether any other type embeds it and relies on synthesized `Codable` — a
+  container relying on synthesized conformance stops compiling the moment a
+  field it holds drops the direction the container needs, so the container
+  must narrow the same way (or gain its own hand-written coder). The same
+  check applies in reverse when widening a type back toward `Codable`: every
+  stored property must be at least as conformant as the type you're widening
+  to.
+- Don't hand-write `encode(to:)`/`init(from:)` for the unused direction "for
+  symmetry" — dead coders accumulate and mislead readers about how the type
+  is actually used. See `V3_MIGRATION.md` for prior cleanup along these
+  lines (`VerifyOTPResponse`, and the broader SDK-1473 pass).
 
 ### Error Handling
 

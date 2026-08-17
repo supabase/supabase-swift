@@ -72,7 +72,19 @@ struct BucketDetailView: View {
     }
     .popover(isPresented: $presentBucketDetails) {
       List {
-        AnyJSONView(rendering: bucket)
+        AnyJSONView(
+          value: .object([
+            "id": .string(bucket.id),
+            "name": .string(bucket.name),
+            "owner": .string(bucket.owner),
+            "isPublic": .bool(bucket.isPublic),
+            "createdAt": .string(bucket.createdAt.description),
+            "updatedAt": .string(bucket.updatedAt.description),
+            "allowedMimeTypes": bucket.allowedMimeTypes.map { .array($0.map(AnyJSON.string)) }
+              ?? .null,
+            "fileSizeLimit": bucket.fileSizeLimit.map { .integer(Int($0)) } ?? .null,
+          ])
+        )
       }
     }
     .navigationDestination(for: FileObject.self) {

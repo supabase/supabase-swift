@@ -16,8 +16,8 @@ extension AnyJSON {
 }
 
 extension AnyJSON {
-  /// Initialize an ``AnyJSON`` from a ``Codable`` value.
-  public init(_ value: some Codable) throws {
+  /// Initialize an ``AnyJSON`` from an ``Encodable`` value.
+  public init(_ value: some Encodable) throws {
     if let value = value as? AnyJSON {
       self = value
     } else if let string = value as? String {
@@ -63,8 +63,8 @@ extension JSONObject {
     try AnyJSON.object(self).decode(as: T.self, decoder: decoder)
   }
 
-  /// Initialize JSONObject from a `Codable` type
-  public init(_ value: some Codable) throws {
+  /// Initialize JSONObject from an `Encodable` type
+  public init(_ value: some Encodable) throws {
     guard let object = try AnyJSON(value).objectValue else {
       throw DecodingError.typeMismatch(
         JSONObject.self,
