@@ -102,24 +102,36 @@ public struct PostgrestResponse<T> {
 /// | ``exact`` | Exact | Slow |
 /// | ``planned`` | Approximate | Fast |
 /// | ``estimated`` | Adaptive | Moderate |
-public enum CountOption: String, Sendable {
+public struct CountOption: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+  public let rawValue: String
+
+  /// Creates a ``CountOption`` from a raw string value.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  /// Creates a ``CountOption`` from a string literal.
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
   /// Performs a `COUNT(*)` under the hood for an exact row count.
   ///
   /// Use this when you need a precise total. It can be slow on large tables.
-  case exact
+  public static let exact: CountOption = "exact"
 
   /// Uses PostgreSQL statistics for a fast but approximate row count.
   ///
   /// The estimate is derived from `pg_class.reltuples` and may be inaccurate  // cspell:ignore reltuples
   /// if the table statistics are stale.
-  case planned
+  public static let planned: CountOption = "planned"
 
   /// Uses exact count for low numbers and planned count for high numbers.
   ///
   /// PostgREST switches to the approximate algorithm automatically when the
   /// estimated count exceeds a threshold, trading accuracy for performance
   /// on large result sets.
-  case estimated
+  public static let estimated: CountOption = "estimated"
 }
 
 /// Controls which rows PostgREST returns after a write operation.
@@ -130,43 +142,69 @@ public enum CountOption: String, Sendable {
 ///
 /// See the [PostgREST documentation](https://postgrest.org/en/v9.0/api.html?highlight=PREFER#insertions-updates)
 /// for more detail.
-public enum PostgrestReturningOptions: String, Sendable {
+public struct PostgrestReturningOptions: RawRepresentable, Hashable, Sendable,
+  ExpressibleByStringLiteral
+{
+  public let rawValue: String
+
+  /// Creates a ``PostgrestReturningOptions`` from a raw string value.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  /// Creates a ``PostgrestReturningOptions`` from a string literal.
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
   /// Returns nothing from the server after the write.
   ///
   /// Use this option when you do not need the affected rows, as it avoids
   /// the overhead of serializing and transmitting them.
-  case minimal
+  public static let minimal: PostgrestReturningOptions = "minimal"
 
   /// Returns a copy of the written rows.
   ///
   /// Use this option (or chain `.select()` after the call) when you need the
   /// server-generated values such as `id`, `created_at`, or computed columns.
-  case representation
+  public static let representation: PostgrestReturningOptions = "representation"
 }
 
 /// The conversion strategy used to turn a plain-text search query into a `tsquery` expression.
 ///
 /// Pass a ``TextSearchType`` to ``PostgrestFilterBuilder/textSearch(_:query:config:type:)`` to
 /// control how user-supplied text is interpreted by PostgreSQL's full-text search engine.
-public enum TextSearchType: String, Sendable {
+public struct TextSearchType: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+  public let rawValue: String
+
+  /// Creates a ``TextSearchType`` from a raw string value.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  /// Creates a ``TextSearchType`` from a string literal.
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
   /// Converts the query using PostgreSQL's `plainto_tsquery` function.
   ///
   /// Words in the query are combined with the `&` (AND) operator. Punctuation
   /// and special characters are ignored.
-  case plain = "pl"
+  public static let plain: TextSearchType = "pl"
 
   /// Converts the query using PostgreSQL's `phraseto_tsquery` function.
   ///
   /// Words must appear in the specified order, making this suitable for
   /// exact phrase searches.
-  case phrase = "ph"
+  public static let phrase: TextSearchType = "ph"
 
   /// Converts the query using PostgreSQL's `websearch_to_tsquery` function.
   ///
   /// This function accepts a web-search–style syntax (`"exact phrase"`, `-exclude`,
   /// `OR`) and never raises syntax errors, making it safe to use with raw
   /// user-supplied input.
-  case websearch = "w"
+  public static let websearch: TextSearchType = "w"
 }
 
 /// The output format of a PostgREST EXPLAIN plan.

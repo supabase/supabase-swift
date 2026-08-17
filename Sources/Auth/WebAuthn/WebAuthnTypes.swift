@@ -55,11 +55,26 @@ public struct WebAuthnChallengeOptions: Encodable, Hashable, Sendable {
 ///
 /// - Warning: Experimental. See ``MFAWebAuthnEnrollParams``.
 @_spi(Experimental)
-public enum WebAuthnChallengeType: String, Decodable, Hashable, Sendable {
+public struct WebAuthnChallengeType: RawRepresentable, Decodable, Hashable, Sendable,
+  ExpressibleByStringLiteral
+{
+  public let rawValue: String
+
+  /// Creates a ``WebAuthnChallengeType`` from a raw string value.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  /// Creates a ``WebAuthnChallengeType`` from a string literal.
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
   /// A registration ceremony (`navigator.credentials.create`).
-  case create
+  public static let create: WebAuthnChallengeType = "create"
+
   /// An authentication ceremony (`navigator.credentials.get`).
-  case request
+  public static let request: WebAuthnChallengeType = "request"
 }
 
 /// WebAuthn-specific payload returned by ``AuthMFA/challenge(params:)`` for `webauthn` factors.

@@ -409,36 +409,48 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
 }
 
 /// One of the providers supported by Auth.
-public enum Provider: String, Identifiable, CaseIterable, Sendable {
-  case apple
-  case azure
-  case bitbucket
-  case discord
-  case email
-  case facebook
-  case figma
-  case github
-  case gitlab
-  case google
-  case kakao
-  case keycloak
-  case linkedin
-  case linkedinOIDC = "linkedin_oidc"
-  case notion
-  case slack
-  case slackOIDC = "slack_oidc"
-  case spotify
-  case twitch
-  /// Uses OAuth 1.0a
-  case twitter
-  /// Uses OAuth 2.0
-  case x
-  case workos
-  case zoom
-  case fly
+public struct Provider: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+  public let rawValue: String
 
-  /// The raw string value of the provider, used as the stable identifier.
-  public var id: RawValue { rawValue }
+  /// Creates a ``Provider`` from a raw string value.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  /// Creates a ``Provider`` from a string literal.
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
+  public static let apple: Provider = "apple"
+  public static let azure: Provider = "azure"
+  public static let bitbucket: Provider = "bitbucket"
+  public static let discord: Provider = "discord"
+  public static let email: Provider = "email"
+  public static let facebook: Provider = "facebook"
+  public static let figma: Provider = "figma"
+  public static let github: Provider = "github"
+  public static let gitlab: Provider = "gitlab"
+  public static let google: Provider = "google"
+  public static let kakao: Provider = "kakao"
+  public static let keycloak: Provider = "keycloak"
+  public static let linkedin: Provider = "linkedin"
+  public static let linkedinOIDC: Provider = "linkedin_oidc"
+  public static let notion: Provider = "notion"
+  public static let slack: Provider = "slack"
+  public static let slackOIDC: Provider = "slack_oidc"
+  public static let spotify: Provider = "spotify"
+  public static let twitch: Provider = "twitch"
+
+  /// Uses OAuth 1.0a
+  public static let twitter: Provider = "twitter"
+
+  /// Uses OAuth 2.0
+  public static let x: Provider = "x"
+
+  public static let workos: Provider = "workos"
+  public static let zoom: Provider = "zoom"
+  public static let fly: Provider = "fly"
 }
 
 /// Credentials for signing in with an OpenID Connect (OIDC) ID token issued by a third-party.
@@ -489,8 +501,25 @@ public struct OpenIDConnectCredentials: Encodable, Hashable, Sendable {
   }
 
   /// Providers supported by the OIDC sign-in flow.
-  public enum Provider: String, Encodable, Hashable, Sendable {
-    case google, apple, azure, facebook
+  public struct Provider: RawRepresentable, Encodable, Hashable, Sendable,
+    ExpressibleByStringLiteral
+  {
+    public let rawValue: String
+
+    /// Creates a ``Provider`` from a raw string value.
+    public init(rawValue: String) {
+      self.rawValue = rawValue
+    }
+
+    /// Creates a ``Provider`` from a string literal.
+    public init(stringLiteral value: String) {
+      self.init(rawValue: value)
+    }
+
+    public static let google: Provider = "google"
+    public static let apple: Provider = "apple"
+    public static let azure: Provider = "azure"
+    public static let facebook: Provider = "facebook"
   }
 }
 
@@ -617,33 +646,61 @@ struct VerifyMobileOTPParams: Encodable, Hashable {
 }
 
 /// The OTP type used when verifying a mobile (SMS/WhatsApp) one-time password.
-public enum MobileOTPType: String, Encodable, Sendable {
+public struct MobileOTPType: RawRepresentable, Encodable, Hashable, Sendable,
+  ExpressibleByStringLiteral
+{
+  public let rawValue: String
+
+  /// Creates a ``MobileOTPType`` from a raw string value.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  /// Creates a ``MobileOTPType`` from a string literal.
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
   /// A standard SMS OTP sent to the phone number.
-  case sms
+  public static let sms: MobileOTPType = "sms"
 
   /// An OTP used when confirming a phone number change.
-  case phoneChange = "phone_change"
+  public static let phoneChange: MobileOTPType = "phone_change"
 }
 
 /// The OTP type used when verifying an email one-time password.
-public enum EmailOTPType: String, Encodable, CaseIterable, Sendable {
+public struct EmailOTPType: RawRepresentable, Encodable, Hashable, Sendable,
+  ExpressibleByStringLiteral
+{
+  public let rawValue: String
+
+  /// Creates an ``EmailOTPType`` from a raw string value.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  /// Creates an ``EmailOTPType`` from a string literal.
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
   /// OTP sent during initial sign-up email confirmation.
-  case signup
+  public static let signup: EmailOTPType = "signup"
 
   /// OTP sent when an admin invites a user by email.
-  case invite
+  public static let invite: EmailOTPType = "invite"
 
   /// OTP sent as part of a magic-link sign-in flow.
-  case magiclink
+  public static let magiclink: EmailOTPType = "magiclink"
 
   /// OTP sent when the user requests a password reset.
-  case recovery
+  public static let recovery: EmailOTPType = "recovery"
 
   /// OTP sent when the user requests an email address change.
-  case emailChange = "email_change"
+  public static let emailChange: EmailOTPType = "email_change"
 
   /// Generic email OTP.
-  case email
+  public static let email: EmailOTPType = "email"
 }
 
 /// The response from sign-up and passkey calls that may return either a session or a user,
@@ -890,12 +947,26 @@ public enum AuthFlowType: Sendable {
 public typealias FactorType = String
 
 /// The enrollment status of an MFA factor.
-public enum FactorStatus: String, Codable, Sendable {
+public struct FactorStatus: RawRepresentable, Codable, Hashable, Sendable,
+  ExpressibleByStringLiteral
+{
+  public let rawValue: String
+
+  /// Creates a ``FactorStatus`` from a raw string value.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  /// Creates a ``FactorStatus`` from a string literal.
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
   /// The factor has been verified and is active.
-  case verified
+  public static let verified: FactorStatus = "verified"
 
   /// The factor has been enrolled but not yet verified.
-  case unverified
+  public static let unverified: FactorStatus = "unverified"
 }
 
 /// An MFA Factor.
@@ -1226,26 +1297,52 @@ public struct AuthMFAGetAuthenticatorAssuranceLevelResponse: Decodable, Hashable
 }
 
 /// The scope of a sign-out operation.
-public enum SignOutScope: String, Sendable {
+public struct SignOutScope: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+  public let rawValue: String
+
+  /// Creates a ``SignOutScope`` from a raw string value.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  /// Creates a ``SignOutScope`` from a string literal.
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
   /// All sessions by this account will be signed out.
-  case global
+  public static let global: SignOutScope = "global"
 
   /// Only this session will be signed out.
-  case local
+  public static let local: SignOutScope = "local"
 
   /// All other sessions except the current one will be signed out. When using
   /// ``SignOutScope/others``, there is no ``AuthChangeEvent/signedOut`` event fired on the current
   /// session.
-  case others
+  public static let others: SignOutScope = "others"
 }
 
 /// The type of email to resend when calling ``AuthClient/resend(email:type:emailRedirectTo:captchaToken:)``.
-public enum ResendEmailType: String, Hashable, Sendable, Encodable {
+public struct ResendEmailType: RawRepresentable, Encodable, Hashable, Sendable,
+  ExpressibleByStringLiteral
+{
+  public let rawValue: String
+
+  /// Creates a ``ResendEmailType`` from a raw string value.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  /// Creates a ``ResendEmailType`` from a string literal.
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
   /// Resends the initial sign-up confirmation email.
-  case signup
+  public static let signup: ResendEmailType = "signup"
 
   /// Resends the email-change confirmation email.
-  case emailChange = "email_change"
+  public static let emailChange: ResendEmailType = "email_change"
 }
 
 struct ResendEmailParams: Encodable {
@@ -1257,12 +1354,26 @@ struct ResendEmailParams: Encodable {
 }
 
 /// The type of mobile OTP to resend when calling ``AuthClient/resend(phone:type:captchaToken:)``.
-public enum ResendMobileType: String, Hashable, Sendable, Encodable {
+public struct ResendMobileType: RawRepresentable, Encodable, Hashable, Sendable,
+  ExpressibleByStringLiteral
+{
+  public let rawValue: String
+
+  /// Creates a ``ResendMobileType`` from a raw string value.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  /// Creates a ``ResendMobileType`` from a string literal.
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
   /// Resends the SMS OTP for the current phone sign-in.
-  case sms
+  public static let sms: ResendMobileType = "sms"
 
   /// Resends the OTP for confirming a phone number change.
-  case phoneChange = "phone_change"
+  public static let phoneChange: ResendMobileType = "phone_change"
 }
 
 struct ResendMobileParams: Encodable {
@@ -1296,12 +1407,26 @@ struct DeleteUserRequest: Encodable {
 }
 
 /// The messaging channel used to deliver OTPs.
-public enum MessagingChannel: String, Encodable, Sendable {
+public struct MessagingChannel: RawRepresentable, Encodable, Hashable, Sendable,
+  ExpressibleByStringLiteral
+{
+  public let rawValue: String
+
+  /// Creates a ``MessagingChannel`` from a raw string value.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  /// Creates a ``MessagingChannel`` from a string literal.
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
   /// Deliver the OTP via SMS.
-  case sms
+  public static let sms: MessagingChannel = "sms"
 
   /// Deliver the OTP via WhatsApp.
-  case whatsapp
+  public static let whatsapp: MessagingChannel = "whatsapp"
 }
 
 struct SignInWithSSORequest: Encodable {

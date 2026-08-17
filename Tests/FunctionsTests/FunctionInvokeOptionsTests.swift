@@ -73,4 +73,16 @@ struct FunctionInvokeOptionsTests {
       #expect(FunctionInvokeOptions.httpMethod(method) == expected)
     }
   }
+
+  @Test
+  func methodStringLiteral() {
+    let method: FunctionInvokeOptions.Method = "TRACE"
+    #expect(method.rawValue == "TRACE")
+  }
+
+  @Test
+  func methodMapsUnknownRawValueToNilHTTPMethod() {
+    let method: FunctionInvokeOptions.Method = "not_a_real_http_method with spaces"
+    #expect(FunctionInvokeOptions.httpMethod(method) == nil)
+  }
 }
