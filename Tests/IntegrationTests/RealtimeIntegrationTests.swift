@@ -16,6 +16,7 @@
   import TestHelpers
   import Testing
 
+  @testable import Helpers
   @testable import Realtime
   @testable import RealtimeV2
 

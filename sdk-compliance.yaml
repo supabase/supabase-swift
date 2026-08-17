@@ -20,6 +20,34 @@ features:
     symbols:
       - AuthClient.signInWithOAuth
       - AuthClient.getOAuthSignInURL
+    supporting_symbols:
+      - Provider
+      - Provider.init
+      - Provider.rawValue
+      - Provider.apple
+      - Provider.azure
+      - Provider.bitbucket
+      - Provider.discord
+      - Provider.email
+      - Provider.facebook
+      - Provider.figma
+      - Provider.github
+      - Provider.gitlab
+      - Provider.google
+      - Provider.kakao
+      - Provider.keycloak
+      - Provider.linkedin
+      - Provider.linkedinOIDC
+      - Provider.notion
+      - Provider.slack
+      - Provider.slackOIDC
+      - Provider.spotify
+      - Provider.twitch
+      - Provider.twitter
+      - Provider.x
+      - Provider.workos
+      - Provider.zoom
+      - Provider.fly
   auth.sign_in.sign_in_with_otp:
     status: implemented
     symbols:
@@ -149,6 +177,12 @@ features:
     status: implemented
     symbols:
       - AuthMFA.challenge
+    supporting_symbols:
+      - MessagingChannel
+      - MessagingChannel.init
+      - MessagingChannel.rawValue
+      - MessagingChannel.sms
+      - MessagingChannel.whatsapp
   auth.mfa.verify:
     status: implemented
     symbols:
@@ -165,6 +199,12 @@ features:
     status: implemented
     symbols:
       - AuthMFA.listFactors
+    supporting_symbols:
+      - FactorStatus
+      - FactorStatus.init
+      - FactorStatus.rawValue
+      - FactorStatus.verified
+      - FactorStatus.unverified
   auth.mfa.get_authenticator_assurance_level:
     status: implemented
     symbols:

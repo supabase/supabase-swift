@@ -3203,23 +3203,25 @@ extension AuthMockerTests {
         "eyJhbGciOiJSUzI1NiIsImtpZCI6InRlc3Qta2lkIiwidHlwIjoiSldUIn0.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6OTk5OTk5OTk5OSwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.dummysignature"
 
       // Mock JWKS endpoint with different kid
-      let jwkDict: [String: Any] = [
-        "kty": "RSA",
-        "kid": "different-kid",
-        "alg": "RS256",
-        "n": "modulus",
-        "e": "AQAB",
+      let jwksDict: [String: Any] = [
+        "keys": [
+          [
+            "kty": "RSA",
+            "kid": "different-kid",
+            "alg": "RS256",
+            "n": "modulus",
+            "e": "AQAB",
+          ]
+        ]
       ]
-      let jwkData = try JSONSerialization.data(withJSONObject: jwkDict)
-      let jwk = try AuthClient.Configuration.jsonDecoder.decode(JWK.self, from: jwkData)
-      let jwks = JWKS(keys: [jwk])
+      let jwksData = try JSONSerialization.data(withJSONObject: jwksDict)
 
       Mock(
         url: clientURL.appendingPathComponent(".well-known/jwks.json"),
         ignoreQuery: true,
         contentType: .json,
         statusCode: 200,
-        data: [.get: try! AuthClient.Configuration.jsonEncoder.encode(jwks)]
+        data: [.get: jwksData]
       ).register()
 
       let user = User(fromMockNamed: "user")
