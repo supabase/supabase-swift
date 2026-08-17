@@ -103,34 +103,34 @@ public struct FunctionInvokeOptions: Sendable {
   }
 
   /// The HTTP method to use when invoking a function.
-  public enum Method: String, Sendable {
+  public struct Method: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+    public let rawValue: String
+
+    /// Creates a ``Method`` from a raw string value.
+    public init(rawValue: String) {
+      self.rawValue = rawValue
+    }
+
+    /// Creates a ``Method`` from a string literal.
+    public init(stringLiteral value: String) {
+      self.init(rawValue: value)
+    }
+
     /// Performs an HTTP GET request.
-    case get = "GET"
+    public static let get: Method = "GET"
     /// Performs an HTTP POST request.
-    case post = "POST"
+    public static let post: Method = "POST"
     /// Performs an HTTP PUT request.
-    case put = "PUT"
+    public static let put: Method = "PUT"
     /// Performs an HTTP PATCH request.
-    case patch = "PATCH"
+    public static let patch: Method = "PATCH"
     /// Performs an HTTP DELETE request.
-    case delete = "DELETE"
+    public static let delete: Method = "DELETE"
   }
 
   static func httpMethod(_ method: Method?) -> HTTPTypes.HTTPRequest.Method? {
-    switch method {
-    case .get:
-      .get
-    case .post:
-      .post
-    case .put:
-      .put
-    case .patch:
-      .patch
-    case .delete:
-      .delete
-    case nil:
-      nil
-    }
+    guard let method else { return nil }
+    return HTTPTypes.HTTPRequest.Method(rawValue: method.rawValue)
   }
 }
 

@@ -51,6 +51,7 @@ etag
 ethereum
 Ethereum
 externaldrive
+failable
 figma
 Figma
 flutterquickstart

@@ -69,6 +69,12 @@ struct TypesTests {
   }
 
   @Test
+  func providerOIDCVariantRawValues() {
+    #expect(Provider.linkedinOIDC.rawValue == "linkedin_oidc")
+    #expect(Provider.slackOIDC.rawValue == "slack_oidc")
+  }
+
+  @Test
   func oidcProviderEncodesAsRawString() throws {
     let data = try JSONEncoder().encode(OpenIDConnectCredentials.Provider.apple)
     #expect(String(decoding: data, as: UTF8.self) == "\"apple\"")
