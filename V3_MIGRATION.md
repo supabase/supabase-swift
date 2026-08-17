@@ -551,3 +551,17 @@ default: ...  // an unrecognized status the SDK doesn't have a case for
 This is a compile error only if you have an exhaustive `switch` over `FactorStatus` — add a
 `default:` case. Equality (`factor.status == .verified`) and construction from a literal
 (`let status: FactorStatus = "verified"`) work unchanged.
+
+`init(rawValue:)` is no longer failable — it now always succeeds, even for an unrecognized value.
+`if let x = FactorStatus(rawValue: someString) { ... }` no longer compiles ("Initializer for
+conditional binding must have Optional type") — replace it with
+`let x = FactorStatus(rawValue: someString)` directly. If your code used
+`FactorStatus(rawValue:) != nil` to validate a string, that check still compiles but is now always
+`true` — this is a silent behavior change, not a compile error, so search for that pattern and
+remove or replace it.
+
+String interpolation of a `FactorStatus` value also changes silently: `"\(FactorStatus.verified)"`-
+style interpolation used to print the case name (`verified`); it now prints the struct's default
+description (`FactorStatus(rawValue: "verified")`). If you log, build a URL, or send analytics
+using direct interpolation of a `FactorStatus` value, use `.rawValue` explicitly to get the bare
+string back.
