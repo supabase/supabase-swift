@@ -72,7 +72,7 @@ struct BucketDetailView: View {
     }
     .popover(isPresented: $presentBucketDetails) {
       List {
-        AnyJSONView(
+        JSONValueView(
           value: .object([
             "id": .string(bucket.id),
             "name": .string(bucket.name),
@@ -80,7 +80,7 @@ struct BucketDetailView: View {
             "isPublic": .bool(bucket.isPublic),
             "createdAt": .string(bucket.createdAt.description),
             "updatedAt": .string(bucket.updatedAt.description),
-            "allowedMimeTypes": bucket.allowedMimeTypes.map { .array($0.map(AnyJSON.string)) }
+            "allowedMimeTypes": bucket.allowedMimeTypes.map { .array($0.map(JSONValue.string)) }
               ?? .null,
             "fileSizeLimit": bucket.fileSizeLimit.map { .integer(Int($0)) } ?? .null,
           ])

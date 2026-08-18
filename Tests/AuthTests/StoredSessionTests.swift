@@ -129,7 +129,7 @@ struct StoredSessionTests {
 
   private final class DiskTestStorage: AuthLocalStorage {
     let url: URL
-    let storage: LockIsolated<[String: AnyJSON]>
+    let storage: LockIsolated<[String: JSONValue]>
 
     let encoder = JSONEncoder()
     let decoder = JSONDecoder()
@@ -148,11 +148,11 @@ struct StoredSessionTests {
       }
 
       let contents = try Data(contentsOf: url)
-      storage = try LockIsolated(decoder.decode([String: AnyJSON].self, from: contents))
+      storage = try LockIsolated(decoder.decode([String: JSONValue].self, from: contents))
     }
 
     func store(key: String, value: Data) throws {
-      let json = try decoder.decode(AnyJSON.self, from: value)
+      let json = try decoder.decode(JSONValue.self, from: value)
       storage.withValue {
         $0[key] = json
       }

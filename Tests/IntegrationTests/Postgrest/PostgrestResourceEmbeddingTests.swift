@@ -24,13 +24,13 @@ struct PostgrestResourceEmbeddingTests {
   init() async throws {
     // Clean up test data before running tests.
     // Delete users with email (test data), preserving seed data (users with username only).
-    try await client.from("users").delete().not("email", operator: .is, value: AnyJSON.null)
+    try await client.from("users").delete().not("email", operator: .is, value: JSONValue.null)
       .execute()
   }
 
   @Test
   func embeddedSelect() async throws {
-    let res = try await client.from("users").select("messages(*)").execute().value as AnyJSON
+    let res = try await client.from("users").select("messages(*)").execute().value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """
@@ -79,7 +79,7 @@ struct PostgrestResourceEmbeddingTests {
       try await client.from("users")
       .select("messages(*)")
       .eq("messages.channel_id", value: 1)
-      .execute().value as AnyJSON
+      .execute().value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """
@@ -121,7 +121,7 @@ struct PostgrestResourceEmbeddingTests {
       try await client.from("users")
       .select("messages(*)")
       .or("channel_id.eq.2,message.eq.Hello World 👋", referencedTable: "messages")
-      .execute().value as AnyJSON
+      .execute().value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """
@@ -173,7 +173,7 @@ struct PostgrestResourceEmbeddingTests {
         "channel_id.eq.2,and(message.eq.Hello World 👋,username.eq.supabot)",
         referencedTable: "messages"
       )
-      .execute().value as AnyJSON
+      .execute().value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """
@@ -222,7 +222,7 @@ struct PostgrestResourceEmbeddingTests {
       try await client.from("users")
       .select("messages(*)")
       .order("channel_id", ascending: false, referencedTable: "messages")
-      .execute().value as AnyJSON
+      .execute().value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """
@@ -272,7 +272,7 @@ struct PostgrestResourceEmbeddingTests {
       .select("messages(*)")
       .order("channel_id", ascending: false, referencedTable: "messages")
       .order("username", ascending: false, referencedTable: "messages")
-      .execute().value as AnyJSON
+      .execute().value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """
@@ -321,7 +321,7 @@ struct PostgrestResourceEmbeddingTests {
       try await client.from("users")
       .select("messages(*)")
       .limit(1, referencedTable: "messages")
-      .execute().value as AnyJSON
+      .execute().value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """
@@ -363,7 +363,7 @@ struct PostgrestResourceEmbeddingTests {
       try await client.from("users")
       .select("messages(*)")
       .range(from: 1, to: 1, referencedTable: "messages")
-      .execute().value as AnyJSON
+      .execute().value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """

@@ -394,7 +394,7 @@
 
         struct Entry: Codable, Equatable {
           let key: String
-          let value: AnyJSON
+          let value: JSONValue
         }
 
         let allChangesTask = Task {
@@ -469,7 +469,7 @@
 
         struct Entry: Codable, Equatable {
           let key: String
-          let value: AnyJSON
+          let value: JSONValue
         }
 
         let testKey1 = UUID().uuidString
@@ -523,7 +523,7 @@
 
         struct Entry: Codable, Equatable {
           let key: String
-          let value: AnyJSON
+          let value: JSONValue
         }
 
         let insertTask = Task {

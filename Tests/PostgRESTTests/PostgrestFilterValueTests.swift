@@ -55,28 +55,28 @@ struct PostgrestFilterValueTests {
   }
 
   @Test
-  func arrayEncodesAnyJSONNullElementsAsRealNull() {
-    #expect(AnyJSON.array([.integer(1), .null]).rawValue == "{1,NULL}")
+  func arrayEncodesJSONValueNullElementsAsRealNull() {
+    #expect(JSONValue.array([.integer(1), .null]).rawValue == "{1,NULL}")
   }
 
   @Test
   func anyJSONArrayEscapesReservedCharacters() {
-    #expect(AnyJSON.array(["a,b"]).rawValue == "{\"a,b\"}")
+    #expect(JSONValue.array(["a,b"]).rawValue == "{\"a,b\"}")
   }
 
   @Test
   func anyJSON() {
     #expect(
-      AnyJSON.array(["is:online", "faction:red"]).rawValue == "{is:online,faction:red}"
+      JSONValue.array(["is:online", "faction:red"]).rawValue == "{is:online,faction:red}"
     )
     #expect(
-      AnyJSON.object(["postalcode": 90210]).rawValue == "{\"postalcode\":90210}"
+      JSONValue.object(["postalcode": 90210]).rawValue == "{\"postalcode\":90210}"
     )
-    #expect(AnyJSON.string("string").rawValue == "string")
-    #expect(AnyJSON.double(3.14).rawValue == "3.14")
-    #expect(AnyJSON.integer(3).rawValue == "3")
-    #expect(AnyJSON.bool(true).rawValue == "true")
-    #expect(AnyJSON.null.rawValue == "NULL")
+    #expect(JSONValue.string("string").rawValue == "string")
+    #expect(JSONValue.double(3.14).rawValue == "3.14")
+    #expect(JSONValue.integer(3).rawValue == "3")
+    #expect(JSONValue.bool(true).rawValue == "true")
+    #expect(JSONValue.null.rawValue == "NULL")
   }
 
   @Test

@@ -106,7 +106,11 @@ struct BuildURLRequestTests {
       TestCase(name: "test all filters and count") { client in
         var query = client.from("todos").select()
 
-        for op in PostgrestFilterBuilder.Operator.allCases {
+        let allOperators: [PostgrestFilterBuilder.Operator] = [
+          .eq, .neq, .gt, .gte, .lt, .lte, .like, .ilike, .match, .imatch, .is, .isdistinct, .in,
+          .cs, .cd, .sl, .sr, .nxl, .nxr, .adj, .ov, .fts, .plfts, .phfts, .wfts,
+        ]
+        for op in allOperators {
           query = query.filter("column", operator: op.rawValue, value: "Some value")
         }
 
@@ -237,7 +241,7 @@ struct BuildURLRequestTests {
       TestCase(name: "rpc call with get and params") { client in
         try client.rpc(
           "get_array_element",
-          params: ["array": [37, 420, 64], "index": 2] as AnyJSON,
+          params: ["array": [37, 420, 64], "index": 2] as JSONValue,
           get: true
         )
       },

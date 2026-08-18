@@ -309,7 +309,8 @@ public final class PostgrestClient: Sendable {
     if head || get {
       method = head ? .head : .get
 
-      guard case .object(let json) = try AnyJSON.decoder.decode(AnyJSON.self, from: bodyData) else {
+      guard case .object(let json) = try JSONValue.decoder.decode(JSONValue.self, from: bodyData)
+      else {
         throw PostgrestError(
           message: "Params should be a key-value type when using `GET` or `HEAD` options."
         )
@@ -387,7 +388,7 @@ public final class PostgrestClient: Sendable {
     return PostgrestClient(configuration: configuration, clock: clock)
   }
 
-  private func queryValue(for value: AnyJSON) -> String {
+  private func queryValue(for value: JSONValue) -> String {
     switch value {
     case .null:
       return "null"

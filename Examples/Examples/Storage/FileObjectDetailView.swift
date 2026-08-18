@@ -18,16 +18,16 @@ struct FileObjectDetailView: View {
   var body: some View {
     List {
       Section {
-        AnyJSONView(
+        JSONValueView(
           value: .object([
             "name": .string(fileObject.name),
-            "bucketId": fileObject.bucketId.map(AnyJSON.string) ?? .null,
-            "owner": fileObject.owner.map(AnyJSON.string) ?? .null,
+            "bucketId": fileObject.bucketId.map(JSONValue.string) ?? .null,
+            "owner": fileObject.owner.map(JSONValue.string) ?? .null,
             "id": fileObject.id.map { .string($0.uuidString) } ?? .null,
             "updatedAt": fileObject.updatedAt.map { .string($0.description) } ?? .null,
             "createdAt": fileObject.createdAt.map { .string($0.description) } ?? .null,
             "lastAccessedAt": fileObject.lastAccessedAt.map { .string($0.description) } ?? .null,
-            "metadata": fileObject.metadata.map(AnyJSON.object) ?? .null,
+            "metadata": fileObject.metadata.map(JSONValue.object) ?? .null,
             "buckets": fileObject.buckets.map { .string($0.name) } ?? .null,
           ])
         )

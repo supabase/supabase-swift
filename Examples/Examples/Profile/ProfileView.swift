@@ -189,8 +189,8 @@ struct ProfileView: View {
 
           // Raw User Data
           Section("User Data (JSON)") {
-            if let json = try? AnyJSON(user) {
-              AnyJSONView(value: json)
+            if let json = try? JSONValue(user) {
+              JSONValueView(value: json)
             }
           }
         }

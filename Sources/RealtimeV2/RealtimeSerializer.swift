@@ -44,7 +44,7 @@ struct RealtimeSerializer: Sendable {
 
   /// Encodes a ``RealtimeMessageV2`` as a JSON array string: `[joinRef, ref, topic, event, payload]`.
   func encodeText(_ message: RealtimeMessageV2) throws -> String {
-    let array: [AnyJSON] = [
+    let array: [JSONValue] = [
       message.joinRef.map { .string($0) } ?? .null,
       message.ref.map { .string($0) } ?? .null,
       .string(message.topic),
@@ -64,7 +64,7 @@ struct RealtimeSerializer: Sendable {
   /// Decodes a JSON array string `[joinRef, ref, topic, event, payload]` into a ``RealtimeMessageV2``.
   func decodeText(_ text: String) throws -> RealtimeMessageV2 {
     let data = Data(text.utf8)
-    let array = try JSONDecoder().decode([AnyJSON].self, from: data)
+    let array = try JSONDecoder().decode([JSONValue].self, from: data)
 
     guard array.count >= 5 else {
       throw RealtimeError(

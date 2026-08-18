@@ -55,11 +55,26 @@ public struct WebAuthnChallengeOptions: Encodable, Hashable, Sendable {
 ///
 /// - Warning: Experimental. See ``MFAWebAuthnEnrollParams``.
 @_spi(Experimental)
-public enum WebAuthnChallengeType: String, Decodable, Hashable, Sendable {
+public struct WebAuthnChallengeType: RawRepresentable, Decodable, Hashable, Sendable,
+  ExpressibleByStringLiteral
+{
+  public let rawValue: String
+
+  /// Creates a ``WebAuthnChallengeType`` from a raw string value.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  /// Creates a ``WebAuthnChallengeType`` from a string literal.
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
   /// A registration ceremony (`navigator.credentials.create`).
-  case create
+  public static let create: WebAuthnChallengeType = "create"
+
   /// An authentication ceremony (`navigator.credentials.get`).
-  case request
+  public static let request: WebAuthnChallengeType = "request"
 }
 
 /// WebAuthn-specific payload returned by ``AuthMFA/challenge(params:)`` for `webauthn` factors.
@@ -72,7 +87,7 @@ public struct WebAuthnChallengeResponseData: Decodable, Hashable, Sendable {
 
   /// The W3C credential options (creation or request) to forward to the authenticator. Field
   /// names follow the W3C spec verbatim (camelCase) and are not transformed.
-  public let credentialOptions: AnyJSON
+  public let credentialOptions: JSONValue
 }
 
 // MARK: - First-factor passkeys
@@ -111,7 +126,7 @@ public struct PasskeyRegistrationOptions: Decodable, Hashable, Sendable {
   public let challengeId: String
 
   /// W3C `PublicKeyCredentialCreationOptions`, forwarded verbatim to the authenticator.
-  public let options: AnyJSON
+  public let options: JSONValue
 
   /// Unix timestamp (seconds since epoch) when the challenge expires.
   public let expiresAt: TimeInterval
@@ -126,7 +141,7 @@ public struct PasskeyAuthenticationOptions: Decodable, Hashable, Sendable {
   public let challengeId: String
 
   /// W3C `PublicKeyCredentialRequestOptions`, forwarded verbatim to the authenticator.
-  public let options: AnyJSON
+  public let options: JSONValue
 
   /// Unix timestamp (seconds since epoch) when the challenge expires.
   public let expiresAt: TimeInterval
@@ -135,7 +150,7 @@ public struct PasskeyAuthenticationOptions: Decodable, Hashable, Sendable {
 /// Encodes a WebAuthn request body without applying the snake_case key strategy, so the embedded
 /// W3C credential JSON (which uses camelCase field names such as `clientDataJSON`) reaches the
 /// backend verbatim. All backend field names must be spelled out explicitly by the caller.
-func encodeWebAuthnBody(_ json: AnyJSON) throws -> Data {
+func encodeWebAuthnBody(_ json: JSONValue) throws -> Data {
   let encoder = JSONEncoder()
   encoder.outputFormatting = [.sortedKeys]
   return try encoder.encode(json)

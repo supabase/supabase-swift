@@ -16,7 +16,7 @@ struct FileOptionsTests {
 
   @Test
   func customInitialization() {
-    let metadata: [String: AnyJSON] = ["key": .string("value")]
+    let metadata: [String: JSONValue] = ["key": .string("value")]
     let options = FileOptions(
       cacheControl: "7200",
       contentType: "image/jpeg",

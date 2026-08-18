@@ -19,10 +19,9 @@ struct UserIdentityList: View {
   @State private var isLoading = false
 
   private var providers: [Provider] {
-    let allProviders = Provider.allCases
     let identities = identities.success ?? []
 
-    return allProviders.filter { provider in
+    return knownProviders.filter { provider in
       !identities.contains(where: { $0.provider == provider.rawValue })
     }
   }
@@ -104,7 +103,7 @@ struct UserIdentityList: View {
 
                 if let identityData = identity.identityData {
                   DisclosureGroup("Identity Data") {
-                    AnyJSONView(value: .object(identityData))
+                    JSONValueView(value: .object(identityData))
                       .font(.system(.caption, design: .monospaced))
                   }
                   .font(.caption)
@@ -126,7 +125,7 @@ struct UserIdentityList: View {
 
         if !providers.isEmpty {
           Section("Available Providers") {
-            ForEach(providers) { provider in
+            ForEach(providers, id: \.self) { provider in
               Button {
                 Task {
                   await linkProvider(provider)
@@ -242,7 +241,7 @@ struct UserIdentityList: View {
         ToolbarItem(placement: .primaryAction) {
           if !providers.isEmpty {
             Menu {
-              ForEach(providers) { provider in
+              ForEach(providers, id: \.self) { provider in
                 Button {
                   Task {
                     await linkProvider(provider)

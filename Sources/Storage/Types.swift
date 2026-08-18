@@ -139,7 +139,7 @@ public struct FileOptions: Sendable {
 
   /// Arbitrary key-value metadata to attach to the uploaded object. You can later use this to
   /// filter or search for files.
-  public var metadata: [String: AnyJSON]?
+  public var metadata: [String: JSONValue]?
 
   /// Extra HTTP headers to include with the upload request.
   public var headers: [String: String]?
@@ -158,7 +158,7 @@ public struct FileOptions: Sendable {
     contentType: String? = nil,
     upsert: Bool = false,
     duplex: String? = nil,
-    metadata: [String: AnyJSON]? = nil,
+    metadata: [String: JSONValue]? = nil,
     headers: [String: String]? = nil
   ) {
     self.cacheControl = cacheControl
@@ -418,7 +418,7 @@ public struct FileObject: Identifiable, Hashable, Decodable, Sendable {
   public var lastAccessedAt: Date?
 
   /// Arbitrary key-value metadata attached to the file at upload time.
-  public var metadata: [String: AnyJSON]?
+  public var metadata: [String: JSONValue]?
 
   /// The bucket associated with this file, if it was eagerly loaded.
   public var buckets: Bucket?
@@ -443,7 +443,7 @@ public struct FileObject: Identifiable, Hashable, Decodable, Sendable {
     updatedAt: Date? = nil,
     createdAt: Date? = nil,
     lastAccessedAt: Date? = nil,
-    metadata: [String: AnyJSON]? = nil,
+    metadata: [String: JSONValue]? = nil,
     buckets: Bucket? = nil
   ) {
     self.name = name
@@ -539,7 +539,7 @@ public struct FileObjectV2: Identifiable, Hashable, Decodable, Sendable {
   public let lastModified: Date?
 
   /// Arbitrary key-value metadata attached to the file at upload time.
-  public let metadata: [String: AnyJSON]?
+  public let metadata: [String: JSONValue]?
 
   enum CodingKeys: String, CodingKey {
     case id

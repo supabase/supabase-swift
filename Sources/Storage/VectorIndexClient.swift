@@ -214,7 +214,7 @@ public struct VectorIndexClient: Sendable {
   public func queryVectors(
     _ queryVector: VectorData,
     topK: Int,
-    filter: [String: AnyJSON]? = nil,
+    filter: [String: JSONValue]? = nil,
     returnDistance: Bool = false,
     returnMetadata: Bool = false
   ) async throws -> QueryVectorsResponse {
@@ -301,7 +301,7 @@ private struct QueryVectorsBody: Encodable {
   var indexName: String
   var queryVector: VectorData
   var topK: Int
-  var filter: [String: AnyJSON]?
+  var filter: [String: JSONValue]?
   var returnDistance: Bool
   var returnMetadata: Bool
 }
@@ -345,7 +345,7 @@ public struct VectorEntry: Encodable, Sendable, Hashable {
   public var data: VectorData
 
   /// Arbitrary metadata to store alongside the vector.
-  public var metadata: [String: AnyJSON]?
+  public var metadata: [String: JSONValue]?
 
   /// Creates a ``VectorEntry``.
   ///
@@ -353,7 +353,7 @@ public struct VectorEntry: Encodable, Sendable, Hashable {
   ///   - key: A unique identifier for the vector within its index.
   ///   - data: The vector's embedding data.
   ///   - metadata: Arbitrary metadata to store alongside the vector.
-  public init(key: String, data: VectorData, metadata: [String: AnyJSON]? = nil) {
+  public init(key: String, data: VectorData, metadata: [String: JSONValue]? = nil) {
     self.key = key
     self.data = data
     self.metadata = metadata
@@ -374,7 +374,7 @@ public struct VectorMatch: Decodable, Sendable, Hashable {
   public var data: VectorData?
 
   /// The vector's metadata, present when the request set `returnMetadata: true`.
-  public var metadata: [String: AnyJSON]?
+  public var metadata: [String: JSONValue]?
 
   /// The similarity distance from the query vector, present when the request set
   /// `returnDistance: true`. Only populated by

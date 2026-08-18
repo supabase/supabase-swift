@@ -10,15 +10,15 @@ import Supabase
 import SwiftUI
 
 struct SignInWithOAuth: View {
-  let providers = Provider.allCases
+  let providers = knownProviders
 
-  @State var provider = Provider.allCases[0]
+  @State var provider = knownProviders[0]
   @Environment(\.webAuthenticationSession) var webAuthenticationSession
 
   var body: some View {
     VStack {
       Picker("Provider", selection: $provider) {
-        ForEach(providers) { provider in
+        ForEach(providers, id: \.self) { provider in
           Text(provider.rawValue).tag(provider)
         }
       }
@@ -50,8 +50,8 @@ struct SignInWithOAuth: View {
   final class SignInWithOAuthViewController: UIViewController, UIPickerViewDataSource,
     UIPickerViewDelegate
   {
-    let providers = Provider.allCases
-    var provider = Provider.allCases[0]
+    let providers = knownProviders
+    var provider = knownProviders[0]
 
     let providerPicker = UIPickerView()
     let signInButton = UIButton(type: .system)

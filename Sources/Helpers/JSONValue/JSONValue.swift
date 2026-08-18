@@ -1,10 +1,10 @@
 import Foundation
 
-public typealias JSONObject = [String: AnyJSON]
-public typealias JSONArray = [AnyJSON]
+public typealias JSONObject = [String: JSONValue]
+public typealias JSONArray = [JSONValue]
 
 /// An enumeration that represents JSON-compatible values of various types.
-public enum AnyJSON: Sendable, Codable, Hashable {
+public enum JSONValue: Sendable, Codable, Hashable {
   /// Represents a `null` JSON value.
   case null
   /// Represents a JSON boolean value.
@@ -20,9 +20,9 @@ public enum AnyJSON: Sendable, Codable, Hashable {
   /// Represents a JSON array (list) value.
   case array(JSONArray)
 
-  /// Returns the underlying Swift value corresponding to the `AnyJSON` instance.
+  /// Returns the underlying Swift value corresponding to the `JSONValue` instance.
   ///
-  /// - Note: For `.object` and `.array` cases, the returned value contains recursively transformed `AnyJSON` instances.
+  /// - Note: For `.object` and `.array` cases, the returned value contains recursively transformed `JSONValue` instances.
   public var value: Any {
     switch self {
     case .null: NSNull()
@@ -123,49 +123,49 @@ public enum AnyJSON: Sendable, Codable, Hashable {
   }
 }
 
-extension AnyJSON: ExpressibleByNilLiteral {
+extension JSONValue: ExpressibleByNilLiteral {
   public init(nilLiteral _: ()) {
     self = .null
   }
 }
 
-extension AnyJSON: ExpressibleByStringLiteral {
+extension JSONValue: ExpressibleByStringLiteral {
   public init(stringLiteral value: String) {
     self = .string(value)
   }
 }
 
-extension AnyJSON: ExpressibleByArrayLiteral {
-  public init(arrayLiteral elements: AnyJSON...) {
+extension JSONValue: ExpressibleByArrayLiteral {
+  public init(arrayLiteral elements: JSONValue...) {
     self = .array(elements)
   }
 }
 
-extension AnyJSON: ExpressibleByIntegerLiteral {
+extension JSONValue: ExpressibleByIntegerLiteral {
   public init(integerLiteral value: Int) {
     self = .integer(value)
   }
 }
 
-extension AnyJSON: ExpressibleByFloatLiteral {
+extension JSONValue: ExpressibleByFloatLiteral {
   public init(floatLiteral value: Double) {
     self = .double(value)
   }
 }
 
-extension AnyJSON: ExpressibleByBooleanLiteral {
+extension JSONValue: ExpressibleByBooleanLiteral {
   public init(booleanLiteral value: Bool) {
     self = .bool(value)
   }
 }
 
-extension AnyJSON: ExpressibleByDictionaryLiteral {
-  public init(dictionaryLiteral elements: (String, AnyJSON)...) {
+extension JSONValue: ExpressibleByDictionaryLiteral {
+  public init(dictionaryLiteral elements: (String, JSONValue)...) {
     self = .object(Dictionary(uniqueKeysWithValues: elements))
   }
 }
 
-extension AnyJSON: CustomStringConvertible {
+extension JSONValue: CustomStringConvertible {
   public var description: String {
     String(describing: value)
   }
