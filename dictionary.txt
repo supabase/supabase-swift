@@ -121,6 +121,7 @@ nullslast
 oauthserver
 oidc
 OIDC
+pipefail
 posix
 omitempty
 openssl

@@ -1006,7 +1006,8 @@ embedded scope, including combined with `!inner`. The §4.4 scope construct is e
 ## 10. Minimum testable surface
 
 Staging in §5 says what order to build in. This section says what the *first shippable slice* is —
-the smallest thing that can go out and generate real feedback.
+the smallest thing that can go out and generate real feedback. It is broken into tasks in
+[`postgrest-v3-stage-1-plan.md`](./postgrest-v3-stage-1-plan.md).
 
 ### 10.1 Two fixes that need none of this
 
