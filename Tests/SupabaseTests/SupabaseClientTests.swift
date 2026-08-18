@@ -291,6 +291,90 @@ struct SupabaseClientTests {
   }
 
   @Test
+  func customAccessTokenErrorPropagatesInsteadOfFallingBackToAnonKey() async {
+    struct TokenProviderError: Error, Equatable {}
+
+    // A URLProtocol that fails any request it receives — proves the request never reaches the
+    // network instead of merely trusting that it didn't. Deliberately not the shared
+    // `RequestCapturingProtocol`: that's also used by `TracingTests` (a `.serialized` suite that
+    // still runs concurrently with this one), so touching its static storage here would race.
+    final class UnreachableProtocol: URLProtocol {
+      override class func canInit(with request: URLRequest) -> Bool { true }
+      override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+      override func startLoading() {
+        client?.urlProtocol(self, didFailWithError: URLError(.unknown))
+      }
+
+      override func stopLoading() {}
+    }
+
+    let config = URLSessionConfiguration.ephemeral
+    config.protocolClasses = [UnreachableProtocol.self]
+
+    let client = SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      options: .init(
+        auth: .init(
+          storage: AuthLocalStorageMock(),
+          accessToken: { throw TokenProviderError() }
+        ),
+        global: .init(session: URLSession(configuration: config))
+      )
+    )
+
+    await #expect(throws: TokenProviderError.self) {
+      try await client.rpc("some_fn").execute()
+    }
+  }
+
+  @Test
+  func missingSessionFallsBackToAnonKeyWithoutCustomAccessToken() async throws {
+    // Single-purpose capturing protocol (not the shared `RequestCapturingProtocol`) so this test
+    // doesn't race with other suites reading/resetting shared static storage.
+    final class CapturingProtocol: URLProtocol {
+      private static let storage = LockIsolated<URLRequest?>(nil)
+      static var capturedRequest: URLRequest? {
+        get { storage.value }
+        set { storage.setValue(newValue) }
+      }
+
+      override class func canInit(with request: URLRequest) -> Bool { true }
+      override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+      override func startLoading() {
+        Self.capturedRequest = request
+        let response = HTTPURLResponse(
+          url: request.url!, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: nil
+        )!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data("[]".utf8))
+        client?.urlProtocolDidFinishLoading(self)
+      }
+
+      override func stopLoading() {}
+    }
+
+    let config = URLSessionConfiguration.ephemeral
+    config.protocolClasses = [CapturingProtocol.self]
+
+    let client = SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      options: .init(
+        auth: .init(storage: AuthLocalStorageMock(), autoRefreshToken: false),
+        global: .init(session: URLSession(configuration: config))
+      )
+    )
+
+    try await client.rpc("some_fn").execute()
+
+    let request = try #require(CapturingProtocol.capturedRequest)
+    #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer PUBLISHABLE_KEY")
+  }
+
+  @Test
   func listenForAuthEventsTaskDoesNotRetainClient() async {
     final class WeakBox: @unchecked Sendable {
       weak var client: SupabaseClient?
