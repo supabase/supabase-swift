@@ -158,6 +158,7 @@ refreshable
 refreshtoken
 resends
 Resends
+revocably
 Rlbn
 Rvci
 sadcat

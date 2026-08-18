@@ -20,7 +20,7 @@ classes stay in place, marked deprecated, and are removed in the next major vers
 
 ## 2. What exists today
 
-`Sources/PostgREST` is 3,181 lines across 10 files. `Tests/PostgRESTTests` is 3,384 lines across 10
+`Sources/PostgREST` is 3,125 lines across 9 files. `Tests/PostgRESTTests` is 3,610 lines across 10
 files, mostly URL-building snapshots.
 
 ```
@@ -579,23 +579,44 @@ let hits = try await client.rpc("search_todos", params: ["keyword": "groceries"]
 ```
 
 This removes today's clunky path for `get: true` / `head: true`, which encodes the params to
-`Data`, decodes them back into `AnyJSON`, checks for `.object`, and throws a server-error value at
+`Data`, decodes them back into `JSONValue`, checks for `.object`, and throws a server-error value at
 build time when the params are not a key-value type. With a descriptor the parameters are known to
 be an object, so a read-only call is a modifier (`.readOnly()`) rather than a Boolean flag that can
 fail.
 
-### 4.7 Transport
+### 4.7 Transport — reuse `HTTPRuntime`, do not invent a protocol
+
+An earlier draft of this section proposed a new `PostgrestTransport` protocol. That was wrong: the
+repository already has one. `Sources/HTTPRuntime/` provides exactly this layer, built for the
+OpenAPI-generated clients:
 
 ```swift
-public protocol PostgrestTransport: Sendable {
-  func send(_ request: HTTPRequest, body: Data?) async throws -> (HTTPResponse, Data)
+package protocol HTTPTransport: Sendable {
+  func send(_ request: HTTPRequest, uploadProgress: ProgressHandler?) async throws(HTTPError)
+    -> HTTPResponse
+  func stream(_ request: HTTPRequest) async throws(HTTPError) -> HTTPResponseStream
 }
 ```
 
-`HTTPTypes` only. This drops `HTTPURLResponse` and every `FoundationNetworking` import from the
-public surface, and it lets the existing `Helpers/HTTP` interceptors compose — so the hand-rolled
-retry loop in `execute` is deleted in favour of `RetryRequestInterceptor`. A `URLSessionTransport`
-ships as the default. One transport instance is built per client, not per chain step.
+with `URLSessionTransport` as the shipped implementation, plus `HTTPRequest`, `HTTPResponse`,
+`HTTPError`, `HTTPMethod`, `MultipartFormData` and `PathEncoding` alongside it. It already uses typed
+throws. Building a parallel abstraction would be duplication, so v3 depends on `HTTPRuntime` and
+deletes the hand-rolled retry loop in `execute`.
+
+**One thing this forces into the open.** Every type in `HTTPRuntime` is `package`, not `public`. That
+is fine for internal use — same package — but it means the transport **cannot appear in v3's public
+API**, because a public protocol requirement cannot reference a `package` type. Today's
+`FetchHandler` is public and callers do use it to inject timeouts and mocks, so dropping that
+capability is a real regression. Three ways out, recorded as an open question in §7 rather than
+decided here:
+
+1. Promote `HTTPTransport` and its supporting types to `public`. Note that `HTTPError` is a `package
+   enum`, and promoting it would put it in scope of [ADR 0001](../adr/0001-public-error-types-are-structs.md) —
+   adding a case would become binary-breaking.
+2. Keep transport injection internal for stages 1 and 2, and give callers a narrower public seam for
+   the things they actually use it for, such as a request timeout and a header provider.
+3. Define a thin public protocol in `PostgREST` that bridges to `HTTPRuntime` internally, accepting a
+   small amount of duplication to keep `HTTPRuntime` unexposed.
 
 ### 4.8 Response and errors
 
@@ -667,7 +688,7 @@ extension PostgrestSource where R == AnyPostgrestRelation {
 ```
 
 Conforming it to `PostgrestWritableRelation` would force `Insert` and `Update` to some concrete type
-such as `AnyJSON`, which is a regression against today's `insert(_ values: some Encodable)`. The
+such as `JSONValue`, which is a regression against today's `insert(_ values: some Encodable)`. The
 escape hatch should be as capable as it is now, and `Insert`/`Update` should stay meaningful for real
 relations instead of degenerating into a JSON blob.
 
@@ -679,9 +700,9 @@ From `PostgrestFilterBuilder`, 16 forwarding methods: `equals`, `notEquals`, `gr
 `phraseToFullTextSearch`, `webFullTextSearch`, `match(_:)`, `fts`. Operators and one
 `.fts(_:_:config:type:)` cover all of them.
 
-All of `Deprecated.swift`: the two deprecated initializers, `plfts`, `phfts`, `wfts`, the
-`like(_:value:)` / `ilike(_:value:)` / `in(_:value:)` overloads, the `String`-format `explain`, and
-the `URLQueryRepresentable` typealias.
+`Deprecated.swift` needs no work — it was deleted from `main` while this document was being
+written, so `plfts`, `phfts`, `wfts`, the `like(_:value:)` / `ilike(_:value:)` / `in(_:value:)`
+overloads and the `URLQueryRepresentable` typealias are already gone.
 
 `FetchOptions`, `FetchHandler`, `PostgrestReturningOptions` as a free-standing enum, and the
 `queryValue` deprecation shim on `PostgrestFilterValue`.
@@ -743,9 +764,11 @@ public to satisfy SwiftSyntax's `CompilerPlugin` protocols.
 ### 4.12 Testing
 
 Value types make request building a pure function. `PostgrestRequest` is inspectable without
-executing, so most of today's 3,384 lines of snapshot tests become direct assertions on a rendered
+executing, so most of today's 3,610 lines of snapshot tests become direct assertions on a rendered
 request. Filter rendering is tested as a pure tree-to-string function, with no client and no
-network. A `PostgrestMockTransport` covers response handling, retry and error mapping.
+network. Response handling, retry and error mapping are covered with the stubs that already exist
+in `Sources/HTTPRuntimeTestHelpers/` — `HTTPTransportStub`, `HTTPStub`, `AssertHTTPRequests` and
+`CurlCommand` — rather than a new PostgREST-specific mock.
 
 Three test kinds the macro layer needs, all present in PR #1036:
 
@@ -822,6 +845,11 @@ deliberate ergonomic tax on a legitimate operation, and that trade is a judgemen
 *The two server behaviors previously listed here — nested negation, and combining the `!<fk>` and
 `!inner` hints — are now verified against a live PostgREST 14.15. Both are supported. See §9. Neither
 is an open question any more.*
+
+**How does a caller inject a transport?** See §4.7. `HTTPRuntime` is `package`-scoped, so it cannot
+appear in v3's public API, but today's `FetchHandler` is public and callers use it for timeouts and
+mocking. Promote `HTTPRuntime` to public, offer a narrower seam, or bridge. Must be settled before
+stage 2; it does not block stage 1.
 
 **`@Table(readOnly: true)` for a view reads oddly.** A view is not a table. A `@View("active_todos")`
 alias expanding to the same conformance would read better, at the cost of a second attribute users
@@ -907,7 +935,7 @@ matter most.
 | `float4`, `float8` | `Double` |
 | `numeric` | `Decimal` |
 | `timestamptz`, `timestamp`, `date` | `Date` |
-| `json`, `jsonb` | `AnyJSON` |
+| `json`, `jsonb` | `JSONValue` |
 | `_type` (array) | `[SwiftType]` |
 | custom enum | generated `enum` |
 
@@ -974,3 +1002,68 @@ Two consequences for the design:
 
 `messages.or=(…)`, `messages.order=id.desc` and `messages.limit=1` all apply correctly within an
 embedded scope, including combined with `!inner`. The §4.4 scope construct is expressible as designed.
+
+## 10. Minimum testable surface
+
+Staging in §5 says what order to build in. This section says what the *first shippable slice* is —
+the smallest thing that can go out and generate real feedback.
+
+### 10.1 Two fixes that need none of this
+
+Both are bugs in the shipped API today, fixable against the current builders, and they should not
+wait on the rewrite.
+
+**`nil` in a comparison filter produces wrong rows.** `Optional.none.rawValue` is `"NULL"` — asserted
+in `Tests/PostgRESTTests/PostgrestFilterValueTests.swift` — and `eq` interpolates it directly, so
+`.eq("message", value: nil as String?)` emits `message=eq.NULL`. §9.3 shows that on a `text` column
+PostgREST matches the row whose value is the literal string, so this silently matches rows containing
+`"NULL"` and misses actual nulls. On an `integer` column it is a 400 instead. Fix: reject `nil` in the
+comparison operators and route callers to `is`.
+
+**Escaping is applied to two operators out of thirty.** `escapePostgRESTFilterValue` in
+`Sources/Helpers/PostgRESTFilterValue.swift` is called only by `in` and `notIn`. What breaks for the
+others is unverified, so this needs a test that establishes the behavior before the fix — but the
+asymmetry alone is a defect.
+
+### 10.2 Slice 0
+
+**In `PostgREST`:** the three protocols from §4.2, a `from(_ type:)` overload wrapping today's
+builder, KeyPath overloads for the comparison set (`eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `in`, `is`,
+`order`, `limit` — all the same one-line shape once the first exists), and the four writes on a
+constrained extension so read-only relations cannot be written.
+
+**In `PostgrestMacros`:** `@Table(_:readOnly:)`, `@Column`, `@PrimaryKey`, `@Default`, `@SelectionOf`
+with columns only, and diagnostics for the obvious misuses.
+
+**Deliberately excluded:** `@Relationship` and embeds, `embedded` / `requiring`, the filter tree,
+`or`, operators, `@Function`, the value-typed core, the transport question, the error struct,
+deprecations, and the generator.
+
+Put the protocols in `PostgREST` from the first commit even though nothing needs them there until
+stage 2. They are about forty lines, and it avoids the module move that made PR #1036 unmergeable.
+
+**Why `@SelectionOf` is in, despite being cuttable.** Without it, slice 0 does not exercise the one
+question §7 flags as genuinely uncertain — whether one declaration per selection shape is an
+acceptable cost. Columns-only selections are cheap; `@Relationship` is the expensive half and waits.
+
+**How to ship it revocably.** Two precedents exist in this repository: `@_spi(Experimental)` on the
+Auth re-export in `Sources/Supabase/Exports.swift`, and an `(alpha)` marker used for the Storage
+vector operations. Prefer the alpha marker. `@_spi` forces callers to annotate every import, and the
+entire point of slice 0 is that people actually try it.
+
+### 10.3 Impact, ranked
+
+| | Impact | Effort |
+|---|---|---|
+| Typed columns on filters | Removes the most common real bug: a typo'd column string becoming a runtime 400 | Medium — needs the macro |
+| Correct `Insert` / `Update` | Removes "I sent `id` on insert" and "every field optional to update one" | Low, once the macro exists |
+| The two fixes in §10.1 | Silently wrong rows | Very low |
+| Read-only relations | Writing to a view becomes a compile error | Very low |
+| `embedded` / `requiring` | Highest severity — PostgREST's default silently returns every parent row | High — needs selections and relationships |
+| Filter tree and `or` | Removes hand-written PostgREST filter strings | Medium-high, narrower reach |
+| The value-typed core | Nearly invisible to callers. The aliasing bug is rare, and nobody notices retry moving | Very high |
+
+The last row is the point worth keeping. **The value-typed core — the "real" rewrite — is the least
+impactful thing to ship first.** Every problem it fixes is internal. A caller upgrading would see no
+difference. That is the strongest argument for the delivery order adopted in §5, and it is why slice 0
+contains none of it.
