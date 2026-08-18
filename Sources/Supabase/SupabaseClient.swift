@@ -437,20 +437,9 @@ public final class SupabaseClient: Sendable {
   ///
   /// The returned closure captures the auth dependencies by value instead of `self`. `AuthClient`
   /// holds no reference back to ``SupabaseClient``, so no cycle is formed.
-  ///
-  /// Only ``AuthError/sessionMissing`` is swallowed here — that's the expected "no signed-in
-  /// user" case, and the request should still go out under the anon key. Any other error
-  /// (a network failure refreshing the session, or one thrown by a configured
-  /// ``SupabaseClientOptions/AuthOptions/accessToken`` third-party auth provider) must fail the
-  /// request instead of silently downgrading it to an anonymous one.
   private var adaptRequest: @Sendable (_ request: URLRequest) async throws -> URLRequest {
     { [getAccessToken = accessTokenProvider] request in
-      let token: String?
-      do {
-        token = try await getAccessToken()
-      } catch AuthError.sessionMissing {
-        token = nil
-      }
+      let token = try await getAccessToken()
 
       var request = TraceContext.inject(into: request)
       if let token {
@@ -461,12 +450,21 @@ public final class SupabaseClient: Sendable {
   }
 
   /// Resolves the access token to send on outgoing requests, without capturing `self`.
+  ///
+  /// Swallows only ``AuthError/sessionMissing`` — the expected "no signed-in user" case, which
+  /// should resolve to `nil` (falling back to the anon key) rather than failing the caller. Every
+  /// other error (a network failure refreshing the session, or one thrown by a configured
+  /// ``SupabaseClientOptions/AuthOptions/accessToken`` third-party auth provider) propagates, so
+  /// callers of this closure never need their own knowledge of which auth errors are benign.
   private var accessTokenProvider: @Sendable () async throws -> String? {
     { [accessToken = options.auth.accessToken, auth = _auth] in
-      if let accessToken {
-        try await accessToken()
-      } else {
-        try await auth.session.accessToken
+      do {
+        if let accessToken {
+          return try await accessToken()
+        }
+        return try await auth.session.accessToken
+      } catch AuthError.sessionMissing {
+        return nil
       }
     }
   }
