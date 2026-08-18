@@ -1520,38 +1520,17 @@ public actor AuthClient {
   }
 
   private func emitInitialSession(forToken token: ObservationToken) async {
-    if configuration.emitLocalSessionAsInitialSession {
-      guard let currentSession else {
-        eventEmitter.emit(.initialSession, session: nil, token: token)
-        return
-      }
+    guard let currentSession else {
+      eventEmitter.emit(.initialSession, session: nil, token: token)
+      return
+    }
 
-      eventEmitter.emit(.initialSession, session: currentSession, token: token)
+    eventEmitter.emit(.initialSession, session: currentSession, token: token)
 
+    if currentSession.isExpired {
       Task {
-        if currentSession.isExpired {
-          _ = try? await sessionManager.refreshSession(currentSession.refreshToken)
-          // No need to emit `tokenRefreshed` nor `signOut` event since the `refreshSession` does it already.
-        }
-      }
-    } else {
-      let session = try? await session
-      eventEmitter.emit(.initialSession, session: session, token: token)
-
-      // Properly expecting issues during tests isn't working as expected, I think because the reportIssue is usually triggered inside an unstructured Task
-      // because of this I'm disabling issue reporting during tests, so we can use it only for advising developers when running their applications.
-      if !isTesting {
-        reportIssue(
-          """
-          Initial session emitted after attempting to refresh the local stored session.
-          This is incorrect behavior and will be fixed in the next major release since it's a breaking change.
-          To opt-in to the new behavior now, set `emitLocalSessionAsInitialSession: true` in your AuthClient configuration.
-          The new behavior ensures that the locally stored session is always emitted, regardless of its validity or expiration.
-          If you rely on the initial session to opt users in, you need to add an additional check for `session.isExpired` in the session.
-
-          Check https://github.com/supabase/supabase-swift/pull/822 for more information.
-          """
-        )
+        _ = try? await sessionManager.refreshSession(currentSession.refreshToken)
+        // No need to emit `tokenRefreshed` nor `signOut` event since the `refreshSession` does it already.
       }
     }
   }

@@ -64,13 +64,6 @@ public struct SupabaseClientOptions: Sendable {
     /// Set to `true` if you want to automatically refresh the token before expiring.
     public let autoRefreshToken: Bool
 
-    /// When `true`, emits the locally stored session immediately as the initial session,
-    /// regardless of its validity or expiration. When `false`, emits the initial session
-    /// after attempting to refresh the local stored session (legacy behavior).
-    ///
-    /// Default is `false` for backward compatibility. This will change to `true` in the next major release.
-    public let emitLocalSessionAsInitialSession: Bool
-
     /// Optional function for using a third-party authentication system with Supabase. The function should return an access token or ID token (JWT) by obtaining it from the third-party auth client library.
     /// Note that this function may be called concurrently and many times. Use memoization and locking techniques if this is not supported by the client libraries.
     /// When set, the `auth` namespace of the Supabase client cannot be used.
@@ -83,7 +76,6 @@ public struct SupabaseClientOptions: Sendable {
       storageKey: String? = nil,
       flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
       autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken,
-      emitLocalSessionAsInitialSession: Bool = false,
       accessToken: (@Sendable () async throws -> String?)? = nil
     ) {
       self.storage = storage
@@ -91,7 +83,6 @@ public struct SupabaseClientOptions: Sendable {
       self.storageKey = storageKey
       self.flowType = flowType
       self.autoRefreshToken = autoRefreshToken
-      self.emitLocalSessionAsInitialSession = emitLocalSessionAsInitialSession
       self.accessToken = accessToken
     }
   }
@@ -205,7 +196,6 @@ extension SupabaseClientOptions.AuthOptions {
       storageKey: String? = nil,
       flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
       autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken,
-      emitLocalSessionAsInitialSession: Bool = false,
       accessToken: (@Sendable () async throws -> String?)? = nil
     ) {
       self.init(
@@ -214,7 +204,6 @@ extension SupabaseClientOptions.AuthOptions {
         storageKey: storageKey,
         flowType: flowType,
         autoRefreshToken: autoRefreshToken,
-        emitLocalSessionAsInitialSession: emitLocalSessionAsInitialSession,
         accessToken: accessToken
       )
     }
