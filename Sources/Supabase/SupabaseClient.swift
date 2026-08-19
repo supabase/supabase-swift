@@ -146,24 +146,23 @@ public final class SupabaseClient: Sendable {
 
   /// The Functions client for invoking Supabase Edge Functions.
   public var functions: FunctionsClient {
-    mutableState.withValue {
-      if $0.functions == nil {
-        var functionsHeaders = _headers
-        if APIKeyFormat.isNew(supabaseKey) {
-          functionsHeaders[.authorization] = nil
-        }
-        $0.functions = FunctionsClient(
-          url: functionsURL,
-          headers: functionsHeaders.dictionary,
-          region: options.functions.region,
-          logger: options.global.logger,
-          fetch: fetchWithAuth,
-          decoder: options.functions.decoder
-        )
-      }
-
-      return $0.functions!
+    var functionsHeaders = _headers
+    if APIKeyFormat.isNew(supabaseKey) {
+      functionsHeaders[.authorization] = nil
     }
+    return FunctionsClient(
+      url: functionsURL,
+      headers: functionsHeaders.dictionary,
+      region: options.functions.region,
+      logger: options.global.logger,
+      fetch: { [session = options.global.session] request in
+        try await session.data(for: TraceContext.inject(into: request))
+      },
+      decoder: options.functions.decoder,
+      accessToken: { [weak self] in
+        try await self?._getAccessToken()
+      }
+    )
   }
 
   let _headers: HTTPFields
@@ -179,7 +178,6 @@ public final class SupabaseClient: Sendable {
     var listenForAuthEventsTask: Task<Void, Never>?
     var storage: SupabaseStorageClient?
     var rest: PostgrestClient?
-    var functions: FunctionsClient?
     var realtime: RealtimeClientV2?
 
     var changedAccessToken: String?
@@ -472,7 +470,7 @@ public final class SupabaseClient: Sendable {
     try await accessTokenProvider()
   }
 
-  /// Mirrors Auth state onto the Functions and Realtime V2 sub-clients for the client's lifetime.
+  /// Mirrors Auth state onto the Realtime V2 sub-client for the client's lifetime.
   ///
   /// `authStateChanges` never finishes on its own, so the observing task must not capture `self`
   /// strongly: it would keep the client alive forever, and ``deinit`` — the only place that
@@ -509,9 +507,6 @@ public final class SupabaseClient: Sendable {
     }
 
     if let accessToken {
-      functions.setAuth(
-        token: APIKeyFormat.functionsBearerToken(accessToken: accessToken, supabaseKey: supabaseKey)
-      )
       await realtimeV2.setAuth(accessToken)
     }
   }
