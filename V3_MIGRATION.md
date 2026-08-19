@@ -1281,3 +1281,147 @@ var client: FunctionsClient?
 
 This is a compile error, not a silent behavior change. Search your codebase for `weak`, `unowned`,
 `AnyObject`, or `===` next to a `FunctionsClient` variable to find affected call sites.
+
+## `PostgrestClient.setAuth(_:)` is removed; pass an `accessToken` closure instead
+
+`PostgrestClient.setAuth(_:)` is removed. Every initializer now takes an optional
+`accessToken: (@Sendable () async throws -> String?)?` closure instead. `PostgrestClient` calls it
+fresh before each request and sends the result as `Authorization: Bearer <token>`.
+
+`setAuth` mutated a lock-protected `Authorization` header stored on the client, the same pattern
+`FunctionsClient.setAuth(token:)` went through earlier (see above). Moving to a pull-based closure
+removes that lock and lets a token that expires and refreshes — e.g. one paired with Supabase
+Auth — stay current without a separate setter call on every refresh.
+
+```swift
+// Before
+let client = PostgrestClient(url: url)
+client.setAuth(token)
+
+// After — static token
+let client = PostgrestClient(url: url, accessToken: { token })
+
+// After — refreshable token, e.g. paired with Supabase Auth
+let client = PostgrestClient(url: url, accessToken: { try await auth.session?.accessToken })
+```
+
+This is a compile error, not a silent behavior change: any call site using `setAuth` fails to
+build.
+
+An `Authorization` header already set via `Configuration.headers`, or via an explicit
+`.setHeader("Authorization", ...)` call on a builder, always takes precedence over the
+`accessToken` closure's result.
+
+## `PostgrestClient` and its builders are now structs, not classes
+
+`PostgrestClient`, `PostgrestBuilder`, `PostgrestQueryBuilder`, `PostgrestFilterBuilder`, and
+`PostgrestTransformBuilder` are structs instead of classes. The `setAuth` removal above took away
+`PostgrestClient`'s only mutable, lock-protected state, and the builder types held their own
+per-request state (headers, retry flag, pending-error tracking) the same way. With neither type
+holding mutable shared state anymore, every stored property is now an immutable `let`, and both
+are value types.
+
+Under the hood, `PostgrestBuilder`, `PostgrestQueryBuilder`, `PostgrestFilterBuilder`, and
+`PostgrestTransformBuilder` are now `typealias`es of a single generic `PostgrestRequestBuilder<Phase>`
+type, where `Phase` is a compile-time-only marker that determines which methods are available (see
+the next two sections for what that means for your code).
+
+Calling methods (`from`, `select`, `eq`, `execute`, and friends) compiles unchanged; this only
+breaks code that depended on these types being reference types: a `weak var` holding one, an
+`AnyObject` constraint, or an identity check with `===`. None of those compile against a struct.
+Subclassing any of the builder types is also no longer possible, since none of them are classes
+anymore — this was previously possible because none of the builder classes were `final`.
+
+```swift
+// Before
+weak var client: PostgrestClient?
+
+// After
+// Structs have no identity to hold weakly — keep a strong reference, or drop the field if it only
+// existed to avoid a retain cycle.
+var client: PostgrestClient?
+```
+
+This is a compile error, not a silent behavior change. Search your codebase for `weak`, `unowned`,
+`AnyObject`, `===`, or a subclass declaration next to `PostgrestClient`, `PostgrestBuilder`,
+`PostgrestQueryBuilder`, `PostgrestFilterBuilder`, or `PostgrestTransformBuilder` to find affected
+call sites.
+
+## `PostgrestBuilder` is no longer a nameable, non-generic type
+
+Code that spells out `PostgrestBuilder` as a type — a stored property, a function parameter or
+return type — no longer compiles, since it's now a generic type alias
+(`PostgrestRequestBuilder<Phase>`) without a non-generic supertype. Use the new
+`any PostgrestExecutableBuilder` protocol for "any executable PostgREST builder regardless of
+phase," or name one of the concrete phase-specific type aliases (`PostgrestFilterBuilder`,
+`PostgrestTransformBuilder`) directly:
+
+```swift
+// Before
+func makeUsersQuery(_ client: PostgrestClient) -> PostgrestBuilder {
+  client.from("users").select()
+}
+
+// After
+func makeUsersQuery(_ client: PostgrestClient) -> any PostgrestExecutableBuilder {
+  client.from("users").select()
+}
+
+try await makeUsersQuery(client).execute(options: FetchOptions())
+```
+
+`any PostgrestExecutableBuilder` only exposes `execute(options:)` — it doesn't carry
+`setHeader`/`retry`, since those are declared directly on `PostgrestRequestBuilder<Phase>` and
+constrained to phases conforming to `PostgrestExecutablePhase`, not on the protocol itself. Code
+that needs to call `setHeader`/`retry` generically must keep the concrete phase type instead of
+erasing to `any PostgrestExecutableBuilder`.
+
+This is a compile error, not a silent behavior change.
+
+## `PostgrestQueryBuilder` no longer supports `execute()`/`setHeader(...)`/`retry(...)` before an operation
+
+`client.from("table").execute()` — calling `execute()` (or `setHeader`/`retry`) without first
+calling `select`/`insert`/`update`/`upsert`/`delete` — no longer compiles. This closes a
+previously-compiling but apparently-unused capability; the fix is to call one of those operations
+first:
+
+```swift
+// Before (compiled, but sent an implicit "select *")
+try await client.from("todos").execute()
+
+// After
+try await client.from("todos").select().execute()
+```
+
+This also removes `setHeader(...)` from the builder `from(_:)` returns, before an operation is
+chosen. If you relied on setting a header there — the operation methods (`select`/`insert`/
+`update`/`upsert`/`delete`) merge their own `Prefer` value with whatever the request already
+carries — set it via `PostgrestClient.Configuration.headers` instead. A client-level header
+applies to every request from that client, and the operation methods still merge with it the same
+way:
+
+```swift
+// Before — a Prefer header set on the query-phase builder, merged by select(count:) into
+// "params=single-object,count=exact"
+let client = PostgrestClient(url: url)
+let todos: [Todo] = try await client
+  .from("todos")
+  .setHeader(name: "Prefer", value: "params=single-object")
+  .select(count: .exact)
+  .execute()
+  .value
+
+// After — set the Prefer header at the client level; select(count:) still merges it
+let client = PostgrestClient(
+  url: url,
+  headers: ["Prefer": "params=single-object"]
+)
+let todos: [Todo] = try await client
+  .from("todos")
+  .select(count: .exact)
+  .execute()
+  .value
+```
+
+This is a compile error, not a silent behavior change: any call site chaining `execute`/
+`setHeader`/`retry` directly onto `from(_:)` fails to build.
