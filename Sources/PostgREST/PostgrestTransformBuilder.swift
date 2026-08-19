@@ -5,7 +5,7 @@ import HTTPTypes
 /// Builder for applying result transformations such as ordering, pagination, and response format.
 ///
 /// ``PostgrestTransformBuilder`` sits between ``PostgrestFilterBuilder`` (WHERE clauses) and
-/// ``PostgrestBuilder/execute(options:)-96tpd`` (sending the request). All transformation methods
+/// ``PostgrestBuilder/execute(options:)->PostgrestResponse<Void>`` (sending the request). All transformation methods
 /// return `self` so they can be chained freely.
 ///
 /// > Note: Thread Safety: Inherits thread-safe mutable state management from ``PostgrestBuilder``.

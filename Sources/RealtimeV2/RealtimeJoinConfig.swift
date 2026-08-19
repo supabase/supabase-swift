@@ -7,7 +7,6 @@
 
 import Foundation
 
-// cspell:ignore pvzp
 struct RealtimeJoinPayload: Encodable {
   var config: RealtimeJoinConfig
   var accessToken: String?
@@ -73,11 +72,11 @@ public struct ReplayOption: Encodable, Hashable, Sendable {
 /// - ``receiveOwnBroadcasts``
 /// - ``replay``
 /// ### Initialization
-/// - ``init(acknowledgeBroadcasts:receiveOwnBroadcasts:replay:)``
+/// - ``init(acknowledgeBroadcasts:receiveOwnBroadcasts:replay:replicationReady:)``
 public struct BroadcastJoinConfig: Encodable, Hashable, Sendable {
   /// When `true`, the server acknowledges each broadcast message before delivering it.
   ///
-  /// Useful in combination with ``RealtimeChannelV2/broadcast(event:message:)-2pvzp``
+  /// Useful in combination with ``RealtimeChannelV2/broadcast(event:message:)-(_,JSONObject)``
   /// to ensure delivery before continuing.
   public var acknowledgeBroadcasts: Bool = false
 
@@ -91,7 +90,7 @@ public struct BroadcastJoinConfig: Encodable, Hashable, Sendable {
   /// Instructs the server to emit a `system` event once the Postgres replication
   /// connection backing this channel is established and ready to stream changes.
   ///
-  /// Listen for it with ``RealtimeChannelV2/onSystem(callback:)-(_)`` (or the
+  /// Listen for it with ``RealtimeChannelV2/onSystem(callback:)-((RealtimeMessageV2)->Void)`` (or the
   /// ``RealtimeChannelV2/system()`` async stream): the message's `status` is
   /// `.ok` (message `"Replication connection established"`) on success, or
   /// `.error` if the connection is not ready in time.

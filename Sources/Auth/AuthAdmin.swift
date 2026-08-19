@@ -29,10 +29,6 @@ import HTTPTypes
 ///
 /// ### OAuth 2.1 clients
 /// - ``oauth``
-///
-/// ### Passkeys
-/// - ``listPasskeys(userId:)``
-/// - ``deletePasskey(userId:passkeyId:)``
 public struct AuthAdmin: Sendable {
   let clientID: AuthClientID
 

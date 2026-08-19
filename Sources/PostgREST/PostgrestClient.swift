@@ -81,7 +81,7 @@ public final class PostgrestClient: Sendable {
   ///
   /// Create a ``Configuration`` value and pass it to ``PostgrestClient/init(configuration:)`` when
   /// you need fine-grained control over the client, such as supplying a custom ``FetchHandler`` or
-  /// ``JSONEncoder``/``JSONDecoder``.
+  /// ``jsonEncoder``/``jsonDecoder``.
   ///
   /// ## Topics
   ///

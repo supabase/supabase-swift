@@ -9,7 +9,7 @@ import Logging
 
 /// The base builder class for all PostgREST requests.
 ///
-/// ``PostgrestBuilder`` holds the shared HTTP request state and provides the ``execute(options:)-96tpd``
+/// ``PostgrestBuilder`` holds the shared HTTP request state and provides the ``execute(options:)->PostgrestResponse<Void>``
 /// methods that send the request to the PostgREST server. You typically interact with one of its
 /// subclasses — ``PostgrestQueryBuilder``, ``PostgrestFilterBuilder``, or
 /// ``PostgrestTransformBuilder`` — rather than instantiating ``PostgrestBuilder`` directly.
@@ -32,8 +32,8 @@ import Logging
 ///
 /// ### Executing the Request
 ///
-/// - ``execute(options:)-96tpd``
-/// - ``execute(options:)-6mk2u``
+/// - ``execute(options:)->PostgrestResponse<Void>``
+/// - ``execute(options:)->PostgrestResponse<T>``
 public class PostgrestBuilder: @unchecked Sendable {
   /// The configuration for the PostgREST client.
   let configuration: PostgrestClient.Configuration

@@ -7,7 +7,7 @@ import Helpers
 /// Obtain a ``PostgrestFilterBuilder`` from ``PostgrestQueryBuilder/select(_:head:count:)``,
 /// ``PostgrestQueryBuilder/insert(_:returning:count:)``, ``PostgrestQueryBuilder/update(_:returning:count:)``,
 /// or other write methods. Chain one or more filter methods, then call
-/// ``PostgrestBuilder/execute(options:)-96tpd`` to send the request.
+/// ``PostgrestBuilder/execute(options:)->PostgrestResponse<Void>`` to send the request.
 ///
 /// All filter methods return `self` so they can be freely chained:
 ///
@@ -36,7 +36,7 @@ import Helpers
 /// - ``isDistinct(_:value:)``
 /// - ``in(_:values:)``
 /// - ``notIn(_:values:)``
-/// - ``match(_:)-6h9ou``
+/// - ``match(_:)``
 ///
 /// ### Comparison Filters
 ///
@@ -53,7 +53,7 @@ import Helpers
 /// - ``ilike(_:pattern:)``
 /// - ``iLikeAllOf(_:patterns:)``
 /// - ``iLikeAnyOf(_:patterns:)``
-/// - ``match(_:pattern:)-9qlv5``
+/// - ``match(_:pattern:)``
 /// - ``imatch(_:pattern:)``
 ///
 /// ### Array and Range Filters

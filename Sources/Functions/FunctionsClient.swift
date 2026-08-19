@@ -11,7 +11,7 @@ let version = Helpers.version
 
 /// A client for invoking Supabase Edge Functions.
 ///
-/// Obtain an instance from ``SupabaseClient/functions`` rather than creating one directly.
+/// Obtain an instance from `SupabaseClient.functions` rather than creating one directly.
 ///
 /// ```swift
 /// // Invoke and decode a response
@@ -27,14 +27,13 @@ let version = Helpers.version
 /// ## Topics
 ///
 /// ### Creating a Client
-/// - ``init(url:headers:region:logger:fetch:decoder:accessToken:)``
+/// - ``init(url:headers:region:logger:fetch:decoder:accessToken:)-(_,_,FunctionRegion?,_,_,_,_)``
 /// - ``FetchHandler``
 ///
 /// ### Invoking Functions
 /// - ``invoke(_:options:decode:)``
 /// - ``invoke(_:options:decoder:)``
 /// - ``invoke(_:options:)``
-/// - ``_invokeWithStreamedResponse(_:options:)``
 ///
 /// ### Configuration
 /// - ``decoder``
@@ -48,7 +47,7 @@ public struct FunctionsClient: Sendable {
 
   /// The maximum time an Edge Function may run before the gateway returns a 504 error (150 seconds).
   ///
-  /// Can be overridden per-invocation via ``FunctionInvokeOptions/timeoutInterval``.
+  /// Can be overridden per-invocation via ``FunctionInvokeOptions/init(method:headers:region:timeoutInterval:)``.
   public static let requestIdleTimeout: TimeInterval = 150
 
   /// The base URL for the functions.
