@@ -95,6 +95,7 @@ jobs:
         with:
           path: |
             ~/.derivedData
+            !~/.derivedData/**/ModuleCache.noindex
           key: |
             deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.xcode }}-${{ matrix.command }}-${{ hashFiles('**/Package.resolved') }}
           restore-keys: |
@@ -108,6 +109,13 @@ jobs:
         run: defaults write com.apple.dt.XCBuild IgnoreFileSystemDeviceInodeChanges -bool YES
       - name: Update mtime for incremental builds
         uses: chetan/git-restore-mtime-action@d186aca54f8760da4dec55313195e51ed3ebb0b3 # v2.3
+      # This runner class persists local disk state across jobs independent of
+      # actions/cache, so a module cache built against a since-updated Xcode
+      # toolchain can survive even on an actions/cache miss. The module cache
+      # embeds absolute host-header mtimes and is cheap to regenerate, so always
+      # purge it rather than risk "could not build module" errors.
+      - name: Clear stale Clang module cache
+        run: rm -rf ~/.derivedData/*/ModuleCache.noindex
       - name: Debug
         if: matrix.skip_debug != '1'
         run: CONFIG=Debug PLATFORM="${{ matrix.platform }}" XCODEBUILD_ARGUMENT="${{ matrix.command }}" ./scripts/xcodebuild.sh
