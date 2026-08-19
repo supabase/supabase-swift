@@ -2,14 +2,93 @@ import ConcurrencyExtras
 import Foundation
 import Helpers
 
-/// Builder for applying WHERE-clause filters to a PostgREST query.
+extension PostgrestRequestBuilder {
+  /// The set of PostgREST comparison operators available for use with
+  /// ``PostgrestFilterBuilder/not(_:operator:value:)`` and
+  /// ``PostgrestFilterBuilder/filter(_:operator:value:)``.
+  ///
+  /// Most operators have dedicated convenience methods (e.g., ``PostgrestFilterBuilder/eq(_:value:)``,
+  /// ``PostgrestFilterBuilder/gt(_:value:)``). Use ``Operator`` directly only when you need
+  /// `not(_:operator:value:)` or the raw `filter(_:operator:value:)` escape hatch.
+  ///
+  /// > Note: `Operator` is declared in an unconstrained extension of ``PostgrestRequestBuilder``
+  /// > (rather than one constrained to `Phase: PostgrestFilterablePhase`) purely so its nested-type
+  /// > declaration doesn't depend on unclear compiler support for nested types in conditional
+  /// > extensions — it's still only meaningfully used from filterable phases.
+  public struct Operator: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+    public let rawValue: String
+
+    /// Creates an ``Operator`` from a raw string value.
+    public init(rawValue: String) {
+      self.rawValue = rawValue
+    }
+
+    /// Creates an ``Operator`` from a string literal.
+    public init(stringLiteral value: String) {
+      self.init(rawValue: value)
+    }
+
+    /// Equals (`=`).
+    public static var eq: Operator { "eq" }
+    /// Not equals (`!=`).
+    public static var neq: Operator { "neq" }
+    /// Greater than (`>`).
+    public static var gt: Operator { "gt" }
+    /// Greater than or equal (`>=`).
+    public static var gte: Operator { "gte" }
+    /// Less than (`<`).
+    public static var lt: Operator { "lt" }
+    /// Less than or equal (`<=`).
+    public static var lte: Operator { "lte" }
+    /// Case-sensitive LIKE pattern match.
+    public static var like: Operator { "like" }
+    /// Case-insensitive ILIKE pattern match.
+    public static var ilike: Operator { "ilike" }
+    /// Case-sensitive regex match.
+    public static var match: Operator { "match" }
+    /// Case-insensitive regex match.
+    public static var imatch: Operator { "imatch" }
+    /// IS (for NULL / boolean checks).
+    public static var `is`: Operator { "is" }
+    /// IS DISTINCT FROM.
+    public static var isdistinct: Operator { "isdistinct" }
+    /// IN — value is in a list.
+    public static var `in`: Operator { "in" }
+    /// Contains (`@>`).
+    public static var cs: Operator { "cs" }
+    /// Contained by (`<@`).
+    public static var cd: Operator { "cd" }
+    /// Range strictly left of (`<<`).
+    public static var sl: Operator { "sl" }
+    /// Range strictly right of (`>>`).
+    public static var sr: Operator { "sr" }
+    /// Range does not extend to the left (`&>`).
+    public static var nxl: Operator { "nxl" }
+    /// Range does not extend to the right (`&<`).
+    public static var nxr: Operator { "nxr" }
+    /// Range is adjacent (`-|-`).
+    public static var adj: Operator { "adj" }
+    /// Overlaps (`&&`).
+    public static var ov: Operator { "ov" }
+    /// Full-text search using `to_tsquery`.
+    public static var fts: Operator { "fts" }
+    /// Full-text search using `plainto_tsquery`.
+    public static var plfts: Operator { "plfts" }
+    /// Full-text search using `phraseto_tsquery`.
+    public static var phfts: Operator { "phfts" }
+    /// Full-text search using `websearch_to_tsquery`.
+    public static var wfts: Operator { "wfts" }
+  }
+}
+
+/// Filter methods for applying WHERE-clause filters to a PostgREST query.
 ///
 /// Obtain a ``PostgrestFilterBuilder`` from ``PostgrestQueryBuilder/select(_:head:count:)``,
 /// ``PostgrestQueryBuilder/insert(_:returning:count:)``, ``PostgrestQueryBuilder/update(_:returning:count:)``,
 /// or other write methods. Chain one or more filter methods, then call
-/// ``PostgrestBuilder/execute(options:)->PostgrestResponse<Void>`` to send the request.
+/// ``PostgrestRequestBuilder/execute(options:)-96tpd`` to send the request.
 ///
-/// All filter methods return `self` so they can be freely chained:
+/// All filter methods return `Self` so they can be freely chained:
 ///
 /// ```swift
 /// let results: [Todo] = try await client
@@ -22,10 +101,6 @@ import Helpers
 ///   .value
 /// ```
 ///
-/// > Note: Thread Safety: Inherits thread-safe mutable state management from ``PostgrestBuilder``.
-///
-/// > Important: Do not modify the same builder instance from multiple concurrent tasks.
-///
 /// ## Topics
 ///
 /// ### Equality Filters
@@ -36,7 +111,7 @@ import Helpers
 /// - ``isDistinct(_:value:)``
 /// - ``in(_:values:)``
 /// - ``notIn(_:values:)``
-/// - ``match(_:)``
+/// - ``match(_:)-6h9ou``
 ///
 /// ### Comparison Filters
 ///
@@ -53,7 +128,7 @@ import Helpers
 /// - ``ilike(_:pattern:)``
 /// - ``iLikeAllOf(_:patterns:)``
 /// - ``iLikeAnyOf(_:patterns:)``
-/// - ``match(_:pattern:)``
+/// - ``match(_:pattern:)-9qlv5``
 /// - ``imatch(_:pattern:)``
 ///
 /// ### Array and Range Filters
@@ -81,78 +156,7 @@ import Helpers
 /// ### Operators
 ///
 /// - ``Operator``
-public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Sendable {
-  /// The set of PostgREST comparison operators available for use with ``not(_:operator:value:)``
-  /// and ``filter(_:operator:value:)``.
-  ///
-  /// Most operators have dedicated convenience methods (e.g., ``eq(_:value:)``, ``gt(_:value:)``).
-  /// Use ``Operator`` directly only when you need ``not(_:operator:value:)`` or the raw
-  /// ``filter(_:operator:value:)`` escape hatch.
-  public struct Operator: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
-    public let rawValue: String
-
-    /// Creates an ``Operator`` from a raw string value.
-    public init(rawValue: String) {
-      self.rawValue = rawValue
-    }
-
-    /// Creates an ``Operator`` from a string literal.
-    public init(stringLiteral value: String) {
-      self.init(rawValue: value)
-    }
-
-    /// Equals (`=`).
-    public static let eq: Operator = "eq"
-    /// Not equals (`!=`).
-    public static let neq: Operator = "neq"
-    /// Greater than (`>`).
-    public static let gt: Operator = "gt"
-    /// Greater than or equal (`>=`).
-    public static let gte: Operator = "gte"
-    /// Less than (`<`).
-    public static let lt: Operator = "lt"
-    /// Less than or equal (`<=`).
-    public static let lte: Operator = "lte"
-    /// Case-sensitive LIKE pattern match.
-    public static let like: Operator = "like"
-    /// Case-insensitive ILIKE pattern match.
-    public static let ilike: Operator = "ilike"
-    /// Case-sensitive regex match.
-    public static let match: Operator = "match"
-    /// Case-insensitive regex match.
-    public static let imatch: Operator = "imatch"
-    /// IS (for NULL / boolean checks).
-    public static let `is`: Operator = "is"
-    /// IS DISTINCT FROM.
-    public static let isdistinct: Operator = "isdistinct"
-    /// IN — value is in a list.
-    public static let `in`: Operator = "in"
-    /// Contains (`@>`).
-    public static let cs: Operator = "cs"
-    /// Contained by (`<@`).
-    public static let cd: Operator = "cd"
-    /// Range strictly left of (`<<`).
-    public static let sl: Operator = "sl"
-    /// Range strictly right of (`>>`).
-    public static let sr: Operator = "sr"
-    /// Range does not extend to the left (`&>`).
-    public static let nxl: Operator = "nxl"
-    /// Range does not extend to the right (`&<`).
-    public static let nxr: Operator = "nxr"
-    /// Range is adjacent (`-|-`).
-    public static let adj: Operator = "adj"
-    /// Overlaps (`&&`).
-    public static let ov: Operator = "ov"
-    /// Full-text search using `to_tsquery`.
-    public static let fts: Operator = "fts"
-    /// Full-text search using `plainto_tsquery`.
-    public static let plfts: Operator = "plfts"
-    /// Full-text search using `phraseto_tsquery`.
-    public static let phfts: Operator = "phfts"
-    /// Full-text search using `websearch_to_tsquery`.
-    public static let wfts: Operator = "wfts"
-  }
-
+extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
   // MARK: - Filters
 
   /// Negates the specified filter using the PostgREST `not.<operator>` syntax.
@@ -168,23 +172,18 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - column: The column to filter on.
   ///   - op: The ``Operator`` to negate.
   ///   - value: The filter value.
-  /// - Returns: The same builder instance so calls can be chained.
+  /// - Returns: The same builder value so calls can be chained.
   public func not(
     _ column: String,
     operator op: Operator,
     value: any PostgrestFilterValue
-  ) -> PostgrestFilterBuilder {
+  ) -> Self {
     let queryValue = value.rawValue
-
-    mutableState.withValue {
-      $0.request.query.append(
-        URLQueryItem(
-          name: column,
-          value: "not.\(op.rawValue).\(queryValue)"
-        ))
-    }
-
-    return self
+    var copy = self
+    copy.request.query.append(
+      URLQueryItem(name: column, value: "not.\(op.rawValue).\(queryValue)")
+    )
+    return copy
   }
 
   /// Combines multiple filters with an OR condition.
@@ -201,17 +200,16 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   /// - Parameters:
   ///   - filters: A comma-separated list of PostgREST filter expressions combined with OR logic.
   ///   - referencedTable: The name of an embedded table to apply the OR filter on. Defaults to `nil`.
-  /// - Returns: The same builder instance so calls can be chained.
+  /// - Returns: The same builder value so calls can be chained.
   public func or(
     _ filters: any PostgrestFilterValue,
     referencedTable: String? = nil
-  ) -> PostgrestFilterBuilder {
+  ) -> Self {
     let key = referencedTable.map { "\($0).or" } ?? "or"
     let queryValue = filters.rawValue
-    mutableState.withValue {
-      $0.request.query.append(URLQueryItem(name: key, value: "(\(queryValue))"))
-    }
-    return self
+    var copy = self
+    copy.request.query.append(URLQueryItem(name: key, value: "(\(queryValue))"))
+    return copy
   }
 
   /// Matches only rows where `column` equals `value`.
@@ -226,16 +224,15 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   /// - Parameters:
   ///   - column: The column to filter on.
   ///   - value: The value to compare against.
-  /// - Returns: The same builder instance so calls can be chained.
+  /// - Returns: The same builder value so calls can be chained.
   public func eq(
     _ column: String,
     value: any PostgrestFilterValue
-  ) -> PostgrestFilterBuilder {
+  ) -> Self {
     let queryValue = value.rawValue
-    mutableState.withValue {
-      $0.request.query.append(URLQueryItem(name: column, value: "eq.\(queryValue)"))
-    }
-    return self
+    var copy = self
+    copy.request.query.append(URLQueryItem(name: column, value: "eq.\(queryValue)"))
+    return copy
   }
 
   /// Matches only rows where `column` is not equal to `value`.
@@ -248,16 +245,15 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   /// - Parameters:
   ///   - column: The column to filter on.
   ///   - value: The value to compare against.
-  /// - Returns: The same builder instance so calls can be chained.
+  /// - Returns: The same builder value so calls can be chained.
   public func neq(
     _ column: String,
     value: any PostgrestFilterValue
-  ) -> PostgrestFilterBuilder {
+  ) -> Self {
     let queryValue = value.rawValue
-    mutableState.withValue {
-      $0.request.query.append(URLQueryItem(name: column, value: "neq.\(queryValue)"))
-    }
-    return self
+    var copy = self
+    copy.request.query.append(URLQueryItem(name: column, value: "neq.\(queryValue)"))
+    return copy
   }
 
   /// Matches only rows where `column` is greater than `value`.
@@ -270,16 +266,15 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   /// - Parameters:
   ///   - column: The column to filter on.
   ///   - value: The value to compare against.
-  /// - Returns: The same builder instance so calls can be chained.
+  /// - Returns: The same builder value so calls can be chained.
   public func gt(
     _ column: String,
     value: any PostgrestFilterValue
-  ) -> PostgrestFilterBuilder {
+  ) -> Self {
     let queryValue = value.rawValue
-    mutableState.withValue {
-      $0.request.query.append(URLQueryItem(name: column, value: "gt.\(queryValue)"))
-    }
-    return self
+    var copy = self
+    copy.request.query.append(URLQueryItem(name: column, value: "gt.\(queryValue)"))
+    return copy
   }
 
   /// Matches only rows where `column` is greater than or equal to `value`.
@@ -292,16 +287,15 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   /// - Parameters:
   ///   - column: The column to filter on.
   ///   - value: The value to compare against.
-  /// - Returns: The same builder instance so calls can be chained.
+  /// - Returns: The same builder value so calls can be chained.
   public func gte(
     _ column: String,
     value: any PostgrestFilterValue
-  ) -> PostgrestFilterBuilder {
+  ) -> Self {
     let queryValue = value.rawValue
-    mutableState.withValue {
-      $0.request.query.append(URLQueryItem(name: column, value: "gte.\(queryValue)"))
-    }
-    return self
+    var copy = self
+    copy.request.query.append(URLQueryItem(name: column, value: "gte.\(queryValue)"))
+    return copy
   }
 
   /// Matches only rows where `column` is less than `value`.
@@ -314,16 +308,15 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   /// - Parameters:
   ///   - column: The column to filter on.
   ///   - value: The value to compare against.
-  /// - Returns: The same builder instance so calls can be chained.
+  /// - Returns: The same builder value so calls can be chained.
   public func lt(
     _ column: String,
     value: any PostgrestFilterValue
-  ) -> PostgrestFilterBuilder {
+  ) -> Self {
     let queryValue = value.rawValue
-    mutableState.withValue {
-      $0.request.query.append(URLQueryItem(name: column, value: "lt.\(queryValue)"))
-    }
-    return self
+    var copy = self
+    copy.request.query.append(URLQueryItem(name: column, value: "lt.\(queryValue)"))
+    return copy
   }
 
   /// Matches only rows where `column` is less than or equal to `value`.
@@ -336,16 +329,15 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   /// - Parameters:
   ///   - column: The column to filter on.
   ///   - value: The value to compare against.
-  /// - Returns: The same builder instance so calls can be chained.
+  /// - Returns: The same builder value so calls can be chained.
   public func lte(
     _ column: String,
     value: any PostgrestFilterValue
-  ) -> PostgrestFilterBuilder {
+  ) -> Self {
     let queryValue = value.rawValue
-    mutableState.withValue {
-      $0.request.query.append(URLQueryItem(name: column, value: "lte.\(queryValue)"))
-    }
-    return self
+    var copy = self
+    copy.request.query.append(URLQueryItem(name: column, value: "lte.\(queryValue)"))
+    return copy
   }
 
   /// Matches only rows where `column` matches `pattern` case-sensitively using SQL LIKE.
@@ -360,16 +352,15 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   /// - Parameters:
   ///   - column: The column to filter on.
   ///   - pattern: The LIKE pattern to match against.
-  /// - Returns: The same builder instance so calls can be chained.
+  /// - Returns: The same builder value so calls can be chained.
   public func like(
     _ column: String,
     pattern: any PostgrestFilterValue
-  ) -> PostgrestFilterBuilder {
+  ) -> Self {
     let queryValue = pattern.rawValue
-    mutableState.withValue {
-      $0.request.query.append(URLQueryItem(name: column, value: "like.\(queryValue)"))
-    }
-    return self
+    var copy = self
+    copy.request.query.append(URLQueryItem(name: column, value: "like.\(queryValue)"))
+    return copy
   }
 
   /// Matches only rows where `column` matches **all** of the supplied LIKE `patterns` case-sensitively.
@@ -382,16 +373,15 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   /// - Parameters:
   ///   - column: The column to filter on.
   ///   - patterns: The LIKE patterns that must all match.
-  /// - Returns: The same builder instance so calls can be chained.
+  /// - Returns: The same builder value so calls can be chained.
   public func likeAllOf(
     _ column: String,
     patterns: [some PostgrestFilterValue]
-  ) -> PostgrestFilterBuilder {
+  ) -> Self {
     let queryValue = patterns.rawValue
-    mutableState.withValue {
-      $0.request.query.append(URLQueryItem(name: column, value: "like(all).\(queryValue)"))
-    }
-    return self
+    var copy = self
+    copy.request.query.append(URLQueryItem(name: column, value: "like(all).\(queryValue)"))
+    return copy
   }
 
   /// Matches only rows where `column` matches **any** of the supplied LIKE `patterns` case-sensitively.
@@ -404,16 +394,15 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   /// - Parameters:
   ///   - column: The column to filter on.
   ///   - patterns: The LIKE patterns, at least one of which must match.
-  /// - Returns: The same builder instance so calls can be chained.
+  /// - Returns: The same builder value so calls can be chained.
   public func likeAnyOf(
     _ column: String,
     patterns: [some PostgrestFilterValue]
-  ) -> PostgrestFilterBuilder {
+  ) -> Self {
     let queryValue = patterns.rawValue
-    mutableState.withValue {
-      $0.request.query.append(URLQueryItem(name: column, value: "like(any).\(queryValue)"))
-    }
-    return self
+    var copy = self
+    copy.request.query.append(URLQueryItem(name: column, value: "like(any).\(queryValue)"))
+    return copy
   }
 
   /// Matches only rows where `column` matches `pattern` case-insensitively using SQL ILIKE.
@@ -428,16 +417,15 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   /// - Parameters:
   ///   - column: The column to filter on.
   ///   - pattern: The ILIKE pattern to match against.
-  /// - Returns: The same builder instance so calls can be chained.
+  /// - Returns: The same builder value so calls can be chained.
   public func ilike(
     _ column: String,
     pattern: any PostgrestFilterValue
-  ) -> PostgrestFilterBuilder {
+  ) -> Self {
     let queryValue = pattern.rawValue
-    mutableState.withValue {
-      $0.request.query.append(URLQueryItem(name: column, value: "ilike.\(queryValue)"))
-    }
-    return self
+    var copy = self
+    copy.request.query.append(URLQueryItem(name: column, value: "ilike.\(queryValue)"))
+    return copy
   }
 
   /// Matches only rows where `column` matches **all** of the supplied ILIKE `patterns` case-insensitively.
@@ -450,16 +438,15 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   /// - Parameters:
   ///   - column: The column to filter on.
   ///   - patterns: The ILIKE patterns that must all match.
-  /// - Returns: The same builder instance so calls can be chained.
+  /// - Returns: The same builder value so calls can be chained.
   public func iLikeAllOf(
     _ column: String,
     patterns: [some PostgrestFilterValue]
-  ) -> PostgrestFilterBuilder {
+  ) -> Self {
     let queryValue = patterns.rawValue
-    mutableState.withValue {
-      $0.request.query.append(URLQueryItem(name: column, value: "ilike(all).\(queryValue)"))
-    }
-    return self
+    var copy = self
+    copy.request.query.append(URLQueryItem(name: column, value: "ilike(all).\(queryValue)"))
+    return copy
   }
 
   /// Matches only rows where `column` matches **any** of the supplied ILIKE `patterns` case-insensitively.
@@ -472,16 +459,15 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   /// - Parameters:
   ///   - column: The column to filter on.
   ///   - patterns: The ILIKE patterns, at least one of which must match.
-  /// - Returns: The same builder instance so calls can be chained.
+  /// - Returns: The same builder value so calls can be chained.
   public func iLikeAnyOf(
     _ column: String,
     patterns: [some PostgrestFilterValue]
-  ) -> PostgrestFilterBuilder {
+  ) -> Self {
     let queryValue = patterns.rawValue
-    mutableState.withValue {
-      $0.request.query.append(URLQueryItem(name: column, value: "ilike(any).\(queryValue)"))
-    }
-    return self
+    var copy = self
+    copy.request.query.append(URLQueryItem(name: column, value: "ilike(any).\(queryValue)"))
+    return copy
   }
 
   /// Matches only rows where `column` matches the regular expression `pattern` case-sensitively.
@@ -496,16 +482,15 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   /// - Parameters:
   ///   - column: The column to filter on.
   ///   - pattern: The POSIX regular expression to match against.
-  /// - Returns: The same builder instance so calls can be chained.
+  /// - Returns: The same builder value so calls can be chained.
   public func match(
     _ column: String,
     pattern: any PostgrestFilterValue
-  ) -> PostgrestFilterBuilder {
+  ) -> Self {
     let queryValue = pattern.rawValue
-    mutableState.withValue {
-      $0.request.query.append(URLQueryItem(name: column, value: "match.\(queryValue)"))
-    }
-    return self
+    var copy = self
+    copy.request.query.append(URLQueryItem(name: column, value: "match.\(queryValue)"))
+    return copy
   }
 
   /// Matches only rows where `column` matches the regular expression `pattern` case-insensitively.
@@ -520,16 +505,15 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   /// - Parameters:
   ///   - column: The column to filter on.
   ///   - pattern: The POSIX regular expression to match against.
-  /// - Returns: The same builder instance so calls can be chained.
+  /// - Returns: The same builder value so calls can be chained.
   public func imatch(
     _ column: String,
     pattern: any PostgrestFilterValue
-  ) -> PostgrestFilterBuilder {
+  ) -> Self {
     let queryValue = pattern.rawValue
-    mutableState.withValue {
-      $0.request.query.append(URLQueryItem(name: column, value: "imatch.\(queryValue)"))
-    }
-    return self
+    var copy = self
+    copy.request.query.append(URLQueryItem(name: column, value: "imatch.\(queryValue)"))
+    return copy
   }
 
   /// Matches only rows where `column` IS `value`.
@@ -548,16 +532,15 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   /// - Parameters:
   ///   - column: The column to filter on.
   ///   - value: `true`, `false`, or `nil` (for NULL).
-  /// - Returns: The same builder instance so calls can be chained.
+  /// - Returns: The same builder value so calls can be chained.
   public func `is`(
     _ column: String,
     value: Bool?
-  ) -> PostgrestFilterBuilder {
+  ) -> Self {
     let queryValue = value.rawValue
-    mutableState.withValue {
-      $0.request.query.append(URLQueryItem(name: column, value: "is.\(queryValue)"))
-    }
-    return self
+    var copy = self
+    copy.request.query.append(URLQueryItem(name: column, value: "is.\(queryValue)"))
+    return copy
   }
 
   /// Matches only rows where `column` IS DISTINCT FROM `value`.
@@ -573,16 +556,15 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   /// - Parameters:
   ///   - column: The column to filter on.
   ///   - value: The value to compare against using IS DISTINCT FROM.
-  /// - Returns: The same builder instance so calls can be chained.
+  /// - Returns: The same builder value so calls can be chained.
   public func isDistinct(
     _ column: String,
     value: any PostgrestFilterValue
-  ) -> PostgrestFilterBuilder {
+  ) -> Self {
     let queryValue = value.rawValue
-    mutableState.withValue {
-      $0.request.query.append(URLQueryItem(name: column, value: "isdistinct.\(queryValue)"))
-    }
-    return self
+    var copy = self
+    copy.request.query.append(URLQueryItem(name: column, value: "isdistinct.\(queryValue)"))
+    return copy
   }
 
   /// Matches only rows where `column` is one of the values in `values`.
@@ -597,21 +579,20 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   /// - Parameters:
   ///   - column: The column to filter on.
   ///   - values: The list of acceptable values.
-  /// - Returns: The same builder instance so calls can be chained.
+  /// - Returns: The same builder value so calls can be chained.
   public func `in`(
     _ column: String,
     values: [any PostgrestFilterValue]
-  ) -> PostgrestFilterBuilder {
+  ) -> Self {
     let queryValues = values.map { escapePostgRESTFilterValue($0.rawValue) }
-    mutableState.withValue {
-      $0.request.query.append(
-        URLQueryItem(
-          name: column,
-          value: "in.(\(queryValues.joined(separator: ",")))"
-        )
+    var copy = self
+    copy.request.query.append(
+      URLQueryItem(
+        name: column,
+        value: "in.(\(queryValues.joined(separator: ",")))"
       )
-    }
-    return self
+    )
+    return copy
   }
 
   /// Matches only rows where `column` is not one of the values in `values`.
@@ -626,21 +607,20 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   /// - Parameters:
   ///   - column: The column to filter on.
   ///   - values: The list of values to exclude.
-  /// - Returns: The same builder instance so calls can be chained.
+  /// - Returns: The same builder value so calls can be chained.
   public func notIn(
     _ column: String,
     values: [any PostgrestFilterValue]
-  ) -> PostgrestFilterBuilder {
+  ) -> Self {
     let queryValues = values.map { escapePostgRESTFilterValue($0.rawValue) }
-    mutableState.withValue {
-      $0.request.query.append(
-        URLQueryItem(
-          name: column,
-          value: "not.in.(\(queryValues.joined(separator: ",")))"
-        )
+    var copy = self
+    copy.request.query.append(
+      URLQueryItem(
+        name: column,
+        value: "not.in.(\(queryValues.joined(separator: ",")))"
       )
-    }
-    return self
+    )
+    return copy
   }
 
   /// Matches only rows where `column` contains every element in `value`.
@@ -655,16 +635,15 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   /// - Parameters:
   ///   - column: The `jsonb`, array, or range column to filter on.
   ///   - value: The `jsonb`, array, or range value that `column` must contain.
-  /// - Returns: The same builder instance so calls can be chained.
+  /// - Returns: The same builder value so calls can be chained.
   public func contains(
     _ column: String,
     value: any PostgrestFilterValue
-  ) -> PostgrestFilterBuilder {
+  ) -> Self {
     let queryValue = value.rawValue
-    mutableState.withValue {
-      $0.request.query.append(URLQueryItem(name: column, value: "cs.\(queryValue)"))
-    }
-    return self
+    var copy = self
+    copy.request.query.append(URLQueryItem(name: column, value: "cs.\(queryValue)"))
+    return copy
   }
 
   /// Matches only rows where `column` is contained by `value`.
@@ -679,16 +658,15 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   /// - Parameters:
   ///   - column: The `jsonb`, array, or range column to filter on.
   ///   - value: The `jsonb`, array, or range value that must contain every element in `column`.
-  /// - Returns: The same builder instance so calls can be chained.
+  /// - Returns: The same builder value so calls can be chained.
   public func containedBy(
     _ column: String,
     value: some PostgrestFilterValue
-  ) -> PostgrestFilterBuilder {
+  ) -> Self {
     let queryValue = value.rawValue
-    mutableState.withValue {
-      $0.request.query.append(URLQueryItem(name: column, value: "cd.\(queryValue)"))
-    }
-    return self
+    var copy = self
+    copy.request.query.append(URLQueryItem(name: column, value: "cd.\(queryValue)"))
+    return copy
   }
 
   /// Matches only rows where every element in `column` is strictly less than every element in `range`.
@@ -703,16 +681,15 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   /// - Parameters:
   ///   - column: The range column to filter on.
   ///   - range: The range value to compare against.
-  /// - Returns: The same builder instance so calls can be chained.
+  /// - Returns: The same builder value so calls can be chained.
   public func rangeLt(
     _ column: String,
     range: any PostgrestFilterValue
-  ) -> PostgrestFilterBuilder {
+  ) -> Self {
     let queryValue = range.rawValue
-    mutableState.withValue {
-      $0.request.query.append(URLQueryItem(name: column, value: "sl.\(queryValue)"))
-    }
-    return self
+    var copy = self
+    copy.request.query.append(URLQueryItem(name: column, value: "sl.\(queryValue)"))
+    return copy
   }
 
   /// Matches only rows where every element in `column` is strictly greater than every element in `range`.
@@ -727,16 +704,15 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   /// - Parameters:
   ///   - column: The range column to filter on.
   ///   - range: The range value to compare against.
-  /// - Returns: The same builder instance so calls can be chained.
+  /// - Returns: The same builder value so calls can be chained.
   public func rangeGt(
     _ column: String,
     range: any PostgrestFilterValue
-  ) -> PostgrestFilterBuilder {
+  ) -> Self {
     let queryValue = range.rawValue
-    mutableState.withValue {
-      $0.request.query.append(URLQueryItem(name: column, value: "sr.\(queryValue)"))
-    }
-    return self
+    var copy = self
+    copy.request.query.append(URLQueryItem(name: column, value: "sr.\(queryValue)"))
+    return copy
   }
 
   /// Matches only rows where `column` does not extend to the left of `range`.
@@ -751,16 +727,15 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   /// - Parameters:
   ///   - column: The range column to filter on.
   ///   - range: The range value to compare against.
-  /// - Returns: The same builder instance so calls can be chained.
+  /// - Returns: The same builder value so calls can be chained.
   public func rangeGte(
     _ column: String,
     range: any PostgrestFilterValue
-  ) -> PostgrestFilterBuilder {
+  ) -> Self {
     let queryValue = range.rawValue
-    mutableState.withValue {
-      $0.request.query.append(URLQueryItem(name: column, value: "nxl.\(queryValue)"))
-    }
-    return self
+    var copy = self
+    copy.request.query.append(URLQueryItem(name: column, value: "nxl.\(queryValue)"))
+    return copy
   }
 
   /// Matches only rows where `column` does not extend to the right of `range`.
@@ -775,16 +750,15 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   /// - Parameters:
   ///   - column: The range column to filter on.
   ///   - range: The range value to compare against.
-  /// - Returns: The same builder instance so calls can be chained.
+  /// - Returns: The same builder value so calls can be chained.
   public func rangeLte(
     _ column: String,
     range: any PostgrestFilterValue
-  ) -> PostgrestFilterBuilder {
+  ) -> Self {
     let queryValue = range.rawValue
-    mutableState.withValue {
-      $0.request.query.append(URLQueryItem(name: column, value: "nxr.\(queryValue)"))
-    }
-    return self
+    var copy = self
+    copy.request.query.append(URLQueryItem(name: column, value: "nxr.\(queryValue)"))
+    return copy
   }
 
   /// Matches only rows where `column` and `range` are adjacent (no gap between them).
@@ -800,16 +774,15 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   /// - Parameters:
   ///   - column: The range column to filter on.
   ///   - range: The range value to compare against.
-  /// - Returns: The same builder instance so calls can be chained.
+  /// - Returns: The same builder value so calls can be chained.
   public func rangeAdjacent(
     _ column: String,
     range: any PostgrestFilterValue
-  ) -> PostgrestFilterBuilder {
+  ) -> Self {
     let queryValue = range.rawValue
-    mutableState.withValue {
-      $0.request.query.append(URLQueryItem(name: column, value: "adj.\(queryValue)"))
-    }
-    return self
+    var copy = self
+    copy.request.query.append(URLQueryItem(name: column, value: "adj.\(queryValue)"))
+    return copy
   }
 
   /// Matches only rows where `column` and `value` share at least one element.
@@ -824,16 +797,15 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   /// - Parameters:
   ///   - column: The array or range column to filter on.
   ///   - value: The array or range value to compare against.
-  /// - Returns: The same builder instance so calls can be chained.
+  /// - Returns: The same builder value so calls can be chained.
   public func overlaps(
     _ column: String,
     value: any PostgrestFilterValue
-  ) -> PostgrestFilterBuilder {
+  ) -> Self {
     let queryValue = value.rawValue
-    mutableState.withValue {
-      $0.request.query.append(URLQueryItem(name: column, value: "ov.\(queryValue)"))
-    }
-    return self
+    var copy = self
+    copy.request.query.append(URLQueryItem(name: column, value: "ov.\(queryValue)"))
+    return copy
   }
 
   /// Matches only rows where `column` matches the full-text search `query`.
@@ -855,24 +827,23 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - query: The search query text.
   ///   - config: The text search configuration name (e.g., `"english"`). Defaults to `nil`.
   ///   - type: The query conversion strategy. See ``TextSearchType``. Defaults to `nil` (uses `to_tsquery`).
-  /// - Returns: The same builder instance so calls can be chained.
+  /// - Returns: The same builder value so calls can be chained.
   public func textSearch(
     _ column: String,
     query: any PostgrestFilterValue,
     config: String? = nil,
     type: TextSearchType? = nil
-  ) -> PostgrestFilterBuilder {
+  ) -> Self {
     let queryValue = query.rawValue
     let configPart = config.map { "(\($0))" }
 
-    mutableState.withValue {
-      $0.request.query.append(
-        URLQueryItem(
-          name: column, value: "\(type?.rawValue ?? "")fts\(configPart ?? "").\(queryValue)"
-        )
+    var copy = self
+    copy.request.query.append(
+      URLQueryItem(
+        name: column, value: "\(type?.rawValue ?? "")fts\(configPart ?? "").\(queryValue)"
       )
-    }
-    return self
+    )
+    return copy
   }
 
   /// Matches only rows where `column` matches the full-text search `query` using `to_tsquery`.
@@ -888,12 +859,12 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - column: The `text` or `tsvector` column to search.
   ///   - query: The search query text.
   ///   - config: The text search configuration name. Defaults to `nil`.
-  /// - Returns: The same builder instance so calls can be chained.
+  /// - Returns: The same builder value so calls can be chained.
   public func fts(
     _ column: String,
     query: any PostgrestFilterValue,
     config: String? = nil
-  ) -> PostgrestFilterBuilder {
+  ) -> Self {
     textSearch(column, query: query, config: config, type: nil)
   }
 
@@ -913,20 +884,19 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - column: The column to filter on.
   ///   - operator: The PostgREST operator string (e.g., `"eq"`, `"gt"`, `"cs"`).
   ///   - value: The filter value string, already formatted for PostgREST.
-  /// - Returns: The same builder instance so calls can be chained.
+  /// - Returns: The same builder value so calls can be chained.
   public func filter(
     _ column: String,
     operator: String,
     value: String
-  ) -> PostgrestFilterBuilder {
-    mutableState.withValue {
-      $0.request.query.append(
-        URLQueryItem(
-          name: column,
-          value: "\(`operator`).\(value)"
-        ))
-    }
-    return self
+  ) -> Self {
+    var copy = self
+    copy.request.query.append(
+      URLQueryItem(
+        name: column,
+        value: "\(`operator`).\(value)"
+      ))
+    return copy
   }
 
   /// Matches only rows where each key in `query` equals its associated value.
@@ -939,21 +909,20 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   /// ```
   ///
   /// - Parameter query: A dictionary mapping column names to filter values.
-  /// - Returns: The same builder instance so calls can be chained.
+  /// - Returns: The same builder value so calls can be chained.
   public func match(
     _ query: [String: any PostgrestFilterValue]
-  ) -> PostgrestFilterBuilder {
+  ) -> Self {
     let query = query.mapValues(\.rawValue)
-    mutableState.withValue { mutableState in
-      for (key, value) in query {
-        mutableState.request.query.append(
-          URLQueryItem(
-            name: key,
-            value: "eq.\(value.rawValue)"
-          ))
-      }
+    var copy = self
+    for (key, value) in query {
+      copy.request.query.append(
+        URLQueryItem(
+          name: key,
+          value: "eq.\(value.rawValue)"
+        ))
     }
-    return self
+    return copy
   }
 
   // MARK: - Filter Semantic Improvements
@@ -965,11 +934,11 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   /// - Parameters:
   ///   - column: The column to filter on.
   ///   - value: The value to compare against.
-  /// - Returns: The same builder instance so calls can be chained.
+  /// - Returns: The same builder value so calls can be chained.
   public func equals(
     _ column: String,
     value: String
-  ) -> PostgrestFilterBuilder {
+  ) -> Self {
     eq(column, value: value)
   }
 
@@ -980,11 +949,11 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   /// - Parameters:
   ///   - column: The column to filter on.
   ///   - value: The value to compare against.
-  /// - Returns: The same builder instance so calls can be chained.
+  /// - Returns: The same builder value so calls can be chained.
   public func notEquals(
     _ column: String,
     value: String
-  ) -> PostgrestFilterBuilder {
+  ) -> Self {
     neq(column, value: value)
   }
 
@@ -995,11 +964,11 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   /// - Parameters:
   ///   - column: The column to filter on.
   ///   - value: The value to compare against.
-  /// - Returns: The same builder instance so calls can be chained.
+  /// - Returns: The same builder value so calls can be chained.
   public func greaterThan(
     _ column: String,
     value: String
-  ) -> PostgrestFilterBuilder {
+  ) -> Self {
     gt(column, value: value)
   }
 
@@ -1010,11 +979,11 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   /// - Parameters:
   ///   - column: The column to filter on.
   ///   - value: The value to compare against.
-  /// - Returns: The same builder instance so calls can be chained.
+  /// - Returns: The same builder value so calls can be chained.
   public func greaterThanOrEquals(
     _ column: String,
     value: String
-  ) -> PostgrestFilterBuilder {
+  ) -> Self {
     gte(column, value: value)
   }
 
@@ -1025,11 +994,11 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   /// - Parameters:
   ///   - column: The column to filter on.
   ///   - value: The value to compare against.
-  /// - Returns: The same builder instance so calls can be chained.
+  /// - Returns: The same builder value so calls can be chained.
   public func lowerThan(
     _ column: String,
     value: String
-  ) -> PostgrestFilterBuilder {
+  ) -> Self {
     lt(column, value: value)
   }
 
@@ -1040,11 +1009,11 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   /// - Parameters:
   ///   - column: The column to filter on.
   ///   - value: The value to compare against.
-  /// - Returns: The same builder instance so calls can be chained.
+  /// - Returns: The same builder value so calls can be chained.
   public func lowerThanOrEquals(
     _ column: String,
     value: String
-  ) -> PostgrestFilterBuilder {
+  ) -> Self {
     lte(column, value: value)
   }
 
@@ -1055,11 +1024,11 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   /// - Parameters:
   ///   - column: The range column to filter on.
   ///   - range: The range value to compare against.
-  /// - Returns: The same builder instance so calls can be chained.
+  /// - Returns: The same builder value so calls can be chained.
   public func rangeLowerThan(
     _ column: String,
     range: String
-  ) -> PostgrestFilterBuilder {
+  ) -> Self {
     rangeLt(column, range: range)
   }
 
@@ -1070,11 +1039,11 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   /// - Parameters:
   ///   - column: The range column to filter on.
   ///   - value: The range value to compare against.
-  /// - Returns: The same builder instance so calls can be chained.
+  /// - Returns: The same builder value so calls can be chained.
   public func rangeGreaterThan(
     _ column: String,
     value: String
-  ) -> PostgrestFilterBuilder {
+  ) -> Self {
     rangeGt(column, range: value)
   }
 
@@ -1085,11 +1054,11 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   /// - Parameters:
   ///   - column: The range column to filter on.
   ///   - value: The range value to compare against.
-  /// - Returns: The same builder instance so calls can be chained.
+  /// - Returns: The same builder value so calls can be chained.
   public func rangeGreaterThanOrEquals(
     _ column: String,
     value: String
-  ) -> PostgrestFilterBuilder {
+  ) -> Self {
     rangeGte(column, range: value)
   }
 
@@ -1100,11 +1069,11 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   /// - Parameters:
   ///   - column: The range column to filter on.
   ///   - value: The range value to compare against.
-  /// - Returns: The same builder instance so calls can be chained.
+  /// - Returns: The same builder value so calls can be chained.
   public func rangeLowerThanOrEquals(
     _ column: String,
     value: String
-  ) -> PostgrestFilterBuilder {
+  ) -> Self {
     rangeLte(column, range: value)
   }
 
@@ -1116,12 +1085,12 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - column: The `text` or `tsvector` column to search.
   ///   - query: The search query text.
   ///   - config: The text search configuration name. Defaults to `nil`.
-  /// - Returns: The same builder instance so calls can be chained.
+  /// - Returns: The same builder value so calls can be chained.
   public func fullTextSearch(
     _ column: String,
     query: String,
     config: String? = nil
-  ) -> PostgrestFilterBuilder {
+  ) -> Self {
     fts(column, query: query, config: config)
   }
 
@@ -1133,12 +1102,12 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - column: The `text` or `tsvector` column to search.
   ///   - query: The search query text.
   ///   - config: The text search configuration name. Defaults to `nil`.
-  /// - Returns: The same builder instance so calls can be chained.
+  /// - Returns: The same builder value so calls can be chained.
   public func plainToFullTextSearch(
     _ column: String,
     query: String,
     config: String? = nil
-  ) -> PostgrestFilterBuilder {
+  ) -> Self {
     textSearch(column, query: query, config: config, type: .plain)
   }
 
@@ -1150,12 +1119,12 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - column: The `text` or `tsvector` column to search.
   ///   - query: The search query text.
   ///   - config: The text search configuration name. Defaults to `nil`.
-  /// - Returns: The same builder instance so calls can be chained.
+  /// - Returns: The same builder value so calls can be chained.
   public func phraseToFullTextSearch(
     _ column: String,
     query: String,
     config: String? = nil
-  ) -> PostgrestFilterBuilder {
+  ) -> Self {
     textSearch(column, query: query, config: config, type: .phrase)
   }
 
@@ -1167,12 +1136,12 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - column: The `text` or `tsvector` column to search.
   ///   - query: The search query text.
   ///   - config: The text search configuration name. Defaults to `nil`.
-  /// - Returns: The same builder instance so calls can be chained.
+  /// - Returns: The same builder value so calls can be chained.
   public func webFullTextSearch(
     _ column: String,
     query: String,
     config: String? = nil
-  ) -> PostgrestFilterBuilder {
+  ) -> Self {
     textSearch(column, query: query, config: config, type: .websearch)
   }
 }

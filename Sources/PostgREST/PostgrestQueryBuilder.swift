@@ -24,10 +24,6 @@ import HTTPTypes
 ///   .value
 /// ```
 ///
-/// > Note: Thread Safety: Inherits thread-safe mutable state management from ``PostgrestBuilder``.
-///
-/// > Important: Do not modify the same builder instance from multiple concurrent tasks.
-///
 /// ## Topics
 ///
 /// ### Querying Rows
@@ -49,7 +45,7 @@ import HTTPTypes
 /// ### Deleting Rows
 ///
 /// - ``delete(returning:count:)``
-public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable {
+extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
   /// Performs a SELECT query on the table or view.
   ///
   /// By default all columns are returned (`*`). You can request specific columns, rename them,
@@ -81,32 +77,31 @@ public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable 
     head: Bool = false,
     count: CountOption? = nil
   ) -> PostgrestFilterBuilder {
-    mutableState.withValue {
-      $0.request.method = .get
-      // remove whitespaces except when quoted.
-      var quoted = false
-      let cleanedColumns = columns.compactMap { char -> String? in
-        if char.isWhitespace, !quoted {
-          return nil
-        }
-        if char == "\"" {
-          quoted = !quoted
-        }
-        return String(char)
+    var request = self.request
+    request.method = .get
+    // remove whitespaces except when quoted.
+    var quoted = false
+    let cleanedColumns = columns.compactMap { char -> String? in
+      if char.isWhitespace, !quoted {
+        return nil
       }
-      .joined(separator: "")
+      if char == "\"" {
+        quoted = !quoted
+      }
+      return String(char)
+    }
+    .joined(separator: "")
 
-      $0.request.query.appendOrUpdate(URLQueryItem(name: "select", value: cleanedColumns))
+    request.query.appendOrUpdate(URLQueryItem(name: "select", value: cleanedColumns))
 
-      if let count {
-        $0.request.headers.appendOrUpdate(.prefer, value: "count=\(count.rawValue)")
-      }
-      if head {
-        $0.request.method = .head
-      }
+    if let count {
+      request.headers.appendOrUpdate(.prefer, value: "count=\(count.rawValue)")
+    }
+    if head {
+      request.method = .head
     }
 
-    return PostgrestFilterBuilder(self)
+    return PostgrestFilterBuilder(carryingFrom: self, request: request)
   }
 
   /// Inserts one or more rows into the table or view.
@@ -143,37 +138,36 @@ public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable 
   ) throws -> PostgrestFilterBuilder {
     let body = try configuration.encoder.encode(values)
 
-    try mutableState.withValue {
-      $0.request.method = .post
-      var prefersHeaders: [String] = []
-      if let returning {
-        prefersHeaders.append("return=\(returning.rawValue)")
-      }
-      $0.request.body = body
-      if let count {
-        prefersHeaders.append("count=\(count.rawValue)")
-      }
-      if let prefer = $0.request.headers[.prefer] {
-        prefersHeaders.insert(prefer, at: 0)
-      }
-      if !prefersHeaders.isEmpty {
-        $0.request.headers[.prefer] = prefersHeaders.joined(separator: ",")
-      }
-      if let body = $0.request.body,
-        let jsonObject = try JSONSerialization.jsonObject(with: body) as? [[String: Any]]
-      {
-        let allKeys = jsonObject.flatMap(\.keys)
-        let uniqueKeys = Set(allKeys).sorted()
-        $0.request.query.appendOrUpdate(
-          URLQueryItem(
-            name: "columns",
-            value: uniqueKeys.map { "\"\($0)\"" }.joined(separator: ",")
-          )
+    var request = self.request
+    request.method = .post
+    var prefersHeaders: [String] = []
+    if let returning {
+      prefersHeaders.append("return=\(returning.rawValue)")
+    }
+    request.body = body
+    if let count {
+      prefersHeaders.append("count=\(count.rawValue)")
+    }
+    if let prefer = request.headers[.prefer] {
+      prefersHeaders.insert(prefer, at: 0)
+    }
+    if !prefersHeaders.isEmpty {
+      request.headers[.prefer] = prefersHeaders.joined(separator: ",")
+    }
+    if let body = request.body,
+      let jsonObject = try JSONSerialization.jsonObject(with: body) as? [[String: Any]]
+    {
+      let allKeys = jsonObject.flatMap(\.keys)
+      let uniqueKeys = Set(allKeys).sorted()
+      request.query.appendOrUpdate(
+        URLQueryItem(
+          name: "columns",
+          value: uniqueKeys.map { "\"\($0)\"" }.joined(separator: ",")
         )
-      }
+      )
     }
 
-    return PostgrestFilterBuilder(self)
+    return PostgrestFilterBuilder(carryingFrom: self, request: request)
   }
 
   /// Inserts rows, updating existing rows on conflict (upsert).
@@ -214,40 +208,40 @@ public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable 
   ) throws -> PostgrestFilterBuilder {
     let body = try configuration.encoder.encode(values)
 
-    try mutableState.withValue {
-      $0.request.method = .post
-      var prefersHeaders = [
-        "resolution=\(ignoreDuplicates ? "ignore" : "merge")-duplicates",
-        "return=\(returning.rawValue)",
-      ]
-      if let onConflict {
-        $0.request.query.appendOrUpdate(URLQueryItem(name: "on_conflict", value: onConflict))
-      }
-      $0.request.body = body
-      if let count {
-        prefersHeaders.append("count=\(count.rawValue)")
-      }
-      if let prefer = $0.request.headers[.prefer] {
-        prefersHeaders.insert(prefer, at: 0)
-      }
-      if !prefersHeaders.isEmpty {
-        $0.request.headers[.prefer] = prefersHeaders.joined(separator: ",")
-      }
-
-      if let body = $0.request.body,
-        let jsonObject = try JSONSerialization.jsonObject(with: body) as? [[String: Any]]
-      {
-        let allKeys = jsonObject.flatMap(\.keys)
-        let uniqueKeys = Set(allKeys).sorted()
-        $0.request.query.appendOrUpdate(
-          URLQueryItem(
-            name: "columns",
-            value: uniqueKeys.map { "\"\($0)\"" }.joined(separator: ",")
-          )
-        )
-      }
+    var request = self.request
+    request.method = .post
+    var prefersHeaders = [
+      "resolution=\(ignoreDuplicates ? "ignore" : "merge")-duplicates",
+      "return=\(returning.rawValue)",
+    ]
+    if let onConflict {
+      request.query.appendOrUpdate(URLQueryItem(name: "on_conflict", value: onConflict))
     }
-    return PostgrestFilterBuilder(self)
+    request.body = body
+    if let count {
+      prefersHeaders.append("count=\(count.rawValue)")
+    }
+    if let prefer = request.headers[.prefer] {
+      prefersHeaders.insert(prefer, at: 0)
+    }
+    if !prefersHeaders.isEmpty {
+      request.headers[.prefer] = prefersHeaders.joined(separator: ",")
+    }
+
+    if let body = request.body,
+      let jsonObject = try JSONSerialization.jsonObject(with: body) as? [[String: Any]]
+    {
+      let allKeys = jsonObject.flatMap(\.keys)
+      let uniqueKeys = Set(allKeys).sorted()
+      request.query.appendOrUpdate(
+        URLQueryItem(
+          name: "columns",
+          value: uniqueKeys.map { "\"\($0)\"" }.joined(separator: ",")
+        )
+      )
+    }
+
+    return PostgrestFilterBuilder(carryingFrom: self, request: request)
   }
 
   /// Performs a partial UPDATE on rows that match subsequent filters.
@@ -256,7 +250,7 @@ public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable 
   /// suppress this, pass `.minimal` as `returning`.
   ///
   /// > Important: Omitting a filter will update **all rows** in the table. Always chain
-  /// > a filter such as ``PostgrestFilterBuilder/eq(_:value:)`` before calling ``PostgrestBuilder/execute(options:)->PostgrestResponse<Void>``.
+  /// > a filter such as ``PostgrestFilterBuilder/eq(_:value:)`` before calling ``PostgrestRequestBuilder/execute(options:)-96tpd``.
   ///
   /// ```swift
   /// try await client
@@ -278,21 +272,22 @@ public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable 
     count: CountOption? = nil
   ) throws -> PostgrestFilterBuilder {
     let body = try configuration.encoder.encode(values)
-    mutableState.withValue {
-      $0.request.method = .patch
-      var preferHeaders = ["return=\(returning.rawValue)"]
-      $0.request.body = body
-      if let count {
-        preferHeaders.append("count=\(count.rawValue)")
-      }
-      if let prefer = $0.request.headers[.prefer] {
-        preferHeaders.insert(prefer, at: 0)
-      }
-      if !preferHeaders.isEmpty {
-        $0.request.headers[.prefer] = preferHeaders.joined(separator: ",")
-      }
+
+    var request = self.request
+    request.method = .patch
+    var preferHeaders = ["return=\(returning.rawValue)"]
+    request.body = body
+    if let count {
+      preferHeaders.append("count=\(count.rawValue)")
     }
-    return PostgrestFilterBuilder(self)
+    if let prefer = request.headers[.prefer] {
+      preferHeaders.insert(prefer, at: 0)
+    }
+    if !preferHeaders.isEmpty {
+      request.headers[.prefer] = preferHeaders.joined(separator: ",")
+    }
+
+    return PostgrestFilterBuilder(carryingFrom: self, request: request)
   }
 
   /// Performs a DELETE on rows that match subsequent filters.
@@ -301,7 +296,7 @@ public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable 
   /// suppress this, pass `.minimal` as `returning`.
   ///
   /// > Important: Omitting a filter will delete **all rows** in the table. Always chain
-  /// > a filter such as ``PostgrestFilterBuilder/eq(_:value:)`` before calling ``PostgrestBuilder/execute(options:)->PostgrestResponse<Void>``.
+  /// > a filter such as ``PostgrestFilterBuilder/eq(_:value:)`` before calling ``PostgrestRequestBuilder/execute(options:)-96tpd``.
   ///
   /// ```swift
   /// try await client
@@ -319,19 +314,19 @@ public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable 
     returning: PostgrestReturningOptions = .representation,
     count: CountOption? = nil
   ) -> PostgrestFilterBuilder {
-    mutableState.withValue {
-      $0.request.method = .delete
-      var preferHeaders = ["return=\(returning.rawValue)"]
-      if let count {
-        preferHeaders.append("count=\(count.rawValue)")
-      }
-      if let prefer = $0.request.headers[.prefer] {
-        preferHeaders.insert(prefer, at: 0)
-      }
-      if !preferHeaders.isEmpty {
-        $0.request.headers[.prefer] = preferHeaders.joined(separator: ",")
-      }
+    var request = self.request
+    request.method = .delete
+    var preferHeaders = ["return=\(returning.rawValue)"]
+    if let count {
+      preferHeaders.append("count=\(count.rawValue)")
     }
-    return PostgrestFilterBuilder(self)
+    if let prefer = request.headers[.prefer] {
+      preferHeaders.insert(prefer, at: 0)
+    }
+    if !preferHeaders.isEmpty {
+      request.headers[.prefer] = preferHeaders.joined(separator: ",")
+    }
+
+    return PostgrestFilterBuilder(carryingFrom: self, request: request)
   }
 }

@@ -18,14 +18,14 @@ extension PostgrestMockerTests {
     var url: URL { fixture.url }
     var sut: PostgrestClient { fixture.sut }
 
-    @Test
-    func setAuth() {
-      #expect(sut.configuration.headers["Authorization"] == nil)
-      sut.setAuth("token")
-      #expect(sut.configuration.headers["Authorization"] == "Bearer token")
-
-      sut.setAuth(nil)
-      #expect(sut.configuration.headers["Authorization"] == nil)
+    /// A client whose `Prefer` header is pre-set to `value`, for tests that verify an
+    /// already-present `Prefer` header is merged with the one the query builder adds. Setting it
+    /// this way (instead of `.setHeader(...)` on the query builder before choosing an operation)
+    /// is required now that `PostgrestQueryPhase` doesn't conform to `PostgrestExecutablePhase`.
+    private func sut(withPreferHeader value: String) -> PostgrestClient {
+      var configuration = sut.configuration
+      configuration.headers["Prefer"] = value
+      return PostgrestClient(configuration: configuration)
     }
 
     @Test
@@ -191,9 +191,8 @@ extension PostgrestMockerTests {
       .register()
 
       let count =
-        try await sut
+        try await sut(withPreferHeader: "existing=value")
         .from("users")
-        .setHeader(name: "Prefer", value: "existing=value")
         .select(head: true, count: .exact)
         .execute()
         .count
@@ -297,9 +296,8 @@ extension PostgrestMockerTests {
       }
       .register()
 
-      try await sut
+      try await sut(withPreferHeader: "existing=value")
         .from("users")
-        .setHeader(name: "Prefer", value: "existing=value")
         .insert(User(id: 1, username: "supabase"), returning: .minimal)
         .execute()
     }
@@ -330,9 +328,8 @@ extension PostgrestMockerTests {
       }
       .register()
 
-      try await sut
+      try await sut(withPreferHeader: "existing=value")
         .from("users")
-        .setHeader(name: "Prefer", value: "existing=value")
         .update(["username": "supabase2"], returning: .minimal, count: .planned)
         .eq("id", value: 1)
         .execute()
@@ -364,9 +361,8 @@ extension PostgrestMockerTests {
       }
       .register()
 
-      try await sut
+      try await sut(withPreferHeader: "existing=value")
         .from("users")
-        .setHeader(name: "Prefer", value: "existing=value")
         .upsert(
           [
             User(id: 1, username: "admin"),
@@ -435,9 +431,8 @@ extension PostgrestMockerTests {
       }
       .register()
 
-      try await sut
+      try await sut(withPreferHeader: "existing=value")
         .from("users")
-        .setHeader(name: "Prefer", value: "existing=value")
         .delete(count: .estimated)
         .eq("username", value: "supabase")
         .execute()

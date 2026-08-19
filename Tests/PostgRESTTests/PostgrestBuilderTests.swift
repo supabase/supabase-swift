@@ -35,9 +35,9 @@ extension PostgrestMockerTests {
 
       // Original client object isn't affected
       #expect(
-        postgrest1.from("users").select().mutableState.request.headers[.init("apikey")!] == "foo")
+        postgrest1.from("users").select().request.headers[.init("apikey")!] == "foo")
       // Derived client object uses new header value
-      #expect(postgrest2.mutableState.request.headers[.init("apikey")!] == "bar")
+      #expect(postgrest2.request.headers[.init("apikey")!] == "bar")
     }
 
     @Test
@@ -373,9 +373,10 @@ extension PostgrestMockerTests {
     @Test
     func setHeader() {
       let query = sut.from("users")
+        .select()
         .setHeader(name: "key", value: "value")
 
-      #expect(query.mutableState.request.headers[.init("key")!] == "value")
+      #expect(query.request.headers[.init("key")!] == "value")
     }
 
     // MARK: - Retry tests

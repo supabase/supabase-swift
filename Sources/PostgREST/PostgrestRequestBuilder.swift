@@ -1,4 +1,10 @@
-import ConcurrencyExtras
+//
+//  PostgrestRequestBuilder.swift
+//  PostgREST
+//
+//  Created by Guilherme Souza on 20/08/24.
+//
+
 import Foundation
 import HTTPTypes
 import Logging
@@ -7,18 +13,50 @@ import Logging
   import FoundationNetworking
 #endif
 
-/// The base builder class for all PostgREST requests.
+/// A marker protocol conformed to by every phase whose builder can execute a request and set
+/// per-request headers/retry behavior.
 ///
-/// ``PostgrestBuilder`` holds the shared HTTP request state and provides the ``execute(options:)->PostgrestResponse<Void>``
-/// methods that send the request to the PostgREST server. You typically interact with one of its
-/// subclasses — ``PostgrestQueryBuilder``, ``PostgrestFilterBuilder``, or
-/// ``PostgrestTransformBuilder`` — rather than instantiating ``PostgrestBuilder`` directly.
+/// Conform a phase type to this — or, more commonly, to ``PostgrestTransformablePhase`` or
+/// ``PostgrestFilterablePhase``, both of which refine it — to grant `setHeader`/`retry`/`execute`
+/// on ``PostgrestRequestBuilder`` when `Phase` is that type.
+public protocol PostgrestExecutablePhase {}
+
+/// A marker protocol for phases that can still apply ordering, pagination, and response-format
+/// transformations. Refines ``PostgrestExecutablePhase``, so every transformable phase is also
+/// executable.
+public protocol PostgrestTransformablePhase: PostgrestExecutablePhase {}
+
+/// A marker protocol for phases that can still apply WHERE-clause filters. Refines
+/// ``PostgrestTransformablePhase``, so every filterable phase is also transformable and
+/// executable.
+public protocol PostgrestFilterablePhase: PostgrestTransformablePhase {}
+
+/// The phase immediately after ``PostgrestClient/from(_:)``, before an operation
+/// (`select`/`insert`/`update`/`upsert`/`delete`) has been chosen.
 ///
-/// > Note: Thread Safety: This class is `@unchecked Sendable` because all mutable state
-/// > is protected by `LockIsolated`. Access to `mutableState` is always through its `withValue` API.
+/// This phase conforms to none of the capability protocols: you cannot filter, transform, set
+/// headers, or execute until you pick an operation.
+public enum PostgrestQueryPhase {}
+
+/// The phase after a filterable operation has been chosen (or after
+/// ``PostgrestClient/rpc(_:params:head:get:count:)``). Supports filtering, transforming, and
+/// executing.
+public enum PostgrestFilterPhase: PostgrestFilterablePhase {}
+
+/// The phase after any transformation (`order`, `limit`, `single`, ...) has been applied.
+/// Supports further transformations and executing, but no longer filtering.
+public enum PostgrestTransformPhase: PostgrestTransformablePhase {}
+
+/// Builder for all PostgREST requests, parameterized by the request's current phase.
 ///
-/// > Important: While this class is `Sendable`, individual builder instances should not be
-/// > modified concurrently from multiple tasks. Create separate builder chains for concurrent operations.
+/// Don't reference this generic type directly — use the phase-specific type aliases instead:
+/// ``PostgrestQueryBuilder``, ``PostgrestFilterBuilder``, and ``PostgrestTransformBuilder``. The
+/// `Phase` parameter is a compile-time-only marker (never constructed) that determines which
+/// methods are available: filter methods require ``PostgrestFilterablePhase``, transform methods
+/// require ``PostgrestTransformablePhase``, and `setHeader`/`retry`/`execute` require
+/// ``PostgrestExecutablePhase``. You don't construct this type directly — call
+/// ``PostgrestClient/from(_:)`` or ``PostgrestClient/rpc(_:params:head:get:count:)`` and chain
+/// from there.
 ///
 /// ## Topics
 ///
@@ -32,28 +70,24 @@ import Logging
 ///
 /// ### Executing the Request
 ///
-/// - ``execute(options:)->PostgrestResponse<Void>``
-/// - ``execute(options:)->PostgrestResponse<T>``
-public class PostgrestBuilder: @unchecked Sendable {
-  /// The configuration for the PostgREST client.
+/// - ``execute(options:)-96tpd``
+/// - ``execute(options:)-6mk2u``
+public struct PostgrestRequestBuilder<Phase>: Sendable {
   let configuration: PostgrestClient.Configuration
   let http: any HTTPClientType
   let clock: any Clock<Duration>
 
-  struct MutableState {
-    var request: Helpers.HTTPRequest
+  var request: Helpers.HTTPRequest
 
-    /// Whether automatic retries are enabled for this request.
-    var retryEnabled: Bool
+  /// Whether automatic retries are enabled for this request.
+  var retryEnabled: Bool
 
-    /// An error to throw when execute() is called, set when an invalid method combination is detected.
-    var pendingError: String?
+  /// An error to throw when execute() is called, set when an invalid method combination is
+  /// detected.
+  var pendingError: String?
 
-    /// Whether a `PGRST116` error should be returned as a `nil` value instead of being thrown.
-    var isMaybeSingle: Bool = false
-  }
-
-  let mutableState: LockIsolated<MutableState>
+  /// Whether a `PGRST116` error should be returned as a `nil` value instead of being thrown.
+  var isMaybeSingle: Bool = false
 
   init(
     configuration: PostgrestClient.Configuration,
@@ -66,26 +100,56 @@ public class PostgrestBuilder: @unchecked Sendable {
     let interceptors: [any HTTPClientInterceptor] = [
       LoggerInterceptor(logger: configuration.logger)
     ]
+    self.http = HTTPClient(fetch: configuration.fetch, interceptors: interceptors)
 
-    http = HTTPClient(fetch: configuration.fetch, interceptors: interceptors)
-
-    mutableState = LockIsolated(
-      MutableState(
-        request: request,
-        retryEnabled: configuration.retryEnabled
-      )
-    )
+    self.request = request
+    self.retryEnabled = configuration.retryEnabled
+    self.pendingError = nil
+    self.isMaybeSingle = false
   }
 
-  convenience init(_ other: PostgrestBuilder) {
-    self.init(
-      configuration: other.configuration,
-      request: other.mutableState.value.request,
-      clock: other.clock
-    )
-    mutableState.withValue { $0.retryEnabled = other.mutableState.value.retryEnabled }
+  /// Recasts an existing builder to a different phase, preserving every field except `request`.
+  ///
+  /// Every method that changes phase (e.g. `select`/`insert` moving from ``PostgrestQueryPhase``
+  /// to ``PostgrestFilterPhase``, or any transform method moving to ``PostgrestTransformPhase``)
+  /// goes through this initializer instead of resetting state, because `pendingError` and
+  /// `isMaybeSingle` must survive a phase change — e.g. `.maybeSingle().order(...)` must not lose
+  /// the `isMaybeSingle` flag just because `order` also changes the phase.
+  init<From>(carryingFrom other: PostgrestRequestBuilder<From>, request: Helpers.HTTPRequest) {
+    self.configuration = other.configuration
+    self.http = other.http
+    self.clock = other.clock
+    self.request = request
+    self.retryEnabled = other.retryEnabled
+    self.pendingError = other.pendingError
+    self.isMaybeSingle = other.isMaybeSingle
   }
+}
 
+public typealias PostgrestQueryBuilder = PostgrestRequestBuilder<PostgrestQueryPhase>
+public typealias PostgrestFilterBuilder = PostgrestRequestBuilder<PostgrestFilterPhase>
+public typealias PostgrestTransformBuilder = PostgrestRequestBuilder<PostgrestTransformPhase>
+
+/// A type-erased PostgREST builder that can execute a request and set per-request
+/// headers/retry behavior, regardless of its concrete phase.
+///
+/// ``PostgrestFilterBuilder`` and ``PostgrestTransformBuilder`` both conform to this
+/// automatically; ``PostgrestQueryBuilder`` does not, since it hasn't had an operation
+/// (`select`/`insert`/`update`/`upsert`/`delete`) applied yet. Use this when you need to accept
+/// "any executable PostgREST builder" regardless of which filter/transform methods were chained
+/// to produce it.
+public protocol PostgrestExecutableBuilder: Sendable {
+  /// See ``PostgrestRequestBuilder/execute(options:)-96tpd``.
+  func execute(options: FetchOptions) async throws -> PostgrestResponse<Void>
+
+  /// See ``PostgrestRequestBuilder/execute(options:)-6mk2u``.
+  func execute<T: Decodable>(options: FetchOptions) async throws -> PostgrestResponse<T>
+}
+
+extension PostgrestRequestBuilder: PostgrestExecutableBuilder
+where Phase: PostgrestExecutablePhase {}
+
+extension PostgrestRequestBuilder where Phase: PostgrestExecutablePhase {
   /// Adds or replaces a custom HTTP header on the request.
   ///
   /// Use this method to attach arbitrary headers — for example, to pass custom PostgREST
@@ -94,33 +158,31 @@ public class PostgrestBuilder: @unchecked Sendable {
   /// - Parameters:
   ///   - name: The header field name.
   ///   - value: The header field value.
-  /// - Returns: The same builder instance so calls can be chained.
-  @discardableResult
+  /// - Returns: The same builder value so calls can be chained.
   public func setHeader(name: String, value: String) -> Self {
-    return self.setHeader(name: .init(name)!, value: value)
+    setHeader(name: .init(name)!, value: value)
   }
 
   /// Set a HTTP header for the request.
-  @discardableResult
-  internal func setHeader(name: HTTPField.Name, value: String) -> Self {
-    mutableState.withValue {
-      $0.request.headers[name] = value
-    }
-    return self
+  func setHeader(name: HTTPField.Name, value: String) -> Self {
+    var copy = self
+    copy.request.headers[name] = value
+    return copy
   }
 
   /// Controls whether automatic retries are enabled for this specific request.
   ///
-  /// When enabled, GET and HEAD requests that receive an HTTP 503 or 520 response, or encounter a
-  /// network error, are retried up to three times with exponential back-off. The global default is
-  /// set via ``PostgrestClient/Configuration/retryEnabled``; this method overrides it per request.
+  /// When enabled, GET and HEAD requests that receive an HTTP 503 or 520 response, or encounter
+  /// a network error, are retried up to three times with exponential back-off. The global
+  /// default is set via ``PostgrestClient/Configuration/retryEnabled``; this method overrides it
+  /// per request.
   ///
   /// - Parameter enabled: Pass `false` to disable retries for this request.
-  /// - Returns: The same builder instance so calls can be chained.
-  @discardableResult
+  /// - Returns: The same builder value so calls can be chained.
   public func retry(enabled: Bool) -> Self {
-    mutableState.withValue { $0.retryEnabled = enabled }
-    return self
+    var copy = self
+    copy.retryEnabled = enabled
+    return copy
   }
 
   /// Executes the request and discards the response body.
@@ -132,7 +194,8 @@ public class PostgrestBuilder: @unchecked Sendable {
   /// - Parameter options: Options controlling whether to include a row count and whether to
   ///   use the HEAD method. Defaults to ``FetchOptions/init(head:count:)``.
   /// - Returns: A ``PostgrestResponse`` whose `value` is `Void`.
-  /// - Throws: ``PostgrestError`` if PostgREST returns an error response, or any error thrown by the fetch handler.
+  /// - Throws: ``PostgrestError`` if PostgREST returns an error response, or any error thrown by
+  ///   the fetch handler.
   @discardableResult
   public func execute(
     options: FetchOptions = FetchOptions()
@@ -153,8 +216,8 @@ public class PostgrestBuilder: @unchecked Sendable {
   /// - Parameter options: Options controlling whether to include a row count and whether to
   ///   use the HEAD method. Defaults to ``FetchOptions/init(head:count:)``.
   /// - Returns: A ``PostgrestResponse`` whose `value` is the decoded `T`.
-  /// - Throws: ``PostgrestError`` if PostgREST returns an error response, a decoding error if the
-  ///   response body cannot be decoded as `T`, or any error thrown by the fetch handler.
+  /// - Throws: ``PostgrestError`` if PostgREST returns an error response, a decoding error if
+  ///   the response body cannot be decoded as `T`, or any error thrown by the fetch handler.
   @discardableResult
   public func execute<T: Decodable>(
     options: FetchOptions = FetchOptions()
@@ -173,13 +236,20 @@ public class PostgrestBuilder: @unchecked Sendable {
     options: FetchOptions,
     decode: @Sendable (Data) throws -> T
   ) async throws -> PostgrestResponse<T> {
-    let (baseRequest, retryEnabled, isMaybeSingle) = try mutableState.withValue {
-      if let message = $0.pendingError {
-        throw PostgrestError(message: message)
-      }
-      return ($0.request, $0.retryEnabled, $0.isMaybeSingle)
+    if let message = pendingError {
+      throw PostgrestError(message: message)
     }
-    var request = baseRequest
+
+    var request = self.request
+
+    // Resolve the access token fresh for every request. An `Authorization` header already set
+    // on the request — whether from `PostgrestClient.Configuration.headers` or from an explicit
+    // `.setHeader("Authorization", ...)` call — always wins over the resolved token.
+    if let accessToken = configuration.accessToken, request.headers[.authorization] == nil {
+      if let token = try await accessToken() {
+        request.headers[.authorization] = "Bearer \(token)"
+      }
+    }
 
     if options.head {
       request.method = .head
@@ -257,10 +327,10 @@ public class PostgrestBuilder: @unchecked Sendable {
     }
   }
 
-  private static let maxDelay = 30.0
-  private static let maxRetries = 3
-  private static let retryableMethods: Set<HTTPTypes.HTTPRequest.Method> = [.get, .head]
-  private static let retryableStatusCodes: Set<Int> = [503, 520]
+  private static var maxDelay: Double { 30.0 }
+  private static var maxRetries: Int { 3 }
+  private static var retryableMethods: Set<HTTPTypes.HTTPRequest.Method> { [.get, .head] }
+  private static var retryableStatusCodes: Set<Int> { [503, 520] }
 
   /// Check if a request should be retried based on method, status code, and error type.
   private func shouldRetry(
@@ -284,7 +354,6 @@ public class PostgrestBuilder: @unchecked Sendable {
   private func retryDelay(attempt: Int) -> TimeInterval {
     min(pow(2.0, Double(attempt)), Self.maxDelay)
   }
-
 }
 
 extension HTTPField.Name {
