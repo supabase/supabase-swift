@@ -1302,7 +1302,7 @@ client.setAuth(token)
 let client = PostgrestClient(url: url, accessToken: { token })
 
 // After — refreshable token, e.g. paired with Supabase Auth
-let client = PostgrestClient(url: url, accessToken: { try await auth.session?.accessToken })
+let client = PostgrestClient(url: url, accessToken: { try await auth.session.accessToken })
 ```
 
 This is a compile error, not a silent behavior change: any call site using `setAuth` fails to
@@ -1316,10 +1316,11 @@ An `Authorization` header already set via `Configuration.headers`, or via an exp
 
 `PostgrestClient`, `PostgrestBuilder`, `PostgrestQueryBuilder`, `PostgrestFilterBuilder`, and
 `PostgrestTransformBuilder` are structs instead of classes. The `setAuth` removal above took away
-`PostgrestClient`'s only mutable, lock-protected state, and the builder types held their own
-per-request state (headers, retry flag, pending-error tracking) the same way. With neither type
-holding mutable shared state anymore, every stored property is now an immutable `let`, and both
-are value types.
+`PostgrestClient`'s only mutable, lock-protected state, so every one of its stored properties is
+now an immutable `let`. The builder types held their own per-request state (headers, retry flag,
+pending-error tracking) the same lock-protected way; removing that lock made them structs too, but
+they still have `var` stored properties — each chained call (`select`, `eq`, `setHeader`, ...)
+copies `self`, mutates the copy, and returns it, rather than mutating shared state in place.
 
 Under the hood, `PostgrestBuilder`, `PostgrestQueryBuilder`, `PostgrestFilterBuilder`, and
 `PostgrestTransformBuilder` are now `typealias`es of a single generic `PostgrestRequestBuilder<Phase>`
