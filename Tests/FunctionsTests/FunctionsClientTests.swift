@@ -32,7 +32,10 @@ struct FunctionsClientTests {
   let apiKey =
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
 
-  private func makeSUT(region: String? = nil) -> FunctionsClient {
+  private func makeSUT(
+    region: String? = nil,
+    accessToken: (@Sendable () async throws -> String?)? = nil
+  ) -> FunctionsClient {
     Mocker.removeAll()
 
     let sessionConfiguration = URLSessionConfiguration.ephemeral
@@ -43,7 +46,8 @@ struct FunctionsClientTests {
       headers: ["apikey": apiKey],
       region: region,
       fetch: { try await session.data(for: $0) },
-      sessionConfiguration: sessionConfiguration
+      sessionConfiguration: sessionConfiguration,
+      accessToken: accessToken
     )
   }
 
@@ -431,14 +435,132 @@ struct FunctionsClientTests {
   }
 
   @Test
-  func setAuth() {
-    let sut = makeSUT()
+  func accessTokenProviderSetsAuthorizationHeader() async throws {
+    let box = CapturedRequestBox()
+    let sut = FunctionsClient(
+      url: url,
+      headers: ["apikey": apiKey],
+      fetch: { request in
+        await box.set(request)
+        return (
+          Data(),
+          HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+        )
+      },
+      accessToken: { "access.token" }
+    )
 
-    sut.setAuth(token: "access.token")
-    #expect(sut.headers[.authorization] == "Bearer access.token")
+    try await sut.invoke("hello-world")
 
-    sut.setAuth(token: nil)
-    #expect(sut.headers[.authorization] == nil)
+    let capturedRequest = await box.request
+    #expect(capturedRequest?.value(forHTTPHeaderField: "Authorization") == "Bearer access.token")
+  }
+
+  @Test
+  func accessTokenProviderIsResolvedPerInvoke() async throws {
+    actor TokenBox {
+      var token = "first.token"
+      func update(_ newValue: String) { token = newValue }
+    }
+    actor Capture {
+      var authorizationHeaders: [String?] = []
+      func record(_ value: String?) { authorizationHeaders.append(value) }
+    }
+
+    let tokenBox = TokenBox()
+    let capture = Capture()
+
+    let sut = FunctionsClient(
+      url: url,
+      headers: ["apikey": apiKey],
+      fetch: { request in
+        await capture.record(request.value(forHTTPHeaderField: "Authorization"))
+        return (
+          Data(),
+          HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+        )
+      },
+      accessToken: { await tokenBox.token }
+    )
+
+    try await sut.invoke("hello-world")
+    await tokenBox.update("second.token")
+    try await sut.invoke("hello-world")
+
+    let recorded = await capture.authorizationHeaders
+    #expect(recorded == ["Bearer first.token", "Bearer second.token"])
+  }
+
+  @Test
+  func invokeOptionsHeaderOverridesAccessTokenProvider() async throws {
+    let box = CapturedRequestBox()
+    let sut = FunctionsClient(
+      url: url,
+      headers: ["apikey": apiKey],
+      fetch: { request in
+        await box.set(request)
+        return (
+          Data(),
+          HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+        )
+      },
+      accessToken: { "provider.token" }
+    )
+
+    try await sut.invoke(
+      "hello-world",
+      options: .init(headers: ["Authorization": "Bearer override.token"])
+    )
+
+    let capturedRequest = await box.request
+    #expect(capturedRequest?.value(forHTTPHeaderField: "Authorization") == "Bearer override.token")
+  }
+
+  @Test
+  func accessTokenProviderErrorPropagatesToInvoke() async throws {
+    struct TokenError: Error {}
+
+    let sut = FunctionsClient(
+      url: url,
+      headers: ["apikey": apiKey],
+      fetch: { _ in
+        Issue.record("fetch should not be called when the access token provider throws")
+        throw TokenError()
+      },
+      accessToken: { throw TokenError() }
+    )
+
+    await #expect(throws: TokenError.self) {
+      try await sut.invoke("hello-world")
+    }
+  }
+
+  @Test
+  func invokeWithStreamedResponseUsesAccessTokenProvider() async throws {
+    let sut = makeSUT(accessToken: { "stream.token" })
+
+    Mock(
+      url: url.appendingPathComponent("stream"),
+      statusCode: 200,
+      data: [.post: Data("hello world".utf8)]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
+      	--header "Authorization: Bearer stream.token" \
+      	--header "X-Client-Info: functions-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:5432/functions/v1/stream"
+      """#
+    }
+    .register()
+
+    let stream = sut._invokeWithStreamedResponse("stream")
+
+    for try await value in stream {
+      #expect(String(decoding: value, as: UTF8.self) == "hello world")
+    }
   }
 
   @Test

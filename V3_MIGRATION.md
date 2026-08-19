@@ -1221,3 +1221,63 @@ Constructing a `Method` from an arbitrary string is not validated at constructio
 HTTP method tokens are caught later, in `httpMethod(_:)`, which returns `nil` for a raw value that
 isn't a legal HTTP token (per RFC 9110). `FunctionsClient` falls back to `.post` when `httpMethod`
 returns `nil`, so an invalid custom `Method` silently becomes a POST request rather than throwing.
+
+## `FunctionsClient.setAuth(token:)` removed; pass an `accessToken` closure instead
+
+`FunctionsClient.setAuth(token:)` is removed. Every initializer now takes an optional
+`accessToken: (@Sendable () async throws -> String?)?` closure instead. `FunctionsClient` calls it
+fresh before each request and sends the result as `Authorization: Bearer <token>`.
+
+`setAuth` mutated a lock-protected header stored on the client — its only mutable state; every
+other property was already immutable configuration set at `init`. That mutation had no effect when
+`FunctionsClient` came from `SupabaseClient.functions`: that client's `fetch` handler already
+overwrites `Authorization` on every request with the live session token, so `SupabaseClient`'s
+internal `functions.setAuth(...)` call (made on every auth state change) never changed a request
+that actually went out on the wire. Moving to a pull-based closure removes the lock and that dead
+call, and gives a standalone `FunctionsClient` (built directly, not through `SupabaseClient`) a way
+to keep its token current without a separate setter.
+
+```swift
+// Before
+let client = FunctionsClient(url: url, headers: ["apikey": apiKey])
+client.setAuth(token: session.accessToken)
+
+// After
+let client = FunctionsClient(
+  url: url,
+  headers: ["apikey": apiKey],
+  accessToken: { session.accessToken }
+)
+```
+
+This is a compile error, not a silent behavior change: any call site using `setAuth` fails to
+build.
+
+If you only use `FunctionsClient` through `SupabaseClient.functions`, there's nothing to change —
+`SupabaseClient` removed its internal `setAuth` call along with the method, but it changed no
+header on the wire, since `SupabaseClient`'s request adapter already supplied the live bearer
+token.
+
+## `FunctionsClient` is now a `struct` instead of a `class`
+
+`FunctionsClient` no longer holds any mutable state — the `setAuth` removal above took away its
+only `let`-backed lock — so every stored property is now an immutable `let`, and the type itself is
+a `struct`.
+
+Calling methods (`invoke`, `_invokeWithStreamedResponse`, and friends) compiles unchanged; this
+only breaks code that depended on `FunctionsClient` being a reference type: a `weak var` holding
+one, an `AnyObject` constraint, or an identity check with `===`. None of those compile against a
+struct.
+
+```swift
+// Before
+weak var client: FunctionsClient?
+
+// After
+// Structs have no identity to hold weakly — keep a strong reference, or drop the field if it only
+// existed to avoid a retain cycle: `FunctionsClient` has never captured `self` from its owner.
+var client: FunctionsClient?
+```
+
+This is a compile error, not a silent behavior change. Search your codebase for `weak`, `unowned`,
+`AnyObject`, or `===` next to a `FunctionsClient` variable to find affected call sites.

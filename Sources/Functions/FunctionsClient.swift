@@ -1,4 +1,3 @@
-import ConcurrencyExtras
 public import Foundation
 import HTTPTypes
 public import Helpers
@@ -28,7 +27,7 @@ let version = Helpers.version
 /// ## Topics
 ///
 /// ### Creating a Client
-/// - ``init(url:headers:region:logger:fetch:decoder:)``
+/// - ``init(url:headers:region:logger:fetch:decoder:accessToken:)``
 /// - ``FetchHandler``
 ///
 /// ### Invoking Functions
@@ -40,8 +39,7 @@ let version = Helpers.version
 /// ### Configuration
 /// - ``decoder``
 /// - ``requestIdleTimeout``
-/// - ``setAuth(token:)``
-public final class FunctionsClient: Sendable {
+public struct FunctionsClient: Sendable {
   /// A handler that performs the underlying HTTP request for a function invocation.
   public typealias FetchHandler =
     @Sendable (_ request: URLRequest) async throws -> (
@@ -62,18 +60,11 @@ public final class FunctionsClient: Sendable {
   /// The JSON decoder used to decode function response bodies.
   public let decoder: JSONDecoder
 
-  struct MutableState {
-    /// Headers to be included in the requests.
-    var headers = HTTPFields()
-  }
+  let headers: HTTPFields
 
   private let http: any HTTPClientType
-  private let mutableState = LockIsolated(MutableState())
   private let sessionConfiguration: URLSessionConfiguration
-
-  var headers: HTTPFields {
-    mutableState.headers
-  }
+  private let accessToken: (@Sendable () async throws -> String?)?
 
   /// Creates a new Functions client.
   /// - Parameters:
@@ -83,14 +74,19 @@ public final class FunctionsClient: Sendable {
   ///   - logger: A logger for request and response diagnostics. Defaults to a build-config-aware logger.
   ///   - fetch: A custom fetch handler. Defaults to `URLSession.shared`.
   ///   - decoder: The JSON decoder used to decode response bodies.
+  ///   - accessToken: An async closure returning the current access token, resolved fresh for
+  ///     every request and sent as `Authorization: Bearer <token>`. `nil` (the default) sends no
+  ///     bearer token; a per-invocation header set via ``FunctionInvokeOptions`` still takes
+  ///     precedence over it.
   @_disfavoredOverload
-  public convenience init(
+  public init(
     url: URL,
     headers: [String: String] = [:],
     region: String? = nil,
     logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.functions"),
     fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
-    decoder: JSONDecoder = JSONDecoder()
+    decoder: JSONDecoder = JSONDecoder(),
+    accessToken: (@Sendable () async throws -> String?)? = nil
   ) {
     self.init(
       url: url,
@@ -99,18 +95,20 @@ public final class FunctionsClient: Sendable {
       logger: logger,
       fetch: fetch,
       decoder: decoder,
-      sessionConfiguration: .default
+      sessionConfiguration: .default,
+      accessToken: accessToken
     )
   }
 
-  convenience init(
+  init(
     url: URL,
     headers: [String: String] = [:],
     region: String? = nil,
     logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.functions"),
     fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
     decoder: JSONDecoder = JSONDecoder(),
-    sessionConfiguration: URLSessionConfiguration
+    sessionConfiguration: URLSessionConfiguration,
+    accessToken: (@Sendable () async throws -> String?)? = nil
   ) {
     var logger = logger
     logger[metadataKey: "system"] = "functions"
@@ -126,7 +124,8 @@ public final class FunctionsClient: Sendable {
       region: region,
       decoder: decoder,
       http: http,
-      sessionConfiguration: sessionConfiguration
+      sessionConfiguration: sessionConfiguration,
+      accessToken: accessToken
     )
   }
 
@@ -136,20 +135,21 @@ public final class FunctionsClient: Sendable {
     region: String?,
     decoder: JSONDecoder = JSONDecoder(),
     http: any HTTPClientType,
-    sessionConfiguration: URLSessionConfiguration = .default
+    sessionConfiguration: URLSessionConfiguration = .default,
+    accessToken: (@Sendable () async throws -> String?)? = nil
   ) {
     self.url = url
     self.region = region
     self.decoder = decoder
     self.http = http
     self.sessionConfiguration = sessionConfiguration
+    self.accessToken = accessToken
 
-    mutableState.withValue {
-      $0.headers = HTTPFields(headers)
-      if $0.headers[.xClientInfo] == nil {
-        $0.headers[.xClientInfo] = "functions-swift/\(version)"
-      }
+    var headers = HTTPFields(headers)
+    if headers[.xClientInfo] == nil {
+      headers[.xClientInfo] = "functions-swift/\(version)"
     }
+    self.headers = headers
   }
 
   /// Creates a new Functions client.
@@ -160,13 +160,18 @@ public final class FunctionsClient: Sendable {
   ///   - logger: A logger for request and response diagnostics. Defaults to a build-config-aware logger.
   ///   - fetch: A custom fetch handler. Defaults to `URLSession.shared`.
   ///   - decoder: The JSON decoder used to decode response bodies.
-  public convenience init(
+  ///   - accessToken: An async closure returning the current access token, resolved fresh for
+  ///     every request and sent as `Authorization: Bearer <token>`. `nil` (the default) sends no
+  ///     bearer token; a per-invocation header set via ``FunctionInvokeOptions`` still takes
+  ///     precedence over it.
+  public init(
     url: URL,
     headers: [String: String] = [:],
     region: FunctionRegion? = nil,
     logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.functions"),
     fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
-    decoder: JSONDecoder = JSONDecoder()
+    decoder: JSONDecoder = JSONDecoder(),
+    accessToken: (@Sendable () async throws -> String?)? = nil
   ) {
     self.init(
       url: url,
@@ -174,20 +179,9 @@ public final class FunctionsClient: Sendable {
       region: region?.rawValue,
       logger: logger,
       fetch: fetch,
-      decoder: decoder
+      decoder: decoder,
+      accessToken: accessToken
     )
-  }
-
-  /// Sets or clears the JWT used in the Authorization header for subsequent requests.
-  /// - Parameter token: The JWT to send, or `nil` to remove the Authorization header.
-  public func setAuth(token: String?) {
-    mutableState.withValue {
-      if let token {
-        $0.headers[.authorization] = "Bearer \(token)"
-      } else {
-        $0.headers[.authorization] = nil
-      }
-    }
   }
 
   /// Invokes a function and decodes the response with a custom closure.
@@ -244,7 +238,7 @@ public final class FunctionsClient: Sendable {
     functionName: String,
     invokeOptions: FunctionInvokeOptions
   ) async throws -> Helpers.HTTPResponse {
-    let request = buildRequest(functionName: functionName, options: invokeOptions)
+    let request = try await buildRequest(functionName: functionName, options: invokeOptions)
     let response = try await http.send(request)
 
     let isRelayError = response.headers[.xRelayError] == "true"
@@ -287,12 +281,18 @@ public final class FunctionsClient: Sendable {
     let session = URLSession(
       configuration: sessionConfiguration, delegate: delegate, delegateQueue: nil)
 
-    let urlRequest = buildRequest(functionName: functionName, options: invokeOptions).urlRequest
-
-    let task = session.dataTask(with: urlRequest)
-    task.resume()
+    let requestTask = Task {
+      do {
+        let request = try await buildRequest(functionName: functionName, options: invokeOptions)
+        let task = session.dataTask(with: request.urlRequest)
+        task.resume()
+      } catch {
+        continuation.finish(throwing: error)
+      }
+    }
 
     continuation.onTermination = { _ in
+      requestTask.cancel()
       session.invalidateAndCancel()
     }
 
@@ -300,14 +300,20 @@ public final class FunctionsClient: Sendable {
   }
 
   private func buildRequest(functionName: String, options: FunctionInvokeOptions)
-    -> Helpers.HTTPRequest
+    async throws -> Helpers.HTTPRequest
   {
+    var headers = headers
+    if let token = try await accessToken?() {
+      headers[.authorization] = "Bearer \(token)"
+    }
+    headers = headers.merging(with: options.headers)
+
     var query = options.query
     var request = HTTPRequest(
       url: url.appendingPathComponent(functionName),
       method: FunctionInvokeOptions.httpMethod(options.method) ?? .post,
       query: query,
-      headers: mutableState.headers.merging(with: options.headers),
+      headers: headers,
       body: options.body,
       timeoutInterval: options.timeoutInterval ?? FunctionsClient.requestIdleTimeout
     )
