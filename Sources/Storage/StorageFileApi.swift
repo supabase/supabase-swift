@@ -74,7 +74,7 @@ enum FileUpload {
 /// let url = try await fileApi.createSignedURL(path: "user123.png", expiresIn: 60)
 /// ```
 ///
-/// > Note: This class is `@unchecked Sendable`. The ``bucketId`` property is immutable (`let`), and
+/// > Note: This class is `@unchecked Sendable`. The `bucketId` property is immutable (`let`), and
 /// > all mutable header state is protected by the lock inherited from ``StorageApi``.
 ///
 /// ## Topics
@@ -95,7 +95,7 @@ enum FileUpload {
 /// ### Downloading files
 ///
 /// - ``download(path:options:query:cacheNonce:)``
-/// - ``getPublicURL(path:download:options:cacheNonce:)``
+/// - ``getPublicURL(path:download:options:cacheNonce:)-(_,DownloadBehavior?,_,_)``
 ///
 /// ### Managing files
 ///
@@ -108,8 +108,8 @@ enum FileUpload {
 ///
 /// ### Creating signed URLs
 ///
-/// - ``createSignedURL(path:expiresIn:download:transform:cacheNonce:)``
-/// - ``createSignedURLs(paths:expiresIn:download:cacheNonce:)``
+/// - ``createSignedURL(path:expiresIn:download:transform:cacheNonce:)-(_,_,DownloadBehavior?,_,_)``
+/// - ``createSignedURLs(paths:expiresIn:download:cacheNonce:)-(_,_,DownloadBehavior?,_)``
 public class StorageFileApi: StorageApi, @unchecked Sendable {
   /// The identifier of the bucket this instance operates on.
   let bucketId: String
@@ -644,7 +644,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   /// Downloads a file from a private bucket and returns its raw bytes.
   ///
   /// For public buckets, prefer requesting the URL returned by
-  /// ``getPublicURL(path:download:options:cacheNonce:)`` directly.
+  /// ``getPublicURL(path:download:options:cacheNonce:)-(_,DownloadBehavior?,_,_)`` directly.
   ///
   /// ```swift
   /// let data = try await storage.from("avatars").download(path: "user123.png")

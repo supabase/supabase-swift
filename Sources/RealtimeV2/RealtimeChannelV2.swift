@@ -20,7 +20,6 @@ import Logging
   }
 #endif
 
-// cspell:ignore pvzp hhoc cnrp
 /// Configuration for a ``RealtimeChannelV2``.
 ///
 /// Pass a builder closure to ``RealtimeClientV2/channel(_:options:)`` to customize
@@ -86,11 +85,11 @@ protocol RealtimeChannelProtocol: AnyObject, Sendable {
 /// - ``subscribeWithError()``
 /// - ``unsubscribe()``
 /// ### Broadcasting
-/// - ``broadcast(event:message:)-7xyf5``
-/// - ``broadcast(event:message:)-2pvzp``
+/// - ``broadcast(event:message:)-(_,Codable)``
+/// - ``broadcast(event:message:)-(_,JSONObject)``
 /// - ``broadcast(event:data:)``
-/// - ``httpSend(event:message:timeout:)-8v03n``
-/// - ``httpSend(event:message:timeout:)-5hhoc``
+/// - ``httpSend(event:message:timeout:)-(_,Codable,_)``
+/// - ``httpSend(event:message:timeout:)-(_,JSONObject,_)``
 /// - ``httpSend(event:data:timeout:)``
 /// ### Presence
 /// - ``track(_:)``
@@ -98,16 +97,16 @@ protocol RealtimeChannelProtocol: AnyObject, Sendable {
 /// - ``untrack()``
 /// - ``onPresenceChange(_:)``
 /// ### Postgres Changes
-/// - ``onPostgresChange(_:schema:table:filter:callback:)-8kn76``
-/// - ``onPostgresChange(_:schema:table:filter:callback:)-1j0l6``
-/// - ``onPostgresChange(_:schema:table:filter:callback:)-9c5h2``
-/// - ``onPostgresChange(_:schema:table:filter:callback:)-7srl6``
+/// - ``onPostgresChange(_:schema:table:filter:select:callback:)-(AnyAction.Type,_,_,RealtimePostgresFilter?,_,_)``
+/// - ``onPostgresChange(_:schema:table:filter:select:callback:)-(InsertAction.Type,_,_,RealtimePostgresFilter?,_,_)``
+/// - ``onPostgresChange(_:schema:table:filter:select:callback:)-(UpdateAction.Type,_,_,RealtimePostgresFilter?,_,_)``
+/// - ``onPostgresChange(_:schema:table:filter:select:callback:)-(DeleteAction.Type,_,_,RealtimePostgresFilter?,_,_)``
 /// ### Broadcast Events
 /// - ``onBroadcast(event:callback:)``
 /// - ``onBroadcastData(event:callback:)``
 /// ### System Events
-/// - ``onSystem(callback:)-7cnrp``
-/// - ``onSystem(callback:)-7cno3``
+/// - ``onSystem(callback:)-((RealtimeMessageV2)->Void)``
+/// - ``onSystem(callback:)-(()->Void)``
 public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   /// The fully-qualified topic string sent to the Realtime server (e.g. `"realtime:room:lobby"`).
   public let topic: String
@@ -220,7 +219,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   /// All callbacks (broadcast, presence, postgres changes) must be registered before calling
   /// this method. Calling it more than once on an already-subscribed channel is a no-op.
   ///
-  /// - Throws: A ``RealtimeError`` if the subscribe attempt fails or times out.
+  /// - Throws: A `RealtimeError` if the subscribe attempt fails or times out.
   public func subscribeWithError() async throws {
     logger.debug("Subscribe requested for channel '\(topic)'")
     try await stateManager.subscribe()
@@ -278,7 +277,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   ///   - event: The broadcast event name.
   ///   - message: A `Codable` value to send as the message payload.
   ///   - timeout: An optional timeout in seconds. Defaults to the socket's configured timeout.
-  /// - Throws: A ``RealtimeError`` if the access token is missing or the request fails.
+  /// - Throws: A `RealtimeError` if the access token is missing or the request fails.
   public func httpSend(
     event: String,
     message: some Codable,
@@ -300,7 +299,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   ///   - event: The broadcast event name.
   ///   - message: A ``JSONObject`` to send as the message payload.
   ///   - timeout: An optional timeout in seconds. Defaults to the socket's configured timeout.
-  /// - Throws: A ``RealtimeError`` if the access token is missing or the request fails.
+  /// - Throws: A `RealtimeError` if the access token is missing or the request fails.
   public func httpSend(
     event: String,
     message: JSONObject,
@@ -349,7 +348,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   ///   - event: The broadcast event name.
   ///   - data: Raw binary data to send as the request body.
   ///   - timeout: An optional timeout in seconds. Defaults to the socket's configured timeout.
-  /// - Throws: A ``RealtimeError`` if the access token is missing or the request fails.
+  /// - Throws: A `RealtimeError` if the access token is missing or the request fails.
   public func httpSend(
     event: String,
     data: Data,
@@ -398,7 +397,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   ///
   /// When the channel is subscribed, the message is sent over the existing WebSocket connection.
   /// If not subscribed, the call falls back to the REST broadcast endpoint with a deprecation notice.
-  /// Prefer ``httpSend(event:message:timeout:)-8v03n`` for an explicit REST call.
+  /// Prefer ``httpSend(event:message:timeout:)-(_,Codable,_)`` for an explicit REST call.
   ///
   /// - Parameters:
   ///   - event: The broadcast event name.
@@ -411,7 +410,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   ///
   /// When the channel is subscribed, the message is sent over the existing WebSocket connection.
   /// If not subscribed, the call falls back to the REST broadcast endpoint with a deprecation notice.
-  /// Prefer ``httpSend(event:message:timeout:)-5hhoc`` for an explicit REST call.
+  /// Prefer ``httpSend(event:message:timeout:)-(_,JSONObject,_)`` for an explicit REST call.
   ///
   /// - Parameters:
   ///   - event: The broadcast event name.
@@ -776,7 +775,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   /// }
   /// ```
   ///
-  /// > Note: Use ``postgresChange(_:schema:table:filter:)`` if you prefer async iteration over closures.
+  /// > Note: Use ``postgresChange(_:schema:table:filter:select:)->AsyncStream<AnyAction>`` if you prefer async iteration over closures.
   ///
   /// - Parameters:
   ///   - type: Pass `AnyAction.self` to match all change types.
@@ -836,7 +835,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   /// }
   /// ```
   ///
-  /// > Note: Use ``postgresChange(_:schema:table:filter:)`` if you prefer async iteration over closures.
+  /// > Note: Use ``postgresChange(_:schema:table:filter:select:)->AsyncStream<InsertAction>`` if you prefer async iteration over closures.
   ///
   /// - Parameters:
   ///   - type: Pass `InsertAction.self`.
@@ -898,7 +897,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   /// }
   /// ```
   ///
-  /// > Note: Use ``postgresChange(_:schema:table:filter:)`` if you prefer async iteration over closures.
+  /// > Note: Use ``postgresChange(_:schema:table:filter:select:)->AsyncStream<UpdateAction>`` if you prefer async iteration over closures.
   ///
   /// - Parameters:
   ///   - type: Pass `UpdateAction.self`.
@@ -960,7 +959,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   /// }
   /// ```
   ///
-  /// > Note: Use ``postgresChange(_:schema:table:filter:)`` if you prefer async iteration over closures.
+  /// > Note: Use ``postgresChange(_:schema:table:filter:select:)->AsyncStream<DeleteAction>`` if you prefer async iteration over closures.
   ///
   /// - Parameters:
   ///   - type: Pass `DeleteAction.self`.

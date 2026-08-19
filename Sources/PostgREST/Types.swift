@@ -248,7 +248,7 @@ public struct ExplainFormat: RawRepresentable, Hashable, Sendable {
 
 /// Options for controlling whether the response body is returned and how rows are counted.
 ///
-/// Pass a ``FetchOptions`` value to ``PostgrestBuilder/execute(options:)-96tpd`` (or the typed
+/// Pass a ``FetchOptions`` value to ``PostgrestBuilder/execute(options:)->PostgrestResponse<Void>`` (or the typed
 /// overload) to request a count without fetching data, or to fetch data and a count simultaneously.
 ///
 /// ```swift

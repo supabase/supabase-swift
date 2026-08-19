@@ -329,7 +329,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
 
   /// Opens the WebSocket connection and suspends until it is established.
   ///
-  /// Calling this method when already connected is a no-op. If ``RealtimeClientOptions/connectOnSubscribe``
+  /// Calling this method when already connected is a no-op. If ``RealtimeClientOptions/defaultConnectOnSubscribe``
   /// is `true` (the default), this is called automatically when a channel is subscribed to.
   ///
   /// ```swift
@@ -695,10 +695,10 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   /// Updates the JWT access token used for channel authorization and Realtime RLS.
   ///
   /// When called, the token is propagated to all currently-subscribed channels. If `token`
-  /// is `nil`, the value is fetched from ``RealtimeClientOptions/accessToken`` if provided,
-  /// or the token already stored on the client is used.
+  /// is `nil`, the value is fetched from the `accessToken` callback configured on
+  /// ``RealtimeClientOptions`` if provided, or the token already stored on the client is used.
   ///
-  /// If ``RealtimeClientOptions/accessToken`` throws, the client keeps the current token and no update is sent to channels.
+  /// If the `accessToken` callback throws, the client keeps the current token and no update is sent to channels.
   /// - Parameter token: A JWT string, or `nil` to refresh from the configured `accessToken` callback.
   public func setAuth(_ token: String? = nil) async {
     var tokenToSend = token

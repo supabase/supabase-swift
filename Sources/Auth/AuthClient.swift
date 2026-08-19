@@ -815,7 +815,7 @@ public actor AuthClient {
   }
 
   #if canImport(AuthenticationServices)
-    /// Sign-in an existing user via a third-party provider using ``ASWebAuthenticationSession``.
+    /// Sign-in an existing user via a third-party provider using `ASWebAuthenticationSession`.
     ///
     /// - Parameters:
     ///   - provider: The third-party provider.
@@ -823,7 +823,7 @@ public actor AuthClient {
     ///   - scopes: A space-separated list of scopes granted to the OAuth application.
     ///   - queryParams: Additional query params.
     ///   - configure: A configuration closure that you can use to customize the internal
-    /// ``ASWebAuthenticationSession`` object.
+    /// `ASWebAuthenticationSession` object.
     ///
     /// - Note: This method support the PKCE flow.
     /// - Warning: Do not call `start()` on the `ASWebAuthenticationSession` object inside the

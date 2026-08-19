@@ -108,7 +108,6 @@ public struct StorageClientConfiguration: Sendable {
 /// ### Accessing buckets
 ///
 /// - ``from(_:)``
-/// - ``vectors``
 ///
 /// ### Bucket management
 ///

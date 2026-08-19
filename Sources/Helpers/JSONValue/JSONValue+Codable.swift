@@ -16,7 +16,7 @@ extension JSONValue {
 }
 
 extension JSONValue {
-  /// Initialize an ``JSONValue`` from an ``Encodable`` value.
+  /// Initialize an ``JSONValue`` from an `Encodable` value.
   public init(_ value: some Encodable) throws {
     if let value = value as? JSONValue {
       self = value

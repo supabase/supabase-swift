@@ -256,7 +256,7 @@ public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable 
   /// suppress this, pass `.minimal` as `returning`.
   ///
   /// > Important: Omitting a filter will update **all rows** in the table. Always chain
-  /// > a filter such as ``PostgrestFilterBuilder/eq(_:value:)`` before calling ``PostgrestBuilder/execute(options:)-96tpd``.
+  /// > a filter such as ``PostgrestFilterBuilder/eq(_:value:)`` before calling ``PostgrestBuilder/execute(options:)->PostgrestResponse<Void>``.
   ///
   /// ```swift
   /// try await client
@@ -301,7 +301,7 @@ public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable 
   /// suppress this, pass `.minimal` as `returning`.
   ///
   /// > Important: Omitting a filter will delete **all rows** in the table. Always chain
-  /// > a filter such as ``PostgrestFilterBuilder/eq(_:value:)`` before calling ``PostgrestBuilder/execute(options:)-96tpd``.
+  /// > a filter such as ``PostgrestFilterBuilder/eq(_:value:)`` before calling ``PostgrestBuilder/execute(options:)->PostgrestResponse<Void>``.
   ///
   /// ```swift
   /// try await client

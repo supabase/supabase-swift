@@ -172,7 +172,7 @@ public struct FileOptions: Sendable {
 
 /// A single signed URL returned as part of a batch sign operation.
 ///
-/// Returned by ``StorageFileApi/createSignedURLs(paths:expiresIn:download:cacheNonce:)-5lkmo`` // cspell:ignore lkmo
+/// Returned by ``StorageFileApi/createSignedURLs(paths:expiresIn:download:cacheNonce:)-(_,_,DownloadBehavior?,_)``
 /// (the legacy `[SignedURL]` overload). Prefer the ``SignedURLResult`` overload for new code.
 ///
 /// ## Topics
@@ -205,7 +205,7 @@ public struct SignedURL: Decodable, Sendable {
   }
 }
 
-/// Represents the per-item result of a ``StorageFileApi/createSignedURLs(paths:expiresIn:download:cacheNonce:)`` call.
+/// Represents the per-item result of a ``StorageFileApi/createSignedURLs(paths:expiresIn:download:cacheNonce:)-(_,_,DownloadBehavior?,_)`` call.
 ///
 /// It is guaranteed that exactly one case applies per item: either the URL was signed
 /// successfully, or the path did not exist or was inaccessible.
@@ -975,8 +975,8 @@ public struct BucketOptions: Sendable {
 /// Options for server-side image transformation applied before the asset is served to the client.
 ///
 /// Pass a ``TransformOptions`` value to ``StorageFileApi/download(path:options:query:cacheNonce:)``,
-/// ``StorageFileApi/getPublicURL(path:download:options:cacheNonce:)``, or
-/// ``StorageFileApi/createSignedURL(path:expiresIn:download:transform:cacheNonce:)`` to resize,
+/// ``StorageFileApi/getPublicURL(path:download:options:cacheNonce:)-(_,DownloadBehavior?,_,_)``, or
+/// ``StorageFileApi/createSignedURL(path:expiresIn:download:transform:cacheNonce:)-(_,_,DownloadBehavior?,_,_)`` to resize,
 /// reformat, or adjust the quality of images on the fly.
 ///
 /// ```swift

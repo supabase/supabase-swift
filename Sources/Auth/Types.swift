@@ -1145,7 +1145,7 @@ public struct MFAVerifyParams: Encodable, Hashable {
   public let challengeId: String
 
   /// Verification code provided by the user. Used for `totp` and `phone` factors; empty for
-  /// `webauthn` factors (which use ``credentialResponse`` instead).
+  /// `webauthn` factors (which use `credentialResponse` instead).
   public let code: String
 
   /// The W3C credential (assertion) response produced by the authenticator. Used for `webauthn`
@@ -2140,7 +2140,7 @@ public struct JWTClaims: Decodable, Hashable, Sendable {
   /// User metadata.
   public let userMetadata: [String: JSONValue]?
 
-  /// Any claims not recognized by the standard set of ``CodingKeys``.
+  /// Any claims not recognized by the standard set of `CodingKeys`.
   public var additionalClaims: [String: JSONValue] = [:]
 
   enum CodingKeys: String, CodingKey {
