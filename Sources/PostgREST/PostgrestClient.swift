@@ -1,5 +1,5 @@
 public import Foundation
-public import HTTPTypes
+import HTTPTypes
 public import Logging
 
 #if canImport(FoundationNetworking)
