@@ -98,21 +98,15 @@ public final class SupabaseClient: Sendable {
   }
 
   var rest: PostgrestClient {
-    mutableState.withValue {
-      if $0.rest == nil {
-        $0.rest = PostgrestClient(
-          url: databaseURL,
-          schema: options.db.schema,
-          headers: headers,
-          logger: options.global.logger,
-          fetch: fetchWithAuth,
-          encoder: options.db.encoder,
-          decoder: options.db.decoder
-        )
-      }
-
-      return $0.rest!
-    }
+    PostgrestClient(
+      url: databaseURL,
+      schema: options.db.schema,
+      headers: headers,
+      logger: options.global.logger,
+      fetch: fetchWithAuth,
+      encoder: options.db.encoder,
+      decoder: options.db.decoder
+    )
   }
 
   /// The Storage client for uploading, downloading, and managing files.
@@ -177,7 +171,6 @@ public final class SupabaseClient: Sendable {
   struct MutableState {
     var listenForAuthEventsTask: Task<Void, Never>?
     var storage: SupabaseStorageClient?
-    var rest: PostgrestClient?
     var realtime: RealtimeClientV2?
 
     var changedAccessToken: String?
