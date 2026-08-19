@@ -1,13 +1,12 @@
-import ConcurrencyExtras
 import Foundation
 import Helpers
 
 /// The set of PostgREST comparison operators available for use with
-/// ``PostgrestFilterBuilder/not(_:operator:value:)`` and
-/// ``PostgrestFilterBuilder/filter(_:operator:value:)``.
+/// ``PostgrestRequestBuilder/not(_:operator:value:)`` and
+/// ``PostgrestRequestBuilder/filter(_:operator:value:)``.
 ///
-/// Most operators have dedicated convenience methods (e.g., ``PostgrestFilterBuilder/eq(_:value:)``,
-/// ``PostgrestFilterBuilder/gt(_:value:)``). Use ``PostgrestOperator`` directly only when you need
+/// Most operators have dedicated convenience methods (e.g., ``PostgrestRequestBuilder/eq(_:value:)``,
+/// ``PostgrestRequestBuilder/gt(_:value:)``). Use ``PostgrestOperator`` directly only when you need
 /// `not(_:operator:value:)` or the raw `filter(_:operator:value:)` escape hatch.
 ///
 /// > Note: This is a top-level type aliased onto ``PostgrestRequestBuilder`` as `Operator` (see
@@ -85,81 +84,10 @@ extension PostgrestRequestBuilder {
   public typealias Operator = PostgrestOperator
 }
 
-/// Filter methods for applying WHERE-clause filters to a PostgREST query.
-///
-/// Obtain a ``PostgrestFilterBuilder`` from ``PostgrestQueryBuilder/select(_:head:count:)``,
-/// ``PostgrestQueryBuilder/insert(_:returning:count:)``, ``PostgrestQueryBuilder/update(_:returning:count:)``,
-/// or other write methods. Chain one or more filter methods, then call
-/// ``PostgrestRequestBuilder/execute(options:)-96tpd`` to send the request.
-///
-/// All filter methods return `Self` so they can be freely chained:
-///
-/// ```swift
-/// let results: [Todo] = try await client
-///   .from("todos")
-///   .select()
-///   .eq("done", value: false)
-///   .order("created_at", ascending: false)
-///   .limit(20)
-///   .execute()
-///   .value
-/// ```
-///
-/// ## Topics
-///
-/// ### Equality Filters
-///
-/// - ``eq(_:value:)``
-/// - ``neq(_:value:)``
-/// - ``is(_:value:)``
-/// - ``isDistinct(_:value:)``
-/// - ``in(_:values:)``
-/// - ``notIn(_:values:)``
-/// - ``match(_:)-6h9ou``
-///
-/// ### Comparison Filters
-///
-/// - ``gt(_:value:)``
-/// - ``gte(_:value:)``
-/// - ``lt(_:value:)``
-/// - ``lte(_:value:)``
-///
-/// ### Pattern Matching Filters
-///
-/// - ``like(_:pattern:)``
-/// - ``likeAllOf(_:patterns:)``
-/// - ``likeAnyOf(_:patterns:)``
-/// - ``ilike(_:pattern:)``
-/// - ``iLikeAllOf(_:patterns:)``
-/// - ``iLikeAnyOf(_:patterns:)``
-/// - ``match(_:pattern:)-9qlv5``
-/// - ``imatch(_:pattern:)``
-///
-/// ### Array and Range Filters
-///
-/// - ``contains(_:value:)``
-/// - ``containedBy(_:value:)``
-/// - ``overlaps(_:value:)``
-/// - ``rangeLt(_:range:)``
-/// - ``rangeGt(_:range:)``
-/// - ``rangeGte(_:range:)``
-/// - ``rangeLte(_:range:)``
-/// - ``rangeAdjacent(_:range:)``
-///
-/// ### Full-Text Search
-///
-/// - ``textSearch(_:query:config:type:)``
-/// - ``fts(_:query:config:)``
-///
-/// ### Logical Operators
-///
-/// - ``not(_:operator:value:)``
-/// - ``or(_:referencedTable:)``
-/// - ``filter(_:operator:value:)``
-///
-/// ### Operators
-///
-/// - ``Operator``
+// The filter methods available while the request is still in a filterable phase. The overview
+// prose and curated `## Topics` groups for these live on the ``PostgrestFilterBuilder`` type alias
+// in `PostgrestRequestBuilder.swift` — DocC discards doc comments written on `extension` blocks,
+// so a `///` comment here would never be rendered.
 extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
   // MARK: - Filters
 

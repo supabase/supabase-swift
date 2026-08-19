@@ -1,50 +1,10 @@
-import ConcurrencyExtras
 import Foundation
 import HTTPTypes
 
-/// Builder for SELECT, INSERT, UPDATE, UPSERT, and DELETE operations on a table or view.
-///
-/// Obtain a ``PostgrestQueryBuilder`` by calling ``PostgrestClient/from(_:)`` and then chain one
-/// of the operation methods. Most methods return a ``PostgrestFilterBuilder`` so you can narrow the
-/// affected rows with WHERE clauses before executing.
-///
-/// ```swift
-/// // INSERT a single row
-/// try await client
-///   .from("todos")
-///   .insert(["task": "Buy milk", "done": false])
-///   .execute()
-///
-/// // SELECT with a filter
-/// let todos: [Todo] = try await client
-///   .from("todos")
-///   .select()
-///   .eq("done", value: false)
-///   .execute()
-///   .value
-/// ```
-///
-/// ## Topics
-///
-/// ### Querying Rows
-///
-/// - ``select(_:head:count:)``
-///
-/// ### Inserting Rows
-///
-/// - ``insert(_:returning:count:)``
-///
-/// ### Updating Rows
-///
-/// - ``update(_:returning:count:)``
-///
-/// ### Upsert Rows
-///
-/// - ``upsert(_:onConflict:returning:count:ignoreDuplicates:)``
-///
-/// ### Deleting Rows
-///
-/// - ``delete(returning:count:)``
+// The operation methods available before an operation has been chosen. The overview prose and
+// curated `## Topics` groups for these live on the ``PostgrestQueryBuilder`` type alias in
+// `PostgrestRequestBuilder.swift` — DocC discards doc comments written on `extension` blocks, so a
+// `///` comment here would never be rendered.
 extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
   /// Performs a SELECT query on the table or view.
   ///
@@ -107,7 +67,7 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
   /// Inserts one or more rows into the table or view.
   ///
   /// By default, inserted rows are not returned. To receive the inserted data, chain with
-  /// ``PostgrestTransformBuilder/select(_:)`` after calling this method.
+  /// ``PostgrestRequestBuilder/select(_:)`` after calling this method.
   ///
   /// ```swift
   /// // Insert a single row
@@ -250,7 +210,8 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
   /// suppress this, pass `.minimal` as `returning`.
   ///
   /// > Important: Omitting a filter will update **all rows** in the table. Always chain
-  /// > a filter such as ``PostgrestFilterBuilder/eq(_:value:)`` before calling ``PostgrestRequestBuilder/execute(options:)-96tpd``.
+  /// > a filter such as ``PostgrestRequestBuilder/eq(_:value:)`` before calling
+  /// > ``PostgrestRequestBuilder/execute(options:)->PostgrestResponse<Void>``.
   ///
   /// ```swift
   /// try await client
@@ -296,7 +257,8 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
   /// suppress this, pass `.minimal` as `returning`.
   ///
   /// > Important: Omitting a filter will delete **all rows** in the table. Always chain
-  /// > a filter such as ``PostgrestFilterBuilder/eq(_:value:)`` before calling ``PostgrestRequestBuilder/execute(options:)-96tpd``.
+  /// > a filter such as ``PostgrestRequestBuilder/eq(_:value:)`` before calling
+  /// > ``PostgrestRequestBuilder/execute(options:)->PostgrestResponse<Void>``.
   ///
   /// ```swift
   /// try await client

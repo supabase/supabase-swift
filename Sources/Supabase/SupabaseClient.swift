@@ -403,9 +403,11 @@ public final class SupabaseClient: Sendable {
   /// A `fetch` closure handed to the REST, Storage and Functions sub-clients.
   ///
   /// Captures only the dependencies it needs — never `self` — because each sub-client stores this
-  /// closure for its whole lifetime while being cached in ``mutableState``. Capturing `self` here
-  /// would form a `self -> mutableState -> sub-client -> closure -> self` retain cycle that keeps
-  /// ``deinit`` from ever running.
+  /// closure for its whole lifetime, and the cached sub-clients (`storage`, `realtimeV2`) are held
+  /// in ``mutableState`` for the lifetime of the client. Capturing `self` here would form a
+  /// `self -> mutableState -> sub-client -> closure -> self` retain cycle that keeps ``deinit`` from
+  /// ever running. `rest` is rebuilt per access and not cached, but it gets the same closure, so the
+  /// no-`self`-capture rule applies uniformly.
   private var fetchWithAuth: @Sendable (_ request: URLRequest) async throws -> (Data, URLResponse) {
     { [session = options.global.session, adapt = adaptRequest] request in
       try await session.data(for: adapt(request))

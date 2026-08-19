@@ -1,45 +1,10 @@
-import ConcurrencyExtras
 import Foundation
 import HTTPTypes
 
-/// Transformation methods for ordering, pagination, and response format.
-///
-/// ``PostgrestTransformBuilder`` sits between ``PostgrestFilterBuilder`` (WHERE clauses) and
-/// ``PostgrestRequestBuilder/execute(options:)-96tpd`` (sending the request). All transformation
-/// methods narrow the builder to ``PostgrestTransformPhase``, so once you call one you can no
-/// longer filter — only transform further or execute.
-///
-/// ## Topics
-///
-/// ### Returning Modified Rows
-///
-/// - ``select(_:)``
-///
-/// ### Ordering and Pagination
-///
-/// - ``order(_:ascending:nullsFirst:referencedTable:)``
-/// - ``limit(_:referencedTable:)``
-/// - ``range(from:to:referencedTable:)``
-///
-/// ### Response Format
-///
-/// - ``single()``
-/// - ``maybeSingle()``
-/// - ``csv()``
-/// - ``geojson()``
-/// - ``stripNulls()``
-///
-/// ### Query Analysis
-///
-/// - ``explain(analyze:verbose:settings:buffers:wal:format:)``
-///
-/// ### Limiting Affected Rows
-///
-/// - ``maxAffected(_:)``
-///
-/// ### Testing Mutations
-///
-/// - ``dryRun()``
+// The ordering, pagination, and response-format methods available while the request is still in a
+// transformable phase. The overview prose and curated `## Topics` groups for these live on the
+// ``PostgrestTransformBuilder`` type alias in `PostgrestRequestBuilder.swift` — DocC discards doc
+// comments written on `extension` blocks, so a `///` comment here would never be rendered.
 extension PostgrestRequestBuilder where Phase: PostgrestTransformablePhase {
   /// Requests that the server return the modified rows from a write operation.
   ///
@@ -331,8 +296,8 @@ extension PostgrestRequestBuilder where Phase: PostgrestTransformablePhase {
   /// Requires PostgREST v13 or later. Compatible with PATCH, DELETE, and RPC calls only.
   ///
   /// > Note: This method does not validate the HTTP method. Ensure you only use it with
-  /// > ``PostgrestQueryBuilder/update(_:returning:count:)``,
-  /// > ``PostgrestQueryBuilder/delete(returning:count:)``, or
+  /// > ``PostgrestRequestBuilder/update(_:returning:count:)``,
+  /// > ``PostgrestRequestBuilder/delete(returning:count:)``, or
   /// > ``PostgrestClient/rpc(_:params:head:get:count:)``.
   ///
   /// - Parameter value: The maximum number of rows that the operation may affect.

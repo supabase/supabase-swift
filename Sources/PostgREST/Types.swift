@@ -92,7 +92,7 @@ public struct PostgrestResponse<T> {
 
 /// The algorithm PostgREST uses to count the total number of rows matching a query.
 ///
-/// Pass a ``CountOption`` to query methods such as ``PostgrestQueryBuilder/select(_:head:count:)``
+/// Pass a ``CountOption`` to query methods such as ``PostgrestRequestBuilder/select(_:head:count:)``
 /// or ``PostgrestClient/rpc(_:params:head:get:count:)`` to include a row count in the response.
 ///
 /// The chosen algorithm determines the accuracy vs. performance trade-off:
@@ -136,9 +136,9 @@ public struct CountOption: RawRepresentable, Hashable, Sendable, ExpressibleBySt
 
 /// Controls which rows PostgREST returns after a write operation.
 ///
-/// Pass a ``PostgrestReturningOptions`` value to ``PostgrestQueryBuilder/insert(_:returning:count:)``,
-/// ``PostgrestQueryBuilder/update(_:returning:count:)``, ``PostgrestQueryBuilder/upsert(_:onConflict:returning:count:ignoreDuplicates:)``,
-/// or ``PostgrestQueryBuilder/delete(returning:count:)`` to specify what the server sends back.
+/// Pass a ``PostgrestReturningOptions`` value to ``PostgrestRequestBuilder/insert(_:returning:count:)``,
+/// ``PostgrestRequestBuilder/update(_:returning:count:)``, ``PostgrestRequestBuilder/upsert(_:onConflict:returning:count:ignoreDuplicates:)``,
+/// or ``PostgrestRequestBuilder/delete(returning:count:)`` to specify what the server sends back.
 ///
 /// See the [PostgREST documentation](https://postgrest.org/en/v9.0/api.html?highlight=PREFER#insertions-updates)
 /// for more detail.
@@ -172,7 +172,7 @@ public struct PostgrestReturningOptions: RawRepresentable, Hashable, Sendable,
 
 /// The conversion strategy used to turn a plain-text search query into a `tsquery` expression.
 ///
-/// Pass a ``TextSearchType`` to ``PostgrestFilterBuilder/textSearch(_:query:config:type:)`` to
+/// Pass a ``TextSearchType`` to ``PostgrestRequestBuilder/textSearch(_:query:config:type:)`` to
 /// control how user-supplied text is interpreted by PostgreSQL's full-text search engine.
 public struct TextSearchType: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
   public let rawValue: String
@@ -209,7 +209,7 @@ public struct TextSearchType: RawRepresentable, Hashable, Sendable, ExpressibleB
 
 /// The output format of a PostgREST EXPLAIN plan.
 ///
-/// Pass an ``ExplainFormat`` value to ``PostgrestTransformBuilder/explain(analyze:verbose:settings:buffers:wal:format:)``
+/// Pass an ``ExplainFormat`` value to ``PostgrestRequestBuilder/explain(analyze:verbose:settings:buffers:wal:format:)``
 /// to choose how the query plan is serialized in the response.
 ///
 /// ## Topics
@@ -248,7 +248,7 @@ public struct ExplainFormat: RawRepresentable, Hashable, Sendable {
 
 /// Options for controlling whether the response body is returned and how rows are counted.
 ///
-/// Pass a ``FetchOptions`` value to ``PostgrestRequestBuilder/execute(options:)-96tpd`` (or the
+/// Pass a ``FetchOptions`` value to ``PostgrestRequestBuilder/execute(options:)->PostgrestResponse<Void>`` (or the
 /// typed overload) to request a count without fetching data, or to fetch data and a count
 /// simultaneously.
 ///

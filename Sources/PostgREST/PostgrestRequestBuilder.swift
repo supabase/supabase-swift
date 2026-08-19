@@ -70,8 +70,8 @@ public enum PostgrestTransformPhase: PostgrestTransformablePhase {}
 ///
 /// ### Executing the Request
 ///
-/// - ``execute(options:)-96tpd``
-/// - ``execute(options:)-6mk2u``
+/// - ``execute(options:)->PostgrestResponse<Void>``
+/// - ``execute(options:)->PostgrestResponse<T>``
 public struct PostgrestRequestBuilder<Phase>: Sendable {
   let configuration: PostgrestClient.Configuration
   let http: any HTTPClientType
@@ -126,8 +126,186 @@ public struct PostgrestRequestBuilder<Phase>: Sendable {
   }
 }
 
+/// Builder for SELECT, INSERT, UPDATE, UPSERT, and DELETE operations on a table or view.
+///
+/// This is ``PostgrestRequestBuilder`` specialized to ``PostgrestQueryPhase``, the phase a request
+/// starts in before an operation has been chosen.
+///
+/// Obtain one by calling ``PostgrestClient/from(_:)`` and then chain one of the operation methods.
+/// Most methods return a ``PostgrestFilterBuilder`` so you can narrow the affected rows with WHERE
+/// clauses before executing.
+///
+/// ```swift
+/// // INSERT a single row
+/// try await client
+///   .from("todos")
+///   .insert(["task": "Buy milk", "done": false])
+///   .execute()
+///
+/// // SELECT with a filter
+/// let todos: [Todo] = try await client
+///   .from("todos")
+///   .select()
+///   .eq("done", value: false)
+///   .execute()
+///   .value
+/// ```
+///
+/// ## Topics
+///
+/// ### Querying Rows
+///
+/// - ``PostgrestRequestBuilder/select(_:head:count:)``
+///
+/// ### Inserting Rows
+///
+/// - ``PostgrestRequestBuilder/insert(_:returning:count:)``
+///
+/// ### Updating Rows
+///
+/// - ``PostgrestRequestBuilder/update(_:returning:count:)``
+///
+/// ### Upsert Rows
+///
+/// - ``PostgrestRequestBuilder/upsert(_:onConflict:returning:count:ignoreDuplicates:)``
+///
+/// ### Deleting Rows
+///
+/// - ``PostgrestRequestBuilder/delete(returning:count:)``
 public typealias PostgrestQueryBuilder = PostgrestRequestBuilder<PostgrestQueryPhase>
+
+/// Builder for applying WHERE-clause filters to a PostgREST query, before transforming or
+/// executing it.
+///
+/// This is ``PostgrestRequestBuilder`` specialized to ``PostgrestFilterPhase``.
+///
+/// Obtain one from ``PostgrestRequestBuilder/select(_:head:count:)``,
+/// ``PostgrestRequestBuilder/insert(_:returning:count:)``,
+/// ``PostgrestRequestBuilder/update(_:returning:count:)``, or another write method on
+/// ``PostgrestQueryBuilder``, or from ``PostgrestClient/rpc(_:params:head:get:count:)``. Chain one
+/// or more filter methods, then call
+/// ``PostgrestRequestBuilder/execute(options:)->PostgrestResponse<T>`` to send the request.
+///
+/// All filter methods return `Self` so they can be freely chained:
+///
+/// ```swift
+/// let results: [Todo] = try await client
+///   .from("todos")
+///   .select()
+///   .eq("done", value: false)
+///   .order("created_at", ascending: false)
+///   .limit(20)
+///   .execute()
+///   .value
+/// ```
+///
+/// ## Topics
+///
+/// ### Equality Filters
+///
+/// - ``PostgrestRequestBuilder/eq(_:value:)``
+/// - ``PostgrestRequestBuilder/neq(_:value:)``
+/// - ``PostgrestRequestBuilder/is(_:value:)``
+/// - ``PostgrestRequestBuilder/isDistinct(_:value:)``
+/// - ``PostgrestRequestBuilder/in(_:values:)``
+/// - ``PostgrestRequestBuilder/notIn(_:values:)``
+/// - ``PostgrestRequestBuilder/match(_:)``
+///
+/// ### Comparison Filters
+///
+/// - ``PostgrestRequestBuilder/gt(_:value:)``
+/// - ``PostgrestRequestBuilder/gte(_:value:)``
+/// - ``PostgrestRequestBuilder/lt(_:value:)``
+/// - ``PostgrestRequestBuilder/lte(_:value:)``
+///
+/// ### Pattern Matching Filters
+///
+/// - ``PostgrestRequestBuilder/like(_:pattern:)``
+/// - ``PostgrestRequestBuilder/likeAllOf(_:patterns:)``
+/// - ``PostgrestRequestBuilder/likeAnyOf(_:patterns:)``
+/// - ``PostgrestRequestBuilder/ilike(_:pattern:)``
+/// - ``PostgrestRequestBuilder/iLikeAllOf(_:patterns:)``
+/// - ``PostgrestRequestBuilder/iLikeAnyOf(_:patterns:)``
+/// - ``PostgrestRequestBuilder/match(_:pattern:)``
+/// - ``PostgrestRequestBuilder/imatch(_:pattern:)``
+///
+/// ### Array and Range Filters
+///
+/// - ``PostgrestRequestBuilder/contains(_:value:)``
+/// - ``PostgrestRequestBuilder/containedBy(_:value:)``
+/// - ``PostgrestRequestBuilder/overlaps(_:value:)``
+/// - ``PostgrestRequestBuilder/rangeLt(_:range:)``
+/// - ``PostgrestRequestBuilder/rangeGt(_:range:)``
+/// - ``PostgrestRequestBuilder/rangeGte(_:range:)``
+/// - ``PostgrestRequestBuilder/rangeLte(_:range:)``
+/// - ``PostgrestRequestBuilder/rangeAdjacent(_:range:)``
+///
+/// ### Full-Text Search
+///
+/// - ``PostgrestRequestBuilder/textSearch(_:query:config:type:)``
+/// - ``PostgrestRequestBuilder/fts(_:query:config:)``
+///
+/// ### Logical Operators
+///
+/// - ``PostgrestRequestBuilder/not(_:operator:value:)``
+/// - ``PostgrestRequestBuilder/or(_:referencedTable:)``
+/// - ``PostgrestRequestBuilder/filter(_:operator:value:)``
+///
+/// ### Operators
+///
+/// - ``PostgrestOperator``
 public typealias PostgrestFilterBuilder = PostgrestRequestBuilder<PostgrestFilterPhase>
+
+/// Builder for ordering, pagination, and response-format transformations, before executing a
+/// PostgREST request.
+///
+/// This is ``PostgrestRequestBuilder`` specialized to ``PostgrestTransformPhase``. It sits between
+/// ``PostgrestFilterBuilder`` (WHERE clauses) and
+/// ``PostgrestRequestBuilder/execute(options:)->PostgrestResponse<T>`` (sending the request). All
+/// transformation methods narrow the builder to ``PostgrestTransformPhase``, so once you call one
+/// you can no longer filter — only transform further or execute.
+///
+/// ```swift
+/// let page: [Todo] = try await client
+///   .from("todos")
+///   .select()
+///   .order("created_at", ascending: false)
+///   .range(from: 0, to: 9)
+///   .execute()
+///   .value
+/// ```
+///
+/// ## Topics
+///
+/// ### Returning Modified Rows
+///
+/// - ``PostgrestRequestBuilder/select(_:)``
+///
+/// ### Ordering and Pagination
+///
+/// - ``PostgrestRequestBuilder/order(_:ascending:nullsFirst:referencedTable:)``
+/// - ``PostgrestRequestBuilder/limit(_:referencedTable:)``
+/// - ``PostgrestRequestBuilder/range(from:to:referencedTable:)``
+///
+/// ### Response Format
+///
+/// - ``PostgrestRequestBuilder/single()``
+/// - ``PostgrestRequestBuilder/maybeSingle()``
+/// - ``PostgrestRequestBuilder/csv()``
+/// - ``PostgrestRequestBuilder/geojson()``
+/// - ``PostgrestRequestBuilder/stripNulls()``
+///
+/// ### Query Analysis
+///
+/// - ``PostgrestRequestBuilder/explain(analyze:verbose:settings:buffers:wal:format:)``
+///
+/// ### Limiting Affected Rows
+///
+/// - ``PostgrestRequestBuilder/maxAffected(_:)``
+///
+/// ### Testing Mutations
+///
+/// - ``PostgrestRequestBuilder/dryRun()``
 public typealias PostgrestTransformBuilder = PostgrestRequestBuilder<PostgrestTransformPhase>
 
 /// A type-erased PostgREST builder that can execute a request and set per-request
@@ -139,10 +317,10 @@ public typealias PostgrestTransformBuilder = PostgrestRequestBuilder<PostgrestTr
 /// "any executable PostgREST builder" regardless of which filter/transform methods were chained
 /// to produce it.
 public protocol PostgrestExecutableBuilder: Sendable {
-  /// See ``PostgrestRequestBuilder/execute(options:)-96tpd``.
+  /// See ``PostgrestRequestBuilder/execute(options:)->PostgrestResponse<Void>``.
   func execute(options: FetchOptions) async throws -> PostgrestResponse<Void>
 
-  /// See ``PostgrestRequestBuilder/execute(options:)-6mk2u``.
+  /// See ``PostgrestRequestBuilder/execute(options:)->PostgrestResponse<T>``.
   func execute<T: Decodable>(options: FetchOptions) async throws -> PostgrestResponse<T>
 }
 
@@ -188,7 +366,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestExecutablePhase {
   /// Executes the request and discards the response body.
   ///
   /// Use this overload for mutations (INSERT, UPDATE, DELETE) when you do not need the
-  /// affected rows, or when you have already called ``PostgrestTransformBuilder/csv()`` or
+  /// affected rows, or when you have already called ``PostgrestRequestBuilder/csv()`` or
   /// a similar method that changes the response format.
   ///
   /// - Parameter options: Options controlling whether to include a row count and whether to

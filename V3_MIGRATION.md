@@ -1048,6 +1048,11 @@ it now prints the struct's default description (`PostgrestFilterBuilder.Operator
 If you log, build a URL, or send analytics using direct interpolation of a
 `PostgrestFilterBuilder.Operator` value, use `.rawValue` explicitly to get the bare string back.
 
+The operator type is now declared at the top level as `PostgrestOperator`, with
+`PostgrestFilterBuilder.Operator` kept as a type alias for it — so every spelling above keeps
+working, and diagnostics that mention `PostgrestOperator` are referring to the same type. Nothing to
+change; this is additive.
+
 ## `CountOption` is now a struct, not an enum
 
 `CountOption` (passed to query methods like `select(_:head:count:)`) is a `RawRepresentable`
@@ -1314,7 +1319,7 @@ An `Authorization` header already set via `Configuration.headers`, or via an exp
 
 ## `PostgrestClient` and its builders are now structs, not classes
 
-`PostgrestClient`, `PostgrestBuilder`, `PostgrestQueryBuilder`, `PostgrestFilterBuilder`, and
+`PostgrestClient`, `PostgrestQueryBuilder`, `PostgrestFilterBuilder`, and
 `PostgrestTransformBuilder` are structs instead of classes. The `setAuth` removal above took away
 `PostgrestClient`'s only mutable, lock-protected state, so every one of its stored properties is
 now an immutable `let`. The builder types held their own per-request state (headers, retry flag,
@@ -1322,10 +1327,11 @@ pending-error tracking) the same lock-protected way; removing that lock made the
 they still have `var` stored properties — each chained call (`select`, `eq`, `setHeader`, ...)
 copies `self`, mutates the copy, and returns it, rather than mutating shared state in place.
 
-Under the hood, `PostgrestBuilder`, `PostgrestQueryBuilder`, `PostgrestFilterBuilder`, and
-`PostgrestTransformBuilder` are now `typealias`es of a single generic `PostgrestRequestBuilder<Phase>`
-type, where `Phase` is a compile-time-only marker that determines which methods are available (see
-the next two sections for what that means for your code).
+Under the hood, `PostgrestQueryBuilder`, `PostgrestFilterBuilder`, and `PostgrestTransformBuilder`
+are now `typealias`es of a single generic `PostgrestRequestBuilder<Phase>` type, where `Phase` is a
+compile-time-only marker that determines which methods are available. `PostgrestBuilder` has no
+replacement name at all — it was removed outright (see the next two sections for what that means for
+your code).
 
 Calling methods (`from`, `select`, `eq`, `execute`, and friends) compiles unchanged; this only
 breaks code that depended on these types being reference types: a `weak var` holding one, an
@@ -1351,8 +1357,8 @@ call sites.
 ## `PostgrestBuilder` is no longer a nameable, non-generic type
 
 Code that spells out `PostgrestBuilder` as a type — a stored property, a function parameter or
-return type — no longer compiles, since it's now a generic type alias
-(`PostgrestRequestBuilder<Phase>`) without a non-generic supertype. Use the new
+return type — no longer compiles. The type was removed outright: there is no `PostgrestBuilder`
+type alias, and no non-generic supertype shared by the phase-specific builders. Use the new
 `any PostgrestExecutableBuilder` protocol for "any executable PostgREST builder regardless of
 phase," or name one of the concrete phase-specific type aliases (`PostgrestFilterBuilder`,
 `PostgrestTransformBuilder`) directly:
@@ -1368,7 +1374,9 @@ func makeUsersQuery(_ client: PostgrestClient) -> any PostgrestExecutableBuilder
   client.from("users").select()
 }
 
-try await makeUsersQuery(client).execute(options: FetchOptions())
+// `PostgrestExecutableBuilder.execute(options:)` is a protocol requirement, so it can't carry
+// `@discardableResult` — bind or use the result to avoid an "unused result" warning.
+_ = try await makeUsersQuery(client).execute(options: FetchOptions())
 ```
 
 `any PostgrestExecutableBuilder` only exposes `execute(options:)` — it doesn't carry
@@ -1426,3 +1434,32 @@ let todos: [Todo] = try await client
 
 This is a compile error, not a silent behavior change: any call site chaining `execute`/
 `setHeader`/`retry` directly onto `from(_:)` fails to build.
+
+## `setHeader(name:value:)` and `retry(enabled:)` no longer carry `@discardableResult`
+
+> Warning: This is the one PostgREST item on this page that is **not** a compile error. It is a
+> warning you can miss.
+
+When the builders were classes, `setHeader(name:value:)` and `retry(enabled:)` mutated the receiver
+in place and returned `self` only for chaining convenience, so both were marked
+`@discardableResult`. Now that the builders are structs, both methods return a **new** value and
+leave the receiver untouched. `@discardableResult` was therefore removed: dropping the return value
+would silently drop the header or the retry setting.
+
+```swift
+// Before — mutated `q` in place, chained call not required
+let q = client.from("todos").select()
+q.setHeader(name: "X-Foo", value: "1")
+try await q.execute()
+
+// After — setHeader/retry return a NEW value; you must use the result
+var q = client.from("todos").select()
+q = q.setHeader(name: "X-Foo", value: "1")
+try await q.execute()
+```
+
+The "before" spelling still compiles. It produces a `result of call to 'setHeader(name:value:)' is
+unused` warning instead of an error, and at runtime the header (or the `retry(enabled:)` setting) is
+simply not applied. Search your codebase for `setHeader(` and `retry(enabled:` on a PostgREST
+builder and make sure every call site consumes the returned value — either by chaining directly onto
+it or by reassigning, as above.

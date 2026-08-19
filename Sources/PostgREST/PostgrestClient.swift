@@ -241,11 +241,11 @@ public struct PostgrestClient: Sendable {
 
   /// Returns a query builder targeting the specified table or view.
   ///
-  /// Call ``PostgrestQueryBuilder/select(_:head:count:)`` on the returned builder to begin a
-  /// `SELECT`, or use ``PostgrestQueryBuilder/insert(_:returning:count:)``,
-  /// ``PostgrestQueryBuilder/update(_:returning:count:)``,
-  /// ``PostgrestQueryBuilder/upsert(_:onConflict:returning:count:ignoreDuplicates:)``, or
-  /// ``PostgrestQueryBuilder/delete(returning:count:)`` for write operations.
+  /// Call ``PostgrestRequestBuilder/select(_:head:count:)`` on the returned builder to begin a
+  /// `SELECT`, or use ``PostgrestRequestBuilder/insert(_:returning:count:)``,
+  /// ``PostgrestRequestBuilder/update(_:returning:count:)``,
+  /// ``PostgrestRequestBuilder/upsert(_:onConflict:returning:count:ignoreDuplicates:)``, or
+  /// ``PostgrestRequestBuilder/delete(returning:count:)`` for write operations.
   ///
   /// - Parameter table: The name of the table or view to query.
   /// - Returns: A ``PostgrestQueryBuilder`` for the specified table or view.
