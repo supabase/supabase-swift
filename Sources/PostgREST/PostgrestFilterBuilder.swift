@@ -2,83 +2,87 @@ import ConcurrencyExtras
 import Foundation
 import Helpers
 
-extension PostgrestRequestBuilder {
-  /// The set of PostgREST comparison operators available for use with
-  /// ``PostgrestFilterBuilder/not(_:operator:value:)`` and
-  /// ``PostgrestFilterBuilder/filter(_:operator:value:)``.
-  ///
-  /// Most operators have dedicated convenience methods (e.g., ``PostgrestFilterBuilder/eq(_:value:)``,
-  /// ``PostgrestFilterBuilder/gt(_:value:)``). Use ``Operator`` directly only when you need
-  /// `not(_:operator:value:)` or the raw `filter(_:operator:value:)` escape hatch.
-  ///
-  /// > Note: `Operator` is declared in an unconstrained extension of ``PostgrestRequestBuilder``
-  /// > (rather than one constrained to `Phase: PostgrestFilterablePhase`) purely so its nested-type
-  /// > declaration doesn't depend on unclear compiler support for nested types in conditional
-  /// > extensions — it's still only meaningfully used from filterable phases.
-  public struct Operator: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
-    public let rawValue: String
+/// The set of PostgREST comparison operators available for use with
+/// ``PostgrestFilterBuilder/not(_:operator:value:)`` and
+/// ``PostgrestFilterBuilder/filter(_:operator:value:)``.
+///
+/// Most operators have dedicated convenience methods (e.g., ``PostgrestFilterBuilder/eq(_:value:)``,
+/// ``PostgrestFilterBuilder/gt(_:value:)``). Use ``PostgrestOperator`` directly only when you need
+/// `not(_:operator:value:)` or the raw `filter(_:operator:value:)` escape hatch.
+///
+/// > Note: This is a top-level type aliased onto ``PostgrestRequestBuilder`` as `Operator` (see
+/// > below) rather than declared as a nested type there — a struct nested inside an extension of a
+/// > generic type is a distinct type per generic specialization, which would make
+/// > `PostgrestQueryBuilder.Operator`, `PostgrestFilterBuilder.Operator`, and
+/// > `PostgrestTransformBuilder.Operator` three unrelated types instead of one shared type.
+public struct PostgrestOperator: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+  public let rawValue: String
 
-    /// Creates an ``Operator`` from a raw string value.
-    public init(rawValue: String) {
-      self.rawValue = rawValue
-    }
-
-    /// Creates an ``Operator`` from a string literal.
-    public init(stringLiteral value: String) {
-      self.init(rawValue: value)
-    }
-
-    /// Equals (`=`).
-    public static var eq: Operator { "eq" }
-    /// Not equals (`!=`).
-    public static var neq: Operator { "neq" }
-    /// Greater than (`>`).
-    public static var gt: Operator { "gt" }
-    /// Greater than or equal (`>=`).
-    public static var gte: Operator { "gte" }
-    /// Less than (`<`).
-    public static var lt: Operator { "lt" }
-    /// Less than or equal (`<=`).
-    public static var lte: Operator { "lte" }
-    /// Case-sensitive LIKE pattern match.
-    public static var like: Operator { "like" }
-    /// Case-insensitive ILIKE pattern match.
-    public static var ilike: Operator { "ilike" }
-    /// Case-sensitive regex match.
-    public static var match: Operator { "match" }
-    /// Case-insensitive regex match.
-    public static var imatch: Operator { "imatch" }
-    /// IS (for NULL / boolean checks).
-    public static var `is`: Operator { "is" }
-    /// IS DISTINCT FROM.
-    public static var isdistinct: Operator { "isdistinct" }
-    /// IN — value is in a list.
-    public static var `in`: Operator { "in" }
-    /// Contains (`@>`).
-    public static var cs: Operator { "cs" }
-    /// Contained by (`<@`).
-    public static var cd: Operator { "cd" }
-    /// Range strictly left of (`<<`).
-    public static var sl: Operator { "sl" }
-    /// Range strictly right of (`>>`).
-    public static var sr: Operator { "sr" }
-    /// Range does not extend to the left (`&>`).
-    public static var nxl: Operator { "nxl" }
-    /// Range does not extend to the right (`&<`).
-    public static var nxr: Operator { "nxr" }
-    /// Range is adjacent (`-|-`).
-    public static var adj: Operator { "adj" }
-    /// Overlaps (`&&`).
-    public static var ov: Operator { "ov" }
-    /// Full-text search using `to_tsquery`.
-    public static var fts: Operator { "fts" }
-    /// Full-text search using `plainto_tsquery`.
-    public static var plfts: Operator { "plfts" }
-    /// Full-text search using `phraseto_tsquery`.
-    public static var phfts: Operator { "phfts" }
-    /// Full-text search using `websearch_to_tsquery`.
-    public static var wfts: Operator { "wfts" }
+  /// Creates a ``PostgrestOperator`` from a raw string value.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
   }
+
+  /// Creates a ``PostgrestOperator`` from a string literal.
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
+  /// Equals (`=`).
+  public static let eq: PostgrestOperator = "eq"
+  /// Not equals (`!=`).
+  public static let neq: PostgrestOperator = "neq"
+  /// Greater than (`>`).
+  public static let gt: PostgrestOperator = "gt"
+  /// Greater than or equal (`>=`).
+  public static let gte: PostgrestOperator = "gte"
+  /// Less than (`<`).
+  public static let lt: PostgrestOperator = "lt"
+  /// Less than or equal (`<=`).
+  public static let lte: PostgrestOperator = "lte"
+  /// Case-sensitive LIKE pattern match.
+  public static let like: PostgrestOperator = "like"
+  /// Case-insensitive ILIKE pattern match.
+  public static let ilike: PostgrestOperator = "ilike"
+  /// Case-sensitive regex match.
+  public static let match: PostgrestOperator = "match"
+  /// Case-insensitive regex match.
+  public static let imatch: PostgrestOperator = "imatch"
+  /// IS (for NULL / boolean checks).
+  public static let `is`: PostgrestOperator = "is"
+  /// IS DISTINCT FROM.
+  public static let isdistinct: PostgrestOperator = "isdistinct"
+  /// IN — value is in a list.
+  public static let `in`: PostgrestOperator = "in"
+  /// Contains (`@>`).
+  public static let cs: PostgrestOperator = "cs"
+  /// Contained by (`<@`).
+  public static let cd: PostgrestOperator = "cd"
+  /// Range strictly left of (`<<`).
+  public static let sl: PostgrestOperator = "sl"
+  /// Range strictly right of (`>>`).
+  public static let sr: PostgrestOperator = "sr"
+  /// Range does not extend to the left (`&>`).
+  public static let nxl: PostgrestOperator = "nxl"
+  /// Range does not extend to the right (`&<`).
+  public static let nxr: PostgrestOperator = "nxr"
+  /// Range is adjacent (`-|-`).
+  public static let adj: PostgrestOperator = "adj"
+  /// Overlaps (`&&`).
+  public static let ov: PostgrestOperator = "ov"
+  /// Full-text search using `to_tsquery`.
+  public static let fts: PostgrestOperator = "fts"
+  /// Full-text search using `plainto_tsquery`.
+  public static let plfts: PostgrestOperator = "plfts"
+  /// Full-text search using `phraseto_tsquery`.
+  public static let phfts: PostgrestOperator = "phfts"
+  /// Full-text search using `websearch_to_tsquery`.
+  public static let wfts: PostgrestOperator = "wfts"
+}
+
+extension PostgrestRequestBuilder {
+  /// See ``PostgrestOperator``.
+  public typealias Operator = PostgrestOperator
 }
 
 /// Filter methods for applying WHERE-clause filters to a PostgREST query.
