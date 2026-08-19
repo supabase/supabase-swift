@@ -30,6 +30,77 @@ supporting_symbols:
   - JSONValue.description
   - JSONValue.rawValue
 
+  # PostgrestBuilder/PostgrestQueryBuilder/PostgrestFilterBuilder/PostgrestTransformBuilder
+  # were replaced by a single generic PostgrestRequestBuilder<Phase> (see the stateless
+  # PostgREST client/builders refactor, PR #1240). Its members implement several already-
+  # `implemented` database.* capabilities above simultaneously (filtering, transforming,
+  # executing), so they're listed here rather than attributed to one feature.
+  - PostgrestClient.Configuration.accessToken
+  - PostgrestExecutableBuilder
+  - PostgrestExecutableBuilder.execute
+  - PostgrestExecutablePhase
+  - PostgrestFilterPhase
+  - PostgrestFilterablePhase
+  - PostgrestQueryPhase
+  - PostgrestRequestBuilder
+  - PostgrestRequestBuilder.Operator
+  - PostgrestRequestBuilder.containedBy
+  - PostgrestRequestBuilder.contains
+  - PostgrestRequestBuilder.csv
+  - PostgrestRequestBuilder.eq
+  - PostgrestRequestBuilder.equals
+  - PostgrestRequestBuilder.execute
+  - PostgrestRequestBuilder.explain
+  - PostgrestRequestBuilder.filter
+  - PostgrestRequestBuilder.fts
+  - PostgrestRequestBuilder.fullTextSearch
+  - PostgrestRequestBuilder.geojson
+  - PostgrestRequestBuilder.greaterThan
+  - PostgrestRequestBuilder.greaterThanOrEquals
+  - PostgrestRequestBuilder.gt
+  - PostgrestRequestBuilder.gte
+  - PostgrestRequestBuilder.iLikeAllOf
+  - PostgrestRequestBuilder.iLikeAnyOf
+  - PostgrestRequestBuilder.ilike
+  - PostgrestRequestBuilder.imatch
+  - PostgrestRequestBuilder.in
+  - PostgrestRequestBuilder.is
+  - PostgrestRequestBuilder.isDistinct
+  - PostgrestRequestBuilder.like
+  - PostgrestRequestBuilder.likeAllOf
+  - PostgrestRequestBuilder.likeAnyOf
+  - PostgrestRequestBuilder.limit
+  - PostgrestRequestBuilder.lowerThan
+  - PostgrestRequestBuilder.lowerThanOrEquals
+  - PostgrestRequestBuilder.lt
+  - PostgrestRequestBuilder.lte
+  - PostgrestRequestBuilder.match
+  - PostgrestRequestBuilder.maxAffected
+  - PostgrestRequestBuilder.neq
+  - PostgrestRequestBuilder.notEquals
+  - PostgrestRequestBuilder.or
+  - PostgrestRequestBuilder.order
+  - PostgrestRequestBuilder.overlaps
+  - PostgrestRequestBuilder.phraseToFullTextSearch
+  - PostgrestRequestBuilder.plainToFullTextSearch
+  - PostgrestRequestBuilder.range
+  - PostgrestRequestBuilder.rangeAdjacent
+  - PostgrestRequestBuilder.rangeGreaterThan
+  - PostgrestRequestBuilder.rangeGreaterThanOrEquals
+  - PostgrestRequestBuilder.rangeGt
+  - PostgrestRequestBuilder.rangeGte
+  - PostgrestRequestBuilder.rangeLowerThan
+  - PostgrestRequestBuilder.rangeLowerThanOrEquals
+  - PostgrestRequestBuilder.rangeLt
+  - PostgrestRequestBuilder.rangeLte
+  - PostgrestRequestBuilder.retry
+  - PostgrestRequestBuilder.setHeader
+  - PostgrestRequestBuilder.single
+  - PostgrestRequestBuilder.stripNulls
+  - PostgrestRequestBuilder.webFullTextSearch
+  - PostgrestTransformPhase
+  - PostgrestTransformablePhase
+
 features:
 
   # ── Auth ───────────────────────────────────────────────────────────────────
@@ -452,7 +523,7 @@ features:
   database.query.select:
     status: implemented
     symbols:
-      - PostgrestQueryBuilder.select
+      - PostgrestRequestBuilder.select
     supporting_symbols:
       - CountOption
       - CountOption.init
@@ -470,10 +541,10 @@ features:
   database.mutate.select_after_mutation:
     status: implemented
     symbols:
-      - PostgrestQueryBuilder.insert
-      - PostgrestQueryBuilder.update
-      - PostgrestQueryBuilder.upsert
-      - PostgrestQueryBuilder.delete
+      - PostgrestRequestBuilder.insert
+      - PostgrestRequestBuilder.update
+      - PostgrestRequestBuilder.upsert
+      - PostgrestRequestBuilder.delete
     supporting_symbols:
       - PostgrestReturningOptions
       - PostgrestReturningOptions.init
@@ -502,7 +573,7 @@ features:
   database.using_filters.text_search:
     status: implemented
     symbols:
-      - PostgrestFilterBuilder.textSearch
+      - PostgrestRequestBuilder.textSearch
     supporting_symbols:
       - TextSearchType
       - TextSearchType.init
@@ -514,36 +585,36 @@ features:
   database.using_filters.not:
     status: implemented
     symbols:
-      - PostgrestFilterBuilder.not
+      - PostgrestRequestBuilder.not
     supporting_symbols:
-      - PostgrestFilterBuilder.Operator
-      - PostgrestFilterBuilder.Operator.init
-      - PostgrestFilterBuilder.Operator.rawValue
-      - PostgrestFilterBuilder.Operator.eq
-      - PostgrestFilterBuilder.Operator.neq
-      - PostgrestFilterBuilder.Operator.gt
-      - PostgrestFilterBuilder.Operator.gte
-      - PostgrestFilterBuilder.Operator.lt
-      - PostgrestFilterBuilder.Operator.lte
-      - PostgrestFilterBuilder.Operator.like
-      - PostgrestFilterBuilder.Operator.ilike
-      - PostgrestFilterBuilder.Operator.match
-      - PostgrestFilterBuilder.Operator.imatch
-      - PostgrestFilterBuilder.Operator.is
-      - PostgrestFilterBuilder.Operator.isdistinct
-      - PostgrestFilterBuilder.Operator.in
-      - PostgrestFilterBuilder.Operator.cs
-      - PostgrestFilterBuilder.Operator.cd
-      - PostgrestFilterBuilder.Operator.sl
-      - PostgrestFilterBuilder.Operator.sr
-      - PostgrestFilterBuilder.Operator.nxl
-      - PostgrestFilterBuilder.Operator.nxr
-      - PostgrestFilterBuilder.Operator.adj
-      - PostgrestFilterBuilder.Operator.ov
-      - PostgrestFilterBuilder.Operator.fts
-      - PostgrestFilterBuilder.Operator.plfts
-      - PostgrestFilterBuilder.Operator.phfts
-      - PostgrestFilterBuilder.Operator.wfts
+      - PostgrestOperator
+      - PostgrestOperator.init
+      - PostgrestOperator.rawValue
+      - PostgrestOperator.eq
+      - PostgrestOperator.neq
+      - PostgrestOperator.gt
+      - PostgrestOperator.gte
+      - PostgrestOperator.lt
+      - PostgrestOperator.lte
+      - PostgrestOperator.like
+      - PostgrestOperator.ilike
+      - PostgrestOperator.match
+      - PostgrestOperator.imatch
+      - PostgrestOperator.is
+      - PostgrestOperator.isdistinct
+      - PostgrestOperator.in
+      - PostgrestOperator.cs
+      - PostgrestOperator.cd
+      - PostgrestOperator.sl
+      - PostgrestOperator.sr
+      - PostgrestOperator.nxl
+      - PostgrestOperator.nxr
+      - PostgrestOperator.adj
+      - PostgrestOperator.ov
+      - PostgrestOperator.fts
+      - PostgrestOperator.plfts
+      - PostgrestOperator.phfts
+      - PostgrestOperator.wfts
   database.using_filters.or: implemented
   database.using_filters.raw: implemented
   database.using_filters.regex: implemented
@@ -552,7 +623,7 @@ features:
   database.using_filters.not_in:
     status: implemented
     symbols:
-      - PostgrestFilterBuilder.notIn
+      - PostgrestRequestBuilder.notIn
   database.using_filters.like_all: implemented
   database.using_filters.like_any: implemented
   database.using_filters.ilike_all: implemented
@@ -565,7 +636,7 @@ features:
   database.using_modifiers.maybe_single_row:
     status: implemented
     symbols:
-      - PostgrestTransformBuilder.maybeSingle
+      - PostgrestRequestBuilder.maybeSingle
   database.using_modifiers.strip_nulls: implemented
   database.using_modifiers.format_csv: implemented
   database.using_modifiers.format_geojson: implemented
@@ -581,7 +652,7 @@ features:
   database.using_modifiers.dry_run:
     status: implemented
     symbols:
-      - PostgrestTransformBuilder.dryRun
+      - PostgrestRequestBuilder.dryRun
 
   database.configuration.auto_retry: implemented
   database.configuration.request_timeout: not_implemented
