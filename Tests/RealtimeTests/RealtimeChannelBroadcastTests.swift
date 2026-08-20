@@ -246,6 +246,46 @@ import Testing
       #expect(payload?["payload"]?.objectValue?["key"]?.stringValue == "value")
     }
 
+    // MARK: - Per-call encoder override
+
+    @Test
+    func broadcast_perCallEncoderOverridesFixedInternalEncoder() async throws {
+      await http.any { _ in
+        HTTPResponse(
+          data: Data(),
+          response: HTTPURLResponse(
+            url: self.url,
+            statusCode: 202,
+            httpVersion: nil,
+            headerFields: nil
+          )!
+        )
+      }
+
+      // Not subscribed, so this falls back to the REST broadcast endpoint. Ack the broadcast so
+      // `broadcast(event:message:encoder:)` awaits the REST call before returning.
+      let channel = sut.channel("test") { config in
+        config.broadcast.acknowledgeBroadcasts = true
+      }
+
+      struct Message: Codable {
+        let userName: String
+      }
+
+      let snakeCaseEncoder = JSONEncoder()
+      snakeCaseEncoder.keyEncodingStrategy = .convertToSnakeCase
+
+      try await channel.broadcast(
+        event: "my_event", message: Message(userName: "abc"), encoder: snakeCaseEncoder
+      )
+
+      let request = await http.receivedRequests.last
+      let body = try #require(request?.body)
+      let json = try #require(try JSONSerialization.jsonObject(with: body) as? [String: Any])
+      #expect(json["user_name"] as? String == "abc")
+      #expect(json["userName"] == nil)
+    }
+
     // MARK: - REST broadcast URL uses the sub-topic (without `realtime:` prefix)
 
     @Test

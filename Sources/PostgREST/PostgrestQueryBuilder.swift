@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 import HTTPTypes
 
 // The operation methods available before an operation has been chosen. The overview prose and
@@ -89,14 +89,17 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
   ///   - values: An `Encodable` value representing a single row or an array of rows to insert.
   ///   - returning: Controls which rows PostgREST returns. Defaults to `nil` (server decides).
   ///   - count: The row-count algorithm to use, or `nil` to skip counting. See ``CountOption``.
+  ///   - encoder: The `JSONEncoder` used to serialize `values`. Overrides
+  ///     ``PostgrestClient/Configuration/encoder`` when non-`nil`.
   /// - Returns: A ``PostgrestFilterBuilder`` for applying additional constraints or executing the request.
   /// - Throws: An encoding error if `values` cannot be serialized, or ``PostgrestError`` on server error.
   public func insert(
     _ values: some Encodable,
     returning: PostgrestReturningOptions? = nil,
-    count: CountOption? = nil
+    count: CountOption? = nil,
+    encoder: JSONEncoder? = nil
   ) throws -> PostgrestFilterBuilder {
-    let body = try configuration.encoder.encode(values)
+    let body = try (encoder ?? configuration.encoder).encode(values)
 
     var request = self.request
     request.method = .post
@@ -157,6 +160,8 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
   ///   - count: The row-count algorithm to use, or `nil` to skip counting. See ``CountOption``.
   ///   - ignoreDuplicates: When `true`, conflicting rows are silently ignored. When `false` (the
   ///     default), conflicting rows are merged with the supplied values.
+  ///   - encoder: The `JSONEncoder` used to serialize `values`. Overrides
+  ///     ``PostgrestClient/Configuration/encoder`` when non-`nil`.
   /// - Returns: A ``PostgrestFilterBuilder`` for applying additional constraints or executing the request.
   /// - Throws: An encoding error if `values` cannot be serialized, or ``PostgrestError`` on server error.
   public func upsert(
@@ -164,9 +169,10 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
     onConflict: String? = nil,
     returning: PostgrestReturningOptions = .representation,
     count: CountOption? = nil,
-    ignoreDuplicates: Bool = false
+    ignoreDuplicates: Bool = false,
+    encoder: JSONEncoder? = nil
   ) throws -> PostgrestFilterBuilder {
-    let body = try configuration.encoder.encode(values)
+    let body = try (encoder ?? configuration.encoder).encode(values)
 
     var request = self.request
     request.method = .post
@@ -225,14 +231,17 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
   ///   - values: An `Encodable` value with the columns to update.
   ///   - returning: Controls which rows PostgREST returns after the update. Defaults to ``PostgrestReturningOptions/representation``.
   ///   - count: The row-count algorithm to use, or `nil` to skip counting. See ``CountOption``.
+  ///   - encoder: The `JSONEncoder` used to serialize `values`. Overrides
+  ///     ``PostgrestClient/Configuration/encoder`` when non-`nil`.
   /// - Returns: A ``PostgrestFilterBuilder`` for scoping which rows are affected.
   /// - Throws: An encoding error if `values` cannot be serialized, or ``PostgrestError`` on server error.
   public func update(
     _ values: some Encodable,
     returning: PostgrestReturningOptions = .representation,
-    count: CountOption? = nil
+    count: CountOption? = nil,
+    encoder: JSONEncoder? = nil
   ) throws -> PostgrestFilterBuilder {
-    let body = try configuration.encoder.encode(values)
+    let body = try (encoder ?? configuration.encoder).encode(values)
 
     var request = self.request
     request.method = .patch

@@ -5,7 +5,7 @@
 //  Created by Guilherme Souza on 20/08/26.
 //
 
-import Foundation
+public import Foundation
 import HTTPTypes
 import Logging
 
@@ -71,7 +71,7 @@ public enum PostgrestTransformPhase: PostgrestTransformablePhase {}
 /// ### Executing the Request
 ///
 /// - ``execute(options:)->PostgrestResponse<Void>``
-/// - ``execute(options:)->PostgrestResponse<T>``
+/// - ``execute(options:decoder:)``
 public struct PostgrestRequestBuilder<Phase>: Sendable {
   let configuration: PostgrestClient.Configuration
   let http: any HTTPClientType
@@ -159,15 +159,15 @@ public struct PostgrestRequestBuilder<Phase>: Sendable {
 ///
 /// ### Inserting Rows
 ///
-/// - ``PostgrestRequestBuilder/insert(_:returning:count:)``
+/// - ``PostgrestRequestBuilder/insert(_:returning:count:encoder:)``
 ///
 /// ### Updating Rows
 ///
-/// - ``PostgrestRequestBuilder/update(_:returning:count:)``
+/// - ``PostgrestRequestBuilder/update(_:returning:count:encoder:)``
 ///
 /// ### Upsert Rows
 ///
-/// - ``PostgrestRequestBuilder/upsert(_:onConflict:returning:count:ignoreDuplicates:)``
+/// - ``PostgrestRequestBuilder/upsert(_:onConflict:returning:count:ignoreDuplicates:encoder:)``
 ///
 /// ### Deleting Rows
 ///
@@ -180,11 +180,11 @@ public typealias PostgrestQueryBuilder = PostgrestRequestBuilder<PostgrestQueryP
 /// This is ``PostgrestRequestBuilder`` specialized to ``PostgrestFilterPhase``.
 ///
 /// Obtain one from ``PostgrestRequestBuilder/select(_:head:count:)``,
-/// ``PostgrestRequestBuilder/insert(_:returning:count:)``,
-/// ``PostgrestRequestBuilder/update(_:returning:count:)``, or another write method on
+/// ``PostgrestRequestBuilder/insert(_:returning:count:encoder:)``,
+/// ``PostgrestRequestBuilder/update(_:returning:count:encoder:)``, or another write method on
 /// ``PostgrestQueryBuilder``, or from ``PostgrestClient/rpc(_:params:head:get:count:)``. Chain one
 /// or more filter methods, then call
-/// ``PostgrestRequestBuilder/execute(options:)->PostgrestResponse<T>`` to send the request.
+/// ``PostgrestRequestBuilder/execute(options:decoder:)`` to send the request.
 ///
 /// All filter methods return `Self` so they can be freely chained:
 ///
@@ -261,7 +261,7 @@ public typealias PostgrestFilterBuilder = PostgrestRequestBuilder<PostgrestFilte
 ///
 /// This is ``PostgrestRequestBuilder`` specialized to ``PostgrestTransformPhase``. It sits between
 /// ``PostgrestFilterBuilder`` (WHERE clauses) and
-/// ``PostgrestRequestBuilder/execute(options:)->PostgrestResponse<T>`` (sending the request). All
+/// ``PostgrestRequestBuilder/execute(options:decoder:)`` (sending the request). All
 /// transformation methods narrow the builder to ``PostgrestTransformPhase``, so once you call one
 /// you can no longer filter — only transform further or execute.
 ///
@@ -320,8 +320,9 @@ public protocol PostgrestExecutableBuilder: Sendable {
   /// See ``PostgrestRequestBuilder/execute(options:)->PostgrestResponse<Void>``.
   func execute(options: FetchOptions) async throws -> PostgrestResponse<Void>
 
-  /// See ``PostgrestRequestBuilder/execute(options:)->PostgrestResponse<T>``.
-  func execute<T: Decodable>(options: FetchOptions) async throws -> PostgrestResponse<T>
+  /// See ``PostgrestRequestBuilder/execute(options:decoder:)``.
+  func execute<T: Decodable>(options: FetchOptions, decoder: JSONDecoder?) async throws
+    -> PostgrestResponse<T>
 }
 
 extension PostgrestRequestBuilder: PostgrestExecutableBuilder
@@ -391,18 +392,24 @@ extension PostgrestRequestBuilder where Phase: PostgrestExecutablePhase {
   ///   .value
   /// ```
   ///
-  /// - Parameter options: Options controlling whether to include a row count and whether to
-  ///   use the HEAD method. Defaults to ``FetchOptions/init(head:count:)``.
+  /// - Parameters:
+  ///   - options: Options controlling whether to include a row count and whether to
+  ///     use the HEAD method. Defaults to ``FetchOptions/init(head:count:)``.
+  ///   - decoder: The `JSONDecoder` used to decode the response body into `T`. Overrides
+  ///     ``PostgrestClient/Configuration/decoder`` when non-`nil`. Never used to decode
+  ///     ``PostgrestError`` — that always uses a fixed internal decoder.
   /// - Returns: A ``PostgrestResponse`` whose `value` is the decoded `T`.
   /// - Throws: ``PostgrestError`` if PostgREST returns an error response, a decoding error if
   ///   the response body cannot be decoded as `T`, or any error thrown by the fetch handler.
   @discardableResult
   public func execute<T: Decodable>(
-    options: FetchOptions = FetchOptions()
+    options: FetchOptions = FetchOptions(),
+    decoder: JSONDecoder? = nil
   ) async throws -> PostgrestResponse<T> {
-    try await execute(options: options) { [configuration] data in
+    let decoder = decoder ?? configuration.decoder
+    return try await execute(options: options) { [configuration] data in
       do {
-        return try configuration.decoder.decode(T.self, from: data)
+        return try decoder.decode(T.self, from: data)
       } catch {
         configuration.logger.error("Failed to decode type '\(T.self) with error: \(error)")
         throw error
@@ -412,7 +419,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestExecutablePhase {
 
   private func execute<T>(
     options: FetchOptions,
-    decode: @Sendable (Data) throws -> T
+    decode: (Data) throws -> T
   ) async throws -> PostgrestResponse<T> {
     if let message = pendingError {
       throw PostgrestError(message: message)
@@ -490,7 +497,10 @@ extension PostgrestRequestBuilder where Phase: PostgrestExecutablePhase {
         continue
       }
 
-      if let error = try? configuration.decoder.decode(PostgrestError.self, from: response.data) {
+      // `PostgrestError`'s fields match PostgREST's JSON keys exactly, so a plain, fixed
+      // `JSONDecoder` decodes it regardless of any user-supplied key/date strategy on
+      // `configuration.decoder` or a per-call override — those are for user-defined row types.
+      if let error = try? JSONDecoder().decode(PostgrestError.self, from: response.data) {
         // `maybeSingle()` turns the "no rows" variant of PGRST116 into a `nil` value, but
         // rethrows the "multiple rows" variant since that indicates a query that should have
         // been scoped to match at most one row.

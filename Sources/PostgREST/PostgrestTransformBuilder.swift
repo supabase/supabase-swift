@@ -296,7 +296,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestTransformablePhase {
   /// Requires PostgREST v13 or later. Compatible with PATCH, DELETE, and RPC calls only.
   ///
   /// > Note: This method does not validate the HTTP method. Ensure you only use it with
-  /// > ``PostgrestRequestBuilder/update(_:returning:count:)``,
+  /// > ``PostgrestRequestBuilder/update(_:returning:count:encoder:)``,
   /// > ``PostgrestRequestBuilder/delete(returning:count:)``, or
   /// > ``PostgrestClient/rpc(_:params:head:get:count:)``.
   ///
