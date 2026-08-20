@@ -161,6 +161,28 @@ struct SupabaseClientTests {
     #expect(realtimeOptions.logger[metadataKey: "system"] == "realtime")
   }
 
+  @Test
+  func dbRetryOptionForwardsToPostgrestClient() {
+    let defaultClient = SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      options: SupabaseClientOptions(
+        auth: SupabaseClientOptions.AuthOptions(storage: AuthLocalStorageMock())
+      )
+    )
+    #expect(defaultClient.rest.configuration.retryEnabled == true)
+
+    let noRetryClient = SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      options: SupabaseClientOptions(
+        db: SupabaseClientOptions.DatabaseOptions(retry: false),
+        auth: SupabaseClientOptions.AuthOptions(storage: AuthLocalStorageMock())
+      )
+    )
+    #expect(noRetryClient.rest.configuration.retryEnabled == false)
+  }
+
   #if !os(Linux) && !os(Android)
     @Test
     func clientInitWithDefaultOptionsShouldBeAvailableInNonLinux() {

@@ -35,14 +35,20 @@ public struct SupabaseClientOptions: Sendable {
     /// The JSONDecoder to use when decoding database response objects.
     public let decoder: JSONDecoder
 
+    /// Whether to automatically retry transient (network or 5xx) PostgREST errors.
+    /// Defaults to `true`.
+    public let retry: Bool
+
     public init(
       schema: String? = nil,
       encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
-      decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder
+      decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder,
+      retry: Bool = true
     ) {
       self.schema = schema
       self.encoder = encoder
       self.decoder = decoder
+      self.retry = retry
     }
   }
 
