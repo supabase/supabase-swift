@@ -113,6 +113,10 @@ public struct StorageClientConfiguration: Sendable {
 ///
 /// - ``configuration``
 ///
+/// ### Customizing headers
+///
+/// - ``setHeader(_:forKey:)``
+///
 /// ### Accessing buckets
 ///
 /// - ``from(_:)``
@@ -137,6 +141,31 @@ public struct SupabaseStorageClient: Sendable {
   ///   headers, JSON codecs, and HTTP session.
   public init(configuration: StorageClientConfiguration) {
     api = StorageApi(configuration: configuration)
+  }
+
+  init(api: StorageApi) {
+    self.api = api
+  }
+
+  /// Returns a new ``SupabaseStorageClient`` with an additional HTTP header merged into the
+  /// underlying ``StorageApi``'s configuration, included in all requests made by the returned
+  /// instance (and by ``StorageFileApi`` instances subsequently obtained via ``from(_:)``).
+  ///
+  /// Because ``SupabaseStorageClient`` is an immutable value type, this method does not mutate
+  /// `self` — it returns a new instance. Discarding the return value is a no-op, so always use
+  /// the result:
+  ///
+  /// ```swift
+  /// let storage = client.storage.setHeader("x-custom-header", forKey: "X-Custom-Header")
+  /// ```
+  ///
+  /// - Parameters:
+  ///   - value: The value of the header field.
+  ///   - key: The name of the header field. The key is case-insensitively stored as lowercase.
+  /// - Returns: A new ``SupabaseStorageClient`` with the header merged into the configuration's
+  ///   headers.
+  public func setHeader(_ value: String, forKey key: String) -> Self {
+    SupabaseStorageClient(api: api.setHeader(value, forKey: key))
   }
 
   /// Returns a ``StorageFileApi`` scoped to the given bucket.
