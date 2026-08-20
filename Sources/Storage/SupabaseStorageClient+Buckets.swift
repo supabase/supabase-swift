@@ -5,24 +5,8 @@ import HTTPTypes
   import FoundationNetworking
 #endif
 
-/// Bucket-management operations for ``SupabaseStorageClient``.
-///
-/// ## Topics
-///
-/// ### Listing and inspecting buckets
-///
-/// - ``SupabaseStorageClient/listBuckets()``
-/// - ``SupabaseStorageClient/getBucket(_:)``
-///
-/// ### Creating and updating buckets
-///
-/// - ``SupabaseStorageClient/createBucket(_:options:)``
-/// - ``SupabaseStorageClient/updateBucket(_:options:)``
-///
-/// ### Removing buckets
-///
-/// - ``SupabaseStorageClient/emptyBucket(_:)``
-/// - ``SupabaseStorageClient/deleteBucket(_:)``
+/// Bucket-management operations (listing, creating, updating, emptying, and deleting) for
+/// ``SupabaseStorageClient``.
 extension SupabaseStorageClient {
   /// Retrieves the details of all Storage buckets within the project.
   ///
