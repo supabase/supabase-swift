@@ -109,6 +109,10 @@ public struct StorageClientConfiguration: Sendable {
 ///
 /// - ``init(configuration:)``
 ///
+/// ### Configuration
+///
+/// - ``configuration``
+///
 /// ### Accessing buckets
 ///
 /// - ``from(_:)``
@@ -123,6 +127,9 @@ public struct StorageClientConfiguration: Sendable {
 /// - ``deleteBucket(_:)``
 public struct SupabaseStorageClient: Sendable {
   let api: StorageApi
+
+  /// The configuration used to initialize this client instance.
+  public var configuration: StorageClientConfiguration { api.configuration }
 
   /// Creates a ``SupabaseStorageClient`` with the given configuration.
   ///

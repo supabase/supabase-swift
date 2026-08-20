@@ -111,11 +111,18 @@ enum FileUpload {
 /// ### Customizing headers
 ///
 /// - ``setHeader(_:forKey:)``
+///
+/// ### Configuration
+///
+/// - ``configuration``
 public struct StorageFileApi: Sendable {
   /// The identifier of the bucket this instance operates on.
   let bucketId: String
 
   let api: StorageApi
+
+  /// The configuration used to initialize this client instance.
+  public var configuration: StorageClientConfiguration { api.configuration }
 
   init(bucketId: String, api: StorageApi) {
     self.bucketId = bucketId
