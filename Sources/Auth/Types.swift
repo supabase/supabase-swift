@@ -1453,14 +1453,22 @@ public struct OAuthResponse: Hashable, Sendable {
   /// The URL to open in order to start the OAuth flow.
   public let url: URL
 
+  /// The id of the PKCE flow this call started, when the client is configured for the PKCE
+  /// flow. Pass it to ``AuthClient/exchangeCodeForSession(authCode:flowId:)`` to select this
+  /// flow's code verifier when multiple PKCE flows may be pending at once. `nil` when not
+  /// using the PKCE flow.
+  public let flowId: String?
+
   /// Creates an ``OAuthResponse``.
   ///
   /// - Parameters:
   ///   - provider: The OAuth provider.
   ///   - url: The URL to open in order to start the OAuth flow.
-  public init(provider: Provider, url: URL) {
+  ///   - flowId: The id of the PKCE flow this call started, if any.
+  public init(provider: Provider, url: URL, flowId: String? = nil) {
     self.provider = provider
     self.url = url
+    self.flowId = flowId
   }
 }
 
