@@ -98,21 +98,15 @@ public final class SupabaseClient: Sendable {
   }
 
   var rest: PostgrestClient {
-    mutableState.withValue {
-      if $0.rest == nil {
-        $0.rest = PostgrestClient(
-          url: databaseURL,
-          schema: options.db.schema,
-          headers: headers,
-          logger: options.global.logger,
-          fetch: fetchWithAuth,
-          encoder: options.db.encoder,
-          decoder: options.db.decoder
-        )
-      }
-
-      return $0.rest!
-    }
+    PostgrestClient(
+      url: databaseURL,
+      schema: options.db.schema,
+      headers: headers,
+      logger: options.global.logger,
+      fetch: fetchWithAuth,
+      encoder: options.db.encoder,
+      decoder: options.db.decoder
+    )
   }
 
   /// The Storage client for uploading, downloading, and managing files.
@@ -177,7 +171,6 @@ public final class SupabaseClient: Sendable {
   struct MutableState {
     var listenForAuthEventsTask: Task<Void, Never>?
     var storage: SupabaseStorageClient?
-    var rest: PostgrestClient?
     var realtime: RealtimeClientV2?
 
     var changedAccessToken: String?
@@ -410,9 +403,11 @@ public final class SupabaseClient: Sendable {
   /// A `fetch` closure handed to the REST, Storage and Functions sub-clients.
   ///
   /// Captures only the dependencies it needs — never `self` — because each sub-client stores this
-  /// closure for its whole lifetime while being cached in ``mutableState``. Capturing `self` here
-  /// would form a `self -> mutableState -> sub-client -> closure -> self` retain cycle that keeps
-  /// ``deinit`` from ever running.
+  /// closure for its whole lifetime, and the cached sub-clients (`storage`, `realtimeV2`) are held
+  /// in ``mutableState`` for the lifetime of the client. Capturing `self` here would form a
+  /// `self -> mutableState -> sub-client -> closure -> self` retain cycle that keeps ``deinit`` from
+  /// ever running. `rest` is rebuilt per access and not cached, but it gets the same closure, so the
+  /// no-`self`-capture rule applies uniformly.
   private var fetchWithAuth: @Sendable (_ request: URLRequest) async throws -> (Data, URLResponse) {
     { [session = options.global.session, adapt = adaptRequest] request in
       try await session.data(for: adapt(request))

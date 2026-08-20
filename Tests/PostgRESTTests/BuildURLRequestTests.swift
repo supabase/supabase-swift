@@ -23,14 +23,14 @@ struct BuildURLRequestTests {
     let record: Bool
     let file: StaticString
     let line: UInt
-    let build: @Sendable (PostgrestClient) async throws -> PostgrestBuilder
+    let build: @Sendable (PostgrestClient) async throws -> any PostgrestExecutableBuilder
 
     init(
       name: String,
       record: Bool = false,
       file: StaticString = #filePath,
       line: UInt = #line,
-      build: @escaping @Sendable (PostgrestClient) async throws -> PostgrestBuilder
+      build: @escaping @Sendable (PostgrestClient) async throws -> any PostgrestExecutableBuilder
     ) {
       self.name = name
       self.record = record
@@ -250,7 +250,7 @@ struct BuildURLRequestTests {
     for testCase in testCases {
       runningTestCase.withValue { $0 = testCase }
       let builder = try await testCase.build(client)
-      _ = try? await builder.execute()
+      _ = try? await builder.execute(options: FetchOptions())
     }
   }
 

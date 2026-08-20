@@ -1,6 +1,5 @@
-import ConcurrencyExtras
 public import Foundation
-public import HTTPTypes
+import HTTPTypes
 public import Logging
 
 #if canImport(FoundationNetworking)
@@ -32,7 +31,7 @@ public import Logging
 /// ### Creating a Client
 ///
 /// - ``init(configuration:)``
-/// - ``init(url:schema:headers:logger:fetch:encoder:decoder:retryEnabled:)``
+/// - ``init(url:schema:headers:logger:fetch:encoder:decoder:retryEnabled:accessToken:)``
 /// - ``Configuration``
 /// - ``FetchHandler``
 ///
@@ -42,10 +41,6 @@ public import Logging
 /// - ``rpc(_:params:head:get:count:)``
 /// - ``rpc(_:head:get:count:)``
 ///
-/// ### Managing Authentication
-///
-/// - ``setAuth(_:)``
-///
 /// ### Switching the Schema
 ///
 /// - ``schema(_:)``
@@ -53,7 +48,7 @@ public import Logging
 /// ### Inspecting Configuration
 ///
 /// - ``configuration``
-public final class PostgrestClient: Sendable {
+public struct PostgrestClient: Sendable {
   /// A closure that performs an HTTP request and returns the raw response data and metadata.
   ///
   /// Provide a custom ``FetchHandler`` through ``Configuration`` when you need to intercept,
@@ -87,7 +82,7 @@ public final class PostgrestClient: Sendable {
   ///
   /// ### Creating Configuration
   ///
-  /// - ``init(url:schema:headers:logger:fetch:encoder:decoder:retryEnabled:)``
+  /// - ``init(url:schema:headers:logger:fetch:encoder:decoder:retryEnabled:accessToken:)``
   ///
   /// ### Configuration Properties
   ///
@@ -98,6 +93,7 @@ public final class PostgrestClient: Sendable {
   /// - ``encoder``
   /// - ``decoder``
   /// - ``retryEnabled``
+  /// - ``accessToken``
   ///
   /// ### Defaults
   ///
@@ -135,8 +131,15 @@ public final class PostgrestClient: Sendable {
     /// When `true` (the default), GET and HEAD requests that receive an HTTP 503 or 520
     /// response, or encounter a network error, are retried up to three times with
     /// exponential back-off. Set to `false` to disable retries globally; individual
-    /// requests can also override this via ``PostgrestBuilder/retry(enabled:)``.
+    /// requests can also override this via ``PostgrestRequestBuilder/retry(enabled:)``.
     public var retryEnabled: Bool
+
+    /// An async closure returning the current access token, resolved fresh for every request and
+    /// sent as `Authorization: Bearer <token>`. `nil` (the default) sends no bearer token from this
+    /// closure. An `Authorization` header already present on the request — from `headers` above, or
+    /// from an explicit `PostgrestRequestBuilder.setHeader("Authorization", ...)` call — always
+    /// takes precedence over this closure's result.
+    public var accessToken: (@Sendable () async throws -> String?)?
 
     let logger: Logging.Logger
 
@@ -151,6 +154,7 @@ public final class PostgrestClient: Sendable {
     ///   - encoder: The `JSONEncoder` used for request bodies. Defaults to ``jsonEncoder``.
     ///   - decoder: The `JSONDecoder` used for response bodies. Defaults to ``jsonDecoder``.
     ///   - retryEnabled: Whether to retry transient errors. Defaults to `true`.
+    ///   - accessToken: An async closure returning the current access token. Defaults to `nil`.
     public init(
       url: URL,
       schema: String? = nil,
@@ -159,7 +163,8 @@ public final class PostgrestClient: Sendable {
       fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
       encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
       decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder,
-      retryEnabled: Bool = true
+      retryEnabled: Bool = true,
+      accessToken: (@Sendable () async throws -> String?)? = nil
     ) {
       self.url = url
       self.schema = schema
@@ -171,31 +176,25 @@ public final class PostgrestClient: Sendable {
       self.encoder = encoder
       self.decoder = decoder
       self.retryEnabled = retryEnabled
+      self.accessToken = accessToken
     }
   }
 
-  private let _configuration: LockIsolated<Configuration>
+  /// The configuration this client was created with.
+  public let configuration: Configuration
   let clock: any Clock<Duration>
-
-  /// The current configuration of this client.
-  ///
-  /// The configuration may change at runtime — for example, when ``setAuth(_:)`` updates the
-  /// `Authorization` header. Always read this property rather than caching a copy if you need
-  /// the most up-to-date values.
-  public var configuration: Configuration { _configuration.value }
 
   /// Creates a ``PostgrestClient`` from an existing ``Configuration``.
   ///
   /// - Parameter configuration: The configuration to use.
-  public convenience init(configuration: Configuration) {
+  public init(configuration: Configuration) {
     self.init(configuration: configuration, clock: ContinuousClock())
   }
 
   init(configuration: Configuration, clock: any Clock<Duration>) {
-    _configuration = LockIsolated(configuration)
-    _configuration.withValue {
-      $0.headers.merge(Configuration.defaultHeaders) { l, _ in l }
-    }
+    var configuration = configuration
+    configuration.headers.merge(Configuration.defaultHeaders) { l, _ in l }
+    self.configuration = configuration
     self.clock = clock
   }
 
@@ -213,7 +212,8 @@ public final class PostgrestClient: Sendable {
   ///   - encoder: The `JSONEncoder` used for request bodies. Defaults to ``Configuration/jsonEncoder``.
   ///   - decoder: The `JSONDecoder` used for response bodies. Defaults to ``Configuration/jsonDecoder``.
   ///   - retryEnabled: Whether to retry transient errors. Defaults to `true`.
-  public convenience init(
+  ///   - accessToken: An async closure returning the current access token. Defaults to `nil`.
+  public init(
     url: URL,
     schema: String? = nil,
     headers: [String: String] = [:],
@@ -221,7 +221,8 @@ public final class PostgrestClient: Sendable {
     fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
     encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
     decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder,
-    retryEnabled: Bool = true
+    retryEnabled: Bool = true,
+    accessToken: (@Sendable () async throws -> String?)? = nil
   ) {
     self.init(
       configuration: Configuration(
@@ -232,35 +233,19 @@ public final class PostgrestClient: Sendable {
         fetch: fetch,
         encoder: encoder,
         decoder: decoder,
-        retryEnabled: retryEnabled
+        retryEnabled: retryEnabled,
+        accessToken: accessToken
       )
     )
   }
 
-  /// Sets or clears the JWT used for row-level security.
-  ///
-  /// When `token` is non-`nil`, the client adds an `Authorization: Bearer <token>` header to all
-  /// subsequent requests. Passing `nil` removes the header.
-  ///
-  /// - Parameter token: A JWT string, or `nil` to remove the authorization header.
-  /// - Returns: The same ``PostgrestClient`` instance so calls can be chained.
-  @discardableResult
-  public func setAuth(_ token: String?) -> PostgrestClient {
-    if let token {
-      _configuration.withValue { $0.headers["Authorization"] = "Bearer \(token)" }
-    } else {
-      _ = _configuration.withValue { $0.headers.removeValue(forKey: "Authorization") }
-    }
-    return self
-  }
-
   /// Returns a query builder targeting the specified table or view.
   ///
-  /// Call ``PostgrestQueryBuilder/select(_:head:count:)`` on the returned builder to begin a
-  /// `SELECT`, or use ``PostgrestQueryBuilder/insert(_:returning:count:)``,
-  /// ``PostgrestQueryBuilder/update(_:returning:count:)``,
-  /// ``PostgrestQueryBuilder/upsert(_:onConflict:returning:count:ignoreDuplicates:)``, or
-  /// ``PostgrestQueryBuilder/delete(returning:count:)`` for write operations.
+  /// Call ``PostgrestRequestBuilder/select(_:head:count:)`` on the returned builder to begin a
+  /// `SELECT`, or use ``PostgrestRequestBuilder/insert(_:returning:count:)``,
+  /// ``PostgrestRequestBuilder/update(_:returning:count:)``,
+  /// ``PostgrestRequestBuilder/upsert(_:onConflict:returning:count:ignoreDuplicates:)``, or
+  /// ``PostgrestRequestBuilder/delete(returning:count:)`` for write operations.
   ///
   /// - Parameter table: The name of the table or view to query.
   /// - Returns: A ``PostgrestQueryBuilder`` for the specified table or view.

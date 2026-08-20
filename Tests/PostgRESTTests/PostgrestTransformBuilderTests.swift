@@ -786,5 +786,37 @@ extension PostgrestMockerTests {
         .dryRun()
         .execute()
     }
+
+    @Test
+    func maybeSingleFlagSurvivesALaterTransformCall() async throws {
+      Mock(
+        url: url.appendingPathComponent("users"),
+        ignoreQuery: true,
+        statusCode: 406,
+        data: [
+          .get: Data(
+            """
+            {
+              "code": "PGRST116",
+              "details": "Results contain 0 rows, application/vnd.pgrst.object+json requires 1 row",
+              "message": "JSON object requested, multiple (or no) rows returned"
+            }
+            """.utf8
+          )
+        ]
+      )
+      .register()
+
+      let user: User? =
+        try await sut
+        .from("users")
+        .select()
+        .maybeSingle()
+        .order("id")
+        .execute()
+        .value
+
+      #expect(user == nil)
+    }
   }
 }

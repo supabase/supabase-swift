@@ -113,26 +113,27 @@ struct FilteringView: View {
     do {
       error = nil
 
-      var query = supabase.from("todos").select()
+      var filtered = supabase.from("todos").select()
 
       // Apply filter
       switch filterComplete {
       case .all:
         break
       case .complete:
-        query = query.eq("is_complete", value: true)
+        filtered = filtered.eq("is_complete", value: true)
       case .incomplete:
-        query = query.eq("is_complete", value: false)
+        filtered = filtered.eq("is_complete", value: false)
       }
 
       // Apply sorting
+      let query: PostgrestTransformBuilder
       switch sortOrder {
       case .newest:
-        query = query.order("created_at", ascending: false) as! PostgrestFilterBuilder
+        query = filtered.order("created_at", ascending: false)
       case .oldest:
-        query = query.order("created_at", ascending: true) as! PostgrestFilterBuilder
+        query = filtered.order("created_at", ascending: true)
       case .alphabetical:
-        query = query.order("description", ascending: true) as! PostgrestFilterBuilder
+        query = filtered.order("description", ascending: true)
       }
 
       todos = try await IdentifiedArrayOf(
