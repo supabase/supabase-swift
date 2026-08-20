@@ -4,7 +4,7 @@ public import Logging
 /// Configuration for the Supabase Storage client.
 ///
 /// Pass a ``StorageClientConfiguration`` to ``SupabaseStorageClient`` to control the Storage
-/// endpoint URL, authentication headers, JSON coding strategies, and the underlying HTTP session.
+/// endpoint URL, authentication headers, and the underlying HTTP session.
 ///
 /// ```swift
 /// let configuration = StorageClientConfiguration(
@@ -18,14 +18,12 @@ public import Logging
 ///
 /// ### Creating a configuration
 ///
-/// - ``init(url:headers:encoder:decoder:session:logger:useNewHostname:)``
+/// - ``init(url:headers:session:logger:useNewHostname:)``
 ///
 /// ### Configuration properties
 ///
 /// - ``url``
 /// - ``headers``
-/// - ``encoder``
-/// - ``decoder``
 /// - ``session``
 /// - ``logger``
 /// - ``useNewHostname``
@@ -36,11 +34,13 @@ public struct StorageClientConfiguration: Sendable {
   /// HTTP headers sent with every request, such as the `Authorization` header.
   public var headers: [String: String]
 
-  /// The JSON encoder used to serialize request bodies.
-  public let encoder: JSONEncoder
+  /// The JSON encoder used to serialize request bodies. Not publicly configurable: Storage only
+  /// ever encodes server-defined shapes, so there's no case for letting callers customize it.
+  let encoder: JSONEncoder = .storageEncoder
 
-  /// The JSON decoder used to deserialize response bodies.
-  public let decoder: JSONDecoder
+  /// The JSON decoder used to deserialize response bodies. Not publicly configurable: Storage only
+  /// ever decodes server-defined shapes, so there's no case for letting callers customize it.
+  let decoder: JSONDecoder = .supabase()
 
   /// The HTTP session abstraction used to execute requests.
   public let session: StorageHTTPSession
@@ -57,9 +57,6 @@ public struct StorageClientConfiguration: Sendable {
   /// - Parameters:
   ///   - url: The base URL of the Storage API endpoint.
   ///   - headers: HTTP headers sent with every request.
-  ///   - encoder: The JSON encoder for request bodies. Defaults to a `snake_case`-converting encoder.
-  ///   - decoder: The JSON decoder for response bodies. Defaults to a decoder configured for the
-  ///     Supabase API's date format.
   ///   - session: The HTTP session used for networking. Defaults to a session backed by `URLSession.shared`.
   ///   - logger: The logger to use. Defaults to a build-config-aware logger; pass a logger backed by
   ///     `SwiftLogNoOpLogHandler` to disable logging entirely.
@@ -67,16 +64,12 @@ public struct StorageClientConfiguration: Sendable {
   public init(
     url: URL,
     headers: [String: String],
-    encoder: JSONEncoder? = nil,
-    decoder: JSONDecoder? = nil,
     session: StorageHTTPSession = .init(),
     logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.storage"),
     useNewHostname: Bool = false
   ) {
     self.url = url
     self.headers = headers
-    self.encoder = encoder ?? .storageEncoder
-    self.decoder = decoder ?? .supabase()
     self.session = session
     var logger = logger
     logger[metadataKey: "system"] = "storage"
