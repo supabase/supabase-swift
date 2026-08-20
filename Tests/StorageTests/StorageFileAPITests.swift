@@ -75,6 +75,12 @@ extension StorageMockerTests {
     }
 
     @Test
+    func configuration() {
+      let storage = makeSUT()
+      #expect(storage.from("bucket").configuration.url == url)
+    }
+
+    @Test
     func listFiles() async throws {
       let storage = makeSUT()
 
