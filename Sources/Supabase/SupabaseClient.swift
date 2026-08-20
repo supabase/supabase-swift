@@ -111,21 +111,15 @@ public final class SupabaseClient: Sendable {
 
   /// The Storage client for uploading, downloading, and managing files.
   public var storage: SupabaseStorageClient {
-    mutableState.withValue {
-      if $0.storage == nil {
-        $0.storage = SupabaseStorageClient(
-          configuration: StorageClientConfiguration(
-            url: storageURL,
-            headers: headers,
-            session: StorageHTTPSession(fetch: fetchWithAuth, upload: uploadWithAuth),
-            logger: options.global.logger,
-            useNewHostname: options.storage.useNewHostname
-          )
-        )
-      }
-
-      return $0.storage!
-    }
+    SupabaseStorageClient(
+      configuration: StorageClientConfiguration(
+        url: storageURL,
+        headers: headers,
+        session: StorageHTTPSession(fetch: fetchWithAuth, upload: uploadWithAuth),
+        logger: options.global.logger,
+        useNewHostname: options.storage.useNewHostname
+      )
+    )
   }
 
   /// The Realtime client for subscribing to database changes and broadcasting presence events.
@@ -170,7 +164,6 @@ public final class SupabaseClient: Sendable {
 
   struct MutableState {
     var listenForAuthEventsTask: Task<Void, Never>?
-    var storage: SupabaseStorageClient?
     var realtime: RealtimeClientV2?
 
     var changedAccessToken: String?
