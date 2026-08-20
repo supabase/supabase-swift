@@ -30,11 +30,9 @@ supporting_symbols:
   - JSONValue.description
   - JSONValue.rawValue
 
-  # PostgrestBuilder/PostgrestQueryBuilder/PostgrestFilterBuilder/PostgrestTransformBuilder
-  # were replaced by a single generic PostgrestRequestBuilder<Phase> (see the stateless
-  # PostgREST client/builders refactor, PR #1240). Its members implement several already-
-  # `implemented` database.* capabilities above simultaneously (filtering, transforming,
-  # executing), so they're listed here rather than attributed to one feature.
+  # PostgrestRequestBuilder<Phase>'s members implement several already-`implemented`
+  # database.* capabilities above simultaneously (filtering, transforming, executing),
+  # rather than owned by a single feature.
   - PostgrestClient.Configuration.accessToken
   - PostgrestExecutableBuilder
   - PostgrestExecutableBuilder.execute
