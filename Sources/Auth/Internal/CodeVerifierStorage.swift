@@ -30,6 +30,13 @@ extension CodeVerifierStorage {
   static func live(clientID: AuthClientID) -> Self {
     var configuration: AuthClient.Configuration { Dependencies[clientID].configuration }
 
+    // Serializes the index read-modify-write in `set`/`remove`/`removeAll`: these are called
+    // `nonisolated`, so concurrent flow starts can genuinely run on different threads, not just
+    // interleave at await points. Without this, two concurrent writers can each read the index
+    // before either writes it back, so one writer's entry is silently dropped, breaking both
+    // eviction and `removeAll`'s cleanup for that flow.
+    let lock = LockIsolated<Void>(())
+
     let baseStorageKey: @Sendable () -> String = {
       configuration.storageKey ?? defaultStorageKey
     }
@@ -90,40 +97,46 @@ extension CodeVerifierStorage {
         return readString(legacyVerifierKey())
       },
       set: { code, flowId in
-        writeString(code, flowSlotKey(flowId))
+        lock.withValue { _ in
+          writeString(code, flowSlotKey(flowId))
 
-        var index = readIndex().filter { $0 != flowId }
-        index.append(flowId)
-        while index.count > maxConcurrentFlows {
-          let evicted = index.removeFirst()
-          removeKey(flowSlotKey(evicted))
+          var index = readIndex().filter { $0 != flowId }
+          index.append(flowId)
+          while index.count > maxConcurrentFlows {
+            let evicted = index.removeFirst()
+            removeKey(flowSlotKey(evicted))
+          }
+          writeIndex(index)
+
+          // Dual write: exchanges with no flow id (older callers, or callers that never
+          // learned this flow's id) fall back to whichever verifier was stored most recently.
+          writeString(code, legacyVerifierKey())
         }
-        writeIndex(index)
-
-        // Dual write: exchanges with no flow id (older callers, or callers that never
-        // learned this flow's id) fall back to whichever verifier was stored most recently.
-        writeString(code, legacyVerifierKey())
       },
       remove: { flowId in
-        guard let flowId else {
-          removeKey(legacyVerifierKey())
-          return
-        }
+        lock.withValue { _ in
+          guard let flowId else {
+            removeKey(legacyVerifierKey())
+            return
+          }
 
-        let slotValue = readString(flowSlotKey(flowId))
-        removeKey(flowSlotKey(flowId))
-        writeIndex(readIndex().filter { $0 != flowId })
+          let slotValue = readString(flowSlotKey(flowId))
+          removeKey(flowSlotKey(flowId))
+          writeIndex(readIndex().filter { $0 != flowId })
 
-        if let slotValue, slotValue == readString(legacyVerifierKey()) {
-          removeKey(legacyVerifierKey())
+          if let slotValue, slotValue == readString(legacyVerifierKey()) {
+            removeKey(legacyVerifierKey())
+          }
         }
       },
       removeAll: {
-        for flowId in readIndex() {
-          removeKey(flowSlotKey(flowId))
+        lock.withValue { _ in
+          for flowId in readIndex() {
+            removeKey(flowSlotKey(flowId))
+          }
+          removeKey(flowIndexKey())
+          removeKey(legacyVerifierKey())
         }
-        removeKey(flowIndexKey())
-        removeKey(legacyVerifierKey())
       }
     )
   }

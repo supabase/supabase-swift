@@ -125,4 +125,19 @@ struct CodeVerifierStorageTests {
       #expect(localStorage.storage.isEmpty)
     }
   }
+
+  @Test
+  func concurrentSetsPreserveTheMaxConcurrentFlowsBound() {
+    let (storage, _, client) = makeSUT()
+    withExtendedLifetime(client) {
+      let flowCount = 20
+
+      DispatchQueue.concurrentPerform(iterations: flowCount) { i in
+        storage.set("verifier-\(i)", "flow-\(i)")
+      }
+
+      let pendingFlows = (0..<flowCount).filter { storage.get("flow-\($0)") != nil }
+      #expect(pendingFlows.count == CodeVerifierStorage.maxConcurrentFlows)
+    }
+  }
 }
