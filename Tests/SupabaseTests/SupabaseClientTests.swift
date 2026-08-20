@@ -432,12 +432,18 @@ struct SupabaseClientTests {
       )
       box.client = client
 
-      // Materialize every lazily-built sub-client: each one caches the `fetch`/`upload` closures
-      // in `mutableState`, so a `self` capture there would form a retain cycle.
+      // Materialize every sub-client cached in `mutableState`: each one captures the
+      // `fetch`/`upload` closures there, so a `self` capture in one of those closures would
+      // form a retain cycle (client -> mutableState -> cached sub-client -> closure -> client).
       _ = client.rest
-      _ = client.storage
       _ = client.functions
       _ = client.realtimeV2
+
+      // `storage` builds a fresh, uncached `SupabaseStorageClient` on every access (see
+      // `SupabaseClient.storage`), so discarding the result here can't exercise the same
+      // detection: nothing keeps the closures it captures alive past this statement, so this
+      // arm can't prove `storage` is cycle-free the way the cached sub-clients above can.
+      _ = client.storage
     }
     scope()
 
