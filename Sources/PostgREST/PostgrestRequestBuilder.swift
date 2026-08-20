@@ -419,7 +419,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestExecutablePhase {
 
   private func execute<T>(
     options: FetchOptions,
-    decode: @Sendable (Data) throws -> T
+    decode: (Data) throws -> T
   ) async throws -> PostgrestResponse<T> {
     if let message = pendingError {
       throw PostgrestError(message: message)
