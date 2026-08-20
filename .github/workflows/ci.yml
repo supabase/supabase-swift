@@ -27,6 +27,10 @@ jobs:
     name: xcodebuild (macOS latest)
     runs-on: blacksmith-6vcpu-macos-latest
     timeout-minutes: 30
+    # Collect compiler warnings instead of annotating them here; the `warnings` job
+    # annotates the deduplicated union across the whole matrix.
+    env:
+      WARNINGS_FILE: ${{ github.workspace }}/warnings.tsv
     strategy:
       matrix:
         command: [test, ""]
@@ -60,6 +64,14 @@ jobs:
       - name: Release
         if: matrix.skip_release != '1'
         run: CONFIG=Release PLATFORM="${{ matrix.platform }}" XCODEBUILD_ARGUMENT="${{ matrix.command }}" ./scripts/xcodebuild.sh
+      - name: Upload collected warnings
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: warnings-macos-${{ matrix.platform }}-${{ matrix.xcode }}-${{ matrix.command || 'build' }}
+          path: warnings.tsv
+          if-no-files-found: ignore
+          retention-days: 1
       - name: Install lcov
         if: matrix.command == 'test' && matrix.platform == 'IOS'
         run: brew install lcov
@@ -80,6 +92,8 @@ jobs:
     name: xcodebuild (legacy)
     runs-on: blacksmith-6vcpu-macos-15
     timeout-minutes: 30
+    env:
+      WARNINGS_FILE: ${{ github.workspace }}/warnings.tsv
     strategy:
       matrix:
         command: [test, ""]
@@ -122,6 +136,14 @@ jobs:
       - name: Release
         if: matrix.skip_release != '1'
         run: CONFIG=Release PLATFORM="${{ matrix.platform }}" XCODEBUILD_ARGUMENT="${{ matrix.command }}" ./scripts/xcodebuild.sh
+      - name: Upload collected warnings
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: warnings-macos-legacy-${{ matrix.platform }}-${{ matrix.xcode }}-${{ matrix.command || 'build' }}
+          path: warnings.tsv
+          if-no-files-found: ignore
+          retention-days: 1
 
   spm:
     runs-on: blacksmith-6vcpu-macos-latest
@@ -256,6 +278,8 @@ jobs:
     name: Examples (${{ matrix.scheme }})
     runs-on: blacksmith-6vcpu-macos-latest
     timeout-minutes: 30
+    env:
+      WARNINGS_FILE: ${{ github.workspace }}/warnings.tsv
     strategy:
       matrix:
         scheme: [Examples, SlackClone, UserManagement]
@@ -278,6 +302,14 @@ jobs:
         uses: chetan/git-restore-mtime-action@d186aca54f8760da4dec55313195e51ed3ebb0b3 # v2.3
       - name: Build ${{ matrix.scheme }}
         run: DERIVED_DATA_PATH=~/.derivedData SCHEME="${{ matrix.scheme }}" XCODEBUILD_ARGUMENT=build ./scripts/xcodebuild.sh
+      - name: Upload collected warnings
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: warnings-examples-${{ matrix.scheme }}
+          path: warnings.tsv
+          if-no-files-found: ignore
+          retention-days: 1
 
   examples-spm:
     name: Examples SPM (${{ matrix.example }})
@@ -373,6 +405,29 @@ jobs:
           else
             echo "✅ All changed Swift files are properly formatted"
           fi
+
+  # Every xcodebuild job compiles the same sources, so letting each one annotate its own
+  # warnings put the same diagnostic on the same line once per matrix leg (ten-plus times
+  # in a pull request diff, twice more where a file is compiled for several targets). The
+  # matrix jobs now only collect their warnings; this job annotates the union of them once.
+  # It is deliberately not part of `ci-success`: it reports, it does not gate.
+  warnings:
+    name: Compiler warnings
+    if: always()
+    needs: [macos, macos-legacy, examples]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Download collected warnings
+        # No artifacts at all (every build job died early) is not an error here.
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: collected-warnings
+          pattern: warnings-*
+      - name: Annotate deduplicated warnings
+        run: ./scripts/annotate-warnings.sh collected-warnings
 
   ci-success:
     name: CI Success
