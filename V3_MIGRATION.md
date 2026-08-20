@@ -1470,12 +1470,33 @@ dictionary `setHeader(_:forKey:)` wrote to, which is now handled by returning a 
 (see below) — so every stored property is now an immutable `let`, and the types themselves are now
 `struct`s.
 
-`StorageBucketApi` is removed entirely. It was never constructed directly; it existed only so
-`SupabaseStorageClient` could inherit its bucket-management methods (`listBuckets()`,
-`getBucket(_:)`, `createBucket(_:options:)`, `updateBucket(_:options:)`, `emptyBucket(_:)`,
-`deleteBucket(_:)`). Those methods are now declared directly on `SupabaseStorageClient` — call
-sites that only ever called them through `SupabaseStorageClient` (e.g. `client.storage.listBuckets()`)
-compile unchanged.
+**Why**: beyond removing the lock, this is a real bug fix. `SupabaseStorageClient` used to store
+its mutable header dictionary separately from its immutable `configuration`, and `from(_:)` built
+each `StorageFileApi` from `configuration` alone — never from the live header state:
+
+```swift
+// Before, inside SupabaseStorageClient.from(_:):
+public func from(_ id: String) -> StorageFileApi {
+  StorageFileApi(bucketId: id, configuration: configuration)  // not the mutated headers
+}
+```
+
+So `storage.setHeader("v", forKey: "X-Foo")` followed by `storage.from("bucket").list()` silently
+dropped `X-Foo` — the new `StorageFileApi` never saw it. Meanwhile the same header *did* reach
+`storage.vectors` calls, since `vectors` passed `self` (the live instance, headers and all) through
+instead of rebuilding from `configuration`. This composition-based rewrite passes the whole `api`
+value — which now carries the header state, since there's no separate mutable copy to drop —
+through both `from(_:)` and `vectors`, so `setHeader` propagates consistently to both call paths.
+
+`StorageBucketApi` is removed entirely. Nothing in this codebase ever constructed it directly; it
+existed only so `SupabaseStorageClient` could inherit its bucket-management methods
+(`listBuckets()`, `getBucket(_:)`, `createBucket(_:options:)`, `updateBucket(_:options:)`,
+`emptyBucket(_:)`, `deleteBucket(_:)`). Those methods are now declared directly on
+`SupabaseStorageClient` — call sites that only ever called them through `SupabaseStorageClient`
+(e.g. `client.storage.listBuckets()`) compile unchanged. If your code constructed
+`StorageBucketApi` directly — it was a public class with an inherited public initializer, so this
+was possible even though nothing here did it — switch to constructing/using
+`SupabaseStorageClient` instead; its methods are a superset, since the bucket methods moved there.
 
 Calling methods (`from(_:)`, `upload`, `download`, `list`, and friends) compiles unchanged; this
 only breaks code that depended on these types being reference types: a `weak var` holding one, an
@@ -1494,6 +1515,25 @@ var storage: SupabaseStorageClient?
 This is a compile error, not a silent behavior change. Search your codebase for `weak`, `unowned`,
 `AnyObject`, or `===` next to a `StorageApi`, `SupabaseStorageClient`, or `StorageFileApi` variable
 to find affected call sites.
+
+`SupabaseClient.storage` also stopped memoizing its result as a side effect of this rewrite: it
+used to cache the `SupabaseStorageClient` it built and return that same instance on every access,
+so a header set via `client.storage.setHeader(...)` (before `setHeader` even required using its
+result, back when it mutated in place) stuck around across later `client.storage` accesses. Now
+every `client.storage` access builds a fresh value, so nothing is around to remember a header
+across accesses even if you do capture and reuse `setHeader`'s result:
+
+```swift
+// This does not persist the header on `client.storage` — the next access builds a new,
+// unmodified instance from `client`'s own configuration.
+_ = client.storage.setHeader("v", forKey: "X-Foo")
+try await client.storage.from("bucket").list() // X-Foo is not sent
+
+// Hold the returned value instead, and use it directly rather than going through
+// `client.storage` again.
+let storage = client.storage.setHeader("v", forKey: "X-Foo")
+try await storage.from("bucket").list() // X-Foo is sent
+```
 
 ## `StorageApi.setHeader(_:forKey:)` no longer mutates in place
 
