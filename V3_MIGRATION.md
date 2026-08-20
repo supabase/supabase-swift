@@ -1463,3 +1463,65 @@ unused` warning instead of an error, and at runtime the header (or the `retry(en
 simply not applied. Search your codebase for `setHeader(` and `retry(enabled:` on a PostgREST
 builder and make sure every call site consumes the returned value — either by chaining directly onto
 it or by reassigning, as above.
+## `StorageApi`, `SupabaseStorageClient`, and `StorageFileApi` are now `struct`s instead of `class`es; `StorageBucketApi` is removed
+
+These types no longer hold any mutable state — the only mutable state they had was the header
+dictionary `setHeader(_:forKey:)` wrote to, which is now handled by returning a new value instead
+(see below) — so every stored property is now an immutable `let`, and the types themselves are now
+`struct`s.
+
+`StorageBucketApi` is removed entirely. It was never constructed directly; it existed only so
+`SupabaseStorageClient` could inherit its bucket-management methods (`listBuckets()`,
+`getBucket(_:)`, `createBucket(_:options:)`, `updateBucket(_:options:)`, `emptyBucket(_:)`,
+`deleteBucket(_:)`). Those methods are now declared directly on `SupabaseStorageClient` — call
+sites that only ever called them through `SupabaseStorageClient` (e.g. `client.storage.listBuckets()`)
+compile unchanged.
+
+Calling methods (`from(_:)`, `upload`, `download`, `list`, and friends) compiles unchanged; this
+only breaks code that depended on these types being reference types: a `weak var` holding one, an
+`AnyObject` constraint, or an identity check with `===`. None of those compile against a struct.
+
+```swift
+// Before
+weak var storage: SupabaseStorageClient?
+
+// After
+// Structs have no identity to hold weakly — keep a strong reference, or drop the field if it only
+// existed to avoid a retain cycle.
+var storage: SupabaseStorageClient?
+```
+
+This is a compile error, not a silent behavior change. Search your codebase for `weak`, `unowned`,
+`AnyObject`, or `===` next to a `StorageApi`, `SupabaseStorageClient`, or `StorageFileApi` variable
+to find affected call sites.
+
+## `StorageApi.setHeader(_:forKey:)` no longer mutates in place
+
+`setHeader(_:forKey:)` used to mutate a lock-protected header dictionary on the instance and return
+`self` for chaining, marked `@discardableResult`. Now that `StorageApi` (and `SupabaseStorageClient`
+/ `StorageFileApi`, which hold one) is an immutable value type, `setHeader` instead builds and
+returns a **new** value with the header merged in, and `@discardableResult` is removed.
+
+This is a silent behavior change, not a compile error, if you call `setHeader` and discard the
+result — removing `@discardableResult` turns that into an "unused result" compiler warning rather
+than a build failure, so it's easy to miss if warnings aren't treated as errors:
+
+```swift
+// Before: mutated the instance in place; the extra header applied to every later request.
+storage.from("avatars").setHeader("x-custom-header", forKey: "X-Custom-Header")
+try await storage.from("avatars").upload(...) // included the header
+
+// After: returns a new value; the statement above is now a no-op, and the header is
+// lost by the next line unless you capture and reuse the returned value.
+let avatars = storage.from("avatars").setHeader("x-custom-header", forKey: "X-Custom-Header")
+try await avatars.upload(...) // includes the header
+
+// Or chain directly:
+try await storage.from("avatars")
+  .setHeader("x-custom-header", forKey: "X-Custom-Header")
+  .upload(...)
+```
+
+Search your codebase for `.setHeader(` on a `StorageApi`/`SupabaseStorageClient`/`StorageFileApi`
+value to find affected call sites, and check that each one uses the returned value rather than
+discarding it.
