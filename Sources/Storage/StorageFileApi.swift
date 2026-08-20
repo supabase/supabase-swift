@@ -74,9 +74,6 @@ enum FileUpload {
 /// let url = try await fileApi.createSignedURL(path: "user123.png", expiresIn: 60)
 /// ```
 ///
-/// > Note: This class is `@unchecked Sendable`. The `bucketId` property is immutable (`let`), and
-/// > all mutable header state is protected by the lock inherited from ``StorageApi``.
-///
 /// ## Topics
 ///
 /// ### Uploading files
@@ -110,13 +107,39 @@ enum FileUpload {
 ///
 /// - ``createSignedURL(path:expiresIn:download:transform:cacheNonce:)-(_,_,DownloadBehavior?,_,_)``
 /// - ``createSignedURLs(paths:expiresIn:download:cacheNonce:)-(_,_,DownloadBehavior?,_)``
-public class StorageFileApi: StorageApi, @unchecked Sendable {
+///
+/// ### Customizing headers
+///
+/// - ``setHeader(_:forKey:)``
+public struct StorageFileApi: Sendable {
   /// The identifier of the bucket this instance operates on.
   let bucketId: String
 
-  init(bucketId: String, configuration: StorageClientConfiguration) {
+  let api: StorageApi
+
+  init(bucketId: String, api: StorageApi) {
     self.bucketId = bucketId
-    super.init(configuration: configuration)
+    self.api = api
+  }
+
+  /// Returns a new ``StorageFileApi`` with an additional HTTP header merged into the underlying
+  /// ``StorageApi``'s configuration, included in all requests made by the returned instance.
+  ///
+  /// Because ``StorageFileApi`` is an immutable value type, this method does not mutate `self` —
+  /// it returns a new instance. Discarding the return value is a no-op, so always use the result:
+  ///
+  /// ```swift
+  /// storage.from("avatars")
+  ///   .setHeader("x-custom-header", forKey: "X-Custom-Header")
+  ///   .list()
+  /// ```
+  ///
+  /// - Parameters:
+  ///   - value: The value of the header field.
+  ///   - key: The name of the header field. The key is case-insensitively stored as lowercase.
+  /// - Returns: A new ``StorageFileApi`` with the header merged into the configuration's headers.
+  public func setHeader(_ value: String, forKey key: String) -> Self {
+    StorageFileApi(bucketId: bucketId, api: api.setHeader(value, forKey: key))
   }
 
   private struct MoveResponse: Decodable {
@@ -163,9 +186,9 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     let cleanPath = _removeEmptyFolders(path)
     let _path = _getFinalPath(cleanPath)
 
-    let response = try await execute(
+    let response = try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("object/\(_path)"),
+        url: api.configuration.url.appendingPathComponent("object/\(_path)"),
         method: method,
         query: [],
         formData: formData,
@@ -173,7 +196,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
         headers: headers
       )
     )
-    .decoded(as: UploadResponse.self, decoder: configuration.decoder)
+    .decoded(as: UploadResponse.self, decoder: api.configuration.decoder)
 
     return FileUploadResponse(
       id: response.Id,
@@ -306,11 +329,11 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     to destination: String,
     options: DestinationOptions? = nil
   ) async throws {
-    try await execute(
+    try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("object/move"),
+        url: api.configuration.url.appendingPathComponent("object/move"),
         method: .post,
-        body: configuration.encoder.encode(
+        body: api.configuration.encoder.encode(
           [
             "bucketId": bucketId,
             "sourceKey": source,
@@ -345,11 +368,11 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
       let Key: String
     }
 
-    return try await execute(
+    return try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("object/copy"),
+        url: api.configuration.url.appendingPathComponent("object/copy"),
         method: .post,
-        body: configuration.encoder.encode(
+        body: api.configuration.encoder.encode(
           [
             "bucketId": bucketId,
             "sourceKey": source,
@@ -359,7 +382,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
         )
       )
     )
-    .decoded(as: UploadResponse.self, decoder: configuration.decoder)
+    .decoded(as: UploadResponse.self, decoder: api.configuration.decoder)
     .Key
   }
 
@@ -390,16 +413,16 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
 
     let encoder = JSONEncoder.unconfiguredEncoder
 
-    let response = try await execute(
+    let response = try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("object/sign/\(_getFinalPath(path))"),
+        url: api.configuration.url.appendingPathComponent("object/sign/\(_getFinalPath(path))"),
         method: .post,
         body: encoder.encode(
           Body(expiresIn: expiresIn, transform: transform)
         )
       )
     )
-    .decoded(as: SignedURLAPIResponse.self, decoder: configuration.decoder)
+    .decoded(as: SignedURLAPIResponse.self, decoder: api.configuration.decoder)
 
     return try makeSignedURL(response.signedURL, download: download, cacheNonce: cacheNonce)
   }
@@ -475,16 +498,16 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
 
     let encoder = JSONEncoder.unconfiguredEncoder
 
-    let response = try await execute(
+    let response = try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("object/sign/\(bucketId)"),
+        url: api.configuration.url.appendingPathComponent("object/sign/\(bucketId)"),
         method: .post,
         body: encoder.encode(
           Params(expiresIn: expiresIn, paths: paths)
         )
       )
     )
-    .decoded(as: [SignedURLsAPIResponse].self, decoder: configuration.decoder)
+    .decoded(as: [SignedURLsAPIResponse].self, decoder: api.configuration.decoder)
 
     return try response.map { item in
       if let signedURLString = item.signedURL {
@@ -554,7 +577,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   {
     guard let signedURLComponents = URLComponents(string: signedURL),
       var baseComponents = URLComponents(
-        url: configuration.url, resolvingAgainstBaseURL: false)
+        url: api.configuration.url, resolvingAgainstBaseURL: false)
     else {
       throw URLError(.badURL)
     }
@@ -593,14 +616,14 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   /// - Throws: ``StorageError`` if the request fails or the caller is not authorized.
   @discardableResult
   public func remove(paths: [String]) async throws -> [FileObject] {
-    try await execute(
+    try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("object/\(bucketId)"),
+        url: api.configuration.url.appendingPathComponent("object/\(bucketId)"),
         method: .delete,
-        body: configuration.encoder.encode(["prefixes": paths])
+        body: api.configuration.encoder.encode(["prefixes": paths])
       )
     )
-    .decoded(decoder: configuration.decoder)
+    .decoded(decoder: api.configuration.decoder)
   }
 
   /// Lists all files within a bucket folder.
@@ -631,14 +654,14 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     sortBy.order = sortBy.order ?? defaultSearchOptions.sortBy?.order
     options.sortBy = sortBy
 
-    return try await execute(
+    return try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("object/list/\(bucketId)"),
+        url: api.configuration.url.appendingPathComponent("object/list/\(bucketId)"),
         method: .post,
         body: encoder.encode(options)
       )
     )
-    .decoded(decoder: configuration.decoder)
+    .decoded(decoder: api.configuration.decoder)
   }
 
   /// Downloads a file from a private bucket and returns its raw bytes.
@@ -678,9 +701,9 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
       queryItems.append(URLQueryItem(name: "cacheNonce", value: cacheNonce))
     }
 
-    return try await execute(
+    return try await api.execute(
       HTTPRequest(
-        url: configuration.url
+        url: api.configuration.url
           .appendingPathComponent("\(renderPath)/\(_path)"),
         method: .get,
         query: queryItems
@@ -697,13 +720,13 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   public func info(path: String) async throws -> FileObjectV2 {
     let _path = _getFinalPath(path)
 
-    return try await execute(
+    return try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("object/info/\(_path)"),
+        url: api.configuration.url.appendingPathComponent("object/info/\(_path)"),
         method: .get
       )
     )
-    .decoded(decoder: configuration.decoder)
+    .decoded(decoder: api.configuration.decoder)
   }
 
   /// Checks whether a file exists in the bucket without downloading it.
@@ -716,9 +739,9 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ///   authorization errors).
   public func exists(path: String) async throws -> Bool {
     do {
-      try await execute(
+      try await api.execute(
         HTTPRequest(
-          url: configuration.url.appendingPathComponent("object/\(_getFinalPath(path))"),
+          url: api.configuration.url.appendingPathComponent("object/\(_getFinalPath(path))"),
           method: .head
         )
       )
@@ -762,7 +785,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ) throws -> URL {
     var queryItems: [URLQueryItem] = []
 
-    guard var components = URLComponents(url: configuration.url, resolvingAgainstBaseURL: true)
+    guard var components = URLComponents(url: api.configuration.url, resolvingAgainstBaseURL: true)
     else {
       throw URLError(.badURL)
     }
@@ -862,15 +885,15 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
 
     let cleanPath = _removeEmptyFolders(path)
 
-    let response = try await execute(
+    let response = try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent(
+        url: api.configuration.url.appendingPathComponent(
           "object/upload/sign/\(bucketId)/\(cleanPath)"),
         method: .post,
         headers: headers
       )
     )
-    .decoded(as: Response.self, decoder: configuration.decoder)
+    .decoded(as: Response.self, decoder: api.configuration.decoder)
 
     let signedURL = try makeSignedURL(response.url, download: nil)
 
@@ -974,9 +997,9 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
 
     let cleanPath = _removeEmptyFolders(path)
 
-    let fullPath = try await execute(
+    let fullPath = try await api.execute(
       HTTPRequest(
-        url: configuration.url
+        url: api.configuration.url
           .appendingPathComponent("object/upload/sign/\(bucketId)/\(cleanPath)"),
         method: .put,
         query: [URLQueryItem(name: "token", value: token)],
@@ -985,7 +1008,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
         headers: headers
       )
     )
-    .decoded(as: UploadResponse.self, decoder: configuration.decoder)
+    .decoded(as: UploadResponse.self, decoder: api.configuration.decoder)
     .Key
 
     return SignedURLUploadResponse(path: cleanPath, fullPath: fullPath)

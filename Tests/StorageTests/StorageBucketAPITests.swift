@@ -93,7 +93,7 @@ extension StorageMockerTests {
         )
       )
       #expect(
-        storage.configuration.url.absoluteString == expected,
+        storage.api.configuration.url.absoluteString == expected,
         "should \(description) if useNewHostname is true"
       )
     }
@@ -115,7 +115,7 @@ extension StorageMockerTests {
           useNewHostname: false
         )
       )
-      #expect(storage.configuration.url.absoluteString == input)
+      #expect(storage.api.configuration.url.absoluteString == input)
     }
 
     @Test

@@ -87,8 +87,8 @@ public struct StorageClientConfiguration: Sendable {
 
 /// The top-level Supabase Storage client for managing buckets and files.
 ///
-/// ``SupabaseStorageClient`` inherits all bucket-management operations from ``StorageBucketApi``
-/// and provides a ``from(_:)`` method to obtain a ``StorageFileApi`` scoped to a specific bucket.
+/// ``SupabaseStorageClient`` provides bucket-management operations directly and a ``from(_:)``
+/// method to obtain a ``StorageFileApi`` scoped to a specific bucket.
 ///
 /// Typically you obtain an instance via the main `SupabaseClient`:
 ///
@@ -105,19 +105,33 @@ public struct StorageClientConfiguration: Sendable {
 ///
 /// ## Topics
 ///
+/// ### Creating a client
+///
+/// - ``init(configuration:)``
+///
 /// ### Accessing buckets
 ///
 /// - ``from(_:)``
 ///
 /// ### Bucket management
 ///
-/// - ``StorageBucketApi/listBuckets()``
-/// - ``StorageBucketApi/getBucket(_:)``
-/// - ``StorageBucketApi/createBucket(_:options:)``
-/// - ``StorageBucketApi/updateBucket(_:options:)``
-/// - ``StorageBucketApi/emptyBucket(_:)``
-/// - ``StorageBucketApi/deleteBucket(_:)``
-public class SupabaseStorageClient: StorageBucketApi, @unchecked Sendable {
+/// - ``listBuckets()``
+/// - ``getBucket(_:)``
+/// - ``createBucket(_:options:)``
+/// - ``updateBucket(_:options:)``
+/// - ``emptyBucket(_:)``
+/// - ``deleteBucket(_:)``
+public struct SupabaseStorageClient: Sendable {
+  let api: StorageApi
+
+  /// Creates a ``SupabaseStorageClient`` with the given configuration.
+  ///
+  /// - Parameter configuration: The configuration that controls the endpoint URL, authentication
+  ///   headers, JSON codecs, and HTTP session.
+  public init(configuration: StorageClientConfiguration) {
+    api = StorageApi(configuration: configuration)
+  }
+
   /// Returns a ``StorageFileApi`` scoped to the given bucket.
   ///
   /// Use the returned object to upload, download, list, move, copy, or delete files within the
@@ -126,7 +140,7 @@ public class SupabaseStorageClient: StorageBucketApi, @unchecked Sendable {
   /// - Parameter id: The unique identifier of the bucket to operate on.
   /// - Returns: A ``StorageFileApi`` configured for the given bucket.
   public func from(_ id: String) -> StorageFileApi {
-    StorageFileApi(bucketId: id, configuration: configuration)
+    StorageFileApi(bucketId: id, api: api)
   }
 
   /// A client for managing vector buckets.
@@ -139,6 +153,6 @@ public class SupabaseStorageClient: StorageBucketApi, @unchecked Sendable {
   /// - Warning: Experimental. See ``StorageVectorsClient``.
   @_spi(Experimental)
   public var vectors: StorageVectorsClient {
-    StorageVectorsClient(api: self)
+    StorageVectorsClient(api: api)
   }
 }
