@@ -5,43 +5,21 @@ import HTTPTypes
   import FoundationNetworking
 #endif
 
-/// Storage API for bucket management operations.
-///
-/// ``StorageBucketApi`` provides methods to list, create, update, empty, and delete Storage
-/// buckets. It is the superclass of ``SupabaseStorageClient``.
-///
-/// > Note: This class is `@unchecked Sendable` and inherits the thread-safe design of
-/// > ``StorageApi``. No additional mutable state is introduced.
-///
-/// ## Topics
-///
-/// ### Listing and inspecting buckets
-///
-/// - ``listBuckets()``
-/// - ``getBucket(_:)``
-///
-/// ### Creating and updating buckets
-///
-/// - ``createBucket(_:options:)``
-/// - ``updateBucket(_:options:)``
-///
-/// ### Removing buckets
-///
-/// - ``emptyBucket(_:)``
-/// - ``deleteBucket(_:)``
-public class StorageBucketApi: StorageApi, @unchecked Sendable {
+/// Bucket-management operations (listing, creating, updating, emptying, and deleting) for
+/// ``SupabaseStorageClient``.
+extension SupabaseStorageClient {
   /// Retrieves the details of all Storage buckets within the project.
   ///
   /// - Returns: An array of ``Bucket`` objects, one for each bucket in the project.
   /// - Throws: ``StorageError`` if the request fails or the caller is not authorized.
   public func listBuckets() async throws -> [Bucket] {
-    try await execute(
+    try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("bucket"),
+        url: api.configuration.url.appendingPathComponent("bucket"),
         method: .get
       )
     )
-    .decoded(decoder: configuration.decoder)
+    .decoded(decoder: api.configuration.decoder)
   }
 
   /// Retrieves the details of an existing Storage bucket.
@@ -50,13 +28,13 @@ public class StorageBucketApi: StorageApi, @unchecked Sendable {
   /// - Returns: The ``Bucket`` with the given identifier.
   /// - Throws: ``StorageError`` if the bucket does not exist or the caller is not authorized.
   public func getBucket(_ id: String) async throws -> Bucket {
-    try await execute(
+    try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("bucket/\(id)"),
+        url: api.configuration.url.appendingPathComponent("bucket/\(id)"),
         method: .get
       )
     )
-    .decoded(decoder: configuration.decoder)
+    .decoded(decoder: api.configuration.decoder)
   }
 
   struct BucketParameters: Encodable {
@@ -85,11 +63,11 @@ public class StorageBucketApi: StorageApi, @unchecked Sendable {
   public func createBucket(_ id: String, options: BucketOptions = BucketOptions(isPublic: false))
     async throws
   {
-    try await execute(
+    try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("bucket"),
+        url: api.configuration.url.appendingPathComponent("bucket"),
         method: .post,
-        body: configuration.encoder.encode(
+        body: api.configuration.encoder.encode(
           BucketParameters(
             id: id,
             name: id,
@@ -116,11 +94,11 @@ public class StorageBucketApi: StorageApi, @unchecked Sendable {
   ///   - options: The new options to apply to the bucket.
   /// - Throws: ``StorageError`` if the bucket does not exist or the caller is not authorized.
   public func updateBucket(_ id: String, options: BucketOptions) async throws {
-    try await execute(
+    try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("bucket/\(id)"),
+        url: api.configuration.url.appendingPathComponent("bucket/\(id)"),
         method: .put,
-        body: configuration.encoder.encode(
+        body: api.configuration.encoder.encode(
           BucketParameters(
             id: id,
             name: id,
@@ -141,9 +119,9 @@ public class StorageBucketApi: StorageApi, @unchecked Sendable {
   /// - Parameter id: The unique identifier of the bucket to empty.
   /// - Throws: ``StorageError`` if the bucket does not exist or the caller is not authorized.
   public func emptyBucket(_ id: String) async throws {
-    try await execute(
+    try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("bucket/\(id)/empty"),
+        url: api.configuration.url.appendingPathComponent("bucket/\(id)/empty"),
         method: .post
       )
     )
@@ -158,9 +136,9 @@ public class StorageBucketApi: StorageApi, @unchecked Sendable {
   /// - Throws: ``StorageError`` if the bucket is not empty, does not exist, or the caller is not
   ///   authorized.
   public func deleteBucket(_ id: String) async throws {
-    try await execute(
+    try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("bucket/\(id)"),
+        url: api.configuration.url.appendingPathComponent("bucket/\(id)"),
         method: .delete
       )
     )

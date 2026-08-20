@@ -419,4 +419,46 @@ struct SupabaseStorageTests {
     // The new StorageFileApi instance should NOT have the previous instance's header
     #expect(capturedRequests[1].value(forHTTPHeaderField: "X-Child-Header") == nil)
   }
+
+  @Test
+  func setHeader_onTopLevelClientPropagatesToFileApi() async throws {
+    let capturedRequest = LockIsolated(URLRequest?.none)
+    let sessionMock = StorageHTTPSession(
+      fetch: { request in
+        capturedRequest.setValue(request)
+        return (
+          """
+          [
+            {
+              "name": "test.txt",
+              "id": "E621E1F8-C36C-495A-93FC-0C247A3E6E5F",
+              "updatedAt": "2024-01-01T00:00:00Z",
+              "createdAt": "2024-01-01T00:00:00Z",
+              "lastAccessedAt": "2024-01-01T00:00:00Z",
+              "metadata": {}
+            }
+          ]
+          """.data(using: .utf8)!,
+          HTTPURLResponse(
+            url: self.supabaseURL,
+            statusCode: 200,
+            httpVersion: nil,
+            headerFields: nil
+          )!
+        )
+      },
+      upload: unimplemented("StorageHTTPSession.upload")
+    )
+
+    let sut = makeSUT(session: sessionMock)
+
+    _ =
+      try await sut
+      .setHeader("client-value", forKey: "X-Client-Header")
+      .from(bucketId)
+      .list()
+
+    #expect(
+      capturedRequest.value?.value(forHTTPHeaderField: "X-Client-Header") == "client-value")
+  }
 }

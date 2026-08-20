@@ -1,4 +1,3 @@
-import ConcurrencyExtras
 import Foundation
 import HTTPTypes
 
@@ -6,43 +5,23 @@ import HTTPTypes
   import FoundationNetworking
 #endif
 
-/// Base class for Storage API operations.
+/// Internal implementation detail shared by ``SupabaseStorageClient``, ``StorageFileApi``, and the
+/// Vectors trio (``StorageVectorsClient``, ``VectorBucketClient``, ``VectorIndexClient``).
 ///
-/// ``StorageApi`` holds the ``StorageClientConfiguration`` and manages mutable per-instance HTTP
-/// headers behind a lock. Both ``StorageBucketApi`` and ``StorageFileApi`` inherit from this class.
-///
-/// > Note: This class is `@unchecked Sendable` because all mutable state is protected by
-/// > `LockIsolated`. The ``configuration`` property is immutable (`let`), while mutable headers are
-/// > managed separately.
-///
-/// ## Topics
-///
-/// ### Configuration
-///
-/// - ``configuration``
-/// - ``init(configuration:)``
-///
-/// ### Customizing headers
-///
-/// - ``setHeader(_:forKey:)``
-public class StorageApi: @unchecked Sendable {
+/// Holds the ``StorageClientConfiguration`` and the underlying HTTP client used to execute
+/// requests. Each of the types above holds a ``StorageApi`` value and delegates to it rather than
+/// inheriting from it.
+struct StorageApi: Sendable {
   /// The configuration used to initialize this client instance.
-  public let configuration: StorageClientConfiguration
+  let configuration: StorageClientConfiguration
 
-  private struct MutableState {
-    var headers: [String: String]
-  }
-
-  private let mutableState: LockIsolated<MutableState>
   private let http: any HTTPClientType
 
   /// Creates a ``StorageApi`` with the given configuration.
   ///
-  /// Subclasses call this initializer via `super.init(configuration:)`.
-  ///
   /// - Parameter configuration: The configuration that controls the endpoint URL, authentication
   ///   headers, JSON codecs, and HTTP session.
-  public init(configuration: StorageClientConfiguration) {
+  init(configuration: StorageClientConfiguration) {
     var configuration = configuration
     if configuration.headers["X-Client-Info"] == nil {
       configuration.headers["X-Client-Info"] = "storage-swift/\(version)"
@@ -70,9 +49,7 @@ public class StorageApi: @unchecked Sendable {
       configuration.url = components.url!
     }
 
-    let initialHeaders = configuration.headers
     self.configuration = configuration
-    self.mutableState = LockIsolated(MutableState(headers: initialHeaders))
 
     let interceptors: [any HTTPClientInterceptor] = [
       LoggerInterceptor(logger: configuration.logger)
@@ -84,30 +61,32 @@ public class StorageApi: @unchecked Sendable {
     )
   }
 
-  /// Sets an HTTP header that will be included in all subsequent requests made by this instance.
+  /// Returns a new ``StorageApi`` with an additional HTTP header merged into
+  /// ``configuration``'s headers, included in all requests made by the returned instance.
   ///
-  /// This method is thread-safe. The header key is normalized to lowercase before being stored.
+  /// Because ``StorageApi`` is an immutable value type, this method does not mutate `self` — it
+  /// returns a new instance. Discarding the return value is a no-op, so always use the result:
   ///
   /// ```swift
   /// storage.from("avatars")
   ///   .setHeader("x-custom-header", forKey: "X-Custom-Header")
+  ///   .list()
   /// ```
   ///
   /// - Parameters:
   ///   - value: The value of the header field.
   ///   - key: The name of the header field. The key is case-insensitively stored as lowercase.
-  /// - Returns: `self`, enabling method chaining.
-  @discardableResult
-  public func setHeader(_ value: String, forKey key: String) -> Self {
-    mutableState.withValue { $0.headers[key.lowercased()] = value }
-    return self
+  /// - Returns: A new ``StorageApi`` with the header merged into ``configuration``'s headers.
+  func setHeader(_ value: String, forKey key: String) -> Self {
+    var configuration = configuration
+    configuration.headers[key.lowercased()] = value
+    return StorageApi(configuration: configuration)
   }
 
   @discardableResult
   func execute(_ request: Helpers.HTTPRequest) async throws -> Helpers.HTTPResponse {
     var request = request
-    let headers = mutableState.headers
-    request.headers = HTTPFields(headers).merging(with: request.headers)
+    request.headers = HTTPFields(configuration.headers).merging(with: request.headers)
 
     let response = try await http.send(request)
 

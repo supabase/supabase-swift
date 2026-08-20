@@ -1463,3 +1463,115 @@ unused` warning instead of an error, and at runtime the header (or the `retry(en
 simply not applied. Search your codebase for `setHeader(` and `retry(enabled:` on a PostgREST
 builder and make sure every call site consumes the returned value — either by chaining directly onto
 it or by reassigning, as above.
+## `StorageApi`, `SupabaseStorageClient`, and `StorageFileApi` are now `struct`s instead of `class`es; `StorageBucketApi` is removed
+
+These types no longer hold any mutable state — the only mutable state they had was the header
+dictionary `setHeader(_:forKey:)` wrote to, which is now handled by returning a new value instead
+(see below) — so every stored property is now an immutable `let`, and the types themselves are now
+`struct`s.
+
+**Why**: beyond removing the lock, this is a real bug fix. `SupabaseStorageClient` used to store
+its mutable header dictionary separately from its immutable `configuration`, and `from(_:)` built
+each `StorageFileApi` from `configuration` alone — never from the live header state:
+
+```swift
+// Before, inside SupabaseStorageClient.from(_:):
+public func from(_ id: String) -> StorageFileApi {
+  StorageFileApi(bucketId: id, configuration: configuration)  // not the mutated headers
+}
+```
+
+So `storage.setHeader("v", forKey: "X-Foo")` followed by `storage.from("bucket").list()` silently
+dropped `X-Foo` — the new `StorageFileApi` never saw it. Meanwhile the same header *did* reach
+`storage.vectors` calls, since `vectors` passed `self` (the live instance, headers and all) through
+instead of rebuilding from `configuration`. This composition-based rewrite passes the whole `api`
+value — which now carries the header state, since there's no separate mutable copy to drop —
+through both `from(_:)` and `vectors`, so `setHeader` propagates consistently to both call paths.
+
+`StorageBucketApi` is removed entirely. Nothing in this codebase ever constructed it directly; it
+existed only so `SupabaseStorageClient` could inherit its bucket-management methods
+(`listBuckets()`, `getBucket(_:)`, `createBucket(_:options:)`, `updateBucket(_:options:)`,
+`emptyBucket(_:)`, `deleteBucket(_:)`). Those methods are now declared directly on
+`SupabaseStorageClient` — call sites that only ever called them through `SupabaseStorageClient`
+(e.g. `client.storage.listBuckets()`) compile unchanged. If your code constructed
+`StorageBucketApi` directly — it was a public class with an inherited public initializer, so this
+was possible even though nothing here did it — switch to constructing/using
+`SupabaseStorageClient` instead; its methods are a superset, since the bucket methods moved there.
+
+Calling methods (`from(_:)`, `upload`, `download`, `list`, and friends) compiles unchanged; this
+only breaks code that depended on these types being reference types: a `weak var` holding one, an
+`AnyObject` constraint, or an identity check with `===`. None of those compile against a struct.
+
+```swift
+// Before
+weak var storage: SupabaseStorageClient?
+
+// After
+// Structs have no identity to hold weakly — keep a strong reference, or drop the field if it only
+// existed to avoid a retain cycle.
+var storage: SupabaseStorageClient?
+```
+
+This is a compile error, not a silent behavior change. Search your codebase for `weak`, `unowned`,
+`AnyObject`, or `===` next to a `StorageApi`, `SupabaseStorageClient`, or `StorageFileApi` variable
+to find affected call sites.
+
+`SupabaseClient.storage` also stopped memoizing its result as a side effect of this rewrite: it
+used to cache the `SupabaseStorageClient` it built and return that same instance on every access,
+so a header set via `client.storage.setHeader(...)` (before `setHeader` even required using its
+result, back when it mutated in place) stuck around across later `client.storage` accesses. Now
+every `client.storage` access builds a fresh value, so nothing is around to remember a header
+across accesses even if you do capture and reuse `setHeader`'s result:
+
+```swift
+// This does not persist the header on `client.storage` — the next access builds a new,
+// unmodified instance from `client`'s own configuration.
+_ = client.storage.setHeader("v", forKey: "X-Foo")
+try await client.storage.from("bucket").list() // X-Foo is not sent
+
+// Hold the returned value instead, and use it directly rather than going through
+// `client.storage` again.
+let storage = client.storage.setHeader("v", forKey: "X-Foo")
+try await storage.from("bucket").list() // X-Foo is sent
+```
+
+## `setHeader(_:forKey:)` on `SupabaseStorageClient`/`StorageFileApi` no longer mutates in place
+
+`setHeader(_:forKey:)` used to mutate a lock-protected header dictionary on the instance and return
+`self` for chaining, marked `@discardableResult`. Now that these are immutable value types,
+`setHeader` instead builds and returns a **new** value with the header merged in, and
+`@discardableResult` is removed.
+
+This is a silent behavior change, not a compile error, if you call `setHeader` and discard the
+result — removing `@discardableResult` turns that into an "unused result" compiler warning rather
+than a build failure, so it's easy to miss if warnings aren't treated as errors:
+
+```swift
+// Before: mutated the instance in place; the extra header applied to every later request.
+storage.from("avatars").setHeader("x-custom-header", forKey: "X-Custom-Header")
+try await storage.from("avatars").upload(...) // included the header
+
+// After: returns a new value; the statement above is now a no-op, and the header is
+// lost by the next line unless you capture and reuse the returned value.
+let avatars = storage.from("avatars").setHeader("x-custom-header", forKey: "X-Custom-Header")
+try await avatars.upload(...) // includes the header
+
+// Or chain directly:
+try await storage.from("avatars")
+  .setHeader("x-custom-header", forKey: "X-Custom-Header")
+  .upload(...)
+```
+
+Search your codebase for `.setHeader(` on a `SupabaseStorageClient`/`StorageFileApi` value to find
+affected call sites, and check that each one uses the returned value rather than discarding it.
+
+## `StorageApi` is now internal
+
+`StorageApi` is removed from the public API. It was the shared implementation type
+`SupabaseStorageClient`, `StorageFileApi`, and the Vectors trio each held internally and delegated
+to — nothing in the public API ever accepted or returned one, so a directly-constructed
+`StorageApi` value had no productive use: its `execute(_:)` method was already internal, and none
+of the public client types exposed a way to build one from a standalone `StorageApi`. If your code
+constructed `StorageApi(configuration:)` directly, construct a `SupabaseStorageClient(configuration:)`
+instead — its public surface (`configuration`, `setHeader(_:forKey:)`, `from(_:)`) is a superset of
+what `StorageApi` exposed.

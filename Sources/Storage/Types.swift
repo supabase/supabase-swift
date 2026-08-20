@@ -561,7 +561,7 @@ public struct FileObjectV2: Identifiable, Hashable, Decodable, Sendable {
 /// A Supabase Storage bucket.
 ///
 /// Buckets are the top-level containers for files. Retrieve bucket details with
-/// ``StorageBucketApi/getBucket(_:)`` or ``StorageBucketApi/listBuckets()``.
+/// ``SupabaseStorageClient/getBucket(_:)`` or ``SupabaseStorageClient/listBuckets()``.
 ///
 /// ## Topics
 ///
