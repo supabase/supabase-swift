@@ -5,25 +5,15 @@ import HTTPTypes
   import FoundationNetworking
 #endif
 
-/// Base type for Storage API operations.
+/// Internal implementation detail shared by ``SupabaseStorageClient``, ``StorageFileApi``, and the
+/// Vectors trio (``StorageVectorsClient``, ``VectorBucketClient``, ``VectorIndexClient``).
 ///
-/// ``StorageApi`` holds the ``StorageClientConfiguration`` and the underlying HTTP client used to
-/// execute requests. ``SupabaseStorageClient`` and ``StorageFileApi`` each hold a ``StorageApi``
-/// value and delegate to it rather than inheriting from it.
-///
-/// ## Topics
-///
-/// ### Configuration
-///
-/// - ``configuration``
-/// - ``init(configuration:)``
-///
-/// ### Customizing headers
-///
-/// - ``setHeader(_:forKey:)``
-public struct StorageApi: Sendable {
+/// Holds the ``StorageClientConfiguration`` and the underlying HTTP client used to execute
+/// requests. Each of the types above holds a ``StorageApi`` value and delegates to it rather than
+/// inheriting from it.
+struct StorageApi: Sendable {
   /// The configuration used to initialize this client instance.
-  public let configuration: StorageClientConfiguration
+  let configuration: StorageClientConfiguration
 
   private let http: any HTTPClientType
 
@@ -31,7 +21,7 @@ public struct StorageApi: Sendable {
   ///
   /// - Parameter configuration: The configuration that controls the endpoint URL, authentication
   ///   headers, JSON codecs, and HTTP session.
-  public init(configuration: StorageClientConfiguration) {
+  init(configuration: StorageClientConfiguration) {
     var configuration = configuration
     if configuration.headers["X-Client-Info"] == nil {
       configuration.headers["X-Client-Info"] = "storage-swift/\(version)"
@@ -87,7 +77,7 @@ public struct StorageApi: Sendable {
   ///   - value: The value of the header field.
   ///   - key: The name of the header field. The key is case-insensitively stored as lowercase.
   /// - Returns: A new ``StorageApi`` with the header merged into ``configuration``'s headers.
-  public func setHeader(_ value: String, forKey key: String) -> Self {
+  func setHeader(_ value: String, forKey key: String) -> Self {
     var configuration = configuration
     configuration.headers[key.lowercased()] = value
     return StorageApi(configuration: configuration)

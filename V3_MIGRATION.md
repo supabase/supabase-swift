@@ -1535,12 +1535,12 @@ let storage = client.storage.setHeader("v", forKey: "X-Foo")
 try await storage.from("bucket").list() // X-Foo is sent
 ```
 
-## `StorageApi.setHeader(_:forKey:)` no longer mutates in place
+## `setHeader(_:forKey:)` on `SupabaseStorageClient`/`StorageFileApi` no longer mutates in place
 
 `setHeader(_:forKey:)` used to mutate a lock-protected header dictionary on the instance and return
-`self` for chaining, marked `@discardableResult`. Now that `StorageApi` (and `SupabaseStorageClient`
-/ `StorageFileApi`, which hold one) is an immutable value type, `setHeader` instead builds and
-returns a **new** value with the header merged in, and `@discardableResult` is removed.
+`self` for chaining, marked `@discardableResult`. Now that these are immutable value types,
+`setHeader` instead builds and returns a **new** value with the header merged in, and
+`@discardableResult` is removed.
 
 This is a silent behavior change, not a compile error, if you call `setHeader` and discard the
 result — removing `@discardableResult` turns that into an "unused result" compiler warning rather
@@ -1562,6 +1562,16 @@ try await storage.from("avatars")
   .upload(...)
 ```
 
-Search your codebase for `.setHeader(` on a `StorageApi`/`SupabaseStorageClient`/`StorageFileApi`
-value to find affected call sites, and check that each one uses the returned value rather than
-discarding it.
+Search your codebase for `.setHeader(` on a `SupabaseStorageClient`/`StorageFileApi` value to find
+affected call sites, and check that each one uses the returned value rather than discarding it.
+
+## `StorageApi` is now internal
+
+`StorageApi` is removed from the public API. It was the shared implementation type
+`SupabaseStorageClient`, `StorageFileApi`, and the Vectors trio each held internally and delegated
+to — nothing in the public API ever accepted or returned one, so a directly-constructed
+`StorageApi` value had no productive use: its `execute(_:)` method was already internal, and none
+of the public client types exposed a way to build one from a standalone `StorageApi`. If your code
+constructed `StorageApi(configuration:)` directly, construct a `SupabaseStorageClient(configuration:)`
+instead — its public surface (`configuration`, `setHeader(_:forKey:)`, `from(_:)`) is a superset of
+what `StorageApi` exposed.

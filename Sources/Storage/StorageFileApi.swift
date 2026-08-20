@@ -130,7 +130,7 @@ public struct StorageFileApi: Sendable {
   }
 
   /// Returns a new ``StorageFileApi`` with an additional HTTP header merged into the underlying
-  /// ``StorageApi``'s configuration, included in all requests made by the returned instance.
+  /// configuration, included in all requests made by the returned instance.
   ///
   /// Because ``StorageFileApi`` is an immutable value type, this method does not mutate `self` —
   /// it returns a new instance. Discarding the return value is a no-op, so always use the result:

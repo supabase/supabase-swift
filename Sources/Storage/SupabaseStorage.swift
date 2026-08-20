@@ -148,8 +148,8 @@ public struct SupabaseStorageClient: Sendable {
   }
 
   /// Returns a new ``SupabaseStorageClient`` with an additional HTTP header merged into the
-  /// underlying ``StorageApi``'s configuration, included in all requests made by the returned
-  /// instance (and by ``StorageFileApi`` instances subsequently obtained via ``from(_:)``).
+  /// underlying configuration, included in all requests made by the returned instance (and by
+  /// ``StorageFileApi`` instances subsequently obtained via ``from(_:)``).
   ///
   /// Because ``SupabaseStorageClient`` is an immutable value type, this method does not mutate
   /// `self` — it returns a new instance. Discarding the return value is a no-op, so always use
