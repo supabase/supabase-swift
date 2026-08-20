@@ -1575,3 +1575,84 @@ of the public client types exposed a way to build one from a standalone `Storage
 constructed `StorageApi(configuration:)` directly, construct a `SupabaseStorageClient(configuration:)`
 instead — its public surface (`configuration`, `setHeader(_:forKey:)`, `from(_:)`) is a superset of
 what `StorageApi` exposed.
+
+## `PostgrestClient.Configuration.encoder`/`.decoder` are now `let`, not `var`
+
+`PostgrestClient.Configuration.encoder` and `.decoder` are immutable, matching the `var` → `let`
+direction the rest of `Configuration` already took when `PostgrestClient` became a stateless value
+type. They were the last two settable properties left over from before that change — nothing in
+the SDK ever mutated them after `init`, and the new per-call overrides below (on `insert`/`update`/
+`upsert`/`execute`) cover the case that mutating them after construction was actually used for.
+
+```swift
+// Before
+var configuration = PostgrestClient.Configuration(url: url)
+configuration.decoder = myDecoder
+
+// After — set it at construction time, or pass a per-call override (see below)
+let configuration = PostgrestClient.Configuration(url: url, decoder: myDecoder)
+```
+
+This is a compile error, not a silent behavior change: any assignment to `.encoder`/`.decoder` on a
+`PostgrestClient.Configuration` value no longer builds.
+
+## PostgREST gains per-call `encoder`/`decoder` overrides; `PostgrestError` decoding no longer uses your decoder
+
+`insert`, `update`, and `upsert` now accept a trailing `encoder: JSONEncoder? = nil`, and
+`execute<T: Decodable>(options:)` now accepts a trailing `decoder: JSONDecoder? = nil` — each
+overrides `PostgrestClient.Configuration.encoder`/`.decoder` for that one call. Calling these
+methods without the new argument compiles unchanged.
+
+```swift
+// Encode this one insert with a different key strategy than the client default
+try await client.from("todos")
+  .insert(todo, encoder: mySnakeCaseEncoder)
+  .execute()
+
+// Decode this one response with a different date strategy than the client default
+let todos: [Todo] = try await client.from("todos")
+  .select()
+  .execute(decoder: myCustomDecoder)
+  .value
+```
+
+Separately, decoding a `PostgrestError` from an error response no longer uses
+`Configuration.decoder` or either of these new per-call overrides — it always uses a fixed,
+non-configurable internal decoder. Previously, a decoder with a non-default `keyDecodingStrategy`
+or `dateDecodingStrategy` that didn't match `PostgrestError`'s plain `details`/`hint`/`code`/
+`message` shape could cause a real PostgREST error response to be reported as a generic `HTTPError`
+instead of a `PostgrestError`, since the mismatched decoder failed to parse it. This is a silent
+behavior change, not a compile error: if you `catch`-typed on `PostgrestError` while also
+customizing `Configuration.decoder`'s key or date strategy, error responses that previously fell
+through as `HTTPError` are now caught as `PostgrestError` instead.
+
+## `PostgrestExecutableBuilder.execute<T: Decodable>(options:)` now requires a `decoder:` argument
+
+The generic `execute` requirement on the `any PostgrestExecutableBuilder` protocol gained the same
+`decoder: JSONDecoder?` parameter as the concrete `execute<T: Decodable>(options:decoder:)` above.
+Protocol requirements can't carry a default argument, so calling it through the type-erased
+`any PostgrestExecutableBuilder` — rather than through a concrete builder type, where the parameter
+still defaults to `nil` — now requires passing `decoder:` explicitly:
+
+```swift
+// Before
+let builder: any PostgrestExecutableBuilder = client.from("todos").select()
+let todos: [Todo] = try await builder.execute(options: FetchOptions()).value
+
+// After
+let todos: [Todo] = try await builder.execute(options: FetchOptions(), decoder: nil).value
+```
+
+This is a compile error, not a silent behavior change, and only affects code that calls the
+generic `execute(options:)` through `any`/`some PostgrestExecutableBuilder` rather than through a
+concrete builder type such as `PostgrestFilterBuilder`.
+
+## `RealtimeChannelV2.broadcast(event:message:)` gains a per-call `encoder:` override
+
+`broadcast(event:message:)` now accepts a trailing `encoder: JSONEncoder? = nil`, overriding the
+fixed internal encoder (`JSONValue.encoder`) previously always used to serialize `message`. Calling
+`broadcast` without the new argument compiles unchanged and behaves the same as before.
+
+```swift
+try await channel.broadcast(event: "cursor", message: cursorPosition, encoder: mySnakeCaseEncoder)
+```

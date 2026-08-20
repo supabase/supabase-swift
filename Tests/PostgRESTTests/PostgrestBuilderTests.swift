@@ -379,6 +379,141 @@ extension PostgrestMockerTests {
       #expect(query.request.headers[.init("key")!] == "value")
     }
 
+    // MARK: - Encoder/decoder override tests
+
+    @Test
+    func insertPerCallEncoderOverridesClientDefault() async throws {
+      let capturedBody = LockIsolated<Data?>(nil)
+      let sut = makeSUTWithCustomFetch { request in
+        capturedBody.setValue(request.httpBody)
+        return (Data(), self.makeHTTPURLResponse(statusCode: 201))
+      }
+
+      let snakeCaseEncoder = JSONEncoder()
+      snakeCaseEncoder.keyEncodingStrategy = .convertToSnakeCase
+
+      try await sut.from("users")
+        .insert(EncoderOverrideRow(userName: "abc"), encoder: snakeCaseEncoder)
+        .execute()
+
+      let body = try #require(capturedBody.value)
+      let json = try #require(JSONSerialization.jsonObject(with: body) as? [String: Any])
+      #expect(json["user_name"] as? String == "abc")
+      #expect(json["userName"] == nil)
+    }
+
+    @Test
+    func updatePerCallEncoderOverridesClientDefault() async throws {
+      let capturedBody = LockIsolated<Data?>(nil)
+      let sut = makeSUTWithCustomFetch { request in
+        capturedBody.setValue(request.httpBody)
+        return (Data(), self.makeHTTPURLResponse(statusCode: 200))
+      }
+
+      let snakeCaseEncoder = JSONEncoder()
+      snakeCaseEncoder.keyEncodingStrategy = .convertToSnakeCase
+
+      try await sut.from("users")
+        .update(EncoderOverrideRow(userName: "abc"), encoder: snakeCaseEncoder)
+        .eq("id", value: 1)
+        .execute()
+
+      let body = try #require(capturedBody.value)
+      let json = try #require(JSONSerialization.jsonObject(with: body) as? [String: Any])
+      #expect(json["user_name"] as? String == "abc")
+      #expect(json["userName"] == nil)
+    }
+
+    @Test
+    func upsertPerCallEncoderOverridesClientDefault() async throws {
+      let capturedBody = LockIsolated<Data?>(nil)
+      let sut = makeSUTWithCustomFetch { request in
+        capturedBody.setValue(request.httpBody)
+        return (Data(), self.makeHTTPURLResponse(statusCode: 201))
+      }
+
+      let snakeCaseEncoder = JSONEncoder()
+      snakeCaseEncoder.keyEncodingStrategy = .convertToSnakeCase
+
+      try await sut.from("users")
+        .upsert(EncoderOverrideRow(userName: "abc"), encoder: snakeCaseEncoder)
+        .execute()
+
+      let body = try #require(capturedBody.value)
+      let json = try #require(JSONSerialization.jsonObject(with: body) as? [String: Any])
+      #expect(json["user_name"] as? String == "abc")
+      #expect(json["userName"] == nil)
+    }
+
+    @Test
+    func executePerCallDecoderOverridesClientDefault() async throws {
+      struct SnakeCasePayload: Decodable, Sendable {
+        let userId: Int
+      }
+
+      let sut = makeSUTWithCustomFetch { _ in
+        (Data(#"{"user_id": 1}"#.utf8), self.makeHTTPURLResponse(statusCode: 200))
+      }
+
+      // The client's default decoder has no key conversion, so it can't match `user_id` to `userId`.
+      do {
+        let _: SnakeCasePayload = try await sut.from("users").select().execute().value
+        Issue.record("Expected a decoding error without a matching key strategy")
+      } catch is DecodingError {}
+
+      let snakeCaseDecoder = JSONDecoder()
+      snakeCaseDecoder.keyDecodingStrategy = .convertFromSnakeCase
+
+      let result: SnakeCasePayload =
+        try await sut.from("users").select().execute(decoder: snakeCaseDecoder).value
+      #expect(result.userId == 1)
+    }
+
+    @Test
+    func errorDecodingIsUnaffectedByClientDecoderCustomization() async throws {
+      // A decoder aggressive enough to remap every key would prevent `PostgrestError` from ever
+      // finding its required `message` field, if it were used to decode the error response.
+      // Error decoding must use a fixed internal decoder instead, decoupled from this setting.
+      let poisonedDecoder = JSONDecoder()
+      poisonedDecoder.keyDecodingStrategy = .custom { _ in TestCodingKey(stringValue: "unmatched") }
+
+      let sut = makeSUTWithCustomFetch(decoder: poisonedDecoder) { _ in
+        (
+          Data(#"{"code":"PGRST000","message":"Bad Request"}"#.utf8),
+          self.makeHTTPURLResponse(statusCode: 400)
+        )
+      }
+
+      do {
+        try await sut.from("users").select().execute()
+        Issue.record("Expected PostgrestError to be thrown")
+      } catch let error as PostgrestError {
+        #expect(error.message == "Bad Request")
+        #expect(error.code == "PGRST000")
+      }
+    }
+
+    @Test
+    func errorDecodingIsUnaffectedByPerCallDecoderOverride() async throws {
+      let poisonedDecoder = JSONDecoder()
+      poisonedDecoder.keyDecodingStrategy = .custom { _ in TestCodingKey(stringValue: "unmatched") }
+
+      let sut = makeSUTWithCustomFetch { _ in
+        (
+          Data(#"{"code":"PGRST000","message":"Bad Request"}"#.utf8),
+          self.makeHTTPURLResponse(statusCode: 400)
+        )
+      }
+
+      do {
+        let _: [User] = try await sut.from("users").select().execute(decoder: poisonedDecoder).value
+        Issue.record("Expected PostgrestError to be thrown")
+      } catch let error as PostgrestError {
+        #expect(error.message == "Bad Request")
+        #expect(error.code == "PGRST000")
+      }
+    }
+
     // MARK: - Retry tests
 
     @Test
@@ -639,10 +774,11 @@ extension PostgrestMockerTests {
 
     private func makeSUTWithCustomFetch(
       retryEnabled: Bool = true,
+      decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder,
       fetch: @escaping PostgrestClient.FetchHandler
     ) -> PostgrestClient {
       PostgrestClient(
-        configuration: .init(url: url, fetch: fetch, retryEnabled: retryEnabled),
+        configuration: .init(url: url, fetch: fetch, decoder: decoder, retryEnabled: retryEnabled),
         clock: ImmediateRetryTestClock()
       )
     }
@@ -659,4 +795,26 @@ struct ImmediateRetryTestClock: Clock {
   var minimumResolution: ContinuousClock.Instant.Duration { ContinuousClock().minimumResolution }
 
   func sleep(until deadline: ContinuousClock.Instant, tolerance: Duration?) async throws {}
+}
+
+/// A row with a camelCase property, used to prove a custom `keyEncodingStrategy` was applied.
+/// `keyEncodingStrategy` only affects keys derived from a type's synthesized `CodingKeys`, not
+/// raw `Dictionary` keys, so this can't be a `[String: String]` literal.
+private struct EncoderOverrideRow: Encodable, Sendable {
+  let userName: String
+}
+
+/// A `CodingKey` that remaps to a fixed, unmatched key — used to simulate a decoder whose key
+/// strategy is aggressive enough to break decoding of any fixed-shape response.
+private struct TestCodingKey: CodingKey {
+  var stringValue: String
+  var intValue: Int? { nil }
+
+  init(stringValue: String) {
+    self.stringValue = stringValue
+  }
+
+  init?(intValue: Int) {
+    nil
+  }
 }

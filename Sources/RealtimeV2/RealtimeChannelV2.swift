@@ -85,7 +85,7 @@ protocol RealtimeChannelProtocol: AnyObject, Sendable {
 /// - ``subscribeWithError()``
 /// - ``unsubscribe()``
 /// ### Broadcasting
-/// - ``broadcast(event:message:)-(_,Codable)``
+/// - ``broadcast(event:message:encoder:)``
 /// - ``broadcast(event:message:)-(_,JSONObject)``
 /// - ``broadcast(event:data:)``
 /// - ``httpSend(event:message:timeout:)-(_,Codable,_)``
@@ -402,8 +402,13 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   /// - Parameters:
   ///   - event: The broadcast event name.
   ///   - message: A `Codable` value to send as the message payload.
-  public func broadcast(event: String, message: some Codable) async throws {
-    try await broadcast(event: event, message: JSONObject(message))
+  ///   - encoder: The `JSONEncoder` used to serialize `message`. Defaults to the fixed internal
+  ///     encoder (``JSONValue/encoder``) when `nil`.
+  public func broadcast(
+    event: String, message: some Codable, encoder: JSONEncoder? = nil
+  ) async throws {
+    try await broadcast(
+      event: event, message: JSONObject(message, encoder: encoder ?? JSONValue.encoder))
   }
 
   /// Sends a broadcast message with a raw `JSONObject` payload over WebSocket (or falls back to REST).

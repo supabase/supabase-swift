@@ -119,12 +119,19 @@ public struct PostgrestClient: Sendable {
     /// The `JSONEncoder` used to serialize request bodies.
     ///
     /// Defaults to ``jsonEncoder``, which is pre-configured with Supabase-compatible settings.
-    public var encoder: JSONEncoder
+    /// Individual calls to ``PostgrestRequestBuilder/insert(_:returning:count:encoder:)``,
+    /// ``PostgrestRequestBuilder/update(_:returning:count:encoder:)``, and
+    /// ``PostgrestRequestBuilder/upsert(_:onConflict:returning:count:ignoreDuplicates:encoder:)``
+    /// can override this per call.
+    public let encoder: JSONEncoder
 
     /// The `JSONDecoder` used to deserialize response bodies.
     ///
     /// Defaults to ``jsonDecoder``, which is pre-configured with Supabase-compatible settings.
-    public var decoder: JSONDecoder
+    /// Individual calls to ``PostgrestRequestBuilder/execute(options:decoder:)``
+    /// can override this per call. Never used to decode ``PostgrestError`` — that always uses a
+    /// fixed internal decoder, decoupled from this setting.
+    public let decoder: JSONDecoder
 
     /// Whether the client should automatically retry transient errors.
     ///
@@ -242,9 +249,9 @@ public struct PostgrestClient: Sendable {
   /// Returns a query builder targeting the specified table or view.
   ///
   /// Call ``PostgrestRequestBuilder/select(_:head:count:)`` on the returned builder to begin a
-  /// `SELECT`, or use ``PostgrestRequestBuilder/insert(_:returning:count:)``,
-  /// ``PostgrestRequestBuilder/update(_:returning:count:)``,
-  /// ``PostgrestRequestBuilder/upsert(_:onConflict:returning:count:ignoreDuplicates:)``, or
+  /// `SELECT`, or use ``PostgrestRequestBuilder/insert(_:returning:count:encoder:)``,
+  /// ``PostgrestRequestBuilder/update(_:returning:count:encoder:)``,
+  /// ``PostgrestRequestBuilder/upsert(_:onConflict:returning:count:ignoreDuplicates:encoder:)``, or
   /// ``PostgrestRequestBuilder/delete(returning:count:)`` for write operations.
   ///
   /// - Parameter table: The name of the table or view to query.

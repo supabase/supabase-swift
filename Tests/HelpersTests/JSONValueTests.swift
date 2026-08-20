@@ -390,6 +390,20 @@ struct JSONValueTests {
   }
 
   @Test
+  func jsonObjectInitFromCodableWithCustomEncoder() throws {
+    struct SnakeCasePerson: Encodable {
+      let fullName: String
+    }
+
+    let snakeCaseEncoder = JSONEncoder()
+    snakeCaseEncoder.keyEncodingStrategy = .convertToSnakeCase
+
+    let jsonObject = try JSONObject(SnakeCasePerson(fullName: "John"), encoder: snakeCaseEncoder)
+    #expect(jsonObject["full_name"] == .string("John"))
+    #expect(jsonObject["fullName"] == nil)
+  }
+
+  @Test
   func jsonObjectInitFromCodableFailure() {
     // Test with a simple string, which should fail because it's not an object
     #expect(throws: (any Error).self) {

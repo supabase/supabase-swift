@@ -57,6 +57,12 @@ public struct FunctionsClient: Sendable {
   let region: String?
 
   /// The JSON decoder used to decode function response bodies.
+  ///
+  /// Individual calls to ``invoke(_:options:decoder:)`` can override this per call — a
+  /// client-wide default with a per-call override, the same pattern PostgREST's
+  /// `PostgrestClient.Configuration.decoder` uses. ``FunctionsError/httpError(code:data:)``
+  /// carries the response body as raw `Data` rather than decoding it, so this setting never
+  /// affects error handling.
   public let decoder: JSONDecoder
 
   let headers: HTTPFields

@@ -17,7 +17,8 @@ extension JSONValue {
 
 extension JSONValue {
   /// Initialize an ``JSONValue`` from an `Encodable` value.
-  public init(_ value: some Encodable) throws {
+  /// - Parameter encoder: The `JSONEncoder` used to serialize `value`. Defaults to ``encoder``.
+  public init(_ value: some Encodable, encoder: JSONEncoder = JSONValue.encoder) throws {
     if let value = value as? JSONValue {
       self = value
     } else if let string = value as? String {
@@ -29,7 +30,7 @@ extension JSONValue {
     } else if let double = value as? Double {
       self = .double(double)
     } else {
-      let data = try JSONValue.encoder.encode(value)
+      let data = try encoder.encode(value)
       self = try JSONValue.decoder.decode(JSONValue.self, from: data)
     }
   }
@@ -64,8 +65,9 @@ extension JSONObject {
   }
 
   /// Initialize JSONObject from an `Encodable` type
-  public init(_ value: some Encodable) throws {
-    guard let object = try JSONValue(value).objectValue else {
+  /// - Parameter encoder: The `JSONEncoder` used to serialize `value`. Defaults to ``JSONValue/encoder``.
+  public init(_ value: some Encodable, encoder: JSONEncoder = JSONValue.encoder) throws {
+    guard let object = try JSONValue(value, encoder: encoder).objectValue else {
       throw DecodingError.typeMismatch(
         JSONObject.self,
         DecodingError.Context(
