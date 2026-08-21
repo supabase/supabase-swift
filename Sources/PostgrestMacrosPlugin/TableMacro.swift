@@ -58,7 +58,15 @@ public struct TableMacro: ExtensionMacro {
     in context: some MacroExpansionContext
   ) throws -> [ExtensionDeclSyntax] {
     guard declaration.is(StructDeclSyntax.self) else {
-      throw MacroExpansionErrorMessage("@Table can only be applied to a struct")
+      context.error("@Table can only be applied to a struct", at: node)
+      return []
+    }
+    if let relationship = declaration.postgrestRelationshipAttribute() {
+      context.error(
+        "@Relationship belongs on a @SelectionOf type, not on @Table",
+        at: relationship
+      )
+      return []
     }
     let arguments = arguments(from: node)
     let access = declaration.postgrestAccessLevel
