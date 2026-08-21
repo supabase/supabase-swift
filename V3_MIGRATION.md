@@ -1656,3 +1656,57 @@ fixed internal encoder (`JSONValue.encoder`) previously always used to serialize
 ```swift
 try await channel.broadcast(event: "cursor", message: cursorPosition, encoder: mySnakeCaseEncoder)
 ```
+
+## `Optional` no longer conforms to `PostgrestFilterValue`; `nil` cannot be a comparison operand
+
+`Optional` used to conform to `PostgrestFilterValue`, rendering `nil` as the literal text `NULL`.
+It now conforms only to the new `PostgrestArrayElement` protocol, so passing `nil` (or any
+optional) to `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `like`, `ilike`, `in` or `notIn` no longer
+compiles.
+
+The old conformance produced silently wrong results rather than an error. Verified against a live
+PostgREST 14.15: on an `integer` column `column=eq.null` is an HTTP 400, but on a `text` column it
+returns **HTTP 200 with the row whose value is the literal string** `'null'` — a wrong row, not an
+empty result. `column = NULL` is never true in SQL, so there is no correct query to send here and
+the SDK does not guess one.
+
+```swift
+// Before — compiled, sent `email=eq.NULL`, matched the wrong rows
+let email: String? = nil
+try await client.from("users").select().eq("email", value: email).execute()
+
+// After — use the NULL-aware filter
+try await client.from("users").select().is("email", value: nil).execute()
+
+// ...and its negation
+try await client.from("users").select()
+  .not("email", operator: .is, value: "null").execute()
+```
+
+**This is a compile error**, so the compiler lists every affected call site:
+`argument type 'String?' does not conform to expected type 'PostgrestFilterValue'`. If the value is
+optional only because of how you obtained it, unwrap it and branch:
+
+```swift
+let query = client.from("users").select()
+let scoped = email.map { query.eq("email", value: $0) } ?? query.is("email", value: nil)
+```
+
+There is no escape hatch, and that is deliberate — the previous behavior had no correct use.
+
+### Array columns still accept `NULL` members
+
+A real Postgres array may legitimately contain `NULL`, so `Optional` keeps that capability through
+`PostgrestArrayElement`:
+
+```swift
+// Still compiles, still sends `tags=cs.{a,NULL}`
+try await client.from("users").select().contains("tags", value: [Optional("a"), nil]).execute()
+```
+
+### If you wrote your own `PostgrestFilterValue`
+
+`PostgrestFilterValue` now refines `PostgrestArrayElement`, which has a default implementation for
+every conforming type. Existing custom conformances keep compiling unchanged and gain array-element
+support for free. Only declare `postgrestArrayElement` yourself if your type is a nested array
+literal or a real `NULL`, where escaping the raw value as a scalar would be wrong.

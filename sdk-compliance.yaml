@@ -42,6 +42,17 @@ supporting_symbols:
   - PostgrestExecutablePhase
   - PostgrestFilterPhase
   - PostgrestFilterablePhase
+  # Array-literal encoding. `PostgrestArrayElement` is the weaker of the two
+  # filter protocols: a value that may appear inside a Postgres array literal,
+  # including SQL NULL. It underpins every filter that takes an array
+  # (contains/containedBy/overlaps) rather than belonging to one of them, and
+  # it is what keeps `nil` out of the scalar comparison filters.
+  - Array.postgrestArrayElement
+  - JSONValue.postgrestArrayElement
+  - Optional.postgrestArrayElement
+  - PostgrestArrayElement
+  - PostgrestArrayElement.postgrestArrayElement
+  - PostgrestFilterValue.postgrestArrayElement
   - PostgrestQueryPhase
   - PostgrestRequestBuilder
   - PostgrestRequestBuilder.Operator

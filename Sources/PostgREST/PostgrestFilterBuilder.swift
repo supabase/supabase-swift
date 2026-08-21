@@ -469,7 +469,8 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
     _ column: String,
     value: Bool?
   ) -> Self {
-    let queryValue = value.rawValue
+    // `Optional` is not a `PostgrestFilterValue`, so spell the NULL case out here.
+    let queryValue = value.map(\.rawValue) ?? "NULL"
     var copy = self
     copy.request.query.append(URLQueryItem(name: column, value: "is.\(queryValue)"))
     return copy
