@@ -387,6 +387,97 @@ extension AuthMockerTests {
     }
 
     @Test
+    func exchangeCodeForSessionUsesVerifierForGivenFlowId() async throws {
+      struct ExchangeCodeRequestBody: Decodable, Sendable {
+        let codeVerifier: String?
+
+        enum CodingKeys: String, CodingKey {
+          case codeVerifier = "code_verifier"
+        }
+      }
+
+      try await withMainSerialExecutor {
+        let capturedVerifier = LockIsolated<String?>(nil)
+
+        var mock = Mock(
+          url: clientURL.appendingPathComponent("token").appendingQueryItems([
+            URLQueryItem(name: "grant_type", value: "pkce")
+          ]),
+          statusCode: 200,
+          data: [
+            .post: MockData.session
+          ]
+        )
+        mock.onRequestHandler = OnRequestHandler(httpBodyType: ExchangeCodeRequestBody.self) {
+          _, body in
+          capturedVerifier.setValue(body?.codeVerifier)
+        }
+        mock.register()
+
+        let sut = makeSUT()
+
+        // Two PKCE flows are pending concurrently, each with its own verifier.
+        Dependencies[sut.clientID].codeVerifierStorage.set("verifier-a", "flow-a")
+        Dependencies[sut.clientID].codeVerifierStorage.set("verifier-b", "flow-b")
+
+        _ = try await sut.exchangeCodeForSession(authCode: "12345", flowId: "flow-a")
+
+        expectNoDifference(capturedVerifier.value, "verifier-a")
+
+        // Exchanging "flow-a" must not disturb "flow-b"'s still-pending verifier.
+        #expect(Dependencies[sut.clientID].codeVerifierStorage.get("flow-a") == nil)
+        #expect(Dependencies[sut.clientID].codeVerifierStorage.get("flow-b") == "verifier-b")
+      }
+    }
+
+    @Test
+    func concurrentPKCEFlowsKeepIndependentVerifiers() async throws {
+      try await withMainSerialExecutor {
+        let sut = makeSUT()
+        Dependencies[sut.clientID].sessionStorage.store(.validSession)
+
+        Mock(
+          url: clientURL.appendingPathComponent("user/identities/authorize"),
+          ignoreQuery: true,
+          statusCode: 200,
+          data: [
+            .get: Data(#"{"url": "https://github.com/login/oauth/authorize"}"#.utf8)
+          ]
+        )
+        .register()
+
+        // Flow A starts (e.g. linking a GitHub identity)...
+        let flowA = try await sut.getLinkIdentityURL(provider: .github)
+
+        // ...then flow B starts before flow A's callback arrives (e.g. the user also kicks off
+        // a Google sign-in in another window). Before flow ids, flow B's verifier would have
+        // silently overwritten flow A's in the single shared slot.
+        let flowB = try await sut.getLinkIdentityURL(provider: .google)
+
+        #expect(flowA.flowId != nil)
+        #expect(flowB.flowId != nil)
+        expectNoDifference(flowA.flowId != flowB.flowId, true)
+
+        Mock(
+          url: clientURL.appendingPathComponent("token").appendingQueryItems([
+            URLQueryItem(name: "grant_type", value: "pkce")
+          ]),
+          statusCode: 200,
+          data: [
+            .post: MockData.session
+          ]
+        )
+        .register()
+
+        // Exchanging flow A's code must still resolve flow A's own verifier.
+        _ = try await sut.exchangeCodeForSession(authCode: "code-a", flowId: flowA.flowId)
+
+        // Flow B is still pending, untouched by flow A's exchange.
+        #expect(Dependencies[sut.clientID].codeVerifierStorage.get(flowB.flowId) != nil)
+      }
+    }
+
+    @Test
     func getLinkIdentityURL() async throws {
       try await withMainSerialExecutor {
         let url =
@@ -423,15 +514,9 @@ extension AuthMockerTests {
 
         let response = try await sut.getLinkIdentityURL(provider: .github)
 
-        expectNoDifference(
-          response,
-          OAuthResponse(
-            provider: .github,
-            url: URL(
-              string: url
-            )!
-          )
-        )
+        expectNoDifference(response.provider, .github)
+        expectNoDifference(response.url, URL(string: url)!)
+        #expect(response.flowId != nil)
       }
     }
 
@@ -604,7 +689,7 @@ extension AuthMockerTests {
     func sessionFromURL_withError() async throws {
       let sut = makeSUT()
 
-      Dependencies[sut.clientID].codeVerifierStorage.set("code-verifier")
+      Dependencies[sut.clientID].codeVerifierStorage.set("code-verifier", "test-flow")
 
       let url = URL(
         string:

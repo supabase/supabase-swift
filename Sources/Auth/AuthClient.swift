@@ -98,7 +98,7 @@ private let globalJWKSCache = GlobalJWKSCache()
 /// - ``signInWithOAuth(provider:redirectTo:scopes:queryParams:launchFlow:)``
 ///
 /// ### Session management
-/// - ``exchangeCodeForSession(authCode:)``
+/// - ``exchangeCodeForSession(authCode:flowId:)``
 /// - ``session(from:)``
 /// - ``setSession(accessToken:refreshToken:)``
 /// - ``refreshSession(refreshToken:)``
@@ -376,7 +376,7 @@ public actor AuthClient {
     redirectTo: URL? = nil,
     captchaToken: String? = nil
   ) async throws -> AuthResponse {
-    let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
+    let (codeChallenge, codeChallengeMethod, _) = prepareForPKCE()
 
     return try await _signUp(
       request: .init(
@@ -599,7 +599,7 @@ public actor AuthClient {
     data: [String: JSONValue]? = nil,
     captchaToken: String? = nil
   ) async throws {
-    let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
+    let (codeChallenge, codeChallengeMethod, _) = prepareForPKCE()
 
     _ = try await api.execute(
       .init(
@@ -672,7 +672,7 @@ public actor AuthClient {
     redirectTo: URL? = nil,
     captchaToken: String? = nil
   ) async throws -> SSOResponse {
-    let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
+    let (codeChallenge, codeChallengeMethod, _) = prepareForPKCE()
 
     return try await api.execute(
       HTTPRequest(
@@ -705,7 +705,7 @@ public actor AuthClient {
     redirectTo: URL? = nil,
     captchaToken: String? = nil
   ) async throws -> SSOResponse {
-    let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
+    let (codeChallenge, codeChallengeMethod, _) = prepareForPKCE()
 
     return try await api.execute(
       HTTPRequest(
@@ -727,8 +727,17 @@ public actor AuthClient {
   }
 
   /// Log in an existing user by exchanging an Auth Code issued during the PKCE flow.
-  public func exchangeCodeForSession(authCode: String) async throws -> Session {
-    let codeVerifier = codeVerifierStorage.get()
+  /// - Parameters:
+  ///   - authCode: The auth code received from the PKCE callback.
+  ///   - flowId: The id of the flow that generated `authCode`, as returned by
+  /// ``signInWithOAuth(provider:redirectTo:scopes:queryParams:launchFlow:)`` or
+  /// ``getLinkIdentityURL(provider:scopes:redirectTo:queryParams:)``. Pass this when several
+  /// PKCE flows may be pending at once, so the correct code verifier is used. When `nil`, the
+  /// most recently started flow's verifier is used.
+  public func exchangeCodeForSession(authCode: String, flowId: String? = nil) async throws
+    -> Session
+  {
+    let codeVerifier = codeVerifierStorage.get(flowId)
 
     if codeVerifier == nil {
       logger.error(
@@ -751,7 +760,7 @@ public actor AuthClient {
     )
     .decoded(decoder: configuration.resolvedDecoder)
 
-    codeVerifierStorage.set(nil)
+    codeVerifierStorage.remove(flowId)
 
     await sessionManager.update(session)
     eventEmitter.emit(.signedIn, session: session)
@@ -780,7 +789,7 @@ public actor AuthClient {
       scopes: scopes,
       redirectTo: redirectTo,
       queryParams: queryParams
-    )
+    ).url
   }
 
   /// Sign-in an existing user via a third-party provider.
@@ -802,7 +811,8 @@ public actor AuthClient {
     queryParams: [(name: String, value: String?)] = [],
     launchFlow: @MainActor @Sendable (_ url: URL) async throws -> URL
   ) async throws -> Session {
-    let url = try getOAuthSignInURL(
+    let (url, flowId) = try getURLForProvider(
+      url: configuration.url.appendingPathComponent("authorize"),
       provider: provider,
       scopes: scopes,
       redirectTo: redirectTo ?? configuration.redirectToURL,
@@ -811,7 +821,7 @@ public actor AuthClient {
 
     let resultURL = try await launchFlow(url)
 
-    return try await session(from: resultURL)
+    return try await session(from: resultURL, flowId: flowId)
   }
 
   #if canImport(AuthenticationServices)
@@ -950,6 +960,14 @@ public actor AuthClient {
   /// Gets the session data from a OAuth2 callback URL.
   @discardableResult
   public func session(from url: URL) async throws -> Session {
+    try await session(from: url, flowId: nil)
+  }
+
+  /// Gets the session data from a OAuth2 callback URL.
+  /// - Parameter flowId: The id of the PKCE flow that produced this callback, when known ahead
+  /// of time (e.g. the flow that was just launched by ``signInWithOAuth(provider:redirectTo:scopes:queryParams:launchFlow:)``).
+  /// `nil` falls back to the most recently started flow's verifier.
+  private func session(from url: URL, flowId: String?) async throws -> Session {
     logger.debug("Received URL: \(url)")
 
     let params = extractParams(from: url)
@@ -967,7 +985,7 @@ public actor AuthClient {
       guard isPKCEFlow(params: params) else {
         throw AuthError.pkceGrantCodeExchange(message: "Not a valid PKCE flow URL: \(url)")
       }
-      return try await handlePKCEFlow(params: params)
+      return try await handlePKCEFlow(params: params, flowId: flowId)
     }
   }
 
@@ -1020,7 +1038,7 @@ public actor AuthClient {
     return session
   }
 
-  private func handlePKCEFlow(params: [String: String]) async throws -> Session {
+  private func handlePKCEFlow(params: [String: String], flowId: String?) async throws -> Session {
     precondition(configuration.flowType == .pkce, "Method only allowed for PKCE flow.")
 
     if params["error"] != nil || params["error_description"] != nil || params["error_code"] != nil {
@@ -1036,7 +1054,7 @@ public actor AuthClient {
       throw AuthError.pkceGrantCodeExchange(message: "No code detected.")
     }
 
-    return try await exchangeCodeForSession(authCode: code)
+    return try await exchangeCodeForSession(authCode: code, flowId: flowId)
   }
 
   /// Sets the session data from the current session. If the current session is expired, setSession
@@ -1216,7 +1234,7 @@ public actor AuthClient {
     emailRedirectTo: URL? = nil,
     captchaToken: String? = nil
   ) async throws {
-    let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
+    let (codeChallenge, codeChallengeMethod, _) = prepareForPKCE()
 
     _ = try await api.execute(
       HTTPRequest(
@@ -1303,7 +1321,7 @@ public actor AuthClient {
     var user = user
 
     if user.email != nil {
-      let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
+      let (codeChallenge, codeChallengeMethod, _) = prepareForPKCE()
       user.codeChallenge = codeChallenge
       user.codeChallengeMethod = codeChallengeMethod
     }
@@ -1427,7 +1445,7 @@ public actor AuthClient {
     redirectTo: URL? = nil,
     queryParams: [(name: String, value: String?)] = []
   ) async throws -> OAuthResponse {
-    let url = try getURLForProvider(
+    let (url, flowId) = try getURLForProvider(
       url: configuration.url.appendingPathComponent("user/identities/authorize"),
       provider: provider,
       scopes: scopes,
@@ -1448,7 +1466,7 @@ public actor AuthClient {
     )
     .decoded(as: Response.self, decoder: configuration.resolvedDecoder)
 
-    return OAuthResponse(provider: provider, url: response.url)
+    return OAuthResponse(provider: provider, url: response.url, flowId: flowId)
   }
 
   /// Unlinks an identity from a user by deleting it. The user will no longer be able to sign in
@@ -1468,7 +1486,7 @@ public actor AuthClient {
     redirectTo: URL? = nil,
     captchaToken: String? = nil
   ) async throws {
-    let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
+    let (codeChallenge, codeChallengeMethod, _) = prepareForPKCE()
 
     _ = try await api.execute(
       .init(
@@ -1536,19 +1554,20 @@ public actor AuthClient {
   }
 
   nonisolated private func prepareForPKCE() -> (
-    codeChallenge: String?, codeChallengeMethod: String?
+    codeChallenge: String?, codeChallengeMethod: String?, flowId: String?
   ) {
     guard configuration.flowType == .pkce else {
-      return (nil, nil)
+      return (nil, nil, nil)
     }
 
+    let flowId = UUID().uuidString
     let codeVerifier = pkce.generateCodeVerifier()
-    codeVerifierStorage.set(codeVerifier)
+    codeVerifierStorage.set(codeVerifier, flowId)
 
     let codeChallenge = pkce.generateCodeChallenge(codeVerifier)
     let codeChallengeMethod = codeVerifier == codeChallenge ? "plain" : "s256"
 
-    return (codeChallenge, codeChallengeMethod)
+    return (codeChallenge, codeChallengeMethod, flowId)
   }
 
   private func isImplicitGrantFlow(params: [String: String]) -> Bool {
@@ -1556,7 +1575,7 @@ public actor AuthClient {
   }
 
   private func isPKCEFlow(params: [String: String]) -> Bool {
-    let currentCodeVerifier = codeVerifierStorage.get()
+    let currentCodeVerifier = codeVerifierStorage.get(nil)
     return params["code"] != nil || params["error_description"] != nil || params["error"] != nil
       || params["error_code"] != nil && currentCodeVerifier != nil
   }
@@ -1568,7 +1587,7 @@ public actor AuthClient {
     redirectTo: URL? = nil,
     queryParams: [(name: String, value: String?)] = [],
     skipBrowserRedirect: Bool? = nil
-  ) throws -> URL {
+  ) throws -> (url: URL, flowId: String?) {
     guard
       var components = URLComponents(
         url: url,
@@ -1590,7 +1609,7 @@ public actor AuthClient {
       queryItems.append(URLQueryItem(name: "redirect_to", value: redirectTo.absoluteString))
     }
 
-    let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
+    let (codeChallenge, codeChallengeMethod, flowId) = prepareForPKCE()
 
     if let codeChallenge {
       queryItems.append(URLQueryItem(name: "code_challenge", value: codeChallenge))
@@ -1612,7 +1631,7 @@ public actor AuthClient {
       throw URLError(.badURL)
     }
 
-    return url
+    return (url, flowId)
   }
 
   /// Fetches a JWK from the JWKS endpoint with caching

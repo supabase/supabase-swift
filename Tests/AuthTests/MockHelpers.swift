@@ -33,11 +33,31 @@ extension Dependencies {
 
 extension CodeVerifierStorage {
   static var mock: CodeVerifierStorage {
-    let code = LockIsolated<String?>(nil)
+    let slots = LockIsolated<[String: String]>([:])
+    let legacy = LockIsolated<String?>(nil)
 
     return Self(
-      get: { code.value },
-      set: { code.setValue($0) }
+      get: { flowId in
+        if let flowId {
+          return slots.value[flowId]
+        }
+        return legacy.value
+      },
+      set: { code, flowId in
+        slots.withValue { $0[flowId] = code }
+        legacy.setValue(code)
+      },
+      remove: { flowId in
+        if let flowId {
+          slots.withValue { _ = $0.removeValue(forKey: flowId) }
+        } else {
+          legacy.setValue(nil)
+        }
+      },
+      removeAll: {
+        slots.setValue([:])
+        legacy.setValue(nil)
+      }
     )
   }
 }

@@ -232,6 +232,11 @@ features:
     status: implemented
     symbols:
       - AuthClient.exchangeCodeForSession
+  auth.sign_in.concurrent_pkce_flows:
+    status: implemented
+    symbols:
+      - AuthClient.exchangeCodeForSession
+      - OAuthResponse.flowId
 
   auth.session.get_session:
     status: implemented
