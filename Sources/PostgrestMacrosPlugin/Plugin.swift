@@ -12,6 +12,7 @@ import SwiftSyntaxMacros
 struct PostgrestMacrosPlugin: CompilerPlugin {
   let providingMacros: [any Macro.Type] = [
     MarkerMacro.self,
+    SelectionOfMacro.self,
     TableMacro.self,
   ]
 }

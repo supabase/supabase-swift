@@ -11,6 +11,13 @@
 /// `PostgrestMacros` module, or emitted by the schema generator. Hand-written conformances are
 /// supported and are the escape hatch when neither fits.
 public protocol PostgrestSelection: Decodable, Sendable {
+  /// The relation this shape selects from.
+  ///
+  /// Naming the source is what stops a selection being handed to the wrong relation. A relation is
+  /// its own source, fixed by the same-type constraint on ``PostgrestRelation``, so a hand-written
+  /// relation conformance declares nothing here.
+  associatedtype Source: PostgrestRelation
+
   /// The PostgREST `select` expression for this shape, for example `"id,task"`.
   static var selectString: String { get }
 }
@@ -19,7 +26,7 @@ public protocol PostgrestSelection: Decodable, Sendable {
 ///
 /// "Relation" is Postgres's own term for that family. Selecting a whole row is the degenerate
 /// selection, which is why this refines ``PostgrestSelection``.
-public protocol PostgrestRelation: PostgrestSelection {
+public protocol PostgrestRelation: PostgrestSelection where Source == Self {
   /// The relation's name as PostgREST addresses it.
   static var relationName: String { get }
 
