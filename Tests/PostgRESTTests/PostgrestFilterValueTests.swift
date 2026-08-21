@@ -79,10 +79,12 @@ struct PostgrestFilterValueTests {
     #expect(JSONValue.null.rawValue == "NULL")
   }
 
+  /// `Optional` is a ``PostgrestArrayElement`` but deliberately not a ``PostgrestFilterValue``,
+  /// so it encodes for an array literal and has no `rawValue` to pass to a comparison filter.
   @Test
-  func optional() {
-    #expect(Optional.some([1, 2]).rawValue == "{1,2}")
-    #expect(Optional<[Int]>.none.rawValue == "NULL")
+  func optionalIsAnArrayElementNotAFilterValue() {
+    #expect(Optional.some([1, 2]).postgrestArrayElement == "{1,2}")
+    #expect(Optional<[Int]>.none.postgrestArrayElement == "NULL")
   }
 
   @Test
