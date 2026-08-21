@@ -1,0 +1,47 @@
+//
+//  PostgrestRelation.swift
+//  PostgREST
+//
+//  Created by Guilherme Souza on 21/08/26.
+//
+
+/// A shape that can be selected from a relation.
+///
+/// Conformance is normally synthesized by the `@Table` or `@SelectionOf` macro in the
+/// `PostgrestMacros` module, or emitted by the schema generator. Hand-written conformances are
+/// supported and are the escape hatch when neither fits.
+public protocol PostgrestSelection: Decodable, Sendable {
+  /// The PostgREST `select` expression for this shape, for example `"id,task"`.
+  static var selectString: String { get }
+}
+
+/// A queryable source of rows: a table, a view, or a materialized view.
+///
+/// "Relation" is Postgres's own term for that family. Selecting a whole row is the degenerate
+/// selection, which is why this refines ``PostgrestSelection``.
+public protocol PostgrestRelation: PostgrestSelection {
+  /// The relation's name as PostgREST addresses it.
+  static var relationName: String { get }
+
+  /// The Postgres schema the relation belongs to.
+  static var schema: String { get }
+
+  /// The database column name backing a property.
+  ///
+  /// - Parameter keyPath: A key path to one of this type's stored properties.
+  /// - Returns: The column name PostgREST expects in a query string.
+  static func columnName<V>(for keyPath: KeyPath<Self, V>) -> String
+}
+
+/// A relation the database accepts writes for: a table, or a view Postgres reports as updatable.
+///
+/// `Insert` and `Update` have no defaults on purpose. Defaulting them to `Self` would mean sending
+/// the primary key on insert and requiring every column on update.
+public protocol PostgrestWritableRelation: PostgrestRelation {
+  /// The shape accepted by an insert: primary keys excluded, defaulted and nullable columns
+  /// optional.
+  associatedtype Insert: Encodable & Sendable
+
+  /// The shape accepted by an update: every column optional.
+  associatedtype Update: Encodable & Sendable
+}
