@@ -105,7 +105,8 @@ public final class SupabaseClient: Sendable {
       logger: options.global.logger,
       fetch: fetchWithAuth,
       encoder: options.db.encoder,
-      decoder: options.db.decoder
+      decoder: options.db.decoder,
+      retryEnabled: options.db.retry
     )
   }
 
