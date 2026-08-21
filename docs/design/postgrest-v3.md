@@ -1,7 +1,8 @@
 # PostgREST v3 — design
 
 Date: 2026-08-10. Revised: 2026-08-11 after a design review, and again after absorbing
-[PR #1036](https://github.com/supabase/supabase-swift/pull/1036).
+[PR #1036](https://github.com/supabase/supabase-swift/pull/1036). Revised again 2026-08-21 to
+re-check §2's baseline against `main`, which had moved substantially since the first draft.
 Status: design only. No implementation plan and no code yet.
 
 PR #1036 is a working typed-query layer (1,930 lines, tests passing) that arrived independently
@@ -20,67 +21,93 @@ classes stay in place, marked deprecated, and are removed in the next major vers
 
 ## 2. What exists today
 
-`Sources/PostgREST` is 3,125 lines across 9 files. `Tests/PostgRESTTests` is 3,610 lines across 10
+Updated 2026-08-21 against `main` — see the note at the end of this section for what moved and why.
+
+`Sources/PostgREST` is 3,195 lines across 9 files. `Tests/PostgRESTTests` is 3,970 lines across 15
 files, mostly URL-building snapshots.
 
 ```
-PostgrestBuilder            (class, @unchecked Sendable, LockIsolated<MutableState>)
-├── PostgrestQueryBuilder   from(): select / insert / update / upsert / delete
-└── PostgrestTransformBuilder  order / limit / range / single / csv / explain / …
-    └── PostgrestFilterBuilder eq / neq / gt / like / in / contains / …  (1,166 lines)
+PostgrestClient                            (struct, Sendable)
+  .from(_:) / .rpc(_:params:head:get:count:)
+    -> PostgrestRequestBuilder<Phase>        (struct, Sendable; phantom-typed by Phase)
+         Phase = PostgrestQueryPhase         no capability protocols — pick an operation first
+         Phase = PostgrestFilterPhase        filter + transform + execute
+         Phase = PostgrestTransformPhase     transform + execute, no filter
 ```
 
-State is one `Helpers.HTTPRequest` mutated in place. Every method writes a query item or a header,
-then returns `self`.
+`PostgrestQueryBuilder` / `PostgrestFilterBuilder` / `PostgrestTransformBuilder` are typealiases of
+`PostgrestRequestBuilder` at each phase. State is one `Helpers.HTTPRequest` value carried through
+phase transitions by a `carryingFrom:` initializer — not a class, and not mutated in place.
 
 ### 2.1 Problems the rewrite fixes
 
-**Reference semantics break the builder illusion.** Builders look like values but are classes. Two
-chains branched off one builder mutate the same object. The lock exists to satisfy `Sendable`, not
-to make concurrency safe. The doc comments admit this: "Do not modify the same builder instance
-from multiple concurrent tasks."
+Two PRs landed on `main` on 2026-08-20 — [#1240](https://github.com/supabase/supabase-swift/pull/1240)
+and [#1248](https://github.com/supabase/supabase-swift/pull/1248) — independently of this RFC and
+before any of its stages started. Three of the problems this section originally listed are now
+fixed; they stay below, struck through, because §4.1's phase model and §5's staging were written
+against the class hierarchy those PRs removed.
 
-**Inheritance encodes phase order, and it leaks.** `PostgrestFilterBuilder` subclasses
-`PostgrestTransformBuilder`, so `select()` returns `Transform` and drops every filter method. You
-must write `.update(x).eq("id", value: 1).select()` and never `.select().eq(…)`. Separately,
-`PostgrestQueryBuilder` inherits `execute()`, so `client.from("t").execute()` compiles and sends a
-bare GET with no operation chosen.
+~~**Reference semantics break the builder illusion.**~~ Fixed by #1240. `PostgrestClient` and
+`PostgrestRequestBuilder` are both `Sendable` structs now. No `LockIsolated`, no shared mutable
+state, no class.
 
-**Illegal states are runtime strings.** `MutableState.pendingError: String?` holds
-"`.csv()` cannot be combined with `.stripNulls()`" until `execute()` throws it.
+~~**Inheritance encodes phase order, and it leaks.**~~ Fixed by #1240, by a different mechanism than
+§4.1 proposes: phantom-typed phases plus protocol-refinement conformance
+(`PostgrestFilterablePhase` refining `PostgrestTransformablePhase` refining
+`PostgrestExecutablePhase`) now encode the phase graph. `select()` returns the filter phase, so
+`.select().eq(…)` compiles. `PostgrestQueryPhase` conforms to none of the capability protocols, so
+`client.from("t").execute()` no longer compiles.
 
-**Stringly-typed surface.** `select("id, task, done")` is parsed by a hand-rolled quote-aware
-whitespace stripper, duplicated in `PostgrestQueryBuilder.select` and
-`PostgrestTransformBuilder.select`. `or("done.eq.true,priority.gt.3")` makes callers write raw
-PostgREST syntax, and it cannot express a nested `and(…)` without hand-writing it into the string.
-`rangeGt(_:range:)` takes a `String`.
+**Illegal states are runtime strings.** Unchanged. `PostgrestRequestBuilder.pendingError: String?`
+still holds "`.csv()` cannot be combined with `.stripNulls()`" until `execute()` throws it.
 
-**Double `try`.** `insert` / `update` / `upsert` / `rpc` are `throws` because they encode the body
-eagerly. Callers write `try client.from(…).insert(…)` then `try await …execute()`. The body is
-encoded even when the chain is discarded.
+**Stringly-typed surface.** Unchanged. `select("id, task, done")` is still parsed by a hand-rolled
+quote-aware whitespace stripper. `or("done.eq.true,priority.gt.3")` still makes callers write raw
+PostgREST syntax, and it still cannot express a nested `and(…)` without hand-writing it into the
+string.
 
-**Inconsistent escaping.** `escapePostgRESTFilterValue` in `Sources/Helpers/PostgRESTFilterValue.swift`
-is called only by `in` and `notIn`. `eq`, `neq`, `gt` and the rest never call it.
+**Double `try`.** Unchanged. `insert` / `update` / `upsert` are still `throws` because they still
+encode the body eagerly.
 
-**Wasted work per chain step.** `PostgrestBuilder.init` builds a fresh `HTTPClient` and interceptor
-array. `convenience init(_ other:)` runs it again on every phase transition.
+**Inconsistent escaping.** Unchanged, and relocated: `escapePostgRESTFilterValue` now lives in
+`Sources/PostgREST/PostgrestFilterValue.swift`, still called only by `in` and `notIn`. `eq`, `neq`,
+`gt` and the rest still never call it.
 
-**Duplicated retry.** `execute` hand-rolls attempt counting, back-off and retryable-status checks,
-duplicating `Sources/Helpers/HTTP/RetryRequestInterceptor.swift`.
+~~**Wasted work per chain step.**~~ Fixed by #1240 as a side effect of the phase refactor: every
+phase transition now goes through `PostgrestRequestBuilder.init(carryingFrom:request:)`, which
+copies the already-built `HTTPClient` and interceptor array instead of rebuilding them.
 
-**Foundation-bound public surface.** `FetchHandler` is
-`@Sendable (URLRequest) async throws -> (Data, URLResponse)`. `PostgrestResponse` stores
-`HTTPURLResponse` and is not `Sendable`. Five files carry
-`#if canImport(FoundationNetworking)`.
+**Duplicated retry.** Unchanged. `execute` still hand-rolls attempt counting, back-off and
+retryable-status checks, still duplicating `Sources/Helpers/HTTP/RetryRequestInterceptor.swift`.
 
-**Auth races.** `setAuth(_:)` mutates client-wide headers under a lock. `from(_:)` snapshots headers
-at call time, so a token change during an in-flight chain is picked up unpredictably.
+**Foundation-bound public surface.** Unchanged. `FetchHandler` is still
+`@Sendable (URLRequest) async throws -> (Data, URLResponse)`. `PostgrestResponse` still stores
+`HTTPURLResponse` and is not `Sendable`.
 
-**Alias sprawl.** `PostgrestFilterBuilder` carries 16 methods that only forward to another method,
-plus a separate 167-line `Deprecated.swift`.
+~~**Auth races.**~~ Fixed by #1240, already matching the token-provider approach §4.8 proposes for
+the new API — the old API didn't need to wait for a rewrite to get it. `setAuth(_:)` is removed;
+`PostgrestClient.Configuration.accessToken` is an async closure resolved fresh on every `execute()`,
+overridden only by an explicit `Authorization` header.
 
-**Views are invisible.** Nothing in the API distinguishes a table from a read-only view, so
-inserting into a materialized view is a runtime 405 rather than a compile error.
+**Alias sprawl, partially.** `Sources/PostgREST/Deprecated.swift` (167 lines: two deprecated
+initializers, `plfts`/`phfts`/`wfts`, the `like`/`ilike`/`in` `value:` overloads, the `String`-format
+`explain`, `URLQueryRepresentable`) is deleted. The 14 forwarding methods this section originally
+counted alongside it — `equals`, `notEquals`, `greaterThan`, `greaterThanOrEquals`, `lowerThan`,
+`lowerThanOrEquals`, `rangeLowerThan`, `rangeGreaterThan`, `rangeGreaterThanOrEquals`,
+`rangeLowerThanOrEquals`, `fullTextSearch`, `plainToFullTextSearch`, `phraseToFullTextSearch`,
+`webFullTextSearch` — are still there, now grouped under a `// MARK: - Filter Semantic
+Improvements` banner that frames them as a deliberate readability feature rather than sprawl.
+§4.10's removal list should be revisited against that framing before stage 4.
+
+**Views are invisible.** Unchanged. Nothing in the API distinguishes a table from a read-only view,
+so inserting into a materialized view is still a runtime 405 rather than a compile error.
+
+One more thing `main` added that this document should reconcile, not just note: #1248 gave the
+*current* API per-call `encoder`/`decoder` overrides on `insert`/`update`/`upsert`/`execute`.
+[ADR 0002](../adr/0002-postgrest-exposes-no-public-json-coders.md) bars the *new* typed API from
+exposing coders at all — the two aren't in conflict, since the ADR was always scoped to the new
+API, but a reviewer comparing them side by side will ask why one gained configurability while the
+other forecloses it. Worth a line in §6 (Migration) once that section is revisited.
 
 ## 3. Decisions taken
 
