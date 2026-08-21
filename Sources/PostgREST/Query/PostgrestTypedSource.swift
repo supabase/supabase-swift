@@ -37,4 +37,23 @@ public struct PostgrestTypedSource<R: PostgrestRelation>: Sendable {
   public func select() -> PostgrestTypedQuery<R, [R], PostgrestFilterPhase> {
     PostgrestTypedQuery(builder: builder.select(R.selectString))
   }
+
+  /// Selects the columns declared by a selection type.
+  ///
+  /// ```swift
+  /// let rows = try await client.from(Todo.self).select(TodoSummary.self).execute().value
+  /// ```
+  ///
+  /// The `where` clause is what makes a declared selection safe to pass around: a selection names
+  /// the relation it was declared against, so handing it to a different relation is *no such
+  /// overload* rather than a request PostgREST rejects.
+  ///
+  /// - Parameter selection: A type declaring the columns to fetch, normally annotated with
+  ///   `@SelectionOf` from the `PostgrestMacros` module.
+  /// - Returns: A ``PostgrestTypedQuery`` decoding into `[S]`.
+  public func select<S: PostgrestSelection>(
+    _ selection: S.Type
+  ) -> PostgrestTypedQuery<R, [S], PostgrestFilterPhase> where S.Source == R {
+    PostgrestTypedQuery(builder: builder.select(S.selectString))
+  }
 }
