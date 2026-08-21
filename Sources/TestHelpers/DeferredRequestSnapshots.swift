@@ -8,6 +8,10 @@
 package import Foundation
 package import InlineSnapshotTesting
 
+#if canImport(FoundationNetworking)
+  package import FoundationNetworking
+#endif
+
 /// A request snapshot whose comparison has to be deferred until the test's own task.
 ///
 /// Mocker invokes `onRequestHandler` from the URL-loading queue, not from the task running the
