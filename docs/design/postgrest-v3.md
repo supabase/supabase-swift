@@ -113,7 +113,7 @@ other forecloses it. Worth a line in §6 (Migration) once that section is revisi
 
 | Decision | Choice |
 |---|---|
-| Compatibility | New API beside the old one. Old classes deprecated, removed next major. |
+| Compatibility | New API beside the current struct-based builders. Those get deprecated, removed next major. |
 | Type safety | Fully typed by default, string fallback available at every level. |
 | Naming | Public types in `PostgREST` are prefixed `Postgrest`. Macro attributes in the opt-in module are bare. |
 | Data sources | `PostgrestRelation` covers tables, views and materialized views; `PostgrestWritableRelation` refines it. |
@@ -125,7 +125,7 @@ other forecloses it. Worth a line in §6 (Migration) once that section is revisi
 | JSON coders | Not configurable. See [ADR 0002](../adr/0002-postgrest-exposes-no-public-json-coders.md). |
 | Errors | A struct with an extensible kind, not an enum. See [ADR 0001](../adr/0001-public-error-types-are-structs.md). |
 | Macro | Ships in a separate opt-in module, so `PostgREST` never depends on swift-syntax. |
-| Delivery order | Typed layer first over today's builders, then the value-typed core beneath it. See §5. |
+| Delivery order | Typed layer first over today's builders, then the value-typed core beneath it. See §5 and the note at the top of §4.1 — "today's builders" no longer means the class hierarchy this row was written against. |
 | Schema source | Both: a macro for hand-written types, and a rewritten postgres-meta generator. |
 | This document | Design only. Implementation is staged and planned separately. |
 
@@ -162,6 +162,25 @@ column exists. It emits no relation-name constants. The SDK team owns this contr
 ## 4. Target API
 
 ### 4.1 Phase modelling
+
+**Reconciling with `main` (2026-08-21).** [#1240](https://github.com/supabase/supabase-swift/pull/1240)
+already gave today's builders phase safety — a `PostgrestRequestBuilder<Phase>` struct with a
+phantom `Phase` parameter and protocol-refinement conformance, not the `PostgrestSource` /
+`PostgrestQuery` / `PostgrestMutation` type chain below. Of the "Four problems disappear
+structurally" bullets further down, one is now already true today (no accidental bare GET), one is
+half true (the read-side phase-order trap is fixed; the write-side `returning()` below doesn't exist
+yet), and two are still fully open (`pendingError`; no compile-time-safe writes) — both of which turn
+out to be about relation-typing (the `R` parameter, §4.2), not about phase order. See each bullet
+below for the detail.
+
+**Open question this raises for stage 2:** does the value-typed core add an `R` parameter to
+today's `PostgrestRequestBuilder<Phase>` — i.e. `PostgrestRequestBuilder<Phase, R>`, with
+`PostgrestSource`/`PostgrestQuery`/`PostgrestMutation` becoming typealiases of it, the same way
+`PostgrestQueryBuilder`/`PostgrestFilterBuilder`/`PostgrestTransformBuilder` already alias
+`PostgrestRequestBuilder<Phase>` today — or do these become genuinely standalone struct types as
+drafted below? The public API sketched in this section reads the same either way; this is an
+internal-architecture choice for whoever plans stage 2, not a public-surface one, so it's left open
+here rather than decided.
 
 Every type is a `Sendable` struct holding an immutable request value. No inheritance. Each phase is
 a distinct type, so illegal chains fail to compile.
@@ -202,14 +221,20 @@ stateDiagram-v2
 Five things the diagram is meant to make obvious:
 
 - **`Source` has no edge to `Result`.** A bare GET cannot be sent; an operation must be chosen first.
+  Already true of today's `PostgrestQueryPhase` too (#1240) — this diagram's job is to keep that
+  property while adding `R`, not to establish it for the first time.
 - **The four write edges out of `Source` exist only where `R` is a `PostgrestWritableRelation`.** On a
-  read-only view those methods are absent, so the mutation path is unreachable at compile time.
+  read-only view those methods are absent, so the mutation path is unreachable at compile time. This
+  one is still net-new — nothing today distinguishes a table from a view.
 - **`Raw` has no edge back to `Query`.** That is what makes the `csv` + `stripNulls` conflict
-  unrepresentable rather than a deferred runtime error.
+  unrepresentable rather than a deferred runtime error. Still net-new — today's `pendingError` is
+  unaffected by #1240.
 - **`Mutation` reaches `Query` only through `returning()`,** so asking for rows back from a write is
-  always explicit.
+  always explicit. Still net-new — today's write methods take a `returning:` header flag instead.
 - **The self-loops are the order-free modifiers.** `where` and `order` sit on the same state, so no
-  ordering trap exists — unlike today, where `select()` drops every filter method.
+  ordering trap exists. Today's builders already fixed this for reads (`select()` returns the filter
+  phase, so `.select().eq(…)` compiles) — this diagram's job is to keep it once `R` is added, not to
+  fix it for the first time.
 
 `single()` and `maybeSingle()` get their own state because they change the output type, from `[T]` to
 `T` and `T?` respectively. That is the whole reason the PGRST116 case needs no hidden flag. The listing
@@ -248,13 +273,20 @@ and rather than *query* because no operation has been chosen yet.
 
 Four problems disappear structurally:
 
-- **No `pendingError`.** `csv()` returns `PostgrestRawQuery`, which has no `stripNulls()`. The
-  conflict is unrepresentable, so nothing needs to be deferred to `execute()`.
-- **No accidental bare GET.** `PostgrestSource` has no `execute()`. An operation must be chosen.
-- **No phase-order trap.** `where` and `order` both live on `PostgrestQuery`, so `.select().where(…)`
-  and `.update(…).where(…).returning()` both read naturally.
-- **No write to a read-only relation.** Writes hang off a constrained extension, so
-  `client.from(ActiveUsers.self).insert(…)` is *no such member* rather than a runtime 405.
+- **No `pendingError`.** Still open. `csv()` returns `PostgrestRawQuery`, which has no
+  `stripNulls()`. The conflict is unrepresentable, so nothing needs to be deferred to `execute()`.
+- ~~**No accidental bare GET.**~~ Already true today, without `PostgrestSource`: `PostgrestQueryPhase`
+  conforms to none of the capability protocols, so `client.from("t").execute()` already doesn't
+  compile.
+- **No phase-order trap, half done.** The read side is already true today: `select()` returns the
+  filter phase, so `.select().where(…)`-shaped chains (as `.select().eq(…)`) already compile. The
+  write side is not: `.update(…).where(…).returning()` needs `returning()` to exist as a chainable
+  method, and today's `update` only takes a `returning:` header flag. That half is still open, and
+  it's a relation-typing problem (`R`), not a phase-order one.
+- **No write to a read-only relation.** Still open — nothing today distinguishes a table from a view,
+  so this needs `R: PostgrestWritableRelation` to exist first. Writes hang off a constrained
+  extension, so `client.from(ActiveUsers.self).insert(…)` is *no such member* rather than a runtime
+  405.
 
 `maybeSingle()` encodes the PGRST116 case in the output type (`Element?`) rather than in a hidden
 `isMaybeSingle` flag read back inside `execute`.
@@ -791,7 +823,7 @@ public to satisfy SwiftSyntax's `CompilerPlugin` protocols.
 ### 4.12 Testing
 
 Value types make request building a pure function. `PostgrestRequest` is inspectable without
-executing, so most of today's 3,610 lines of snapshot tests become direct assertions on a rendered
+executing, so most of today's 3,970 lines of snapshot tests become direct assertions on a rendered
 request. Filter rendering is tested as a pure tree-to-string function, with no client and no
 network. Response handling, retry and error mapping are covered with the stubs that already exist
 in `Sources/HTTPRuntimeTestHelpers/` — `HTTPTransportStub`, `HTTPStub`, `AssertHTTPRequests` and
@@ -820,17 +852,27 @@ first over today's builders, then replace the internals beneath it.**
 | 1 | Typed protocols in `PostgREST`, plus `PostgrestMacros` with `@Table` / `@SelectionOf` / `@Relationship` / `@Column` / `@PrimaryKey` / `@Default`, layered over today's builders — essentially PR #1036 |
 | 2 | Value-typed core swapped in beneath stage 1: request model, transport, response, errors, filter tree |
 | 3 | `where`, `embedded` / `requiring` scope, `@Function`; operator layer once measured |
-| 4 | Deprecate today's classes |
+| 4 | Deprecate today's builders |
 | 5 | Rewrite the postgres-meta Swift template (separate repository) |
+
+**Stage 1's integration target moved.** "Today's builders" meant the `PostgrestBuilder` class
+hierarchy when this table was written, and PR #1036's typed wrappers (`TypedPostgrestQueryBuilder`
+and friends) delegate to that hierarchy. It's gone (#1240, see §2.1) — today's builders are
+`PostgrestRequestBuilder<Phase>`. PR #1036's protocols and macros are unaffected and still lift as
+designed; only its typed-builder integration layer needs to be rewritten against the new
+phase-generic struct instead of the old classes.
 
 Why this order. Wrapping today's builders puts compile-time column and table safety in users' hands
 in one release, without waiting on the value-typed core. The internals can then be replaced with
 callers noticing nothing, because the typed surface does not expose them.
 
-What it costs. Stage 1 inherits the aliasing bug and cannot express `or`, nesting or embedded scope —
-those arrive in stages 2 and 3. Stage 1's typed filter methods (`.eq(\.senderID, value:)`) must
-therefore be designed to **survive into the final API as sugar**, so that early adopters are not
-migrated twice. `where` and the filter tree are then purely additive.
+What it costs. Stage 1 cannot express `or`, nesting or embedded scope — those arrive in stages 2 and
+3. (An earlier draft of this section also said stage 1 "inherits the aliasing bug" — the bug where
+two chains branched off one builder mutate the same object. That's gone too: today's builders are
+value types, so there's no aliasing left to inherit. See §6 for where that same stale claim still
+needs fixing.) Stage 1's typed filter methods (`.eq(\.senderID, value:)`) must therefore be designed
+to **survive into the final API as sugar**, so that early adopters are not migrated twice. `where`
+and the filter tree are then purely additive.
 
 Each stage gets its own implementation plan.
 
