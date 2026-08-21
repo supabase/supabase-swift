@@ -1073,6 +1073,7 @@ features:
   storage.file_buckets.get_public_url:
     status: implemented
     symbols:
+      - StorageFileApi.getPublicURL
       - DownloadBehavior
       - DownloadBehavior.withOriginalName
       - DownloadBehavior.named
