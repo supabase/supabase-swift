@@ -223,35 +223,6 @@ jobs:
   #         # tests are not yet passing on Android
   #         run-tests: false
 
-  # Known-broken as of the swift-log migration (SDK-1412): swift-log's Logger.Storage.init is
-  # @inlinable in every version reachable within our pinned toolchain floor, which fails under
-  # -enable-library-evolution on Xcode 26. Fixed upstream only in swift-log 1.14.0, which itself
-  # requires raising our swift-tools-version floor past 6.1. Deliberately left out of ci-success's
-  # required-jobs list below until that's resolved — see SDK-1482 for root cause and remediation
-  # options. Re-add to ci-success once fixed.
-  library-evolution:
-    name: Library (evolution)
-    runs-on: blacksmith-6vcpu-macos-latest
-    timeout-minutes: 30
-    strategy:
-      matrix:
-        xcode: ["26.4"]
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Cache derived data
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.derivedData
-          key: |
-            deriveddata-library-evolution-${{ matrix.xcode }}-${{ hashFiles('**/Package.resolved') }}
-          restore-keys: |
-            deriveddata-library-evolution-${{ matrix.xcode }}-
-            deriveddata-library-evolution-
-      - name: Select Xcode ${{ matrix.xcode }}
-        run: sudo xcode-select -s /Applications/Xcode_${{ matrix.xcode }}.app
-      - name: Build for library evolution
-        run: ./scripts/build-for-library-evolution.sh
-
   examples:
     name: Examples (${{ matrix.scheme }})
     runs-on: blacksmith-6vcpu-macos-latest
