@@ -36,6 +36,8 @@ supporting_symbols:
   # feature. Every other filter/modifier method is a 1:1 entry point for
   # exactly one capability and is attributed to that feature's own `symbols:`
   # list instead (see the database.* section below).
+  # The typed-query contracts are in the same category: a relation type is used by
+  # both the read and the write features rather than owned by one capability.
   - PostgrestClient.Configuration.accessToken
   - PostgrestExecutableBuilder
   - PostgrestExecutableBuilder.execute
@@ -54,6 +56,10 @@ supporting_symbols:
   - PostgrestArrayElement.postgrestArrayElement
   - PostgrestFilterValue.postgrestArrayElement
   - PostgrestQueryPhase
+  - PostgrestRelation
+  - PostgrestRelation.columnName
+  - PostgrestRelation.relationName
+  - PostgrestRelation.schema
   - PostgrestRequestBuilder
   - PostgrestRequestBuilder.Operator
   - PostgrestRequestBuilder.execute
@@ -64,8 +70,13 @@ supporting_symbols:
   - PostgrestRequestBuilder.plainToFullTextSearch
   - PostgrestRequestBuilder.setHeader
   - PostgrestRequestBuilder.webFullTextSearch
+  - PostgrestSelection
+  - PostgrestSelection.selectString
   - PostgrestTransformPhase
   - PostgrestTransformablePhase
+  - PostgrestWritableRelation
+  - PostgrestWritableRelation.Insert
+  - PostgrestWritableRelation.Update
 
 features:
 
