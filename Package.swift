@@ -197,6 +197,7 @@ let package = Package(
       name: "PostgrestMacrosTests",
       dependencies: [
         .product(name: "MacroTesting", package: "swift-macro-testing"),
+        .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
         "PostgrestMacros",
         "PostgrestMacrosPlugin",
       ]
