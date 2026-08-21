@@ -30,9 +30,12 @@ supporting_symbols:
   - JSONValue.description
   - JSONValue.rawValue
 
-  # PostgrestRequestBuilder<Phase>'s members implement several already-`implemented`
-  # database.* capabilities above simultaneously (filtering, transforming, executing),
-  # rather than owned by a single feature.
+  # A handful of PostgrestRequestBuilder members are used across many
+  # database.* capabilities simultaneously (executing every query/mutate/rpc,
+  # or acting as structural phase markers) rather than owned by a single
+  # feature. Every other filter/modifier method is a 1:1 entry point for
+  # exactly one capability and is attributed to that feature's own `symbols:`
+  # list instead (see the database.* section below).
   - PostgrestClient.Configuration.accessToken
   - PostgrestExecutableBuilder
   - PostgrestExecutableBuilder.execute
@@ -42,59 +45,13 @@ supporting_symbols:
   - PostgrestQueryPhase
   - PostgrestRequestBuilder
   - PostgrestRequestBuilder.Operator
-  - PostgrestRequestBuilder.containedBy
-  - PostgrestRequestBuilder.contains
-  - PostgrestRequestBuilder.csv
-  - PostgrestRequestBuilder.eq
-  - PostgrestRequestBuilder.equals
   - PostgrestRequestBuilder.execute
   - PostgrestRequestBuilder.explain
-  - PostgrestRequestBuilder.filter
   - PostgrestRequestBuilder.fts
   - PostgrestRequestBuilder.fullTextSearch
-  - PostgrestRequestBuilder.geojson
-  - PostgrestRequestBuilder.greaterThan
-  - PostgrestRequestBuilder.greaterThanOrEquals
-  - PostgrestRequestBuilder.gt
-  - PostgrestRequestBuilder.gte
-  - PostgrestRequestBuilder.iLikeAllOf
-  - PostgrestRequestBuilder.iLikeAnyOf
-  - PostgrestRequestBuilder.ilike
-  - PostgrestRequestBuilder.imatch
-  - PostgrestRequestBuilder.in
-  - PostgrestRequestBuilder.is
-  - PostgrestRequestBuilder.isDistinct
-  - PostgrestRequestBuilder.like
-  - PostgrestRequestBuilder.likeAllOf
-  - PostgrestRequestBuilder.likeAnyOf
-  - PostgrestRequestBuilder.limit
-  - PostgrestRequestBuilder.lowerThan
-  - PostgrestRequestBuilder.lowerThanOrEquals
-  - PostgrestRequestBuilder.lt
-  - PostgrestRequestBuilder.lte
-  - PostgrestRequestBuilder.match
-  - PostgrestRequestBuilder.maxAffected
-  - PostgrestRequestBuilder.neq
-  - PostgrestRequestBuilder.notEquals
-  - PostgrestRequestBuilder.or
-  - PostgrestRequestBuilder.order
-  - PostgrestRequestBuilder.overlaps
   - PostgrestRequestBuilder.phraseToFullTextSearch
   - PostgrestRequestBuilder.plainToFullTextSearch
-  - PostgrestRequestBuilder.range
-  - PostgrestRequestBuilder.rangeAdjacent
-  - PostgrestRequestBuilder.rangeGreaterThan
-  - PostgrestRequestBuilder.rangeGreaterThanOrEquals
-  - PostgrestRequestBuilder.rangeGt
-  - PostgrestRequestBuilder.rangeGte
-  - PostgrestRequestBuilder.rangeLowerThan
-  - PostgrestRequestBuilder.rangeLowerThanOrEquals
-  - PostgrestRequestBuilder.rangeLt
-  - PostgrestRequestBuilder.rangeLte
-  - PostgrestRequestBuilder.retry
   - PostgrestRequestBuilder.setHeader
-  - PostgrestRequestBuilder.single
-  - PostgrestRequestBuilder.stripNulls
   - PostgrestRequestBuilder.webFullTextSearch
   - PostgrestTransformPhase
   - PostgrestTransformablePhase
@@ -495,18 +452,51 @@ features:
 
   # ── Client ─────────────────────────────────────────────────────────────────
 
-  client.authentication_integration.third_party_auth: implemented
-  client.authentication_integration.cross_client_token_sync: implemented
-  client.authentication_integration.oauth_flow_type: implemented
-  client.authentication_integration.session_url_detection: implemented
+  client.authentication_integration.third_party_auth:
+    status: implemented
+    symbols:
+      - SupabaseClientOptions.AuthOptions.accessToken
+  client.authentication_integration.cross_client_token_sync:
+    status: implemented
+    note: "Automatic and always-on whenever AuthOptions.accessToken (third_party_auth) is nil: SupabaseClient listens to AuthClient.authStateChanges and pushes the current token to realtime/database/storage/functions. There is no separate opt-in symbol."
+    symbols:
+      - AuthClient.authStateChanges
+  client.authentication_integration.oauth_flow_type:
+    status: implemented
+    symbols:
+      - SupabaseClientOptions.AuthOptions.flowType
+      - AuthClient.Configuration.flowType
+    supporting_symbols:
+      - AuthFlowType
+      - AuthFlowType.implicit
+      - AuthFlowType.pkce
+  client.authentication_integration.session_url_detection:
+    status: implemented
+    note: "No automatic listener/predicate like supabase-js's boolean-or-custom-predicate config: the app calls SupabaseClient.handle(_:)/AuthClient.handle(_:) manually and unconditionally from its own URL-handling entry point. That explicit call is how redirect handling works in Swift."
+    symbols:
+      - SupabaseClient.handle
+      - AuthClient.handle
 
-  client.session_management.custom_storage: implemented
-  client.session_management.persist_session: implemented
+  client.session_management.custom_storage:
+    status: implemented
+    symbols:
+      - SupabaseClientOptions.AuthOptions.storage
+      - AuthClient.Configuration.localStorage
+    supporting_symbols:
+      - AuthLocalStorage
+  client.session_management.persist_session:
+    status: implemented
+    note: "Sessions persist by default via AuthLocalStorage.defaultLocalStorage (KeychainLocalStorage on Apple platforms). There's no separate boolean toggle to disable persistence — that's done by swapping in a custom, non-persisting AuthLocalStorage via client.session_management.custom_storage."
+    symbols:
+      - AuthLocalStorage.defaultLocalStorage
 
   client.request_configuration.custom_http_client:
     status: partially_implemented
     note: "A custom URLSession can be supplied; a full HTTP client adapter protocol is not exposed."
-  client.request_configuration.global_headers: implemented
+  client.request_configuration.global_headers:
+    status: implemented
+    symbols:
+      - SupabaseClientOptions.GlobalOptions.headers
 
   client.observability.trace_propagation:
     status: implemented
@@ -529,13 +519,33 @@ features:
       - CountOption.exact
       - CountOption.planned
       - CountOption.estimated
-  database.query.schema_selection: implemented
-  database.query.rpc: implemented
+  database.query.schema_selection:
+    status: implemented
+    symbols:
+      - PostgrestClient.schema
+    supporting_symbols:
+      - PostgrestClient.Configuration.schema
+  database.query.rpc:
+    status: implemented
+    symbols:
+      - PostgrestClient.rpc
 
-  database.mutate.insert: implemented
-  database.mutate.update: implemented
-  database.mutate.upsert: implemented
-  database.mutate.delete: implemented
+  database.mutate.insert:
+    status: implemented
+    symbols:
+      - PostgrestRequestBuilder.insert
+  database.mutate.update:
+    status: implemented
+    symbols:
+      - PostgrestRequestBuilder.update
+  database.mutate.upsert:
+    status: implemented
+    symbols:
+      - PostgrestRequestBuilder.upsert
+  database.mutate.delete:
+    status: implemented
+    symbols:
+      - PostgrestRequestBuilder.delete
   database.mutate.select_after_mutation:
     status: implemented
     symbols:
@@ -550,24 +560,88 @@ features:
       - PostgrestReturningOptions.minimal
       - PostgrestReturningOptions.representation
 
-  database.using_filters.eq: implemented
-  database.using_filters.neq: implemented
-  database.using_filters.gt: implemented
-  database.using_filters.gte: implemented
-  database.using_filters.lt: implemented
-  database.using_filters.lte: implemented
-  database.using_filters.like: implemented
-  database.using_filters.ilike: implemented
-  database.using_filters.is: implemented
-  database.using_filters.in: implemented
-  database.using_filters.contains: implemented
-  database.using_filters.contained_by: implemented
-  database.using_filters.range_gt: implemented
-  database.using_filters.range_gte: implemented
-  database.using_filters.range_lt: implemented
-  database.using_filters.range_lte: implemented
-  database.using_filters.range_adjacent: implemented
-  database.using_filters.overlaps: implemented
+  database.using_filters.eq:
+    status: implemented
+    symbols:
+      - PostgrestRequestBuilder.eq
+      - PostgrestRequestBuilder.equals
+  database.using_filters.neq:
+    status: implemented
+    symbols:
+      - PostgrestRequestBuilder.neq
+      - PostgrestRequestBuilder.notEquals
+  database.using_filters.gt:
+    status: implemented
+    symbols:
+      - PostgrestRequestBuilder.gt
+      - PostgrestRequestBuilder.greaterThan
+  database.using_filters.gte:
+    status: implemented
+    symbols:
+      - PostgrestRequestBuilder.gte
+      - PostgrestRequestBuilder.greaterThanOrEquals
+  database.using_filters.lt:
+    status: implemented
+    symbols:
+      - PostgrestRequestBuilder.lt
+      - PostgrestRequestBuilder.lowerThan
+  database.using_filters.lte:
+    status: implemented
+    symbols:
+      - PostgrestRequestBuilder.lte
+      - PostgrestRequestBuilder.lowerThanOrEquals
+  database.using_filters.like:
+    status: implemented
+    symbols:
+      - PostgrestRequestBuilder.like
+  database.using_filters.ilike:
+    status: implemented
+    symbols:
+      - PostgrestRequestBuilder.ilike
+  database.using_filters.is:
+    status: implemented
+    symbols:
+      - PostgrestRequestBuilder.is
+  database.using_filters.in:
+    status: implemented
+    symbols:
+      - PostgrestRequestBuilder.in
+  database.using_filters.contains:
+    status: implemented
+    symbols:
+      - PostgrestRequestBuilder.contains
+  database.using_filters.contained_by:
+    status: implemented
+    symbols:
+      - PostgrestRequestBuilder.containedBy
+  database.using_filters.range_gt:
+    status: implemented
+    symbols:
+      - PostgrestRequestBuilder.rangeGt
+      - PostgrestRequestBuilder.rangeGreaterThan
+  database.using_filters.range_gte:
+    status: implemented
+    symbols:
+      - PostgrestRequestBuilder.rangeGte
+      - PostgrestRequestBuilder.rangeGreaterThanOrEquals
+  database.using_filters.range_lt:
+    status: implemented
+    symbols:
+      - PostgrestRequestBuilder.rangeLt
+      - PostgrestRequestBuilder.rangeLowerThan
+  database.using_filters.range_lte:
+    status: implemented
+    symbols:
+      - PostgrestRequestBuilder.rangeLte
+      - PostgrestRequestBuilder.rangeLowerThanOrEquals
+  database.using_filters.range_adjacent:
+    status: implemented
+    symbols:
+      - PostgrestRequestBuilder.rangeAdjacent
+  database.using_filters.overlaps:
+    status: implemented
+    symbols:
+      - PostgrestRequestBuilder.overlaps
   database.using_filters.text_search:
     status: implemented
     symbols:
@@ -579,7 +653,11 @@ features:
       - TextSearchType.plain
       - TextSearchType.phrase
       - TextSearchType.websearch
-  database.using_filters.match: implemented
+  database.using_filters.match:
+    status: implemented
+    note: "PostgrestRequestBuilder.match(_:) — the dictionary-based overload, shorthand for chaining multiple .eq() calls with AND logic. Distinct from the pattern-based overload used by database.using_filters.regex below."
+    symbols:
+      - PostgrestRequestBuilder.match
   database.using_filters.not:
     status: implemented
     symbols:
@@ -613,36 +691,91 @@ features:
       - PostgrestOperator.plfts
       - PostgrestOperator.phfts
       - PostgrestOperator.wfts
-  database.using_filters.or: implemented
-  database.using_filters.raw: implemented
-  database.using_filters.regex: implemented
-  database.using_filters.regex_icase: implemented
-  database.using_filters.is_distinct: implemented
+  database.using_filters.or:
+    status: implemented
+    symbols:
+      - PostgrestRequestBuilder.or
+  database.using_filters.raw:
+    status: implemented
+    symbols:
+      - PostgrestRequestBuilder.filter
+  database.using_filters.regex:
+    status: implemented
+    note: "PostgrestRequestBuilder.match(_:pattern:) — the PostgrestFilterValue-typed overload backing the `~` operator, distinct from the dictionary-based overload used by database.using_filters.match above."
+    symbols:
+      - PostgrestRequestBuilder.match
+  database.using_filters.regex_icase:
+    status: implemented
+    symbols:
+      - PostgrestRequestBuilder.imatch
+  database.using_filters.is_distinct:
+    status: implemented
+    symbols:
+      - PostgrestRequestBuilder.isDistinct
   database.using_filters.not_in:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.notIn
-  database.using_filters.like_all: implemented
-  database.using_filters.like_any: implemented
-  database.using_filters.ilike_all: implemented
-  database.using_filters.ilike_any: implemented
+  database.using_filters.like_all:
+    status: implemented
+    symbols:
+      - PostgrestRequestBuilder.likeAllOf
+  database.using_filters.like_any:
+    status: implemented
+    symbols:
+      - PostgrestRequestBuilder.likeAnyOf
+  database.using_filters.ilike_all:
+    status: implemented
+    symbols:
+      - PostgrestRequestBuilder.iLikeAllOf
+  database.using_filters.ilike_any:
+    status: implemented
+    symbols:
+      - PostgrestRequestBuilder.iLikeAnyOf
 
-  database.using_modifiers.order: implemented
-  database.using_modifiers.limit: implemented
-  database.using_modifiers.range: implemented
-  database.using_modifiers.single_row: implemented
+  database.using_modifiers.order:
+    status: implemented
+    symbols:
+      - PostgrestRequestBuilder.order
+  database.using_modifiers.limit:
+    status: implemented
+    symbols:
+      - PostgrestRequestBuilder.limit
+  database.using_modifiers.range:
+    status: implemented
+    symbols:
+      - PostgrestRequestBuilder.range
+  database.using_modifiers.single_row:
+    status: implemented
+    symbols:
+      - PostgrestRequestBuilder.single
   database.using_modifiers.maybe_single_row:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.maybeSingle
-  database.using_modifiers.strip_nulls: implemented
-  database.using_modifiers.format_csv: implemented
-  database.using_modifiers.format_geojson: implemented
+  database.using_modifiers.strip_nulls:
+    status: implemented
+    symbols:
+      - PostgrestRequestBuilder.stripNulls
+  database.using_modifiers.format_csv:
+    status: implemented
+    symbols:
+      - PostgrestRequestBuilder.csv
+  database.using_modifiers.format_geojson:
+    status: implemented
+    symbols:
+      - PostgrestRequestBuilder.geojson
   database.using_modifiers.explain:
     status: implemented
     symbols:
       - ExplainFormat
-  database.using_modifiers.max_affected_rows: implemented
+  database.using_modifiers.max_affected_rows:
+    status: implemented
+    symbols:
+      - PostgrestRequestBuilder.maxAffected
+  # Cancellation is plain Swift structured concurrency (cancel the enclosing
+  # Task; the request's retry loop observes it via Task.checkCancellation())
+  # — there is no dedicated cancel()-style symbol to register.
   database.using_modifiers.request_cancellation: implemented
   database.using_modifiers.relationship_embed:
     status: partially_implemented
@@ -652,13 +785,27 @@ features:
     symbols:
       - PostgrestRequestBuilder.dryRun
 
-  database.configuration.auto_retry: implemented
+  database.configuration.auto_retry:
+    status: implemented
+    symbols:
+      - PostgrestClient.Configuration.retryEnabled
+      - PostgrestRequestBuilder.retry
   database.configuration.request_timeout: not_implemented
 
   # ── Functions ──────────────────────────────────────────────────────────────
 
-  functions.invocation.invoke: implemented
-  functions.invocation.set_auth_token: implemented
+  functions.invocation.invoke:
+    status: implemented
+    symbols:
+      - FunctionsClient.invoke
+  # No runtime setter exists; the token is supplied as an `accessToken`
+  # closure at construction time and re-invoked on every request, so
+  # "updating" the token means having the closure read from a mutable
+  # source — this is how SupabaseClient itself wires it.
+  functions.invocation.set_auth_token:
+    status: implemented
+    symbols:
+      - FunctionsClient.init
   functions.invocation.method_override:
     status: implemented
     symbols:
@@ -670,7 +817,11 @@ features:
       - FunctionInvokeOptions.Method.put
       - FunctionInvokeOptions.Method.patch
       - FunctionInvokeOptions.Method.delete
-  functions.invocation.streaming_response: implemented
+  functions.invocation.streaming_response:
+    status: implemented
+    note: "Yields Data chunks via an AsyncThrowingStream rather than passing through a raw Response object; _invokeWithStreamedResponse is marked experimental (leading underscore) but is a genuine public symbol."
+    symbols:
+      - FunctionsClient._invokeWithStreamedResponse
   functions.invocation.region_selection:
     status: implemented
     symbols:
@@ -691,6 +842,10 @@ features:
       - FunctionRegion.usEast1
       - FunctionRegion.usWest1
       - FunctionRegion.usWest2
+  # Cancellation is plain Swift structured concurrency: cancel the enclosing
+  # Task for invoke(), or stop iterating / cancel the Task for the
+  # AsyncThrowingStream returned by _invokeWithStreamedResponse. No dedicated
+  # cancel()-style symbol exists.
   functions.invocation.request_cancellation: implemented
   functions.invocation.timeout:
     status: implemented
@@ -699,27 +854,72 @@ features:
 
   # ── Realtime ───────────────────────────────────────────────────────────────
 
-  realtime.client.connect: implemented
-  realtime.client.disconnect: implemented
-  realtime.client.get_channels: implemented
-  realtime.client.remove_channel: implemented
-  realtime.client.remove_all_channels: implemented
-  realtime.client.connection_state: implemented
-  realtime.client.listen_heartbeats: implemented
-  realtime.client.set_auth_token: implemented
-  realtime.client.channel: implemented
+  realtime.client.connect:
+    status: implemented
+    symbols:
+      - RealtimeClientV2.connect
+  realtime.client.disconnect:
+    status: implemented
+    symbols:
+      - RealtimeClientV2.disconnect
+  realtime.client.get_channels:
+    status: implemented
+    symbols:
+      - RealtimeClientV2.channels
+  realtime.client.remove_channel:
+    status: implemented
+    symbols:
+      - RealtimeClientV2.removeChannel
+  realtime.client.remove_all_channels:
+    status: implemented
+    symbols:
+      - RealtimeClientV2.removeAllChannels
+  realtime.client.connection_state:
+    status: implemented
+    symbols:
+      - RealtimeClientV2.status
+  realtime.client.listen_heartbeats:
+    status: implemented
+    symbols:
+      - RealtimeClientV2.onHeartbeat
+  realtime.client.set_auth_token:
+    status: implemented
+    symbols:
+      - RealtimeClientV2.setAuth
+  realtime.client.channel:
+    status: implemented
+    symbols:
+      - RealtimeClientV2.channel
 
-  realtime.channel.subscribe: implemented
-  realtime.channel.unsubscribe: implemented
-  realtime.channel.broadcast: implemented
-  realtime.channel.broadcast_http: implemented
+  realtime.channel.subscribe:
+    status: implemented
+    symbols:
+      - RealtimeChannelV2.subscribeWithError
+  realtime.channel.unsubscribe:
+    status: implemented
+    symbols:
+      - RealtimeChannelV2.unsubscribe
+  realtime.channel.broadcast:
+    status: implemented
+    symbols:
+      - RealtimeChannelV2.broadcast
+  realtime.channel.broadcast_http:
+    status: implemented
+    symbols:
+      - RealtimeChannelV2.httpSend
 
   realtime.subscriptions.broadcast:
     status: implemented
     symbols:
       - BroadcastJoinConfig.replicationReady
-  realtime.subscriptions.postgres_changes: implemented
-  realtime.subscriptions.subscribe_presence: implemented
+  realtime.subscriptions.postgres_changes:
+    status: implemented
+    symbols:
+      - RealtimeChannelV2.onPostgresChange
+  realtime.subscriptions.subscribe_presence:
+    status: implemented
+    symbols:
+      - RealtimeChannelV2.onPresenceChange
   realtime.subscriptions.postgres_changes_filter:
     status: implemented
     symbols:
@@ -736,23 +936,72 @@ features:
       - RealtimePostgresIsValue.true
       - RealtimePostgresIsValue.false
       - RealtimePostgresIsValue.unknown
-  realtime.subscriptions.private_channel: implemented
-  realtime.subscriptions.broadcast_self: implemented
-  realtime.subscriptions.broadcast_ack: implemented
-  realtime.subscriptions.broadcast_replay: implemented
+  realtime.subscriptions.private_channel:
+    status: implemented
+    symbols:
+      - RealtimeChannelConfig.isPrivate
+  realtime.subscriptions.broadcast_self:
+    status: implemented
+    symbols:
+      - BroadcastJoinConfig.receiveOwnBroadcasts
+  realtime.subscriptions.broadcast_ack:
+    status: implemented
+    symbols:
+      - BroadcastJoinConfig.acknowledgeBroadcasts
+  realtime.subscriptions.broadcast_replay:
+    status: implemented
+    symbols:
+      - BroadcastJoinConfig.replay
+    supporting_symbols:
+      - ReplayOption
+      - ReplayOption.init
 
-  realtime.presence.track: implemented
-  realtime.presence.untrack: implemented
+  realtime.presence.track:
+    status: implemented
+    symbols:
+      - RealtimeChannelV2.track
+  realtime.presence.untrack:
+    status: implemented
+    symbols:
+      - RealtimeChannelV2.untrack
   realtime.presence.presence_state: not_implemented
-  realtime.presence.presence_key: implemented
+  realtime.presence.presence_key:
+    status: implemented
+    symbols:
+      - PresenceJoinConfig.key
 
-  realtime.configuration.custom_websocket_transport: implemented
-  realtime.configuration.reconnect_backoff: implemented
-  realtime.configuration.heartbeat_interval: implemented
-  realtime.configuration.access_token_callback: implemented
-  realtime.configuration.deferred_disconnect: implemented
-  realtime.configuration.custom_logger: implemented
-  realtime.configuration.binary_protocol: implemented
+  # Swift always has a native WebSocket (URLSessionWebSocketTask); unlike
+  # supabase-js, there's no runtime (Node <22, Cloudflare Workers, Deno) that
+  # needs an injected WebSocket constructor, and the SDK exposes none — the
+  # transport is always the internal URLSessionWebSocket.
+  realtime.configuration.custom_websocket_transport: not_applicable
+  realtime.configuration.reconnect_backoff:
+    status: partially_implemented
+    note: "RealtimeClientOptions.reconnectDelay configures a fixed base delay; there is no hook to supply a custom attempt-count-to-delay function — the backoff curve itself (ConnectionManager.reconnectBackoffDelay) is a private, hardcoded exponential."
+  realtime.configuration.heartbeat_interval:
+    status: implemented
+    note: "Set via the heartbeatInterval parameter of RealtimeClientOptions.init; the backing stored property is internal, not public."
+    symbols:
+      - RealtimeClientOptions.init
+  realtime.configuration.access_token_callback:
+    status: implemented
+    note: "Set via the accessToken parameter of RealtimeClientOptions.init; the backing stored property is package-visibility, not public."
+    symbols:
+      - RealtimeClientOptions.init
+  realtime.configuration.deferred_disconnect:
+    status: implemented
+    note: "Set via the disconnectOnEmptyChannelsAfter parameter of RealtimeClientOptions.init; the backing stored property is internal, not public."
+    symbols:
+      - RealtimeClientOptions.init
+  realtime.configuration.custom_logger:
+    status: implemented
+    note: "Set via the logger/logLevel parameters of RealtimeClientOptions.init; the backing stored properties are internal/package, not public."
+    symbols:
+      - RealtimeClientOptions.init
+  realtime.configuration.binary_protocol:
+    status: implemented
+    symbols:
+      - RealtimeClientOptions.vsn
 
   # ── Storage ────────────────────────────────────────────────────────────────
 
@@ -768,14 +1017,38 @@ features:
       - StorageByteCount.stringValue
       - StorageByteCount.encode
       - BucketOptions.isPublic
-  storage.file_buckets.get_bucket: implemented
-  storage.file_buckets.list_file_buckets: implemented
-  storage.file_buckets.update_bucket: implemented
-  storage.file_buckets.delete_file_bucket: implemented
-  storage.file_buckets.empty_bucket: implemented
-  storage.file_buckets.access_bucket: implemented
-  storage.file_buckets.upload: implemented
-  storage.file_buckets.download: implemented
+  storage.file_buckets.get_bucket:
+    status: implemented
+    symbols:
+      - SupabaseStorageClient.getBucket
+  storage.file_buckets.list_file_buckets:
+    status: implemented
+    symbols:
+      - SupabaseStorageClient.listBuckets
+  storage.file_buckets.update_bucket:
+    status: implemented
+    symbols:
+      - SupabaseStorageClient.updateBucket
+  storage.file_buckets.delete_file_bucket:
+    status: implemented
+    symbols:
+      - SupabaseStorageClient.deleteBucket
+  storage.file_buckets.empty_bucket:
+    status: implemented
+    symbols:
+      - SupabaseStorageClient.emptyBucket
+  storage.file_buckets.access_bucket:
+    status: implemented
+    symbols:
+      - SupabaseStorageClient.from
+  storage.file_buckets.upload:
+    status: implemented
+    symbols:
+      - StorageFileApi.upload
+  storage.file_buckets.download:
+    status: implemented
+    symbols:
+      - StorageFileApi.download
   storage.file_buckets.list_files:
     status: implemented
     symbols:
@@ -785,22 +1058,52 @@ features:
       - SortOrder.ascending
       - SortOrder.descending
       - SortOrder.encode
-  storage.file_buckets.move: implemented
-  storage.file_buckets.copy: implemented
-  storage.file_buckets.remove: implemented
+  storage.file_buckets.move:
+    status: implemented
+    symbols:
+      - StorageFileApi.move
+  storage.file_buckets.copy:
+    status: implemented
+    symbols:
+      - StorageFileApi.copy
+  storage.file_buckets.remove:
+    status: implemented
+    symbols:
+      - StorageFileApi.remove
   storage.file_buckets.get_public_url:
     status: implemented
     symbols:
       - DownloadBehavior
       - DownloadBehavior.withOriginalName
       - DownloadBehavior.named
-  storage.file_buckets.create_signed_url: implemented
-  storage.file_buckets.create_signed_urls: implemented
-  storage.file_buckets.create_signed_upload_url: implemented
-  storage.file_buckets.upload_with_signed_url: implemented
-  storage.file_buckets.update_file: implemented
-  storage.file_buckets.file_exists: implemented
-  storage.file_buckets.file_info: implemented
+  storage.file_buckets.create_signed_url:
+    status: implemented
+    symbols:
+      - StorageFileApi.createSignedURL
+  storage.file_buckets.create_signed_urls:
+    status: implemented
+    symbols:
+      - StorageFileApi.createSignedURLs
+  storage.file_buckets.create_signed_upload_url:
+    status: implemented
+    symbols:
+      - StorageFileApi.createSignedUploadURL
+  storage.file_buckets.upload_with_signed_url:
+    status: implemented
+    symbols:
+      - StorageFileApi.uploadToSignedURL
+  storage.file_buckets.update_file:
+    status: implemented
+    symbols:
+      - StorageFileApi.update
+  storage.file_buckets.file_exists:
+    status: implemented
+    symbols:
+      - StorageFileApi.exists
+  storage.file_buckets.file_info:
+    status: implemented
+    symbols:
+      - StorageFileApi.info
   storage.file_buckets.download_with_transform:
     status: implemented
     symbols:
@@ -818,9 +1121,27 @@ features:
       - ImageFormat.webp
       - ImageFormat.avif
       - ImageFormat.encode
-  storage.file_buckets.copy_cross_bucket: implemented
-  storage.file_buckets.move_cross_bucket: implemented
-  storage.file_buckets.upload_with_metadata: implemented
+  storage.file_buckets.copy_cross_bucket:
+    status: implemented
+    note: "Not a separate method: the destinationBucket field of the options: DestinationOptions? parameter on StorageFileApi.copy."
+    symbols:
+      - DestinationOptions.destinationBucket
+  storage.file_buckets.move_cross_bucket:
+    status: implemented
+    note: "Not a separate method: the destinationBucket field of the options: DestinationOptions? parameter on StorageFileApi.move."
+    symbols:
+      - DestinationOptions.destinationBucket
+  storage.file_buckets.upload_with_metadata:
+    status: implemented
+    note: "Not a separate method: the metadata/cacheControl/contentType fields of the options: FileOptions parameter on StorageFileApi.upload."
+    symbols:
+      - FileOptions.metadata
+      - FileOptions.cacheControl
+      - FileOptions.contentType
+  # Not a separate method: a bare `cacheNonce: String?` parameter repeated on
+  # createSignedURL, createSignedURLs, download, and getPublicURL — no
+  # dedicated named symbol exists distinct from those methods, which are
+  # already claimed by their own capabilities above.
   storage.file_buckets.url_cache_nonce: implemented
   storage.file_buckets.download_as_stream: not_implemented
   storage.file_buckets.purge_bucket_cache: not_implemented
