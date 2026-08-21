@@ -90,6 +90,16 @@ supporting_symbols:
   - PostgrestWritableRelation.Insert
   - PostgrestWritableRelation.Update
 
+  # The `PostgrestMacros` attributes. `@Table` synthesizes the relation
+  # conformance used by every database.* typed entry point, and the three
+  # markers are inputs to that one expansion rather than capabilities of their
+  # own. Attribute names are unprefixed on purpose — nothing re-exports
+  # `PostgrestMacros`, so a user opts in with an explicit import.
+  - Table
+  - Column
+  - PrimaryKey
+  - Default
+
 features:
 
   # ── Auth ───────────────────────────────────────────────────────────────────
