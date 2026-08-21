@@ -535,11 +535,20 @@ features:
     status: implemented
     symbols:
       - PostgrestError.details
+    supporting_symbols:
+      # The value `from(_ type:)` returns once a relation has been chosen but
+      # no operation has been picked yet.
+      - PostgrestTypedSource
   database.query.select:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.select
+      - PostgrestTypedSource.select
     supporting_symbols:
+      - PostgrestTypedQuery
+      - PostgrestTypedQuery.builder
+      - PostgrestTypedQuery.init
+      - PostgrestTypedQuery.execute
       - CountOption
       - CountOption.init
       - CountOption.rawValue

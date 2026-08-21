@@ -31,7 +31,7 @@ public protocol PostgrestTransformablePhase: PostgrestExecutablePhase {}
 /// executable.
 public protocol PostgrestFilterablePhase: PostgrestTransformablePhase {}
 
-/// The phase immediately after ``PostgrestClient/from(_:)``, before an operation
+/// The phase immediately after ``PostgrestClient/from(_:)->PostgrestQueryBuilder``, before an operation
 /// (`select`/`insert`/`update`/`upsert`/`delete`) has been chosen.
 ///
 /// This phase conforms to none of the capability protocols: you cannot filter, transform, set
@@ -55,7 +55,7 @@ public enum PostgrestTransformPhase: PostgrestTransformablePhase {}
 /// methods are available: filter methods require ``PostgrestFilterablePhase``, transform methods
 /// require ``PostgrestTransformablePhase``, and `setHeader`/`retry`/`execute` require
 /// ``PostgrestExecutablePhase``. You don't construct this type directly — call
-/// ``PostgrestClient/from(_:)`` or ``PostgrestClient/rpc(_:params:head:get:count:)`` and chain
+/// ``PostgrestClient/from(_:)->PostgrestQueryBuilder`` or ``PostgrestClient/rpc(_:params:head:get:count:)`` and chain
 /// from there.
 ///
 /// ## Topics
@@ -131,7 +131,7 @@ public struct PostgrestRequestBuilder<Phase>: Sendable {
 /// This is ``PostgrestRequestBuilder`` specialized to ``PostgrestQueryPhase``, the phase a request
 /// starts in before an operation has been chosen.
 ///
-/// Obtain one by calling ``PostgrestClient/from(_:)`` and then chain one of the operation methods.
+/// Obtain one by calling ``PostgrestClient/from(_:)->PostgrestQueryBuilder`` and then chain one of the operation methods.
 /// Most methods return a ``PostgrestFilterBuilder`` so you can narrow the affected rows with WHERE
 /// clauses before executing.
 ///
