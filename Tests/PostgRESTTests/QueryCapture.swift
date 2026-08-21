@@ -48,6 +48,9 @@ struct QueryCapture {
     return query.removingPercentEncoding ?? query
   }
 
+  /// The path of the captured request's URL, which ends in the relation name.
+  var path: String? { captured.value?.url?.path }
+
   /// The HTTP method of the captured request.
   var httpMethod: String? { captured.value?.httpMethod }
 

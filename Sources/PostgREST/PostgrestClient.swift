@@ -9,7 +9,7 @@ public import Logging
 /// The main entry point for interacting with a PostgREST server.
 ///
 /// ``PostgrestClient`` lets you query and mutate data exposed by PostgREST. Start by calling
-/// ``from(_:)`` to target a table or view, or ``rpc(_:params:head:get:count:)`` to invoke a
+/// ``from(_:)->PostgrestQueryBuilder`` to target a table or view, or ``rpc(_:params:head:get:count:)`` to invoke a
 /// stored function.
 ///
 /// ```swift
@@ -37,7 +37,7 @@ public import Logging
 ///
 /// ### Querying and Mutating Data
 ///
-/// - ``from(_:)``
+/// - ``from(_:)->PostgrestQueryBuilder``
 /// - ``rpc(_:params:head:get:count:)``
 /// - ``rpc(_:head:get:count:)``
 ///
