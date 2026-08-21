@@ -882,10 +882,16 @@ The old and new APIs coexist for one minor-version series. Existing code keeps c
 deprecation warnings.
 
 For stage 4, today's implementation stays **in place and untouched**, marked deprecated, rather than
-reimplemented over the new core. Value types cannot reproduce the old aliasing behavior, where two
-chains branched off one builder mutate the same object. Some user code depends on that by accident.
-Leaving the old code alone avoids silently changing it, and it deletes cleanly in the next major.
-The cost is duplicated request-building logic for one release cycle.
+reimplemented over the new core. The original reason for that — "value types cannot reproduce the
+old aliasing behavior, where two chains branched off one builder mutate the same object, and some
+user code depends on that by accident" — no longer applies: [#1240](https://github.com/supabase/supabase-swift/pull/1240)
+already made today's builders value types (§2.1), so there's no aliasing behavior left for a
+reimplementation to lose. The reason that still holds is narrower: today's builders carry their own
+hand-rolled retry loop and inconsistent escaping (§2.1), and stages 2–3 fix both in the new core.
+Reimplementing the deprecated builders over that core would silently change their behavior during
+the deprecation window, which is exactly what marking something deprecated is supposed to avoid.
+Leaving the old code alone keeps it behaviorally frozen until it deletes cleanly in the next major.
+The cost is still duplicated request-building logic for one release cycle.
 
 `SupabaseClient.from(_:)`, `rpc(_:params:count:)` and `schema(_:)` in `Sources/Supabase` need new
 overloads returning the new types, and the new client needs its own options type rather than reusing
@@ -895,6 +901,14 @@ overloads returning the new types, and the new client needs its own options type
 One migration cost is worth stating plainly: an app that configured one global snake-case coder — as
 `Examples/SlackClone/Supabase.swift` does today — must declare the naming convention per relation
 instead. That is more typing, and it is the price of column names being correct by construction.
+
+This is also where [#1248](https://github.com/supabase/supabase-swift/pull/1248) needs reconciling:
+it gave the *current* (soon-to-be-deprecated) API per-call `encoder`/`decoder` overrides on
+`insert`/`update`/`upsert`/`execute`, the same release cycle this document's new API is being
+designed in. [ADR 0002](../adr/0002-postgrest-exposes-no-public-json-coders.md)'s "not configurable"
+decision was always scoped to the new API only, so the two aren't in tension technically — but an
+app that just adopted a per-call coder override on the deprecated API gets no equivalent on the new
+one, and will hit this migration cost sooner than one that didn't.
 
 ## 7. Open questions
 
