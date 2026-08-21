@@ -4,7 +4,6 @@ import TestHelpers
 import Testing
 
 @testable import Realtime
-@testable import RealtimeV2
 
 /// Regression tests for issue #1145: after a failed auto-reconnect a client
 /// could reach a state where no subscribe ever converged again.

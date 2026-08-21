@@ -11,7 +11,6 @@ import TestHelpers
 import Testing
 
 @testable import Realtime
-@testable import RealtimeV2
 
 #if os(Linux)
   // RealtimeChannelBroadcastTests are disabled on Linux due to timing flakiness.
