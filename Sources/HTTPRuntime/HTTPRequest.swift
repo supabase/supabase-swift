@@ -96,9 +96,9 @@ package struct HTTPRequestBuilder: Sendable {
     guard var components = URLComponents(string: base + prefixedPath) else {
       throw HTTPRuntimeError.invalidURL(base: baseURL, path: path)
     }
-    if !queryItems.isEmpty {
-      components.queryItems = queryItems
-    }
+    // Not `components.queryItems`: that encoding leaves `+` literal, which a
+    // form-decoding server reads as a space. See `QueryEncoding`.
+    components.percentEncodedQuery = QueryEncoding.render(queryItems)
     // The scheme check is load-bearing, not belt-and-braces. A schemeless base
     // URL parses into `URLComponents` and yields a non-nil relative `.url`, so
     // it clears the guards above — and then trips
