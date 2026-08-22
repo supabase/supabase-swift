@@ -19,9 +19,11 @@ import Testing
 @Suite
 struct TableMacroSupportTests {
   private func clause(readOnly: Bool, missing: [String]) -> String {
-    TableMacro.inheritanceClause(
-      TableMacro.Arguments(name: "todos", schema: "public", readOnly: readOnly),
-      missing.map { TypeSyntax(stringLiteral: $0) }
+    inheritanceClause(
+      wanted: TableMacro.wantedConformances(
+        TableMacro.Arguments(name: "todos", schema: "public", readOnly: readOnly)
+      ),
+      missing: missing.map { TypeSyntax(stringLiteral: $0) }
     )
   }
 

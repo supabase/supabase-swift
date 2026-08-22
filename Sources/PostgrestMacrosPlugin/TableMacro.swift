@@ -90,10 +90,11 @@ public struct TableMacro: ExtensionMacro {
       )
     }
 
+    let clause = inheritanceClause(wanted: wantedConformances(arguments), missing: protocols)
     return [
       try ExtensionDeclSyntax(
         """
-        extension \(type.trimmed)\(raw: inheritanceClause(arguments, protocols)) {
+        extension \(type.trimmed)\(raw: clause) {
         \(raw: body.joined(separator: "\n\n"))
         }
         """
@@ -103,24 +104,17 @@ public struct TableMacro: ExtensionMacro {
 
   // MARK: Generation
 
-  /// The inheritance clause to emit, or `""` when the type already declares everything.
-  ///
-  /// `protocols` is the subset of the attribute's declared `conformances:` the type does not
-  /// already satisfy, so a user who writes `struct Todo: Decodable` gets no duplicate — and no
-  /// "redundant conformance" error.
+  /// The protocols `@Table` conforms the annotated type to.
   ///
   /// `Decodable` is in the list and `Encodable` is not: rows are decoded from responses, and writes
   /// go out through the `Encodable` `Insert` and `Update` shapes.
-  static func inheritanceClause(_ arguments: Arguments, _ protocols: [TypeSyntax]) -> String {
-    let wanted = [
+  static func wantedConformances(_ arguments: Arguments) -> [String] {
+    [
       "Decodable",
       "Sendable",
       "PostgrestRelation",
       arguments.readOnly ? nil : "PostgrestWritableRelation",
     ].compactMap { $0 }
-    let missing = Set(protocols.map(\.trimmedDescription))
-    let needed = wanted.filter(missing.contains)
-    return needed.isEmpty ? "" : ": \(needed.joined(separator: ", "))"
   }
 
   /// The key-path-to-column mapping.
@@ -146,20 +140,6 @@ public struct TableMacro: ExtensionMacro {
     lines.append("      fatalError(\"\(type): no column is mapped for that key path\")")
     lines.append("    }")
     lines.append("  }")
-    return lines.joined(separator: "\n")
-  }
-
-  /// The `CodingKeys` enum, or `nil` when there is nothing to map.
-  ///
-  /// The same property list drives this and the column mapping, so the write path and the filter
-  /// path cannot disagree about a column name.
-  static func codingKeys(for properties: [StoredProperty], indent: String = "  ") -> String? {
-    guard !properties.isEmpty else { return nil }
-    var lines = ["\(indent)enum CodingKeys: String, CodingKey {"]
-    for property in properties {
-      lines.append("\(indent)  case \(property.name) = \"\(property.columnName)\"")
-    }
-    lines.append("\(indent)}")
     return lines.joined(separator: "\n")
   }
 
