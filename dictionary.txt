@@ -1,3 +1,12 @@
+
+
+
+
+# edge cases (BuildURLRequestTests, HTTPErrorTests).
+# Non-ASCII fixture data used to exercise Unicode-handling and URL-encoding
+# Term from AGENTS.md's Enum-like Values section (describing non-failable init(rawValue:)).
+# Terms from HTTPRuntime (Sources/HTTPRuntime) and its tests.
+# Terms from HTTPRuntimeTestHelpers planning and scheme configuration.
 Abijmil
 accesstoken
 acks
@@ -9,13 +18,13 @@ Apikey
 AQAB
 Ascii
 associatedtype
+Authy
 autocapitalization
 Autocapitalization
 autocorrection
 autoresizing
 Autoresizing
 autoresponder
-Authy
 awailas
 backgrounded
 Backgrounded
@@ -25,30 +34,32 @@ Bitbucket
 bytea
 chan
 checkmark
+Cigányka
 Cloudflare
 cloudflare
-conformances
 confirmer
 conformances
+conformances
+corelibs
 corelibs
 CREDENTIALW
+cskm
 dapp
 datastructure
+decoratee
 Dedup
 dedup
 dedupe
-decoratee
 deeplinking
+deinits
 discardable
 docc
 dollarsign
-dotproduct
 dont
+dotproduct
 dragarcia
 dummysignature
 ecdsa
-footgun
-halfvec
 emaillink
 entrancy
 etag
@@ -56,9 +67,12 @@ ethereum
 Ethereum
 externaldrive
 failable
+failable
 figma
 Figma
+fileprivate
 flutterquickstart
+footgun
 forwardslash
 gearshape
 github
@@ -68,6 +82,7 @@ gotrue
 GoTrue
 Guilherme
 Gxlbmdl
+halfvec
 Hashability
 heartbeating
 Heartbeating
@@ -121,11 +136,10 @@ nullslast
 oauthserver
 oidc
 OIDC
-pipefail
-posix
 omitempty
 openssl
 opentelemetry
+parallelizable
 parameterless
 passout
 passwordless
@@ -136,12 +150,14 @@ pgrst
 pgvector
 phfts
 phraseto
+pipefail
 pkce
 PKCE
 pkcs
 pkey
 plainto
 plfts
+posix
 postalcode
 Postg
 postgres
@@ -155,6 +171,7 @@ radiowaves
 reauthentication
 Reauthentication
 Reconnections
+reencoded
 refreshable
 refreshtoken
 resends
@@ -170,14 +187,16 @@ siws
 SIWS
 solana
 Solana
-Souza
 sourcery
 Sourcery
+Souza
 spotify
 Spotify
 Stringly
 subclassing
+subdata
 subheadline
+Subrange
 Subview
 subview
 Supa
@@ -188,6 +207,8 @@ supabase
 SUPABASE
 supabaseswiftintegrationtest
 supabot
+Testables
+TESTBOUNDARY
 testpath
 testuser
 timestamptz
@@ -214,6 +235,7 @@ URLAPI
 uuid
 UUID
 varchar
+vízrajzi
 WASI
 web3
 Web3
@@ -222,40 +244,19 @@ WebAuthn
 webcredentials
 websearch
 Websearch
+wfts
 whatsapp
 WhatsApp
-wfts
 workos
 WorkOS
 Wwta
 xcodeproj
-xctest
-XVCJ
-
-# Terms from HTTPRuntime (Sources/HTTPRuntime) and its tests.
-corelibs
-reencoded
-subdata
-Subrange
-TESTBOUNDARY
-
-# Terms from HTTPRuntimeTestHelpers planning and scheme configuration.
-fileprivate
-parallelizable
-Testables
 xcscheme
 xcschemes
 xcshareddata
+xctest
 xcworkspace
-
-# Non-ASCII fixture data used to exercise Unicode-handling and URL-encoding
-# edge cases (BuildURLRequestTests, HTTPErrorTests).
-Cigányka
-cskm
-vízrajzi
+Xfrontend
+XVCJ
 állomás
 áéíóú
-deinits
-
-# Term from AGENTS.md's Enum-like Values section (describing non-failable init(rawValue:)).
-failable
