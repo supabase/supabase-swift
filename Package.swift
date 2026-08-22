@@ -163,6 +163,7 @@ let package = Package(
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
         .product(name: "Logging", package: "swift-log"),
+        "HTTPRuntime",
         "Helpers",
       ],
       exclude: [
@@ -173,6 +174,7 @@ let package = Package(
       name: "PostgRESTTests",
       dependencies: [
         .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
+        "HTTPRuntime",
         "Helpers",
         "Mocker",
         "PostgREST",
