@@ -118,9 +118,9 @@ package struct HTTPRequestBuilder: Sendable {
     guard var components = URLComponents(string: base + prefixedPath) else {
       throw HTTPError.invalidURL(base: baseURL, path: path)
     }
-    if !queryItems.isEmpty {
-      components.queryItems = queryItems
-    }
+    // Not `components.queryItems`: that encoding leaves `+` literal, which a
+    // form-decoding server reads as a space. See `QueryEncoding`.
+    components.percentEncodedQuery = QueryEncoding.render(queryItems)
     guard let url = components.url else {
       throw HTTPError.invalidURL(base: baseURL, path: path)
     }
