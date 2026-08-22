@@ -71,6 +71,26 @@ supporting_symbols:
   - PostgrestRelation.columnName
   - PostgrestRelation.relationName
   - PostgrestRelation.schema
+  # The request value model. `PostgrestRequest` is what every query, mutation
+  # and RPC renders into, so it belongs to no single capability. It is also the
+  # one place percent-encoding happens.
+  - PostgrestRequest
+  - PostgrestRequest.method
+  - PostgrestRequest.path
+  - PostgrestRequest.queryItems
+  - PostgrestRequest.headerFields
+  - PostgrestRequest.body
+  - PostgrestRequest.init
+  - PostgrestRequest.appendQueryItem
+  - PostgrestRequest.setQueryItem
+  - PostgrestRequest.queryValues
+  - PostgrestRequest.renderedQuery
+  - PostgrestRequest.renderedPath
+  - PostgrestRequest.httpRequest
+  - PostgrestRequest.QueryItem
+  - PostgrestRequest.QueryItem.name
+  - PostgrestRequest.QueryItem.value
+  - PostgrestRequest.QueryItem.init
   - PostgrestRequestBuilder
   - PostgrestRequestBuilder.Operator
   - PostgrestRequestBuilder.execute
