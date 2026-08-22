@@ -55,6 +55,11 @@ supporting_symbols:
   - PostgrestArrayElement
   - PostgrestArrayElement.postgrestArrayElement
   - PostgrestFilterValue.postgrestArrayElement
+  - PostgrestKeyPathFilterable
+  - PostgrestKeyPathFilterable.Phase
+  - PostgrestKeyPathFilterable.Relation
+  - PostgrestKeyPathFilterable.builder
+  - PostgrestKeyPathFilterable.init
   - PostgrestQueryPhase
   - PostgrestRelation
   - PostgrestRelation.columnName
@@ -74,6 +79,7 @@ supporting_symbols:
   - PostgrestSelection.selectString
   - PostgrestTransformPhase
   - PostgrestTransformablePhase
+  - PostgrestTypedQuery.Relation
   - PostgrestWritableRelation
   - PostgrestWritableRelation.Insert
   - PostgrestWritableRelation.Update
@@ -601,31 +607,37 @@ features:
     symbols:
       - PostgrestRequestBuilder.eq
       - PostgrestRequestBuilder.equals
+      - PostgrestKeyPathFilterable.eq
   database.using_filters.neq:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.neq
       - PostgrestRequestBuilder.notEquals
+      - PostgrestKeyPathFilterable.neq
   database.using_filters.gt:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.gt
       - PostgrestRequestBuilder.greaterThan
+      - PostgrestKeyPathFilterable.gt
   database.using_filters.gte:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.gte
       - PostgrestRequestBuilder.greaterThanOrEquals
+      - PostgrestKeyPathFilterable.gte
   database.using_filters.lt:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.lt
       - PostgrestRequestBuilder.lowerThan
+      - PostgrestKeyPathFilterable.lt
   database.using_filters.lte:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.lte
       - PostgrestRequestBuilder.lowerThanOrEquals
+      - PostgrestKeyPathFilterable.lte
   database.using_filters.like:
     status: implemented
     symbols:
@@ -638,10 +650,13 @@ features:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.is
+      - PostgrestKeyPathFilterable.isNull
+      - PostgrestKeyPathFilterable.isNotNull
   database.using_filters.in:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.in
+      - PostgrestKeyPathFilterable.in
   database.using_filters.contains:
     status: implemented
     symbols:
@@ -773,10 +788,12 @@ features:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.order
+      - PostgrestTypedQuery.order
   database.using_modifiers.limit:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.limit
+      - PostgrestTypedQuery.limit
   database.using_modifiers.range:
     status: implemented
     symbols:
