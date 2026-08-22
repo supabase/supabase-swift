@@ -876,6 +876,18 @@ and the filter tree are then purely additive.
 
 Each stage gets its own implementation plan.
 
+| Stage | Plan | Decisions it settled |
+|---|---|---|
+| 1 | [stage 1 plan](./postgrest-v3-stage-1-plan.md) | — |
+| 2 | [stage 2 plan](./postgrest-v3-stage-2-plan.md) | §4.1's `R`-parameter question, §4.7/§7's transport question, §7's unfiltered `update`/`delete` question, and the `PostgrestTyped*` naming gap stage 1 created |
+| 3 | [stage 3 plan](./postgrest-v3-stage-3-plan.md) | Operator layer stays conditional on a measurement rather than taste (§3 decision 5) |
+| 4 | [stage 4 plan](./postgrest-v3-stage-4-plan.md) | — |
+| 5 | [stage 5 plan](./postgrest-v3-stage-5-plan.md) | — |
+
+Three of the open questions in §7 are now answered by the stage 2 plan. They are left in §7 as
+written, with the answers recorded in that plan's decision table, so the reasoning that produced them
+stays readable.
+
 ## 6. Migration
 
 The old and new APIs coexist for one minor-version series. Existing code keeps compiling and emits
@@ -941,9 +953,19 @@ must know about. Cosmetic, decidable later.
 **`AsyncSequence` pagination.** `.pages(of:)` over `range` is cheap to add and useful, but it is not
 required by anything today. Deferred until asked for.
 
-**Generated selection types.** The generator currently emits one `Select` struct per relation.
-Whether it should also emit selections, and how a user would name them, is undecided. Not needed for
-stages 1 to 4.
+~~**Generated selection types.**~~ **Answered — the generator emits none.** See the
+[stage 5 plan](./postgrest-v3-stage-5-plan.md) Task 6. Generated output stops at the relation
+contract: `@SelectionOf`'s per-shape declaration cost is the one question the stage 1 alpha exists to
+gather feedback on, and generating shapes before that feedback arrives answers it in advance. Naming
+them had no obvious answer either. Embeds fall out with selections, since §4.5 puts `@Relationship`
+on selections and makes it an error on a relation. Revisit after the alpha feedback; not permanent.
+
+**Generated Postgres enums are `RawRepresentable` structs, not Swift enums.** Also settled in the
+stage 5 plan, Task 3, and it was not previously recorded here as a question at all. A
+`enum Status: String, Codable` throws on decode when it meets a value it has no case for, so adding a
+value to a Postgres enum breaks every already-shipped app reading that column until each one
+regenerates. The struct idiom in `AGENTS.md` round-trips the unknown value instead. The cost is that
+`switch` over the type stops being exhaustive.
 
 ## 8. What came from PR #1036
 
