@@ -117,6 +117,59 @@ struct QueryEncodingTests {
     #expect(request.url.absoluteString == "https://example.supabase.co/todos?col=eq.100%25")
   }
 
+  @Test
+  func setQueryReplacesInPlaceRatherThanMovingToTheEnd() throws {
+    var builder = HTTPRequestBuilder(method: .get, baseURL: baseURL, path: "/todos")
+    builder.setQuery("select", "*")
+    builder.addQuery("done", "eq.false")
+    builder.setQuery("select", "id,title")
+
+    let request = try builder.build()
+
+    #expect(
+      request.url.absoluteString
+        == "https://example.supabase.co/todos?select=id%2Ctitle&done=eq.false")
+  }
+
+  @Test
+  func setQueryAppendsWhenAbsent() throws {
+    var builder = HTTPRequestBuilder(method: .get, baseURL: baseURL, path: "/todos")
+    builder.addQuery("done", "eq.false")
+    builder.setQuery("select", "*")
+
+    let request = try builder.build()
+
+    #expect(
+      request.url.absoluteString == "https://example.supabase.co/todos?done=eq.false&select=%2A")
+  }
+
+  @Test
+  func setQueryReplacesOnlyTheFirstOfARepeatedName() throws {
+    // A repeated name is a list or, in PostgREST's case, a conjunction on one column. Replacing
+    // every match would silently turn `id=gt.1&id=lt.9` into a single condition.
+    var builder = HTTPRequestBuilder(method: .get, baseURL: baseURL, path: "/todos")
+    builder.addQuery("id", "gt.1")
+    builder.addQuery("id", "lt.9")
+    builder.setQuery("id", "eq.5")
+
+    let request = try builder.build()
+
+    #expect(request.url.absoluteString == "https://example.supabase.co/todos?id=eq.5&id=lt.9")
+  }
+
+  @Test
+  func setQueryIgnoresNilValue() throws {
+    // Matches `addQuery`, so the same argument behaves the same way in both. It sets a value; it
+    // does not remove one.
+    var builder = HTTPRequestBuilder(method: .get, baseURL: baseURL, path: "/todos")
+    builder.setQuery("select", "*")
+    builder.setQuery("select", String?.none)
+
+    let request = try builder.build()
+
+    #expect(request.url.absoluteString == "https://example.supabase.co/todos?select=%2A")
+  }
+
   // MARK: - PostgREST's recorded wire format
 
   @Test
