@@ -230,7 +230,26 @@ follow-up decision; do not change them here.
 
 ---
 
-## Task 2: Establish and fix filter-value escaping
+## Task 2: Establish filter-value escaping — RESOLVED, no behavior change
+
+> **Outcome (2026-08-22, SDK-1510).** The characterization step did its job and the task inverted:
+> the asymmetry is correct, and Step 3 below would have been a regression. Spec §9.5 has the server
+> measurement. Delivered instead: `Tests/PostgRESTTests/PostgrestFilterOperandEscapingTests.swift`
+> pinning both halves of the rule, plus doc notes on `escapePostgRESTFilterValue`, `or` and `filter`.
+>
+> **What the server actually does.** A double quote in a top-level scalar operand is *data, not
+> syntax* — a row storing literally `"quoted"` is what `txt=eq.%22quoted%22` returns. So `eq."a,b"`
+> matches nothing where `eq.a,b` matches correctly, and 22 awkward scalar values (`a,b`, `a"b`,
+> `a\b`, `a(b)c`, `a.b`, `a&b`, `a b`, `(1,2)`, `{a,b}`, `a->>b`, …) all round-trip fine unescaped.
+> The rule is **positional**: escape only where the operand sits inside a delimited list. `in` and
+> `notIn` are the only two builders in that position, so two out of thirty is the right number.
+> Array and range literals escape one layer down, per element, via `postgrestArrayElement`; quoting
+> the whole literal gives `22P02 malformed array literal` / `malformed range literal`.
+>
+> **The one real find.** In `or`, the comma *is* structural — `or=(txt.eq.a,b)` is a 400 `PGRST100`.
+> That is the only place a caller must quote by hand, and it was undocumented.
+>
+> The steps below are kept as written, for the record. Do not execute Step 3.
 
 `escapePostgRESTFilterValue` is called only by `in` and `notIn`. What breaks for the other operators
 is unverified, so this task writes characterization tests first and only then changes behavior.
@@ -242,7 +261,7 @@ is unverified, so this task writes characterization tests first and only then ch
 **Interfaces:**
 - Consumes: `QueryCapture` from Task 1.
 
-- [ ] **Step 1: Write characterization tests that record current behavior**
+- [x] **Step 1: Write characterization tests that record current behavior**
 
 ```swift
 @Test
@@ -270,15 +289,24 @@ func eqLeavesPlainValueUnquoted() async throws {
 }
 ```
 
-- [ ] **Step 2: Run them and record what actually happens**
+- [x] **Step 2: Run them and record what actually happens**
 
 Run: `swift test --filter PostgrestFilterBuilderTests`
 Expected: the first two FAIL (no escaping today), the third PASSES.
 
+Observed: exactly that. `eq.a,b`, `eq.a"b`, `eq.plain`, `match.@supabase\.io$` all raw;
+`in.("a,b")` and `cs.{"a,b",c}` correctly escaped.
+
 Write the observed failure output into the commit message in Step 5. If the first two *pass*,
 escaping is already applied somewhere and this task is unnecessary — stop and report.
 
-- [ ] **Step 3: Apply escaping in the shared render path**
+> The stop-condition as written was too narrow. It only caught "escaping already applied", not
+> "escaping must not be applied". The test assertions above *assume the conclusion* — they assert
+> `eq."a,b"` is desirable rather than measuring whether the server accepts it. A characterization
+> test should record what the code emits; deciding whether that is right needs the server. Adding a
+> Step 2b (ask the server) is what turned this task around.
+
+- [ ] ~~**Step 3: Apply escaping in the shared render path**~~ — **do not do this. It is a regression.**
 
 The operators build their value with string interpolation. Add one private helper and route the
 single-value operators through it. In `Sources/PostgREST/PostgrestFilterBuilder.swift`:
@@ -307,26 +335,33 @@ Apply the identical change to `neq`, `gt`, `gte`, `lt`, `lte`, `like`, `ilike`, 
 literals `true`, `false`, `null`), `in`/`notIn` (already escaped), `or`, `filter`, or the full-text
 search operators, whose values are `tsquery` expressions where quoting changes meaning.
 
-- [ ] **Step 4: Run the full PostgREST suite**
+- [x] **Step 4: Run the full PostgREST suite**
 
 Run: `swift test --filter PostgRESTTests`
 Expected: the three new tests PASS. Snapshot tests in `BuildURLRequestTests` may now differ — inspect
 each diff and confirm it is an intended escaping change before re-recording. Do not blanket
 re-record.
 
-- [ ] **Step 5: Format, spell-check, commit**
+Observed: 1232 tests in 124 suites pass. No snapshot differed, because no behavior changed — which is
+itself the confirmation that Step 3 was not applied.
+
+- [x] **Step 5: Format, spell-check, commit**
 
 ```bash
 ./scripts/format.sh
 ./scripts/spell-check.sh
-git add Sources/PostgREST/PostgrestFilterBuilder.swift \
-        Tests/PostgRESTTests/PostgrestFilterBuilderTests.swift
-git commit -m "fix(postgrest): escape filter operands for every single-value operator
+git add Sources/Helpers/PostgRESTFilterValue.swift \
+        Sources/PostgREST/PostgrestFilterBuilder.swift \
+        Tests/PostgRESTTests/PostgrestFilterOperandEscapingTests.swift
+git commit -m "test(postgrest): pin filter-operand escaping, and why it is asymmetric
 
-escapePostgRESTFilterValue was called only by in/notIn, so a value
-containing a comma, parenthesis, quote or backslash was interpolated raw
-into eq, neq, gt, like and the range operators. Full-text search, is, and
-the list operators keep their existing handling."
+escapePostgRESTFilterValue is called only by in/notIn, which reads like an
+oversight and was filed as one. Measured against PostgREST 14.15: it is
+correct. A top-level scalar operand runs to the end of the query-parameter
+value, so nothing in it is structural, and quoting it changes what is
+compared rather than delimiting it. Escaping belongs only where the operand
+sits inside a delimited list. No behavior change; the rule is now pinned by
+tests and documented at all three call sites."
 ```
 
 ---

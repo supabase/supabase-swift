@@ -1108,16 +1108,62 @@ Two consequences for the design:
 `messages.or=(…)`, `messages.order=id.desc` and `messages.limit=1` all apply correctly within an
 embedded scope, including combined with `!inner`. The §4.4 scope construct is expressible as designed.
 
+### 9.5 Filter operand escaping — the asymmetry is correct
+
+Run 2026-08-22 against PostgREST **14.15** on Postgres 17, same container method. Prompted by
+SDK-1510, which read the escaping asymmetry noted in §10.1 as a defect and proposed routing every
+single-value operator through `escapePostgRESTFilterValue`. The measurement says that would be a
+regression.
+
+**A double quote in a top-level scalar operand is data, not syntax.** A row whose stored value is
+literally `"quoted"`, quote characters included, is the row `txt=eq.%22quoted%22` returns. Had quotes
+been a delimiter, that query would have matched the row containing `quoted`.
+
+| Context | Unquoted | Quoted |
+|---|---|---|
+| `txt=eq.a,b` | 200 — correct row | `eq."a,b"` → 200, `[]` |
+| `txt=eq.plain` | 200 — correct row | `eq."plain"` → 200, `[]` |
+| `txt=in.(a,b)` | 200, `[]` — matches nothing | `in.("a,b")` → 200, correct row |
+| `or=(txt.eq.a,b)` | **400 `PGRST100`** | `or=(txt.eq."a,b")` → 200, correct row |
+
+Every awkward scalar value round-trips correctly with no escaping at all — `a,b`, `a"b`, `a\b`,
+`a(b)c`, `a.b`, `a:b`, `a&b`, `a=b`, `a+b`, `a b`, `" lead"`, `(1,2)`, `{a,b}`, `eq.x`, `a%b`, `a#b`,
+`a'b`, `null`, `true`, `*`, `a->b`, `a->>b`. Quoting each returns zero rows. No scalar operand could
+be constructed that needs quoting.
+
+Three consequences:
+
+- **The rule is positional, not per-operator.** A top-level operand runs to the end of the
+  query-parameter value, so nothing inside it is structural. Escaping is needed only where the
+  operand sits inside a delimited list, and `in` / `notIn` are the only two builders in that
+  position. Two out of thirty is the right number.
+- **Array and range literals escape one layer down.** `contains` / `containedBy` / `overlaps` with an
+  `Array` operand already quote **per element** through `postgrestArrayElement` — the commas between
+  elements are structural, the comma inside an element is data. Quoting the whole literal yields
+  `cs."{a,b}"`, rejected with `22P02 malformed array literal`; ranges fail the same way with
+  `22P02 malformed range literal`.
+- **`or` is the one place a caller must escape by hand.** There the comma *is* structural, so an
+  unquoted comma in a value is a 400 rather than a wrong row. `or` and `filter` are raw escape
+  hatches by design, and now say so.
+
+The wider lesson for this document: §10.1 called the asymmetry "a defect" from code shape alone, in
+the same sentence that admitted the behavior was unverified. The shape was evidence of a *question*,
+not of a bug. Both §10.1 entries needed the same server check; only one survived it.
+
 ## 10. Minimum testable surface
 
 Staging in §5 says what order to build in. This section says what the *first shippable slice* is —
 the smallest thing that can go out and generate real feedback. It is broken into tasks in
 [`postgrest-v3-stage-1-plan.md`](./postgrest-v3-stage-1-plan.md).
 
-### 10.1 Two fixes that need none of this
+### 10.1 One fix that needs none of this
 
-Both are bugs in the shipped API today, fixable against the current builders, and they should not
-wait on the rewrite.
+This section originally listed two. The second turned out not to be a bug at all — §9.5 records the
+measurement. It is kept below, struck through, because the reasoning that made it look like a bug is
+the kind that will recur.
+
+The remaining one is a real bug in the shipped API today, fixable against the current builders, and
+it should not wait on the rewrite.
 
 **`nil` in a comparison filter produces wrong rows.** `Optional.none.rawValue` is `"NULL"` — asserted
 in `Tests/PostgRESTTests/PostgrestFilterValueTests.swift` — and `eq` interpolates it directly, so
@@ -1126,10 +1172,16 @@ PostgREST matches the row whose value is the literal string, so this silently ma
 `"NULL"` and misses actual nulls. On an `integer` column it is a 400 instead. Fix: reject `nil` in the
 comparison operators and route callers to `is`.
 
-**Escaping is applied to two operators out of thirty.** `escapePostgRESTFilterValue` in
+~~**Escaping is applied to two operators out of thirty.** `escapePostgRESTFilterValue` in
 `Sources/Helpers/PostgRESTFilterValue.swift` is called only by `in` and `notIn`. What breaks for the
 others is unverified, so this needs a test that establishes the behavior before the fix — but the
-asymmetry alone is a defect.
+asymmetry alone is a defect.~~
+
+**Withdrawn.** The asymmetry is correct and the "fix" was a regression. §9.5 has the measurement;
+`Tests/PostgRESTTests/PostgrestFilterOperandEscapingTests.swift` pins it. The clause that misled was
+"the asymmetry alone is a defect" — an inference from code shape, asserted in the same breath as the
+admission that the behavior was unverified. Two out of thirty is exactly the right number, because
+only two of the thirty put their operand inside a delimited list.
 
 ### 10.2 Slice 0
 
@@ -1163,7 +1215,7 @@ entire point of slice 0 is that people actually try it.
 |---|---|---|
 | Typed columns on filters | Removes the most common real bug: a typo'd column string becoming a runtime 400 | Medium — needs the macro |
 | Correct `Insert` / `Update` | Removes "I sent `id` on insert" and "every field optional to update one" | Low, once the macro exists |
-| The two fixes in §10.1 | Silently wrong rows | Very low |
+| The fix in §10.1 | Silently wrong rows | Very low |
 | Read-only relations | Writing to a view becomes a compile error | Very low |
 | `embedded` / `requiring` | Highest severity — PostgREST's default silently returns every parent row | High — needs selections and relationships |
 | Filter tree and `or` | Removes hand-written PostgREST filter strings | Medium-high, narrower reach |
