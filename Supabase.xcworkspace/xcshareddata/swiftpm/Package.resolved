@@ -1,5 +1,5 @@
 {
-  "originHash" : "5e68a3cf2de6edf2abec2dfb983a8393d24cb9fc0b0786db3b5f16fa4672d712",
+  "originHash" : "9d9f6b0fc1bc72b8bfc309542e450e769d50124b550f98600e5d16cb59f23a43",
   "pins" : [
     {
       "identity" : "appauth-ios",
@@ -215,6 +215,24 @@
       "state" : {
         "revision" : "322d9ffeeba85c9f7c4984b39422ec7cc3c56597",
         "version" : "1.1.1"
+      }
+    },
+    {
+      "identity" : "swift-log",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-log.git",
+      "state" : {
+        "revision" : "3ffafb9722d5d918c614feb496c8789a3b59d222",
+        "version" : "1.15.0"
+      }
+    },
+    {
+      "identity" : "swift-macro-testing",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/pointfreeco/swift-macro-testing",
+      "state" : {
+        "revision" : "2e494c632d510715c96a694ff25e2a8d4ac3f64b",
+        "version" : "0.6.5"
       }
     },
     {

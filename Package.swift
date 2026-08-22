@@ -1,6 +1,7 @@
 // swift-tools-version:6.1
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
+import CompilerPluginSupport
 import Foundation
 import PackageDescription
 
@@ -17,6 +18,9 @@ let package = Package(
     .library(name: "Auth", targets: ["Auth"]),
     .library(name: "Functions", targets: ["Functions"]),
     .library(name: "PostgREST", targets: ["PostgREST"]),
+    // Opt-in. `Supabase` deliberately does not re-export this, so swift-syntax is compiled
+    // only for users who write `import PostgrestMacros`.
+    .library(name: "PostgrestMacros", targets: ["PostgrestMacros"]),
     .library(name: "Realtime", targets: ["Realtime"]),
     .library(name: "Storage", targets: ["Storage"]),
     .library(name: "Supabase", targets: ["Supabase"]),
@@ -28,6 +32,7 @@ let package = Package(
   dependencies: [
     .package(url: "https://github.com/apple/swift-crypto.git", "3.0.0"..<"5.0.0"),
     .package(url: "https://github.com/apple/swift-http-types.git", from: "1.3.0"),
+    .package(url: "https://github.com/swiftlang/swift-syntax", "601.0.0"..<"605.0.0"),
     // Pinned below 1.11.0: that version requires swift-tools-version 6.2, above this
     // package's current floor (Xcode 16.4+ / Swift 6.1). Widening this range raises
     // the effective minimum toolchain for every consumer — see SDK-1412.
@@ -36,6 +41,7 @@ let package = Package(
     .package(url: "https://github.com/pointfreeco/swift-clocks", from: "1.0.0"),
     .package(url: "https://github.com/pointfreeco/swift-concurrency-extras", from: "1.1.0"),
     .package(url: "https://github.com/pointfreeco/swift-custom-dump", from: "1.3.2"),
+    .package(url: "https://github.com/pointfreeco/swift-macro-testing", from: "0.6.0"),
     .package(url: "https://github.com/pointfreeco/swift-snapshot-testing", from: "1.17.0"),
     .package(url: "https://github.com/pointfreeco/xctest-dynamic-overlay", from: "1.2.2"),
     .package(url: "https://github.com/WeTransfer/Mocker", from: "3.0.0"),
@@ -175,6 +181,28 @@ let package = Package(
         "__Snapshots__"
       ]
     ),
+    .macro(
+      name: "PostgrestMacrosPlugin",
+      dependencies: [
+        .product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
+        .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
+      ]
+    ),
+    .target(
+      name: "PostgrestMacros",
+      dependencies: [
+        "PostgREST",
+        "PostgrestMacrosPlugin",
+      ]
+    ),
+    .testTarget(
+      name: "PostgrestMacrosTests",
+      dependencies: [
+        .product(name: "MacroTesting", package: "swift-macro-testing"),
+        "PostgrestMacros",
+        "PostgrestMacrosPlugin",
+      ]
+    ),
     .target(
       name: "RealtimeV2",
       dependencies: [
@@ -283,9 +311,16 @@ for target in package.targets {
     .enableUpcomingFeature("ExistentialAny"),
     .enableUpcomingFeature("ImmutableWeakCaptures"),
     .enableUpcomingFeature("InferIsolatedConformances"),
-    .enableUpcomingFeature("InternalImportsByDefault"),
-    .enableUpcomingFeature("MemberImportVisibility"),
   ]
+
+  // The compiler-plugin target must declare its macro types `public` to satisfy SwiftSyntax's
+  // `CompilerPlugin` protocol, and `InternalImportsByDefault` rejects a public conformance to a
+  // protocol from an internally-imported module. Plugins run at build time and ship no
+  // distributable API, so the two import-visibility features gain nothing there.
+  if target.name != "PostgrestMacrosPlugin" {
+    swiftSettings.append(.enableUpcomingFeature("InternalImportsByDefault"))
+    swiftSettings.append(.enableUpcomingFeature("MemberImportVisibility"))
+  }
 
   target.swiftSettings = swiftSettings
 }
