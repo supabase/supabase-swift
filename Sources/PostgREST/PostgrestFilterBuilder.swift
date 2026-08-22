@@ -129,6 +129,12 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
   /// .or("done.eq.true,priority.gt.3")
   /// ```
   ///
+  /// > Important: The comma is structural here, so a *value* containing one must be double-quoted
+  /// > or the server rejects the whole request. Unlike ``eq(_:value:)`` — where the operand runs to
+  /// > the end of the query parameter and needs no quoting — `or=(name.eq.a,b)` is an HTTP 400
+  /// > `PGRST100`. Write `.or(#"name.eq."a,b""#)` instead, backslash-escaping any `"` or `\` inside
+  /// > the quotes. This method does no escaping for you by design; see ``filter(_:operator:value:)``.
+  ///
   /// - Parameters:
   ///   - filters: A comma-separated list of PostgREST filter expressions combined with OR logic.
   ///   - referencedTable: The name of an embedded table to apply the OR filter on. Defaults to `nil`.
@@ -812,6 +818,11 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
   /// // Equivalent to .eq("status", value: "active")
   /// .filter("status", operator: "eq", value: "active")
   /// ```
+  ///
+  /// > Note: A scalar operand needs no quoting — it runs to the end of the query parameter, so
+  /// > `value: "a,b"` is sent and matched correctly. Quoting it would be wrong, because PostgREST
+  /// > compares against the quote marks too. An operand inside a delimited list is the opposite
+  /// > case and must be quoted: `operator: "in", value: #"("a,b")"#`.
   ///
   /// - Parameters:
   ///   - column: The column to filter on.

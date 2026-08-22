@@ -14,6 +14,15 @@ package func postgrestFilterValueNeedsQuoting(_ value: String) -> Bool {
 /// Escapes a raw filter value for safe inclusion in a PostgREST filter such as
 /// `in.(...)`. Values containing reserved characters (`,`, `(`, `)`, `"`, `\`)
 /// or surrounding whitespace are double-quoted, with `\` and `"` backslash-escaped.
+///
+/// > Important: This applies **only** to an operand inside a delimited list — `in.(...)`,
+/// > `not.in.(...)`, or a group such as `or=(...)`. It must not be applied to a top-level scalar
+/// > operand like `eq.`, `like.` or `match.`, where the operand runs to the end of the
+/// > query-parameter value and nothing inside it is structural. PostgREST treats a double quote in
+/// > that position as *data, not syntax*, so quoting there changes what is compared rather than
+/// > delimiting it: measured against PostgREST 14.15, `txt=eq."a,b"` returns no rows where
+/// > `txt=eq.a,b` returns the right one. See `PostgrestFilterOperandEscapingTests` for the full
+/// > measurement, and SDK-1510 for the report that this asymmetry is a bug (it is not).
 package func escapePostgRESTFilterValue(_ raw: String) -> String {
   guard postgrestFilterValueNeedsQuoting(raw) else { return raw }
   let escaped = raw.replacingOccurrences(of: "\\", with: "\\\\")
