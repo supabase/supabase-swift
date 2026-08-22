@@ -1710,3 +1710,35 @@ try await client.from("users").select().contains("tags", value: [Optional("a"), 
 every conforming type. Existing custom conformances keep compiling unchanged and gain array-element
 support for free. Only declare `postgrestArrayElement` yourself if your type is a nested array
 literal or a real `NULL`, where escaping the raw value as a scalar would be wrong.
+
+## PostgREST's pre-v3 builders are now frozen under `Legacy/`
+
+The builder API PostgREST shipped before v3 — `PostgrestClient`, `PostgrestQueryBuilder`,
+`PostgrestFilterBuilder`, `PostgrestTransformBuilder`, `PostgrestRequestBuilder`, and the option
+types beside them (`PostgrestResponse`, `CountOption`, `PostgrestReturningOptions`,
+`TextSearchType`, `ExplainFormat`, `FetchOptions`) — moved from `Sources/PostgREST/` to
+`Sources/PostgREST/Legacy/`. Not one symbol was renamed, retyped, or moved to a different module.
+
+These builders each carry their own retry loop and their own escaping rules. v3 replaces them with
+a value-typed core rather than rewriting them in place, and the directory boundary is what makes
+"replace" honest: a bug reported against `Legacy/` is answered by pointing at the replacement, not
+by patching code that is already scheduled for deletion.
+
+```swift
+// Before — and After. Identical.
+let todos: [Todo] = try await client
+  .from("todos")
+  .select()
+  .eq("is_done", value: false)
+  .execute()
+  .value
+```
+
+**This is neither a compile error nor a silent behavior change** — there is nothing in your code to
+find or fix. What changed is the support commitment: these types stop receiving behavior fixes as
+of this release, are marked `@available(*, deprecated, ...)` later in v3, and are removed in v4.
+Read a `!` on this change as "the guarantee moved", not "your build breaks".
+
+Nothing is withdrawn today, so there is no escape hatch to reach for. When the deprecation
+warnings do arrive, the replacement is the typed API — `client.schema("public").from(Todo.self)`
+and the `@Table` macro — not a different spelling of the same builder.
