@@ -7,8 +7,9 @@
 
 /// A wrapper that scopes a request by key path.
 ///
-/// ``PostgrestTypedQuery`` conforms, so the key-path filter set is declared once here rather than
-/// repeated on every wrapper that needs it. You do not conform your own types to this.
+/// Both ``PostgrestTypedQuery`` and ``PostgrestTypedMutation`` conform, so the key-path filter set
+/// is declared once here rather than repeated on every wrapper. You do not conform your own types
+/// to this.
 ///
 /// Only filters live here. `order` and `limit` move the request into
 /// ``PostgrestTransformPhase``, so they cannot return `Self` and are declared on

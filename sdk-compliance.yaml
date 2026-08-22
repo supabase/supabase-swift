@@ -60,6 +60,12 @@ supporting_symbols:
   - PostgrestKeyPathFilterable.Relation
   - PostgrestKeyPathFilterable.builder
   - PostgrestKeyPathFilterable.init
+  - PostgrestTypedMutation
+  - PostgrestTypedMutation.Phase
+  - PostgrestTypedMutation.Relation
+  - PostgrestTypedMutation.builder
+  - PostgrestTypedMutation.init
+  - PostgrestTypedMutation.execute
   - PostgrestQueryPhase
   - PostgrestRelation
   - PostgrestRelation.columnName
@@ -576,18 +582,22 @@ features:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.insert
+      - PostgrestTypedSource.insert
   database.mutate.update:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.update
+      - PostgrestTypedSource.update
   database.mutate.upsert:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.upsert
+      - PostgrestTypedSource.upsert
   database.mutate.delete:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.delete
+      - PostgrestTypedSource.delete
   database.mutate.select_after_mutation:
     status: implemented
     symbols:
@@ -595,6 +605,7 @@ features:
       - PostgrestRequestBuilder.update
       - PostgrestRequestBuilder.upsert
       - PostgrestRequestBuilder.delete
+      - PostgrestTypedMutation.returning
     supporting_symbols:
       - PostgrestReturningOptions
       - PostgrestReturningOptions.init
