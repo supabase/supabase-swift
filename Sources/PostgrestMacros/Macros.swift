@@ -72,7 +72,8 @@ public macro Column(_ name: String) =
 /// rejects. This matches how `postgres-meta` types supabase-js: it makes a column optional from
 /// `is_nullable || is_identity || default_value !== null`, and never consults the primary key.
 ///
-/// The key is left out of `Update`, which targets rows by key rather than changing it.
+/// `Update` carries the key like any other column, all optional, so a natural key can be renamed.
+/// Which rows a write touches is decided by the filters on the mutation, not by this marker.
 @attached(peer)
 public macro PrimaryKey() =
   #externalMacro(

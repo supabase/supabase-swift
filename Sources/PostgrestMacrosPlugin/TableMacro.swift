@@ -94,8 +94,10 @@ public struct TableMacro: ExtensionMacro {
       // — including each half of a compound key — is required, which is what makes a join table
       // insertable and an incomplete key a compile error rather than a 400.
       //
-      // `Update` targets rows by key and changes the rest, so the key stays out and every
-      // remaining column is optional — a partial update names only what it changes.
+      // `Update` makes every column optional, the key included, so a partial update names only
+      // what it changes. Targeting is a separate concern — the caller filters the mutation — so
+      // holding the key back would not have protected a row's identity, only made a natural key
+      // impossible to rename.
       body.append(
         writeShape(
           named: "Insert",
@@ -105,9 +107,9 @@ public struct TableMacro: ExtensionMacro {
           }
         )
       )
-      let writable = properties.filter { !$0.isPrimaryKey }
       body.append(
-        writeShape(named: "Update", access: access, fields: writable.map { ($0, $0.optionalType) })
+        writeShape(
+          named: "Update", access: access, fields: properties.map { ($0, $0.optionalType) })
       )
     }
 
