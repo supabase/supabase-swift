@@ -42,8 +42,9 @@ extension DeclGroupSyntax {
   ///   accessor block, so testing `accessorBlock == nil` excludes it as though it were computed.
   ///
   /// A property whose type is inferred from an initializer (`var isDone = false`) is still
-  /// skipped: a macro sees syntax, not types, so there is no annotation to read. That is a real
-  /// gap — the property silently gets no column — and it wants a diagnostic rather than a guess.
+  /// skipped: a macro sees syntax, not types, so there is no annotation to read. Guessing from the
+  /// initializer is not the macro's to do, so `postgrestDiagnoseUnannotatedProperties(macro:in:)`
+  /// reports it and the expansion stops before anything reaches here.
   func postgrestStoredProperties() -> [StoredProperty] {
     memberBlock.members.flatMap { member -> [StoredProperty] in
       guard

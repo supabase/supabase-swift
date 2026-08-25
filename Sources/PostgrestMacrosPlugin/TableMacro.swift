@@ -68,6 +68,9 @@ public struct TableMacro: ExtensionMacro {
       )
       return []
     }
+    if declaration.postgrestDiagnoseUnannotatedProperties(macro: "@Table", in: context) {
+      return []
+    }
     let arguments = arguments(from: node)
     let access = declaration.postgrestAccessLevel
     let properties = declaration.postgrestStoredProperties()
