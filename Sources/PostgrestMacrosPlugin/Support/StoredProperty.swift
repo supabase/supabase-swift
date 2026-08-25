@@ -28,6 +28,11 @@ extension DeclGroupSyntax {
   ///
   /// A key path to a skipped property therefore maps to no column, which is what the generated
   /// `columnName(for:)` traps on.
+  ///
+  /// A property whose type comes only from its initializer is skipped as well — there is no
+  /// annotation to read. That one is a mistake rather than a design, so
+  /// `postgrestDiagnoseUnannotatedProperties(macro:in:)` reports it and the macro stops before
+  /// anything reaches here.
   func postgrestStoredProperties() -> [StoredProperty] {
     memberBlock.members.compactMap { member -> StoredProperty? in
       guard

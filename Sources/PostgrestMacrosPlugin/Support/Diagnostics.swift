@@ -45,3 +45,47 @@ extension DeclGroupSyntax {
     return nil
   }
 }
+
+extension DeclGroupSyntax {
+  /// Reports every stored property whose type comes only from its initializer.
+  ///
+  /// `postgrestStoredProperties()` reads syntax, so `var isDone = false` gives it no annotation to
+  /// read and the property is dropped from `CodingKeys`, `columnName(for:)`, `Insert` and `Update`.
+  /// Nothing about that is loud: the initializer doubles as a decoding default, so the type still
+  /// compiles, the column simply never round-trips, and the mistake surfaces only when a query
+  /// names the key path and hits the generated `fatalError`. A macro cannot recover the type from
+  /// the initializer expression, so the author is asked for an annotation instead.
+  ///
+  /// Returns `true` if anything was reported, so the caller can stop before emitting an expansion
+  /// that leaves the column out.
+  func postgrestDiagnoseUnannotatedProperties(
+    macro: String,
+    in context: some MacroExpansionContext
+  ) -> Bool {
+    var reported = false
+    // The same members `postgrestStoredProperties()` would have taken, minus the annotation: a
+    // static member or a computed property maps to no column by design, not by mistake.
+    for member in memberBlock.members {
+      guard
+        let variable = member.decl.as(VariableDeclSyntax.self),
+        !variable.modifiers.contains(where: { $0.name.text == "static" }),
+        let binding = variable.bindings.first,
+        let identifier = binding.pattern.as(IdentifierPatternSyntax.self),
+        binding.typeAnnotation == nil,
+        binding.accessorBlock == nil
+      else { continue }
+
+      let name = identifier.identifier.text
+      context.error(
+        """
+        \(macro) requires an explicit type annotation on '\(name)', as in \
+        'var \(name): <Type> = ...' — without one the macro cannot infer the type, and the column \
+        is dropped
+        """,
+        at: binding.pattern
+      )
+      reported = true
+    }
+    return reported
+  }
+}

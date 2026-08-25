@@ -102,4 +102,154 @@ struct DiagnosticsTests {
       """
     }
   }
+
+  @Test
+  func tableRejectsAPropertyWithNoTypeAnnotation() {
+    // Left alone, the property has a default, so `Decodable` synthesis still succeeds. The column
+    // never round-trips and the mistake surfaces only when `columnName(for:)` traps at runtime.
+    assertMacro {
+      """
+      @Table("todos")
+      struct Todo {
+        @PrimaryKey var id: Int
+        var isDone = false
+      }
+      """
+    } diagnostics: {
+      """
+      @Table("todos")
+      struct Todo {
+        @PrimaryKey var id: Int
+        var isDone = false
+            ┬─────
+            ╰─ 🛑 @Table requires an explicit type annotation on 'isDone', as in 'var isDone: <Type> = ...' — without one the macro cannot infer the type, and the column is dropped
+      }
+      """
+    }
+  }
+
+  @Test
+  func tableReportsEveryPropertyWithNoTypeAnnotation() {
+    // One diagnostic per property, so the author fixes them all in one pass.
+    assertMacro {
+      """
+      @Table("todos")
+      struct Todo {
+        @PrimaryKey var id: Int
+        var isDone = false
+        var task = ""
+      }
+      """
+    } diagnostics: {
+      """
+      @Table("todos")
+      struct Todo {
+        @PrimaryKey var id: Int
+        var isDone = false
+            ┬─────
+            ╰─ 🛑 @Table requires an explicit type annotation on 'isDone', as in 'var isDone: <Type> = ...' — without one the macro cannot infer the type, and the column is dropped
+        var task = ""
+            ┬───
+            ╰─ 🛑 @Table requires an explicit type annotation on 'task', as in 'var task: <Type> = ...' — without one the macro cannot infer the type, and the column is dropped
+      }
+      """
+    }
+  }
+
+  @Test
+  func tableAcceptsMembersThatMapToNoColumn() {
+    // A static member and a computed property are not stored, so neither maps to a column and
+    // neither is a missing annotation.
+    assertMacro {
+      """
+      @Table("todos")
+      struct Todo {
+        @PrimaryKey var id: Int
+        var task: String
+        static let placeholder = "none"
+        var summary: String { "todo" }
+      }
+      """
+    } expansion: {
+      #"""
+      struct Todo {
+        @PrimaryKey var id: Int
+        var task: String
+        static let placeholder = "none"
+        var summary: String { "todo" }
+      }
+
+      extension Todo {
+        static let relationName = "todos"
+
+        static let schema = "public"
+
+        static let selectString = "*"
+
+        static func columnName<V>(for keyPath: KeyPath<Self, V>) -> String {
+          switch keyPath {
+          case \Self.id:
+            return "id"
+          case \Self.task:
+            return "task"
+          default:
+            fatalError("Todo: no column is mapped for that key path")
+          }
+        }
+
+        enum CodingKeys: String, CodingKey {
+          case id = "id"
+          case task = "task"
+        }
+
+        struct Insert: Encodable, Sendable {
+          var task: String
+
+          enum CodingKeys: String, CodingKey {
+            case task = "task"
+          }
+
+          init(task: String) {
+            self.task = task
+          }
+        }
+
+        struct Update: Encodable, Sendable {
+          var task: String?
+
+          enum CodingKeys: String, CodingKey {
+            case task = "task"
+          }
+
+          init(task: String? = nil) {
+            self.task = task
+          }
+        }
+      }
+      """#
+    }
+  }
+
+  @Test
+  func selectionOfRejectsAPropertyWithNoTypeAnnotation() {
+    assertMacro {
+      """
+      @SelectionOf(Todo.self)
+      struct TodoSummary {
+        var id: Int
+        var isDone = false
+      }
+      """
+    } diagnostics: {
+      """
+      @SelectionOf(Todo.self)
+      struct TodoSummary {
+        var id: Int
+        var isDone = false
+            ┬─────
+            ╰─ 🛑 @SelectionOf requires an explicit type annotation on 'isDone', as in 'var isDone: <Type> = ...' — without one the macro cannot infer the type, and the column is dropped
+      }
+      """
+    }
+  }
 }
