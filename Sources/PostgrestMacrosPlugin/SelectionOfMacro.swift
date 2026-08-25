@@ -30,12 +30,15 @@ public struct SelectionOfMacro: ExtensionMacro {
     in context: some MacroExpansionContext
   ) throws -> [ExtensionDeclSyntax] {
     guard declaration.is(StructDeclSyntax.self) else {
-      throw MacroExpansionErrorMessage("@SelectionOf can only be applied to a struct")
+      context.error("@SelectionOf can only be applied to a struct", at: node)
+      return []
     }
     guard let relation = relation(from: node) else {
-      throw MacroExpansionErrorMessage(
-        "@SelectionOf requires a relation type, e.g. @SelectionOf(Todo.self)"
+      context.error(
+        "@SelectionOf requires a relation type, e.g. @SelectionOf(Todo.self)",
+        at: node
       )
+      return []
     }
     let access = declaration.postgrestAccessLevel
     let properties = declaration.postgrestStoredProperties()
