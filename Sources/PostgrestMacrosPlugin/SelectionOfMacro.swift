@@ -40,6 +40,9 @@ public struct SelectionOfMacro: ExtensionMacro {
       )
       return []
     }
+    if declaration.postgrestDiagnoseUnannotatedProperties(macro: "@SelectionOf", in: context) {
+      return []
+    }
     let access = declaration.postgrestAccessLevel
     let properties = declaration.postgrestStoredProperties()
 

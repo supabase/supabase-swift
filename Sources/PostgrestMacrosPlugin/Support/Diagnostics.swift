@@ -45,3 +45,56 @@ extension DeclGroupSyntax {
     return nil
   }
 }
+
+extension DeclGroupSyntax {
+  /// Reports every stored property whose type is left to its initializer.
+  ///
+  /// `postgrestStoredProperties()` reads syntax, so `var isDone = false` gives it no annotation to
+  /// read and the property is dropped from `CodingKeys`, `columnName(for:)`, `Insert` and `Update`.
+  /// Nothing about that is loud: the initializer doubles as a decoding default, so the type still
+  /// compiles, the column simply never round-trips, and the mistake surfaces only when a query
+  /// names the key path and hits the generated `fatalError`. A macro cannot recover the type from
+  /// the initializer expression, so the author is asked for an annotation instead.
+  ///
+  /// The condition is `postgrestType(at:)` returning `nil` — the very test the reader uses to skip
+  /// a binding — so the two cannot drift apart. In particular `var draft, review: String` is not
+  /// reported: `draft` has no annotation of its own but takes `review`'s, exactly as the reader
+  /// resolves it.
+  ///
+  /// Returns `true` if anything was reported, so the caller can stop before emitting an expansion
+  /// that leaves the column out.
+  func postgrestDiagnoseUnannotatedProperties(
+    macro: String,
+    in context: some MacroExpansionContext
+  ) -> Bool {
+    var reported = false
+    for member in memberBlock.members {
+      guard
+        let variable = member.decl.as(VariableDeclSyntax.self),
+        !variable.modifiers.contains(where: { $0.name.text == "static" })
+      else { continue }
+
+      let bindings = Array(variable.bindings)
+      for index in bindings.indices {
+        let binding = bindings[index]
+        guard
+          let identifier = binding.pattern.as(IdentifierPatternSyntax.self),
+          binding.isPostgrestStored,
+          bindings.postgrestType(at: index) == nil
+        else { continue }
+
+        let name = identifier.identifier.text
+        context.error(
+          """
+          \(macro) requires an explicit type annotation on '\(name)', as in \
+          'var \(name): <Type> = ...' — without one the macro cannot infer the type, and the \
+          column is dropped
+          """,
+          at: binding.pattern
+        )
+        reported = true
+      }
+    }
+    return reported
+  }
+}
