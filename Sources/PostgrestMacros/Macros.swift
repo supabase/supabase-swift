@@ -71,3 +71,33 @@ public macro Default() =
   #externalMacro(
     module: "PostgrestMacrosPlugin", type: "MarkerMacro"
   )
+
+/// Declares a named subset of a relation's columns.
+///
+/// ```swift
+/// @SelectionOf(Todo.self)
+/// struct TodoSummary {
+///   var id: Int
+///   var isDone: Bool
+/// }
+///
+/// let rows = try await client.from(Todo.self).select(TodoSummary.self).execute().value
+/// ```
+///
+/// Property names follow the same snake_case conversion as ``Table(_:schema:readOnly:)``, and
+/// ``Column(_:)`` overrides one. The expansion emits references to the relation's own columns, so a
+/// property that names no column on it fails to compile.
+///
+/// The annotated type must be declared at file scope. The macro attaches an extension, and Swift
+/// does not allow an extension of a type nested inside another type.
+///
+/// - Parameter relation: The relation this selects from, for example `Todo.self`.
+@attached(
+  extension,
+  conformances: Decodable, Sendable, PostgrestSelection,
+  names: named(Source), named(selectString), named(CodingKeys), named(_columnCheck)
+)
+public macro SelectionOf(_ relation: Any.Type) =
+  #externalMacro(
+    module: "PostgrestMacrosPlugin", type: "SelectionOfMacro"
+  )

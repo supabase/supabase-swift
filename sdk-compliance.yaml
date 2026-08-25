@@ -82,6 +82,7 @@ supporting_symbols:
   - PostgrestRequestBuilder.setHeader
   - PostgrestRequestBuilder.webFullTextSearch
   - PostgrestSelection
+  - PostgrestSelection.Source
   - PostgrestSelection.selectString
   - PostgrestTransformPhase
   - PostgrestTransformablePhase
@@ -96,6 +97,7 @@ supporting_symbols:
   # own. Attribute names are unprefixed on purpose — nothing re-exports
   # `PostgrestMacros`, so a user opts in with an explicit import.
   - Table
+  - SelectionOf
   - Column
   - PrimaryKey
   - Default
