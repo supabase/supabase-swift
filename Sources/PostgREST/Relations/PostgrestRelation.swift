@@ -42,11 +42,13 @@ public protocol PostgrestRelation: PostgrestSelection where Source == Self {
 
 /// A relation the database accepts writes for: a table, or a view Postgres reports as updatable.
 ///
-/// `Insert` and `Update` have no defaults on purpose. Defaulting them to `Self` would mean sending
-/// the primary key on insert and requiring every column on update.
+/// `Insert` and `Update` have no defaults on purpose. Defaulting them to `Self` would mean
+/// requiring every column on both — including the ones the database fills in on insert, and the
+/// ones an update is not touching.
 public protocol PostgrestWritableRelation: PostgrestRelation {
-  /// The shape accepted by an insert: primary keys excluded, defaulted and nullable columns
-  /// optional.
+  /// The shape accepted by an insert: every column, optional exactly where the database can fill
+  /// it in — a nullable column, or one with a default. A primary key is included, and required
+  /// unless it is also defaulted.
   associatedtype Insert: Encodable & Sendable
 
   /// The shape accepted by an update: every column optional.

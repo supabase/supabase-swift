@@ -76,6 +76,7 @@ imatch
 Imatch
 Inbucket
 initializers
+insertable
 inkey
 isdistinct
 johndoe

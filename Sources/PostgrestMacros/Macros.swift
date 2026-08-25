@@ -14,7 +14,7 @@
 /// ```swift
 /// @Table("todos")
 /// struct Todo {
-///   @PrimaryKey var id: Int
+///   @PrimaryKey @Default var id: Int
 ///   var task: String
 ///   @Default var isDone: Bool
 ///   @Column("due_at") var dueDate: Date?
@@ -56,7 +56,23 @@ public macro Column(_ name: String) =
     module: "PostgrestMacrosPlugin", type: "MarkerMacro"
   )
 
-/// Marks a property as the relation's primary key, excluding it from the generated `Insert`.
+/// Marks a property as part of the relation's primary key.
+///
+/// This does **not** make the column optional in `Insert`. Being the key says nothing about
+/// whether the database can supply the value — a `SERIAL` or identity column can, and a natural
+/// key like a country code cannot. Add ``Default()`` for the ones it can:
+///
+/// ```swift
+/// @PrimaryKey @Default var id: Int      // generated — omit it on insert
+/// @PrimaryKey var code: String          // natural — required on insert
+/// ```
+///
+/// Apply it to more than one property for a compound key. Each half is then required unless it is
+/// also ``Default()``, so an incomplete key is a compile error rather than a request PostgREST
+/// rejects. This matches how `postgres-meta` types supabase-js: it makes a column optional from
+/// `is_nullable || is_identity || default_value !== null`, and never consults the primary key.
+///
+/// The key is left out of `Update`, which targets rows by key rather than changing it.
 @attached(peer)
 public macro PrimaryKey() =
   #externalMacro(
@@ -65,7 +81,9 @@ public macro PrimaryKey() =
 
 /// Marks a property as having a database default, making it optional in the generated `Insert`.
 ///
-/// Leaving it `nil` omits the column from the request body, so the database fills it in.
+/// Leaving it `nil` omits the column from the request body, so the database fills it in. This is
+/// the only marker that makes a column optional — including for a primary key, which needs
+/// `@PrimaryKey @Default` when the database generates it.
 @attached(peer)
 public macro Default() =
   #externalMacro(

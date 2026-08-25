@@ -15,13 +15,15 @@ import Testing
 /// the clause directly.
 @Suite(.macros(["Table": TableMacro.self]))
 struct TableMacroTests {
+  /// A generated surrogate key: `@Default` is what makes it optional in `Insert`, not
+  /// `@PrimaryKey`. See `insertOnATableThatIsNothingButACompoundKey` for a key without it.
   @Test
   func expandsAWritableTable() {
     assertMacro {
       """
       @Table("todos")
       struct Todo {
-        @PrimaryKey var id: Int
+        @PrimaryKey @Default var id: Int
         var task: String
         @Default var isDone: Bool
         @Column("due_at") var dueDate: Date?
@@ -30,7 +32,7 @@ struct TableMacroTests {
     } expansion: {
       #"""
       struct Todo {
-        @PrimaryKey var id: Int
+        @PrimaryKey @Default var id: Int
         var task: String
         @Default var isDone: Bool
         @Column("due_at") var dueDate: Date?
@@ -66,17 +68,20 @@ struct TableMacroTests {
         }
 
         struct Insert: Encodable, Sendable {
+          var id: Int?
           var task: String
           var isDone: Bool?
           var dueDate: Date?
 
           enum CodingKeys: String, CodingKey {
+            case id = "id"
             case task = "task"
             case isDone = "is_done"
             case dueDate = "due_at"
           }
 
-          init(task: String, isDone: Bool? = nil, dueDate: Date? = nil) {
+          init(id: Int? = nil, task: String, isDone: Bool? = nil, dueDate: Date? = nil) {
+            self.id = id
             self.task = task
             self.isDone = isDone
             self.dueDate = dueDate
@@ -185,13 +190,16 @@ struct TableMacroTests {
         }
 
         public struct Insert: Encodable, Sendable {
+          public var id: Int
           public var task: String
 
           enum CodingKeys: String, CodingKey {
+            case id = "id"
             case task = "task"
           }
 
-          public init(task: String) {
+          public init(id: Int, task: String) {
+            self.id = id
             self.task = task
           }
         }
@@ -330,19 +338,22 @@ struct TableMacroTests {
         }
 
         struct Insert: Encodable, Sendable {
+          var id: Int
           var task: String
           var note: String
           var draft: String
           var review: String
 
           enum CodingKeys: String, CodingKey {
+            case id = "id"
             case task = "task"
             case note = "note"
             case draft = "draft"
             case review = "review"
           }
 
-          init(task: String, note: String, draft: String, review: String) {
+          init(id: Int, task: String, note: String, draft: String, review: String) {
+            self.id = id
             self.task = task
             self.note = note
             self.draft = draft
@@ -426,13 +437,16 @@ struct TableMacroTests {
         }
 
         struct Insert: Encodable, Sendable {
+          var id: Int
           var task: String
 
           enum CodingKeys: String, CodingKey {
+            case id = "id"
             case task = "task"
           }
 
-          init(task: String) {
+          init(id: Int, task: String) {
+            self.id = id
             self.task = task
           }
         }
@@ -452,4 +466,250 @@ struct TableMacroTests {
       """#
     }
   }
+
+  @Test
+  func insertCarriesACompoundPrimaryKey() {
+    // A compound natural key is never database-generated, so the client is the only thing that can
+    // supply it. Dropping it from `Insert` made the row impossible to create.
+    assertMacro {
+      """
+      @Table("user_roles")
+      struct UserRole {
+        @PrimaryKey var userID: UUID
+        @PrimaryKey var roleID: UUID
+        var grantedAt: Date
+      }
+      """
+    } expansion: {
+      #"""
+      struct UserRole {
+        @PrimaryKey var userID: UUID
+        @PrimaryKey var roleID: UUID
+        var grantedAt: Date
+      }
+
+      extension UserRole {
+        static let relationName = "user_roles"
+
+        static let schema = "public"
+
+        static let selectString = "*"
+
+        static func columnName<V>(for keyPath: KeyPath<Self, V>) -> String {
+          switch keyPath {
+          case \Self.userID:
+            return "user_id"
+          case \Self.roleID:
+            return "role_id"
+          case \Self.grantedAt:
+            return "granted_at"
+          default:
+            fatalError("UserRole: no column is mapped for that key path")
+          }
+        }
+
+        enum CodingKeys: String, CodingKey {
+          case userID = "user_id"
+          case roleID = "role_id"
+          case grantedAt = "granted_at"
+        }
+
+        struct Insert: Encodable, Sendable {
+          var userID: UUID
+          var roleID: UUID
+          var grantedAt: Date
+
+          enum CodingKeys: String, CodingKey {
+            case userID = "user_id"
+            case roleID = "role_id"
+            case grantedAt = "granted_at"
+          }
+
+          init(userID: UUID, roleID: UUID, grantedAt: Date) {
+            self.userID = userID
+            self.roleID = roleID
+            self.grantedAt = grantedAt
+          }
+        }
+
+        struct Update: Encodable, Sendable {
+          var grantedAt: Date?
+
+          enum CodingKeys: String, CodingKey {
+            case grantedAt = "granted_at"
+          }
+
+          init(grantedAt: Date? = nil) {
+            self.grantedAt = grantedAt
+          }
+        }
+      }
+      """#
+    }
+  }
+
+  @Test
+  func insertOnATableThatIsNothingButACompoundKey() {
+    // A pure join table previously expanded to `Insert` with no fields and an empty `init()`.
+    // Neither half is `@Default`, so both are required: `Insert()` and `Insert(userID:)` do not
+    // compile, and an incomplete key can no longer reach PostgREST as a 400.
+    assertMacro {
+      """
+      @Table("user_roles")
+      struct UserRole {
+        @PrimaryKey var userID: UUID
+        @PrimaryKey var roleID: UUID
+      }
+      """
+    } expansion: {
+      #"""
+      struct UserRole {
+        @PrimaryKey var userID: UUID
+        @PrimaryKey var roleID: UUID
+      }
+
+      extension UserRole {
+        static let relationName = "user_roles"
+
+        static let schema = "public"
+
+        static let selectString = "*"
+
+        static func columnName<V>(for keyPath: KeyPath<Self, V>) -> String {
+          switch keyPath {
+          case \Self.userID:
+            return "user_id"
+          case \Self.roleID:
+            return "role_id"
+          default:
+            fatalError("UserRole: no column is mapped for that key path")
+          }
+        }
+
+        enum CodingKeys: String, CodingKey {
+          case userID = "user_id"
+          case roleID = "role_id"
+        }
+
+        struct Insert: Encodable, Sendable {
+          var userID: UUID
+          var roleID: UUID
+
+          enum CodingKeys: String, CodingKey {
+            case userID = "user_id"
+            case roleID = "role_id"
+          }
+
+          init(userID: UUID, roleID: UUID) {
+            self.userID = userID
+            self.roleID = roleID
+          }
+        }
+
+        struct Update: Encodable, Sendable {
+
+          init() {
+          }
+        }
+      }
+      """#
+    }
+  }
+  /// `Int?` and `Optional<Int>` are the same type, and optionality has to be recognized in both
+  /// spellings everywhere it is decided. The generated initializers used to give `= nil` only to
+  /// the `?` form, so an `Optional<T>` column had to be passed explicitly — including in `Update`,
+  /// whose whole contract is naming only what changes.
+  @Test
+  func acceptsTheOptionalSpellingOfAnOptional() {
+    assertMacro {
+      """
+      @Table("todos")
+      struct Todo {
+        @PrimaryKey @Default var id: Int
+        var task: String
+        var note: Optional<String>
+        @Default var tag: Optional<String>
+      }
+      """
+    } expansion: {
+      #"""
+      struct Todo {
+        @PrimaryKey @Default var id: Int
+        var task: String
+        var note: Optional<String>
+        @Default var tag: Optional<String>
+      }
+
+      extension Todo {
+        static let relationName = "todos"
+
+        static let schema = "public"
+
+        static let selectString = "*"
+
+        static func columnName<V>(for keyPath: KeyPath<Self, V>) -> String {
+          switch keyPath {
+          case \Self.id:
+            return "id"
+          case \Self.task:
+            return "task"
+          case \Self.note:
+            return "note"
+          case \Self.tag:
+            return "tag"
+          default:
+            fatalError("Todo: no column is mapped for that key path")
+          }
+        }
+
+        enum CodingKeys: String, CodingKey {
+          case id = "id"
+          case task = "task"
+          case note = "note"
+          case tag = "tag"
+        }
+
+        struct Insert: Encodable, Sendable {
+          var id: Int?
+          var task: String
+          var note: Optional<String>
+          var tag: Optional<String>
+
+          enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case task = "task"
+            case note = "note"
+            case tag = "tag"
+          }
+
+          init(id: Int? = nil, task: String, note: Optional<String> = nil, tag: Optional<String> = nil) {
+            self.id = id
+            self.task = task
+            self.note = note
+            self.tag = tag
+          }
+        }
+
+        struct Update: Encodable, Sendable {
+          var task: String?
+          var note: Optional<String>
+          var tag: Optional<String>
+
+          enum CodingKeys: String, CodingKey {
+            case task = "task"
+            case note = "note"
+            case tag = "tag"
+          }
+
+          init(task: String? = nil, note: Optional<String> = nil, tag: Optional<String> = nil) {
+            self.task = task
+            self.note = note
+            self.tag = tag
+          }
+        }
+      }
+      """#
+    }
+  }
+
 }

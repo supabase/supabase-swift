@@ -85,17 +85,27 @@ public struct TableMacro: ExtensionMacro {
       body.append(codingKeys)
     }
     if !arguments.readOnly {
-      // `Insert` drops the primary key and makes defaulted columns optional, so a row can be
-      // inserted without naming a column the database fills in. `Update` makes every column
-      // optional, so a partial update names only what it changes.
-      let writable = properties.filter { !$0.isPrimaryKey }
+      // `Insert` carries every column, and a column is optional exactly when the database can
+      // fill it in: it is nullable, or it has a default. Being the primary key is not one of the
+      // reasons — `postgres-meta`, which generates supabase-js's types from the same column
+      // metadata, computes `is_nullable || is_identity || default_value !== null` and never
+      // consults the key. `@Default` already carries what `is_identity || default_value !== null`
+      // means, so a generated key is spelled `@PrimaryKey @Default var id: Int` and a natural one
+      // — including each half of a compound key — is required, which is what makes a join table
+      // insertable and an incomplete key a compile error rather than a 400.
+      //
+      // `Update` targets rows by key and changes the rest, so the key stays out and every
+      // remaining column is optional — a partial update names only what it changes.
       body.append(
         writeShape(
           named: "Insert",
           access: access,
-          fields: writable.map { ($0, $0.isOptional || $0.hasDefault ? $0.optionalType : $0.type) }
+          fields: properties.map {
+            ($0, $0.isOptional || $0.hasDefault ? $0.optionalType : $0.type)
+          }
         )
       )
+      let writable = properties.filter { !$0.isPrimaryKey }
       body.append(
         writeShape(named: "Update", access: access, fields: writable.map { ($0, $0.optionalType) })
       )
@@ -179,7 +189,10 @@ public struct TableMacro: ExtensionMacro {
 
     let parameters =
       fields
-      .map { "\($0.property.name): \($0.type)\($0.type.hasSuffix("?") ? " = nil" : "")" }
+      // The default follows the *generated* parameter type, not the property's own. In `Update`
+      // every column is optional even when the property is not, so testing the property here would
+      // drop the default that makes a partial update possible.
+      .map { "\($0.property.name): \($0.type)\(postgrestIsOptionalType($0.type) ? " = nil" : "")" }
       .joined(separator: ", ")
     lines.append("")
     lines.append("    \(access)init(\(parameters)) {")
