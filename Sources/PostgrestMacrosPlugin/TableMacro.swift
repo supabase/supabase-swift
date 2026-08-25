@@ -189,7 +189,10 @@ public struct TableMacro: ExtensionMacro {
 
     let parameters =
       fields
-      .map { "\($0.property.name): \($0.type)\($0.type.hasSuffix("?") ? " = nil" : "")" }
+      // The default follows the *generated* parameter type, not the property's own. In `Update`
+      // every column is optional even when the property is not, so testing the property here would
+      // drop the default that makes a partial update possible.
+      .map { "\($0.property.name): \($0.type)\(postgrestIsOptionalType($0.type) ? " = nil" : "")" }
       .joined(separator: ", ")
     lines.append("")
     lines.append("    \(access)init(\(parameters)) {")

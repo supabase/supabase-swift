@@ -615,4 +615,101 @@ struct TableMacroTests {
       """#
     }
   }
+  /// `Int?` and `Optional<Int>` are the same type, and optionality has to be recognized in both
+  /// spellings everywhere it is decided. The generated initializers used to give `= nil` only to
+  /// the `?` form, so an `Optional<T>` column had to be passed explicitly — including in `Update`,
+  /// whose whole contract is naming only what changes.
+  @Test
+  func acceptsTheOptionalSpellingOfAnOptional() {
+    assertMacro {
+      """
+      @Table("todos")
+      struct Todo {
+        @PrimaryKey @Default var id: Int
+        var task: String
+        var note: Optional<String>
+        @Default var tag: Optional<String>
+      }
+      """
+    } expansion: {
+      #"""
+      struct Todo {
+        @PrimaryKey @Default var id: Int
+        var task: String
+        var note: Optional<String>
+        @Default var tag: Optional<String>
+      }
+
+      extension Todo {
+        static let relationName = "todos"
+
+        static let schema = "public"
+
+        static let selectString = "*"
+
+        static func columnName<V>(for keyPath: KeyPath<Self, V>) -> String {
+          switch keyPath {
+          case \Self.id:
+            return "id"
+          case \Self.task:
+            return "task"
+          case \Self.note:
+            return "note"
+          case \Self.tag:
+            return "tag"
+          default:
+            fatalError("Todo: no column is mapped for that key path")
+          }
+        }
+
+        enum CodingKeys: String, CodingKey {
+          case id = "id"
+          case task = "task"
+          case note = "note"
+          case tag = "tag"
+        }
+
+        struct Insert: Encodable, Sendable {
+          var id: Int?
+          var task: String
+          var note: Optional<String>
+          var tag: Optional<String>
+
+          enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case task = "task"
+            case note = "note"
+            case tag = "tag"
+          }
+
+          init(id: Int? = nil, task: String, note: Optional<String> = nil, tag: Optional<String> = nil) {
+            self.id = id
+            self.task = task
+            self.note = note
+            self.tag = tag
+          }
+        }
+
+        struct Update: Encodable, Sendable {
+          var task: String?
+          var note: Optional<String>
+          var tag: Optional<String>
+
+          enum CodingKeys: String, CodingKey {
+            case task = "task"
+            case note = "note"
+            case tag = "tag"
+          }
+
+          init(task: String? = nil, note: Optional<String> = nil, tag: Optional<String> = nil) {
+            self.task = task
+            self.note = note
+            self.tag = tag
+          }
+        }
+      }
+      """#
+    }
+  }
+
 }

@@ -23,6 +23,19 @@ struct StoredProperty {
   var optionalType: String { isOptional ? type : "\(type)?" }
 }
 
+/// Whether a written type is spelled as an `Optional`.
+///
+/// Both spellings have to be recognized everywhere optionality is decided: `Int?` and
+/// `Optional<Int>` are the same type, and a generated schema can emit either. Recognizing one and
+/// not the other is what let an `Optional<T>` field lose the `= nil` default in a generated
+/// initializer while a `?`-spelled one kept it.
+///
+/// A `Swift.Optional<Int>` spelling is not matched. It is legal but vanishingly rare, and a macro
+/// cannot resolve module qualification from syntax alone.
+func postgrestIsOptionalType(_ type: String) -> Bool {
+  type.hasSuffix("?") || type.hasPrefix("Optional<")
+}
+
 extension DeclGroupSyntax {
   /// Reads the stored properties, skipping computed properties and static members.
   ///
@@ -78,7 +91,7 @@ extension DeclGroupSyntax {
         return StoredProperty(
           name: identifier.identifier.text,
           type: typeText,
-          isOptional: typeText.hasSuffix("?") || typeText.hasPrefix("Optional<"),
+          isOptional: postgrestIsOptionalType(typeText),
           isPrimaryKey: attribute("PrimaryKey") != nil,
           hasDefault: attribute("Default") != nil,
           explicitColumn: column

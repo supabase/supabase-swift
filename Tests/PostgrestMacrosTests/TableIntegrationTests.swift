@@ -32,6 +32,14 @@ struct IntegrationUserRole {
   var grantedAt: Date?
 }
 
+// `Optional<T>` rather than `T?`, to keep the generated defaults honest for both spellings.
+@Table("notes")
+struct IntegrationNote {
+  @PrimaryKey @Default var id: Int
+  var body: String
+  var tag: Optional<String>
+}
+
 @Table("active_todos", readOnly: true)
 struct IntegrationActiveTodo {
   var id: Int
@@ -87,6 +95,20 @@ struct TableIntegrationTests {
     let json = String(decoding: data, as: UTF8.self)
     #expect(json.contains("\"user_id\":1") == true)
     #expect(json.contains("\"role_id\":2") == true)
+  }
+
+  @Test
+  func anOptionalSpelledColumnCanBeOmitted() throws {
+    // This is the assertion the expansion test cannot make: `MacroTesting` compares generated
+    // text, it does not compile it. Both calls omit `tag`, which only compiles if the generated
+    // initializers defaulted an `Optional<String>` to nil.
+    let insert = try JSONEncoder().encode(IntegrationNote.Insert(body: "hello"))
+    #expect(String(decoding: insert, as: UTF8.self) == #"{"body":"hello"}"#)
+
+    // `Update()` naming nothing at all is the stronger half — a partial update was impossible on
+    // such a table before, because every `Optional<T>` column had to be passed.
+    let update = try JSONEncoder().encode(IntegrationNote.Update())
+    #expect(String(decoding: update, as: UTF8.self) == "{}")
   }
 
   @Test
