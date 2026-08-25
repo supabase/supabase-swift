@@ -51,4 +51,44 @@ struct HTTPRequestBuilderTests {
     let request = try builder.build()
     #expect(request.path == "/storage/v1/object/bucket/a/b/c.txt")
   }
+
+  @Test
+  func addHeaderAppendsToExistingValue() throws {
+    var builder = HTTPRequestBuilder(
+      method: .get, baseURL: URL(string: "https://example.com")!, path: "/x")
+    builder.addHeader(.prefer, value: "returning=minimal")
+    builder.addHeader(.prefer, value: "count=exact")
+    let request = try builder.build()
+    #expect(request.headerFields[.prefer] == "returning=minimal,count=exact")
+  }
+
+  @Test
+  func addHeaderReplacesMatchingDirectiveKey() throws {
+    var builder = HTTPRequestBuilder(
+      method: .get, baseURL: URL(string: "https://example.com")!, path: "/x")
+    builder.addHeader(.prefer, value: "count=exact")
+    builder.addHeader(.prefer, value: "returning=minimal")
+    builder.addHeader(.prefer, value: "count=planned")
+    let request = try builder.build()
+    #expect(request.headerFields[.prefer] == "count=planned,returning=minimal")
+  }
+
+  @Test
+  func addHeaderSetsWhenAbsent() throws {
+    var builder = HTTPRequestBuilder(
+      method: .get, baseURL: URL(string: "https://example.com")!, path: "/x")
+    builder.addHeader(.prefer, value: "returning=minimal")
+    let request = try builder.build()
+    #expect(request.headerFields[.prefer] == "returning=minimal")
+  }
+
+  @Test
+  func addHeaderIgnoresNilValue() throws {
+    var builder = HTTPRequestBuilder(
+      method: .get, baseURL: URL(string: "https://example.com")!, path: "/x")
+    builder.addHeader(.prefer, value: "returning=minimal")
+    builder.addHeader(.prefer, value: nil)
+    let request = try builder.build()
+    #expect(request.headerFields[.prefer] == "returning=minimal")
+  }
 }
