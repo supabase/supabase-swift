@@ -81,6 +81,15 @@ public struct TableMacro: ExtensionMacro {
       "  \(access)static let selectString = \"*\"",
       columnNameFunction(access: access, type: type.trimmedDescription, properties: properties),
     ]
+    // The one thing `@PrimaryKey` uniquely does. Without this the marker is inert: after the key
+    // stopped gating `Insert` optionality and stopped being filtered out of `Update`, writing it or
+    // omitting it expanded byte-for-byte the same. Emitted only when a key is declared, so a
+    // keyless relation falls back to the protocol's empty default.
+    let keyColumns = properties.filter(\.isPrimaryKey).map(\.columnName)
+    if !keyColumns.isEmpty {
+      let list = keyColumns.map { "\"\($0)\"" }.joined(separator: ", ")
+      body.append("  \(access)static let primaryKeyColumns: [String] = [\(list)]")
+    }
     if let codingKeys = codingKeys(for: properties) {
       body.append(codingKeys)
     }

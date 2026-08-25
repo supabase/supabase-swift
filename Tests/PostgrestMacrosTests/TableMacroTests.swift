@@ -60,6 +60,8 @@ struct TableMacroTests {
           }
         }
 
+        static let primaryKeyColumns: [String] = ["id"]
+
         enum CodingKeys: String, CodingKey {
           case id = "id"
           case task = "task"
@@ -186,6 +188,8 @@ struct TableMacroTests {
             fatalError("Todo: no column is mapped for that key path")
           }
         }
+
+        public static let primaryKeyColumns: [String] = ["id"]
 
         enum CodingKeys: String, CodingKey {
           case id = "id"
@@ -335,6 +339,8 @@ struct TableMacroTests {
           }
         }
 
+        static let primaryKeyColumns: [String] = ["id"]
+
         enum CodingKeys: String, CodingKey {
           case id = "id"
           case task = "task"
@@ -440,6 +446,8 @@ struct TableMacroTests {
           }
         }
 
+        static let primaryKeyColumns: [String] = ["id"]
+
         enum CodingKeys: String, CodingKey {
           case id = "id"
           case task = "task"
@@ -519,6 +527,8 @@ struct TableMacroTests {
             fatalError("UserRole: no column is mapped for that key path")
           }
         }
+
+        static let primaryKeyColumns: [String] = ["user_id", "role_id"]
 
         enum CodingKeys: String, CodingKey {
           case userID = "user_id"
@@ -603,6 +613,8 @@ struct TableMacroTests {
             fatalError("UserRole: no column is mapped for that key path")
           }
         }
+
+        static let primaryKeyColumns: [String] = ["user_id", "role_id"]
 
         enum CodingKeys: String, CodingKey {
           case userID = "user_id"
@@ -689,6 +701,8 @@ struct TableMacroTests {
           }
         }
 
+        static let primaryKeyColumns: [String] = ["id"]
+
         enum CodingKeys: String, CodingKey {
           case id = "id"
           case task = "task"
@@ -718,17 +732,20 @@ struct TableMacroTests {
         }
 
         struct Update: Encodable, Sendable {
+          var id: Int?
           var task: String?
           var note: Optional<String>
           var tag: Optional<String>
 
           enum CodingKeys: String, CodingKey {
+            case id = "id"
             case task = "task"
             case note = "note"
             case tag = "tag"
           }
 
-          init(task: String? = nil, note: Optional<String> = nil, tag: Optional<String> = nil) {
+          init(id: Int? = nil, task: String? = nil, note: Optional<String> = nil, tag: Optional<String> = nil) {
+            self.id = id
             self.task = task
             self.note = note
             self.tag = tag

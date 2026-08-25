@@ -197,6 +197,8 @@ struct DiagnosticsTests {
           }
         }
 
+        static let primaryKeyColumns: [String] = ["id"]
+
         enum CodingKeys: String, CodingKey {
           case id = "id"
           case task = "task"

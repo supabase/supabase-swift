@@ -38,6 +38,21 @@ public protocol PostgrestRelation: PostgrestSelection where Source == Self {
   /// - Parameter keyPath: A key path to one of this type's stored properties.
   /// - Returns: The column name PostgREST expects in a query string.
   static func columnName<V>(for keyPath: KeyPath<Self, V>) -> String
+
+  /// The columns making up the relation's primary key, in declaration order.
+  ///
+  /// Empty when the relation declares no key. A caller deriving a conflict target for an upsert
+  /// has to treat that as "cannot derive" rather than "conflicts on nothing" — an empty
+  /// `on_conflict` is not the same request.
+  static var primaryKeyColumns: [String] { get }
+}
+
+extension PostgrestRelation {
+  /// No declared key.
+  ///
+  /// `@Table` overrides this whenever a property is marked `@PrimaryKey`; a hand-written
+  /// conformance opts in by declaring it.
+  public static var primaryKeyColumns: [String] { [] }
 }
 
 /// A relation the database accepts writes for: a table, or a view Postgres reports as updatable.

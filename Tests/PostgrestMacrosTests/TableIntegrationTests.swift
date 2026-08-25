@@ -98,6 +98,20 @@ struct TableIntegrationTests {
   }
 
   @Test
+  func macroReportsThePrimaryKeyColumns() {
+    // The only thing `@PrimaryKey` produces now that it no longer gates `Insert` optionality or
+    // filters `Update`. Declaration order, and column names rather than property names.
+    #expect(Todo.primaryKeyColumns == ["id"])
+    #expect(IntegrationUserRole.primaryKeyColumns == ["user_id", "role_id"])
+  }
+
+  @Test
+  func aRelationWithNoDeclaredKeyReportsNone() {
+    // Falls through to the protocol default rather than expanding to an empty literal.
+    #expect(IntegrationActiveTodo.primaryKeyColumns.isEmpty)
+  }
+
+  @Test
   func anOptionalSpelledColumnCanBeOmitted() throws {
     // This is the assertion the expansion test cannot make: `MacroTesting` compares generated
     // text, it does not compile it. Both calls omit `tag`, which only compiles if the generated
