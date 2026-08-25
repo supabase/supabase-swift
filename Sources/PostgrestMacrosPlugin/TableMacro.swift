@@ -85,10 +85,14 @@ public struct TableMacro: ExtensionMacro {
       body.append(codingKeys)
     }
     if !arguments.readOnly {
-      // `Insert` carries every column and makes the primary key optional alongside the defaulted
-      // ones, so a row can be inserted without naming a column the database fills in. Dropping the
-      // key instead only works when the database generates it: a compound natural key is supplied
-      // by the client, and leaving it out made such a table impossible to insert into at all.
+      // `Insert` carries every column, and a column is optional exactly when the database can
+      // fill it in: it is nullable, or it has a default. Being the primary key is not one of the
+      // reasons — `postgres-meta`, which generates supabase-js's types from the same column
+      // metadata, computes `is_nullable || is_identity || default_value !== null` and never
+      // consults the key. `@Default` already carries what `is_identity || default_value !== null`
+      // means, so a generated key is spelled `@PrimaryKey @Default var id: Int` and a natural one
+      // — including each half of a compound key — is required, which is what makes a join table
+      // insertable and an incomplete key a compile error rather than a 400.
       //
       // `Update` targets rows by key and changes the rest, so the key stays out and every
       // remaining column is optional — a partial update names only what it changes.
@@ -97,7 +101,7 @@ public struct TableMacro: ExtensionMacro {
           named: "Insert",
           access: access,
           fields: properties.map {
-            ($0, $0.isOptional || $0.hasDefault || $0.isPrimaryKey ? $0.optionalType : $0.type)
+            ($0, $0.isOptional || $0.hasDefault ? $0.optionalType : $0.type)
           }
         )
       )

@@ -203,7 +203,7 @@ struct DiagnosticsTests {
         }
 
         struct Insert: Encodable, Sendable {
-          var id: Int?
+          var id: Int
           var task: String
 
           enum CodingKeys: String, CodingKey {
@@ -211,7 +211,7 @@ struct DiagnosticsTests {
             case task = "task"
           }
 
-          init(id: Int? = nil, task: String) {
+          init(id: Int, task: String) {
             self.id = id
             self.task = task
           }

@@ -15,13 +15,15 @@ import Testing
 /// the clause directly.
 @Suite(.macros(["Table": TableMacro.self]))
 struct TableMacroTests {
+  /// A generated surrogate key: `@Default` is what makes it optional in `Insert`, not
+  /// `@PrimaryKey`. See `insertOnATableThatIsNothingButACompoundKey` for a key without it.
   @Test
   func expandsAWritableTable() {
     assertMacro {
       """
       @Table("todos")
       struct Todo {
-        @PrimaryKey var id: Int
+        @PrimaryKey @Default var id: Int
         var task: String
         @Default var isDone: Bool
         @Column("due_at") var dueDate: Date?
@@ -30,7 +32,7 @@ struct TableMacroTests {
     } expansion: {
       #"""
       struct Todo {
-        @PrimaryKey var id: Int
+        @PrimaryKey @Default var id: Int
         var task: String
         @Default var isDone: Bool
         @Column("due_at") var dueDate: Date?
@@ -188,7 +190,7 @@ struct TableMacroTests {
         }
 
         public struct Insert: Encodable, Sendable {
-          public var id: Int?
+          public var id: Int
           public var task: String
 
           enum CodingKeys: String, CodingKey {
@@ -196,7 +198,7 @@ struct TableMacroTests {
             case task = "task"
           }
 
-          public init(id: Int? = nil, task: String) {
+          public init(id: Int, task: String) {
             self.id = id
             self.task = task
           }
@@ -336,7 +338,7 @@ struct TableMacroTests {
         }
 
         struct Insert: Encodable, Sendable {
-          var id: Int?
+          var id: Int
           var task: String
           var note: String
           var draft: String
@@ -350,7 +352,7 @@ struct TableMacroTests {
             case review = "review"
           }
 
-          init(id: Int? = nil, task: String, note: String, draft: String, review: String) {
+          init(id: Int, task: String, note: String, draft: String, review: String) {
             self.id = id
             self.task = task
             self.note = note
@@ -435,7 +437,7 @@ struct TableMacroTests {
         }
 
         struct Insert: Encodable, Sendable {
-          var id: Int?
+          var id: Int
           var task: String
 
           enum CodingKeys: String, CodingKey {
@@ -443,7 +445,7 @@ struct TableMacroTests {
             case task = "task"
           }
 
-          init(id: Int? = nil, task: String) {
+          init(id: Int, task: String) {
             self.id = id
             self.task = task
           }
@@ -513,8 +515,8 @@ struct TableMacroTests {
         }
 
         struct Insert: Encodable, Sendable {
-          var userID: UUID?
-          var roleID: UUID?
+          var userID: UUID
+          var roleID: UUID
           var grantedAt: Date
 
           enum CodingKeys: String, CodingKey {
@@ -523,7 +525,7 @@ struct TableMacroTests {
             case grantedAt = "granted_at"
           }
 
-          init(userID: UUID? = nil, roleID: UUID? = nil, grantedAt: Date) {
+          init(userID: UUID, roleID: UUID, grantedAt: Date) {
             self.userID = userID
             self.roleID = roleID
             self.grantedAt = grantedAt
@@ -549,6 +551,8 @@ struct TableMacroTests {
   @Test
   func insertOnATableThatIsNothingButACompoundKey() {
     // A pure join table previously expanded to `Insert` with no fields and an empty `init()`.
+    // Neither half is `@Default`, so both are required: `Insert()` and `Insert(userID:)` do not
+    // compile, and an incomplete key can no longer reach PostgREST as a 400.
     assertMacro {
       """
       @Table("user_roles")
@@ -588,15 +592,15 @@ struct TableMacroTests {
         }
 
         struct Insert: Encodable, Sendable {
-          var userID: UUID?
-          var roleID: UUID?
+          var userID: UUID
+          var roleID: UUID
 
           enum CodingKeys: String, CodingKey {
             case userID = "user_id"
             case roleID = "role_id"
           }
 
-          init(userID: UUID? = nil, roleID: UUID? = nil) {
+          init(userID: UUID, roleID: UUID) {
             self.userID = userID
             self.roleID = roleID
           }

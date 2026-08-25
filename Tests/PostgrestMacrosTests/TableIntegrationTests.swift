@@ -13,14 +13,18 @@ import Testing
 // extension of a type nested inside another type, so annotating a nested struct fails to compile.
 @Table("todos")
 struct IntegrationTodo: Hashable {
-  @PrimaryKey var id: Int
+  // `@Default` is what makes the key optional in `Insert`, not `@PrimaryKey`. It says the database
+  // generates this one — an identity column or a column with a default — matching what
+  // `postgres-meta` reads to make a column optional for supabase-js.
+  @PrimaryKey @Default var id: Int
   var task: String
   @Default var isDone: Bool
   @Column("due_at") var dueDate: Date?
 }
 
-// A compound natural key. Nothing in the database generates these, so an `Insert` that dropped
-// them would make the table impossible to write to.
+// A compound natural key. Nothing in the database generates these, so neither half is `@Default`
+// and both are required by `Insert` — an incomplete key is a compile error, and an `Insert` that
+// dropped them made the table impossible to write to at all.
 @Table("user_roles")
 struct IntegrationUserRole {
   @PrimaryKey var userID: Int
@@ -55,6 +59,7 @@ struct TableIntegrationTests {
   @Test
   func insertOmitsANilPrimaryKeyAndUsesColumnNames() throws {
     // The key is optional rather than absent, so leaving it out still lets the database fill it in.
+    // Optional because it is `@Default`, not because it is the key.
     let data = try JSONEncoder().encode(Todo.Insert(task: "buy milk", isDone: false))
     let json = String(decoding: data, as: UTF8.self)
     #expect(json.contains("\"id\"") == false)
@@ -73,6 +78,11 @@ struct TableIntegrationTests {
   func insertCarriesAWholeCompoundPrimaryKey() throws {
     // The acceptance criterion for a join table: both halves of the key reach the wire, so the row
     // can actually be created.
+    //
+    // Both are also *required*, because neither is `@Default`. `IntegrationUserRole.Insert()` and
+    // `.Insert(userID: 1)` no longer compile, which is the point — before, they compiled and sent
+    // an incomplete body for PostgREST to reject at runtime. Swift cannot assert that something
+    // fails to compile, so this notes it rather than covering it.
     let data = try JSONEncoder().encode(IntegrationUserRole.Insert(userID: 1, roleID: 2))
     let json = String(decoding: data, as: UTF8.self)
     #expect(json.contains("\"user_id\":1") == true)
