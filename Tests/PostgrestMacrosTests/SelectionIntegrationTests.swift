@@ -30,18 +30,36 @@ struct SelectionTodoDueDate {
   @Column("due_at") var dueDate: Date?
 }
 
+/// The same property, without repeating the relation's `@Column`.
+@SelectionOf(SelectionTodo.self)
+struct SelectionTodoInheritedColumn {
+  var dueDate: Date?
+}
+
 @Suite
 struct SelectionIntegrationTests {
   typealias TodoSummary = SelectionTodoSummary
 
   @Test
   func selectStringListsTheDeclaredColumns() {
-    #expect(TodoSummary.selectString == "id,is_done")
+    // Each entry is a PostgREST alias, `key:column`. The column comes from the relation; the key
+    // is what the response is returned under, and it is what `CodingKeys` decodes. Here the two
+    // agree, so the alias is a no-op.
+    #expect(TodoSummary.selectString == "id:id,is_done:is_done")
   }
 
   @Test
   func columnOverridesApply() {
-    #expect(SelectionTodoDueDate.selectString == "due_at")
+    #expect(SelectionTodoDueDate.selectString == "due_at:due_at")
+  }
+
+  @Test
+  func aSelectionInheritsTheRelationsColumnMapping() {
+    // The regression this guards: `dueDate` snake-cases to `due_date`, but the relation maps it to
+    // `due_at`. Deriving the column locally asked PostgREST for a column that does not exist, and
+    // nothing caught it — `_columnCheck` proves the key path resolves, not that the name matches.
+    // Reading the column from the relation makes repeating `@Column` on a selection unnecessary.
+    #expect(SelectionTodoInheritedColumn.selectString == "due_date:due_at")
   }
 
   @Test
@@ -67,7 +85,9 @@ struct SelectionIntegrationTests {
 
     #expect(rows == [TodoSummary(id: 1, isDone: false)])
     #expect(capture.path?.hasSuffix("/todos") == true)
-    #expect(capture.query?.contains("select=id,is_done") == true)
+    // `RequestCapture.query` is the decoded query, so the aliases read as written here. On the
+    // wire the `:` and `,` are escaped.
+    #expect(capture.query?.contains("select=id:id,is_done:is_done") == true)
     #expect(capture.query?.contains("is_done=eq.false") == true)
   }
 }

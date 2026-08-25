@@ -34,7 +34,10 @@ struct SelectionOfMacroTests {
       extension TodoSummary {
         typealias Source = Todo
 
-        static let selectString = "id,due_at"
+        static let selectString = [
+          "id:\(Todo.columnName(for: \Todo.id))",
+          "due_at:\(Todo.columnName(for: \Todo.dueDate))",
+        ].joined(separator: ",")
 
         enum CodingKeys: String, CodingKey {
           case id = "id"
@@ -69,7 +72,9 @@ struct SelectionOfMacroTests {
       extension TodoSummary {
         public typealias Source = Todo
 
-        public static let selectString = "is_done"
+        public static let selectString = [
+          "is_done:\(Todo.columnName(for: \Todo.isDone))",
+        ].joined(separator: ",")
 
         enum CodingKeys: String, CodingKey {
           case isDone = "is_done"
