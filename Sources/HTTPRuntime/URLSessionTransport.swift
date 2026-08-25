@@ -6,7 +6,7 @@
 //
 package import Foundation
 package import HTTPTypes
-import HTTPTypesFoundation
+package import HTTPTypesFoundation
 
 #if canImport(FoundationNetworking)
   package import FoundationNetworking
@@ -26,6 +26,11 @@ import HTTPTypesFoundation
 ///   — background transfers must use delegate-based `downloadTask`/`uploadTask`
 ///   that complete out-of-process. That path is documented as a known limitation
 ///   rather than faked here.
+/// - `URLRequest(httpRequest:)` carries no timeout, and `HTTPTypes.HTTPRequest`
+///   has no field for one, so there is no per-request timeout here — only the
+///   session-wide `URLSessionConfiguration.timeoutIntervalForRequest`.
+///   Supporting a per-request timeout means building the `URLRequest` by hand
+///   and giving up the `HTTPTypesFoundation` conveniences above.
 package struct URLSessionTransport: HTTPTransport {
   private let session: URLSession
 
@@ -40,26 +45,25 @@ package struct URLSessionTransport: HTTPTransport {
   package func send(_ request: HTTPRequest, body: HTTPBody?, uploadProgress: ProgressHandler?)
     async throws(HTTPRuntimeError) -> HTTPBufferedResponse
   {
-    let urlRequest = try Self.makeURLRequest(request)
     let delegate = uploadProgress.map { ProgressDelegate(onProgress: $0) }
 
     let data: Data
-    let response: URLResponse
+    let response: HTTPResponse
     do {
       switch body {
       case nil:
-        (data, response) = try await session.data(for: urlRequest, delegate: delegate)
+        (data, response) = try await session.data(for: request, delegate: delegate)
       case .data(let payload):
         (data, response) = try await session.upload(
-          for: urlRequest, from: payload, delegate: delegate)
+          for: request, from: payload, delegate: delegate)
       case .file(let fileURL):
         (data, response) = try await session.upload(
-          for: urlRequest, fromFile: fileURL, delegate: delegate)
+          for: request, fromFile: fileURL, delegate: delegate)
       }
     } catch {
       throw HTTPRuntimeError.transport(error)
     }
-    return HTTPBufferedResponse(head: try Self.makeHead(response), body: data)
+    return HTTPBufferedResponse(head: response, body: data)
   }
 
   #if canImport(FoundationNetworking)
@@ -70,11 +74,10 @@ package struct URLSessionTransport: HTTPTransport {
       -> HTTPStreamedResponse
     {
       try Self.rejectFileBody(body)
-      let urlRequest = try Self.makeURLRequest(request)
       let data: Data
-      let response: URLResponse
+      let response: HTTPResponse
       do {
-        (data, response) = try await session.data(for: urlRequest)
+        (data, response) = try await session.data(for: request)
       } catch {
         throw HTTPRuntimeError.transport(error)
       }
@@ -82,18 +85,17 @@ package struct URLSessionTransport: HTTPTransport {
         continuation.yield(data)
         continuation.finish()
       }
-      return HTTPStreamedResponse(head: try Self.makeHead(response), body: body)
+      return HTTPStreamedResponse(head: response, body: body)
     }
   #else
     package func stream(_ request: HTTPRequest, body: HTTPBody?) async throws(HTTPRuntimeError)
       -> HTTPStreamedResponse
     {
       try Self.rejectFileBody(body)
-      let urlRequest = try Self.makeURLRequest(request)
       let bytes: URLSession.AsyncBytes
-      let response: URLResponse
+      let response: HTTPResponse
       do {
-        (bytes, response) = try await session.bytes(for: urlRequest)
+        (bytes, response) = try await session.bytes(for: request)
       } catch {
         throw HTTPRuntimeError.transport(error)
       }
@@ -120,7 +122,8 @@ package struct URLSessionTransport: HTTPTransport {
         }
         continuation.onTermination = { _ in task.cancel() }
       }
-      return HTTPStreamedResponse(head: try Self.makeHead(response), body: body)
+
+      return HTTPStreamedResponse(head: response, body: body)
     }
   #endif
 
@@ -136,21 +139,6 @@ package struct URLSessionTransport: HTTPTransport {
         "stream(_:) does not support file-backed request bodies; use send(_:uploadProgress:) instead."
       )
     }
-  }
-
-  private static func makeURLRequest(_ request: HTTPRequest) throws(HTTPRuntimeError) -> URLRequest
-  {
-    guard let urlRequest = URLRequest(httpRequest: request) else {
-      throw HTTPRuntimeError.invalidURL(base: request.url!, path: request.path!)
-    }
-    return urlRequest
-  }
-
-  private static func makeHead(_ response: URLResponse) throws(HTTPRuntimeError) -> HTTPResponse {
-    guard let httpResponse = (response as? HTTPURLResponse)?.httpResponse else {
-      throw HTTPRuntimeError.transport(URLError(.badServerResponse))
-    }
-    return httpResponse
   }
 }
 
