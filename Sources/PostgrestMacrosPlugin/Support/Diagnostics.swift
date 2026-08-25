@@ -72,7 +72,7 @@ extension DeclGroupSyntax {
         let binding = variable.bindings.first,
         let identifier = binding.pattern.as(IdentifierPatternSyntax.self),
         binding.typeAnnotation == nil,
-        binding.accessorBlock == nil
+        binding.postgrestIsStored
       else { continue }
 
       let name = identifier.identifier.text

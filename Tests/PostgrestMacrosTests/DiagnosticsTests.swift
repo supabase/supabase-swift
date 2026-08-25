@@ -252,4 +252,28 @@ struct DiagnosticsTests {
       """
     }
   }
+
+  @Test
+  func tableRejectsAnObservedPropertyWithNoTypeAnnotation() {
+    // Observed *and* unannotated. The accessor block must not excuse the missing annotation.
+    assertMacro {
+      """
+      @Table("todos")
+      struct Todo {
+        @PrimaryKey var id: Int
+        var isDone = false { didSet { print(isDone) } }
+      }
+      """
+    } diagnostics: {
+      """
+      @Table("todos")
+      struct Todo {
+        @PrimaryKey var id: Int
+        var isDone = false { didSet { print(isDone) } }
+            ┬─────
+            ╰─ 🛑 @Table requires an explicit type annotation on 'isDone', as in 'var isDone: <Type> = ...' — without one the macro cannot infer the type, and the column is dropped
+      }
+      """
+    }
+  }
 }

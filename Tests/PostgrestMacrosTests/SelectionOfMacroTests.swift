@@ -83,4 +83,41 @@ struct SelectionOfMacroTests {
       """#
     }
   }
+
+  @Test
+  func keepsObservedStoredProperties() {
+    assertMacro {
+      """
+      @SelectionOf(Todo.self)
+      struct TodoSummary {
+        var id: Int
+        var isDone: Bool = false { didSet { print(isDone) } }
+      }
+      """
+    } expansion: {
+      #"""
+      struct TodoSummary {
+        var id: Int
+        var isDone: Bool = false { didSet { print(isDone) } }
+      }
+
+      extension TodoSummary {
+        typealias Source = Todo
+
+        static let selectString = "id,is_done"
+
+        enum CodingKeys: String, CodingKey {
+          case id = "id"
+          case isDone = "is_done"
+        }
+
+        /// Fails to compile if a property does not name a column on Todo.
+        private static let _columnCheck: [String] = [
+          Todo.columnName(for: \Todo.id),
+          Todo.columnName(for: \Todo.isDone),
+        ]
+      }
+      """#
+    }
+  }
 }

@@ -23,6 +23,31 @@ struct StoredProperty {
   var optionalType: String { isOptional ? type : "\(type)?" }
 }
 
+extension PatternBindingSyntax {
+  /// Whether the binding stores a value, rather than computing one.
+  ///
+  /// A non-nil `accessorBlock` is not enough to call a property computed: `willSet` and `didSet`
+  /// land in that same block, and an observed property still holds a value and still needs its
+  /// column. Anything else in the block computes the value instead — an explicit `get`, a `_read`
+  /// or `unsafeAddress` accessor, or a bare code block standing in for an implicit getter — and
+  /// maps to no column.
+  var postgrestIsStored: Bool {
+    guard let accessorBlock else { return true }
+    switch accessorBlock.accessors {
+    case .getter:
+      // `var summary: String { htmlURL }` — an implicit getter, with no accessor to inspect.
+      return false
+    case .accessors(let accessors):
+      return accessors.allSatisfy {
+        switch $0.accessorSpecifier.tokenKind {
+        case .keyword(.willSet), .keyword(.didSet): return true
+        default: return false
+        }
+      }
+    }
+  }
+}
+
 extension DeclGroupSyntax {
   /// Reads the stored properties, skipping computed properties and static members.
   ///
@@ -41,7 +66,7 @@ extension DeclGroupSyntax {
         let binding = variable.bindings.first,
         let identifier = binding.pattern.as(IdentifierPatternSyntax.self),
         let annotation = binding.typeAnnotation?.type,
-        binding.accessorBlock == nil
+        binding.postgrestIsStored
       else { return nil }
 
       let attributes = variable.attributes.compactMap { $0.as(AttributeSyntax.self) }

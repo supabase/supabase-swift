@@ -278,4 +278,156 @@ struct TableMacroTests {
       """#
     }
   }
+
+  @Test
+  func keepsObservedStoredProperties() {
+    // `willSet`/`didSet` put an accessor block on a property that still holds a value, so it still
+    // needs its column.
+    assertMacro {
+      """
+      @Table("todos")
+      struct Todo {
+        @PrimaryKey var id: Int
+        var isDone: Bool = false { didSet { print(isDone) } }
+        var task: String { willSet { print(newValue) } }
+      }
+      """
+    } expansion: {
+      #"""
+      struct Todo {
+        @PrimaryKey var id: Int
+        var isDone: Bool = false { didSet { print(isDone) } }
+        var task: String { willSet { print(newValue) } }
+      }
+
+      extension Todo {
+        static let relationName = "todos"
+
+        static let schema = "public"
+
+        static let selectString = "*"
+
+        static func columnName<V>(for keyPath: KeyPath<Self, V>) -> String {
+          switch keyPath {
+          case \Self.id:
+            return "id"
+          case \Self.isDone:
+            return "is_done"
+          case \Self.task:
+            return "task"
+          default:
+            fatalError("Todo: no column is mapped for that key path")
+          }
+        }
+
+        enum CodingKeys: String, CodingKey {
+          case id = "id"
+          case isDone = "is_done"
+          case task = "task"
+        }
+
+        struct Insert: Encodable, Sendable {
+          var isDone: Bool
+          var task: String
+
+          enum CodingKeys: String, CodingKey {
+            case isDone = "is_done"
+            case task = "task"
+          }
+
+          init(isDone: Bool, task: String) {
+            self.isDone = isDone
+            self.task = task
+          }
+        }
+
+        struct Update: Encodable, Sendable {
+          var isDone: Bool?
+          var task: String?
+
+          enum CodingKeys: String, CodingKey {
+            case isDone = "is_done"
+            case task = "task"
+          }
+
+          init(isDone: Bool? = nil, task: String? = nil) {
+            self.isDone = isDone
+            self.task = task
+          }
+        }
+      }
+      """#
+    }
+  }
+
+  @Test
+  func skipsPropertiesThatComputeTheirValue() {
+    // Every accessor block that is not observers-only: an explicit getter, a getter with a setter,
+    // and a `_read` coroutine. None holds a value, so none maps to a column.
+    assertMacro {
+      """
+      @Table("todos")
+      struct Todo {
+        var task: String
+        var upper: String { get { task } }
+        var settable: String { get { task } set { task = newValue } }
+        var yielded: String { _read { yield task } }
+      }
+      """
+    } expansion: {
+      #"""
+      struct Todo {
+        var task: String
+        var upper: String { get { task } }
+        var settable: String { get { task } set { task = newValue } }
+        var yielded: String { _read { yield task } }
+      }
+
+      extension Todo {
+        static let relationName = "todos"
+
+        static let schema = "public"
+
+        static let selectString = "*"
+
+        static func columnName<V>(for keyPath: KeyPath<Self, V>) -> String {
+          switch keyPath {
+          case \Self.task:
+            return "task"
+          default:
+            fatalError("Todo: no column is mapped for that key path")
+          }
+        }
+
+        enum CodingKeys: String, CodingKey {
+          case task = "task"
+        }
+
+        struct Insert: Encodable, Sendable {
+          var task: String
+
+          enum CodingKeys: String, CodingKey {
+            case task = "task"
+          }
+
+          init(task: String) {
+            self.task = task
+          }
+        }
+
+        struct Update: Encodable, Sendable {
+          var task: String?
+
+          enum CodingKeys: String, CodingKey {
+            case task = "task"
+          }
+
+          init(task: String? = nil) {
+            self.task = task
+          }
+        }
+      }
+      """#
+    }
+  }
 }
