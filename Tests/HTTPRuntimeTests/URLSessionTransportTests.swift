@@ -138,7 +138,7 @@ struct URLSessionTransportTests {
     do {
       _ = try await makeTransport().stream(request, body: .file(fileURL))
       Issue.record("expected stream to reject a file body")
-    } catch let error as HTTPRuntimeError {
+    } catch {
       guard case .unsupportedRequestBody = error else {
         Issue.record("expected .unsupportedRequestBody, got \(error)")
         return

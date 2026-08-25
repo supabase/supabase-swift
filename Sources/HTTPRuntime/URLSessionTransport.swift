@@ -6,7 +6,7 @@
 //
 package import Foundation
 package import HTTPTypes
-package import HTTPTypesFoundation
+import HTTPTypesFoundation
 
 #if canImport(FoundationNetworking)
   package import FoundationNetworking
