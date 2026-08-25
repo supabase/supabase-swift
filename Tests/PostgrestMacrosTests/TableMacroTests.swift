@@ -278,4 +278,254 @@ struct TableMacroTests {
       """#
     }
   }
+  @Test
+  func coversEveryBindingInAMultiBindingDeclaration() {
+    assertMacro {
+      """
+      @Table("todos")
+      struct Todo {
+        @PrimaryKey var id: Int
+        var task: String, note: String
+        var draft, review: String
+      }
+      """
+    } expansion: {
+      #"""
+      struct Todo {
+        @PrimaryKey var id: Int
+        var task: String, note: String
+        var draft, review: String
+      }
+
+      extension Todo {
+        static let relationName = "todos"
+
+        static let schema = "public"
+
+        static let selectString = "*"
+
+        static func columnName<V>(for keyPath: KeyPath<Self, V>) -> String {
+          switch keyPath {
+          case \Self.id:
+            return "id"
+          case \Self.task:
+            return "task"
+          case \Self.note:
+            return "note"
+          case \Self.draft:
+            return "draft"
+          case \Self.review:
+            return "review"
+          default:
+            fatalError("Todo: no column is mapped for that key path")
+          }
+        }
+
+        enum CodingKeys: String, CodingKey {
+          case id = "id"
+          case task = "task"
+          case note = "note"
+          case draft = "draft"
+          case review = "review"
+        }
+
+        struct Insert: Encodable, Sendable {
+          var task: String
+          var note: String
+          var draft: String
+          var review: String
+
+          enum CodingKeys: String, CodingKey {
+            case task = "task"
+            case note = "note"
+            case draft = "draft"
+            case review = "review"
+          }
+
+          init(task: String, note: String, draft: String, review: String) {
+            self.task = task
+            self.note = note
+            self.draft = draft
+            self.review = review
+          }
+        }
+
+        struct Update: Encodable, Sendable {
+          var task: String?
+          var note: String?
+          var draft: String?
+          var review: String?
+
+          enum CodingKeys: String, CodingKey {
+            case task = "task"
+            case note = "note"
+            case draft = "draft"
+            case review = "review"
+          }
+
+          init(task: String? = nil, note: String? = nil, draft: String? = nil, review: String? = nil) {
+            self.task = task
+            self.note = note
+            self.draft = draft
+            self.review = review
+          }
+        }
+      }
+      """#
+    }
+  }
+
+  @Test
+  func includesAStoredPropertyWithObservers() {
+    assertMacro {
+      """
+      @Table("todos")
+      struct Todo {
+        @PrimaryKey var id: Int
+        var task: String = "" {
+          didSet { print(task) }
+        }
+        var count: Int {
+          task.count
+        }
+      }
+      """
+    } expansion: {
+      #"""
+      struct Todo {
+        @PrimaryKey var id: Int
+        var task: String = "" {
+          didSet { print(task) }
+        }
+        var count: Int {
+          task.count
+        }
+      }
+
+      extension Todo {
+        static let relationName = "todos"
+
+        static let schema = "public"
+
+        static let selectString = "*"
+
+        static func columnName<V>(for keyPath: KeyPath<Self, V>) -> String {
+          switch keyPath {
+          case \Self.id:
+            return "id"
+          case \Self.task:
+            return "task"
+          default:
+            fatalError("Todo: no column is mapped for that key path")
+          }
+        }
+
+        enum CodingKeys: String, CodingKey {
+          case id = "id"
+          case task = "task"
+        }
+
+        struct Insert: Encodable, Sendable {
+          var task: String
+
+          enum CodingKeys: String, CodingKey {
+            case task = "task"
+          }
+
+          init(task: String) {
+            self.task = task
+          }
+        }
+
+        struct Update: Encodable, Sendable {
+          var task: String?
+
+          enum CodingKeys: String, CodingKey {
+            case task = "task"
+          }
+
+          init(task: String? = nil) {
+            self.task = task
+          }
+        }
+      }
+      """#
+    }
+  }
+
+  @Test
+  func doesNotBorrowATypeAnnotationForAnInitializedBinding() {
+    // `count` is an `Int` inferred from its initializer, not the `String` that `label` declares.
+    // Reading forward for a shared annotation is only correct for a binding that has no
+    // initializer of its own, so `count` is skipped rather than typed `String`.
+    //
+    // Skipping is the pre-existing behavior for any property whose type comes from an initializer
+    // (`var isDone = false`). It means the property silently gets no column, which wants a
+    // diagnostic — see the note in `postgrestStoredProperties()`.
+    assertMacro {
+      """
+      @Table("todos")
+      struct Todo {
+        @PrimaryKey var id: Int
+        var count = 1, label: String
+      }
+      """
+    } expansion: {
+      #"""
+      struct Todo {
+        @PrimaryKey var id: Int
+        var count = 1, label: String
+      }
+
+      extension Todo {
+        static let relationName = "todos"
+
+        static let schema = "public"
+
+        static let selectString = "*"
+
+        static func columnName<V>(for keyPath: KeyPath<Self, V>) -> String {
+          switch keyPath {
+          case \Self.id:
+            return "id"
+          case \Self.label:
+            return "label"
+          default:
+            fatalError("Todo: no column is mapped for that key path")
+          }
+        }
+
+        enum CodingKeys: String, CodingKey {
+          case id = "id"
+          case label = "label"
+        }
+
+        struct Insert: Encodable, Sendable {
+          var label: String
+
+          enum CodingKeys: String, CodingKey {
+            case label = "label"
+          }
+
+          init(label: String) {
+            self.label = label
+          }
+        }
+
+        struct Update: Encodable, Sendable {
+          var label: String?
+
+          enum CodingKeys: String, CodingKey {
+            case label = "label"
+          }
+
+          init(label: String? = nil) {
+            self.label = label
+          }
+        }
+      }
+      """#
+    }
+  }
+
 }
