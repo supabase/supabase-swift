@@ -56,7 +56,14 @@ public macro Column(_ name: String) =
     module: "PostgrestMacrosPlugin", type: "MarkerMacro"
   )
 
-/// Marks a property as the relation's primary key, excluding it from the generated `Insert`.
+/// Marks a property as part of the relation's primary key, making it optional in the generated
+/// `Insert`.
+///
+/// Leaving it `nil` omits the column, so a database-generated key fills itself in. Supplying it
+/// sends it, which is what a compound natural key needs — nothing in the database generates those.
+///
+/// Apply it to more than one property for a compound key. The key is left out of `Update`, which
+/// targets rows by key rather than changing it.
 @attached(peer)
 public macro PrimaryKey() =
   #externalMacro(

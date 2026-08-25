@@ -66,17 +66,20 @@ struct TableMacroTests {
         }
 
         struct Insert: Encodable, Sendable {
+          var id: Int?
           var task: String
           var isDone: Bool?
           var dueDate: Date?
 
           enum CodingKeys: String, CodingKey {
+            case id = "id"
             case task = "task"
             case isDone = "is_done"
             case dueDate = "due_at"
           }
 
-          init(task: String, isDone: Bool? = nil, dueDate: Date? = nil) {
+          init(id: Int? = nil, task: String, isDone: Bool? = nil, dueDate: Date? = nil) {
+            self.id = id
             self.task = task
             self.isDone = isDone
             self.dueDate = dueDate
@@ -185,13 +188,16 @@ struct TableMacroTests {
         }
 
         public struct Insert: Encodable, Sendable {
+          public var id: Int?
           public var task: String
 
           enum CodingKeys: String, CodingKey {
+            case id = "id"
             case task = "task"
           }
 
-          public init(task: String) {
+          public init(id: Int? = nil, task: String) {
+            self.id = id
             self.task = task
           }
         }
@@ -330,19 +336,22 @@ struct TableMacroTests {
         }
 
         struct Insert: Encodable, Sendable {
+          var id: Int?
           var task: String
           var note: String
           var draft: String
           var review: String
 
           enum CodingKeys: String, CodingKey {
+            case id = "id"
             case task = "task"
             case note = "note"
             case draft = "draft"
             case review = "review"
           }
 
-          init(task: String, note: String, draft: String, review: String) {
+          init(id: Int? = nil, task: String, note: String, draft: String, review: String) {
+            self.id = id
             self.task = task
             self.note = note
             self.draft = draft
@@ -426,13 +435,16 @@ struct TableMacroTests {
         }
 
         struct Insert: Encodable, Sendable {
+          var id: Int?
           var task: String
 
           enum CodingKeys: String, CodingKey {
+            case id = "id"
             case task = "task"
           }
 
-          init(task: String) {
+          init(id: Int? = nil, task: String) {
+            self.id = id
             self.task = task
           }
         }
@@ -446,6 +458,153 @@ struct TableMacroTests {
 
           init(task: String? = nil) {
             self.task = task
+          }
+        }
+      }
+      """#
+    }
+  }
+
+  @Test
+  func insertCarriesACompoundPrimaryKey() {
+    // A compound natural key is never database-generated, so the client is the only thing that can
+    // supply it. Dropping it from `Insert` made the row impossible to create.
+    assertMacro {
+      """
+      @Table("user_roles")
+      struct UserRole {
+        @PrimaryKey var userID: UUID
+        @PrimaryKey var roleID: UUID
+        var grantedAt: Date
+      }
+      """
+    } expansion: {
+      #"""
+      struct UserRole {
+        @PrimaryKey var userID: UUID
+        @PrimaryKey var roleID: UUID
+        var grantedAt: Date
+      }
+
+      extension UserRole {
+        static let relationName = "user_roles"
+
+        static let schema = "public"
+
+        static let selectString = "*"
+
+        static func columnName<V>(for keyPath: KeyPath<Self, V>) -> String {
+          switch keyPath {
+          case \Self.userID:
+            return "user_id"
+          case \Self.roleID:
+            return "role_id"
+          case \Self.grantedAt:
+            return "granted_at"
+          default:
+            fatalError("UserRole: no column is mapped for that key path")
+          }
+        }
+
+        enum CodingKeys: String, CodingKey {
+          case userID = "user_id"
+          case roleID = "role_id"
+          case grantedAt = "granted_at"
+        }
+
+        struct Insert: Encodable, Sendable {
+          var userID: UUID?
+          var roleID: UUID?
+          var grantedAt: Date
+
+          enum CodingKeys: String, CodingKey {
+            case userID = "user_id"
+            case roleID = "role_id"
+            case grantedAt = "granted_at"
+          }
+
+          init(userID: UUID? = nil, roleID: UUID? = nil, grantedAt: Date) {
+            self.userID = userID
+            self.roleID = roleID
+            self.grantedAt = grantedAt
+          }
+        }
+
+        struct Update: Encodable, Sendable {
+          var grantedAt: Date?
+
+          enum CodingKeys: String, CodingKey {
+            case grantedAt = "granted_at"
+          }
+
+          init(grantedAt: Date? = nil) {
+            self.grantedAt = grantedAt
+          }
+        }
+      }
+      """#
+    }
+  }
+
+  @Test
+  func insertOnATableThatIsNothingButACompoundKey() {
+    // A pure join table previously expanded to `Insert` with no fields and an empty `init()`.
+    assertMacro {
+      """
+      @Table("user_roles")
+      struct UserRole {
+        @PrimaryKey var userID: UUID
+        @PrimaryKey var roleID: UUID
+      }
+      """
+    } expansion: {
+      #"""
+      struct UserRole {
+        @PrimaryKey var userID: UUID
+        @PrimaryKey var roleID: UUID
+      }
+
+      extension UserRole {
+        static let relationName = "user_roles"
+
+        static let schema = "public"
+
+        static let selectString = "*"
+
+        static func columnName<V>(for keyPath: KeyPath<Self, V>) -> String {
+          switch keyPath {
+          case \Self.userID:
+            return "user_id"
+          case \Self.roleID:
+            return "role_id"
+          default:
+            fatalError("UserRole: no column is mapped for that key path")
+          }
+        }
+
+        enum CodingKeys: String, CodingKey {
+          case userID = "user_id"
+          case roleID = "role_id"
+        }
+
+        struct Insert: Encodable, Sendable {
+          var userID: UUID?
+          var roleID: UUID?
+
+          enum CodingKeys: String, CodingKey {
+            case userID = "user_id"
+            case roleID = "role_id"
+          }
+
+          init(userID: UUID? = nil, roleID: UUID? = nil) {
+            self.userID = userID
+            self.roleID = roleID
+          }
+        }
+
+        struct Update: Encodable, Sendable {
+
+          init() {
           }
         }
       }

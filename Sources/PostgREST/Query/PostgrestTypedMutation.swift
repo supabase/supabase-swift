@@ -57,7 +57,8 @@ extension PostgrestTypedSource where R: PostgrestWritableRelation {
   /// Inserts a row.
   ///
   /// - Parameter values: The row to insert, in the relation's `Insert` shape. Primary keys and
-  ///   defaulted columns are absent or optional there.
+  ///   defaulted columns are optional there, so either can be left out and filled in by the
+  ///   database.
   /// - Returns: A ``PostgrestTypedMutation`` to execute, or to request rows back from.
   /// - Throws: An encoding error if `values` cannot be serialized.
   public func insert(_ values: R.Insert) throws -> PostgrestTypedMutation<R> {

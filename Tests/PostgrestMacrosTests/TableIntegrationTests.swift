@@ -19,6 +19,15 @@ struct IntegrationTodo: Hashable {
   @Column("due_at") var dueDate: Date?
 }
 
+// A compound natural key. Nothing in the database generates these, so an `Insert` that dropped
+// them would make the table impossible to write to.
+@Table("user_roles")
+struct IntegrationUserRole {
+  @PrimaryKey var userID: Int
+  @PrimaryKey var roleID: Int
+  var grantedAt: Date?
+}
+
 @Table("active_todos", readOnly: true)
 struct IntegrationActiveTodo {
   var id: Int
@@ -44,12 +53,30 @@ struct TableIntegrationTests {
   }
 
   @Test
-  func insertExcludesThePrimaryKeyAndUsesColumnNames() throws {
+  func insertOmitsANilPrimaryKeyAndUsesColumnNames() throws {
+    // The key is optional rather than absent, so leaving it out still lets the database fill it in.
     let data = try JSONEncoder().encode(Todo.Insert(task: "buy milk", isDone: false))
     let json = String(decoding: data, as: UTF8.self)
     #expect(json.contains("\"id\"") == false)
     #expect(json.contains("\"is_done\"") == true)
     #expect(json.contains("\"isDone\"") == false)
+  }
+
+  @Test
+  func insertCarriesAPrimaryKeyTheClientSupplies() throws {
+    let data = try JSONEncoder().encode(Todo.Insert(id: 7, task: "buy milk"))
+    let json = String(decoding: data, as: UTF8.self)
+    #expect(json.contains("\"id\":7") == true)
+  }
+
+  @Test
+  func insertCarriesAWholeCompoundPrimaryKey() throws {
+    // The acceptance criterion for a join table: both halves of the key reach the wire, so the row
+    // can actually be created.
+    let data = try JSONEncoder().encode(IntegrationUserRole.Insert(userID: 1, roleID: 2))
+    let json = String(decoding: data, as: UTF8.self)
+    #expect(json.contains("\"user_id\":1") == true)
+    #expect(json.contains("\"role_id\":2") == true)
   }
 
   @Test
@@ -113,5 +140,20 @@ struct TableIntegrationTests {
     #expect(rows.count == 1)
     #expect(capture.path?.hasSuffix("/active_todos") == true)
     #expect(capture.query?.contains("task=eq.buy milk") == true)
+  }
+
+  @Test
+  func aTypedUpsertCarriesTheConflictKey() async throws {
+    // `upsert` sends no `on_conflict`, so PostgREST resolves against the primary key — which has
+    // to be in the body for that to mean anything. While `Insert` dropped the key, the merge half
+    // of every upsert was unreachable and each call just inserted another row.
+    let capture = RequestCapture()
+    _ = try await capture.client
+      .from(Todo.self)
+      .upsert(Todo.Insert(id: 1, task: "buy milk"))
+      .execute()
+
+    #expect(capture.path?.hasSuffix("/todos") == true)
+    #expect(capture.bodyString?.contains(#""id":1"#) == true)
   }
 }

@@ -85,17 +85,23 @@ public struct TableMacro: ExtensionMacro {
       body.append(codingKeys)
     }
     if !arguments.readOnly {
-      // `Insert` drops the primary key and makes defaulted columns optional, so a row can be
-      // inserted without naming a column the database fills in. `Update` makes every column
-      // optional, so a partial update names only what it changes.
-      let writable = properties.filter { !$0.isPrimaryKey }
+      // `Insert` carries every column and makes the primary key optional alongside the defaulted
+      // ones, so a row can be inserted without naming a column the database fills in. Dropping the
+      // key instead only works when the database generates it: a compound natural key is supplied
+      // by the client, and leaving it out made such a table impossible to insert into at all.
+      //
+      // `Update` targets rows by key and changes the rest, so the key stays out and every
+      // remaining column is optional — a partial update names only what it changes.
       body.append(
         writeShape(
           named: "Insert",
           access: access,
-          fields: writable.map { ($0, $0.isOptional || $0.hasDefault ? $0.optionalType : $0.type) }
+          fields: properties.map {
+            ($0, $0.isOptional || $0.hasDefault || $0.isPrimaryKey ? $0.optionalType : $0.type)
+          }
         )
       )
+      let writable = properties.filter { !$0.isPrimaryKey }
       body.append(
         writeShape(named: "Update", access: access, fields: writable.map { ($0, $0.optionalType) })
       )
