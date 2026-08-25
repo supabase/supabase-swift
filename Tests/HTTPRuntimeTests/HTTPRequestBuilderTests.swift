@@ -1,0 +1,54 @@
+//
+//  HTTPRequestBuilderTests.swift
+//  HTTPRuntime
+//
+//  Created by Guilherme Souza on 25/08/26.
+//
+
+import Foundation
+import HTTPTypes
+import Testing
+
+@testable import HTTPRuntime
+
+@Suite
+struct HTTPRequestBuilderTests {
+  // Query values stay inside the unreserved set on purpose. Whether
+  // `URLComponents` and `CFURLGetBytes` percent-encode a sub-delimiter such as
+  // `*` is not what these tests are pinning down.
+  @Test
+  func buildPreservesQueryString() throws {
+    var builder = HTTPRequestBuilder(
+      method: .get, baseURL: URL(string: "https://example.com")!, path: "/rest/v1/todos")
+    builder.addQuery("select", "name")
+    builder.addQuery("id", "eq.1")
+    let request = try builder.build()
+    #expect(request.path == "/rest/v1/todos?select=name&id=eq.1")
+  }
+
+  @Test
+  func buildPreservesRepeatedQueryKeys() throws {
+    var builder = HTTPRequestBuilder(
+      method: .get, baseURL: URL(string: "https://example.com")!, path: "/x")
+    builder.addQuery("tag", ["a", "b"])
+    let request = try builder.build()
+    #expect(request.path == "/x?tag=a&tag=b")
+  }
+
+  @Test
+  func buildPreservesNonDefaultPort() throws {
+    let builder = HTTPRequestBuilder(
+      method: .get, baseURL: URL(string: "http://127.0.0.1:54321")!, path: "/auth/v1/token")
+    let request = try builder.build()
+    #expect(request.authority == "127.0.0.1:54321")
+  }
+
+  @Test
+  func buildPreservesGreedyPathSlashes() throws {
+    let builder = HTTPRequestBuilder(
+      method: .get, baseURL: URL(string: "https://example.com")!,
+      path: "/storage/v1/object/bucket/a/b/c.txt")
+    let request = try builder.build()
+    #expect(request.path == "/storage/v1/object/bucket/a/b/c.txt")
+  }
+}

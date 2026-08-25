@@ -6,6 +6,7 @@
 //
 package import Foundation
 package import HTTPTypes
+import HTTPTypesFoundation
 
 /// The body of an outgoing request.
 ///
@@ -101,8 +102,6 @@ package struct HTTPRequestBuilder: Sendable {
     guard let url = components.url else {
       throw HTTPRuntimeError.invalidURL(base: baseURL, path: path)
     }
-    return HTTPRequest(
-      method: method, scheme: url.scheme, authority: url.host, path: url.path(),
-      headerFields: headers)
+    return HTTPRequest(method: method, url: url, headerFields: headers)
   }
 }
