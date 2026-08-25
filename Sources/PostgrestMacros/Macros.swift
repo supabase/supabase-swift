@@ -37,7 +37,7 @@
   extension,
   conformances: Decodable, Sendable, PostgrestRelation, PostgrestWritableRelation,
   names: named(relationName), named(schema), named(selectString), named(columnName(for:)),
-  named(CodingKeys), named(Insert), named(Update)
+  named(primaryKeyColumns), named(CodingKeys), named(Insert), named(Update)
 )
 public macro Table(
   _ name: String,
@@ -72,7 +72,12 @@ public macro Column(_ name: String) =
 /// rejects. This matches how `postgres-meta` types supabase-js: it makes a column optional from
 /// `is_nullable || is_identity || default_value !== null`, and never consults the primary key.
 ///
-/// The key is left out of `Update`, which targets rows by key rather than changing it.
+/// `Update` carries the key like any other column, all optional, so a natural key can be renamed.
+/// Which rows a write touches is decided by the filters on the mutation, not by this marker.
+///
+/// What the marker does produce is ``PostgREST/PostgrestRelation/primaryKeyColumns``, the column
+/// names in declaration order. That is what lets a caller — or a future `upsert` — name a conflict
+/// target without repeating the key as a string.
 @attached(peer)
 public macro PrimaryKey() =
   #externalMacro(

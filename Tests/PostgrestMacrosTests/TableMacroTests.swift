@@ -60,6 +60,8 @@ struct TableMacroTests {
           }
         }
 
+        static let primaryKeyColumns: [String] = ["id"]
+
         enum CodingKeys: String, CodingKey {
           case id = "id"
           case task = "task"
@@ -89,17 +91,20 @@ struct TableMacroTests {
         }
 
         struct Update: Encodable, Sendable {
+          var id: Int?
           var task: String?
           var isDone: Bool?
           var dueDate: Date?
 
           enum CodingKeys: String, CodingKey {
+            case id = "id"
             case task = "task"
             case isDone = "is_done"
             case dueDate = "due_at"
           }
 
-          init(task: String? = nil, isDone: Bool? = nil, dueDate: Date? = nil) {
+          init(id: Int? = nil, task: String? = nil, isDone: Bool? = nil, dueDate: Date? = nil) {
+            self.id = id
             self.task = task
             self.isDone = isDone
             self.dueDate = dueDate
@@ -184,6 +189,8 @@ struct TableMacroTests {
           }
         }
 
+        public static let primaryKeyColumns: [String] = ["id"]
+
         enum CodingKeys: String, CodingKey {
           case id = "id"
           case task = "task"
@@ -205,13 +212,16 @@ struct TableMacroTests {
         }
 
         public struct Update: Encodable, Sendable {
+          public var id: Int?
           public var task: String?
 
           enum CodingKeys: String, CodingKey {
+            case id = "id"
             case task = "task"
           }
 
-          public init(task: String? = nil) {
+          public init(id: Int? = nil, task: String? = nil) {
+            self.id = id
             self.task = task
           }
         }
@@ -329,6 +339,8 @@ struct TableMacroTests {
           }
         }
 
+        static let primaryKeyColumns: [String] = ["id"]
+
         enum CodingKeys: String, CodingKey {
           case id = "id"
           case task = "task"
@@ -362,19 +374,22 @@ struct TableMacroTests {
         }
 
         struct Update: Encodable, Sendable {
+          var id: Int?
           var task: String?
           var note: String?
           var draft: String?
           var review: String?
 
           enum CodingKeys: String, CodingKey {
+            case id = "id"
             case task = "task"
             case note = "note"
             case draft = "draft"
             case review = "review"
           }
 
-          init(task: String? = nil, note: String? = nil, draft: String? = nil, review: String? = nil) {
+          init(id: Int? = nil, task: String? = nil, note: String? = nil, draft: String? = nil, review: String? = nil) {
+            self.id = id
             self.task = task
             self.note = note
             self.draft = draft
@@ -431,6 +446,8 @@ struct TableMacroTests {
           }
         }
 
+        static let primaryKeyColumns: [String] = ["id"]
+
         enum CodingKeys: String, CodingKey {
           case id = "id"
           case task = "task"
@@ -452,13 +469,16 @@ struct TableMacroTests {
         }
 
         struct Update: Encodable, Sendable {
+          var id: Int?
           var task: String?
 
           enum CodingKeys: String, CodingKey {
+            case id = "id"
             case task = "task"
           }
 
-          init(task: String? = nil) {
+          init(id: Int? = nil, task: String? = nil) {
+            self.id = id
             self.task = task
           }
         }
@@ -508,6 +528,8 @@ struct TableMacroTests {
           }
         }
 
+        static let primaryKeyColumns: [String] = ["user_id", "role_id"]
+
         enum CodingKeys: String, CodingKey {
           case userID = "user_id"
           case roleID = "role_id"
@@ -533,13 +555,19 @@ struct TableMacroTests {
         }
 
         struct Update: Encodable, Sendable {
+          var userID: UUID?
+          var roleID: UUID?
           var grantedAt: Date?
 
           enum CodingKeys: String, CodingKey {
+            case userID = "user_id"
+            case roleID = "role_id"
             case grantedAt = "granted_at"
           }
 
-          init(grantedAt: Date? = nil) {
+          init(userID: UUID? = nil, roleID: UUID? = nil, grantedAt: Date? = nil) {
+            self.userID = userID
+            self.roleID = roleID
             self.grantedAt = grantedAt
           }
         }
@@ -586,6 +614,8 @@ struct TableMacroTests {
           }
         }
 
+        static let primaryKeyColumns: [String] = ["user_id", "role_id"]
+
         enum CodingKeys: String, CodingKey {
           case userID = "user_id"
           case roleID = "role_id"
@@ -607,8 +637,17 @@ struct TableMacroTests {
         }
 
         struct Update: Encodable, Sendable {
+          var userID: UUID?
+          var roleID: UUID?
 
-          init() {
+          enum CodingKeys: String, CodingKey {
+            case userID = "user_id"
+            case roleID = "role_id"
+          }
+
+          init(userID: UUID? = nil, roleID: UUID? = nil) {
+            self.userID = userID
+            self.roleID = roleID
           }
         }
       }
@@ -662,6 +701,8 @@ struct TableMacroTests {
           }
         }
 
+        static let primaryKeyColumns: [String] = ["id"]
+
         enum CodingKeys: String, CodingKey {
           case id = "id"
           case task = "task"
@@ -691,17 +732,20 @@ struct TableMacroTests {
         }
 
         struct Update: Encodable, Sendable {
+          var id: Int?
           var task: String?
           var note: Optional<String>
           var tag: Optional<String>
 
           enum CodingKeys: String, CodingKey {
+            case id = "id"
             case task = "task"
             case note = "note"
             case tag = "tag"
           }
 
-          init(task: String? = nil, note: Optional<String> = nil, tag: Optional<String> = nil) {
+          init(id: Int? = nil, task: String? = nil, note: Optional<String> = nil, tag: Optional<String> = nil) {
+            self.id = id
             self.task = task
             self.note = note
             self.tag = tag

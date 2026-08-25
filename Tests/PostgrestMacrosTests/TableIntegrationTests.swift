@@ -98,6 +98,20 @@ struct TableIntegrationTests {
   }
 
   @Test
+  func macroReportsThePrimaryKeyColumns() {
+    // The only thing `@PrimaryKey` produces now that it no longer gates `Insert` optionality or
+    // filters `Update`. Declaration order, and column names rather than property names.
+    #expect(Todo.primaryKeyColumns == ["id"])
+    #expect(IntegrationUserRole.primaryKeyColumns == ["user_id", "role_id"])
+  }
+
+  @Test
+  func aRelationWithNoDeclaredKeyReportsNone() {
+    // Falls through to the protocol default rather than expanding to an empty literal.
+    #expect(IntegrationActiveTodo.primaryKeyColumns.isEmpty)
+  }
+
+  @Test
   func anOptionalSpelledColumnCanBeOmitted() throws {
     // This is the assertion the expansion test cannot make: `MacroTesting` compares generated
     // text, it does not compile it. Both calls omit `tag`, which only compiles if the generated
@@ -187,5 +201,33 @@ struct TableIntegrationTests {
 
     #expect(capture.path?.hasSuffix("/todos") == true)
     #expect(capture.bodyString?.contains(#""id":1"#) == true)
+  }
+
+  @Test
+  func updateCanChangeAKeyColumn() async throws {
+    // Renaming a natural key is a real operation. Targeting is a separate concern — the filter
+    // below is what picks the row — so keeping the key out of the payload only removed the
+    // ability to change it.
+    let capture = RequestCapture()
+    _ = try await capture.client
+      .from(IntegrationUserRole.self)
+      .update(IntegrationUserRole.Update(roleID: 3))
+      .eq(\.userID, 1)
+      .execute()
+
+    #expect(capture.bodyString == #"{"role_id":3}"#)
+  }
+
+  @Test
+  func updateStillOmitsAKeyItIsNotChanging() async throws {
+    // The addition is purely additive: a caller that does not name the key is unaffected.
+    let capture = RequestCapture()
+    _ = try await capture.client
+      .from(Todo.self)
+      .update(Todo.Update(task: "buy oat milk"))
+      .eq(\.id, 1)
+      .execute()
+
+    #expect(capture.bodyString == #"{"task":"buy oat milk"}"#)
   }
 }

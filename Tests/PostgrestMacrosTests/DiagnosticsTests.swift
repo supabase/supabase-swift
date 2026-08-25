@@ -197,6 +197,8 @@ struct DiagnosticsTests {
           }
         }
 
+        static let primaryKeyColumns: [String] = ["id"]
+
         enum CodingKeys: String, CodingKey {
           case id = "id"
           case task = "task"
@@ -218,13 +220,16 @@ struct DiagnosticsTests {
         }
 
         struct Update: Encodable, Sendable {
+          var id: Int?
           var task: String?
 
           enum CodingKeys: String, CodingKey {
+            case id = "id"
             case task = "task"
           }
 
-          init(task: String? = nil) {
+          init(id: Int? = nil, task: String? = nil) {
+            self.id = id
             self.task = task
           }
         }
