@@ -1,5 +1,5 @@
 {
-  "originHash" : "e02e24d410edd1a54b0cc6c1b179cf93c6fab7b27de683761e1eb6b27f8e8b8c",
+  "originHash" : "66fc84e1d93fc7d8e6e79e85cb1c6583c07ea159d66325d0329cfeba57a7a06a",
   "pins" : [
     {
       "identity" : "cryptoswift",
@@ -83,6 +83,15 @@
       }
     },
     {
+      "identity" : "swift-macro-testing",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/pointfreeco/swift-macro-testing",
+      "state" : {
+        "revision" : "2e494c632d510715c96a694ff25e2a8d4ac3f64b",
+        "version" : "0.6.5"
+      }
+    },
+    {
       "identity" : "swift-secp256k1",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/21-DOT-DEV/swift-secp256k1.git",
@@ -105,8 +114,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/swiftlang/swift-syntax",
       "state" : {
-        "revision" : "0687f71944021d616d34d922343dcef086855920",
-        "version" : "600.0.1"
+        "revision" : "79e4b74a295b6eb74a8b585e3a39d29e70c1dbd1",
+        "version" : "603.0.2"
       }
     },
     {
