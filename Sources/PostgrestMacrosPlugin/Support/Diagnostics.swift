@@ -56,6 +56,9 @@ extension DeclGroupSyntax {
   /// names the key path and hits the generated `fatalError`. A macro cannot recover the type from
   /// the initializer expression, so the author is asked for an annotation instead.
   ///
+  /// Reads `bindings.first` because ``postgrestDiagnoseMultipleBindings(macro:in:)`` has already
+  /// rejected anything that binds more than one property.
+  ///
   /// Returns `true` if anything was reported, so the caller can stop before emitting an expansion
   /// that leaves the column out.
   func postgrestDiagnoseUnannotatedProperties(
@@ -88,4 +91,56 @@ extension DeclGroupSyntax {
     }
     return reported
   }
+}
+
+extension DeclGroupSyntax {
+  /// Reports every declaration that binds more than one property.
+  ///
+  /// `var task: String, note: String` declares two stored properties, and
+  /// `postgrestStoredProperties()` reads only `bindings.first`, so `note` was dropped from every
+  /// generated member.
+  ///
+  /// Iterating the bindings instead is not the fix. A marker attribute sits on the *declaration*,
+  /// not on a binding, so `@Column("a") var x: Int, y: Int` would name one column twice and
+  /// `@PrimaryKey var x: Int, y: Int` would claim two primary keys. And `var task, note: String`
+  /// parses as one binding with no annotation and one with it, so the type would have to be
+  /// propagated backwards the way the compiler does it. One property per declaration removes both
+  /// problems, and the shape it asks for is the one this SDK writes anyway.
+  ///
+  /// Runs before ``postgrestDiagnoseUnannotatedProperties(macro:in:)``, so the shared-annotation
+  /// form is told to split rather than to annotate a type it already has.
+  func postgrestDiagnoseMultipleBindings(
+    macro: String,
+    in context: some MacroExpansionContext
+  ) -> Bool {
+    var reported = false
+    for member in memberBlock.members {
+      guard
+        let variable = member.decl.as(VariableDeclSyntax.self),
+        !variable.modifiers.contains(where: { $0.name.text == "static" }),
+        variable.bindings.count > 1
+      else { continue }
+
+      let names = variable.bindings.compactMap {
+        $0.pattern.as(IdentifierPatternSyntax.self)?.identifier.text
+      }
+      context.error(
+        """
+        \(macro) requires one stored property per declaration; split \
+        \(postgrestNameList(names)) into separate declarations
+        """,
+        at: variable.bindings
+      )
+      reported = true
+    }
+    return reported
+  }
+}
+
+/// `'a'`, then `'a' and 'b'`, then `'a', 'b' and 'c'`.
+private func postgrestNameList(_ names: [String]) -> String {
+  let quoted = names.map { "'\($0)'" }
+  guard let last = quoted.last else { return "" }
+  guard quoted.count > 1 else { return last }
+  return quoted.dropLast().joined(separator: ", ") + " and " + last
 }

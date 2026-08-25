@@ -40,6 +40,9 @@ public struct SelectionOfMacro: ExtensionMacro {
       )
       return []
     }
+    if declaration.postgrestDiagnoseMultipleBindings(macro: "@SelectionOf", in: context) {
+      return []
+    }
     if declaration.postgrestDiagnoseUnannotatedProperties(macro: "@SelectionOf", in: context) {
       return []
     }

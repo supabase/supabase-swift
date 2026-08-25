@@ -68,6 +68,9 @@ public struct TableMacro: ExtensionMacro {
       )
       return []
     }
+    if declaration.postgrestDiagnoseMultipleBindings(macro: "@Table", in: context) {
+      return []
+    }
     if declaration.postgrestDiagnoseUnannotatedProperties(macro: "@Table", in: context) {
       return []
     }

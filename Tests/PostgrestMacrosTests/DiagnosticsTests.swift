@@ -276,4 +276,146 @@ struct DiagnosticsTests {
       """
     }
   }
+
+  @Test
+  func tableRejectsMoreThanOnePropertyPerDeclaration() {
+    assertMacro {
+      """
+      @Table("todos")
+      struct Todo {
+        @PrimaryKey var id: Int
+        var task: String, note: String
+      }
+      """
+    } diagnostics: {
+      """
+      @Table("todos")
+      struct Todo {
+        @PrimaryKey var id: Int
+        var task: String, note: String
+            ┬─────────────────────────
+            ╰─ 🛑 @Table requires one stored property per declaration; split 'task' and 'note' into separate declarations
+      }
+      """
+    }
+  }
+
+  @Test
+  func tableRejectsASharedTypeAnnotation() {
+    // `var task, note: String` gives the parser one binding with no annotation and one with it.
+    // The split message has to win here, or the author is told to annotate a type they did write.
+    assertMacro {
+      """
+      @Table("todos")
+      struct Todo {
+        @PrimaryKey var id: Int
+        var task, note: String
+      }
+      """
+    } diagnostics: {
+      """
+      @Table("todos")
+      struct Todo {
+        @PrimaryKey var id: Int
+        var task, note: String
+            ┬─────────────────
+            ╰─ 🛑 @Table requires one stored property per declaration; split 'task' and 'note' into separate declarations
+      }
+      """
+    }
+  }
+
+  @Test
+  func tableAcceptsAStaticDeclarationThatBindsSeveralNames() {
+    // A static member maps to no column either way, so splitting it would buy nothing.
+    assertMacro {
+      """
+      @Table("todos")
+      struct Todo {
+        @PrimaryKey var id: Int
+        var task: String
+        static let first = "a", second = "b"
+      }
+      """
+    } expansion: {
+      #"""
+      struct Todo {
+        @PrimaryKey var id: Int
+        var task: String
+        static let first = "a", second = "b"
+      }
+
+      extension Todo {
+        static let relationName = "todos"
+
+        static let schema = "public"
+
+        static let selectString = "*"
+
+        static func columnName<V>(for keyPath: KeyPath<Self, V>) -> String {
+          switch keyPath {
+          case \Self.id:
+            return "id"
+          case \Self.task:
+            return "task"
+          default:
+            fatalError("Todo: no column is mapped for that key path")
+          }
+        }
+
+        enum CodingKeys: String, CodingKey {
+          case id = "id"
+          case task = "task"
+        }
+
+        struct Insert: Encodable, Sendable {
+          var task: String
+
+          enum CodingKeys: String, CodingKey {
+            case task = "task"
+          }
+
+          init(task: String) {
+            self.task = task
+          }
+        }
+
+        struct Update: Encodable, Sendable {
+          var task: String?
+
+          enum CodingKeys: String, CodingKey {
+            case task = "task"
+          }
+
+          init(task: String? = nil) {
+            self.task = task
+          }
+        }
+      }
+      """#
+    }
+  }
+
+  @Test
+  func selectionOfRejectsMoreThanOnePropertyPerDeclaration() {
+    assertMacro {
+      """
+      @SelectionOf(Todo.self)
+      struct TodoSummary {
+        var id: Int
+        var task: String, note: String, tag: String
+      }
+      """
+    } diagnostics: {
+      """
+      @SelectionOf(Todo.self)
+      struct TodoSummary {
+        var id: Int
+        var task: String, note: String, tag: String
+            ┬──────────────────────────────────────
+            ╰─ 🛑 @SelectionOf requires one stored property per declaration; split 'task', 'note' and 'tag' into separate declarations
+      }
+      """
+    }
+  }
 }

@@ -58,6 +58,10 @@ extension DeclGroupSyntax {
   /// annotation to read. That one is a mistake rather than a design, so
   /// `postgrestDiagnoseUnannotatedProperties(macro:in:)` reports it and the macro stops before
   /// anything reaches here.
+  ///
+  /// Reading `bindings.first` is safe for the same reason: a declaration that binds more than one
+  /// property is rejected by `postgrestDiagnoseMultipleBindings(macro:in:)` first, so whatever
+  /// gets here binds exactly one.
   func postgrestStoredProperties() -> [StoredProperty] {
     memberBlock.members.compactMap { member -> StoredProperty? in
       guard
