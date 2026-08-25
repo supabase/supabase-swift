@@ -6,6 +6,8 @@
 //
 import Foundation
 import HTTPRuntime
+import HTTPTypes
+import HTTPTypesFoundation
 import Testing
 
 @testable import HTTPRuntimeTestHelpers
@@ -22,11 +24,13 @@ struct AssertHTTPRequestsTests {
     // Fires one request *before* any assertHTTPRequests call — must not leak
     // into the slice captured below.
     _ = try await HTTPTransportStub.current.send(
-      HTTPRequest(method: .get, url: URL(string: "https://example.com/a")!), uploadProgress: nil)
+      HTTPRequest(method: .get, url: URL(string: "https://example.com/a")!), body: nil,
+      uploadProgress: nil)
 
     try await assertHTTPRequests {
       _ = try await HTTPTransportStub.current.send(
-        HTTPRequest(method: .get, url: URL(string: "https://example.com/b")!), uploadProgress: nil)
+        HTTPRequest(method: .get, url: URL(string: "https://example.com/b")!), body: nil,
+        uploadProgress: nil)
     } matches: {
       #"""
       curl \
@@ -37,7 +41,8 @@ struct AssertHTTPRequestsTests {
     // A second call must only see requests made after the first one returned.
     try await assertHTTPRequests {
       _ = try await HTTPTransportStub.current.send(
-        HTTPRequest(method: .get, url: URL(string: "https://example.com/c")!), uploadProgress: nil)
+        HTTPRequest(method: .get, url: URL(string: "https://example.com/c")!), body: nil,
+        uploadProgress: nil)
     } matches: {
       #"""
       curl \
@@ -55,10 +60,10 @@ struct AssertHTTPRequestsTests {
     try await assertHTTPRequests {
       _ = try await HTTPTransportStub.current.send(
         HTTPRequest(method: .get, url: URL(string: "https://example.com/first")!),
-        uploadProgress: nil)
+        body: nil, uploadProgress: nil)
       _ = try await HTTPTransportStub.current.send(
         HTTPRequest(method: .post, url: URL(string: "https://example.com/second")!),
-        uploadProgress: nil)
+        body: nil, uploadProgress: nil)
     } matches: {
       #"""
       curl \
@@ -67,6 +72,22 @@ struct AssertHTTPRequestsTests {
       curl \
       	--request POST \
       	"https://example.com/second"
+      """#
+    }
+  }
+
+  @Test(.http(stubs: [.post("https://example.com/create") { .empty }]))
+  func rendersTheRequestBodyAsData() async throws {
+    try await assertHTTPRequests {
+      _ = try await HTTPTransportStub.current.send(
+        HTTPRequest(method: .post, url: URL(string: "https://example.com/create")!),
+        body: .data(Data(#"{"a":1}"#.utf8)), uploadProgress: nil)
+    } matches: {
+      #"""
+      curl \
+      	--request POST \
+      	--data "{\"a\":1}" \
+      	"https://example.com/create"
       """#
     }
   }

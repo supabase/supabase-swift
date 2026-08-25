@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 08/07/26.
 //
 package import Foundation
+package import HTTPTypes
 
 /// The body of an outgoing request.
 ///
@@ -18,41 +19,23 @@ package enum HTTPBody: Sendable {
   case file(URL)
 }
 
-/// A fully-resolved HTTP request: absolute URL, headers, and body.
-package struct HTTPRequest: Sendable {
-  package var method: HTTPMethod
-  package var url: URL
-  package var headers: [String: String]
-  package var body: HTTPBody?
-
-  package init(
-    method: HTTPMethod,
-    url: URL,
-    headers: [String: String] = [:],
-    body: HTTPBody? = nil
-  ) {
-    self.method = method
-    self.url = url
-    self.headers = headers
-    self.body = body
-  }
-}
-
 /// Assembles an `HTTPRequest` from a base URL, a path template already filled
 /// with path parameters, repeated query items, and headers.
 ///
 /// Generated code drives this builder; it never constructs `URLComponents`
 /// directly. Query values use repeated-key encoding (`?k=a&k=b`) to match the
 /// Smithy/OpenAPI list conventions in the specs.
+///
+/// The builder does not carry a request body. `HTTPTypes.HTTPRequest` models a
+/// head only, so the caller passes the body to `HTTPTransport.send(_:body:)`.
 package struct HTTPRequestBuilder: Sendable {
-  private let method: HTTPMethod
+  private let method: HTTPRequest.Method
   private let baseURL: URL
   private let path: String
   private var queryItems: [URLQueryItem] = []
-  private var headers: [String: String] = [:]
-  private var body: HTTPBody? = nil
+  private var headers: HTTPFields = [:]
 
-  package init(method: HTTPMethod, baseURL: URL, path: String) {
+  package init(method: HTTPRequest.Method, baseURL: URL, path: String) {
     self.method = method
     self.baseURL = baseURL
     self.path = path
@@ -70,20 +53,25 @@ package struct HTTPRequestBuilder: Sendable {
     }
   }
 
-  package mutating func setHeader(_ name: String, _ value: String?) {
+  package mutating func setHeader(_ name: HTTPField.Name, _ value: String?) {
     guard let value else { return }
-    headers[canonicalKey(for: name)] = value
+    headers[name] = value
   }
 
   /// Appends to an existing header value (joined with `separator`, `","` by
   /// default per RFC 7240's `Prefer` directive list) instead of replacing it.
   /// If `value` shares a directive key (the part before `=`) with an existing
-  /// component, it replaces that component instead of duplicating it. Header
-  /// names are matched case-insensitively per HTTP semantics.
-  package mutating func addHeader(_ name: String, value: String?, separator: String = ",") {
+  /// component, it replaces that component instead of duplicating it.
+  ///
+  /// `HTTPFields` matches names case-insensitively on its own, so this no
+  /// longer canonicalizes the key by hand.
+  ///
+  /// - Note: This duplicates `appendOrUpdate(_:value:separator:)` in
+  ///   `Sources/Helpers/HTTP/HTTPFields.swift`. HTTPRuntime must not depend on
+  ///   Helpers, so the copy stands until Helpers/HTTP retires.
+  package mutating func addHeader(_ name: HTTPField.Name, value: String?, separator: String = ",") {
     guard let value else { return }
-    let key = canonicalKey(for: name)
-    if let existing = headers[key] {
+    if let existing = headers[name] {
       var components = existing.components(separatedBy: separator)
       if let directiveKey = value.split(separator: "=").first,
         let index = components.firstIndex(where: { $0.hasPrefix("\(directiveKey)=") })
@@ -92,38 +80,29 @@ package struct HTTPRequestBuilder: Sendable {
       } else {
         components.append(value)
       }
-      headers[key] = components.joined(separator: separator)
+      headers[name] = components.joined(separator: separator)
     } else {
-      headers[key] = value
+      headers[name] = value
     }
   }
 
-  /// Returns the already-stored key matching `name` case-insensitively, if
-  /// any, so repeated calls with different casing merge into one header
-  /// instead of creating a duplicate entry.
-  private func canonicalKey(for name: String) -> String {
-    headers.keys.first { $0.caseInsensitiveCompare(name) == .orderedSame } ?? name
-  }
-
-  package mutating func setBody(_ body: HTTPBody?) {
-    self.body = body
-  }
-
-  package func build() throws -> HTTPRequest {
+  package func build() throws(HTTPRuntimeError) -> HTTPRequest {
     // Compose by string so slashes inside greedy path params ({path+}) are
     // preserved. Generated code percent-encodes individual label values.
     var base = baseURL.absoluteString
     if base.hasSuffix("/") { base.removeLast() }
     let prefixedPath = path.hasPrefix("/") ? path : "/" + path
     guard var components = URLComponents(string: base + prefixedPath) else {
-      throw HTTPError.invalidURL(base: baseURL, path: path)
+      throw HTTPRuntimeError.invalidURL(base: baseURL, path: path)
     }
     if !queryItems.isEmpty {
       components.queryItems = queryItems
     }
     guard let url = components.url else {
-      throw HTTPError.invalidURL(base: baseURL, path: path)
+      throw HTTPRuntimeError.invalidURL(base: baseURL, path: path)
     }
-    return HTTPRequest(method: method, url: url, headers: headers, body: body)
+    return HTTPRequest(
+      method: method, scheme: url.scheme, authority: url.host, path: url.path(),
+      headerFields: headers)
   }
 }

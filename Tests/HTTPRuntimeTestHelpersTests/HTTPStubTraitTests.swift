@@ -6,6 +6,8 @@
 //
 import Foundation
 import HTTPRuntime
+import HTTPTypes
+import HTTPTypesFoundation
 import Testing
 
 @testable import HTTPRuntimeTestHelpers
@@ -15,7 +17,8 @@ struct HTTPStubTraitTests {
   @Test(.http(stubs: [.get("https://example.com/x", status: 200) { .string("ok") }]))
   func bindsCurrentForTestBody() async throws {
     let response = try await HTTPTransportStub.current.send(
-      HTTPRequest(method: .get, url: URL(string: "https://example.com/x")!), uploadProgress: nil)
+      HTTPRequest(method: .get, url: URL(string: "https://example.com/x")!), body: nil,
+      uploadProgress: nil)
     #expect(response.body == Data("ok".utf8))
   }
 
@@ -37,10 +40,10 @@ struct HTTPStubTraitTests {
       try await testLevelTrait.provideScope(for: Test.current!, testCase: Test.Case.current) {
         let first = try await HTTPTransportStub.current.send(
           HTTPRequest(method: .get, url: URL(string: "https://example.com/first")!),
-          uploadProgress: nil)
+          body: nil, uploadProgress: nil)
         let second = try await HTTPTransportStub.current.send(
           HTTPRequest(method: .get, url: URL(string: "https://example.com/second")!),
-          uploadProgress: nil)
+          body: nil, uploadProgress: nil)
         #expect(first.body == Data("1".utf8))
         #expect(second.body == Data("2".utf8))
       }

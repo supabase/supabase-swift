@@ -62,18 +62,26 @@ let package = Package(
       ]
     ),
     .target(
-      name: "HTTPRuntime"
+      name: "HTTPRuntime",
+      dependencies: [
+        .product(name: "HTTPTypes", package: "swift-http-types"),
+        .product(name: "HTTPTypesFoundation", package: "swift-http-types"),
+      ]
     ),
     .testTarget(
       name: "HTTPRuntimeTests",
       dependencies: [
-        "HTTPRuntime"
+        "HTTPRuntime",
+        .product(name: "HTTPTypes", package: "swift-http-types"),
+        .product(name: "HTTPTypesFoundation", package: "swift-http-types"),
       ]
     ),
     .target(
       name: "HTTPRuntimeTestHelpers",
       dependencies: [
         "HTTPRuntime",
+        .product(name: "HTTPTypes", package: "swift-http-types"),
+        .product(name: "HTTPTypesFoundation", package: "swift-http-types"),
         .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
       ]
     ),
@@ -82,6 +90,8 @@ let package = Package(
       dependencies: [
         "HTTPRuntime",
         "HTTPRuntimeTestHelpers",
+        .product(name: "HTTPTypes", package: "swift-http-types"),
+        .product(name: "HTTPTypesFoundation", package: "swift-http-types"),
       ]
     ),
     .target(

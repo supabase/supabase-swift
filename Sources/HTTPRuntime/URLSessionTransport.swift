@@ -5,6 +5,8 @@
 //  Created by Guilherme Souza on 08/07/26.
 //
 package import Foundation
+package import HTTPTypes
+import HTTPTypesFoundation
 
 #if canImport(FoundationNetworking)
   package import FoundationNetworking
@@ -35,16 +37,16 @@ package struct URLSessionTransport: HTTPTransport {
     self.session = session
   }
 
-  package func send(_ request: HTTPRequest, uploadProgress: ProgressHandler?)
-    async throws(HTTPError) -> HTTPResponse
+  package func send(_ request: HTTPRequest, body: HTTPBody?, uploadProgress: ProgressHandler?)
+    async throws(HTTPRuntimeError) -> HTTPBufferedResponse
   {
-    let urlRequest = Self.makeURLRequest(request)
+    let urlRequest = try Self.makeURLRequest(request)
     let delegate = uploadProgress.map { ProgressDelegate(onProgress: $0) }
 
     let data: Data
     let response: URLResponse
     do {
-      switch request.body {
+      switch body {
       case nil:
         (data, response) = try await session.data(for: urlRequest, delegate: delegate)
       case .data(let payload):
@@ -55,41 +57,45 @@ package struct URLSessionTransport: HTTPTransport {
           for: urlRequest, fromFile: fileURL, delegate: delegate)
       }
     } catch {
-      throw HTTPError.transport(error)
+      throw HTTPRuntimeError.transport(error)
     }
-    return HTTPResponse(head: Self.makeHead(response), body: data)
+    return HTTPBufferedResponse(head: try Self.makeHead(response), body: data)
   }
 
   #if canImport(FoundationNetworking)
     // swift-corelibs-foundation has no async byte-streaming API
     // (`bytes(for:)`/`AsyncBytes`), so on Linux the response is buffered in
     // full and delivered as a single chunk instead of streamed incrementally.
-    package func stream(_ request: HTTPRequest) async throws(HTTPError) -> HTTPResponseStream {
-      try Self.rejectFileBody(request)
-      let urlRequest = Self.makeURLRequest(request)
+    package func stream(_ request: HTTPRequest, body: HTTPBody?) async throws(HTTPRuntimeError)
+      -> HTTPStreamedResponse
+    {
+      try Self.rejectFileBody(body)
+      let urlRequest = try Self.makeURLRequest(request)
       let data: Data
       let response: URLResponse
       do {
         (data, response) = try await session.data(for: urlRequest)
       } catch {
-        throw HTTPError.transport(error)
+        throw HTTPRuntimeError.transport(error)
       }
       let body = AsyncThrowingStream<Data, any Error> { continuation in
         continuation.yield(data)
         continuation.finish()
       }
-      return HTTPResponseStream(head: Self.makeHead(response), body: body)
+      return HTTPStreamedResponse(head: try Self.makeHead(response), body: body)
     }
   #else
-    package func stream(_ request: HTTPRequest) async throws(HTTPError) -> HTTPResponseStream {
-      try Self.rejectFileBody(request)
-      let urlRequest = Self.makeURLRequest(request)
+    package func stream(_ request: HTTPRequest, body: HTTPBody?) async throws(HTTPRuntimeError)
+      -> HTTPStreamedResponse
+    {
+      try Self.rejectFileBody(body)
+      let urlRequest = try Self.makeURLRequest(request)
       let bytes: URLSession.AsyncBytes
       let response: URLResponse
       do {
         (bytes, response) = try await session.bytes(for: urlRequest)
       } catch {
-        throw HTTPError.transport(error)
+        throw HTTPRuntimeError.transport(error)
       }
 
       let body = AsyncThrowingStream<Data, any Error> { continuation in
@@ -109,12 +115,12 @@ package struct URLSessionTransport: HTTPTransport {
             if !buffer.isEmpty { continuation.yield(Data(buffer)) }
             continuation.finish()
           } catch {
-            continuation.finish(throwing: HTTPError.transport(error))
+            continuation.finish(throwing: HTTPRuntimeError.transport(error))
           }
         }
         continuation.onTermination = { _ in task.cancel() }
       }
-      return HTTPResponseStream(head: Self.makeHead(response), body: body)
+      return HTTPStreamedResponse(head: try Self.makeHead(response), body: body)
     }
   #endif
 
@@ -124,37 +130,27 @@ package struct URLSessionTransport: HTTPTransport {
   /// takes a file URL, so a `.file` body would silently transmit empty
   /// instead of the file's contents. Reject it up front rather than send(_:)
   /// which knows how to upload file bodies.
-  private static func rejectFileBody(_ request: HTTPRequest) throws(HTTPError) {
-    if case .file = request.body {
-      throw HTTPError.unsupportedRequestBody(
+  private static func rejectFileBody(_ body: HTTPBody?) throws(HTTPRuntimeError) {
+    if case .file = body {
+      throw HTTPRuntimeError.unsupportedRequestBody(
         "stream(_:) does not support file-backed request bodies; use send(_:uploadProgress:) instead."
       )
     }
   }
 
-  private static func makeURLRequest(_ request: HTTPRequest) -> URLRequest {
-    var urlRequest = URLRequest(url: request.url)
-    urlRequest.httpMethod = request.method.rawValue
-    for (name, value) in request.headers {
-      urlRequest.setValue(value, forHTTPHeaderField: name)
-    }
-    if case .data(let payload) = request.body {
-      urlRequest.httpBody = payload
+  private static func makeURLRequest(_ request: HTTPRequest) throws(HTTPRuntimeError) -> URLRequest
+  {
+    guard let urlRequest = URLRequest(httpRequest: request) else {
+      throw HTTPRuntimeError.invalidURL(base: request.url!, path: request.path!)
     }
     return urlRequest
   }
 
-  private static func makeHead(_ response: URLResponse) -> HTTPResponseHead {
-    guard let http = response as? HTTPURLResponse else {
-      return HTTPResponseHead(status: 0, headers: [:])
+  private static func makeHead(_ response: URLResponse) throws(HTTPRuntimeError) -> HTTPResponse {
+    guard let httpResponse = (response as? HTTPURLResponse)?.httpResponse else {
+      throw HTTPRuntimeError.transport(URLError(.badServerResponse))
     }
-    var headers: [String: String] = [:]
-    for (key, value) in http.allHeaderFields {
-      if let key = key as? String, let value = value as? String {
-        headers[key] = value
-      }
-    }
-    return HTTPResponseHead(status: http.statusCode, headers: headers)
+    return httpResponse
   }
 }
 
