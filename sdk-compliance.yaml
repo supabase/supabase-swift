@@ -81,6 +81,15 @@ supporting_symbols:
   - PostgrestRelation.primaryKeyColumns
   - PostgrestRelation.relationName
   - PostgrestRelation.schema
+  # The transport seam. `PostgrestTransport` is how a caller takes over
+  # sending — a timeout, an injected header, a test stub — so it underpins
+  # every database.* capability rather than belonging to one. `HTTPRuntime` is
+  # `package`, so it cannot appear here; this protocol is the public face of it.
+  - PostgrestTransport
+  - PostgrestTransport.send
+  - URLSessionPostgrestTransport
+  - URLSessionPostgrestTransport.init
+  - URLSessionPostgrestTransport.send
   - PostgrestRequestBuilder
   - PostgrestRequestBuilder.Operator
   - PostgrestRequestBuilder.execute
