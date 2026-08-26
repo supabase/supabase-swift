@@ -6,9 +6,11 @@
 //
 import Foundation
 package import HTTPRuntime
+package import HTTPTypes
+import HTTPTypesFoundation
 package import Testing
 
-/// Thrown into `HTTPError.transport` on a stub mismatch — the actual test
+/// Thrown into `HTTPRuntimeError.transport` on a stub mismatch — the actual test
 /// failure is the `Issue.record` call alongside it; this just gives the code
 /// under test a real error to handle if it inspects the failure.
 package struct HTTPStubMismatch: Error, CustomStringConvertible {
@@ -33,38 +35,60 @@ package actor HTTPTransportStub: HTTPTransport {
   }
 
   private var pending: [HTTPStub]
-  private var consumedRequests: [HTTPRequest] = []
+  private var consumedRequests: [(request: HTTPRequest, body: HTTPBody?)] = []
 
   package init(stubs: [HTTPStub]) {
     pending = stubs
   }
 
-  private func nextMatchingStub(for request: HTTPRequest) throws(HTTPError) -> HTTPStub {
-    consumedRequests.append(request)
+  /// `actualURL` is rebuilt from `HTTPRequest`'s `:scheme`/`:authority`/`:path`
+  /// pseudo header fields, and that round trip normalizes an empty path to `/`.
+  /// So `https://example.com` comes back as `https://example.com/`. Normalize
+  /// the stub's URL the same way, or a host-only stub could never match a
+  /// request for that host's root — and the mismatch message would show two
+  /// strings differing by a slash the author never wrote.
+  ///
+  /// Deliberately done with `URLComponents` rather than by feeding the string
+  /// through `HTTPRequest(method:url:)`: that initializer aborts the process on
+  /// a schemeless URL, which is exactly what a hand-typed stub string might be.
+  private static func normalizedStubURL(_ urlString: String) -> String {
+    guard var components = URLComponents(string: urlString), components.scheme != nil
+    else { return urlString }
+    if components.path.isEmpty { components.path = "/" }
+    return components.url?.absoluteString ?? urlString
+  }
+
+  private func nextMatchingStub(for request: HTTPRequest, body: HTTPBody?) throws(HTTPRuntimeError)
+    -> HTTPStub
+  {
+    consumedRequests.append((request, body))
+    // `HTTPTypes.HTTPRequest.url` is optional — it is nil when the scheme,
+    // authority or path pseudo header fields are missing. Report that as a
+    // mismatch rather than letting it compare equal to nothing.
+    let actualURL = request.url?.absoluteString ?? "<no URL>"
     guard !pending.isEmpty else {
       let message =
-        "Unexpected request \(request.method.rawValue) \(request.url.absoluteString) — no stubs remaining"
+        "Unexpected request \(request.method.rawValue) \(actualURL) — no stubs remaining"
       Issue.record("\(message)")
-      throw HTTPError.transport(HTTPStubMismatch(description: message))
+      throw HTTPRuntimeError.transport(HTTPStubMismatch(description: message))
     }
     let stub = pending.removeFirst()
-    guard stub.method == request.method, stub.url == request.url.absoluteString else {
+    guard stub.method == request.method, Self.normalizedStubURL(stub.url) == actualURL else {
       let message = """
         Request mismatch.
         Expected: \(stub.method.rawValue) \(stub.url)
-        Actual:   \(request.method.rawValue) \(request.url.absoluteString)
+        Actual:   \(request.method.rawValue) \(actualURL)
         """
       Issue.record("\(message)")
-      throw HTTPError.transport(HTTPStubMismatch(description: message))
+      throw HTTPRuntimeError.transport(HTTPStubMismatch(description: message))
     }
     return stub
   }
 
-  package func send(_ request: HTTPRequest, uploadProgress: ProgressHandler?)
-    async throws(HTTPError)
-    -> HTTPResponse
+  package func send(_ request: HTTPRequest, body: HTTPBody?, uploadProgress: ProgressHandler?)
+    async throws(HTTPRuntimeError) -> HTTPBufferedResponse
   {
-    let stub = try nextMatchingStub(for: request)
+    let stub = try nextMatchingStub(for: request, body: body)
     let bodyData: Data
     switch stub.body() {
     case .empty:
@@ -78,12 +102,14 @@ package actor HTTPTransportStub: HTTPTransport {
       for await chunk in stream { collected.append(chunk) }
       bodyData = collected
     }
-    return HTTPResponse(
-      head: HTTPResponseHead(status: stub.status, headers: stub.headers), body: bodyData)
+    return HTTPBufferedResponse(
+      head: HTTPResponse(status: stub.status, headerFields: stub.headers), body: bodyData)
   }
 
-  package func stream(_ request: HTTPRequest) async throws(HTTPError) -> HTTPResponseStream {
-    let stub = try nextMatchingStub(for: request)
+  package func stream(_ request: HTTPRequest, body: HTTPBody?) async throws(HTTPRuntimeError)
+    -> HTTPStreamedResponse
+  {
+    let stub = try nextMatchingStub(for: request, body: body)
     let responseBody: AsyncThrowingStream<Data, any Error>
     switch stub.body() {
     case .empty:
@@ -107,8 +133,8 @@ package actor HTTPTransportStub: HTTPTransport {
         continuation.onTermination = { _ in task.cancel() }
       }
     }
-    return HTTPResponseStream(
-      head: HTTPResponseHead(status: stub.status, headers: stub.headers), body: responseBody)
+    return HTTPStreamedResponse(
+      head: HTTPResponse(status: stub.status, headerFields: stub.headers), body: responseBody)
   }
 
   /// Records an issue for every stub that was never consumed. Called by
@@ -123,8 +149,11 @@ package actor HTTPTransportStub: HTTPTransport {
   /// before running its operation, then diffs against it after.
   package var requestCount: Int { consumedRequests.count }
 
-  /// Requests recorded from `index` onward.
-  package func requests(since index: Int) -> [HTTPRequest] { Array(consumedRequests[index...]) }
+  /// Requests recorded from `index` onward, each paired with the body it was
+  /// sent with.
+  package func requests(since index: Int) -> [(request: HTTPRequest, body: HTTPBody?)] {
+    Array(consumedRequests[index...])
+  }
 
   /// Hands off stubs not yet consumed to a nested `HTTPStubTrait` scope
   /// (below), clearing this instance's own queue in the process — the nested

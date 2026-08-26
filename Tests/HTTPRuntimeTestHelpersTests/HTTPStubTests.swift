@@ -5,21 +5,26 @@
 //  Created by Guilherme Souza on 11/07/26.
 //
 import HTTPRuntime
+import HTTPTypes
 import Testing
 
 @testable import HTTPRuntimeTestHelpers
+
+extension HTTPField.Name {
+  fileprivate static let xTest = HTTPField.Name("X-Test")!
+}
 
 @Suite
 struct HTTPStubTests {
   @Test
   func getBuildsExpectedStub() {
-    let stub = HTTPStub.get("https://example.com/x", status: 201, headers: ["X-Test": "1"]) {
+    let stub = HTTPStub.get("https://example.com/x", status: 201, headers: [.xTest: "1"]) {
       .string("hello")
     }
     #expect(stub.method == .get)
     #expect(stub.url == "https://example.com/x")
     #expect(stub.status == 201)
-    #expect(stub.headers == ["X-Test": "1"])
+    #expect(stub.headers == [.xTest: "1"])
     guard case .string(let value) = stub.body() else {
       Issue.record("expected .string body")
       return

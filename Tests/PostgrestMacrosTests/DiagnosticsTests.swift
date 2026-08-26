@@ -186,7 +186,7 @@ struct DiagnosticsTests {
 
         static let selectString = "*"
 
-        static func columnName<V>(for keyPath: KeyPath<Self, V>) -> String {
+        static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
           switch keyPath {
           case \Self.id:
             return "id"
