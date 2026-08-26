@@ -78,9 +78,10 @@ supporting_symbols:
   - PostgrestQueryPhase
   - PostgrestRelation
   - PostgrestRelation.columnName
-  - PostgrestRelation.primaryKeyColumns
   - PostgrestRelation.relationName
   - PostgrestRelation.schema
+  - PostgrestKeyedRelation
+  - PostgrestKeyedRelation.primaryKeyColumns
   - PostgrestRequestBuilder
   - PostgrestRequestBuilder.Operator
   - PostgrestRequestBuilder.execute

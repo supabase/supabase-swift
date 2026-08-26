@@ -35,24 +35,33 @@ public protocol PostgrestRelation: PostgrestSelection where Source == Self {
 
   /// The database column name backing a property.
   ///
+  /// Takes a `PartialKeyPath` rather than a `KeyPath<Self, V>` because the property's type
+  /// is not part of the answer — a column name is a column name. Callers that do care about the
+  /// type, every filter among them, constrain it in their own signature and pass the key path
+  /// straight through; `KeyPath` is a `PartialKeyPath` subclass, so that costs nothing at the call
+  /// site.
+  ///
   /// - Parameter keyPath: A key path to one of this type's stored properties.
   /// - Returns: The column name PostgREST expects in a query string.
-  static func columnName<V>(for keyPath: KeyPath<Self, V>) -> String
-
-  /// The columns making up the relation's primary key, in declaration order.
-  ///
-  /// Empty when the relation declares no key. A caller deriving a conflict target for an upsert
-  /// has to treat that as "cannot derive" rather than "conflicts on nothing" — an empty
-  /// `on_conflict` is not the same request.
-  static var primaryKeyColumns: [String] { get }
+  static func columnName(for keyPath: PartialKeyPath<Self>) -> String
 }
 
-extension PostgrestRelation {
-  /// No declared key.
+/// A relation that declares a primary key.
+///
+/// Conformance is what makes the key-derived operations available, so it is deliberately a separate
+/// protocol rather than an optional member on ``PostgrestRelation``: a relation with no key does
+/// not conform, and reaching for one of those operations on it is *no such overload* instead of a
+/// request the database cannot honor.
+///
+/// `@Table` conforms a type to this whenever a property is marked `@PrimaryKey`. A hand-written
+/// conformance opts in by declaring ``primaryKeyColumns``.
+public protocol PostgrestKeyedRelation: PostgrestRelation {
+  /// The columns making up the relation's primary key, in declaration order.
   ///
-  /// `@Table` overrides this whenever a property is marked `@PrimaryKey`; a hand-written
-  /// conformance opts in by declaring it.
-  public static var primaryKeyColumns: [String] { [] }
+  /// There is no default. An empty array would conform a keyless relation and let it derive an
+  /// empty `on_conflict`, which is a different request rather than a missing one — so "declares no
+  /// key" is spelled as not conforming at all.
+  static var primaryKeyColumns: [String] { get }
 }
 
 /// A relation the database accepts writes for: a table, or a view Postgres reports as updatable.
