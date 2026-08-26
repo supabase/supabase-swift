@@ -45,7 +45,7 @@ struct TableMacroTests {
 
         static let selectString = "*"
 
-        static func columnName<V>(for keyPath: KeyPath<Self, V>) -> String {
+        static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
           switch keyPath {
           case \Self.id:
             return "id"
@@ -116,7 +116,7 @@ struct TableMacroTests {
 
         static let selectString = "*"
 
-        static func columnName<V>(for keyPath: KeyPath<Self, V>) -> String {
+        static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
           switch keyPath {
           case \Self.id:
             return "id"
@@ -127,6 +127,60 @@ struct TableMacroTests {
 
         enum CodingKeys: String, CodingKey {
           case id = "id"
+        }
+      }
+      """#
+    }
+  }
+
+  @Test
+  func aWritableTableWithNoKeyOmitsPrimaryKeyColumns() {
+    // `primaryKeyColumns` is mandatory on `PostgrestKeyedRelation`, so not emitting it is what
+    // keeps this type off that protocol — and off the derived-target `upsert` with it. Emitting an
+    // empty literal would conform it and send an empty `on_conflict`, a different request.
+    assertMacro {
+      """
+      @Table("audit_events")
+      struct AuditEvent {
+        var action: String
+      }
+      """
+    } expansion: {
+      #"""
+      struct AuditEvent {
+        var action: String
+      }
+
+      extension AuditEvent {
+        static let relationName = "audit_events"
+
+        static let schema = "public"
+
+        static let selectString = "*"
+
+        static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
+          switch keyPath {
+          case \Self.action:
+            return "action"
+          default:
+            fatalError("AuditEvent: no column is mapped for that key path")
+          }
+        }
+
+        enum CodingKeys: String, CodingKey {
+          case action = "action"
+        }
+
+        struct Insert: Encodable, Sendable {
+          var action: String
+
+          enum CodingKeys: String, CodingKey {
+            case action = "action"
+          }
+
+          init(action: String) {
+            self.action = action
+          }
         }
       }
       """#
@@ -157,7 +211,7 @@ struct TableMacroTests {
 
         public static let selectString = "*"
 
-        public static func columnName<V>(for keyPath: KeyPath<Self, V>) -> String {
+        public static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
           switch keyPath {
           case \Self.id:
             return "id"
@@ -220,7 +274,7 @@ struct TableMacroTests {
 
         static let selectString = "*"
 
-        static func columnName<V>(for keyPath: KeyPath<Self, V>) -> String {
+        static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
           switch keyPath {
           case \Self.htmlURL:
             return "html_url"
@@ -274,7 +328,7 @@ struct TableMacroTests {
 
         static let selectString = "*"
 
-        static func columnName<V>(for keyPath: KeyPath<Self, V>) -> String {
+        static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
           switch keyPath {
           case \Self.id:
             return "id"
@@ -363,7 +417,7 @@ struct TableMacroTests {
 
         static let selectString = "*"
 
-        static func columnName<V>(for keyPath: KeyPath<Self, V>) -> String {
+        static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
           switch keyPath {
           case \Self.id:
             return "id"
@@ -428,7 +482,7 @@ struct TableMacroTests {
 
         static let selectString = "*"
 
-        static func columnName<V>(for keyPath: KeyPath<Self, V>) -> String {
+        static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
           switch keyPath {
           case \Self.userID:
             return "user_id"
@@ -498,7 +552,7 @@ struct TableMacroTests {
 
         static let selectString = "*"
 
-        static func columnName<V>(for keyPath: KeyPath<Self, V>) -> String {
+        static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
           switch keyPath {
           case \Self.userID:
             return "user_id"
@@ -566,7 +620,7 @@ struct TableMacroTests {
 
         static let selectString = "*"
 
-        static func columnName<V>(for keyPath: KeyPath<Self, V>) -> String {
+        static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
           switch keyPath {
           case \Self.id:
             return "id"
