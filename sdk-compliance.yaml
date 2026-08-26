@@ -66,11 +66,22 @@ supporting_symbols:
   - PostgrestTypedMutation.builder
   - PostgrestTypedMutation.init
   - PostgrestTypedMutation.execute
+  # The update payload is a set of column assignments rather than a row shape, which is what lets
+  # a nullable column be cleared: a column is in the body because it was assigned, and `nil` is
+  # sent as an explicit null. Shared by the typed update entry point and any caller that builds an
+  # update ahead of time and hands it over.
+  - PostgrestUpdate
+  - PostgrestUpdate.init
+  - PostgrestUpdate.isEmpty
+  - PostgrestUpdate.subscript
+  - PostgrestUpdate.encode
   - PostgrestQueryPhase
   - PostgrestRelation
   - PostgrestRelation.columnName
   - PostgrestRelation.relationName
   - PostgrestRelation.schema
+  - PostgrestKeyedRelation
+  - PostgrestKeyedRelation.primaryKeyColumns
   - PostgrestRequestBuilder
   - PostgrestRequestBuilder.Operator
   - PostgrestRequestBuilder.execute
@@ -82,13 +93,24 @@ supporting_symbols:
   - PostgrestRequestBuilder.setHeader
   - PostgrestRequestBuilder.webFullTextSearch
   - PostgrestSelection
+  - PostgrestSelection.Source
   - PostgrestSelection.selectString
   - PostgrestTransformPhase
   - PostgrestTransformablePhase
   - PostgrestTypedQuery.Relation
   - PostgrestWritableRelation
   - PostgrestWritableRelation.Insert
-  - PostgrestWritableRelation.Update
+
+  # The `PostgrestMacros` attributes. `@Table` synthesizes the relation
+  # conformance used by every database.* typed entry point, and the three
+  # markers are inputs to that one expansion rather than capabilities of their
+  # own. Attribute names are unprefixed on purpose — nothing re-exports
+  # `PostgrestMacros`, so a user opts in with an explicit import.
+  - Table
+  - SelectionOf
+  - Column
+  - PrimaryKey
+  - Default
 
 features:
 

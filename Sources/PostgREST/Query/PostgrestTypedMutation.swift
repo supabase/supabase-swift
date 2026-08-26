@@ -57,27 +57,48 @@ extension PostgrestTypedSource where R: PostgrestWritableRelation {
   /// Inserts a row.
   ///
   /// - Parameter values: The row to insert, in the relation's `Insert` shape. Primary keys and
-  ///   defaulted columns are absent or optional there.
+  ///   defaulted columns are optional there, so either can be left out and filled in by the
+  ///   database.
   /// - Returns: A ``PostgrestTypedMutation`` to execute, or to request rows back from.
   /// - Throws: An encoding error if `values` cannot be serialized.
   public func insert(_ values: R.Insert) throws -> PostgrestTypedMutation<R> {
     PostgrestTypedMutation(builder: try builder.insert(values, returning: .minimal))
   }
 
-  /// Inserts rows, updating any that conflict.
+  /// Inserts a row, updating it instead if it conflicts on a unique constraint of your choosing.
+  ///
+  /// ```swift
+  /// // merge on the `email` unique index rather than on the key
+  /// try await client.from(User.self)
+  ///   .upsert(User.Insert(email: "a@example.com", name: "Ada"), onConflict: \.email)
+  ///   .execute()
+  /// ```
+  ///
+  /// The target is spelled as key paths, so a column that does not exist is a compile error rather
+  /// than a PostgREST 400 naming a column you cannot grep for. Splitting it into a first column
+  /// plus the rest also makes an empty target unrepresentable — `on_conflict=` with nothing after
+  /// it is a different request, not a missing one.
+  ///
+  /// To merge on the primary key, use ``upsert(_:)``, which derives the target instead.
   ///
   /// - Parameters:
-  ///   - values: The rows to upsert.
-  ///   - onConflict: Comma-separated unique columns that determine a duplicate. Defaults to the
-  ///     relation's primary key.
+  ///   - values: The row to upsert, in the relation's `Insert` shape.
+  ///   - column: The first column of the unique constraint to merge on.
+  ///   - additional: The remaining columns, for a constraint spanning more than one.
   /// - Returns: A ``PostgrestTypedMutation`` to execute, or to request rows back from.
   /// - Throws: An encoding error if `values` cannot be serialized.
   public func upsert(
     _ values: R.Insert,
-    onConflict: String? = nil
+    onConflict column: PartialKeyPath<R>,
+    _ additional: PartialKeyPath<R>...
   ) throws -> PostgrestTypedMutation<R> {
-    PostgrestTypedMutation(
-      builder: try builder.upsert(values, onConflict: onConflict, returning: .minimal)
+    let columns = CollectionOfOne(column) + additional
+    return PostgrestTypedMutation(
+      builder: try builder.upsert(
+        values,
+        onConflict: columns.map { R.columnName(for: $0) }.joined(separator: ","),
+        returning: .minimal
+      )
     )
   }
 
@@ -85,10 +106,40 @@ extension PostgrestTypedSource where R: PostgrestWritableRelation {
   ///
   /// > Important: With no filter this updates every row in the relation.
   ///
-  /// - Parameter values: The columns to change, in the relation's `Update` shape.
+  /// The closure assigns to the columns this update changes. A column it never names stays out of
+  /// the request body and the database leaves it alone; a column assigned `nil` is sent as an
+  /// explicit `null` and is cleared.
+  ///
+  /// ```swift
+  /// try await client.from(Todo.self)
+  ///   .update {
+  ///     $0.task = "buy oat milk"
+  ///     $0.dueDate = nil
+  ///   }
+  ///   .eq(\.id, 1)
+  ///   .execute()
+  /// ```
+  ///
+  /// - Parameter build: A closure that assigns to the columns to change.
   /// - Returns: A ``PostgrestTypedMutation`` to scope, then execute.
-  /// - Throws: An encoding error if `values` cannot be serialized.
-  public func update(_ values: R.Update) throws -> PostgrestTypedMutation<R> {
+  /// - Throws: An encoding error if the assigned values cannot be serialized.
+  public func update(
+    _ build: (inout PostgrestUpdate<R>) -> Void
+  ) throws -> PostgrestTypedMutation<R> {
+    try update(PostgrestUpdate(build))
+  }
+
+  /// Updates the rows matched by the filters applied to the returned value.
+  ///
+  /// Takes an update built elsewhere, so the layer that decides what changes does not have to be
+  /// the layer that sends it.
+  ///
+  /// > Important: With no filter this updates every row in the relation.
+  ///
+  /// - Parameter values: The columns to change.
+  /// - Returns: A ``PostgrestTypedMutation`` to scope, then execute.
+  /// - Throws: An encoding error if the assigned values cannot be serialized.
+  public func update(_ values: PostgrestUpdate<R>) throws -> PostgrestTypedMutation<R> {
     PostgrestTypedMutation(builder: try builder.update(values, returning: .minimal))
   }
 
@@ -99,5 +150,37 @@ extension PostgrestTypedSource where R: PostgrestWritableRelation {
   /// - Returns: A ``PostgrestTypedMutation`` to scope, then execute.
   public func delete() -> PostgrestTypedMutation<R> {
     PostgrestTypedMutation(builder: builder.delete(returning: .minimal))
+  }
+}
+
+extension PostgrestTypedSource where R: PostgrestWritableRelation & PostgrestKeyedRelation {
+  /// Inserts a row, updating it instead if it conflicts on the relation's primary key.
+  ///
+  /// ```swift
+  /// try await client.from(Todo.self)
+  ///   .upsert(Todo.Insert(id: 1, task: "buy milk"))
+  ///   .execute()
+  /// ```
+  ///
+  /// The conflict target comes from ``PostgrestKeyedRelation/primaryKeyColumns``, which is why this
+  /// overload exists only where the relation declares a key. On a keyless relation the database has
+  /// nothing to merge on, so an upsert with no target is not a merge at all — it inserts another row
+  /// every call. Requiring the conformance makes that a compile error instead; use
+  /// ``upsert(_:onConflict:_:)`` there and name a unique constraint the relation does have.
+  ///
+  /// > Note: The target only takes effect if the columns it names are in the body. A key the
+  /// > database generates is optional in `Insert`, so omitting it still inserts.
+  ///
+  /// - Parameter values: The row to upsert, in the relation's `Insert` shape.
+  /// - Returns: A ``PostgrestTypedMutation`` to execute, or to request rows back from.
+  /// - Throws: An encoding error if `values` cannot be serialized.
+  public func upsert(_ values: R.Insert) throws -> PostgrestTypedMutation<R> {
+    PostgrestTypedMutation(
+      builder: try builder.upsert(
+        values,
+        onConflict: R.primaryKeyColumns.joined(separator: ","),
+        returning: .minimal
+      )
+    )
   }
 }

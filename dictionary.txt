@@ -76,6 +76,7 @@ imatch
 Imatch
 Inbucket
 initializers
+insertable
 inkey
 isdistinct
 johndoe
@@ -252,3 +253,8 @@ deinits
 
 # Term from AGENTS.md's Enum-like Values section (describing non-failable init(rawValue:)).
 failable
+memberwise
+
+# Term from PostgrestTypedMutation's upsert doc (an empty conflict target cannot be
+# written, so it is unrepresentable rather than merely invalid).
+unrepresentable
