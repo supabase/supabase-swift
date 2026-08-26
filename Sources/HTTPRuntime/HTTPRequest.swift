@@ -70,6 +70,30 @@ package struct HTTPRequestBuilder: Sendable {
     }
   }
 
+  /// Sets a query item, replacing the first item already using `name` rather
+  /// than adding a second one.
+  ///
+  /// For the parameters a server reads once — `select`, `order`, `limit`,
+  /// `offset`, `on_conflict` — where `addQuery` would leave two behind and let
+  /// the server pick. Replacement happens in place, so the items around it stay
+  /// where they were.
+  ///
+  /// Only the first match is replaced. A repeated name is usually a list
+  /// (`?k=a&k=b`) or, in PostgREST's case, a conjunction on one column;
+  /// replacing every match would silently collapse it into a single condition.
+  ///
+  /// A `nil` value is ignored, matching `addQuery`. Use this to set a value,
+  /// not to remove one.
+  package mutating func setQuery(_ name: String, _ value: String?) {
+    guard let value else { return }
+    let item = URLQueryItem(name: name, value: value)
+    if let index = queryItems.firstIndex(where: { $0.name == name }) {
+      queryItems[index] = item
+    } else {
+      queryItems.append(item)
+    }
+  }
+
   package mutating func setHeader(_ name: String, _ value: String?) {
     guard let value else { return }
     headers[canonicalKey(for: name)] = value
@@ -118,9 +142,9 @@ package struct HTTPRequestBuilder: Sendable {
     guard var components = URLComponents(string: base + prefixedPath) else {
       throw HTTPError.invalidURL(base: baseURL, path: path)
     }
-    if !queryItems.isEmpty {
-      components.queryItems = queryItems
-    }
+    // Not `components.queryItems`: that encoding leaves `+` literal, which a
+    // form-decoding server reads as a space. See `QueryEncoding`.
+    components.percentEncodedQuery = QueryEncoding.render(queryItems)
     guard let url = components.url else {
       throw HTTPError.invalidURL(base: baseURL, path: path)
     }

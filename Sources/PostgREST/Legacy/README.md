@@ -14,11 +14,11 @@ Frozen does not yet mean unreferenced. `Query/` currently builds on symbols decl
 
 | Symbol | Declared in | Replaced by |
 | --- | --- | --- |
-| `PostgrestRequestBuilder` | `PostgrestRequestBuilder.swift` | `PostgrestRequest` (stage 2 task 2) |
+| `PostgrestRequestBuilder` | `PostgrestRequestBuilder.swift` | `HTTPRuntime`'s `HTTPRequestBuilder` (stage 2 task 2) |
 | `PostgrestQueryPhase`, `PostgrestFilterPhase`, `PostgrestTransformPhase` and their protocols | `PostgrestRequestBuilder.swift` | kept — the phase markers are shared, not legacy |
 | `PostgrestResponse` | `Types.swift` | a new `PostgrestResponse` (stage 2 task 4) |
 | `PostgrestClient` | `PostgrestClient.swift` | the wire client (stage 2 task 10) |
 
 That dependency is temporary and one-way. Stage 2 task 7 rebuilds the typed wrappers on
-`PostgrestRequest`, which is when this directory becomes genuinely standalone. Until then, a change
+`HTTPRuntime`'s request model, which is when this directory becomes genuinely standalone. Until then, a change
 here can still break `Query/` — which is another reason not to make one.
