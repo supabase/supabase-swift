@@ -114,15 +114,10 @@ struct TableIntegrationTests {
   @Test
   func anOptionalSpelledColumnCanBeOmitted() throws {
     // This is the assertion the expansion test cannot make: `MacroTesting` compares generated
-    // text, it does not compile it. Both calls omit `tag`, which only compiles if the generated
-    // initializers defaulted an `Optional<String>` to nil.
+    // text, it does not compile it. The call omits `tag`, which only compiles if the generated
+    // initializer defaulted an `Optional<String>` to nil.
     let insert = try JSONEncoder().encode(IntegrationNote.Insert(body: "hello"))
     #expect(String(decoding: insert, as: UTF8.self) == #"{"body":"hello"}"#)
-
-    // `Update()` naming nothing at all is the stronger half — a partial update was impossible on
-    // such a table before, because every `Optional<T>` column had to be passed.
-    let update = try JSONEncoder().encode(IntegrationNote.Update())
-    #expect(String(decoding: update, as: UTF8.self) == "{}")
   }
 
   @Test
@@ -136,9 +131,23 @@ struct TableIntegrationTests {
 
   @Test
   func aPartialUpdateNamesOnlyWhatItChanges() throws {
-    let data = try JSONEncoder().encode(Todo.Update(isDone: true))
+    let data = try JSONEncoder().encode(PostgrestUpdate<Todo> { $0.isDone = true })
     let json = String(decoding: data, as: UTF8.self)
     #expect(json == #"{"is_done":true}"#)
+  }
+
+  @Test
+  func aMacroTypeCanClearANullableColumn() async throws {
+    // SDK-1610. `due_at` is nullable, so `nil` has to reach the wire as an explicit null rather
+    // than dropping the key, which is what "leave this column alone" means.
+    let capture = RequestCapture()
+    _ = try await capture.client
+      .from(Todo.self)
+      .update { $0.dueDate = nil }
+      .eq(\.id, 1)
+      .execute()
+
+    #expect(capture.bodyString == #"{"due_at":null}"#)
   }
 
   @Test
@@ -211,7 +220,7 @@ struct TableIntegrationTests {
     let capture = RequestCapture()
     _ = try await capture.client
       .from(IntegrationUserRole.self)
-      .update(IntegrationUserRole.Update(roleID: 3))
+      .update { $0.roleID = 3 }
       .eq(\.userID, 1)
       .execute()
 
@@ -224,7 +233,7 @@ struct TableIntegrationTests {
     let capture = RequestCapture()
     _ = try await capture.client
       .from(Todo.self)
-      .update(Todo.Update(task: "buy oat milk"))
+      .update { $0.task = "buy oat milk" }
       .eq(\.id, 1)
       .execute()
 

@@ -103,10 +103,12 @@ public struct TableMacro: ExtensionMacro {
       // — including each half of a compound key — is required, which is what makes a join table
       // insertable and an incomplete key a compile error rather than a 400.
       //
-      // `Update` makes every column optional, the key included, so a partial update names only
-      // what it changes. Targeting is a separate concern — the caller filters the mutation — so
-      // holding the key back would not have protected a row's identity, only made a natural key
-      // impossible to rename.
+      // There is no matching `Update` shape. An update names the columns it writes, and a row
+      // type cannot say that: one optional field would have to mean both "not assigned" and
+      // "assigned null", so a nullable column could never be cleared. `PostgrestUpdate` builds
+      // the assignments from this type's key paths instead, and `columnName(for:)` above is all
+      // it needs from the macro. Targeting stays a separate concern — the caller filters the
+      // mutation — so the key is assignable like any other column.
       body.append(
         writeShape(
           named: "Insert",
@@ -115,10 +117,6 @@ public struct TableMacro: ExtensionMacro {
             ($0, $0.isOptional || $0.hasDefault ? $0.optionalType : $0.type)
           }
         )
-      )
-      body.append(
-        writeShape(
-          named: "Update", access: access, fields: properties.map { ($0, $0.optionalType) })
       )
     }
 

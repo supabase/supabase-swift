@@ -218,21 +218,6 @@ struct DiagnosticsTests {
             self.task = task
           }
         }
-
-        struct Update: Encodable, Sendable {
-          var id: Int?
-          var task: String?
-
-          enum CodingKeys: String, CodingKey {
-            case id = "id"
-            case task = "task"
-          }
-
-          init(id: Int? = nil, task: String? = nil) {
-            self.id = id
-            self.task = task
-          }
-        }
       }
       """#
     }

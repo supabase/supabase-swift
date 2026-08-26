@@ -20,6 +20,7 @@ struct PostgrestTypedMutationTests {
     var id: Int
     var task: String
     var isDone: Bool
+    var note: String?
 
     /// A hand-written conformance has to keep these in step with `columnName(for:)` itself. The
     /// `@Column` macro generates both from one input so they cannot drift.
@@ -27,6 +28,7 @@ struct PostgrestTypedMutationTests {
       case id
       case task
       case isDone = "is_done"
+      case note
     }
 
     static func columnName<V>(for keyPath: KeyPath<Self, V>) -> String {
@@ -34,16 +36,13 @@ struct PostgrestTypedMutationTests {
       case \Self.id: "id"
       case \Self.task: "task"
       case \Self.isDone: "is_done"
+      case \Self.note: "note"
       default: fatalError("unmapped key path")
       }
     }
 
     struct Insert: Encodable, Sendable {
       var task: String
-      var isDone: Bool?
-    }
-    struct Update: Encodable, Sendable {
-      var task: String?
       var isDone: Bool?
     }
   }
@@ -89,8 +88,34 @@ struct PostgrestTypedMutationTests {
   func updateScopesByKeyPath() async throws {
     let capture = QueryCapture()
     _ = try await capture.client.from(Todo.self)
-      .update(Todo.Update(task: "done", isDone: true)).eq(\.id, 1).execute()
+      .update { $0.task = "done" }.eq(\.id, 1).execute()
     #expect(capture.query?.contains("id=eq.1") == true)
+  }
+
+  @Test
+  func updateSendsAnExplicitNullForAnAssignedNil() async throws {
+    // The whole point of SDK-1610: the body has to carry `null`, not drop the key.
+    let capture = QueryCapture()
+    _ = try await capture.client.from(Todo.self)
+      .update { $0.note = nil }.eq(\.id, 1).execute()
+    #expect(capture.bodyString == #"{"note":null}"#)
+  }
+
+  @Test
+  func updateOmitsAColumnItNeverNames() async throws {
+    let capture = QueryCapture()
+    _ = try await capture.client.from(Todo.self)
+      .update { $0.task = "done" }.eq(\.id, 1).execute()
+    #expect(capture.bodyString == #"{"task":"done"}"#)
+  }
+
+  @Test
+  func anUpdateBuiltAheadOfTimeCanBeHandedToTheSource() async throws {
+    // The payload is a value, so one layer can decide the change and another can send it.
+    let update = PostgrestUpdate<Todo> { $0.note = nil }
+    let capture = QueryCapture()
+    _ = try await capture.client.from(Todo.self).update(update).eq(\.id, 1).execute()
+    #expect(capture.bodyString == #"{"note":null}"#)
   }
 
   @Test

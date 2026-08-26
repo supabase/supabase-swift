@@ -86,10 +86,40 @@ extension PostgrestTypedSource where R: PostgrestWritableRelation {
   ///
   /// > Important: With no filter this updates every row in the relation.
   ///
-  /// - Parameter values: The columns to change, in the relation's `Update` shape.
+  /// The closure assigns to the columns this update changes. A column it never names stays out of
+  /// the request body and the database leaves it alone; a column assigned `nil` is sent as an
+  /// explicit `null` and is cleared.
+  ///
+  /// ```swift
+  /// try await client.from(Todo.self)
+  ///   .update {
+  ///     $0.task = "buy oat milk"
+  ///     $0.dueDate = nil
+  ///   }
+  ///   .eq(\.id, 1)
+  ///   .execute()
+  /// ```
+  ///
+  /// - Parameter build: A closure that assigns to the columns to change.
   /// - Returns: A ``PostgrestTypedMutation`` to scope, then execute.
-  /// - Throws: An encoding error if `values` cannot be serialized.
-  public func update(_ values: R.Update) throws -> PostgrestTypedMutation<R> {
+  /// - Throws: An encoding error if the assigned values cannot be serialized.
+  public func update(
+    _ build: (inout PostgrestUpdate<R>) -> Void
+  ) throws -> PostgrestTypedMutation<R> {
+    try update(PostgrestUpdate(build))
+  }
+
+  /// Updates the rows matched by the filters applied to the returned value.
+  ///
+  /// Takes an update built elsewhere, so the layer that decides what changes does not have to be
+  /// the layer that sends it.
+  ///
+  /// > Important: With no filter this updates every row in the relation.
+  ///
+  /// - Parameter values: The columns to change.
+  /// - Returns: A ``PostgrestTypedMutation`` to scope, then execute.
+  /// - Throws: An encoding error if the assigned values cannot be serialized.
+  public func update(_ values: PostgrestUpdate<R>) throws -> PostgrestTypedMutation<R> {
     PostgrestTypedMutation(builder: try builder.update(values, returning: .minimal))
   }
 

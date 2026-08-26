@@ -33,10 +33,6 @@ struct PostgrestRelationTests {
       var task: String
       var isDone: Bool?
     }
-    struct Update: Encodable, Sendable {
-      var task: String?
-      var isDone: Bool?
-    }
   }
 
   @Test
