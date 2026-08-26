@@ -99,7 +99,13 @@ package struct HTTPRequestBuilder: Sendable {
     if !queryItems.isEmpty {
       components.queryItems = queryItems
     }
-    guard let url = components.url else {
+    // The scheme check is load-bearing, not belt-and-braces. A schemeless base
+    // URL parses into `URLComponents` and yields a non-nil relative `.url`, so
+    // it clears the guards above — and then trips
+    // `precondition(schemeRange.location != kCFNotFound)` inside
+    // `HTTPTypesFoundation`'s `URL.httpRequestComponents`, aborting the process
+    // instead of throwing. `.invalidURL` exists for exactly this input.
+    guard let url = components.url, components.scheme != nil else {
       throw HTTPRuntimeError.invalidURL(base: baseURL, path: path)
     }
     return HTTPRequest(method: method, url: url, headerFields: headers)

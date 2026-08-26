@@ -91,4 +91,14 @@ struct HTTPRequestBuilderTests {
     let request = try builder.build()
     #expect(request.headerFields[.prefer] == "returning=minimal")
   }
+
+  // A schemeless base URL clears both `.invalidURL` guards in `build()` —
+  // `URLComponents` parses it and hands back a non-nil relative URL — and then
+  // aborts the process inside `HTTPTypesFoundation`. This must throw.
+  @Test
+  func buildRejectsASchemelessBaseURL() {
+    let builder = HTTPRequestBuilder(
+      method: .get, baseURL: URL(string: "example.com")!, path: "/x")
+    #expect(throws: HTTPRuntimeError.self) { try builder.build() }
+  }
 }
