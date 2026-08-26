@@ -23,7 +23,10 @@ package func assertHTTPRequests<R>(
   let startIndex = await transport.requestCount
   let result = try await operation()
   let requests = await transport.requests(since: startIndex)
-  let rendered = requests.map(curlCommand(for:)).joined(separator: "\n\n")
+  let rendered =
+    requests
+    .map { curlCommand(for: $0.request, body: $0.body) }
+    .joined(separator: "\n\n")
   assertInlineSnapshot(
     of: rendered, as: .lines,
     syntaxDescriptor: InlineSnapshotSyntaxDescriptor(trailingClosureOffset: 1),
