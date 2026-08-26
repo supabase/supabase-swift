@@ -16,7 +16,7 @@ import Testing
 
 /// Captures the outgoing `URLRequest` and replays a canned response, so the
 /// transport can be exercised without a network.
-private final class RecordingURLProtocol: URLProtocol, @unchecked Sendable {
+private final class RecordingURLProtocol: URLProtocol {
   // These deliberately carry no lock, and must stay that way — a lock here
   // would fight the design rather than protect it. Two things make the
   // unchecked access safe. `@Suite(.serialized)` means only one test at a time
@@ -73,6 +73,34 @@ private func makeTransport() -> URLSessionTransport {
   return URLSessionTransport(configuration: configuration)
 }
 
+/// Asserts on an upload's body only where the test double can actually see it.
+///
+/// `URLSession.upload(for:from:)` and `upload(for:fromFile:)` do not hand the
+/// request body to a custom `URLProtocol` on swift-corelibs-foundation: the
+/// recorded request arrives with `httpBody` nil AND `httpBodyStream` nil, so
+/// there is nothing to read. Verified against Swift 6.2.4 on Linux.
+///
+/// This is a limitation of the observation mechanism, not of
+/// `URLSessionTransport` — the upload itself still runs on Linux, and the
+/// surrounding assertions (method, URL, headers, response) hold on both
+/// platforms. A request whose `httpBody` is set directly, as
+/// `stream(_:body:)` does, propagates fine on corelibs, which is why
+/// `streamTransmitsADataBody` asserts its payload unconditionally.
+private func assertBodyIfObservable(
+  _ request: URLRequest,
+  equals payload: Data,
+  sourceLocation: SourceLocation = #_sourceLocation
+) {
+  #if canImport(FoundationNetworking)
+    #expect(
+      request.httpBody == nil,
+      "corelibs is expected to drop an upload body; if this now arrives, drop the platform gate",
+      sourceLocation: sourceLocation)
+  #else
+    #expect(request.httpBody == payload, sourceLocation: sourceLocation)
+  #endif
+}
+
 @Suite(.serialized)
 struct URLSessionTransportTests {
   @Test
@@ -111,7 +139,8 @@ struct URLSessionTransportTests {
     _ = try await makeTransport().send(request, body: .data(payload), uploadProgress: nil)
 
     let sent = try #require(RecordingURLProtocol.lastRequest)
-    #expect(sent.httpBody == payload)
+    #expect(sent.httpMethod == "POST")
+    assertBodyIfObservable(sent, equals: payload)
   }
 
   @Test
@@ -130,7 +159,8 @@ struct URLSessionTransportTests {
     _ = try await makeTransport().send(request, body: .file(fileURL), uploadProgress: nil)
 
     let sent = try #require(RecordingURLProtocol.lastRequest)
-    #expect(sent.httpBody == payload)
+    #expect(sent.httpMethod == "PUT")
+    assertBodyIfObservable(sent, equals: payload)
   }
 
   @Test
