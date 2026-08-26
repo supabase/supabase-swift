@@ -92,6 +92,32 @@ struct HTTPRequestBuilderTests {
     #expect(request.headerFields[.prefer] == "returning=minimal")
   }
 
+  // `HTTPFields` matches names on `HTTPField.Name`'s lowercased canonical name,
+  // so these pin behavior the deleted `canonicalKey(for:)` helper used to
+  // provide by hand. Two differently-cased names must still collapse to one
+  // field — otherwise a request goes out with duplicate headers.
+  @Test
+  func addHeaderMergesCaseInsensitively() throws {
+    var builder = HTTPRequestBuilder(
+      method: .get, baseURL: URL(string: "https://example.com")!, path: "/x")
+    builder.addHeader(HTTPField.Name("Prefer")!, value: "returning=minimal")
+    builder.addHeader(HTTPField.Name("prefer")!, value: "count=exact")
+    let request = try builder.build()
+    #expect(request.headerFields.count == 1)
+    #expect(request.headerFields[.prefer] == "returning=minimal,count=exact")
+  }
+
+  @Test
+  func setHeaderReplacesCaseInsensitively() throws {
+    var builder = HTTPRequestBuilder(
+      method: .get, baseURL: URL(string: "https://example.com")!, path: "/x")
+    builder.setHeader(HTTPField.Name("Content-Type")!, "text/plain")
+    builder.setHeader(HTTPField.Name("content-type")!, "application/json")
+    let request = try builder.build()
+    #expect(request.headerFields.count == 1)
+    #expect(request.headerFields[.contentType] == "application/json")
+  }
+
   // A schemeless base URL clears both `.invalidURL` guards in `build()` —
   // `URLComponents` parses it and hands back a non-nil relative URL — and then
   // aborts the process inside `HTTPTypesFoundation`. This must throw.
