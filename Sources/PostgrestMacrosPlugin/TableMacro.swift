@@ -136,8 +136,9 @@ public struct TableMacro: ExtensionMacro {
 
   /// The protocols `@Table` conforms the annotated type to.
   ///
-  /// `Decodable` is in the list and `Encodable` is not: rows are decoded from responses, and writes
-  /// go out through the `Encodable` `Insert` and `Update` shapes.
+  /// `Decodable` is in the list and `Encodable` is not: rows are decoded from responses, and a
+  /// write encodes something other than a row — the generated `Insert` shape, or a
+  /// `PostgrestUpdate` built from this type's key paths.
   static func wantedConformances(_ arguments: Arguments) -> [String] {
     [
       "Decodable",
@@ -198,9 +199,9 @@ public struct TableMacro: ExtensionMacro {
 
     let parameters =
       fields
-      // The default follows the *generated* parameter type, not the property's own. In `Update`
-      // every column is optional even when the property is not, so testing the property here would
-      // drop the default that makes a partial update possible.
+      // The default follows the *generated* parameter type, not the property's own. `@Default`
+      // makes a column optional in `Insert` even when the property is not, so testing the property
+      // here would drop the `= nil` that lets a caller omit a database-supplied column.
       .map { "\($0.property.name): \($0.type)\(postgrestIsOptionalType($0.type) ? " = nil" : "")" }
       .joined(separator: ", ")
     lines.append("")

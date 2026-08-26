@@ -46,7 +46,7 @@ extension DeclGroupSyntax {
   ///
   /// - **Every binding counts.** `var task: String, note: String` is one `VariableDeclSyntax` with
   ///   two bindings. Reading only the first silently drops `note` from `CodingKeys`, the column
-  ///   map, `Insert` and `Update`.
+  ///   map and `Insert`.
   /// - **A shared annotation sits on the last binding.** In `var draft, review: String` only
   ///   `review` carries the type, so a binding without one takes the next annotation forward —
   ///   but only when it has no initializer of its own. In `var a = 1, b: String`, `a` is an `Int`
