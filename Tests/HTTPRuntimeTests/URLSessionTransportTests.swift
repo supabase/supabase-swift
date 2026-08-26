@@ -10,9 +10,19 @@ import Testing
 
 @testable import HTTPRuntime
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 /// Captures the outgoing `URLRequest` and replays a canned response, so the
 /// transport can be exercised without a network.
 private final class RecordingURLProtocol: URLProtocol, @unchecked Sendable {
+  // These deliberately carry no lock, and must stay that way — a lock here
+  // would fight the design rather than protect it. Two things make the
+  // unchecked access safe. `@Suite(.serialized)` means only one test at a time
+  // owns the class, so there are never two concurrent writers. And URLSession
+  // finishes `startLoading` before it resumes the continuation the test is
+  // awaiting, which orders the protocol's writes before the test's reads.
   nonisolated(unsafe) static var lastRequest: URLRequest?
   nonisolated(unsafe) static var responseStatus = 200
   nonisolated(unsafe) static var responseBody = Data()
@@ -161,5 +171,27 @@ struct URLSessionTransportTests {
 
     #expect(response.head.status == 200)
     #expect(collected == Data("line one\nline two\n".utf8))
+  }
+
+  @Test
+  func streamTransmitsADataBody() async throws {
+    RecordingURLProtocol.reset()
+    RecordingURLProtocol.responseBody = Data("event: ok\n".utf8)
+    let payload = Data(#"{"topic":"events"}"#.utf8)
+
+    var builder = HTTPRequestBuilder(
+      method: .post, baseURL: URL(string: "https://example.com")!, path: "/v1/events")
+    builder.setHeader(.contentType, "application/json")
+    let request = try builder.build()
+
+    let response = try await makeTransport().stream(request, body: .data(payload))
+    var collected = Data()
+    for try await chunk in response.body { collected.append(chunk) }
+
+    let sent = try #require(RecordingURLProtocol.lastRequest)
+    #expect(sent.httpMethod == "POST")
+    #expect(sent.httpBody == payload)
+    #expect(response.head.status == 200)
+    #expect(collected == Data("event: ok\n".utf8))
   }
 }

@@ -223,11 +223,13 @@ xctest
 XVCJ
 
 # Terms from HTTPRuntime (Sources/HTTPRuntime) and its tests.
+CFURL
 corelibs
 reencoded
 subdata
 Subrange
 TESTBOUNDARY
+unmodeled
 
 # Terms from HTTPRuntimeTestHelpers planning and scheme configuration.
 fileprivate

@@ -76,10 +76,24 @@ package struct URLSessionTransport: HTTPTransport {
       try Self.rejectFileBody(body)
       let data: Data
       let response: HTTPResponse
-      do {
-        (data, response) = try await session.data(for: request)
-      } catch {
-        throw HTTPRuntimeError.transport(error)
+      if case .data(let payload) = body {
+        // The `HTTPRequest` convenience carries no body, so a request that has
+        // one has to go through a hand-built `URLRequest`.
+        var urlRequest = try Self.makeURLRequest(for: request)
+        urlRequest.httpBody = payload
+        let urlResponse: URLResponse
+        do {
+          (data, urlResponse) = try await session.data(for: urlRequest)
+        } catch {
+          throw HTTPRuntimeError.transport(error)
+        }
+        response = try Self.makeHTTPResponse(from: urlResponse)
+      } else {
+        do {
+          (data, response) = try await session.data(for: request)
+        } catch {
+          throw HTTPRuntimeError.transport(error)
+        }
       }
       let body = AsyncThrowingStream<Data, any Error> { continuation in
         continuation.yield(data)
@@ -94,10 +108,24 @@ package struct URLSessionTransport: HTTPTransport {
       try Self.rejectFileBody(body)
       let bytes: URLSession.AsyncBytes
       let response: HTTPResponse
-      do {
-        (bytes, response) = try await session.bytes(for: request)
-      } catch {
-        throw HTTPRuntimeError.transport(error)
+      if case .data(let payload) = body {
+        // The `HTTPRequest` convenience carries no body, so a request that has
+        // one has to go through a hand-built `URLRequest`.
+        var urlRequest = try Self.makeURLRequest(for: request)
+        urlRequest.httpBody = payload
+        let urlResponse: URLResponse
+        do {
+          (bytes, urlResponse) = try await session.bytes(for: urlRequest)
+        } catch {
+          throw HTTPRuntimeError.transport(error)
+        }
+        response = try Self.makeHTTPResponse(from: urlResponse)
+      } else {
+        do {
+          (bytes, response) = try await session.bytes(for: request)
+        } catch {
+          throw HTTPRuntimeError.transport(error)
+        }
       }
 
       let body = AsyncThrowingStream<Data, any Error> { continuation in
@@ -129,16 +157,42 @@ package struct URLSessionTransport: HTTPTransport {
 
   // MARK: - Helpers
 
-  /// `stream(_:)` uses `session.data(for:)`/`bytes(for:)`, neither of which
-  /// takes a file URL, so a `.file` body would silently transmit empty
-  /// instead of the file's contents. Reject it up front rather than send(_:)
-  /// which knows how to upload file bodies.
+  /// `stream(_:body:)` sends a `.data` body by attaching it to a hand-built
+  /// `URLRequest`, which buffers the whole payload in memory. A `.file` body
+  /// exists precisely so a large payload never does that, so streaming one
+  /// through the same path would defeat its purpose. Reject it up front and
+  /// point at `send(_:body:uploadProgress:)`, which streams the file from disk.
   private static func rejectFileBody(_ body: HTTPBody?) throws(HTTPRuntimeError) {
     if case .file = body {
       throw HTTPRuntimeError.unsupportedRequestBody(
         "stream(_:) does not support file-backed request bodies; use send(_:uploadProgress:) instead."
       )
     }
+  }
+
+  /// `URLRequest(httpRequest:)` is failable, and returns nil exactly when the
+  /// request's pseudo-header fields do not form a URL. Force-unwrapping those
+  /// same fields to build an error would crash in that case, so map the nil to
+  /// `.transport` instead.
+  private static func makeURLRequest(for request: HTTPRequest) throws(HTTPRuntimeError)
+    -> URLRequest
+  {
+    guard let urlRequest = URLRequest(httpRequest: request) else {
+      throw HTTPRuntimeError.transport(URLError(.badURL))
+    }
+    return urlRequest
+  }
+
+  /// The `URLRequest`-taking URLSession calls hand back a `URLResponse` rather
+  /// than an `HTTPResponse`, so convert, without force-unwrapping a response
+  /// that turns out not to be an HTTP one.
+  private static func makeHTTPResponse(from response: URLResponse) throws(HTTPRuntimeError)
+    -> HTTPResponse
+  {
+    guard let httpResponse = (response as? HTTPURLResponse)?.httpResponse else {
+      throw HTTPRuntimeError.transport(URLError(.badServerResponse))
+    }
+    return httpResponse
   }
 }
 
