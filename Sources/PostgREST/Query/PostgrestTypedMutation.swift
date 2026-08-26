@@ -65,20 +65,40 @@ extension PostgrestTypedSource where R: PostgrestWritableRelation {
     PostgrestTypedMutation(builder: try builder.insert(values, returning: .minimal))
   }
 
-  /// Inserts rows, updating any that conflict.
+  /// Inserts a row, updating it instead if it conflicts on a unique constraint of your choosing.
+  ///
+  /// ```swift
+  /// // merge on the `email` unique index rather than on the key
+  /// try await client.from(User.self)
+  ///   .upsert(User.Insert(email: "a@example.com", name: "Ada"), onConflict: \.email)
+  ///   .execute()
+  /// ```
+  ///
+  /// The target is spelled as key paths, so a column that does not exist is a compile error rather
+  /// than a PostgREST 400 naming a column you cannot grep for. Splitting it into a first column
+  /// plus the rest also makes an empty target unrepresentable — `on_conflict=` with nothing after
+  /// it is a different request, not a missing one.
+  ///
+  /// To merge on the primary key, use ``upsert(_:)``, which derives the target instead.
   ///
   /// - Parameters:
-  ///   - values: The rows to upsert.
-  ///   - onConflict: Comma-separated unique columns that determine a duplicate. Defaults to the
-  ///     relation's primary key.
+  ///   - values: The row to upsert, in the relation's `Insert` shape.
+  ///   - column: The first column of the unique constraint to merge on.
+  ///   - additional: The remaining columns, for a constraint spanning more than one.
   /// - Returns: A ``PostgrestTypedMutation`` to execute, or to request rows back from.
   /// - Throws: An encoding error if `values` cannot be serialized.
   public func upsert(
     _ values: R.Insert,
-    onConflict: String? = nil
+    onConflict column: PartialKeyPath<R>,
+    _ additional: PartialKeyPath<R>...
   ) throws -> PostgrestTypedMutation<R> {
-    PostgrestTypedMutation(
-      builder: try builder.upsert(values, onConflict: onConflict, returning: .minimal)
+    let columns = CollectionOfOne(column) + additional
+    return PostgrestTypedMutation(
+      builder: try builder.upsert(
+        values,
+        onConflict: columns.map { R.columnName(for: $0) }.joined(separator: ","),
+        returning: .minimal
+      )
     )
   }
 
@@ -130,5 +150,37 @@ extension PostgrestTypedSource where R: PostgrestWritableRelation {
   /// - Returns: A ``PostgrestTypedMutation`` to scope, then execute.
   public func delete() -> PostgrestTypedMutation<R> {
     PostgrestTypedMutation(builder: builder.delete(returning: .minimal))
+  }
+}
+
+extension PostgrestTypedSource where R: PostgrestWritableRelation & PostgrestKeyedRelation {
+  /// Inserts a row, updating it instead if it conflicts on the relation's primary key.
+  ///
+  /// ```swift
+  /// try await client.from(Todo.self)
+  ///   .upsert(Todo.Insert(id: 1, task: "buy milk"))
+  ///   .execute()
+  /// ```
+  ///
+  /// The conflict target comes from ``PostgrestKeyedRelation/primaryKeyColumns``, which is why this
+  /// overload exists only where the relation declares a key. On a keyless relation the database has
+  /// nothing to merge on, so an upsert with no target is not a merge at all — it inserts another row
+  /// every call. Requiring the conformance makes that a compile error instead; use
+  /// ``upsert(_:onConflict:_:)`` there and name a unique constraint the relation does have.
+  ///
+  /// > Note: The target only takes effect if the columns it names are in the body. A key the
+  /// > database generates is optional in `Insert`, so omitting it still inserts.
+  ///
+  /// - Parameter values: The row to upsert, in the relation's `Insert` shape.
+  /// - Returns: A ``PostgrestTypedMutation`` to execute, or to request rows back from.
+  /// - Throws: An encoding error if `values` cannot be serialized.
+  public func upsert(_ values: R.Insert) throws -> PostgrestTypedMutation<R> {
+    PostgrestTypedMutation(
+      builder: try builder.upsert(
+        values,
+        onConflict: R.primaryKeyColumns.joined(separator: ","),
+        returning: .minimal
+      )
+    )
   }
 }

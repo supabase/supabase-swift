@@ -83,8 +83,10 @@ public struct TableMacro: ExtensionMacro {
     ]
     // The one thing `@PrimaryKey` uniquely does. Without this the marker is inert: after the key
     // stopped gating `Insert` optionality and stopped being filtered out of `Update`, writing it or
-    // omitting it expanded byte-for-byte the same. Emitted only when a key is declared, so a
-    // keyless relation falls back to the protocol's empty default.
+    // omitting it expanded byte-for-byte the same. Emitted only when a key is declared, and the
+    // `PostgrestKeyedRelation` conformance below rides on the same condition — the requirement has
+    // no default, so a keyless relation does not conform, which is what withholds the
+    // derived-conflict-target `upsert` from it at compile time.
     let keyColumns = properties.filter(\.isPrimaryKey).map(\.columnName)
     if !keyColumns.isEmpty {
       let list = keyColumns.map { "\"\($0)\"" }.joined(separator: ", ")
@@ -120,7 +122,10 @@ public struct TableMacro: ExtensionMacro {
       )
     }
 
-    let clause = inheritanceClause(wanted: wantedConformances(arguments), missing: protocols)
+    let clause = inheritanceClause(
+      wanted: wantedConformances(arguments, hasPrimaryKey: !keyColumns.isEmpty),
+      missing: protocols
+    )
     return [
       try ExtensionDeclSyntax(
         """
@@ -139,11 +144,15 @@ public struct TableMacro: ExtensionMacro {
   /// `Decodable` is in the list and `Encodable` is not: rows are decoded from responses, and a
   /// write encodes something other than a row — the generated `Insert` shape, or a
   /// `PostgrestUpdate` built from this type's key paths.
-  static func wantedConformances(_ arguments: Arguments) -> [String] {
+  ///
+  /// Keyed and writable are independent axes: a view Postgres reports a key for is keyed and still
+  /// read-only, and an append-only table is writable with no key at all.
+  static func wantedConformances(_ arguments: Arguments, hasPrimaryKey: Bool) -> [String] {
     [
       "Decodable",
       "Sendable",
       "PostgrestRelation",
+      hasPrimaryKey ? "PostgrestKeyedRelation" : nil,
       arguments.readOnly ? nil : "PostgrestWritableRelation",
     ].compactMap { $0 }
   }
@@ -160,7 +169,7 @@ public struct TableMacro: ExtensionMacro {
     properties: [StoredProperty]
   ) -> String {
     var lines = [
-      "  \(access)static func columnName<V>(for keyPath: KeyPath<Self, V>) -> String {",
+      "  \(access)static func columnName(for keyPath: PartialKeyPath<Self>) -> String {",
       "    switch keyPath {",
     ]
     for property in properties {
