@@ -100,6 +100,35 @@ struct HTTPTransportStubTests {
     #expect(collected == Data("chunk".utf8))
   }
 
+  // A request's URL is rebuilt from its pseudo header fields, which turns an
+  // empty path into `/`. Without normalizing the stub's URL the same way, a
+  // host-only stub could never match, and the mismatch message would show two
+  // strings differing only by a slash the test author never typed.
+  @Test
+  func hostOnlyStubMatchesARootPathRequest() async throws {
+    let transport = HTTPTransportStub(stubs: [
+      .get("https://example.com") { .string("root") }
+    ])
+    let response = try await transport.send(
+      HTTPRequest(method: .get, url: URL(string: "https://example.com")!), body: nil,
+      uploadProgress: nil)
+    #expect(response.body == Data("root".utf8))
+  }
+
+  // The normalization must not make matching sloppy: a genuinely different path
+  // still has to fail.
+  @Test
+  func hostOnlyStubStillRejectsANonRootPath() async throws {
+    let transport = HTTPTransportStub(stubs: [
+      .get("https://example.com") { .string("root") }
+    ])
+    await withKnownIssue {
+      _ = try await transport.send(
+        HTTPRequest(method: .get, url: URL(string: "https://example.com/x")!), body: nil,
+        uploadProgress: nil)
+    }
+  }
+
   @Test
   func recordsTheBodyAlongsideTheRequest() async throws {
     let transport = HTTPTransportStub(stubs: [

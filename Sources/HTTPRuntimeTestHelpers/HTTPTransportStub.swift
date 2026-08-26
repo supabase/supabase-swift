@@ -41,6 +41,23 @@ package actor HTTPTransportStub: HTTPTransport {
     pending = stubs
   }
 
+  /// `actualURL` is rebuilt from `HTTPRequest`'s `:scheme`/`:authority`/`:path`
+  /// pseudo header fields, and that round trip normalizes an empty path to `/`.
+  /// So `https://example.com` comes back as `https://example.com/`. Normalize
+  /// the stub's URL the same way, or a host-only stub could never match a
+  /// request for that host's root — and the mismatch message would show two
+  /// strings differing by a slash the author never wrote.
+  ///
+  /// Deliberately done with `URLComponents` rather than by feeding the string
+  /// through `HTTPRequest(method:url:)`: that initializer aborts the process on
+  /// a schemeless URL, which is exactly what a hand-typed stub string might be.
+  private static func normalizedStubURL(_ urlString: String) -> String {
+    guard var components = URLComponents(string: urlString), components.scheme != nil
+    else { return urlString }
+    if components.path.isEmpty { components.path = "/" }
+    return components.url?.absoluteString ?? urlString
+  }
+
   private func nextMatchingStub(for request: HTTPRequest, body: HTTPBody?) throws(HTTPRuntimeError)
     -> HTTPStub
   {
@@ -56,7 +73,7 @@ package actor HTTPTransportStub: HTTPTransport {
       throw HTTPRuntimeError.transport(HTTPStubMismatch(description: message))
     }
     let stub = pending.removeFirst()
-    guard stub.method == request.method, stub.url == actualURL else {
+    guard stub.method == request.method, Self.normalizedStubURL(stub.url) == actualURL else {
       let message = """
         Request mismatch.
         Expected: \(stub.method.rawValue) \(stub.url)
