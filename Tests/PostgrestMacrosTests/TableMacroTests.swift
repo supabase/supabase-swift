@@ -15,8 +15,8 @@ import Testing
 /// the clause directly.
 @Suite(.macros(["Table": TableMacro.self]))
 struct TableMacroTests {
-  /// A generated surrogate key: `@Default` is what makes it optional in `Insert`, not
-  /// `@PrimaryKey`. See `insertOnATableThatIsNothingButACompoundKey` for a key without it.
+  /// A generated surrogate key: `@Default` is what makes it optional in `Draft`, not
+  /// `@PrimaryKey`. See `draftOnATableThatIsNothingButACompoundKey` for a key without it.
   @Test
   func expandsAWritableTable() {
     assertMacro {
@@ -69,7 +69,7 @@ struct TableMacroTests {
           case dueDate = "due_at"
         }
 
-        struct Insert: Encodable, Sendable {
+        struct Draft: Encodable, Sendable {
           var id: Int?
           var task: String
           var isDone: Bool?
@@ -95,7 +95,7 @@ struct TableMacroTests {
   }
 
   @Test
-  func readOnlyTableOmitsInsert() {
+  func readOnlyTableOmitsTheDraftShape() {
     assertMacro {
       """
       @Table("active_todos", readOnly: true)
@@ -175,7 +175,7 @@ struct TableMacroTests {
           case task = "task"
         }
 
-        public struct Insert: Encodable, Sendable {
+        public struct Draft: Encodable, Sendable {
           public var id: Int
           public var task: String
 
@@ -233,7 +233,7 @@ struct TableMacroTests {
           case htmlURL = "html_url"
         }
 
-        struct Insert: Encodable, Sendable {
+        struct Draft: Encodable, Sendable {
           var htmlURL: String
 
           enum CodingKeys: String, CodingKey {
@@ -301,7 +301,7 @@ struct TableMacroTests {
           case review = "review"
         }
 
-        struct Insert: Encodable, Sendable {
+        struct Draft: Encodable, Sendable {
           var id: Int
           var task: String
           var note: String
@@ -381,7 +381,7 @@ struct TableMacroTests {
           case task = "task"
         }
 
-        struct Insert: Encodable, Sendable {
+        struct Draft: Encodable, Sendable {
           var id: Int
           var task: String
 
@@ -401,9 +401,9 @@ struct TableMacroTests {
   }
 
   @Test
-  func insertCarriesACompoundPrimaryKey() {
+  func draftCarriesACompoundPrimaryKey() {
     // A compound natural key is never database-generated, so the client is the only thing that can
-    // supply it. Dropping it from `Insert` made the row impossible to create.
+    // supply it. Dropping it from `Draft` made the row impossible to create.
     assertMacro {
       """
       @Table("user_roles")
@@ -449,7 +449,7 @@ struct TableMacroTests {
           case grantedAt = "granted_at"
         }
 
-        struct Insert: Encodable, Sendable {
+        struct Draft: Encodable, Sendable {
           var userID: UUID
           var roleID: UUID
           var grantedAt: Date
@@ -472,9 +472,9 @@ struct TableMacroTests {
   }
 
   @Test
-  func insertOnATableThatIsNothingButACompoundKey() {
-    // A pure join table previously expanded to `Insert` with no fields and an empty `init()`.
-    // Neither half is `@Default`, so both are required: `Insert()` and `Insert(userID:)` do not
+  func draftOnATableThatIsNothingButACompoundKey() {
+    // A pure join table previously expanded to `Draft` with no fields and an empty `init()`.
+    // Neither half is `@Default`, so both are required: `Draft()` and `Draft(userID:)` do not
     // compile, and an incomplete key can no longer reach PostgREST as a 400.
     assertMacro {
       """
@@ -516,7 +516,7 @@ struct TableMacroTests {
           case roleID = "role_id"
         }
 
-        struct Insert: Encodable, Sendable {
+        struct Draft: Encodable, Sendable {
           var userID: UUID
           var roleID: UUID
 
@@ -590,7 +590,7 @@ struct TableMacroTests {
           case tag = "tag"
         }
 
-        struct Insert: Encodable, Sendable {
+        struct Draft: Encodable, Sendable {
           var id: Int?
           var task: String
           var note: Optional<String>

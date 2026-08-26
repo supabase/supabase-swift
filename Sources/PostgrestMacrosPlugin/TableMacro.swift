@@ -82,7 +82,7 @@ public struct TableMacro: ExtensionMacro {
       columnNameFunction(access: access, type: type.trimmedDescription, properties: properties),
     ]
     // The one thing `@PrimaryKey` uniquely does. Without this the marker is inert: after the key
-    // stopped gating `Insert` optionality and stopped being filtered out of `Update`, writing it or
+    // stopped gating `Draft` optionality and stopped being filtered out of `Update`, writing it or
     // omitting it expanded byte-for-byte the same. Emitted only when a key is declared, so a
     // keyless relation falls back to the protocol's empty default.
     let keyColumns = properties.filter(\.isPrimaryKey).map(\.columnName)
@@ -94,7 +94,7 @@ public struct TableMacro: ExtensionMacro {
       body.append(codingKeys)
     }
     if !arguments.readOnly {
-      // `Insert` carries every column, and a column is optional exactly when the database can
+      // `Draft` carries every column, and a column is optional exactly when the database can
       // fill it in: it is nullable, or it has a default. Being the primary key is not one of the
       // reasons — `postgres-meta`, which generates supabase-js's types from the same column
       // metadata, computes `is_nullable || is_identity || default_value !== null` and never
@@ -111,7 +111,7 @@ public struct TableMacro: ExtensionMacro {
       // mutation — so the key is assignable like any other column.
       body.append(
         writeShape(
-          named: "Insert",
+          named: "Draft",
           access: access,
           fields: properties.map {
             ($0, $0.isOptional || $0.hasDefault ? $0.optionalType : $0.type)
@@ -137,7 +137,7 @@ public struct TableMacro: ExtensionMacro {
   /// The protocols `@Table` conforms the annotated type to.
   ///
   /// `Decodable` is in the list and `Encodable` is not: rows are decoded from responses, and writes
-  /// go out through the `Encodable` `Insert` and `Update` shapes.
+  /// go out through the `Encodable` `Draft` shape and `PostgrestUpdate`.
   static func wantedConformances(_ arguments: Arguments) -> [String] {
     [
       "Decodable",

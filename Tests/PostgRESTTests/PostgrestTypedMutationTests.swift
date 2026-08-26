@@ -41,7 +41,7 @@ struct PostgrestTypedMutationTests {
       }
     }
 
-    struct Insert: Encodable, Sendable {
+    struct Draft: Encodable, Sendable {
       var task: String
       var isDone: Bool?
     }
@@ -64,12 +64,12 @@ struct PostgrestTypedMutationTests {
   }
 
   @Test
-  func insertSendsTheInsertShape() async throws {
+  func insertSendsTheDraftShape() async throws {
     let capture = QueryCapture()
     _ = try await capture.client.from(Todo.self)
-      .insert(Todo.Insert(task: "buy milk", isDone: nil)).execute()
+      .insert(Todo.Draft(task: "buy milk", isDone: nil)).execute()
     #expect(capture.httpMethod == "POST")
-    // The Insert shape excludes the primary key, so `id` must not appear in the body.
+    // The hand-written `Draft` here omits the primary key, so `id` must not appear in the body.
     #expect(capture.bodyString?.contains("\"task\":\"buy milk\"") == true)
     #expect(capture.bodyString?.contains("\"id\"") == false)
   }
@@ -78,7 +78,7 @@ struct PostgrestTypedMutationTests {
   func preferHeaderIsUnambiguousWhenReturningRows() async throws {
     let capture = QueryCapture(body: #"[{"id":1,"task":"buy milk","is_done":false}]"#)
     _ = try await capture.client.from(Todo.self)
-      .insert(Todo.Insert(task: "buy milk", isDone: nil)).returning().execute()
+      .insert(Todo.Draft(task: "buy milk", isDone: nil)).returning().execute()
     let prefer = capture.header("Prefer") ?? ""
     #expect(prefer.contains("return=representation"))
     #expect(prefer.contains("return=minimal") == false)
@@ -129,7 +129,7 @@ struct PostgrestTypedMutationTests {
   func returningDecodesRows() async throws {
     let capture = QueryCapture(body: #"[{"id":1,"task":"buy milk","is_done":false}]"#)
     let rows = try await capture.client.from(Todo.self)
-      .insert(Todo.Insert(task: "buy milk", isDone: nil)).returning().execute().value
+      .insert(Todo.Draft(task: "buy milk", isDone: nil)).returning().execute().value
     #expect(rows.first?.task == "buy milk")
   }
 }

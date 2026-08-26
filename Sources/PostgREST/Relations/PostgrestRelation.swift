@@ -57,16 +57,21 @@ extension PostgrestRelation {
 
 /// A relation the database accepts writes for: a table, or a view Postgres reports as updatable.
 ///
-/// `Insert` has no default on purpose. Defaulting it to `Self` would mean requiring every column,
+/// `Draft` has no default on purpose. Defaulting it to `Self` would mean requiring every column,
 /// including the ones the database fills in.
 ///
-/// There is no matching `Update` shape. An insert sends a row, so a row type fits it; an update
-/// sends a set of column assignments, which ``PostgrestUpdate`` builds from this relation's key
-/// paths. Modelling both as row types is what once made clearing a nullable column impossible —
-/// a single optional field cannot mean both "not assigned" and "assigned null".
+/// The name describes the value, not the verb that receives it. A draft is a row the database has
+/// not stored yet, which is as true under `upsert` as it is under `insert`. Calling it `Insert`
+/// made the `upsert` parameter read like a category error and made every call site stutter.
+///
+/// There is no matching `Update` shape. A draft is a whole row, so a row type fits a write that
+/// sends one; an update sends a set of column assignments, which ``PostgrestUpdate`` builds from
+/// this relation's key paths. Modelling both as row types is what once made clearing a nullable
+/// column impossible — a single optional field cannot mean both "not assigned" and "assigned
+/// null".
 public protocol PostgrestWritableRelation: PostgrestRelation {
-  /// The shape accepted by an insert: every column, optional exactly where the database can fill
-  /// it in — a nullable column, or one with a default. A primary key is included, and required
-  /// unless it is also defaulted.
-  associatedtype Insert: Encodable & Sendable
+  /// The shape a write sends: every column, optional exactly where the database can fill it in —
+  /// a nullable column, or one with a default. A primary key is included, and required unless it
+  /// is also defaulted.
+  associatedtype Draft: Encodable & Sendable
 }

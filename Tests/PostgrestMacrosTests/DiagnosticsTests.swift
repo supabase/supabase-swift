@@ -204,7 +204,7 @@ struct DiagnosticsTests {
           case task = "task"
         }
 
-        struct Insert: Encodable, Sendable {
+        struct Draft: Encodable, Sendable {
           var id: Int
           var task: String
 

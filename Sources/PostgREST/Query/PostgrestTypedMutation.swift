@@ -56,25 +56,41 @@ public struct PostgrestTypedMutation<R: PostgrestWritableRelation>: PostgrestKey
 extension PostgrestTypedSource where R: PostgrestWritableRelation {
   /// Inserts a row.
   ///
-  /// - Parameter values: The row to insert, in the relation's `Insert` shape. Primary keys and
-  ///   defaulted columns are optional there, so either can be left out and filled in by the
-  ///   database.
+  /// ```swift
+  /// try await client.from(Todo.self)
+  ///   .insert(Todo.Draft(task: "buy milk"))
+  ///   .execute()
+  /// ```
+  ///
+  /// - Parameter values: The row to insert, in the relation's
+  ///   ``PostgrestWritableRelation/Draft`` shape. Primary keys and defaulted columns are optional
+  ///   there, so either can be left out and filled in by the database.
   /// - Returns: A ``PostgrestTypedMutation`` to execute, or to request rows back from.
   /// - Throws: An encoding error if `values` cannot be serialized.
-  public func insert(_ values: R.Insert) throws -> PostgrestTypedMutation<R> {
+  public func insert(_ values: R.Draft) throws -> PostgrestTypedMutation<R> {
     PostgrestTypedMutation(builder: try builder.insert(values, returning: .minimal))
   }
 
-  /// Inserts rows, updating any that conflict.
+  /// Inserts a row, updating it instead if it conflicts.
+  ///
+  /// ```swift
+  /// try await client.from(Todo.self)
+  ///   .upsert(Todo.Draft(id: 1, task: "buy milk"))
+  ///   .execute()
+  /// ```
+  ///
+  /// The same ``PostgrestWritableRelation/Draft`` serves both writes: it is a row the database has
+  /// not stored yet, whether this call ends up inserting it or merging it into an existing one.
   ///
   /// - Parameters:
-  ///   - values: The rows to upsert.
+  ///   - values: The row to upsert. Include the conflict columns — a merge cannot match on a
+  ///     column the request does not send.
   ///   - onConflict: Comma-separated unique columns that determine a duplicate. Defaults to the
   ///     relation's primary key.
   /// - Returns: A ``PostgrestTypedMutation`` to execute, or to request rows back from.
   /// - Throws: An encoding error if `values` cannot be serialized.
   public func upsert(
-    _ values: R.Insert,
+    _ values: R.Draft,
     onConflict: String? = nil
   ) throws -> PostgrestTypedMutation<R> {
     PostgrestTypedMutation(

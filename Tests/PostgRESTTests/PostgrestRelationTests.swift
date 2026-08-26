@@ -29,7 +29,7 @@ struct PostgrestRelationTests {
       }
     }
 
-    struct Insert: Encodable, Sendable {
+    struct Draft: Encodable, Sendable {
       var task: String
       var isDone: Bool?
     }
