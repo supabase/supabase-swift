@@ -40,6 +40,15 @@ struct IntegrationNote {
   var tag: Optional<String>
 }
 
+// A writable table with no declared key — an append-only log. It must not conform to
+// `PostgrestKeyedRelation`, so the derived-target `upsert` is simply not available on it: there is
+// no key for PostgREST to merge on, and the call would quietly insert another row every time.
+@Table("audit_events")
+struct IntegrationAuditEvent {
+  var action: String
+  var recordedBy: String
+}
+
 @Table("active_todos", readOnly: true)
 struct IntegrationActiveTodo {
   var id: Int
@@ -106,9 +115,30 @@ struct TableIntegrationTests {
   }
 
   @Test
-  func aRelationWithNoDeclaredKeyReportsNone() {
-    // Falls through to the protocol default rather than expanding to an empty literal.
-    #expect(IntegrationActiveTodo.primaryKeyColumns.isEmpty)
+  func onlyARelationWithADeclaredKeyIsKeyed() {
+    // The conformance *is* the mechanism. `primaryKeyColumns` is mandatory on
+    // `PostgrestKeyedRelation`, so "no key" is a missing conformance rather than an empty array —
+    // and an empty `on_conflict`, which is a different request, stops being representable.
+    #expect(Todo.self is any PostgrestKeyedRelation.Type)
+    #expect(IntegrationUserRole.self is any PostgrestKeyedRelation.Type)
+    #expect(!(IntegrationAuditEvent.self is any PostgrestKeyedRelation.Type))
+    #expect(!(IntegrationActiveTodo.self is any PostgrestKeyedRelation.Type))
+  }
+
+  @Test
+  func aKeylessRelationCanStillUpsertOnAnExplicitTarget() async throws {
+    // Losing the derived overload must not cost the keyless relation the operation itself. A
+    // unique constraint it does have is still a legal target.
+    let capture = RequestCapture()
+    _ = try await capture.client
+      .from(IntegrationAuditEvent.self)
+      .upsert(
+        IntegrationAuditEvent.Draft(action: "sign_in", recordedBy: "service_role"),
+        onConflict: \.action
+      )
+      .execute()
+
+    #expect(capture.query?.contains("on_conflict=action") == true)
   }
 
   @Test
@@ -199,9 +229,9 @@ struct TableIntegrationTests {
 
   @Test
   func aTypedUpsertCarriesTheConflictKey() async throws {
-    // `upsert` sends no `on_conflict`, so PostgREST resolves against the primary key — which has
-    // to be in the body for that to mean anything. While `Draft` dropped the key, the merge half
-    // of every upsert was unreachable and each call just inserted another row.
+    // The conflict target only means something if the columns it names are in the body. While
+    // `Draft` dropped the key, the merge half of every upsert was unreachable and each call just
+    // inserted another row.
     let capture = RequestCapture()
     _ = try await capture.client
       .from(Todo.self)
@@ -210,6 +240,59 @@ struct TableIntegrationTests {
 
     #expect(capture.path?.hasSuffix("/todos") == true)
     #expect(capture.bodyString?.contains(#""id":1"#) == true)
+  }
+
+  @Test
+  func aTypedUpsertDerivesTheConflictTargetFromTheKey() async throws {
+    // PostgREST resolves an absent `on_conflict` against the primary key already, so this is the
+    // same request either way. Naming it is what makes the request say what it merges on, and it
+    // is only reachable because the relation declares a key — a keyless one has no such overload.
+    let capture = RequestCapture()
+    _ = try await capture.client
+      .from(Todo.self)
+      .upsert(Todo.Draft(id: 1, task: "buy milk"))
+      .execute()
+
+    #expect(capture.query?.contains("on_conflict=id") == true)
+  }
+
+  @Test
+  func aTypedUpsertDerivesACompoundConflictTarget() async throws {
+    // A join table conflicts on both halves of its key, in declaration order.
+    let capture = RequestCapture()
+    _ = try await capture.client
+      .from(IntegrationUserRole.self)
+      .upsert(IntegrationUserRole.Draft(userID: 1, roleID: 2))
+      .execute()
+
+    #expect(capture.query?.contains("on_conflict=user_id,role_id") == true)
+  }
+
+  @Test
+  func aTypedUpsertTakesAnExplicitConflictTarget() async throws {
+    // Merging on a unique constraint that is not the primary key is the reason the override
+    // exists. Spelled as a key path, so a column that does not exist is a compile error rather
+    // than a PostgREST 400.
+    let capture = RequestCapture()
+    _ = try await capture.client
+      .from(IntegrationNote.self)
+      .upsert(IntegrationNote.Draft(body: "remember the milk", tag: "home"), onConflict: \.tag)
+      .execute()
+
+    #expect(capture.query?.contains("on_conflict=tag") == true)
+  }
+
+  @Test
+  func anExplicitConflictTargetMapsEveryColumnName() async throws {
+    // `isDone` has to reach the wire as `is_done`, so the override goes through the same
+    // `columnName(for:)` mapping every filter uses rather than interpolating property names.
+    let capture = RequestCapture()
+    _ = try await capture.client
+      .from(Todo.self)
+      .upsert(Todo.Draft(task: "buy milk"), onConflict: \.task, \.isDone)
+      .execute()
+
+    #expect(capture.query?.contains("on_conflict=task,is_done") == true)
   }
 
   @Test

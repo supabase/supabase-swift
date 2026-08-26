@@ -18,10 +18,15 @@ import Testing
 /// The clause is what makes the conformance land, so it is asserted here directly.
 @Suite
 struct TableMacroSupportTests {
-  private func clause(readOnly: Bool, missing: [String]) -> String {
+  private func clause(
+    readOnly: Bool,
+    hasPrimaryKey: Bool = false,
+    missing: [String]
+  ) -> String {
     inheritanceClause(
       wanted: TableMacro.wantedConformances(
-        TableMacro.Arguments(name: "todos", schema: "public", readOnly: readOnly)
+        TableMacro.Arguments(name: "todos", schema: "public", readOnly: readOnly),
+        hasPrimaryKey: hasPrimaryKey
       ),
       missing: missing.map { TypeSyntax(stringLiteral: $0) }
     )
@@ -36,6 +41,35 @@ struct TableMacroSupportTests {
         readOnly: false,
         missing: ["Decodable", "Sendable", "PostgrestRelation", "PostgrestWritableRelation"]
       ) == ": Decodable, Sendable, PostgrestRelation, PostgrestWritableRelation"
+    )
+  }
+
+  @Test
+  func aDeclaredKeyAddsTheKeyedRelation() {
+    // What gates the derived-target `upsert`. Listed after `PostgrestRelation` for the same reason
+    // the whole chain is listed: the generated extension does not derive an inherited conformance.
+    #expect(
+      clause(
+        readOnly: false,
+        hasPrimaryKey: true,
+        missing: [
+          "Decodable", "Sendable", "PostgrestRelation", "PostgrestKeyedRelation",
+          "PostgrestWritableRelation",
+        ]
+      )
+        == ": Decodable, Sendable, PostgrestRelation, PostgrestKeyedRelation, PostgrestWritableRelation"
+    )
+  }
+
+  @Test
+  func aKeyedViewIsKeyedButNotWritable() {
+    // A view Postgres reports a key for is still read-only. The two axes are independent.
+    #expect(
+      clause(
+        readOnly: true,
+        hasPrimaryKey: true,
+        missing: ["Decodable", "Sendable", "PostgrestRelation", "PostgrestKeyedRelation"]
+      ) == ": Decodable, Sendable, PostgrestRelation, PostgrestKeyedRelation"
     )
   }
 

@@ -20,7 +20,7 @@ struct PostgrestRelationTests {
     var task: String
     var isDone: Bool
 
-    static func columnName<V>(for keyPath: KeyPath<Self, V>) -> String {
+    static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
       switch keyPath {
       case \Self.id: "id"
       case \Self.task: "task"

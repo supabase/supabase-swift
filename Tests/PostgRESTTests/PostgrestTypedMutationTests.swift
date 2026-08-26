@@ -31,7 +31,7 @@ struct PostgrestTypedMutationTests {
       case note
     }
 
-    static func columnName<V>(for keyPath: KeyPath<Self, V>) -> String {
+    static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
       switch keyPath {
       case \Self.id: "id"
       case \Self.task: "task"
@@ -55,7 +55,7 @@ struct PostgrestTypedMutationTests {
 
     var id: Int
 
-    static func columnName<V>(for keyPath: KeyPath<Self, V>) -> String {
+    static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
       switch keyPath {
       case \Self.id: "id"
       default: fatalError("unmapped key path")

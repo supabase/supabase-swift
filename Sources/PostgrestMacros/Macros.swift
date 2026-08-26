@@ -35,7 +35,8 @@
 ///     only, and the write methods are not available on it.
 @attached(
   extension,
-  conformances: Decodable, Sendable, PostgrestRelation, PostgrestWritableRelation,
+  conformances: Decodable, Sendable, PostgrestRelation, PostgrestKeyedRelation,
+  PostgrestWritableRelation,
   names: named(relationName), named(schema), named(selectString), named(columnName(for:)),
   named(primaryKeyColumns), named(CodingKeys), named(Draft), named(Update)
 )
@@ -75,9 +76,11 @@ public macro Column(_ name: String) =
 /// `Update` carries the key like any other column, all optional, so a natural key can be renamed.
 /// Which rows a write touches is decided by the filters on the mutation, not by this marker.
 ///
-/// What the marker does produce is ``PostgREST/PostgrestRelation/primaryKeyColumns``, the column
-/// names in declaration order. That is what lets a caller — or a future `upsert` — name a conflict
-/// target without repeating the key as a string.
+/// What the marker does produce is a ``PostgREST/PostgrestKeyedRelation`` conformance, carrying
+/// ``PostgREST/PostgrestKeyedRelation/primaryKeyColumns`` — the column names in declaration order.
+/// That conformance is what makes `upsert(_:)` available: it derives the conflict target from the
+/// key, so no caller repeats it as a string. Leave the marker off and the relation does not conform,
+/// which turns an upsert with no target into a compile error rather than a silent plain insert.
 @attached(peer)
 public macro PrimaryKey() =
   #externalMacro(
