@@ -265,3 +265,6 @@ uncast
 
 # Term from the comparison operators' documentation (PostgrestFilter+Comparison.swift).
 someop
+
+# Term from the cast target list (PostgrestDerivedColumn.swift).
+citext
