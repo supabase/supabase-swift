@@ -38,7 +38,7 @@
   conformances: Decodable, Sendable, PostgrestRelation, PostgrestKeyedRelation,
   PostgrestWritableRelation,
   names: named(relationName), named(schema), named(selectString), named(columnName(for:)),
-  named(primaryKeyColumns), named(CodingKeys), named(Insert)
+  named(primaryKeyColumns), named(CodingKeys), named(Draft)
 )
 public macro Table(
   _ name: String,
@@ -59,7 +59,7 @@ public macro Column(_ name: String) =
 
 /// Marks a property as part of the relation's primary key.
 ///
-/// This does **not** make the column optional in `Insert`. Being the key says nothing about
+/// This does **not** make the column optional in `Draft`. Being the key says nothing about
 /// whether the database can supply the value — a `SERIAL` or identity column can, and a natural
 /// key like a country code cannot. Add ``Default()`` for the ones it can:
 ///
@@ -87,7 +87,7 @@ public macro PrimaryKey() =
     module: "PostgrestMacrosPlugin", type: "MarkerMacro"
   )
 
-/// Marks a property as having a database default, making it optional in the generated `Insert`.
+/// Marks a property as having a database default, making it optional in the generated `Draft`.
 ///
 /// Leaving it `nil` omits the column from the request body, so the database fills it in. This is
 /// the only marker that makes a column optional — including for a primary key, which needs

@@ -37,7 +37,7 @@ struct PostgrestUpdateTests {
       }
     }
 
-    struct Insert: Encodable, Sendable {
+    struct Draft: Encodable, Sendable {
       var task: String
     }
   }
