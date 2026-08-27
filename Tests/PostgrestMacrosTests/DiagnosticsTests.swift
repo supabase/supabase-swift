@@ -172,7 +172,7 @@ struct DiagnosticsTests {
       }
       """
     } expansion: {
-      #"""
+      """
       struct Todo {
         @PrimaryKey var id: Int
         var task: String
@@ -197,17 +197,6 @@ struct DiagnosticsTests {
 
         static let columns = Columns()
 
-        static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
-          switch keyPath {
-          case \Self.id:
-            return "id"
-          case \Self.task:
-            return "task"
-          default:
-            fatalError("Todo: no column is mapped for that key path")
-          }
-        }
-
         static let primaryKeyColumns: [String] = ["id"]
 
         enum CodingKeys: String, CodingKey {
@@ -230,7 +219,7 @@ struct DiagnosticsTests {
           }
         }
       }
-      """#
+      """
     }
   }
 

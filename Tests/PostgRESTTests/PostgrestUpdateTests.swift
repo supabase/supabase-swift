@@ -36,15 +36,6 @@ struct PostgrestUpdateTests {
 
     static let columns = Columns()
 
-    static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
-      switch keyPath {
-      case \Self.id: "id"
-      case \Self.task: "task"
-      case \Self.dueAt: "due_at"
-      default: fatalError("unmapped key path")
-      }
-    }
-
     struct Draft: Encodable, Sendable {
       var task: String
     }

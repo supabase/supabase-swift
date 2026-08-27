@@ -28,15 +28,6 @@ struct PostgrestFilterPatternTests {
     }
 
     static let columns = Columns()
-
-    static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
-      switch keyPath {
-      case \Self.id: "id"
-      case \Self.task: "task"
-      case \Self.note: "note"
-      default: fatalError("unmapped key path")
-      }
-    }
   }
 
   private func rendered(_ filter: PostgrestFilter<Todo>) -> String {

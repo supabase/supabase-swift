@@ -103,4 +103,11 @@ extension PostgrestTypedQuery where Phase: PostgrestTransformablePhase {
       builder: PostgrestRequestBuilder(carryingFrom: builder, request: request)
     )
   }
+
+  /// Limits the number of rows returned.
+  ///
+  /// Like either `order(_:)` overload this moves the request into ``PostgrestTransformPhase``.
+  public func limit(_ count: Int) -> PostgrestTypedQuery<R, Output, PostgrestTransformPhase> {
+    PostgrestTypedQuery<R, Output, PostgrestTransformPhase>(builder: builder.limit(count))
+  }
 }

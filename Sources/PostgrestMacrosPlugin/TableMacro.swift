@@ -80,7 +80,6 @@ public struct TableMacro: ExtensionMacro {
       "  \(access)static let schema = \"\(arguments.schema)\"",
       "  \(access)static let selectString = \"*\"",
       columnsNamespace(access: access, type: type.trimmedDescription, properties: properties),
-      columnNameFunction(access: access, type: type.trimmedDescription, properties: properties),
     ]
     // The one thing `@PrimaryKey` uniquely does. Without this the marker is inert: after the key
     // stopped gating `Draft` optionality and stopped being filtered out of `Update`, writing it or
@@ -110,8 +109,8 @@ public struct TableMacro: ExtensionMacro {
       // type cannot say that: one optional field would have to mean both "not assigned" and
       // "assigned null", so a nullable column could never be cleared. `PostgrestUpdate` builds
       // the assignments from key paths into the `Columns` namespace above instead, so it needs
-      // nothing further from the macro beyond that. Targeting stays a separate concern — the
-      // caller filters the mutation — so the key is assignable like any other column.
+      // nothing further from the macro. Targeting stays a separate concern — the caller filters
+      // the mutation — so the key is assignable like any other column.
       body.append(
         writeShape(
           named: "Draft",
@@ -158,8 +157,8 @@ public struct TableMacro: ExtensionMacro {
     ].compactMap { $0 }
   }
 
-  /// The column namespace: one stored property per column, and no `default:` arm, because a key
-  /// path to a computed property has nowhere to land.
+  /// The column namespace: one stored property per column. A computed property has nothing to
+  /// land on here — it is simply not one of `properties`.
   ///
   /// An optional property gets a `PostgrestNullableColumn` carrying its **wrapped** type, so
   /// `var dueDate: Date?` emits `PostgrestNullableColumn<Todo, Date>`.
@@ -184,32 +183,6 @@ public struct TableMacro: ExtensionMacro {
     lines.append("  }")
     lines.append("")
     lines.append("  \(access)static let columns = Columns()")
-    return lines.joined(separator: "\n")
-  }
-
-  /// The key-path-to-column mapping, for the filter surface that has not moved to `Columns` yet.
-  ///
-  /// Every stored property gets a case, so `default` is reachable only through a key path to a
-  /// computed property — a mistake at the call site, not a query worth sending. `fatalError` says
-  /// so immediately; returning `""` would build a query with an empty column name and leave
-  /// PostgREST to reject it with a 400 that never names the key path.
-  static func columnNameFunction(
-    access: String,
-    type: String,
-    properties: [StoredProperty]
-  ) -> String {
-    var lines = [
-      "  \(access)static func columnName(for keyPath: PartialKeyPath<Self>) -> String {",
-      "    switch keyPath {",
-    ]
-    for property in properties {
-      lines.append("    case \\Self.\(property.name):")
-      lines.append("      return \"\(property.columnName)\"")
-    }
-    lines.append("    default:")
-    lines.append("      fatalError(\"\(type): no column is mapped for that key path\")")
-    lines.append("    }")
-    lines.append("  }")
     return lines.joined(separator: "\n")
   }
 

@@ -55,6 +55,9 @@ supporting_symbols:
   - PostgrestArrayElement
   - PostgrestArrayElement.postgrestArrayElement
   - PostgrestFilterValue.postgrestArrayElement
+  # The request wrapper `where(_:)` is declared on, so one declaration serves both the typed query
+  # and the typed mutation. Shared by every database.using_filters.* capability rather than owned
+  # by one — the operator methods themselves are attributed individually below.
   - PostgrestFilterableRequest
   - PostgrestFilterableRequest.Phase
   - PostgrestFilterableRequest.Relation
@@ -80,7 +83,6 @@ supporting_symbols:
   - PostgrestRelation
   - PostgrestRelation.Columns
   - PostgrestRelation.columns
-  - PostgrestRelation.columnName
   - PostgrestRelation.relationName
   - PostgrestRelation.schema
   - PostgrestKeyedRelation
@@ -681,42 +683,36 @@ features:
     symbols:
       - PostgrestRequestBuilder.eq
       - PostgrestRequestBuilder.equals
-      - PostgrestFilterableRequest.eq
       - PostgrestFilterableExpression.eq
   database.using_filters.neq:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.neq
       - PostgrestRequestBuilder.notEquals
-      - PostgrestFilterableRequest.neq
       - PostgrestFilterableExpression.neq
   database.using_filters.gt:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.gt
       - PostgrestRequestBuilder.greaterThan
-      - PostgrestFilterableRequest.gt
       - PostgrestFilterableExpression.gt
   database.using_filters.gte:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.gte
       - PostgrestRequestBuilder.greaterThanOrEquals
-      - PostgrestFilterableRequest.gte
       - PostgrestFilterableExpression.gte
   database.using_filters.lt:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.lt
       - PostgrestRequestBuilder.lowerThan
-      - PostgrestFilterableRequest.lt
       - PostgrestFilterableExpression.lt
   database.using_filters.lte:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.lte
       - PostgrestRequestBuilder.lowerThanOrEquals
-      - PostgrestFilterableRequest.lte
       - PostgrestFilterableExpression.lte
   database.using_filters.like:
     status: implemented
@@ -732,8 +728,6 @@ features:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.is
-      - PostgrestFilterableRequest.isNull
-      - PostgrestFilterableRequest.isNotNull
       - PostgrestFilterableExpression.isTrue
       - PostgrestFilterableExpression.isFalse
       - PostgrestNullableExpression.isNull
@@ -741,7 +735,6 @@ features:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.in
-      - PostgrestFilterableRequest.in
       - PostgrestFilterableExpression.in
   database.using_filters.contains:
     status: implemented
