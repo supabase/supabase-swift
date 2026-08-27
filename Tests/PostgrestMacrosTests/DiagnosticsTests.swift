@@ -106,7 +106,8 @@ struct DiagnosticsTests {
   @Test
   func tableRejectsAPropertyWithNoTypeAnnotation() {
     // Left alone, the property has a default, so `Decodable` synthesis still succeeds. The column
-    // never round-trips and the mistake surfaces only when `columnName(for:)` traps at runtime.
+    // never round-trips and the mistake surfaces only much later, as a compile error at some
+    // unrelated call site that expected the column to exist in `Columns` or `Draft`.
     assertMacro {
       """
       @Table("todos")
@@ -185,6 +186,16 @@ struct DiagnosticsTests {
         static let schema = "public"
 
         static let selectString = "*"
+
+        struct Columns: Sendable {
+          let id = PostgrestColumn<Todo, Int>("id")
+          let task = PostgrestColumn<Todo, String>("task")
+
+          init() {
+          }
+        }
+
+        static let columns = Columns()
 
         static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
           switch keyPath {

@@ -28,6 +28,14 @@ struct PostgrestUpdateTests {
       case dueAt = "due_at"
     }
 
+    struct Columns: Sendable {
+      let id = PostgrestColumn<Todo, Int>("id")
+      let task = PostgrestColumn<Todo, String>("task")
+      let dueAt = PostgrestNullableColumn<Todo, String>("due_at")
+    }
+
+    static let columns = Columns()
+
     static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
       switch keyPath {
       case \Self.id: "id"
@@ -53,6 +61,24 @@ struct PostgrestUpdateTests {
   func assigningNilSendsAnExplicitNull() throws {
     let update = PostgrestUpdate<Todo> { $0.dueAt = nil }
     expectNoDifference(try encoded(update), ["due_at": .null])
+  }
+
+  /// The expected keys are derived from `Todo.columns` rather than hardcoded, so this fails if
+  /// the subscript ever reads a different source of truth than filters do. `dueAt` is the case
+  /// that matters: its wire name (`due_at`) differs from its Swift name.
+  @Test
+  func assignmentsResolveThroughTheColumnNamespace() throws {
+    let update = PostgrestUpdate<Todo> {
+      $0.task = "buy oat milk"
+      $0.dueAt = nil
+    }
+    expectNoDifference(
+      try encoded(update),
+      [
+        Todo.columns.task.postgrestExpression: "buy oat milk",
+        Todo.columns.dueAt.postgrestExpression: .null,
+      ]
+    )
   }
 
   @Test

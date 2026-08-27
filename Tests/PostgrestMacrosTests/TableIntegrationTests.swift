@@ -66,6 +66,18 @@ struct TableIntegrationTests {
     #expect(Todo.selectString == "*")
   }
 
+  /// `assertMacro` checks the emitted text. This checks the expansion compiles into usable
+  /// values on a real type, which the text alone does not prove.
+  @Test
+  func theGeneratedNamespaceCarriesNamesAndTypes() {
+    #expect(Todo.columns.task.postgrestExpression == "task")
+    #expect(Todo.columns.isDone.postgrestExpression == "is_done")
+    #expect(Todo.columns.dueDate.postgrestExpression == "due_at")
+    #expect(type(of: Todo.columns.isDone).Value.self == Bool.self)
+    // The nullable column carries the wrapped type.
+    #expect(type(of: Todo.columns.dueDate).Value.self == Date.self)
+  }
+
   @Test
   func macroMapsKeyPathsToColumns() {
     #expect(Todo.columnName(for: \.id) == "id")

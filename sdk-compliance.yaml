@@ -77,6 +77,8 @@ supporting_symbols:
   - PostgrestUpdate.encode
   - PostgrestQueryPhase
   - PostgrestRelation
+  - PostgrestRelation.Columns
+  - PostgrestRelation.columns
   - PostgrestRelation.columnName
   - PostgrestRelation.relationName
   - PostgrestRelation.schema

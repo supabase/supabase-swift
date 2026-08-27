@@ -21,6 +21,17 @@ struct StoredProperty {
 
   /// The property's type made optional, or left alone if it already is.
   var optionalType: String { isOptional ? type : "\(type)?" }
+
+  /// The property's type with one layer of `Optional` removed, or left alone if it has none.
+  ///
+  /// Handles both spellings, since a generated schema can emit either.
+  var unwrappedType: String {
+    if type.hasSuffix("?") { return String(type.dropLast()) }
+    if type.hasPrefix("Optional<"), type.hasSuffix(">") {
+      return String(type.dropFirst("Optional<".count).dropLast())
+    }
+    return type
+  }
 }
 
 /// Whether a written type is spelled as an `Optional`.
@@ -39,8 +50,8 @@ func postgrestIsOptionalType(_ type: String) -> Bool {
 extension DeclGroupSyntax {
   /// Reads the stored properties, skipping computed properties and static members.
   ///
-  /// A key path to a skipped property therefore maps to no column, which is what the generated
-  /// `columnName(for:)` traps on.
+  /// A skipped property therefore has no entry in `Columns`, so a filter or a selection naming it
+  /// is a compile error, and no case in `columnName(for:)`, which traps instead.
   ///
   /// Three shapes are easy to get wrong, so each is spelled out:
   ///

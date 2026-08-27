@@ -29,7 +29,7 @@ extension MacroExpansionContext {
 extension DeclGroupSyntax {
   /// The first `@Relationship` attribute on a stored property, if any.
   ///
-  /// Embeds belong to a selection, never to a relation (spec §4.5), so `@Table` rejects one.
+  /// Embeds belong to a selection, never to a relation, so `@Table` rejects one.
   ///
   /// Forward-looking: `@Relationship` itself lands in stage 3, so today a user who writes it gets
   /// "unknown attribute" from the compiler first. Matching on the attribute *name* puts the guard
@@ -50,11 +50,12 @@ extension DeclGroupSyntax {
   /// Reports every stored property whose type is left to its initializer.
   ///
   /// `postgrestStoredProperties()` reads syntax, so `var isDone = false` gives it no annotation to
-  /// read and the property is dropped from `CodingKeys`, `columnName(for:)` and `Draft`.
+  /// read and the property is dropped from `CodingKeys`, `Columns`, `columnName(for:)` and
+  /// `Draft`.
   /// Nothing about that is loud: the initializer doubles as a decoding default, so the type still
-  /// compiles, the column simply never round-trips, and the mistake surfaces only when a query
-  /// names the key path and hits the generated `fatalError`. A macro cannot recover the type from
-  /// the initializer expression, so the author is asked for an annotation instead.
+  /// compiles, the column simply never round-trips, and the mistake surfaces only much later, at
+  /// some unrelated call site that expected the column to exist. A macro cannot recover the type
+  /// from the initializer expression, so the author is asked for an annotation instead.
   ///
   /// The condition is `postgrestType(at:)` returning `nil` — the very test the reader uses to skip
   /// a binding — so the two cannot drift apart. In particular `var draft, review: String` is not

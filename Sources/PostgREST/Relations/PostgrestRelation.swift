@@ -33,6 +33,18 @@ public protocol PostgrestRelation: PostgrestSelection where Source == Self {
   /// The Postgres schema the relation belongs to.
   static var schema: String { get }
 
+  /// The namespace of this relation's columns.
+  ///
+  /// `@Table` generates it as a nested `Columns` struct holding one ``PostgrestColumn`` per
+  /// column. A hand-written conformance declares its own.
+  associatedtype Columns: Sendable
+
+  /// The relation's columns, for building filters and selections.
+  ///
+  /// A filter closure receives this value, so a call site names a column as `$0.isDone` rather
+  /// than spelling the relation out.
+  static var columns: Columns { get }
+
   /// The database column name backing a property.
   ///
   /// Takes a `PartialKeyPath` rather than a `KeyPath<Self, V>` because the property's type
@@ -75,9 +87,9 @@ public protocol PostgrestKeyedRelation: PostgrestRelation {
 ///
 /// There is no matching `Update` shape. A draft is a whole row, so a row type fits a write that
 /// sends one; an update sends a set of column assignments, which ``PostgrestUpdate`` builds from
-/// this relation's key paths. Modelling both as row types is what once made clearing a nullable
-/// column impossible — a single optional field cannot mean both "not assigned" and "assigned
-/// null".
+/// key paths into this relation's ``PostgrestRelation/Columns`` namespace. Modelling both as row
+/// types is what once made clearing a nullable column impossible — a single optional field cannot
+/// mean both "not assigned" and "assigned null".
 public protocol PostgrestWritableRelation: PostgrestRelation {
   /// The shape a write sends: every column, optional exactly where the database can fill it in —
   /// a nullable column, or one with a default. A primary key is included, and required unless it

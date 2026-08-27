@@ -45,6 +45,18 @@ struct TableMacroTests {
 
         static let selectString = "*"
 
+        struct Columns: Sendable {
+          let id = PostgrestColumn<Todo, Int>("id")
+          let task = PostgrestColumn<Todo, String>("task")
+          let isDone = PostgrestColumn<Todo, Bool>("is_done")
+          let dueDate = PostgrestNullableColumn<Todo, Date>("due_at")
+
+          init() {
+          }
+        }
+
+        static let columns = Columns()
+
         static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
           switch keyPath {
           case \Self.id:
@@ -116,6 +128,15 @@ struct TableMacroTests {
 
         static let selectString = "*"
 
+        struct Columns: Sendable {
+          let id = PostgrestColumn<ActiveTodo, Int>("id")
+
+          init() {
+          }
+        }
+
+        static let columns = Columns()
+
         static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
           switch keyPath {
           case \Self.id:
@@ -157,6 +178,15 @@ struct TableMacroTests {
         static let schema = "public"
 
         static let selectString = "*"
+
+        struct Columns: Sendable {
+          let action = PostgrestColumn<AuditEvent, String>("action")
+
+          init() {
+          }
+        }
+
+        static let columns = Columns()
 
         static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
           switch keyPath {
@@ -210,6 +240,16 @@ struct TableMacroTests {
         public static let schema = "app"
 
         public static let selectString = "*"
+
+        public struct Columns: Sendable {
+          public let id = PostgrestColumn<Todo, Int>("id")
+          public let task = PostgrestColumn<Todo, String>("task")
+
+          public init() {
+          }
+        }
+
+        public static let columns = Columns()
 
         public static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
           switch keyPath {
@@ -274,6 +314,15 @@ struct TableMacroTests {
 
         static let selectString = "*"
 
+        struct Columns: Sendable {
+          let htmlURL = PostgrestColumn<Todo, String>("html_url")
+
+          init() {
+          }
+        }
+
+        static let columns = Columns()
+
         static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
           switch keyPath {
           case \Self.htmlURL:
@@ -327,6 +376,19 @@ struct TableMacroTests {
         static let schema = "public"
 
         static let selectString = "*"
+
+        struct Columns: Sendable {
+          let id = PostgrestColumn<Todo, Int>("id")
+          let task = PostgrestColumn<Todo, String>("task")
+          let note = PostgrestColumn<Todo, String>("note")
+          let draft = PostgrestColumn<Todo, String>("draft")
+          let review = PostgrestColumn<Todo, String>("review")
+
+          init() {
+          }
+        }
+
+        static let columns = Columns()
 
         static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
           switch keyPath {
@@ -417,6 +479,16 @@ struct TableMacroTests {
 
         static let selectString = "*"
 
+        struct Columns: Sendable {
+          let id = PostgrestColumn<Todo, Int>("id")
+          let task = PostgrestColumn<Todo, String>("task")
+
+          init() {
+          }
+        }
+
+        static let columns = Columns()
+
         static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
           switch keyPath {
           case \Self.id:
@@ -481,6 +553,17 @@ struct TableMacroTests {
         static let schema = "public"
 
         static let selectString = "*"
+
+        struct Columns: Sendable {
+          let userID = PostgrestColumn<UserRole, UUID>("user_id")
+          let roleID = PostgrestColumn<UserRole, UUID>("role_id")
+          let grantedAt = PostgrestColumn<UserRole, Date>("granted_at")
+
+          init() {
+          }
+        }
+
+        static let columns = Columns()
 
         static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
           switch keyPath {
@@ -552,6 +635,16 @@ struct TableMacroTests {
 
         static let selectString = "*"
 
+        struct Columns: Sendable {
+          let userID = PostgrestColumn<UserRole, UUID>("user_id")
+          let roleID = PostgrestColumn<UserRole, UUID>("role_id")
+
+          init() {
+          }
+        }
+
+        static let columns = Columns()
+
         static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
           switch keyPath {
           case \Self.userID:
@@ -620,6 +713,18 @@ struct TableMacroTests {
 
         static let selectString = "*"
 
+        struct Columns: Sendable {
+          let id = PostgrestColumn<Todo, Int>("id")
+          let task = PostgrestColumn<Todo, String>("task")
+          let note = PostgrestNullableColumn<Todo, String>("note")
+          let tag = PostgrestNullableColumn<Todo, String>("tag")
+
+          init() {
+          }
+        }
+
+        static let columns = Columns()
+
         static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
           switch keyPath {
           case \Self.id:
@@ -669,4 +774,72 @@ struct TableMacroTests {
     }
   }
 
+  @Test
+  func expandsAColumnsNamespace() {
+    assertMacro {
+      """
+      @Table("todos")
+      struct Todo {
+        var id: Int
+        @Column("due_at") var dueDate: Date?
+      }
+      """
+    } expansion: {
+      #"""
+      struct Todo {
+        var id: Int
+        @Column("due_at") var dueDate: Date?
+      }
+
+      extension Todo {
+        static let relationName = "todos"
+
+        static let schema = "public"
+
+        static let selectString = "*"
+
+        struct Columns: Sendable {
+          let id = PostgrestColumn<Todo, Int>("id")
+          let dueDate = PostgrestNullableColumn<Todo, Date>("due_at")
+
+          init() {
+          }
+        }
+
+        static let columns = Columns()
+
+        static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
+          switch keyPath {
+          case \Self.id:
+            return "id"
+          case \Self.dueDate:
+            return "due_at"
+          default:
+            fatalError("Todo: no column is mapped for that key path")
+          }
+        }
+
+        enum CodingKeys: String, CodingKey {
+          case id = "id"
+          case dueDate = "due_at"
+        }
+
+        struct Draft: Encodable, Sendable {
+          var id: Int
+          var dueDate: Date?
+
+          enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case dueDate = "due_at"
+          }
+
+          init(id: Int, dueDate: Date? = nil) {
+            self.id = id
+            self.dueDate = dueDate
+          }
+        }
+      }
+      """#
+    }
+  }
 }

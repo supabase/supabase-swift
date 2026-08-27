@@ -100,4 +100,19 @@ struct TableMacroSupportTests {
     #expect(camelToSnakeCase("urlSession") == "url_session")
     #expect(camelToSnakeCase("id") == "id")
   }
+
+  @Test
+  func unwrapsBothOptionalSpellings() {
+    func unwrapped(_ type: String) -> String {
+      StoredProperty(
+        name: "x", type: type, isOptional: true, isPrimaryKey: false, hasDefault: false,
+        explicitColumn: nil
+      ).unwrappedType
+    }
+    #expect(unwrapped("Date?") == "Date")
+    #expect(unwrapped("Optional<Date>") == "Date")
+    #expect(unwrapped("[String]?") == "[String]")
+    #expect(unwrapped("Optional<[Int]>") == "[Int]")
+    #expect(unwrapped("String") == "String")
+  }
 }

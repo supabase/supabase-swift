@@ -20,6 +20,14 @@ struct PostgrestRelationTests {
     var task: String
     var isDone: Bool
 
+    struct Columns: Sendable {
+      let id = PostgrestColumn<Todo, Int>("id")
+      let task = PostgrestColumn<Todo, String>("task")
+      let isDone = PostgrestColumn<Todo, Bool>("is_done")
+    }
+
+    static let columns = Columns()
+
     static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
       switch keyPath {
       case \Self.id: "id"
