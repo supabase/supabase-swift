@@ -6,6 +6,8 @@
 //
 
 import Foundation
+import HTTPTypes
+import HTTPTypesFoundation
 import Testing
 
 @testable import HTTPRuntime
@@ -70,7 +72,7 @@ struct QueryEncodingTests {
 
     let request = try builder.build()
 
-    #expect(request.url.absoluteString == "https://example.supabase.co/todos?id=gt.1&id=lt.9")
+    #expect(request.url!.absoluteString == "https://example.supabase.co/todos?id=gt.1&id=lt.9")
   }
 
   @Test
@@ -82,7 +84,7 @@ struct QueryEncodingTests {
     let request = try builder.build()
 
     #expect(
-      request.url.absoluteString == "https://example.supabase.co/todos?select=%2A&done=eq.false")
+      request.url!.absoluteString == "https://example.supabase.co/todos?select=%2A&done=eq.false")
   }
 
   @Test
@@ -91,7 +93,7 @@ struct QueryEncodingTests {
 
     let request = try builder.build()
 
-    #expect(request.url.absoluteString == "https://example.supabase.co/todos")
+    #expect(request.url!.absoluteString == "https://example.supabase.co/todos")
   }
 
   @Test
@@ -102,7 +104,7 @@ struct QueryEncodingTests {
 
     let request = try builder.build()
 
-    #expect(request.url.absoluteString == "https://example.supabase.co/todos?select=%2A")
+    #expect(request.url!.absoluteString == "https://example.supabase.co/todos?select=%2A")
   }
 
   @Test
@@ -114,7 +116,7 @@ struct QueryEncodingTests {
 
     let request = try builder.build()
 
-    #expect(request.url.absoluteString == "https://example.supabase.co/todos?col=eq.100%25")
+    #expect(request.url!.absoluteString == "https://example.supabase.co/todos?col=eq.100%25")
   }
 
   @Test
@@ -127,7 +129,7 @@ struct QueryEncodingTests {
     let request = try builder.build()
 
     #expect(
-      request.url.absoluteString
+      request.url!.absoluteString
         == "https://example.supabase.co/todos?select=id%2Ctitle&done=eq.false")
   }
 
@@ -140,7 +142,7 @@ struct QueryEncodingTests {
     let request = try builder.build()
 
     #expect(
-      request.url.absoluteString == "https://example.supabase.co/todos?done=eq.false&select=%2A")
+      request.url!.absoluteString == "https://example.supabase.co/todos?done=eq.false&select=%2A")
   }
 
   @Test
@@ -154,7 +156,7 @@ struct QueryEncodingTests {
 
     let request = try builder.build()
 
-    #expect(request.url.absoluteString == "https://example.supabase.co/todos?id=eq.5&id=lt.9")
+    #expect(request.url!.absoluteString == "https://example.supabase.co/todos?id=eq.5&id=lt.9")
   }
 
   @Test
@@ -167,7 +169,7 @@ struct QueryEncodingTests {
 
     let request = try builder.build()
 
-    #expect(request.url.absoluteString == "https://example.supabase.co/todos?select=%2A")
+    #expect(request.url!.absoluteString == "https://example.supabase.co/todos?select=%2A")
   }
 
   // MARK: - PostgREST's recorded wire format
@@ -194,12 +196,12 @@ struct QueryEncodingTests {
     let expected =
       "https://example.supabase.co/todos?select=%2A&"
       + operators.map { "column=\($0).Some%20value" }.joined(separator: "&")
-    #expect(request.url.absoluteString == expected)
+    #expect(request.url!.absoluteString == expected)
   }
 
   struct WireFormatCase: Sendable, CustomStringConvertible {
     let name: String
-    let method: HTTPMethod
+    let method: HTTPRequest.Method
     let path: String
     let queryItems: [(name: String, value: String)]
     let url: String
@@ -463,7 +465,7 @@ struct QueryEncodingTests {
 
     let request = try builder.build()
 
-    #expect(request.url.absoluteString == testCase.url)
+    #expect(request.url!.absoluteString == testCase.url)
     #expect(request.method == testCase.method)
   }
 }
