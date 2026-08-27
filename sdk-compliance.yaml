@@ -719,10 +719,12 @@ features:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.like
+      - PostgrestFilterableExpression.like
   database.using_filters.ilike:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.ilike
+      - PostgrestFilterableExpression.ilike
   database.using_filters.is:
     status: implemented
     symbols:
@@ -737,46 +739,62 @@ features:
     symbols:
       - PostgrestRequestBuilder.in
       - PostgrestKeyPathFilterable.in
+      - PostgrestFilterableExpression.in
   database.using_filters.contains:
     status: implemented
+    note: "The operand literal is chosen by the column's Postgres type, not by the operator — `cs.{a,b}` for an array, `cs.[1,3)` for a range, `cs.{\"a\":1}` for jsonb. The typed surface spells the three as separate methods so each takes the operand shape it needs; the string builder takes one dictionary/array argument."
     symbols:
       - PostgrestRequestBuilder.contains
+      - PostgrestFilterableExpression.contains
+      - PostgrestFilterableExpression.containsRange
+      - PostgrestFilterableExpression.containsJSON
   database.using_filters.contained_by:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.containedBy
+      - PostgrestFilterableExpression.containedBy
+      - PostgrestFilterableExpression.containedByRange
+      - PostgrestFilterableExpression.containedByJSON
   database.using_filters.range_gt:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.rangeGt
       - PostgrestRequestBuilder.rangeGreaterThan
+      - PostgrestFilterableExpression.rangeGt
   database.using_filters.range_gte:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.rangeGte
       - PostgrestRequestBuilder.rangeGreaterThanOrEquals
+      - PostgrestFilterableExpression.rangeGte
   database.using_filters.range_lt:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.rangeLt
       - PostgrestRequestBuilder.rangeLowerThan
+      - PostgrestFilterableExpression.rangeLt
   database.using_filters.range_lte:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.rangeLte
       - PostgrestRequestBuilder.rangeLowerThanOrEquals
+      - PostgrestFilterableExpression.rangeLte
   database.using_filters.range_adjacent:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.rangeAdjacent
+      - PostgrestFilterableExpression.rangeAdjacent
   database.using_filters.overlaps:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.overlaps
+      - PostgrestFilterableExpression.overlaps
+      - PostgrestFilterableExpression.overlapsRange
   database.using_filters.text_search:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.textSearch
+      - PostgrestFilterableExpression.textSearch
     supporting_symbols:
       - TextSearchType
       - TextSearchType.init
@@ -840,10 +858,12 @@ features:
     note: "PostgrestRequestBuilder.match(_:pattern:) — the PostgrestFilterValue-typed overload backing the `~` operator, distinct from the dictionary-based overload used by database.using_filters.match above."
     symbols:
       - PostgrestRequestBuilder.match
+      - PostgrestFilterableExpression.regexMatch
   database.using_filters.regex_icase:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.imatch
+      - PostgrestFilterableExpression.regexIMatch
   database.using_filters.is_distinct:
     status: implemented
     symbols:
@@ -857,19 +877,23 @@ features:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.likeAllOf
+      - PostgrestFilterableExpression.likeAllOf
   database.using_filters.like_any:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.likeAnyOf
+      - PostgrestFilterableExpression.likeAnyOf
   database.using_filters.ilike_all:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.iLikeAllOf
+      - PostgrestFilterableExpression.ilikeAllOf
   database.using_filters.ilike_any:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.iLikeAnyOf
 
+      - PostgrestFilterableExpression.ilikeAnyOf
   database.using_modifiers.order:
     status: implemented
     symbols:

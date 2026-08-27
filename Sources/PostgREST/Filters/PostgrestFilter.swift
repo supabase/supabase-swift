@@ -27,7 +27,8 @@ public struct PostgrestFilter<R: PostgrestRelation>: Sendable {
     case comparison(column: String, operator: String, value: String)
 
     /// Everything after the `=` as one unparsed string. Separate from `comparison` because the
-    /// operator and value cannot be split.
+    /// operator and value cannot be split, and because `in`'s own `in.(…)` delimiters must
+    /// survive `group()` unescaped.
     case raw(column: String, operand: String)
 
     case and([Node])
@@ -164,8 +165,9 @@ extension PostgrestFilter {
     case .comparison(let column, let `operator`, let value):
       return "\(column).\(`operator`).\(escapePostgRESTFilterValue(value))"
     case .raw(let column, let operand):
-      // Not escaped: quoting would break the caller's own syntax. The cost is that a raw node
-      // cannot always sit in a group — a `::` in the column is a parse error inside `or=(…)`.
+      // Not escaped: quoting would break the caller's own syntax, and `in`'s own `in.(…)`
+      // delimiters must stay literal. The cost is that a raw node cannot always sit in a group —
+      // a `::` in the column is a parse error inside `or=(…)`.
       return "\(column).\(operand)"
     case .and(let children):
       return "and(\(children.map(group).joined(separator: ",")))"
