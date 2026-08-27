@@ -121,9 +121,9 @@ format.
 ```
 
 This runs the same stale-entry check locally, without network access or a
-checkout of `supabase/sdk`, and also runs as part of `ci.yml`'s `compliance`
-job — which, unlike `validate-capabilities.yml`, feeds into the required
-`CI Success` check.
+checkout of `supabase/sdk`. Run it yourself before pushing a public-API
+change — `validate-capabilities.yml` will eventually catch it too, but
+since it isn't a required check, nothing stops a merge if you don't.
 
 ## Code Style and Conventions
 

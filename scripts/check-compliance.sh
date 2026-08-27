@@ -6,14 +6,14 @@
 # newly added public API and registered symbols the code no longer has. But
 # that workflow is not a required status check on `main` — only `CI Success`
 # (this repo's own ci.yml) is — so a failing compliance check does not, by
-# itself, block a merge. This script reproduces the stale-entry half of that
-# check locally and without a base ref, so it can run as part of `CI
-# Success` (the "compliance" job in ci.yml) and actually gate merges: it
-# dumps the current public symbol graph, normalizes it the same way
-# upstream's normalize-symbolgraph.ts does (pathComponents joined with ".",
-# everything from the first "(" in the last component stripped), and does a
-# comm-style diff against every symbol sdk-compliance.yaml declares
-# (`symbols` + `supporting_symbols`, top level and per feature).
+# itself, block a merge, and nothing else runs it locally before a push.
+# This script reproduces the stale-entry half of that check locally and
+# without a base ref: it dumps the current public symbol graph, normalizes
+# it the same way upstream's normalize-symbolgraph.ts does (pathComponents
+# joined with ".", everything from the first "(" in the last component
+# stripped), and does a comm-style diff against every symbol
+# sdk-compliance.yaml declares (`symbols` + `supporting_symbols`, top level
+# and per feature).
 #
 # This only fails the build on STALE entries: symbols the manifest still
 # declares after the code that implemented them was deleted, moved, or
