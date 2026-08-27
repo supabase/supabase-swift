@@ -547,9 +547,9 @@ features:
       - AuthLocalStorage
   client.session_management.persist_session:
     status: implemented
-    note: "Sessions persist by default via AuthLocalStorage.defaultLocalStorage (KeychainLocalStorage on Apple platforms). There's no separate boolean toggle to disable persistence — that's done by swapping in a custom, non-persisting AuthLocalStorage via client.session_management.custom_storage."
+    note: "Sessions persist by default via AuthClient.Configuration.defaultLocalStorage (KeychainLocalStorage on Apple platforms). There's no separate boolean toggle to disable persistence — that's done by swapping in a custom, non-persisting AuthLocalStorage via client.session_management.custom_storage."
     symbols:
-      - AuthLocalStorage.defaultLocalStorage
+      - AuthClient.Configuration.defaultLocalStorage
 
   client.request_configuration.custom_http_client:
     status: partially_implemented
