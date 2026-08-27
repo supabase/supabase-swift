@@ -108,8 +108,8 @@ supporting_symbols:
 
   # The typed column-expression surface. A column expression is the left-hand side of every
   # filter, every `order` key and every `select` entry at once, so none of these types belongs to
-  # a single capability. The operator methods declared over them are 1:1 with a capability and are
-  # attributed to that feature's own `symbols:` list instead (see database.using_filters.*
+  # a single capability. The ~34 operator methods declared over them are 1:1 with a capability and
+  # are attributed to that feature's own `symbols:` list instead (see database.using_filters.*
   # below); `asc()`/`desc()` likewise, under database.using_modifiers.order.
   #
   # The position refinements are rules enforced by the type system rather than by the server: the
@@ -976,7 +976,57 @@ features:
   database.using_modifiers.request_cancellation: implemented
   database.using_modifiers.relationship_embed:
     status: partially_implemented
-    note: "Supported via query-string syntax in select() (e.g. 'user(*)'); no dedicated relationship builder API."
+    note: "Two spellings. The string builder takes query-string syntax in select() (e.g. 'user(*)'). The typed surface has a dedicated relationship API: `PostgrestToOneRelation`/`PostgrestToManyRelation`, declared on a relation's `Columns` namespace (emitted by the postgres-meta-backed generator, or hand-written; `@Table` does not synthesize them, since a macro cannot see foreign-key metadata), and projecting a column through one is compiler-checked in select position, and in order position for the to-one direction only (a to-many order key is PGRST118 on the server). Still partial: filtering *inside* an embed needs the `parent.title` rendering and an `!inner` decision, which is scoped separately (SDK-1575) — `embeddedFilterName` is what it will read."
+    symbols:
+      - PostgrestToOneRelation.subscript
+      - PostgrestToManyRelation.subscript
+    supporting_symbols:
+      - PostgrestToOneRelation
+      - PostgrestToOneRelation.init
+      - PostgrestToOneRelation.postgrestEmbedName
+      - PostgrestToManyRelation
+      - PostgrestToManyRelation.init
+      - PostgrestToManyRelation.postgrestEmbedName
+      # An embedded projection renders `parent(title)`, so a cast, JSON path or aggregate on one
+      # has to land *inside* the parentheses — PostgREST 16.1 answers 200 and silently drops
+      # anything outside them. Each embedded column type therefore shadows all eight inherited
+      # accessors rather than inheriting them from PostgrestColumnExpression.
+      - PostgrestToOneColumn
+      - PostgrestToOneColumn.postgrestExpression
+      - PostgrestToOneColumn.embeddedFilterName
+      - PostgrestToOneColumn.cast
+      - PostgrestToOneColumn.jsonText
+      - PostgrestToOneColumn.jsonObject
+      - PostgrestToOneColumn.sum
+      - PostgrestToOneColumn.avg
+      - PostgrestToOneColumn.min
+      - PostgrestToOneColumn.max
+      - PostgrestToOneColumn.count
+      - PostgrestToManyColumn
+      - PostgrestToManyColumn.postgrestExpression
+      - PostgrestToManyColumn.embeddedFilterName
+      - PostgrestToManyColumn.cast
+      - PostgrestToManyColumn.jsonText
+      - PostgrestToManyColumn.jsonObject
+      - PostgrestToManyColumn.sum
+      - PostgrestToManyColumn.avg
+      - PostgrestToManyColumn.min
+      - PostgrestToManyColumn.max
+      - PostgrestToManyColumn.count
+      # The to-one direction needs a fifth type to reach the same place. A to-many projection can
+      # return itself from a cast or an aggregate, because it was never orderable; a to-one
+      # projection is orderable and a cast or aggregate of it is not, so it has to move to a
+      # select-only type that still keeps the embed name and the inner expression apart.
+      - PostgrestToOneDerivedColumn
+      - PostgrestToOneDerivedColumn.postgrestExpression
+      - PostgrestToOneDerivedColumn.cast
+      - PostgrestToOneDerivedColumn.jsonText
+      - PostgrestToOneDerivedColumn.jsonObject
+      - PostgrestToOneDerivedColumn.sum
+      - PostgrestToOneDerivedColumn.avg
+      - PostgrestToOneDerivedColumn.min
+      - PostgrestToOneDerivedColumn.max
+      - PostgrestToOneDerivedColumn.count
   database.using_modifiers.dry_run:
     status: implemented
     symbols:
