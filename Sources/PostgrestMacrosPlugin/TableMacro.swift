@@ -82,7 +82,7 @@ public struct TableMacro: ExtensionMacro {
       columnNameFunction(access: access, type: type.trimmedDescription, properties: properties),
     ]
     // The one thing `@PrimaryKey` uniquely does. Without this the marker is inert: after the key
-    // stopped gating `Insert` optionality and stopped being filtered out of `Update`, writing it or
+    // stopped gating `Draft` optionality and stopped being filtered out of `Update`, writing it or
     // omitting it expanded byte-for-byte the same. Emitted only when a key is declared, and the
     // `PostgrestKeyedRelation` conformance below rides on the same condition — the requirement has
     // no default, so a keyless relation does not conform, which is what withholds the
@@ -96,7 +96,7 @@ public struct TableMacro: ExtensionMacro {
       body.append(codingKeys)
     }
     if !arguments.readOnly {
-      // `Insert` carries every column, and a column is optional exactly when the database can
+      // `Draft` carries every column, and a column is optional exactly when the database can
       // fill it in: it is nullable, or it has a default. Being the primary key is not one of the
       // reasons — `postgres-meta`, which generates supabase-js's types from the same column
       // metadata, computes `is_nullable || is_identity || default_value !== null` and never
@@ -113,7 +113,7 @@ public struct TableMacro: ExtensionMacro {
       // mutation — so the key is assignable like any other column.
       body.append(
         writeShape(
-          named: "Insert",
+          named: "Draft",
           access: access,
           fields: properties.map {
             ($0, $0.isOptional || $0.hasDefault ? $0.optionalType : $0.type)
@@ -142,7 +142,7 @@ public struct TableMacro: ExtensionMacro {
   /// The protocols `@Table` conforms the annotated type to.
   ///
   /// `Decodable` is in the list and `Encodable` is not: rows are decoded from responses, and a
-  /// write encodes something other than a row — the generated `Insert` shape, or a
+  /// write encodes something other than a row — the generated `Draft` shape, or a
   /// `PostgrestUpdate` built from this type's key paths.
   ///
   /// Keyed and writable are independent axes: a view Postgres reports a key for is keyed and still
@@ -209,7 +209,7 @@ public struct TableMacro: ExtensionMacro {
     let parameters =
       fields
       // The default follows the *generated* parameter type, not the property's own. `@Default`
-      // makes a column optional in `Insert` even when the property is not, so testing the property
+      // makes a column optional in `Draft` even when the property is not, so testing the property
       // here would drop the `= nil` that lets a caller omit a database-supplied column.
       .map { "\($0.property.name): \($0.type)\(postgrestIsOptionalType($0.type) ? " = nil" : "")" }
       .joined(separator: ", ")

@@ -56,12 +56,18 @@ public struct PostgrestTypedMutation<R: PostgrestWritableRelation>: PostgrestKey
 extension PostgrestTypedSource where R: PostgrestWritableRelation {
   /// Inserts a row.
   ///
-  /// - Parameter values: The row to insert, in the relation's `Insert` shape. Primary keys and
-  ///   defaulted columns are optional there, so either can be left out and filled in by the
-  ///   database.
+  /// ```swift
+  /// try await client.from(Todo.self)
+  ///   .insert(Todo.Draft(task: "buy milk"))
+  ///   .execute()
+  /// ```
+  ///
+  /// - Parameter values: The row to insert, in the relation's
+  ///   ``PostgrestWritableRelation/Draft`` shape. Primary keys and defaulted columns are optional
+  ///   there, so either can be left out and filled in by the database.
   /// - Returns: A ``PostgrestTypedMutation`` to execute, or to request rows back from.
   /// - Throws: An encoding error if `values` cannot be serialized.
-  public func insert(_ values: R.Insert) throws -> PostgrestTypedMutation<R> {
+  public func insert(_ values: R.Draft) throws -> PostgrestTypedMutation<R> {
     PostgrestTypedMutation(builder: try builder.insert(values, returning: .minimal))
   }
 
@@ -70,7 +76,7 @@ extension PostgrestTypedSource where R: PostgrestWritableRelation {
   /// ```swift
   /// // merge on the `email` unique index rather than on the key
   /// try await client.from(User.self)
-  ///   .upsert(User.Insert(email: "a@example.com", name: "Ada"), onConflict: \.email)
+  ///   .upsert(User.Draft(email: "a@example.com", name: "Ada"), onConflict: \.email)
   ///   .execute()
   /// ```
   ///
@@ -82,13 +88,13 @@ extension PostgrestTypedSource where R: PostgrestWritableRelation {
   /// To merge on the primary key, use ``upsert(_:)``, which derives the target instead.
   ///
   /// - Parameters:
-  ///   - values: The row to upsert, in the relation's `Insert` shape.
+  ///   - values: The row to upsert, in the relation's ``PostgrestWritableRelation/Draft`` shape.
   ///   - column: The first column of the unique constraint to merge on.
   ///   - additional: The remaining columns, for a constraint spanning more than one.
   /// - Returns: A ``PostgrestTypedMutation`` to execute, or to request rows back from.
   /// - Throws: An encoding error if `values` cannot be serialized.
   public func upsert(
-    _ values: R.Insert,
+    _ values: R.Draft,
     onConflict column: PartialKeyPath<R>,
     _ additional: PartialKeyPath<R>...
   ) throws -> PostgrestTypedMutation<R> {
@@ -158,7 +164,7 @@ extension PostgrestTypedSource where R: PostgrestWritableRelation & PostgrestKey
   ///
   /// ```swift
   /// try await client.from(Todo.self)
-  ///   .upsert(Todo.Insert(id: 1, task: "buy milk"))
+  ///   .upsert(Todo.Draft(id: 1, task: "buy milk"))
   ///   .execute()
   /// ```
   ///
@@ -168,13 +174,18 @@ extension PostgrestTypedSource where R: PostgrestWritableRelation & PostgrestKey
   /// every call. Requiring the conformance makes that a compile error instead; use
   /// ``upsert(_:onConflict:_:)`` there and name a unique constraint the relation does have.
   ///
-  /// > Note: The target only takes effect if the columns it names are in the body. A key the
-  /// > database generates is optional in `Insert`, so omitting it still inserts.
+  /// The same ``PostgrestWritableRelation/Draft`` serves this and ``insert(_:)``: it is a row the
+  /// database has not stored yet, whether this call ends up inserting it or merging it into an
+  /// existing one.
   ///
-  /// - Parameter values: The row to upsert, in the relation's `Insert` shape.
+  /// > Note: The target only takes effect if the columns it names are in the body. A key the
+  /// > database generates is optional in `Draft`, so omitting it still inserts.
+  ///
+  /// - Parameter values: The row to upsert, in the relation's ``PostgrestWritableRelation/Draft``
+  ///   shape.
   /// - Returns: A ``PostgrestTypedMutation`` to execute, or to request rows back from.
   /// - Throws: An encoding error if `values` cannot be serialized.
-  public func upsert(_ values: R.Insert) throws -> PostgrestTypedMutation<R> {
+  public func upsert(_ values: R.Draft) throws -> PostgrestTypedMutation<R> {
     PostgrestTypedMutation(
       builder: try builder.upsert(
         values,

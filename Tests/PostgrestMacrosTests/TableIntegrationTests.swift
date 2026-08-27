@@ -13,7 +13,7 @@ import Testing
 // extension of a type nested inside another type, so annotating a nested struct fails to compile.
 @Table("todos")
 struct IntegrationTodo: Hashable {
-  // `@Default` is what makes the key optional in `Insert`, not `@PrimaryKey`. It says the database
+  // `@Default` is what makes the key optional in `Draft`, not `@PrimaryKey`. It says the database
   // generates this one — an identity column or a column with a default — matching what
   // `postgres-meta` reads to make a column optional for supabase-js.
   @PrimaryKey @Default var id: Int
@@ -23,7 +23,7 @@ struct IntegrationTodo: Hashable {
 }
 
 // A compound natural key. Nothing in the database generates these, so neither half is `@Default`
-// and both are required by `Insert` — an incomplete key is a compile error, and an `Insert` that
+// and both are required by `Draft` — an incomplete key is a compile error, and a `Draft` that
 // dropped them made the table impossible to write to at all.
 @Table("user_roles")
 struct IntegrationUserRole {
@@ -77,7 +77,7 @@ struct TableIntegrationTests {
   func insertOmitsANilPrimaryKeyAndUsesColumnNames() throws {
     // The key is optional rather than absent, so leaving it out still lets the database fill it in.
     // Optional because it is `@Default`, not because it is the key.
-    let data = try JSONEncoder().encode(Todo.Insert(task: "buy milk", isDone: false))
+    let data = try JSONEncoder().encode(Todo.Draft(task: "buy milk", isDone: false))
     let json = String(decoding: data, as: UTF8.self)
     #expect(json.contains("\"id\"") == false)
     #expect(json.contains("\"is_done\"") == true)
@@ -86,7 +86,7 @@ struct TableIntegrationTests {
 
   @Test
   func insertCarriesAPrimaryKeyTheClientSupplies() throws {
-    let data = try JSONEncoder().encode(Todo.Insert(id: 7, task: "buy milk"))
+    let data = try JSONEncoder().encode(Todo.Draft(id: 7, task: "buy milk"))
     let json = String(decoding: data, as: UTF8.self)
     #expect(json.contains("\"id\":7") == true)
   }
@@ -96,11 +96,11 @@ struct TableIntegrationTests {
     // The acceptance criterion for a join table: both halves of the key reach the wire, so the row
     // can actually be created.
     //
-    // Both are also *required*, because neither is `@Default`. `IntegrationUserRole.Insert()` and
-    // `.Insert(userID: 1)` no longer compile, which is the point — before, they compiled and sent
+    // Both are also *required*, because neither is `@Default`. `IntegrationUserRole.Draft()` and
+    // `.Draft(userID: 1)` no longer compile, which is the point — before, they compiled and sent
     // an incomplete body for PostgREST to reject at runtime. Swift cannot assert that something
     // fails to compile, so this notes it rather than covering it.
-    let data = try JSONEncoder().encode(IntegrationUserRole.Insert(userID: 1, roleID: 2))
+    let data = try JSONEncoder().encode(IntegrationUserRole.Draft(userID: 1, roleID: 2))
     let json = String(decoding: data, as: UTF8.self)
     #expect(json.contains("\"user_id\":1") == true)
     #expect(json.contains("\"role_id\":2") == true)
@@ -108,7 +108,7 @@ struct TableIntegrationTests {
 
   @Test
   func macroReportsThePrimaryKeyColumns() {
-    // The only thing `@PrimaryKey` produces now that it no longer gates `Insert` optionality or
+    // The only thing `@PrimaryKey` produces now that it no longer gates `Draft` optionality or
     // filters `Update`. Declaration order, and column names rather than property names.
     #expect(Todo.primaryKeyColumns == ["id"])
     #expect(IntegrationUserRole.primaryKeyColumns == ["user_id", "role_id"])
@@ -133,7 +133,7 @@ struct TableIntegrationTests {
     _ = try await capture.client
       .from(IntegrationAuditEvent.self)
       .upsert(
-        IntegrationAuditEvent.Insert(action: "sign_in", recordedBy: "service_role"),
+        IntegrationAuditEvent.Draft(action: "sign_in", recordedBy: "service_role"),
         onConflict: \.action
       )
       .execute()
@@ -146,15 +146,15 @@ struct TableIntegrationTests {
     // This is the assertion the expansion test cannot make: `MacroTesting` compares generated
     // text, it does not compile it. The call omits `tag`, which only compiles if the generated
     // initializer defaulted an `Optional<String>` to nil.
-    let insert = try JSONEncoder().encode(IntegrationNote.Insert(body: "hello"))
+    let insert = try JSONEncoder().encode(IntegrationNote.Draft(body: "hello"))
     #expect(String(decoding: insert, as: UTF8.self) == #"{"body":"hello"}"#)
   }
 
   @Test
   func aNilOptionalIsOmittedSoTheDatabaseDefaultApplies() throws {
-    // `@Default var isDone` is optional in `Insert` precisely so it can be left out. Encoding it
+    // `@Default var isDone` is optional in `Draft` precisely so it can be left out. Encoding it
     // as `null` would insert NULL instead of letting the column default apply.
-    let data = try JSONEncoder().encode(Todo.Insert(task: "buy milk"))
+    let data = try JSONEncoder().encode(Todo.Draft(task: "buy milk"))
     let json = String(decoding: data, as: UTF8.self)
     #expect(json == #"{"task":"buy milk"}"#)
   }
@@ -205,7 +205,7 @@ struct TableIntegrationTests {
     let capture = RequestCapture()
     _ = try await capture.client
       .from(Todo.self)
-      .insert(Todo.Insert(task: "buy milk"))
+      .insert(Todo.Draft(task: "buy milk"))
       .execute()
 
     #expect(capture.path?.hasSuffix("/todos") == true)
@@ -230,12 +230,12 @@ struct TableIntegrationTests {
   @Test
   func aTypedUpsertCarriesTheConflictKey() async throws {
     // The conflict target only means something if the columns it names are in the body. While
-    // `Insert` dropped the key, the merge half of every upsert was unreachable and each call just
+    // `Draft` dropped the key, the merge half of every upsert was unreachable and each call just
     // inserted another row.
     let capture = RequestCapture()
     _ = try await capture.client
       .from(Todo.self)
-      .upsert(Todo.Insert(id: 1, task: "buy milk"))
+      .upsert(Todo.Draft(id: 1, task: "buy milk"))
       .execute()
 
     #expect(capture.path?.hasSuffix("/todos") == true)
@@ -250,7 +250,7 @@ struct TableIntegrationTests {
     let capture = RequestCapture()
     _ = try await capture.client
       .from(Todo.self)
-      .upsert(Todo.Insert(id: 1, task: "buy milk"))
+      .upsert(Todo.Draft(id: 1, task: "buy milk"))
       .execute()
 
     #expect(capture.query?.contains("on_conflict=id") == true)
@@ -262,7 +262,7 @@ struct TableIntegrationTests {
     let capture = RequestCapture()
     _ = try await capture.client
       .from(IntegrationUserRole.self)
-      .upsert(IntegrationUserRole.Insert(userID: 1, roleID: 2))
+      .upsert(IntegrationUserRole.Draft(userID: 1, roleID: 2))
       .execute()
 
     #expect(capture.query?.contains("on_conflict=user_id,role_id") == true)
@@ -276,7 +276,7 @@ struct TableIntegrationTests {
     let capture = RequestCapture()
     _ = try await capture.client
       .from(IntegrationNote.self)
-      .upsert(IntegrationNote.Insert(body: "remember the milk", tag: "home"), onConflict: \.tag)
+      .upsert(IntegrationNote.Draft(body: "remember the milk", tag: "home"), onConflict: \.tag)
       .execute()
 
     #expect(capture.query?.contains("on_conflict=tag") == true)
@@ -289,7 +289,7 @@ struct TableIntegrationTests {
     let capture = RequestCapture()
     _ = try await capture.client
       .from(Todo.self)
-      .upsert(Todo.Insert(task: "buy milk"), onConflict: \.task, \.isDone)
+      .upsert(Todo.Draft(task: "buy milk"), onConflict: \.task, \.isDone)
       .execute()
 
     #expect(capture.query?.contains("on_conflict=task,is_done") == true)

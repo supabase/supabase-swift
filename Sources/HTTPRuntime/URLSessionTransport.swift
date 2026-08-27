@@ -5,6 +5,8 @@
 //  Created by Guilherme Souza on 08/07/26.
 //
 package import Foundation
+package import HTTPTypes
+import HTTPTypesFoundation
 
 #if canImport(FoundationNetworking)
   package import FoundationNetworking
@@ -24,6 +26,11 @@ package import Foundation
 ///   — background transfers must use delegate-based `downloadTask`/`uploadTask`
 ///   that complete out-of-process. That path is documented as a known limitation
 ///   rather than faked here.
+/// - `URLRequest(httpRequest:)` carries no timeout, and `HTTPTypes.HTTPRequest`
+///   has no field for one, so there is no per-request timeout here — only the
+///   session-wide `URLSessionConfiguration.timeoutIntervalForRequest`.
+///   Supporting a per-request timeout means building the `URLRequest` by hand
+///   and giving up the `HTTPTypesFoundation` conveniences above.
 package struct URLSessionTransport: HTTPTransport {
   private let session: URLSession
 
@@ -35,61 +42,90 @@ package struct URLSessionTransport: HTTPTransport {
     self.session = session
   }
 
-  package func send(_ request: HTTPRequest, uploadProgress: ProgressHandler?)
-    async throws(HTTPError) -> HTTPResponse
+  package func send(_ request: HTTPRequest, body: HTTPBody?, uploadProgress: ProgressHandler?)
+    async throws(HTTPRuntimeError) -> HTTPBufferedResponse
   {
-    let urlRequest = Self.makeURLRequest(request)
     let delegate = uploadProgress.map { ProgressDelegate(onProgress: $0) }
 
     let data: Data
-    let response: URLResponse
+    let response: HTTPResponse
     do {
-      switch request.body {
+      switch body {
       case nil:
-        (data, response) = try await session.data(for: urlRequest, delegate: delegate)
+        (data, response) = try await session.data(for: request, delegate: delegate)
       case .data(let payload):
         (data, response) = try await session.upload(
-          for: urlRequest, from: payload, delegate: delegate)
+          for: request, from: payload, delegate: delegate)
       case .file(let fileURL):
         (data, response) = try await session.upload(
-          for: urlRequest, fromFile: fileURL, delegate: delegate)
+          for: request, fromFile: fileURL, delegate: delegate)
       }
     } catch {
-      throw HTTPError.transport(error)
+      throw HTTPRuntimeError.transport(error)
     }
-    return HTTPResponse(head: Self.makeHead(response), body: data)
+    return HTTPBufferedResponse(head: response, body: data)
   }
 
   #if canImport(FoundationNetworking)
     // swift-corelibs-foundation has no async byte-streaming API
     // (`bytes(for:)`/`AsyncBytes`), so on Linux the response is buffered in
     // full and delivered as a single chunk instead of streamed incrementally.
-    package func stream(_ request: HTTPRequest) async throws(HTTPError) -> HTTPResponseStream {
-      try Self.rejectFileBody(request)
-      let urlRequest = Self.makeURLRequest(request)
+    package func stream(_ request: HTTPRequest, body: HTTPBody?) async throws(HTTPRuntimeError)
+      -> HTTPStreamedResponse
+    {
+      try Self.rejectFileBody(body)
       let data: Data
-      let response: URLResponse
-      do {
-        (data, response) = try await session.data(for: urlRequest)
-      } catch {
-        throw HTTPError.transport(error)
+      let response: HTTPResponse
+      if case .data(let payload) = body {
+        // The `HTTPRequest` convenience carries no body, so a request that has
+        // one has to go through a hand-built `URLRequest`.
+        var urlRequest = try Self.makeURLRequest(for: request)
+        urlRequest.httpBody = payload
+        let urlResponse: URLResponse
+        do {
+          (data, urlResponse) = try await session.data(for: urlRequest)
+        } catch {
+          throw HTTPRuntimeError.transport(error)
+        }
+        response = try Self.makeHTTPResponse(from: urlResponse)
+      } else {
+        do {
+          (data, response) = try await session.data(for: request)
+        } catch {
+          throw HTTPRuntimeError.transport(error)
+        }
       }
       let body = AsyncThrowingStream<Data, any Error> { continuation in
         continuation.yield(data)
         continuation.finish()
       }
-      return HTTPResponseStream(head: Self.makeHead(response), body: body)
+      return HTTPStreamedResponse(head: response, body: body)
     }
   #else
-    package func stream(_ request: HTTPRequest) async throws(HTTPError) -> HTTPResponseStream {
-      try Self.rejectFileBody(request)
-      let urlRequest = Self.makeURLRequest(request)
+    package func stream(_ request: HTTPRequest, body: HTTPBody?) async throws(HTTPRuntimeError)
+      -> HTTPStreamedResponse
+    {
+      try Self.rejectFileBody(body)
       let bytes: URLSession.AsyncBytes
-      let response: URLResponse
-      do {
-        (bytes, response) = try await session.bytes(for: urlRequest)
-      } catch {
-        throw HTTPError.transport(error)
+      let response: HTTPResponse
+      if case .data(let payload) = body {
+        // The `HTTPRequest` convenience carries no body, so a request that has
+        // one has to go through a hand-built `URLRequest`.
+        var urlRequest = try Self.makeURLRequest(for: request)
+        urlRequest.httpBody = payload
+        let urlResponse: URLResponse
+        do {
+          (bytes, urlResponse) = try await session.bytes(for: urlRequest)
+        } catch {
+          throw HTTPRuntimeError.transport(error)
+        }
+        response = try Self.makeHTTPResponse(from: urlResponse)
+      } else {
+        do {
+          (bytes, response) = try await session.bytes(for: request)
+        } catch {
+          throw HTTPRuntimeError.transport(error)
+        }
       }
 
       let body = AsyncThrowingStream<Data, any Error> { continuation in
@@ -109,52 +145,54 @@ package struct URLSessionTransport: HTTPTransport {
             if !buffer.isEmpty { continuation.yield(Data(buffer)) }
             continuation.finish()
           } catch {
-            continuation.finish(throwing: HTTPError.transport(error))
+            continuation.finish(throwing: HTTPRuntimeError.transport(error))
           }
         }
         continuation.onTermination = { _ in task.cancel() }
       }
-      return HTTPResponseStream(head: Self.makeHead(response), body: body)
+
+      return HTTPStreamedResponse(head: response, body: body)
     }
   #endif
 
   // MARK: - Helpers
 
-  /// `stream(_:)` uses `session.data(for:)`/`bytes(for:)`, neither of which
-  /// takes a file URL, so a `.file` body would silently transmit empty
-  /// instead of the file's contents. Reject it up front rather than send(_:)
-  /// which knows how to upload file bodies.
-  private static func rejectFileBody(_ request: HTTPRequest) throws(HTTPError) {
-    if case .file = request.body {
-      throw HTTPError.unsupportedRequestBody(
+  /// `stream(_:body:)` sends a `.data` body by attaching it to a hand-built
+  /// `URLRequest`, which buffers the whole payload in memory. A `.file` body
+  /// exists precisely so a large payload never does that, so streaming one
+  /// through the same path would defeat its purpose. Reject it up front and
+  /// point at `send(_:body:uploadProgress:)`, which streams the file from disk.
+  private static func rejectFileBody(_ body: HTTPBody?) throws(HTTPRuntimeError) {
+    if case .file = body {
+      throw HTTPRuntimeError.unsupportedRequestBody(
         "stream(_:) does not support file-backed request bodies; use send(_:uploadProgress:) instead."
       )
     }
   }
 
-  private static func makeURLRequest(_ request: HTTPRequest) -> URLRequest {
-    var urlRequest = URLRequest(url: request.url)
-    urlRequest.httpMethod = request.method.rawValue
-    for (name, value) in request.headers {
-      urlRequest.setValue(value, forHTTPHeaderField: name)
-    }
-    if case .data(let payload) = request.body {
-      urlRequest.httpBody = payload
+  /// `URLRequest(httpRequest:)` is failable, and returns nil exactly when the
+  /// request's pseudo-header fields do not form a URL. Force-unwrapping those
+  /// same fields to build an error would crash in that case, so map the nil to
+  /// `.transport` instead.
+  private static func makeURLRequest(for request: HTTPRequest) throws(HTTPRuntimeError)
+    -> URLRequest
+  {
+    guard let urlRequest = URLRequest(httpRequest: request) else {
+      throw HTTPRuntimeError.transport(URLError(.badURL))
     }
     return urlRequest
   }
 
-  private static func makeHead(_ response: URLResponse) -> HTTPResponseHead {
-    guard let http = response as? HTTPURLResponse else {
-      return HTTPResponseHead(status: 0, headers: [:])
+  /// The `URLRequest`-taking URLSession calls hand back a `URLResponse` rather
+  /// than an `HTTPResponse`, so convert, without force-unwrapping a response
+  /// that turns out not to be an HTTP one.
+  private static func makeHTTPResponse(from response: URLResponse) throws(HTTPRuntimeError)
+    -> HTTPResponse
+  {
+    guard let httpResponse = (response as? HTTPURLResponse)?.httpResponse else {
+      throw HTTPRuntimeError.transport(URLError(.badServerResponse))
     }
-    var headers: [String: String] = [:]
-    for (key, value) in http.allHeaderFields {
-      if let key = key as? String, let value = value as? String {
-        headers[key] = value
-      }
-    }
-    return HTTPResponseHead(status: http.statusCode, headers: headers)
+    return httpResponse
   }
 }
 

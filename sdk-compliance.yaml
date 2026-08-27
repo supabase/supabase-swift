@@ -99,7 +99,7 @@ supporting_symbols:
   - PostgrestTransformablePhase
   - PostgrestTypedQuery.Relation
   - PostgrestWritableRelation
-  - PostgrestWritableRelation.Insert
+  - PostgrestWritableRelation.Draft
 
   # The `PostgrestMacros` attributes. `@Table` synthesizes the relation
   # conformance used by every database.* typed entry point, and the three
