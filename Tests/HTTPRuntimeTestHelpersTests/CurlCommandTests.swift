@@ -6,6 +6,8 @@
 //
 import Foundation
 import HTTPRuntime
+import HTTPTypes
+import HTTPTypesFoundation
 import Testing
 
 @testable import HTTPRuntimeTestHelpers
@@ -17,9 +19,9 @@ struct CurlCommandTests {
     let request = HTTPRequest(
       method: .get,
       url: URL(string: "https://example.com/x?b=2&a=1")!,
-      headers: ["Content-Type": "application/json", "Accept": "application/json"])
+      headerFields: [.contentType: "application/json", .accept: "application/json"])
     #expect(
-      curlCommand(for: request) == """
+      curlCommand(for: request, body: nil) == """
         curl \\
         \t--header "Accept: application/json" \\
         \t--header "Content-Type: application/json" \\
@@ -32,10 +34,9 @@ struct CurlCommandTests {
     let request = HTTPRequest(
       method: .post,
       url: URL(string: "https://example.com/x")!,
-      headers: [:],
-      body: .data(Data(#"{"a":1}"#.utf8)))
+      headerFields: [:])
     #expect(
-      curlCommand(for: request) == #"""
+      curlCommand(for: request, body: .data(Data(#"{"a":1}"#.utf8))) == #"""
         curl \
         	--request POST \
         	--data "{\"a\":1}" \
@@ -47,7 +48,7 @@ struct CurlCommandTests {
   func rendersHead() {
     let request = HTTPRequest(method: .head, url: URL(string: "https://example.com/x")!)
     #expect(
-      curlCommand(for: request) == """
+      curlCommand(for: request, body: nil) == """
         curl \\
         \t--head \\
         \t"https://example.com/x"

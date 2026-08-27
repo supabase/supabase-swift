@@ -38,7 +38,7 @@
   conformances: Decodable, Sendable, PostgrestRelation, PostgrestKeyedRelation,
   PostgrestWritableRelation,
   names: named(relationName), named(schema), named(selectString), named(columnName(for:)),
-  named(primaryKeyColumns), named(CodingKeys), named(Draft), named(Update)
+  named(primaryKeyColumns), named(CodingKeys), named(Draft)
 )
 public macro Table(
   _ name: String,
