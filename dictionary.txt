@@ -258,3 +258,10 @@ memberwise
 # Term from PostgrestTypedMutation's upsert doc (an empty conflict target cannot be
 # written, so it is unrepresentable rather than merely invalid).
 unrepresentable
+
+# Terms from the typed column-expression surface (Sources/PostgREST/Columns).
+associatedtype
+uncast
+
+# Term from the comparison operators' documentation (PostgrestFilter+Comparison.swift).
+someop
