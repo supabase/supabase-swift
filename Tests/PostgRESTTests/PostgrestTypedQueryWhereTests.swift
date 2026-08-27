@@ -33,17 +33,6 @@ struct PostgrestTypedQueryWhereTests {
 
     static let columns = Columns()
 
-    static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
-      switch keyPath {
-      case \Self.id: "id"
-      case \Self.isDone: "is_done"
-      case \Self.priority: "priority"
-      case \Self.dueDate: "due_at"
-      case \Self.metadata: "metadata"
-      default: fatalError("unmapped key path")
-      }
-    }
-
     struct Draft: Encodable, Sendable {
       var id: Int
       var isDone: Bool

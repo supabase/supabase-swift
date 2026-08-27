@@ -28,25 +28,10 @@ struct PostgrestRelationTests {
 
     static let columns = Columns()
 
-    static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
-      switch keyPath {
-      case \Self.id: "id"
-      case \Self.task: "task"
-      case \Self.isDone: "is_done"
-      default: fatalError("unmapped key path")
-      }
-    }
-
     struct Draft: Encodable, Sendable {
       var task: String
       var isDone: Bool?
     }
-  }
-
-  @Test
-  func columnNameMapsKeyPathToDatabaseColumn() {
-    #expect(Todo.columnName(for: \.id) == "id")
-    #expect(Todo.columnName(for: \.isDone) == "is_done")
   }
 
   @Test

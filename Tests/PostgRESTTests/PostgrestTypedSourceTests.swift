@@ -26,14 +26,6 @@ struct PostgrestTypedSourceTests {
     }
 
     static let columns = Columns()
-
-    static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
-      switch keyPath {
-      case \Self.id: "id"
-      case \Self.task: "task"
-      default: fatalError("unmapped key path")
-      }
-    }
   }
 
   @Test

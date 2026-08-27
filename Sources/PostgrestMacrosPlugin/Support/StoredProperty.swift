@@ -67,7 +67,7 @@ extension DeclGroupSyntax {
   /// Reads the stored properties, skipping computed properties and static members.
   ///
   /// A skipped property therefore has no entry in `Columns`, so a filter or a selection naming it
-  /// is a compile error, and no case in `columnName(for:)`, which traps instead.
+  /// is a compile error rather than a runtime one.
   ///
   /// Three shapes are easy to get wrong, so each is spelled out:
   ///

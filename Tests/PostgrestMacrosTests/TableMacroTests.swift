@@ -30,7 +30,7 @@ struct TableMacroTests {
       }
       """
     } expansion: {
-      #"""
+      """
       struct Todo {
         @PrimaryKey @Default var id: Int
         var task: String
@@ -56,21 +56,6 @@ struct TableMacroTests {
         }
 
         static let columns = Columns()
-
-        static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
-          switch keyPath {
-          case \Self.id:
-            return "id"
-          case \Self.task:
-            return "task"
-          case \Self.isDone:
-            return "is_done"
-          case \Self.dueDate:
-            return "due_at"
-          default:
-            fatalError("Todo: no column is mapped for that key path")
-          }
-        }
 
         static let primaryKeyColumns: [String] = ["id"]
 
@@ -102,7 +87,7 @@ struct TableMacroTests {
           }
         }
       }
-      """#
+      """
     }
   }
 
@@ -116,7 +101,7 @@ struct TableMacroTests {
       }
       """
     } expansion: {
-      #"""
+      """
       struct ActiveTodo {
         var id: Int
       }
@@ -137,20 +122,11 @@ struct TableMacroTests {
 
         static let columns = Columns()
 
-        static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
-          switch keyPath {
-          case \Self.id:
-            return "id"
-          default:
-            fatalError("ActiveTodo: no column is mapped for that key path")
-          }
-        }
-
         enum CodingKeys: String, CodingKey {
           case id = "id"
         }
       }
-      """#
+      """
     }
   }
 
@@ -188,15 +164,6 @@ struct TableMacroTests {
 
         static let columns = Columns()
 
-        static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
-          switch keyPath {
-          case \Self.action:
-            return "action"
-          default:
-            fatalError("AuditEvent: no column is mapped for that key path")
-          }
-        }
-
         enum CodingKeys: String, CodingKey {
           case action = "action"
         }
@@ -228,7 +195,7 @@ struct TableMacroTests {
       }
       """
     } expansion: {
-      #"""
+      """
       public struct Todo {
         @PrimaryKey var id: Int
         var task: String
@@ -250,17 +217,6 @@ struct TableMacroTests {
         }
 
         public static let columns = Columns()
-
-        public static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
-          switch keyPath {
-          case \Self.id:
-            return "id"
-          case \Self.task:
-            return "task"
-          default:
-            fatalError("Todo: no column is mapped for that key path")
-          }
-        }
 
         public static let primaryKeyColumns: [String] = ["id"]
 
@@ -284,7 +240,7 @@ struct TableMacroTests {
           }
         }
       }
-      """#
+      """
     }
   }
 
@@ -300,7 +256,7 @@ struct TableMacroTests {
       }
       """
     } expansion: {
-      #"""
+      """
       struct Todo {
         static let table = "todos"
         var htmlURL: String
@@ -323,15 +279,6 @@ struct TableMacroTests {
 
         static let columns = Columns()
 
-        static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
-          switch keyPath {
-          case \Self.htmlURL:
-            return "html_url"
-          default:
-            fatalError("Todo: no column is mapped for that key path")
-          }
-        }
-
         enum CodingKeys: String, CodingKey {
           case htmlURL = "html_url"
         }
@@ -348,7 +295,7 @@ struct TableMacroTests {
           }
         }
       }
-      """#
+      """
     }
   }
   @Test
@@ -363,7 +310,7 @@ struct TableMacroTests {
       }
       """
     } expansion: {
-      #"""
+      """
       struct Todo {
         @PrimaryKey var id: Int
         var task: String, note: String
@@ -389,23 +336,6 @@ struct TableMacroTests {
         }
 
         static let columns = Columns()
-
-        static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
-          switch keyPath {
-          case \Self.id:
-            return "id"
-          case \Self.task:
-            return "task"
-          case \Self.note:
-            return "note"
-          case \Self.draft:
-            return "draft"
-          case \Self.review:
-            return "review"
-          default:
-            fatalError("Todo: no column is mapped for that key path")
-          }
-        }
 
         static let primaryKeyColumns: [String] = ["id"]
 
@@ -441,7 +371,7 @@ struct TableMacroTests {
           }
         }
       }
-      """#
+      """
     }
   }
 
@@ -461,7 +391,7 @@ struct TableMacroTests {
       }
       """
     } expansion: {
-      #"""
+      """
       struct Todo {
         @PrimaryKey var id: Int
         var task: String = "" {
@@ -489,17 +419,6 @@ struct TableMacroTests {
 
         static let columns = Columns()
 
-        static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
-          switch keyPath {
-          case \Self.id:
-            return "id"
-          case \Self.task:
-            return "task"
-          default:
-            fatalError("Todo: no column is mapped for that key path")
-          }
-        }
-
         static let primaryKeyColumns: [String] = ["id"]
 
         enum CodingKeys: String, CodingKey {
@@ -522,7 +441,7 @@ struct TableMacroTests {
           }
         }
       }
-      """#
+      """
     }
   }
 
@@ -540,7 +459,7 @@ struct TableMacroTests {
       }
       """
     } expansion: {
-      #"""
+      """
       struct UserRole {
         @PrimaryKey var userID: UUID
         @PrimaryKey var roleID: UUID
@@ -564,19 +483,6 @@ struct TableMacroTests {
         }
 
         static let columns = Columns()
-
-        static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
-          switch keyPath {
-          case \Self.userID:
-            return "user_id"
-          case \Self.roleID:
-            return "role_id"
-          case \Self.grantedAt:
-            return "granted_at"
-          default:
-            fatalError("UserRole: no column is mapped for that key path")
-          }
-        }
 
         static let primaryKeyColumns: [String] = ["user_id", "role_id"]
 
@@ -604,7 +510,7 @@ struct TableMacroTests {
           }
         }
       }
-      """#
+      """
     }
   }
 
@@ -622,7 +528,7 @@ struct TableMacroTests {
       }
       """
     } expansion: {
-      #"""
+      """
       struct UserRole {
         @PrimaryKey var userID: UUID
         @PrimaryKey var roleID: UUID
@@ -644,17 +550,6 @@ struct TableMacroTests {
         }
 
         static let columns = Columns()
-
-        static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
-          switch keyPath {
-          case \Self.userID:
-            return "user_id"
-          case \Self.roleID:
-            return "role_id"
-          default:
-            fatalError("UserRole: no column is mapped for that key path")
-          }
-        }
 
         static let primaryKeyColumns: [String] = ["user_id", "role_id"]
 
@@ -678,7 +573,7 @@ struct TableMacroTests {
           }
         }
       }
-      """#
+      """
     }
   }
   /// `Int?` and `Optional<Int>` are the same type, and optionality has to be recognized in both
@@ -698,7 +593,7 @@ struct TableMacroTests {
       }
       """
     } expansion: {
-      #"""
+      """
       struct Todo {
         @PrimaryKey @Default var id: Int
         var task: String
@@ -724,21 +619,6 @@ struct TableMacroTests {
         }
 
         static let columns = Columns()
-
-        static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
-          switch keyPath {
-          case \Self.id:
-            return "id"
-          case \Self.task:
-            return "task"
-          case \Self.note:
-            return "note"
-          case \Self.tag:
-            return "tag"
-          default:
-            fatalError("Todo: no column is mapped for that key path")
-          }
-        }
 
         static let primaryKeyColumns: [String] = ["id"]
 
@@ -770,7 +650,7 @@ struct TableMacroTests {
           }
         }
       }
-      """#
+      """
     }
   }
 
@@ -785,7 +665,7 @@ struct TableMacroTests {
       }
       """
     } expansion: {
-      #"""
+      """
       struct Todo {
         var id: Int
         @Column("due_at") var dueDate: Date?
@@ -808,17 +688,6 @@ struct TableMacroTests {
 
         static let columns = Columns()
 
-        static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
-          switch keyPath {
-          case \Self.id:
-            return "id"
-          case \Self.dueDate:
-            return "due_at"
-          default:
-            fatalError("Todo: no column is mapped for that key path")
-          }
-        }
-
         enum CodingKeys: String, CodingKey {
           case id = "id"
           case dueDate = "due_at"
@@ -839,7 +708,7 @@ struct TableMacroTests {
           }
         }
       }
-      """#
+      """
     }
   }
 }

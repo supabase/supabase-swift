@@ -98,13 +98,6 @@ struct TableIntegrationTests {
   }
 
   @Test
-  func macroMapsKeyPathsToColumns() {
-    #expect(Todo.columnName(for: \.id) == "id")
-    #expect(Todo.columnName(for: \.isDone) == "is_done")
-    #expect(Todo.columnName(for: \.dueDate) == "due_at")
-  }
-
-  @Test
   func insertOmitsANilPrimaryKeyAndUsesColumnNames() throws {
     // The key is optional rather than absent, so leaving it out still lets the database fill it in.
     // Optional because it is `@Default`, not because it is the key.
@@ -315,8 +308,8 @@ struct TableIntegrationTests {
 
   @Test
   func anExplicitConflictTargetMapsEveryColumnName() async throws {
-    // `isDone` has to reach the wire as `is_done`, so the override goes through the same
-    // `columnName(for:)` mapping every filter uses rather than interpolating property names.
+    // `isDone` has to reach the wire as `is_done`, so the override reads the name off `Columns`
+    // rather than interpolating the property name.
     let capture = RequestCapture()
     _ = try await capture.client
       .from(Todo.self)
