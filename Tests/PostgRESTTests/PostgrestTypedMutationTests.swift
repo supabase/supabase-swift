@@ -101,10 +101,10 @@ struct PostgrestTypedMutationTests {
   }
 
   @Test
-  func updateScopesByKeyPath() async throws {
+  func updateScopesByFilter() async throws {
     let capture = QueryCapture()
     _ = try await capture.client.from(Todo.self)
-      .update { $0.task = "done" }.eq(\.id, 1).execute()
+      .update { $0.task = "done" }.where { $0.id.eq(1) }.execute()
     #expect(capture.query?.contains("id=eq.1") == true)
   }
 
@@ -113,7 +113,7 @@ struct PostgrestTypedMutationTests {
     // The whole point of SDK-1610: the body has to carry `null`, not drop the key.
     let capture = QueryCapture()
     _ = try await capture.client.from(Todo.self)
-      .update { $0.note = nil }.eq(\.id, 1).execute()
+      .update { $0.note = nil }.where { $0.id.eq(1) }.execute()
     #expect(capture.bodyString == #"{"note":null}"#)
   }
 
@@ -121,7 +121,7 @@ struct PostgrestTypedMutationTests {
   func updateOmitsAColumnItNeverNames() async throws {
     let capture = QueryCapture()
     _ = try await capture.client.from(Todo.self)
-      .update { $0.task = "done" }.eq(\.id, 1).execute()
+      .update { $0.task = "done" }.where { $0.id.eq(1) }.execute()
     #expect(capture.bodyString == #"{"task":"done"}"#)
   }
 
@@ -130,14 +130,14 @@ struct PostgrestTypedMutationTests {
     // The payload is a value, so one layer can decide the change and another can send it.
     let update = PostgrestUpdate<Todo> { $0.note = nil }
     let capture = QueryCapture()
-    _ = try await capture.client.from(Todo.self).update(update).eq(\.id, 1).execute()
+    _ = try await capture.client.from(Todo.self).update(update).where { $0.id.eq(1) }.execute()
     #expect(capture.bodyString == #"{"note":null}"#)
   }
 
   @Test
-  func deleteScopesByKeyPath() async throws {
+  func deleteScopesByFilter() async throws {
     let capture = QueryCapture()
-    _ = try await capture.client.from(Todo.self).delete().eq(\.id, 1).execute()
+    _ = try await capture.client.from(Todo.self).delete().where { $0.id.eq(1) }.execute()
     #expect(capture.query?.contains("id=eq.1") == true)
   }
 

@@ -134,7 +134,7 @@ extension PostgrestTypedSource where R: PostgrestWritableRelation {
   ///     $0.task = "buy oat milk"
   ///     $0.dueDate = nil
   ///   }
-  ///   .eq(\.id, 1)
+  ///   .where { $0.id.eq(1) }
   ///   .execute()
   /// ```
   ///

@@ -205,7 +205,7 @@ struct TableIntegrationTests {
     _ = try await capture.client
       .from(Todo.self)
       .update { $0.dueDate = nil }
-      .eq(\.id, 1)
+      .where { $0.id.eq(1) }
       .execute()
 
     #expect(capture.bodyString == #"{"due_at":null}"#)
@@ -219,8 +219,8 @@ struct TableIntegrationTests {
     let todos = try await capture.client
       .from(Todo.self)
       .select()
-      .eq(\.isDone, false)
-      .order(\.id, ascending: false)
+      .where { $0.isDone.eq(false) }
+      .order { $0.id.desc() }
       .execute()
       .value
 
@@ -249,7 +249,7 @@ struct TableIntegrationTests {
     let rows = try await capture.client
       .from(IntegrationActiveTodo.self)
       .select()
-      .eq(\.task, "buy milk")
+      .where { $0.task.eq("buy milk") }
       .execute()
       .value
 
@@ -335,7 +335,7 @@ struct TableIntegrationTests {
     _ = try await capture.client
       .from(IntegrationUserRole.self)
       .update { $0.roleID = 3 }
-      .eq(\.userID, 1)
+      .where { $0.userID.eq(1) }
       .execute()
 
     #expect(capture.bodyString == #"{"role_id":3}"#)
@@ -348,7 +348,7 @@ struct TableIntegrationTests {
     _ = try await capture.client
       .from(Todo.self)
       .update { $0.task = "buy oat milk" }
-      .eq(\.id, 1)
+      .where { $0.id.eq(1) }
       .execute()
 
     #expect(capture.bodyString == #"{"task":"buy oat milk"}"#)

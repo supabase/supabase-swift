@@ -60,6 +60,7 @@ supporting_symbols:
   - PostgrestKeyPathFilterable.Relation
   - PostgrestKeyPathFilterable.builder
   - PostgrestKeyPathFilterable.init
+  - PostgrestKeyPathFilterable.where
   - PostgrestTypedMutation
   - PostgrestTypedMutation.Phase
   - PostgrestTypedMutation.Relation
@@ -104,10 +105,10 @@ supporting_symbols:
   - PostgrestWritableRelation.Draft
 
   # The typed column-expression surface. A column expression is the left-hand side of every
-  # filter and every `select` entry at once, so none of these types belongs to a single
-  # capability. The operator methods declared over them are 1:1 with a capability and are
+  # filter, every `order` key and every `select` entry at once, so none of these types belongs to
+  # a single capability. The operator methods declared over them are 1:1 with a capability and are
   # attributed to that feature's own `symbols:` list instead (see database.using_filters.*
-  # below).
+  # below); `asc()`/`desc()` likewise, under database.using_modifiers.order.
   #
   # The position refinements are rules enforced by the type system rather than by the server: the
   # base protocol is select position, `PostgrestFilterableExpression` adds the left of a filter,
@@ -902,6 +903,17 @@ features:
     symbols:
       - PostgrestRequestBuilder.order
       - PostgrestTypedQuery.order
+      - PostgrestOrderableExpression.asc
+      - PostgrestOrderableExpression.desc
+    supporting_symbols:
+      - PostgrestOrdering
+      - PostgrestOrdering.nullsFirst
+      - PostgrestOrdering.nullsLast
+      - PostgrestNullPlacement
+      - PostgrestNullPlacement.init
+      - PostgrestNullPlacement.rawValue
+      - PostgrestNullPlacement.first
+      - PostgrestNullPlacement.last
   database.using_modifiers.limit:
     status: implemented
     symbols:
