@@ -98,23 +98,32 @@ Ensures DocC documentation builds without warnings.
 ### Capability Compliance
 
 `sdk-compliance.yaml` declares this SDK's public API against the
-[supabase/sdk](https://github.com/supabase/sdk) capability matrix, and is
-CI-gated: `.github/workflows/validate-capabilities.yml` fails a PR that adds
-public API not listed there. **Any change to public API — adding, removing,
-renaming, or moving a symbol — updates `sdk-compliance.yaml` in the same
-commit.** This includes symbols a refactor deletes: a stale entry for a
-symbol that no longer exists is as much a compliance failure as a missing
-one, and CI does not check for it. See the file's own comments and
-`https://github.com/supabase/sdk/blob/main/CONTRIBUTING.md` for the format.
+[supabase/sdk](https://github.com/supabase/sdk) capability matrix.
+`.github/workflows/validate-capabilities.yml` calls supabase/sdk's reusable
+compliance workflow on every PR, and it does check for both newly added
+public API not listed in the manifest and registered symbols the code no
+longer has. But that workflow is not a required status check on `main` —
+only `CI Success` (this repo's own `ci.yml`) and the WIP/draft gate are —
+so a failing compliance check does not, by itself, block a merge. That is
+how a 15-symbol manifest drift shipped unnoticed.
+
+**Any change to public API — adding, removing, renaming, or moving a
+symbol — updates `sdk-compliance.yaml` in the same commit.** This includes
+symbols a refactor deletes: a stale entry for a symbol that no longer
+exists is as much a compliance failure as a missing one. See the file's
+own comments and
+`https://github.com/supabase/sdk/blob/main/CONTRIBUTING.md` for the
+format.
 
 ```bash
 # Check sdk-compliance.yaml against the current public API
 ./scripts/check-compliance.sh
 ```
 
-This reproduces the gate's stale-entry check locally: it fails if the
-manifest still lists a symbol the public API no longer has. It does not
-require network access or a checkout of `supabase/sdk`.
+This runs the same stale-entry check locally, without network access or a
+checkout of `supabase/sdk`, and also runs as part of `ci.yml`'s `compliance`
+job — which, unlike `validate-capabilities.yml`, feeds into the required
+`CI Success` check.
 
 ## Code Style and Conventions
 
