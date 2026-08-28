@@ -83,6 +83,11 @@ public struct PostgrestToManyRelation<
 }
 
 // MARK: - Columns
+//
+// Each embedded column implements `_deriving(_:)` to place a derivation inside its parentheses,
+// and declares its `Position`. Those two lines are all either kind contributes: `cast(to:)`,
+// `jsonText(_:)`, `jsonObject(_:)` and the five aggregates are declared once on
+// `PostgrestColumnExpression` and are correct here for free.
 
 /// A column of a to-**one** embedded relation, seen from the parent.
 ///
@@ -95,6 +100,8 @@ public struct PostgrestToOneColumn<
   Target: PostgrestRelation,
   Value
 >: PostgrestColumnExpression, PostgrestOrderableExpression {
+  public typealias Position = PostgrestSelectAndOrder
+
   let embed: String
   let inner: String
 
@@ -108,6 +115,12 @@ public struct PostgrestToOneColumn<
     self.embed = embed
     self.inner = inner
   }
+
+  public func _deriving<V, P: PostgrestPosition>(
+    _ derivation: String
+  ) -> PostgrestDerivedExpression<Root, V, P> {
+    PostgrestDerivedExpression<Root, V, P>(embed: embed, inner: inner + derivation)
+  }
 }
 
 /// A column of a to-**many** embedded relation, seen from the parent.
@@ -119,6 +132,8 @@ public struct PostgrestToManyColumn<
   Target: PostgrestRelation,
   Value
 >: PostgrestColumnExpression {
+  public typealias Position = PostgrestSelectOnly
+
   let embed: String
   let inner: String
 
@@ -132,195 +147,10 @@ public struct PostgrestToManyColumn<
     self.embed = embed
     self.inner = inner
   }
-}
 
-/// A cast, JSON path or aggregate applied to a to-**one** embedded column — **select position
-/// only**.
-///
-/// A to-one projection is orderable but a cast or an aggregate of one is not, so those methods
-/// return this type instead of `Self`. It keeps `embed` and `inner` apart, so anything chained
-/// onward also lands inside the embed's parentheses:
-/// `Order.columns.todo.amount.sum().cast(to: .text)` renders `todo(amount.sum()::text)`, with the
-/// cast applied — the flattened form `todo(amount.sum())::text` returns the value uncast.
-///
-/// > Note: Landing inside the parentheses makes an invalid chain loud rather than silent.
-/// > PostgREST accepts only `::` after an aggregate, so a second aggregate or a JSON path is a
-/// > 400. The to-many side behaves the same way.
-///
-/// > Important: When the operation is an aggregate, everything ``PostgrestAggregate`` documents
-/// > still applies — the `db-aggregates-enabled` requirement, and the response being an array of
-/// > objects keyed by the function name.
-public struct PostgrestToOneDerivedColumn<
-  Root: PostgrestRelation,
-  Target: PostgrestRelation,
-  Value
->: PostgrestColumnExpression {
-  let embed: String
-  let inner: String
-
-  /// The `select`-list form, `parent(title::text)`. There is no `order` or filter form.
-  public var postgrestExpression: String { "\(embed)(\(inner))" }
-
-  init(embed: String, inner: String) {
-    self.embed = embed
-    self.inner = inner
-  }
-}
-
-// Every embedded column type shadows the eight accessors it would otherwise inherit from
-// `PostgrestColumnExpression`. The inherited versions render *outside* the embed's parentheses —
-// `parent(title)::text` rather than `parent(title::text)` — and PostgREST does not reject that:
-// it answers 200 and silently drops whatever sits outside. The shadows put the operation inside.
-
-// MARK: - Shadowed accessors (to-one derived)
-
-extension PostgrestToOneDerivedColumn {
-  /// Casts this derived projection to another Postgres type.
-  ///
-  /// > Note: Make a cast the last step. PostgREST applies only the first cast in
-  /// > `parent(id::text::int)`, returning a JSON string while the Swift type says `Int`.
-  ///
-  /// - Returns: A derived projection rendering `embed(inner::sqlType)`.
-  public func cast<T>(
-    to target: PostgrestCastTarget<T>
-  ) -> PostgrestToOneDerivedColumn<Root, Target, T> {
-    PostgrestToOneDerivedColumn<Root, Target, T>(
-      embed: embed, inner: "\(inner)::\(target.sqlType)")
-  }
-
-  /// Reads a `json`/`jsonb` path on this derived projection as text, with `->>`.
-  public func jsonText(_ path: String) -> PostgrestToOneDerivedColumn<Root, Target, String> {
-    PostgrestToOneDerivedColumn<Root, Target, String>(embed: embed, inner: "\(inner)->>\(path)")
-  }
-
-  /// Reads a `json`/`jsonb` path on this derived projection as JSON, with `->`.
-  public func jsonObject(_ path: String) -> PostgrestToOneDerivedColumn<Root, Target, Value> {
-    PostgrestToOneDerivedColumn(embed: embed, inner: "\(inner)->\(path)")
-  }
-
-  /// The sum of this derived projection.
-  public func sum() -> PostgrestToOneDerivedColumn<Root, Target, Double> {
-    PostgrestToOneDerivedColumn<Root, Target, Double>(embed: embed, inner: "\(inner).sum()")
-  }
-
-  /// The mean of this derived projection.
-  public func avg() -> PostgrestToOneDerivedColumn<Root, Target, Double> {
-    PostgrestToOneDerivedColumn<Root, Target, Double>(embed: embed, inner: "\(inner).avg()")
-  }
-
-  /// The smallest value of this derived projection.
-  public func min() -> PostgrestToOneDerivedColumn<Root, Target, Value> {
-    PostgrestToOneDerivedColumn(embed: embed, inner: "\(inner).min()")
-  }
-
-  /// The largest value of this derived projection.
-  public func max() -> PostgrestToOneDerivedColumn<Root, Target, Value> {
-    PostgrestToOneDerivedColumn(embed: embed, inner: "\(inner).max()")
-  }
-
-  /// How many non-null values of this derived projection there are.
-  public func count() -> PostgrestToOneDerivedColumn<Root, Target, Int> {
-    PostgrestToOneDerivedColumn<Root, Target, Int>(embed: embed, inner: "\(inner).count()")
-  }
-}
-
-// MARK: - Shadowed accessors (to-one)
-
-extension PostgrestToOneColumn {
-  /// Casts this projection to another Postgres type.
-  ///
-  /// Returns ``PostgrestToOneDerivedColumn``, not `Self`: a to-one projection is orderable and a
-  /// cast of one is not.
-  ///
-  /// - Returns: A select-only derived projection rendering `embed(inner::sqlType)`.
-  public func cast<T>(
-    to target: PostgrestCastTarget<T>
-  ) -> PostgrestToOneDerivedColumn<Root, Target, T> {
-    PostgrestToOneDerivedColumn<Root, Target, T>(
-      embed: embed, inner: "\(inner)::\(target.sqlType)")
-  }
-
-  /// Reads a `json`/`jsonb` path on this projection as text, with `->>`.
-  ///
-  /// Keeps this type, unlike ``cast(to:)``: an arrow path inside an embed is still orderable.
-  public func jsonText(_ path: String) -> PostgrestToOneColumn<Root, Target, String> {
-    PostgrestToOneColumn<Root, Target, String>(embed: embed, inner: "\(inner)->>\(path)")
-  }
-
-  /// Reads a `json`/`jsonb` path on this projection as JSON, with `->`.
-  public func jsonObject(_ path: String) -> PostgrestToOneColumn<Root, Target, Value> {
-    PostgrestToOneColumn(embed: embed, inner: "\(inner)->\(path)")
-  }
-
-  /// The sum of this projection, over the single related row.
-  ///
-  /// Returns ``PostgrestToOneDerivedColumn``, not `Self`: a to-one projection is orderable and an
-  /// aggregate of one is not.
-  public func sum() -> PostgrestToOneDerivedColumn<Root, Target, Double> {
-    PostgrestToOneDerivedColumn<Root, Target, Double>(embed: embed, inner: "\(inner).sum()")
-  }
-
-  /// The mean of this projection, over the single related row.
-  public func avg() -> PostgrestToOneDerivedColumn<Root, Target, Double> {
-    PostgrestToOneDerivedColumn<Root, Target, Double>(embed: embed, inner: "\(inner).avg()")
-  }
-
-  /// The smallest value of this projection, over the single related row.
-  public func min() -> PostgrestToOneDerivedColumn<Root, Target, Value> {
-    PostgrestToOneDerivedColumn(embed: embed, inner: "\(inner).min()")
-  }
-
-  /// The largest value of this projection, over the single related row.
-  public func max() -> PostgrestToOneDerivedColumn<Root, Target, Value> {
-    PostgrestToOneDerivedColumn(embed: embed, inner: "\(inner).max()")
-  }
-
-  /// How many non-null values of this projection are in the single related row.
-  public func count() -> PostgrestToOneDerivedColumn<Root, Target, Int> {
-    PostgrestToOneDerivedColumn<Root, Target, Int>(embed: embed, inner: "\(inner).count()")
-  }
-}
-
-// MARK: - Shadowed accessors (to-many)
-
-extension PostgrestToManyColumn {
-  /// Casts this projection to another Postgres type, rendering `children(amount::text)`.
-  public func cast<T>(to target: PostgrestCastTarget<T>) -> PostgrestToManyColumn<Root, Target, T> {
-    PostgrestToManyColumn<Root, Target, T>(embed: embed, inner: "\(inner)::\(target.sqlType)")
-  }
-
-  /// Reads a `json`/`jsonb` path on this projection as text, with `->>`.
-  public func jsonText(_ path: String) -> PostgrestToManyColumn<Root, Target, String> {
-    PostgrestToManyColumn<Root, Target, String>(embed: embed, inner: "\(inner)->>\(path)")
-  }
-
-  /// Reads a `json`/`jsonb` path on this projection as JSON, with `->`.
-  public func jsonObject(_ path: String) -> PostgrestToManyColumn<Root, Target, Value> {
-    PostgrestToManyColumn(embed: embed, inner: "\(inner)->\(path)")
-  }
-
-  /// The sum of this embedded column across the group, rendering `orders(amount.sum())`.
-  public func sum() -> PostgrestToManyColumn<Root, Target, Double> {
-    PostgrestToManyColumn<Root, Target, Double>(embed: embed, inner: "\(inner).sum()")
-  }
-
-  /// The mean of this embedded column across the group.
-  public func avg() -> PostgrestToManyColumn<Root, Target, Double> {
-    PostgrestToManyColumn<Root, Target, Double>(embed: embed, inner: "\(inner).avg()")
-  }
-
-  /// The smallest value of this embedded column in the group.
-  public func min() -> PostgrestToManyColumn<Root, Target, Value> {
-    PostgrestToManyColumn(embed: embed, inner: "\(inner).min()")
-  }
-
-  /// The largest value of this embedded column in the group.
-  public func max() -> PostgrestToManyColumn<Root, Target, Value> {
-    PostgrestToManyColumn(embed: embed, inner: "\(inner).max()")
-  }
-
-  /// How many non-null values of this embedded column are in the group.
-  public func count() -> PostgrestToManyColumn<Root, Target, Int> {
-    PostgrestToManyColumn<Root, Target, Int>(embed: embed, inner: "\(inner).count()")
+  public func _deriving<V, P: PostgrestPosition>(
+    _ derivation: String
+  ) -> PostgrestDerivedExpression<Root, V, P> {
+    PostgrestDerivedExpression<Root, V, P>(embed: embed, inner: inner + derivation)
   }
 }

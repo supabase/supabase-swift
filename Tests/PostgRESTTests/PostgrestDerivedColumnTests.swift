@@ -50,14 +50,16 @@ struct PostgrestDerivedColumnTests {
     #expect((costText as Any) is any PostgrestOrderableExpression == false)
   }
 
-  /// A JSON path chained onto a cast **compiles**, since both are declared on the base protocol,
-  /// but PostgREST rejects the result. The rendering pinned here is therefore not a form to send
-  /// — it records the compiling-but-rejected shape so a change to the hierarchy surfaces here.
+  /// A JSON path chained onto a cast still compiles — both are declared on the base protocol —
+  /// but it inherits the cast's select-only position, so it can no longer be filtered on.
+  /// PostgREST rejects `cost::text->>k` in every position, so select-only is as tight as the
+  /// type system can get here without forbidding the chain outright.
   @Test
-  func castingThenJSONPathCompilesButPostgRESTRejectsIt() {
+  func castingThenJSONPathInheritsTheCastsSelectOnlyPosition() {
     let composed = Item.columns.cost.cast(to: .text).jsonText("k")
     #expect(composed.postgrestExpression == "cost::text->>k")
-    #expect((composed as Any) is any PostgrestFilterableExpression)
+    #expect((composed as Any) is any PostgrestFilterableExpression == false)
+    #expect((composed as Any) is any PostgrestOrderableExpression == false)
   }
 
   /// A Postgres type with no shipped target is still reachable, and still says what it produces.
