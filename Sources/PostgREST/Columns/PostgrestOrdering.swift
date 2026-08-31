@@ -32,17 +32,14 @@ public struct PostgrestOrdering<Root: PostgrestRelation>: Sendable {
       + (nullPlacement.map { ".\($0.rawValue)" } ?? "")
   }
 
-  /// Sorts `NULL`s before non-null values.
-  public func nullsFirst() -> Self {
+  /// Places `NULL`s relative to non-null values.
+  ///
+  /// ```swift
+  /// .order { $0.priority.desc().nulls(.first) }
+  /// ```
+  public func nulls(_ placement: PostgrestNullPlacement) -> Self {
     var copy = self
-    copy.nullPlacement = .first
-    return copy
-  }
-
-  /// Sorts `NULL`s after non-null values.
-  public func nullsLast() -> Self {
-    var copy = self
-    copy.nullPlacement = .last
+    copy.nullPlacement = placement
     return copy
   }
 }
@@ -65,8 +62,7 @@ public struct PostgrestNullPlacement: RawRepresentable, Hashable, Sendable {
 extension PostgrestOrderableExpression {
   /// Sorts by this expression, smallest first.
   ///
-  /// Null placement is left to the database unless you chain
-  /// ``PostgrestOrdering/nullsFirst()`` or ``PostgrestOrdering/nullsLast()``.
+  /// Null placement is left to the database unless you chain ``PostgrestOrdering/nulls(_:)``.
   public func asc() -> PostgrestOrdering<Root> {
     PostgrestOrdering(column: postgrestExpression, ascending: true)
   }
@@ -74,5 +70,19 @@ extension PostgrestOrderableExpression {
   /// Sorts by this expression, largest first.
   public func desc() -> PostgrestOrdering<Root> {
     PostgrestOrdering(column: postgrestExpression, ascending: false)
+  }
+
+  /// Sorts by this expression with an explicit `NULL` placement, leaving the direction to
+  /// PostgREST.
+  ///
+  /// ```swift
+  /// .order { $0.dueDate.nulls(.first) }   // order=due_at.nullsfirst
+  /// ```
+  ///
+  /// The two parts are independent on the wire, so a placement does not require picking a
+  /// direction: `order=name.nullsfirst` is a 200. Without this, wanting PostgREST's default
+  /// direction *and* an explicit placement would force a direction into the query anyway.
+  public func nulls(_ placement: PostgrestNullPlacement) -> PostgrestOrdering<Root> {
+    PostgrestOrdering(column: postgrestExpression, ascending: nil, nullPlacement: placement)
   }
 }

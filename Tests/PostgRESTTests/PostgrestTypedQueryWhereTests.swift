@@ -158,8 +158,20 @@ struct PostgrestTypedQueryWhereTests {
   func nullPlacementIsChainedWhenWanted() async throws {
     let capture = QueryCapture()
     _ = try await capture.client.from(Todo.self)
-      .select().order { $0.dueDate.desc().nullsFirst() }.execute()
+      .select().order { $0.dueDate.desc().nulls(.first) }.execute()
     #expect(capture.query?.contains("order=due_at.desc.nullsfirst") == true)
+  }
+
+  /// Direction and placement are independent on the wire, so asking for a placement must not
+  /// force a direction into the query — `order=due_at.nullslast` is a 200.
+  @Test
+  func aPlacementDoesNotRequireADirection() async throws {
+    let capture = QueryCapture()
+    _ = try await capture.client.from(Todo.self)
+      .select().order { $0.dueDate.nulls(.last) }.execute()
+    #expect(capture.query?.contains("order=due_at.nullslast") == true)
+    #expect(capture.query?.contains("asc") == false)
+    #expect(capture.query?.contains("desc") == false)
   }
 
   /// Repeated calls merge into one `order` parameter, so the second key breaks ties in the first.

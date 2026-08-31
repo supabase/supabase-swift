@@ -5,17 +5,18 @@
 //  Created by Guilherme Souza on 21/08/26.
 //
 
-/// A wrapper that scopes a request by key path.
+/// A request wrapper that can be scoped by filters.
 ///
-/// Both ``PostgrestTypedQuery`` and ``PostgrestTypedMutation`` conform, so the key-path filter set
-/// is declared once here rather than repeated on every wrapper. You do not conform your own types
-/// to this.
+/// Both ``PostgrestTypedQuery`` and ``PostgrestTypedMutation`` conform, so the filter set is
+/// declared once here rather than repeated on every wrapper. You do not conform your own types to
+/// this.
 ///
 /// Only filters live here. `order` and `limit` move the request into
 /// ``PostgrestTransformPhase``, so they cannot return `Self` and are declared on
 /// ``PostgrestTypedQuery`` instead.
-public protocol PostgrestKeyPathFilterable {
-  /// The relation whose key paths this wrapper accepts.
+public protocol PostgrestFilterableRequest {
+  /// The relation this wrapper queries. Its ``PostgrestRelation/Columns`` is what a filter
+  /// closure receives.
   associatedtype Relation: PostgrestRelation
 
   /// The phase of the underlying request. Filters require a filterable phase.
@@ -28,12 +29,12 @@ public protocol PostgrestKeyPathFilterable {
   init(builder: PostgrestRequestBuilder<Phase>)
 }
 
-extension PostgrestTypedQuery: PostgrestKeyPathFilterable
+extension PostgrestTypedQuery: PostgrestFilterableRequest
 where Phase: PostgrestFilterablePhase {
   public typealias Relation = R
 }
 
-extension PostgrestKeyPathFilterable {
+extension PostgrestFilterableRequest {
   /// Matches rows where the column at `column` equals `value`.
   public func eq<V: PostgrestFilterValue>(_ column: KeyPath<Relation, V>, _ value: V) -> Self {
     Self(builder: builder.eq(Relation.columnName(for: column), value: value))

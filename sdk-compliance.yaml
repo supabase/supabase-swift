@@ -55,12 +55,12 @@ supporting_symbols:
   - PostgrestArrayElement
   - PostgrestArrayElement.postgrestArrayElement
   - PostgrestFilterValue.postgrestArrayElement
-  - PostgrestKeyPathFilterable
-  - PostgrestKeyPathFilterable.Phase
-  - PostgrestKeyPathFilterable.Relation
-  - PostgrestKeyPathFilterable.builder
-  - PostgrestKeyPathFilterable.init
-  - PostgrestKeyPathFilterable.where
+  - PostgrestFilterableRequest
+  - PostgrestFilterableRequest.Phase
+  - PostgrestFilterableRequest.Relation
+  - PostgrestFilterableRequest.builder
+  - PostgrestFilterableRequest.init
+  - PostgrestFilterableRequest.where
   - PostgrestTypedMutation
   - PostgrestTypedMutation.Phase
   - PostgrestTypedMutation.Relation
@@ -681,42 +681,42 @@ features:
     symbols:
       - PostgrestRequestBuilder.eq
       - PostgrestRequestBuilder.equals
-      - PostgrestKeyPathFilterable.eq
+      - PostgrestFilterableRequest.eq
       - PostgrestFilterableExpression.eq
   database.using_filters.neq:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.neq
       - PostgrestRequestBuilder.notEquals
-      - PostgrestKeyPathFilterable.neq
+      - PostgrestFilterableRequest.neq
       - PostgrestFilterableExpression.neq
   database.using_filters.gt:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.gt
       - PostgrestRequestBuilder.greaterThan
-      - PostgrestKeyPathFilterable.gt
+      - PostgrestFilterableRequest.gt
       - PostgrestFilterableExpression.gt
   database.using_filters.gte:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.gte
       - PostgrestRequestBuilder.greaterThanOrEquals
-      - PostgrestKeyPathFilterable.gte
+      - PostgrestFilterableRequest.gte
       - PostgrestFilterableExpression.gte
   database.using_filters.lt:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.lt
       - PostgrestRequestBuilder.lowerThan
-      - PostgrestKeyPathFilterable.lt
+      - PostgrestFilterableRequest.lt
       - PostgrestFilterableExpression.lt
   database.using_filters.lte:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.lte
       - PostgrestRequestBuilder.lowerThanOrEquals
-      - PostgrestKeyPathFilterable.lte
+      - PostgrestFilterableRequest.lte
       - PostgrestFilterableExpression.lte
   database.using_filters.like:
     status: implemented
@@ -732,8 +732,8 @@ features:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.is
-      - PostgrestKeyPathFilterable.isNull
-      - PostgrestKeyPathFilterable.isNotNull
+      - PostgrestFilterableRequest.isNull
+      - PostgrestFilterableRequest.isNotNull
       - PostgrestFilterableExpression.isTrue
       - PostgrestFilterableExpression.isFalse
       - PostgrestNullableExpression.isNull
@@ -741,7 +741,7 @@ features:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.in
-      - PostgrestKeyPathFilterable.in
+      - PostgrestFilterableRequest.in
       - PostgrestFilterableExpression.in
   database.using_filters.contains:
     status: implemented
@@ -905,10 +905,10 @@ features:
       - PostgrestTypedQuery.order
       - PostgrestOrderableExpression.asc
       - PostgrestOrderableExpression.desc
+      - PostgrestOrderableExpression.nulls
     supporting_symbols:
       - PostgrestOrdering
-      - PostgrestOrdering.nullsFirst
-      - PostgrestOrdering.nullsLast
+      - PostgrestOrdering.nulls
       - PostgrestNullPlacement
       - PostgrestNullPlacement.init
       - PostgrestNullPlacement.rawValue

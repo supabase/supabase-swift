@@ -13,7 +13,7 @@
 ///
 /// Like the builder it wraps, this is a value type: chaining off the same mutation twice gives
 /// two independent requests.
-public struct PostgrestTypedMutation<R: PostgrestWritableRelation>: PostgrestKeyPathFilterable,
+public struct PostgrestTypedMutation<R: PostgrestWritableRelation>: PostgrestFilterableRequest,
   Sendable
 {
   public typealias Relation = R
