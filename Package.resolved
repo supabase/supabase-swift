@@ -1,5 +1,5 @@
 {
-  "originHash" : "66fc84e1d93fc7d8e6e79e85cb1c6583c07ea159d66325d0329cfeba57a7a06a",
+  "originHash" : "8f5fa67bbeecc8761ed87c44086ec1f1ed487e9e678aaf400b4b8c56e51614c4",
   "pins" : [
     {
       "identity" : "cryptoswift",
@@ -87,8 +87,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/swift-macro-testing",
       "state" : {
-        "revision" : "2e494c632d510715c96a694ff25e2a8d4ac3f64b",
-        "version" : "0.6.5"
+        "revision" : "0b6bd11ea72e07eec539f2f000efad0b363a90cc",
+        "version" : "0.7.0"
       }
     },
     {
