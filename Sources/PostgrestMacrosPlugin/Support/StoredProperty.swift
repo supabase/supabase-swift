@@ -22,29 +22,45 @@ struct StoredProperty {
   /// The property's type made optional, or left alone if it already is.
   var optionalType: String { isOptional ? type : "\(type)?" }
 
-  /// The property's type with one layer of `Optional` removed, or left alone if it has none.
-  ///
-  /// Handles both spellings, since a generated schema can emit either.
-  var unwrappedType: String {
-    if type.hasSuffix("?") { return String(type.dropLast()) }
-    if type.hasPrefix("Optional<"), type.hasSuffix(">") {
-      return String(type.dropFirst("Optional<".count).dropLast())
-    }
-    return type
+  /// The property's type with every layer of `Optional` removed, or left alone if it has none.
+  var unwrappedType: String { postgrestUnwrapOptionalType(type) ?? type }
+}
+
+/// A written type with every layer of `Optional` stripped, or `nil` if it is not spelled as one.
+///
+/// Three spellings count, because all three mean a nullable column: `Int?`, `Optional<Int>` and
+/// `Int!`. A generated schema can emit either of the first two, and the `!` spelling reaches a
+/// generic argument where it is illegal — `PostgrestColumn<Todo, String!>` does not compile, and
+/// the error lands on macro-expanded code the author never wrote.
+///
+/// Stripping *every* layer is what keeps `Value` non-optional, which the whole wrapped-type design
+/// rests on: a column is nullable or it is not, so `Optional<Int>!` and `Int??` both describe a
+/// nullable `Int`. Leaving one layer on gives `PostgrestNullableColumn<Todo, Int?>`, and because
+/// `Optional` deliberately does not conform to `PostgrestFilterValue` that column silently loses
+/// every operator — "no member `eq`" rather than anything naming the real problem.
+///
+/// A `Swift.Optional<Int>` spelling is not matched. It is legal but vanishingly rare, and a macro
+/// cannot resolve module qualification from syntax alone.
+func postgrestUnwrapOptionalType(_ type: String) -> String? {
+  let inner: String
+  if type.hasSuffix("?") || type.hasSuffix("!") {
+    inner = String(type.dropLast())
+  } else if type.hasPrefix("Optional<"), type.hasSuffix(">") {
+    inner = String(type.dropFirst("Optional<".count).dropLast())
+  } else {
+    return nil
   }
+  return postgrestUnwrapOptionalType(inner) ?? inner
 }
 
 /// Whether a written type is spelled as an `Optional`.
 ///
-/// Both spellings have to be recognized everywhere optionality is decided: `Int?` and
-/// `Optional<Int>` are the same type, and a generated schema can emit either. Recognizing one and
-/// not the other is what let an `Optional<T>` field lose the `= nil` default in a generated
-/// initializer while a `?`-spelled one kept it.
-///
-/// A `Swift.Optional<Int>` spelling is not matched. It is legal but vanishingly rare, and a macro
-/// cannot resolve module qualification from syntax alone.
+/// Derived from ``postgrestUnwrapOptionalType(_:)`` rather than testing its own set of spellings:
+/// the two used to disagree — one accepted a bare `Optional<` prefix, the other required the
+/// closing `>` as well — and any spelling that satisfied one and not the other produced a column
+/// whose `Value` was itself optional.
 func postgrestIsOptionalType(_ type: String) -> Bool {
-  type.hasSuffix("?") || type.hasPrefix("Optional<")
+  postgrestUnwrapOptionalType(type) != nil
 }
 
 extension DeclGroupSyntax {

@@ -49,6 +49,15 @@ struct IntegrationAuditEvent {
   var recordedBy: String
 }
 
+// An implicitly unwrapped optional. The spelling means the same nullable column as `T?`, and it
+// only ever reached a property type before `Columns` existed — a generic argument rejects `!`, so
+// the compile error landed on expanded code the author never wrote.
+@Table("drafts")
+struct IntegrationDraftNote {
+  @PrimaryKey @Default var id: Int
+  var title: String!
+}
+
 @Table("active_todos", readOnly: true)
 struct IntegrationActiveTodo {
   var id: Int
@@ -76,6 +85,16 @@ struct TableIntegrationTests {
     #expect(type(of: Todo.columns.isDone).Value.self == Bool.self)
     // The nullable column carries the wrapped type.
     #expect(type(of: Todo.columns.dueDate).Value.self == Date.self)
+  }
+
+  /// An implicitly unwrapped optional is a nullable column: the wrapped type reaches `Value`, so
+  /// the operators are there, and `isNull()` is too.
+  @Test
+  func anImplicitlyUnwrappedOptionalIsANullableColumn() {
+    #expect(IntegrationDraftNote.columns.title.postgrestExpression == "title")
+    #expect(type(of: IntegrationDraftNote.columns.title).Value.self == String.self)
+    _ = IntegrationDraftNote.columns.title.isNull()
+    _ = IntegrationDraftNote.Draft(title: nil)
   }
 
   @Test
