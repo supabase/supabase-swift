@@ -49,7 +49,7 @@ extension PostgrestTypedQuery where Phase: PostgrestTransformablePhase {
   ///
   /// ```swift
   /// .order { $0.dueDate.asc() }
-  /// .order { $0.priority.desc().nullsFirst() }
+  /// .order { $0.priority.desc().nulls(.first) }
   /// ```
   ///
   /// Repeated calls append, so the second key breaks ties in the first. Ordering moves the
@@ -67,12 +67,12 @@ extension PostgrestTypedQuery where Phase: PostgrestTransformablePhase {
   /// ```swift
   /// .order { $0.dueDate }                  // order=due_at
   /// .order { $0.priority.desc() }          // order=priority.desc
+  /// .order { $0.dueDate.nulls(.first) }    // order=due_at.nullsfirst
   /// ```
   ///
   /// Chain ``PostgrestOrderableExpression/asc()`` or ``PostgrestOrderableExpression/desc()`` when
-  /// the direction matters, or when you need
-  /// ``PostgrestOrdering/nullsFirst()``/``PostgrestOrdering/nullsLast()`` — a placement hangs off
-  /// the direction, not off the bare column.
+  /// the direction matters. Direction and placement are independent on the wire, so
+  /// ``PostgrestOrderableExpression/nulls(_:)`` sets a placement without choosing one.
   public func order<E: PostgrestOrderableExpression>(
     _ build: (R.Columns) -> E
   ) -> PostgrestTypedQuery<R, Output, PostgrestTransformPhase> where E.Root == R {
@@ -82,6 +82,10 @@ extension PostgrestTypedQuery where Phase: PostgrestTransformablePhase {
   }
 
   /// Merges one rendered sort key into the single `order` parameter PostgREST expects.
+  ///
+  /// A merge, not a second parameter: PostgREST honours only the first `order` it sees and
+  /// silently ignores the rest, so `order=name.asc&order=id.desc` sorts by name alone. Only
+  /// `order=name.asc,id.desc` applies both.
   ///
   /// Not `builder.order(_:ascending:nullsFirst:)`, which always appends a placement.
   private func appendingOrder(

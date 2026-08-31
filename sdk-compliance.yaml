@@ -916,10 +916,10 @@ features:
       - PostgrestTypedQuery.order
       - PostgrestOrderableExpression.asc
       - PostgrestOrderableExpression.desc
+      - PostgrestOrderableExpression.nulls
     supporting_symbols:
       - PostgrestOrdering
-      - PostgrestOrdering.nullsFirst
-      - PostgrestOrdering.nullsLast
+      - PostgrestOrdering.nulls
       - PostgrestNullPlacement
       - PostgrestNullPlacement.init
       - PostgrestNullPlacement.rawValue
