@@ -20,7 +20,7 @@ import Foundation
 ///     $0.task = "buy oat milk"   // {"task": "buy oat milk"}
 ///     $0.dueDate = nil           // {"due_at": null}
 ///   }
-///   .eq(\.id, 1)
+///   .where { $0.id.eq(1) }
 ///   .execute()
 /// ```
 ///

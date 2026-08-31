@@ -55,11 +55,12 @@ supporting_symbols:
   - PostgrestArrayElement
   - PostgrestArrayElement.postgrestArrayElement
   - PostgrestFilterValue.postgrestArrayElement
-  - PostgrestKeyPathFilterable
-  - PostgrestKeyPathFilterable.Phase
-  - PostgrestKeyPathFilterable.Relation
-  - PostgrestKeyPathFilterable.builder
-  - PostgrestKeyPathFilterable.init
+  - PostgrestFilterableRequest
+  - PostgrestFilterableRequest.Phase
+  - PostgrestFilterableRequest.Relation
+  - PostgrestFilterableRequest.builder
+  - PostgrestFilterableRequest.init
+  - PostgrestFilterableRequest.where
   - PostgrestTypedMutation
   - PostgrestTypedMutation.Phase
   - PostgrestTypedMutation.Relation
@@ -104,10 +105,10 @@ supporting_symbols:
   - PostgrestWritableRelation.Draft
 
   # The typed column-expression surface. A column expression is the left-hand side of every
-  # filter and every `select` entry at once, so none of these types belongs to a single
-  # capability. The operator methods declared over them are 1:1 with a capability and are
+  # filter, every `order` key and every `select` entry at once, so none of these types belongs to
+  # a single capability. The operator methods declared over them are 1:1 with a capability and are
   # attributed to that feature's own `symbols:` list instead (see database.using_filters.*
-  # below).
+  # below); `asc()`/`desc()` likewise, under database.using_modifiers.order.
   #
   # The position refinements are rules enforced by the type system rather than by the server: the
   # base protocol is select position, `PostgrestFilterableExpression` adds the left of a filter,
@@ -680,42 +681,42 @@ features:
     symbols:
       - PostgrestRequestBuilder.eq
       - PostgrestRequestBuilder.equals
-      - PostgrestKeyPathFilterable.eq
+      - PostgrestFilterableRequest.eq
       - PostgrestFilterableExpression.eq
   database.using_filters.neq:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.neq
       - PostgrestRequestBuilder.notEquals
-      - PostgrestKeyPathFilterable.neq
+      - PostgrestFilterableRequest.neq
       - PostgrestFilterableExpression.neq
   database.using_filters.gt:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.gt
       - PostgrestRequestBuilder.greaterThan
-      - PostgrestKeyPathFilterable.gt
+      - PostgrestFilterableRequest.gt
       - PostgrestFilterableExpression.gt
   database.using_filters.gte:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.gte
       - PostgrestRequestBuilder.greaterThanOrEquals
-      - PostgrestKeyPathFilterable.gte
+      - PostgrestFilterableRequest.gte
       - PostgrestFilterableExpression.gte
   database.using_filters.lt:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.lt
       - PostgrestRequestBuilder.lowerThan
-      - PostgrestKeyPathFilterable.lt
+      - PostgrestFilterableRequest.lt
       - PostgrestFilterableExpression.lt
   database.using_filters.lte:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.lte
       - PostgrestRequestBuilder.lowerThanOrEquals
-      - PostgrestKeyPathFilterable.lte
+      - PostgrestFilterableRequest.lte
       - PostgrestFilterableExpression.lte
   database.using_filters.like:
     status: implemented
@@ -731,8 +732,8 @@ features:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.is
-      - PostgrestKeyPathFilterable.isNull
-      - PostgrestKeyPathFilterable.isNotNull
+      - PostgrestFilterableRequest.isNull
+      - PostgrestFilterableRequest.isNotNull
       - PostgrestFilterableExpression.isTrue
       - PostgrestFilterableExpression.isFalse
       - PostgrestNullableExpression.isNull
@@ -740,7 +741,7 @@ features:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.in
-      - PostgrestKeyPathFilterable.in
+      - PostgrestFilterableRequest.in
       - PostgrestFilterableExpression.in
   database.using_filters.contains:
     status: implemented
@@ -902,6 +903,17 @@ features:
     symbols:
       - PostgrestRequestBuilder.order
       - PostgrestTypedQuery.order
+      - PostgrestOrderableExpression.asc
+      - PostgrestOrderableExpression.desc
+      - PostgrestOrderableExpression.nulls
+    supporting_symbols:
+      - PostgrestOrdering
+      - PostgrestOrdering.nulls
+      - PostgrestNullPlacement
+      - PostgrestNullPlacement.init
+      - PostgrestNullPlacement.rawValue
+      - PostgrestNullPlacement.first
+      - PostgrestNullPlacement.last
   database.using_modifiers.limit:
     status: implemented
     symbols:
