@@ -62,6 +62,15 @@ struct PostgrestFilterPatternTests {
     #expect(rendered(task.ilikeAnyOf(["a%"])) == "task=ilike(any).{a%}")
   }
 
+  /// An empty list reaches the server as an empty literal rather than being short-circuited: for
+  /// `all` that is vacuously true and matches every row, for `any`/`in` it matches none.
+  @Test
+  func emptyListsRenderAnEmptyLiteral() {
+    #expect(rendered(Todo.columns.task.likeAllOf([])) == "task=like(all).{}")
+    #expect(rendered(Todo.columns.task.likeAnyOf([])) == "task=like(any).{}")
+    #expect(rendered(Todo.columns.id.in([])) == "id=in.()")
+  }
+
   /// There is no `notIn`; `!` covers it.
   @Test
   func listOperatorsRenderAParenthesisedList() {

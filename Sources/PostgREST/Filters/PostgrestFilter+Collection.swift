@@ -5,11 +5,12 @@
 //  Created by Guilherme Souza on 26/08/26.
 //
 
-extension PostgrestFilter {
-  /// `{a,b}` — the Postgres array literal the array operators take.
-  static func array(_ values: [some PostgrestArrayElement]) -> String {
-    "{\(values.map(\.postgrestArrayElement).joined(separator: ","))}"
-  }
+/// `{a,b}` — the Postgres array literal the array and multi-pattern operators take.
+///
+/// Members go through the array escaper: a raw join splits any element containing a comma into
+/// two, and a stray `{`/`}` corrupts the literal's delimiters.
+func postgrestArray(_ values: [some PostgrestArrayElement]) -> String {
+  "{\(values.map(\.postgrestArrayElement).joined(separator: ","))}"
 }
 
 // MARK: - Array operands
@@ -32,21 +33,21 @@ extension PostgrestFilterableExpression {
   public func contains<E: PostgrestArrayElement>(_ values: [E]) -> PostgrestFilter<Root>
   where Value == [E] {
     PostgrestFilter(
-      column: postgrestExpression, operator: "cs", value: PostgrestFilter<Root>.array(values))
+      column: postgrestExpression, operator: "cs", value: postgrestArray(values))
   }
 
   /// Matches rows where every element of this array column is contained by `values`.
   public func containedBy<E: PostgrestArrayElement>(_ values: [E]) -> PostgrestFilter<Root>
   where Value == [E] {
     PostgrestFilter(
-      column: postgrestExpression, operator: "cd", value: PostgrestFilter<Root>.array(values))
+      column: postgrestExpression, operator: "cd", value: postgrestArray(values))
   }
 
   /// Matches rows where this array column shares at least one element with `values`.
   public func overlaps<E: PostgrestArrayElement>(_ values: [E]) -> PostgrestFilter<Root>
   where Value == [E] {
     PostgrestFilter(
-      column: postgrestExpression, operator: "ov", value: PostgrestFilter<Root>.array(values))
+      column: postgrestExpression, operator: "ov", value: postgrestArray(values))
   }
 }
 

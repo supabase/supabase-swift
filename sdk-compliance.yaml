@@ -871,6 +871,7 @@ features:
       - PostgrestFilterableExpression.isDistinct
   database.using_filters.not_in:
     status: implemented
+    note: "The typed surface has no dedicated `notIn`: negation is the `!` operator on the filter tree, so `!$0.id.in([1, 2])` renders `id=not.in.(1,2)`."
     symbols:
       - PostgrestRequestBuilder.notIn
   database.using_filters.like_all:
@@ -892,8 +893,8 @@ features:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.iLikeAnyOf
-
       - PostgrestFilterableExpression.ilikeAnyOf
+
   database.using_modifiers.order:
     status: implemented
     symbols:
