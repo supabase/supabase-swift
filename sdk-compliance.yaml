@@ -108,8 +108,8 @@ supporting_symbols:
 
   # The typed column-expression surface. A column expression is the left-hand side of every
   # filter, every `order` key and every `select` entry at once, so none of these types belongs to
-  # a single capability. The operator methods declared over them are 1:1 with a capability and are
-  # attributed to that feature's own `symbols:` list instead (see database.using_filters.*
+  # a single capability. The ~34 operator methods declared over them are 1:1 with a capability and
+  # are attributed to that feature's own `symbols:` list instead (see database.using_filters.*
   # below); `asc()`/`desc()` likewise, under database.using_modifiers.order.
   #
   # The position refinements are rules enforced by the type system rather than by the server: the
@@ -129,6 +129,7 @@ supporting_symbols:
   - PostgrestStoredColumn
   - PostgrestStoredColumn.init
   - PostgrestStoredColumn.postgrestExpression
+  - PostgrestStoredColumn.Position
   - PostgrestColumn
   - PostgrestNullableColumn
   - PostgrestNullability
@@ -144,8 +145,16 @@ supporting_symbols:
   # Casts, JSON paths and aggregates. These are absent from `capabilities/database.yaml` in every
   # SDK — there is no `database.*` id to attribute them to yet — so they are registered here,
   # which accounts for them without claiming a capability.
+  #
+  # All three are one type. A derivation keeps the embed name and the inner expression apart, so a
+  # further derivation lands inside an embed's parentheses, and a phantom `Position` carries where
+  # the result may appear — inherited from whatever it was applied to. `PostgrestCastColumn` and
+  # `PostgrestAggregate` remain as aliases that fix `Position` to select-only.
+  - PostgrestDerivedExpression
+  - PostgrestDerivedExpression.postgrestExpression
+  - PostgrestDerivedExpression.countAll
   - PostgrestCastColumn
-  - PostgrestCastColumn.postgrestExpression
+  - PostgrestAggregate
   - PostgrestCastTarget
   - PostgrestCastTarget.init
   - PostgrestCastTarget.sqlType
@@ -153,19 +162,28 @@ supporting_symbols:
   - PostgrestCastTarget.int
   - PostgrestCastTarget.double
   - PostgrestCastTarget.boolean
+  # Declared once each on the base protocol, and correct for a stored column, a derivation and
+  # either embed direction alike, because each expression kind places a derivation through a
+  # single hook rather than shadowing every accessor.
   - PostgrestColumnExpression.cast
-  - PostgrestJSONPath
-  - PostgrestJSONPath.postgrestExpression
   - PostgrestColumnExpression.jsonText
   - PostgrestColumnExpression.jsonObject
-  - PostgrestAggregate
-  - PostgrestAggregate.postgrestExpression
-  - PostgrestAggregate.countAll
   - PostgrestColumnExpression.sum
   - PostgrestColumnExpression.avg
   - PostgrestColumnExpression.min
   - PostgrestColumnExpression.max
   - PostgrestColumnExpression.count
+
+  # Where an expression may appear, as a phantom type. The two marker protocols are what the
+  # conditional conformances of PostgrestDerivedExpression key off, so a derivation's position is
+  # the intersection of the accessor's and its receiver's.
+  - PostgrestPosition
+  - PostgrestOrderablePosition
+  - PostgrestFilterablePosition
+  - PostgrestSelectOnly
+  - PostgrestSelectAndOrder
+  - PostgrestEveryPosition
+  - PostgrestColumnExpression.Position
 
   # The `PostgrestMacros` attributes. `@Table` synthesizes the relation
   # conformance used by every database.* typed entry point, and the three
@@ -976,7 +994,31 @@ features:
   database.using_modifiers.request_cancellation: implemented
   database.using_modifiers.relationship_embed:
     status: partially_implemented
-    note: "Supported via query-string syntax in select() (e.g. 'user(*)'); no dedicated relationship builder API."
+    note: "Two spellings. The string builder takes query-string syntax in select() (e.g. 'user(*)'). The typed surface has a dedicated relationship API: `PostgrestToOneRelation`/`PostgrestToManyRelation`, declared on a relation's `Columns` namespace (emitted by the postgres-meta-backed generator, or hand-written; `@Table` does not synthesize them, since a macro cannot see foreign-key metadata), and projecting a column through one is compiler-checked in select position, and in order position for the to-one direction only (a to-many order key is PGRST118 on the server). Still partial: filtering *inside* an embed needs the `parent.title` rendering and an `!inner` decision, which is scoped separately (SDK-1575) — `embeddedFilterName` is what it will read."
+    symbols:
+      - PostgrestToOneRelation.subscript
+      - PostgrestToManyRelation.subscript
+    supporting_symbols:
+      - PostgrestToOneRelation
+      - PostgrestToOneRelation.init
+      - PostgrestToOneRelation.postgrestEmbedName
+      - PostgrestToManyRelation
+      - PostgrestToManyRelation.init
+      - PostgrestToManyRelation.postgrestEmbedName
+      # An embedded projection renders `parent(title)`, so a cast, JSON path or aggregate on one
+      # has to land *inside* the parentheses — PostgREST 16.1 answers 200 and silently drops
+      # anything outside them. Each embed kind states that once, by placing a derivation itself,
+      # and declares no accessors of its own: the eight live on PostgrestColumnExpression above.
+      # Cardinality is the `Position` each carries — the to-one direction is orderable, the
+      # to-many direction is select-only, since a to-many order key is PGRST118.
+      - PostgrestToOneColumn
+      - PostgrestToOneColumn.postgrestExpression
+      - PostgrestToOneColumn.embeddedFilterName
+      - PostgrestToOneColumn.Position
+      - PostgrestToManyColumn
+      - PostgrestToManyColumn.postgrestExpression
+      - PostgrestToManyColumn.embeddedFilterName
+      - PostgrestToManyColumn.Position
   database.using_modifiers.dry_run:
     status: implemented
     symbols:
