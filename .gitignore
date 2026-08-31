@@ -48,6 +48,24 @@ playground.xcworkspace
 
 .build/
 
+# Per-file compiler intermediates leaked into the working directory.
+#
+# These belong in .build/ (SwiftPM) or DerivedData (Xcode), and both are configured correctly —
+# nothing here overrides the build location. SwiftPM bug #7930 writes them relative to the build
+# process's working directory instead, for a target whose sources come from a build-tool plugin's
+# output directory. swift-secp256k1's `P256K` is such a target: its 63 shared sources are copied
+# in by SharedSourcesPlugin, and its own plugin header documents the leak. One observed run left
+# 252 files (63 basenames x 4 extensions) in the repository root, where a `git add -A` committed
+# them.
+#
+# Root-anchored on purpose. A bare `*.o` would silently hide a file anywhere in the tree; these
+# only ever appear beside Package.swift.
+/*.o
+/*.d
+/*.dia
+/*.swiftdeps
+/*.swiftmodule
+
 # CocoaPods
 #
 # We recommend against adding the Pods directory to your .gitignore. However
