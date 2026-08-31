@@ -129,6 +129,7 @@ supporting_symbols:
   - PostgrestStoredColumn
   - PostgrestStoredColumn.init
   - PostgrestStoredColumn.postgrestExpression
+  - PostgrestStoredColumn.Position
   - PostgrestColumn
   - PostgrestNullableColumn
   - PostgrestNullability
@@ -1013,9 +1014,11 @@ features:
       - PostgrestToOneColumn
       - PostgrestToOneColumn.postgrestExpression
       - PostgrestToOneColumn.embeddedFilterName
+      - PostgrestToOneColumn.Position
       - PostgrestToManyColumn
       - PostgrestToManyColumn.postgrestExpression
       - PostgrestToManyColumn.embeddedFilterName
+      - PostgrestToManyColumn.Position
   database.using_modifiers.dry_run:
     status: implemented
     symbols:
