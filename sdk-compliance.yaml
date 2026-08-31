@@ -427,6 +427,9 @@ features:
   # symbol graph the compliance scanner reads from never contains them.
   auth.passkey.register_passkey: implemented
   auth.passkey.sign_in_with_passkey: implemented
+  auth.passkey.delete_passkey: not_implemented
+  auth.passkey.list_passkeys: not_implemented
+  auth.passkey.update_passkey: not_implemented
 
   auth.passkey_admin.list_passkeys: not_implemented
   auth.passkey_admin.delete_passkey: not_implemented
@@ -1041,6 +1044,7 @@ features:
     supporting_symbols:
       - ReplayOption
       - ReplayOption.init
+  realtime.subscriptions.postgres_changes_multiple_filters: not_implemented
 
   realtime.presence.track:
     status: implemented
@@ -1233,6 +1237,7 @@ features:
   storage.file_buckets.download_as_stream: not_implemented
   storage.file_buckets.purge_bucket_cache: not_implemented
   storage.file_buckets.purge_cache: not_implemented
+  storage.file_buckets.request_cancellation: not_implemented
 
   # ── Storage — Vector Buckets ───────────────────────────────────────────────
 
@@ -1265,3 +1270,12 @@ features:
   storage.analytics.update_table: not_implemented
   storage.analytics.rename_table: not_implemented
   storage.analytics.delete_table: not_implemented
+  storage.analytics.access_catalog: not_implemented
+  storage.analytics.load_namespace_metadata: not_implemented
+  storage.analytics.namespace_exists: not_implemented
+  storage.analytics.register_table: not_implemented
+  storage.analytics.table_exists: not_implemented
+  storage.analytics.update_namespace_properties: not_implemented
+  # Newly synced from the canonical spec; no local group yet, place manually.
+  storage.configuration.auto_retry: not_implemented
+  storage.errors.error_codes: not_implemented
