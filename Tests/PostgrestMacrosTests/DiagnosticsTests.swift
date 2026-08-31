@@ -35,8 +35,9 @@ struct DiagnosticsTests {
 
   @Test
   func tableRejectsARelationshipProperty() {
-    // Forward-looking. `@Relationship` lands in stage 3, so today the compiler rejects the unknown
-    // attribute first; `assertMacro` has no such check, which is what lets this be tested now.
+    // `@Relationship` exists now, so this is what a user actually sees: the attribute resolves,
+    // and `@Table` rejects it before the compiler has anything to say. Embeds belong to a
+    // selection, so the fix is to move the property to a `@SelectionOf` type.
     assertMacro {
       """
       @Table("todos")
@@ -53,6 +54,33 @@ struct DiagnosticsTests {
         @Relationship(\Comment.todoID) var comments: [Comment]
         ┬─────────────────────────────
         ╰─ 🛑 @Relationship belongs on a @SelectionOf type, not on @Table
+      }
+      """#
+    }
+  }
+
+  @Test
+  func selectionOfRejectsARelationshipWithNoRoot() {
+    // `\.todoID` infers its root from context a macro cannot see, so the expansion would have
+    // nothing to name the foreign key's relation by. Left unreported, the property falls through
+    // to the plain-column path and the reader gets "no member 'comments'" on a line they did not
+    // write.
+    assertMacro {
+      #"""
+      @SelectionOf(Todo.self)
+      struct TodoWithComments {
+        var id: Int
+        @Relationship(\.todoID) var comments: [CommentBody]
+      }
+      """#
+    } diagnostics: {
+      #"""
+      @SelectionOf(Todo.self)
+      struct TodoWithComments {
+        var id: Int
+        @Relationship(\.todoID) var comments: [CommentBody]
+        ┬──────────────────────
+        ╰─ 🛑 @Relationship requires a key path to one foreign key column, written with its root, as in '@Relationship(\Comment.todoID)'
       }
       """#
     }

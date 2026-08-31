@@ -16,7 +16,14 @@ struct StoredProperty {
   var hasDefault: Bool
   var explicitColumn: String?
 
+  /// The `@Relationship` foreign key, rendered as a reference into the owning relation's column
+  /// namespace — `Comment.columns.todoID` — or `nil` for a plain column.
+  var foreignKey: String?
+
   /// The database column name: an explicit `@Column`, otherwise the snake_case form.
+  ///
+  /// For an embed this is the PostgREST alias rather than a column: the response comes back keyed
+  /// by it, and `CodingKeys` decodes it, exactly as for a column.
   var columnName: String { explicitColumn ?? camelToSnakeCase(name) }
 
   /// The property's type made optional, or left alone if it already is.
@@ -24,6 +31,14 @@ struct StoredProperty {
 
   /// The property's type with every layer of `Optional` removed, or left alone if it has none.
   var unwrappedType: String { postgrestUnwrapOptionalType(type) ?? type }
+
+  /// The selection an embed decodes into: the property's type with every `Array` and `Optional`
+  /// layer removed, so `[CommentBody]` and `UserName?` both give the selection itself.
+  ///
+  /// Only meaningful for a property carrying ``foreignKey``. To-many and to-one differ in the
+  /// Swift type and in nothing PostgREST is told — the embed renders the same either way, and the
+  /// server decides how many rows come back.
+  var embeddedSelection: String { postgrestUnwrapElementType(type) ?? type }
 }
 
 /// A written type with every layer of `Optional` stripped, or `nil` if it is not spelled as one.
@@ -51,6 +66,27 @@ func postgrestUnwrapOptionalType(_ type: String) -> String? {
     return nil
   }
   return postgrestUnwrapOptionalType(inner) ?? inner
+}
+
+/// A written type with every `Optional` and `Array` layer stripped, or `nil` if it has neither.
+///
+/// An embed is written `[CommentBody]` for a to-many and `UserName?` for a nullable to-one, and
+/// both name the same thing to PostgREST — the selection that goes inside the parentheses. Both
+/// array spellings count, since a generated schema emits `[X]` and hand-written code may say
+/// `Array<X>`.
+func postgrestUnwrapElementType(_ type: String) -> String? {
+  if let inner = postgrestUnwrapOptionalType(type) {
+    return postgrestUnwrapElementType(inner) ?? inner
+  }
+  let inner: String
+  if type.hasPrefix("["), type.hasSuffix("]") {
+    inner = String(type.dropFirst().dropLast())
+  } else if type.hasPrefix("Array<"), type.hasSuffix(">") {
+    inner = String(type.dropFirst("Array<".count).dropLast())
+  } else {
+    return nil
+  }
+  return postgrestUnwrapElementType(inner) ?? inner
 }
 
 /// Whether a written type is spelled as an `Optional`.
@@ -105,6 +141,8 @@ extension DeclGroupSyntax {
         .expression.as(StringLiteralExprSyntax.self)?
         .representedLiteralValue
 
+      let foreignKey = attribute("Relationship").flatMap(postgrestForeignKeyReference)
+
       let bindings = Array(variable.bindings)
       return bindings.indices.compactMap { index -> StoredProperty? in
         let binding = bindings[index]
@@ -121,7 +159,8 @@ extension DeclGroupSyntax {
           isOptional: postgrestIsOptionalType(typeText),
           isPrimaryKey: attribute("PrimaryKey") != nil,
           hasDefault: attribute("Default") != nil,
-          explicitColumn: column
+          explicitColumn: column,
+          foreignKey: foreignKey
         )
       }
     }

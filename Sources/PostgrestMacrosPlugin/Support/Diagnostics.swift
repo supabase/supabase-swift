@@ -26,14 +26,34 @@ extension MacroExpansionContext {
   }
 }
 
+/// The `@Relationship` foreign key rendered as a namespace reference, `Comment.columns.todoID`,
+/// or `nil` if the argument is not a single-component key path with a written root.
+///
+/// The root is what makes the reference resolvable from the expansion, and it is why the key path
+/// has to be written in full: `\.todoID` infers its root from context the macro cannot see.
+///
+/// One component, because a foreign key is one column. A longer path would name something inside a
+/// column's value, which is not a relationship.
+func postgrestForeignKeyReference(_ attribute: AttributeSyntax) -> String? {
+  guard
+    let keyPath = attribute.arguments?.as(LabeledExprListSyntax.self)?.first?
+      .expression.as(KeyPathExprSyntax.self),
+    let root = keyPath.root?.trimmedDescription,
+    keyPath.components.count == 1,
+    let property = keyPath.components.first?.component.as(KeyPathPropertyComponentSyntax.self)
+  else { return nil }
+  return "\(root).columns.\(property.declName.baseName.trimmedDescription)"
+}
+
 extension DeclGroupSyntax {
   /// The first `@Relationship` attribute on a stored property, if any.
   ///
-  /// Embeds belong to a selection, never to a relation, so `@Table` rejects one.
+  /// Embeds belong to a selection, never to a relation, so `@Table` rejects one. A relation carries
+  /// columns; the property naming the other side of a join is declared by the selection that wants
+  /// it embedded.
   ///
-  /// Forward-looking: `@Relationship` itself lands in stage 3, so today a user who writes it gets
-  /// "unknown attribute" from the compiler first. Matching on the attribute *name* puts the guard
-  /// in place for the day the macro exists.
+  /// Matching on the attribute *name* rather than resolving the macro is what keeps this working
+  /// from `@Table`, which never expands `@Relationship` itself.
   func postgrestRelationshipAttribute() -> AttributeSyntax? {
     for member in memberBlock.members {
       guard let variable = member.decl.as(VariableDeclSyntax.self) else { continue }
@@ -91,6 +111,36 @@ extension DeclGroupSyntax {
           column is dropped
           """,
           at: binding.pattern
+        )
+        reported = true
+      }
+    }
+    return reported
+  }
+}
+
+extension DeclGroupSyntax {
+  /// Reports every `@Relationship` whose argument is not a usable foreign key key path.
+  ///
+  /// Left alone, the property falls through to the plain-column path and the reader gets
+  /// "value of type 'Todo.Columns' has no member 'comments'" on a line they did not write — the
+  /// column the embed deliberately does not have.
+  ///
+  /// Returns `true` if anything was reported.
+  func postgrestDiagnoseRelationships(in context: some MacroExpansionContext) -> Bool {
+    var reported = false
+    for member in memberBlock.members {
+      guard let variable = member.decl.as(VariableDeclSyntax.self) else { continue }
+      for attribute in variable.attributes.compactMap({ $0.as(AttributeSyntax.self) })
+      where attribute.attributeName.trimmedDescription == "Relationship"
+        && postgrestForeignKeyReference(attribute) == nil
+      {
+        context.error(
+          """
+          @Relationship requires a key path to one foreign key column, written with its root, \
+          as in '@Relationship(\\Comment.todoID)'
+          """,
+          at: attribute
         )
         reported = true
       }
