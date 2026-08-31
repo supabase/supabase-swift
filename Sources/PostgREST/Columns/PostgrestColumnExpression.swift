@@ -5,6 +5,29 @@
 //  Created by Guilherme Souza on 26/08/26.
 //
 
+// MARK: - Positions
+
+/// Where an expression is allowed to appear. Carried as a phantom type so a derived expression
+/// inherits its receiver's positions instead of restating them.
+public protocol PostgrestPosition: Sendable {}
+
+/// A position set that includes `order`.
+public protocol PostgrestOrderablePosition: PostgrestPosition {}
+
+/// A position set that includes the left of a filter operator.
+public protocol PostgrestFilterablePosition: PostgrestPosition {}
+
+/// `select` only — a cast, an aggregate, or any projection of a to-many embed.
+public enum PostgrestSelectOnly: PostgrestPosition {}
+
+/// `select` and `order`, but not a filter — a to-one embedded projection.
+public enum PostgrestSelectAndOrder: PostgrestOrderablePosition {}
+
+/// Every position — a stored column, or a JSON path on one.
+public enum PostgrestEveryPosition: PostgrestOrderablePosition, PostgrestFilterablePosition {}
+
+// MARK: - Expressions
+
 /// Anything that can appear in a `select` list: a stored column, a cast, a JSON path, an
 /// aggregate, or a column projected through an embedded relation.
 ///
@@ -18,8 +41,31 @@ public protocol PostgrestColumnExpression<Root, Value>: Sendable {
   /// `.eq("seven")` on an `Int` column does not compile.
   associatedtype Value
 
+  /// Where this expression may appear. A derivation of it inherits this, so a JSON path on a
+  /// to-many embed is select-only without that rule being written per embed kind.
+  associatedtype Position: PostgrestPosition
+
   /// The text PostgREST expects, in a `select` list or on the left of an operator.
   var postgrestExpression: String { get }
+
+  /// Applies `derivation` where PostgREST expects it, which is not always at the end: an
+  /// embedded projection renders `parent(title)`, and a cast or aggregate has to land inside
+  /// those parentheses or the server drops it.
+  ///
+  /// This is the single hook each expression kind implements. Every accessor — `cast(to:)`,
+  /// `jsonText(_:)`, `sum()` and the rest — is declared once against it.
+  func _deriving<V, P: PostgrestPosition>(
+    _ derivation: String
+  ) -> PostgrestDerivedExpression<Root, V, P>
+}
+
+extension PostgrestColumnExpression {
+  /// Appends, which is correct for everything that is not an embedded projection.
+  public func _deriving<V, P: PostgrestPosition>(
+    _ derivation: String
+  ) -> PostgrestDerivedExpression<Root, V, P> {
+    PostgrestDerivedExpression(embed: nil, inner: postgrestExpression + derivation)
+  }
 }
 
 /// A column expression that can also sit on the left of a filter operator.
@@ -80,6 +126,8 @@ public struct PostgrestStoredColumn<
   Value,
   Nullability: PostgrestNullability
 >: PostgrestFilterableExpression, PostgrestOrderableExpression {
+  public typealias Position = PostgrestEveryPosition
+
   public let postgrestExpression: String
 
   /// - Parameter name: The database column name.

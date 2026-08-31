@@ -5,11 +5,17 @@
 //  Created by Guilherme Souza on 26/08/26.
 //
 
-/// An aggregate function applied to an expression — **select position only**.
+extension PostgrestDerivedExpression where Value == Int, Position == PostgrestSelectOnly {
+  /// `count()` — counts rows rather than values of a column.
+  public static var countAll: Self { Self(embed: nil, inner: "count()") }
+}
+
+/// The five aggregate functions, each declared once and correct for a stored column, a JSON path
+/// and either embed direction alike.
 ///
-/// PostgREST has no `HAVING`, and rejects an aggregate in `order`, so filtering or ordering by
-/// one is a compile error. Grouping needs nothing declared: selecting a plain column alongside an
-/// aggregate groups by it.
+/// The result is **select position only**: PostgREST has no `HAVING`, and rejects an aggregate in
+/// `order`, so filtering or ordering by one is a compile error. Grouping needs nothing declared —
+/// selecting a plain column alongside an aggregate groups by it.
 ///
 /// > Important: Requires PostgREST's `db-aggregates-enabled` setting. It is on for hosted
 /// > Supabase and off by default when self-hosting.
@@ -32,52 +38,37 @@
 /// Adding a grouping column is what removes the row entirely, so a decoder written against the
 /// grouped shape never sees the `null` and one written against the bare shape always can.
 ///
-/// The `Value` type parameter is the *non-optional* result type. It types the expression, not the
-/// response — nothing in the SDK decodes through it — so it stays non-optional for the same reason
-/// a nullable column's ``PostgrestColumn`` does: an optional `Value` would strip the operators from
-/// anything chained off it.
-public struct PostgrestAggregate<Root: PostgrestRelation, Value>: PostgrestColumnExpression {
-  public let postgrestExpression: String
-
-  init(_ expression: String) {
-    self.postgrestExpression = expression
-  }
-}
-
-extension PostgrestAggregate where Value == Int {
-  /// `count()` — counts rows rather than values of a column.
-  public static var countAll: Self { Self("count()") }
-}
-
+/// The result's `Value` is the *non-optional* type. It types the expression, not the response —
+/// nothing in the SDK decodes through it — so it stays non-optional for the same reason a nullable
+/// column's ``PostgrestColumn`` does: an optional `Value` would strip the operators from anything
+/// chained off it.
 extension PostgrestColumnExpression {
   /// The sum of this expression across the group, typed `Double` whatever the column's type.
   ///
   /// > Important: The wire value is a JSON integer, so past 2^53 a `Double` rounds it silently.
   /// > When a total can get that large, alias the aggregate in `select` and decode that field as
   /// > `Int` or `Decimal`.
-  public func sum() -> PostgrestAggregate<Root, Double> {
-    PostgrestAggregate("\(postgrestExpression).sum()")
+  public func sum() -> PostgrestDerivedExpression<Root, Double, PostgrestSelectOnly> {
+    _deriving(".sum()")
   }
 
   /// The mean of this expression across the group.
-  public func avg() -> PostgrestAggregate<Root, Double> {
-    PostgrestAggregate("\(postgrestExpression).avg()")
+  public func avg() -> PostgrestDerivedExpression<Root, Double, PostgrestSelectOnly> {
+    _deriving(".avg()")
   }
 
   /// The smallest value of this expression in the group, keeping the expression's own type.
-  public func min() -> PostgrestAggregate<Root, Value> {
-    PostgrestAggregate("\(postgrestExpression).min()")
+  public func min() -> PostgrestDerivedExpression<Root, Value, PostgrestSelectOnly> {
+    _deriving(".min()")
   }
 
   /// The largest value of this expression in the group.
-  public func max() -> PostgrestAggregate<Root, Value> {
-    PostgrestAggregate("\(postgrestExpression).max()")
+  public func max() -> PostgrestDerivedExpression<Root, Value, PostgrestSelectOnly> {
+    _deriving(".max()")
   }
 
   /// How many non-null values of this expression are in the group.
-  ///
-  /// For a count of rows rather than of values, use ``PostgrestAggregate/countAll``.
-  public func count() -> PostgrestAggregate<Root, Int> {
-    PostgrestAggregate("\(postgrestExpression).count()")
+  public func count() -> PostgrestDerivedExpression<Root, Int, PostgrestSelectOnly> {
+    _deriving(".count()")
   }
 }

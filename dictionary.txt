@@ -268,3 +268,7 @@ someop
 
 # Term from the cast target list (PostgrestDerivedColumn.swift).
 citext
+
+# Terms from the embedded-relations column namespace (PostgrestRelatedColumns.swift).
+unshadowed
+orderability
