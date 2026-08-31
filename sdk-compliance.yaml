@@ -107,21 +107,28 @@ supporting_symbols:
   # attributed to that feature's own `symbols:` list instead (see database.using_filters.*
   # below).
   #
-  # The two refinements are position rules, enforced by the type system rather than by the
-  # server: the base protocol is select position, `PostgrestFilterableExpression` adds the left of
-  # a filter, `PostgrestOrderableExpression` adds an `order` key.
+  # The position refinements are rules enforced by the type system rather than by the server: the
+  # base protocol is select position, `PostgrestFilterableExpression` adds the left of a filter,
+  # `PostgrestOrderableExpression` adds an `order` key. `PostgrestNullableExpression` is not a
+  # position but a nullability refinement, and it is where `isNull()` lives so that any future
+  # nullable expression gets the operator by conforming rather than by redeclaring it.
   - PostgrestColumnExpression
   - PostgrestColumnExpression.Root
   - PostgrestColumnExpression.Value
   - PostgrestColumnExpression.postgrestExpression
   - PostgrestFilterableExpression
   - PostgrestOrderableExpression
+  - PostgrestNullableExpression
+  # One stored-column struct with a nullability phantom, plus the two aliases callers and the
+  # generator spell it as. The members are on the struct, so they are registered there.
+  - PostgrestStoredColumn
+  - PostgrestStoredColumn.init
+  - PostgrestStoredColumn.postgrestExpression
   - PostgrestColumn
-  - PostgrestColumn.init
-  - PostgrestColumn.postgrestExpression
   - PostgrestNullableColumn
-  - PostgrestNullableColumn.init
-  - PostgrestNullableColumn.postgrestExpression
+  - PostgrestNullability
+  - PostgrestNotNull
+  - PostgrestNullable
   # The filter value itself, and the AND junction. `||` and `!` map onto
   # database.using_filters.or and .not; `&&` has no capability of its own — PostgREST ANDs
   # top-level query parameters already, so conjunction is the default rather than a feature — and
@@ -724,7 +731,7 @@ features:
       - PostgrestKeyPathFilterable.isNotNull
       - PostgrestFilterableExpression.isTrue
       - PostgrestFilterableExpression.isFalse
-      - PostgrestNullableColumn.isNull
+      - PostgrestNullableExpression.isNull
   database.using_filters.in:
     status: implemented
     symbols:

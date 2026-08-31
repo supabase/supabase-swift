@@ -59,9 +59,14 @@ public struct PostgrestFilter<R: PostgrestRelation>: Sendable {
   /// .where { $0.isDone.eq(false) && .raw("cost::text", "eq.10") }
   /// ```
   ///
-  /// > Important: Combine this with `&&`, not `||`. Inside the `or=(…)` an `||` produces,
-  /// > PostgREST's grammar is stricter — a `::` in the column name is a `PGRST100` there even
-  /// > though it parses at top level.
+  /// > Important: Keep a raw node out of every subtree beneath `||` or `!`, not merely out of
+  /// > their immediate operands. Anything below one of those renders in the stricter
+  /// > `or=(…)`/`not.and=(…)` grammar, where a `::` in the column name is a `PGRST100` even
+  /// > though it parses at top level. The immediate combinator does not decide it:
+  /// > `(a && .raw("cost::text", "eq.10")) || b` renders
+  /// > `or=(and(a,cost::text.eq.10),b)` and 400s, and `!(a && .raw("cost::text", "eq.10"))`
+  /// > renders `not.and=(a,cost::text.eq.10)` and 400s the same way. Only a node whose path to
+  /// > the root is `&&` throughout stays in the top-level grammar.
   ///
   /// - Parameters:
   ///   - column: The query-parameter name, for example `"cost::text"`.

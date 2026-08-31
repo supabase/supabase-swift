@@ -139,6 +139,23 @@ struct PostgrestFilterTests {
     #expect(rendered(filter) == ["or=(and(a.eq.1,b.not.eq.2),c.eq.3)"])
   }
 
+  /// The group grammar reaches a raw node by ancestry, not by its immediate combinator: an `&&`
+  /// nested under `||` is still rendered by `group()`, so a `::` in the column reaches the
+  /// stricter grammar and 400s. Pinned because the rule is easy to state as "combine with `&&`",
+  /// which is not the test.
+  @Test
+  func aRawLeafUnderAndNestedInOrStillReachesTheGroupGrammar() {
+    let filter = (c("id", "eq", "1") && .raw("cost::text", "eq.10")) || c("id", "eq", "3")
+    #expect(rendered(filter) == ["or=(and(id.eq.1,cost::text.eq.10),id.eq.3)"])
+  }
+
+  /// The same by way of `not.and`, which also routes its children through `group()`.
+  @Test
+  func aRawLeafUnderAndNestedInNotStillReachesTheGroupGrammar() {
+    let filter = !(c("id", "eq", "1") && PostgrestFilter<Todo>.raw("cost::text", "eq.10"))
+    #expect(rendered(filter) == ["not.and=(id.eq.1,cost::text.eq.10)"])
+  }
+
   /// A negated `raw` leaf follows the same in-group rule as a negated comparison.
   @Test
   func negatedRawLeafInsideAGroupMovesNotNextToTheOperand() {

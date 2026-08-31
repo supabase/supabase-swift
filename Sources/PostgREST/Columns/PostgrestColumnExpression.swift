@@ -40,27 +40,45 @@ public protocol PostgrestFilterableExpression<Root, Value>: PostgrestColumnExpre
 /// embedded columns do not — PostgREST rejects all three in `order`.
 public protocol PostgrestOrderableExpression<Root, Value>: PostgrestColumnExpression {}
 
-/// A stored column, reached through a relation's generated `Columns` namespace.
-public struct PostgrestColumn<Root: PostgrestRelation, Value>: PostgrestFilterableExpression,
-  PostgrestOrderableExpression
-{
-  public let postgrestExpression: String
-
-  /// - Parameter name: The database column name.
-  public init(_ name: String) {
-    self.postgrestExpression = name
-  }
-}
-
-/// A stored column the database allows to be `NULL`.
+/// A filterable expression whose value the database allows to be `NULL`.
 ///
-/// `Value` is the **wrapped** type: `var dueDate: Date?` generates
-/// `PostgrestNullableColumn<Todo, Date>`. So every operator takes a non-optional operand — use
-/// ``PostgrestNullableColumn/isNull()`` to test for `NULL` — while an update accepts `nil` here
-/// to clear the column.
-public struct PostgrestNullableColumn<
+/// Carries ``PostgrestNullableExpression/isNull()``, which is meaningless on a `NOT NULL` column:
+/// it can never match, and a filter that silently returns nothing is worse than one that does not
+/// compile.
+///
+/// This is a protocol rather than a member of one concrete column type so that a future nullable
+/// expression — a JSON path into a nullable column, an outer-joined embed — gets `isNull()` by
+/// conforming, instead of the operator having to be redeclared on it.
+public protocol PostgrestNullableExpression<Root, Value>: PostgrestFilterableExpression {}
+
+// MARK: - Nullability
+
+/// Whether a stored column's database type admits `NULL`.
+///
+/// A phantom type on ``PostgrestStoredColumn``, never a value and never on the wire: it exists so
+/// one struct serves both column kinds while `isNull()` and an update's `nil` assignment stay
+/// available on exactly the nullable one.
+public protocol PostgrestNullability: Sendable {}
+
+/// A `NOT NULL` column.
+public enum PostgrestNotNull: PostgrestNullability {}
+
+/// A column the database allows to be `NULL`.
+public enum PostgrestNullable: PostgrestNullability {}
+
+/// A stored column, reached through a relation's generated `Columns` namespace.
+///
+/// Spell it as ``PostgrestColumn`` or ``PostgrestNullableColumn`` rather than naming this type
+/// directly; both are aliases that fix `Nullability`.
+///
+/// `Value` is always the **wrapped** type: `var dueDate: Date?` generates
+/// `PostgrestNullableColumn<Todo, Date>`, not `Optional<Date>`. So every operator takes a
+/// non-optional operand — use ``PostgrestNullableExpression/isNull()`` to test for `NULL` — while
+/// an update accepts `nil` on a nullable column to clear it.
+public struct PostgrestStoredColumn<
   Root: PostgrestRelation,
-  Value
+  Value,
+  Nullability: PostgrestNullability
 >: PostgrestFilterableExpression, PostgrestOrderableExpression {
   public let postgrestExpression: String
 
@@ -69,3 +87,15 @@ public struct PostgrestNullableColumn<
     self.postgrestExpression = name
   }
 }
+
+/// Only a nullable column can be `NULL`, so only it gets `isNull()`.
+extension PostgrestStoredColumn: PostgrestNullableExpression
+where Nullability == PostgrestNullable {}
+
+/// A stored `NOT NULL` column.
+public typealias PostgrestColumn<Root: PostgrestRelation, Value> =
+  PostgrestStoredColumn<Root, Value, PostgrestNotNull>
+
+/// A stored column the database allows to be `NULL`.
+public typealias PostgrestNullableColumn<Root: PostgrestRelation, Value> =
+  PostgrestStoredColumn<Root, Value, PostgrestNullable>
