@@ -141,9 +141,9 @@ supporting_symbols:
   - PostgrestFilter
   - "&&"
 
-  # Casts and JSON paths. These are absent from `capabilities/database.yaml` in every SDK — there
-  # is no `database.*` id to attribute them to yet — so they are registered here, which accounts
-  # for them without claiming a capability.
+  # Casts, JSON paths and aggregates. These are absent from `capabilities/database.yaml` in every
+  # SDK — there is no `database.*` id to attribute them to yet — so they are registered here,
+  # which accounts for them without claiming a capability.
   - PostgrestCastColumn
   - PostgrestCastColumn.postgrestExpression
   - PostgrestCastTarget
@@ -158,6 +158,14 @@ supporting_symbols:
   - PostgrestJSONPath.postgrestExpression
   - PostgrestColumnExpression.jsonText
   - PostgrestColumnExpression.jsonObject
+  - PostgrestAggregate
+  - PostgrestAggregate.postgrestExpression
+  - PostgrestAggregate.countAll
+  - PostgrestColumnExpression.sum
+  - PostgrestColumnExpression.avg
+  - PostgrestColumnExpression.min
+  - PostgrestColumnExpression.max
+  - PostgrestColumnExpression.count
 
   # The `PostgrestMacros` attributes. `@Table` synthesizes the relation
   # conformance used by every database.* typed entry point, and the three
