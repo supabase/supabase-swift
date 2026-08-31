@@ -101,6 +101,41 @@ supporting_symbols:
   - PostgrestWritableRelation
   - PostgrestWritableRelation.Draft
 
+  # The typed column-expression surface. A column expression is the left-hand side of every
+  # filter and every `select` entry at once, so none of these types belongs to a single
+  # capability. The operator methods declared over them are 1:1 with a capability and are
+  # attributed to that feature's own `symbols:` list instead (see database.using_filters.*
+  # below).
+  #
+  # The position refinements are rules enforced by the type system rather than by the server: the
+  # base protocol is select position, `PostgrestFilterableExpression` adds the left of a filter,
+  # `PostgrestOrderableExpression` adds an `order` key. `PostgrestNullableExpression` is not a
+  # position but a nullability refinement, and it is where `isNull()` lives so that any future
+  # nullable expression gets the operator by conforming rather than by redeclaring it.
+  - PostgrestColumnExpression
+  - PostgrestColumnExpression.Root
+  - PostgrestColumnExpression.Value
+  - PostgrestColumnExpression.postgrestExpression
+  - PostgrestFilterableExpression
+  - PostgrestOrderableExpression
+  - PostgrestNullableExpression
+  # One stored-column struct with a nullability phantom, plus the two aliases callers and the
+  # generator spell it as. The members are on the struct, so they are registered there.
+  - PostgrestStoredColumn
+  - PostgrestStoredColumn.init
+  - PostgrestStoredColumn.postgrestExpression
+  - PostgrestColumn
+  - PostgrestNullableColumn
+  - PostgrestNullability
+  - PostgrestNotNull
+  - PostgrestNullable
+  # The filter value itself, and the AND junction. `||` and `!` map onto
+  # database.using_filters.or and .not; `&&` has no capability of its own — PostgREST ANDs
+  # top-level query parameters already, so conjunction is the default rather than a feature — and
+  # sits here instead of being attributed to a capability it does not implement.
+  - PostgrestFilter
+  - "&&"
+
   # The `PostgrestMacros` attributes. `@Table` synthesizes the relation
   # conformance used by every database.* typed entry point, and the three
   # markers are inputs to that one expansion rather than capabilities of their
@@ -644,36 +679,42 @@ features:
       - PostgrestRequestBuilder.eq
       - PostgrestRequestBuilder.equals
       - PostgrestKeyPathFilterable.eq
+      - PostgrestFilterableExpression.eq
   database.using_filters.neq:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.neq
       - PostgrestRequestBuilder.notEquals
       - PostgrestKeyPathFilterable.neq
+      - PostgrestFilterableExpression.neq
   database.using_filters.gt:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.gt
       - PostgrestRequestBuilder.greaterThan
       - PostgrestKeyPathFilterable.gt
+      - PostgrestFilterableExpression.gt
   database.using_filters.gte:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.gte
       - PostgrestRequestBuilder.greaterThanOrEquals
       - PostgrestKeyPathFilterable.gte
+      - PostgrestFilterableExpression.gte
   database.using_filters.lt:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.lt
       - PostgrestRequestBuilder.lowerThan
       - PostgrestKeyPathFilterable.lt
+      - PostgrestFilterableExpression.lt
   database.using_filters.lte:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.lte
       - PostgrestRequestBuilder.lowerThanOrEquals
       - PostgrestKeyPathFilterable.lte
+      - PostgrestFilterableExpression.lte
   database.using_filters.like:
     status: implemented
     symbols:
@@ -688,6 +729,9 @@ features:
       - PostgrestRequestBuilder.is
       - PostgrestKeyPathFilterable.isNull
       - PostgrestKeyPathFilterable.isNotNull
+      - PostgrestFilterableExpression.isTrue
+      - PostgrestFilterableExpression.isFalse
+      - PostgrestNullableExpression.isNull
   database.using_filters.in:
     status: implemented
     symbols:
@@ -749,6 +793,7 @@ features:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.not
+      - "!"
     supporting_symbols:
       - PostgrestOperator
       - PostgrestOperator.init
@@ -782,10 +827,14 @@ features:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.or
+      - "||"
   database.using_filters.raw:
     status: implemented
+    note: "Two escape hatches on the typed surface, at different strengths. `PostgrestFilterableExpression.raw(_:)` keeps the column compiler-checked and leaves only the operand as a string; `PostgrestFilter.raw(_:_:)` takes both as strings, for an expression the generated namespace cannot name at all."
     symbols:
       - PostgrestRequestBuilder.filter
+      - PostgrestFilterableExpression.raw
+      - PostgrestFilter.raw
   database.using_filters.regex:
     status: implemented
     note: "PostgrestRequestBuilder.match(_:pattern:) — the PostgrestFilterValue-typed overload backing the `~` operator, distinct from the dictionary-based overload used by database.using_filters.match above."
@@ -799,6 +848,7 @@ features:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.isDistinct
+      - PostgrestFilterableExpression.isDistinct
   database.using_filters.not_in:
     status: implemented
     symbols:
