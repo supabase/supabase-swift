@@ -44,18 +44,6 @@ public protocol PostgrestRelation: PostgrestSelection where Source == Self {
   /// A filter closure receives this value, so a call site names a column as `$0.isDone` rather
   /// than spelling the relation out.
   static var columns: Columns { get }
-
-  /// The database column name backing a property.
-  ///
-  /// Takes a `PartialKeyPath` rather than a `KeyPath<Self, V>` because the property's type
-  /// is not part of the answer — a column name is a column name. Callers that do care about the
-  /// type, every filter among them, constrain it in their own signature and pass the key path
-  /// straight through; `KeyPath` is a `PartialKeyPath` subclass, so that costs nothing at the call
-  /// site.
-  ///
-  /// - Parameter keyPath: A key path to one of this type's stored properties.
-  /// - Returns: The column name PostgREST expects in a query string.
-  static func columnName(for keyPath: PartialKeyPath<Self>) -> String
 }
 
 /// A relation that declares a primary key.

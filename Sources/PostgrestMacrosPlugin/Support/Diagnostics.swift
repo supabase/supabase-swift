@@ -50,8 +50,7 @@ extension DeclGroupSyntax {
   /// Reports every stored property whose type is left to its initializer.
   ///
   /// `postgrestStoredProperties()` reads syntax, so `var isDone = false` gives it no annotation to
-  /// read and the property is dropped from `CodingKeys`, `Columns`, `columnName(for:)` and
-  /// `Draft`.
+  /// read and the property is dropped from `CodingKeys`, `Columns` and `Draft`.
   /// Nothing about that is loud: the initializer doubles as a decoding default, so the type still
   /// compiles, the column simply never round-trips, and the mistake surfaces only much later, at
   /// some unrelated call site that expected the column to exist. A macro cannot recover the type

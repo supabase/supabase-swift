@@ -22,9 +22,8 @@ struct PostgrestTypedMutationTests {
     var isDone: Bool
     var note: String?
 
-    /// A hand-written conformance has to keep these in step with `Columns` and
-    /// `columnName(for:)` themselves. The `@Column` macro generates them from one input so they
-    /// cannot drift.
+    /// A hand-written conformance keeps these in step with `Columns` by hand; `@Column`
+    /// generates both from one input.
     enum CodingKeys: String, CodingKey {
       case id
       case task
@@ -40,16 +39,6 @@ struct PostgrestTypedMutationTests {
     }
 
     static let columns = Columns()
-
-    static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
-      switch keyPath {
-      case \Self.id: "id"
-      case \Self.task: "task"
-      case \Self.isDone: "is_done"
-      case \Self.note: "note"
-      default: fatalError("unmapped key path")
-      }
-    }
 
     struct Draft: Encodable, Sendable {
       var task: String
@@ -70,13 +59,6 @@ struct PostgrestTypedMutationTests {
     }
 
     static let columns = Columns()
-
-    static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
-      switch keyPath {
-      case \Self.id: "id"
-      default: fatalError("unmapped key path")
-      }
-    }
   }
 
   @Test
