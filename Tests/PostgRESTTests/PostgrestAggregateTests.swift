@@ -49,6 +49,17 @@ struct PostgrestAggregateTests {
     #expect(type(of: Order.columns.quantity.count()).Value.self == Int.self)
   }
 
+  /// `Value` is the non-optional result type: it types the expression, not the response. An
+  /// aggregate over zero matching rows comes back `null` on the wire (`count` excepted), and the
+  /// caller decodes that as an optional — the wrapped-type invariant here matches
+  /// ``PostgrestColumn``'s, where an optional `Value` strips the operators from anything chained
+  /// off it.
+  @Test
+  func theResultTypeStaysNonOptional() {
+    #expect(type(of: Order.columns.amount.sum()).Value.self != Double?.self)
+    #expect(type(of: Order.columns.amount.min()).Value.self != Double?.self)
+  }
+
   /// `count()` with no column counts rows, so it takes no argument and is a static.
   @Test
   func countAllRendersWithNoColumn() {

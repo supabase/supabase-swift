@@ -16,6 +16,26 @@
 ///
 /// > Important: The response is an array of objects keyed by the function name, not a scalar —
 /// > `{"total":[{"sum":150}]}` for `select=total:children(amount.sum())`. Decode accordingly.
+///
+/// ## Decoding an empty result
+///
+/// `sum`, `avg`, `min` and `max` come back `null` when no rows match, so decode them as optionals.
+/// Only `count` is exempt — it is `0`. Selecting the aggregate on its own still returns one row,
+/// because a query with no grouping column has nothing to group by:
+///
+/// ```
+/// ?select=amount.sum(),amount.count()&id=eq.99999   -> [{"sum":null,"count":0}]
+/// ?select=count()&id=eq.99999                       -> [{"count":0}]
+/// ?select=category,amount.sum()&id=eq.99999         -> []
+/// ```
+///
+/// Adding a grouping column is what removes the row entirely, so a decoder written against the
+/// grouped shape never sees the `null` and one written against the bare shape always can.
+///
+/// The `Value` type parameter is the *non-optional* result type. It types the expression, not the
+/// response — nothing in the SDK decodes through it — so it stays non-optional for the same reason
+/// a nullable column's ``PostgrestColumn`` does: an optional `Value` would strip the operators from
+/// anything chained off it.
 public struct PostgrestAggregate<Root: PostgrestRelation, Value>: PostgrestColumnExpression {
   public let postgrestExpression: String
 
