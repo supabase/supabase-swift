@@ -670,6 +670,10 @@ features:
       - PostgrestTypedQuery.builder
       - PostgrestTypedQuery.init
       - PostgrestTypedQuery.execute
+      # Row counting. `capabilities/database.yaml` has no id for it — it is an option on every
+      # verb in supabase-js rather than a modifier — so it is registered against `select`, the
+      # verb the count-only HEAD form belongs to, instead of claiming a capability of its own.
+      - PostgrestTypedQuery.count
       - CountOption
       - CountOption.init
       - CountOption.rawValue
