@@ -117,17 +117,8 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
     if !prefersHeaders.isEmpty {
       request.headers[.prefer] = prefersHeaders.joined(separator: ",")
     }
-    if let body = request.body,
-      let jsonObject = try JSONSerialization.jsonObject(with: body) as? [[String: Any]]
-    {
-      let allKeys = jsonObject.flatMap(\.keys)
-      let uniqueKeys = Set(allKeys).sorted()
-      request.query.appendOrUpdate(
-        URLQueryItem(
-          name: "columns",
-          value: uniqueKeys.map { "\"\($0)\"" }.joined(separator: ",")
-        )
-      )
+    if let body = request.body, let columns = try columnsQueryItem(forBody: body) {
+      request.query.appendOrUpdate(columns)
     }
 
     return PostgrestFilterBuilder(carryingFrom: self, request: request)
@@ -194,17 +185,8 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
       request.headers[.prefer] = prefersHeaders.joined(separator: ",")
     }
 
-    if let body = request.body,
-      let jsonObject = try JSONSerialization.jsonObject(with: body) as? [[String: Any]]
-    {
-      let allKeys = jsonObject.flatMap(\.keys)
-      let uniqueKeys = Set(allKeys).sorted()
-      request.query.appendOrUpdate(
-        URLQueryItem(
-          name: "columns",
-          value: uniqueKeys.map { "\"\($0)\"" }.joined(separator: ",")
-        )
-      )
+    if let body = request.body, let columns = try columnsQueryItem(forBody: body) {
+      request.query.appendOrUpdate(columns)
     }
 
     return PostgrestFilterBuilder(carryingFrom: self, request: request)
@@ -300,4 +282,29 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
 
     return PostgrestFilterBuilder(carryingFrom: self, request: request)
   }
+}
+
+/// The `columns` query parameter for an array request body: the union of the keys across every
+/// row, quoted and comma-separated.
+///
+/// PostgREST otherwise derives the column list from the first object alone and silently drops keys
+/// a later row added. Rows in one batch legitimately differ, because a nil optional is omitted from
+/// the payload rather than encoded as `null`, so the union has to be sent explicitly.
+///
+/// - Parameter body: The encoded request body.
+/// - Returns: The query item, or `nil` when the body is not an array of objects, or is an array
+///   that contributes no keys at all. An empty union would spell `columns=`, which names one
+///   column called `""` and makes PostgREST reject the request — so an empty batch sends no
+///   parameter and writes nothing, rather than failing.
+/// - Throws: An error if `body` is not valid JSON.
+private func columnsQueryItem(forBody body: Data) throws -> URLQueryItem? {
+  guard let rows = try JSONSerialization.jsonObject(with: body) as? [[String: Any]] else {
+    return nil
+  }
+  let uniqueKeys = Set(rows.flatMap(\.keys)).sorted()
+  guard !uniqueKeys.isEmpty else { return nil }
+  return URLQueryItem(
+    name: "columns",
+    value: uniqueKeys.map { "\"\($0)\"" }.joined(separator: ",")
+  )
 }
