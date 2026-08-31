@@ -85,6 +85,33 @@ struct PostgrestDerivedColumnTests {
     #expect((name as Any) is any PostgrestOrderableExpression)
   }
 
+  /// A JSON extraction is null-testable whatever the column's own nullability: `data` is a
+  /// `NOT NULL` column here, and `data->>name` is still `NULL` when the key is absent. Verified
+  /// on PostgREST 16.1 — `data->>name=is.null` answers 200 with the rows whose extracted value
+  /// is null.
+  @Test
+  func aJSONPathIsNullTestableOnANotNullColumn() {
+    #expect(rendered(Item.columns.data.jsonText("name").isNull()) == "data->>name=is.null")
+    // No `isNotNull()` anywhere on the surface; `!` covers it.
+    #expect(rendered(!Item.columns.data.jsonText("name").isNull()) == "data->>name=not.is.null")
+  }
+
+  /// The operator is keyed on the filterable position, so a select-only derivation does not pick
+  /// it up. Neither call must compile:
+  ///
+  ///     $0.cost.cast(to: .text).isNull()   // does not conform to PostgrestNullableExpression
+  ///     $0.cost.sum().isNull()             // same
+  ///
+  /// Nor does a `NOT NULL` stored column gain it — that guarantee is what put `isNull()` on a
+  /// refinement rather than on the base protocol.
+  @Test
+  func onlyAFilterableDerivationIsNullTestable() {
+    #expect((Item.columns.data.jsonText("name") as Any) is any PostgrestNullableExpression)
+    #expect((Item.columns.cost.cast(to: .text) as Any) is any PostgrestNullableExpression == false)
+    #expect((Item.columns.cost.sum() as Any) is any PostgrestNullableExpression == false)
+    #expect((Item.columns.cost as Any) is any PostgrestNullableExpression == false)
+  }
+
   /// A JSON path survives a logic tree, which a cast does not.
   ///
   /// `cost` is a `Double` column, so `.eq(2)` renders `cost.eq.2.0` — what the SDK actually
