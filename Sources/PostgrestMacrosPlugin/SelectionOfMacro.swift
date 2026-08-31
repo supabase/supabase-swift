@@ -77,9 +77,9 @@ public struct SelectionOfMacro: ExtensionMacro {
   /// PostgREST for `due_date`, a column that does not exist. Nothing caught it — `_columnCheck`
   /// proves the *key path* resolves, not that the name matches.
   ///
-  /// So the column comes from `Source.columnName(for:)`, which is the mapping the relation already
-  /// validated. That makes the value a runtime one rather than a literal, which is why it is
-  /// assembled with `joined(separator:)`.
+  /// So the column comes from `Source.columns`, the namespace the relation already validated.
+  /// That makes the value a runtime one rather than a literal, which is why it is assembled
+  /// with `joined(separator:)`.
   ///
   /// Each entry is emitted as a PostgREST alias, `key:column`. The alias is what keeps
   /// `CodingKeys` correct: the response comes back keyed by the selection's own name, so the
@@ -96,7 +96,7 @@ public struct SelectionOfMacro: ExtensionMacro {
     var lines = ["  \(access)static let selectString = ["]
     for property in properties {
       lines.append(
-        "    \"\(property.columnName):\\(\(relation).columnName(for: \\\(relation).\(property.name)))\","
+        "    \"\(property.columnName):\\(\(relation).columns.\(property.name).postgrestExpression)\","
       )
     }
     lines.append("  ].joined(separator: \",\")")
@@ -110,17 +110,17 @@ public struct SelectionOfMacro: ExtensionMacro {
   /// on the relation fails on the emitted line. That is what makes a declared selection fully
   /// checked rather than checked by convention.
   ///
-  /// Now that ``selectString(access:relation:properties:)`` calls `columnName(for:)` on every
-  /// property, it carries the same proof, and this array is redundant. It is kept because it says
-  /// out loud what the check is for; the diagnostic a reader gets from a bad key path is the same
-  /// either way.
+  /// Now that ``selectString(access:relation:properties:)`` reads `.postgrestExpression` off
+  /// every property's column, it carries the same proof, and this array is redundant. It is kept
+  /// because it says out loud what the check is for; the diagnostic a reader gets from a bad
+  /// property name is the same either way.
   static func columnCheck(relation: String, properties: [StoredProperty]) -> String {
     var lines = [
       "  /// Fails to compile if a property does not name a column on \(relation).",
       "  private static let _columnCheck: [String] = [",
     ]
     for property in properties {
-      lines.append("    \(relation).columnName(for: \\\(relation).\(property.name)),")
+      lines.append("    \(relation).columns.\(property.name).postgrestExpression,")
     }
     lines.append("  ]")
     return lines.joined(separator: "\n")

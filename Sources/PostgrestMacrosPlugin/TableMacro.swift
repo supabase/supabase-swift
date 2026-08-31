@@ -79,6 +79,7 @@ public struct TableMacro: ExtensionMacro {
       "  \(access)static let relationName = \"\(arguments.name)\"",
       "  \(access)static let schema = \"\(arguments.schema)\"",
       "  \(access)static let selectString = \"*\"",
+      columnsNamespace(access: access, type: type.trimmedDescription, properties: properties),
       columnNameFunction(access: access, type: type.trimmedDescription, properties: properties),
     ]
     // The one thing `@PrimaryKey` uniquely does. Without this the marker is inert: after the key
@@ -108,9 +109,9 @@ public struct TableMacro: ExtensionMacro {
       // There is no matching `Update` shape. An update names the columns it writes, and a row
       // type cannot say that: one optional field would have to mean both "not assigned" and
       // "assigned null", so a nullable column could never be cleared. `PostgrestUpdate` builds
-      // the assignments from this type's key paths instead, and `columnName(for:)` above is all
-      // it needs from the macro. Targeting stays a separate concern — the caller filters the
-      // mutation — so the key is assignable like any other column.
+      // the assignments from key paths into the `Columns` namespace above instead, so it needs
+      // nothing further from the macro beyond that. Targeting stays a separate concern — the
+      // caller filters the mutation — so the key is assignable like any other column.
       body.append(
         writeShape(
           named: "Draft",
@@ -157,7 +158,36 @@ public struct TableMacro: ExtensionMacro {
     ].compactMap { $0 }
   }
 
-  /// The key-path-to-column mapping.
+  /// The column namespace: one stored property per column, and no `default:` arm, because a key
+  /// path to a computed property has nowhere to land.
+  ///
+  /// An optional property gets a `PostgrestNullableColumn` carrying its **wrapped** type, so
+  /// `var dueDate: Date?` emits `PostgrestNullableColumn<Todo, Date>`.
+  ///
+  /// The explicit `init()` is required: a `public` struct's memberwise initializer is internal,
+  /// so `Columns()` would not resolve from another module.
+  static func columnsNamespace(
+    access: String,
+    type: String,
+    properties: [StoredProperty]
+  ) -> String {
+    var lines = ["  \(access)struct Columns: Sendable {"]
+    for property in properties {
+      let column = property.isOptional ? "PostgrestNullableColumn" : "PostgrestColumn"
+      lines.append(
+        "    \(access)let \(property.name) = \(column)<\(type), \(property.unwrappedType)>"
+          + "(\"\(property.columnName)\")"
+      )
+    }
+    lines.append("")
+    lines.append("    \(access)init() {}")
+    lines.append("  }")
+    lines.append("")
+    lines.append("  \(access)static let columns = Columns()")
+    return lines.joined(separator: "\n")
+  }
+
+  /// The key-path-to-column mapping, for the filter surface that has not moved to `Columns` yet.
   ///
   /// Every stored property gets a case, so `default` is reachable only through a key path to a
   /// computed property — a mistake at the call site, not a query worth sending. `fatalError` says

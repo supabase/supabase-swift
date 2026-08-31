@@ -35,8 +35,8 @@ struct SelectionOfMacroTests {
         typealias Source = Todo
 
         static let selectString = [
-          "id:\(Todo.columnName(for: \Todo.id))",
-          "due_at:\(Todo.columnName(for: \Todo.dueDate))",
+          "id:\(Todo.columns.id.postgrestExpression)",
+          "due_at:\(Todo.columns.dueDate.postgrestExpression)",
         ].joined(separator: ",")
 
         enum CodingKeys: String, CodingKey {
@@ -46,11 +46,52 @@ struct SelectionOfMacroTests {
 
         /// Fails to compile if a property does not name a column on Todo.
         private static let _columnCheck: [String] = [
-          Todo.columnName(for: \Todo.id),
-          Todo.columnName(for: \Todo.dueDate),
+          Todo.columns.id.postgrestExpression,
+          Todo.columns.dueDate.postgrestExpression,
         ]
       }
       """#
+    }
+  }
+
+  /// The select list reads the relation's namespace directly, not a key-path-to-column mapping.
+  @Test
+  func selectStringReadsTheColumnNamespace() {
+    assertMacro {
+      """
+      @SelectionOf(Todo.self)
+      struct TodoSummary {
+        var id: Int
+        var isDone: Bool
+      }
+      """
+    } expansion: {
+      """
+      struct TodoSummary {
+        var id: Int
+        var isDone: Bool
+      }
+
+      extension TodoSummary {
+        typealias Source = Todo
+
+        static let selectString = [
+          "id:\\(Todo.columns.id.postgrestExpression)",
+          "is_done:\\(Todo.columns.isDone.postgrestExpression)",
+        ].joined(separator: ",")
+
+        enum CodingKeys: String, CodingKey {
+          case id = "id"
+          case isDone = "is_done"
+        }
+
+        /// Fails to compile if a property does not name a column on Todo.
+        private static let _columnCheck: [String] = [
+          Todo.columns.id.postgrestExpression,
+          Todo.columns.isDone.postgrestExpression,
+        ]
+      }
+      """
     }
   }
 
@@ -73,7 +114,7 @@ struct SelectionOfMacroTests {
         public typealias Source = Todo
 
         public static let selectString = [
-          "is_done:\(Todo.columnName(for: \Todo.isDone))",
+          "is_done:\(Todo.columns.isDone.postgrestExpression)",
         ].joined(separator: ",")
 
         enum CodingKeys: String, CodingKey {
@@ -82,7 +123,7 @@ struct SelectionOfMacroTests {
 
         /// Fails to compile if a property does not name a column on Todo.
         private static let _columnCheck: [String] = [
-          Todo.columnName(for: \Todo.isDone),
+          Todo.columns.isDone.postgrestExpression,
         ]
       }
       """#

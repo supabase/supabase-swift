@@ -25,6 +25,17 @@
 /// generated `CodingKeys` and the generated column mapping come from the same input, so an insert
 /// body and a filter can never disagree about a column.
 ///
+/// The macro also generates a `Columns` namespace holding one column value per property, which
+/// filter and order closures receive:
+///
+/// ```swift
+/// .where { ($0.isDone.eq(false) && $0.priority.gt(3)) || $0.id.eq(7) }
+/// .order { $0.dueDate.desc() }
+/// ```
+///
+/// Each column carries its database name and its Swift type, so an operand of the wrong type is
+/// a compile error. Casts, JSON paths and aggregates compose onto a column and stay checked.
+///
 /// The annotated type must be declared at file scope. The macro attaches an extension, and Swift
 /// does not allow an extension of a type nested inside another type.
 ///
@@ -37,8 +48,9 @@
   extension,
   conformances: Decodable, Sendable, PostgrestRelation, PostgrestKeyedRelation,
   PostgrestWritableRelation,
-  names: named(relationName), named(schema), named(selectString), named(columnName(for:)),
-  named(primaryKeyColumns), named(CodingKeys), named(Draft)
+  names: named(relationName), named(schema), named(selectString), named(Columns),
+  named(columns), named(columnName(for:)), named(primaryKeyColumns), named(CodingKeys),
+  named(Draft)
 )
 public macro Table(
   _ name: String,

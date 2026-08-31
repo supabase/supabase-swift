@@ -31,6 +31,15 @@ struct PostgrestTypedQueryFilterTests {
       default: fatalError("unmapped key path")
       }
     }
+
+    struct Columns: Sendable {
+      let id = PostgrestColumn<Todo, Int>("id")
+      let task = PostgrestColumn<Todo, String>("task")
+      let isDone = PostgrestColumn<Todo, Bool>("is_done")
+      let dueDate = PostgrestNullableColumn<Todo, Date>("due_date")
+    }
+
+    static let columns = Columns()
   }
 
   @Test

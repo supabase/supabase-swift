@@ -22,14 +22,24 @@ struct PostgrestTypedMutationTests {
     var isDone: Bool
     var note: String?
 
-    /// A hand-written conformance has to keep these in step with `columnName(for:)` itself. The
-    /// `@Column` macro generates both from one input so they cannot drift.
+    /// A hand-written conformance has to keep these in step with `Columns` and
+    /// `columnName(for:)` themselves. The `@Column` macro generates them from one input so they
+    /// cannot drift.
     enum CodingKeys: String, CodingKey {
       case id
       case task
       case isDone = "is_done"
       case note
     }
+
+    struct Columns: Sendable {
+      let id = PostgrestColumn<Todo, Int>("id")
+      let task = PostgrestColumn<Todo, String>("task")
+      let isDone = PostgrestColumn<Todo, Bool>("is_done")
+      let note = PostgrestNullableColumn<Todo, String>("note")
+    }
+
+    static let columns = Columns()
 
     static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
       switch keyPath {
@@ -54,6 +64,12 @@ struct PostgrestTypedMutationTests {
     static let selectString = "*"
 
     var id: Int
+
+    struct Columns: Sendable {
+      let id = PostgrestColumn<ActiveTodo, Int>("id")
+    }
+
+    static let columns = Columns()
 
     static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
       switch keyPath {

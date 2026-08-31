@@ -20,6 +20,13 @@ struct PostgrestTypedSourceTests {
     var id: Int
     var task: String
 
+    struct Columns: Sendable {
+      let id = PostgrestColumn<Todo, Int>("id")
+      let task = PostgrestColumn<Todo, String>("task")
+    }
+
+    static let columns = Columns()
+
     static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
       switch keyPath {
       case \Self.id: "id"

@@ -80,10 +80,14 @@ extension PostgrestTypedSource where R: PostgrestWritableRelation {
   ///   .execute()
   /// ```
   ///
-  /// The target is spelled as key paths, so a column that does not exist is a compile error rather
-  /// than a PostgREST 400 naming a column you cannot grep for. Splitting it into a first column
-  /// plus the rest also makes an empty target unrepresentable — `on_conflict=` with nothing after
-  /// it is a different request, not a missing one.
+  /// The target is spelled as key paths into the relation's ``PostgrestRelation/Columns``
+  /// namespace, so a column that does not exist is a compile error rather than a PostgREST 400.
+  /// Taking a first column plus the rest also makes an empty target unrepresentable.
+  ///
+  /// Each key path must land on a ``PostgrestStoredColumn`` of *this* relation, which is narrower
+  /// than a column expression in general: `on_conflict` names columns of a unique index, so a
+  /// derived expression — a cast, an aggregate — is not a target PostgREST can take, and neither
+  /// is a column belonging to some other relation. Both are rejected at the call site.
   ///
   /// To merge on the primary key, use ``upsert(_:)``, which derives the target instead.
   ///
@@ -93,16 +97,24 @@ extension PostgrestTypedSource where R: PostgrestWritableRelation {
   ///   - additional: The remaining columns, for a constraint spanning more than one.
   /// - Returns: A ``PostgrestTypedMutation`` to execute, or to request rows back from.
   /// - Throws: An encoding error if `values` cannot be serialized.
-  public func upsert(
+  public func upsert<
+    FirstValue,
+    FirstNullability: PostgrestNullability,
+    each RestValue,
+    each RestNullability: PostgrestNullability
+  >(
     _ values: R.Draft,
-    onConflict column: PartialKeyPath<R>,
-    _ additional: PartialKeyPath<R>...
+    onConflict column: KeyPath<R.Columns, PostgrestStoredColumn<R, FirstValue, FirstNullability>>,
+    _ additional: repeat KeyPath<
+      R.Columns, PostgrestStoredColumn<R, each RestValue, each RestNullability>
+    >
   ) throws -> PostgrestTypedMutation<R> {
-    let columns = CollectionOfOne(column) + additional
+    var names = [R.columns[keyPath: column].postgrestExpression]
+    repeat names.append(R.columns[keyPath: each additional].postgrestExpression)
     return PostgrestTypedMutation(
       builder: try builder.upsert(
         values,
-        onConflict: columns.map { R.columnName(for: $0) }.joined(separator: ","),
+        onConflict: names.joined(separator: ","),
         returning: .minimal
       )
     )
