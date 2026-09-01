@@ -707,6 +707,12 @@ features:
     symbols:
       - PostgrestRequestBuilder.upsert
       - PostgrestTypedSource.upsert
+    supporting_symbols:
+      - PostgrestConflictResolution
+      - PostgrestConflictResolution.init
+      - PostgrestConflictResolution.rawValue
+      - PostgrestConflictResolution.mergeDuplicates
+      - PostgrestConflictResolution.ignoreDuplicates
   database.mutate.delete:
     status: implemented
     symbols:
