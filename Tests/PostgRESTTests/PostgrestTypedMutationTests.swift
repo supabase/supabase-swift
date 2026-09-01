@@ -12,7 +12,7 @@ import Testing
 
 @Suite
 struct PostgrestTypedMutationTests {
-  struct Todo: PostgrestWritableRelation {
+  struct Todo: PostgrestWritableRelation, PostgrestKeyedRelation {
     static let relationName = "todos"
     static let schema = "public"
     static let selectString = "*"
@@ -39,10 +39,18 @@ struct PostgrestTypedMutationTests {
     }
 
     static let columns = Columns()
+    static let primaryKeyColumns = ["id"]
 
     struct Draft: Encodable, Sendable {
       var task: String
       var isDone: Bool?
+
+      /// Mirrors the relation's own mapping, so a batch's `columns` parameter is asserted in the
+      /// database's spelling rather than in Swift's.
+      enum CodingKeys: String, CodingKey {
+        case task
+        case isDone = "is_done"
+      }
     }
   }
 
@@ -129,5 +137,114 @@ struct PostgrestTypedMutationTests {
     let rows = try await capture.client.from(Todo.self)
       .insert(Todo.Draft(task: "buy milk", isDone: nil)).returning().execute().value
     #expect(rows.first?.task == "buy milk")
+  }
+
+  @Test
+  func singleRowInsertSendsAnObjectAndNoColumnsParameter() async throws {
+    // The `columns` parameter exists to reconcile rows that encode differently. One row cannot
+    // disagree with itself, so the single-row path must stay as it was.
+    let capture = QueryCapture()
+    _ = try await capture.client.from(Todo.self)
+      .insert(Todo.Draft(task: "buy milk", isDone: nil)).execute()
+    #expect(capture.bodyString?.hasPrefix("{") == true)
+    #expect(capture.query?.contains("columns") != true)
+  }
+
+  @Test
+  func bulkInsertSendsEveryRowInOneRequest() async throws {
+    let capture = QueryCapture()
+    _ = try await capture.client.from(Todo.self)
+      .insert([Todo.Draft(task: "a", isDone: false), Todo.Draft(task: "b", isDone: false)])
+      .execute()
+    #expect(capture.httpMethod == "POST")
+    #expect(capture.bodyString?.contains("\"task\":\"a\"") == true)
+    #expect(capture.bodyString?.contains("\"task\":\"b\"") == true)
+    #expect(capture.bodyString?.hasPrefix("[") == true)
+  }
+
+  @Test
+  func bulkInsertNamesTheUnionOfColumnsAcrossRaggedRows() async throws {
+    // A draft omits a nil optional rather than sending `null`, so these two rows encode different
+    // key sets. Without the union, PostgREST reads the column list off the first row and drops
+    // `is_done` from the second — the whole reason the parameter is sent.
+    let capture = QueryCapture()
+    _ = try await capture.client.from(Todo.self)
+      .insert([Todo.Draft(task: "a", isDone: nil), Todo.Draft(task: "b", isDone: true)])
+      .execute()
+    #expect(capture.query?.contains(#"columns="is_done","task""#) == true)
+  }
+
+  @Test
+  func bulkInsertOfAnEmptyCollectionWritesNothingRatherThanFailing() async throws {
+    // Decided behavior: an empty batch is a request that writes nothing, not an error. The
+    // `columns` parameter has to be left off — `columns=` names one column called "", which
+    // PostgREST rejects, and a no-op that 400s is not a no-op.
+    let capture = QueryCapture()
+    _ = try await capture.client.from(Todo.self).insert([Todo.Draft]()).execute()
+    #expect(capture.bodyString == "[]")
+    #expect(capture.query?.contains("columns") != true)
+  }
+
+  @Test
+  func bulkInsertTakesAnyCollection() async throws {
+    // `some Collection` rather than `[Draft]`, so a slice reaches the wire without the caller
+    // rebuilding an array.
+    let rows = [Todo.Draft(task: "a"), Todo.Draft(task: "b"), Todo.Draft(task: "c")]
+    let capture = QueryCapture()
+    _ = try await capture.client.from(Todo.self).insert(rows[1...]).execute()
+    #expect(capture.bodyString?.contains("\"task\":\"a\"") == false)
+    #expect(capture.bodyString?.contains("\"task\":\"c\"") == true)
+  }
+
+  @Test
+  func bulkInsertCanReturnTheRows() async throws {
+    let capture = QueryCapture(
+      body: #"[{"id":1,"task":"a","is_done":false},{"id":2,"task":"b","is_done":false}]"#
+    )
+    let rows = try await capture.client.from(Todo.self)
+      .insert([Todo.Draft(task: "a"), Todo.Draft(task: "b")]).returning().execute().value
+    #expect(rows.map(\.task) == ["a", "b"])
+  }
+
+  @Test
+  func bulkUpsertDerivesTheConflictTargetFromThePrimaryKey() async throws {
+    let capture = QueryCapture()
+    _ = try await capture.client.from(Todo.self)
+      .upsert([Todo.Draft(task: "a"), Todo.Draft(task: "b")]).execute()
+    #expect(capture.query?.contains("on_conflict=id") == true)
+    #expect(capture.bodyString?.hasPrefix("[") == true)
+  }
+
+  @Test
+  func bulkUpsertTakesAnExplicitConflictTarget() async throws {
+    let capture = QueryCapture()
+    _ = try await capture.client.from(Todo.self)
+      .upsert([Todo.Draft(task: "a"), Todo.Draft(task: "b")], onConflict: \.task).execute()
+    #expect(capture.query?.contains("on_conflict=task") == true)
+  }
+
+  @Test
+  func bulkUpsertTakesAConflictTargetSpanningSeveralColumns() async throws {
+    let capture = QueryCapture()
+    _ = try await capture.client.from(Todo.self)
+      .upsert([Todo.Draft(task: "a")], onConflict: \.id, \.task).execute()
+    #expect(capture.query?.contains("on_conflict=id,task") == true)
+  }
+
+  @Test
+  func bulkUpsertNamesTheUnionOfColumnsAcrossRaggedRows() async throws {
+    let capture = QueryCapture()
+    _ = try await capture.client.from(Todo.self)
+      .upsert([Todo.Draft(task: "a", isDone: nil), Todo.Draft(task: "b", isDone: true)])
+      .execute()
+    #expect(capture.query?.contains(#"columns="is_done","task""#) == true)
+  }
+
+  @Test
+  func bulkUpsertOfAnEmptyCollectionWritesNothingRatherThanFailing() async throws {
+    let capture = QueryCapture()
+    _ = try await capture.client.from(Todo.self).upsert([Todo.Draft]()).execute()
+    #expect(capture.bodyString == "[]")
+    #expect(capture.query?.contains("columns") != true)
   }
 }
