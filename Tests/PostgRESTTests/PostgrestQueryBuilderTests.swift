@@ -408,6 +408,158 @@ extension PostgrestMockerTests {
     }
 
     @Test
+    func insertDefaultToNullFalseSendsMissingDefault() async throws {
+      Mock(
+        url: url.appendingPathComponent("users"),
+        ignoreQuery: true,
+        statusCode: 201,
+        data: [
+          .post: Data()
+        ]
+      )
+      .snapshotRequest {
+        #"""
+        curl \
+        	--request POST \
+        	--header "Accept: application/json" \
+        	--header "Content-Length: 27" \
+        	--header "Content-Type: application/json" \
+        	--header "Prefer: return=minimal,missing=default" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	--data "{\"id\":1,\"username\":\"admin\"}" \
+        	"http://localhost:54321/rest/v1/users"
+        """#
+      }
+      .register()
+
+      try await sut
+        .from("users")
+        .insert(User(id: 1, username: "admin"), returning: .minimal, defaultToNull: false)
+        .execute()
+    }
+
+    @Test
+    func insertDefaultToNullFalseComposesWithReturningAndCount() async throws {
+      Mock(
+        url: url.appendingPathComponent("users"),
+        ignoreQuery: true,
+        statusCode: 201,
+        data: [
+          .post: Data()
+        ]
+      )
+      .snapshotRequest {
+        #"""
+        curl \
+        	--request POST \
+        	--header "Accept: application/json" \
+        	--header "Content-Length: 60" \
+        	--header "Content-Type: application/json" \
+        	--header "Prefer: return=minimal,count=estimated,missing=default" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	--data "[{\"id\":1,\"username\":\"admin\"},{\"id\":2,\"username\":\"supabase\"}]" \
+        	"http://localhost:54321/rest/v1/users?columns=%22id%22,%22username%22"
+        """#
+      }
+      .register()
+
+      try await sut
+        .from("users")
+        .insert(
+          [
+            User(id: 1, username: "admin"),
+            User(id: 2, username: "supabase"),
+          ],
+          returning: .minimal,
+          count: .estimated,
+          defaultToNull: false
+        )
+        .execute()
+    }
+
+    @Test
+    func upsertDefaultToNullFalseKeepsEveryOtherPreference() async throws {
+      // The whole point of the option is that it is one more entry in a header that already carries
+      // `resolution=`, `return=`, `count=` and whatever the caller set. Dropping any of them turns
+      // the request into a different operation — see SDK-1626.
+      Mock(
+        url: url.appendingPathComponent("users"),
+        ignoreQuery: true,
+        statusCode: 201,
+        data: [
+          .post: Data()
+        ]
+      )
+      .snapshotRequest {
+        #"""
+        curl \
+        	--request POST \
+        	--header "Accept: application/json" \
+        	--header "Content-Length: 60" \
+        	--header "Content-Type: application/json" \
+        	--header "Prefer: existing=value,resolution=merge-duplicates,return=minimal,count=estimated,missing=default" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	--data "[{\"id\":1,\"username\":\"admin\"},{\"id\":2,\"username\":\"supabase\"}]" \
+        	"http://localhost:54321/rest/v1/users?columns=%22id%22,%22username%22&on_conflict=username"
+        """#
+      }
+      .register()
+
+      try await sut(withPreferHeader: "existing=value")
+        .from("users")
+        .upsert(
+          [
+            User(id: 1, username: "admin"),
+            User(id: 2, username: "supabase"),
+          ],
+          onConflict: "username",
+          returning: .minimal,
+          count: .estimated,
+          defaultToNull: false
+        )
+        .execute()
+    }
+
+    @Test
+    func upsertDefaultToNullFalseComposesWithIgnoreDuplicates() async throws {
+      Mock(
+        url: url.appendingPathComponent("users"),
+        ignoreQuery: true,
+        statusCode: 201,
+        data: [
+          .post: Data()
+        ]
+      )
+      .snapshotRequest {
+        #"""
+        curl \
+        	--request POST \
+        	--header "Accept: application/json" \
+        	--header "Content-Length: 27" \
+        	--header "Content-Type: application/json" \
+        	--header "Prefer: resolution=ignore-duplicates,return=representation,missing=default" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	--data "{\"id\":1,\"username\":\"admin\"}" \
+        	"http://localhost:54321/rest/v1/users"
+        """#
+      }
+      .register()
+
+      try await sut
+        .from("users")
+        .upsert(
+          User(id: 1, username: "admin"),
+          ignoreDuplicates: true,
+          defaultToNull: false
+        )
+        .execute()
+    }
+
+    @Test
     func delete() async throws {
       Mock(
         url: url.appendingPathComponent("users"),

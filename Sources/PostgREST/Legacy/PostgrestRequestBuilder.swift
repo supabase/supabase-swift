@@ -159,7 +159,7 @@ public struct PostgrestRequestBuilder<Phase>: Sendable {
 ///
 /// ### Inserting Rows
 ///
-/// - ``PostgrestRequestBuilder/insert(_:returning:count:encoder:)``
+/// - ``PostgrestRequestBuilder/insert(_:returning:count:defaultToNull:encoder:)``
 ///
 /// ### Updating Rows
 ///
@@ -167,7 +167,7 @@ public struct PostgrestRequestBuilder<Phase>: Sendable {
 ///
 /// ### Upsert Rows
 ///
-/// - ``PostgrestRequestBuilder/upsert(_:onConflict:returning:count:ignoreDuplicates:encoder:)``
+/// - ``PostgrestRequestBuilder/upsert(_:onConflict:returning:count:ignoreDuplicates:defaultToNull:encoder:)``
 ///
 /// ### Deleting Rows
 ///
@@ -180,7 +180,7 @@ public typealias PostgrestQueryBuilder = PostgrestRequestBuilder<PostgrestQueryP
 /// This is ``PostgrestRequestBuilder`` specialized to ``PostgrestFilterPhase``.
 ///
 /// Obtain one from ``PostgrestRequestBuilder/select(_:head:count:)``,
-/// ``PostgrestRequestBuilder/insert(_:returning:count:encoder:)``,
+/// ``PostgrestRequestBuilder/insert(_:returning:count:defaultToNull:encoder:)``,
 /// ``PostgrestRequestBuilder/update(_:returning:count:encoder:)``, or another write method on
 /// ``PostgrestQueryBuilder``, or from ``PostgrestClient/rpc(_:params:head:get:count:)``. Chain one
 /// or more filter methods, then call
