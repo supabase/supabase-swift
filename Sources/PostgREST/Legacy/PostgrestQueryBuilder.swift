@@ -89,6 +89,10 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
   ///   - values: An `Encodable` value representing a single row or an array of rows to insert.
   ///   - returning: Controls which rows PostgREST returns. Defaults to `nil` (server decides).
   ///   - count: The row-count algorithm to use, or `nil` to skip counting. See ``CountOption``.
+  ///   - defaultToNull: Controls what happens to a column that some rows in a bulk payload name and
+  ///     others leave out. `true` (the default) inserts `null` for the rows that omit it; `false`
+  ///     sends `Prefer: missing=default` so the column's `DEFAULT` applies instead. `upsert` takes
+  ///     the same option.
   ///   - encoder: The `JSONEncoder` used to serialize `values`. Overrides
   ///     ``PostgrestClient/Configuration/encoder`` when non-`nil`.
   /// - Returns: A ``PostgrestFilterBuilder`` for applying additional constraints or executing the request.
@@ -97,6 +101,7 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
     _ values: some Encodable,
     returning: PostgrestReturningOptions? = nil,
     count: CountOption? = nil,
+    defaultToNull: Bool = true,
     encoder: JSONEncoder? = nil
   ) throws -> PostgrestFilterBuilder {
     let body = try (encoder ?? configuration.encoder).encode(values)
@@ -110,6 +115,9 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
     request.body = body
     if let count {
       prefersHeaders.append("count=\(count.rawValue)")
+    }
+    if !defaultToNull {
+      prefersHeaders.append("missing=default")
     }
     if let prefer = request.headers[.prefer] {
       prefersHeaders.insert(prefer, at: 0)
@@ -151,6 +159,11 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
   ///   - count: The row-count algorithm to use, or `nil` to skip counting. See ``CountOption``.
   ///   - ignoreDuplicates: When `true`, conflicting rows are silently ignored. When `false` (the
   ///     default), conflicting rows are merged with the supplied values.
+  ///   - defaultToNull: Controls what happens to a column that some rows in a bulk payload name and
+  ///     others leave out. `true` (the default) inserts `null` for the rows that omit it; `false`
+  ///     sends `Prefer: missing=default` so the column's `DEFAULT` applies instead. This also
+  ///     decides what a row omitting the conflict target merges against: under `false` the target
+  ///     resolves to the database-generated value, which is what the conflict is detected on.
   ///   - encoder: The `JSONEncoder` used to serialize `values`. Overrides
   ///     ``PostgrestClient/Configuration/encoder`` when non-`nil`.
   /// - Returns: A ``PostgrestFilterBuilder`` for applying additional constraints or executing the request.
@@ -161,6 +174,7 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
     returning: PostgrestReturningOptions = .representation,
     count: CountOption? = nil,
     ignoreDuplicates: Bool = false,
+    defaultToNull: Bool = true,
     encoder: JSONEncoder? = nil
   ) throws -> PostgrestFilterBuilder {
     let body = try (encoder ?? configuration.encoder).encode(values)
@@ -177,6 +191,9 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
     request.body = body
     if let count {
       prefersHeaders.append("count=\(count.rawValue)")
+    }
+    if !defaultToNull {
+      prefersHeaders.append("missing=default")
     }
     if let prefer = request.headers[.prefer] {
       prefersHeaders.insert(prefer, at: 0)
