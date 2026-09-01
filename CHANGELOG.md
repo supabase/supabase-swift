@@ -1,5 +1,117 @@
 # Changelog
 
+## [3.0.0-beta](https://github.com/supabase/supabase-swift/compare/v2.55.1...v3.0.0-beta) (2026-09-01)
+
+
+### ⚠ BREAKING CHANGES
+
+* **postgrest:** no public symbol moved module, changed shape, or was renamed, and no call site needs editing. What changed is the guarantee: PostgREST's pre-v3 builders stop receiving behavior fixes as of this release, are deprecated later in v3, and are removed in v4. See V3_MIGRATION.md.
+* **postgrest:** `Optional` no longer conforms to `PostgrestFilterValue`. Use `is(_:value:)` to test for NULL. See V3_MIGRATION.md.
+* **postgrest,realtime:** standardize per-call encoder/decoder overrides ([#1248](https://github.com/supabase/supabase-swift/issues/1248))
+* **storage:** drop encoder/decoder customization ([#1247](https://github.com/supabase/supabase-swift/issues/1247))
+* **storage:** make Storage client types stateless structs ([#1246](https://github.com/supabase/supabase-swift/issues/1246))
+* **postgrest:** make client and builders stateless value types ([#1240](https://github.com/supabase/supabase-swift/issues/1240))
+* **functions:** make FunctionsClient stateless and a struct ([#1233](https://github.com/supabase/supabase-swift/issues/1233))
+* **auth:** always emit locally stored session as initial session ([#1214](https://github.com/supabase/supabase-swift/issues/1214))
+* **helpers:** rename AnyJSON to JSONValue ([#1232](https://github.com/supabase/supabase-swift/issues/1232))
+* **functions:** convert FunctionInvokeOptions.Method to a RawRepresentable struct ([#1229](https://github.com/supabase/supabase-swift/issues/1229))
+* **postgrest:** convert TextSearchType to a RawRepresentable struct ([#1228](https://github.com/supabase/supabase-swift/issues/1228))
+* **postgrest:** convert PostgrestReturningOptions to a RawRepresentable struct ([#1227](https://github.com/supabase/supabase-swift/issues/1227))
+* **postgrest:** convert CountOption to a RawRepresentable struct ([#1226](https://github.com/supabase/supabase-swift/issues/1226))
+* **postgrest:** convert PostgrestFilterBuilder.Operator to a RawRepresentable struct ([#1225](https://github.com/supabase/supabase-swift/issues/1225))
+* **auth:** convert SignOutScope to a RawRepresentable struct ([#1224](https://github.com/supabase/supabase-swift/issues/1224))
+* **auth:** convert ResendMobileType to a RawRepresentable struct ([#1223](https://github.com/supabase/supabase-swift/issues/1223))
+* **auth:** convert ResendEmailType to a RawRepresentable struct ([#1222](https://github.com/supabase/supabase-swift/issues/1222))
+* **auth:** convert EmailOTPType to a RawRepresentable struct ([#1221](https://github.com/supabase/supabase-swift/issues/1221))
+* **auth:** convert MobileOTPType to a RawRepresentable struct ([#1220](https://github.com/supabase/supabase-swift/issues/1220))
+* **auth:** convert OpenIDConnectCredentials.Provider to a RawRepresentable struct ([#1219](https://github.com/supabase/supabase-swift/issues/1219))
+* **auth:** convert Provider to a RawRepresentable struct ([#1217](https://github.com/supabase/supabase-swift/issues/1217))
+* **auth:** convert MessagingChannel to a RawRepresentable struct ([#1216](https://github.com/supabase/supabase-swift/issues/1216))
+* **auth:** convert FactorStatus to a RawRepresentable struct ([#1215](https://github.com/supabase/supabase-swift/issues/1215))
+* **auth:** fix macOS Keychain consent prompt and storage contract ([#1208](https://github.com/supabase/supabase-swift/issues/1208))
+* **auth:** drop LocalStorage implementation for Windows platform ([#1213](https://github.com/supabase/supabase-swift/issues/1213))
+* **auth,storage,realtime,helpers:** narrow Codable conformances to their actual usage direction ([#1209](https://github.com/supabase/supabase-swift/issues/1209))
+* SupabaseLogger, SupabaseLogMessage, SupabaseLogLevel, SupabaseLoggerTaskLocal, and OSLogSupabaseLogger are removed. Use Logging.Logger (swift-log) directly. See V3_MIGRATION.md.
+* remove all deprecated pre-v3 APIs ([#1206](https://github.com/supabase/supabase-swift/issues/1206))
+* **auth:** `AuthResponse.user` is now `User?` instead of `User`. Update call sites that access `response.user` directly to handle the optional (e.g. `response.user?.email`).
+
+### Features
+
+* **auth:** support concurrent PKCE flows via flow id ([#1245](https://github.com/supabase/supabase-swift/issues/1245)) ([e7b2325](https://github.com/supabase/supabase-swift/commit/e7b2325cd6938ac6faa0ca0dba6df28615e3abf0))
+* **client:** add db.retry option to disable PostgREST retries ([#1244](https://github.com/supabase/supabase-swift/issues/1244)) ([894ad20](https://github.com/supabase/supabase-swift/commit/894ad20c248b380b654f6c8546809eb98945a69f))
+* **postgrest,realtime:** standardize per-call encoder/decoder overrides ([#1248](https://github.com/supabase/supabase-swift/issues/1248)) ([4f7d8a8](https://github.com/supabase/supabase-swift/commit/4f7d8a8c9b14c4fd45418ad7cc625c7a5886b9aa))
+* **postgrest:** accept a collection of rows in typed insert and upsert ([#1306](https://github.com/supabase/supabase-swift/issues/1306)) ([fbf2bb7](https://github.com/supabase/supabase-swift/commit/fbf2bb7319e665c3e62caba180d204124bc32b6b))
+* **postgrest:** add @Relationship and embeds in selections ([#1307](https://github.com/supabase/supabase-swift/issues/1307)) ([1689765](https://github.com/supabase/supabase-swift/commit/16897652032664e3836746decc7614dcaf89a6ea))
+* **postgrest:** add @SelectionOf for column subsets ([#1260](https://github.com/supabase/supabase-swift/issues/1260)) ([f47933e](https://github.com/supabase/supabase-swift/commit/f47933e7767f79135961c72ca458be517707ea88))
+* **postgrest:** add actionable macro diagnostics ([#1261](https://github.com/supabase/supabase-swift/issues/1261)) ([8ee0a6b](https://github.com/supabase/supabase-swift/commit/8ee0a6bf3aefbdbd7c7bc61dfa181031c13d0bb2))
+* **postgrest:** add aggregate functions as select-only expressions ([#1294](https://github.com/supabase/supabase-swift/issues/1294)) ([4d944f7](https://github.com/supabase/supabase-swift/commit/4d944f72554a47ca4b904f607a68882f5202040d))
+* **postgrest:** add casts and JSON paths as column expressions ([#1293](https://github.com/supabase/supabase-swift/issues/1293)) ([1852b9e](https://github.com/supabase/supabase-swift/commit/1852b9e0122b2d05f696c8d4b2b16cd5e98f54b6))
+* **postgrest:** add column expressions and the filter tree ([#1288](https://github.com/supabase/supabase-swift/issues/1288)) ([b6bfaa6](https://github.com/supabase/supabase-swift/commit/b6bfaa6258451e9cf9d54ee199055dc0ac6cc940))
+* **postgrest:** add count and head to the typed surface ([#1305](https://github.com/supabase/supabase-swift/issues/1305)) ([13132e3](https://github.com/supabase/supabase-swift/commit/13132e31961276783d96f3ad8b61093271fafd3e))
+* **postgrest:** add embedded relations to the column namespace ([#1295](https://github.com/supabase/supabase-swift/issues/1295)) ([4253a08](https://github.com/supabase/supabase-swift/commit/4253a08a0002e2bbc6a76c759222afdd4f52edd6))
+* **postgrest:** add from(_ type:) and a typed whole-row select ([#1253](https://github.com/supabase/supabase-swift/issues/1253)) ([52eec30](https://github.com/supabase/supabase-swift/commit/52eec30c20207cd32d389be01f4a9d9518c99459))
+* **postgrest:** add key-path filters and modifiers to the typed query ([#1254](https://github.com/supabase/supabase-swift/issues/1254)) ([d177ab6](https://github.com/supabase/supabase-swift/commit/d177ab646b0ab02a2061d2d7d719ebabbdf83aef))
+* **postgrest:** add the @Table macro and its marker attributes ([#1259](https://github.com/supabase/supabase-swift/issues/1259)) ([7a2c450](https://github.com/supabase/supabase-swift/commit/7a2c450157819997dc1d70d4e3a4880a1c3ac6bd))
+* **postgrest:** add the PostgrestMacros targets ([#1258](https://github.com/supabase/supabase-swift/issues/1258)) ([c26da5b](https://github.com/supabase/supabase-swift/commit/c26da5bdf52d3c356052f144f83cd66903ec2705))
+* **postgrest:** add the relation and selection protocols ([#1252](https://github.com/supabase/supabase-swift/issues/1252)) ([f2f37d2](https://github.com/supabase/supabase-swift/commit/f2f37d2e11aadf1d75e42bc4f804b0468d8e55c5))
+* **postgrest:** add the remaining filter operators ([#1289](https://github.com/supabase/supabase-swift/issues/1289)) ([2638f4a](https://github.com/supabase/supabase-swift/commit/2638f4ac95b26cc6e704cac4290a18063856448e))
+* **postgrest:** add the where and order closures ([#1291](https://github.com/supabase/supabase-swift/issues/1291)) ([8345ea0](https://github.com/supabase/supabase-swift/commit/8345ea01da3c05e0636f25b144a9353b2796587c))
+* **postgrest:** add typed writes gated on the writable refinement ([#1255](https://github.com/supabase/supabase-swift/issues/1255)) ([b595383](https://github.com/supabase/supabase-swift/commit/b5953839d5e5e99d8796d9258fbdf1b4657ab3b8))
+* **postgrest:** allow isNull() on a JSON path ([#1304](https://github.com/supabase/supabase-swift/issues/1304)) ([4d0f178](https://github.com/supabase/supabase-swift/commit/4d0f1784ad47967946370855898af20d2bf25937))
+* **postgrest:** diagnose stored properties with no type annotation ([#1274](https://github.com/supabase/supabase-swift/issues/1274)) ([d57414c](https://github.com/supabase/supabase-swift/commit/d57414c7e3c68ef5f27c1939ceba288069c1a8f3))
+* **postgrest:** generate a Columns namespace from @Table ([#1290](https://github.com/supabase/supabase-swift/issues/1290)) ([845ff60](https://github.com/supabase/supabase-swift/commit/845ff6064e327eab6f78f625cfdf5d2cfa145de8))
+* **postgrest:** let a typed upsert ignore duplicates instead of merging them ([#1309](https://github.com/supabase/supabase-swift/issues/1309)) ([3204541](https://github.com/supabase/supabase-swift/commit/32045417f2cbfe9ea05c56bef1200a07077c3679))
+
+
+### Bug Fixes
+
+* **auth,storage,realtime,helpers:** narrow Codable conformances to their actual usage direction ([#1209](https://github.com/supabase/supabase-swift/issues/1209)) ([0b558d5](https://github.com/supabase/supabase-swift/commit/0b558d53cda2f2e4b80f944b1ffab240ea21c2f5))
+* **auth:** address code-review findings on VerifyOTPResponse ([#1205](https://github.com/supabase/supabase-swift/issues/1205)) ([f285277](https://github.com/supabase/supabase-swift/commit/f285277a8570a66d622d4b44d8a4a015cc2ec2dd))
+* **auth:** always emit locally stored session as initial session ([#1214](https://github.com/supabase/supabase-swift/issues/1214)) ([12cfe79](https://github.com/supabase/supabase-swift/commit/12cfe799b7efa4321a250eeb1165b855559c665b))
+* **auth:** convert EmailOTPType to a RawRepresentable struct ([#1221](https://github.com/supabase/supabase-swift/issues/1221)) ([9dc627e](https://github.com/supabase/supabase-swift/commit/9dc627ef2d80ffb49f142f3e9d61066d70aed563))
+* **auth:** convert FactorStatus to a RawRepresentable struct ([#1215](https://github.com/supabase/supabase-swift/issues/1215)) ([2fa8d76](https://github.com/supabase/supabase-swift/commit/2fa8d76bb19cc50e1778a69468d82b469da48412))
+* **auth:** convert MessagingChannel to a RawRepresentable struct ([#1216](https://github.com/supabase/supabase-swift/issues/1216)) ([14dbc6a](https://github.com/supabase/supabase-swift/commit/14dbc6ab83bcf4cf2cd315ca94e52f2430f40d49))
+* **auth:** convert MobileOTPType to a RawRepresentable struct ([#1220](https://github.com/supabase/supabase-swift/issues/1220)) ([3c39d48](https://github.com/supabase/supabase-swift/commit/3c39d4811d500dc1bbb98b6818d2b7906fc1c99f))
+* **auth:** convert OpenIDConnectCredentials.Provider to a RawRepresentable struct ([#1219](https://github.com/supabase/supabase-swift/issues/1219)) ([23e1793](https://github.com/supabase/supabase-swift/commit/23e1793d5d7287307caff755d346e47c04fc8519))
+* **auth:** convert Provider to a RawRepresentable struct ([#1217](https://github.com/supabase/supabase-swift/issues/1217)) ([dd7fcb2](https://github.com/supabase/supabase-swift/commit/dd7fcb2275c1dfb58ef48ec7b4e49d84a4d04319))
+* **auth:** convert ResendEmailType to a RawRepresentable struct ([#1222](https://github.com/supabase/supabase-swift/issues/1222)) ([42f66bd](https://github.com/supabase/supabase-swift/commit/42f66bd9c924ff92697e463c5b64a9b38e5eb81f))
+* **auth:** convert ResendMobileType to a RawRepresentable struct ([#1223](https://github.com/supabase/supabase-swift/issues/1223)) ([b1c877d](https://github.com/supabase/supabase-swift/commit/b1c877dbe3bbd2d1f9653fbabd31a1ef2781c798))
+* **auth:** convert SignOutScope to a RawRepresentable struct ([#1224](https://github.com/supabase/supabase-swift/issues/1224)) ([0c63222](https://github.com/supabase/supabase-swift/commit/0c63222ea6f94f03d9c8094d86025ae3c773a100))
+* **auth:** convert WebAuthnChallengeType to a RawRepresentable struct ([#1218](https://github.com/supabase/supabase-swift/issues/1218)) ([966859b](https://github.com/supabase/supabase-swift/commit/966859bab598b836e3de90d323b9aa559ad52556))
+* **auth:** drop LocalStorage implementation for Windows platform ([#1213](https://github.com/supabase/supabase-swift/issues/1213)) ([7bf6da1](https://github.com/supabase/supabase-swift/commit/7bf6da15853c72eb50f8edd7ba197e92237618a6))
+* **auth:** drop refresh token from log metadata, inject client logger into event emitter ([#1211](https://github.com/supabase/supabase-swift/issues/1211)) ([48e6438](https://github.com/supabase/supabase-swift/commit/48e6438ddf0b273a3822c9e9c960cc1eae781788))
+* **auth:** fix macOS Keychain consent prompt and storage contract ([#1208](https://github.com/supabase/supabase-swift/issues/1208)) ([528bd5f](https://github.com/supabase/supabase-swift/commit/528bd5fbb1689c3beff32875e7ff450d688d8db3))
+* **auth:** return VerifyOTPResponse from verifyOTP instead of AuthResponse ([#1088](https://github.com/supabase/supabase-swift/issues/1088)) ([dd5e825](https://github.com/supabase/supabase-swift/commit/dd5e82513da43bfe16eabb24d2932548d75d36bb))
+* **ci:** fail loudly instead of silently exporting stale coverage ([#1242](https://github.com/supabase/supabase-swift/issues/1242)) ([5f59480](https://github.com/supabase/supabase-swift/commit/5f5948004e87d9882f65e482a766f250d15aca5d))
+* **ci:** purge stale Clang module cache in xcodebuild legacy job ([#1243](https://github.com/supabase/supabase-swift/issues/1243)) ([1a8b451](https://github.com/supabase/supabase-swift/commit/1a8b45128fb93a034cb47e8647811244fbf38e74))
+* **docs:** match DocC's current warning phrasing and fix stale symbol links ([#1241](https://github.com/supabase/supabase-swift/issues/1241)) ([80ad2a1](https://github.com/supabase/supabase-swift/commit/80ad2a1006547bab98d78757a1cc5c3c3218124e))
+* **functions:** convert FunctionInvokeOptions.Method to a RawRepresentable struct ([#1229](https://github.com/supabase/supabase-swift/issues/1229)) ([3df400c](https://github.com/supabase/supabase-swift/commit/3df400c48a2640f10b8678856e313e03a478fc18))
+* **helpers:** make OSLogHandler internal-only ([#1212](https://github.com/supabase/supabase-swift/issues/1212)) ([04c7383](https://github.com/supabase/supabase-swift/commit/04c73836da126c1efb3deb9db304cc44a62c1f89))
+* **postgrest:** close the typed upsert's missing conflict target ([#1283](https://github.com/supabase/supabase-swift/issues/1283)) ([06f5c75](https://github.com/supabase/supabase-swift/commit/06f5c75e4bca159223908de3546d698b6f9802a6))
+* **postgrest:** convert CountOption to a RawRepresentable struct ([#1226](https://github.com/supabase/supabase-swift/issues/1226)) ([672c438](https://github.com/supabase/supabase-swift/commit/672c4381f366811a43be7d5e61c0b3e79a0cdfb4))
+* **postgrest:** convert PostgrestFilterBuilder.Operator to a RawRepresentable struct ([#1225](https://github.com/supabase/supabase-swift/issues/1225)) ([1149c6f](https://github.com/supabase/supabase-swift/commit/1149c6f9c5b3bdac95e9dd9b94deb79dc72c724f))
+* **postgrest:** convert PostgrestReturningOptions to a RawRepresentable struct ([#1227](https://github.com/supabase/supabase-swift/issues/1227)) ([068c6fd](https://github.com/supabase/supabase-swift/commit/068c6fdb9ff992d4d7eee604fd2f40a632b1d7fd))
+* **postgrest:** convert TextSearchType to a RawRepresentable struct ([#1228](https://github.com/supabase/supabase-swift/issues/1228)) ([3dd7e62](https://github.com/supabase/supabase-swift/commit/3dd7e62606ee47857eecfee4eb649cf8ab335d1f))
+* **postgrest:** keep resolution=merge-duplicates when returning() follows upsert ([#1308](https://github.com/supabase/supabase-swift/issues/1308)) ([7e64c05](https://github.com/supabase/supabase-swift/commit/7e64c05c9c343c41a0ecf410d0e06542e11d7a9f))
+* **postgrest:** let a typed update clear a nullable column ([#1281](https://github.com/supabase/supabase-swift/issues/1281)) ([bc52fc7](https://github.com/supabase/supabase-swift/commit/bc52fc709b8dd040854e70ed7168ef75401c587f))
+* **postgrest:** let Update change a primary key column ([#1280](https://github.com/supabase/supabase-swift/issues/1280)) ([62bb21b](https://github.com/supabase/supabase-swift/commit/62bb21beb3b3a41451a6534e55bc9502ee308677))
+* **postgrest:** make the primary key optional in Insert, not absent ([#1278](https://github.com/supabase/supabase-swift/issues/1278)) ([a595e61](https://github.com/supabase/supabase-swift/commit/a595e61a9e17a9e2b8b6e491b0905634407155fc))
+* **postgrest:** reject nil filter operands at compile time ([#1238](https://github.com/supabase/supabase-swift/issues/1238)) ([61f6fb4](https://github.com/supabase/supabase-swift/commit/61f6fb44b701d32185ff0545a248c727b8765e27))
+* **storage:** drop encoder/decoder customization ([#1247](https://github.com/supabase/supabase-swift/issues/1247)) ([353e87d](https://github.com/supabase/supabase-swift/commit/353e87db6937ebaa67eb04d5c2bf0ec37d0853f5))
+* **supabase:** propagate access-token provider errors instead of swallowing them ([#1236](https://github.com/supabase/supabase-swift/issues/1236)) ([84f3370](https://github.com/supabase/supabase-swift/commit/84f3370a9dc5d1ac7c1855b1fabab825781480de))
+* **tests:** make request snapshot assertions actually fail ([#1239](https://github.com/supabase/supabase-swift/issues/1239)) ([72b36cc](https://github.com/supabase/supabase-swift/commit/72b36cc8f6f54eece8b62fa22400f43ad3780a6b))
+
+
+### Code Refactoring
+
+* **functions:** make FunctionsClient stateless and a struct ([#1233](https://github.com/supabase/supabase-swift/issues/1233)) ([88a5efe](https://github.com/supabase/supabase-swift/commit/88a5efe7d0f533f5d432164d91e8d67a1e18f9db))
+* **helpers:** rename AnyJSON to JSONValue ([#1232](https://github.com/supabase/supabase-swift/issues/1232)) ([9f40f8f](https://github.com/supabase/supabase-swift/commit/9f40f8fa4b0621753be5d31076dc507449ca5e13))
+* **postgrest:** make client and builders stateless value types ([#1240](https://github.com/supabase/supabase-swift/issues/1240)) ([b52d385](https://github.com/supabase/supabase-swift/commit/b52d385ce55719ace132bb321c19337cbc556668))
+* **postgrest:** move today's builders under Legacy/ ([#1267](https://github.com/supabase/supabase-swift/issues/1267)) ([d96ed5d](https://github.com/supabase/supabase-swift/commit/d96ed5d4b1c49b8cdfa3a8b1b8a09f4eb065c58d))
+* remove all deprecated pre-v3 APIs ([#1206](https://github.com/supabase/supabase-swift/issues/1206)) ([6182b19](https://github.com/supabase/supabase-swift/commit/6182b195699d7cc5e38f82008f0b4da528cd1de8))
+* replace SupabaseLogger with swift-log (SDK-1412) ([#1210](https://github.com/supabase/supabase-swift/issues/1210)) ([7325a6f](https://github.com/supabase/supabase-swift/commit/7325a6f1ffe11f087cc5920add57c36a77da53f4))
+* **storage:** make Storage client types stateless structs ([#1246](https://github.com/supabase/supabase-swift/issues/1246)) ([1dac92d](https://github.com/supabase/supabase-swift/commit/1dac92dff5d59a97bc35dcb43b28532a5a8214ef))
+
 ## [2.55.1](https://github.com/supabase/supabase-swift/compare/v2.55.0...v2.55.1) (2026-08-13)
 
 ### Bug Fixes
