@@ -31,18 +31,15 @@ public struct PostgrestTypedMutation<R: PostgrestWritableRelation>: PostgrestFil
 
   /// Requests the affected rows back, decoded as `[R]`.
   ///
-  /// This replaces the `Prefer` header rather than appending to it. The write methods set
-  /// `return=minimal` so a plain ``execute()`` does not transfer rows, and appending would leave
-  /// `Prefer: return=minimal,return=representation`, which is contradictory.
+  /// This replaces only the `return=` preference in the `Prefer` header, so it composes with
+  /// whatever else a write method already set there — `upsert` puts `resolution=` in the same
+  /// header, and losing it there would silently turn the upsert into a plain insert.
   /// `return=representation` alone returns every column, so no `select` parameter is needed.
-  ///
-  /// > Note: Because this replaces the whole header, do not combine it with any other `Prefer`
-  /// > preference on a mutation. Slice 0 sets none.
   ///
   /// - Returns: A ``PostgrestTypedQuery`` decoding into `[R]`.
   public func returning() -> PostgrestTypedQuery<R, [R], PostgrestFilterPhase> {
     PostgrestTypedQuery(
-      builder: builder.setHeader(name: "Prefer", value: "return=representation")
+      builder: builder.mergingPreferHeader("return=representation")
     )
   }
 

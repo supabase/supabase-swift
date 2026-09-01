@@ -48,6 +48,9 @@ struct RequestCapture {
   /// The path of the captured request's URL, which ends in the relation name.
   var path: String? { captured.value?.url?.path }
 
+  /// The captured request's `Prefer` header, for asserting the full value rather than a substring.
+  var prefer: String? { captured.value?.value(forHTTPHeaderField: "Prefer") }
+
   /// The captured request body decoded as UTF-8.
   var bodyString: String? {
     captured.value?.httpBody.map { String(decoding: $0, as: UTF8.self) }
