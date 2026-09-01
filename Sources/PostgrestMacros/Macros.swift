@@ -111,6 +111,43 @@ public macro Default() =
     module: "PostgrestMacrosPlugin", type: "MarkerMacro"
   )
 
+/// Declares a property as an embedded relation, identified by its foreign key column.
+///
+/// ```swift
+/// @SelectionOf(Todo.self)
+/// struct TodoWithComments {
+///   var id: UUID
+///   var task: String
+///   @Relationship(\Comment.todoID) var comments: [CommentBody]
+/// }
+///
+/// // "id:id,task:task,comments:comments!todo_id(id:id,body:body)"
+/// ```
+///
+/// The foreign key is itself a column, so the key path exists whichever side declares it:
+/// `\Comment.todoID` for the one-to-many above, and `\Message.senderID` for the many-to-one
+/// `@Relationship(\Message.senderID) var sender: UserName?`. Either way it is compiler-checked, and
+/// it needs nothing from the schema generator that a column does not already provide.
+///
+/// Naming it is a correctness feature, not only compile-time sugar. PostgREST answers an ambiguous
+/// embed — two foreign keys joining the same pair of relations — with HTTP 300 `PGRST201`. Because
+/// the key path is required, the generated `select` always carries the `!todo_id` hint, so that
+/// response cannot be produced.
+///
+/// The embed's shape comes from the property's own type, with `Array` and `Optional` layers
+/// removed: `[CommentBody]` and `UserName?` both embed the selection, one as many rows and one as
+/// at most one. That selection names its own relation, which is what the embed is addressed by.
+///
+/// Embeds belong to a selection. Writing this on a ``Table(_:schema:readOnly:)`` property is a
+/// compile error.
+///
+/// - Parameter foreignKey: A key path to the foreign key column, for example `\Comment.todoID`.
+@attached(peer)
+public macro Relationship(_ foreignKey: AnyKeyPath) =
+  #externalMacro(
+    module: "PostgrestMacrosPlugin", type: "MarkerMacro"
+  )
+
 /// Declares a named subset of a relation's columns.
 ///
 /// ```swift
@@ -126,6 +163,9 @@ public macro Default() =
 /// Property names follow the same snake_case conversion as ``Table(_:schema:readOnly:)``, and
 /// ``Column(_:)`` overrides one. The expansion emits references to the relation's own columns, so a
 /// property that names no column on it fails to compile.
+///
+/// A property that holds another selection rather than a column is an embed, declared with
+/// ``Relationship(_:)``.
 ///
 /// The annotated type must be declared at file scope. The macro attaches an extension, and Swift
 /// does not allow an extension of a type nested inside another type.

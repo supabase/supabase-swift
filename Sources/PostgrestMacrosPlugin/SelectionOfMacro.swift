@@ -43,6 +43,9 @@ public struct SelectionOfMacro: ExtensionMacro {
     if declaration.postgrestDiagnoseUnannotatedProperties(macro: "@SelectionOf", in: context) {
       return []
     }
+    if declaration.postgrestDiagnoseRelationships(in: context) {
+      return []
+    }
     let access = declaration.postgrestAccessLevel
     let properties = declaration.postgrestStoredProperties()
 
@@ -86,6 +89,9 @@ public struct SelectionOfMacro: ExtensionMacro {
   /// generated coding keys need no knowledge of the relation's column names — which a macro could
   /// not give them anyway, since a `CodingKey` raw value has to be a literal. When the two names
   /// agree the alias is a no-op, so it is emitted unconditionally rather than guessed at.
+  ///
+  /// A `@Relationship` property renders an embed instead of a column, and every part of it is read
+  /// off a type rather than spelled here — see ``embed(_:)``.
   static func selectString(
     access: String, relation: String, properties: [StoredProperty]
   ) -> String {
@@ -95,12 +101,34 @@ public struct SelectionOfMacro: ExtensionMacro {
 
     var lines = ["  \(access)static let selectString = ["]
     for property in properties {
-      lines.append(
-        "    \"\(property.columnName):\\(\(relation).columns.\(property.name).postgrestExpression)\","
-      )
+      let value =
+        property.foreignKey.map { embed(property, foreignKey: $0) }
+        ?? "\\(\(relation).columns.\(property.name).postgrestExpression)"
+      lines.append("    \"\(property.columnName):\(value)\",")
     }
     lines.append("  ].joined(separator: \",\")")
     return lines.joined(separator: "\n")
+  }
+
+  /// The right-hand side of one embed entry, `comments!todo_id(id:id,body:body)`.
+  ///
+  /// Three interpolations, none of them a literal the macro could write:
+  ///
+  /// - The embedded relation is `Selection.Source.relationName`, taken from the property's own
+  ///   type. That is what lets one attribute serve both directions: `\Comment.todoID` is rooted on
+  ///   the *target* for a one-to-many and on the *source* for a many-to-one, so the key path does
+  ///   not name the embed, and the property does.
+  /// - The `!todo_id` hint is the foreign key's column, read from its relation's namespace so a
+  ///   `@Column` override on it applies. Omitting the hint is what makes PostgREST answer an
+  ///   ambiguous embed with HTTP 300 `PGRST201`; emitting it always means this expansion cannot
+  ///   produce that response.
+  /// - The parenthesised list is the embedded selection's own `selectString`, so an embed nests to
+  ///   any depth with no further work here.
+  static func embed(_ property: StoredProperty, foreignKey: String) -> String {
+    let selection = property.embeddedSelection
+    return "\\(\(selection).Source.relationName)"
+      + "!\\(\(foreignKey).postgrestExpression)"
+      + "(\\(\(selection).selectString))"
   }
 
   /// The cross-type check.
@@ -114,13 +142,20 @@ public struct SelectionOfMacro: ExtensionMacro {
   /// every property's column, it carries the same proof, and this array is redundant. It is kept
   /// because it says out loud what the check is for; the diagnostic a reader gets from a bad
   /// property name is the same either way.
+  ///
+  /// An embed contributes its foreign key rather than a column of this relation. It has no column
+  /// here by construction — `Todo.columns.comments` does not exist — and the foreign key is the
+  /// part that can be wrong, since the compiler already checks the key path at the attribute but
+  /// nothing yet says the column it names belongs to a relation this expansion can reach.
   static func columnCheck(relation: String, properties: [StoredProperty]) -> String {
     var lines = [
-      "  /// Fails to compile if a property does not name a column on \(relation).",
+      "  /// Fails to compile if a property does not name a column on \(relation), or an embed's",
+      "  /// foreign key does not name one on its own relation.",
       "  private static let _columnCheck: [String] = [",
     ]
     for property in properties {
-      lines.append("    \(relation).columns.\(property.name).postgrestExpression,")
+      let reference = property.foreignKey ?? "\(relation).columns.\(property.name)"
+      lines.append("    \(reference).postgrestExpression,")
     }
     lines.append("  ]")
     return lines.joined(separator: "\n")

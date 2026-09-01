@@ -195,6 +195,7 @@ supporting_symbols:
   - Column
   - PrimaryKey
   - Default
+  - Relationship
 
 features:
 
