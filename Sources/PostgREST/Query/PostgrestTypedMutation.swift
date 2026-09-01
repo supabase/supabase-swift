@@ -51,6 +51,27 @@ public struct PostgrestTypedMutation<R: PostgrestWritableRelation>: PostgrestFil
   public func execute() async throws -> PostgrestResponse<Void> {
     try await builder.execute()
   }
+
+  /// Sends the request, discarding the response body but asking how many rows it affected.
+  ///
+  /// ```swift
+  /// let removed = try await client.from(Todo.self).delete()
+  ///   .where { $0.isDone.eq(true) }
+  ///   .execute(count: .exact)
+  ///   .count
+  /// ```
+  ///
+  /// This composes with ``returning()``, which sets a different `Prefer` preference: the count is
+  /// applied when the request is sent, and each preference replaces only its own key.
+  ///
+  /// - Parameter count: The counting algorithm. See ``CountOption`` for the accuracy/speed
+  ///   trade-off.
+  /// - Returns: A ``PostgrestResponse`` whose ``PostgrestResponse/count`` is the number of rows
+  ///   affected.
+  @discardableResult
+  public func execute(count: CountOption) async throws -> PostgrestResponse<Void> {
+    try await builder.execute(options: FetchOptions(count: count))
+  }
 }
 
 extension PostgrestTypedSource where R: PostgrestWritableRelation {

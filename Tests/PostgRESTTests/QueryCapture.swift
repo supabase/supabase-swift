@@ -23,7 +23,11 @@ struct QueryCapture {
   let client: PostgrestClient
   private let captured = LockIsolated(URLRequest?.none)
 
-  init(body: String = "[]") {
+  /// - Parameters:
+  ///   - body: The response body to hand back to every request.
+  ///   - responseHeaders: Extra response header fields, merged over `Content-Type`. Use this to
+  ///     stub the `Content-Range` header a count request reads its total from.
+  init(body: String = "[]", responseHeaders: [String: String] = [:]) {
     let captured = self.captured
     client = PostgrestClient(
       url: URL(string: "https://example.supabase.co")!,
@@ -34,7 +38,7 @@ struct QueryCapture {
           url: request.url!,
           statusCode: 200,
           httpVersion: nil,
-          headerFields: ["Content-Type": "application/json"]
+          headerFields: ["Content-Type": "application/json"].merging(responseHeaders) { $1 }
         )!
         return (Data(body.utf8), response)
       }
