@@ -46,6 +46,15 @@ where Position: PostgrestFilterablePosition {}
 extension PostgrestDerivedExpression: PostgrestOrderableExpression
 where Position: PostgrestOrderablePosition {}
 
+/// A JSON extraction can be `NULL` whatever the column's own nullability — `data->>'name'` is
+/// `NULL` when the key is absent, even on a `NOT NULL` `jsonb` column — so it gets `isNull()`
+/// without the column having to be nullable.
+///
+/// Keyed on the filterable position rather than named per accessor: a cast and an aggregate are
+/// select-only, so neither picks the operator up, and a JSON path inherits its receiver's position.
+extension PostgrestDerivedExpression: PostgrestNullableExpression
+where Position: PostgrestFilterablePosition {}
+
 /// A cast is select position only, whatever it was applied to.
 public typealias PostgrestCastColumn<Root: PostgrestRelation, Value> =
   PostgrestDerivedExpression<Root, Value, PostgrestSelectOnly>
