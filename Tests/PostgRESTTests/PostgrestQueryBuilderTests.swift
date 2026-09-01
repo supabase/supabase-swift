@@ -407,11 +407,6 @@ extension PostgrestMockerTests {
         .execute()
     }
 
-    // SDK-1613. `defaultToNull: false` sends `Prefer: missing=default`, so a column some rows in a
-    // bulk payload omit takes its database `DEFAULT` instead of being overwritten with `null`.
-    // The header is sent regardless of whether the payload is a single row or an array, matching
-    // supabase-js — there the `Array.isArray` check gates only the `columns` parameter.
-
     @Test
     func insertDefaultToNullFalseSendsMissingDefault() async throws {
       Mock(
