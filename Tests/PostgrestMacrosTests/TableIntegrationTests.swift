@@ -305,6 +305,76 @@ struct TableIntegrationTests {
   }
 
   @Test
+  func aTypedUpsertCanIgnoreDuplicatesInsteadOfMergingThem() async throws {
+    // SDK-1627. `resolution=ignore-duplicates` is `ON CONFLICT DO NOTHING` — insert if absent,
+    // leave an existing row exactly as it is. A distinct operation, not a tuning knob.
+    let capture = RequestCapture()
+    _ = try await capture.client
+      .from(Todo.self)
+      .upsert(Todo.Draft(id: 1, task: "buy milk"), resolution: .ignoreDuplicates)
+      .execute()
+
+    #expect(capture.prefer == "resolution=ignore-duplicates,return=minimal")
+    #expect(capture.query?.contains("on_conflict=id") == true)
+  }
+
+  @Test
+  func anIgnoreDuplicatesResolutionSurvivesReturning() async throws {
+    // The pairing that SDK-1626 broke for `merge`: whichever resolution the caller picked has to
+    // still be on the header once they ask for the row back.
+    let capture = RequestCapture()
+    _ = try await capture.client
+      .from(Todo.self)
+      .upsert(Todo.Draft(id: 1, task: "buy milk"), resolution: .ignoreDuplicates)
+      .returning()
+      .execute()
+
+    #expect(capture.prefer == "resolution=ignore-duplicates,return=representation")
+  }
+
+  @Test
+  func anExplicitConflictTargetTakesAResolution() async throws {
+    let capture = RequestCapture()
+    _ = try await capture.client
+      .from(IntegrationNote.self)
+      .upsert(
+        IntegrationNote.Draft(body: "remember the milk", tag: "home"),
+        onConflict: \.tag,
+        resolution: .ignoreDuplicates
+      )
+      .execute()
+
+    #expect(capture.prefer == "resolution=ignore-duplicates,return=minimal")
+    #expect(capture.query?.contains("on_conflict=tag") == true)
+  }
+
+  @Test
+  func aBulkUpsertTakesAResolutionOnEitherConflictTarget() async throws {
+    let derived = RequestCapture()
+    _ = try await derived.client
+      .from(Todo.self)
+      .upsert(
+        [Todo.Draft(id: 1, task: "buy milk"), Todo.Draft(id: 2, task: "buy bread")],
+        resolution: .ignoreDuplicates
+      )
+      .execute()
+
+    #expect(derived.prefer == "resolution=ignore-duplicates,return=minimal")
+
+    let explicit = RequestCapture()
+    _ = try await explicit.client
+      .from(IntegrationNote.self)
+      .upsert(
+        [IntegrationNote.Draft(body: "remember the milk", tag: "home")],
+        onConflict: \.tag,
+        resolution: .ignoreDuplicates
+      )
+      .execute()
+
+    #expect(explicit.prefer == "resolution=ignore-duplicates,return=minimal")
+  }
+
+  @Test
   func aTypedUpsertDerivesTheConflictTargetFromTheKey() async throws {
     // PostgREST resolves an absent `on_conflict` against the primary key already, so this is the
     // same request either way. Naming it is what makes the request say what it merges on, and it

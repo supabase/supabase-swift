@@ -5,6 +5,38 @@
 //  Created by Guilherme Souza on 21/08/26.
 //
 
+/// What an upsert does with a row that conflicts on its target.
+///
+/// Pass a value to the `resolution` parameter of a typed `upsert`. The default,
+/// ``mergeDuplicates``, is the upsert everyone means by the word; ``ignoreDuplicates`` is a
+/// different operation, and worth reaching for deliberately.
+public struct PostgrestConflictResolution: RawRepresentable, Hashable, Sendable,
+  ExpressibleByStringLiteral
+{
+  public let rawValue: String
+
+  /// Creates a ``PostgrestConflictResolution`` from a raw string value.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  /// Creates a ``PostgrestConflictResolution`` from a string literal.
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
+  /// Updates the existing row with the supplied values — `ON CONFLICT DO UPDATE`.
+  ///
+  /// The default, and what "upsert" normally means.
+  public static let mergeDuplicates: PostgrestConflictResolution = "merge-duplicates"
+
+  /// Leaves the existing row exactly as it is — `ON CONFLICT DO NOTHING`.
+  ///
+  /// Insert-if-absent. Use this for seeding reference data, backfilling, or any at-least-once job
+  /// where overwriting a row someone has since edited would be data loss.
+  public static let ignoreDuplicates: PostgrestConflictResolution = "ignore-duplicates"
+}
+
 /// A write request against a writable relation.
 ///
 /// Obtain one from `insert`, `upsert`, `update` or `delete` on a ``PostgrestTypedSource``. Those
@@ -133,12 +165,14 @@ extension PostgrestTypedSource where R: PostgrestWritableRelation {
   /// derived expression — a cast, an aggregate — is not a target PostgREST can take, and neither
   /// is a column belonging to some other relation. Both are rejected at the call site.
   ///
-  /// To merge on the primary key, use ``upsert(_:)-(R.Draft)``, which derives the target instead.
+  /// To merge on the primary key, use ``upsert(_:resolution:)-(R.Draft,_)``, which derives the target instead.
   ///
   /// - Parameters:
   ///   - values: The row to upsert, in the relation's ``PostgrestWritableRelation/Draft`` shape.
   ///   - column: The first column of the unique constraint to merge on.
   ///   - additional: The remaining columns, for a constraint spanning more than one.
+  ///   - resolution: What to do with a conflicting row. Defaults to
+  ///     ``PostgrestConflictResolution/mergeDuplicates``.
   /// - Returns: A ``PostgrestTypedMutation`` to execute, or to request rows back from.
   /// - Throws: An encoding error if `values` cannot be serialized.
   public func upsert<
@@ -151,7 +185,8 @@ extension PostgrestTypedSource where R: PostgrestWritableRelation {
     onConflict column: KeyPath<R.Columns, PostgrestStoredColumn<R, FirstValue, FirstNullability>>,
     _ additional: repeat KeyPath<
       R.Columns, PostgrestStoredColumn<R, each RestValue, each RestNullability>
-    >
+    >,
+    resolution: PostgrestConflictResolution = .mergeDuplicates
   ) throws -> PostgrestTypedMutation<R> {
     var names = [R.columns[keyPath: column].postgrestExpression]
     repeat names.append(R.columns[keyPath: each additional].postgrestExpression)
@@ -161,6 +196,7 @@ extension PostgrestTypedSource where R: PostgrestWritableRelation {
         onConflict: names.joined(separator: ","),
         returning: .minimal
       )
+      .mergingPreferHeader("resolution=\(resolution.rawValue)")
     )
   }
 
@@ -174,7 +210,7 @@ extension PostgrestTypedSource where R: PostgrestWritableRelation {
   /// ```
   ///
   /// The target applies to every row in the batch, and carries the same rules as
-  /// ``upsert(_:onConflict:_:)-(R.Draft,_,_)``: each key path must name a stored column of this
+  /// ``upsert(_:onConflict:_:resolution:)-(R.Draft,_,_,_)``: each key path must name a stored column of this
   /// relation. As with the bulk insert, the rows may encode different columns and an empty collection
   /// writes nothing rather than throwing.
   ///
@@ -182,6 +218,8 @@ extension PostgrestTypedSource where R: PostgrestWritableRelation {
   ///   - values: The rows to upsert, in the relation's ``PostgrestWritableRelation/Draft`` shape.
   ///   - column: The first column of the unique constraint to merge on.
   ///   - additional: The remaining columns, for a constraint spanning more than one.
+  ///   - resolution: What to do with a conflicting row. Defaults to
+  ///     ``PostgrestConflictResolution/mergeDuplicates``, and applies to every row in the batch.
   /// - Returns: A ``PostgrestTypedMutation`` to execute, or to request rows back from.
   /// - Throws: An encoding error if `values` cannot be serialized.
   public func upsert<
@@ -194,7 +232,8 @@ extension PostgrestTypedSource where R: PostgrestWritableRelation {
     onConflict column: KeyPath<R.Columns, PostgrestStoredColumn<R, FirstValue, FirstNullability>>,
     _ additional: repeat KeyPath<
       R.Columns, PostgrestStoredColumn<R, each RestValue, each RestNullability>
-    >
+    >,
+    resolution: PostgrestConflictResolution = .mergeDuplicates
   ) throws -> PostgrestTypedMutation<R> {
     var names = [R.columns[keyPath: column].postgrestExpression]
     repeat names.append(R.columns[keyPath: each additional].postgrestExpression)
@@ -204,6 +243,7 @@ extension PostgrestTypedSource where R: PostgrestWritableRelation {
         onConflict: names.joined(separator: ","),
         returning: .minimal
       )
+      .mergingPreferHeader("resolution=\(resolution.rawValue)")
     )
   }
 
@@ -271,7 +311,7 @@ extension PostgrestTypedSource where R: PostgrestWritableRelation & PostgrestKey
   /// overload exists only where the relation declares a key. On a keyless relation the database has
   /// nothing to merge on, so an upsert with no target is not a merge at all — it inserts another row
   /// every call. Requiring the conformance makes that a compile error instead; use
-  /// ``upsert(_:onConflict:_:)-(R.Draft,_,_)`` there and name a unique constraint the relation does have.
+  /// ``upsert(_:onConflict:_:resolution:)-(R.Draft,_,_,_)`` there and name a unique constraint the relation does have.
   ///
   /// The same ``PostgrestWritableRelation/Draft`` serves this and ``insert(_:)-(R.Draft)``: it is a row the
   /// database has not stored yet, whether this call ends up inserting it or merging it into an
@@ -280,17 +320,23 @@ extension PostgrestTypedSource where R: PostgrestWritableRelation & PostgrestKey
   /// > Note: The target only takes effect if the columns it names are in the body. A key the
   /// > database generates is optional in `Draft`, so omitting it still inserts.
   ///
-  /// - Parameter values: The row to upsert, in the relation's ``PostgrestWritableRelation/Draft``
-  ///   shape.
+  /// - Parameters:
+  ///   - values: The row to upsert, in the relation's ``PostgrestWritableRelation/Draft`` shape.
+  ///   - resolution: What to do with a conflicting row. Defaults to
+  ///     ``PostgrestConflictResolution/mergeDuplicates``.
   /// - Returns: A ``PostgrestTypedMutation`` to execute, or to request rows back from.
   /// - Throws: An encoding error if `values` cannot be serialized.
-  public func upsert(_ values: R.Draft) throws -> PostgrestTypedMutation<R> {
+  public func upsert(
+    _ values: R.Draft,
+    resolution: PostgrestConflictResolution = .mergeDuplicates
+  ) throws -> PostgrestTypedMutation<R> {
     PostgrestTypedMutation(
       builder: try builder.upsert(
         values,
         onConflict: R.primaryKeyColumns.joined(separator: ","),
         returning: .minimal
       )
+      .mergingPreferHeader("resolution=\(resolution.rawValue)")
     )
   }
 
@@ -303,23 +349,29 @@ extension PostgrestTypedSource where R: PostgrestWritableRelation & PostgrestKey
   /// ```
   ///
   /// The target comes from ``PostgrestKeyedRelation/primaryKeyColumns``, exactly as in
-  /// ``upsert(_:)-(R.Draft)``, and applies to every row in the batch. As with the bulk insert, the
+  /// ``upsert(_:resolution:)-(R.Draft,_)``, and applies to every row in the batch. As with the bulk insert, the
   /// rows may encode different columns and an empty collection writes nothing rather than throwing.
   ///
   /// > Note: The target only takes effect for a row that carries the key columns in its body. A
   /// > row that omits a database-generated key is inserted, so a batch can mix the two.
   ///
-  /// - Parameter values: The rows to upsert, in the relation's
-  ///   ``PostgrestWritableRelation/Draft`` shape.
+  /// - Parameters:
+  ///   - values: The rows to upsert, in the relation's ``PostgrestWritableRelation/Draft`` shape.
+  ///   - resolution: What to do with a conflicting row. Defaults to
+  ///     ``PostgrestConflictResolution/mergeDuplicates``, and applies to every row in the batch.
   /// - Returns: A ``PostgrestTypedMutation`` to execute, or to request rows back from.
   /// - Throws: An encoding error if `values` cannot be serialized.
-  public func upsert(_ values: some Collection<R.Draft>) throws -> PostgrestTypedMutation<R> {
+  public func upsert(
+    _ values: some Collection<R.Draft>,
+    resolution: PostgrestConflictResolution = .mergeDuplicates
+  ) throws -> PostgrestTypedMutation<R> {
     PostgrestTypedMutation(
       builder: try builder.upsert(
         Array(values),
         onConflict: R.primaryKeyColumns.joined(separator: ","),
         returning: .minimal
       )
+      .mergingPreferHeader("resolution=\(resolution.rawValue)")
     )
   }
 }
