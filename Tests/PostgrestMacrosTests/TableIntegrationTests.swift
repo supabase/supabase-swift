@@ -267,6 +267,44 @@ struct TableIntegrationTests {
   }
 
   @Test
+  func aTypedUpsertReturningKeepsTheConflictResolutionPreference() async throws {
+    // SDK-1626. `returning()` used to replace the whole `Prefer` header, so it silently dropped
+    // the `resolution=merge-duplicates` that `upsert()` had already set — turning the upsert into
+    // a plain insert the moment a caller asked for the row back.
+    let capture = RequestCapture()
+    _ = try await capture.client
+      .from(Todo.self)
+      .upsert(Todo.Draft(id: 1, task: "buy milk"))
+      .returning()
+      .execute()
+
+    #expect(capture.prefer == "resolution=merge-duplicates,return=representation")
+  }
+
+  @Test
+  func aTypedUpsertExecuteAloneKeepsAMinimalReturnPreference() async throws {
+    let capture = RequestCapture()
+    _ = try await capture.client
+      .from(Todo.self)
+      .upsert(Todo.Draft(id: 1, task: "buy milk"))
+      .execute()
+
+    #expect(capture.prefer == "resolution=merge-duplicates,return=minimal")
+  }
+
+  @Test
+  func aTypedInsertReturningSendsExactlyOneReturnPreference() async throws {
+    let capture = RequestCapture()
+    _ = try await capture.client
+      .from(Todo.self)
+      .insert(Todo.Draft(task: "buy milk"))
+      .returning()
+      .execute()
+
+    #expect(capture.prefer == "return=representation")
+  }
+
+  @Test
   func aTypedUpsertDerivesTheConflictTargetFromTheKey() async throws {
     // PostgREST resolves an absent `on_conflict` against the primary key already, so this is the
     // same request either way. Naming it is what makes the request say what it merges on, and it

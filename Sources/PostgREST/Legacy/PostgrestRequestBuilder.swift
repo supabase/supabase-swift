@@ -349,6 +349,15 @@ extension PostgrestRequestBuilder where Phase: PostgrestExecutablePhase {
     return copy
   }
 
+  /// Adds or replaces one preference in the `Prefer` header, leaving any other preference already
+  /// there untouched — unlike ``setHeader(name:value:)-(String,_)``, which replaces the header
+  /// wholesale.
+  func mergingPreferHeader(_ value: String) -> Self {
+    var copy = self
+    copy.request.headers.appendOrUpdate(.prefer, value: value)
+    return copy
+  }
+
   /// Controls whether automatic retries are enabled for this specific request.
   ///
   /// When enabled, GET and HEAD requests that receive an HTTP 503 or 520 response, or encounter
