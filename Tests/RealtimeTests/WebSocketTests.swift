@@ -10,7 +10,6 @@ import Foundation
 import Testing
 
 @testable import Realtime
-@testable import RealtimeV2
 
 // Cert-pinning tests generate self-signed identities via `SecPKCS12Import`, which is
 // flaky when invoked concurrently (observed intermittent `errSecInternalComponent`/-26276

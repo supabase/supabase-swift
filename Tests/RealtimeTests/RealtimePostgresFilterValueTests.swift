@@ -9,7 +9,6 @@ import Foundation
 import Testing
 
 @testable import Realtime
-@testable import RealtimeV2
 
 @Suite
 struct RealtimePostgresFilterValueTests {
