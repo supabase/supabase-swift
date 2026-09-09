@@ -88,6 +88,7 @@ keccak
 Keccak
 keyout
 kiwicopple
+Klingsbo
 letterboxing
 libro
 libros
@@ -95,6 +96,7 @@ lifecycles
 linkedin
 LinkedIn
 lnbm
+Lukas
 magiclink
 magnifyingglass
 metamask

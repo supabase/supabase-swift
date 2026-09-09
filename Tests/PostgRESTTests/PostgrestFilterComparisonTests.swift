@@ -34,6 +34,16 @@ struct PostgrestFilterComparisonTests {
     filter.queryItems().map { "\($0.name)=\($0.value ?? "")" }.joined(separator: "&")
   }
 
+  /// The `IS` keywords are sent bare in every position; a quoted `"null"` is a string, not SQL
+  /// `NULL`.
+  @Test
+  func isChecksStayBareInsideAGroup() {
+    let c = Todo.columns
+    #expect(rendered(c.dueDate.isNull() || c.id.eq(3)) == "or=(due_at.is.null,id.eq.3)")
+    #expect(rendered(!c.isDone.isTrue() || c.id.eq(3)) == "or=(is_done.not.is.true,id.eq.3)")
+    #expect(rendered(c.isDone.isFalse() || c.id.eq(3)) == "or=(is_done.is.false,id.eq.3)")
+  }
+
   @Test
   func everyComparisonRendersItsOperator() {
     let c = Todo.columns

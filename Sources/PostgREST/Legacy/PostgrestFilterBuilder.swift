@@ -27,56 +27,62 @@ public struct PostgrestOperator: RawRepresentable, Hashable, Sendable, Expressib
     self.init(rawValue: value)
   }
 
+  /// The legacy spelling of a typed operator, so every token is declared once, on
+  /// ``PostgrestFilterOperator``.
+  init(_ operator: PostgrestFilterOperator) {
+    self.init(rawValue: `operator`.token)
+  }
+
   /// Equals (`=`).
-  public static let eq: PostgrestOperator = "eq"
+  public static let eq = PostgrestOperator(.eq)
   /// Not equals (`!=`).
-  public static let neq: PostgrestOperator = "neq"
+  public static let neq = PostgrestOperator(.neq)
   /// Greater than (`>`).
-  public static let gt: PostgrestOperator = "gt"
+  public static let gt = PostgrestOperator(.gt)
   /// Greater than or equal (`>=`).
-  public static let gte: PostgrestOperator = "gte"
+  public static let gte = PostgrestOperator(.gte)
   /// Less than (`<`).
-  public static let lt: PostgrestOperator = "lt"
+  public static let lt = PostgrestOperator(.lt)
   /// Less than or equal (`<=`).
-  public static let lte: PostgrestOperator = "lte"
+  public static let lte = PostgrestOperator(.lte)
   /// Case-sensitive LIKE pattern match.
-  public static let like: PostgrestOperator = "like"
+  public static let like = PostgrestOperator(.like)
   /// Case-insensitive ILIKE pattern match.
-  public static let ilike: PostgrestOperator = "ilike"
+  public static let ilike = PostgrestOperator(.ilike)
   /// Case-sensitive regex match.
-  public static let match: PostgrestOperator = "match"
+  public static let match = PostgrestOperator(.regexMatch)
   /// Case-insensitive regex match.
-  public static let imatch: PostgrestOperator = "imatch"
+  public static let imatch = PostgrestOperator(.regexIMatch)
   /// IS (for NULL / boolean checks).
-  public static let `is`: PostgrestOperator = "is"
+  public static let `is` = PostgrestOperator(.is)
   /// IS DISTINCT FROM.
-  public static let isdistinct: PostgrestOperator = "isdistinct"
+  public static let isdistinct = PostgrestOperator(.isDistinct)
   /// IN — value is in a list.
-  public static let `in`: PostgrestOperator = "in"
+  public static let `in` = PostgrestOperator(.in)
   /// Contains (`@>`).
-  public static let cs: PostgrestOperator = "cs"
+  public static let cs = PostgrestOperator(.contains)
   /// Contained by (`<@`).
-  public static let cd: PostgrestOperator = "cd"
+  public static let cd = PostgrestOperator(.containedBy)
   /// Range strictly left of (`<<`).
-  public static let sl: PostgrestOperator = "sl"
+  public static let sl = PostgrestOperator(.rangeLt)
   /// Range strictly right of (`>>`).
-  public static let sr: PostgrestOperator = "sr"
+  public static let sr = PostgrestOperator(.rangeGt)
   /// Range does not extend to the left (`&>`).
-  public static let nxl: PostgrestOperator = "nxl"
+  public static let nxl = PostgrestOperator(.rangeGte)
   /// Range does not extend to the right (`&<`).
-  public static let nxr: PostgrestOperator = "nxr"
+  public static let nxr = PostgrestOperator(.rangeLte)
   /// Range is adjacent (`-|-`).
-  public static let adj: PostgrestOperator = "adj"
+  public static let adj = PostgrestOperator(.rangeAdjacent)
   /// Overlaps (`&&`).
-  public static let ov: PostgrestOperator = "ov"
+  public static let ov = PostgrestOperator(.overlaps)
   /// Full-text search using `to_tsquery`.
-  public static let fts: PostgrestOperator = "fts"
+  public static let fts = PostgrestOperator(.textSearch(config: nil, type: nil))
   /// Full-text search using `plainto_tsquery`.
-  public static let plfts: PostgrestOperator = "plfts"
+  public static let plfts = PostgrestOperator(.textSearch(config: nil, type: .plain))
   /// Full-text search using `phraseto_tsquery`.
-  public static let phfts: PostgrestOperator = "phfts"
+  public static let phfts = PostgrestOperator(.textSearch(config: nil, type: .phrase))
   /// Full-text search using `websearch_to_tsquery`.
-  public static let wfts: PostgrestOperator = "wfts"
+  public static let wfts = PostgrestOperator(.textSearch(config: nil, type: .websearch))
 }
 
 extension PostgrestRequestBuilder {

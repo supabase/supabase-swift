@@ -5,9 +5,19 @@
 //  Created by Guilherme Souza on 26/08/26.
 //
 
+/// The aggregate functions PostgREST accepts in a `select` list.
+enum PostgrestAggregateFunction: String, Sendable {
+  case sum, avg, min, max, count
+
+  /// The call as it appears in a `select` list, `sum()`.
+  var call: String { "\(rawValue)()" }
+}
+
 extension PostgrestDerivedExpression where Value == Int, Position == PostgrestSelectOnly {
   /// `count()` — counts rows rather than values of a column.
-  public static var countAll: Self { Self(embed: nil, inner: "count()") }
+  public static var countAll: Self {
+    Self(embed: nil, inner: PostgrestAggregateFunction.count.call)
+  }
 }
 
 /// The five aggregate functions, each declared once and correct for a stored column, a JSON path
@@ -43,32 +53,38 @@ extension PostgrestDerivedExpression where Value == Int, Position == PostgrestSe
 /// column's ``PostgrestColumn`` does: an optional `Value` would strip the operators from anything
 /// chained off it.
 extension PostgrestColumnExpression {
+  private func aggregate<V>(
+    _ function: PostgrestAggregateFunction
+  ) -> PostgrestDerivedExpression<Root, V, PostgrestSelectOnly> {
+    _deriving(".\(function.call)")
+  }
+
   /// The sum of this expression across the group, typed `Double` whatever the column's type.
   ///
   /// > Important: The wire value is a JSON integer, so past 2^53 a `Double` rounds it silently.
   /// > When a total can get that large, alias the aggregate in `select` and decode that field as
   /// > `Int` or `Decimal`.
   public func sum() -> PostgrestDerivedExpression<Root, Double, PostgrestSelectOnly> {
-    _deriving(".sum()")
+    aggregate(.sum)
   }
 
   /// The mean of this expression across the group.
   public func avg() -> PostgrestDerivedExpression<Root, Double, PostgrestSelectOnly> {
-    _deriving(".avg()")
+    aggregate(.avg)
   }
 
   /// The smallest value of this expression in the group, keeping the expression's own type.
   public func min() -> PostgrestDerivedExpression<Root, Value, PostgrestSelectOnly> {
-    _deriving(".min()")
+    aggregate(.min)
   }
 
   /// The largest value of this expression in the group.
   public func max() -> PostgrestDerivedExpression<Root, Value, PostgrestSelectOnly> {
-    _deriving(".max()")
+    aggregate(.max)
   }
 
   /// How many non-null values of this expression are in the group.
   public func count() -> PostgrestDerivedExpression<Root, Int, PostgrestSelectOnly> {
-    _deriving(".count()")
+    aggregate(.count)
   }
 }

@@ -141,6 +141,37 @@ supporting_symbols:
   # sits here instead of being attributed to a capability it does not implement.
   - PostgrestFilter
   - "&&"
+  # The operator every typed filter is built through, one case per wire token. The operator
+  # methods on the expression protocols are attributed to their capabilities below; the enum is the
+  # shared spelling behind all of them, so it sits here rather than under any one of them.
+  - PostgrestFilterOperator
+  - PostgrestFilterOperator.token
+  - PostgrestFilterOperator.eq
+  - PostgrestFilterOperator.neq
+  - PostgrestFilterOperator.gt
+  - PostgrestFilterOperator.gte
+  - PostgrestFilterOperator.lt
+  - PostgrestFilterOperator.lte
+  - PostgrestFilterOperator.is
+  - PostgrestFilterOperator.isDistinct
+  - PostgrestFilterOperator.in
+  - PostgrestFilterOperator.like
+  - PostgrestFilterOperator.ilike
+  - PostgrestFilterOperator.likeAllOf
+  - PostgrestFilterOperator.likeAnyOf
+  - PostgrestFilterOperator.ilikeAllOf
+  - PostgrestFilterOperator.ilikeAnyOf
+  - PostgrestFilterOperator.regexMatch
+  - PostgrestFilterOperator.regexIMatch
+  - PostgrestFilterOperator.contains
+  - PostgrestFilterOperator.containedBy
+  - PostgrestFilterOperator.overlaps
+  - PostgrestFilterOperator.rangeLt
+  - PostgrestFilterOperator.rangeGt
+  - PostgrestFilterOperator.rangeGte
+  - PostgrestFilterOperator.rangeLte
+  - PostgrestFilterOperator.rangeAdjacent
+  - PostgrestFilterOperator.textSearch
 
   # Casts, JSON paths and aggregates. These are absent from `capabilities/database.yaml` in every
   # SDK — there is no `database.*` id to attribute them to yet — so they are registered here,

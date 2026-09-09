@@ -102,6 +102,15 @@ struct PostgrestFilterPatternTests {
         == "or=(id.in.(2,3),id.eq.4)")
   }
 
+  /// A negated `in` inside a group follows the leaf rule, `not.` after the column, and its list
+  /// parens stay bare there too.
+  @Test
+  func negatedInInsideAGroupKeepsItsListParensBare() {
+    #expect(
+      rendered(!Todo.columns.id.in([2, 3]) || Todo.columns.id.eq(4))
+        == "or=(id.not.in.(2,3),id.eq.4)")
+  }
+
   /// Members are still escaped inside a group. Only the list's own outer parens stay bare.
   @Test
   func inEscapesItsListMembersInsideAGroup() {
