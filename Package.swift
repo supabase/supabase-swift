@@ -54,6 +54,7 @@ let package = Package(
       dependencies: [
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
+        .product(name: "HTTPTypesFoundation", package: "swift-http-types"),
         .product(name: "Clocks", package: "swift-clocks"),
         .product(name: "Logging", package: "swift-log"),
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
@@ -65,6 +66,7 @@ let package = Package(
       dependencies: [
         .product(name: "CustomDump", package: "swift-custom-dump"),
         "Helpers",
+        "Mocker",
       ]
     ),
     .target(
