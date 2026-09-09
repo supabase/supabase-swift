@@ -685,7 +685,8 @@ public actor AuthClient {
             redirectTo: redirectTo ?? configuration.redirectToURL,
             gotrueMetaSecurity: captchaToken.map { AuthMetaSecurity(captchaToken: $0) },
             codeChallenge: codeChallenge,
-            codeChallengeMethod: codeChallengeMethod
+            codeChallengeMethod: codeChallengeMethod,
+            skipHttpRedirect: true
           )
         )
       )
@@ -718,7 +719,8 @@ public actor AuthClient {
             redirectTo: redirectTo ?? configuration.redirectToURL,
             gotrueMetaSecurity: captchaToken.map { AuthMetaSecurity(captchaToken: $0) },
             codeChallenge: codeChallenge,
-            codeChallengeMethod: codeChallengeMethod
+            codeChallengeMethod: codeChallengeMethod,
+            skipHttpRedirect: true
           )
         )
       )
