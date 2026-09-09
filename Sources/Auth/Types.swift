@@ -1436,6 +1436,7 @@ struct SignInWithSSORequest: Encodable {
   let gotrueMetaSecurity: AuthMetaSecurity?
   let codeChallenge: String?
   let codeChallengeMethod: String?
+  let skipHttpRedirect: Bool?
 }
 
 /// The response from a single sign-on (SSO) initiation request.
