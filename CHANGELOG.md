@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.55.2](https://github.com/supabase/supabase-swift/compare/v2.55.1...v2.55.2) (2026-09-09)
+
+### Bug Fixes
+
+* **auth:** send skip_http_redirect so signInWithSSO gets JSON instead of a 303 ([#1322](https://github.com/supabase/supabase-swift/issues/1322)) ([4d21170](https://github.com/supabase/supabase-swift/commit/4d21170308f966a354a4e7e9a381705d4fa473d5))
+
 ## [2.55.1](https://github.com/supabase/supabase-swift/compare/v2.55.0...v2.55.1) (2026-08-13)
 
 ### Bug Fixes
