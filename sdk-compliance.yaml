@@ -273,6 +273,7 @@ features:
       - Provider.workos
       - Provider.zoom
       - Provider.fly
+      - AuthError.oauthFlowFailed
   auth.sign_in.sign_in_with_otp:
     status: implemented
     symbols:

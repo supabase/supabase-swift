@@ -44,6 +44,11 @@ struct AuthErrorTests {
     let implicitGrantRedirect = AuthError.implicitGrantRedirect(message: "Implicit grant failure")
     #expect(implicitGrantRedirect.errorCode == .unknown)
     #expect(implicitGrantRedirect.message == "Implicit grant failure")
+
+    let oauthFlowFailed = AuthError.oauthFlowFailed(message: "No redirect URL configured")
+    #expect(oauthFlowFailed.errorCode == .unknown)
+    #expect(oauthFlowFailed.message == "No redirect URL configured")
+    #expect(oauthFlowFailed.errorDescription == "No redirect URL configured")
   }
 
   @Test

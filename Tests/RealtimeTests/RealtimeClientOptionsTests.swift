@@ -11,6 +11,18 @@ import Testing
 @Suite
 struct RealtimeClientOptionsTests {
   @Test
+  func initializesWithoutAnAPIKeyInsteadOfTrapping() {
+    // The apikey rides along as a query item when present, and is simply absent when it is not.
+    // Constructing the client used to trap instead, taking the host app down over a header.
+    let client = RealtimeClientV2(
+      url: URL(string: "https://project-ref.supabase.co/realtime/v1")!,
+      options: RealtimeClientOptions(headers: [:])
+    )
+
+    #expect(client.options.apikey == nil)
+  }
+
+  @Test
   func sessionDefaultsToNil() {
     let options = RealtimeClientOptions(headers: ["apikey": "test-key"])
     #expect(options.session == nil)

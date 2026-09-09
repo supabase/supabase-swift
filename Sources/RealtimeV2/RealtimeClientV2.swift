@@ -124,7 +124,6 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   let wsTransport: WebSocketTransport
   let mutableState = LockIsolated(MutableState())
   let http: any HTTPClientType
-  let apikey: String
   let serializer = RealtimeSerializer()
   let clock: any Clock<Duration>
 
@@ -192,9 +191,6 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     self.wsTransport = wsTransport
     self.http = http
     self.clock = clock
-
-    precondition(options.apikey != nil, "API key is required to connect to Realtime")
-    apikey = options.apikey!
 
     mutableState.withValue { [options] in
       if let accessToken = options.headers[.authorization]?.split(separator: " ").last {

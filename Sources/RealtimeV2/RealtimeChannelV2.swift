@@ -257,10 +257,15 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       version: socket.options.headers[.xClientInfo]
     )
 
+    guard let encodedPayload = try? JSONObject(payload) else {
+      reportIssue("Failed to encode the phx_join payload for channel '\(topic)'. Skipping join.")
+      return
+    }
+
     await push(
       ChannelEvent.join,
       ref: ref,
-      payload: try! JSONObject(payload)
+      payload: encodedPayload
     )
   }
 

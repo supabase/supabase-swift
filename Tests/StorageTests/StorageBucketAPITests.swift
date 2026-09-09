@@ -82,6 +82,26 @@ extension StorageMockerTests {
           "http://localhost:1234/storage/v1",
           "support local host with port without modification"
         ),
+        (
+          "https://blah.supabasexco/storage/v1",
+          "https://blah.supabasexco/storage/v1",
+          "not treat a non-dot separator as a platform host"
+        ),
+        (
+          "https://supabase.co/storage/v1",
+          "https://supabase.co/storage/v1",
+          "not rewrite the bare apex domain, which is not a project host"
+        ),
+        (
+          "https://not-supabase.co/storage/v1",
+          "https://not-supabase.co/storage/v1",
+          "not rewrite a host that only ends with the apex, without a label boundary"
+        ),
+        (
+          "https://mysupabase.in/storage/v1",
+          "https://mysupabase.in/storage/v1",
+          "not rewrite a caller-owned domain ending in the apex"
+        ),
       ]
     )
     func urlConstructionWithNewHostname(input: String, expected: String, description: String) {

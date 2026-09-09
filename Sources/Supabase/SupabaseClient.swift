@@ -67,6 +67,17 @@ import Logging
 /// span is active (via `opentelemetry-swift`) when a request is made gets propagated; with no
 /// active span, or with the trait disabled, requests go out unchanged.
 public final class SupabaseClient: Sendable {
+  /// Derives the default auth storage key from the project ref in `url`'s host, so two projects
+  /// in the same app do not share a stored session.
+  ///
+  /// - Returns: `nil` when `url` has no host, and so no project ref to namespace by. An empty
+  ///   host counts as none: `"".split(separator: ".")` is empty.
+  static func defaultStorageKey(for url: URL) -> String? {
+    url.host(percentEncoded: false)?
+      .split(separator: ".").first
+      .map { "sb-\($0)-auth-token" }
+  }
+
   let options: SupabaseClientOptions
   let supabaseURL: URL
   let supabaseKey: String
@@ -234,11 +245,17 @@ public final class SupabaseClient: Sendable {
       )
       .merging(with: HTTPFields(options.global.headers))
 
-    // default storage key uses the supabase project ref as a namespace
-    guard let host = supabaseURL.host(percentEncoded: false) else {
-      preconditionFailure("supabaseURL must have a valid host.")
+    // The default storage key namespaces the stored session by project ref, taken from the URL's
+    // host. `supabaseURL` is supplied once, at construction, so a URL without a host is a
+    // programmer error rather than a runtime condition — trap on it, where the offending value is,
+    // instead of degrading into a shared storage key that silently collides across projects.
+    guard let defaultStorageKey = Self.defaultStorageKey(for: supabaseURL) else {
+      preconditionFailure(
+        """
+        supabaseURL must have a host to derive the auth storage key from, got \(supabaseURL).
+        """
+      )
     }
-    let defaultStorageKey = "sb-\(host.split(separator: ".")[0])-auth-token"
 
     _auth = AuthClient(
       url: supabaseURL.appendingPathComponent("/auth/v1"),
