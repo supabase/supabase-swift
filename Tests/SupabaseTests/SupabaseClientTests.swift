@@ -209,7 +209,7 @@ struct SupabaseClientTests {
     )
 
     #expect(
-      client.realtimeV2.options.fetch != nil,
+      client.realtimeV2.options.transport != nil,
       "global URLSession should be propagated to Realtime client as a fetch closure"
     )
   }
@@ -226,13 +226,13 @@ struct SupabaseClientTests {
           autoRefreshToken: false
         ),
         realtime: RealtimeClientOptions(
-          fetch: { _ in throw URLError(.cancelled) }
+          transport: URLSessionTransport(configuration: .ephemeral)
         )
       )
     )
 
     #expect(
-      client.realtimeV2.options.fetch != nil,
+      client.realtimeV2.options.transport != nil,
       "user-provided realtime fetch should be preserved"
     )
   }
