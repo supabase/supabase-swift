@@ -52,8 +52,8 @@ public struct PostgrestClient: Sendable {
   /// Configuration options for a ``PostgrestClient`` instance.
   ///
   /// Create a ``Configuration`` value and pass it to ``PostgrestClient/init(configuration:)`` when
-  /// you need fine-grained control over the client, such as supplying a custom ``http`` configuration or
-  /// ``jsonEncoder``/``jsonDecoder``.
+  /// you need fine-grained control over the client, such as supplying a custom ``http`` transport
+  /// or middleware chain, or a custom ``jsonEncoder``/``jsonDecoder``.
   ///
   /// ## Topics
   ///
