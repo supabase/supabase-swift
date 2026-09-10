@@ -49,10 +49,13 @@ struct RequestCapture {
       headers: ["X-Client-Info": "postgrest-swift/test"],
       transport: ClosureTransport { request, requestBody in
         captured.setValue(request)
-        if let requestBody {
-          let data = try await Data(collecting: requestBody, upTo: .max)
-          capturedBody.setValue(data)
-        }
+        let data: Data? =
+          if let requestBody {
+            try await Data(collecting: requestBody, upTo: .max)
+          } else {
+            nil
+          }
+        capturedBody.setValue(data)
         return (
           HTTPTypes.HTTPResponse(status: .ok, headerFields: [.contentType: "application/json"]),
           HTTPBody(Data(body.utf8))
