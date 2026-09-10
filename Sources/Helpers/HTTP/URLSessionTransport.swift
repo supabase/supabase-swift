@@ -21,6 +21,8 @@ import HTTPTypesFoundation
 ///   `URLSession.bytes(for:)`, so on Linux the response is buffered and delivered as one chunk.
 /// - Timeouts come from the session's `URLSessionConfiguration`, plus the SDK's internal
 ///   per-request override where a sub-client sets one (Functions).
+/// - A buffered response body is `.multiple`, while a streamed one is `.single`, so
+///   replay-sensitive middleware behaves differently per platform.
 ///
 /// ```swift
 /// let configuration = URLSessionConfiguration.default
@@ -40,6 +42,8 @@ public struct URLSessionTransport: ClientTransport {
     self.init(session: URLSession(configuration: configuration))
   }
 
+  /// Sends `request` through the session; see the type documentation for how each body kind
+  /// is uploaded.
   public func send(_ request: HTTPTypes.HTTPRequest, body: HTTPBody?) async throws -> (
     HTTPTypes.HTTPResponse, HTTPBody?
   ) {
@@ -47,6 +51,9 @@ public struct URLSessionTransport: ClientTransport {
     if let timeout = RequestTimeout.current {
       urlRequest.timeoutInterval = timeout
     }
+    // URLSession treats Content-Length as reserved and recomputes it from the body; setting it
+    // here keeps custom URLProtocol observers (tests) and non-URLSession callers of this header
+    // path consistent.
     if let body, case .known(let count) = body.length,
       urlRequest.value(forHTTPHeaderField: "Content-Length") == nil
     {
@@ -90,10 +97,13 @@ public struct URLSessionTransport: ClientTransport {
             do {
               var buffer = [UInt8]()
               buffer.reserveCapacity(16 * 1024)
+              // ponytail: per-byte AsyncBytes iteration and an unbounded stream buffer; a
+              // delegate-fed, back-pressured stream is the upgrade if large downloads show up
+              // in profiles.
               for try await byte in bytes {
                 buffer.append(byte)
                 // Flush on newline (prompt SSE frame delivery) or when a chunk fills up
-                // (bounded memory for large downloads).
+                // (caps the size of each yielded chunk).
                 if byte == 0x0A || buffer.count >= 16 * 1024 {
                   continuation.yield(ArraySlice(buffer))
                   buffer.removeAll(keepingCapacity: true)
@@ -127,6 +137,6 @@ public struct URLSessionTransport: ClientTransport {
   }
 
   private static func makeBody(_ data: Data, from response: URLResponse) -> HTTPBody? {
-    data.isEmpty && response.expectedContentLength == 0 ? nil : HTTPBody(data)
+    data.isEmpty ? nil : HTTPBody(data)
   }
 }
