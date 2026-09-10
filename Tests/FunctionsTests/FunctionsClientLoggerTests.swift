@@ -1,5 +1,7 @@
 import Foundation
+import HTTPTypes
 import Logging
+import TestHelpers
 import Testing
 
 @testable import Functions
@@ -56,11 +58,8 @@ struct FunctionsClientLoggerTests {
       url: url,
       headers: ["apikey": apiKey],
       logger: logger,
-      fetch: { request in
-        (
-          Data(),
-          HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
-        )
+      transport: ClosureTransport { _, _ in
+        (HTTPTypes.HTTPResponse(status: .ok), nil)
       }
     )
 
