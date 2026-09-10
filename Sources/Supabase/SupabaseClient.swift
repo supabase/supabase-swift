@@ -530,8 +530,8 @@ public final class SupabaseClient: Sendable {
     realtimeOptions.logger = options.global.logger
     realtimeOptions.logger[metadataKey: "system"] = "realtime"
 
-    if realtimeOptions.fetch == nil {
-      realtimeOptions.fetch = { [session = options.global.session] request in
+    if realtimeOptions.transport == nil {
+      realtimeOptions.transport = FetchTransport { [session = options.global.session] request in
         try await session.data(for: TraceContext.inject(into: request))
       }
     }
