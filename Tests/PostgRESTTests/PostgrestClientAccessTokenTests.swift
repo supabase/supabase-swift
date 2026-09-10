@@ -7,6 +7,7 @@
 
 import ConcurrencyExtras
 import Foundation
+import TestHelpers
 import Testing
 
 @testable import PostgREST
@@ -19,29 +20,26 @@ import Testing
 struct PostgrestClientAccessTokenTests {
   let url = URL(string: "http://localhost:54321/rest/v1")!
 
-  private func okResponse(for request: URLRequest) -> (Data, URLResponse) {
-    (
-      Data("[]".utf8),
-      HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
-    )
+  private func okResponse() -> (HTTPTypes.HTTPResponse, HTTPBody?) {
+    (HTTPTypes.HTTPResponse(status: .ok), HTTPBody(Data("[]".utf8)))
   }
 
   @Test
   func accessTokenSetsAuthorizationHeader() async throws {
-    let capturedHeaders = LockIsolated([String: String]())
+    let capturedHeaders = LockIsolated(HTTPFields())
 
     let sut = PostgrestClient(
       url: url,
-      fetch: { request in
-        capturedHeaders.withValue { $0 = request.allHTTPHeaderFields ?? [:] }
-        return self.okResponse(for: request)
+      transport: ClosureTransport { request, _ in
+        capturedHeaders.setValue(request.headerFields)
+        return self.okResponse()
       },
       accessToken: { "access.token" }
     )
 
     try await sut.from("todos").select().execute()
 
-    #expect(capturedHeaders.value["Authorization"] == "Bearer access.token")
+    #expect(capturedHeaders.value[.authorization] == "Bearer access.token")
   }
 
   @Test
@@ -51,11 +49,11 @@ struct PostgrestClientAccessTokenTests {
 
     let sut = PostgrestClient(
       url: url,
-      fetch: { request in
+      transport: ClosureTransport { request, _ in
         capturedAuthorizationHeaders.withValue {
-          $0.append(request.value(forHTTPHeaderField: "Authorization") ?? "")
+          $0.append(request.headerFields[.authorization] ?? "")
         }
-        return self.okResponse(for: request)
+        return self.okResponse()
       },
       accessToken: { token.value }
     )
@@ -69,13 +67,13 @@ struct PostgrestClientAccessTokenTests {
 
   @Test
   func explicitAuthorizationHeaderOverridesAccessToken() async throws {
-    let capturedHeaders = LockIsolated([String: String]())
+    let capturedHeaders = LockIsolated(HTTPFields())
 
     let sut = PostgrestClient(
       url: url,
-      fetch: { request in
-        capturedHeaders.withValue { $0 = request.allHTTPHeaderFields ?? [:] }
-        return self.okResponse(for: request)
+      transport: ClosureTransport { request, _ in
+        capturedHeaders.setValue(request.headerFields)
+        return self.okResponse()
       },
       accessToken: { "access.token" }
     )
@@ -85,7 +83,7 @@ struct PostgrestClientAccessTokenTests {
       .setHeader(name: "Authorization", value: "Bearer explicit")
       .execute()
 
-    #expect(capturedHeaders.value["Authorization"] == "Bearer explicit")
+    #expect(capturedHeaders.value[.authorization] == "Bearer explicit")
   }
 
   @Test
@@ -94,9 +92,9 @@ struct PostgrestClientAccessTokenTests {
 
     let sut = PostgrestClient(
       url: url,
-      fetch: { request in
-        Issue.record("fetch should not be called when the access token provider throws")
-        return self.okResponse(for: request)
+      transport: ClosureTransport { request, _ in
+        Issue.record("transport should not be called when the access token provider throws")
+        return self.okResponse()
       },
       accessToken: { throw TokenError() }
     )
@@ -108,18 +106,18 @@ struct PostgrestClientAccessTokenTests {
 
   @Test
   func noAccessTokenSendsNoAuthorizationHeader() async throws {
-    let capturedHeaders = LockIsolated([String: String]())
+    let capturedHeaders = LockIsolated(HTTPFields())
 
     let sut = PostgrestClient(
       url: url,
-      fetch: { request in
-        capturedHeaders.withValue { $0 = request.allHTTPHeaderFields ?? [:] }
-        return self.okResponse(for: request)
+      transport: ClosureTransport { request, _ in
+        capturedHeaders.setValue(request.headerFields)
+        return self.okResponse()
       }
     )
 
     try await sut.from("todos").select().execute()
 
-    #expect(capturedHeaders.value["Authorization"] == nil)
+    #expect(capturedHeaders.value[.authorization] == nil)
   }
 }

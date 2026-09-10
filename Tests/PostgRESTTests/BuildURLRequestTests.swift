@@ -1,6 +1,8 @@
 import ConcurrencyExtras
 import Foundation
+import HTTPTypesFoundation
 import SnapshotTesting
+import TestHelpers
 import Testing
 
 @testable import PostgREST
@@ -51,15 +53,20 @@ struct BuildURLRequestTests {
       url: url,
       schema: nil,
       headers: ["X-Client-Info": "postgrest-swift/x.y.z"],
-      fetch: { request in
+      transport: ClosureTransport { request, body in
         guard let runningTestCase = runningTestCase.value else {
           Issue.record("execute called without a runningTestCase set.")
-          return (Data(), URLResponse.empty())
+          return (HTTPTypes.HTTPResponse(status: .ok), nil)
         }
+
+        guard var urlRequest = URLRequest(httpRequest: request) else {
+          throw URLError(.badURL)
+        }
+        if let body { urlRequest.httpBody = try await Data(collecting: body, upTo: .max) }
 
         await MainActor.run { [runningTestCase] in
           assertSnapshot(
-            of: request,
+            of: urlRequest,
             as: .curl,
             named: runningTestCase.name,
             record: runningTestCase.record,
@@ -69,7 +76,7 @@ struct BuildURLRequestTests {
           )
         }
 
-        return (Data(), URLResponse.empty())
+        return (HTTPTypes.HTTPResponse(status: .ok), nil)
       },
       encoder: encoder,
       retryEnabled: false
@@ -259,24 +266,5 @@ struct BuildURLRequestTests {
     let client = PostgrestClient(url: url, schema: nil)
     let clientInfoHeader = client.configuration.headers["X-Client-Info"]
     #expect(clientInfoHeader != nil)
-  }
-}
-
-extension URLResponse {
-  // Windows and Linux don't have the ability to empty initialize a URLResponse like `URLResponse()`
-  // so
-  // We provide a function that can give us the right value on an platform.
-  // See https://github.com/apple/swift-corelibs-foundation/pull/4778
-  fileprivate static func empty() -> URLResponse {
-    #if os(Windows) || os(Linux) || os(Android)
-      URLResponse(
-        url: .init(string: "https://supabase.com")!,
-        mimeType: nil,
-        expectedContentLength: 0,
-        textEncodingName: nil
-      )
-    #else
-      URLResponse()
-    #endif
   }
 }

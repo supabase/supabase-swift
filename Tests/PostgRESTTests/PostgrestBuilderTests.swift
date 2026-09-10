@@ -8,6 +8,7 @@
 import ConcurrencyExtras
 import Foundation
 import HTTPTypes
+import HTTPTypesFoundation
 import Helpers
 import Mocker
 import TestHelpers
@@ -775,10 +776,22 @@ extension PostgrestMockerTests {
     private func makeSUTWithCustomFetch(
       retryEnabled: Bool = true,
       decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder,
-      fetch: @escaping PostgrestClient.FetchHandler
+      fetch: @escaping @Sendable (URLRequest) async throws -> (Data, URLResponse)
     ) -> PostgrestClient {
-      PostgrestClient(
-        configuration: .init(url: url, fetch: fetch, decoder: decoder, retryEnabled: retryEnabled),
+      let transport = ClosureTransport { request, body in
+        guard var urlRequest = URLRequest(httpRequest: request) else {
+          throw URLError(.badURL)
+        }
+        if let body { urlRequest.httpBody = try await Data(collecting: body, upTo: .max) }
+        let (data, response) = try await fetch(urlRequest)
+        guard let head = (response as? HTTPURLResponse)?.httpResponse else {
+          throw URLError(.badServerResponse)
+        }
+        return (head, data.isEmpty ? nil : HTTPBody(data))
+      }
+      return PostgrestClient(
+        configuration: .init(
+          url: url, transport: transport, decoder: decoder, retryEnabled: retryEnabled),
         clock: ImmediateRetryTestClock()
       )
     }
