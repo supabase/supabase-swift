@@ -512,30 +512,77 @@ struct SupabaseClientTests {
 
   @Test
   func globalTransportAndMiddlewaresReachEverySubClient() async throws {
-    let seen = LockIsolated<[HTTPTypes.HTTPRequest]>([])
+    let seenByMiddleware = LockIsolated<[HTTPTypes.HTTPRequest]>([])
+    let seenByTransport = LockIsolated<[HTTPTypes.HTTPRequest]>([])
     let transport = ClosureTransport { request, _ in
-      seen.withValue { $0.append(request) }
+      seenByTransport.withValue { $0.append(request) }
       return (
         HTTPTypes.HTTPResponse(status: .ok, headerFields: [.contentType: "application/json"]),
         HTTPBody(Data("[]".utf8))
       )
     }
-    struct Tag: ClientMiddleware {
-      func intercept(
-        _ request: HTTPTypes.HTTPRequest,
-        body: HTTPBody?,
-        next:
-          @Sendable (HTTPTypes.HTTPRequest, HTTPBody?) async throws -> (
-            HTTPTypes.HTTPResponse, HTTPBody?
-          )
-      ) async throws -> (HTTPTypes.HTTPResponse, HTTPBody?) {
-        var request = request
-        request.headerFields[.tag] = "yes"
-        // User middlewares run before the SDK injects the bearer token, so with no signed-in
-        // session the header still carries the anon key.
-        #expect(request.headerFields[.authorization] == "Bearer PUBLISHABLE_KEY")
-        return try await next(request, body)
-      }
+    let client = SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      options: SupabaseClientOptions(
+        auth: SupabaseClientOptions.AuthOptions(
+          storage: AuthLocalStorageMock(),
+          autoRefreshToken: false,
+          accessToken: { "live-session-token" }
+        ),
+        global: SupabaseClientOptions.GlobalOptions(
+          transport: transport,
+          middlewares: [TagMiddleware(seen: seenByMiddleware)]
+        )
+      )
+    )
+
+    _ = try await client.from("todos").select().execute()
+    _ = try? await client.storage.listBuckets()
+    _ = try? await client.functions.invoke("hello")
+
+    // Every sub-client reached the caller's transport, through the caller's middleware.
+    for prefix in ["/rest/v1/todos", "/storage/v1/bucket", "/functions/v1/hello"] {
+      #expect(seenByTransport.value.contains { $0.path?.hasPrefix(prefix) == true })
+    }
+    #expect(seenByTransport.value.allSatisfy { $0.headerFields[.tag] == "yes" })
+
+    // Caller middlewares run *before* `AccessTokenMiddleware`: REST and Storage still carry the
+    // anon key when the caller's middleware sees them, and the live token by the time they reach
+    // the transport.
+    for prefix in ["/rest/v1/todos", "/storage/v1/bucket"] {
+      #expect(
+        authorization(in: seenByMiddleware.value, forPathPrefix: prefix) == "Bearer PUBLISHABLE_KEY"
+      )
+      #expect(
+        authorization(in: seenByTransport.value, forPathPrefix: prefix)
+          == "Bearer live-session-token"
+      )
+    }
+
+    // Functions deliberately gets no `AccessTokenMiddleware`: it resolves the token itself while
+    // building the request, so the live token is already on the header before any middleware runs.
+    #expect(
+      authorization(in: seenByMiddleware.value, forPathPrefix: "/functions/v1/hello")
+        == "Bearer live-session-token"
+    )
+    #expect(
+      authorization(in: seenByTransport.value, forPathPrefix: "/functions/v1/hello")
+        == "Bearer live-session-token"
+    )
+  }
+
+  @Test
+  func globalTransportAndMiddlewaresReachAuth() async throws {
+    let seen = LockIsolated<[HTTPTypes.HTTPRequest]>([])
+    let transport = ClosureTransport { request, _ in
+      seen.withValue { $0.append(request) }
+      return (
+        HTTPTypes.HTTPResponse(
+          status: .badRequest, headerFields: [.contentType: "application/json"]
+        ),
+        HTTPBody(Data("{}".utf8))
+      )
     }
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
@@ -545,20 +592,69 @@ struct SupabaseClientTests {
           storage: AuthLocalStorageMock(),
           autoRefreshToken: false
         ),
-        global: SupabaseClientOptions.GlobalOptions(transport: transport, middlewares: [Tag()])
+        global: SupabaseClientOptions.GlobalOptions(
+          transport: transport,
+          middlewares: [TagMiddleware()]
+        )
       )
     )
 
-    _ = try await client.from("todos").select().execute()
-    _ = try? await client.storage.listBuckets()
-    _ = try? await client.functions.invoke("hello")
+    _ = try? await client.auth.signIn(email: "a@b.c", password: "x")
 
-    let paths = seen.value.compactMap(\.path)
-    #expect(paths.contains { $0.hasPrefix("/rest/v1/todos") })
-    #expect(paths.contains { $0.hasPrefix("/storage/v1/bucket") })
-    #expect(paths.contains { $0.hasPrefix("/functions/v1/hello") })
-    #expect(seen.value.allSatisfy { $0.headerFields[.tag] == "yes" })
+    let request = try #require(seen.value.first { $0.path?.hasPrefix("/auth/v1/token") == true })
+    #expect(request.headerFields[.tag] == "yes")
   }
+
+  @Test
+  func realtimeKeepsCallerMiddlewaresWhenSDKInstallsItsOwn() {
+    let client = SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      options: SupabaseClientOptions(
+        auth: SupabaseClientOptions.AuthOptions(
+          storage: AuthLocalStorageMock(),
+          autoRefreshToken: false
+        ),
+        realtime: RealtimeClientOptions(middlewares: [TagMiddleware()])
+      )
+    )
+
+    let middlewares = client.realtimeV2.options.middlewares
+    #expect(middlewares.contains { $0 is TagMiddleware })
+    #expect(middlewares.contains { $0 is TraceContextMiddleware })
+  }
+}
+
+/// Stamps `X-Tag` on every request and records what it saw, so tests can assert both that a
+/// caller-supplied middleware runs and what the headers looked like at that point in the chain.
+private struct TagMiddleware: ClientMiddleware {
+  let seen: LockIsolated<[HTTPTypes.HTTPRequest]>
+
+  init(seen: LockIsolated<[HTTPTypes.HTTPRequest]> = LockIsolated([])) {
+    self.seen = seen
+  }
+
+  func intercept(
+    _ request: HTTPTypes.HTTPRequest,
+    body: HTTPBody?,
+    next:
+      @Sendable (HTTPTypes.HTTPRequest, HTTPBody?) async throws -> (
+        HTTPTypes.HTTPResponse, HTTPBody?
+      )
+  ) async throws -> (HTTPTypes.HTTPResponse, HTTPBody?) {
+    var tagged = request
+    tagged.headerFields[.tag] = "yes"
+    seen.withValue { [tagged] in $0.append(tagged) }
+    return try await next(tagged, body)
+  }
+}
+
+/// The `Authorization` header of the first recorded request whose path starts with `prefix`.
+private func authorization(
+  in requests: [HTTPTypes.HTTPRequest],
+  forPathPrefix prefix: String
+) -> String? {
+  requests.first { $0.path?.hasPrefix(prefix) == true }?.headerFields[.authorization]
 }
 
 extension HTTPField.Name {

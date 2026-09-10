@@ -423,11 +423,11 @@ public final class SupabaseClient: Sendable {
   /// User middlewares followed by the SDK's, for sub-clients that send the user's token.
   ///
   /// ``AccessTokenMiddleware`` captures only the dependencies it needs — never `self` — because
-  /// each sub-client stores its middlewares for its whole lifetime, and the cached sub-clients
-  /// (`storage`, `realtimeV2`) are held in ``mutableState`` for the lifetime of the client.
-  /// Capturing `self` here would form a `self -> mutableState -> sub-client -> middleware -> self`
-  /// retain cycle that keeps ``deinit`` from ever running. `rest` is rebuilt per access and not
-  /// cached, but it gets the same middlewares, so the no-`self`-capture rule applies uniformly.
+  /// each sub-client stores its middlewares for its whole lifetime: the cached ``realtimeV2``
+  /// sub-client is held in ``mutableState`` for the lifetime of the client, and a caller may hold
+  /// any sub-client for that long too. Capturing `self` here would form a
+  /// `self -> sub-client -> middleware -> self` retain cycle that keeps ``deinit`` from ever
+  /// running.
   private var authenticatedMiddlewares: [any ClientMiddleware] {
     options.global.middlewares + [
       TraceContextMiddleware(), AccessTokenMiddleware(getAccessToken: accessTokenProvider),
@@ -508,7 +508,8 @@ public final class SupabaseClient: Sendable {
 
     if realtimeOptions.transport == nil {
       realtimeOptions.transport = transport
-      realtimeOptions.middlewares = options.global.middlewares + [TraceContextMiddleware()]
+      realtimeOptions.middlewares =
+        options.global.middlewares + realtimeOptions.middlewares + [TraceContextMiddleware()]
     }
 
     if realtimeOptions.session == nil {

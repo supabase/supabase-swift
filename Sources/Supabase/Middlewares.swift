@@ -5,7 +5,6 @@
 //  Created by Guilherme Souza on 09/09/26.
 //
 
-import Foundation
 import HTTPTypes
 import Helpers
 
