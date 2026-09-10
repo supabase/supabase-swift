@@ -7,7 +7,6 @@
 
 import ConcurrencyExtras
 import Foundation
-import HTTPTypesFoundation
 package import Helpers
 import XCTestDynamicOverlay
 
@@ -62,13 +61,5 @@ package actor HTTPClientMock: HTTPClientType {
 
     XCTFail("Mock not found for: \(request)")
     throw MockNotFound()
-  }
-
-  package func stream(_ request: HTTPRequest) async throws -> (HTTPTypes.HTTPResponse, HTTPBody?) {
-    let response = try await send(request)
-    guard let head = response.underlyingResponse.httpResponse else {
-      throw URLError(.badServerResponse)
-    }
-    return (head, response.data.isEmpty ? nil : HTTPBody(response.data))
   }
 }
