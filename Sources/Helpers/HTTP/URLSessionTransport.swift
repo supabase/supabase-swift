@@ -64,7 +64,7 @@ public struct URLSessionTransport: ClientTransport {
       switch body.storage {
       case .file(let fileURL):
         let (data, response) = try await session.upload(for: urlRequest, fromFile: fileURL)
-        return (try Self.makeHead(response), Self.makeBody(data, from: response))
+        return (try Self.makeHead(response), Self.makeBody(data))
       case .data(let data):
         urlRequest.httpBody = data
       case .stream:
@@ -81,7 +81,7 @@ public struct URLSessionTransport: ClientTransport {
       HTTPTypes.HTTPResponse, HTTPBody?
     ) {
       let (data, response) = try await session.data(for: urlRequest)
-      return (try Self.makeHead(response), Self.makeBody(data, from: response))
+      return (try Self.makeHead(response), Self.makeBody(data))
     }
   #else
     private func streamResponse(for urlRequest: URLRequest) async throws -> (
@@ -136,7 +136,7 @@ public struct URLSessionTransport: ClientTransport {
     return head
   }
 
-  private static func makeBody(_ data: Data, from response: URLResponse) -> HTTPBody? {
+  private static func makeBody(_ data: Data) -> HTTPBody? {
     data.isEmpty ? nil : HTTPBody(data)
   }
 }

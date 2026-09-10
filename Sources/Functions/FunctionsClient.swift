@@ -117,11 +117,11 @@ public struct FunctionsClient: Sendable {
   ) {
     var logger = logger
     logger[metadataKey: "system"] = "functions"
-    let interceptors: [any HTTPClientInterceptor] = [
+    let middlewares: [any ClientMiddleware] = [
       LoggerInterceptor(logger: logger)
     ]
 
-    let http = HTTPClient(fetch: fetch, interceptors: interceptors)
+    let http = HTTPClient(transport: FetchTransport(fetch: fetch), middlewares: middlewares)
 
     self.init(
       url: url,

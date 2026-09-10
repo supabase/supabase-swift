@@ -7,6 +7,7 @@
 
 package import Foundation
 package import HTTPTypes
+import HTTPTypesFoundation
 
 #if canImport(FoundationNetworking)
   package import FoundationNetworking
@@ -32,5 +33,16 @@ extension HTTPResponse {
     throws -> T
   {
     try decoder.decode(T.self, from: data)
+  }
+}
+
+extension HTTPResponse {
+  /// Builds the buffered response from an `HTTPTypes` head. `underlyingResponse` is rebuilt
+  /// so public error types keep carrying an `HTTPURLResponse`.
+  package init(data: Data, head: HTTPTypes.HTTPResponse, url: URL) throws {
+    guard let underlying = HTTPURLResponse(httpResponse: head, url: url) else {
+      throw URLError(.badServerResponse)
+    }
+    self.init(data: data, response: underlying)
   }
 }

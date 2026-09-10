@@ -97,10 +97,11 @@ public struct PostgrestRequestBuilder<Phase>: Sendable {
     self.configuration = configuration
     self.clock = clock
 
-    let interceptors: [any HTTPClientInterceptor] = [
+    let middlewares: [any ClientMiddleware] = [
       LoggerInterceptor(logger: configuration.logger)
     ]
-    self.http = HTTPClient(fetch: configuration.fetch, interceptors: interceptors)
+    self.http = HTTPClient(
+      transport: FetchTransport(fetch: configuration.fetch), middlewares: middlewares)
 
     self.request = request
     self.retryEnabled = configuration.retryEnabled

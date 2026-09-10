@@ -71,13 +71,13 @@ struct StorageApi: Sendable {
 
     self.configuration = configuration
 
-    let interceptors: [any HTTPClientInterceptor] = [
+    let middlewares: [any ClientMiddleware] = [
       LoggerInterceptor(logger: configuration.logger)
     ]
 
     http = HTTPClient(
-      fetch: configuration.session.fetch,
-      interceptors: interceptors
+      transport: FetchTransport(fetch: configuration.session.fetch),
+      middlewares: middlewares
     )
   }
 

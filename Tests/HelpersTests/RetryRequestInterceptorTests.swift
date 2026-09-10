@@ -8,6 +8,7 @@
 import ConcurrencyExtras
 import Foundation
 import HTTPTypes
+import HTTPTypesFoundation
 import Testing
 
 @testable import Helpers
@@ -21,14 +22,8 @@ struct RetryRequestInterceptorTests {
 
   // MARK: - Helpers
 
-  func makeResponse(statusCode: Int) -> Helpers.HTTPResponse {
-    let urlResponse = HTTPURLResponse(
-      url: URL(string: "https://example.com")!,
-      statusCode: statusCode,
-      httpVersion: nil,
-      headerFields: nil
-    )!
-    return Helpers.HTTPResponse(data: Data(), response: urlResponse)
+  func makeResponse(statusCode: Int) -> (HTTPTypes.HTTPResponse, HTTPBody?) {
+    (HTTPTypes.HTTPResponse(status: HTTPTypes.HTTPResponse.Status(code: statusCode)), nil)
   }
 
   func makeInterceptor(retryLimit: Int = 2) -> RetryRequestInterceptor {
@@ -39,8 +34,8 @@ struct RetryRequestInterceptorTests {
     )
   }
 
-  func makeRequest(method: HTTPTypes.HTTPRequest.Method = .get) -> Helpers.HTTPRequest {
-    Helpers.HTTPRequest(url: URL(string: "https://example.com")!, method: method)
+  func makeRequest(method: HTTPTypes.HTTPRequest.Method = .get) -> HTTPTypes.HTTPRequest {
+    HTTPTypes.HTTPRequest(method: method, url: URL(string: "https://example.com")!)
   }
 
   // MARK: - defaultRetryableHTTPStatusCodes
@@ -76,14 +71,14 @@ struct RetryRequestInterceptorTests {
 
     for code in cloudflareCodes {
       let callCount = LockIsolated(0)
-      let finalResponse = try await interceptor.intercept(request) { _ in
+      let (head, _) = try await interceptor.intercept(request, body: nil) { _, _ in
         callCount.withValue { $0 += 1 }
         if callCount.value < 2 {
           return self.makeResponse(statusCode: code)
         }
         return self.makeResponse(statusCode: 200)
       }
-      #expect(finalResponse.statusCode == 200, "Should retry on \(code) and succeed")
+      #expect(head.status.code == 200, "Should retry on \(code) and succeed")
       #expect(callCount.value == 2, "Should have called next twice for \(code)")
     }
   }
@@ -96,11 +91,11 @@ struct RetryRequestInterceptorTests {
 
     for code in nonRetryableCodes {
       let callCount = LockIsolated(0)
-      let response = try await interceptor.intercept(request) { _ in
+      let (head, _) = try await interceptor.intercept(request, body: nil) { _, _ in
         callCount.withValue { $0 += 1 }
         return self.makeResponse(statusCode: code)
       }
-      #expect(response.statusCode == code)
+      #expect(head.status.code == code)
       #expect(callCount.value == 1, "Should not retry on \(code)")
     }
   }
@@ -113,14 +108,14 @@ struct RetryRequestInterceptorTests {
 
     for code in retryableCodes {
       let callCount = LockIsolated(0)
-      let finalResponse = try await interceptor.intercept(request) { _ in
+      let (head, _) = try await interceptor.intercept(request, body: nil) { _, _ in
         callCount.withValue { $0 += 1 }
         if callCount.value < 2 {
           return self.makeResponse(statusCode: code)
         }
         return self.makeResponse(statusCode: 200)
       }
-      #expect(finalResponse.statusCode == 200, "Should retry on \(code) and succeed")
+      #expect(head.status.code == 200, "Should retry on \(code) and succeed")
       #expect(callCount.value == 2, "Should have called next twice for \(code)")
     }
   }
@@ -131,11 +126,11 @@ struct RetryRequestInterceptorTests {
     let request = makeRequest(method: .post)
 
     let callCount = LockIsolated(0)
-    let response = try await interceptor.intercept(request) { _ in
+    let (head, _) = try await interceptor.intercept(request, body: nil) { _, _ in
       callCount.withValue { $0 += 1 }
       return self.makeResponse(statusCode: 500)
     }
-    #expect(response.statusCode == 500)
+    #expect(head.status.code == 500)
     #expect(callCount.value == 1, "POST should not be retried")
   }
 
@@ -145,12 +140,48 @@ struct RetryRequestInterceptorTests {
     let request = makeRequest()
 
     let callCount = LockIsolated(0)
-    let response = try await interceptor.intercept(request) { _ in
+    let (head, _) = try await interceptor.intercept(request, body: nil) { _, _ in
       callCount.withValue { $0 += 1 }
       return self.makeResponse(statusCode: 520)
     }
-    #expect(response.statusCode == 520)
+    #expect(head.status.code == 520)
     #expect(callCount.value == 2, "Should not exceed retryLimit")
+  }
+
+  @Test
+  func singleIterationBodyIsNotRetried() async throws {
+    let interceptor = makeInterceptor(retryLimit: 3)
+    let attempts = LockIsolated(0)
+    let body = HTTPBody(
+      AsyncStream<ArraySlice<UInt8>> {
+        $0.yield(ArraySlice([1]))
+        $0.finish()
+      },
+      length: .unknown, iterationBehavior: .single)
+
+    let (head, _) = try await interceptor.intercept(makeRequest(), body: body) { _, _ in
+      attempts.withValue { $0 += 1 }
+      return (HTTPTypes.HTTPResponse(status: .serviceUnavailable), nil)
+    }
+
+    #expect(head.status == .serviceUnavailable)
+    #expect(attempts.value == 1)
+  }
+
+  @Test
+  func multipleIterationBodyIsRetried() async throws {
+    let interceptor = makeInterceptor(retryLimit: 3)
+    let attempts = LockIsolated(0)
+
+    let (head, _) = try await interceptor.intercept(
+      makeRequest(), body: HTTPBody(Data("{}".utf8))
+    ) { _, _ in
+      attempts.withValue { $0 += 1 }
+      return self.makeResponse(statusCode: attempts.value < 2 ? 503 : 200)
+    }
+
+    #expect(head.status.code == 200)
+    #expect(attempts.value == 2)
   }
 
   // MARK: - Backoff delay
@@ -166,12 +197,12 @@ struct RetryRequestInterceptorTests {
     )
 
     let callCount = LockIsolated(0)
-    let response = try await interceptor.intercept(makeRequest()) { _ in
+    let (head, _) = try await interceptor.intercept(makeRequest(), body: nil) { _, _ in
       callCount.withValue { $0 += 1 }
       return self.makeResponse(statusCode: callCount.value < 2 ? 503 : 200)
     }
 
-    #expect(response.statusCode == 200)
+    #expect(head.status.code == 200)
     #expect(callCount.value == 2)
     #expect(clock.durations.value == [.seconds(pow(2.0, 1.0) * 0.3)])
   }
