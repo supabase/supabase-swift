@@ -7,6 +7,7 @@
 
 package import Foundation
 package import HTTPTypes
+import HTTPTypesFoundation
 
 #if canImport(FoundationNetworking)
   package import FoundationNetworking
@@ -72,5 +73,24 @@ extension [URLQueryItem] {
     } else {
       self.append(queryItem)
     }
+  }
+}
+
+extension HTTPRequest {
+  /// The URL with `query` applied.
+  package var finalURL: URL {
+    query.isEmpty ? url : url.appendingQueryItems(query)
+  }
+
+  /// Splits this request into the `HTTPTypes` head and the body ``ClientTransport`` takes.
+  ///
+  /// Keeps `urlRequest`'s rule: a request with a body and no `Content-Type` is JSON.
+  package var httpRequestAndBody: (HTTPTypes.HTTPRequest, HTTPBody?) {
+    var headers = headers
+    if body != nil, headers[.contentType] == nil {
+      headers[.contentType] = "application/json"
+    }
+    let head = HTTPTypes.HTTPRequest(method: method, url: finalURL, headerFields: headers)
+    return (head, body.map(HTTPBody.init))
   }
 }

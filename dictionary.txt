@@ -275,3 +275,6 @@ citext
 # Terms from the embedded-relations column namespace (PostgrestRelatedColumns.swift).
 unshadowed
 orderability
+
+# Term from the logging middleware's body-buffering helper (LoggerInterceptor.swift).
+loggable
