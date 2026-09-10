@@ -6,6 +6,7 @@
 //
 
 public import Foundation
+public import Helpers
 public import Logging
 
 #if canImport(FoundationNetworking)
@@ -13,12 +14,6 @@ public import Logging
 #endif
 
 extension AuthClient {
-  /// FetchHandler is a type alias for asynchronous network request handling.
-  public typealias FetchHandler =
-    @Sendable (
-      _ request: URLRequest
-    ) async throws -> (Data, URLResponse)
-
   /// Configuration options for ``AuthClient``.
   ///
   /// ## Topics
@@ -28,7 +23,8 @@ extension AuthClient {
   /// - ``headers``
   /// - ``flowType``
   /// - ``redirectToURL``
-  /// - ``fetch``
+  /// - ``transport``
+  /// - ``middlewares``
   ///
   /// ### Storage
   /// - ``localStorage``
@@ -75,8 +71,11 @@ extension AuthClient {
     /// The JSON decoder used to deserialize responses received from the Auth server.
     let resolvedDecoder: JSONDecoder
 
-    /// A custom fetch implementation.
-    public let fetch: FetchHandler
+    /// The transport every request goes through. Defaults to ``URLSessionTransport``.
+    public let transport: any ClientTransport
+
+    /// Middlewares run, in order, before the request reaches ``transport``.
+    public let middlewares: [any ClientMiddleware]
 
     /// Set to `true` if you want to automatically refresh the token before expiring.
     public let autoRefreshToken: Bool
@@ -91,7 +90,8 @@ extension AuthClient {
     ///   - storageKey: Optional key name used for storing tokens in local storage.
     ///   - localStorage: The storage mechanism for local data.
     ///   - logger: The logger to use. Defaults to a build-config-aware logger — see `Configuration.logger`.
-    ///   - fetch: The asynchronous fetch handler for network requests.
+    ///   - transport: The transport every request goes through. Defaults to ``URLSessionTransport``.
+    ///   - middlewares: Middlewares run, in order, before the request reaches `transport`.
     ///   - autoRefreshToken: Set to `true` if you want to automatically refresh the token before expiring.
     public init(
       url: URL? = nil,
@@ -101,7 +101,8 @@ extension AuthClient {
       storageKey: String? = nil,
       localStorage: any AuthLocalStorage,
       logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.auth"),
-      fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
+      transport: any ClientTransport = URLSessionTransport(),
+      middlewares: [any ClientMiddleware] = [],
       autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken
     ) {
       self.init(
@@ -114,7 +115,8 @@ extension AuthClient {
         logger: logger,
         resolvedEncoder: AuthClient.Configuration.jsonEncoder,
         resolvedDecoder: AuthClient.Configuration.jsonDecoder,
-        fetch: fetch,
+        transport: transport,
+        middlewares: middlewares,
         autoRefreshToken: autoRefreshToken
       )
     }
@@ -133,7 +135,8 @@ extension AuthClient {
       logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.auth"),
       resolvedEncoder: JSONEncoder,
       resolvedDecoder: JSONDecoder,
-      fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
+      transport: any ClientTransport = URLSessionTransport(),
+      middlewares: [any ClientMiddleware] = [],
       autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken
     ) {
       let headers = headers.merging(Configuration.defaultHeaders) { l, _ in l }
@@ -149,7 +152,8 @@ extension AuthClient {
       self.logger = logger
       self.resolvedEncoder = resolvedEncoder
       self.resolvedDecoder = resolvedDecoder
-      self.fetch = fetch
+      self.transport = transport
+      self.middlewares = middlewares
       self.autoRefreshToken = autoRefreshToken
     }
   }
@@ -164,7 +168,8 @@ extension AuthClient {
   ///   - storageKey: Optional key name used for storing tokens in local storage.
   ///   - localStorage: The storage mechanism for local data..
   ///   - logger: The logger to use. Defaults to a build-config-aware logger — see `Configuration.logger`.
-  ///   - fetch: The asynchronous fetch handler for network requests.
+  ///   - transport: The transport every request goes through. Defaults to ``URLSessionTransport``.
+  ///   - middlewares: Middlewares run, in order, before the request reaches `transport`.
   ///   - autoRefreshToken: Set to `true` if you want to automatically refresh the token before expiring.
   public init(
     url: URL? = nil,
@@ -174,7 +179,8 @@ extension AuthClient {
     storageKey: String? = nil,
     localStorage: any AuthLocalStorage,
     logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.auth"),
-    fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
+    transport: any ClientTransport = URLSessionTransport(),
+    middlewares: [any ClientMiddleware] = [],
     autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken
   ) {
     self.init(
@@ -186,7 +192,8 @@ extension AuthClient {
         storageKey: storageKey,
         localStorage: localStorage,
         logger: logger,
-        fetch: fetch,
+        transport: transport,
+        middlewares: middlewares,
         autoRefreshToken: autoRefreshToken
       )
     )

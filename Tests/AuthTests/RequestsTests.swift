@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import HTTPTypesFoundation
 import Helpers
 import InlineSnapshotTesting
 import SnapshotTesting
@@ -723,7 +724,7 @@ struct RequestsTests {
   private func makeSUT(
     record: Bool = false,
     flowType: AuthFlowType = .implicit,
-    fetch: AuthClient.FetchHandler? = nil,
+    fetch: (@Sendable (URLRequest) async throws -> (Data, URLResponse))? = nil,
     file: StaticString = #filePath,
     testName: String = #function,
     line: UInt = #line
@@ -733,15 +734,22 @@ struct RequestsTests {
       headers: ["Apikey": "dummy.api.key", "X-Client-Info": "gotrue-swift/x.y.z"],
       flowType: flowType,
       localStorage: InMemoryLocalStorage(),
-      fetch: { request in
+      transport: ClosureTransport { request, body in
+        guard var urlRequest = URLRequest(httpRequest: request) else { throw URLError(.badURL) }
+        if let body { urlRequest.httpBody = try await Data(collecting: body, upTo: .max) }
+
         await MainActor.run {
           assertSnapshot(
-            of: request, as: ._curl, record: record, file: file, testName: testName, line: line
+            of: urlRequest, as: ._curl, record: record, file: file, testName: testName, line: line
           )
         }
 
         if let fetch {
-          return try await fetch(request)
+          let (data, response) = try await fetch(urlRequest)
+          guard let head = (response as? HTTPURLResponse)?.httpResponse else {
+            throw URLError(.badServerResponse)
+          }
+          return (head, data.isEmpty ? nil : HTTPBody(data))
         }
 
         throw UnimplementedError()

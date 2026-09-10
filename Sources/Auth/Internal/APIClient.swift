@@ -15,7 +15,10 @@ extension HTTPClient {
       )
     )
 
-    self.init(transport: FetchTransport(fetch: configuration.fetch), middlewares: middlewares)
+    self.init(
+      transport: configuration.transport,
+      middlewares: configuration.middlewares + middlewares
+    )
   }
 }
 
