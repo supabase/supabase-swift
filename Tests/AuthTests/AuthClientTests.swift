@@ -3496,8 +3496,7 @@ extension AuthMockerTests {
         ],
         flowType: flowType,
         localStorage: storage,
-        transport: URLSessionTransport(session: session)
-      )
+        http: .init(transport: URLSessionTransport(session: session)))
 
       let sut = AuthClient(configuration: configuration)
 

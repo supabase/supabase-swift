@@ -115,8 +115,7 @@ public final class SupabaseClient: Sendable {
       schema: options.db.schema,
       headers: headers,
       logger: options.global.logger,
-      transport: transport,
-      middlewares: authenticatedMiddlewares,
+      http: HTTPClientConfiguration(transport: transport, middlewares: authenticatedMiddlewares),
       encoder: options.db.encoder,
       decoder: options.db.decoder,
       retryEnabled: options.db.retry
@@ -129,8 +128,7 @@ public final class SupabaseClient: Sendable {
       configuration: StorageClientConfiguration(
         url: storageURL,
         headers: headers,
-        transport: transport,
-        middlewares: authenticatedMiddlewares,
+        http: HTTPClientConfiguration(transport: transport, middlewares: authenticatedMiddlewares),
         logger: options.global.logger,
         useNewHostname: options.storage.useNewHostname
       )
@@ -160,8 +158,10 @@ public final class SupabaseClient: Sendable {
       headers: functionsHeaders.dictionary,
       region: options.functions.region,
       logger: options.global.logger,
-      transport: transport,
-      middlewares: options.global.middlewares + [TraceContextMiddleware()],
+      http: HTTPClientConfiguration(
+        transport: transport,
+        middlewares: options.global.http.middlewares + [TraceContextMiddleware()]
+      ),
       decoder: options.functions.decoder,
       accessToken: { [weak self] in
         try await self?._getAccessToken()
@@ -269,10 +269,13 @@ public final class SupabaseClient: Sendable {
       storageKey: options.auth.storageKey ?? defaultStorageKey,
       localStorage: options.auth.storage,
       logger: options.global.logger,
-      transport: options.global.transport ?? URLSessionTransport(session: options.global.session),
       // DON'T give the AuthClient `AccessTokenMiddleware` — resolving the access token goes
       // through the AuthClient itself, which may cause a deadlock.
-      middlewares: options.global.middlewares + [TraceContextMiddleware()],
+      http: HTTPClientConfiguration(
+        transport: options.global.http.transport
+          ?? URLSessionTransport(session: options.global.session),
+        middlewares: options.global.http.middlewares + [TraceContextMiddleware()]
+      ),
       autoRefreshToken: options.auth.autoRefreshToken
     )
 
@@ -417,7 +420,7 @@ public final class SupabaseClient: Sendable {
 
   /// The resolved transport shared by every sub-client.
   private var transport: any ClientTransport {
-    options.global.transport ?? URLSessionTransport(session: options.global.session)
+    options.global.http.transport ?? URLSessionTransport(session: options.global.session)
   }
 
   /// User middlewares followed by the SDK's, for sub-clients that send the user's token.
@@ -429,7 +432,7 @@ public final class SupabaseClient: Sendable {
   /// `self -> sub-client -> middleware -> self` retain cycle that keeps ``deinit`` from ever
   /// running.
   private var authenticatedMiddlewares: [any ClientMiddleware] {
-    options.global.middlewares + [
+    options.global.http.middlewares + [
       TraceContextMiddleware(), AccessTokenMiddleware(getAccessToken: accessTokenProvider),
     ]
   }
@@ -506,10 +509,12 @@ public final class SupabaseClient: Sendable {
     realtimeOptions.logger = options.global.logger
     realtimeOptions.logger[metadataKey: "system"] = "realtime"
 
-    if realtimeOptions.transport == nil {
-      realtimeOptions.transport = transport
-      realtimeOptions.middlewares =
-        options.global.middlewares + realtimeOptions.middlewares + [TraceContextMiddleware()]
+    if realtimeOptions.http.transport == nil {
+      realtimeOptions.http = HTTPClientConfiguration(
+        transport: transport,
+        middlewares: options.global.http.middlewares + realtimeOptions.http.middlewares
+          + [TraceContextMiddleware()]
+      )
     }
 
     if realtimeOptions.session == nil {

@@ -734,27 +734,27 @@ struct RequestsTests {
       headers: ["Apikey": "dummy.api.key", "X-Client-Info": "gotrue-swift/x.y.z"],
       flowType: flowType,
       localStorage: InMemoryLocalStorage(),
-      transport: ClosureTransport { request, body in
-        guard var urlRequest = URLRequest(httpRequest: request) else { throw URLError(.badURL) }
-        if let body { urlRequest.httpBody = try await Data(collecting: body, upTo: .max) }
+      http: .init(
+        transport: ClosureTransport { request, body in
+          guard var urlRequest = URLRequest(httpRequest: request) else { throw URLError(.badURL) }
+          if let body { urlRequest.httpBody = try await Data(collecting: body, upTo: .max) }
 
-        await MainActor.run {
-          assertSnapshot(
-            of: urlRequest, as: ._curl, record: record, file: file, testName: testName, line: line
-          )
-        }
-
-        if let fetch {
-          let (data, response) = try await fetch(urlRequest)
-          guard let head = (response as? HTTPURLResponse)?.httpResponse else {
-            throw URLError(.badServerResponse)
+          await MainActor.run {
+            assertSnapshot(
+              of: urlRequest, as: ._curl, record: record, file: file, testName: testName, line: line
+            )
           }
-          return (head, data.isEmpty ? nil : HTTPBody(data))
-        }
 
-        throw UnimplementedError()
-      }
-    )
+          if let fetch {
+            let (data, response) = try await fetch(urlRequest)
+            guard let head = (response as? HTTPURLResponse)?.httpResponse else {
+              throw URLError(.badServerResponse)
+            }
+            return (head, data.isEmpty ? nil : HTTPBody(data))
+          }
+
+          throw UnimplementedError()
+        }))
 
     return AuthClient(configuration: configuration)
   }

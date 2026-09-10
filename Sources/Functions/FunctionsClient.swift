@@ -27,7 +27,7 @@ let version = Helpers.version
 /// ## Topics
 ///
 /// ### Creating a Client
-/// - ``init(url:headers:region:logger:transport:middlewares:decoder:accessToken:)-(_,_,FunctionRegion?,_,_,_,_,_)``
+/// - ``init(url:headers:region:logger:http:decoder:accessToken:)-(_,_,FunctionRegion?,_,_,_,_)``
 ///
 /// ### Invoking Functions
 /// - ``invoke(_:options:decode:)``
@@ -69,8 +69,7 @@ public struct FunctionsClient: Sendable {
   ///   - headers: Additional headers to include in every request.
   ///   - region: The region string to invoke functions in.
   ///   - logger: A logger for request and response diagnostics. Defaults to a build-config-aware logger.
-  ///   - transport: The transport every request goes through. Defaults to ``URLSessionTransport``.
-  ///   - middlewares: Middlewares run, in order, before the request reaches `transport`.
+  ///   - http: The transport and middleware chain every request goes through.
   ///   - decoder: The JSON decoder used to decode response bodies.
   ///   - accessToken: An async closure returning the current access token, resolved fresh for
   ///     every request and sent as `Authorization: Bearer <token>`. `nil` (the default) sends no
@@ -82,22 +81,21 @@ public struct FunctionsClient: Sendable {
     headers: [String: String] = [:],
     region: String? = nil,
     logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.functions"),
-    transport: any ClientTransport = URLSessionTransport(),
-    middlewares: [any ClientMiddleware] = [],
+    http: HTTPClientConfiguration = .init(),
     decoder: JSONDecoder = JSONDecoder(),
     accessToken: (@Sendable () async throws -> String?)? = nil
   ) {
     var logger = logger
     logger[metadataKey: "system"] = "functions"
-    let http = HTTPClient(
-      transport: transport, middlewares: middlewares + [LoggerInterceptor(logger: logger)])
+    let httpClient = HTTPClient(
+      configuration: http, appending: [LoggerInterceptor(logger: logger)])
 
     self.init(
       url: url,
       headers: headers,
       region: region,
       decoder: decoder,
-      http: http,
+      http: httpClient,
       accessToken: accessToken
     )
   }
@@ -129,8 +127,7 @@ public struct FunctionsClient: Sendable {
   ///   - headers: Additional headers to include in every request.
   ///   - region: The region to invoke functions in.
   ///   - logger: A logger for request and response diagnostics. Defaults to a build-config-aware logger.
-  ///   - transport: The transport every request goes through. Defaults to ``URLSessionTransport``.
-  ///   - middlewares: Middlewares run, in order, before the request reaches `transport`.
+  ///   - http: The transport and middleware chain every request goes through.
   ///   - decoder: The JSON decoder used to decode response bodies.
   ///   - accessToken: An async closure returning the current access token, resolved fresh for
   ///     every request and sent as `Authorization: Bearer <token>`. `nil` (the default) sends no
@@ -141,8 +138,7 @@ public struct FunctionsClient: Sendable {
     headers: [String: String] = [:],
     region: FunctionRegion? = nil,
     logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.functions"),
-    transport: any ClientTransport = URLSessionTransport(),
-    middlewares: [any ClientMiddleware] = [],
+    http: HTTPClientConfiguration = .init(),
     decoder: JSONDecoder = JSONDecoder(),
     accessToken: (@Sendable () async throws -> String?)? = nil
   ) {
@@ -151,8 +147,7 @@ public struct FunctionsClient: Sendable {
       headers: headers,
       region: region?.rawValue,
       logger: logger,
-      transport: transport,
-      middlewares: middlewares,
+      http: http,
       decoder: decoder,
       accessToken: accessToken
     )

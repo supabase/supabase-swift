@@ -32,8 +32,7 @@ extension StorageMockerTests {
           configuration: StorageClientConfiguration(
             url: url,
             headers: [:],
-            transport: URLSessionTransport(session: session)
-          )
+            http: .init(transport: URLSessionTransport(session: session)))
         )
       )
     }

@@ -23,8 +23,7 @@ extension AuthClient {
   /// - ``headers``
   /// - ``flowType``
   /// - ``redirectToURL``
-  /// - ``transport``
-  /// - ``middlewares``
+  /// - ``http``
   ///
   /// ### Storage
   /// - ``localStorage``
@@ -71,11 +70,8 @@ extension AuthClient {
     /// The JSON decoder used to deserialize responses received from the Auth server.
     let resolvedDecoder: JSONDecoder
 
-    /// The transport every request goes through. Defaults to ``URLSessionTransport``.
-    public let transport: any ClientTransport
-
-    /// Middlewares run, in order, before the request reaches ``transport``.
-    public let middlewares: [any ClientMiddleware]
+    /// The transport and middleware chain every request goes through.
+    public let http: HTTPClientConfiguration
 
     /// Set to `true` if you want to automatically refresh the token before expiring.
     public let autoRefreshToken: Bool
@@ -90,8 +86,7 @@ extension AuthClient {
     ///   - storageKey: Optional key name used for storing tokens in local storage.
     ///   - localStorage: The storage mechanism for local data.
     ///   - logger: The logger to use. Defaults to a build-config-aware logger — see `Configuration.logger`.
-    ///   - transport: The transport every request goes through. Defaults to ``URLSessionTransport``.
-    ///   - middlewares: Middlewares run, in order, before the request reaches `transport`.
+    ///   - http: The transport and middleware chain every request goes through.
     ///   - autoRefreshToken: Set to `true` if you want to automatically refresh the token before expiring.
     public init(
       url: URL? = nil,
@@ -101,8 +96,7 @@ extension AuthClient {
       storageKey: String? = nil,
       localStorage: any AuthLocalStorage,
       logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.auth"),
-      transport: any ClientTransport = URLSessionTransport(),
-      middlewares: [any ClientMiddleware] = [],
+      http: HTTPClientConfiguration = .init(),
       autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken
     ) {
       self.init(
@@ -115,8 +109,7 @@ extension AuthClient {
         logger: logger,
         resolvedEncoder: AuthClient.Configuration.jsonEncoder,
         resolvedDecoder: AuthClient.Configuration.jsonDecoder,
-        transport: transport,
-        middlewares: middlewares,
+        http: http,
         autoRefreshToken: autoRefreshToken
       )
     }
@@ -135,8 +128,7 @@ extension AuthClient {
       logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.auth"),
       resolvedEncoder: JSONEncoder,
       resolvedDecoder: JSONDecoder,
-      transport: any ClientTransport = URLSessionTransport(),
-      middlewares: [any ClientMiddleware] = [],
+      http: HTTPClientConfiguration = .init(),
       autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken
     ) {
       let headers = headers.merging(Configuration.defaultHeaders) { l, _ in l }
@@ -152,8 +144,7 @@ extension AuthClient {
       self.logger = logger
       self.resolvedEncoder = resolvedEncoder
       self.resolvedDecoder = resolvedDecoder
-      self.transport = transport
-      self.middlewares = middlewares
+      self.http = http
       self.autoRefreshToken = autoRefreshToken
     }
   }
@@ -168,8 +159,7 @@ extension AuthClient {
   ///   - storageKey: Optional key name used for storing tokens in local storage.
   ///   - localStorage: The storage mechanism for local data..
   ///   - logger: The logger to use. Defaults to a build-config-aware logger — see `Configuration.logger`.
-  ///   - transport: The transport every request goes through. Defaults to ``URLSessionTransport``.
-  ///   - middlewares: Middlewares run, in order, before the request reaches `transport`.
+  ///   - http: The transport and middleware chain every request goes through.
   ///   - autoRefreshToken: Set to `true` if you want to automatically refresh the token before expiring.
   public init(
     url: URL? = nil,
@@ -179,8 +169,7 @@ extension AuthClient {
     storageKey: String? = nil,
     localStorage: any AuthLocalStorage,
     logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.auth"),
-    transport: any ClientTransport = URLSessionTransport(),
-    middlewares: [any ClientMiddleware] = [],
+    http: HTTPClientConfiguration = .init(),
     autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken
   ) {
     self.init(
@@ -192,8 +181,7 @@ extension AuthClient {
         storageKey: storageKey,
         localStorage: localStorage,
         logger: logger,
-        transport: transport,
-        middlewares: middlewares,
+        http: http,
         autoRefreshToken: autoRefreshToken
       )
     )

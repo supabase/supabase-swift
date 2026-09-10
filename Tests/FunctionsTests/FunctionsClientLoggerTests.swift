@@ -58,10 +58,10 @@ struct FunctionsClientLoggerTests {
       url: url,
       headers: ["apikey": apiKey],
       logger: logger,
-      transport: ClosureTransport { _, _ in
-        (HTTPTypes.HTTPResponse(status: .ok), nil)
-      }
-    )
+      http: .init(
+        transport: ClosureTransport { _, _ in
+          (HTTPTypes.HTTPResponse(status: .ok), nil)
+        }))
 
     try await sut.invoke("hello-world")
 

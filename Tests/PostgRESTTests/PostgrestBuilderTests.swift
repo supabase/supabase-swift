@@ -791,7 +791,7 @@ extension PostgrestMockerTests {
       }
       return PostgrestClient(
         configuration: .init(
-          url: url, transport: transport, decoder: decoder, retryEnabled: retryEnabled),
+          url: url, http: .init(transport: transport), decoder: decoder, retryEnabled: retryEnabled),
         clock: ImmediateRetryTestClock()
       )
     }

@@ -15,10 +15,7 @@ extension HTTPClient {
       )
     )
 
-    self.init(
-      transport: configuration.transport,
-      middlewares: configuration.middlewares + middlewares
-    )
+    self.init(configuration: configuration.http, appending: middlewares)
   }
 }
 

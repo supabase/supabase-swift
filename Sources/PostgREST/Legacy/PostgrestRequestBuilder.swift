@@ -100,8 +100,7 @@ public struct PostgrestRequestBuilder<Phase>: Sendable {
     let middlewares: [any ClientMiddleware] = [
       LoggerInterceptor(logger: configuration.logger)
     ]
-    self.http = HTTPClient(
-      transport: configuration.transport, middlewares: configuration.middlewares + middlewares)
+    self.http = HTTPClient(configuration: configuration.http, appending: middlewares)
 
     self.request = request
     self.retryEnabled = configuration.retryEnabled

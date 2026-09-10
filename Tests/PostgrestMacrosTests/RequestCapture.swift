@@ -47,21 +47,21 @@ struct RequestCapture {
     client = PostgrestClient(
       url: URL(string: "https://example.supabase.co")!,
       headers: ["X-Client-Info": "postgrest-swift/test"],
-      transport: ClosureTransport { request, requestBody in
-        captured.setValue(request)
-        let data: Data? =
-          if let requestBody {
-            try await Data(collecting: requestBody, upTo: .max)
-          } else {
-            nil
-          }
-        capturedBody.setValue(data)
-        return (
-          HTTPTypes.HTTPResponse(status: .ok, headerFields: [.contentType: "application/json"]),
-          HTTPBody(Data(body.utf8))
-        )
-      }
-    )
+      http: .init(
+        transport: ClosureTransport { request, requestBody in
+          captured.setValue(request)
+          let data: Data? =
+            if let requestBody {
+              try await Data(collecting: requestBody, upTo: .max)
+            } else {
+              nil
+            }
+          capturedBody.setValue(data)
+          return (
+            HTTPTypes.HTTPResponse(status: .ok, headerFields: [.contentType: "application/json"]),
+            HTTPBody(Data(body.utf8))
+          )
+        }))
   }
 
   /// The query string, percent-decoded so assertions read in the spelling PostgREST documents.

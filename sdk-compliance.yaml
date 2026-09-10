@@ -674,9 +674,9 @@ features:
   client.request_configuration.custom_http_client:
     status: implemented
     symbols:
-      - SupabaseClientOptions.GlobalOptions.transport
-      - SupabaseClientOptions.GlobalOptions.middlewares
+      - SupabaseClientOptions.GlobalOptions.http
     supporting_symbols:
+      - HTTPClientConfiguration
       - ClientTransport
       - ClientMiddleware
       - URLSessionTransport

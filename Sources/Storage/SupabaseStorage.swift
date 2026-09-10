@@ -19,14 +19,13 @@ public import Logging
 ///
 /// ### Creating a configuration
 ///
-/// - ``init(url:headers:transport:middlewares:logger:useNewHostname:)``
+/// - ``init(url:headers:http:logger:useNewHostname:)``
 ///
 /// ### Configuration properties
 ///
 /// - ``url``
 /// - ``headers``
-/// - ``transport``
-/// - ``middlewares``
+/// - ``http``
 /// - ``logger``
 /// - ``useNewHostname``
 public struct StorageClientConfiguration: Sendable {
@@ -44,11 +43,8 @@ public struct StorageClientConfiguration: Sendable {
   /// ever decodes server-defined shapes, so there's no case for letting callers customize it.
   let decoder: JSONDecoder = .supabase()
 
-  /// The transport every request goes through. Defaults to ``URLSessionTransport``.
-  public let transport: any ClientTransport
-
-  /// Middlewares run, in order, before the request reaches ``transport``.
-  public let middlewares: [any ClientMiddleware]
+  /// The transport and middleware chain every request goes through.
+  public let http: HTTPClientConfiguration
 
   /// The logger used for debugging HTTP interactions. Defaults to a build-config-aware logger.
   public let logger: Logging.Logger
@@ -62,23 +58,20 @@ public struct StorageClientConfiguration: Sendable {
   /// - Parameters:
   ///   - url: The base URL of the Storage API endpoint.
   ///   - headers: HTTP headers sent with every request.
-  ///   - transport: The transport every request goes through. Defaults to ``URLSessionTransport``.
-  ///   - middlewares: Middlewares run, in order, before the request reaches `transport`.
+  ///   - http: The transport and middleware chain every request goes through.
   ///   - logger: The logger to use. Defaults to a build-config-aware logger; pass a logger backed by
   ///     `SwiftLogNoOpLogHandler` to disable logging entirely.
   ///   - useNewHostname: When `true`, the storage-specific hostname is used, enabling uploads over 50 GB.
   public init(
     url: URL,
     headers: [String: String],
-    transport: any ClientTransport = URLSessionTransport(),
-    middlewares: [any ClientMiddleware] = [],
+    http: HTTPClientConfiguration = .init(),
     logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.storage"),
     useNewHostname: Bool = false
   ) {
     self.url = url
     self.headers = headers
-    self.transport = transport
-    self.middlewares = middlewares
+    self.http = http
     var logger = logger
     logger[metadataKey: "system"] = "storage"
     self.logger = logger

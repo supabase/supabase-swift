@@ -40,21 +40,21 @@ struct QueryCapture {
     client = PostgrestClient(
       url: URL(string: "https://example.supabase.co")!,
       headers: ["X-Client-Info": "postgrest-swift/test"],
-      transport: ClosureTransport { request, requestBody in
-        captured.setValue(request)
-        let data: Data? =
-          if let requestBody {
-            try await Data(collecting: requestBody, upTo: .max)
-          } else {
-            nil
-          }
-        capturedBody.setValue(data)
-        return (
-          HTTPTypes.HTTPResponse(status: .ok, headerFields: headerFields),
-          HTTPBody(Data(body.utf8))
-        )
-      }
-    )
+      http: .init(
+        transport: ClosureTransport { request, requestBody in
+          captured.setValue(request)
+          let data: Data? =
+            if let requestBody {
+              try await Data(collecting: requestBody, upTo: .max)
+            } else {
+              nil
+            }
+          capturedBody.setValue(data)
+          return (
+            HTTPTypes.HTTPResponse(status: .ok, headerFields: headerFields),
+            HTTPBody(Data(body.utf8))
+          )
+        }))
   }
 
   /// The query string of the captured request, percent-decoded so assertions can be written in

@@ -48,7 +48,7 @@ struct FunctionsClientTests {
       url: url,
       headers: ["apikey": apiKey],
       region: region,
-      transport: URLSessionTransport(session: session),
+      http: .init(transport: URLSessionTransport(session: session)),
       accessToken: accessToken
     )
   }
@@ -400,11 +400,11 @@ struct FunctionsClientTests {
     let sut = FunctionsClient(
       url: url,
       headers: ["apikey": apiKey],
-      transport: ClosureTransport { request, _ in
-        await box.set(request, timeoutInterval: RequestTimeout.current)
-        return (HTTPTypes.HTTPResponse(status: .ok), nil)
-      }
-    )
+      http: .init(
+        transport: ClosureTransport { request, _ in
+          await box.set(request, timeoutInterval: RequestTimeout.current)
+          return (HTTPTypes.HTTPResponse(status: .ok), nil)
+        }))
 
     try await sut.invoke("hello-world", options: .init(timeoutInterval: 30))
 
@@ -418,11 +418,11 @@ struct FunctionsClientTests {
     let sut = FunctionsClient(
       url: url,
       headers: ["apikey": apiKey],
-      transport: ClosureTransport { request, _ in
-        await box.set(request, timeoutInterval: RequestTimeout.current)
-        return (HTTPTypes.HTTPResponse(status: .ok), nil)
-      }
-    )
+      http: .init(
+        transport: ClosureTransport { request, _ in
+          await box.set(request, timeoutInterval: RequestTimeout.current)
+          return (HTTPTypes.HTTPResponse(status: .ok), nil)
+        }))
 
     try await sut.invoke("hello-world")
 
@@ -436,10 +436,11 @@ struct FunctionsClientTests {
     let sut = FunctionsClient(
       url: url,
       headers: ["apikey": apiKey],
-      transport: ClosureTransport { request, _ in
-        await box.set(request, timeoutInterval: nil)
-        return (HTTPTypes.HTTPResponse(status: .ok), nil)
-      },
+      http: .init(
+        transport: ClosureTransport { request, _ in
+          await box.set(request, timeoutInterval: nil)
+          return (HTTPTypes.HTTPResponse(status: .ok), nil)
+        }),
       accessToken: { "access.token" }
     )
 
@@ -466,10 +467,11 @@ struct FunctionsClientTests {
     let sut = FunctionsClient(
       url: url,
       headers: ["apikey": apiKey],
-      transport: ClosureTransport { request, _ in
-        await capture.record(request.headerFields[.authorization])
-        return (HTTPTypes.HTTPResponse(status: .ok), nil)
-      },
+      http: .init(
+        transport: ClosureTransport { request, _ in
+          await capture.record(request.headerFields[.authorization])
+          return (HTTPTypes.HTTPResponse(status: .ok), nil)
+        }),
       accessToken: { await tokenBox.token }
     )
 
@@ -487,10 +489,11 @@ struct FunctionsClientTests {
     let sut = FunctionsClient(
       url: url,
       headers: ["apikey": apiKey],
-      transport: ClosureTransport { request, _ in
-        await box.set(request, timeoutInterval: nil)
-        return (HTTPTypes.HTTPResponse(status: .ok), nil)
-      },
+      http: .init(
+        transport: ClosureTransport { request, _ in
+          await box.set(request, timeoutInterval: nil)
+          return (HTTPTypes.HTTPResponse(status: .ok), nil)
+        }),
       accessToken: { "provider.token" }
     )
 
@@ -510,10 +513,11 @@ struct FunctionsClientTests {
     let sut = FunctionsClient(
       url: url,
       headers: ["apikey": apiKey],
-      transport: ClosureTransport { _, _ in
-        Issue.record("transport should not be called when the access token provider throws")
-        return (HTTPTypes.HTTPResponse(status: .ok), nil)
-      },
+      http: .init(
+        transport: ClosureTransport { _, _ in
+          Issue.record("transport should not be called when the access token provider throws")
+          return (HTTPTypes.HTTPResponse(status: .ok), nil)
+        }),
       accessToken: { throw TokenError() }
     )
 
