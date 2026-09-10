@@ -70,38 +70,6 @@ let package = Package(
       ]
     ),
     .target(
-      name: "HTTPRuntime",
-      dependencies: [
-        .product(name: "HTTPTypes", package: "swift-http-types"),
-        .product(name: "HTTPTypesFoundation", package: "swift-http-types"),
-      ]
-    ),
-    .testTarget(
-      name: "HTTPRuntimeTests",
-      dependencies: [
-        "HTTPRuntime",
-        .product(name: "HTTPTypes", package: "swift-http-types"),
-      ]
-    ),
-    .target(
-      name: "HTTPRuntimeTestHelpers",
-      dependencies: [
-        "HTTPRuntime",
-        .product(name: "HTTPTypes", package: "swift-http-types"),
-        .product(name: "HTTPTypesFoundation", package: "swift-http-types"),
-        .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
-      ]
-    ),
-    .testTarget(
-      name: "HTTPRuntimeTestHelpersTests",
-      dependencies: [
-        "HTTPRuntime",
-        "HTTPRuntimeTestHelpers",
-        .product(name: "HTTPTypes", package: "swift-http-types"),
-        .product(name: "HTTPTypesFoundation", package: "swift-http-types"),
-      ]
-    ),
-    .target(
       name: "Auth",
       dependencies: [
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
