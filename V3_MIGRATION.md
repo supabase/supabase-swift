@@ -1796,3 +1796,210 @@ reads `error.message` / `error.errorCode` is unaffected.
 
 `errorCode` for the new case is `.unknown`, matching the other client-side cases
 (`pkceGrantCodeExchange`, `implicitGrantRedirect`).
+
+## `fetch:` closures and `StorageHTTPSession` replaced by `ClientTransport` and `ClientMiddleware`
+
+Every sub-client now sends through one protocol, `ClientTransport`, behind an ordered chain of
+`ClientMiddleware`. `AuthClient`, `PostgrestClient`, `FunctionsClient`, `SupabaseStorageClient` and
+`RealtimeClientV2` take `transport:` and `middlewares:` where they used to take a `fetch:` closure
+or a `StorageHTTPSession`. `SupabaseClient` gains
+`SupabaseClientOptions.GlobalOptions.transport` and `.middlewares`, which it hands to every
+sub-client at once. All four types — `ClientTransport`, `ClientMiddleware`, `URLSessionTransport`
+and the streaming `HTTPBody` — are public in `Helpers`, which every module re-exports, so
+`import Supabase` (or `import Auth`, `import Storage`, …) is enough.
+
+### Why
+
+v2 had four incompatible injection shapes for the same job. `AuthClient.FetchHandler`,
+`PostgrestClient.FetchHandler` and `FunctionsClient.FetchHandler` were three separate
+`typealias` declarations over the identical
+`(URLRequest) async throws -> (Data, URLResponse)` signature; Storage had
+`StorageHTTPSession` with its own `fetch`/`upload` pair; Realtime had a bare
+`RealtimeClientOptions.fetch` closure. None of them composed. There was no way to add logging, a
+custom header, retry, or a mock to every sub-client at once — you wrote the same closure five
+times, or you wrote it once and it still did not cover Storage's upload path. And a closure that
+returns `Data` cannot stream: a 2 GB download was a 2 GB allocation.
+
+One `Sendable` transport protocol plus a middleware chain is where the ecosystem landed —
+Apple's swift-openapi-runtime, Smithy Swift, and Apollo iOS all expose that exact pair. This SDK
+now matches it, and `HTTPBody` gives the transport a body it can hand back before it is complete.
+
+### Before / After
+
+Auth, PostgREST and Functions each took a `fetch:` closure:
+
+```swift
+// Before
+let session = URLSession(configuration: configuration)
+
+let auth = AuthClient(
+  url: authURL,
+  localStorage: localStorage,
+  fetch: { try await session.data(for: $0) }
+)
+let database = PostgrestClient(
+  url: databaseURL,
+  fetch: { try await session.data(for: $0) }
+)
+let functions = FunctionsClient(
+  url: functionsURL,
+  fetch: { try await session.data(for: $0) }
+)
+```
+
+```swift
+// After
+let session = URLSession(configuration: configuration)
+let transport = URLSessionTransport(session: session)
+
+let auth = AuthClient(
+  url: authURL,
+  localStorage: localStorage,
+  transport: transport
+)
+let database = PostgrestClient(
+  url: databaseURL,
+  transport: transport
+)
+let functions = FunctionsClient(
+  url: functionsURL,
+  transport: transport
+)
+```
+
+`AuthClient.Configuration` and `PostgrestClient.Configuration` changed the same way: the `fetch:`
+parameter and stored property became `transport:` and `middlewares:`.
+
+Storage swapped `StorageHTTPSession` for the same transport:
+
+```swift
+// Before
+let storage = SupabaseStorageClient(
+  configuration: StorageClientConfiguration(
+    url: storageURL,
+    headers: headers,
+    session: StorageHTTPSession(session: session)
+  )
+)
+```
+
+```swift
+// After
+let storage = SupabaseStorageClient(
+  configuration: StorageClientConfiguration(
+    url: storageURL,
+    headers: headers,
+    transport: URLSessionTransport(session: session)
+  )
+)
+```
+
+Realtime's `fetch:` — used for REST broadcast calls — became `transport:`/`middlewares:`:
+
+```swift
+// Before
+let options = RealtimeClientOptions(fetch: { try await session.data(for: $0) })
+
+// After
+let options = RealtimeClientOptions(transport: URLSessionTransport(session: session))
+```
+
+And on `SupabaseClient`, one transport and one middleware chain now cover every sub-client:
+
+```swift
+let client = SupabaseClient(
+  supabaseURL: supabaseURL,
+  supabaseKey: supabaseKey,
+  options: SupabaseClientOptions(
+    global: SupabaseClientOptions.GlobalOptions(
+      transport: URLSessionTransport(session: session),
+      middlewares: [AppVersionMiddleware()]
+    )
+  )
+)
+```
+
+**This is a compile error.** The parameters and types below were removed, not deprecated, so the
+compiler points at every call site.
+
+| Before | After |
+| --- | --- |
+| `AuthClient.FetchHandler` | `any ClientTransport` |
+| `PostgrestClient.FetchHandler` | `any ClientTransport` |
+| `FunctionsClient.FetchHandler` | `any ClientTransport` |
+| `StorageHTTPSession` | `any ClientTransport` |
+| `AuthClient(… fetch:)`, `AuthClient.Configuration(… fetch:)` | `transport:` / `middlewares:` |
+| `PostgrestClient(… fetch:)`, `PostgrestClient.Configuration(… fetch:)` | `transport:` / `middlewares:` |
+| `FunctionsClient(… fetch:)` | `transport:` / `middlewares:` |
+| `StorageClientConfiguration(… session:)` | `StorageClientConfiguration(… transport:middlewares:)` |
+| `RealtimeClientOptions(… fetch:)` | `RealtimeClientOptions(… transport:middlewares:)` |
+
+### The escape hatch
+
+`URLSessionTransport(session:)` wraps any `URLSession` you already have — delegate, configuration,
+certificate pinning and all — so a v2 `fetch: { try await session.data(for: $0) }` becomes
+`transport: URLSessionTransport(session: session)` with nothing else to change. There is also
+`URLSessionTransport(configuration:)`, which builds its own session from a
+`URLSessionConfiguration`.
+
+### Writing a middleware
+
+A middleware sees the request on the way out and the response on the way back. Call `next` exactly
+once to continue, or return without calling it to short-circuit:
+
+```swift
+struct AppVersionMiddleware: ClientMiddleware {
+  static let headerName = HTTPField.Name("X-App-Version")!
+
+  func intercept(
+    _ request: HTTPRequest,
+    body: HTTPBody?,
+    next: @Sendable (HTTPRequest, HTTPBody?) async throws -> (HTTPResponse, HTTPBody?)
+  ) async throws -> (HTTPResponse, HTTPBody?) {
+    var request = request
+    request.headerFields[Self.headerName] = "2.1.0"
+    return try await next(request, body)
+  }
+}
+```
+
+Middlewares run in array order on the way out and in reverse on the way back. A middleware that
+retries must check `HTTPBody.iterationBehavior` and skip the retry when it is `.single`.
+
+### Mocking the network in tests
+
+A transport is one method, so a stub is five lines:
+
+```swift
+struct StubTransport: ClientTransport {
+  func send(_ request: HTTPRequest, body: HTTPBody?) async throws -> (HTTPResponse, HTTPBody?) {
+    (HTTPResponse(status: .ok), HTTPBody(Data("[]".utf8)))
+  }
+}
+```
+
+Pass it as `transport:` to any sub-client, or as `GlobalOptions.transport` to replace the network
+for the whole client.
+
+### Behavior notes
+
+- **Your middlewares run before the SDK's.** `SupabaseClient` appends its own middlewares — trace
+  context, and the one that injects the bearer token — *after* yours. So a middleware you supply
+  sees the request without the `Authorization` header, while your `ClientTransport` always sees the
+  final request, token included. Read or rewrite auth headers in a transport, not a middleware.
+- **A caller-supplied Realtime transport opts out of the SDK's middlewares.** If you set
+  `RealtimeClientOptions.transport` yourself, `SupabaseClient` installs none of its own middlewares
+  on Realtime — it assumes you are fully in charge of that path. Leave it `nil` to get the global
+  transport plus the SDK's chain.
+- **`HTTPURLResponse.url` is now the request URL.** `HTTPError.response` and
+  `AuthError.api(underlyingResponse:)` still carry an `HTTPURLResponse`, but the transport
+  synthesizes it from the request, so its `url` is the URL that was requested rather than the URL
+  after redirects. Anything reading `error.response.url` to detect a redirect target must read the
+  `Location` header instead.
+- **`GlobalOptions.session` stays.** It still configures the default transport (when you pass no
+  `transport`) and it is still the template `URLSession` that Realtime's WebSocket is built from.
+  Setting `transport` overrides it for HTTP only; the WebSocket keeps using `session`.
+- **Timeouts belong to the transport.** Set them on the session:
+  `URLSessionConfiguration.timeoutIntervalForRequest`. `FunctionInvokeOptions.timeoutInterval`
+  keeps working with the default transport — the SDK carries that per-request override through the
+  chain internally. A custom `ClientTransport` owns its own timeouts and is free to ignore it.

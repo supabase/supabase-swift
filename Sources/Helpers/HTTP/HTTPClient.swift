@@ -5,7 +5,7 @@
 //  Created by Guilherme Souza on 30/04/24.
 //
 
-package import Foundation
+import Foundation
 package import HTTPTypes
 import HTTPTypesFoundation
 

@@ -672,8 +672,15 @@ features:
       - AuthLocalStorage.defaultLocalStorage
 
   client.request_configuration.custom_http_client:
-    status: partially_implemented
-    note: "A custom URLSession can be supplied; a full HTTP client adapter protocol is not exposed."
+    status: implemented
+    symbols:
+      - SupabaseClientOptions.GlobalOptions.transport
+      - SupabaseClientOptions.GlobalOptions.middlewares
+    supporting_symbols:
+      - ClientTransport
+      - ClientMiddleware
+      - URLSessionTransport
+      - HTTPBody
   client.request_configuration.global_headers:
     status: implemented
     symbols:

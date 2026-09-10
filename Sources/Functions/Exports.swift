@@ -2,7 +2,7 @@
 //  Exports.swift
 //  Functions
 //
-//  Created by Guilherme Souza on 09/09/26.
+//  Created by Guilherme Souza on 30/05/25.
 //
 
 @_exported import Helpers
