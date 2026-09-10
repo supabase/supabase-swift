@@ -60,7 +60,7 @@ public enum RealtimeProtocolVersion: String, Sendable {
 /// - ``defaultDisconnectOnEmptyChannelsAfter``
 /// - ``defaultHandleAppLifecycle``
 /// ### Initialization
-/// - ``init(headers:heartbeatInterval:reconnectDelay:timeoutInterval:disconnectOnSessionLoss:connectOnSubscribe:maxRetryAttempts:disconnectOnEmptyChannelsAfter:vsn:logLevel:transport:middlewares:accessToken:logger:session:handleAppLifecycle:)``
+/// - ``init(headers:heartbeatInterval:reconnectDelay:timeoutInterval:disconnectOnSessionLoss:connectOnSubscribe:maxRetryAttempts:disconnectOnEmptyChannelsAfter:vsn:logLevel:http:accessToken:logger:session:handleAppLifecycle:)``
 public struct RealtimeClientOptions: Sendable {
   package var headers: HTTPFields
   var heartbeatInterval: TimeInterval
@@ -94,8 +94,7 @@ public struct RealtimeClientOptions: Sendable {
 
   /// Sets the log level for Realtime
   var logLevel: LogLevel?
-  package var transport: (any ClientTransport)?
-  package var middlewares: [any ClientMiddleware]
+  package var http: HTTPClientConfiguration
   package var accessToken: (@Sendable () async throws -> String?)?
   package var logger: Logging.Logger
 
@@ -160,8 +159,7 @@ public struct RealtimeClientOptions: Sendable {
   ///   - disconnectOnEmptyChannelsAfter: Seconds to wait before disconnecting when all channels are removed. Defaults to ``defaultDisconnectOnEmptyChannelsAfter``.
   ///   - vsn: The Phoenix protocol version to use. Defaults to ``RealtimeProtocolVersion/v2``.
   ///   - logLevel: Optional log level for Realtime log output.
-  ///   - transport: The transport used for REST broadcast calls. Defaults to ``URLSessionTransport`` when `nil`.
-  ///   - middlewares: Middlewares run, in order, before the request reaches `transport`.
+  ///   - http: The transport and middleware chain REST broadcast calls go through.
   ///   - accessToken: Optional async closure that returns the current access token.
   ///   - logger: The logger used for Realtime client diagnostics. Defaults to a logger labeled `"io.supabase.realtime"`.
   ///   - session: A template `URLSession` to configure the WebSocket connection from. Defaults to `nil`.
@@ -177,8 +175,7 @@ public struct RealtimeClientOptions: Sendable {
     disconnectOnEmptyChannelsAfter: TimeInterval = Self.defaultDisconnectOnEmptyChannelsAfter,
     vsn: RealtimeProtocolVersion = .v2,
     logLevel: LogLevel? = nil,
-    transport: (any ClientTransport)? = nil,
-    middlewares: [any ClientMiddleware] = [],
+    http: HTTPClientConfiguration = .init(),
     accessToken: (@Sendable () async throws -> String?)? = nil,
     logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.realtime"),
     session: URLSession? = nil,
@@ -195,8 +192,7 @@ public struct RealtimeClientOptions: Sendable {
     self.vsn = vsn
     self.handleAppLifecycle = handleAppLifecycle
     self.logLevel = logLevel
-    self.transport = transport
-    self.middlewares = middlewares
+    self.http = http
     self.accessToken = accessToken
     var logger = logger
     logger[metadataKey: "system"] = "realtime"
@@ -217,8 +213,7 @@ public struct RealtimeClientOptions: Sendable {
     maxRetryAttempts: Int = Self.defaultMaxRetryAttempts,
     disconnectOnEmptyChannelsAfter: TimeInterval = Self.defaultDisconnectOnEmptyChannelsAfter,
     logLevel: LogLevel? = nil,
-    transport: (any ClientTransport)? = nil,
-    middlewares: [any ClientMiddleware] = [],
+    http: HTTPClientConfiguration = .init(),
     accessToken: (@Sendable () async throws -> String?)? = nil,
     logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.realtime")
   ) {
@@ -233,8 +228,7 @@ public struct RealtimeClientOptions: Sendable {
       disconnectOnEmptyChannelsAfter: disconnectOnEmptyChannelsAfter,
       vsn: .v2,
       logLevel: logLevel,
-      transport: transport,
-      middlewares: middlewares,
+      http: http,
       accessToken: accessToken,
       logger: logger
     )
@@ -343,7 +337,7 @@ extension HTTPField.Name {
 
 /// Verbosity of log output emitted by the Realtime client.
 ///
-/// Pass a value to ``RealtimeClientOptions/init(headers:heartbeatInterval:reconnectDelay:timeoutInterval:disconnectOnSessionLoss:connectOnSubscribe:maxRetryAttempts:disconnectOnEmptyChannelsAfter:vsn:logLevel:transport:middlewares:accessToken:logger:session:handleAppLifecycle:)``
+/// Pass a value to ``RealtimeClientOptions/init(headers:heartbeatInterval:reconnectDelay:timeoutInterval:disconnectOnSessionLoss:connectOnSubscribe:maxRetryAttempts:disconnectOnEmptyChannelsAfter:vsn:logLevel:http:accessToken:logger:session:handleAppLifecycle:)``
 /// to control how much detail the Realtime server logs.
 ///
 /// ## Topics

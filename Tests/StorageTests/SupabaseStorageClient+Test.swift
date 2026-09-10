@@ -13,7 +13,7 @@ extension SupabaseStorageClient {
   static func test(
     supabaseURL: String,
     apiKey: String,
-    transport: any ClientTransport = URLSessionTransport()
+    http: HTTPClientConfiguration = .init()
   ) -> SupabaseStorageClient {
     SupabaseStorageClient(
       configuration: StorageClientConfiguration(
@@ -23,8 +23,7 @@ extension SupabaseStorageClient {
           "Apikey": apiKey,
           "X-Client-Info": "storage-swift/x.y.z",
         ],
-        transport: transport
-      )
+        http: http)
     )
   }
 }

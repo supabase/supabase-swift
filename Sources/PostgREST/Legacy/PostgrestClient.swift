@@ -32,7 +32,7 @@ public import Logging
 /// ### Creating a Client
 ///
 /// - ``init(configuration:)``
-/// - ``init(url:schema:headers:logger:transport:middlewares:encoder:decoder:retryEnabled:accessToken:)``
+/// - ``init(url:schema:headers:logger:http:encoder:decoder:retryEnabled:accessToken:)``
 /// - ``Configuration``
 ///
 /// ### Querying and Mutating Data
@@ -52,22 +52,21 @@ public struct PostgrestClient: Sendable {
   /// Configuration options for a ``PostgrestClient`` instance.
   ///
   /// Create a ``Configuration`` value and pass it to ``PostgrestClient/init(configuration:)`` when
-  /// you need fine-grained control over the client, such as supplying a custom ``transport`` or
+  /// you need fine-grained control over the client, such as supplying a custom ``http`` configuration or
   /// ``jsonEncoder``/``jsonDecoder``.
   ///
   /// ## Topics
   ///
   /// ### Creating Configuration
   ///
-  /// - ``init(url:schema:headers:logger:transport:middlewares:encoder:decoder:retryEnabled:accessToken:)``
+  /// - ``init(url:schema:headers:logger:http:encoder:decoder:retryEnabled:accessToken:)``
   ///
   /// ### Configuration Properties
   ///
   /// - ``url``
   /// - ``schema``
   /// - ``headers``
-  /// - ``transport``
-  /// - ``middlewares``
+  /// - ``http``
   /// - ``encoder``
   /// - ``decoder``
   /// - ``retryEnabled``
@@ -88,11 +87,8 @@ public struct PostgrestClient: Sendable {
     /// Additional HTTP headers sent with every request.
     public var headers: [String: String]
 
-    /// The transport every request goes through. Defaults to ``URLSessionTransport``.
-    public var transport: any ClientTransport
-
-    /// Middlewares run, in order, before the request reaches ``transport``.
-    public var middlewares: [any ClientMiddleware]
+    /// The transport and middleware chain every request goes through.
+    public var http: HTTPClientConfiguration
 
     /// The `JSONEncoder` used to serialize request bodies.
     ///
@@ -135,8 +131,7 @@ public struct PostgrestClient: Sendable {
     ///   - schema: The PostgreSQL schema to use. Defaults to `nil` (PostgREST default).
     ///   - headers: Additional HTTP headers sent with every request.
     ///   - logger: A logger for diagnostic output. Defaults to a build-config-aware logger.
-    ///   - transport: The transport every request goes through. Defaults to ``URLSessionTransport``.
-    ///   - middlewares: Middlewares run, in order, before the request reaches `transport`.
+    ///   - http: The transport and middleware chain every request goes through.
     ///   - encoder: The `JSONEncoder` used for request bodies. Defaults to ``jsonEncoder``.
     ///   - decoder: The `JSONDecoder` used for response bodies. Defaults to ``jsonDecoder``.
     ///   - retryEnabled: Whether to retry transient errors. Defaults to `true`.
@@ -146,8 +141,7 @@ public struct PostgrestClient: Sendable {
       schema: String? = nil,
       headers: [String: String] = [:],
       logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.postgrest"),
-      transport: any ClientTransport = URLSessionTransport(),
-      middlewares: [any ClientMiddleware] = [],
+      http: HTTPClientConfiguration = .init(),
       encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
       decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder,
       retryEnabled: Bool = true,
@@ -159,8 +153,7 @@ public struct PostgrestClient: Sendable {
       var logger = logger
       logger[metadataKey: "system"] = "postgrest"
       self.logger = logger
-      self.transport = transport
-      self.middlewares = middlewares
+      self.http = http
       self.encoder = encoder
       self.decoder = decoder
       self.retryEnabled = retryEnabled
@@ -196,8 +189,7 @@ public struct PostgrestClient: Sendable {
   ///   - schema: The PostgreSQL schema to use. Defaults to `nil` (PostgREST default).
   ///   - headers: Additional HTTP headers sent with every request.
   ///   - logger: A logger for diagnostic output. Defaults to a build-config-aware logger.
-  ///   - transport: The transport every request goes through. Defaults to ``URLSessionTransport``.
-  ///   - middlewares: Middlewares run, in order, before the request reaches `transport`.
+  ///   - http: The transport and middleware chain every request goes through.
   ///   - encoder: The `JSONEncoder` used for request bodies. Defaults to ``Configuration/jsonEncoder``.
   ///   - decoder: The `JSONDecoder` used for response bodies. Defaults to ``Configuration/jsonDecoder``.
   ///   - retryEnabled: Whether to retry transient errors. Defaults to `true`.
@@ -207,8 +199,7 @@ public struct PostgrestClient: Sendable {
     schema: String? = nil,
     headers: [String: String] = [:],
     logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.postgrest"),
-    transport: any ClientTransport = URLSessionTransport(),
-    middlewares: [any ClientMiddleware] = [],
+    http: HTTPClientConfiguration = .init(),
     encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
     decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder,
     retryEnabled: Bool = true,
@@ -220,8 +211,7 @@ public struct PostgrestClient: Sendable {
         schema: schema,
         headers: headers,
         logger: logger,
-        transport: transport,
-        middlewares: middlewares,
+        http: http,
         encoder: encoder,
         decoder: decoder,
         retryEnabled: retryEnabled,

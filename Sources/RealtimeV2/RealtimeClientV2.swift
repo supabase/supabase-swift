@@ -166,10 +166,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
           session: options.session
         )
       },
-      http: HTTPClient(
-        transport: options.transport ?? URLSessionTransport(),
-        middlewares: options.middlewares + interceptors
-      ),
+      http: HTTPClient(configuration: options.http, appending: interceptors),
       clock: clock
     )
   }

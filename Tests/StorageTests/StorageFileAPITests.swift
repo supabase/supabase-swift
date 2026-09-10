@@ -37,8 +37,7 @@ extension StorageMockerTests {
             "apikey":
               "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
           ],
-          transport: URLSessionTransport(session: session)
-        )
+          http: .init(transport: URLSessionTransport(session: session)))
       )
     }
 
@@ -49,27 +48,27 @@ extension StorageMockerTests {
         configuration: StorageClientConfiguration(
           url: url,
           headers: [:],
-          transport: ClosureTransport { request, requestBody in
-            guard let urlRequest = URLRequest(httpRequest: request) else {
-              throw URLError(.badURL)
-            }
-            let data: Data
-            if let requestBody {
-              data = try await Data(collecting: requestBody, upTo: .max)
-            } else {
-              data = Data()
-            }
-            body.setValue(data)
-            let response = HTTPURLResponse(
-              url: urlRequest.url!, statusCode: 200, httpVersion: nil, headerFields: nil
-            )!
-            guard let head = response.httpResponse else { throw URLError(.badServerResponse) }
-            return (
-              head,
-              HTTPBody(Data(#"{"Key":"bucket/\#(urlRequest.url!.lastPathComponent)"}"#.utf8))
-            )
-          }
-        )
+          http: .init(
+            transport: ClosureTransport { request, requestBody in
+              guard let urlRequest = URLRequest(httpRequest: request) else {
+                throw URLError(.badURL)
+              }
+              let data: Data
+              if let requestBody {
+                data = try await Data(collecting: requestBody, upTo: .max)
+              } else {
+                data = Data()
+              }
+              body.setValue(data)
+              let response = HTTPURLResponse(
+                url: urlRequest.url!, statusCode: 200, httpVersion: nil, headerFields: nil
+              )!
+              guard let head = response.httpResponse else { throw URLError(.badServerResponse) }
+              return (
+                head,
+                HTTPBody(Data(#"{"Key":"bucket/\#(urlRequest.url!.lastPathComponent)"}"#.utf8))
+              )
+            }))
       )
     }
 

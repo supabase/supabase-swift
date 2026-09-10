@@ -30,10 +30,11 @@ struct PostgrestClientAccessTokenTests {
 
     let sut = PostgrestClient(
       url: url,
-      transport: ClosureTransport { request, _ in
-        capturedHeaders.setValue(request.headerFields)
-        return self.okResponse()
-      },
+      http: .init(
+        transport: ClosureTransport { request, _ in
+          capturedHeaders.setValue(request.headerFields)
+          return self.okResponse()
+        }),
       accessToken: { "access.token" }
     )
 
@@ -49,12 +50,13 @@ struct PostgrestClientAccessTokenTests {
 
     let sut = PostgrestClient(
       url: url,
-      transport: ClosureTransport { request, _ in
-        capturedAuthorizationHeaders.withValue {
-          $0.append(request.headerFields[.authorization] ?? "")
-        }
-        return self.okResponse()
-      },
+      http: .init(
+        transport: ClosureTransport { request, _ in
+          capturedAuthorizationHeaders.withValue {
+            $0.append(request.headerFields[.authorization] ?? "")
+          }
+          return self.okResponse()
+        }),
       accessToken: { token.value }
     )
 
@@ -71,10 +73,11 @@ struct PostgrestClientAccessTokenTests {
 
     let sut = PostgrestClient(
       url: url,
-      transport: ClosureTransport { request, _ in
-        capturedHeaders.setValue(request.headerFields)
-        return self.okResponse()
-      },
+      http: .init(
+        transport: ClosureTransport { request, _ in
+          capturedHeaders.setValue(request.headerFields)
+          return self.okResponse()
+        }),
       accessToken: { "access.token" }
     )
 
@@ -92,10 +95,11 @@ struct PostgrestClientAccessTokenTests {
 
     let sut = PostgrestClient(
       url: url,
-      transport: ClosureTransport { request, _ in
-        Issue.record("transport should not be called when the access token provider throws")
-        return self.okResponse()
-      },
+      http: .init(
+        transport: ClosureTransport { request, _ in
+          Issue.record("transport should not be called when the access token provider throws")
+          return self.okResponse()
+        }),
       accessToken: { throw TokenError() }
     )
 
@@ -110,11 +114,11 @@ struct PostgrestClientAccessTokenTests {
 
     let sut = PostgrestClient(
       url: url,
-      transport: ClosureTransport { request, _ in
-        capturedHeaders.setValue(request.headerFields)
-        return self.okResponse()
-      }
-    )
+      http: .init(
+        transport: ClosureTransport { request, _ in
+          capturedHeaders.setValue(request.headerFields)
+          return self.okResponse()
+        }))
 
     try await sut.from("todos").select().execute()
 

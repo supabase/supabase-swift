@@ -75,10 +75,7 @@ struct StorageApi: Sendable {
       LoggerInterceptor(logger: configuration.logger)
     ]
 
-    http = HTTPClient(
-      transport: configuration.transport,
-      middlewares: configuration.middlewares + interceptors
-    )
+    http = HTTPClient(configuration: configuration.http, appending: interceptors)
   }
 
   /// Returns a new ``StorageApi`` with an additional HTTP header merged into

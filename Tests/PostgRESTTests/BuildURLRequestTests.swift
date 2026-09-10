@@ -53,31 +53,32 @@ struct BuildURLRequestTests {
       url: url,
       schema: nil,
       headers: ["X-Client-Info": "postgrest-swift/x.y.z"],
-      transport: ClosureTransport { request, body in
-        guard let runningTestCase = runningTestCase.value else {
-          Issue.record("execute called without a runningTestCase set.")
+      http: .init(
+        transport: ClosureTransport { request, body in
+          guard let runningTestCase = runningTestCase.value else {
+            Issue.record("execute called without a runningTestCase set.")
+            return (HTTPTypes.HTTPResponse(status: .ok), nil)
+          }
+
+          guard var urlRequest = URLRequest(httpRequest: request) else {
+            throw URLError(.badURL)
+          }
+          if let body { urlRequest.httpBody = try await Data(collecting: body, upTo: .max) }
+
+          await MainActor.run { [runningTestCase] in
+            assertSnapshot(
+              of: urlRequest,
+              as: .curl,
+              named: runningTestCase.name,
+              record: runningTestCase.record,
+              file: runningTestCase.file,
+              testName: "testBuildRequest()",
+              line: runningTestCase.line
+            )
+          }
+
           return (HTTPTypes.HTTPResponse(status: .ok), nil)
-        }
-
-        guard var urlRequest = URLRequest(httpRequest: request) else {
-          throw URLError(.badURL)
-        }
-        if let body { urlRequest.httpBody = try await Data(collecting: body, upTo: .max) }
-
-        await MainActor.run { [runningTestCase] in
-          assertSnapshot(
-            of: urlRequest,
-            as: .curl,
-            named: runningTestCase.name,
-            record: runningTestCase.record,
-            file: runningTestCase.file,
-            testName: "testBuildRequest()",
-            line: runningTestCase.line
-          )
-        }
-
-        return (HTTPTypes.HTTPResponse(status: .ok), nil)
-      },
+        }),
       encoder: encoder,
       retryEnabled: false
     )

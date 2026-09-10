@@ -210,11 +210,11 @@ struct SupabaseClientTests {
     )
 
     #expect(
-      client.realtimeV2.options.transport is URLSessionTransport,
+      client.realtimeV2.options.http.transport is URLSessionTransport,
       "global URLSession should be propagated to Realtime client as the default transport"
     )
     #expect(
-      client.realtimeV2.options.middlewares.contains { $0 is TraceContextMiddleware },
+      client.realtimeV2.options.http.middlewares.contains { $0 is TraceContextMiddleware },
       "SDK middlewares should be installed when the caller sets no transport"
     )
   }
@@ -231,17 +231,16 @@ struct SupabaseClientTests {
           autoRefreshToken: false
         ),
         realtime: RealtimeClientOptions(
-          transport: ClosureTransport { _, _ in throw URLError(.cancelled) }
-        )
+          http: .init(transport: ClosureTransport { _, _ in throw URLError(.cancelled) }))
       )
     )
 
     #expect(
-      client.realtimeV2.options.transport is ClosureTransport,
+      client.realtimeV2.options.http.transport is ClosureTransport,
       "user-provided realtime transport should be preserved"
     )
     #expect(
-      client.realtimeV2.options.middlewares.isEmpty,
+      client.realtimeV2.options.http.middlewares.isEmpty,
       "middlewares should stay as the caller passed them when they set a transport"
     )
   }
@@ -531,9 +530,7 @@ struct SupabaseClientTests {
           accessToken: { "live-session-token" }
         ),
         global: SupabaseClientOptions.GlobalOptions(
-          transport: transport,
-          middlewares: [TagMiddleware(seen: seenByMiddleware)]
-        )
+          http: .init(transport: transport, middlewares: [TagMiddleware(seen: seenByMiddleware)]))
       )
     )
 
@@ -593,9 +590,7 @@ struct SupabaseClientTests {
           autoRefreshToken: false
         ),
         global: SupabaseClientOptions.GlobalOptions(
-          transport: transport,
-          middlewares: [TagMiddleware()]
-        )
+          http: .init(transport: transport, middlewares: [TagMiddleware()]))
       )
     )
 
@@ -615,11 +610,11 @@ struct SupabaseClientTests {
           storage: AuthLocalStorageMock(),
           autoRefreshToken: false
         ),
-        realtime: RealtimeClientOptions(middlewares: [TagMiddleware()])
+        realtime: RealtimeClientOptions(http: .init(middlewares: [TagMiddleware()]))
       )
     )
 
-    let middlewares = client.realtimeV2.options.middlewares
+    let middlewares = client.realtimeV2.options.http.middlewares
     #expect(middlewares.contains { $0 is TagMiddleware })
     #expect(middlewares.contains { $0 is TraceContextMiddleware })
   }

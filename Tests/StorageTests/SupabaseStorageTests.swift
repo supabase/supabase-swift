@@ -218,16 +218,16 @@ struct SupabaseStorageTests {
     SupabaseStorageClient.test(
       supabaseURL: supabaseURL.absoluteString,
       apiKey: "test.api.key",
-      transport: ClosureTransport { request, body in
-        guard var urlRequest = URLRequest(httpRequest: request) else { throw URLError(.badURL) }
-        if let body { urlRequest.httpBody = try await Data(collecting: body, upTo: .max) }
-        let (data, response) = try await fetch(urlRequest)
-        guard let head = (response as? HTTPURLResponse)?.httpResponse else {
-          throw URLError(.badServerResponse)
-        }
-        return (head, data.isEmpty ? nil : HTTPBody(data))
-      }
-    )
+      http: .init(
+        transport: ClosureTransport { request, body in
+          guard var urlRequest = URLRequest(httpRequest: request) else { throw URLError(.badURL) }
+          if let body { urlRequest.httpBody = try await Data(collecting: body, upTo: .max) }
+          let (data, response) = try await fetch(urlRequest)
+          guard let head = (response as? HTTPURLResponse)?.httpResponse else {
+            throw URLError(.badServerResponse)
+          }
+          return (head, data.isEmpty ? nil : HTTPBody(data))
+        }))
   }
 
   private func uploadFileURL(_ fileName: String) -> URL {
