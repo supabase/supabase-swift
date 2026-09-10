@@ -267,7 +267,7 @@ public final class SupabaseClient: Sendable {
       storageKey: options.auth.storageKey ?? defaultStorageKey,
       localStorage: options.auth.storage,
       logger: options.global.logger,
-      fetch: {
+      transport: FetchTransport {
         // DON'T use `fetchWithAuth` method within the AuthClient as it may cause a deadlock.
         try await options.global.session.data(for: TraceContext.inject(into: $0))
       },
