@@ -77,8 +77,11 @@ final class URLSessionWebSocket: WebSocket {
       )
     }
 
+    // `continuation` is assigned below, before `task.resume()`, so it is always present by the
+    // time any delegate callback can run. It is `Optional` rather than implicitly unwrapped so
+    // that an unset continuation does nothing instead of trapping.
     struct MutableState {
-      var continuation: CheckedContinuation<URLSessionWebSocket, any Error>!
+      var continuation: CheckedContinuation<URLSessionWebSocket, any Error>?
       var webSocket: URLSessionWebSocket?
     }
 
@@ -113,7 +116,7 @@ final class URLSessionWebSocket: WebSocket {
           // failed before `onWebSocketTaskOpened`), so invalidate it here — otherwise
           // it (and its task/delegate) leak.
           session.finishTasksAndInvalidate()
-          let continuation = $0.continuation!
+          guard let continuation = $0.continuation else { return {} }
           return {
             continuation.resume(
               throwing: WebSocketError.connection(
@@ -137,20 +140,20 @@ final class URLSessionWebSocket: WebSocket {
     let onWebSocketTaskOpened: @Sendable (URLSession, URLSessionWebSocketTask, String?) -> Void = {
       session, task, `protocol` in
       let (webSocket, continuation) = mutableState.withValue {
-        state -> (URLSessionWebSocket, CheckedContinuation<URLSessionWebSocket, any Error>) in
+        state -> (URLSessionWebSocket, CheckedContinuation<URLSessionWebSocket, any Error>?) in
         let webSocket = URLSessionWebSocket(
           _task: task, _protocol: `protocol` ?? "", session: session)
         state.webSocket = webSocket
-        return (webSocket, state.continuation!)
+        return (webSocket, state.continuation)
       }
-      continuation.resume(returning: webSocket)
+      continuation?.resume(returning: webSocket)
     }
     let onWebSocketTaskClosed:
       @Sendable (URLSession, URLSessionWebSocketTask, Int?, Data?) -> Void =
         { session, task, code, reason in
           mutableState.withValue {
             assert($0.webSocket != nil, "connection should exist by this time")
-            $0.webSocket!._connectionClosed(code: code, reason: reason)
+            $0.webSocket?._connectionClosed(code: code, reason: reason)
           }
         }
 

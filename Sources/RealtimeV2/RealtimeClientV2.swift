@@ -933,15 +933,19 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       return baseURL
     }
 
-    components.queryItems = components.queryItems ?? []
+    var queryItems = components.queryItems ?? []
+
     if let apikey {
-      components.queryItems!.append(URLQueryItem(name: "apikey", value: apikey))
+      queryItems.append(URLQueryItem(name: "apikey", value: apikey))
     }
-    components.queryItems!.append(URLQueryItem(name: "vsn", value: vsn.rawValue))
+
+    queryItems.append(URLQueryItem(name: "vsn", value: vsn.rawValue))
 
     if let logLevel {
-      components.queryItems!.append(URLQueryItem(name: "log_level", value: logLevel.rawValue))
+      queryItems.append(URLQueryItem(name: "log_level", value: logLevel.rawValue))
     }
+
+    components.queryItems = queryItems
 
     components.path.append("/websocket")
     components.path = components.path.replacingOccurrences(of: "//", with: "/")

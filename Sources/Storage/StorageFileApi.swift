@@ -26,7 +26,7 @@ enum FileUpload {
 
   func encode(to formData: MultipartFormData, withPath path: String, options: FileOptions) {
     formData.append(
-      options.cacheControl.data(using: .utf8)!,
+      Data(options.cacheControl.utf8),
       withName: "cacheControl"
     )
 
@@ -594,14 +594,20 @@ public struct StorageFileApi: Sendable {
       ? signedURLComponents.path : "/\(signedURLComponents.path)"
     baseComponents.queryItems = signedURLComponents.queryItems
 
-    if let download {
-      baseComponents.queryItems = baseComponents.queryItems ?? []
-      baseComponents.queryItems!.append(URLQueryItem(name: "download", value: download))
-    }
+    // Only touched when there is something to add — assigning an empty array would leave a bare
+    // "?" on a URL that previously had no query at all.
+    if download != nil || cacheNonce != nil {
+      var queryItems = baseComponents.queryItems ?? []
 
-    if let cacheNonce {
-      baseComponents.queryItems = baseComponents.queryItems ?? []
-      baseComponents.queryItems!.append(URLQueryItem(name: "cacheNonce", value: cacheNonce))
+      if let download {
+        queryItems.append(URLQueryItem(name: "download", value: download))
+      }
+
+      if let cacheNonce {
+        queryItems.append(URLQueryItem(name: "cacheNonce", value: cacheNonce))
+      }
+
+      baseComponents.queryItems = queryItems
     }
 
     guard let signedURL = baseComponents.url else {

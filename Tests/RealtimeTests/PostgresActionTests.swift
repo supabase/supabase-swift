@@ -27,7 +27,8 @@ struct PostgresActionTests {
     Column(name: "email", type: "text"),
   ]
 
-  private let sampleDate = Date(timeIntervalSince1970: 1_722_246_000)  // Fixed timestamp for consistency
+  // Fixed timestamp for consistency
+  private let sampleDate = Date(timeIntervalSince1970: 1_722_246_000)
 
   @Test
   func columnEquality() {

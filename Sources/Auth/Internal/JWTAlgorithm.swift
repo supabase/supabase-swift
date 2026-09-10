@@ -14,7 +14,7 @@ enum JWTAlgorithm: String {
     jwt: DecodedJWT,
     jwk: JWK
   ) -> Bool {
-    let message = "\(jwt.raw.header).\(jwt.raw.payload)".data(using: .utf8)!
+    let message = Data("\(jwt.raw.header).\(jwt.raw.payload)".utf8)
     switch self {
     case .rs256:
       #if canImport(Security)
