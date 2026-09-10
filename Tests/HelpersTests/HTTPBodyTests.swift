@@ -14,7 +14,7 @@ import Testing
 @Suite
 struct HTTPBodyTests {
   @Test
-  func dataBodyIsKnownLengthAndReiterable() async throws {
+  func dataBodyIsKnownLengthAndIteratesTwice() async throws {
     let body = HTTPBody(Data("hello".utf8))
     #expect(body.length == .known(5))
     #expect(body.iterationBehavior == .multiple)

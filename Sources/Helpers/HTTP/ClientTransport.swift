@@ -5,7 +5,7 @@
 //  Created by Guilherme Souza on 09/09/26.
 //
 
-public import Foundation
+package import Foundation
 public import HTTPTypes
 
 /// Performs one HTTP exchange. The single seam between the SDK and the network.
