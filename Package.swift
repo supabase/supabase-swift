@@ -304,6 +304,7 @@ let package = Package(
           condition: .when(traits: ["OpenTelemetry"])
         ),
         "Supabase",
+        "TestHelpers",
       ]
     ),
     .target(

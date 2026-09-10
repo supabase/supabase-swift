@@ -223,7 +223,7 @@ extension HTTPBody {
   /// Works in both directions: wrap a request body to observe upload progress, or a response
   /// body to observe download progress. ``length`` and ``iterationBehavior`` are preserved.
   ///
-  /// The returned body's ``storage`` is always `.stream`, even when the receiver's storage is
+  /// The returned body's storage is always `.stream`, even when the receiver's storage is
   /// `.file` or `.data` — a file-backed body wrapped this way no longer uploads straight from
   /// disk; it is re-read chunk by chunk instead.
   public func reportingProgress(
