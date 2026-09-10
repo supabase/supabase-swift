@@ -9,7 +9,8 @@
 ///
 /// Pass one of these as `http:` to any sub-client or to
 /// `SupabaseClientOptions.GlobalOptions`. ``transport`` is `nil` by default, which means the
-/// platform default: ``URLSessionTransport`` over the session the client was given.
+/// default ``URLSessionTransport`` (`URLSession.shared`, or `GlobalOptions.session` when used
+/// through `SupabaseClient`).
 /// Middlewares run in array order for requests (index 0 first) and in reverse for responses,
 /// before the SDK's own middlewares and the transport.
 public struct HTTPClientConfiguration: Sendable {

@@ -115,7 +115,7 @@ public final class SupabaseClient: Sendable {
       schema: options.db.schema,
       headers: headers,
       logger: options.global.logger,
-      http: HTTPClientConfiguration(transport: transport, middlewares: authenticatedMiddlewares),
+      http: authenticatedHTTP,
       encoder: options.db.encoder,
       decoder: options.db.decoder,
       retryEnabled: options.db.retry
@@ -128,7 +128,7 @@ public final class SupabaseClient: Sendable {
       configuration: StorageClientConfiguration(
         url: storageURL,
         headers: headers,
-        http: HTTPClientConfiguration(transport: transport, middlewares: authenticatedMiddlewares),
+        http: authenticatedHTTP,
         logger: options.global.logger,
         useNewHostname: options.storage.useNewHostname
       )
@@ -423,7 +423,8 @@ public final class SupabaseClient: Sendable {
     options.global.http.transport ?? URLSessionTransport(session: options.global.session)
   }
 
-  /// User middlewares followed by the SDK's, for sub-clients that send the user's token.
+  /// The shared transport plus the user's middlewares followed by the SDK's, for sub-clients that
+  /// send the user's token.
   ///
   /// ``AccessTokenMiddleware`` captures only the dependencies it needs — never `self` — because
   /// each sub-client stores its middlewares for its whole lifetime: the cached ``realtimeV2``
@@ -431,10 +432,13 @@ public final class SupabaseClient: Sendable {
   /// any sub-client for that long too. Capturing `self` here would form a
   /// `self -> sub-client -> middleware -> self` retain cycle that keeps ``deinit`` from ever
   /// running.
-  private var authenticatedMiddlewares: [any ClientMiddleware] {
-    options.global.http.middlewares + [
-      TraceContextMiddleware(), AccessTokenMiddleware(getAccessToken: accessTokenProvider),
-    ]
+  private var authenticatedHTTP: HTTPClientConfiguration {
+    HTTPClientConfiguration(
+      transport: transport,
+      middlewares: options.global.http.middlewares + [
+        TraceContextMiddleware(), AccessTokenMiddleware(getAccessToken: accessTokenProvider),
+      ]
+    )
   }
 
   /// Resolves the access token to send on outgoing requests, without capturing `self`.
