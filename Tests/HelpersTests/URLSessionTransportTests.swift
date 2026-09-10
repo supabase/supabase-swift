@@ -55,20 +55,27 @@ struct URLSessionTransportTests {
   }
 
   @Test
-  func bufferedGetReturnsHeadAndBody() async throws {
+  func getReturnsHeadAndStreamedBody() async throws {
     let transport = makeTransport()
+    // Mocker doesn't compute Content-Length from the mocked data itself, so the header is
+    // supplied explicitly here to give `URLResponse.expectedContentLength` a known value.
     Mock(
       url: url, statusCode: 201,
       data: [.get: Data("ok".utf8)],
-      additionalHeaders: ["X-Test": "1"]
+      additionalHeaders: ["X-Test": "1", "Content-Length": "2"]
     ).register()
 
-    let (head, body) = try await transport.send(
+    let (head, maybeBody) = try await transport.send(
       HTTPRequest(method: .get, url: url), body: nil)
 
     #expect(head.status == 201)
     #expect(head.headerFields[HTTPField.Name("X-Test")!] == "1")
-    let data = try await Data(collecting: try #require(body), upTo: 100)
+    let body = try #require(maybeBody)
+    #if !canImport(FoundationNetworking)
+      #expect(body.iterationBehavior == .single)
+    #endif
+    #expect(body.length == .known(2))
+    let data = try await Data(collecting: body, upTo: 100)
     #expect(data == Data("ok".utf8))
   }
 
