@@ -14,9 +14,6 @@ import Foundation
 /// on/off switch. Compiles to a no-op when the trait is disabled, and no-ops at runtime when
 /// there's no active span, so calling ``inject(into:)`` is always safe.
 ///
-/// Not applied to `FunctionsClient._invokeWithStreamedResponse`, which uses its own `URLSession`
-/// outside `SupabaseClient`'s fetch pipeline (same pre-existing exception as auth header injection).
-///
 /// To enable, add the trait to your dependency declaration:
 ///
 /// ```swift

@@ -6,7 +6,9 @@
 //
 
 import Foundation
+import HTTPTypesFoundation
 import SnapshotTesting
+import TestHelpers
 import Testing
 
 @testable import Functions
@@ -66,26 +68,32 @@ struct RequestTests {
   ) async {
     let sut = FunctionsClient(
       url: url,
-      headers: ["apikey": apiKey, "x-client-info": "functions-swift/x.y.z"]
-    ) { request in
-      await MainActor.run {
-        #if os(Android)
-          // missing snapshots for Android
-          return
-        #endif
-        assertSnapshot(
-          of: request,
-          as: .curl,
-          record: record,
-          fileID: fileID,
-          file: filePath,
-          testName: testName,
-          line: line,
-          column: column
-        )
+      headers: ["apikey": apiKey, "x-client-info": "functions-swift/x.y.z"],
+      transport: ClosureTransport { request, body in
+        guard var urlRequest = URLRequest(httpRequest: request) else {
+          throw URLError(.badURL)
+        }
+        if let body { urlRequest.httpBody = try await Data(collecting: body, upTo: .max) }
+
+        await MainActor.run {
+          #if os(Android)
+            // missing snapshots for Android
+            return
+          #endif
+          assertSnapshot(
+            of: urlRequest,
+            as: .curl,
+            record: record,
+            fileID: fileID,
+            file: filePath,
+            testName: testName,
+            line: line,
+            column: column
+          )
+        }
+        throw NSError(domain: "Error", code: 0, userInfo: nil)
       }
-      throw NSError(domain: "Error", code: 0, userInfo: nil)
-    }
+    )
 
     try? await test(sut)
   }

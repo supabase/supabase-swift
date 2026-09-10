@@ -1,8 +1,8 @@
 //
 //  Exports.swift
-//  Supabase
+//  Functions
 //
-//  Created by Guilherme Souza on 30/05/25.
+//  Created by Guilherme Souza on 09/09/26.
 //
 
-import Helpers
+@_exported import Helpers

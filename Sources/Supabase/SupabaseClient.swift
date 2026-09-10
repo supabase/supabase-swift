@@ -159,7 +159,8 @@ public final class SupabaseClient: Sendable {
       headers: functionsHeaders.dictionary,
       region: options.functions.region,
       logger: options.global.logger,
-      fetch: { [session = options.global.session] request in
+      // ponytail: stopgap FetchTransport wrapper, Task 9 replaces this with transport/middlewares.
+      transport: FetchTransport { [session = options.global.session] request in
         try await session.data(for: TraceContext.inject(into: request))
       },
       decoder: options.functions.decoder,
