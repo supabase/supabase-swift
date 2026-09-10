@@ -115,8 +115,8 @@ public final class SupabaseClient: Sendable {
       schema: options.db.schema,
       headers: headers,
       logger: options.global.logger,
-      // ponytail: stopgap FetchTransport wrapper, Task 9 replaces this with transport/middlewares.
-      transport: FetchTransport(fetch: fetchWithAuth),
+      transport: transport,
+      middlewares: authenticatedMiddlewares,
       encoder: options.db.encoder,
       decoder: options.db.decoder,
       retryEnabled: options.db.retry
@@ -129,8 +129,8 @@ public final class SupabaseClient: Sendable {
       configuration: StorageClientConfiguration(
         url: storageURL,
         headers: headers,
-        // ponytail: stopgap FetchTransport wrapper, Task 9 replaces this with transport/middlewares.
-        transport: FetchTransport(fetch: fetchWithAuth),
+        transport: transport,
+        middlewares: authenticatedMiddlewares,
         logger: options.global.logger,
         useNewHostname: options.storage.useNewHostname
       )
@@ -160,10 +160,8 @@ public final class SupabaseClient: Sendable {
       headers: functionsHeaders.dictionary,
       region: options.functions.region,
       logger: options.global.logger,
-      // ponytail: stopgap FetchTransport wrapper, Task 9 replaces this with transport/middlewares.
-      transport: FetchTransport { [session = options.global.session] request in
-        try await session.data(for: TraceContext.inject(into: request))
-      },
+      transport: transport,
+      middlewares: options.global.middlewares + [TraceContextMiddleware()],
       decoder: options.functions.decoder,
       accessToken: { [weak self] in
         try await self?._getAccessToken()
@@ -271,10 +269,10 @@ public final class SupabaseClient: Sendable {
       storageKey: options.auth.storageKey ?? defaultStorageKey,
       localStorage: options.auth.storage,
       logger: options.global.logger,
-      transport: FetchTransport {
-        // DON'T use `fetchWithAuth` method within the AuthClient as it may cause a deadlock.
-        try await options.global.session.data(for: TraceContext.inject(into: $0))
-      },
+      transport: options.global.transport ?? URLSessionTransport(session: options.global.session),
+      // DON'T give the AuthClient `AccessTokenMiddleware` — resolving the access token goes
+      // through the AuthClient itself, which may cause a deadlock.
+      middlewares: options.global.middlewares + [TraceContextMiddleware()],
       autoRefreshToken: options.auth.autoRefreshToken
     )
 
@@ -417,45 +415,23 @@ public final class SupabaseClient: Sendable {
     mutableState.listenForAuthEventsTask?.cancel()
   }
 
-  /// A `fetch` closure handed to the REST, Storage and Functions sub-clients.
-  ///
-  /// Captures only the dependencies it needs — never `self` — because each sub-client stores this
-  /// closure for its whole lifetime, and the cached sub-clients (`storage`, `realtimeV2`) are held
-  /// in ``mutableState`` for the lifetime of the client. Capturing `self` here would form a
-  /// `self -> mutableState -> sub-client -> closure -> self` retain cycle that keeps ``deinit`` from
-  /// ever running. `rest` is rebuilt per access and not cached, but it gets the same closure, so the
-  /// no-`self`-capture rule applies uniformly.
-  private var fetchWithAuth: @Sendable (_ request: URLRequest) async throws -> (Data, URLResponse) {
-    { [session = options.global.session, adapt = adaptRequest] request in
-      try await session.data(for: adapt(request))
-    }
+  /// The resolved transport shared by every sub-client.
+  private var transport: any ClientTransport {
+    options.global.transport ?? URLSessionTransport(session: options.global.session)
   }
 
-  /// An `upload` closure handed to the Storage sub-client.
+  /// User middlewares followed by the SDK's, for sub-clients that send the user's token.
   ///
-  /// Same no-`self`-capture rationale as ``fetchWithAuth``.
-  private var uploadWithAuth:
-    @Sendable (_ request: URLRequest, _ data: Data) async throws -> (Data, URLResponse)
-  {
-    { [session = options.global.session, adapt = adaptRequest] request, data in
-      try await session.upload(for: adapt(request), from: data)
-    }
-  }
-
-  /// Builds a request adapter that injects trace context and the current access token.
-  ///
-  /// The returned closure captures the auth dependencies by value instead of `self`. `AuthClient`
-  /// holds no reference back to ``SupabaseClient``, so no cycle is formed.
-  private var adaptRequest: @Sendable (_ request: URLRequest) async throws -> URLRequest {
-    { [getAccessToken = accessTokenProvider] request in
-      let token = try await getAccessToken()
-
-      var request = TraceContext.inject(into: request)
-      if let token {
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-      }
-      return request
-    }
+  /// ``AccessTokenMiddleware`` captures only the dependencies it needs — never `self` — because
+  /// each sub-client stores its middlewares for its whole lifetime, and the cached sub-clients
+  /// (`storage`, `realtimeV2`) are held in ``mutableState`` for the lifetime of the client.
+  /// Capturing `self` here would form a `self -> mutableState -> sub-client -> middleware -> self`
+  /// retain cycle that keeps ``deinit`` from ever running. `rest` is rebuilt per access and not
+  /// cached, but it gets the same middlewares, so the no-`self`-capture rule applies uniformly.
+  private var authenticatedMiddlewares: [any ClientMiddleware] {
+    options.global.middlewares + [
+      TraceContextMiddleware(), AccessTokenMiddleware(getAccessToken: accessTokenProvider),
+    ]
   }
 
   /// Resolves the access token to send on outgoing requests, without capturing `self`.
@@ -531,9 +507,8 @@ public final class SupabaseClient: Sendable {
     realtimeOptions.logger[metadataKey: "system"] = "realtime"
 
     if realtimeOptions.transport == nil {
-      realtimeOptions.transport = FetchTransport { [session = options.global.session] request in
-        try await session.data(for: TraceContext.inject(into: request))
-      }
+      realtimeOptions.transport = transport
+      realtimeOptions.middlewares = options.global.middlewares + [TraceContextMiddleware()]
     }
 
     if realtimeOptions.session == nil {

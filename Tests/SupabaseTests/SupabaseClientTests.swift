@@ -5,6 +5,7 @@ import HTTPTypes
 import InlineSnapshotTesting
 import Logging
 import SnapshotTestingCustomDump
+import TestHelpers
 import Testing
 
 @testable import Auth
@@ -209,13 +210,17 @@ struct SupabaseClientTests {
     )
 
     #expect(
-      client.realtimeV2.options.transport != nil,
-      "global URLSession should be propagated to Realtime client as a fetch closure"
+      client.realtimeV2.options.transport is URLSessionTransport,
+      "global URLSession should be propagated to Realtime client as the default transport"
+    )
+    #expect(
+      client.realtimeV2.options.middlewares.contains { $0 is TraceContextMiddleware },
+      "SDK middlewares should be installed when the caller sets no transport"
     )
   }
 
   @Test
-  func userProvidedRealtimeFetchIsNotOverridden() {
+  func userProvidedRealtimeTransportIsNotOverridden() {
     let localStorage = AuthLocalStorageMock()
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
@@ -226,14 +231,18 @@ struct SupabaseClientTests {
           autoRefreshToken: false
         ),
         realtime: RealtimeClientOptions(
-          transport: URLSessionTransport(configuration: .ephemeral)
+          transport: ClosureTransport { _, _ in throw URLError(.cancelled) }
         )
       )
     )
 
     #expect(
-      client.realtimeV2.options.transport != nil,
-      "user-provided realtime fetch should be preserved"
+      client.realtimeV2.options.transport is ClosureTransport,
+      "user-provided realtime transport should be preserved"
+    )
+    #expect(
+      client.realtimeV2.options.middlewares.isEmpty,
+      "middlewares should stay as the caller passed them when they set a transport"
     )
   }
 
@@ -500,4 +509,58 @@ struct SupabaseClientTests {
     #expect(client.functions.headers.dictionary["Authorization"] == "Bearer legacy-jwt-key")
     #expect(client.functions.headers.dictionary["Apikey"] == "legacy-jwt-key")
   }
+
+  @Test
+  func globalTransportAndMiddlewaresReachEverySubClient() async throws {
+    let seen = LockIsolated<[HTTPTypes.HTTPRequest]>([])
+    let transport = ClosureTransport { request, _ in
+      seen.withValue { $0.append(request) }
+      return (
+        HTTPTypes.HTTPResponse(status: .ok, headerFields: [.contentType: "application/json"]),
+        HTTPBody(Data("[]".utf8))
+      )
+    }
+    struct Tag: ClientMiddleware {
+      func intercept(
+        _ request: HTTPTypes.HTTPRequest,
+        body: HTTPBody?,
+        next:
+          @Sendable (HTTPTypes.HTTPRequest, HTTPBody?) async throws -> (
+            HTTPTypes.HTTPResponse, HTTPBody?
+          )
+      ) async throws -> (HTTPTypes.HTTPResponse, HTTPBody?) {
+        var request = request
+        request.headerFields[.tag] = "yes"
+        // User middlewares run before the SDK injects the bearer token, so with no signed-in
+        // session the header still carries the anon key.
+        #expect(request.headerFields[.authorization] == "Bearer PUBLISHABLE_KEY")
+        return try await next(request, body)
+      }
+    }
+    let client = SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      options: SupabaseClientOptions(
+        auth: SupabaseClientOptions.AuthOptions(
+          storage: AuthLocalStorageMock(),
+          autoRefreshToken: false
+        ),
+        global: SupabaseClientOptions.GlobalOptions(transport: transport, middlewares: [Tag()])
+      )
+    )
+
+    _ = try await client.from("todos").select().execute()
+    _ = try? await client.storage.listBuckets()
+    _ = try? await client.functions.invoke("hello")
+
+    let paths = seen.value.compactMap(\.path)
+    #expect(paths.contains { $0.hasPrefix("/rest/v1/todos") })
+    #expect(paths.contains { $0.hasPrefix("/storage/v1/bucket") })
+    #expect(paths.contains { $0.hasPrefix("/functions/v1/hello") })
+    #expect(seen.value.allSatisfy { $0.headerFields[.tag] == "yes" })
+  }
+}
+
+extension HTTPField.Name {
+  fileprivate static let tag = HTTPField.Name("X-Tag")!
 }

@@ -1,4 +1,5 @@
 public import Foundation
+public import Helpers
 public import Logging
 
 #if canImport(FoundationNetworking)
@@ -105,13 +106,34 @@ public struct SupabaseClientOptions: Sendable {
     /// logger: visible (warning+) in debug builds, silent in release builds.
     public let logger: Logging.Logger
 
+    /// The transport every sub-client sends through. `nil` (the default) uses
+    /// ``URLSessionTransport`` over ``session``.
+    public let transport: (any ClientTransport)?
+
+    /// Middlewares every sub-client runs, in order, before the SDK's own (trace context,
+    /// access-token injection) and before the request reaches the transport.
+    public let middlewares: [any ClientMiddleware]
+
+    /// Creates the shared options.
+    /// - Parameters:
+    ///   - headers: Extra headers sent on every request made by every sub-client.
+    ///   - session: The `URLSession` backing the default transport, and the session Realtime's
+    ///     WebSocket connects with. Ignored for HTTP when `transport` is set.
+    ///   - transport: The transport every sub-client sends through. Defaults to
+    ///     ``URLSessionTransport`` over `session`.
+    ///   - middlewares: Middlewares every sub-client runs, in order, before the SDK's own.
+    ///   - logger: The logger used across all Supabase sub-packages.
     public init(
       headers: [String: String] = [:],
       session: URLSession = .shared,
+      transport: (any ClientTransport)? = nil,
+      middlewares: [any ClientMiddleware] = [],
       logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase")
     ) {
       self.headers = headers
       self.session = session
+      self.transport = transport
+      self.middlewares = middlewares
       self.logger = logger
     }
   }
