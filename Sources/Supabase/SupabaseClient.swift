@@ -129,7 +129,8 @@ public final class SupabaseClient: Sendable {
       configuration: StorageClientConfiguration(
         url: storageURL,
         headers: headers,
-        session: StorageHTTPSession(fetch: fetchWithAuth, upload: uploadWithAuth),
+        // ponytail: stopgap FetchTransport wrapper, Task 9 replaces this with transport/middlewares.
+        transport: FetchTransport(fetch: fetchWithAuth),
         logger: options.global.logger,
         useNewHostname: options.storage.useNewHostname
       )
