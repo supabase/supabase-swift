@@ -226,17 +226,10 @@ xcodeproj
 xctest
 XVCJ
 
-# Terms from HTTPRuntime (Sources/HTTPRuntime) and its tests.
-CFURL
+# Term from Sources/Helpers/HTTP and Sources/RealtimeV2 (Linux corelibs-Foundation).
 corelibs
-reencoded
-schemeless
-subdata
-Subrange
-TESTBOUNDARY
-unmodeled
 
-# Terms from HTTPRuntimeTestHelpers planning and scheme configuration.
+# Terms from Xcode scheme configuration, shared across module test targets.
 fileprivate
 parallelizable
 Testables
