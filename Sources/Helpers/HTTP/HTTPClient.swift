@@ -7,6 +7,7 @@
 
 package import Foundation
 package import HTTPTypes
+import HTTPTypesFoundation
 
 #if canImport(FoundationNetworking)
   package import FoundationNetworking
@@ -19,6 +20,20 @@ package protocol HTTPClientType: Sendable {
   func send(_ request: HTTPRequest) async throws -> HTTPResponse
   /// Streaming exchange: the head returns as soon as it arrives, the body streams.
   func stream(_ request: HTTPRequest) async throws -> (HTTPTypes.HTTPResponse, HTTPBody?)
+}
+
+extension HTTPClientType {
+  /// Buffers the exchange through ``send(_:)`` and re-wraps it as a head plus body.
+  ///
+  /// The default for clients that have no streaming path of their own (the test doubles).
+  /// ``HTTPClient`` overrides it with a genuinely streaming implementation.
+  package func stream(_ request: HTTPRequest) async throws -> (HTTPTypes.HTTPResponse, HTTPBody?) {
+    let response = try await send(request)
+    guard let head = response.underlyingResponse.httpResponse else {
+      throw URLError(.badServerResponse)
+    }
+    return (head, response.data.isEmpty ? nil : HTTPBody(response.data))
+  }
 }
 
 /// Runs a request through `middlewares` (in order) and then the `transport`.

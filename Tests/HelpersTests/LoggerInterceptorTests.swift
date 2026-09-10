@@ -377,6 +377,29 @@ struct LoggerInterceptorTests {
   }
 
   @Test
+  func interceptorPassesThroughError() async throws {
+    let (logger, _) = makeLogger()
+    let interceptor = LoggerInterceptor(logger: logger)
+
+    struct CustomError: Error, Equatable {
+      let message: String
+    }
+
+    let expectedError = CustomError(message: "Test error")
+
+    do {
+      let _ = try await interceptor.intercept(createTestRequest(), body: nil) { _, _ in
+        throw expectedError
+      }
+      Issue.record("Should have thrown error")
+    } catch let error as CustomError {
+      #expect(error == expectedError)
+    } catch {
+      Issue.record("Wrong error type thrown")
+    }
+  }
+
+  @Test
   func unknownLengthBodyPassesThroughUnconsumed() async throws {
     let (logger, _) = makeLogger()
     let sut = LoggerInterceptor(logger: logger)

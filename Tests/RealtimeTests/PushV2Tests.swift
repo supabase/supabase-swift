@@ -7,7 +7,6 @@
 
 import ConcurrencyExtras
 import Foundation
-import HTTPTypesFoundation
 import Logging
 import Testing
 
@@ -376,13 +375,5 @@ private struct MockHTTPClient: HTTPClientType {
       headerFields: nil
     )!
     return HTTPResponse(data: Data(), response: urlResponse)
-  }
-
-  func stream(_ request: HTTPRequest) async throws -> (HTTPTypes.HTTPResponse, HTTPBody?) {
-    let response = try await send(request)
-    guard let head = response.underlyingResponse.httpResponse else {
-      throw URLError(.badServerResponse)
-    }
-    return (head, response.data.isEmpty ? nil : HTTPBody(response.data))
   }
 }

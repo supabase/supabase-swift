@@ -170,6 +170,12 @@ package actor RetryRequestInterceptor: ClientMiddleware {
       try? await clock.sleep(for: .seconds(retryDelay))
 
       if !Task.isCancelled {
+        // This attempt's body is about to be discarded, so drain it to termination — a streamed
+        // body holds its producer (a URLSession task) open until its stream finishes. Exceeding
+        // the cap throws, which drops the iterator and terminates the stream just the same.
+        if let responseBody = result.value?.1 {
+          _ = try? await Data(collecting: responseBody, upTo: 1 << 20)
+        }
         return try await retry(request, body: body, retryCount: retryCount + 1, next: next)
       }
     }

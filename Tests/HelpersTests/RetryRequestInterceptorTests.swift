@@ -184,6 +184,41 @@ struct RetryRequestInterceptorTests {
     #expect(attempts.value == 2)
   }
 
+  @Test
+  func discardedResponseBodyIsDrainedBeforeRetrying() async throws {
+    let interceptor = makeInterceptor(retryLimit: 2)
+    let iterated = LockIsolated(false)
+    let terminated = LockIsolated(false)
+    let attempts = LockIsolated(0)
+
+    // `makeChunks` runs only when the body is iterated, so both flags stay false unless the
+    // interceptor actually drains the response it discards.
+    let body = HTTPBody(storage: .stream, length: .unknown, iterationBehavior: .single) {
+      iterated.setValue(true)
+      return AsyncThrowingStream { continuation in
+        continuation.onTermination = { _ in terminated.setValue(true) }
+        // More than the drain's 1 MiB cap, so collecting throws and drops the iterator.
+        for _ in 0..<3 {
+          continuation.yield(ArraySlice(repeating: 0, count: 512 * 1024))
+        }
+        continuation.finish()
+      }
+    }
+
+    let (head, _) = try await interceptor.intercept(makeRequest(), body: nil) { _, _ in
+      attempts.withValue { $0 += 1 }
+      if attempts.value < 2 {
+        return (HTTPTypes.HTTPResponse(status: .serviceUnavailable), body)
+      }
+      return self.makeResponse(statusCode: 200)
+    }
+
+    #expect(head.status.code == 200)
+    #expect(attempts.value == 2)
+    #expect(iterated.value, "The discarded response body should be iterated")
+    #expect(terminated.value, "The discarded response body's stream should terminate")
+  }
+
   // MARK: - Backoff delay
 
   @Test
