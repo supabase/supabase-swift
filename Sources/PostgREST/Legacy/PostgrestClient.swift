@@ -234,9 +234,9 @@ public struct PostgrestClient: Sendable {
     PostgrestQueryBuilder(
       configuration: configuration,
       request: .init(
-        url: configuration.url.appendingPathComponent(table),
         method: .get,
-        headers: HTTPFields(configuration.headers)
+        url: configuration.url.appendingPathComponent(table),
+        headerFields: HTTPFields(configuration.headers)
       ),
       clock: clock
     )
@@ -267,7 +267,7 @@ public struct PostgrestClient: Sendable {
     get: Bool = false,
     count: CountOption? = nil
   ) throws -> PostgrestFilterBuilder {
-    let method: HTTPTypes.HTTPRequest.Method
+    let method: HTTPRequest.Method
     var url = configuration.url.appendingPathComponent("rpc/\(fn)")
     let bodyData = try configuration.encoder.encode(params)
     var body: Data?
@@ -292,19 +292,19 @@ public struct PostgrestClient: Sendable {
     }
 
     var request = HTTPRequest(
-      url: url,
       method: method,
-      headers: HTTPFields(configuration.headers),
-      body: params is NoParams ? nil : body
+      url: url,
+      headerFields: HTTPFields(configuration.headers)
     )
 
     if let count {
-      request.headers[.prefer] = "count=\(count.rawValue)"
+      request.headerFields[.prefer] = "count=\(count.rawValue)"
     }
 
     return PostgrestFilterBuilder(
       configuration: configuration,
       request: request,
+      body: params is NoParams ? nil : body,
       clock: clock
     )
   }

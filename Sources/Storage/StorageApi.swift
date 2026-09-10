@@ -31,7 +31,7 @@ struct StorageApi: Sendable {
   /// The configuration used to initialize this client instance.
   let configuration: StorageClientConfiguration
 
-  private let http: any HTTPClientType
+  private let http: HTTPClient
 
   /// Creates a ``StorageApi`` with the given configuration.
   ///
@@ -100,50 +100,38 @@ struct StorageApi: Sendable {
     return StorageApi(configuration: configuration)
   }
 
+  /// Sends `request` with the client's default headers and returns the response body.
   @discardableResult
-  func execute(_ request: Helpers.HTTPRequest) async throws -> Helpers.HTTPResponse {
+  func execute(_ request: HTTPRequest, body: Data? = nil) async throws -> Data {
     var request = request
-    request.headers = HTTPFields(configuration.headers).merging(with: request.headers)
+    request.headerFields = HTTPFields(configuration.headers).merging(with: request.headerFields)
 
-    let response = try await http.send(request)
+    let (response, data) = try await http.send(request, body: body)
 
-    guard (200..<300).contains(response.statusCode) else {
-      if let error = try? configuration.decoder.decode(
-        StorageError.self,
-        from: response.data
-      ) {
+    guard (200..<300).contains(response.status.code) else {
+      if let error = try? configuration.decoder.decode(StorageError.self, from: data) {
         throw error
       }
 
-      throw HTTPError(data: response.data, response: response.underlyingResponse)
+      throw HTTPError(data: data, response: response)
     }
 
-    return response
+    return data
   }
-}
 
-extension Helpers.HTTPRequest {
-  init(
-    url: URL,
-    method: HTTPTypes.HTTPRequest.Method,
-    query: [URLQueryItem],
+  /// Sends `formData` as a multipart upload, defaulting `Content-Type` and `Cache-Control`.
+  func upload(
+    _ request: HTTPRequest,
     formData: MultipartFormData,
-    options: FileOptions,
-    headers: HTTPFields = [:]
-  ) throws {
-    var headers = headers
-    if headers[.contentType] == nil {
-      headers[.contentType] = formData.contentType
+    options: FileOptions
+  ) async throws -> Data {
+    var request = request
+    if request.headerFields[.contentType] == nil {
+      request.headerFields[.contentType] = formData.contentType
     }
-    if headers[.cacheControl] == nil {
-      headers[.cacheControl] = "max-age=\(options.cacheControl)"
+    if request.headerFields[.cacheControl] == nil {
+      request.headerFields[.cacheControl] = "max-age=\(options.cacheControl)"
     }
-    try self.init(
-      url: url,
-      method: method,
-      query: query,
-      headers: headers,
-      body: formData.encode()
-    )
+    return try await execute(request, body: try formData.encode())
   }
 }

@@ -8,6 +8,7 @@
 import ConcurrencyExtras
 import Foundation
 import Logging
+import TestHelpers
 import Testing
 
 @testable import Realtime
@@ -310,7 +311,8 @@ private final class MockRealtimeClient: RealtimeClientProtocol, @unchecked Senda
   private let _pushedMessages = LockIsolated<[RealtimeMessageV2]>([])
   private let _status = LockIsolated<RealtimeClientStatus>(.connected)
   let options: RealtimeClientOptions
-  let http: any HTTPClientType = MockHTTPClient()
+  let http = HTTPClient(
+    transport: RecordingTransport { _, _ in (HTTPResponse(status: .ok), Data()) })
   let clock: any Clock<Duration> = ContinuousClock()
 
   func broadcastURL(topic: String, event: String, isPrivate: Bool) -> URL {
@@ -363,17 +365,5 @@ private final class MockRealtimeClient: RealtimeClientProtocol, @unchecked Senda
 
   func _remove(_ channel: any RealtimeChannelProtocol) {
     // No-op for mock
-  }
-}
-
-private struct MockHTTPClient: HTTPClientType {
-  func send(_ request: HTTPRequest) async throws -> HTTPResponse {
-    let urlResponse = HTTPURLResponse(
-      url: URL(string: "https://example.com")!,
-      statusCode: 200,
-      httpVersion: nil,
-      headerFields: nil
-    )!
-    return HTTPResponse(data: Data(), response: urlResponse)
   }
 }

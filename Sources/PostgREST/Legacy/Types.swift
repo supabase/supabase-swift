@@ -1,8 +1,5 @@
 public import Foundation
-
-#if canImport(FoundationNetworking)
-  public import FoundationNetworking
-#endif
+public import HTTPTypes
 
 /// The response returned by a PostgREST query, containing the raw data, HTTP response, row count, and decoded value.
 ///
@@ -38,8 +35,8 @@ public struct PostgrestResponse<T> {
   /// The raw response body as `Data`.
   public let data: Data
 
-  /// The underlying HTTP URL response.
-  public let response: HTTPURLResponse
+  /// The HTTP response head: status and header fields.
+  public let response: HTTPResponse
 
   /// The total number of rows matching the query, or `nil` if no count was requested.
   ///
@@ -53,25 +50,23 @@ public struct PostgrestResponse<T> {
 
   /// The HTTP status code of the response.
   public var status: Int {
-    response.statusCode
+    response.status.code
   }
 
   /// Creates a ``PostgrestResponse`` from raw response data.
   ///
   /// - Parameters:
   ///   - data: The raw response body.
-  ///   - response: The HTTP URL response.
+  ///   - response: The HTTP response head.
   ///   - value: The decoded value.
   public init(
     data: Data,
-    response: HTTPURLResponse,
+    response: HTTPResponse,
     value: T
   ) {
     var count: Int?
 
-    if let contentRange = response.value(forHTTPHeaderField: "Content-Range")?.split(separator: "/")
-      .last
-    {
+    if let contentRange = response.headerFields[.contentRange]?.split(separator: "/").last {
       count = contentRange == "*" ? nil : Int(contentRange)
     }
 

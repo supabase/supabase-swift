@@ -24,7 +24,7 @@ import Testing
 
     let server: FakeWebSocket
     let client: FakeWebSocket
-    let http: HTTPClientMock
+    let http: RecordingTransport
     let sut: RealtimeClientV2
     let serverTask = LockIsolated<Task<Void, Never>?>(nil)
 
@@ -32,7 +32,7 @@ import Testing
       let (client, server) = FakeWebSocket.fakes()
       self.client = client
       self.server = server
-      http = HTTPClientMock()
+      http = RecordingTransport()
 
       sut = RealtimeClientV2(
         url: url,
@@ -43,7 +43,7 @@ import Testing
           }
         ),
         wsTransport: { _, _ in client },
-        http: http,
+        http: HTTPClient(transport: http),
         clock: ContinuousClock()
       )
     }
@@ -250,16 +250,8 @@ import Testing
 
     @Test
     func broadcast_perCallEncoderOverridesFixedInternalEncoder() async throws {
-      await http.any { _ in
-        HTTPResponse(
-          data: Data(),
-          response: HTTPURLResponse(
-            url: self.url,
-            statusCode: 202,
-            httpVersion: nil,
-            headerFields: nil
-          )!
-        )
+      http.respond { _, _ in
+        (HTTPResponse(status: .init(code: 202)), Data())
       }
 
       // Not subscribed, so this falls back to the REST broadcast endpoint. Ack the broadcast so
@@ -279,7 +271,7 @@ import Testing
         event: "my_event", message: Message(userName: "abc"), encoder: snakeCaseEncoder
       )
 
-      let request = await http.receivedRequests.last
+      let request = http.requests.last
       let body = try #require(request?.body)
       let json = try #require(try JSONSerialization.jsonObject(with: body) as? [String: Any])
       #expect(json["user_name"] as? String == "abc")
@@ -290,16 +282,8 @@ import Testing
 
     @Test
     func httpSend_urlUsesSubTopicWithoutRealtimePrefix() async throws {
-      await http.any { _ in
-        HTTPResponse(
-          data: Data(),
-          response: HTTPURLResponse(
-            url: self.url,
-            statusCode: 202,
-            httpVersion: nil,
-            headerFields: nil
-          )!
-        )
+      http.respond { _, _ in
+        (HTTPResponse(status: .init(code: 202)), Data())
       }
 
       let channel = sut.channel("test")
@@ -309,8 +293,8 @@ import Testing
         event: "my_event", message: ["hello": .string("world")] as JSONObject
       )
 
-      let request = await http.receivedRequests.last
-      let url = try #require(request?.url)
+      let request = http.requests.last
+      let url = try #require(request?.head.url)
       #expect(url.path == "/realtime/v1/api/broadcast/test/events/my_event")
 
       let body = try #require(request?.body)

@@ -61,10 +61,10 @@ public struct AuthOAuthServer: Sendable {
   ) async throws -> OAuthAuthorizationDetailsResponse {
     try await api.authorizedExecute(
       HTTPRequest(
+        method: .get,
         url: configuration.url
           .appendingPathComponent("oauth/authorizations")
-          .appendingPathComponent(authorizationId),
-        method: .get
+          .appendingPathComponent(authorizationId)
       )
     )
     .decoded(decoder: decoder)
@@ -104,13 +104,12 @@ public struct AuthOAuthServer: Sendable {
   private func consent(authorizationId: String, action: String) async throws -> OAuthRedirect {
     try await api.authorizedExecute(
       HTTPRequest(
+        method: .post,
         url: configuration.url
           .appendingPathComponent("oauth/authorizations")
           .appendingPathComponent(authorizationId)
-          .appendingPathComponent("consent"),
-        method: .post,
-        body: encoder.encode(["action": action])
-      )
+          .appendingPathComponent("consent")
+      ), body: encoder.encode(["action": action])
     )
     .decoded(decoder: decoder)
   }
@@ -121,8 +120,8 @@ public struct AuthOAuthServer: Sendable {
   public func listGrants() async throws -> [OAuthGrant] {
     try await api.authorizedExecute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("user/oauth/grants"),
-        method: .get
+        method: .get,
+        url: configuration.url.appendingPathComponent("user/oauth/grants")
       )
     )
     .decoded(decoder: decoder)
@@ -137,8 +136,8 @@ public struct AuthOAuthServer: Sendable {
   public func revokeGrant(clientId: UUID) async throws {
     _ = try await api.authorizedExecute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("user/oauth/grants"),
         method: .delete,
+        url: configuration.url.appendingPathComponent("user/oauth/grants"),
         query: [URLQueryItem(name: "client_id", value: clientId.uuidString)]
       )
     )

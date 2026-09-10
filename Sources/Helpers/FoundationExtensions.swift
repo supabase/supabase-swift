@@ -65,6 +65,26 @@ extension URL {
   }
 }
 
+extension [URLQueryItem] {
+  /// Replaces the item named like `queryItem`, or appends it when there is none.
+  package mutating func appendOrUpdate(_ queryItem: URLQueryItem) {
+    if let index = firstIndex(where: { $0.name == queryItem.name }) {
+      self[index] = queryItem
+    } else {
+      append(queryItem)
+    }
+  }
+}
+
+extension Data {
+  /// Decodes a JSON response body.
+  package func decoded<T: Decodable>(as _: T.Type = T.self, decoder: JSONDecoder = JSONDecoder())
+    throws -> T
+  {
+    try decoder.decode(T.self, from: self)
+  }
+}
+
 func escape(_ string: String) -> String {
   string.addingPercentEncoding(withAllowedCharacters: .sbURLQueryAllowed) ?? string
 }

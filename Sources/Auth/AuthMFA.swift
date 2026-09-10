@@ -43,10 +43,9 @@ public struct AuthMFA: Sendable {
   public func enroll(params: any MFAEnrollParamsType) async throws -> AuthMFAEnrollResponse {
     try await api.authorizedExecute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("factors"),
         method: .post,
-        body: encoder.encode(params)
-      )
+        url: configuration.url.appendingPathComponent("factors")
+      ), body: encoder.encode(params)
     )
     .decoded(decoder: decoder)
   }
@@ -67,10 +66,9 @@ public struct AuthMFA: Sendable {
 
     return try await api.authorizedExecute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("factors/\(params.factorId)/challenge"),
         method: .post,
-        body: body
-      )
+        url: configuration.url.appendingPathComponent("factors/\(params.factorId)/challenge")
+      ), body: body
     )
     .decoded(decoder: decoder)
   }
@@ -97,10 +95,9 @@ public struct AuthMFA: Sendable {
 
     let response: AuthMFAVerifyResponse = try await api.authorizedExecute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("factors/\(params.factorId)/verify"),
         method: .post,
-        body: body
-      )
+        url: configuration.url.appendingPathComponent("factors/\(params.factorId)/verify")
+      ), body: body
     ).decoded(decoder: decoder)
 
     await sessionManager.update(response)
@@ -119,8 +116,8 @@ public struct AuthMFA: Sendable {
   public func unenroll(params: MFAUnenrollParams) async throws -> AuthMFAUnenrollResponse {
     try await api.authorizedExecute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("factors/\(params.factorId)"),
-        method: .delete
+        method: .delete,
+        url: configuration.url.appendingPathComponent("factors/\(params.factorId)")
       )
     )
     .decoded(decoder: decoder)

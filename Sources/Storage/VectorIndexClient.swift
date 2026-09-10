@@ -84,14 +84,14 @@ public struct VectorIndexClient: Sendable {
   public func putVectors(_ vectors: [VectorEntry]) async throws {
     try await api.execute(
       HTTPRequest(
-        url: api.configuration.url.appendingPathComponent("vector/PutVectors"),
         method: .post,
-        body: JSONEncoder.unconfiguredEncoder.encode(
-          PutVectorsBody(
-            vectorBucketName: vectorBucketName,
-            indexName: indexName,
-            vectors: vectors
-          )
+        url: api.configuration.url.appendingPathComponent("vector/PutVectors")
+      ),
+      body: JSONEncoder.unconfiguredEncoder.encode(
+        PutVectorsBody(
+          vectorBucketName: vectorBucketName,
+          indexName: indexName,
+          vectors: vectors
         )
       )
     )
@@ -118,16 +118,16 @@ public struct VectorIndexClient: Sendable {
   ) async throws -> [VectorMatch] {
     let response: GetVectorsResponseBody = try await api.execute(
       HTTPRequest(
-        url: api.configuration.url.appendingPathComponent("vector/GetVectors"),
         method: .post,
-        body: JSONEncoder.unconfiguredEncoder.encode(
-          GetVectorsBody(
-            vectorBucketName: vectorBucketName,
-            indexName: indexName,
-            keys: keys,
-            returnData: returnData,
-            returnMetadata: returnMetadata
-          )
+        url: api.configuration.url.appendingPathComponent("vector/GetVectors")
+      ),
+      body: JSONEncoder.unconfiguredEncoder.encode(
+        GetVectorsBody(
+          vectorBucketName: vectorBucketName,
+          indexName: indexName,
+          keys: keys,
+          returnData: returnData,
+          returnMetadata: returnMetadata
         )
       )
     )
@@ -164,19 +164,19 @@ public struct VectorIndexClient: Sendable {
   ) async throws -> ListVectorsResponse {
     let response: ListVectorsResponseBody = try await api.execute(
       HTTPRequest(
-        url: api.configuration.url.appendingPathComponent("vector/ListVectors"),
         method: .post,
-        body: JSONEncoder.unconfiguredEncoder.encode(
-          ListVectorsBody(
-            vectorBucketName: vectorBucketName,
-            indexName: indexName,
-            maxResults: maxResults,
-            nextToken: nextToken,
-            returnData: returnData,
-            returnMetadata: returnMetadata,
-            segmentCount: segment?.count,
-            segmentIndex: segment?.index
-          )
+        url: api.configuration.url.appendingPathComponent("vector/ListVectors")
+      ),
+      body: JSONEncoder.unconfiguredEncoder.encode(
+        ListVectorsBody(
+          vectorBucketName: vectorBucketName,
+          indexName: indexName,
+          maxResults: maxResults,
+          nextToken: nextToken,
+          returnData: returnData,
+          returnMetadata: returnMetadata,
+          segmentCount: segment?.count,
+          segmentIndex: segment?.index
         )
       )
     )
@@ -220,18 +220,18 @@ public struct VectorIndexClient: Sendable {
   ) async throws -> QueryVectorsResponse {
     let response: QueryVectorsResponseBody = try await api.execute(
       HTTPRequest(
-        url: api.configuration.url.appendingPathComponent("vector/QueryVectors"),
         method: .post,
-        body: JSONEncoder.unconfiguredEncoder.encode(
-          QueryVectorsBody(
-            vectorBucketName: vectorBucketName,
-            indexName: indexName,
-            queryVector: queryVector,
-            topK: topK,
-            filter: filter,
-            returnDistance: returnDistance,
-            returnMetadata: returnMetadata
-          )
+        url: api.configuration.url.appendingPathComponent("vector/QueryVectors")
+      ),
+      body: JSONEncoder.unconfiguredEncoder.encode(
+        QueryVectorsBody(
+          vectorBucketName: vectorBucketName,
+          indexName: indexName,
+          queryVector: queryVector,
+          topK: topK,
+          filter: filter,
+          returnDistance: returnDistance,
+          returnMetadata: returnMetadata
         )
       )
     )
@@ -252,11 +252,11 @@ public struct VectorIndexClient: Sendable {
   public func deleteVectors(keys: [String]) async throws {
     try await api.execute(
       HTTPRequest(
-        url: api.configuration.url.appendingPathComponent("vector/DeleteVectors"),
         method: .post,
-        body: JSONEncoder.unconfiguredEncoder.encode(
-          DeleteVectorsBody(vectorBucketName: vectorBucketName, indexName: indexName, keys: keys)
-        )
+        url: api.configuration.url.appendingPathComponent("vector/DeleteVectors")
+      ),
+      body: JSONEncoder.unconfiguredEncoder.encode(
+        DeleteVectorsBody(vectorBucketName: vectorBucketName, indexName: indexName, keys: keys)
       )
     )
   }

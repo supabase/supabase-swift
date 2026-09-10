@@ -5,21 +5,6 @@ import Helpers
 import IssueReporting
 import Logging
 
-#if canImport(FoundationNetworking)
-  import FoundationNetworking
-
-  extension HTTPURLResponse {
-    convenience init() {
-      self.init(
-        url: URL(string: "http://127.0.0.1")!,
-        statusCode: 200,
-        httpVersion: nil,
-        headerFields: nil
-      )!
-    }
-  }
-#endif
-
 /// Configuration for a ``RealtimeChannelV2``.
 ///
 /// Pass a builder closure to ``RealtimeClientV2/channel(_:options:)`` to customize
@@ -325,19 +310,18 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     let body = try JSONEncoder.supabase().encode(message)
 
     let request = HTTPRequest(
-      url: socket.broadcastURL(topic: subTopic, event: event, isPrivate: isPrivate),
       method: .post,
-      headers: headers,
-      body: body
+      url: socket.broadcastURL(topic: subTopic, event: event, isPrivate: isPrivate),
+      headerFields: headers
     )
 
-    let response = try await withTimeout(
+    let (response, data) = try await withTimeout(
       interval: timeout ?? socket.options.timeoutInterval, clock: socket.clock
     ) {
-      [self] in try await socket.http.send(request)
+      [self] in try await socket.http.send(request, body: body)
     }
 
-    try Self.validateHTTPSendResponse(response)
+    try Self.validateHTTPSendResponse(response, data: data)
   }
 
   /// Sends a binary broadcast message via the REST API.
@@ -372,26 +356,25 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     headers[.authorization] = "Bearer \(accessToken)"
 
     let request = HTTPRequest(
-      url: socket.broadcastURL(topic: subTopic, event: event, isPrivate: isPrivate),
       method: .post,
-      headers: headers,
-      body: data
+      url: socket.broadcastURL(topic: subTopic, event: event, isPrivate: isPrivate),
+      headerFields: headers
     )
 
-    let response = try await withTimeout(
+    let (response, responseData) = try await withTimeout(
       interval: timeout ?? socket.options.timeoutInterval, clock: socket.clock
     ) {
-      [self] in try await socket.http.send(request)
+      [self] in try await socket.http.send(request, body: data)
     }
 
-    try Self.validateHTTPSendResponse(response)
+    try Self.validateHTTPSendResponse(response, data: responseData)
   }
 
-  private static func validateHTTPSendResponse(_ response: Helpers.HTTPResponse) throws {
-    guard response.statusCode == 202 else {
+  private static func validateHTTPSendResponse(_ response: HTTPResponse, data: Data) throws {
+    guard response.status.code == 202 else {
       // Try to parse error message from response body
-      var errorMessage = HTTPURLResponse.localizedString(forStatusCode: response.statusCode)
-      if let errorBody = try? response.decoded(as: [String: String].self) {
+      var errorMessage = "Status Code: \(response.status.code)"
+      if let errorBody = try? data.decoded(as: [String: String].self) {
         errorMessage = errorBody["error"] ?? errorBody["message"] ?? errorMessage
       }
       throw RealtimeError(errorMessage)
@@ -451,11 +434,10 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       let task = Task { [headers] in
         _ = try? await socket.http.send(
           HTTPRequest(
-            url: socket.broadcastURL(topic: subTopic, event: event, isPrivate: config.isPrivate),
             method: .post,
-            headers: headers,
-            body: JSONEncoder.supabase().encode(message)
-          )
+            url: socket.broadcastURL(topic: subTopic, event: event, isPrivate: config.isPrivate),
+            headerFields: headers
+          ), body: JSONEncoder.supabase().encode(message)
         )
       }
 

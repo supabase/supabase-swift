@@ -375,7 +375,7 @@ struct AuthClientIntegrationTests {
         return
       }
       // Backend returns 404 when the passkey doesn't exist or belongs to another user.
-      #expect(response.statusCode == 404)
+      #expect(response.status.code == 404)
     }
   }
 

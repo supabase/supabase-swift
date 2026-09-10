@@ -37,7 +37,7 @@ extension PostgrestFilterableRequest {
   /// - Returns: A new request with the filter applied. The receiver is unchanged.
   public func `where`(_ build: (Relation.Columns) -> PostgrestFilter<Relation>) -> Self {
     var builder = self.builder
-    builder.request.query.append(contentsOf: build(Relation.columns).queryItems())
+    builder.query.append(contentsOf: build(Relation.columns).queryItems())
     return Self(builder: builder)
   }
 }
@@ -91,17 +91,15 @@ extension PostgrestTypedQuery where Phase: PostgrestTransformablePhase {
   private func appendingOrder(
     _ value: String
   ) -> PostgrestTypedQuery<R, Output, PostgrestTransformPhase> {
-    var request = builder.request
-    if let index = request.query.firstIndex(where: { $0.name == "order" }),
-      let existing = request.query[index].value
+    var builder = PostgrestRequestBuilder<PostgrestTransformPhase>(carryingFrom: builder)
+    if let index = builder.query.firstIndex(where: { $0.name == "order" }),
+      let existing = builder.query[index].value
     {
-      request.query[index] = URLQueryItem(name: "order", value: "\(existing),\(value)")
+      builder.query[index] = URLQueryItem(name: "order", value: "\(existing),\(value)")
     } else {
-      request.query.append(URLQueryItem(name: "order", value: value))
+      builder.query.append(URLQueryItem(name: "order", value: value))
     }
-    return PostgrestTypedQuery<R, Output, PostgrestTransformPhase>(
-      builder: PostgrestRequestBuilder(carryingFrom: builder, request: request)
-    )
+    return PostgrestTypedQuery<R, Output, PostgrestTransformPhase>(builder: builder)
   }
 
   /// Limits the number of rows returned.

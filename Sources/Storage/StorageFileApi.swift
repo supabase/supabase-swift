@@ -164,7 +164,7 @@ public struct StorageFileApi: Sendable {
   }
 
   private func _uploadOrUpdate(
-    method: HTTPTypes.HTTPRequest.Method,
+    method: HTTPRequest.Method,
     path: String,
     file: FileUpload,
     options: FileOptions?
@@ -193,15 +193,14 @@ public struct StorageFileApi: Sendable {
     let cleanPath = _removeEmptyFolders(path)
     let _path = _getFinalPath(cleanPath)
 
-    let response = try await api.execute(
+    let response = try await api.upload(
       HTTPRequest(
-        url: api.configuration.url.appendingPathComponent("object/\(_path)"),
         method: method,
-        query: [],
-        formData: formData,
-        options: options,
-        headers: headers
-      )
+        url: api.configuration.url.appendingPathComponent("object/\(_path)"),
+        headerFields: headers
+      ),
+      formData: formData,
+      options: options
     )
     .decoded(as: UploadResponse.self, decoder: api.configuration.decoder)
 
@@ -338,16 +337,16 @@ public struct StorageFileApi: Sendable {
   ) async throws {
     try await api.execute(
       HTTPRequest(
-        url: api.configuration.url.appendingPathComponent("object/move"),
         method: .post,
-        body: api.configuration.encoder.encode(
-          [
-            "bucketId": bucketId,
-            "sourceKey": source,
-            "destinationKey": destination,
-            "destinationBucket": options?.destinationBucket,
-          ]
-        )
+        url: api.configuration.url.appendingPathComponent("object/move")
+      ),
+      body: api.configuration.encoder.encode(
+        [
+          "bucketId": bucketId,
+          "sourceKey": source,
+          "destinationKey": destination,
+          "destinationBucket": options?.destinationBucket,
+        ]
       )
     )
   }
@@ -377,16 +376,16 @@ public struct StorageFileApi: Sendable {
 
     return try await api.execute(
       HTTPRequest(
-        url: api.configuration.url.appendingPathComponent("object/copy"),
         method: .post,
-        body: api.configuration.encoder.encode(
-          [
-            "bucketId": bucketId,
-            "sourceKey": source,
-            "destinationKey": destination,
-            "destinationBucket": options?.destinationBucket,
-          ]
-        )
+        url: api.configuration.url.appendingPathComponent("object/copy")
+      ),
+      body: api.configuration.encoder.encode(
+        [
+          "bucketId": bucketId,
+          "sourceKey": source,
+          "destinationKey": destination,
+          "destinationBucket": options?.destinationBucket,
+        ]
       )
     )
     .decoded(as: UploadResponse.self, decoder: api.configuration.decoder)
@@ -422,11 +421,11 @@ public struct StorageFileApi: Sendable {
 
     let response = try await api.execute(
       HTTPRequest(
-        url: api.configuration.url.appendingPathComponent("object/sign/\(_getFinalPath(path))"),
         method: .post,
-        body: encoder.encode(
-          Body(expiresIn: expiresIn, transform: transform)
-        )
+        url: api.configuration.url.appendingPathComponent("object/sign/\(_getFinalPath(path))")
+      ),
+      body: encoder.encode(
+        Body(expiresIn: expiresIn, transform: transform)
       )
     )
     .decoded(as: SignedURLAPIResponse.self, decoder: api.configuration.decoder)
@@ -507,11 +506,11 @@ public struct StorageFileApi: Sendable {
 
     let response = try await api.execute(
       HTTPRequest(
-        url: api.configuration.url.appendingPathComponent("object/sign/\(bucketId)"),
         method: .post,
-        body: encoder.encode(
-          Params(expiresIn: expiresIn, paths: paths)
-        )
+        url: api.configuration.url.appendingPathComponent("object/sign/\(bucketId)")
+      ),
+      body: encoder.encode(
+        Params(expiresIn: expiresIn, paths: paths)
       )
     )
     .decoded(as: [SignedURLsAPIResponse].self, decoder: api.configuration.decoder)
@@ -631,10 +630,9 @@ public struct StorageFileApi: Sendable {
   public func remove(paths: [String]) async throws -> [FileObject] {
     try await api.execute(
       HTTPRequest(
-        url: api.configuration.url.appendingPathComponent("object/\(bucketId)"),
         method: .delete,
-        body: api.configuration.encoder.encode(["prefixes": paths])
-      )
+        url: api.configuration.url.appendingPathComponent("object/\(bucketId)")
+      ), body: api.configuration.encoder.encode(["prefixes": paths])
     )
     .decoded(decoder: api.configuration.decoder)
   }
@@ -669,10 +667,9 @@ public struct StorageFileApi: Sendable {
 
     return try await api.execute(
       HTTPRequest(
-        url: api.configuration.url.appendingPathComponent("object/list/\(bucketId)"),
         method: .post,
-        body: encoder.encode(options)
-      )
+        url: api.configuration.url.appendingPathComponent("object/list/\(bucketId)")
+      ), body: encoder.encode(options)
     )
     .decoded(decoder: api.configuration.decoder)
   }
@@ -716,13 +713,12 @@ public struct StorageFileApi: Sendable {
 
     return try await api.execute(
       HTTPRequest(
+        method: .get,
         url: api.configuration.url
           .appendingPathComponent("\(renderPath)/\(_path)"),
-        method: .get,
         query: queryItems
       )
     )
-    .data
   }
 
   /// Retrieves metadata about an existing file without downloading its content.
@@ -735,8 +731,8 @@ public struct StorageFileApi: Sendable {
 
     return try await api.execute(
       HTTPRequest(
-        url: api.configuration.url.appendingPathComponent("object/info/\(_path)"),
-        method: .get
+        method: .get,
+        url: api.configuration.url.appendingPathComponent("object/info/\(_path)")
       )
     )
     .decoded(decoder: api.configuration.decoder)
@@ -754,8 +750,8 @@ public struct StorageFileApi: Sendable {
     do {
       try await api.execute(
         HTTPRequest(
-          url: api.configuration.url.appendingPathComponent("object/\(_getFinalPath(path))"),
-          method: .head
+          method: .head,
+          url: api.configuration.url.appendingPathComponent("object/\(_getFinalPath(path))")
         )
       )
       return true
@@ -765,7 +761,7 @@ public struct StorageFileApi: Sendable {
       if let error = error as? StorageError {
         statusCode = error.statusCode.flatMap(Int.init)
       } else if let error = error as? HTTPError {
-        statusCode = error.response.statusCode
+        statusCode = error.response.status.code
       }
 
       if let statusCode, [400, 404].contains(statusCode) {
@@ -900,10 +896,10 @@ public struct StorageFileApi: Sendable {
 
     let response = try await api.execute(
       HTTPRequest(
+        method: .post,
         url: api.configuration.url.appendingPathComponent(
           "object/upload/sign/\(bucketId)/\(cleanPath)"),
-        method: .post,
-        headers: headers
+        headerFields: headers
       )
     )
     .decoded(as: Response.self, decoder: api.configuration.decoder)
@@ -1010,16 +1006,16 @@ public struct StorageFileApi: Sendable {
 
     let cleanPath = _removeEmptyFolders(path)
 
-    let fullPath = try await api.execute(
+    let fullPath = try await api.upload(
       HTTPRequest(
+        method: .put,
         url: api.configuration.url
           .appendingPathComponent("object/upload/sign/\(bucketId)/\(cleanPath)"),
-        method: .put,
         query: [URLQueryItem(name: "token", value: token)],
-        formData: formData,
-        options: options,
-        headers: headers
-      )
+        headerFields: headers
+      ),
+      formData: formData,
+      options: options
     )
     .decoded(as: UploadResponse.self, decoder: api.configuration.decoder)
     .Key

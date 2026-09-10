@@ -36,7 +36,7 @@ struct StoredSessionTests {
         storageKey: "supabase.auth.token",
         localStorage: localStorage
       ),
-      http: HTTPClientMock(),
+      http: HTTPClient(transport: RecordingTransport()),
       api: .init(clientID: testClientID),
       codeVerifierStorage: .mock,
       sessionStorage: .live(clientID: testClientID),
@@ -60,7 +60,7 @@ struct StoredSessionTests {
         storageKey: "supabase.auth.token",
         localStorage: try! DiskTestStorage()
       ),
-      http: HTTPClientMock(),
+      http: HTTPClient(transport: RecordingTransport()),
       api: .init(clientID: clientID),
       codeVerifierStorage: .mock,
       sessionStorage: .live(clientID: clientID),

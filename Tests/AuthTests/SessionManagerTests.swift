@@ -25,7 +25,7 @@ import Testing
 // suite's own tests.
 @Suite(.serialized, .mainSerialExecutorSerialized)
 struct SessionManagerTests {
-  let http = HTTPClientMock()
+  let http = RecordingTransport()
   // Unique negative clientID so this suite's process-global `Dependencies` entry can't be
   // clobbered by another suite running concurrently (Swift Testing runs suites in parallel;
   // `AuthClientID` is an `Int` and `AuthClient`'s own generator only ever hands out positive ids,
@@ -43,7 +43,7 @@ struct SessionManagerTests {
         localStorage: InMemoryLocalStorage(),
         autoRefreshToken: false
       ),
-      http: http,
+      http: HTTPClient(transport: http),
       api: APIClient(clientID: clientID),
       codeVerifierStorage: .mock,
       sessionStorage: SessionStorage.live(clientID: clientID),
@@ -92,14 +92,11 @@ struct SessionManagerTests {
 
       let (refreshSessionStream, refreshSessionContinuation) = AsyncStream<Session>.makeStream()
 
-      await http.when(
-        { $0.url.path.contains("/token") },
-        return: { _ in
-          refreshSessionCallCount.withValue { $0 += 1 }
-          let session = await refreshSessionStream.first(where: { _ in true })!
-          return .stub(session)
-        }
-      )
+      http.respond(when: { $0.url?.path.contains("/token") == true }) { _, _ in
+        refreshSessionCallCount.withValue { $0 += 1 }
+        let session = await refreshSessionStream.first(where: { _ in true })!
+        return (HTTPResponse(status: .ok), try AuthClient.Configuration.jsonEncoder.encode(session))
+      }
 
       // Fire N tasks and call sut.session()
       let tasks = (0..<10).map { _ in

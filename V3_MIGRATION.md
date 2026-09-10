@@ -1996,11 +1996,9 @@ Pass it as `http: .init(transport: StubTransport())` to any sub-client, or as
   `RealtimeClientOptions.http.transport` yourself, `SupabaseClient` installs none of its own middlewares
   on Realtime — it assumes you are fully in charge of that path. Leave it `nil` to get the global
   transport plus the SDK's chain.
-- **`HTTPURLResponse.url` is now the request URL.** `HTTPError.response` and
-  `AuthError.api(underlyingResponse:)` still carry an `HTTPURLResponse`, but the transport
-  synthesizes it from the request, so its `url` is the URL that was requested rather than the URL
-  after redirects. Anything reading `error.response.url` to detect a redirect target must read the
-  `Location` header instead.
+- **Error and response types no longer carry an `HTTPURLResponse`.** `HTTPError.response`,
+  `PostgrestResponse.response` and `AuthError.api(underlyingResponse:)` carry the `HTTPTypes`
+  response head instead; see the section on those types below.
 - **Functions streaming goes through your transport now.** `_invokeWithStreamedResponse` used to
   run on a private `URLSession` that ignored everything you configured. It now sends through the
   client's `http` transport and middlewares, like every other call.
@@ -2063,3 +2061,109 @@ options: .init(
   realtime: .init(session: mySession)
 )
 ```
+
+## `HTTPError.response`, `PostgrestResponse.response`, `AuthError.api(underlyingResponse:)` and `FunctionsClient.invoke(decode:)` carry `HTTPResponse` instead of `HTTPURLResponse`
+
+Every place the SDK handed you the raw response head now uses `HTTPTypes.HTTPResponse` — the
+same type a `ClientTransport` or `ClientMiddleware` produces:
+
+| Before | After |
+| --- | --- |
+| `HTTPError.response: HTTPURLResponse` | `HTTPError.response: HTTPResponse` |
+| `HTTPError(data:response: HTTPURLResponse)` | `HTTPError(data:response: HTTPResponse)` |
+| `PostgrestResponse.response: HTTPURLResponse` | `PostgrestResponse.response: HTTPResponse` |
+| `PostgrestResponse(data:response: HTTPURLResponse, value:)` | `PostgrestResponse(data:response: HTTPResponse, value:)` |
+| `AuthError.api(message:errorCode:underlyingData:underlyingResponse: HTTPURLResponse)` | `AuthError.api(message:errorCode:underlyingData:underlyingResponse: HTTPResponse)` |
+| `FunctionsClient.invoke(_:options:decode: (Data, HTTPURLResponse) throws -> T)` | `FunctionsClient.invoke(_:options:decode: (Data, HTTPResponse) throws -> T)` |
+
+### Why
+
+Since the transport seam landed (previous section), the SDK's network layer speaks `HTTPTypes`
+end to end. The only reason an `HTTPURLResponse` still existed was to fill these four public
+signatures, and the SDK had to synthesize one from the `HTTPTypes` head on every response, with a
+`url` that was the request URL rather than anything the server sent. A custom `ClientTransport`
+that never touches `URLSession` (AsyncHTTPClient on Linux, a test stub) paid that cost for
+nothing, and Foundation's `HTTPURLResponse` was the one type in these signatures that a
+non-Foundation networking stack could not produce natively.
+
+### Before / After
+
+`HTTPResponse` has `status` (an `HTTPResponse.Status` with `code` and `reasonPhrase`) and
+`headerFields` (an `HTTPFields`, subscripted by `HTTPField.Name`). It has no URL.
+
+```swift
+// Before
+do {
+  try await supabase.storage.from("avatars").remove(paths: ["a.png"])
+} catch let error as HTTPError {
+  print(error.response.statusCode)
+  print(error.response.allHeaderFields["Content-Type"] as? String)
+  print(error.response.url)
+}
+
+// After
+do {
+  try await supabase.storage.from("avatars").remove(paths: ["a.png"])
+} catch let error as HTTPError {
+  print(error.response.status.code)
+  print(error.response.headerFields[.contentType])
+  // No URL on the response head; log the URL you requested instead.
+}
+```
+
+```swift
+// Before
+let response = try await supabase.from("todos").select().execute()
+let etag = response.response.value(forHTTPHeaderField: "ETag")
+
+// After
+let response = try await supabase.from("todos").select().execute()
+let etag = response.response.headerFields[.eTag]
+```
+
+```swift
+// Before
+} catch let AuthError.api(_, _, _, response) where response.statusCode == 429 {
+
+// After
+} catch let AuthError.api(_, _, _, response) where response.status.code == 429 {
+```
+
+```swift
+// Before
+let payload = try await supabase.functions.invoke("hello") { data, response in
+  guard response.statusCode == 200 else { throw MyError.unexpected }
+  return try JSONDecoder().decode(Payload.self, from: data)
+}
+
+// After
+let payload = try await supabase.functions.invoke("hello") { data, response in
+  guard response.status == .ok else { throw MyError.unexpected }
+  return try JSONDecoder().decode(Payload.self, from: data)
+}
+```
+
+### Compile error or silent?
+
+Compile error. `HTTPResponse` has none of `statusCode`, `allHeaderFields`, `url`,
+`value(forHTTPHeaderField:)` or `mimeType`, so every read of those on one of these values fails
+to build. `PostgrestResponse.status` (the `Int` status code) is unchanged. Search your code for
+`.response.statusCode`, `.response.allHeaderFields`, `.response.url` and `underlyingResponse` to
+find the sites.
+
+### Escape hatch
+
+There is no way to get an `HTTPURLResponse` back from these types. If a dependency needs one,
+build it from the head:
+
+```swift
+guard let urlResponse = HTTPURLResponse(httpResponse: error.response, url: requestURL) else {
+  return
+}
+```
+
+The initializer is failable, so unwrap its result before handing it to an API that wants a
+non-optional `HTTPURLResponse`.
+
+`HTTPURLResponse.init(httpResponse:url:)` comes from `HTTPTypesFoundation`, which `Helpers` now
+re-exports alongside `HTTPTypes`.

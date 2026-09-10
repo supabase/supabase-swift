@@ -128,9 +128,9 @@ public struct FunctionInvokeOptions: Sendable {
     public static let delete: Method = "DELETE"
   }
 
-  static func httpMethod(_ method: Method?) -> HTTPTypes.HTTPRequest.Method? {
+  static func httpMethod(_ method: Method?) -> HTTPRequest.Method? {
     guard let method else { return nil }
-    return HTTPTypes.HTTPRequest.Method(rawValue: method.rawValue)
+    return HTTPRequest.Method(rawValue: method.rawValue)
   }
 }
 

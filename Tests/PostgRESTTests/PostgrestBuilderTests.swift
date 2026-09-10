@@ -36,9 +36,9 @@ extension PostgrestMockerTests {
 
       // Original client object isn't affected
       #expect(
-        postgrest1.from("users").select().request.headers[.init("apikey")!] == "foo")
+        postgrest1.from("users").select().request.headerFields[.init("apikey")!] == "foo")
       // Derived client object uses new header value
-      #expect(postgrest2.request.headers[.init("apikey")!] == "bar")
+      #expect(postgrest2.request.headerFields[.init("apikey")!] == "bar")
     }
 
     @Test
@@ -90,7 +90,7 @@ extension PostgrestMockerTests {
         Issue.record("Expected error to be thrown")
       } catch let error as HTTPError {
         #expect(error.data == Data("Bad Request".utf8))
-        #expect(error.response.statusCode == 400)
+        #expect(error.response.status.code == 400)
       }
     }
 
@@ -377,7 +377,7 @@ extension PostgrestMockerTests {
         .select()
         .setHeader(name: "key", value: "value")
 
-      #expect(query.request.headers[.init("key")!] == "value")
+      #expect(query.request.headerFields[.init("key")!] == "value")
     }
 
     // MARK: - Encoder/decoder override tests

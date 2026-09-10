@@ -736,7 +736,7 @@ extension StorageMockerTests {
         Issue.record()
       } catch let error as HTTPError {
         #expect(error.data == Data("error".utf8))
-        #expect(error.response.statusCode == 412)
+        #expect(error.response.status.code == 412)
       }
     }
 

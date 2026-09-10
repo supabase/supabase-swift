@@ -93,14 +93,14 @@ private actor LiveSessionManager {
 
         let session = try await api.execute(
           HTTPRequest(
-            url: configuration.url.appendingPathComponent("token"),
             method: .post,
+            url: configuration.url.appendingPathComponent("token"),
             query: [
               URLQueryItem(name: "grant_type", value: "refresh_token")
-            ],
-            body: configuration.resolvedEncoder.encode(
-              UserCredentials(refreshToken: refreshToken)
-            )
+            ]
+          ),
+          body: configuration.resolvedEncoder.encode(
+            UserCredentials(refreshToken: refreshToken)
           )
         )
         .decoded(as: Session.self, decoder: configuration.resolvedDecoder)

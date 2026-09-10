@@ -83,17 +83,17 @@ public struct VectorBucketClient: Sendable {
   ) async throws {
     try await api.execute(
       HTTPRequest(
-        url: api.configuration.url.appendingPathComponent("vector/CreateIndex"),
         method: .post,
-        body: JSONEncoder.unconfiguredEncoder.encode(
-          CreateIndexBody(
-            vectorBucketName: vectorBucketName,
-            indexName: indexName,
-            dataType: dataType,
-            dimension: dimension,
-            distanceMetric: distanceMetric,
-            metadataConfiguration: metadataConfiguration
-          )
+        url: api.configuration.url.appendingPathComponent("vector/CreateIndex")
+      ),
+      body: JSONEncoder.unconfiguredEncoder.encode(
+        CreateIndexBody(
+          vectorBucketName: vectorBucketName,
+          indexName: indexName,
+          dataType: dataType,
+          dimension: dimension,
+          distanceMetric: distanceMetric,
+          metadataConfiguration: metadataConfiguration
         )
       )
     )
@@ -114,11 +114,11 @@ public struct VectorBucketClient: Sendable {
   public func getIndex(_ indexName: String) async throws -> VectorIndex {
     let response: GetIndexResponseBody = try await api.execute(
       HTTPRequest(
-        url: api.configuration.url.appendingPathComponent("vector/GetIndex"),
         method: .post,
-        body: JSONEncoder.unconfiguredEncoder.encode(
-          VectorBucketIndexNameBody(vectorBucketName: vectorBucketName, indexName: indexName)
-        )
+        url: api.configuration.url.appendingPathComponent("vector/GetIndex")
+      ),
+      body: JSONEncoder.unconfiguredEncoder.encode(
+        VectorBucketIndexNameBody(vectorBucketName: vectorBucketName, indexName: indexName)
       )
     )
     .decoded(decoder: .supabase())
@@ -153,15 +153,15 @@ public struct VectorBucketClient: Sendable {
   ) async throws -> ListVectorIndexesResponse {
     let response: ListIndexesResponseBody = try await api.execute(
       HTTPRequest(
-        url: api.configuration.url.appendingPathComponent("vector/ListIndexes"),
         method: .post,
-        body: JSONEncoder.unconfiguredEncoder.encode(
-          ListIndexesBody(
-            vectorBucketName: vectorBucketName,
-            prefix: prefix,
-            maxResults: maxResults,
-            nextToken: nextToken
-          )
+        url: api.configuration.url.appendingPathComponent("vector/ListIndexes")
+      ),
+      body: JSONEncoder.unconfiguredEncoder.encode(
+        ListIndexesBody(
+          vectorBucketName: vectorBucketName,
+          prefix: prefix,
+          maxResults: maxResults,
+          nextToken: nextToken
         )
       )
     )
@@ -182,11 +182,11 @@ public struct VectorBucketClient: Sendable {
   public func deleteIndex(_ indexName: String) async throws {
     try await api.execute(
       HTTPRequest(
-        url: api.configuration.url.appendingPathComponent("vector/DeleteIndex"),
         method: .post,
-        body: JSONEncoder.unconfiguredEncoder.encode(
-          VectorBucketIndexNameBody(vectorBucketName: vectorBucketName, indexName: indexName)
-        )
+        url: api.configuration.url.appendingPathComponent("vector/DeleteIndex")
+      ),
+      body: JSONEncoder.unconfiguredEncoder.encode(
+        VectorBucketIndexNameBody(vectorBucketName: vectorBucketName, indexName: indexName)
       )
     )
   }
