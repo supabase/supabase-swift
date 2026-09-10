@@ -101,7 +101,7 @@ public struct PostgrestRequestBuilder<Phase>: Sendable {
       LoggerInterceptor(logger: configuration.logger)
     ]
     self.http = HTTPClient(
-      transport: FetchTransport(fetch: configuration.fetch), middlewares: middlewares)
+      transport: configuration.transport, middlewares: configuration.middlewares + middlewares)
 
     self.request = request
     self.retryEnabled = configuration.retryEnabled
@@ -384,7 +384,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestExecutablePhase {
   ///   use the HEAD method. Defaults to ``FetchOptions/init(head:count:)``.
   /// - Returns: A ``PostgrestResponse`` whose `value` is `Void`.
   /// - Throws: ``PostgrestError`` if PostgREST returns an error response, or any error thrown by
-  ///   the fetch handler.
+  ///   the transport.
   @discardableResult
   public func execute(
     options: FetchOptions = FetchOptions()
@@ -410,7 +410,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestExecutablePhase {
   ///     ``PostgrestError`` — that always uses a fixed internal decoder.
   /// - Returns: A ``PostgrestResponse`` whose `value` is the decoded `T`.
   /// - Throws: ``PostgrestError`` if PostgREST returns an error response, a decoding error if
-  ///   the response body cannot be decoded as `T`, or any error thrown by the fetch handler.
+  ///   the response body cannot be decoded as `T`, or any error thrown by the transport.
   @discardableResult
   public func execute<T: Decodable>(
     options: FetchOptions = FetchOptions(),

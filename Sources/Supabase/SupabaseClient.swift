@@ -1,6 +1,7 @@
 import ConcurrencyExtras
 public import Foundation
 import HTTPTypes
+import Helpers
 import IssueReporting
 import Logging
 
@@ -114,7 +115,8 @@ public final class SupabaseClient: Sendable {
       schema: options.db.schema,
       headers: headers,
       logger: options.global.logger,
-      fetch: fetchWithAuth,
+      // ponytail: stopgap FetchTransport wrapper, Task 9 replaces this with transport/middlewares.
+      transport: FetchTransport(fetch: fetchWithAuth),
       encoder: options.db.encoder,
       decoder: options.db.decoder,
       retryEnabled: options.db.retry
