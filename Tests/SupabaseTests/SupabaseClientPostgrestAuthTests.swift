@@ -66,7 +66,9 @@ struct SupabaseClientPostgrestAuthTests {
           storage: AuthLocalStorageMock(),
           accessToken: { "live-session-token" }
         ),
-        global: SupabaseClientOptions.GlobalOptions(session: makePostgrestAuthCapturingSession())
+        global: SupabaseClientOptions.GlobalOptions(
+          http: .init(transport: URLSessionTransport(session: makePostgrestAuthCapturingSession()))
+        )
       )
     )
 
@@ -87,7 +89,9 @@ struct SupabaseClientPostgrestAuthTests {
           storage: AuthLocalStorageMock(),
           autoRefreshToken: false
         ),
-        global: SupabaseClientOptions.GlobalOptions(session: makePostgrestAuthCapturingSession())
+        global: SupabaseClientOptions.GlobalOptions(
+          http: .init(transport: URLSessionTransport(session: makePostgrestAuthCapturingSession()))
+        )
       )
     )
 

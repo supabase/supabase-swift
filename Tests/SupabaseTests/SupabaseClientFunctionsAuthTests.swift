@@ -61,7 +61,9 @@ struct SupabaseClientFunctionsAuthTests {
           storage: AuthLocalStorageMock(),
           accessToken: { "live-session-token" }
         ),
-        global: SupabaseClientOptions.GlobalOptions(session: makeFunctionsAuthCapturingSession())
+        global: SupabaseClientOptions.GlobalOptions(
+          http: .init(transport: URLSessionTransport(session: makeFunctionsAuthCapturingSession()))
+        )
       )
     )
 
@@ -85,7 +87,9 @@ struct SupabaseClientFunctionsAuthTests {
           storage: AuthLocalStorageMock(),
           autoRefreshToken: false
         ),
-        global: SupabaseClientOptions.GlobalOptions(session: makeFunctionsAuthCapturingSession())
+        global: SupabaseClientOptions.GlobalOptions(
+          http: .init(transport: URLSessionTransport(session: makeFunctionsAuthCapturingSession()))
+        )
       )
     )
 
@@ -106,7 +110,9 @@ struct SupabaseClientFunctionsAuthTests {
           storage: AuthLocalStorageMock(),
           accessToken: { "live-session-token" }
         ),
-        global: SupabaseClientOptions.GlobalOptions(session: makeFunctionsAuthCapturingSession())
+        global: SupabaseClientOptions.GlobalOptions(
+          http: .init(transport: URLSessionTransport(session: makeFunctionsAuthCapturingSession()))
+        )
       )
     )
 

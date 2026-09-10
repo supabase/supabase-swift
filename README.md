@@ -99,7 +99,7 @@ let client = SupabaseClient(
         ),
         global: .init(
             headers: ["x-my-custom-header": "my-app-name"],
-            session: URLSession.myCustomSession
+            http: .init(transport: URLSessionTransport(session: URLSession.myCustomSession))
         )
     )
 )

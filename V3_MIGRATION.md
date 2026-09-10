@@ -2001,10 +2001,6 @@ Pass it as `http: .init(transport: StubTransport())` to any sub-client, or as
   synthesizes it from the request, so its `url` is the URL that was requested rather than the URL
   after redirects. Anything reading `error.response.url` to detect a redirect target must read the
   `Location` header instead.
-- **`GlobalOptions.session` stays.** It still configures the default transport (when
-  `http.transport` is `nil`) and it is still the template `URLSession` that Realtime's WebSocket is
-  built from. Setting `http.transport` overrides it for HTTP only; the WebSocket keeps using
-  `session`.
 - **Functions streaming goes through your transport now.** `_invokeWithStreamedResponse` used to
   run on a private `URLSession` that ignored everything you configured. It now sends through the
   client's `http` transport and middlewares, like every other call.
@@ -2023,3 +2019,46 @@ Pass it as `http: .init(transport: StubTransport())` to any sub-client, or as
   default transport `URLSessionConfiguration.timeoutIntervalForRequest` no longer takes effect for
   SDK requests. A custom `ClientTransport` owns its own timeout policy and is free to ignore the
   per-request override.
+
+## `SupabaseClientOptions.GlobalOptions.session` is removed
+
+`GlobalOptions` no longer has a `session: URLSession` property or init parameter. The `URLSession`
+that HTTP requests go through is configured on the transport instead: pass
+`URLSessionTransport(session:)` as `GlobalOptions.http.transport`.
+
+With `http` in place, `session` had two overlapping jobs. It backed the default transport only
+while `http.transport` was `nil`, so a caller who set both a custom `session` and a custom
+`transport` silently lost the session for HTTP. It was also copied into
+`RealtimeClientOptions.session` for the WebSocket, which is not an HTTP request and never goes
+through `ClientTransport`. One knob now configures HTTP, and Realtime's WebSocket session is
+configured only where it lives.
+
+```swift
+// Before
+let client = SupabaseClient(
+  supabaseURL: url,
+  supabaseKey: key,
+  options: .init(global: .init(session: mySession))
+)
+
+// After
+let client = SupabaseClient(
+  supabaseURL: url,
+  supabaseKey: key,
+  options: .init(global: .init(http: .init(transport: URLSessionTransport(session: mySession))))
+)
+```
+
+This is a compile error: `GlobalOptions.init` has no `session:` argument, and
+`options.global.session` no longer exists.
+
+One behavior change compiles without change elsewhere: Realtime no longer inherits a `URLSession`
+from `GlobalOptions`. If you relied on the global session reaching Realtime's WebSocket (for
+example for certificate pinning), pass it on the Realtime options instead:
+
+```swift
+options: .init(
+  global: .init(http: .init(transport: URLSessionTransport(session: mySession))),
+  realtime: .init(session: mySession)
+)
+```
