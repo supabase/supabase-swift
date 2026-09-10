@@ -19,14 +19,18 @@ import HTTPTypesFoundation
 ///   ``HTTPBody/init(fileURL:)`` stream from disk through `upload(for:fromFile:)`.
 /// - Response bodies stream on Apple platforms. swift-corelibs-foundation has no
 ///   `URLSession.bytes(for:)`, so on Linux the response is buffered and delivered as one chunk.
-/// - Timeouts come from the session's `URLSessionConfiguration`, plus the SDK's internal
-///   per-request override where a sub-client sets one (Functions).
+/// - The SDK sets `URLRequest.timeoutInterval` on every request it sends (60 seconds by default,
+///   `FunctionInvokeOptions.timeoutInterval` for Functions), so it wins over the session's
+///   `timeoutIntervalForRequest`.
 /// - A buffered response body is `.multiple`, while a streamed one is `.single`, so
 ///   replay-sensitive middleware behaves differently per platform.
+/// - An empty response body comes back as `nil` on Linux but as a non-nil body that yields no
+///   chunks on Apple platforms, so middleware must not branch on `body == nil` to detect
+///   emptiness — collect the body and check its byte count instead.
 ///
 /// ```swift
 /// let configuration = URLSessionConfiguration.default
-/// configuration.timeoutIntervalForRequest = 30
+/// configuration.httpAdditionalHeaders = ["X-App": "demo"]
 /// let transport = URLSessionTransport(configuration: configuration)
 /// ```
 public struct URLSessionTransport: ClientTransport {

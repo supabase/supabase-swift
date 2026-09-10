@@ -1800,9 +1800,11 @@ reads `error.message` / `error.errorCode` is unaffected.
 ## `fetch:` closures and `StorageHTTPSession` replaced by `ClientTransport` and `ClientMiddleware`
 
 Every sub-client now sends through one protocol, `ClientTransport`, behind an ordered chain of
-`ClientMiddleware`. `AuthClient`, `PostgrestClient`, `FunctionsClient`, `SupabaseStorageClient` and
-`RealtimeClientV2` take `transport:` and `middlewares:` where they used to take a `fetch:` closure
-or a `StorageHTTPSession`. `SupabaseClient` gains
+`ClientMiddleware`. `AuthClient`, `PostgrestClient` and `FunctionsClient` take `transport:` and
+`middlewares:` directly, where they used to take a `fetch:` closure; `SupabaseStorageClient` and
+`RealtimeClientV2` receive the same pair through `StorageClientConfiguration` and
+`RealtimeClientOptions`, which replace `StorageHTTPSession` and Realtime's `fetch:` closure.
+`SupabaseClient` gains
 `SupabaseClientOptions.GlobalOptions.transport` and `.middlewares`, which it hands to every
 sub-client at once. All four types — `ClientTransport`, `ClientMiddleware`, `URLSessionTransport`
 and the streaming `HTTPBody` — are public in `Helpers`, which every module re-exports, so
@@ -1999,7 +2001,21 @@ for the whole client.
 - **`GlobalOptions.session` stays.** It still configures the default transport (when you pass no
   `transport`) and it is still the template `URLSession` that Realtime's WebSocket is built from.
   Setting `transport` overrides it for HTTP only; the WebSocket keeps using `session`.
-- **Timeouts belong to the transport.** Set them on the session:
-  `URLSessionConfiguration.timeoutIntervalForRequest`. `FunctionInvokeOptions.timeoutInterval`
-  keeps working with the default transport — the SDK carries that per-request override through the
-  chain internally. A custom `ClientTransport` owns its own timeouts and is free to ignore it.
+- **Functions streaming goes through your transport now.** `_invokeWithStreamedResponse` used to
+  run on a private `URLSession` that ignored everything you configured. It now sends through the
+  client's `transport` and `middlewares`, like every other call.
+- **A streamed `FunctionsError.httpError` now carries the response body.** In v2 the streamed call
+  threw `.httpError(code, Data())`; the body is now included, so anything that read the payload
+  from a non-2xx streamed invoke no longer has to special-case an empty `Data`.
+- **Streamed chunk boundaries changed.** The default transport yields a chunk at every newline, or
+  once 16 KiB accumulates without one. Code that assumed one chunk per `write` on the server, or
+  one chunk per SSE event, must reassemble across chunks.
+- **`HTTPTypes` names are now in scope.** `Helpers` re-exports `HTTPTypes`, so `import Supabase`
+  (or `import Functions`, `import Auth`, …) also brings `HTTPRequest`, `HTTPResponse`, `HTTPFields`
+  and `HTTPField` in. If you also import another library that exports those names, the reference
+  becomes ambiguous — qualify it with the module name (`HTTPTypes.HTTPRequest`).
+- **Timeouts belong to the transport.** The SDK always sets `URLRequest.timeoutInterval` itself —
+  60 seconds by default, or `FunctionInvokeOptions.timeoutInterval` for Functions — so on the
+  default transport `URLSessionConfiguration.timeoutIntervalForRequest` no longer takes effect for
+  SDK requests. A custom `ClientTransport` owns its own timeout policy and is free to ignore the
+  per-request override.

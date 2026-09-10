@@ -81,16 +81,24 @@ public final class HTTPBody: AsyncSequence, @unchecked Sendable {
     let size = (attributes[.size] as? NSNumber)?.int64Value ?? 0
     self.init(storage: .file(fileURL), length: .known(size), iterationBehavior: .multiple) {
       AsyncThrowingStream { continuation in
-        do {
-          let handle = try FileHandle(forReadingFrom: fileURL)
-          defer { try? handle.close() }
-          while let chunk = try handle.read(upToCount: 64 * 1024), !chunk.isEmpty {
-            continuation.yield(ArraySlice(chunk))
+        // ponytail: the stream's buffer is unbounded, so a consumer slower than the disk still
+        // ends up holding the whole file; a back-pressured reader that only reads the next chunk
+        // when the consumer asks for it is the upgrade.
+        let task = Task {
+          do {
+            let handle = try FileHandle(forReadingFrom: fileURL)
+            defer { try? handle.close() }
+            while !Task.isCancelled,
+              let chunk = try handle.read(upToCount: 64 * 1024), !chunk.isEmpty
+            {
+              continuation.yield(ArraySlice(chunk))
+            }
+            continuation.finish()
+          } catch {
+            continuation.finish(throwing: error)
           }
-          continuation.finish()
-        } catch {
-          continuation.finish(throwing: error)
         }
+        continuation.onTermination = { _ in task.cancel() }
       }
     }
   }
@@ -193,7 +201,8 @@ extension Data {
   public init(collecting body: HTTPBody, upTo maxBytes: Int) async throws {
     var data = Data()
     if case .known(let count) = body.length, count > 0 {
-      data.reserveCapacity(Int(clamping: count))
+      // The declared length is a hint from the peer; never reserve more than the caller's cap.
+      data.reserveCapacity(Int(clamping: Swift.min(count, Int64(maxBytes))))
     }
     for try await chunk in body {
       guard data.count + chunk.count <= maxBytes else {

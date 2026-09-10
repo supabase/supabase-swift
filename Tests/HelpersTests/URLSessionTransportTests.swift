@@ -10,6 +10,7 @@ import Foundation
 import HTTPTypes
 import HTTPTypesFoundation
 import Mocker
+import TestHelpers
 import Testing
 
 @testable import Helpers
@@ -42,8 +43,9 @@ extension URLRequest {
 
 // Mocker's registry (`Mock.register()`, `Mocker.removeAll()`) is process-global, and each test
 // calls `removeAll()` in `makeTransport()`, so two tests running concurrently can wipe out one
-// another's registered mock. `.serialized` keeps them from racing.
-@Suite(.serialized)
+// another's registered mock. `.serialized` keeps this suite's own tests from racing, and
+// `.mockerSerialized` extends that to Mocker-backed suites in every other test target.
+@Suite(.serialized, .mockerSerialized)
 struct URLSessionTransportTests {
   let url = URL(string: "https://example.com/path")!
 
@@ -132,5 +134,28 @@ struct URLSessionTransportTests {
     }
 
     #expect(seen.value == 150)
+  }
+
+  @Test
+  func streamedResponseSplitsOnNewlines() async throws {
+    let transport = makeTransport()
+    let payload = "data: 1\ndata: 2\ndata: 3\n"
+    Mock(url: url, statusCode: 200, data: [.get: Data(payload.utf8)]).register()
+
+    var chunks: [String] = []
+    let (_, maybeBody) = try await transport.send(
+      HTTPRequest(method: .get, url: url), body: nil)
+    for try await chunk in try #require(maybeBody) {
+      chunks.append(String(decoding: chunk, as: UTF8.self))
+    }
+
+    #expect(chunks.joined() == payload)
+    #if canImport(FoundationNetworking)
+      // swift-corelibs-foundation has no `URLSession.bytes(for:)`, so the whole response is
+      // buffered and delivered as a single chunk.
+      #expect(chunks.count == 1)
+    #else
+      #expect(chunks == ["data: 1\n", "data: 2\n", "data: 3\n"])
+    #endif
   }
 }

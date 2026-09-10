@@ -67,6 +67,7 @@ let package = Package(
         .product(name: "CustomDump", package: "swift-custom-dump"),
         "Helpers",
         "Mocker",
+        "TestHelpers",
       ]
     ),
     .target(
