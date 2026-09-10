@@ -32,10 +32,7 @@ extension StorageMockerTests {
           configuration: StorageClientConfiguration(
             url: url,
             headers: [:],
-            session: StorageHTTPSession(
-              fetch: { try await session.data(for: $0) },
-              upload: { try await session.upload(for: $0, from: $1) }
-            )
+            transport: URLSessionTransport(session: session)
           )
         )
       )

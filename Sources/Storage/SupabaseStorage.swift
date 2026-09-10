@@ -1,10 +1,11 @@
 public import Foundation
+public import Helpers
 public import Logging
 
 /// Configuration for the Supabase Storage client.
 ///
 /// Pass a ``StorageClientConfiguration`` to ``SupabaseStorageClient`` to control the Storage
-/// endpoint URL, authentication headers, and the underlying HTTP session.
+/// endpoint URL, authentication headers, and the underlying transport.
 ///
 /// ```swift
 /// let configuration = StorageClientConfiguration(
@@ -18,13 +19,14 @@ public import Logging
 ///
 /// ### Creating a configuration
 ///
-/// - ``init(url:headers:session:logger:useNewHostname:)``
+/// - ``init(url:headers:transport:middlewares:logger:useNewHostname:)``
 ///
 /// ### Configuration properties
 ///
 /// - ``url``
 /// - ``headers``
-/// - ``session``
+/// - ``transport``
+/// - ``middlewares``
 /// - ``logger``
 /// - ``useNewHostname``
 public struct StorageClientConfiguration: Sendable {
@@ -42,8 +44,11 @@ public struct StorageClientConfiguration: Sendable {
   /// ever decodes server-defined shapes, so there's no case for letting callers customize it.
   let decoder: JSONDecoder = .supabase()
 
-  /// The HTTP session abstraction used to execute requests.
-  public let session: StorageHTTPSession
+  /// The transport every request goes through. Defaults to ``URLSessionTransport``.
+  public let transport: any ClientTransport
+
+  /// Middlewares run, in order, before the request reaches ``transport``.
+  public let middlewares: [any ClientMiddleware]
 
   /// The logger used for debugging HTTP interactions. Defaults to a build-config-aware logger.
   public let logger: Logging.Logger
@@ -57,20 +62,23 @@ public struct StorageClientConfiguration: Sendable {
   /// - Parameters:
   ///   - url: The base URL of the Storage API endpoint.
   ///   - headers: HTTP headers sent with every request.
-  ///   - session: The HTTP session used for networking. Defaults to a session backed by `URLSession.shared`.
+  ///   - transport: The transport every request goes through. Defaults to ``URLSessionTransport``.
+  ///   - middlewares: Middlewares run, in order, before the request reaches `transport`.
   ///   - logger: The logger to use. Defaults to a build-config-aware logger; pass a logger backed by
   ///     `SwiftLogNoOpLogHandler` to disable logging entirely.
   ///   - useNewHostname: When `true`, the storage-specific hostname is used, enabling uploads over 50 GB.
   public init(
     url: URL,
     headers: [String: String],
-    session: StorageHTTPSession = .init(),
+    transport: any ClientTransport = URLSessionTransport(),
+    middlewares: [any ClientMiddleware] = [],
     logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.storage"),
     useNewHostname: Bool = false
   ) {
     self.url = url
     self.headers = headers
-    self.session = session
+    self.transport = transport
+    self.middlewares = middlewares
     var logger = logger
     logger[metadataKey: "system"] = "storage"
     self.logger = logger
@@ -131,7 +139,7 @@ public struct SupabaseStorageClient: Sendable {
   /// Creates a ``SupabaseStorageClient`` with the given configuration.
   ///
   /// - Parameter configuration: The configuration that controls the endpoint URL, authentication
-  ///   headers, JSON codecs, and HTTP session.
+  ///   headers, JSON codecs, and transport.
   public init(configuration: StorageClientConfiguration) {
     api = StorageApi(configuration: configuration)
   }

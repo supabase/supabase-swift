@@ -1,6 +1,9 @@
 import ConcurrencyExtras
 import Foundation
+import HTTPTypesFoundation
+import Helpers
 import InlineSnapshotTesting
+import TestHelpers
 import Testing
 import XCTestDynamicOverlay
 
@@ -56,33 +59,28 @@ struct SupabaseStorageTests {
 
   @Test
   func createSignedURLs() async throws {
-    let sessionMock = StorageHTTPSession(
-      fetch: { _ in
-        (
-          """
-          [
-            {
-              "path": "file1.txt",
-              "signedURL": "/sign/file1.txt?token=abc.def.ghi"
-            },
-            {
-              "path": "file2.txt",
-              "signedURL": "/sign/file2.txt?token=abc.def.ghi"
-            }
-          ]
-          """.data(using: .utf8)!,
-          HTTPURLResponse(
-            url: self.supabaseURL,
-            statusCode: 200,
-            httpVersion: nil,
-            headerFields: nil
-          )!
-        )
-      },
-      upload: unimplemented("StorageHTTPSession.upload")
-    )
-
-    let sut = makeSUT(session: sessionMock)
+    let sut = makeSUT(fetch: { _ in
+      (
+        """
+        [
+          {
+            "path": "file1.txt",
+            "signedURL": "/sign/file1.txt?token=abc.def.ghi"
+          },
+          {
+            "path": "file2.txt",
+            "signedURL": "/sign/file2.txt?token=abc.def.ghi"
+          }
+        ]
+        """.data(using: .utf8)!,
+        HTTPURLResponse(
+          url: self.supabaseURL,
+          statusCode: 200,
+          httpVersion: nil,
+          headerFields: nil
+        )!
+      )
+    })
     let results: [SignedURLResult] = try await sut.from(bucketId).createSignedURLs(
       paths: ["file1.txt", "file2.txt"],
       expiresIn: 60
@@ -112,55 +110,50 @@ struct SupabaseStorageTests {
     func uploadData() async throws {
       testingBoundary.setValue("alamofire.boundary.c21f947c1c7b0c57")
 
-      let sessionMock = StorageHTTPSession(
-        fetch: { request in
-          assertInlineSnapshot(of: request, as: .curl) {
-            #"""
-            curl \
-            	--request POST \
-            	--header "Apikey: test.api.key" \
-            	--header "Authorization: Bearer test.api.key" \
-            	--header "Cache-Control: max-age=14400" \
-            	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.c21f947c1c7b0c57" \
-            	--header "X-Client-Info: storage-swift/x.y.z" \
-            	--header "x-upsert: false" \
-            	--data "--alamofire.boundary.c21f947c1c7b0c57\#r
-            Content-Disposition: form-data; name=\"cacheControl\"\#r
-            \#r
-            14400\#r
-            --alamofire.boundary.c21f947c1c7b0c57\#r
-            Content-Disposition: form-data; name=\"metadata\"\#r
-            \#r
-            {\"key\":\"value\"}\#r
-            --alamofire.boundary.c21f947c1c7b0c57\#r
-            Content-Disposition: form-data; name=\"\"; filename=\"file1.txt\"\#r
-            Content-Type: text/plain\#r
-            \#r
-            test data\#r
-            --alamofire.boundary.c21f947c1c7b0c57--\#r
-            " \
-            	"http://localhost:54321/storage/v1/object/tests/file1.txt"
-            """#
+      let sut = makeSUT(fetch: { request in
+        assertInlineSnapshot(of: request, as: .curl) {
+          #"""
+          curl \
+          	--request POST \
+          	--header "Apikey: test.api.key" \
+          	--header "Authorization: Bearer test.api.key" \
+          	--header "Cache-Control: max-age=14400" \
+          	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.c21f947c1c7b0c57" \
+          	--header "X-Client-Info: storage-swift/x.y.z" \
+          	--header "x-upsert: false" \
+          	--data "--alamofire.boundary.c21f947c1c7b0c57\#r
+          Content-Disposition: form-data; name=\"cacheControl\"\#r
+          \#r
+          14400\#r
+          --alamofire.boundary.c21f947c1c7b0c57\#r
+          Content-Disposition: form-data; name=\"metadata\"\#r
+          \#r
+          {\"key\":\"value\"}\#r
+          --alamofire.boundary.c21f947c1c7b0c57\#r
+          Content-Disposition: form-data; name=\"\"; filename=\"file1.txt\"\#r
+          Content-Type: text/plain\#r
+          \#r
+          test data\#r
+          --alamofire.boundary.c21f947c1c7b0c57--\#r
+          " \
+          	"http://localhost:54321/storage/v1/object/tests/file1.txt"
+          """#
+        }
+        return (
+          """
+          {
+            "Id": "tests/file1.txt",
+            "Key": "tests/file1.txt"
           }
-          return (
-            """
-            {
-              "Id": "tests/file1.txt",
-              "Key": "tests/file1.txt"
-            }
-            """.data(using: .utf8)!,
-            HTTPURLResponse(
-              url: self.supabaseURL,
-              statusCode: 200,
-              httpVersion: nil,
-              headerFields: nil
-            )!
-          )
-        },
-        upload: unimplemented("StorageHTTPSession.upload")
-      )
-
-      let sut = makeSUT(session: sessionMock)
+          """.data(using: .utf8)!,
+          HTTPURLResponse(
+            url: self.supabaseURL,
+            statusCode: 200,
+            httpVersion: nil,
+            headerFields: nil
+          )!
+        )
+      })
 
       try await sut.from(bucketId)
         .upload(
@@ -177,40 +170,35 @@ struct SupabaseStorageTests {
     func uploadFileURL() async throws {
       testingBoundary.setValue("alamofire.boundary.c21f947c1c7b0c57")
 
-      let sessionMock = StorageHTTPSession(
-        fetch: { request in
-          assertInlineSnapshot(of: request, as: .curl) {
-            #"""
-            curl \
-            	--request POST \
-            	--header "Apikey: test.api.key" \
-            	--header "Authorization: Bearer test.api.key" \
-            	--header "Cache-Control: max-age=3600" \
-            	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.c21f947c1c7b0c57" \
-            	--header "X-Client-Info: storage-swift/x.y.z" \
-            	--header "x-upsert: false" \
-            	"http://localhost:54321/storage/v1/object/tests/sadcat.jpg"
-            """#
+      let sut = makeSUT(fetch: { request in
+        assertInlineSnapshot(of: request, as: .curl) {
+          #"""
+          curl \
+          	--request POST \
+          	--header "Apikey: test.api.key" \
+          	--header "Authorization: Bearer test.api.key" \
+          	--header "Cache-Control: max-age=3600" \
+          	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.c21f947c1c7b0c57" \
+          	--header "X-Client-Info: storage-swift/x.y.z" \
+          	--header "x-upsert: false" \
+          	"http://localhost:54321/storage/v1/object/tests/sadcat.jpg"
+          """#
+        }
+        return (
+          """
+          {
+            "Id": "tests/file1.txt",
+            "Key": "tests/file1.txt"
           }
-          return (
-            """
-            {
-              "Id": "tests/file1.txt",
-              "Key": "tests/file1.txt"
-            }
-            """.data(using: .utf8)!,
-            HTTPURLResponse(
-              url: self.supabaseURL,
-              statusCode: 200,
-              httpVersion: nil,
-              headerFields: nil
-            )!
-          )
-        },
-        upload: unimplemented("StorageHTTPSession.upload")
-      )
-
-      let sut = makeSUT(session: sessionMock)
+          """.data(using: .utf8)!,
+          HTTPURLResponse(
+            url: self.supabaseURL,
+            statusCode: 200,
+            httpVersion: nil,
+            headerFields: nil
+          )!
+        )
+      })
 
       try await sut.from(bucketId)
         .upload(
@@ -224,15 +212,21 @@ struct SupabaseStorageTests {
   #endif
 
   private func makeSUT(
-    session: StorageHTTPSession = StorageHTTPSession(
-      fetch: unimplemented("StorageHTTPSession.fetch"),
-      upload: unimplemented("StorageHTTPSession.upload")
-    )
+    fetch: @escaping @Sendable (URLRequest) async throws -> (Data, URLResponse) = unimplemented(
+      "makeSUT.fetch")
   ) -> SupabaseStorageClient {
     SupabaseStorageClient.test(
       supabaseURL: supabaseURL.absoluteString,
       apiKey: "test.api.key",
-      session: session
+      transport: ClosureTransport { request, body in
+        guard var urlRequest = URLRequest(httpRequest: request) else { throw URLError(.badURL) }
+        if let body { urlRequest.httpBody = try await Data(collecting: body, upTo: .max) }
+        let (data, response) = try await fetch(urlRequest)
+        guard let head = (response as? HTTPURLResponse)?.httpResponse else {
+          throw URLError(.badServerResponse)
+        }
+        return (head, data.isEmpty ? nil : HTTPBody(data))
+      }
     )
   }
 
@@ -247,34 +241,29 @@ struct SupabaseStorageTests {
   @Test
   func setHeader_setsHeaderOnRequest() async throws {
     let capturedRequest = LockIsolated(URLRequest?.none)
-    let sessionMock = StorageHTTPSession(
-      fetch: { request in
-        capturedRequest.setValue(request)
-        return (
-          """
-          [
-            {
-              "name": "test.txt",
-              "id": "E621E1F8-C36C-495A-93FC-0C247A3E6E5F",
-              "updatedAt": "2024-01-01T00:00:00Z",
-              "createdAt": "2024-01-01T00:00:00Z",
-              "lastAccessedAt": "2024-01-01T00:00:00Z",
-              "metadata": {}
-            }
-          ]
-          """.data(using: .utf8)!,
-          HTTPURLResponse(
-            url: self.supabaseURL,
-            statusCode: 200,
-            httpVersion: nil,
-            headerFields: nil
-          )!
-        )
-      },
-      upload: unimplemented("StorageHTTPSession.upload")
-    )
-
-    let sut = makeSUT(session: sessionMock)
+    let sut = makeSUT(fetch: { request in
+      capturedRequest.setValue(request)
+      return (
+        """
+        [
+          {
+            "name": "test.txt",
+            "id": "E621E1F8-C36C-495A-93FC-0C247A3E6E5F",
+            "updatedAt": "2024-01-01T00:00:00Z",
+            "createdAt": "2024-01-01T00:00:00Z",
+            "lastAccessedAt": "2024-01-01T00:00:00Z",
+            "metadata": {}
+          }
+        ]
+        """.data(using: .utf8)!,
+        HTTPURLResponse(
+          url: self.supabaseURL,
+          statusCode: 200,
+          httpVersion: nil,
+          headerFields: nil
+        )!
+      )
+    })
 
     _ = try await sut.from(bucketId)
       .setHeader("custom-value", forKey: "X-Custom-Header")
@@ -287,34 +276,29 @@ struct SupabaseStorageTests {
   @Test
   func setHeader_supportsMethodChaining() async throws {
     let capturedRequest = LockIsolated(URLRequest?.none)
-    let sessionMock = StorageHTTPSession(
-      fetch: { request in
-        capturedRequest.setValue(request)
-        return (
-          """
-          [
-            {
-              "name": "test.txt",
-              "id": "E621E1F8-C36C-495A-93FC-0C247A3E6E5F",
-              "updatedAt": "2024-01-01T00:00:00Z",
-              "createdAt": "2024-01-01T00:00:00Z",
-              "lastAccessedAt": "2024-01-01T00:00:00Z",
-              "metadata": {}
-            }
-          ]
-          """.data(using: .utf8)!,
-          HTTPURLResponse(
-            url: self.supabaseURL,
-            statusCode: 200,
-            httpVersion: nil,
-            headerFields: nil
-          )!
-        )
-      },
-      upload: unimplemented("StorageHTTPSession.upload")
-    )
-
-    let sut = makeSUT(session: sessionMock)
+    let sut = makeSUT(fetch: { request in
+      capturedRequest.setValue(request)
+      return (
+        """
+        [
+          {
+            "name": "test.txt",
+            "id": "E621E1F8-C36C-495A-93FC-0C247A3E6E5F",
+            "updatedAt": "2024-01-01T00:00:00Z",
+            "createdAt": "2024-01-01T00:00:00Z",
+            "lastAccessedAt": "2024-01-01T00:00:00Z",
+            "metadata": {}
+          }
+        ]
+        """.data(using: .utf8)!,
+        HTTPURLResponse(
+          url: self.supabaseURL,
+          statusCode: 200,
+          httpVersion: nil,
+          headerFields: nil
+        )!
+      )
+    })
 
     _ = try await sut.from(bucketId)
       .setHeader("value-a", forKey: "X-Header-A")
@@ -328,34 +312,29 @@ struct SupabaseStorageTests {
   @Test
   func setHeader_overridesExistingHeader() async throws {
     let capturedRequest = LockIsolated(URLRequest?.none)
-    let sessionMock = StorageHTTPSession(
-      fetch: { request in
-        capturedRequest.setValue(request)
-        return (
-          """
-          [
-            {
-              "name": "test.txt",
-              "id": "E621E1F8-C36C-495A-93FC-0C247A3E6E5F",
-              "updatedAt": "2024-01-01T00:00:00Z",
-              "createdAt": "2024-01-01T00:00:00Z",
-              "lastAccessedAt": "2024-01-01T00:00:00Z",
-              "metadata": {}
-            }
-          ]
-          """.data(using: .utf8)!,
-          HTTPURLResponse(
-            url: self.supabaseURL,
-            statusCode: 200,
-            httpVersion: nil,
-            headerFields: nil
-          )!
-        )
-      },
-      upload: unimplemented("StorageHTTPSession.upload")
-    )
-
-    let sut = makeSUT(session: sessionMock)
+    let sut = makeSUT(fetch: { request in
+      capturedRequest.setValue(request)
+      return (
+        """
+        [
+          {
+            "name": "test.txt",
+            "id": "E621E1F8-C36C-495A-93FC-0C247A3E6E5F",
+            "updatedAt": "2024-01-01T00:00:00Z",
+            "createdAt": "2024-01-01T00:00:00Z",
+            "lastAccessedAt": "2024-01-01T00:00:00Z",
+            "metadata": {}
+          }
+        ]
+        """.data(using: .utf8)!,
+        HTTPURLResponse(
+          url: self.supabaseURL,
+          statusCode: 200,
+          httpVersion: nil,
+          headerFields: nil
+        )!
+      )
+    })
 
     _ = try await sut.from(bucketId)
       .setHeader("initial-value", forKey: "X-Custom-Header")
@@ -383,24 +362,19 @@ struct SupabaseStorageTests {
       ]
       """
 
-    let sessionMock = StorageHTTPSession(
-      fetch: { request in
-        capturedRequests.withValue { $0.append(request) }
+    let sut = makeSUT(fetch: { request in
+      capturedRequests.withValue { $0.append(request) }
 
-        return (
-          listResponse.data(using: .utf8)!,
-          HTTPURLResponse(
-            url: self.supabaseURL,
-            statusCode: 200,
-            httpVersion: nil,
-            headerFields: nil
-          )!
-        )
-      },
-      upload: unimplemented("StorageHTTPSession.upload")
-    )
-
-    let sut = makeSUT(session: sessionMock)
+      return (
+        listResponse.data(using: .utf8)!,
+        HTTPURLResponse(
+          url: self.supabaseURL,
+          statusCode: 200,
+          httpVersion: nil,
+          headerFields: nil
+        )!
+      )
+    })
 
     // First, make a request with setHeader on StorageFileApi
     _ = try await sut.from(bucketId)
@@ -423,34 +397,29 @@ struct SupabaseStorageTests {
   @Test
   func setHeader_onTopLevelClientPropagatesToFileApi() async throws {
     let capturedRequest = LockIsolated(URLRequest?.none)
-    let sessionMock = StorageHTTPSession(
-      fetch: { request in
-        capturedRequest.setValue(request)
-        return (
-          """
-          [
-            {
-              "name": "test.txt",
-              "id": "E621E1F8-C36C-495A-93FC-0C247A3E6E5F",
-              "updatedAt": "2024-01-01T00:00:00Z",
-              "createdAt": "2024-01-01T00:00:00Z",
-              "lastAccessedAt": "2024-01-01T00:00:00Z",
-              "metadata": {}
-            }
-          ]
-          """.data(using: .utf8)!,
-          HTTPURLResponse(
-            url: self.supabaseURL,
-            statusCode: 200,
-            httpVersion: nil,
-            headerFields: nil
-          )!
-        )
-      },
-      upload: unimplemented("StorageHTTPSession.upload")
-    )
-
-    let sut = makeSUT(session: sessionMock)
+    let sut = makeSUT(fetch: { request in
+      capturedRequest.setValue(request)
+      return (
+        """
+        [
+          {
+            "name": "test.txt",
+            "id": "E621E1F8-C36C-495A-93FC-0C247A3E6E5F",
+            "updatedAt": "2024-01-01T00:00:00Z",
+            "createdAt": "2024-01-01T00:00:00Z",
+            "lastAccessedAt": "2024-01-01T00:00:00Z",
+            "metadata": {}
+          }
+        ]
+        """.data(using: .utf8)!,
+        HTTPURLResponse(
+          url: self.supabaseURL,
+          statusCode: 200,
+          httpVersion: nil,
+          headerFields: nil
+        )!
+      )
+    })
 
     _ =
       try await sut
