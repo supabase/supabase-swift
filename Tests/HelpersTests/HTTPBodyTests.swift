@@ -58,6 +58,23 @@ struct HTTPBodyTests {
   }
 
   @Test
+  func fileBodyYieldsChunksAsItReads() async throws {
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let size = 64 * 1024 + 7
+    try Data(repeating: 9, count: size).write(to: url)
+    defer { try? FileManager.default.removeItem(at: url) }
+
+    let body = try HTTPBody(fileURL: url)
+    var iterator = body.makeAsyncIterator()
+    let first = try #require(try await iterator.next())
+    #expect(first.count == 64 * 1024)
+
+    var total = first.count
+    while let chunk = try await iterator.next() { total += chunk.count }
+    #expect(total == size)
+  }
+
+  @Test
   func writeToFileRoundTrips() async throws {
     let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: url) }

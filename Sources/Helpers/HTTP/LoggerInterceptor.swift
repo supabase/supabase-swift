@@ -63,12 +63,18 @@ package struct LoggerInterceptor: ClientMiddleware {
 
   /// Buffers small known-length bodies for logging and re-wraps them; passes everything else
   /// through unconsumed.
+  ///
+  /// The declared length only decides *whether* to buffer. Collecting uses a much larger ceiling,
+  /// because a body can deliver more bytes than it claims — with transparent gzip,
+  /// `Content-Length` is the compressed size while the decoded bytes come out. Capping at the
+  /// claim would throw ``HTTPBodyTooLargeError`` out of a logging middleware and fail the request,
+  /// which is unrecoverable once the body has been consumed.
   private static func loggable(_ body: HTTPBody?) async throws -> (HTTPBody?, String) {
     guard let body else { return (nil, "<none>") }
     guard case .known(let count) = body.length, count <= maxLoggedBodyBytes else {
       return (body, "<streamed>")
     }
-    let data = try await Data(collecting: body, upTo: Int(count))
+    let data = try await Data(collecting: body, upTo: Int(maxLoggedBodyBytes) * 16)
     return (HTTPBody(data), stringify(data))
   }
 }

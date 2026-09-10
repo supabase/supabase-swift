@@ -574,9 +574,16 @@ struct FunctionsClientTests {
 
     let stream = sut._invokeWithStreamedResponse("stream")
 
+    var chunks: [Data] = []
     for try await value in stream {
-      #expect(String(decoding: value, as: UTF8.self) == "hello world")
+      chunks.append(value)
     }
+
+    // Assert on the collected chunks, not inside the loop: a stream that yields nothing would
+    // pass an in-loop assertion vacuously. The payload has no newline and is under 16 KiB, so
+    // the transport delivers it as one chunk.
+    #expect(chunks.count == 1)
+    #expect(chunks.reduce(Data(), +) == Data("hello world".utf8))
   }
 
   @Test

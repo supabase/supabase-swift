@@ -418,4 +418,31 @@ struct LoggerInterceptorTests {
     #expect(returned === body)
     #expect(try await Data(collecting: try #require(returned), upTo: 10) == Data([1, 2]))
   }
+
+  @Test
+  func underDeclaredBodyStillReachesTheNextHandlerWhole() async throws {
+    // Transparent gzip makes `Content-Length` the *compressed* size while the body yields the
+    // decoded bytes, so a body can deliver more than it declares. Logging must not fail the
+    // request over it.
+    let (logger, _) = makeLogger()
+    let sut = LoggerInterceptor(logger: logger)
+    let body = HTTPBody(
+      AsyncStream<ArraySlice<UInt8>> {
+        $0.yield(ArraySlice(repeating: 7, count: 100))
+        $0.finish()
+      },
+      length: .known(10), iterationBehavior: .single)
+
+    let seen = LockIsolated<Data?>(nil)
+    _ = try await sut.intercept(
+      HTTPTypes.HTTPRequest(method: .post, url: URL(string: "https://example.com")!),
+      body: body
+    ) { _, forwarded in
+      let collected = try await Data(collecting: try #require(forwarded), upTo: 1000)
+      seen.setValue(collected)
+      return (HTTPTypes.HTTPResponse(status: .ok), nil)
+    }
+
+    #expect(seen.value == Data(repeating: 7, count: 100))
+  }
 }
