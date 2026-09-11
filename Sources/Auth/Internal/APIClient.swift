@@ -1,6 +1,10 @@
 import Foundation
 import HTTPTypes
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 extension HTTPClient {
   init(configuration: AuthClient.Configuration) {
     var interceptors: [any HTTPClientInterceptor] = [
@@ -84,8 +88,23 @@ struct APIClient: Sendable {
         decoder: configuration.resolvedDecoder
       )
     else {
+      // `HTTPURLResponse` does not expose the reason phrase, so Foundation's
+      // status description is the closest analog. The status code is always
+      // included because the description is localized on Darwin and differs
+      // from the Linux one; the empty check is defensive only.
+      let statusDescription = HTTPURLResponse.localizedString(
+        forStatusCode: response.statusCode
+      )
+      let statusMessage = "HTTP \(response.statusCode)"
+      let message =
+        if 500..<600 ~= response.statusCode {
+          statusDescription.isEmpty ? statusMessage : "\(statusMessage): \(statusDescription)"
+        } else {
+          "Unexpected error"
+        }
+
       return .api(
-        message: "Unexpected error",
+        message: message,
         errorCode: .unexpectedFailure,
         underlyingData: response.data,
         underlyingResponse: response.underlyingResponse
