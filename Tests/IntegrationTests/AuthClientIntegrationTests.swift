@@ -10,6 +10,7 @@ import Crypto
 import CryptoSwift
 import CustomDump
 import Foundation
+import Helpers
 import InlineSnapshotTesting
 import P256K
 import TestHelpers
@@ -513,6 +514,81 @@ struct AuthClientIntegrationTests {
     let adminClient = Self.makeClient(serviceRole: true)
     try await adminClient.admin.signOut(jwt: accessToken)
     withExtendedLifetime(adminClient) {}
+  }
+
+  /// Pins the shape of the live JWKS that `getClaims` local verification depends on.
+  ///
+  /// A stock local project has no `auth.signing_keys_path`, so the CLI falls back to its
+  /// built-in ES256 key. `getClaims` picks its verifier from the JWK's `alg` field, not from
+  /// the JWT header, so an ES256 key served without `alg` would silently fall back to
+  /// `GET /user` even though the SDK can verify it.
+  @Test
+  func wellKnownJWKSServesES256Key() async throws {
+    let url = URL(string: "\(DotEnv.SUPABASE_URL)/auth/v1/.well-known/jwks.json")!
+    let (data, _) = try await URLSession.shared.data(from: url)
+    let jwks = try AuthClient.Configuration.jsonDecoder.decode(JWKS.self, from: data)
+
+    let jwk = try #require(jwks.keys.first { $0.alg == "ES256" })
+    expectNoDifference(jwk.kty, "EC")
+    expectNoDifference(jwk.crv, "P-256")
+    #expect(jwk.kid != nil)
+
+    // The coordinates must be 32 raw bytes each, or `JWK.p256PublicKey` returns nil.
+    expectNoDifference(Base64URL.decode(try #require(jwk.x))?.count, 32)
+    expectNoDifference(Base64URL.decode(try #require(jwk.y))?.count, 32)
+
+    // The `alg` the server sends must map to a verifier the SDK actually implements.
+    expectNoDifference(JWTAlgorithm(rawValue: try #require(jwk.alg)), .es256)
+    #expect(jwk.p256PublicKey != nil)
+  }
+
+  /// A live access token is ES256, and `getClaims` returns its claims.
+  @Test
+  func getClaimsWithLiveES256Session() async throws {
+    let email = mockEmail()
+    let session = try #require(
+      try await authClient.signUp(email: email, password: mockPassword()).session
+    )
+
+    let decoded = try #require(JWT.decode(session.accessToken))
+    expectNoDifference(decoded.header["alg"] as? String, "ES256")
+    // Local verification needs a `kid` to look the key up; without one it falls back.
+    #expect(decoded.header["kid"] as? String != nil)
+    // The JWS signature is raw r||s, which is what `ECDSASignature(rawRepresentation:)` takes.
+    expectNoDifference(decoded.signature.count, 64)
+
+    let result = try await authClient.getClaims()
+
+    expectNoDifference(result.header.alg, "ES256")
+    expectNoDifference(result.claims.sub, session.user.id.uuidString.lowercased())
+    expectNoDifference(result.claims.email, email)
+    expectNoDifference(result.claims.role, "authenticated")
+  }
+
+  /// Proves the verification is local, not a `GET /user` round trip.
+  ///
+  /// `jwtVerificationFailed("Invalid JWT signature")` is only reachable from the local
+  /// verification branch. Were the ES256 token still falling back to the server, a tampered
+  /// token would surface a GoTrue API error instead.
+  @Test
+  func getClaimsRejectsTamperedLiveES256Token() async throws {
+    let session = try #require(
+      try await authClient.signUp(email: mockEmail(), password: mockPassword()).session
+    )
+
+    let parts = session.accessToken.split(separator: ".")
+    var payload = try #require(
+      JWT.decodePayload(session.accessToken)
+    )
+    payload["role"] = "service_role"
+    let tamperedPayload = Base64URL.encode(
+      try JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys])
+    )
+    let tamperedJWT = "\(parts[0]).\(tamperedPayload).\(parts[2])"
+
+    await #expect(throws: AuthError.jwtVerificationFailed(message: "Invalid JWT signature")) {
+      _ = try await authClient.getClaims(jwt: tamperedJWT)
+    }
   }
 
   @discardableResult

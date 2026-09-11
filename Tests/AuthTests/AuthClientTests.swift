@@ -3149,24 +3149,47 @@ extension AuthMockerTests {
     }
 
     @Test
-    func getClaims_withProvidedJWKS_shouldStillFallbackForES256() async throws {
-      // ES256 is not yet supported client-side, so it will fallback to server even with JWKS
-      let jwt =
-        "eyJhbGciOiJFUzI1NiIsImtpZCI6InRlc3Qta2lkIiwidHlwIjoiSldUIn0.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6OTk5OTk5OTk5OSwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.dummysignature"
+    func getClaims_withES256JWTAndJWKS_shouldVerifyLocally() async throws {
+      let signer = ES256TestSigner()
+      let jwt = try signer.sign(
+        header: #"{"alg":"ES256","kid":"es256-test-kid","typ":"JWT"}"#,
+        payload:
+          #"{"sub":"1234567890","iss":"http://localhost:54321/auth/v1","aud":"authenticated","exp":9999999999,"iat":1516239022,"role":"authenticated"}"#
+      )
 
-      // JWK is Codable, no custom init needed
-      let jwkDict: [String: Any] = [
-        "kty": "EC",
-        "kid": "test-kid",
-        "alg": "ES256",
-        "crv": "P-256",
-        "x": "MKBCTNIcKUSDii11ySs3526iDZ8AiTo7Tu6KPAqv7D4",
-        "y": "4Etl6SRW2YiLUrN5vfvVHuhp7x8PxltmWWlbbM4IFyM",
-      ]
+      Mock(
+        url: clientURL.appendingPathComponent("user"),
+        ignoreQuery: true,
+        contentType: .json,
+        statusCode: 401,
+        data: [.get: Data()]
+      ).register()
 
-      let jwkData = try JSONSerialization.data(withJSONObject: jwkDict)
-      let jwk = try AuthClient.Configuration.jsonDecoder.decode(JWK.self, from: jwkData)
-      let jwks = JWKS(keys: [jwk])
+      let sut = makeSUT()
+
+      let result = try await sut.getClaims(
+        jwt: jwt,
+        options: GetClaimsOptions(jwks: JWKS(keys: [signer.jwk]))
+      )
+
+      #expect(result.claims.sub == "1234567890")
+      #expect(result.claims.role == "authenticated")
+      #expect(result.header.alg == "ES256")
+      #expect(result.header.kid == "es256-test-kid")
+    }
+
+    @Test
+    func getClaims_withTamperedES256JWT_shouldThrowWithoutFallback() async throws {
+      let signer = ES256TestSigner()
+      let jwt = try signer.sign(
+        header: #"{"alg":"ES256","kid":"es256-test-kid","typ":"JWT"}"#,
+        payload: #"{"sub":"1234567890","exp":9999999999,"role":"authenticated"}"#
+      )
+      let parts = jwt.split(separator: ".")
+      let tamperedPayload = Base64URL.encode(
+        Data(#"{"sub":"1234567890","exp":9999999999,"role":"service_role"}"#.utf8)
+      )
+      let tamperedJWT = "\(parts[0]).\(tamperedPayload).\(parts[2])"
 
       let user = User(fromMockNamed: "user")
 
@@ -3180,10 +3203,12 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      let result = try await sut.getClaims(jwt: jwt, options: GetClaimsOptions(jwks: jwks))
-
-      #expect(result.claims.sub == "1234567890")
-      #expect(result.claims.role == "authenticated")
+      await #expect(throws: AuthError.jwtVerificationFailed(message: "Invalid JWT signature")) {
+        _ = try await sut.getClaims(
+          jwt: tamperedJWT,
+          options: GetClaimsOptions(jwks: JWKS(keys: [signer.jwk]))
+        )
+      }
     }
 
     @Test

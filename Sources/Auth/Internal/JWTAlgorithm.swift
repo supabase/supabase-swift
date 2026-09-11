@@ -5,10 +5,12 @@
 //  Created by Claude on 06/10/25.
 //
 
+import Crypto
 import Foundation
 
 enum JWTAlgorithm: String {
   case rs256 = "RS256"
+  case es256 = "ES256"
 
   func verify(
     jwt: DecodedJWT,
@@ -29,6 +31,14 @@ enum JWTAlgorithm: String {
       #else
         return false
       #endif
+    case .es256:
+      guard
+        let publicKey = jwk.p256PublicKey,
+        let signature = try? P256.Signing.ECDSASignature(rawRepresentation: jwt.signature)
+      else {
+        return false
+      }
+      return publicKey.isValidSignature(signature, for: message)
     }
   }
 }
