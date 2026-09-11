@@ -1429,10 +1429,6 @@ features:
   storage.file_buckets.download_as_stream: not_implemented
   storage.file_buckets.purge_bucket_cache: not_implemented
   storage.file_buckets.purge_cache: not_implemented
-  # Cancellation is plain Swift structured concurrency (cancel the enclosing
-  # Task; URLSession tears down the in-flight transfer and the retry loop
-  # observes it via Task.isCancelled) — there is no dedicated cancel()-style
-  # symbol to register, matching database and functions.
   storage.file_buckets.request_cancellation: implemented
 
   # ── Storage — Vector Buckets ───────────────────────────────────────────────
