@@ -119,9 +119,9 @@ public struct PostgrestClient: Sendable {
     /// The `JSONEncoder` used to serialize request bodies.
     ///
     /// Defaults to ``jsonEncoder``, which is pre-configured with Supabase-compatible settings.
-    /// Individual calls to ``PostgrestRequestBuilder/insert(_:returning:count:encoder:)``,
+    /// Individual calls to ``PostgrestRequestBuilder/insert(_:returning:count:defaultToNull:encoder:)``,
     /// ``PostgrestRequestBuilder/update(_:returning:count:encoder:)``, and
-    /// ``PostgrestRequestBuilder/upsert(_:onConflict:returning:count:ignoreDuplicates:encoder:)``
+    /// ``PostgrestRequestBuilder/upsert(_:onConflict:returning:count:ignoreDuplicates:defaultToNull:encoder:)``
     /// can override this per call.
     public let encoder: JSONEncoder
 
@@ -249,9 +249,9 @@ public struct PostgrestClient: Sendable {
   /// Returns a query builder targeting the specified table or view.
   ///
   /// Call ``PostgrestRequestBuilder/select(_:head:count:)`` on the returned builder to begin a
-  /// `SELECT`, or use ``PostgrestRequestBuilder/insert(_:returning:count:encoder:)``,
+  /// `SELECT`, or use ``PostgrestRequestBuilder/insert(_:returning:count:defaultToNull:encoder:)``,
   /// ``PostgrestRequestBuilder/update(_:returning:count:encoder:)``,
-  /// ``PostgrestRequestBuilder/upsert(_:onConflict:returning:count:ignoreDuplicates:encoder:)``, or
+  /// ``PostgrestRequestBuilder/upsert(_:onConflict:returning:count:ignoreDuplicates:defaultToNull:encoder:)``, or
   /// ``PostgrestRequestBuilder/delete(returning:count:)`` for write operations.
   ///
   /// - Parameter table: The name of the table or view to query.
