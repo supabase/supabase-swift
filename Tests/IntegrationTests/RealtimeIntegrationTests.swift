@@ -18,7 +18,6 @@
 
   @testable import Helpers
   @testable import Realtime
-  @testable import RealtimeV2
 
   // Serialize this suite so concurrent tests don't open competing realtime connections against
   // the same local Supabase instance — Swift Testing runs `@Test`s in the same suite concurrently

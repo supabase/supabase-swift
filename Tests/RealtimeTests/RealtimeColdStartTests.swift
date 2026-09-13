@@ -4,7 +4,6 @@ import TestHelpers
 import Testing
 
 @testable import Realtime
-@testable import RealtimeV2
 
 /// Regression tests for SDK-959: deaf-socket stalls on cold-start subscribe.
 ///

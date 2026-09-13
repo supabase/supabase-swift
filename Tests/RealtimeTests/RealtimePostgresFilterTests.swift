@@ -8,7 +8,6 @@
 import Testing
 
 @testable import Realtime
-@testable import RealtimeV2
 
 @Suite
 struct RealtimePostgresFilterTests {

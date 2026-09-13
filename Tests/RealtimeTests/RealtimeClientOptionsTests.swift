@@ -2,7 +2,7 @@ import Foundation
 import Logging
 import Testing
 
-@testable import RealtimeV2
+@testable import Realtime
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking

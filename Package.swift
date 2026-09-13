@@ -216,22 +216,13 @@ let package = Package(
       ]
     ),
     .target(
-      name: "RealtimeV2",
+      name: "Realtime",
       dependencies: [
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
         .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
         .product(name: "Logging", package: "swift-log"),
         "Helpers",
-      ]
-    ),
-    .target(
-      name: "Realtime",
-      dependencies: [
-        .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
-        .product(name: "HTTPTypes", package: "swift-http-types"),
-        "Helpers",
-        "RealtimeV2",
       ]
     ),
     .testTarget(
@@ -241,7 +232,6 @@ let package = Package(
         .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
         "Realtime",
-        "RealtimeV2",
         "TestHelpers",
       ]
     ),

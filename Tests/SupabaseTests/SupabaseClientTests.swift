@@ -10,7 +10,6 @@ import Testing
 @testable import Auth
 @testable import Functions
 @testable import Realtime
-@testable import RealtimeV2
 @testable import Supabase
 
 #if canImport(FoundationNetworking)
