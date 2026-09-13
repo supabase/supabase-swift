@@ -95,6 +95,36 @@ Legitimate technical terms and project-specific words go in `dictionary.txt` at 
 
 Ensures DocC documentation builds without warnings.
 
+### Capability Compliance
+
+`sdk-compliance.yaml` declares this SDK's public API against the
+[supabase/sdk](https://github.com/supabase/sdk) capability matrix.
+`.github/workflows/validate-capabilities.yml` calls supabase/sdk's reusable
+compliance workflow on every PR, and it does check for both newly added
+public API not listed in the manifest and registered symbols the code no
+longer has. But that workflow is not a required status check on `main` —
+only `CI Success` (this repo's own `ci.yml`) and the WIP/draft gate are —
+so a failing compliance check does not, by itself, block a merge. That is
+how a 15-symbol manifest drift shipped unnoticed.
+
+**Any change to public API — adding, removing, renaming, or moving a
+symbol — updates `sdk-compliance.yaml` in the same commit.** This includes
+symbols a refactor deletes: a stale entry for a symbol that no longer
+exists is as much a compliance failure as a missing one. See the file's
+own comments and
+`https://github.com/supabase/sdk/blob/main/CONTRIBUTING.md` for the
+format.
+
+```bash
+# Check sdk-compliance.yaml against the current public API
+./scripts/check-compliance.sh
+```
+
+This runs the same stale-entry check locally, without network access or a
+checkout of `supabase/sdk`. Run it yourself before pushing a public-API
+change — `validate-capabilities.yml` will eventually catch it too, but
+since it isn't a required check, nothing stops a merge if you don't.
+
 ## Code Style and Conventions
 
 ### Swift Style
@@ -321,19 +351,25 @@ Dropping support for older versions is NOT considered a breaking change and happ
 
 1. Create feature branch from `main`
 2. Implement feature with tests
-3. Run `./scripts/format.sh` to format code
-4. Run `swift test` to verify tests pass
-5. Add documentation if needed
-6. Create PR with conventional commit title
-7. Ensure CI passes
+3. If the feature adds or changes public API, update `sdk-compliance.yaml`
+   in the same commit (see "Capability Compliance" above) and run
+   `./scripts/check-compliance.sh`
+4. Run `./scripts/format.sh` to format code
+5. Run `swift test` to verify tests pass
+6. Add documentation if needed
+7. Create PR with conventional commit title
+8. Ensure CI passes
 
 ### Fixing a Bug
 
 1. Add a failing test that reproduces the bug
 2. Fix the bug
-3. Verify test now passes
-4. Run full test suite
-5. Create PR with `fix:` prefix
+3. If the fix adds, removes, or renames public API, update
+   `sdk-compliance.yaml` in the same commit and run
+   `./scripts/check-compliance.sh`
+4. Verify test now passes
+5. Run full test suite
+6. Create PR with `fix:` prefix
 
 ### Updating Dependencies
 
@@ -370,6 +406,9 @@ supabase stop
 ## Important Notes for AI Coding Agents
 
 - Always run `./scripts/format.sh` before committing Swift code
+- Any change to public API (add, remove, rename, or move a symbol) updates
+  `sdk-compliance.yaml` in the same commit — run `./scripts/check-compliance.sh`
+  to check for stale entries before committing (see "Capability Compliance")
 - Ensure new public APIs have DocC documentation comments
 - Add tests for all new functionality
 - Keep changes minimal and focused
