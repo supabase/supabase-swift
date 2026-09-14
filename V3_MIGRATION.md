@@ -2167,3 +2167,73 @@ non-optional `HTTPURLResponse`.
 
 `HTTPURLResponse.init(httpResponse:url:)` comes from `HTTPTypesFoundation`, which `Helpers` now
 re-exports alongside `HTTPTypes`.
+
+## `FunctionsError` is now a struct, not an enum
+
+`FunctionsError` is a struct with a `kind: FunctionsError.Kind` property instead of an enum with
+`.relayError` and `.httpError(code:data:)` cases. `Kind` is a `RawRepresentable` struct with
+static members: `.relay`, `.http`, `.transport` and `.decoding`.
+
+The package builds with library evolution enabled, so adding a case to a public enum was a
+binary-breaking change. Every new failure the SDK learned to report would have needed a major
+version. A struct with an open `Kind` grows additively. The struct also conforms to
+`SupabaseError`, the new root shared by every module, and carries the HTTP status, headers, body
+and Supabase request id in `response`.
+
+This is a compile error: pattern matching on the old cases no longer compiles.
+
+```swift
+// Before
+do {
+  try await supabase.functions.invoke("hello")
+} catch FunctionsError.relayError {
+  retryLater()
+} catch let FunctionsError.httpError(code, data) {
+  print(code, String(decoding: data, as: UTF8.self))
+}
+
+// After
+do {
+  try await supabase.functions.invoke("hello")
+} catch let error as FunctionsError where error.kind == .relay {
+  retryLater()
+} catch let error as FunctionsError where error.kind == .http {
+  let response = error.response!  // always set for `.http` and `.relay`
+  print(response.statusCode, String(decoding: response.body, as: UTF8.self), response.requestID ?? "")
+}
+```
+
+`FunctionsError` is not `Equatable`. Compare `kind`, `message` and `response` instead. String
+interpolation of the error now prints `FunctionsError(http): Edge Function returned a non-2xx
+status code: 500 [status 500]` instead of the case name.
+
+## Network and decoding failures are wrapped in the module error
+
+Auth, PostgREST, Storage, Functions and Realtime no longer let `URLError` and `DecodingError`
+propagate as themselves. A request that never completes throws the module error with kind
+`.transport`, and a success body that cannot be decoded throws it with kind `.decoding`. The
+original error is in `underlyingError`. `CancellationError` is never wrapped and still propagates
+as itself.
+
+Without this, one `catch let error as any SupabaseError` missed exactly the failures a user is
+most likely to hit in the field: no network, and a schema drift between the app's model and the
+server. swift-openapi-runtime and Auth0 wrap the same way.
+
+This compiles silently. Search your codebase for `as URLError`, `as? URLError`, `as
+DecodingError` and `as? DecodingError` near Supabase calls; those branches stop matching.
+
+```swift
+// Before
+} catch let error as URLError where error.code == .notConnectedToInternet {
+  showOfflineBanner()
+}
+
+// After
+} catch let error as any SupabaseError where error.underlyingError is URLError {
+  if (error.underlyingError as? URLError)?.code == .notConnectedToInternet {
+    showOfflineBanner()
+  }
+}
+```
+
+There is no escape hatch that restores the raw error; `underlyingError` is the original value.
