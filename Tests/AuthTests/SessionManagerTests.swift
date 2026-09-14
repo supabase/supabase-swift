@@ -75,6 +75,17 @@ struct SessionManagerTests {
   }
 
   @Test
+  func customFetchErrorIsNotWrapped() async {
+    struct FetchError: Error {}
+    await http.any { _ in throw FetchError() }
+    Dependencies[clientID].sessionStorage.store(.expiredSession)
+
+    await #expect(throws: FetchError.self) {
+      _ = try await sut.session()
+    }
+  }
+
+  @Test
   func session_shouldReturnValidSession() async throws {
     try await withMainSerialExecutor {
       let session = Session.validSession
