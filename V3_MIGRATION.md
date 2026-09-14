@@ -1623,11 +1623,13 @@ Separately, decoding a `PostgrestError` from an error response no longer uses
 `Configuration.decoder` or either of these new per-call overrides — it always uses a fixed,
 non-configurable internal decoder. Previously, a decoder with a non-default `keyDecodingStrategy`
 or `dateDecodingStrategy` that didn't match `PostgrestError`'s plain `details`/`hint`/`code`/
-`message` shape could cause a real PostgREST error response to be reported as a generic `HTTPError`
-instead of a `PostgrestError`, since the mismatched decoder failed to parse it. This is a silent
-behavior change, not a compile error: if you `catch`-typed on `PostgrestError` while also
-customizing `Configuration.decoder`'s key or date strategy, error responses that previously fell
-through as `HTTPError` are now caught as `PostgrestError` instead.
+`message` shape could cause a real PostgREST error response to fail decoding, and was reported as a
+generic `HTTPError` instead of a `PostgrestError`. Now, any unrecognized response body throws
+`PostgrestError` with kind `.unexpectedResponse` and the decoded payload in `serverError` as
+`PostgrestError.ServerError`. This is a silent behavior change, not a compile error: if you
+`catch`-typed on `PostgrestError` while also customizing `Configuration.decoder`'s key or date
+strategy, error responses that previously fell through as `HTTPError` are now caught as
+`PostgrestError` instead.
 
 ## `PostgrestExecutableBuilder.execute<T: Decodable>(options:)` now requires a `decoder:` argument
 
@@ -2063,15 +2065,13 @@ options: .init(
 )
 ```
 
-## `HTTPError.response`, `PostgrestResponse.response`, `AuthError.api(underlyingResponse:)` and `FunctionsClient.invoke(decode:)` carry `HTTPResponse` instead of `HTTPURLResponse`
+## `PostgrestResponse.response`, `AuthError.api(underlyingResponse:)` and `FunctionsClient.invoke(decode:)` carry `HTTPResponse` instead of `HTTPURLResponse`
 
 Every place the SDK handed you the raw response head now uses `HTTPTypes.HTTPResponse` — the
 same type a `ClientTransport` or `ClientMiddleware` produces:
 
 | Before | After |
 | --- | --- |
-| `HTTPError.response: HTTPURLResponse` | `HTTPError.response: HTTPResponse` |
-| `HTTPError(data:response: HTTPURLResponse)` | `HTTPError(data:response: HTTPResponse)` |
 | `PostgrestResponse.response: HTTPURLResponse` | `PostgrestResponse.response: HTTPResponse` |
 | `PostgrestResponse(data:response: HTTPURLResponse, value:)` | `PostgrestResponse(data:response: HTTPResponse, value:)` |
 | `AuthError.api(message:errorCode:underlyingData:underlyingResponse: HTTPURLResponse)` | `AuthError.api(message:errorCode:underlyingData:underlyingResponse: HTTPResponse)` |
@@ -2090,7 +2090,9 @@ non-Foundation networking stack could not produce natively.
 ### Before / After
 
 `HTTPResponse` has `status` (an `HTTPResponse.Status` with `code` and `reasonPhrase`) and
-`headerFields` (an `HTTPFields`, subscripted by `HTTPField.Name`). It has no URL.
+`headerFields` (an `HTTPFields`, subscripted by `HTTPField.Name`). It has no URL. `HTTPError`
+itself is gone (see "`HTTPError` removed" below); each module error carries an
+``HTTPErrorResponse`` with the same shape plus the body.
 
 ```swift
 // Before
@@ -2105,10 +2107,10 @@ do {
 // After
 do {
   try await supabase.storage.from("avatars").remove(paths: ["a.png"])
-} catch let error as HTTPError {
-  print(error.response.status.code)
-  print(error.response.headerFields[.contentType])
-  // No URL on the response head; log the URL you requested instead.
+} catch let error as StorageError {
+  print(error.response?.statusCode)
+  print(error.response?.headers[.contentType])
+  // No URL on the response; log the URL you requested instead.
 }
 ```
 
@@ -2158,7 +2160,7 @@ There is no way to get an `HTTPURLResponse` back from these types. If a dependen
 build it from the head:
 
 ```swift
-guard let urlResponse = HTTPURLResponse(httpResponse: error.response, url: requestURL) else {
+guard let urlResponse = HTTPURLResponse(httpResponse: response.response, url: requestURL) else {
   return
 }
 ```
@@ -2211,10 +2213,12 @@ status code: 500 [status 500]` instead of the case name.
 ## Network and decoding failures are wrapped in the module error
 
 Auth, PostgREST, Storage, Functions and Realtime no longer let `URLError` and `DecodingError`
-propagate as themselves. A request that never completes throws the module error with kind
-`.transport`, and a success body that cannot be decoded throws it with kind `.decoding`. The
-original error is in `underlyingError`. `CancellationError` is never wrapped and still propagates
-as itself.
+propagate as themselves. A `URLError` from the network layer is thrown as the module error with
+kind `.transport`, and a success body that cannot be decoded throws it with kind `.decoding`.
+Errors thrown by your own code that runs inside the request — a custom `ClientTransport` or
+`ClientMiddleware`, or the `accessToken` closure — still propagate as themselves. The original
+error is in `underlyingError`. `CancellationError` is never wrapped and still propagates as
+itself.
 
 Without this, one `catch let error as any SupabaseError` missed exactly the failures a user is
 most likely to hit in the field: no network, and a schema drift between the app's model and the
@@ -2274,3 +2278,63 @@ This is a compile error: `statusCode` and `error` no longer exist on `StorageErr
 Kinds: `.server` (recognized body, `serverError` set), `.unexpectedResponse` (non-2xx with an
 unrecognized body, raw bytes in `response?.body`), `.transport`, `.decoding`, and `.invalidURL`
 for the URL-building helpers such as `getPublicURL`, which threw `URLError(.badURL)` before.
+
+## `PostgrestError` gains `kind` and `response`; server fields move to `serverError`
+
+`PostgrestError` is a wrapper with `kind`, `message`, `serverError`, `response` and
+`underlyingError`. The body PostgREST returns is decoded into `PostgrestError.ServerError`, which
+keeps `code`, `message`, `details` and `hint`. `PostgrestError` itself is no longer `Decodable`.
+
+A failed query used to arrive as one of three unrelated types: `PostgrestError` for a recognized
+body, `HTTPError` for anything else, and a raw `DecodingError` when the rows did not match your
+model. None carried the response headers or the Supabase request id. Now every failure is a
+`PostgrestError`, and `response?.requestID` is there for support tickets.
+
+This is a compile error: `code`, `details` and `hint` no longer exist on `PostgrestError`.
+
+```swift
+// Before
+} catch let error as PostgrestError {
+  if error.code == "23505" { showDuplicate(error.details) }
+} catch let error as HTTPError {
+  print(error.response.statusCode)
+}
+
+// After
+} catch let error as PostgrestError {
+  if error.serverError?.code == "23505" { showDuplicate(error.serverError?.details) }
+  print(error.response?.statusCode ?? 0, error.response?.requestID ?? "")
+}
+```
+
+Kinds: `.server` (recognized body, `serverError` set), `.unexpectedResponse` (raw body in
+`response?.body`), `.transport`, `.decoding`, and `.invalidRequest` for client-side rejections
+such as `.csv()` combined with `.stripNulls()`.
+
+If you constructed `PostgrestError(message:)` yourself, pass a kind:
+`PostgrestError(kind: .invalidRequest, message:)`.
+
+## `HTTPError` removed
+
+The generic `HTTPError` type is gone. Storage and PostgREST threw it when a non-2xx body did not
+decode as their own error payload, which meant two catch clauses per module. Each module error
+now carries `response: HTTPErrorResponse?` with the status code, `HTTPFields` headers, raw body
+and `requestID`, and an unrecognized body is reported with kind `.unexpectedResponse`.
+
+This is a compile error for any `catch let error as HTTPError`.
+
+```swift
+// Before
+} catch let error as HTTPError {
+  print(error.response.statusCode, String(decoding: error.data, as: UTF8.self))
+}
+
+// After
+} catch let error as any SupabaseError where error.response != nil {
+  let response = error.response!
+  print(response.statusCode, String(decoding: response.body, as: UTF8.self))
+}
+```
+
+`HTTPErrorResponse.headers` is `HTTPFields` from swift-http-types, not `[String: String]`.
+`import HTTPTypes` to spell header names: `response.headers[.contentType]`.

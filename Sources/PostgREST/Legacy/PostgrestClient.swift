@@ -103,8 +103,8 @@ public struct PostgrestClient: Sendable {
     ///
     /// Defaults to ``jsonDecoder``, which is pre-configured with Supabase-compatible settings.
     /// Individual calls to ``PostgrestRequestBuilder/execute(options:decoder:)``
-    /// can override this per call. Never used to decode ``PostgrestError`` — that always uses a
-    /// fixed internal decoder, decoupled from this setting.
+    /// can override this per call. Never used to decode ``PostgrestError/ServerError`` — that
+    /// always uses a fixed internal decoder, decoupled from this setting.
     public let decoder: JSONDecoder
 
     /// Whether the client should automatically retry transient errors.
@@ -259,7 +259,7 @@ public struct PostgrestClient: Sendable {
   ///   - get: When `true`, parameters are sent as query string items and the function runs in read-only mode.
   ///   - count: The row-count algorithm to use for [set-returning functions](https://www.postgresql.org/docs/current/functions-srf.html), or `nil` to skip counting.
   /// - Returns: A ``PostgrestFilterBuilder`` that you can further filter or execute.
-  /// - Throws: ``PostgrestError`` if `params` cannot be serialized to a key-value JSON object when using `head` or `get`.
+  /// - Throws: ``PostgrestError`` with kind `.invalidRequest` if `params` cannot be serialized to a key-value JSON object when using `head` or `get`.
   public func rpc(
     _ fn: String,
     params: some Encodable,
@@ -278,6 +278,7 @@ public struct PostgrestClient: Sendable {
       guard case .object(let json) = try JSONValue.decoder.decode(JSONValue.self, from: bodyData)
       else {
         throw PostgrestError(
+          kind: .invalidRequest,
           message: "Params should be a key-value type when using `GET` or `HEAD` options."
         )
       }
@@ -326,7 +327,7 @@ public struct PostgrestClient: Sendable {
   ///   - get: When `true`, the function runs in read-only mode.
   ///   - count: The row-count algorithm to use for [set-returning functions](https://www.postgresql.org/docs/current/functions-srf.html), or `nil` to skip counting.
   /// - Returns: A ``PostgrestFilterBuilder`` that you can further filter or execute.
-  /// - Throws: ``PostgrestError`` if the request cannot be constructed.
+  /// - Throws: ``PostgrestError`` with kind `.invalidRequest` if the request cannot be constructed.
   public func rpc(
     _ fn: String,
     head: Bool = false,

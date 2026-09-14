@@ -66,7 +66,10 @@ extension PostgrestMockerTests {
           .execute()
         Issue.record("Expected error to be thrown")
       } catch let error as PostgrestError {
+        #expect(error.kind == .server)
         #expect(error.message == "Bad Request")
+        #expect(error.serverError?.message == "Bad Request")
+        #expect(error.response?.statusCode == 400)
       }
     }
 
@@ -88,9 +91,11 @@ extension PostgrestMockerTests {
           .select()
           .execute()
         Issue.record("Expected error to be thrown")
-      } catch let error as HTTPError {
-        #expect(error.data == Data("Bad Request".utf8))
-        #expect(error.response.status.code == 400)
+      } catch let error as PostgrestError {
+        #expect(error.kind == .unexpectedResponse)
+        #expect(error.serverError == nil)
+        #expect(error.response?.body == Data("Bad Request".utf8))
+        #expect(error.response?.statusCode == 400)
       }
     }
 
@@ -186,7 +191,7 @@ extension PostgrestMockerTests {
           .value
         Issue.record("Expected error to be thrown")
       } catch let error as PostgrestError {
-        #expect(error.code == "PGRST116")
+        #expect(error.serverError?.code == "PGRST116")
       }
     }
 
@@ -460,7 +465,10 @@ extension PostgrestMockerTests {
       do {
         let _: SnakeCasePayload = try await sut.from("users").select().execute().value
         Issue.record("Expected a decoding error without a matching key strategy")
-      } catch is DecodingError {}
+      } catch let error as PostgrestError {
+        #expect(error.kind == .decoding)
+        #expect(error.underlyingError is DecodingError)
+      }
 
       let snakeCaseDecoder = JSONDecoder()
       snakeCaseDecoder.keyDecodingStrategy = .convertFromSnakeCase
@@ -490,7 +498,7 @@ extension PostgrestMockerTests {
         Issue.record("Expected PostgrestError to be thrown")
       } catch let error as PostgrestError {
         #expect(error.message == "Bad Request")
-        #expect(error.code == "PGRST000")
+        #expect(error.serverError?.code == "PGRST000")
       }
     }
 
@@ -511,7 +519,7 @@ extension PostgrestMockerTests {
         Issue.record("Expected PostgrestError to be thrown")
       } catch let error as PostgrestError {
         #expect(error.message == "Bad Request")
-        #expect(error.code == "PGRST000")
+        #expect(error.serverError?.code == "PGRST000")
       }
     }
 
@@ -769,6 +777,59 @@ extension PostgrestMockerTests {
       .execute()
       #expect(callCount.value == 2)
       #expect(result.value.isEmpty)
+    }
+
+    @Test
+    func transportFailureIsWrapped() async {
+      let sut = makeSUTWithCustomFetch(retryEnabled: false) { _ in
+        throw URLError(.notConnectedToInternet)
+      }
+
+      do {
+        try await sut.from("users").select().execute()
+        Issue.record("Expected error to be thrown")
+      } catch let error as PostgrestError {
+        #expect(error.kind == .transport)
+        #expect((error.underlyingError as? URLError)?.code == .notConnectedToInternet)
+      } catch {
+        Issue.record("Unexpected error \(error)")
+      }
+    }
+
+    @Test
+    func cancellationIsNotWrapped() async {
+      let sut = makeSUTWithCustomFetch(retryEnabled: false) { _ in throw CancellationError() }
+
+      await #expect(throws: CancellationError.self) {
+        try await sut.from("users").select().execute()
+      }
+    }
+
+    @Test
+    func customFetchErrorIsNotWrapped() async {
+      struct FetchError: Error {}
+      let sut = makeSUTWithCustomFetch(retryEnabled: false) { _ in throw FetchError() }
+
+      await #expect(throws: FetchError.self) {
+        try await sut.from("users").select().execute()
+      }
+    }
+
+    @Test
+    func undecodableSuccessBodyIsWrapped() async {
+      let sut = makeSUTWithCustomFetch { _ in
+        (Data("not json".utf8), self.makeHTTPURLResponse(statusCode: 200))
+      }
+
+      do {
+        let _: [User] = try await sut.from("users").select().execute().value
+        Issue.record("Expected error to be thrown")
+      } catch let error as PostgrestError {
+        #expect(error.kind == .decoding)
+        #expect(error.underlyingError is DecodingError)
+      } catch {
+        Issue.record("Unexpected error \(error)")
+      }
     }
 
     // MARK: - Helpers

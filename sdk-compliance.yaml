@@ -282,6 +282,30 @@ supporting_symbols:
   - StorageError.response
   - StorageError.underlyingError
   - StorageError.description
+  # PostgrestError (SDK-1788) is thrown by every database.* capability rather
+  # than owned by one. ServerError is the decoded PostgREST error payload.
+  - PostgrestError
+  - PostgrestError.Kind
+  - PostgrestError.Kind.init
+  - PostgrestError.Kind.rawValue
+  - PostgrestError.Kind.server
+  - PostgrestError.Kind.unexpectedResponse
+  - PostgrestError.Kind.transport
+  - PostgrestError.Kind.decoding
+  - PostgrestError.Kind.invalidRequest
+  - PostgrestError.ServerError
+  - PostgrestError.ServerError.init
+  - PostgrestError.ServerError.code
+  - PostgrestError.ServerError.message
+  - PostgrestError.ServerError.details
+  - PostgrestError.ServerError.hint
+  - PostgrestError.init
+  - PostgrestError.kind
+  - PostgrestError.message
+  - PostgrestError.serverError
+  - PostgrestError.response
+  - PostgrestError.underlyingError
+  - PostgrestError.description
 
 features:
 
@@ -781,7 +805,7 @@ features:
   database.query.from_table:
     status: implemented
     symbols:
-      - PostgrestError.details
+      - PostgrestClient.from
     supporting_symbols:
       # The value `from(_ type:)` returns once a relation has been chosen but
       # no operation has been picked yet.
