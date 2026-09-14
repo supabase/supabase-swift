@@ -263,7 +263,7 @@ extension AuthMockerTests {
       do {
         _ = try await sut.oauthServer.getAuthorizationDetails(authorizationId: "abc123def456")
         Issue.record("Expected AuthError.sessionMissing")
-      } catch AuthError.sessionMissing {
+      } catch let error as AuthError where error.kind == .sessionMissing {
         // expected
       }
     }
@@ -287,8 +287,9 @@ extension AuthMockerTests {
       do {
         _ = try await sut.oauthServer.getAuthorizationDetails(authorizationId: "missing")
         Issue.record("Expected AuthError.api")
-      } catch let AuthError.api(_, errorCode, _, _) {
-        #expect(errorCode == .oauthAuthorizationNotFound)
+      } catch let error as AuthError {
+        #expect(error.kind == .api)
+        #expect(error.errorCode == .oauthAuthorizationNotFound)
       }
     }
 
@@ -465,8 +466,9 @@ extension AuthMockerTests {
       do {
         try await sut.oauthServer.revokeGrant(clientId: clientId)
         Issue.record("Expected AuthError.api")
-      } catch let AuthError.api(_, errorCode, _, _) {
-        #expect(errorCode == .oauthConsentNotFound)
+      } catch let error as AuthError {
+        #expect(error.kind == .api)
+        #expect(error.errorCode == .oauthConsentNotFound)
       }
     }
   }

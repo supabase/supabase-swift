@@ -856,10 +856,10 @@ public actor AuthClient {
           guard let callbackScheme = (configuration.redirectToURL ?? redirectTo)?.scheme else {
             continuation.resume(
               throwing: AuthError.oauthFlowFailed(
-                message: """
-                  Provide a redirect URL with a scheme, either through the `redirectTo` parameter \
-                  or globally through `AuthClient.Configuration.redirectToURL`.
-                  """
+                """
+                Provide a redirect URL with a scheme, either through the `redirectTo` parameter \
+                or globally through `AuthClient.Configuration.redirectToURL`.
+                """
               )
             )
             return
@@ -883,7 +883,7 @@ public actor AuthClient {
               reportIssue("ASWebAuthenticationSession returned neither a URL nor an error.")
               continuation.resume(
                 throwing: AuthError.oauthFlowFailed(
-                  message: "ASWebAuthenticationSession returned neither a URL nor an error."
+                  "ASWebAuthenticationSession returned neither a URL nor an error."
                 )
               )
             }
@@ -988,15 +988,13 @@ public actor AuthClient {
     switch configuration.flowType {
     case .implicit:
       guard isImplicitGrantFlow(params: params) else {
-        throw AuthError.implicitGrantRedirect(
-          message: "Not a valid implicit grant flow URL: \(url)"
-        )
+        throw AuthError.implicitGrantRedirect("Not a valid implicit grant flow URL: \(url)")
       }
       return try await handleImplicitGrantFlow(params: params)
 
     case .pkce:
       guard isPKCEFlow(params: params) else {
-        throw AuthError.pkceGrantCodeExchange(message: "Not a valid PKCE flow URL: \(url)")
+        throw AuthError.pkceGrantCodeExchange("Not a valid PKCE flow URL: \(url)")
       }
       return try await handlePKCEFlow(params: params, flowId: flowId)
     }
@@ -1006,7 +1004,7 @@ public actor AuthClient {
   /// `configuration.flowType`, which is what guarantees the flow type here.
   private func handleImplicitGrantFlow(params: [String: String]) async throws -> Session {
     if let errorMessage = params["error_description"] ?? params["error"] {
-      throw AuthError.implicitGrantRedirect(message: errorMessage)
+      throw AuthError.implicitGrantRedirect(errorMessage)
     }
 
     guard
@@ -1015,7 +1013,7 @@ public actor AuthClient {
       let refreshToken = params["refresh_token"],
       let tokenType = params["token_type"]
     else {
-      throw AuthError.implicitGrantRedirect(message: "No session defined in URL")
+      throw AuthError.implicitGrantRedirect("No session defined in URL")
     }
 
     let expiresAt = params["expires_at"].flatMap(TimeInterval.init)
@@ -1055,16 +1053,17 @@ public actor AuthClient {
   /// `configuration.flowType`, which is what guarantees the flow type here.
   private func handlePKCEFlow(params: [String: String], flowId: String?) async throws -> Session {
     if params["error"] != nil || params["error_description"] != nil || params["error_code"] != nil {
+      let oauthError = params["error"] ?? "unspecified_error"
+      let description =
+        params["error_description"] ?? "Error in URL with unspecified error_description."
       throw AuthError.pkceGrantCodeExchange(
-        message: params["error_description"]
-          ?? "Error in URL with unspecified error_description.",
-        error: params["error"] ?? "unspecified_error",
-        code: params["error_code"] ?? "unspecified_code"
+        "\(oauthError): \(description)",
+        errorCode: params["error_code"].map { ErrorCode($0) } ?? .unknown
       )
     }
 
     guard let code = params["code"] else {
-      throw AuthError.pkceGrantCodeExchange(message: "No code detected.")
+      throw AuthError.pkceGrantCodeExchange("No code detected.")
     }
 
     return try await exchangeCodeForSession(authCode: code, flowId: flowId)
@@ -1135,11 +1134,14 @@ public actor AuthClient {
           headerFields: [.authorization: "Bearer \(accessToken)"]
         )
       )
-    } catch let AuthError.api(_, _, _, response)
-      where [404, 403, 401].contains(response.status.code)
+    } catch let error as AuthError
+      where [.api, .unexpectedResponse].contains(error.kind)
+      && [404, 403, 401].contains(error.response?.statusCode ?? 0)
     {
       // ignore 404s since user might not exist anymore
       // ignore 401s, and 403s since an invalid or expired JWT should sign out the current session.
+      // A body-less error response (e.g. from a proxy) reports as `.unexpectedResponse` rather
+      // than `.api`, but the status code alone is enough to know it's still safe to swallow here.
     }
   }
 
@@ -1708,7 +1710,7 @@ public actor AuthClient {
   ///
   /// - Returns: A `JWTClaimsResponse` containing the verified claims, header, and signature.
   ///
-  /// - Throws: `AuthError.jwtVerificationFailed` if verification fails, or `AuthError.sessionMissing` if no session exists.
+  /// - Throws: ``AuthError`` with kind `.jwtVerificationFailed` if verification fails, or ``AuthError/sessionMissing`` if no session exists.
   public func getClaims(
     jwt: String? = nil,
     options: GetClaimsOptions = GetClaimsOptions()
@@ -1724,7 +1726,7 @@ public actor AuthClient {
     }
 
     guard let decodedJWT = JWT.decode(token) else {
-      throw AuthError.jwtVerificationFailed(message: "Invalid JWT structure")
+      throw AuthError.jwtVerificationFailed("Invalid JWT structure")
     }
 
     // Validate expiration unless allowExpired is true
@@ -1732,7 +1734,7 @@ public actor AuthClient {
       if let exp = decodedJWT.payload["exp"] as? TimeInterval {
         let now = date().timeIntervalSince1970
         if exp <= now {
-          throw AuthError.jwtVerificationFailed(message: "JWT has expired")
+          throw AuthError.jwtVerificationFailed("JWT has expired")
         }
       }
     }
@@ -1773,7 +1775,7 @@ public actor AuthClient {
     let isValid = algorithm.verify(jwt: decodedJWT, jwk: signingKey)
 
     guard isValid else {
-      throw AuthError.jwtVerificationFailed(message: "Invalid JWT signature")
+      throw AuthError.jwtVerificationFailed("Invalid JWT signature")
     }
 
     // Decode claims and header
