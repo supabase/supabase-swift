@@ -642,15 +642,15 @@ struct RealtimeChannelTests {
 
   @Test
   func httpSendWrapsTransportFailure() async {
-    let httpClient = HTTPClientMock()
-    await httpClient.any { _ in throw URLError(.timedOut) }
+    let httpClient = RecordingTransport()
+    httpClient.respond { _, _ in throw URLError(.timedOut) }
     let (client, _) = FakeWebSocket.fakes()
     let socket = RealtimeClientV2(
       url: URL(string: "https://localhost:54321/realtime/v1")!,
       options: RealtimeClientOptions(
         headers: ["apikey": "test-key"], accessToken: { "test-token" }),
       wsTransport: { _, _ in client },
-      http: httpClient,
+      http: HTTPClient(transport: httpClient),
       clock: ContinuousClock()
     )
     let channel = socket.channel("test-topic")
@@ -668,15 +668,15 @@ struct RealtimeChannelTests {
 
   @Test
   func httpSendDoesNotWrapCancellation() async {
-    let httpClient = HTTPClientMock()
-    await httpClient.any { _ in throw CancellationError() }
+    let httpClient = RecordingTransport()
+    httpClient.respond { _, _ in throw CancellationError() }
     let (client, _) = FakeWebSocket.fakes()
     let socket = RealtimeClientV2(
       url: URL(string: "https://localhost:54321/realtime/v1")!,
       options: RealtimeClientOptions(
         headers: ["apikey": "test-key"], accessToken: { "test-token" }),
       wsTransport: { _, _ in client },
-      http: httpClient,
+      http: HTTPClient(transport: httpClient),
       clock: ContinuousClock()
     )
     let channel = socket.channel("test-topic")
@@ -690,15 +690,15 @@ struct RealtimeChannelTests {
 
   @Test
   func httpSendDoesNotWrapCustomFetchError() async {
-    let httpClient = HTTPClientMock()
-    await httpClient.any { _ in throw FetchError() }
+    let httpClient = RecordingTransport()
+    httpClient.respond { _, _ in throw FetchError() }
     let (client, _) = FakeWebSocket.fakes()
     let socket = RealtimeClientV2(
       url: URL(string: "https://localhost:54321/realtime/v1")!,
       options: RealtimeClientOptions(
         headers: ["apikey": "test-key"], accessToken: { "test-token" }),
       wsTransport: { _, _ in client },
-      http: httpClient,
+      http: HTTPClient(transport: httpClient),
       clock: ContinuousClock()
     )
     let channel = socket.channel("test-topic")
