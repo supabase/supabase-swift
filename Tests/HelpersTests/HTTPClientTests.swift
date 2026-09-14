@@ -13,6 +13,10 @@ import Testing
 
 @testable import Helpers
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 @Suite
 struct HTTPClientTests {
   struct StubTransport: ClientTransport {
