@@ -182,13 +182,16 @@ jobs:
           ["swift:6.2-noble", "swift:6.3-noble", "swiftlang/swift:nightly-main-noble"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Official Swift images run as root, so files the container writes into the
+      # bind-mounted workspace end up root-owned. That breaks hashFiles() in the cache
+      # action's post-step (it stats the workspace from the runner's own, non-root
+      # context), so this key can't depend on hashFiles('**/Package.resolved') the way
+      # the uncontainerized jobs' keys do.
       - name: "Cache Swift Package"
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .build
-          key: ${{ runner.os }}-spm-${{ matrix.container }}-${{ hashFiles('**/Package.resolved') }}
-          restore-keys: |
-            ${{ runner.os }}-spm-${{ matrix.container }}-
+          key: ${{ runner.os }}-spm-${{ matrix.container }}
       - name: "Build Swift Package"
         run: swift build --explicit-target-dependency-import-check error
       - name: "Test Swift Package"
