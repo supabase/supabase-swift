@@ -259,6 +259,29 @@ supporting_symbols:
   - FunctionsError.response
   - FunctionsError.underlyingError
   - FunctionsError.description
+  # StorageError (SDK-1788) is thrown by every storage.* capability rather than
+  # owned by one. ServerError is the decoded Storage error payload.
+  - StorageError
+  - StorageError.Kind
+  - StorageError.Kind.init
+  - StorageError.Kind.rawValue
+  - StorageError.Kind.server
+  - StorageError.Kind.unexpectedResponse
+  - StorageError.Kind.transport
+  - StorageError.Kind.decoding
+  - StorageError.Kind.invalidURL
+  - StorageError.ServerError
+  - StorageError.ServerError.init
+  - StorageError.ServerError.statusCode
+  - StorageError.ServerError.error
+  - StorageError.ServerError.message
+  - StorageError.init
+  - StorageError.kind
+  - StorageError.message
+  - StorageError.serverError
+  - StorageError.response
+  - StorageError.underlyingError
+  - StorageError.description
 
 features:
 
