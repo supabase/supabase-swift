@@ -388,8 +388,9 @@ extension PostgrestRequestBuilder where Phase: PostgrestExecutablePhase {
   /// - Parameter options: Options controlling whether to include a row count and whether to
   ///   use the HEAD method. Defaults to ``FetchOptions/init(head:count:)``.
   /// - Returns: A ``PostgrestResponse`` whose `value` is `Void`.
-  /// - Throws: ``PostgrestError`` if PostgREST returns an error response, or any error thrown by
-  ///   the transport.
+  /// - Throws: ``PostgrestError`` with kind `.server` if PostgREST returns an error response,
+  ///   `.transport` if the request never completes, or `.unexpectedResponse` if the body is not
+  ///   a PostgREST error.
   @discardableResult
   public func execute(
     options: FetchOptions = FetchOptions()
@@ -412,10 +413,10 @@ extension PostgrestRequestBuilder where Phase: PostgrestExecutablePhase {
   ///     use the HEAD method. Defaults to ``FetchOptions/init(head:count:)``.
   ///   - decoder: The `JSONDecoder` used to decode the response body into `T`. Overrides
   ///     ``PostgrestClient/Configuration/decoder`` when non-`nil`. Never used to decode
-  ///     ``PostgrestError`` — that always uses a fixed internal decoder.
+  ///     ``PostgrestError/ServerError`` — that always uses a fixed internal decoder.
   /// - Returns: A ``PostgrestResponse`` whose `value` is the decoded `T`.
-  /// - Throws: ``PostgrestError`` if PostgREST returns an error response, a decoding error if
-  ///   the response body cannot be decoded as `T`, or any error thrown by the transport.
+  /// - Throws: ``PostgrestError`` with kind `.decoding` if the body cannot be decoded as `T`, or
+  ///   another kind for server, transport and unexpected responses.
   @discardableResult
   public func execute<T: Decodable>(
     options: FetchOptions = FetchOptions(),
@@ -427,7 +428,11 @@ extension PostgrestRequestBuilder where Phase: PostgrestExecutablePhase {
         return try decoder.decode(T.self, from: data)
       } catch {
         configuration.logger.error("Failed to decode type '\(T.self) with error: \(error)")
-        throw error
+        throw PostgrestError(
+          kind: .decoding,
+          message: "Failed to decode the PostgREST response as \(T.self).",
+          underlyingError: error
+        )
       }
     }
   }
@@ -437,7 +442,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestExecutablePhase {
     decode: (Data) throws -> T
   ) async throws -> PostgrestResponse<T> {
     if let message = pendingError {
-      throw PostgrestError(message: message)
+      throw PostgrestError(kind: .invalidRequest, message: message)
     }
 
     var request = self.request
@@ -498,7 +503,9 @@ extension PostgrestRequestBuilder where Phase: PostgrestExecutablePhase {
           attempt += 1
           continue
         }
-        throw error
+        if error is CancellationError { throw error }
+        throw PostgrestError(
+          kind: .transport, message: error.localizedDescription, underlyingError: error)
       }
 
       if 200..<300 ~= response.status.code {
@@ -515,20 +522,29 @@ extension PostgrestRequestBuilder where Phase: PostgrestExecutablePhase {
         continue
       }
 
-      // `PostgrestError`'s fields match PostgREST's JSON keys exactly, so a plain, fixed
+      // `ServerError`'s fields match PostgREST's JSON keys exactly, so a plain, fixed
       // `JSONDecoder` decodes it regardless of any user-supplied key/date strategy on
       // `configuration.decoder` or a per-call override — those are for user-defined row types.
-      if let error = try? JSONDecoder().decode(PostgrestError.self, from: data) {
+      if let serverError = try? JSONDecoder().decode(PostgrestError.ServerError.self, from: data) {
         // `maybeSingle()` turns the "no rows" variant of PGRST116 into a `nil` value, but
         // rethrows the "multiple rows" variant since that indicates a query that should have
         // been scoped to match at most one row.
-        if isMaybeSingle, error.code == "PGRST116", error.matchedZeroRows {
+        if isMaybeSingle, serverError.code == "PGRST116", serverError.matchedZeroRows {
           let value = try decode(Data("null".utf8))
           return PostgrestResponse(data: data, response: response, value: value)
         }
-        throw error
+        throw PostgrestError(
+          kind: .server,
+          message: serverError.message,
+          serverError: serverError,
+          response: HTTPErrorResponse(response, body: data)
+        )
       }
-      throw HTTPError(data: data, response: response)
+      throw PostgrestError(
+        kind: .unexpectedResponse,
+        message: "Unexpected response with status code \(response.status.code).",
+        response: HTTPErrorResponse(response, body: data)
+      )
     }
   }
 
@@ -565,23 +581,4 @@ extension HTTPField.Name {
   static let acceptProfile = Self("Accept-Profile")!
   static let contentProfile = Self("Content-Profile")!
   static let xRetryCount = Self("X-Retry-Count")!
-}
-
-extension PostgrestError {
-  /// Whether a `PGRST116` error was caused by the query matching zero rows, as opposed to more
-  /// than one row.
-  ///
-  /// PostgREST reports both cases with the same error code; the row count is only distinguishable
-  /// via the `details` message. The exact wording has varied across PostgREST versions, e.g.
-  /// "Results contain 0 rows, application/vnd.pgrst.object+json requires 1 row" and "The result
-  /// contains 0 rows". Both mention the matched row count immediately before a "row"/"rows" word,
-  /// so look for that instead of matching a fixed prefix.
-  fileprivate var matchedZeroRows: Bool {
-    guard let details else { return false }
-    let words = details.split(separator: " ")
-    guard let rowsIndex = words.firstIndex(where: { $0.hasPrefix("row") }), rowsIndex > 0,
-      let count = Int(words[rowsIndex - 1])
-    else { return false }
-    return count == 0
-  }
 }

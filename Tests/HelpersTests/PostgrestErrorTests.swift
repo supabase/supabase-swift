@@ -6,20 +6,22 @@
 //
 
 import Foundation
-import Helpers
+import HTTPTypes
 import Testing
+
+@testable import Helpers
 
 @Suite
 struct PostgrestErrorTests {
-
   @Test
-  func localizedErrorConformance() {
-    let error = PostgrestError(message: "test error message")
+  func errorDescriptionIsTheMessage() {
+    let error = PostgrestError(kind: .invalidRequest, message: "test error message")
+
     #expect(error.errorDescription == "test error message")
   }
 
   @Test
-  func decodesDetailsFromWireKey() throws {
+  func serverErrorDecodesTheWirePayload() throws {
     let json = """
       {
         "code": "23505",
@@ -29,11 +31,40 @@ struct PostgrestErrorTests {
       }
       """
 
-    let error = try JSONDecoder().decode(PostgrestError.self, from: Data(json.utf8))
+    let payload = try JSONDecoder().decode(PostgrestError.ServerError.self, from: Data(json.utf8))
 
-    #expect(error.details == "Key (id)=(1) already exists.")
-    #expect(error.hint == "Use a different id.")
-    #expect(error.code == "23505")
-    #expect(error.message == "duplicate key value violates unique constraint \"users_pkey\"")
+    #expect(payload.details == "Key (id)=(1) already exists.")
+    #expect(payload.hint == "Use a different id.")
+    #expect(payload.code == "23505")
+    #expect(payload.message == "duplicate key value violates unique constraint \"users_pkey\"")
+  }
+
+  @Test
+  func descriptionIncludesKindStatusAndRequestID() {
+    var headers = HTTPFields()
+    headers[.sbRequestID] = "req-9"
+    let error = PostgrestError(
+      kind: .server,
+      message: "Row not found",
+      serverError: .init(code: "PGRST116", message: "Row not found"),
+      response: HTTPErrorResponse(statusCode: 406, headers: headers, body: Data())
+    )
+
+    #expect(
+      error.description == "PostgrestError(server): Row not found [status 406, request req-9]")
+  }
+
+  @Test
+  func matchedZeroRowsReadsTheRowCountFromDetails() {
+    #expect(
+      PostgrestError.ServerError(
+        code: "PGRST116", message: "", details: "The result contains 0 rows"
+      ).matchedZeroRows)
+    #expect(
+      !PostgrestError.ServerError(
+        code: "PGRST116", message: "",
+        details: "Results contain 2 rows, application/vnd.pgrst.object+json requires 1 row"
+      ).matchedZeroRows)
+    #expect(!PostgrestError.ServerError(code: "PGRST116", message: "").matchedZeroRows)
   }
 }

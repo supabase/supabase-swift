@@ -93,6 +93,7 @@ extension PostgrestMockerTests {
           .execute()
         Issue.record("Expected error to be thrown")
       } catch let error as PostgrestError {
+        #expect(error.kind == .invalidRequest)
         #expect(
           error.message == "Params should be a key-value type when using `GET` or `HEAD` options.")
       }
@@ -106,6 +107,7 @@ extension PostgrestMockerTests {
           .execute()
         Issue.record("Expected error to be thrown")
       } catch let error as PostgrestError {
+        #expect(error.kind == .invalidRequest)
         #expect(
           error.message == "Params should be a key-value type when using `GET` or `HEAD` options.")
       }
