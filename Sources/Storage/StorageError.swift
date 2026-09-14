@@ -1,4 +1,4 @@
-public import Foundation
+import Foundation
 public import Helpers
 
 /// An error thrown by the Storage client.
