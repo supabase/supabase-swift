@@ -1799,6 +1799,62 @@ reads `error.message` / `error.errorCode` is unaffected.
 `errorCode` for the new case is `.unknown`, matching the other client-side cases
 (`pkceGrantCodeExchange`, `implicitGrantRedirect`).
 
+## `AuthError` is now a struct, not an enum
+
+`AuthError` is a struct with `kind: AuthError.Kind`, `message`, `errorCode`,
+`weakPasswordReasons`, `response` and `underlyingError`. `Kind` is a `RawRepresentable` struct
+with static members that mirror the old cases (`.api`, `.sessionMissing`, `.weakPassword`,
+`.pkceGrantCodeExchange`, `.implicitGrantRedirect`, `.jwtVerificationFailed`) plus `.webAuthn`,
+`.unexpectedResponse`, `.transport` and `.decoding`. `AuthError.sessionMissing` still exists as a
+static value, so `throw AuthError.sessionMissing` compiles unchanged.
+
+The package builds with library evolution enabled, so adding a case to a public enum was a
+binary-breaking change; every new failure GoTrue learned to report needed a major version. The
+`.api` case also carried an `HTTPURLResponse`, which is not `Sendable`. The struct is `Sendable`,
+conforms to the new `SupabaseError` root, and carries the status, headers, body and Supabase
+request id in `response`.
+
+This is a compile error for every `case`-based pattern and for the removed `~=` operator:
+
+| Before | After |
+| --- | --- |
+| `catch AuthError.sessionMissing` | `catch let error as AuthError where error.kind == .sessionMissing` |
+| `catch let AuthError.api(message, code, data, response)` | `catch let error as AuthError where error.kind == .api` then `error.message`, `error.errorCode`, `error.response?.body`, `error.response?.statusCode` |
+| `catch let AuthError.weakPassword(message, reasons)` | `catch let error as AuthError where error.kind == .weakPassword` then `error.weakPasswordReasons` |
+| `catch let AuthError.pkceGrantCodeExchange(message, error, code)` | `error.kind == .pkceGrantCodeExchange`; `message` is now `"<error>: <description>"` and `code` is in `error.errorCode` |
+| `catch let AuthError.jwtVerificationFailed(message)` | `error.kind == .jwtVerificationFailed` then `error.message` |
+| `AuthError.sessionMissing ~= error` | `(error as? AuthError)?.kind == .sessionMissing` |
+
+```swift
+// Before
+do {
+  try await supabase.auth.signIn(email: email, password: password)
+} catch let AuthError.api(message, errorCode, _, response) {
+  print(response.statusCode, errorCode, message)
+} catch AuthError.sessionMissing {
+  showLogin()
+}
+
+// After
+do {
+  try await supabase.auth.signIn(email: email, password: password)
+} catch let error as AuthError where error.kind == .api {
+  print(error.response?.statusCode ?? 0, error.errorCode, error.message)
+} catch let error as AuthError where error.kind == .sessionMissing {
+  showLogin()
+}
+```
+
+`AuthError` is no longer `Equatable`. `error == .sessionMissing` and any `Equatable` state type
+that stores an `AuthError` stop compiling; compare `kind`, `errorCode` and `message`, or store
+those instead. String interpolation prints `AuthError(api): Invalid login credentials [status
+400, request ...]` instead of the case name.
+
+`signOut` keeps swallowing 401, 403 and 404 responses from the `/logout` endpoint, whether or not the body was a recognizable GoTrue error. In v2 that fallback surfaced as `.api(message: "Unexpected error", ...)`; in v3 it is kind `.unexpectedResponse`, and `signOut` treats both kinds the same way for those statuses. No change in behavior.
+
+The internal `WebAuthnError` type, which could leak from the passkey and WebAuthn MFA flows, is
+folded into `AuthError` with kind `.webAuthn`.
+
 ## `fetch:` closures and `StorageHTTPSession` replaced by `ClientTransport` and `ClientMiddleware`
 
 Every sub-client now sends through one protocol, `ClientTransport`, behind an ordered chain of
