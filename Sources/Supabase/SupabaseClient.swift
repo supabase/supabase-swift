@@ -272,8 +272,7 @@ public final class SupabaseClient: Sendable {
       // DON'T give the AuthClient `AccessTokenMiddleware` — resolving the access token goes
       // through the AuthClient itself, which may cause a deadlock.
       http: HTTPClientConfiguration(
-        transport: options.global.http.transport
-          ?? URLSessionTransport(session: options.global.session),
+        transport: options.global.http.transport ?? URLSessionTransport(),
         middlewares: options.global.http.middlewares + [TraceContextMiddleware()]
       ),
       autoRefreshToken: options.auth.autoRefreshToken
@@ -420,7 +419,7 @@ public final class SupabaseClient: Sendable {
 
   /// The resolved transport shared by every sub-client.
   private var transport: any ClientTransport {
-    options.global.http.transport ?? URLSessionTransport(session: options.global.session)
+    options.global.http.transport ?? URLSessionTransport()
   }
 
   /// The shared transport plus the user's middlewares followed by the SDK's, for sub-clients that
@@ -519,10 +518,6 @@ public final class SupabaseClient: Sendable {
         middlewares: options.global.http.middlewares + realtimeOptions.http.middlewares
           + [TraceContextMiddleware()]
       )
-    }
-
-    if realtimeOptions.session == nil {
-      realtimeOptions.session = options.global.session
     }
 
     if realtimeOptions.accessToken == nil {

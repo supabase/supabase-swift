@@ -82,7 +82,6 @@ struct SupabaseClientTests {
         ),
         global: SupabaseClientOptions.GlobalOptions(
           headers: customHeaders,
-          session: .shared,
           logger: logger
         ),
         functions: SupabaseClientOptions.FunctionsOptions(
@@ -195,7 +194,7 @@ struct SupabaseClientTests {
   #endif
 
   @Test
-  func customSessionPropagatedToRealtimeClient() {
+  func defaultTransportPropagatedToRealtimeClient() {
     let localStorage = AuthLocalStorageMock()
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
@@ -204,14 +203,13 @@ struct SupabaseClientTests {
         auth: SupabaseClientOptions.AuthOptions(
           storage: localStorage,
           autoRefreshToken: false
-        ),
-        global: SupabaseClientOptions.GlobalOptions(session: .shared)
+        )
       )
     )
 
     #expect(
       client.realtimeV2.options.http.transport is URLSessionTransport,
-      "global URLSession should be propagated to Realtime client as the default transport"
+      "the default URLSessionTransport should be propagated to Realtime client"
     )
     #expect(
       client.realtimeV2.options.http.middlewares.contains { $0 is TraceContextMiddleware },
@@ -246,31 +244,9 @@ struct SupabaseClientTests {
   }
 
   @Test
-  func globalSessionPropagatedToRealtimeWebSocket() {
+  func realtimeWebSocketSessionComesOnlyFromRealtimeOptions() {
     let localStorage = AuthLocalStorageMock()
-    let customSession = URLSession(configuration: .ephemeral)
-    let client = SupabaseClient(
-      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
-      supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
-        auth: SupabaseClientOptions.AuthOptions(
-          storage: localStorage,
-          autoRefreshToken: false
-        ),
-        global: SupabaseClientOptions.GlobalOptions(session: customSession)
-      )
-    )
-
-    #expect(
-      client.realtimeV2.options.session === customSession,
-      "global URLSession should be propagated to Realtime's WebSocket transport for certificate pinning"
-    )
-  }
-
-  @Test
-  func userProvidedRealtimeSessionIsNotOverridden() {
-    let localStorage = AuthLocalStorageMock()
-    let globalSession = URLSession(configuration: .ephemeral)
+    let httpSession = URLSession(configuration: .ephemeral)
     let realtimeSpecificSession = URLSession(configuration: .default)
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
@@ -280,7 +256,9 @@ struct SupabaseClientTests {
           storage: localStorage,
           autoRefreshToken: false
         ),
-        global: SupabaseClientOptions.GlobalOptions(session: globalSession),
+        global: SupabaseClientOptions.GlobalOptions(
+          http: .init(transport: URLSessionTransport(session: httpSession))
+        ),
         realtime: RealtimeClientOptions(session: realtimeSpecificSession)
       )
     )
@@ -288,6 +266,25 @@ struct SupabaseClientTests {
     #expect(
       client.realtimeV2.options.session === realtimeSpecificSession,
       "user-provided realtime session should be preserved"
+    )
+
+    let clientWithoutRealtimeSession = SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      options: SupabaseClientOptions(
+        auth: SupabaseClientOptions.AuthOptions(
+          storage: localStorage,
+          autoRefreshToken: false
+        ),
+        global: SupabaseClientOptions.GlobalOptions(
+          http: .init(transport: URLSessionTransport(session: httpSession))
+        )
+      )
+    )
+
+    #expect(
+      clientWithoutRealtimeSession.realtimeV2.options.session == nil,
+      "the HTTP transport's URLSession must not leak into Realtime's WebSocket"
     )
   }
 
@@ -350,7 +347,9 @@ struct SupabaseClientTests {
           storage: AuthLocalStorageMock(),
           accessToken: { throw TokenProviderError() }
         ),
-        global: .init(session: URLSession(configuration: config))
+        global: .init(
+          http: .init(transport: URLSessionTransport(session: URLSession(configuration: config)))
+        )
       )
     )
 
@@ -394,7 +393,9 @@ struct SupabaseClientTests {
       supabaseKey: "PUBLISHABLE_KEY",
       options: .init(
         auth: .init(storage: AuthLocalStorageMock(), autoRefreshToken: false),
-        global: .init(session: URLSession(configuration: config))
+        global: .init(
+          http: .init(transport: URLSessionTransport(session: URLSession(configuration: config)))
+        )
       )
     )
 
