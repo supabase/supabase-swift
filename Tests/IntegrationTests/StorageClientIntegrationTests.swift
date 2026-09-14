@@ -76,7 +76,9 @@ struct StorageClientIntegrationTests {
       #expect(error.kind == .server)
       #expect(error.serverError?.error == "Bucket not found")
       #expect(error.message == "Bucket not found")
-      #expect(error.response?.statusCode == 404)
+      // Storage answers a missing bucket with HTTP 400 and puts "404" in the body.
+      #expect(error.serverError?.statusCode == "404")
+      #expect(error.response != nil)
     } catch {
       Issue.record("Unexpected error \(error)")
     }
