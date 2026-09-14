@@ -243,6 +243,22 @@ supporting_symbols:
   - HTTPErrorResponse.body
   - HTTPErrorResponse.requestID
   - HTTPField.Name.sbRequestID
+  # FunctionsError (SDK-1788) is thrown by every functions.* capability rather
+  # than owned by one.
+  - FunctionsError
+  - FunctionsError.Kind
+  - FunctionsError.Kind.init
+  - FunctionsError.Kind.rawValue
+  - FunctionsError.Kind.relay
+  - FunctionsError.Kind.http
+  - FunctionsError.Kind.transport
+  - FunctionsError.Kind.decoding
+  - FunctionsError.init
+  - FunctionsError.kind
+  - FunctionsError.message
+  - FunctionsError.response
+  - FunctionsError.underlyingError
+  - FunctionsError.description
 
 features:
 
