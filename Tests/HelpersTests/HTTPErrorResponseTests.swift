@@ -35,17 +35,12 @@ struct HTTPErrorResponseTests {
 
   @Test
   func initFromHTTPResponseCopiesStatusHeadersAndBody() throws {
-    let urlResponse = try #require(
-      HTTPURLResponse(
-        url: URL(string: "https://example.com")!,
-        statusCode: 429,
-        httpVersion: nil,
-        headerFields: ["sb-request-id": "abc", "Content-Type": "application/json"]
-      )
-    )
-    let http = HTTPResponse(data: Data("body".utf8), response: urlResponse)
+    var headerFields = HTTPFields()
+    headerFields[.sbRequestID] = "abc"
+    headerFields[.contentType] = "application/json"
+    let head = HTTPResponse(status: .tooManyRequests, headerFields: headerFields)
 
-    let response = HTTPErrorResponse(http)
+    let response = HTTPErrorResponse(head, body: Data("body".utf8))
 
     #expect(response.statusCode == 429)
     #expect(response.body == Data("body".utf8))

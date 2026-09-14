@@ -46,8 +46,9 @@ public struct HTTPErrorResponse: Sendable, Hashable {
     self.body = body
   }
 
-  package init(_ response: HTTPResponse) {
-    self.init(statusCode: response.statusCode, headers: response.headers, body: response.data)
+  /// Summarizes a response head and the body that came with it.
+  package init(_ response: HTTPResponse, body: Data) {
+    self.init(statusCode: response.status.code, headers: response.headerFields, body: body)
   }
 }
 
