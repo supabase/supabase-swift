@@ -605,6 +605,29 @@ struct FunctionsClientTests {
   }
 
   @Test
+  func invokeWithStreamedResponseDoesNotWrapAccessTokenError() async {
+    let sut = FunctionsClient(
+      url: url,
+      headers: ["apikey": apiKey],
+      http: .init(
+        transport: ClosureTransport { _, _ in
+          Issue.record("transport should not be called when the access token provider throws")
+          return (HTTPTypes.HTTPResponse(status: .ok), nil)
+        }),
+      accessToken: { throw URLError(.userAuthenticationRequired) }
+    )
+
+    do {
+      for try await _ in sut._invokeWithStreamedResponse("stream") {}
+      Issue.record("expected the stream to fail")
+    } catch let error as URLError {
+      #expect(error.code == .userAuthenticationRequired)
+    } catch {
+      Issue.record("Unexpected error \(error)")
+    }
+  }
+
+  @Test
   func invokeWithStreamedResponseUsesAccessTokenProvider() async throws {
     let sut = makeSUT(accessToken: { "stream.token" })
 

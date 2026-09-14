@@ -268,9 +268,19 @@ public struct FunctionsClient: Sendable {
   ) -> AsyncThrowingStream<Data, any Error> {
     let (stream, continuation) = AsyncThrowingStream<Data, any Error>.makeStream()
     let task = Task {
+      // Built outside the catch below: an error from the `accessToken` closure is the caller's
+      // own and must propagate unchanged, even when it happens to be a `URLError`.
+      let request: HTTPRequest
+      let requestBody: Data?
       do {
-        let (request, requestBody) = try await buildRequest(
+        (request, requestBody) = try await buildRequest(
           functionName: functionName, options: invokeOptions)
+      } catch {
+        continuation.finish(throwing: error)
+        return
+      }
+
+      do {
         let (head, body) = try await http.stream(
           request, body: requestBody.map { HTTPBody($0) }, timeout: Self.timeout(for: invokeOptions)
         )
