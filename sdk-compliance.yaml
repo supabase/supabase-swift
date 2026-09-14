@@ -227,6 +227,22 @@ supporting_symbols:
   - PrimaryKey
   - Default
   - Relationship
+  # Error root shared by every module error (SDK-1788). Each module's error
+  # struct conforms to SupabaseError and carries the failed HTTP response as an
+  # HTTPErrorResponse, so one catch clause serves the whole SDK. The
+  # sb-request-id header name is exposed for callers that read it directly.
+  - SupabaseError
+  - SupabaseError.message
+  - SupabaseError.response
+  - SupabaseError.underlyingError
+  - SupabaseError.errorDescription
+  - HTTPErrorResponse
+  - HTTPErrorResponse.init
+  - HTTPErrorResponse.statusCode
+  - HTTPErrorResponse.headers
+  - HTTPErrorResponse.body
+  - HTTPErrorResponse.requestID
+  - HTTPField.Name.sbRequestID
 
 features:
 
