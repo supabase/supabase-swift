@@ -2053,9 +2053,9 @@ Pass it as `http: .init(transport: StubTransport())` to any sub-client, or as
   `RealtimeClientOptions.http.transport` yourself, `SupabaseClient` installs none of its own middlewares
   on Realtime — it assumes you are fully in charge of that path. Leave it `nil` to get the global
   transport plus the SDK's chain.
-- **Error and response types no longer carry an `HTTPURLResponse`.** `HTTPError.response`,
-  `PostgrestResponse.response` and `AuthError.api(underlyingResponse:)` carry the `HTTPTypes`
-  response head instead; see the section on those types below.
+- **Error and response types no longer carry an `HTTPURLResponse`.** `PostgrestResponse.response`
+  carries the `HTTPTypes` response head instead, and every module error carries an
+  `HTTPErrorResponse` (status, headers and body); see the sections on those types below.
 - **Functions streaming goes through your transport now.** `_invokeWithStreamedResponse` used to
   run on a private `URLSession` that ignored everything you configured. It now sends through the
   client's `http` transport and middlewares, like every other call.
@@ -2120,7 +2120,7 @@ options: .init(
 )
 ```
 
-## `PostgrestResponse.response`, `AuthError.api(underlyingResponse:)` and `FunctionsClient.invoke(decode:)` carry `HTTPResponse` instead of `HTTPURLResponse`
+## `PostgrestResponse.response` and `FunctionsClient.invoke(decode:)` carry `HTTPResponse` instead of `HTTPURLResponse`
 
 Every place the SDK handed you the raw response head now uses `HTTPTypes.HTTPResponse` — the
 same type a `ClientTransport` or `ClientMiddleware` produces:
@@ -2129,7 +2129,7 @@ same type a `ClientTransport` or `ClientMiddleware` produces:
 | --- | --- |
 | `PostgrestResponse.response: HTTPURLResponse` | `PostgrestResponse.response: HTTPResponse` |
 | `PostgrestResponse(data:response: HTTPURLResponse, value:)` | `PostgrestResponse(data:response: HTTPResponse, value:)` |
-| `AuthError.api(message:errorCode:underlyingData:underlyingResponse: HTTPURLResponse)` | `AuthError.api(message:errorCode:underlyingData:underlyingResponse: HTTPResponse)` |
+| `AuthError.api(message:errorCode:underlyingData:underlyingResponse: HTTPURLResponse)` | `AuthError.response: HTTPErrorResponse?` (see "`AuthError` is now a struct, not an enum") |
 | `FunctionsClient.invoke(_:options:decode: (Data, HTTPURLResponse) throws -> T)` | `FunctionsClient.invoke(_:options:decode: (Data, HTTPResponse) throws -> T)` |
 
 ### Why
@@ -2184,7 +2184,7 @@ let etag = response.response.headerFields[.eTag]
 } catch let AuthError.api(_, _, _, response) where response.statusCode == 429 {
 
 // After
-} catch let AuthError.api(_, _, _, response) where response.status.code == 429 {
+} catch let error as AuthError where error.response?.statusCode == 429 {
 ```
 
 ```swift

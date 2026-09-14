@@ -66,7 +66,7 @@ struct SessionManagerTests {
 
   @Test
   func cancellationFromTransportIsNotWrapped() async {
-    await http.any { _ in throw CancellationError() }
+    http.respond { _, _ in throw CancellationError() }
     Dependencies[clientID].sessionStorage.store(.expiredSession)
 
     await #expect(throws: CancellationError.self) {
@@ -77,7 +77,7 @@ struct SessionManagerTests {
   @Test
   func customFetchErrorIsNotWrapped() async {
     struct FetchError: Error {}
-    await http.any { _ in throw FetchError() }
+    http.respond { _, _ in throw FetchError() }
     Dependencies[clientID].sessionStorage.store(.expiredSession)
 
     await #expect(throws: FetchError.self) {
