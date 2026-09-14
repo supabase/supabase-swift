@@ -2238,3 +2238,39 @@ DecodingError` and `as? DecodingError` near Supabase calls; those branches stop 
 ```
 
 There is no escape hatch that restores the raw error; `underlyingError` is the original value.
+
+## `StorageError` gains `kind` and `response`; `statusCode` and `error` move to `serverError`
+
+`StorageError` is no longer the decoded error body itself. It is a struct with `kind`,
+`message`, `serverError`, `response` and `underlyingError`. The body Storage sends is decoded
+into `StorageError.ServerError`, which keeps the wire fields `statusCode: String?`,
+`error: String?` and `message`. `StorageError` no longer conforms to `Decodable`.
+
+Storage used to throw two unrelated types for a failed request: `StorageError` when the body was
+a recognizable payload, and `HTTPError` otherwise. Neither carried the response headers or the
+Supabase request id, and `statusCode` was a string. Now every failure is a `StorageError`, the
+integer status lives in `response?.statusCode`, and `response?.requestID` is available for
+support tickets.
+
+This is a compile error: `statusCode` and `error` no longer exist on `StorageError`, and
+`JSONDecoder().decode(StorageError.self, ...)` no longer compiles.
+
+```swift
+// Before
+} catch let error as StorageError {
+  if error.statusCode == "404" { showMissing() }
+  print(error.error ?? "", error.message)
+} catch let error as HTTPError {
+  print(error.response.statusCode)
+}
+
+// After
+} catch let error as StorageError {
+  if error.response?.statusCode == 404 { showMissing() }
+  print(error.serverError?.error ?? "", error.message)
+}
+```
+
+Kinds: `.server` (recognized body, `serverError` set), `.unexpectedResponse` (non-2xx with an
+unrecognized body, raw bytes in `response?.body`), `.transport`, `.decoding`, and `.invalidURL`
+for the URL-building helpers such as `getPublicURL`, which threw `URLError(.badURL)` before.
