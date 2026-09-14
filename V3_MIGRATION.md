@@ -179,8 +179,8 @@ Also removed, with no replacement, because they no longer represent something Go
 `AuthError.missingExpClaim`, `AuthError.malformedJWT`, `AuthError.missingURL`.
 
 `AuthError.invalidRedirectScheme` was removed on the same grounds, but has since come back as
-`AuthError.oauthFlowFailed(message:)` — the condition is client-side, not something GoTrue throws.
-See "`AuthError` gains `oauthFlowFailed(message:)`" below.
+`AuthError.Kind.oauthFlowFailed` — the condition is client-side, not something GoTrue throws.
+See "`AuthError` gains `Kind.oauthFlowFailed`" below.
 
 `UserCredentials` was deprecated ("access will be removed on the next major release") and is now
 internal — it was only ever used by `AuthClient` itself to encode the request body for
@@ -1748,12 +1748,12 @@ Nothing is withdrawn today, so there is no escape hatch to reach for. When the d
 warnings do arrive, the replacement is the typed API — `client.schema("public").from(Todo.self)`
 and the `@Table` macro — not a different spelling of the same builder.
 
-## `AuthError` gains `oauthFlowFailed(message:)`; client-side OAuth failures throw instead of trapping
+## `AuthError` gains `Kind.oauthFlowFailed`; client-side OAuth failures throw instead of trapping
 
-`AuthError` has a new case:
+`AuthError.Kind` has a new member:
 
 ```swift
-case oauthFlowFailed(message: String)
+static let oauthFlowFailed: AuthError.Kind
 ```
 
 It covers OAuth failures that happen entirely on the client, before any request reaches GoTrue.
@@ -1762,8 +1762,8 @@ Two call sites in `signInWithOAuth(provider:redirectTo:scopes:queryParams:config
 
 | Condition | Before | After |
 | --- | --- | --- |
-| No redirect URL with a scheme, from either `redirectTo` or `AuthClient.Configuration.redirectToURL` | `preconditionFailure` | `throws AuthError.oauthFlowFailed(message:)` |
-| `ASWebAuthenticationSession` reports neither a URL nor an error | `fatalError` | `reportIssue`, then `throws AuthError.oauthFlowFailed(message:)` |
+| No redirect URL with a scheme, from either `redirectTo` or `AuthClient.Configuration.redirectToURL` | `preconditionFailure` | throws `AuthError` with `kind == .oauthFlowFailed` |
+| `ASWebAuthenticationSession` reports neither a URL nor an error | `fatalError` | `reportIssue`, then throws `AuthError` with `kind == .oauthFlowFailed` |
 
 The redirect URL is read per call: `redirectTo` is a parameter of the sign-in method, falling back
 to `AuthClient.Configuration.redirectToURL`. A value that varies per call is not something to trap
@@ -1777,7 +1777,7 @@ still real, it just belongs to the SDK rather than the API. Read that row as:
 
 | Before | After |
 | --- | --- |
-| `AuthError.invalidRedirectScheme` | `AuthError.oauthFlowFailed(message:)` |
+| `AuthError.invalidRedirectScheme` | `AuthError` with `kind == .oauthFlowFailed` |
 
 ```swift
 // Before — no way to handle this; the app died on the missing redirect URL
@@ -1786,26 +1786,24 @@ let session = try await supabase.auth.signInWithOAuth(provider: .github)
 // After
 do {
   let session = try await supabase.auth.signInWithOAuth(provider: .github)
-} catch let AuthError.oauthFlowFailed(message) {
-  presentSetupError(message)
+} catch let error as AuthError where error.kind == .oauthFlowFailed {
+  presentSetupError(error.message)
 }
 ```
 
-**This is a compile error only if you switch exhaustively over `AuthError`.** `AuthError` is a
-public non-frozen enum, so a `switch` without a `default` stops compiling until you add the new
-case; the compiler lists every such site. Code that catches with `catch let error as AuthError` or
-reads `error.message` / `error.errorCode` is unaffected.
+This is not a compile error. `Kind` is an open struct (see "`AuthError` is now a struct, not an
+enum" below), so a new member is additive; a `switch` over `kind` already needs a `default`.
 
-`errorCode` for the new case is `.unknown`, matching the other client-side cases
-(`pkceGrantCodeExchange`, `implicitGrantRedirect`).
+`errorCode` for this kind is `.unknown`, matching the other client-side kinds
+(`.pkceGrantCodeExchange`, `.implicitGrantRedirect`).
 
 ## `AuthError` is now a struct, not an enum
 
 `AuthError` is a struct with `kind: AuthError.Kind`, `message`, `errorCode`,
 `weakPasswordReasons`, `response` and `underlyingError`. `Kind` is a `RawRepresentable` struct
 with static members that mirror the old cases (`.api`, `.sessionMissing`, `.weakPassword`,
-`.pkceGrantCodeExchange`, `.implicitGrantRedirect`, `.jwtVerificationFailed`) plus `.webAuthn`,
-`.unexpectedResponse`, `.transport` and `.decoding`. `AuthError.sessionMissing` still exists as a
+`.pkceGrantCodeExchange`, `.implicitGrantRedirect`, `.oauthFlowFailed`, `.jwtVerificationFailed`)
+plus `.webAuthn`, `.unexpectedResponse`, `.transport` and `.decoding`. `AuthError.sessionMissing` still exists as a
 static value, so `throw AuthError.sessionMissing` compiles unchanged.
 
 The package builds with library evolution enabled, so adding a case to a public enum was a
@@ -1822,6 +1820,7 @@ This is a compile error for every `case`-based pattern and for the removed `~=` 
 | `catch let AuthError.api(message, code, data, response)` | `catch let error as AuthError where error.kind == .api` then `error.message`, `error.errorCode`, `error.response?.body`, `error.response?.statusCode` |
 | `catch let AuthError.weakPassword(message, reasons)` | `catch let error as AuthError where error.kind == .weakPassword` then `error.weakPasswordReasons` |
 | `catch let AuthError.pkceGrantCodeExchange(message, error, code)` | `error.kind == .pkceGrantCodeExchange`; `message` is now `"<error>: <description>"` and `code` is in `error.errorCode` |
+| `catch let AuthError.oauthFlowFailed(message)` | `error.kind == .oauthFlowFailed` then `error.message` |
 | `catch let AuthError.jwtVerificationFailed(message)` | `error.kind == .jwtVerificationFailed` then `error.message` |
 | `AuthError.sessionMissing ~= error` | `(error as? AuthError)?.kind == .sessionMissing` |
 
