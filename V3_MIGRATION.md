@@ -170,9 +170,9 @@ message) is now mandatory. This is a compile error everywhere: the old symbols n
 | `MFAEnrollParams` | `MFATotpEnrollParams` or `MFAPhoneEnrollParams` |
 | `AuthAdmin.deleteUser(id: String, shouldSoftDelete:)` | `AuthAdmin.deleteUser(id: UUID, shouldSoftDelete:)` |
 | `AuthError.sessionNotFound` | `AuthError.sessionMissing` |
-| `AuthError.pkce(_:)` / `AuthError.PKCEFailureReason` | `AuthError.pkceGrantCodeExchange(message:error:code:)` |
-| `AuthError.invalidImplicitGrantFlowURL` | `AuthError.implicitGrantRedirect(message:)` |
-| `AuthError.api(_ error: APIError)` / `AuthError.APIError` | `AuthError.api(message:errorCode:underlyingData:underlyingResponse:)` |
+| `AuthError.pkce(_:)` / `AuthError.PKCEFailureReason` | `AuthError` with `kind == .pkceGrantCodeExchange` |
+| `AuthError.invalidImplicitGrantFlowURL` | `AuthError` with `kind == .implicitGrantRedirect` |
+| `AuthError.api(_ error: APIError)` / `AuthError.APIError` | `AuthError` with `kind == .api`; `errorCode` and `response` carry the details |
 | `UserAttributes.emailChangeToken` | *(removed, no replacement — was unused by GoTrue)* |
 
 Also removed, with no replacement, because they no longer represent something GoTrue can throw:
