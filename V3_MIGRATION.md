@@ -2073,10 +2073,13 @@ Pass it as `http: .init(transport: StubTransport())` to any sub-client, or as
   and `HTTPField` in. If you also import another library that exports those names, the reference
   becomes ambiguous — qualify it with the module name (`HTTPTypes.HTTPRequest`).
 - **Timeouts belong to the transport.** The SDK always sets `URLRequest.timeoutInterval` itself —
-  60 seconds by default, or `FunctionInvokeOptions.timeoutInterval` for Functions — so on the
-  default transport `URLSessionConfiguration.timeoutIntervalForRequest` no longer takes effect for
-  SDK requests. A custom `ClientTransport` owns its own timeout policy and is free to ignore the
-  per-request override.
+  `HTTPClientConfiguration.timeout` when set, otherwise 60 seconds (150 for Functions) — so on
+  the default transport `URLSessionConfiguration.timeoutIntervalForRequest` no longer takes effect
+  for SDK requests. Set the idle timeout per client with
+  `GlobalOptions(http: .init(timeout: .seconds(30)))` (or the `http:` parameter of any standalone
+  sub-client), and per call with `FunctionInvokeOptions.timeout` or
+  `PostgrestRequestBuilder.timeout(_:)`. A custom `ClientTransport` owns its own timeout policy
+  and is free to ignore both.
 
 ## `SupabaseClientOptions.GlobalOptions.session` is removed
 
@@ -2429,3 +2432,36 @@ do {
 
 For `httpSend`, a non-202 answer is `.server` with `response?.statusCode` and `response?.body`
 set; a request that never completes is `.transport` with the `URLError` in `underlyingError`.
+
+## `FunctionInvokeOptions.timeoutInterval` is now `timeout: Duration`
+
+`FunctionInvokeOptions` takes `timeout: Duration? = nil` instead of `timeoutInterval: TimeInterval?
+= nil` in all four initializers, and `FunctionsClient.requestIdleTimeout` is a `Duration`
+(`.seconds(150)`) instead of a `TimeInterval` (`150`).
+
+The SDK-wide request timeout that lands alongside this change (`HTTPClientConfiguration.timeout`,
+`PostgrestRequestBuilder.timeout(_:)`) is a `Duration`, the Swift standard library's unit-safe
+time type. The Functions per-invocation override shares the same resolution path, so it takes the
+same type; keeping it a `TimeInterval` would have left callers converting between `Double` seconds
+and `Duration` inside one request. The remaining `TimeInterval` intervals in the public API
+(Realtime's heartbeat, reconnect and reply timeouts) move in a follow-up.
+
+```swift
+// Before
+try await supabase.functions.invoke(
+  "slow-report",
+  options: .init(timeoutInterval: 30)
+)
+let fallback: TimeInterval = FunctionsClient.requestIdleTimeout
+
+// After
+try await supabase.functions.invoke(
+  "slow-report",
+  options: .init(timeout: .seconds(30))
+)
+let fallback: Duration = FunctionsClient.requestIdleTimeout
+```
+
+This is a compile error: the `timeoutInterval:` argument label no longer exists, and a
+`TimeInterval` value no longer type-checks where `requestIdleTimeout` is used. Search for
+`timeoutInterval:` at `FunctionInvokeOptions` call sites and for `requestIdleTimeout`.

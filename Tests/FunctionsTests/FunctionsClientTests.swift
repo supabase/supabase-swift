@@ -15,11 +15,11 @@ import Testing
 /// properties (like the resolved timeout) not surfaced by Mocker's `snapshotRequest` curl output.
 private actor CapturedRequestBox {
   var request: HTTPTypes.HTTPRequest?
-  var timeoutInterval: TimeInterval?
+  var timeout: Duration?
 
-  func set(_ request: HTTPTypes.HTTPRequest, timeoutInterval: TimeInterval?) {
+  func set(_ request: HTTPTypes.HTTPRequest, timeout: Duration?) {
     self.request = request
-    self.timeoutInterval = timeoutInterval
+    self.timeout = timeout
   }
 }
 
@@ -480,14 +480,14 @@ struct FunctionsClientTests {
       headers: ["apikey": apiKey],
       http: .init(
         transport: ClosureTransport { request, _ in
-          await box.set(request, timeoutInterval: RequestTimeout.current)
+          await box.set(request, timeout: RequestTimeout.current)
           return (HTTPTypes.HTTPResponse(status: .ok), nil)
         }))
 
-    try await sut.invoke("hello-world", options: .init(timeoutInterval: 30))
+    try await sut.invoke("hello-world", options: .init(timeout: .seconds(30)))
 
-    let capturedTimeout = await box.timeoutInterval
-    #expect(capturedTimeout == 30)
+    let capturedTimeout = await box.timeout
+    #expect(capturedTimeout == .seconds(30))
   }
 
   @Test
@@ -498,14 +498,36 @@ struct FunctionsClientTests {
       headers: ["apikey": apiKey],
       http: .init(
         transport: ClosureTransport { request, _ in
-          await box.set(request, timeoutInterval: RequestTimeout.current)
+          await box.set(request, timeout: RequestTimeout.current)
           return (HTTPTypes.HTTPResponse(status: .ok), nil)
         }))
 
     try await sut.invoke("hello-world")
 
-    let capturedTimeout = await box.timeoutInterval
+    let capturedTimeout = await box.timeout
     #expect(capturedTimeout == FunctionsClient.requestIdleTimeout)
+  }
+
+  @Test
+  func configuredTimeoutIntervalReplacesTheFunctionsDefault() async throws {
+    let box = CapturedRequestBox()
+    let sut = FunctionsClient(
+      url: url,
+      headers: ["apikey": apiKey],
+      http: .init(
+        transport: ClosureTransport { request, _ in
+          await box.set(request, timeout: RequestTimeout.current)
+          return (HTTPTypes.HTTPResponse(status: .ok), nil)
+        },
+        timeout: .seconds(20)))
+
+    try await sut.invoke("hello-world")
+    let configuredTimeout = await box.timeout
+    #expect(configuredTimeout == .seconds(20))
+
+    try await sut.invoke("hello-world", options: .init(timeout: .seconds(30)))
+    let perInvocationTimeout = await box.timeout
+    #expect(perInvocationTimeout == .seconds(30))
   }
 
   @Test
@@ -516,7 +538,7 @@ struct FunctionsClientTests {
       headers: ["apikey": apiKey],
       http: .init(
         transport: ClosureTransport { request, _ in
-          await box.set(request, timeoutInterval: nil)
+          await box.set(request, timeout: nil)
           return (HTTPTypes.HTTPResponse(status: .ok), nil)
         }),
       accessToken: { "access.token" }
@@ -569,7 +591,7 @@ struct FunctionsClientTests {
       headers: ["apikey": apiKey],
       http: .init(
         transport: ClosureTransport { request, _ in
-          await box.set(request, timeoutInterval: nil)
+          await box.set(request, timeout: nil)
           return (HTTPTypes.HTTPResponse(status: .ok), nil)
         }),
       accessToken: { "provider.token" }
