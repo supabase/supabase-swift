@@ -176,8 +176,11 @@ message) is now mandatory. This is a compile error everywhere: the old symbols n
 | `UserAttributes.emailChangeToken` | *(removed, no replacement — was unused by GoTrue)* |
 
 Also removed, with no replacement, because they no longer represent something GoTrue can throw:
-`AuthError.missingExpClaim`, `AuthError.malformedJWT`, `AuthError.missingURL`,
-`AuthError.invalidRedirectScheme`.
+`AuthError.missingExpClaim`, `AuthError.malformedJWT`, `AuthError.missingURL`.
+
+`AuthError.invalidRedirectScheme` was removed on the same grounds, but has since come back as
+`AuthError.oauthFlowFailed(message:)` — the condition is client-side, not something GoTrue throws.
+See "`AuthError` gains `oauthFlowFailed(message:)`" below.
 
 `UserCredentials` was deprecated ("access will be removed on the next major release") and is now
 internal — it was only ever used by `AuthClient` itself to encode the request body for
@@ -1742,3 +1745,54 @@ Read a `!` on this change as "the guarantee moved", not "your build breaks".
 Nothing is withdrawn today, so there is no escape hatch to reach for. When the deprecation
 warnings do arrive, the replacement is the typed API — `client.schema("public").from(Todo.self)`
 and the `@Table` macro — not a different spelling of the same builder.
+
+## `AuthError` gains `oauthFlowFailed(message:)`; client-side OAuth failures throw instead of trapping
+
+`AuthError` has a new case:
+
+```swift
+case oauthFlowFailed(message: String)
+```
+
+It covers OAuth failures that happen entirely on the client, before any request reaches GoTrue.
+Two call sites in `signInWithOAuth(provider:redirectTo:scopes:queryParams:configure:)` (the
+`ASWebAuthenticationSession` overload) used to end the process instead of throwing:
+
+| Condition | Before | After |
+| --- | --- | --- |
+| No redirect URL with a scheme, from either `redirectTo` or `AuthClient.Configuration.redirectToURL` | `preconditionFailure` | `throws AuthError.oauthFlowFailed(message:)` |
+| `ASWebAuthenticationSession` reports neither a URL nor an error | `fatalError` | `reportIssue`, then `throws AuthError.oauthFlowFailed(message:)` |
+
+The redirect URL is read per call: `redirectTo` is a parameter of the sign-in method, falling back
+to `AuthClient.Configuration.redirectToURL`. A value that varies per call is not something to trap
+on, and the enclosing method already throws, so an error costs nothing. (A value fixed once at
+construction is different — those still trap. See "When trapping is allowed" in `AGENTS.md`.)
+
+This also restores something v3 dropped. `AuthError.invalidRedirectScheme` existed in v2 and was
+listed above as removed with no replacement, on the grounds that it no longer represented anything
+GoTrue could throw. That was right about the server and wrong about the client: the condition is
+still real, it just belongs to the SDK rather than the API. Read that row as:
+
+| Before | After |
+| --- | --- |
+| `AuthError.invalidRedirectScheme` | `AuthError.oauthFlowFailed(message:)` |
+
+```swift
+// Before — no way to handle this; the app died on the missing redirect URL
+let session = try await supabase.auth.signInWithOAuth(provider: .github)
+
+// After
+do {
+  let session = try await supabase.auth.signInWithOAuth(provider: .github)
+} catch let AuthError.oauthFlowFailed(message) {
+  presentSetupError(message)
+}
+```
+
+**This is a compile error only if you switch exhaustively over `AuthError`.** `AuthError` is a
+public non-frozen enum, so a `switch` without a `default` stops compiling until you add the new
+case; the compiler lists every such site. Code that catches with `catch let error as AuthError` or
+reads `error.message` / `error.errorCode` is unaffected.
+
+`errorCode` for the new case is `.unknown`, matching the other client-side cases
+(`pkceGrantCodeExchange`, `implicitGrantRedirect`).

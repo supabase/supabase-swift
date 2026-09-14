@@ -180,6 +180,25 @@ Use standard file headers with copyright:
 - Use `async throws` for async error handling
 - Report issues using `IssueReporting` from xctest-dynamic-overlay
 
+#### When trapping is allowed
+
+The dividing line is *when the value is fixed*, not who supplied it.
+
+- **Fixed once, at construction** — an initializer argument, a configuration field, a `package`
+  tuning constant. `precondition`/`preconditionFailure` is the right tool: the value cannot change
+  afterwards, so a bad one is a programmer error, and trapping reports it at the exact point it
+  was introduced. `SupabaseClient.init` traps on a `supabaseURL` with no host; `StorageApi` traps
+  on a URL it cannot decompose; `RetryRequestInterceptor` traps on a backoff base below 2.
+  Degrading instead would bury the mistake behind an unrelated failure much later.
+- **Varies at runtime, or comes from the server** — a per-call parameter, a response header, a
+  decoded payload, a WebSocket close code. Never trap. Throw if the context already throws;
+  otherwise `reportIssue` and fall back. `HTTPFields.init(_:)` drops invalid field names rather
+  than trapping precisely because `HTTPResponse.init` builds it from `response.allHeaderFields`,
+  which a proxy or a hostile server controls.
+
+A value being "user input" is not on its own a reason to avoid trapping — `supabaseURL` is user
+input and traps. A value being *dynamic* is. See SDK-1793.
+
 ### Testing Conventions
 
 This project uses the [Swift Testing](https://developer.apple.com/documentation/testing) framework, and only Swift Testing — do not use XCTest or `XCTestCase`.

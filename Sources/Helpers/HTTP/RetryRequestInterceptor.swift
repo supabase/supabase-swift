@@ -86,6 +86,8 @@ package actor RetryRequestInterceptor: HTTPClientInterceptor {
     retryableErrorCodes: Set<URLError.Code> = RetryRequestInterceptor.defaultRetryableURLErrorCodes,
     clock: any Clock<Duration> = ContinuousClock()
   ) {
+    // A base below 2 makes each wait shorter than the last instead of longer. The value is fixed
+    // at construction, so this is a programmer error, not a runtime condition.
     precondition(
       exponentialBackoffBase >= 2,
       "The `exponentialBackoffBase` must be a minimum of 2."

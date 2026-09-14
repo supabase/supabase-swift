@@ -856,9 +856,15 @@ public actor AuthClient {
       ) { @MainActor url in
         try await withCheckedThrowingContinuation { [configuration] continuation in
           guard let callbackScheme = (configuration.redirectToURL ?? redirectTo)?.scheme else {
-            preconditionFailure(
-              "Please, provide a valid redirect URL, either through `redirectTo` param, or globally through `AuthClient.Configuration.redirectToURL`."
+            continuation.resume(
+              throwing: AuthError.oauthFlowFailed(
+                message: """
+                  Provide a redirect URL with a scheme, either through the `redirectTo` parameter \
+                  or globally through `AuthClient.Configuration.redirectToURL`.
+                  """
+              )
             )
+            return
           }
 
           #if !os(tvOS) && !os(watchOS)
@@ -874,7 +880,14 @@ public actor AuthClient {
             } else if let url {
               continuation.resume(returning: url)
             } else {
-              fatalError("Expected url or error, but got none.")
+              // `ASWebAuthenticationSession` always reports a URL or an error. Surface a broken
+              // contract as a thrown error rather than taking the host app down with it.
+              reportIssue("ASWebAuthenticationSession returned neither a URL nor an error.")
+              continuation.resume(
+                throwing: AuthError.oauthFlowFailed(
+                  message: "ASWebAuthenticationSession returned neither a URL nor an error."
+                )
+              )
             }
 
             #if !os(tvOS) && !os(watchOS)
@@ -991,9 +1004,9 @@ public actor AuthClient {
     }
   }
 
+  /// Only reached from ``session(from:)``, under `case .implicit` of its switch on
+  /// `configuration.flowType`, which is what guarantees the flow type here.
   private func handleImplicitGrantFlow(params: [String: String]) async throws -> Session {
-    precondition(configuration.flowType == .implicit, "Method only allowed for implicit flow.")
-
     if let errorMessage = params["error_description"] ?? params["error"] {
       throw AuthError.implicitGrantRedirect(message: errorMessage)
     }
@@ -1040,9 +1053,9 @@ public actor AuthClient {
     return session
   }
 
+  /// Only reached from ``session(from:)``, under `case .pkce` of its switch on
+  /// `configuration.flowType`, which is what guarantees the flow type here.
   private func handlePKCEFlow(params: [String: String], flowId: String?) async throws -> Session {
-    precondition(configuration.flowType == .pkce, "Method only allowed for PKCE flow.")
-
     if params["error"] != nil || params["error_description"] != nil || params["error_code"] != nil {
       throw AuthError.pkceGrantCodeExchange(
         message: params["error_description"]

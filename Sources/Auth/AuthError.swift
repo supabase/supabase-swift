@@ -230,6 +230,7 @@ extension ErrorCode {
 /// ### OAuth flow errors
 /// - ``pkceGrantCodeExchange(message:error:code:)``
 /// - ``implicitGrantRedirect(message:)``
+/// - ``oauthFlowFailed(message:)``
 ///
 /// ### JWT errors
 /// - ``jwtVerificationFailed(message:)``
@@ -255,6 +256,10 @@ public enum AuthError: LocalizedError, Equatable {
   /// Error thrown when an error happens during implicit grant flow.
   case implicitGrantRedirect(message: String)
 
+  /// Error thrown when an OAuth flow cannot start or finish on the client, before any request
+  /// reaches the server — most often because no redirect URL with a scheme is configured.
+  case oauthFlowFailed(message: String)
+
   /// Error thrown when JWT verification fails.
   case jwtVerificationFailed(message: String)
 
@@ -265,6 +270,7 @@ public enum AuthError: LocalizedError, Equatable {
       .api(let message, _, _, _),
       .pkceGrantCodeExchange(let message, _, _),
       .implicitGrantRedirect(let message),
+      .oauthFlowFailed(let message),
       .jwtVerificationFailed(let message):
       message
     }
@@ -275,7 +281,7 @@ public enum AuthError: LocalizedError, Equatable {
     case .sessionMissing: .sessionNotFound
     case .weakPassword: .weakPassword
     case .api(_, let errorCode, _, _): errorCode
-    case .pkceGrantCodeExchange, .implicitGrantRedirect: .unknown
+    case .pkceGrantCodeExchange, .implicitGrantRedirect, .oauthFlowFailed: .unknown
     case .jwtVerificationFailed: .invalidJWT
     }
   }

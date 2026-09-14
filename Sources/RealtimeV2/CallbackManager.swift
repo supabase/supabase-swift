@@ -151,15 +151,11 @@ final class CallbackManager: Sendable {
   }
 
   func triggerBroadcastData(event: String, data: Data) {
-    let callbacks = mutableState.callbacks.filter {
-      isBroadcastDataCallback(callback: $0, for: event)
-    }
-    .map { callback -> BroadcastDataCallback in
-      if case .broadcastData(let callback) = callback {
-        return callback
-      } else {
-        fatalError("Expected broadcast data callback")
-      }
+    let callbacks = mutableState.callbacks.compactMap { callback -> BroadcastDataCallback? in
+      guard isBroadcastDataCallback(callback: callback, for: event),
+        case .broadcastData(let broadcastData) = callback
+      else { return nil }
+      return broadcastData
     }
     callbacks.forEach { $0.callback(data) }
   }

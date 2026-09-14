@@ -1,5 +1,6 @@
 import ConcurrencyExtras
 import Foundation
+import IssueReporting
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -70,7 +71,10 @@ final class URLSessionWebSocket: WebSocket {
     session: URLSession? = nil
   ) async throws -> URLSessionWebSocket {
     guard url.scheme == "ws" || url.scheme == "wss" else {
-      preconditionFailure("only ws: and wss: schemes are supported")
+      throw WebSocketError.connection(
+        message: "only ws: and wss: schemes are supported, got \(url.scheme ?? "no scheme").",
+        error: URLError(.unsupportedURL)
+      )
     }
 
     struct MutableState {
@@ -406,31 +410,74 @@ final class URLSessionWebSocket: WebSocket {
       return
     }
 
-    // Validate close code per RFC 6455
-    if let code = code, code != 1000, !(code >= 3000 && code <= 4999) {
-      preconditionFailure(
-        "Invalid close code: \(code). Must be 1000 or in range 3000-4999"
+    let validatedCode = Self.validatedCloseCode(code)
+    if let code, validatedCode == nil {
+      reportIssue(
+        "Invalid close code \(code). Must be 1000 or in 3000...4999. Closing without a code."
       )
     }
 
-    // Validate reason length per RFC 6455
-    if let reason = reason, reason.utf8.count > 123 {
-      preconditionFailure("Close reason must be ≤ 123 bytes when UTF-8 encoded")
+    let validatedReason = Self.validatedCloseReason(reason)
+    if let reason, validatedReason != reason {
+      reportIssue(
+        "Close reason is \(reason.utf8.count) bytes, over the 123-byte limit. Truncating it."
+      )
+    }
+
+    // The two platforms disagree about what `CloseCode` accepts. On Darwin it is imported from
+    // Objective-C as a non-exhaustive `NS_ENUM`, so any `Int` round-trips and an application code
+    // like 4001 goes out as 4001. In swift-corelibs-foundation it is a plain Swift enum holding
+    // only the named cases, so everything in 3000...4999 converts to `nil` and cannot be sent.
+    // Close without a status there rather than substituting a different code — reporting 1000
+    // ("normal closure") for what was meant to be an application error would misinform the peer.
+    let closeCode = validatedCode.flatMap(URLSessionWebSocketTask.CloseCode.init(rawValue:))
+    if let validatedCode, closeCode == nil {
+      reportIssue(
+        """
+        Close code \(validatedCode) is not representable by \
+        `URLSessionWebSocketTask.CloseCode` on this platform. Closing without a code.
+        """
+      )
     }
 
     mutableState.withValue {
       guard !$0.isClosed else { return }
 
-      if let code = code {
-        let closeReason = reason ?? ""
-        _task.cancel(
-          with: URLSessionWebSocketTask.CloseCode(rawValue: code)!,
-          reason: Data(closeReason.utf8)
-        )
+      if let closeCode {
+        _task.cancel(with: closeCode, reason: Data((validatedReason ?? "").utf8))
       } else {
         _task.cancel()
       }
     }
+  }
+
+  /// Returns `code` if RFC 6455 §7.4 allows an endpoint to send it, otherwise `nil`.
+  ///
+  /// Only 1000 and the application-defined range 3000...4999 may be sent. Anything else closes
+  /// without a code (the peer sees 1005) rather than trapping — ``close(code:reason:)`` is called
+  /// from user code and cannot throw.
+  ///
+  /// Pure by design: the caller reports the rejection. Driving `reportIssue` from a `@Test`
+  /// function segfaults under `xcodebuild test` (SDK-435), so keeping it out of here is what lets
+  /// this be tested directly on both runners.
+  static func validatedCloseCode(_ code: Int?) -> Int? {
+    guard let code else { return nil }
+    return code == 1000 || (3000...4999).contains(code) ? code : nil
+  }
+
+  /// Returns `reason` truncated to the 123-byte close-frame payload limit of RFC 6455 §5.5.
+  ///
+  /// Truncation happens on whole characters, so the frame never carries a split UTF-8 scalar.
+  /// Pure for the same reason as ``validatedCloseCode(_:)``.
+  static func validatedCloseReason(_ reason: String?) -> String? {
+    guard let reason, reason.utf8.count > 123 else { return reason }
+
+    var truncated = ""
+    for character in reason {
+      guard truncated.utf8.count + character.utf8.count <= 123 else { break }
+      truncated.append(character)
+    }
+    return truncated
   }
 
   /// The WebSocket subprotocol negotiated with the peer.
