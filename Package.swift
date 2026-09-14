@@ -65,6 +65,7 @@ let package = Package(
       name: "HelpersTests",
       dependencies: [
         .product(name: "CustomDump", package: "swift-custom-dump"),
+        .product(name: "HTTPTypes", package: "swift-http-types"),
         "Helpers",
         "Mocker",
         "TestHelpers",
