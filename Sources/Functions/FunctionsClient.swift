@@ -299,12 +299,15 @@ public struct FunctionsClient: Sendable {
           }
         }
         continuation.finish()
-      } catch let error where error is FunctionsError || error is CancellationError {
-        continuation.finish(throwing: error)
-      } catch {
+      } catch let urlError as URLError {
+        // Only the network layer's own failures are relabelled. `CancellationError`, a
+        // `FunctionsError` thrown above and errors from a user's `accessToken` closure propagate
+        // as themselves.
         continuation.finish(
           throwing: FunctionsError(
-            kind: .transport, message: error.localizedDescription, underlyingError: error))
+            kind: .transport, message: urlError.localizedDescription, underlyingError: urlError))
+      } catch {
+        continuation.finish(throwing: error)
       }
     }
     continuation.onTermination = { _ in task.cancel() }

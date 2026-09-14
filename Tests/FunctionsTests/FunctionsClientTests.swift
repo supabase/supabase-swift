@@ -285,7 +285,7 @@ struct FunctionsClientTests {
   }
 
   @Test
-  func invoke_shouldThrow_URLError_badServerResponse() async {
+  func invoke_badServerResponse_wrapsAsTransport() async {
     let sut = makeSUT()
 
     Mock(

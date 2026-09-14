@@ -1624,9 +1624,10 @@ Separately, decoding a `PostgrestError` from an error response no longer uses
 non-configurable internal decoder. Previously, a decoder with a non-default `keyDecodingStrategy`
 or `dateDecodingStrategy` that didn't match `PostgrestError`'s plain `details`/`hint`/`code`/
 `message` shape could cause a real PostgREST error response to fail decoding, and was reported as a
-generic `HTTPError` instead of a `PostgrestError`. Now, any unrecognized response body throws
-`PostgrestError` with kind `.unexpectedResponse` and the decoded payload in `serverError` as
-`PostgrestError.ServerError`. This is a silent behavior change, not a compile error: if you
+generic `HTTPError` instead of a `PostgrestError`. Now, a recognized PostgREST error body throws
+`PostgrestError` with kind `.server` and the decoded `PostgrestError.ServerError` in `serverError`.
+An unrecognized body throws kind `.unexpectedResponse` with `serverError == nil` and the raw bytes
+in `response?.body`. This is a silent behavior change, not a compile error: if you
 `catch`-typed on `PostgrestError` while also customizing `Configuration.decoder`'s key or date
 strategy, error responses that previously fell through as `HTTPError` are now caught as
 `PostgrestError` instead.

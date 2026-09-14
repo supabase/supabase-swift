@@ -711,9 +711,6 @@ struct RequestsTests {
     do {
       try await block()
     } catch is UnimplementedError {
-    } catch let error as AuthError where error.underlyingError is UnimplementedError {
-      // `APIClient.execute` wraps every transport failure (except cancellation) as `.transport`,
-      // so the `UnimplementedError` thrown by this file's stub `fetch` now arrives wrapped.
     } catch {
       Issue.record("Unexpected error: \(error)")
     }

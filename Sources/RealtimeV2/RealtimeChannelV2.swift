@@ -204,7 +204,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   /// All callbacks (broadcast, presence, postgres changes) must be registered before calling
   /// this method. Calling it more than once on an already-subscribed channel is a no-op.
   ///
-  /// - Throws: ``RealtimeError``. Check `kind` for `.timeout`, `.maxRetryAttemptsReached`, `.channelClosedByServer` (subscribe) or `.accessTokenMissing`, `.server`, `.transport`, `.timeout` (httpSend).
+  /// - Throws: ``RealtimeError`` with kind `.timeout`, `.maxRetryAttemptsReached` or `.channelClosedByServer`.
   public func subscribeWithError() async throws {
     logger.debug("Subscribe requested for channel '\(topic)'")
     try await stateManager.subscribe()
@@ -267,7 +267,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   ///   - event: The broadcast event name.
   ///   - message: A `Codable` value to send as the message payload.
   ///   - timeout: An optional timeout in seconds. Defaults to the socket's configured timeout.
-  /// - Throws: ``RealtimeError``. Check `kind` for `.timeout`, `.maxRetryAttemptsReached`, `.channelClosedByServer` (subscribe) or `.accessTokenMissing`, `.server`, `.transport`, `.timeout` (httpSend).
+  /// - Throws: ``RealtimeError`` with kind `.accessTokenMissing`, `.server`, `.transport` or `.timeout`.
   public func httpSend(
     event: String,
     message: some Codable,
@@ -289,7 +289,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   ///   - event: The broadcast event name.
   ///   - message: A ``JSONObject`` to send as the message payload.
   ///   - timeout: An optional timeout in seconds. Defaults to the socket's configured timeout.
-  /// - Throws: ``RealtimeError``. Check `kind` for `.timeout`, `.maxRetryAttemptsReached`, `.channelClosedByServer` (subscribe) or `.accessTokenMissing`, `.server`, `.transport`, `.timeout` (httpSend).
+  /// - Throws: ``RealtimeError`` with kind `.accessTokenMissing`, `.server`, `.transport` or `.timeout`.
   public func httpSend(
     event: String,
     message: JSONObject,
@@ -326,7 +326,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     } catch is TimeoutError {
       throw RealtimeError(kind: .timeout, message: "httpSend() timed out.")
     } catch {
-      // Only the network layer's own failures are relabelled (Task 4.5 rule). `CancellationError`
+      // Only the network layer's own failures are relabelled. `CancellationError`
       // and errors thrown by a user's `fetch`/`accessToken` closure propagate as themselves.
       guard let urlError = error as? URLError else { throw error }
       throw RealtimeError(
@@ -349,7 +349,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   ///   - event: The broadcast event name.
   ///   - data: Raw binary data to send as the request body.
   ///   - timeout: An optional timeout in seconds. Defaults to the socket's configured timeout.
-  /// - Throws: ``RealtimeError``. Check `kind` for `.timeout`, `.maxRetryAttemptsReached`, `.channelClosedByServer` (subscribe) or `.accessTokenMissing`, `.server`, `.transport`, `.timeout` (httpSend).
+  /// - Throws: ``RealtimeError`` with kind `.accessTokenMissing`, `.server`, `.transport` or `.timeout`.
   public func httpSend(
     event: String,
     data: Data,
@@ -384,7 +384,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     } catch is TimeoutError {
       throw RealtimeError(kind: .timeout, message: "httpSend() timed out.")
     } catch {
-      // Only the network layer's own failures are relabelled (Task 4.5 rule). `CancellationError`
+      // Only the network layer's own failures are relabelled. `CancellationError`
       // and errors thrown by a user's `fetch`/`accessToken` closure propagate as themselves.
       guard let urlError = error as? URLError else { throw error }
       throw RealtimeError(

@@ -120,7 +120,8 @@ final class URLSessionWebSocket: WebSocket {
           return {
             continuation.resume(
               throwing: RealtimeError.connection(
-                "connection ended unexpectedly", underlyingError: error))
+                "connection ended unexpectedly \(error.localizedDescription)",
+                underlyingError: error))
           }
         } else {
           // `onWebSocketTaskOpened` should have been called and resumed continuation.
