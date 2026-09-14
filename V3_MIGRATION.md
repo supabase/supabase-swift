@@ -2002,9 +2002,10 @@ Pass it as `http: .init(transport: StubTransport())` to any sub-client, or as
 - **Functions streaming goes through your transport now.** `_invokeWithStreamedResponse` used to
   run on a private `URLSession` that ignored everything you configured. It now sends through the
   client's `http` transport and middlewares, like every other call.
-- **A streamed `FunctionsError.httpError` now carries the response body.** In v2 the streamed call
-  threw `.httpError(code, Data())`; the body is now included, so anything that read the payload
-  from a non-2xx streamed invoke no longer has to special-case an empty `Data`.
+- **A streamed `FunctionsError` with kind `.http` now carries the response body.** In v2 the
+  streamed call threw `.httpError(code, Data())`; the body is now in `response?.body`, so anything
+  that read the payload from a non-2xx streamed invoke no longer has to special-case an empty
+  `Data`.
 - **Streamed chunk boundaries changed.** The default transport yields one chunk per
   `URLSession` data delivery, so boundaries follow the network, not the payload: an SSE event can
   arrive split across chunks or several events can share one. Code that assumed one chunk per

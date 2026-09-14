@@ -54,14 +54,16 @@ struct FunctionsClientTests {
   }
 
   private func makeSUT(
-    fetch: @escaping @Sendable (URLRequest) async throws -> (Data, URLResponse)
+    transport:
+      @escaping @Sendable (HTTPTypes.HTTPRequest, HTTPBody?) async throws -> (
+        HTTPTypes.HTTPResponse, HTTPBody?
+      )
   ) -> FunctionsClient {
     FunctionsClient(
       url: url,
       headers: ["apikey": apiKey],
       region: nil,
-      fetch: fetch,
-      sessionConfiguration: .ephemeral,
+      http: .init(transport: ClosureTransport(handler: transport)),
       accessToken: nil
     )
   }
@@ -414,7 +416,7 @@ struct FunctionsClientTests {
 
   @Test
   func invoke_transportFailure_wrapsURLError() async {
-    let sut = makeSUT { _ in throw URLError(.notConnectedToInternet) }
+    let sut = makeSUT { _, _ in throw URLError(.notConnectedToInternet) }
 
     do {
       try await sut.invoke("hello_world")
@@ -430,7 +432,7 @@ struct FunctionsClientTests {
 
   @Test
   func invoke_cancellation_isNotWrapped() async {
-    let sut = makeSUT { _ in throw CancellationError() }
+    let sut = makeSUT { _, _ in throw CancellationError() }
 
     await #expect(throws: CancellationError.self) {
       try await sut.invoke("hello_world")
