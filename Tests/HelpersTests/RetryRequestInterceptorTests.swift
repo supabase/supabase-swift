@@ -22,61 +22,42 @@ struct RetryRequestInterceptorTests {
 
   // MARK: - Helpers
 
-  func makeResponse(statusCode: Int) -> (HTTPTypes.HTTPResponse, HTTPBody?) {
-    (HTTPTypes.HTTPResponse(status: HTTPTypes.HTTPResponse.Status(code: statusCode)), nil)
-  }
+  /// Zero base delay makes the jittered wait exactly zero, so tests run instantly on any clock.
+  let instant = RetryPolicy(baseDelay: .zero)
 
-  func makeInterceptor(retryLimit: Int = 2) -> RetryRequestInterceptor {
-    RetryRequestInterceptor(
-      retryLimit: retryLimit,
-      exponentialBackoffBase: 2,
-      exponentialBackoffScale: 0
+  func makeResponse(statusCode: Int, headers: HTTPFields = [:]) -> (
+    HTTPTypes.HTTPResponse, HTTPBody?
+  ) {
+    (
+      HTTPTypes.HTTPResponse(
+        status: HTTPTypes.HTTPResponse.Status(code: statusCode), headerFields: headers), nil
     )
   }
 
-  func makeRequest(method: HTTPTypes.HTTPRequest.Method = .get) -> HTTPTypes.HTTPRequest {
-    HTTPTypes.HTTPRequest(method: method, url: URL(string: "https://example.com")!)
+  func makeInterceptor(
+    _ policy: RetryPolicy? = nil, clock: any Clock<Duration> = ContinuousClock()
+  ) -> RetryRequestInterceptor {
+    RetryRequestInterceptor(policy: policy ?? instant, clock: clock)
   }
 
-  // MARK: - defaultRetryableHTTPStatusCodes
-
-  @Test
-  func defaultRetryableHTTPStatusCodesContainsStandardCodes() {
-    let codes = RetryRequestInterceptor.defaultRetryableHTTPStatusCodes
-    #expect(codes.contains(408))
-    #expect(codes.contains(500))
-    #expect(codes.contains(502))
-    #expect(codes.contains(503))
-    #expect(codes.contains(504))
+  func makeRequest(
+    method: HTTPTypes.HTTPRequest.Method = .get, headers: HTTPFields = [:]
+  ) -> HTTPTypes.HTTPRequest {
+    HTTPTypes.HTTPRequest(
+      method: method, url: URL(string: "https://example.com")!, headerFields: headers)
   }
 
-  @Test
-  func defaultRetryableHTTPStatusCodesContainsCloudflareCodes() {
-    let codes = RetryRequestInterceptor.defaultRetryableHTTPStatusCodes
-    #expect(codes.contains(520), "520 (Cloudflare Unknown Error) should be retryable")
-    #expect(codes.contains(521), "521 (Web Server Down) should be retryable")
-    #expect(codes.contains(522), "522 (Connection Timed Out) should be retryable")
-    #expect(codes.contains(523), "523 (Origin Is Unreachable) should be retryable")
-    #expect(codes.contains(524), "524 (A Timeout Occurred) should be retryable")
-    #expect(codes.contains(530), "530 (Site Frozen) should be retryable")
-  }
-
-  // MARK: - Retry behavior for Cloudflare codes
+  // MARK: - What is retried
 
   @Test
-  func retriesOnCloudflareErrorCodes() async throws {
-    let interceptor = makeInterceptor(retryLimit: 2)
-    let request = makeRequest()
-    let cloudflareCodes = [520, 521, 522, 523, 524, 530]
+  func retriesEveryDefaultRetryableStatus() async throws {
+    let interceptor = makeInterceptor()
 
-    for code in cloudflareCodes {
+    for code in RetryPolicy.default.retryableStatuses {
       let callCount = LockIsolated(0)
-      let (head, _) = try await interceptor.intercept(request, body: nil) { _, _ in
+      let (head, _) = try await interceptor.intercept(makeRequest(), body: nil) { _, _ in
         callCount.withValue { $0 += 1 }
-        if callCount.value < 2 {
-          return self.makeResponse(statusCode: code)
-        }
-        return self.makeResponse(statusCode: 200)
+        return self.makeResponse(statusCode: callCount.value < 2 ? code : 200)
       }
       #expect(head.status.code == 200, "Should retry on \(code) and succeed")
       #expect(callCount.value == 2, "Should have called next twice for \(code)")
@@ -84,14 +65,12 @@ struct RetryRequestInterceptorTests {
   }
 
   @Test
-  func doesNotRetryOnNonRetryableStatusCodes() async throws {
-    let interceptor = makeInterceptor(retryLimit: 2)
-    let request = makeRequest()
-    let nonRetryableCodes = [400, 401, 403, 404, 422]
+  func doesNotRetryNonRetryableStatuses() async throws {
+    let interceptor = makeInterceptor()
 
-    for code in nonRetryableCodes {
+    for code in [400, 401, 403, 404, 422] {
       let callCount = LockIsolated(0)
-      let (head, _) = try await interceptor.intercept(request, body: nil) { _, _ in
+      let (head, _) = try await interceptor.intercept(makeRequest(), body: nil) { _, _ in
         callCount.withValue { $0 += 1 }
         return self.makeResponse(statusCode: code)
       }
@@ -101,32 +80,41 @@ struct RetryRequestInterceptorTests {
   }
 
   @Test
-  func retriesOnStandardRetryableStatusCodes() async throws {
-    let interceptor = makeInterceptor(retryLimit: 2)
-    let request = makeRequest()
-    let retryableCodes = [408, 500, 502, 503, 504]
+  func retriesTransportErrors() async throws {
+    let interceptor = makeInterceptor()
+    let callCount = LockIsolated(0)
 
-    for code in retryableCodes {
-      let callCount = LockIsolated(0)
-      let (head, _) = try await interceptor.intercept(request, body: nil) { _, _ in
-        callCount.withValue { $0 += 1 }
-        if callCount.value < 2 {
-          return self.makeResponse(statusCode: code)
-        }
-        return self.makeResponse(statusCode: 200)
-      }
-      #expect(head.status.code == 200, "Should retry on \(code) and succeed")
-      #expect(callCount.value == 2, "Should have called next twice for \(code)")
+    let (head, _) = try await interceptor.intercept(makeRequest(), body: nil) { _, _ in
+      callCount.withValue { $0 += 1 }
+      if callCount.value < 2 { throw URLError(.networkConnectionLost) }
+      return self.makeResponse(statusCode: 200)
     }
+    #expect(head.status.code == 200)
+    #expect(callCount.value == 2)
   }
 
   @Test
-  func doesNotRetryOnNonRetryableMethod() async throws {
-    let interceptor = makeInterceptor(retryLimit: 2)
-    let request = makeRequest(method: .post)
-
+  func doesNotRetryErrorsThrownByUserCode() async {
+    struct CustomTransportError: Error {}
+    let interceptor = makeInterceptor()
     let callCount = LockIsolated(0)
-    let (head, _) = try await interceptor.intercept(request, body: nil) { _, _ in
+
+    await #expect(throws: CustomTransportError.self) {
+      try await interceptor.intercept(makeRequest(), body: nil) { _, _ in
+        callCount.withValue { $0 += 1 }
+        throw CustomTransportError()
+      }
+    }
+    #expect(callCount.value == 1, "Only URLError is a transport failure worth replaying")
+  }
+
+  @Test
+  func doesNotRetryNonIdempotentMethod() async throws {
+    let interceptor = makeInterceptor()
+    let callCount = LockIsolated(0)
+
+    let (head, _) = try await interceptor.intercept(makeRequest(method: .post), body: nil) {
+      _, _ in
       callCount.withValue { $0 += 1 }
       return self.makeResponse(statusCode: 500)
     }
@@ -135,28 +123,109 @@ struct RetryRequestInterceptorTests {
   }
 
   @Test
-  func respectsRetryLimit() async throws {
-    let interceptor = makeInterceptor(retryLimit: 2)
-    let request = makeRequest()
-
+  func retriesNonIdempotentMethodWithIdempotencyKey() async throws {
+    let interceptor = makeInterceptor()
     let callCount = LockIsolated(0)
+    let request = makeRequest(method: .post, headers: [.idempotencyKey: "abc"])
+
     let (head, _) = try await interceptor.intercept(request, body: nil) { _, _ in
       callCount.withValue { $0 += 1 }
-      return self.makeResponse(statusCode: 520)
+      return self.makeResponse(statusCode: callCount.value < 2 ? 503 : 200)
     }
-    #expect(head.status.code == 520)
-    #expect(callCount.value == 2, "Should not exceed retryLimit")
+    #expect(head.status.code == 200)
+    #expect(callCount.value == 2)
   }
 
   @Test
+  func respectsMaxAttempts() async throws {
+    let interceptor = makeInterceptor(RetryPolicy(maxAttempts: 3, baseDelay: .zero))
+    let callCount = LockIsolated(0)
+
+    let (head, _) = try await interceptor.intercept(makeRequest(), body: nil) { _, _ in
+      callCount.withValue { $0 += 1 }
+      return self.makeResponse(statusCode: 503)
+    }
+    #expect(head.status.code == 503)
+    #expect(callCount.value == 3)
+  }
+
+  @Test
+  func disabledPolicyMakesOneAttempt() async throws {
+    let interceptor = makeInterceptor(.disabled)
+    let callCount = LockIsolated(0)
+
+    let (head, _) = try await interceptor.intercept(makeRequest(), body: nil) { _, _ in
+      callCount.withValue { $0 += 1 }
+      return self.makeResponse(statusCode: 503)
+    }
+    #expect(head.status.code == 503)
+    #expect(callCount.value == 1)
+  }
+
+  @Test
+  func setsRetryCountHeaderOnRetriesOnly() async throws {
+    let interceptor = makeInterceptor()
+    let seen = LockIsolated<[String?]>([])
+
+    _ = try await interceptor.intercept(makeRequest(), body: nil) { request, _ in
+      seen.withValue { $0.append(request.headerFields[.xRetryCount]) }
+      return self.makeResponse(statusCode: seen.value.count < 3 ? 503 : 200)
+    }
+    #expect(seen.value == [nil, "1", "2"])
+  }
+
+  // MARK: - Cancellation
+
+  @Test
+  func doesNotRetryCancellation() async {
+    let interceptor = makeInterceptor()
+    let callCount = LockIsolated(0)
+
+    await #expect(throws: CancellationError.self) {
+      try await interceptor.intercept(makeRequest(), body: nil) { _, _ in
+        callCount.withValue { $0 += 1 }
+        throw CancellationError()
+      }
+    }
+    #expect(callCount.value == 1)
+  }
+
+  @Test
+  func doesNotRetryCancelledURLError() async {
+    let interceptor = makeInterceptor()
+    let callCount = LockIsolated(0)
+
+    await #expect(throws: URLError.self) {
+      try await interceptor.intercept(makeRequest(), body: nil) { _, _ in
+        callCount.withValue { $0 += 1 }
+        throw URLError(.cancelled)
+      }
+    }
+    #expect(callCount.value == 1)
+  }
+
+  @Test
+  func cancellationDuringBackoffStopsRetrying() async {
+    let interceptor = makeInterceptor(RetryPolicy(baseDelay: .seconds(1)), clock: CancellingClock())
+    let callCount = LockIsolated(0)
+
+    await #expect(throws: CancellationError.self) {
+      try await interceptor.intercept(makeRequest(), body: nil) { _, _ in
+        callCount.withValue { $0 += 1 }
+        return self.makeResponse(statusCode: 503)
+      }
+    }
+    #expect(callCount.value == 1)
+  }
+
+  // MARK: - Bodies
+
+  @Test
   func singleIterationBodyIsNotRetried() async throws {
-    let interceptor = makeInterceptor(retryLimit: 3)
+    let interceptor = makeInterceptor()
     let attempts = LockIsolated(0)
     let body = HTTPBody(
-      AsyncStream<ArraySlice<UInt8>> {
-        $0.yield(ArraySlice([1]))
-        $0.finish()
-      },
+      AsyncThrowingStream<ArraySlice<UInt8>, any Error> { $0.finish() },
       length: .unknown, iterationBehavior: .single)
 
     let (head, _) = try await interceptor.intercept(makeRequest(), body: body) { _, _ in
@@ -170,7 +239,7 @@ struct RetryRequestInterceptorTests {
 
   @Test
   func multipleIterationBodyIsRetried() async throws {
-    let interceptor = makeInterceptor(retryLimit: 3)
+    let interceptor = makeInterceptor()
     let attempts = LockIsolated(0)
 
     let (head, _) = try await interceptor.intercept(
@@ -186,7 +255,7 @@ struct RetryRequestInterceptorTests {
 
   @Test
   func discardedResponseBodyIsDrainedBeforeRetrying() async throws {
-    let interceptor = makeInterceptor(retryLimit: 2)
+    let interceptor = makeInterceptor()
     let iterated = LockIsolated(false)
     let terminated = LockIsolated(false)
     let attempts = LockIsolated(0)
@@ -219,27 +288,42 @@ struct RetryRequestInterceptorTests {
     #expect(terminated.value, "The discarded response body's stream should terminate")
   }
 
-  // MARK: - Backoff delay
+  // MARK: - Delays
 
   @Test
-  func awaitsFullFractionalBackoffDelay() async throws {
+  func waitsJitteredBackoffBetweenAttempts() async throws {
     let clock = RecordingClock()
-    let interceptor = RetryRequestInterceptor(
-      retryLimit: 2,
-      exponentialBackoffBase: 2,
-      exponentialBackoffScale: 0.3,
-      clock: clock
-    )
-
+    let interceptor = makeInterceptor(
+      RetryPolicy(baseDelay: .seconds(1), maxDelay: .seconds(60)), clock: clock)
     let callCount = LockIsolated(0)
-    let (head, _) = try await interceptor.intercept(makeRequest(), body: nil) { _, _ in
+
+    _ = try await interceptor.intercept(makeRequest(), body: nil) { _, _ in
       callCount.withValue { $0 += 1 }
-      return self.makeResponse(statusCode: callCount.value < 2 ? 503 : 200)
+      return self.makeResponse(statusCode: callCount.value < 3 ? 503 : 200)
     }
 
-    #expect(head.status.code == 200)
-    #expect(callCount.value == 2)
-    #expect(clock.durations.value == [.seconds(pow(2.0, 1.0) * 0.3)])
+    let durations = clock.durations.value
+    #expect(durations.count == 2)
+    #expect((Duration.zero...(.seconds(1))).contains(durations[0]))
+    #expect((Duration.zero...(.seconds(2))).contains(durations[1]))
+  }
+
+  @Test
+  func honoursRetryAfterHeader() async throws {
+    let clock = RecordingClock()
+    let interceptor = makeInterceptor(
+      RetryPolicy(baseDelay: .seconds(1), maxDelay: .seconds(20)), clock: clock)
+    let callCount = LockIsolated(0)
+
+    _ = try await interceptor.intercept(makeRequest(), body: nil) { _, _ in
+      callCount.withValue { $0 += 1 }
+      if callCount.value < 2 {
+        return self.makeResponse(statusCode: 429, headers: [.retryAfter: "7"])
+      }
+      return self.makeResponse(statusCode: 200)
+    }
+
+    #expect(clock.durations.value == [.seconds(7)])
   }
 }
 
@@ -259,5 +343,15 @@ struct RecordingClock: Clock {
 
   func sleep(until deadline: ContinuousClock.Instant, tolerance: Duration?) async throws {
     durations.withValue { $0.append(anchor.duration(to: deadline)) }
+  }
+}
+
+/// A clock whose every sleep is cancelled, standing in for a task cancelled mid-backoff.
+struct CancellingClock: Clock {
+  var now: ContinuousClock.Instant { ContinuousClock().now }
+  var minimumResolution: Duration { .zero }
+
+  func sleep(until deadline: ContinuousClock.Instant, tolerance: Duration?) async throws {
+    throw CancellationError()
   }
 }

@@ -36,8 +36,8 @@ public struct SupabaseClientOptions: Sendable {
     /// The JSONDecoder to use when decoding database response objects.
     public let decoder: JSONDecoder
 
-    /// Whether to automatically retry transient (network or 5xx) PostgREST errors.
-    /// Defaults to `true`.
+    /// Whether to automatically retry transient (network, 503 or 520) PostgREST errors on GET
+    /// and HEAD requests. Defaults to `true`.
     public let retry: Bool
 
     public init(
@@ -139,20 +139,27 @@ public struct SupabaseClientOptions: Sendable {
     /// The JSON decoder to use for decoding function response bodies.
     public let decoder: JSONDecoder
 
+    /// How transient failures are retried. Defaults to ``RetryPolicy/default``, which only
+    /// replays idempotent methods, so a plain `POST` invocation is never retried.
+    public let retryPolicy: RetryPolicy
+
     @_disfavoredOverload
     public init(
       region: String? = nil,
-      decoder: JSONDecoder = JSONDecoder()
+      decoder: JSONDecoder = JSONDecoder(),
+      retryPolicy: RetryPolicy = .default
     ) {
       self.region = region
       self.decoder = decoder
+      self.retryPolicy = retryPolicy
     }
 
     public init(
       region: FunctionRegion? = nil,
-      decoder: JSONDecoder = JSONDecoder()
+      decoder: JSONDecoder = JSONDecoder(),
+      retryPolicy: RetryPolicy = .default
     ) {
-      self.init(region: region?.rawValue, decoder: decoder)
+      self.init(region: region?.rawValue, decoder: decoder, retryPolicy: retryPolicy)
     }
   }
 
@@ -161,8 +168,12 @@ public struct SupabaseClientOptions: Sendable {
     /// Whether storage client should be initialized with the new hostname format, i.e. `project-ref.storage.supabase.co`
     public let useNewHostname: Bool
 
-    public init(useNewHostname: Bool = false) {
+    /// How transient failures are retried. Defaults to ``RetryPolicy/default``.
+    public let retryPolicy: RetryPolicy
+
+    public init(useNewHostname: Bool = false, retryPolicy: RetryPolicy = .default) {
       self.useNewHostname = useNewHostname
+      self.retryPolicy = retryPolicy
     }
   }
 

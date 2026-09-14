@@ -72,7 +72,8 @@ struct StorageApi: Sendable {
     self.configuration = configuration
 
     let interceptors: [any ClientMiddleware] = [
-      LoggerInterceptor(logger: configuration.logger)
+      RetryRequestInterceptor(policy: configuration.retryPolicy),
+      LoggerInterceptor(logger: configuration.logger),
     ]
 
     http = HTTPClient(configuration: configuration.http, appending: interceptors)

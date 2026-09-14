@@ -19,7 +19,7 @@ public import Logging
 ///
 /// ### Creating a configuration
 ///
-/// - ``init(url:headers:http:logger:useNewHostname:)``
+/// - ``init(url:headers:http:logger:useNewHostname:retryPolicy:)``
 ///
 /// ### Configuration properties
 ///
@@ -28,6 +28,7 @@ public import Logging
 /// - ``http``
 /// - ``logger``
 /// - ``useNewHostname``
+/// - ``retryPolicy``
 public struct StorageClientConfiguration: Sendable {
   /// The base URL of the Storage API endpoint (e.g. `https://project.supabase.co/storage/v1`).
   public var url: URL
@@ -53,6 +54,10 @@ public struct StorageClientConfiguration: Sendable {
   /// which disables request buffering and enables uploads larger than 50 GB.
   public let useNewHostname: Bool
 
+  /// How transient failures are retried. Defaults to ``RetryPolicy/default``; pass
+  /// ``RetryPolicy/disabled`` to never retry.
+  public let retryPolicy: RetryPolicy
+
   /// Creates a ``StorageClientConfiguration``.
   ///
   /// - Parameters:
@@ -62,12 +67,14 @@ public struct StorageClientConfiguration: Sendable {
   ///   - logger: The logger to use. Defaults to a build-config-aware logger; pass a logger backed by
   ///     `SwiftLogNoOpLogHandler` to disable logging entirely.
   ///   - useNewHostname: When `true`, the storage-specific hostname is used, enabling uploads over 50 GB.
+  ///   - retryPolicy: How transient failures are retried. Defaults to ``RetryPolicy/default``.
   public init(
     url: URL,
     headers: [String: String],
     http: HTTPClientConfiguration = .init(),
     logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.storage"),
-    useNewHostname: Bool = false
+    useNewHostname: Bool = false,
+    retryPolicy: RetryPolicy = .default
   ) {
     self.url = url
     self.headers = headers
@@ -76,6 +83,7 @@ public struct StorageClientConfiguration: Sendable {
     logger[metadataKey: "system"] = "storage"
     self.logger = logger
     self.useNewHostname = useNewHostname
+    self.retryPolicy = retryPolicy
   }
 }
 
