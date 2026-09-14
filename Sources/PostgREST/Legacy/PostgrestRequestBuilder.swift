@@ -504,7 +504,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestExecutablePhase {
           continue
         }
         // Only the network layer's own failures are relabelled. `CancellationError`, and anything
-        // thrown by user code that runs inside `send` (a custom `fetch`, an `accessToken`
+        // thrown by user code that runs inside `send` (a custom `ClientTransport` or middleware, an `accessToken`
         // closure), propagate as themselves.
         guard let urlError = error as? URLError else { throw error }
         throw PostgrestError(

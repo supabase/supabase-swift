@@ -2215,8 +2215,8 @@ status code: 500 [status 500]` instead of the case name.
 Auth, PostgREST, Storage, Functions and Realtime no longer let `URLError` and `DecodingError`
 propagate as themselves. A `URLError` from the network layer is thrown as the module error with
 kind `.transport`, and a success body that cannot be decoded throws it with kind `.decoding`.
-Errors thrown by your own code that runs inside the request — a custom `fetch` handler, a
-`StorageHTTPSession`, or the `accessToken` closure — still propagate as themselves. The original
+Errors thrown by your own code that runs inside the request — a custom `ClientTransport` or
+`ClientMiddleware`, or the `accessToken` closure — still propagate as themselves. The original
 error is in `underlyingError`. `CancellationError` is never wrapped and still propagates as
 itself.
 

@@ -112,7 +112,7 @@ struct StorageApi: Sendable {
       (response, data) = try await http.send(request, body: body)
     } catch {
       // Only the network layer's own failures are relabelled. `CancellationError`, and anything
-      // thrown by user code that runs inside `send` (a custom `fetch`, an `accessToken` closure),
+      // thrown by user code that runs inside `send` (a custom `ClientTransport` or middleware, an `accessToken` closure),
       // propagate as themselves.
       guard let urlError = error as? URLError else { throw error }
       throw StorageError(
