@@ -1,3 +1,4 @@
+import ConcurrencyExtras
 import Foundation
 import HTTPTypes
 import Helpers
@@ -789,5 +790,48 @@ struct FunctionsClientTests {
     } catch let error as FunctionsError {
       #expect(error.kind == .relay)
     }
+  }
+
+  // MARK: - Retry
+
+  @Test
+  func retryPolicyRetriesIdempotentInvocations() async throws {
+    let attempts = LockIsolated(0)
+    let sut = makeSUT(retryPolicy: RetryPolicy(baseDelay: .zero)) {
+      attempts.withValue { $0 += 1 }
+      if attempts.value < 2 {
+        return (HTTPTypes.HTTPResponse(status: .serviceUnavailable), nil)
+      }
+      return (HTTPTypes.HTTPResponse(status: .ok), nil)
+    }
+
+    try await sut.invoke("hello", options: FunctionInvokeOptions(method: .get))
+    #expect(attempts.value == 2)
+  }
+
+  @Test
+  func defaultRetryPolicyDoesNotReplayPOST() async {
+    let attempts = LockIsolated(0)
+    let sut = makeSUT(retryPolicy: .default) {
+      attempts.withValue { $0 += 1 }
+      return (HTTPTypes.HTTPResponse(status: .serviceUnavailable), nil)
+    }
+
+    await #expect(throws: FunctionsError.self) { try await sut.invoke("hello") }
+    #expect(attempts.value == 1)
+  }
+
+  private func makeSUT(
+    retryPolicy: RetryPolicy,
+    transport: @escaping @Sendable () -> (HTTPTypes.HTTPResponse, HTTPBody?)
+  ) -> FunctionsClient {
+    FunctionsClient(
+      url: url,
+      headers: ["apikey": apiKey],
+      region: nil,
+      http: .init(transport: ClosureTransport { _, _ in transport() }),
+      retryPolicy: retryPolicy,
+      accessToken: nil
+    )
   }
 }

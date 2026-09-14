@@ -5,110 +5,32 @@
 //  Created by Guilherme Souza on 23/04/24.
 //
 
-package import Foundation
+import Foundation
 package import HTTPTypes
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
 #endif
 
-/// A ``ClientMiddleware`` for retrying failed HTTP requests with exponential backoff.
+/// The one ``ClientMiddleware`` that retries failed requests, for every HTTP module.
 ///
-/// The `RetryRequestInterceptor` actor intercepts HTTP requests and automatically retries them in case
-/// of failure, with exponential backoff between retries. You can configure the retry behavior by specifying
-/// the retry limit, exponential backoff base, scale, retryable HTTP methods, HTTP status codes, and URL error codes.
-package actor RetryRequestInterceptor: ClientMiddleware {
-  /// The default retry limit for the interceptor.
-  package static let defaultRetryLimit = 2
-  /// The default base value for exponential backoff.
-  package static let defaultExponentialBackoffBase: UInt = 2
-  /// The default scale factor for exponential backoff.
-  package static let defaultExponentialBackoffScale: Double = 0.5
-
-  /// The default set of retryable HTTP methods.
-  package static let defaultRetryableHTTPMethods: Set<HTTPTypes.HTTPRequest.Method> = [
-    .delete, .get, .head, .options, .put, .trace,
-  ]
-
-  /// The default set of retryable URL error codes.
-  package static let defaultRetryableURLErrorCodes: Set<URLError.Code> = [
-    .backgroundSessionInUseByAnotherProcess, .backgroundSessionWasDisconnected,
-    .badServerResponse, .callIsActive, .cannotConnectToHost, .cannotFindHost,
-    .cannotLoadFromNetwork, .dataNotAllowed, .dnsLookupFailed,
-    .downloadDecodingFailedMidStream, .downloadDecodingFailedToComplete,
-    .internationalRoamingOff, .networkConnectionLost, .notConnectedToInternet,
-    .secureConnectionFailed, .serverCertificateHasBadDate,
-    .serverCertificateNotYetValid, .timedOut,
-  ]
-
-  /// The default set of retryable HTTP status codes.
-  ///
-  /// Includes Cloudflare-specific error codes (520-524, 530) which represent transient
-  /// infrastructure errors that should not cause session invalidation.
-  package static let defaultRetryableHTTPStatusCodes: Set<Int> = [
-    408, 500, 502, 503, 504,
-    // Cloudflare-specific transient errors
-    520, 521, 522, 523, 524, 530,
-  ]
-
-  /// The maximum number of retries.
-  package let retryLimit: Int
-  /// The base value for exponential backoff.
-  package let exponentialBackoffBase: UInt
-  /// The scale factor for exponential backoff.
-  package let exponentialBackoffScale: Double
-  /// The set of retryable HTTP methods.
-  package let retryableHTTPMethods: Set<HTTPTypes.HTTPRequest.Method>
-  /// The set of retryable HTTP status codes.
-  package let retryableHTTPStatusCodes: Set<Int>
-  /// The set of retryable URL error codes.
-  package let retryableErrorCodes: Set<URLError.Code>
-  /// The clock used to wait between retries.
+/// Driven entirely by a ``RetryPolicy``: which methods and statuses are retryable, how many
+/// attempts, and how long to wait (full-jitter backoff or `Retry-After`). Sends
+/// `X-Retry-Count: n` on the n-th retry so a server can tell a replay from a first attempt.
+///
+/// A request whose body is ``HTTPBody/IterationBehavior/single`` is never retried — the bytes
+/// are gone after the first send. Only a `URLError` counts as a transport failure; an error
+/// thrown by user code propagates untouched. `CancellationError` (and `URLError.cancelled`) end
+/// the loop at once, and a cancellation that lands during the backoff wait propagates as itself.
+package struct RetryRequestInterceptor: ClientMiddleware {
+  package let policy: RetryPolicy
   package let clock: any Clock<Duration>
 
-  /// Creates a `RetryRequestInterceptor` instance.
-  ///
-  /// - Parameters:
-  ///   - retryLimit: The maximum number of retries. Default is `2`.
-  ///   - exponentialBackoffBase: The base value for exponential backoff. Default is `2`.
-  ///   - exponentialBackoffScale: The scale factor for exponential backoff. Default is `0.5`.
-  ///   - retryableHTTPMethods: The set of retryable HTTP methods. Default includes common methods.
-  ///   - retryableHTTPStatusCodes: The set of retryable HTTP status codes. Default includes common status codes.
-  ///   - retryableErrorCodes: The set of retryable URL error codes. Default includes common error codes.
-  ///   - clock: The clock used to wait between retries. Default is `ContinuousClock()`.
-  package init(
-    retryLimit: Int = RetryRequestInterceptor.defaultRetryLimit,
-    exponentialBackoffBase: UInt = RetryRequestInterceptor.defaultExponentialBackoffBase,
-    exponentialBackoffScale: Double = RetryRequestInterceptor.defaultExponentialBackoffScale,
-    retryableHTTPMethods: Set<HTTPTypes.HTTPRequest.Method> = RetryRequestInterceptor
-      .defaultRetryableHTTPMethods,
-    retryableHTTPStatusCodes: Set<Int> = RetryRequestInterceptor.defaultRetryableHTTPStatusCodes,
-    retryableErrorCodes: Set<URLError.Code> = RetryRequestInterceptor.defaultRetryableURLErrorCodes,
-    clock: any Clock<Duration> = ContinuousClock()
-  ) {
-    // A base below 2 makes each wait shorter than the last instead of longer. The value is fixed
-    // at construction, so this is a programmer error, not a runtime condition.
-    precondition(
-      exponentialBackoffBase >= 2,
-      "The `exponentialBackoffBase` must be a minimum of 2."
-    )
-
-    self.retryLimit = retryLimit
-    self.exponentialBackoffBase = exponentialBackoffBase
-    self.exponentialBackoffScale = exponentialBackoffScale
-    self.retryableHTTPMethods = retryableHTTPMethods
-    self.retryableHTTPStatusCodes = retryableHTTPStatusCodes
-    self.retryableErrorCodes = retryableErrorCodes
+  package init(policy: RetryPolicy, clock: any Clock<Duration> = ContinuousClock()) {
+    self.policy = policy
     self.clock = clock
   }
 
-  /// Intercepts an HTTP request and automatically retries it in case of failure.
-  ///
-  /// - Parameters:
-  ///   - request: The original HTTP request to be intercepted and retried.
-  ///   - body: The outgoing body, if any.
-  ///   - next: A closure representing the rest of the chain.
-  /// - Returns: The HTTP response obtained after retrying.
   package func intercept(
     _ request: HTTPTypes.HTTPRequest,
     body: HTTPBody?,
@@ -121,65 +43,59 @@ package actor RetryRequestInterceptor: ClientMiddleware {
     guard body?.iterationBehavior != .single else {
       return try await next(request, body)
     }
-    return try await retry(request, body: body, retryCount: 1, next: next)
+
+    var attempt = 1
+    while true {
+      var current = request
+      if attempt > 1 {
+        current.headerFields[.xRetryCount] = "\(attempt - 1)"
+      }
+
+      let result: Result<(HTTPTypes.HTTPResponse, HTTPBody?), any Error>
+      do {
+        result = .success(try await next(current, body))
+      } catch {
+        result = .failure(error)
+      }
+
+      guard attempt < policy.maxAttempts, shouldRetry(request, result: result) else {
+        return try result.get()
+      }
+
+      // This attempt's body is about to be discarded, so drain it to termination — a streamed
+      // body holds its producer (a URLSession task) open until its stream finishes. Exceeding
+      // the cap throws, which drops the iterator and terminates the stream just the same.
+      if let responseBody = result.value?.1 {
+        _ = try? await Data(collecting: responseBody, upTo: 1 << 20)
+      }
+
+      let retryAfter = result.value?.0.headerFields[.retryAfter]
+      try await clock.sleep(for: policy.delay(retry: attempt, retryAfter: retryAfter))
+      attempt += 1
+    }
   }
 
   private func shouldRetry(
-    request: HTTPTypes.HTTPRequest,
-    result: Result<HTTPTypes.HTTPResponse, any Error>
+    _ request: HTTPTypes.HTTPRequest,
+    result: Result<(HTTPTypes.HTTPResponse, HTTPBody?), any Error>
   ) -> Bool {
-    guard retryableHTTPMethods.contains(request.method) else { return false }
+    guard
+      policy.retryableMethods.contains(request.method)
+        || request.headerFields[.idempotencyKey] != nil
+    else { return false }
 
-    if let head = result.value, retryableHTTPStatusCodes.contains(head.status.code) {
-      return true
-    }
-
-    guard let errorCode = (result.error as? URLError)?.code else {
+    switch result {
+    case .success(let (head, _)):
+      return policy.retryableStatuses.contains(head.status.code)
+    case .failure(let error as URLError):
+      // ponytail: every URLError but a cancellation counts as transient. A deterministic one
+      // (bad URL, untrusted certificate) costs at most two short extra attempts; a curated
+      // code list is the upgrade if that ever matters.
+      return error.code != .cancelled
+    case .failure:
+      // `CancellationError`, and anything thrown by user code (a custom transport or
+      // middleware, an `accessToken` closure) — those propagate as themselves.
       return false
     }
-
-    return retryableErrorCodes.contains(errorCode)
-  }
-
-  private func retry(
-    _ request: HTTPTypes.HTTPRequest,
-    body: HTTPBody?,
-    retryCount: Int,
-    next:
-      @Sendable (HTTPTypes.HTTPRequest, HTTPBody?) async throws -> (
-        HTTPTypes.HTTPResponse, HTTPBody?
-      )
-  ) async throws -> (HTTPTypes.HTTPResponse, HTTPBody?) {
-    let result: Result<(HTTPTypes.HTTPResponse, HTTPBody?), any Error>
-
-    do {
-      result = .success(try await next(request, body))
-    } catch {
-      result = .failure(error)
-    }
-
-    if retryCount < retryLimit,
-      shouldRetry(request: request, result: result.map(\.0))
-    {
-      let retryDelay =
-        pow(
-          Double(exponentialBackoffBase),
-          Double(retryCount)
-        ) * exponentialBackoffScale
-
-      try? await clock.sleep(for: .seconds(retryDelay))
-
-      if !Task.isCancelled {
-        // This attempt's body is about to be discarded, so drain it to termination — a streamed
-        // body holds its producer (a URLSession task) open until its stream finishes. Exceeding
-        // the cap throws, which drops the iterator and terminates the stream just the same.
-        if let responseBody = result.value?.1 {
-          _ = try? await Data(collecting: responseBody, upTo: 1 << 20)
-        }
-        return try await retry(request, body: body, retryCount: retryCount + 1, next: next)
-      }
-    }
-
-    return try result.get()
   }
 }

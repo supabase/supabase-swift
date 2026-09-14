@@ -3,19 +3,17 @@ import HTTPTypes
 
 extension HTTPClient {
   init(configuration: AuthClient.Configuration) {
-    var middlewares: [any ClientMiddleware] = [
-      LoggerInterceptor(logger: configuration.logger)
-    ]
+    // POST is added so token refreshes are retried too; GoTrue's `/token` is safe to replay
+    // within its reuse interval.
+    var policy = RetryPolicy.default
+    policy.retryableMethods.insert(.post)
 
-    middlewares.append(
-      RetryRequestInterceptor(
-        retryableHTTPMethods: RetryRequestInterceptor.defaultRetryableHTTPMethods.union(
-          [.post]  // Add POST method so refresh token are also retried.
-        )
-      )
-    )
-
-    self.init(configuration: configuration.http, appending: middlewares)
+    self.init(
+      configuration: configuration.http,
+      appending: [
+        RetryRequestInterceptor(policy: policy),
+        LoggerInterceptor(logger: configuration.logger),
+      ])
   }
 }
 
