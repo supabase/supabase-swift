@@ -72,18 +72,13 @@ struct StorageClientIntegrationTests {
     do {
       _ = try await storage.getBucket("not-exist-id")
       Issue.record("Unexpected success")
+    } catch let error as StorageError {
+      #expect(error.kind == .server)
+      #expect(error.serverError?.error == "Bucket not found")
+      #expect(error.message == "Bucket not found")
+      #expect(error.response?.statusCode == 404)
     } catch {
-      assertInlineSnapshot(of: error, as: .dump) {
-        """
-        ▿ StorageError
-          ▿ error: Optional<String>
-            - some: "Bucket not found"
-          - message: "Bucket not found"
-          ▿ statusCode: Optional<String>
-            - some: "404"
-
-        """
-      }
+      Issue.record("Unexpected error \(error)")
     }
   }
 }

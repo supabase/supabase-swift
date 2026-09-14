@@ -1,44 +1,87 @@
 public import Foundation
+public import Helpers
 
-/// An error returned by the Supabase Storage API.
+/// An error thrown by the Storage client.
 ///
-/// ``StorageError`` is thrown whenever the server responds with a non-2xx status code or when the
-/// response body contains a recognizable error payload. Inspect ``message`` for a human-readable
-/// description, and ``statusCode`` for the HTTP status code string returned by the API.
+/// Check ``kind`` to learn what failed. For ``Kind-swift.struct/server``, ``serverError`` holds
+/// the body Storage returned and ``response`` holds the status, headers and request id.
 ///
 /// ```swift
 /// do {
 ///   try await storage.from("avatars").download(path: "missing.png")
-/// } catch let error as StorageError {
-///   print(error.statusCode ?? "unknown", error.message)
+/// } catch let error as StorageError where error.kind == .server {
+///   print(error.response?.statusCode ?? 0, error.serverError?.error ?? "", error.message)
 /// }
 /// ```
-public struct StorageError: Error, Decodable, Sendable {
-  /// The HTTP status code returned by the API, represented as a string (e.g. `"404"`).
-  public var statusCode: String?
+public struct StorageError: SupabaseError {
+  /// What failed. Compare against the static members and keep a fallback branch.
+  public struct Kind: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+    public let rawValue: String
 
-  /// A human-readable description of the error.
-  public var message: String
+    public init(rawValue: String) {
+      self.rawValue = rawValue
+    }
 
-  /// A short error identifier string returned by the API, if available.
-  public var error: String?
+    public init(stringLiteral value: String) {
+      self.init(rawValue: value)
+    }
 
-  /// Creates a ``StorageError``.
-  ///
-  /// - Parameters:
-  ///   - statusCode: The HTTP status code string, if known.
-  ///   - message: A human-readable description of the error.
-  ///   - error: A short error identifier string, if available.
-  public init(statusCode: String? = nil, message: String, error: String? = nil) {
-    self.statusCode = statusCode
-    self.message = message
-    self.error = error
+    /// Storage rejected the request and sent a recognizable error body. See
+    /// ``StorageError/serverError``.
+    public static let server: Kind = "server"
+    /// A non-2xx status whose body was not a Storage error payload. ``StorageError/response``
+    /// has the raw body.
+    public static let unexpectedResponse: Kind = "unexpectedResponse"
+    /// The request never completed. ``StorageError/underlyingError`` is usually a `URLError`.
+    public static let transport: Kind = "transport"
+    /// A success body could not be decoded. ``StorageError/underlyingError`` is usually a
+    /// `DecodingError`.
+    public static let decoding: Kind = "decoding"
+    /// A URL could not be built from the configuration and the given path. No request was sent.
+    public static let invalidURL: Kind = "invalidURL"
   }
-}
 
-extension StorageError: LocalizedError {
-  /// A localized description of the error, equal to ``message``.
-  public var errorDescription: String? {
-    message
+  /// The error body Storage returns for a rejected request, with its wire field names.
+  public struct ServerError: Decodable, Hashable, Sendable {
+    /// The HTTP status as Storage spells it in the body, e.g. `"404"`.
+    ///
+    /// Prefer ``HTTPErrorResponse/statusCode`` on the enclosing ``StorageError/response`` for
+    /// the integer.
+    public var statusCode: String?
+    /// A short identifier such as `"not_found"` or `"Duplicate"`, when Storage sends one.
+    public var error: String?
+    /// The human-readable message.
+    public var message: String
+
+    public init(statusCode: String? = nil, error: String? = nil, message: String) {
+      self.statusCode = statusCode
+      self.error = error
+      self.message = message
+    }
+  }
+
+  public var kind: Kind
+  public var message: String
+  /// The decoded error body. Non-nil exactly when ``kind`` is ``Kind-swift.struct/server``.
+  public var serverError: ServerError?
+  public var response: HTTPErrorResponse?
+  public var underlyingError: (any Error)?
+
+  public init(
+    kind: Kind,
+    message: String,
+    serverError: ServerError? = nil,
+    response: HTTPErrorResponse? = nil,
+    underlyingError: (any Error)? = nil
+  ) {
+    self.kind = kind
+    self.message = message
+    self.serverError = serverError
+    self.response = response
+    self.underlyingError = underlyingError
+  }
+
+  public var description: String {
+    formattedDescription(kind: kind.rawValue)
   }
 }
