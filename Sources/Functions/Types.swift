@@ -1,22 +1,64 @@
 public import Foundation
 import HTTPTypes
-import Helpers
+public import Helpers
 
-/// An error type representing various errors that can occur while invoking functions.
-public enum FunctionsError: Error, LocalizedError {
-  /// Error indicating a relay error while invoking the Edge Function.
-  case relayError
-  /// Error indicating a non-2xx status code returned by the Edge Function.
-  case httpError(code: Int, data: Data)
+/// An error thrown by ``FunctionsClient``.
+///
+/// Check ``kind`` to learn what failed. ``response`` carries the status, headers and body for
+/// ``Kind-swift.struct/relay`` and ``Kind-swift.struct/http``. ``underlyingError`` carries the
+/// `URLError` or `DecodingError` for ``Kind-swift.struct/transport`` and
+/// ``Kind-swift.struct/decoding``.
+///
+/// ```swift
+/// do {
+///   try await functions.invoke("hello")
+/// } catch let error as FunctionsError where error.kind == .http {
+///   print(error.response?.statusCode ?? 0, error.response?.body ?? Data())
+/// }
+/// ```
+public struct FunctionsError: SupabaseError {
+  /// What failed. Compare against the static members and keep a fallback branch.
+  public struct Kind: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+    public let rawValue: String
 
-  /// A localized description of the error.
-  public var errorDescription: String? {
-    switch self {
-    case .relayError:
-      "Relay Error invoking the Edge Function"
-    case .httpError(let code, _):
-      "Edge Function returned a non-2xx status code: \(code)"
+    public init(rawValue: String) {
+      self.rawValue = rawValue
     }
+
+    public init(stringLiteral value: String) {
+      self.init(rawValue: value)
+    }
+
+    /// The Supabase relay could not reach the function (`x-relay-error: true`).
+    public static let relay: Kind = "relay"
+    /// The function answered with a non-2xx status. ``FunctionsError/response`` has the body.
+    public static let http: Kind = "http"
+    /// The request never completed. ``FunctionsError/underlyingError`` is usually a `URLError`.
+    public static let transport: Kind = "transport"
+    /// The response body could not be decoded as the requested type.
+    /// ``FunctionsError/underlyingError`` is usually a `DecodingError`.
+    public static let decoding: Kind = "decoding"
+  }
+
+  public var kind: Kind
+  public var message: String
+  public var response: HTTPErrorResponse?
+  public var underlyingError: (any Error)?
+
+  public init(
+    kind: Kind,
+    message: String,
+    response: HTTPErrorResponse? = nil,
+    underlyingError: (any Error)? = nil
+  ) {
+    self.kind = kind
+    self.message = message
+    self.response = response
+    self.underlyingError = underlyingError
+  }
+
+  public var description: String {
+    formattedDescription(kind: kind.rawValue)
   }
 }
 

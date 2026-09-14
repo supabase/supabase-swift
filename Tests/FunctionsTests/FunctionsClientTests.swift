@@ -53,6 +53,21 @@ struct FunctionsClientTests {
     )
   }
 
+  private func makeSUT(
+    transport:
+      @escaping @Sendable (HTTPTypes.HTTPRequest, HTTPBody?) async throws -> (
+        HTTPTypes.HTTPResponse, HTTPBody?
+      )
+  ) -> FunctionsClient {
+    FunctionsClient(
+      url: url,
+      headers: ["apikey": apiKey],
+      region: nil,
+      http: .init(transport: ClosureTransport(handler: transport)),
+      accessToken: nil
+    )
+  }
+
   @Test
   func `init`() async {
     let client = FunctionsClient(
@@ -293,8 +308,9 @@ struct FunctionsClientTests {
     do {
       try await sut.invoke("hello_world")
       Issue.record("Invoke should fail.")
-    } catch let urlError as URLError {
-      #expect(urlError.code == .badServerResponse)
+    } catch let error as FunctionsError {
+      #expect(error.kind == .transport)
+      #expect((error.underlyingError as? URLError)?.code == .badServerResponse)
     } catch {
       Issue.record("Unexpected error thrown \(error)")
     }
@@ -323,8 +339,10 @@ struct FunctionsClientTests {
     do {
       try await sut.invoke("hello_world")
       Issue.record("Invoke should fail.")
-    } catch let FunctionsError.httpError(code, _) {
-      #expect(code == 300)
+    } catch let error as FunctionsError {
+      #expect(error.kind == .http)
+      #expect(error.response?.statusCode == 300)
+      #expect(error.response?.body == Data())
     } catch {
       Issue.record("Unexpected error thrown \(error)")
     }
@@ -356,7 +374,8 @@ struct FunctionsClientTests {
     do {
       try await sut.invoke("hello_world")
       Issue.record("Invoke should fail.")
-    } catch FunctionsError.relayError {
+    } catch let error as FunctionsError {
+      #expect(error.kind == .relay)
     } catch {
       Issue.record("Unexpected error thrown \(error)")
     }
@@ -388,7 +407,56 @@ struct FunctionsClientTests {
     do {
       try await sut.invoke("hello_world")
       Issue.record("Invoke should fail.")
-    } catch FunctionsError.relayError {
+    } catch let error as FunctionsError {
+      #expect(error.kind == .relay)
+    } catch {
+      Issue.record("Unexpected error thrown \(error)")
+    }
+  }
+
+  @Test
+  func invoke_transportFailure_wrapsURLError() async {
+    let sut = makeSUT { _, _ in throw URLError(.notConnectedToInternet) }
+
+    do {
+      try await sut.invoke("hello_world")
+      Issue.record("Invoke should fail.")
+    } catch let error as FunctionsError {
+      #expect(error.kind == .transport)
+      #expect(error.response == nil)
+      #expect((error.underlyingError as? URLError)?.code == .notConnectedToInternet)
+    } catch {
+      Issue.record("Unexpected error thrown \(error)")
+    }
+  }
+
+  @Test
+  func invoke_cancellation_isNotWrapped() async {
+    let sut = makeSUT { _, _ in throw CancellationError() }
+
+    await #expect(throws: CancellationError.self) {
+      try await sut.invoke("hello_world")
+    }
+  }
+
+  @Test
+  func invoke_undecodableBody_wrapsDecodingError() async {
+    let sut = makeSUT()
+
+    Mock(
+      url: url.appendingPathComponent("hello_world"),
+      statusCode: 200,
+      data: [.post: Data("not json".utf8)]
+    )
+    .register()
+
+    do {
+      let _: [String: String] = try await sut.invoke("hello_world")
+      Issue.record("Invoke should fail.")
+    } catch let error as FunctionsError {
+      #expect(error.kind == .decoding)
+      #expect(error.response == nil)
+      #expect(error.underlyingError is DecodingError)
     } catch {
       Issue.record("Unexpected error thrown \(error)")
     }
@@ -616,8 +684,9 @@ struct FunctionsClientTests {
       for try await _ in stream {
         Issue.record("should throw error")
       }
-    } catch let FunctionsError.httpError(code, _) {
-      #expect(code == 300)
+    } catch let error as FunctionsError {
+      #expect(error.kind == .http)
+      #expect(error.response?.statusCode == 300)
     }
   }
 
@@ -650,7 +719,8 @@ struct FunctionsClientTests {
       for try await _ in stream {
         Issue.record("should throw error")
       }
-    } catch FunctionsError.relayError {
+    } catch let error as FunctionsError {
+      #expect(error.kind == .relay)
     }
   }
 
@@ -683,7 +753,8 @@ struct FunctionsClientTests {
       for try await _ in stream {
         Issue.record("should throw error")
       }
-    } catch FunctionsError.relayError {
+    } catch let error as FunctionsError {
+      #expect(error.kind == .relay)
     }
   }
 }
