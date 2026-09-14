@@ -115,7 +115,11 @@ struct URLSessionTransportTests {
       HTTPRequest(method: .put, url: url), body: try HTTPBody(fileURL: fileURL))
 
     #expect(head.status == 200)
-    #expect(seen.value == Data("file".utf8))
+    // swift-corelibs-foundation keeps a file upload on the task, not on the `URLRequest` that
+    // `MockingURLProtocol` observes, so the mock cannot see the body on Linux.
+    #if !canImport(FoundationNetworking)
+      #expect(seen.value == Data("file".utf8))
+    #endif
     #expect(try await Data(collecting: try #require(body), upTo: 100) == Data("done".utf8))
   }
 
