@@ -53,9 +53,9 @@ public struct FunctionsClient: Sendable {
   ///
   /// Individual calls to ``invoke(_:options:decoder:)`` can override this per call — a
   /// client-wide default with a per-call override, the same pattern PostgREST's
-  /// `PostgrestClient.Configuration.decoder` uses. ``FunctionsError/httpError(code:data:)``
-  /// carries the response body as raw `Data` rather than decoding it, so this setting never
-  /// affects error handling.
+  /// `PostgrestClient.Configuration.decoder` uses. ``FunctionsError/response`` carries the
+  /// response body as raw `Data` rather than decoding it, so this setting never affects error
+  /// handling.
   public let decoder: JSONDecoder
 
   let headers: HTTPFields
@@ -160,7 +160,8 @@ public struct FunctionsClient: Sendable {
   ///   - decode: A closure that receives the raw response data and HTTP response, and returns the
   ///     decoded value.
   /// - Returns: The value returned by `decode`.
-  /// - Throws: ``FunctionsError`` if the function returns a non-2xx status or a relay error.
+  /// - Throws: ``FunctionsError`` if the function returns a non-2xx status, a relay error occurs,
+  ///   or the request fails.
   public func invoke<Response>(
     _ functionName: String,
     options: FunctionInvokeOptions = .init(),
@@ -178,8 +179,9 @@ public struct FunctionsClient: Sendable {
   ///   - options: Options for the invocation.
   ///   - decoder: The JSON decoder to use. Defaults to the client's ``decoder`` when `nil`.
   /// - Returns: The decoded `T`.
-  /// - Throws: ``FunctionsError`` if the function returns a non-2xx status or a relay error, or
-  ///   a decoding error if the response body cannot be decoded as `T`.
+  /// - Throws: ``FunctionsError`` with kind ``FunctionsError/Kind-swift.struct/decoding`` if the
+  ///   response body cannot be decoded as `T`, or another kind for relay, HTTP and transport
+  ///   failures.
   public func invoke<T: Decodable>(
     _ functionName: String,
     options: FunctionInvokeOptions = .init(),
@@ -187,7 +189,15 @@ public struct FunctionsClient: Sendable {
   ) async throws -> T {
     let decoder = decoder ?? self.decoder
     return try await invoke(functionName, options: options) { data, _ in
-      try decoder.decode(T.self, from: data)
+      do {
+        return try decoder.decode(T.self, from: data)
+      } catch {
+        throw FunctionsError(
+          kind: .decoding,
+          message: "Failed to decode the Edge Function response as \(T.self).",
+          underlyingError: error
+        )
+      }
     }
   }
 
@@ -195,7 +205,8 @@ public struct FunctionsClient: Sendable {
   /// - Parameters:
   ///   - functionName: The name of the function to invoke.
   ///   - options: Options for the invocation.
-  /// - Throws: ``FunctionsError`` if the function returns a non-2xx status or a relay error.
+  /// - Throws: ``FunctionsError`` if the function returns a non-2xx status, a relay error occurs,
+  ///   or the request fails.
   public func invoke(
     _ functionName: String,
     options: FunctionInvokeOptions = .init()
@@ -208,15 +219,32 @@ public struct FunctionsClient: Sendable {
     invokeOptions: FunctionInvokeOptions
   ) async throws -> (HTTPResponse, Data) {
     let (request, body) = try await buildRequest(functionName: functionName, options: invokeOptions)
-    let (response, data) = try await http.send(
-      request, body: body, timeout: Self.timeout(for: invokeOptions))
+
+    let response: HTTPResponse
+    let data: Data
+    do {
+      (response, data) = try await http.send(
+        request, body: body, timeout: Self.timeout(for: invokeOptions))
+    } catch {
+      if error is CancellationError { throw error }
+      throw FunctionsError(
+        kind: .transport, message: error.localizedDescription, underlyingError: error)
+    }
 
     if response.headerFields[.xRelayError] == "true" {
-      throw FunctionsError.relayError
+      throw FunctionsError(
+        kind: .relay,
+        message: "Relay Error invoking the Edge Function",
+        response: HTTPErrorResponse(response, body: data)
+      )
     }
 
     guard response.status.kind == .successful else {
-      throw FunctionsError.httpError(code: response.status.code, data: data)
+      throw FunctionsError(
+        kind: .http,
+        message: "Edge Function returned a non-2xx status code: \(response.status.code)",
+        response: HTTPErrorResponse(response, body: data)
+      )
     }
 
     return (response, data)
@@ -245,12 +273,22 @@ public struct FunctionsClient: Sendable {
         )
 
         if head.headerFields[.xRelayError] == "true" {
-          throw FunctionsError.relayError
+          var data = Data()
+          if let body { data = try await Data(collecting: body, upTo: .max) }
+          throw FunctionsError(
+            kind: .relay,
+            message: "Relay Error invoking the Edge Function",
+            response: HTTPErrorResponse(head, body: data)
+          )
         }
         guard head.status.kind == .successful else {
           var data = Data()
           if let body { data = try await Data(collecting: body, upTo: .max) }
-          throw FunctionsError.httpError(code: head.status.code, data: data)
+          throw FunctionsError(
+            kind: .http,
+            message: "Edge Function returned a non-2xx status code: \(head.status.code)",
+            response: HTTPErrorResponse(head, body: data)
+          )
         }
         if let body {
           for try await chunk in body {
@@ -258,8 +296,12 @@ public struct FunctionsClient: Sendable {
           }
         }
         continuation.finish()
-      } catch {
+      } catch let error where error is FunctionsError || error is CancellationError {
         continuation.finish(throwing: error)
+      } catch {
+        continuation.finish(
+          throwing: FunctionsError(
+            kind: .transport, message: error.localizedDescription, underlyingError: error))
       }
     }
     continuation.onTermination = { _ in task.cancel() }
