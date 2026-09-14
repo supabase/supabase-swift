@@ -268,9 +268,19 @@ public struct FunctionsClient: Sendable {
   ) -> AsyncThrowingStream<Data, any Error> {
     let (stream, continuation) = AsyncThrowingStream<Data, any Error>.makeStream()
     let task = Task {
+      // Built outside the catch below: an error from the `accessToken` closure is the caller's
+      // own and must propagate unchanged, even when it happens to be a `URLError`.
+      let request: HTTPRequest
+      let requestBody: Data?
       do {
-        let (request, requestBody) = try await buildRequest(
+        (request, requestBody) = try await buildRequest(
           functionName: functionName, options: invokeOptions)
+      } catch {
+        continuation.finish(throwing: error)
+        return
+      }
+
+      do {
         let (head, body) = try await http.stream(
           request, body: requestBody.map { HTTPBody($0) }, timeout: Self.timeout(for: invokeOptions)
         )
@@ -299,12 +309,15 @@ public struct FunctionsClient: Sendable {
           }
         }
         continuation.finish()
-      } catch let error where error is FunctionsError || error is CancellationError {
-        continuation.finish(throwing: error)
-      } catch {
+      } catch let urlError as URLError {
+        // Only the network layer's own failures are relabelled. `CancellationError`, a
+        // `FunctionsError` thrown above and errors from a user's `accessToken` closure propagate
+        // as themselves.
         continuation.finish(
           throwing: FunctionsError(
-            kind: .transport, message: error.localizedDescription, underlyingError: error))
+            kind: .transport, message: urlError.localizedDescription, underlyingError: urlError))
+      } catch {
+        continuation.finish(throwing: error)
       }
     }
     continuation.onTermination = { _ in task.cancel() }

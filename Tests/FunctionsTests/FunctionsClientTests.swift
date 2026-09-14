@@ -285,7 +285,7 @@ struct FunctionsClientTests {
   }
 
   @Test
-  func invoke_shouldThrow_URLError_badServerResponse() async {
+  func invoke_badServerResponse_wrapsAsTransport() async {
     let sut = makeSUT()
 
     Mock(
@@ -601,6 +601,29 @@ struct FunctionsClientTests {
 
     await #expect(throws: TokenError.self) {
       try await sut.invoke("hello-world")
+    }
+  }
+
+  @Test
+  func invokeWithStreamedResponseDoesNotWrapAccessTokenError() async {
+    let sut = FunctionsClient(
+      url: url,
+      headers: ["apikey": apiKey],
+      http: .init(
+        transport: ClosureTransport { _, _ in
+          Issue.record("transport should not be called when the access token provider throws")
+          return (HTTPTypes.HTTPResponse(status: .ok), nil)
+        }),
+      accessToken: { throw URLError(.userAuthenticationRequired) }
+    )
+
+    do {
+      for try await _ in sut._invokeWithStreamedResponse("stream") {}
+      Issue.record("expected the stream to fail")
+    } catch let error as URLError {
+      #expect(error.code == .userAuthenticationRequired)
+    } catch {
+      Issue.record("Unexpected error \(error)")
     }
   }
 

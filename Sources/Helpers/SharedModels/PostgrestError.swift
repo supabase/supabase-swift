@@ -35,8 +35,9 @@ public struct PostgrestError: SupabaseError {
 
     /// PostgREST rejected the request and sent an error body. See ``PostgrestError/serverError``.
     public static let server: Kind = "server"
-    /// A non-2xx status whose body was not a PostgREST error payload. ``PostgrestError/response``
-    /// has the raw body.
+    /// A non-2xx status whose body was not a PostgREST error payload, or a response the SDK
+    /// could not interpret (for example a `count(_:)` reply with no `Content-Range`).
+    /// ``PostgrestError/response`` has the raw body when there was one.
     public static let unexpectedResponse: Kind = "unexpectedResponse"
     /// The request never completed. ``PostgrestError/underlyingError`` is usually a `URLError`.
     public static let transport: Kind = "transport"

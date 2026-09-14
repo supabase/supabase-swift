@@ -475,6 +475,37 @@ extension StorageMockerTests {
     }
 
     @Test
+    func createSignedURL_invalidURL() async throws {
+      let storage = makeSUT()
+
+      Mock(
+        url: url.appendingPathComponent("object/sign/bucket/file.txt"),
+        statusCode: 200,
+        data: [
+          .post: Data(
+            """
+            {
+              "signedURL": "http://[::1"
+            }
+            """.utf8
+          )
+        ]
+      )
+      .register()
+
+      do {
+        _ = try await storage.from("bucket").createSignedURL(
+          path: "file.txt",
+          expiresIn: 3600
+        )
+        Issue.record("expected createSignedURL to throw")
+      } catch let error as StorageError {
+        #expect(error.kind == .invalidURL)
+        #expect(error.response == nil)
+      }
+    }
+
+    @Test
     func createSignedURL_download() async throws {
       let storage = makeSUT()
 

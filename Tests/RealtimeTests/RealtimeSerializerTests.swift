@@ -91,6 +91,19 @@ struct RealtimeSerializerTests {
     }
   }
 
+  @Test
+  func decodeTextRejectsShortArraysWithDecodingKind() {
+    do {
+      _ = try serializer.decodeText("[1, 2, 3]")
+      Issue.record("Expected failure")
+    } catch let error as RealtimeError {
+      #expect(error.kind == .decoding)
+      #expect(error.message == "Expected JSON array with 5 elements, got 3.")
+    } catch {
+      Issue.record("Unexpected error \(error)")
+    }
+  }
+
   // MARK: - Text Round-trip
 
   @Test

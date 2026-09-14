@@ -23,6 +23,9 @@ public import Foundation
 /// Each conforming type has a `kind` property, a `RawRepresentable` struct with static
 /// members, that says which failure it is. Compare against the known kinds and keep a
 /// fallback branch; a newer server or SDK may add kinds.
+///
+/// Conforming to this protocol outside the Supabase SDK is not supported; the shared
+/// `description` layout is internal to the package.
 public protocol SupabaseError: Error, Sendable, LocalizedError, CustomStringConvertible {
   /// A human-readable description of what went wrong. Never empty.
   var message: String { get }

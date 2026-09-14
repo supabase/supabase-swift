@@ -7,18 +7,6 @@ enum WebSocketEvent: Sendable, Hashable {
   case close(code: Int?, reason: String)
 }
 
-/// Represents errors that can occur on a WebSocket connection.
-enum WebSocketError: Error, LocalizedError {
-  /// An error occurred while connecting to the peer.
-  case connection(message: String, error: any Error)
-
-  var errorDescription: String? {
-    switch self {
-    case .connection(let message, let error): "\(message) \(error.localizedDescription)"
-    }
-  }
-}
-
 /// The interface for WebSocket connection.
 protocol WebSocket: Sendable, AnyObject {
   var closeCode: Int? { get }

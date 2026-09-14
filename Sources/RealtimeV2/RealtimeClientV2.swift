@@ -609,7 +609,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       // a timeout that fires after a reconnect has already replaced the
       // socket can't tear down the healthy new connection.
       let conn = mutableState.withValue { $0.connection }
-      await connectionManager.handleError(RealtimeError("heartbeat timeout"), from: conn)
+      await connectionManager.handleError(RealtimeError.heartbeatTimeout, from: conn)
     }
   }
 

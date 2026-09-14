@@ -332,6 +332,28 @@ supporting_symbols:
   - AuthError.underlyingError
   - AuthError.description
   - AuthError.sessionMissing
+  # RealtimeError (SDK-1788) is thrown by every realtime.* capability rather
+  # than owned by one.
+  - RealtimeError
+  - RealtimeError.Kind
+  - RealtimeError.Kind.init
+  - RealtimeError.Kind.rawValue
+  - RealtimeError.Kind.connection
+  - RealtimeError.Kind.timeout
+  - RealtimeError.Kind.accessTokenMissing
+  - RealtimeError.Kind.maxRetryAttemptsReached
+  - RealtimeError.Kind.channelClosedByServer
+  - RealtimeError.Kind.server
+  - RealtimeError.Kind.transport
+  - RealtimeError.Kind.decoding
+  - RealtimeError.init
+  - RealtimeError.kind
+  - RealtimeError.message
+  - RealtimeError.response
+  - RealtimeError.underlyingError
+  - RealtimeError.description
+  - RealtimeError.maxRetryAttemptsReached
+  - RealtimeError.channelClosedByServer
 
 features:
 

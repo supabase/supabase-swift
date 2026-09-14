@@ -60,8 +60,7 @@ actor ConnectionManager {
       try await task.value
       // After waiting, get the connection from state
       guard case .connected(let conn) = state else {
-        throw WebSocketError.connection(
-          message: "Connection failed", error: NSError(domain: "ConnectionManager", code: -1))
+        throw RealtimeError.connection("Connection failed")
       }
       return conn
 
@@ -69,8 +68,7 @@ actor ConnectionManager {
       logger.debug("Initiating new connection")
       try await performConnection()
       guard case .connected(let conn) = state else {
-        throw WebSocketError.connection(
-          message: "Connection failed", error: NSError(domain: "ConnectionManager", code: -1))
+        throw RealtimeError.connection("Connection failed")
       }
       return conn
 
@@ -78,8 +76,7 @@ actor ConnectionManager {
       logger.debug("Reconnection in progress, waiting...")
       try await task.value
       guard case .connected(let conn) = state else {
-        throw WebSocketError.connection(
-          message: "Connection failed", error: NSError(domain: "ConnectionManager", code: -1))
+        throw RealtimeError.connection("Connection failed")
       }
       return conn
     }

@@ -1624,9 +1624,10 @@ Separately, decoding a `PostgrestError` from an error response no longer uses
 non-configurable internal decoder. Previously, a decoder with a non-default `keyDecodingStrategy`
 or `dateDecodingStrategy` that didn't match `PostgrestError`'s plain `details`/`hint`/`code`/
 `message` shape could cause a real PostgREST error response to fail decoding, and was reported as a
-generic `HTTPError` instead of a `PostgrestError`. Now, any unrecognized response body throws
-`PostgrestError` with kind `.unexpectedResponse` and the decoded payload in `serverError` as
-`PostgrestError.ServerError`. This is a silent behavior change, not a compile error: if you
+generic `HTTPError` instead of a `PostgrestError`. Now, a recognized PostgREST error body throws
+`PostgrestError` with kind `.server` and the decoded `PostgrestError.ServerError` in `serverError`.
+An unrecognized body throws kind `.unexpectedResponse` with `serverError == nil` and the raw bytes
+in `response?.body`. This is a silent behavior change, not a compile error: if you
 `catch`-typed on `PostgrestError` while also customizing `Configuration.decoder`'s key or date
 strategy, error responses that previously fell through as `HTTPError` are now caught as
 `PostgrestError` instead.
@@ -2393,3 +2394,38 @@ This is a compile error for any `catch let error as HTTPError`.
 
 `HTTPErrorResponse.headers` is `HTTPFields` from swift-http-types, not `[String: String]`.
 `import HTTPTypes` to spell header names: `response.headers[.contentType]`.
+
+## Realtime throws `RealtimeError` for every failure
+
+`RealtimeError` is now public. It is a struct with `kind: RealtimeError.Kind`, `message`,
+`response` and `underlyingError`, conforming to `SupabaseError`. Kinds: `.connection`,
+`.timeout`, `.accessTokenMissing`, `.maxRetryAttemptsReached`, `.channelClosedByServer`,
+`.server`, `.transport` and `.decoding`.
+
+Before, `RealtimeError` was `package`-scoped, so `subscribeWithError()` and `httpSend` handed you
+an `any Error` you could only inspect through `localizedDescription`. `httpSend` could also leak
+an internal `TimeoutError`, and connection failures surfaced as an internal `WebSocketError`
+wrapping a placeholder `NSError(domain: "ConnectionManager", code: -1)`. All of those are now
+`RealtimeError`.
+
+This compiles silently. Search your codebase for `localizedDescription` comparisons and
+`NSError` domain checks around `subscribeWithError()` and `httpSend`, and switch them to `kind`:
+
+```swift
+// Before
+do {
+  try await channel.subscribeWithError()
+} catch {
+  if error.localizedDescription == "Maximum retry attempts reached." { scheduleRetry() }
+}
+
+// After
+do {
+  try await channel.subscribeWithError()
+} catch let error as RealtimeError where error.kind == .maxRetryAttemptsReached {
+  scheduleRetry()
+}
+```
+
+For `httpSend`, a non-202 answer is `.server` with `response?.statusCode` and `response?.body`
+set; a request that never completes is `.transport` with the `URLError` in `underlyingError`.

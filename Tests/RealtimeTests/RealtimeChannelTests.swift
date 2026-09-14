@@ -469,6 +469,7 @@ struct RealtimeChannelTests {
       try await channel.httpSend(event: "test", message: ["data": "test"])
       Issue.record("Expected httpSend to throw an error when access token is missing")
     } catch {
+      #expect((error as? RealtimeError)?.kind == .accessTokenMissing)
       #expect(error.localizedDescription == "Access token is required for httpSend()")
     }
   }
@@ -600,6 +601,7 @@ struct RealtimeChannelTests {
       try await channel.httpSend(event: "test", data: Data([0x01]))
       Issue.record("Expected httpSend to throw an error when access token is missing")
     } catch {
+      #expect((error as? RealtimeError)?.kind == .accessTokenMissing)
       #expect(error.localizedDescription == "Access token is required for httpSend()")
     }
   }
@@ -629,8 +631,80 @@ struct RealtimeChannelTests {
     do {
       try await channel.httpSend(event: "test", message: ["data": "test"])
       Issue.record("Expected httpSend to throw an error on non-202 status")
+    } catch let error as RealtimeError {
+      #expect(error.kind == .server)
+      #expect(error.message == "Server error")
+      #expect(error.response?.statusCode == 500)
     } catch {
-      #expect(error.localizedDescription == "Server error")
+      Issue.record("Unexpected error \(error)")
+    }
+  }
+
+  @Test
+  func httpSendWrapsTransportFailure() async {
+    let httpClient = RecordingTransport()
+    httpClient.respond { _, _ in throw URLError(.timedOut) }
+    let (client, _) = FakeWebSocket.fakes()
+    let socket = RealtimeClientV2(
+      url: URL(string: "https://localhost:54321/realtime/v1")!,
+      options: RealtimeClientOptions(
+        headers: ["apikey": "test-key"], accessToken: { "test-token" }),
+      wsTransport: { _, _ in client },
+      http: HTTPClient(transport: httpClient),
+      clock: ContinuousClock()
+    )
+    let channel = socket.channel("test-topic")
+
+    do {
+      try await channel.httpSend(event: "test", message: ["data": "test"])
+      Issue.record("Expected failure")
+    } catch let error as RealtimeError {
+      #expect(error.kind == .transport)
+      #expect((error.underlyingError as? URLError)?.code == .timedOut)
+    } catch {
+      Issue.record("Unexpected error \(error)")
+    }
+  }
+
+  @Test
+  func httpSendDoesNotWrapCancellation() async {
+    let httpClient = RecordingTransport()
+    httpClient.respond { _, _ in throw CancellationError() }
+    let (client, _) = FakeWebSocket.fakes()
+    let socket = RealtimeClientV2(
+      url: URL(string: "https://localhost:54321/realtime/v1")!,
+      options: RealtimeClientOptions(
+        headers: ["apikey": "test-key"], accessToken: { "test-token" }),
+      wsTransport: { _, _ in client },
+      http: HTTPClient(transport: httpClient),
+      clock: ContinuousClock()
+    )
+    let channel = socket.channel("test-topic")
+
+    await #expect(throws: CancellationError.self) {
+      try await channel.httpSend(event: "test", message: ["data": "test"])
+    }
+  }
+
+  private struct FetchError: Error {}
+
+  @Test
+  func httpSendDoesNotWrapCustomFetchError() async {
+    let httpClient = RecordingTransport()
+    httpClient.respond { _, _ in throw FetchError() }
+    let (client, _) = FakeWebSocket.fakes()
+    let socket = RealtimeClientV2(
+      url: URL(string: "https://localhost:54321/realtime/v1")!,
+      options: RealtimeClientOptions(
+        headers: ["apikey": "test-key"], accessToken: { "test-token" }),
+      wsTransport: { _, _ in client },
+      http: HTTPClient(transport: httpClient),
+      clock: ContinuousClock()
+    )
+    let channel = socket.channel("test-topic")
+
+    await #expect(throws: FetchError.self) {
+      try await channel.httpSend(event: "test", message: ["data": "test"])
     }
   }
 

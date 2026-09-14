@@ -187,7 +187,7 @@ struct ChannelStateManagerTests {
       try await h.sut.subscribe()
       Issue.record("Expected subscribe to throw after max retries")
     } catch {
-      #expect(error is RealtimeError)
+      #expect((error as? RealtimeError)?.kind == .maxRetryAttemptsReached)
     }
 
     let state = await h.sut.state
@@ -256,7 +256,7 @@ struct ChannelStateManagerTests {
       Issue.record("Expected subscribe to throw when socket is not connected")
     } catch {
       #expect(!(error is CancellationError), "Connect failure surfaced as CancellationError")
-      #expect(error is RealtimeError)
+      #expect((error as? RealtimeError)?.kind == .maxRetryAttemptsReached)
     }
   }
 
@@ -351,8 +351,7 @@ struct ChannelStateManagerTests {
     } catch {
       #expect(!(error is CancellationError), "Server close surfaced as CancellationError")
       #expect(
-        (error as? RealtimeError)?.errorDescription
-          == RealtimeError.channelClosedByServer.errorDescription,
+        (error as? RealtimeError)?.kind == .channelClosedByServer,
         "Expected channelClosedByServer, got \(error)"
       )
     }
