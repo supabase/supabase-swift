@@ -204,7 +204,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   /// All callbacks (broadcast, presence, postgres changes) must be registered before calling
   /// this method. Calling it more than once on an already-subscribed channel is a no-op.
   ///
-  /// - Throws: A `RealtimeError` if the subscribe attempt fails or times out.
+  /// - Throws: ``RealtimeError``. Check `kind` for `.timeout`, `.maxRetryAttemptsReached`, `.channelClosedByServer` (subscribe) or `.accessTokenMissing`, `.server`, `.transport`, `.timeout` (httpSend).
   public func subscribeWithError() async throws {
     logger.debug("Subscribe requested for channel '\(topic)'")
     try await stateManager.subscribe()
@@ -267,7 +267,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   ///   - event: The broadcast event name.
   ///   - message: A `Codable` value to send as the message payload.
   ///   - timeout: An optional timeout in seconds. Defaults to the socket's configured timeout.
-  /// - Throws: A `RealtimeError` if the access token is missing or the request fails.
+  /// - Throws: ``RealtimeError``. Check `kind` for `.timeout`, `.maxRetryAttemptsReached`, `.channelClosedByServer` (subscribe) or `.accessTokenMissing`, `.server`, `.transport`, `.timeout` (httpSend).
   public func httpSend(
     event: String,
     message: some Codable,
@@ -289,14 +289,14 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   ///   - event: The broadcast event name.
   ///   - message: A ``JSONObject`` to send as the message payload.
   ///   - timeout: An optional timeout in seconds. Defaults to the socket's configured timeout.
-  /// - Throws: A `RealtimeError` if the access token is missing or the request fails.
+  /// - Throws: ``RealtimeError``. Check `kind` for `.timeout`, `.maxRetryAttemptsReached`, `.channelClosedByServer` (subscribe) or `.accessTokenMissing`, `.server`, `.transport`, `.timeout` (httpSend).
   public func httpSend(
     event: String,
     message: JSONObject,
     timeout: TimeInterval? = nil
   ) async throws {
     guard let accessToken = await socket._getAccessToken() else {
-      throw RealtimeError("Access token is required for httpSend()")
+      throw RealtimeError.accessTokenMissing
     }
 
     let isPrivate = await config.isPrivate
@@ -315,10 +315,22 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       headerFields: headers
     )
 
-    let (response, data) = try await withTimeout(
-      interval: timeout ?? socket.options.timeoutInterval, clock: socket.clock
-    ) {
-      [self] in try await socket.http.send(request, body: body)
+    let response: HTTPResponse
+    let data: Data
+    do {
+      (response, data) = try await withTimeout(
+        interval: timeout ?? socket.options.timeoutInterval, clock: socket.clock
+      ) {
+        [self] in try await socket.http.send(request, body: body)
+      }
+    } catch is TimeoutError {
+      throw RealtimeError(kind: .timeout, message: "httpSend() timed out.")
+    } catch {
+      // Only the network layer's own failures are relabelled (Task 4.5 rule). `CancellationError`
+      // and errors thrown by a user's `fetch`/`accessToken` closure propagate as themselves.
+      guard let urlError = error as? URLError else { throw error }
+      throw RealtimeError(
+        kind: .transport, message: urlError.localizedDescription, underlyingError: urlError)
     }
 
     try Self.validateHTTPSendResponse(response, data: data)
@@ -337,14 +349,14 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   ///   - event: The broadcast event name.
   ///   - data: Raw binary data to send as the request body.
   ///   - timeout: An optional timeout in seconds. Defaults to the socket's configured timeout.
-  /// - Throws: A `RealtimeError` if the access token is missing or the request fails.
+  /// - Throws: ``RealtimeError``. Check `kind` for `.timeout`, `.maxRetryAttemptsReached`, `.channelClosedByServer` (subscribe) or `.accessTokenMissing`, `.server`, `.transport`, `.timeout` (httpSend).
   public func httpSend(
     event: String,
     data: Data,
     timeout: TimeInterval? = nil
   ) async throws {
     guard let accessToken = await socket._getAccessToken() else {
-      throw RealtimeError("Access token is required for httpSend()")
+      throw RealtimeError.accessTokenMissing
     }
 
     let isPrivate = await config.isPrivate
@@ -361,10 +373,22 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       headerFields: headers
     )
 
-    let (response, responseData) = try await withTimeout(
-      interval: timeout ?? socket.options.timeoutInterval, clock: socket.clock
-    ) {
-      [self] in try await socket.http.send(request, body: data)
+    let response: HTTPResponse
+    let responseData: Data
+    do {
+      (response, responseData) = try await withTimeout(
+        interval: timeout ?? socket.options.timeoutInterval, clock: socket.clock
+      ) {
+        [self] in try await socket.http.send(request, body: data)
+      }
+    } catch is TimeoutError {
+      throw RealtimeError(kind: .timeout, message: "httpSend() timed out.")
+    } catch {
+      // Only the network layer's own failures are relabelled (Task 4.5 rule). `CancellationError`
+      // and errors thrown by a user's `fetch`/`accessToken` closure propagate as themselves.
+      guard let urlError = error as? URLError else { throw error }
+      throw RealtimeError(
+        kind: .transport, message: urlError.localizedDescription, underlyingError: urlError)
     }
 
     try Self.validateHTTPSendResponse(response, data: responseData)
@@ -377,7 +401,8 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       if let errorBody = try? data.decoded(as: [String: String].self) {
         errorMessage = errorBody["error"] ?? errorBody["message"] ?? errorMessage
       }
-      throw RealtimeError(errorMessage)
+      throw RealtimeError(
+        kind: .server, message: errorMessage, response: HTTPErrorResponse(response, body: data))
     }
   }
 
@@ -576,7 +601,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
           let ref = message.ref,
           let status = message.payload["status"]?.stringValue
         else {
-          throw RealtimeError("Received a reply with unexpected payload: \(message)")
+          throw RealtimeError.decoding("Received a reply with unexpected payload: \(message)")
         }
 
         await didReceiveReply(ref: ref, status: status)
@@ -636,7 +661,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
           )
 
         default:
-          throw RealtimeError("Unknown event type: \(postgresActions.type)")
+          throw RealtimeError.decoding("Unknown event type: \(postgresActions.type)")
         }
 
         callbackManager.triggerPostgresChanges(ids: ids, data: action)
@@ -645,7 +670,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
         let payload = message.payload
 
         guard let event = payload["event"]?.stringValue else {
-          throw RealtimeError("Expected 'event' key in 'payload' for broadcast event.")
+          throw RealtimeError.decoding("Expected 'event' key in 'payload' for broadcast event.")
         }
 
         callbackManager.triggerBroadcast(event: event, json: payload)

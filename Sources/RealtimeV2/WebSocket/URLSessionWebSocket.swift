@@ -63,7 +63,7 @@ final class URLSessionWebSocket: WebSocket {
   ///             certificate pinning and other server-trust customization. Defaults to `nil`
   ///             (equivalent to `.default` configuration with no delegate to forward).
   /// - Returns: A connected `URLSessionWebSocket` instance.
-  /// - Throws: `WebSocketError.connection` if the connection fails or times out.
+  /// - Throws: ``RealtimeError`` with kind `.connection` if the connection fails or times out.
   static func connect(
     to url: URL,
     protocols: [String]? = nil,
@@ -119,11 +119,8 @@ final class URLSessionWebSocket: WebSocket {
           guard let continuation = $0.continuation else { return {} }
           return {
             continuation.resume(
-              throwing: WebSocketError.connection(
-                message: "connection ended unexpectedly",
-                error: error
-              )
-            )
+              throwing: RealtimeError.connection(
+                "connection ended unexpectedly", underlyingError: error))
           }
         } else {
           // `onWebSocketTaskOpened` should have been called and resumed continuation.
@@ -254,16 +251,7 @@ final class URLSessionWebSocket: WebSocket {
       event = .binary(data)
     @unknown default:
       // Handle unknown message types gracefully by closing the connection
-      _closeConnectionWithError(
-        WebSocketError.connection(
-          message: "Received unsupported message type",
-          error: NSError(
-            domain: "WebSocketError",
-            code: 1002,
-            userInfo: [NSLocalizedDescriptionKey: "Unsupported message type"]
-          )
-        )
-      )
+      _closeConnectionWithError(RealtimeError.connection("Received unsupported message type"))
       return
     }
     _trigger(event)

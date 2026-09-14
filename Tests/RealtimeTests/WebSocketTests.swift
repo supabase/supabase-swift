@@ -86,29 +86,6 @@ struct WebSocketTests {
     }
   }
 
-  // MARK: - WebSocketError Tests
-
-  @Test
-  func webSocketErrorConnection() {
-    let underlyingError = NSError(
-      domain: "TestDomain", code: 123, userInfo: [NSLocalizedDescriptionKey: "Test error"])
-    let webSocketError = WebSocketError.connection(
-      message: "Connection failed", error: underlyingError)
-
-    #expect(webSocketError.errorDescription == "Connection failed Test error")
-  }
-
-  @Test
-  func webSocketErrorAsError() {
-    let underlyingError = NSError(
-      domain: "TestDomain", code: 123, userInfo: [NSLocalizedDescriptionKey: "Test error"])
-    let webSocketError = WebSocketError.connection(
-      message: "Connection failed", error: underlyingError)
-    let error: Error = webSocketError
-
-    #expect(error.localizedDescription == "Connection failed Test error")
-  }
-
   // MARK: - URLSessionWebSocket Lifecycle Tests
 
   #if canImport(Network)
@@ -420,6 +397,10 @@ struct WebSocketTests {
   #endif
 }
 
+private struct LoopbackError: Error {
+  let message: String
+}
+
 #if canImport(Network)
   import Network
   import ObjectiveC
@@ -467,10 +448,7 @@ struct WebSocketTests {
       listener.start(queue: queue)
 
       guard ready.wait(timeout: .now() + 5) == .success, let port = listener.port else {
-        throw WebSocketError.connection(
-          message: "loopback server failed to start",
-          error: NSError(domain: "LoopbackWebSocketServer", code: -1)
-        )
+        throw LoopbackError(message: "loopback server failed to start")
       }
 
       return port.rawValue
@@ -532,10 +510,7 @@ struct WebSocketTests {
         try process.run()
         process.waitUntilExit()
         guard process.terminationStatus == 0 else {
-          throw WebSocketError.connection(
-            message: "openssl \(arguments.first ?? "") failed",
-            error: NSError(domain: "WebSocketTests", code: Int(process.terminationStatus))
-          )
+          throw LoopbackError(message: "openssl \(arguments.first ?? "") failed")
         }
       }
 
@@ -559,20 +534,14 @@ struct WebSocketTests {
         let items = importResult as? [[String: Any]],
         let identityRef = items.first?[kSecImportItemIdentity as String]
       else {
-        throw WebSocketError.connection(
-          message: "SecPKCS12Import failed",
-          error: NSError(domain: "WebSocketTests", code: Int(status))
-        )
+        throw LoopbackError(message: "SecPKCS12Import failed")
       }
       let identity = identityRef as! SecIdentity
 
       var certificate: SecCertificate?
       SecIdentityCopyCertificate(identity, &certificate)
       guard let certificate else {
-        throw WebSocketError.connection(
-          message: "failed to extract certificate from identity",
-          error: NSError(domain: "WebSocketTests", code: -1)
-        )
+        throw LoopbackError(message: "failed to extract certificate from identity")
       }
 
       return (identity, SecCertificateCopyData(certificate) as Data)
@@ -587,10 +556,7 @@ struct WebSocketTests {
       init(identity: SecIdentity) throws {
         let tlsOptions = NWProtocolTLS.Options()
         guard let secIdentity = sec_identity_create(identity) else {
-          throw WebSocketError.connection(
-            message: "sec_identity_create failed",
-            error: NSError(domain: "LoopbackTLSWebSocketServer", code: -1)
-          )
+          throw LoopbackError(message: "sec_identity_create failed")
         }
         sec_protocol_options_set_local_identity(tlsOptions.securityProtocolOptions, secIdentity)
 
@@ -629,10 +595,7 @@ struct WebSocketTests {
         listener.start(queue: queue)
 
         guard ready.wait(timeout: .now() + 5) == .success, let port = listener.port else {
-          throw WebSocketError.connection(
-            message: "loopback TLS server failed to start",
-            error: NSError(domain: "LoopbackTLSWebSocketServer", code: -1)
-          )
+          throw LoopbackError(message: "loopback TLS server failed to start")
         }
 
         return port.rawValue

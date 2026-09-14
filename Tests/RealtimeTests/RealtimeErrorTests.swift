@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import HTTPTypes
 import Testing
 
 @testable import Realtime
@@ -14,46 +15,37 @@ import Testing
 @Suite
 struct RealtimeErrorTests {
   @Test
-  func realtimeErrorInitialization() {
-    let errorMessage = "Connection failed"
-    let error = RealtimeError(errorMessage)
+  func errorDescriptionIsTheMessage() {
+    let error = RealtimeError(kind: .connection, message: "Connection failed")
 
-    #expect(error.errorDescription == errorMessage)
+    #expect(error.errorDescription == "Connection failed")
+    #expect(error.localizedDescription == "Connection failed")
   }
 
   @Test
-  func realtimeErrorLocalizedDescription() {
-    let errorMessage = "Test error message"
-    let error = RealtimeError(errorMessage)
-
-    // LocalizedError protocol provides localizedDescription
-    #expect(error.localizedDescription == errorMessage)
+  func statics() {
+    #expect(RealtimeError.maxRetryAttemptsReached.kind == .maxRetryAttemptsReached)
+    #expect(RealtimeError.maxRetryAttemptsReached.message == "Maximum retry attempts reached.")
+    #expect(RealtimeError.channelClosedByServer.kind == .channelClosedByServer)
+    #expect(RealtimeError.accessTokenMissing.kind == .accessTokenMissing)
+    #expect(RealtimeError.heartbeatTimeout.kind == .timeout)
   }
 
   @Test
-  func realtimeErrorWithEmptyMessage() {
-    let error = RealtimeError("")
-    #expect(error.errorDescription == "")
+  func descriptionIncludesKindAndStatus() {
+    let error = RealtimeError(
+      kind: .server,
+      message: "Server error",
+      response: HTTPErrorResponse(statusCode: 500, headers: HTTPFields(), body: Data())
+    )
+
+    #expect(error.description == "RealtimeError(server): Server error [status 500]")
   }
 
   @Test
-  func realtimeErrorAsError() {
-    let errorMessage = "Network timeout"
-    let realtimeError = RealtimeError(errorMessage)
-    let error: Error = realtimeError
+  func isPublicAndConformsToSupabaseError() {
+    let error: any Error = RealtimeError(kind: .decoding, message: "bad frame")
 
-    // Test that it can be used as a general Error
-    #expect(error.localizedDescription == errorMessage)
-  }
-
-  @Test
-  func realtimeErrorEquality() {
-    let error1 = RealtimeError("Same message")
-    let error2 = RealtimeError("Same message")
-    let error3 = RealtimeError("Different message")
-
-    // Since RealtimeError doesn't implement Equatable, we test the description
-    #expect(error1.errorDescription == error2.errorDescription)
-    #expect(error1.errorDescription != error3.errorDescription)
+    #expect((error as? any SupabaseError)?.message == "bad frame")
   }
 }
