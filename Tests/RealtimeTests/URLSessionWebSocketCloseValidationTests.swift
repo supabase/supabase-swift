@@ -96,8 +96,10 @@ struct URLSessionWebSocketCloseValidationTests {
 
   @Test
   func rejectsANonWebSocketSchemeInsteadOfTrapping() async {
-    await #expect(throws: WebSocketError.self) {
+    let error = await #expect(throws: RealtimeError.self) {
       _ = try await URLSessionWebSocket.connect(to: URL(string: "https://example.com")!)
     }
+    #expect(error?.kind == .connection)
+    #expect(error?.underlyingError is URLError)
   }
 }

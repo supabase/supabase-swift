@@ -71,9 +71,9 @@ final class URLSessionWebSocket: WebSocket {
     session: URLSession? = nil
   ) async throws -> URLSessionWebSocket {
     guard url.scheme == "ws" || url.scheme == "wss" else {
-      throw WebSocketError.connection(
-        message: "only ws: and wss: schemes are supported, got \(url.scheme ?? "no scheme").",
-        error: URLError(.unsupportedURL)
+      throw RealtimeError.connection(
+        "only ws: and wss: schemes are supported, got \(url.scheme ?? "no scheme").",
+        underlyingError: URLError(.unsupportedURL)
       )
     }
 
