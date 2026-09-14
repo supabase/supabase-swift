@@ -2065,15 +2065,13 @@ options: .init(
 )
 ```
 
-## `HTTPError.response`, `PostgrestResponse.response`, `AuthError.api(underlyingResponse:)` and `FunctionsClient.invoke(decode:)` carry `HTTPResponse` instead of `HTTPURLResponse`
+## `PostgrestResponse.response`, `AuthError.api(underlyingResponse:)` and `FunctionsClient.invoke(decode:)` carry `HTTPResponse` instead of `HTTPURLResponse`
 
 Every place the SDK handed you the raw response head now uses `HTTPTypes.HTTPResponse` — the
 same type a `ClientTransport` or `ClientMiddleware` produces:
 
 | Before | After |
 | --- | --- |
-| `HTTPError.response: HTTPURLResponse` | `HTTPError.response: HTTPResponse` |
-| `HTTPError(data:response: HTTPURLResponse)` | `HTTPError(data:response: HTTPResponse)` |
 | `PostgrestResponse.response: HTTPURLResponse` | `PostgrestResponse.response: HTTPResponse` |
 | `PostgrestResponse(data:response: HTTPURLResponse, value:)` | `PostgrestResponse(data:response: HTTPResponse, value:)` |
 | `AuthError.api(message:errorCode:underlyingData:underlyingResponse: HTTPURLResponse)` | `AuthError.api(message:errorCode:underlyingData:underlyingResponse: HTTPResponse)` |
@@ -2092,7 +2090,9 @@ non-Foundation networking stack could not produce natively.
 ### Before / After
 
 `HTTPResponse` has `status` (an `HTTPResponse.Status` with `code` and `reasonPhrase`) and
-`headerFields` (an `HTTPFields`, subscripted by `HTTPField.Name`). It has no URL.
+`headerFields` (an `HTTPFields`, subscripted by `HTTPField.Name`). It has no URL. `HTTPError`
+itself is gone (see "`HTTPError` removed" below); each module error carries an
+``HTTPErrorResponse`` with the same shape plus the body.
 
 ```swift
 // Before
@@ -2107,10 +2107,10 @@ do {
 // After
 do {
   try await supabase.storage.from("avatars").remove(paths: ["a.png"])
-} catch let error as HTTPError {
-  print(error.response.status.code)
-  print(error.response.headerFields[.contentType])
-  // No URL on the response head; log the URL you requested instead.
+} catch let error as StorageError {
+  print(error.response?.statusCode)
+  print(error.response?.headers[.contentType])
+  // No URL on the response; log the URL you requested instead.
 }
 ```
 
@@ -2160,7 +2160,7 @@ There is no way to get an `HTTPURLResponse` back from these types. If a dependen
 build it from the head:
 
 ```swift
-guard let urlResponse = HTTPURLResponse(httpResponse: error.response, url: requestURL) else {
+guard let urlResponse = HTTPURLResponse(httpResponse: response.response, url: requestURL) else {
   return
 }
 ```

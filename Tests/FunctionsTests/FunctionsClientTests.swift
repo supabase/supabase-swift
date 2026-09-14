@@ -442,7 +442,7 @@ struct FunctionsClientTests {
   @Test
   func invoke_customFetchError_isNotWrapped() async {
     struct FetchError: Error {}
-    let sut = makeSUT { _ in throw FetchError() }
+    let sut = makeSUT { _, _ in throw FetchError() }
 
     await #expect(throws: FetchError.self) {
       try await sut.invoke("hello_world")
