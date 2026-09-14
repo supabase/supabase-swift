@@ -30,7 +30,7 @@ struct AuthOAuthServerIntegrationTests {
     scope: String
   ) async throws -> String {
     var components = URLComponents(
-      url: URL(string: "\(DotEnv.SUPABASE_URL)/auth/v1/oauth/authorize")!,
+      url: URL(string: "\(DotEnv.supabaseURL)/auth/v1/oauth/authorize")!,
       resolvingAgainstBaseURL: false
     )!
     components.queryItems = [
@@ -44,7 +44,7 @@ struct AuthOAuthServerIntegrationTests {
     ]
 
     var request = URLRequest(url: components.url!)
-    request.setValue(DotEnv.SUPABASE_PUBLISHABLE_KEY, forHTTPHeaderField: "apikey")
+    request.setValue(DotEnv.supabasePublishableKey, forHTTPHeaderField: "apikey")
     request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
 
     let delegate = NoRedirectSessionDelegate()

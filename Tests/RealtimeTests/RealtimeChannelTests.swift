@@ -899,7 +899,7 @@ extension RealtimeChannelTests {
     timeout: TimeInterval,
     pollInterval: UInt64 = 10_000_000
   ) async {
-    await Testing_waitUntil(timeout: timeout, pollInterval: pollInterval) {
+    await testingWaitUntil(timeout: timeout, pollInterval: pollInterval) {
       channel.status == status
     }
   }
@@ -933,7 +933,7 @@ extension RealtimeChannelTests {
 /// avoids a "passing a `@MainActor`-isolated closure as a `@Sendable` closure" diagnostic
 /// when the condition captures main-actor-isolated state (e.g. `RealtimeChannelV2.status`).
 @MainActor
-private func Testing_waitUntil(
+private func testingWaitUntil(
   timeout: TimeInterval,
   pollInterval: UInt64,
   condition: @MainActor @escaping () -> Bool

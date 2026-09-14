@@ -147,7 +147,7 @@ final class CallbackManager: Sendable {
     let callbacks = broadcastCallbacks.filter {
       $0.event == "*" || $0.event.lowercased() == event.lowercased()
     }
-    callbacks.forEach { $0.callback(json) }
+    for callback in callbacks { callback.callback(json) }
   }
 
   func triggerBroadcastData(event: String, data: Data) {
@@ -157,7 +157,7 @@ final class CallbackManager: Sendable {
       else { return nil }
       return broadcastData
     }
-    callbacks.forEach { $0.callback(data) }
+    for callback in callbacks { callback.callback(data) }
   }
 
   func hasBroadcastDataCallbacks(for event: String) -> Bool {
