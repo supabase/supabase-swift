@@ -141,7 +141,7 @@ struct URLSessionTransportTests {
   }
 
   @Test
-  func streamedResponseSplitsOnNewlines() async throws {
+  func streamedResponseDeliversChunksAsReceived() async throws {
     let transport = makeTransport()
     let payload = "data: 1\ndata: 2\ndata: 3\n"
     Mock(url: url, statusCode: 200, data: [.get: Data(payload.utf8)]).register()
@@ -153,13 +153,21 @@ struct URLSessionTransportTests {
       chunks.append(String(decoding: chunk, as: UTF8.self))
     }
 
-    #expect(chunks.joined() == payload)
-    #if canImport(FoundationNetworking)
-      // swift-corelibs-foundation has no `URLSession.bytes(for:)`, so the whole response is
-      // buffered and delivered as a single chunk.
-      #expect(chunks.count == 1)
-    #else
-      #expect(chunks == ["data: 1\n", "data: 2\n", "data: 3\n"])
-    #endif
+    // Chunk boundaries follow URLSession's deliveries, never the payload. Mocker hands the
+    // whole body over in one `didLoad`, so exactly one chunk arrives and nothing is re-split.
+    #expect(chunks == [payload])
+  }
+
+  @Test
+  func streamedResponseFailureSurfacesAsThrownError() async throws {
+    let transport = makeTransport()
+    Mock(
+      url: url, statusCode: 200, data: [.get: Data()],
+      requestError: URLError(.notConnectedToInternet)
+    ).register()
+
+    await #expect(throws: URLError.self) {
+      _ = try await transport.send(HTTPRequest(method: .get, url: url), body: nil)
+    }
   }
 }

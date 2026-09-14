@@ -2007,9 +2007,10 @@ Pass it as `http: .init(transport: StubTransport())` to any sub-client, or as
 - **A streamed `FunctionsError.httpError` now carries the response body.** In v2 the streamed call
   threw `.httpError(code, Data())`; the body is now included, so anything that read the payload
   from a non-2xx streamed invoke no longer has to special-case an empty `Data`.
-- **Streamed chunk boundaries changed.** The default transport yields a chunk at every newline, or
-  once 16 KiB accumulates without one. Code that assumed one chunk per `write` on the server, or
-  one chunk per SSE event, must reassemble across chunks.
+- **Streamed chunk boundaries changed.** The default transport yields one chunk per
+  `URLSession` data delivery, so boundaries follow the network, not the payload: an SSE event can
+  arrive split across chunks or several events can share one. Code that assumed one chunk per
+  `write` on the server, or one chunk per event, must reassemble on the `\n\n` frame separator.
 - **`HTTPTypes` names are now in scope.** `Helpers` re-exports `HTTPTypes`, so `import Supabase`
   (or `import Functions`, `import Auth`, …) also brings `HTTPRequest`, `HTTPResponse`, `HTTPFields`
   and `HTTPField` in. If you also import another library that exports those names, the reference

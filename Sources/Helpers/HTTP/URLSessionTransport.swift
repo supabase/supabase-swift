@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 09/09/26.
 //
 
+import ConcurrencyExtras
 public import Foundation
 public import HTTPTypes
 import HTTPTypesFoundation
@@ -17,8 +18,10 @@ import HTTPTypesFoundation
 ///
 /// - Bodies created with ``HTTPBody/init(_:)`` upload from memory; bodies created with
 ///   ``HTTPBody/init(fileURL:)`` stream from disk through `upload(for:fromFile:)`.
-/// - Response bodies stream on Apple platforms. swift-corelibs-foundation has no
-///   `URLSession.bytes(for:)`, so on Linux the response is buffered and delivered as one chunk.
+/// - Response bodies stream on Apple platforms: the head is returned as soon as it arrives and
+///   each chunk is one `didReceive(data:)` delivery from `URLSession`, so chunk boundaries follow
+///   the network, not the payload. swift-corelibs-foundation has no per-task delegates, so on
+///   Linux the response is buffered and delivered as one chunk.
 /// - The SDK sets `URLRequest.timeoutInterval` on every request it sends (60 seconds by default,
 ///   `FunctionInvokeOptions.timeoutInterval` for Functions), so it wins over the session's
 ///   `timeoutIntervalForRequest`.
@@ -91,37 +94,23 @@ public struct URLSessionTransport: ClientTransport {
     private func streamResponse(for urlRequest: URLRequest) async throws -> (
       HTTPTypes.HTTPResponse, HTTPBody?
     ) {
-      let (bytes, response) = try await session.bytes(for: urlRequest)
+      // ponytail: the chunk stream is unbounded, so a consumer slower than the network holds
+      // the backlog; suspend/resume the task on a watermark if that shows up (SDK-1833).
+      let (chunks, continuation) = AsyncThrowingStream<ArraySlice<UInt8>, any Error>.makeStream()
+      let task = session.dataTask(with: urlRequest)
+      let delegate = StreamingTaskDelegate(body: continuation)
+      task.delegate = delegate
+      continuation.onTermination = { _ in task.cancel() }
+
+      let response = try await withTaskCancellationHandler {
+        try await delegate.head(starting: task)
+      } onCancel: {
+        task.cancel()
+      }
       let head = try Self.makeHead(response)
       let length: HTTPBody.Length =
         response.expectedContentLength >= 0 ? .known(response.expectedContentLength) : .unknown
-      let body = HTTPBody(storage: .stream, length: length, iterationBehavior: .single) {
-        AsyncThrowingStream { continuation in
-          let task = Task {
-            do {
-              var buffer = [UInt8]()
-              buffer.reserveCapacity(16 * 1024)
-              // ponytail: per-byte AsyncBytes iteration and an unbounded stream buffer; a
-              // delegate-fed, back-pressured stream is the upgrade if large downloads show up
-              // in profiles.
-              for try await byte in bytes {
-                buffer.append(byte)
-                // Flush on newline (prompt SSE frame delivery) or when a chunk fills up
-                // (caps the size of each yielded chunk).
-                if byte == 0x0A || buffer.count >= 16 * 1024 {
-                  continuation.yield(ArraySlice(buffer))
-                  buffer.removeAll(keepingCapacity: true)
-                }
-              }
-              if !buffer.isEmpty { continuation.yield(ArraySlice(buffer)) }
-              continuation.finish()
-            } catch {
-              continuation.finish(throwing: error)
-            }
-          }
-          continuation.onTermination = { _ in task.cancel() }
-        }
-      }
+      let body = HTTPBody(storage: .stream, length: length, iterationBehavior: .single) { chunks }
       return (head, body)
     }
   #endif
@@ -144,3 +133,69 @@ public struct URLSessionTransport: ClientTransport {
     data.isEmpty ? nil : HTTPBody(data)
   }
 }
+
+#if !canImport(FoundationNetworking)
+  /// Per-task delegate that hands the response head to `head(starting:)` and forwards every
+  /// `didReceive(data:)` delivery to the body stream as one chunk.
+  private final class StreamingTaskDelegate: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+    private enum State {
+      case idle
+      case waitingForHead(CheckedContinuation<URLResponse, any Error>)
+      case headDelivered
+      case finished
+    }
+
+    private let body: AsyncThrowingStream<ArraySlice<UInt8>, any Error>.Continuation
+    private let state = LockIsolated(State.idle)
+
+    init(body: AsyncThrowingStream<ArraySlice<UInt8>, any Error>.Continuation) {
+      self.body = body
+    }
+
+    /// Starts `task` and returns its response as soon as the headers arrive. Throws if the task
+    /// fails before that.
+    func head(starting task: URLSessionTask) async throws -> URLResponse {
+      try await withCheckedThrowingContinuation { continuation in
+        state.setValue(.waitingForHead(continuation))
+        task.resume()
+      }
+    }
+
+    func urlSession(
+      _ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse,
+      completionHandler: @escaping @Sendable (URLSession.ResponseDisposition) -> Void
+    ) {
+      takePendingHead()?.resume(returning: response)
+      completionHandler(.allow)
+    }
+
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+      body.yield(ArraySlice(data))
+    }
+
+    func urlSession(
+      _ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?
+    ) {
+      let pending = takePendingHead(finished: true)
+      if let error {
+        pending?.resume(throwing: error)
+        body.finish(throwing: error)
+      } else {
+        // Completing without ever delivering a response is not a valid HTTP exchange.
+        pending?.resume(throwing: URLError(.badServerResponse))
+        body.finish()
+      }
+    }
+
+    /// Returns the head continuation if it is still waiting, advancing the state exactly once.
+    private func takePendingHead(finished: Bool = false) -> CheckedContinuation<
+      URLResponse, any Error
+    >? {
+      state.withValue { state in
+        defer { state = finished ? .finished : .headDelivered }
+        if case .waitingForHead(let continuation) = state { return continuation }
+        return nil
+      }
+    }
+  }
+#endif
