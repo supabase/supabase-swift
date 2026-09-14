@@ -65,7 +65,7 @@ struct RealtimeReconnectRecoveryTests {
         sockets.withValue { $0.append(socket) }
         return socket
       },
-      http: HTTPClientMock(),
+      http: HTTPClient(transport: RecordingTransport()),
       clock: ContinuousClock()
     )
     defer { sut.disconnect() }
@@ -102,7 +102,7 @@ struct RealtimeReconnectRecoveryTests {
         sockets.withValue { $0.append(socket) }
         return socket
       },
-      http: HTTPClientMock(),
+      http: HTTPClient(transport: RecordingTransport()),
       clock: ContinuousClock()
     )
     defer { sut.disconnect() }
@@ -161,7 +161,7 @@ struct RealtimeReconnectRecoveryTests {
         sockets.withValue { $0.append(socket) }
         return socket
       },
-      http: HTTPClientMock(),
+      http: HTTPClient(transport: RecordingTransport()),
       clock: ContinuousClock()
     )
     defer { sut.disconnect() }
@@ -215,7 +215,7 @@ struct RealtimeReconnectRecoveryTests {
         sockets.withValue { $0.append(socket) }
         return socket
       },
-      http: HTTPClientMock(),
+      http: HTTPClient(transport: RecordingTransport()),
       clock: ContinuousClock()
     )
     defer { sut.disconnect() }

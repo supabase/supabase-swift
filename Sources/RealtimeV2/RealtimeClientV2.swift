@@ -23,7 +23,7 @@ typealias WebSocketTransport =
 protocol RealtimeClientProtocol: AnyObject, Sendable {
   var status: RealtimeClientStatus { get }
   var options: RealtimeClientOptions { get }
-  var http: any HTTPClientType { get }
+  var http: HTTPClient { get }
   var clock: any Clock<Duration> { get }
   func broadcastURL(topic: String, event: String, isPrivate: Bool) -> URL
 
@@ -123,7 +123,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   let options: RealtimeClientOptions
   let wsTransport: WebSocketTransport
   let mutableState = LockIsolated(MutableState())
-  let http: any HTTPClientType
+  let http: HTTPClient
   let serializer = RealtimeSerializer()
   let clock: any Clock<Duration>
 
@@ -175,7 +175,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     url: URL,
     options: RealtimeClientOptions,
     wsTransport: @escaping WebSocketTransport,
-    http: any HTTPClientType,
+    http: HTTPClient,
     clock: any Clock<Duration>
   ) {
     var options = options

@@ -44,10 +44,10 @@ public struct AuthAdminOAuth: Sendable {
       let aud: String
     }
 
-    let httpResponse = try await api.execute(
+    let (httpResponse, data) = try await api.send(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("admin/oauth/clients"),
         method: .get,
+        url: configuration.url.appendingPathComponent("admin/oauth/clients"),
         query: [
           URLQueryItem(name: "page", value: params?.page?.description ?? ""),
           URLQueryItem(name: "per_page", value: params?.perPage?.description ?? ""),
@@ -55,17 +55,17 @@ public struct AuthAdminOAuth: Sendable {
       )
     )
 
-    let response = try httpResponse.decoded(
+    let response = try data.decoded(
       as: Response.self, decoder: configuration.resolvedDecoder)
 
     var pagination = ListOAuthClientsPaginatedResponse(
       clients: response.clients,
       aud: response.aud,
       lastPage: 0,
-      total: httpResponse.headers[.xTotalCount].flatMap(Int.init) ?? 0
+      total: httpResponse.headerFields[.xTotalCount].flatMap(Int.init) ?? 0
     )
 
-    let links = httpResponse.headers[.link]?.components(separatedBy: ",") ?? []
+    let links = httpResponse.headerFields[.link]?.components(separatedBy: ",") ?? []
     if !links.isEmpty {
       for link in links {
         let page = link.components(separatedBy: ";")[0].components(separatedBy: "=")[1].prefix(
@@ -92,10 +92,9 @@ public struct AuthAdminOAuth: Sendable {
   public func createClient(params: CreateOAuthClientParams) async throws -> OAuthClient {
     try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("admin/oauth/clients"),
         method: .post,
-        body: encoder.encode(params)
-      )
+        url: configuration.url.appendingPathComponent("admin/oauth/clients")
+      ), body: encoder.encode(params)
     )
     .decoded(decoder: configuration.resolvedDecoder)
   }
@@ -108,8 +107,8 @@ public struct AuthAdminOAuth: Sendable {
   public func getClient(clientId: UUID) async throws -> OAuthClient {
     try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("admin/oauth/clients/\(clientId)"),
-        method: .get
+        method: .get,
+        url: configuration.url.appendingPathComponent("admin/oauth/clients/\(clientId)")
       )
     )
     .decoded(decoder: configuration.resolvedDecoder)
@@ -127,10 +126,9 @@ public struct AuthAdminOAuth: Sendable {
   ) async throws -> OAuthClient {
     try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("admin/oauth/clients/\(clientId)"),
         method: .put,
-        body: configuration.resolvedEncoder.encode(params)
-      )
+        url: configuration.url.appendingPathComponent("admin/oauth/clients/\(clientId)")
+      ), body: configuration.resolvedEncoder.encode(params)
     )
     .decoded(decoder: configuration.resolvedDecoder)
   }
@@ -143,8 +141,8 @@ public struct AuthAdminOAuth: Sendable {
   public func deleteClient(clientId: UUID) async throws {
     _ = try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("admin/oauth/clients/\(clientId)"),
-        method: .delete
+        method: .delete,
+        url: configuration.url.appendingPathComponent("admin/oauth/clients/\(clientId)")
       )
     )
   }
@@ -158,9 +156,9 @@ public struct AuthAdminOAuth: Sendable {
   public func regenerateClientSecret(clientId: UUID) async throws -> OAuthClient {
     try await api.execute(
       HTTPRequest(
+        method: .post,
         url: configuration.url
-          .appendingPathComponent("admin/oauth/clients/\(clientId)/regenerate_secret"),
-        method: .post
+          .appendingPathComponent("admin/oauth/clients/\(clientId)/regenerate_secret")
       )
     )
     .decoded(decoder: configuration.resolvedDecoder)

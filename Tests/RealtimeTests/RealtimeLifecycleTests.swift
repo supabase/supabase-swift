@@ -24,12 +24,12 @@ import Testing
     let url = URL(string: "http://localhost:54321/realtime/v1")!
     let apiKey = "publishable.api.key"
 
-    let http: HTTPClientMock
+    let http: RecordingTransport
     let testClock: TestClock<Duration>
     let servers: LockIsolated<[FakeWebSocket]>
 
     init() {
-      http = HTTPClientMock()
+      http = RecordingTransport()
       testClock = TestClock()
       servers = LockIsolated([])
     }
@@ -82,7 +82,7 @@ import Testing
           }
           return client
         },
-        http: http,
+        http: HTTPClient(transport: http),
         clock: testClock
       )
     }
@@ -232,7 +232,7 @@ import Testing
           }
           return client
         },
-        http: http,
+        http: HTTPClient(transport: http),
         clock: testClock
       )
 

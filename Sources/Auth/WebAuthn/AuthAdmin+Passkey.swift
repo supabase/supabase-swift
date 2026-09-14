@@ -17,8 +17,8 @@ extension AuthAdmin {
   public func listPasskeys(userId: UUID) async throws -> [PasskeyListItem] {
     try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("admin/users/\(userId)/passkeys"),
-        method: .get
+        method: .get,
+        url: configuration.url.appendingPathComponent("admin/users/\(userId)/passkeys")
       )
     ).decoded(decoder: configuration.resolvedDecoder)
   }
@@ -33,9 +33,9 @@ extension AuthAdmin {
   public func deletePasskey(userId: UUID, passkeyId: UUID) async throws {
     _ = try await api.execute(
       HTTPRequest(
+        method: .delete,
         url: configuration.url.appendingPathComponent(
-          "admin/users/\(userId)/passkeys/\(passkeyId)"),
-        method: .delete
+          "admin/users/\(userId)/passkeys/\(passkeyId)")
       )
     )
   }

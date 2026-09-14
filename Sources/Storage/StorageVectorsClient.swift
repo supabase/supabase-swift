@@ -73,10 +73,9 @@ public struct StorageVectorsClient: Sendable {
   public func createBucket(_ name: String) async throws {
     try await api.execute(
       HTTPRequest(
-        url: api.configuration.url.appendingPathComponent("vector/CreateVectorBucket"),
         method: .post,
-        body: JSONEncoder.unconfiguredEncoder.encode(VectorBucketNameBody(vectorBucketName: name))
-      )
+        url: api.configuration.url.appendingPathComponent("vector/CreateVectorBucket")
+      ), body: JSONEncoder.unconfiguredEncoder.encode(VectorBucketNameBody(vectorBucketName: name))
     )
   }
 
@@ -95,10 +94,9 @@ public struct StorageVectorsClient: Sendable {
   public func getBucket(_ name: String) async throws -> VectorBucket {
     let response: GetVectorBucketResponseBody = try await api.execute(
       HTTPRequest(
-        url: api.configuration.url.appendingPathComponent("vector/GetVectorBucket"),
         method: .post,
-        body: JSONEncoder.unconfiguredEncoder.encode(VectorBucketNameBody(vectorBucketName: name))
-      )
+        url: api.configuration.url.appendingPathComponent("vector/GetVectorBucket")
+      ), body: JSONEncoder.unconfiguredEncoder.encode(VectorBucketNameBody(vectorBucketName: name))
     )
     .decoded(decoder: .supabase())
     return response.vectorBucket
@@ -131,11 +129,11 @@ public struct StorageVectorsClient: Sendable {
   ) async throws -> ListVectorBucketsResponse {
     let response: ListVectorBucketsResponseBody = try await api.execute(
       HTTPRequest(
-        url: api.configuration.url.appendingPathComponent("vector/ListVectorBuckets"),
         method: .post,
-        body: JSONEncoder.unconfiguredEncoder.encode(
-          VectorBucketListBody(maxResults: maxResults, nextToken: nextToken, prefix: prefix)
-        )
+        url: api.configuration.url.appendingPathComponent("vector/ListVectorBuckets")
+      ),
+      body: JSONEncoder.unconfiguredEncoder.encode(
+        VectorBucketListBody(maxResults: maxResults, nextToken: nextToken, prefix: prefix)
       )
     )
     .decoded(decoder: .supabase())
@@ -158,10 +156,9 @@ public struct StorageVectorsClient: Sendable {
   public func deleteBucket(_ name: String) async throws {
     try await api.execute(
       HTTPRequest(
-        url: api.configuration.url.appendingPathComponent("vector/DeleteVectorBucket"),
         method: .post,
-        body: JSONEncoder.unconfiguredEncoder.encode(VectorBucketNameBody(vectorBucketName: name))
-      )
+        url: api.configuration.url.appendingPathComponent("vector/DeleteVectorBucket")
+      ), body: JSONEncoder.unconfiguredEncoder.encode(VectorBucketNameBody(vectorBucketName: name))
     )
   }
 }

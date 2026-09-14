@@ -37,8 +37,8 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
     head: Bool = false,
     count: CountOption? = nil
   ) -> PostgrestFilterBuilder {
-    var request = self.request
-    request.method = .get
+    var copy = PostgrestFilterBuilder(carryingFrom: self)
+    copy.request.method = .get
     // remove whitespaces except when quoted.
     var quoted = false
     let cleanedColumns = columns.compactMap { char -> String? in
@@ -52,16 +52,16 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
     }
     .joined(separator: "")
 
-    request.query.appendOrUpdate(URLQueryItem(name: "select", value: cleanedColumns))
+    copy.query.appendOrUpdate(URLQueryItem(name: "select", value: cleanedColumns))
 
     if let count {
-      request.headers.appendOrUpdate(.prefer, value: "count=\(count.rawValue)")
+      copy.request.headerFields.appendOrUpdate(.prefer, value: "count=\(count.rawValue)")
     }
     if head {
-      request.method = .head
+      copy.request.method = .head
     }
 
-    return PostgrestFilterBuilder(carryingFrom: self, request: request)
+    return copy
   }
 
   /// Inserts one or more rows into the table or view.
@@ -101,27 +101,27 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
   ) throws -> PostgrestFilterBuilder {
     let body = try (encoder ?? configuration.encoder).encode(values)
 
-    var request = self.request
-    request.method = .post
+    var copy = PostgrestFilterBuilder(carryingFrom: self)
+    copy.request.method = .post
     var prefersHeaders: [String] = []
     if let returning {
       prefersHeaders.append("return=\(returning.rawValue)")
     }
-    request.body = body
+    copy.body = body
     if let count {
       prefersHeaders.append("count=\(count.rawValue)")
     }
-    if let prefer = request.headers[.prefer] {
+    if let prefer = copy.request.headerFields[.prefer] {
       prefersHeaders.insert(prefer, at: 0)
     }
     if !prefersHeaders.isEmpty {
-      request.headers[.prefer] = prefersHeaders.joined(separator: ",")
+      copy.request.headerFields[.prefer] = prefersHeaders.joined(separator: ",")
     }
-    if let body = request.body, let columns = try columnsQueryItem(forBody: body) {
-      request.query.appendOrUpdate(columns)
+    if let body = copy.body, let columns = try columnsQueryItem(forBody: body) {
+      copy.query.appendOrUpdate(columns)
     }
 
-    return PostgrestFilterBuilder(carryingFrom: self, request: request)
+    return copy
   }
 
   /// Inserts rows, updating existing rows on conflict (upsert).
@@ -165,31 +165,31 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
   ) throws -> PostgrestFilterBuilder {
     let body = try (encoder ?? configuration.encoder).encode(values)
 
-    var request = self.request
-    request.method = .post
+    var copy = PostgrestFilterBuilder(carryingFrom: self)
+    copy.request.method = .post
     var prefersHeaders = [
       "resolution=\(ignoreDuplicates ? "ignore" : "merge")-duplicates",
       "return=\(returning.rawValue)",
     ]
     if let onConflict {
-      request.query.appendOrUpdate(URLQueryItem(name: "on_conflict", value: onConflict))
+      copy.query.appendOrUpdate(URLQueryItem(name: "on_conflict", value: onConflict))
     }
-    request.body = body
+    copy.body = body
     if let count {
       prefersHeaders.append("count=\(count.rawValue)")
     }
-    if let prefer = request.headers[.prefer] {
+    if let prefer = copy.request.headerFields[.prefer] {
       prefersHeaders.insert(prefer, at: 0)
     }
     if !prefersHeaders.isEmpty {
-      request.headers[.prefer] = prefersHeaders.joined(separator: ",")
+      copy.request.headerFields[.prefer] = prefersHeaders.joined(separator: ",")
     }
 
-    if let body = request.body, let columns = try columnsQueryItem(forBody: body) {
-      request.query.appendOrUpdate(columns)
+    if let body = copy.body, let columns = try columnsQueryItem(forBody: body) {
+      copy.query.appendOrUpdate(columns)
     }
 
-    return PostgrestFilterBuilder(carryingFrom: self, request: request)
+    return copy
   }
 
   /// Performs a partial UPDATE on rows that match subsequent filters.
@@ -225,21 +225,21 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
   ) throws -> PostgrestFilterBuilder {
     let body = try (encoder ?? configuration.encoder).encode(values)
 
-    var request = self.request
-    request.method = .patch
+    var copy = PostgrestFilterBuilder(carryingFrom: self)
+    copy.request.method = .patch
     var preferHeaders = ["return=\(returning.rawValue)"]
-    request.body = body
+    copy.body = body
     if let count {
       preferHeaders.append("count=\(count.rawValue)")
     }
-    if let prefer = request.headers[.prefer] {
+    if let prefer = copy.request.headerFields[.prefer] {
       preferHeaders.insert(prefer, at: 0)
     }
     if !preferHeaders.isEmpty {
-      request.headers[.prefer] = preferHeaders.joined(separator: ",")
+      copy.request.headerFields[.prefer] = preferHeaders.joined(separator: ",")
     }
 
-    return PostgrestFilterBuilder(carryingFrom: self, request: request)
+    return copy
   }
 
   /// Performs a DELETE on rows that match subsequent filters.
@@ -267,20 +267,20 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
     returning: PostgrestReturningOptions = .representation,
     count: CountOption? = nil
   ) -> PostgrestFilterBuilder {
-    var request = self.request
-    request.method = .delete
+    var copy = PostgrestFilterBuilder(carryingFrom: self)
+    copy.request.method = .delete
     var preferHeaders = ["return=\(returning.rawValue)"]
     if let count {
       preferHeaders.append("count=\(count.rawValue)")
     }
-    if let prefer = request.headers[.prefer] {
+    if let prefer = copy.request.headerFields[.prefer] {
       preferHeaders.insert(prefer, at: 0)
     }
     if !preferHeaders.isEmpty {
-      request.headers[.prefer] = preferHeaders.joined(separator: ",")
+      copy.request.headerFields[.prefer] = preferHeaders.joined(separator: ",")
     }
 
-    return PostgrestFilterBuilder(carryingFrom: self, request: request)
+    return copy
   }
 }
 

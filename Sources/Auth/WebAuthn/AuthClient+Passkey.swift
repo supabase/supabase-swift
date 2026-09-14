@@ -33,8 +33,8 @@ extension AuthClient {
   public func getPasskeyRegistrationOptions() async throws -> PasskeyRegistrationOptions {
     try await Dependencies[clientID].api.authorizedExecute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("passkeys/registration/options"),
-        method: .post
+        method: .post,
+        url: configuration.url.appendingPathComponent("passkeys/registration/options")
       )
     )
     .decoded(decoder: configuration.resolvedDecoder)
@@ -54,13 +54,13 @@ extension AuthClient {
   ) async throws -> PasskeyListItem {
     try await Dependencies[clientID].api.authorizedExecute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("passkeys/registration/verify"),
         method: .post,
-        body: encodeWebAuthnBody([
-          "challenge_id": .string(challengeId),
-          "credential": credentialResponse,
-        ])
-      )
+        url: configuration.url.appendingPathComponent("passkeys/registration/verify")
+      ),
+      body: encodeWebAuthnBody([
+        "challenge_id": .string(challengeId),
+        "credential": credentialResponse,
+      ])
     )
     .decoded(decoder: configuration.resolvedDecoder)
   }
@@ -75,8 +75,8 @@ extension AuthClient {
   public func getPasskeyAuthenticationOptions() async throws -> PasskeyAuthenticationOptions {
     try await Dependencies[clientID].api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("passkeys/authentication/options"),
-        method: .post
+        method: .post,
+        url: configuration.url.appendingPathComponent("passkeys/authentication/options")
       )
     )
     .decoded(decoder: configuration.resolvedDecoder)
@@ -96,13 +96,13 @@ extension AuthClient {
   ) async throws -> AuthResponse {
     let response: AuthResponse = try await Dependencies[clientID].api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("passkeys/authentication/verify"),
         method: .post,
-        body: encodeWebAuthnBody([
-          "challenge_id": .string(challengeId),
-          "credential": credentialResponse,
-        ])
-      )
+        url: configuration.url.appendingPathComponent("passkeys/authentication/verify")
+      ),
+      body: encodeWebAuthnBody([
+        "challenge_id": .string(challengeId),
+        "credential": credentialResponse,
+      ])
     )
     .decoded(decoder: configuration.resolvedDecoder)
 
@@ -119,8 +119,8 @@ extension AuthClient {
   public func listPasskeys() async throws -> [PasskeyListItem] {
     try await Dependencies[clientID].api.authorizedExecute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("passkeys/"),
-        method: .get
+        method: .get,
+        url: configuration.url.appendingPathComponent("passkeys/")
       )
     )
     .decoded(decoder: configuration.resolvedDecoder)
@@ -137,11 +137,11 @@ extension AuthClient {
   public func renamePasskey(id: UUID, friendlyName: String) async throws -> PasskeyListItem {
     try await Dependencies[clientID].api.authorizedExecute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("passkeys/\(id)"),
         method: .patch,
-        // Dictionary keys are not transformed by the snake_case strategy, so spell it out.
-        body: configuration.resolvedEncoder.encode(["friendly_name": friendlyName])
-      )
+        url: configuration.url.appendingPathComponent("passkeys/\(id)")
+      ),
+      // Dictionary keys are not transformed by the snake_case strategy, so spell it out.
+      body: configuration.resolvedEncoder.encode(["friendly_name": friendlyName])
     )
     .decoded(decoder: configuration.resolvedDecoder)
   }
@@ -153,8 +153,8 @@ extension AuthClient {
   public func deletePasskey(id: UUID) async throws {
     try await Dependencies[clientID].api.authorizedExecute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("passkeys/\(id)"),
-        method: .delete
+        method: .delete,
+        url: configuration.url.appendingPathComponent("passkeys/\(id)")
       )
     )
   }

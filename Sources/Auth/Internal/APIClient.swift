@@ -34,7 +34,7 @@ struct APIClient: Sendable {
     Dependencies[clientID].eventEmitter
   }
 
-  var http: any HTTPClientType {
+  var http: HTTPClient {
     Dependencies[clientID].http
   }
 
@@ -46,25 +46,33 @@ struct APIClient: Sendable {
     .refreshTokenAlreadyUsed,
   ]
 
-  func execute(_ request: Helpers.HTTPRequest) async throws -> Helpers.HTTPResponse {
+  /// Sends `request` with the client's default headers and returns the response body.
+  func execute(_ request: HTTPRequest, body: Data? = nil) async throws -> Data {
+    try await send(request, body: body).data
+  }
+
+  /// Like ``execute(_:body:)`` but also returns the response head, for callers that read headers.
+  func send(_ request: HTTPRequest, body: Data? = nil) async throws -> (
+    response: HTTPResponse, data: Data
+  ) {
     var request = request
-    request.headers = HTTPFields(configuration.headers).merging(with: request.headers)
+    request.headerFields = HTTPFields(configuration.headers).merging(with: request.headerFields)
 
-    if request.headers[.apiVersionHeaderName] == nil {
-      request.headers[.apiVersionHeaderName] = apiVersions[._20240101]!.name.rawValue
+    if request.headerFields[.apiVersionHeaderName] == nil {
+      request.headerFields[.apiVersionHeaderName] = apiVersions[._20240101]!.name.rawValue
     }
 
-    let response = try await http.send(request)
+    let (response, data) = try await http.send(request, body: body)
 
-    guard 200..<300 ~= response.statusCode else {
-      throw await handleError(response: response)
+    guard 200..<300 ~= response.status.code else {
+      throw await handleError(response: response, data: data)
     }
 
-    return response
+    return (response, data)
   }
 
   @discardableResult
-  func authorizedExecute(_ request: Helpers.HTTPRequest) async throws -> Helpers.HTTPResponse {
+  func authorizedExecute(_ request: HTTPRequest, body: Data? = nil) async throws -> Data {
     var sessionManager: SessionManager {
       Dependencies[clientID].sessionManager
     }
@@ -72,14 +80,14 @@ struct APIClient: Sendable {
     let session = try await sessionManager.session()
 
     var request = request
-    request.headers[.authorization] = "Bearer \(session.accessToken)"
+    request.headerFields[.authorization] = "Bearer \(session.accessToken)"
 
-    return try await execute(request)
+    return try await execute(request, body: body)
   }
 
-  func handleError(response: Helpers.HTTPResponse) async -> AuthError {
+  func handleError(response: HTTPResponse, data: Data) async -> AuthError {
     guard
-      let error = try? response.decoded(
+      let error = try? data.decoded(
         as: _RawAPIErrorResponse.self,
         decoder: configuration.resolvedDecoder
       )
@@ -87,8 +95,8 @@ struct APIClient: Sendable {
       return .api(
         message: "Unexpected error",
         errorCode: .unexpectedFailure,
-        underlyingData: response.data,
-        underlyingResponse: response.underlyingResponse
+        underlyingData: data,
+        underlyingResponse: response
       )
     }
 
@@ -124,14 +132,14 @@ struct APIClient: Sendable {
       return .api(
         message: error._getErrorMessage(),
         errorCode: errorCode ?? .unknown,
-        underlyingData: response.data,
-        underlyingResponse: response.underlyingResponse
+        underlyingData: data,
+        underlyingResponse: response
       )
     }
   }
 
-  private func parseResponseAPIVersion(_ response: Helpers.HTTPResponse) -> Date? {
-    guard let apiVersion = response.headers[.apiVersionHeaderName] else { return nil }
+  private func parseResponseAPIVersion(_ response: HTTPResponse) -> Date? {
+    guard let apiVersion = response.headerFields[.apiVersionHeaderName] else { return nil }
 
     let formatter = ISO8601DateFormatter()
     formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]

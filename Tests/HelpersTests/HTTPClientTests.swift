@@ -63,11 +63,11 @@ struct HTTPClientTests {
       middlewares: [TagMiddleware(tag: "A", log: log), TagMiddleware(tag: "B", log: log)]
     )
 
-    let response = try await client.send(
+    let (response, data) = try await client.send(
       HTTPRequest(
-        url: URL(string: "https://example.com/rest")!, method: .post,
-        query: [URLQueryItem(name: "select", value: "*")],
-        body: Data("{}".utf8), timeoutInterval: 42)
+        method: .post, url: URL(string: "https://example.com/rest")!,
+        query: [URLQueryItem(name: "select", value: "*")]),
+      body: Data("{}".utf8), timeout: 42
     )
 
     #expect(log.value == ["A:request", "B:request", "B:response", "A:response"])
@@ -78,10 +78,8 @@ struct HTTPClientTests {
     #expect(sent.0.headerFields[HTTPField.Name("X-B")!] == "1")
     #expect(sent.0.headerFields[.contentType] == "application/json")
     #expect(sent.1?.length == .known(2))
-    #expect(response.statusCode == 200)
-    #expect(response.data == Data("[]".utf8))
-    #expect(
-      response.underlyingResponse.url?.absoluteString == "https://example.com/rest?select=%2A")
+    #expect(response.status == .ok)
+    #expect(data == Data("[]".utf8))
   }
 
   @Test
@@ -92,14 +90,14 @@ struct HTTPClientTests {
       middlewares: []
     )
 
-    let response = try await client.send(
-      HTTPRequest(url: URL(string: "https://example.com")!, method: .get, timeoutInterval: 42))
+    let (response, data) = try await client.send(
+      HTTPRequest(method: .get, url: URL(string: "https://example.com")!), timeout: 42)
 
     let sent = try #require(seen.value.first)
     #expect(sent.1 == nil)
     #expect(sent.0.headerFields[.contentType] == nil)
-    #expect(response.data.isEmpty)
-    #expect(response.statusCode == 204)
+    #expect(data.isEmpty)
+    #expect(response.status == .noContent)
   }
 
   @Test
@@ -117,7 +115,7 @@ struct HTTPClientTests {
     )
 
     let (head, body) = try await client.stream(
-      HTTPRequest(url: URL(string: "https://example.com")!, method: .get, timeoutInterval: 42))
+      HTTPRequest(method: .get, url: URL(string: "https://example.com")!), timeout: 42)
     #expect(head.status == .ok)
 
     continuation.yield(ArraySlice("data: 1\n".utf8))

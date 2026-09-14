@@ -60,7 +60,7 @@ public struct FunctionsClient: Sendable {
 
   let headers: HTTPFields
 
-  private let http: any HTTPClientType
+  private let http: HTTPClient
   private let accessToken: (@Sendable () async throws -> String?)?
 
   /// Creates a new Functions client.
@@ -105,7 +105,7 @@ public struct FunctionsClient: Sendable {
     headers: [String: String],
     region: String?,
     decoder: JSONDecoder = JSONDecoder(),
-    http: any HTTPClientType,
+    http: HTTPClient,
     accessToken: (@Sendable () async throws -> String?)? = nil
   ) {
     self.url = url
@@ -164,12 +164,12 @@ public struct FunctionsClient: Sendable {
   public func invoke<Response>(
     _ functionName: String,
     options: FunctionInvokeOptions = .init(),
-    decode: (Data, HTTPURLResponse) throws -> Response
+    decode: (Data, HTTPResponse) throws -> Response
   ) async throws -> Response {
-    let response = try await rawInvoke(
+    let (response, data) = try await rawInvoke(
       functionName: functionName, invokeOptions: options
     )
-    return try decode(response.data, response.underlyingResponse)
+    return try decode(data, response)
   }
 
   /// Invokes a function and JSON-decodes the response body into `T`.
@@ -206,20 +206,20 @@ public struct FunctionsClient: Sendable {
   private func rawInvoke(
     functionName: String,
     invokeOptions: FunctionInvokeOptions
-  ) async throws -> Helpers.HTTPResponse {
-    let request = try await buildRequest(functionName: functionName, options: invokeOptions)
-    let response = try await http.send(request)
+  ) async throws -> (HTTPResponse, Data) {
+    let (request, body) = try await buildRequest(functionName: functionName, options: invokeOptions)
+    let (response, data) = try await http.send(
+      request, body: body, timeout: Self.timeout(for: invokeOptions))
 
-    let isRelayError = response.headers[.xRelayError] == "true"
-    if isRelayError {
+    if response.headerFields[.xRelayError] == "true" {
       throw FunctionsError.relayError
     }
 
-    guard 200..<300 ~= response.statusCode else {
-      throw FunctionsError.httpError(code: response.statusCode, data: response.data)
+    guard response.status.kind == .successful else {
+      throw FunctionsError.httpError(code: response.status.code, data: data)
     }
 
-    return response
+    return (response, data)
   }
 
   /// Invokes a function and returns its response as a stream of raw `Data` chunks.
@@ -238,8 +238,11 @@ public struct FunctionsClient: Sendable {
     let (stream, continuation) = AsyncThrowingStream<Data, any Error>.makeStream()
     let task = Task {
       do {
-        let request = try await buildRequest(functionName: functionName, options: invokeOptions)
-        let (head, body) = try await http.stream(request)
+        let (request, requestBody) = try await buildRequest(
+          functionName: functionName, options: invokeOptions)
+        let (head, body) = try await http.stream(
+          request, body: requestBody.map { HTTPBody($0) }, timeout: Self.timeout(for: invokeOptions)
+        )
 
         if head.headerFields[.xRelayError] == "true" {
           throw FunctionsError.relayError
@@ -263,8 +266,12 @@ public struct FunctionsClient: Sendable {
     return stream
   }
 
+  private static func timeout(for options: FunctionInvokeOptions) -> TimeInterval {
+    options.timeoutInterval ?? requestIdleTimeout
+  }
+
   private func buildRequest(functionName: String, options: FunctionInvokeOptions)
-    async throws -> Helpers.HTTPRequest
+    async throws -> (HTTPRequest, Data?)
   {
     var headers = headers
     if let token = try await accessToken?() {
@@ -273,21 +280,17 @@ public struct FunctionsClient: Sendable {
     headers = headers.merging(with: options.headers)
 
     var query = options.query
-    var request = HTTPRequest(
-      url: url.appendingPathComponent(functionName),
-      method: FunctionInvokeOptions.httpMethod(options.method) ?? .post,
-      query: query,
-      headers: headers,
-      body: options.body,
-      timeoutInterval: options.timeoutInterval ?? FunctionsClient.requestIdleTimeout
-    )
-
     if let region = options.region ?? region {
-      request.headers[.xRegion] = region
+      headers[.xRegion] = region
       query.appendOrUpdate(URLQueryItem(name: "forceFunctionRegion", value: region))
-      request.query = query
     }
 
-    return request
+    let request = HTTPRequest(
+      method: FunctionInvokeOptions.httpMethod(options.method) ?? .post,
+      url: url.appendingPathComponent(functionName),
+      query: query,
+      headerFields: headers
+    )
+    return (request, options.body)
   }
 }

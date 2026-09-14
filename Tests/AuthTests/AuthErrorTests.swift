@@ -30,8 +30,7 @@ struct AuthErrorTests {
       message: "API Error",
       errorCode: .emailConflictIdentityNotDeletable,
       underlyingData: Data(),
-      underlyingResponse: HTTPURLResponse(
-        url: URL(string: "http://localhost")!, statusCode: 400, httpVersion: nil, headerFields: nil)!
+      underlyingResponse: HTTPResponse(status: .badRequest)
     )
     #expect(api.errorCode == .emailConflictIdentityNotDeletable)
     #expect(api.message == "API Error")
@@ -98,12 +97,7 @@ struct AuthErrorTests {
         message: "Test error",
         errorCode: code,
         underlyingData: Data(),
-        underlyingResponse: HTTPURLResponse(
-          url: URL(string: "http://localhost")!,
-          statusCode: 400,
-          httpVersion: nil,
-          headerFields: nil
-        )!
+        underlyingResponse: HTTPResponse(status: .badRequest)
       )
 
       #expect(error.errorCode == code)

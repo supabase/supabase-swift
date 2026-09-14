@@ -1,8 +1,5 @@
 public import Foundation
-
-#if canImport(FoundationNetworking)
-  public import FoundationNetworking
-#endif
+public import HTTPTypes
 
 /// An error code thrown by the server.
 public struct ErrorCode: Decodable, RawRepresentable, Sendable, Hashable {
@@ -247,7 +244,7 @@ public enum AuthError: LocalizedError, Equatable {
     message: String,
     errorCode: ErrorCode,
     underlyingData: Data,
-    underlyingResponse: HTTPURLResponse
+    underlyingResponse: HTTPResponse
   )
 
   /// Error thrown when an error happens during PKCE grant flow.

@@ -22,7 +22,7 @@ extension Dependencies {
       url: URL(string: "https://project-id.supabase.com")!,
       localStorage: InMemoryLocalStorage()
     ),
-    http: HTTPClientMock(),
+    http: HTTPClient(transport: RecordingTransport()),
     api: APIClient(clientID: AuthClientID()),
     codeVerifierStorage: CodeVerifierStorage.mock,
     sessionStorage: SessionStorage.live(clientID: AuthClientID()),

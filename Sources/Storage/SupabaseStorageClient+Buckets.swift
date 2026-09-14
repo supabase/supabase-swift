@@ -15,8 +15,8 @@ extension SupabaseStorageClient {
   public func listBuckets() async throws -> [Bucket] {
     try await api.execute(
       HTTPRequest(
-        url: api.configuration.url.appendingPathComponent("bucket"),
-        method: .get
+        method: .get,
+        url: api.configuration.url.appendingPathComponent("bucket")
       )
     )
     .decoded(decoder: api.configuration.decoder)
@@ -30,8 +30,8 @@ extension SupabaseStorageClient {
   public func getBucket(_ id: String) async throws -> Bucket {
     try await api.execute(
       HTTPRequest(
-        url: api.configuration.url.appendingPathComponent("bucket/\(id)"),
-        method: .get
+        method: .get,
+        url: api.configuration.url.appendingPathComponent("bucket/\(id)")
       )
     )
     .decoded(decoder: api.configuration.decoder)
@@ -65,16 +65,16 @@ extension SupabaseStorageClient {
   {
     try await api.execute(
       HTTPRequest(
-        url: api.configuration.url.appendingPathComponent("bucket"),
         method: .post,
-        body: api.configuration.encoder.encode(
-          BucketParameters(
-            id: id,
-            name: id,
-            public: options.isPublic,
-            fileSizeLimit: options.fileSizeLimit.map { StorageByteCount(stringLiteral: $0) },
-            allowedMimeTypes: options.allowedMimeTypes
-          )
+        url: api.configuration.url.appendingPathComponent("bucket")
+      ),
+      body: api.configuration.encoder.encode(
+        BucketParameters(
+          id: id,
+          name: id,
+          public: options.isPublic,
+          fileSizeLimit: options.fileSizeLimit.map { StorageByteCount(stringLiteral: $0) },
+          allowedMimeTypes: options.allowedMimeTypes
         )
       )
     )
@@ -96,16 +96,16 @@ extension SupabaseStorageClient {
   public func updateBucket(_ id: String, options: BucketOptions) async throws {
     try await api.execute(
       HTTPRequest(
-        url: api.configuration.url.appendingPathComponent("bucket/\(id)"),
         method: .put,
-        body: api.configuration.encoder.encode(
-          BucketParameters(
-            id: id,
-            name: id,
-            public: options.isPublic,
-            fileSizeLimit: options.fileSizeLimit.map { StorageByteCount(stringLiteral: $0) },
-            allowedMimeTypes: options.allowedMimeTypes
-          )
+        url: api.configuration.url.appendingPathComponent("bucket/\(id)")
+      ),
+      body: api.configuration.encoder.encode(
+        BucketParameters(
+          id: id,
+          name: id,
+          public: options.isPublic,
+          fileSizeLimit: options.fileSizeLimit.map { StorageByteCount(stringLiteral: $0) },
+          allowedMimeTypes: options.allowedMimeTypes
         )
       )
     )
@@ -121,8 +121,8 @@ extension SupabaseStorageClient {
   public func emptyBucket(_ id: String) async throws {
     try await api.execute(
       HTTPRequest(
-        url: api.configuration.url.appendingPathComponent("bucket/\(id)/empty"),
-        method: .post
+        method: .post,
+        url: api.configuration.url.appendingPathComponent("bucket/\(id)/empty")
       )
     )
   }
@@ -138,8 +138,8 @@ extension SupabaseStorageClient {
   public func deleteBucket(_ id: String) async throws {
     try await api.execute(
       HTTPRequest(
-        url: api.configuration.url.appendingPathComponent("bucket/\(id)"),
-        method: .delete
+        method: .delete,
+        url: api.configuration.url.appendingPathComponent("bucket/\(id)")
       )
     )
   }

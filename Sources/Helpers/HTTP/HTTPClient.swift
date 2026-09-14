@@ -5,56 +5,49 @@
 //  Created by Guilherme Souza on 30/04/24.
 //
 
-import Foundation
+package import Foundation
 package import HTTPTypes
 import HTTPTypesFoundation
 
-#if canImport(FoundationNetworking)
-  package import FoundationNetworking
-#endif
-
-/// The internal seam every sub-client sends through. `HTTPClient` is the real one;
-/// `HTTPClientMock` in TestHelpers is the test double.
-package protocol HTTPClientType: Sendable {
-  /// Buffered exchange.
-  func send(_ request: HTTPRequest) async throws -> HTTPResponse
-  /// Streaming exchange: the head returns as soon as it arrives, the body streams.
-  func stream(_ request: HTTPRequest) async throws -> (HTTPTypes.HTTPResponse, HTTPBody?)
-}
-
-extension HTTPClientType {
-  /// Buffers the exchange through ``send(_:)`` and re-wraps it as a head plus body.
-  ///
-  /// The default for clients that have no streaming path of their own (the test doubles).
-  /// ``HTTPClient`` overrides it with a genuinely streaming implementation.
-  package func stream(_ request: HTTPRequest) async throws -> (HTTPTypes.HTTPResponse, HTTPBody?) {
-    let response = try await send(request)
-    guard let head = response.underlyingResponse.httpResponse else {
-      throw URLError(.badServerResponse)
-    }
-    return (head, response.data.isEmpty ? nil : HTTPBody(response.data))
-  }
-}
-
 /// Runs a request through `middlewares` (in order) and then the `transport`.
-package struct HTTPClient: HTTPClientType {
+///
+/// The one internal seam every sub-client sends through. Tests swap the ``ClientTransport``
+/// (`ClosureTransport` in TestHelpers) instead of this type.
+package struct HTTPClient: Sendable {
   let transport: any ClientTransport
   let middlewares: [any ClientMiddleware]
 
-  package init(transport: any ClientTransport, middlewares: [any ClientMiddleware]) {
+  package init(transport: any ClientTransport, middlewares: [any ClientMiddleware] = []) {
     self.transport = transport
     self.middlewares = middlewares
   }
 
-  package func send(_ request: HTTPRequest) async throws -> HTTPResponse {
-    let (head, body) = try await stream(request)
+  /// Buffered exchange: uploads `body` from memory and collects the whole response body.
+  package func send(
+    _ request: HTTPTypes.HTTPRequest,
+    body: Data? = nil,
+    timeout: TimeInterval = 60
+  ) async throws -> (HTTPTypes.HTTPResponse, Data) {
+    let (head, responseBody) = try await stream(
+      request, body: body.map { HTTPBody($0) }, timeout: timeout)
     var data = Data()
-    if let body { data = try await Data(collecting: body, upTo: .max) }
-    return try HTTPResponse(data: data, head: head, url: request.finalURL)
+    if let responseBody { data = try await Data(collecting: responseBody, upTo: .max) }
+    return (head, data)
   }
 
-  package func stream(_ request: HTTPRequest) async throws -> (HTTPTypes.HTTPResponse, HTTPBody?) {
-    let (httpRequest, body) = request.httpRequestAndBody
+  /// Streaming exchange: the head returns as soon as it arrives, the body streams.
+  ///
+  /// A request with a body and no `Content-Type` is sent as JSON. The header is set before the
+  /// middleware chain runs, so middlewares see the request the transport sees.
+  package func stream(
+    _ request: HTTPTypes.HTTPRequest,
+    body: HTTPBody? = nil,
+    timeout: TimeInterval = 60
+  ) async throws -> (HTTPTypes.HTTPResponse, HTTPBody?) {
+    var request = request
+    if body != nil, request.headerFields[.contentType] == nil {
+      request.headerFields[.contentType] = "application/json"
+    }
 
     var next:
       @Sendable (HTTPTypes.HTTPRequest, HTTPBody?) async throws -> (
@@ -67,8 +60,20 @@ package struct HTTPClient: HTTPClientType {
       next = { try await middleware.intercept($0, body: $1, next: tmp) }
     }
 
-    return try await RequestTimeout.$current.withValue(request.timeoutInterval) {
-      try await next(httpRequest, body)
+    return try await RequestTimeout.$current.withValue(timeout) {
+      try await next(request, body)
     }
+  }
+}
+
+extension HTTPTypes.HTTPRequest {
+  /// Builds a request head with `query` appended to `url` using the SDK's percent-encoding rules.
+  package init(
+    method: Method,
+    url: URL,
+    query: [URLQueryItem],
+    headerFields: HTTPFields = [:]
+  ) {
+    self.init(method: method, url: url.appendingQueryItems(query), headerFields: headerFields)
   }
 }
