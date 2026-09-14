@@ -88,39 +88,45 @@ struct WebSocketTests {
 
   // MARK: - Connection Failure Tests
 
-  @Test
-  func connectFailureWrapsURLErrorAsConnectionKind() async {
-    // A URLProtocol that fails any request it receives, so `connect` never reaches
-    // the network and the failure is deterministic instead of depending on an
-    // actual unreachable host.
-    final class UnreachableProtocol: URLProtocol {
-      override class func canInit(with request: URLRequest) -> Bool { true }
-      override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+  // `URLProtocol` lives in `FoundationNetworking` on Linux, and swift-corelibs-foundation does
+  // not route WebSocket tasks through custom `protocolClasses`, so this test is
+  // Apple-platforms-only.
+  #if !canImport(FoundationNetworking)
+    @Test
+    func connectFailureWrapsURLErrorAsConnectionKind() async {
+      // A URLProtocol that fails any request it receives, so `connect` never reaches
+      // the network and the failure is deterministic instead of depending on an
+      // actual unreachable host.
+      final class UnreachableProtocol: URLProtocol {
+        override class func canInit(with request: URLRequest) -> Bool { true }
+        override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
-      override func startLoading() {
-        client?.urlProtocol(self, didFailWithError: URLError(.cannotConnectToHost))
+        override func startLoading() {
+          client?.urlProtocol(self, didFailWithError: URLError(.cannotConnectToHost))
+        }
+
+        override func stopLoading() {}
       }
 
-      override func stopLoading() {}
+      let config = URLSessionConfiguration.ephemeral
+      config.protocolClasses = [UnreachableProtocol.self]
+      let session = URLSession(configuration: config)
+
+      let url = URL(string: "ws://127.0.0.1:1")!
+
+      do {
+        _ = try await URLSessionWebSocket.connect(to: url, session: session)
+        Issue.record("expected connect to throw")
+      } catch let error as RealtimeError {
+        #expect(error.kind == .connection)
+        #expect(error.message.hasPrefix("connection ended unexpectedly"))
+        #expect(error.underlyingError is URLError)
+      } catch {
+        Issue.record("Unexpected error: \(error)")
+      }
     }
 
-    let config = URLSessionConfiguration.ephemeral
-    config.protocolClasses = [UnreachableProtocol.self]
-    let session = URLSession(configuration: config)
-
-    let url = URL(string: "ws://127.0.0.1:1")!
-
-    do {
-      _ = try await URLSessionWebSocket.connect(to: url, session: session)
-      Issue.record("expected connect to throw")
-    } catch let error as RealtimeError {
-      #expect(error.kind == .connection)
-      #expect(error.message.hasPrefix("connection ended unexpectedly"))
-      #expect(error.underlyingError is URLError)
-    } catch {
-      Issue.record("Unexpected error: \(error)")
-    }
-  }
+  #endif
 
   // MARK: - URLSessionWebSocket Lifecycle Tests
 
