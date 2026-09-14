@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import HTTPTypes
 import Testing
 
 @_spi(Experimental) @testable import Auth
@@ -17,92 +18,78 @@ import Testing
 @Suite
 struct AuthErrorTests {
   @Test
-  func errors() {
-    let sessionMissing = AuthError.sessionMissing
-    #expect(sessionMissing.errorCode == .sessionNotFound)
-    #expect(sessionMissing.message == "Auth session missing.")
+  func sessionMissingStatic() {
+    let error = AuthError.sessionMissing
 
-    let weakPassword = AuthError.weakPassword(message: "Weak password", reasons: [])
-    #expect(weakPassword.errorCode == .weakPassword)
-    #expect(weakPassword.message == "Weak password")
+    #expect(error.kind == .sessionMissing)
+    #expect(error.errorCode == .sessionNotFound)
+    #expect(error.message == "Auth session missing.")
+    #expect(error.weakPasswordReasons.isEmpty)
+    #expect(error.response == nil)
+  }
 
-    let api = AuthError.api(
+  @Test
+  func defaultsForErrorCodeAndReasons() {
+    let error = AuthError(kind: .implicitGrantRedirect, message: "Implicit grant failure")
+
+    #expect(error.errorCode == .unknown)
+    #expect(error.weakPasswordReasons.isEmpty)
+    #expect(error.errorDescription == "Implicit grant failure")
+  }
+
+  @Test
+  func oauthFlowFailedIsClientSide() {
+    let error = AuthError.oauthFlowFailed("No redirect URL configured")
+
+    #expect(error.kind == .oauthFlowFailed)
+    #expect(error.errorCode == .unknown)
+    #expect(error.response == nil)
+    #expect(error.errorDescription == "No redirect URL configured")
+  }
+
+  @Test
+  func weakPasswordCarriesReasons() {
+    let error = AuthError(
+      kind: .weakPassword,
+      message: "Password is weak",
+      errorCode: .weakPassword,
+      weakPasswordReasons: ["length", "characters", "pwned"]
+    )
+
+    #expect(error.kind == .weakPassword)
+    #expect(error.weakPasswordReasons == ["length", "characters", "pwned"])
+  }
+
+  @Test
+  func apiErrorCarriesResponse() {
+    var headers = HTTPFields()
+    headers[.sbRequestID] = "req-1"
+    let error = AuthError(
+      kind: .api,
       message: "API Error",
       errorCode: .emailConflictIdentityNotDeletable,
-      underlyingData: Data(),
-      underlyingResponse: HTTPResponse(status: .badRequest)
-    )
-    #expect(api.errorCode == .emailConflictIdentityNotDeletable)
-    #expect(api.message == "API Error")
-
-    let pkceGrantCodeExchange = AuthError.pkceGrantCodeExchange(
-      message: "PKCE failure", error: nil, code: nil)
-    #expect(pkceGrantCodeExchange.errorCode == .unknown)
-    #expect(pkceGrantCodeExchange.message == "PKCE failure")
-
-    let implicitGrantRedirect = AuthError.implicitGrantRedirect(message: "Implicit grant failure")
-    #expect(implicitGrantRedirect.errorCode == .unknown)
-    #expect(implicitGrantRedirect.message == "Implicit grant failure")
-
-    let oauthFlowFailed = AuthError.oauthFlowFailed(message: "No redirect URL configured")
-    #expect(oauthFlowFailed.errorCode == .unknown)
-    #expect(oauthFlowFailed.message == "No redirect URL configured")
-    #expect(oauthFlowFailed.errorDescription == "No redirect URL configured")
-  }
-
-  @Test
-  func weakPasswordWithReasons() {
-    let reasons = ["length", "characters", "pwned"]
-    let weakPassword = AuthError.weakPassword(message: "Password is weak", reasons: reasons)
-
-    #expect(weakPassword.message == "Password is weak")
-    #expect(weakPassword.errorCode == .weakPassword)
-    #expect(weakPassword.errorDescription == "Password is weak")
-  }
-
-  @Test
-  func jwtVerificationFailed() {
-    let jwtError = AuthError.jwtVerificationFailed(message: "Invalid JWT signature")
-
-    #expect(jwtError.message == "Invalid JWT signature")
-    #expect(jwtError.errorCode == .invalidJWT)
-    #expect(jwtError.errorDescription == "Invalid JWT signature")
-  }
-
-  @Test
-  func pkceGrantCodeExchangeWithErrorAndCode() {
-    let pkceError = AuthError.pkceGrantCodeExchange(
-      message: "Exchange failed",
-      error: "invalid_grant",
-      code: "auth_code_123"
+      response: HTTPErrorResponse(statusCode: 422, headers: headers, body: Data())
     )
 
-    #expect(pkceError.message == "Exchange failed")
-    #expect(pkceError.errorCode == .unknown)
+    #expect(error.errorCode == .emailConflictIdentityNotDeletable)
+    #expect(error.response?.statusCode == 422)
+    #expect(error.response?.requestID == "req-1")
+    #expect(error.description == "AuthError(api): API Error [status 422, request req-1]")
   }
 
   @Test
-  func apiErrorWithDifferentCodes() {
-    let errorCodes: [ErrorCode] = [
-      .badJWT,
-      .sessionExpired,
-      .userNotFound,
-      .invalidCredentials,
-      .emailExists,
-      .overRequestRateLimit,
-    ]
+  func kindIsOpen() {
+    let future = AuthError.Kind(rawValue: "somethingNew")
 
-    for code in errorCodes {
-      let error = AuthError.api(
-        message: "Test error",
-        errorCode: code,
-        underlyingData: Data(),
-        underlyingResponse: HTTPResponse(status: .badRequest)
-      )
+    #expect(future.rawValue == "somethingNew")
+    #expect(future != .api)
+  }
 
-      #expect(error.errorCode == code)
-      #expect(error.message == "Test error")
-    }
+  @Test
+  func conformsToSupabaseError() {
+    let error: any Error = AuthError.sessionMissing
+
+    #expect((error as? any SupabaseError)?.message == "Auth session missing.")
   }
 
   @Test
@@ -143,19 +130,5 @@ struct AuthErrorTests {
     #expect(set.contains(.badJWT))
     #expect(set.contains(.sessionExpired))
     #expect(!set.contains(.emailExists))
-  }
-
-  @Test
-  func authErrorPatternMatching() {
-    let error1: any Error = AuthError.sessionMissing
-    #expect(AuthError.sessionMissing ~= error1)
-
-    let error2: any Error = AuthError.weakPassword(message: "weak", reasons: [])
-    #expect(AuthError.weakPassword(message: "weak", reasons: []) ~= error2)
-
-    // Test non-AuthError
-    struct OtherError: Error {}
-    let error3: any Error = OtherError()
-    #expect(!(AuthError.sessionMissing ~= error3))
   }
 }

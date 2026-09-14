@@ -104,12 +104,7 @@ extension AuthMockerTests {
         do {
           _ = try await sut.session
         } catch {
-          assertInlineSnapshot(of: error, as: .dump) {
-            """
-            - AuthError.sessionMissing
-
-            """
-          }
+          #expect((error as? AuthError)?.kind == .sessionMissing)
         }
       }
     }
@@ -700,14 +695,10 @@ extension AuthMockerTests {
         try await sut.session(from: url)
         Issue.record("Expect failure")
       } catch {
-        expectNoDifference(
-          error as? AuthError,
-          AuthError.pkceGrantCodeExchange(
-            message: "Identity is already linked to another user",
-            error: "server_error",
-            code: "422"
-          )
-        )
+        let authError = error as? AuthError
+        #expect(authError?.kind == .pkceGrantCodeExchange)
+        #expect(authError?.message == "server_error: Identity is already linked to another user")
+        #expect(authError?.errorCode == ErrorCode("422"))
       }
     }
 
@@ -1002,8 +993,10 @@ extension AuthMockerTests {
           )
         )
         Issue.record("Expected AuthError.api")
-      } catch let AuthError.api(_, errorCode, _, _) {
-        #expect(errorCode == .web3UnsupportedChain)
+      } catch let error as AuthError {
+        #expect(error.kind == .api)
+        #expect(error.errorCode == .web3UnsupportedChain)
+        #expect(error.response?.statusCode == 400)
       }
     }
 
@@ -1206,8 +1199,9 @@ extension AuthMockerTests {
       do {
         try await sut.session(from: url)
         Issue.record("Expected implicitGrantRedirect error")
-      } catch let AuthError.implicitGrantRedirect(message) {
-        expectNoDifference(message, "Not a valid implicit grant flow URL: \(url)")
+      } catch let error as AuthError {
+        #expect(error.kind == .implicitGrantRedirect)
+        expectNoDifference(error.message, "Not a valid implicit grant flow URL: \(url)")
       }
     }
 
@@ -1223,8 +1217,9 @@ extension AuthMockerTests {
       do {
         try await sut.session(from: url)
         Issue.record("Expected implicitGrantRedirect error")
-      } catch let AuthError.implicitGrantRedirect(message) {
-        expectNoDifference(message, "Invalid code")
+      } catch let error as AuthError {
+        #expect(error.kind == .implicitGrantRedirect)
+        expectNoDifference(error.message, "Invalid code")
       }
     }
 
@@ -1240,8 +1235,9 @@ extension AuthMockerTests {
       do {
         try await sut.session(from: url)
         Issue.record("Expected implicitGrantRedirect error")
-      } catch let AuthError.implicitGrantRedirect(message) {
-        expectNoDifference(message, "User denied access")
+      } catch let error as AuthError {
+        #expect(error.kind == .implicitGrantRedirect)
+        expectNoDifference(error.message, "User denied access")
       }
     }
 
@@ -1254,8 +1250,9 @@ extension AuthMockerTests {
       do {
         try await sut.session(from: url)
         Issue.record("Expected implicitGrantRedirect error")
-      } catch let AuthError.implicitGrantRedirect(message) {
-        expectNoDifference(message, "access_denied")
+      } catch let error as AuthError {
+        #expect(error.kind == .implicitGrantRedirect)
+        expectNoDifference(error.message, "access_denied")
       }
     }
 
@@ -1268,8 +1265,9 @@ extension AuthMockerTests {
       do {
         try await sut.session(from: url)
         Issue.record("Expected implicitGrantRedirect error")
-      } catch let AuthError.implicitGrantRedirect(message) {
-        expectNoDifference(message, "access_denied")
+      } catch let error as AuthError {
+        #expect(error.kind == .implicitGrantRedirect)
+        expectNoDifference(error.message, "access_denied")
       }
     }
 
@@ -1325,10 +1323,10 @@ extension AuthMockerTests {
       do {
         try await sut.session(from: url)
         Issue.record("Expected pkceGrantCodeExchange error")
-      } catch let AuthError.pkceGrantCodeExchange(message, error, code) {
-        expectNoDifference(message, "Invalid code")
-        expectNoDifference(error, "invalid_grant")
-        expectNoDifference(code, "500")
+      } catch let error as AuthError {
+        #expect(error.kind == .pkceGrantCodeExchange)
+        expectNoDifference(error.message, "invalid_grant: Invalid code")
+        expectNoDifference(error.errorCode, ErrorCode("500"))
       }
     }
 
@@ -1344,10 +1342,11 @@ extension AuthMockerTests {
       do {
         try await sut.session(from: url)
         Issue.record("Expected pkceGrantCodeExchange error")
-      } catch let AuthError.pkceGrantCodeExchange(message, error, code) {
-        expectNoDifference(message, "Error in URL with unspecified error_description.")
-        expectNoDifference(error, "invalid_grant")
-        expectNoDifference(code, "500")
+      } catch let error as AuthError {
+        #expect(error.kind == .pkceGrantCodeExchange)
+        expectNoDifference(
+          error.message, "invalid_grant: Error in URL with unspecified error_description.")
+        expectNoDifference(error.errorCode, ErrorCode("500"))
       }
     }
 
@@ -1363,16 +1362,12 @@ extension AuthMockerTests {
       do {
         _ = try await sut.session(from: url)
       } catch {
-        assertInlineSnapshot(of: error, as: .dump) {
-          """
-          ▿ AuthError
-            ▿ pkceGrantCodeExchange: (3 elements)
-              - message: "Not a valid PKCE flow URL: https://dummy-url.com/callback#access_token=accesstoken&expires_in=60&refresh_token=refreshtoken"
-              - error: Optional<String>.none
-              - code: Optional<String>.none
-
-          """
-        }
+        let authError = error as? AuthError
+        #expect(authError?.kind == .pkceGrantCodeExchange)
+        #expect(
+          authError?.message
+            == "Not a valid PKCE flow URL: https://dummy-url.com/callback#access_token=accesstoken&expires_in=60&refresh_token=refreshtoken"
+        )
       }
     }
 
@@ -3009,7 +3004,7 @@ extension AuthMockerTests {
             _ = try await sut.user()
             Issue.record("Expected failure")
           } catch {
-            #expect(error as? AuthError == .sessionMissing)
+            #expect((error as? AuthError)?.kind == .sessionMissing)
           }
         },
         expectedEvents: [.initialSession, .signedOut]
@@ -3051,7 +3046,7 @@ extension AuthMockerTests {
             _ = try await sut.session
             Issue.record("Expected failure")
           } catch {
-            #expect(error as? AuthError == .sessionMissing)
+            #expect((error as? AuthError)?.kind == .sessionMissing)
           }
         },
         expectedEvents: expectedEvents
@@ -3203,12 +3198,14 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      await #expect(throws: AuthError.jwtVerificationFailed(message: "Invalid JWT signature")) {
+      let error = await #expect(throws: AuthError.self) {
         _ = try await sut.getClaims(
           jwt: tamperedJWT,
           options: GetClaimsOptions(jwks: JWKS(keys: [signer.jwk]))
         )
       }
+      #expect(error?.kind == .jwtVerificationFailed)
+      #expect(error?.message == "Invalid JWT signature")
     }
 
     @Test
@@ -3313,10 +3310,7 @@ extension AuthMockerTests {
         _ = try await sut.getClaims()
         Issue.record("Expected sessionMissing error")
       } catch let error as AuthError {
-        guard case .sessionMissing = error else {
-          Issue.record("Expected sessionMissing error, got \(error)")
-          return
-        }
+        #expect(error.kind == .sessionMissing)
       } catch {
         Issue.record("Expected AuthError, got \(error)")
       }
@@ -3332,11 +3326,8 @@ extension AuthMockerTests {
         _ = try await sut.getClaims(jwt: invalidJWT)
         Issue.record("Expected jwtVerificationFailed error")
       } catch let error as AuthError {
-        guard case .jwtVerificationFailed(let message) = error else {
-          Issue.record("Expected jwtVerificationFailed error, got \(error)")
-          return
-        }
-        #expect(message == "Invalid JWT structure")
+        #expect(error.kind == .jwtVerificationFailed)
+        #expect(error.message == "Invalid JWT structure")
       } catch {
         Issue.record("Expected AuthError, got \(error)")
       }
@@ -3354,11 +3345,8 @@ extension AuthMockerTests {
         _ = try await sut.getClaims(jwt: expiredJWT)
         Issue.record("Expected jwtVerificationFailed error")
       } catch let error as AuthError {
-        guard case .jwtVerificationFailed(let message) = error else {
-          Issue.record("Expected jwtVerificationFailed error, got \(error)")
-          return
-        }
-        #expect(message == "JWT has expired")
+        #expect(error.kind == .jwtVerificationFailed)
+        #expect(error.message == "JWT has expired")
       } catch {
         Issue.record("Expected AuthError, got \(error)")
       }
@@ -3479,6 +3467,79 @@ extension AuthMockerTests {
 
       #expect(result.claims.sub == "1234567890")
       #expect(result.claims.aud != nil)
+    }
+
+    @Test
+    func transportFailureIsWrapped() async {
+      Mock(
+        url: clientURL.appendingPathComponent("token"),
+        ignoreQuery: true,
+        statusCode: 200,
+        data: [.post: Data()],
+        requestError: URLError(.notConnectedToInternet)
+      )
+      .register()
+
+      let sut = makeSUT()
+
+      do {
+        try await sut.signIn(email: "a@b.c", password: "secret")
+        Issue.record("Expected failure")
+      } catch let error as AuthError {
+        #expect(error.kind == .transport)
+        #expect(error.errorCode == .unknown)
+        #expect((error.underlyingError as? URLError)?.code == .notConnectedToInternet)
+      } catch {
+        Issue.record("Unexpected error \(error)")
+      }
+    }
+
+    @Test
+    func unexpectedResponseBodyIsReported() async {
+      Mock(
+        url: clientURL.appendingPathComponent("token"),
+        ignoreQuery: true,
+        statusCode: 502,
+        data: [.post: Data("<html>bad gateway</html>".utf8)]
+      )
+      .register()
+
+      let sut = makeSUT()
+
+      do {
+        try await sut.signIn(email: "a@b.c", password: "secret")
+        Issue.record("Expected failure")
+      } catch let error as AuthError {
+        #expect(error.kind == .unexpectedResponse)
+        #expect(error.errorCode == .unexpectedFailure)
+        #expect(error.response?.statusCode == 502)
+        #expect(error.response?.body == Data("<html>bad gateway</html>".utf8))
+      } catch {
+        Issue.record("Unexpected error \(error)")
+      }
+    }
+
+    @Test
+    func undecodableSuccessBodyIsWrapped() async {
+      Mock(
+        url: clientURL.appendingPathComponent("token"),
+        ignoreQuery: true,
+        statusCode: 200,
+        data: [.post: Data("not json".utf8)]
+      )
+      .register()
+
+      let sut = makeSUT()
+
+      do {
+        try await sut.signIn(email: "a@b.c", password: "secret")
+        Issue.record("Expected failure")
+      } catch let error as AuthError {
+        #expect(error.kind == .decoding)
+        #expect(error.underlyingError is DecodingError)
+      } catch {
+        Issue.record("Unexpected error \(error)")
+      }
     }
 
     private func makeSUT(

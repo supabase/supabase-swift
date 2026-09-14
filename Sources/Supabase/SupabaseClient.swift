@@ -454,7 +454,7 @@ public final class SupabaseClient: Sendable {
           return try await accessToken()
         }
         return try await auth.session.accessToken
-      } catch AuthError.sessionMissing {
+      } catch let error as AuthError where error.kind == .sessionMissing {
         return nil
       }
     }

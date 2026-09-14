@@ -193,7 +193,7 @@ public struct AuthMFA: Sendable {
         nextLevel: nextLevel,
         currentAuthenticationMethods: currentAuthenticationMethods
       )
-    } catch AuthError.sessionMissing {
+    } catch let error as AuthError where error.kind == .sessionMissing {
       return AuthMFAGetAuthenticatorAssuranceLevelResponse(
         currentLevel: nil,
         nextLevel: nil,

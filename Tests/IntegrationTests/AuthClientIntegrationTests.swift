@@ -370,12 +370,9 @@ struct AuthClientIntegrationTests {
       try await client.admin.deletePasskey(userId: session.user.id, passkeyId: UUID())
       Issue.record("Expected deletePasskey to throw for a nonexistent passkey")
     } catch let error as AuthError {
-      guard case .api(_, _, _, let response) = error else {
-        Issue.record("Expected AuthError.api, got \(error)")
-        return
-      }
+      #expect(error.kind == .api)
       // Backend returns 404 when the passkey doesn't exist or belongs to another user.
-      #expect(response.status.code == 404)
+      #expect(error.response?.statusCode == 404)
     }
   }
 
@@ -393,7 +390,7 @@ struct AuthClientIntegrationTests {
         _ = try await authClient.session
         Issue.record("Expected to throw AuthError.sessionMissing")
       } catch let error as AuthError {
-        #expect(error == .sessionMissing)
+        #expect(error.kind == .sessionMissing)
       }
       #expect(authClient.currentSession == nil)
     }
@@ -586,9 +583,11 @@ struct AuthClientIntegrationTests {
     )
     let tamperedJWT = "\(parts[0]).\(tamperedPayload).\(parts[2])"
 
-    await #expect(throws: AuthError.jwtVerificationFailed(message: "Invalid JWT signature")) {
+    let error = await #expect(throws: AuthError.self) {
       _ = try await authClient.getClaims(jwt: tamperedJWT)
     }
+    #expect(error?.kind == .jwtVerificationFailed)
+    #expect(error?.message == "Invalid JWT signature")
   }
 
   @discardableResult

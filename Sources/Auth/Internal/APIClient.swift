@@ -62,7 +62,14 @@ struct APIClient: Sendable {
       request.headerFields[.apiVersionHeaderName] = apiVersions[._20240101]!.name.rawValue
     }
 
-    let (response, data) = try await http.send(request, body: body)
+    let response: HTTPResponse
+    let data: Data
+    do {
+      (response, data) = try await http.send(request, body: body)
+    } catch {
+      if error is CancellationError { throw error }
+      throw AuthError(kind: .transport, message: error.localizedDescription, underlyingError: error)
+    }
 
     guard 200..<300 ~= response.status.code else {
       throw await handleError(response: response, data: data)
@@ -86,17 +93,16 @@ struct APIClient: Sendable {
   }
 
   func handleError(response: HTTPResponse, data: Data) async -> AuthError {
+    let errorResponse = HTTPErrorResponse(response, body: data)
+
     guard
-      let error = try? data.decoded(
-        as: _RawAPIErrorResponse.self,
-        decoder: configuration.resolvedDecoder
-      )
+      let error = try? configuration.resolvedDecoder.decode(_RawAPIErrorResponse.self, from: data)
     else {
-      return .api(
-        message: "Unexpected error",
+      return AuthError(
+        kind: .unexpectedResponse,
+        message: "Unexpected response with status code \(response.status.code).",
         errorCode: .unexpectedFailure,
-        underlyingData: data,
-        underlyingResponse: response
+        response: errorResponse
       )
     }
 
@@ -112,28 +118,30 @@ struct APIClient: Sendable {
       }
 
     if errorCode == nil, let weakPassword = error.weakPassword {
-      return .weakPassword(
-        message: error._getErrorMessage(),
-        reasons: weakPassword.reasons ?? []
-      )
+      var result = AuthError.weakPassword(
+        message: error._getErrorMessage(), reasons: weakPassword.reasons ?? [])
+      result.response = errorResponse
+      return result
     } else if errorCode == .weakPassword {
-      return .weakPassword(
-        message: error._getErrorMessage(),
-        reasons: error.weakPassword?.reasons ?? []
-      )
+      var result = AuthError.weakPassword(
+        message: error._getErrorMessage(), reasons: error.weakPassword?.reasons ?? [])
+      result.response = errorResponse
+      return result
     } else if let errorCode, sessionCleanupErrorCodes.contains(errorCode) {
       // The `session_id` inside the JWT does not correspond to a row in the
       // `sessions` table. This usually means the user has signed out, has been
       // deleted, or their session has somehow been terminated.
       await sessionManager.remove()
       eventEmitter.emit(.signedOut, session: nil)
-      return .sessionMissing
+      var result = AuthError.sessionMissing
+      result.response = errorResponse
+      return result
     } else {
-      return .api(
+      return AuthError(
+        kind: .api,
         message: error._getErrorMessage(),
         errorCode: errorCode ?? .unknown,
-        underlyingData: data,
-        underlyingResponse: response
+        response: errorResponse
       )
     }
   }
@@ -163,5 +171,24 @@ struct _RawAPIErrorResponse: Decodable {
 
   func _getErrorMessage() -> String {
     msg ?? message ?? errorDescription ?? error ?? "Unknown"
+  }
+}
+
+extension Data {
+  /// Shadows `Data.decoded(as:decoder:)` from Helpers inside the Auth module so every existing
+  /// decode call site throws ``AuthError`` with kind `.decoding` instead of a bare
+  /// `DecodingError`. Same-module declarations win over imported ones with the same signature.
+  func decoded<T: Decodable>(as _: T.Type = T.self, decoder: JSONDecoder = JSONDecoder()) throws
+    -> T
+  {
+    do {
+      return try decoder.decode(T.self, from: self)
+    } catch {
+      throw AuthError(
+        kind: .decoding,
+        message: "Failed to decode the Auth response as \(T.self).",
+        underlyingError: error
+      )
+    }
   }
 }

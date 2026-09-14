@@ -59,13 +59,18 @@ struct SessionManagerTests {
         _ = try await sut.session()
         Issue.record("Expected a \(AuthError.sessionMissing) failure")
       } catch {
-        assertInlineSnapshot(of: error, as: .dump) {
-          """
-          - AuthError.sessionMissing
-
-          """
-        }
+        #expect((error as? AuthError)?.kind == .sessionMissing)
       }
+    }
+  }
+
+  @Test
+  func cancellationFromTransportIsNotWrapped() async {
+    await http.any { _ in throw CancellationError() }
+    Dependencies[clientID].sessionStorage.store(.expiredSession)
+
+    await #expect(throws: CancellationError.self) {
+      _ = try await sut.session()
     }
   }
 

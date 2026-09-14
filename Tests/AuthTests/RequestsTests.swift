@@ -194,14 +194,9 @@ struct RequestsTests {
     do {
       _ = try await sut.session(from: url)
     } catch {
-      assertInlineSnapshot(of: error, as: .dump) {
-        """
-        ▿ AuthError
-          ▿ implicitGrantRedirect: (1 element)
-            - message: "No session defined in URL"
-
-        """
-      }
+      let authError = error as? AuthError
+      #expect(authError?.kind == .implicitGrantRedirect)
+      #expect(authError?.message == "No session defined in URL")
     }
   }
 
@@ -716,6 +711,9 @@ struct RequestsTests {
     do {
       try await block()
     } catch is UnimplementedError {
+    } catch let error as AuthError where error.underlyingError is UnimplementedError {
+      // `APIClient.execute` wraps every transport failure (except cancellation) as `.transport`,
+      // so the `UnimplementedError` thrown by this file's stub `fetch` now arrives wrapped.
     } catch {
       Issue.record("Unexpected error: \(error)")
     }
