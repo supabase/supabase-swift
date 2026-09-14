@@ -503,9 +503,12 @@ extension PostgrestRequestBuilder where Phase: PostgrestExecutablePhase {
           attempt += 1
           continue
         }
-        if error is CancellationError { throw error }
+        // Only the network layer's own failures are relabelled. `CancellationError`, and anything
+        // thrown by user code that runs inside `send` (a custom `fetch`, an `accessToken`
+        // closure), propagate as themselves.
+        guard let urlError = error as? URLError else { throw error }
         throw PostgrestError(
-          kind: .transport, message: error.localizedDescription, underlyingError: error)
+          kind: .transport, message: urlError.localizedDescription, underlyingError: urlError)
       }
 
       if 200..<300 ~= response.status.code {

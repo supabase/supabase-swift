@@ -110,6 +110,16 @@ extension StorageMockerTests {
     }
 
     @Test
+    func customFetchErrorIsNotWrapped() async {
+      struct FetchError: Error {}
+      let storage = makeFailingSUT { throw FetchError() }
+
+      await #expect(throws: FetchError.self) {
+        _ = try await storage.from("bucket").list()
+      }
+    }
+
+    @Test
     func undecodableSuccessBodyIsWrapped() async {
       let storage = makeSUT()
 

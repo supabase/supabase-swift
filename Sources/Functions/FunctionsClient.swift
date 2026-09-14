@@ -226,9 +226,12 @@ public struct FunctionsClient: Sendable {
       (response, data) = try await http.send(
         request, body: body, timeout: Self.timeout(for: invokeOptions))
     } catch {
-      if error is CancellationError { throw error }
+      // Only the network layer's own failures are relabelled. `CancellationError`, and anything
+      // thrown by user code that runs inside `send` (a custom `fetch`, an `accessToken` closure),
+      // propagate as themselves.
+      guard let urlError = error as? URLError else { throw error }
       throw FunctionsError(
-        kind: .transport, message: error.localizedDescription, underlyingError: error)
+        kind: .transport, message: urlError.localizedDescription, underlyingError: urlError)
     }
 
     if response.headerFields[.xRelayError] == "true" {

@@ -806,6 +806,16 @@ extension PostgrestMockerTests {
     }
 
     @Test
+    func customFetchErrorIsNotWrapped() async {
+      struct FetchError: Error {}
+      let sut = makeSUTWithCustomFetch(retryEnabled: false) { _ in throw FetchError() }
+
+      await #expect(throws: FetchError.self) {
+        try await sut.from("users").select().execute()
+      }
+    }
+
+    @Test
     func undecodableSuccessBodyIsWrapped() async {
       let sut = makeSUTWithCustomFetch { _ in
         (Data("not json".utf8), self.makeHTTPURLResponse(statusCode: 200))

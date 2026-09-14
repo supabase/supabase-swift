@@ -440,6 +440,16 @@ struct FunctionsClientTests {
   }
 
   @Test
+  func invoke_customFetchError_isNotWrapped() async {
+    struct FetchError: Error {}
+    let sut = makeSUT { _ in throw FetchError() }
+
+    await #expect(throws: FetchError.self) {
+      try await sut.invoke("hello_world")
+    }
+  }
+
+  @Test
   func invoke_undecodableBody_wrapsDecodingError() async {
     let sut = makeSUT()
 
