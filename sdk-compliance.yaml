@@ -1430,7 +1430,7 @@ features:
   storage.file_buckets.download_as_stream: not_implemented
   storage.file_buckets.purge_bucket_cache: not_implemented
   storage.file_buckets.purge_cache: not_implemented
-  storage.file_buckets.request_cancellation: not_implemented
+  storage.file_buckets.request_cancellation: implemented
 
   # ── Storage — Vector Buckets ───────────────────────────────────────────────
 
