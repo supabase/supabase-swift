@@ -306,6 +306,32 @@ supporting_symbols:
   - PostgrestError.response
   - PostgrestError.underlyingError
   - PostgrestError.description
+  # AuthError (SDK-1788) is thrown by every auth.* capability rather than owned
+  # by one. ErrorCode values are attributed to their features below.
+  - AuthError
+  - AuthError.Kind
+  - AuthError.Kind.init
+  - AuthError.Kind.rawValue
+  - AuthError.Kind.api
+  - AuthError.Kind.sessionMissing
+  - AuthError.Kind.weakPassword
+  - AuthError.Kind.pkceGrantCodeExchange
+  - AuthError.Kind.implicitGrantRedirect
+  - AuthError.Kind.oauthFlowFailed
+  - AuthError.Kind.jwtVerificationFailed
+  - AuthError.Kind.webAuthn
+  - AuthError.Kind.unexpectedResponse
+  - AuthError.Kind.transport
+  - AuthError.Kind.decoding
+  - AuthError.init
+  - AuthError.kind
+  - AuthError.message
+  - AuthError.errorCode
+  - AuthError.weakPasswordReasons
+  - AuthError.response
+  - AuthError.underlyingError
+  - AuthError.description
+  - AuthError.sessionMissing
 
 features:
 
@@ -352,7 +378,6 @@ features:
       - Provider.workos
       - Provider.zoom
       - Provider.fly
-      - AuthError.oauthFlowFailed
   auth.sign_in.sign_in_with_otp:
     status: implemented
     symbols:
