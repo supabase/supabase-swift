@@ -166,7 +166,9 @@ extension StorageMockerTests {
         ])
       }
       #expect(error?.message == "new row violates row-level security")
-      #expect(error?.error == "Unauthorized")
+      #expect(error?.kind == .server)
+      #expect(error?.serverError?.error == "Unauthorized")
+      #expect(error?.response?.statusCode == 403)
     }
   }
 }

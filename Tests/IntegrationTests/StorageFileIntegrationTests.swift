@@ -142,18 +142,15 @@ final class StorageFileIntegrationTests {
     do {
       try await storage.from(bucketName).upload(uploadPath, data: file)
       Issue.record("Unexpected success")
+    } catch let error as StorageError {
+      #expect(error.kind == .server)
+      #expect(error.serverError?.error == "Payload too large")
+      #expect(error.message == "The object exceeded the maximum allowed size")
+      // Storage answers with HTTP 400 and puts "413" in the body.
+      #expect(error.serverError?.statusCode == "413")
+      #expect(error.response != nil)
     } catch {
-      assertInlineSnapshot(of: error, as: .dump) {
-        """
-        ▿ StorageError
-          ▿ error: Optional<String>
-            - some: "Payload too large"
-          - message: "The object exceeded the maximum allowed size"
-          ▿ statusCode: Optional<String>
-            - some: "413"
-
-        """
-      }
+      Issue.record("Unexpected error \(error)")
     }
   }
 
@@ -189,18 +186,15 @@ final class StorageFileIntegrationTests {
         )
       )
       Issue.record("Unexpected success")
+    } catch let error as StorageError {
+      #expect(error.kind == .server)
+      #expect(error.serverError?.error == "invalid_mime_type")
+      #expect(error.message == "mime type image/jpeg is not supported")
+      // Storage answers with HTTP 400 and puts "415" in the body.
+      #expect(error.serverError?.statusCode == "415")
+      #expect(error.response != nil)
     } catch {
-      assertInlineSnapshot(of: error, as: .dump) {
-        """
-        ▿ StorageError
-          ▿ error: Optional<String>
-            - some: "invalid_mime_type"
-          - message: "mime type image/jpeg is not supported"
-          ▿ statusCode: Optional<String>
-            - some: "415"
-
-        """
-      }
+      Issue.record("Unexpected error \(error)")
     }
   }
 
@@ -244,18 +238,15 @@ final class StorageFileIntegrationTests {
     do {
       try await storage.from(bucketName).uploadToSignedURL(res.path, token: res.token, data: file)
       Issue.record("Unexpected success")
+    } catch let error as StorageError {
+      #expect(error.kind == .server)
+      #expect(error.serverError?.error == "Duplicate")
+      #expect(error.message == "The resource already exists")
+      // Storage answers with HTTP 400 and puts "409" in the body.
+      #expect(error.serverError?.statusCode == "409")
+      #expect(error.response != nil)
     } catch {
-      assertInlineSnapshot(of: error, as: .dump) {
-        """
-        ▿ StorageError
-          ▿ error: Optional<String>
-            - some: "Duplicate"
-          - message: "The resource already exists"
-          ▿ statusCode: Optional<String>
-            - some: "409"
-
-        """
-      }
+      Issue.record("Unexpected error \(error)")
     }
   }
 

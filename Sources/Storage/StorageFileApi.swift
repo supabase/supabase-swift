@@ -585,7 +585,8 @@ public struct StorageFileApi: Sendable {
       var baseComponents = URLComponents(
         url: api.configuration.url, resolvingAgainstBaseURL: false)
     else {
-      throw URLError(.badURL)
+      throw StorageError(
+        kind: .invalidURL, message: "Cannot build a signed URL from '\(signedURL)'.")
     }
 
     baseComponents.path +=
@@ -610,7 +611,8 @@ public struct StorageFileApi: Sendable {
     }
 
     guard let signedURL = baseComponents.url else {
-      throw URLError(.badURL)
+      throw StorageError(
+        kind: .invalidURL, message: "Cannot build a signed URL from '\(signedURL)'.")
     }
 
     return signedURL
@@ -755,19 +757,10 @@ public struct StorageFileApi: Sendable {
         )
       )
       return true
-    } catch {
-      var statusCode: Int?
-
-      if let error = error as? StorageError {
-        statusCode = error.statusCode.flatMap(Int.init)
-      } else if let error = error as? HTTPError {
-        statusCode = error.response.status.code
-      }
-
-      if let statusCode, [400, 404].contains(statusCode) {
+    } catch let error as StorageError {
+      if let statusCode = error.response?.statusCode, [400, 404].contains(statusCode) {
         return false
       }
-
       throw error
     }
   }
@@ -784,7 +777,7 @@ public struct StorageFileApi: Sendable {
   ///   - cacheNonce: An optional nonce appended as a `cacheNonce` query parameter for
   ///     cache-busting purposes.
   /// - Returns: The publicly accessible `URL` for the file.
-  /// - Throws: `URLError` if the resulting URL cannot be constructed.
+  /// - Throws: ``StorageError`` with kind ``StorageError/Kind-swift.struct/invalidURL`` if the resulting URL cannot be constructed.
   @_disfavoredOverload
   public func getPublicURL(
     path: String,
@@ -796,7 +789,7 @@ public struct StorageFileApi: Sendable {
 
     guard var components = URLComponents(url: api.configuration.url, resolvingAgainstBaseURL: true)
     else {
-      throw URLError(.badURL)
+      throw StorageError(kind: .invalidURL, message: "Cannot build a public URL for '\(path)'.")
     }
 
     if let download {
@@ -817,7 +810,7 @@ public struct StorageFileApi: Sendable {
     components.queryItems = !queryItems.isEmpty ? queryItems : nil
 
     guard let generatedUrl = components.url else {
-      throw URLError(.badURL)
+      throw StorageError(kind: .invalidURL, message: "Cannot build a public URL for '\(path)'.")
     }
 
     return generatedUrl
@@ -844,7 +837,7 @@ public struct StorageFileApi: Sendable {
   ///   - cacheNonce: An optional nonce appended as a `cacheNonce` query parameter for
   ///     cache-busting purposes.
   /// - Returns: The publicly accessible `URL` for the file.
-  /// - Throws: `URLError` if the resulting URL cannot be constructed.
+  /// - Throws: ``StorageError`` with kind ``StorageError/Kind-swift.struct/invalidURL`` if the resulting URL cannot be constructed.
   public func getPublicURL(
     path: String,
     download: DownloadBehavior? = nil,
@@ -907,15 +900,17 @@ public struct StorageFileApi: Sendable {
     let signedURL = try makeSignedURL(response.url, download: nil)
 
     guard let components = URLComponents(url: signedURL, resolvingAgainstBaseURL: false) else {
-      throw URLError(.badURL)
+      throw StorageError(
+        kind: .invalidURL, message: "Cannot build a signed upload URL for '\(path)'.")
     }
 
     guard let token = components.queryItems?.first(where: { $0.name == "token" })?.value else {
-      throw StorageError(statusCode: nil, message: "No token returned by API", error: nil)
+      throw StorageError(kind: .unexpectedResponse, message: "No token returned by API")
     }
 
     guard let url = components.url else {
-      throw URLError(.badURL)
+      throw StorageError(
+        kind: .invalidURL, message: "Cannot build a signed upload URL for '\(path)'.")
     }
 
     return SignedUploadURL(

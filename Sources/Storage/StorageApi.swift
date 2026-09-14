@@ -106,14 +106,33 @@ struct StorageApi: Sendable {
     var request = request
     request.headerFields = HTTPFields(configuration.headers).merging(with: request.headerFields)
 
-    let (response, data) = try await http.send(request, body: body)
+    let response: HTTPResponse
+    let data: Data
+    do {
+      (response, data) = try await http.send(request, body: body)
+    } catch {
+      if error is CancellationError { throw error }
+      throw StorageError(
+        kind: .transport, message: error.localizedDescription, underlyingError: error)
+    }
 
     guard (200..<300).contains(response.status.code) else {
-      if let error = try? configuration.decoder.decode(StorageError.self, from: data) {
-        throw error
+      if let serverError = try? configuration.decoder.decode(
+        StorageError.ServerError.self, from: data)
+      {
+        throw StorageError(
+          kind: .server,
+          message: serverError.message,
+          serverError: serverError,
+          response: HTTPErrorResponse(response, body: data)
+        )
       }
 
-      throw HTTPError(data: data, response: response)
+      throw StorageError(
+        kind: .unexpectedResponse,
+        message: "Unexpected response with status code \(response.status.code).",
+        response: HTTPErrorResponse(response, body: data)
+      )
     }
 
     return data
@@ -133,5 +152,24 @@ struct StorageApi: Sendable {
       request.headerFields[.cacheControl] = "max-age=\(options.cacheControl)"
     }
     return try await execute(request, body: try formData.encode())
+  }
+}
+
+extension Data {
+  /// Shadows `Data.decoded(as:decoder:)` from Helpers inside the Storage module so every
+  /// existing decode call site throws ``StorageError`` with kind `.decoding` instead of a bare
+  /// `DecodingError`. Same-module declarations win over imported ones with the same signature.
+  func decoded<T: Decodable>(as _: T.Type = T.self, decoder: JSONDecoder = JSONDecoder()) throws
+    -> T
+  {
+    do {
+      return try decoder.decode(T.self, from: self)
+    } catch {
+      throw StorageError(
+        kind: .decoding,
+        message: "Failed to decode the Storage response as \(T.self).",
+        underlyingError: error
+      )
+    }
   }
 }

@@ -72,6 +72,65 @@ extension StorageMockerTests {
       )
     }
 
+    private func makeFailingSUT(_ failure: @escaping @Sendable () throws -> Never)
+      -> SupabaseStorageClient
+    {
+      SupabaseStorageClient(
+        configuration: StorageClientConfiguration(
+          url: url,
+          headers: [:],
+          http: .init(transport: ClosureTransport { _, _ in try failure() })
+        )
+      )
+    }
+
+    @Test
+    func transportFailureIsWrapped() async {
+      let storage = makeFailingSUT { throw URLError(.timedOut) }
+
+      do {
+        _ = try await storage.from("bucket").list()
+        Issue.record("Expected failure")
+      } catch let error as StorageError {
+        #expect(error.kind == .transport)
+        #expect(error.response == nil)
+        #expect((error.underlyingError as? URLError)?.code == .timedOut)
+      } catch {
+        Issue.record("Unexpected error \(error)")
+      }
+    }
+
+    @Test
+    func cancellationIsNotWrapped() async {
+      let storage = makeFailingSUT { throw CancellationError() }
+
+      await #expect(throws: CancellationError.self) {
+        _ = try await storage.from("bucket").list()
+      }
+    }
+
+    @Test
+    func undecodableSuccessBodyIsWrapped() async {
+      let storage = makeSUT()
+
+      Mock(
+        url: url.appendingPathComponent("object/list/bucket"),
+        statusCode: 200,
+        data: [.post: Data("not json".utf8)]
+      )
+      .register()
+
+      do {
+        _ = try await storage.from("bucket").list()
+        Issue.record("Expected failure")
+      } catch let error as StorageError {
+        #expect(error.kind == .decoding)
+        #expect(error.underlyingError is DecodingError)
+      } catch {
+        Issue.record("Unexpected error \(error)")
+      }
+    }
+
     @Test
     func configuration() {
       let storage = makeSUT()
@@ -701,7 +760,10 @@ extension StorageMockerTests {
           .move(from: "source", to: "destination")
         Issue.record()
       } catch let error as StorageError {
+        #expect(error.kind == .server)
         #expect(error.message == "Error")
+        #expect(error.serverError?.message == "Error")
+        #expect(error.response?.statusCode == 400)
       }
     }
 
@@ -734,9 +796,11 @@ extension StorageMockerTests {
         try await storage.from("bucket")
           .move(from: "source", to: "destination")
         Issue.record()
-      } catch let error as HTTPError {
-        #expect(error.data == Data("error".utf8))
-        #expect(error.response.status.code == 412)
+      } catch let error as StorageError {
+        #expect(error.kind == .unexpectedResponse)
+        #expect(error.serverError == nil)
+        #expect(error.response?.body == Data("error".utf8))
+        #expect(error.response?.statusCode == 412)
       }
     }
 

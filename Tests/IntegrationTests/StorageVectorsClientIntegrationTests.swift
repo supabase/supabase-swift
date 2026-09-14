@@ -67,18 +67,13 @@ struct StorageVectorsClientIntegrationTests {
     do {
       _ = try await vectors.getBucket("not-exist-bucket")
       Issue.record("Unexpected success")
+    } catch let error as StorageError {
+      #expect(error.kind == .server)
+      #expect(error.serverError?.error == "NotFoundException")
+      #expect(error.message == "resource \"not-exist-bucket\" not found")
+      #expect(error.response?.statusCode == 404)
     } catch {
-      assertInlineSnapshot(of: error, as: .dump) {
-        """
-        ▿ StorageError
-          ▿ error: Optional<String>
-            - some: "NotFoundException"
-          - message: "resource \\"not-exist-bucket\\" not found"
-          ▿ statusCode: Optional<String>
-            - some: "404"
-
-        """
-      }
+      Issue.record("Unexpected error \(error)")
     }
   }
 }
