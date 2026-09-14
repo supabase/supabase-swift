@@ -171,12 +171,15 @@ jobs:
     name: Linux (${{ matrix.container }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    continue-on-error: ${{ matrix.container == 'swift:nightly' }}
+    continue-on-error: ${{ matrix.container == 'swiftlang/swift:nightly-main-noble' }}
     container: ${{ matrix.container }}
     strategy:
       fail-fast: false
       matrix:
-        container: ["swift:6.2-noble", "swift:6.3-noble", "swift:nightly"]
+        # The stable releases live under the `swift` image; nightly snapshots are only
+        # published under `swiftlang/swift` (there is no `swift:nightly`).
+        container:
+          ["swift:6.2-noble", "swift:6.3-noble", "swiftlang/swift:nightly-main-noble"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: "Cache Swift Package"
