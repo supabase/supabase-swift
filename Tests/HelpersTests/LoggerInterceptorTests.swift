@@ -5,8 +5,10 @@
 //  Created by Coverage Tests
 //
 
+import ConcurrencyExtras
 import Foundation
 import HTTPTypes
+import HTTPTypesFoundation
 import Logging
 import Testing
 
@@ -69,24 +71,13 @@ struct LoggerInterceptorTests {
 
   func createTestRequest(
     url: String = "https://api.example.com/test",
-    method: Method = .get,
-    body: Data? = nil
-  ) -> Helpers.HTTPRequest {
-    Helpers.HTTPRequest(
-      url: URL(string: url)!,
-      method: method,
-      body: body
-    )
+    method: Method = .get
+  ) -> HTTPTypes.HTTPRequest {
+    HTTPTypes.HTTPRequest(method: method, url: URL(string: url)!)
   }
 
-  func createTestResponse(statusCode: Int = 200, data: Data = Data()) -> Helpers.HTTPResponse {
-    let urlResponse = HTTPURLResponse(
-      url: URL(string: "https://api.example.com/test")!,
-      statusCode: statusCode,
-      httpVersion: nil,
-      headerFields: nil
-    )!
-    return Helpers.HTTPResponse(data: data, response: urlResponse)
+  func createTestResponse(statusCode: Int = 200) -> HTTPTypes.HTTPResponse {
+    HTTPTypes.HTTPResponse(status: HTTPTypes.HTTPResponse.Status(code: statusCode))
   }
 
   // MARK: - Interceptor Tests
@@ -97,10 +88,9 @@ struct LoggerInterceptorTests {
     let interceptor = LoggerInterceptor(logger: logger)
 
     let request = createTestRequest(url: "https://api.example.com/users", method: .get)
-    let expectedResponse = createTestResponse()
 
-    let _ = try await interceptor.intercept(request) { _ in
-      return expectedResponse
+    let _ = try await interceptor.intercept(request, body: nil) { _, _ in
+      (self.createTestResponse(), nil)
     }
 
     // Verify request was logged
@@ -116,15 +106,41 @@ struct LoggerInterceptorTests {
 
     let request = createTestRequest()
     let responseData = #"{"success": true}"#.data(using: .utf8)!
-    let expectedResponse = createTestResponse(statusCode: 200, data: responseData)
 
-    let _ = try await interceptor.intercept(request) { _ in
-      return expectedResponse
+    let _ = try await interceptor.intercept(request, body: nil) { _, _ in
+      (self.createTestResponse(statusCode: 200), HTTPBody(responseData))
     }
 
     // Verify response was logged
     #expect(capture.verboseLogs.count == 2)
     #expect(capture.verboseLogs[1].contains("Response: Status code: 200"))
+  }
+
+  @Test
+  func interceptorLogsContentLengthHeaderWhenPresent() async throws {
+    let (logger, capture) = makeLogger()
+    let interceptor = LoggerInterceptor(logger: logger)
+
+    let _ = try await interceptor.intercept(createTestRequest(), body: nil) { _, _ in
+      (
+        HTTPTypes.HTTPResponse(status: .ok, headerFields: [.contentLength: "17"]),
+        HTTPBody(#"{"success": true}"#.data(using: .utf8)!)
+      )
+    }
+
+    #expect(capture.verboseLogs[1].contains("Content-Length: 17"))
+  }
+
+  @Test
+  func interceptorLogsDashWhenContentLengthIsMissing() async throws {
+    let (logger, capture) = makeLogger()
+    let interceptor = LoggerInterceptor(logger: logger)
+
+    let _ = try await interceptor.intercept(createTestRequest(), body: nil) { _, _ in
+      (self.createTestResponse(), nil)
+    }
+
+    #expect(capture.verboseLogs[1].contains("Content-Length: -"))
   }
 
   @Test
@@ -137,7 +153,7 @@ struct LoggerInterceptorTests {
     struct TestError: Error {}
 
     do {
-      let _ = try await interceptor.intercept(request) { _ in
+      let _ = try await interceptor.intercept(request, body: nil) { _, _ in
         throw TestError()
       }
       Issue.record("Should have thrown error")
@@ -156,11 +172,10 @@ struct LoggerInterceptorTests {
     let interceptor = LoggerInterceptor(logger: logger)
 
     let jsonBody = #"{"name": "test", "value": 123}"#.data(using: .utf8)!
-    let request = createTestRequest(method: .post, body: jsonBody)
-    let expectedResponse = createTestResponse()
+    let request = createTestRequest(method: .post)
 
-    let _ = try await interceptor.intercept(request) { _ in
-      return expectedResponse
+    let _ = try await interceptor.intercept(request, body: HTTPBody(jsonBody)) { _, _ in
+      (self.createTestResponse(), nil)
     }
 
     // Verify JSON body was logged
@@ -173,11 +188,10 @@ struct LoggerInterceptorTests {
     let (logger, capture) = makeLogger()
     let interceptor = LoggerInterceptor(logger: logger)
 
-    let request = createTestRequest(method: .get, body: Data?.none)
-    let expectedResponse = createTestResponse()
+    let request = createTestRequest(method: .get)
 
-    let _ = try await interceptor.intercept(request) { _ in
-      return expectedResponse
+    let _ = try await interceptor.intercept(request, body: nil) { _, _ in
+      (self.createTestResponse(), nil)
     }
 
     // Verify empty body handling
@@ -199,14 +213,13 @@ struct LoggerInterceptorTests {
       let interceptor = LoggerInterceptor(logger: logger)
 
       let request = createTestRequest(method: method)
-      let expectedResponse = createTestResponse()
 
-      let _ = try await interceptor.intercept(request) { _ in
-        return expectedResponse
+      let _ = try await interceptor.intercept(request, body: nil) { _, _ in
+        (self.createTestResponse(), nil)
       }
 
       #expect(
-        capture.verboseLogs[0].contains("Request:"),
+        capture.verboseLogs[0].contains("Request: \(methodString)"),
         "Should log \(methodString) request"
       )
     }
@@ -221,10 +234,9 @@ struct LoggerInterceptorTests {
       let interceptor = LoggerInterceptor(logger: logger)
 
       let request = createTestRequest()
-      let expectedResponse = createTestResponse(statusCode: statusCode)
 
-      let _ = try await interceptor.intercept(request) { _ in
-        return expectedResponse
+      let _ = try await interceptor.intercept(request, body: nil) { _, _ in
+        (self.createTestResponse(statusCode: statusCode), nil)
       }
 
       #expect(
@@ -335,23 +347,39 @@ struct LoggerInterceptorTests {
 
     let request = createTestRequest()
     let testData = "Test Response".data(using: .utf8)!
-    let expectedResponse = createTestResponse(statusCode: 201, data: testData)
 
-    let actualResponse = try await interceptor.intercept(request) { _ in
-      return expectedResponse
+    let (head, body) = try await interceptor.intercept(request, body: nil) { _, _ in
+      (self.createTestResponse(statusCode: 201), HTTPBody(testData))
     }
 
     // Verify response is passed through unchanged
-    #expect(actualResponse.statusCode == 201)
-    #expect(actualResponse.data == testData)
+    #expect(head.status.code == 201)
+    #expect(try await Data(collecting: try #require(body), upTo: .max) == testData)
+  }
+
+  @Test
+  func interceptorPassesThroughRequestBody() async throws {
+    let (logger, _) = makeLogger()
+    let interceptor = LoggerInterceptor(logger: logger)
+
+    let requestBody = #"{"name": "test"}"#.data(using: .utf8)!
+    let seen = LockIsolated<Data?>(nil)
+
+    let _ = try await interceptor.intercept(
+      createTestRequest(method: .post), body: HTTPBody(requestBody)
+    ) { _, body in
+      let collected = try await Data(collecting: try #require(body), upTo: .max)
+      seen.setValue(collected)
+      return (self.createTestResponse(), nil)
+    }
+
+    #expect(seen.value == requestBody)
   }
 
   @Test
   func interceptorPassesThroughError() async throws {
     let (logger, _) = makeLogger()
     let interceptor = LoggerInterceptor(logger: logger)
-
-    let request = createTestRequest()
 
     struct CustomError: Error, Equatable {
       let message: String
@@ -360,7 +388,7 @@ struct LoggerInterceptorTests {
     let expectedError = CustomError(message: "Test error")
 
     do {
-      let _ = try await interceptor.intercept(request) { _ in
+      let _ = try await interceptor.intercept(createTestRequest(), body: nil) { _, _ in
         throw expectedError
       }
       Issue.record("Should have thrown error")
@@ -369,5 +397,52 @@ struct LoggerInterceptorTests {
     } catch {
       Issue.record("Wrong error type thrown")
     }
+  }
+
+  @Test
+  func unknownLengthBodyPassesThroughUnconsumed() async throws {
+    let (logger, _) = makeLogger()
+    let sut = LoggerInterceptor(logger: logger)
+    let body = HTTPBody(
+      AsyncStream<ArraySlice<UInt8>> {
+        $0.yield(ArraySlice([1, 2]))
+        $0.finish()
+      },
+      length: .unknown, iterationBehavior: .single)
+
+    let (_, returned) = try await sut.intercept(
+      HTTPTypes.HTTPRequest(method: .get, url: URL(string: "https://example.com")!),
+      body: nil
+    ) { _, _ in (HTTPTypes.HTTPResponse(status: .ok), body) }
+
+    #expect(returned === body)
+    #expect(try await Data(collecting: try #require(returned), upTo: 10) == Data([1, 2]))
+  }
+
+  @Test
+  func underDeclaredBodyStillReachesTheNextHandlerWhole() async throws {
+    // Transparent gzip makes `Content-Length` the *compressed* size while the body yields the
+    // decoded bytes, so a body can deliver more than it declares. Logging must not fail the
+    // request over it.
+    let (logger, _) = makeLogger()
+    let sut = LoggerInterceptor(logger: logger)
+    let body = HTTPBody(
+      AsyncStream<ArraySlice<UInt8>> {
+        $0.yield(ArraySlice(repeating: 7, count: 100))
+        $0.finish()
+      },
+      length: .known(10), iterationBehavior: .single)
+
+    let seen = LockIsolated<Data?>(nil)
+    _ = try await sut.intercept(
+      HTTPTypes.HTTPRequest(method: .post, url: URL(string: "https://example.com")!),
+      body: body
+    ) { _, forwarded in
+      let collected = try await Data(collecting: try #require(forwarded), upTo: 1000)
+      seen.setValue(collected)
+      return (HTTPTypes.HTTPResponse(status: .ok), nil)
+    }
+
+    #expect(seen.value == Data(repeating: 7, count: 100))
   }
 }

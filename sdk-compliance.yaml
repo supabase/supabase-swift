@@ -672,8 +672,46 @@ features:
       - AuthLocalStorage.defaultLocalStorage
 
   client.request_configuration.custom_http_client:
-    status: partially_implemented
-    note: "A custom URLSession can be supplied; a full HTTP client adapter protocol is not exposed."
+    status: implemented
+    symbols:
+      - SupabaseClientOptions.GlobalOptions.http
+      - AuthClient.Configuration.http
+      - PostgrestClient.Configuration.http
+      - StorageClientConfiguration.http
+    supporting_symbols:
+      - HTTPClientConfiguration
+      - HTTPClientConfiguration.init
+      - HTTPClientConfiguration.transport
+      - HTTPClientConfiguration.middlewares
+      - ClientTransport
+      - ClientTransport.send
+      - ClientMiddleware
+      - ClientMiddleware.intercept
+      - URLSessionTransport
+      - URLSessionTransport.init
+      - URLSessionTransport.send
+      - HTTPBody
+      - HTTPBody.init
+      - HTTPBody.Element
+      - HTTPBody.Length
+      - HTTPBody.Length.known
+      - HTTPBody.Length.unknown
+      - HTTPBody.length
+      - HTTPBody.IterationBehavior
+      - HTTPBody.IterationBehavior.single
+      - HTTPBody.IterationBehavior.multiple
+      - HTTPBody.iterationBehavior
+      - HTTPBody.Iterator
+      - HTTPBody.Iterator.next
+      - HTTPBody.makeAsyncIterator
+      - HTTPBody.write
+      - HTTPBody.reportingProgress
+      - HTTPBodyAlreadyConsumedError
+      - HTTPBodyAlreadyConsumedError.init
+      - HTTPBodyTooLargeError
+      - HTTPBodyTooLargeError.init
+      - HTTPBodyTooLargeError.maxBytes
+      - Data.init
   client.request_configuration.global_headers:
     status: implemented
     symbols:

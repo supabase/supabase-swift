@@ -152,7 +152,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   /// targets of this package (e.g. `SupabaseClient`) can inject a test clock without
   /// exposing it publicly.
   package convenience init(url: URL, options: RealtimeClientOptions, clock: any Clock<Duration>) {
-    let interceptors: [any HTTPClientInterceptor] = [
+    let interceptors: [any ClientMiddleware] = [
       LoggerInterceptor(logger: options.logger)
     ]
 
@@ -166,10 +166,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
           session: options.session
         )
       },
-      http: HTTPClient(
-        fetch: options.fetch ?? { try await URLSession.shared.data(for: $0) },
-        interceptors: interceptors
-      ),
+      http: HTTPClient(configuration: options.http, appending: interceptors),
       clock: clock
     )
   }

@@ -1796,3 +1796,270 @@ reads `error.message` / `error.errorCode` is unaffected.
 
 `errorCode` for the new case is `.unknown`, matching the other client-side cases
 (`pkceGrantCodeExchange`, `implicitGrantRedirect`).
+
+## `fetch:` closures and `StorageHTTPSession` replaced by `ClientTransport` and `ClientMiddleware`
+
+Every sub-client now sends through one protocol, `ClientTransport`, behind an ordered chain of
+`ClientMiddleware`. The two travel together in one value, `HTTPClientConfiguration`, which every
+client takes as a single `http:` parameter. `AuthClient`, `PostgrestClient` and `FunctionsClient`
+take `http:` directly, where they used to take a `fetch:` closure; `SupabaseStorageClient` and
+`RealtimeClientV2` receive the same value through `StorageClientConfiguration` and
+`RealtimeClientOptions`, which replace `StorageHTTPSession` and Realtime's `fetch:` closure.
+`SupabaseClient` gains `SupabaseClientOptions.GlobalOptions.http`, which it hands to every
+sub-client at once. All five types — `HTTPClientConfiguration`, `ClientTransport`,
+`ClientMiddleware`, `URLSessionTransport` and the streaming `HTTPBody` — are public in `Helpers`,
+which every module re-exports, so `import Supabase` (or `import Auth`, `import Storage`, …) is
+enough.
+
+### Why
+
+v2 had four incompatible injection shapes for the same job. `AuthClient.FetchHandler`,
+`PostgrestClient.FetchHandler` and `FunctionsClient.FetchHandler` were three separate
+`typealias` declarations over the identical
+`(URLRequest) async throws -> (Data, URLResponse)` signature; Storage had
+`StorageHTTPSession` with its own `fetch`/`upload` pair; Realtime had a bare
+`RealtimeClientOptions.fetch` closure. None of them composed. There was no way to add logging, a
+custom header, retry, or a mock to every sub-client at once — you wrote the same closure five
+times, or you wrote it once and it still did not cover Storage's upload path. And a closure that
+returns `Data` cannot stream: a 2 GB download was a 2 GB allocation.
+
+One `Sendable` transport protocol plus a middleware chain is where the ecosystem landed —
+Apple's swift-openapi-runtime, Smithy Swift, and Apollo iOS all expose that exact pair. This SDK
+now matches it, and `HTTPBody` gives the transport a body it can hand back before it is complete.
+
+### Before / After
+
+Auth, PostgREST and Functions each took a `fetch:` closure:
+
+```swift
+// Before
+let session = URLSession(configuration: configuration)
+
+let auth = AuthClient(
+  url: authURL,
+  localStorage: localStorage,
+  fetch: { try await session.data(for: $0) }
+)
+let database = PostgrestClient(
+  url: databaseURL,
+  fetch: { try await session.data(for: $0) }
+)
+let functions = FunctionsClient(
+  url: functionsURL,
+  fetch: { try await session.data(for: $0) }
+)
+```
+
+```swift
+// After
+let session = URLSession(configuration: configuration)
+let transport = URLSessionTransport(session: session)
+
+let auth = AuthClient(
+  url: authURL,
+  localStorage: localStorage,
+  http: .init(transport: transport)
+)
+let database = PostgrestClient(
+  url: databaseURL,
+  http: .init(transport: transport)
+)
+let functions = FunctionsClient(
+  url: functionsURL,
+  http: .init(transport: transport)
+)
+```
+
+`AuthClient.Configuration` and `PostgrestClient.Configuration` changed the same way: the `fetch:`
+parameter and stored property became `http:`.
+
+Storage swapped `StorageHTTPSession` for the same transport:
+
+```swift
+// Before
+let storage = SupabaseStorageClient(
+  configuration: StorageClientConfiguration(
+    url: storageURL,
+    headers: headers,
+    session: StorageHTTPSession(session: session)
+  )
+)
+```
+
+```swift
+// After
+let storage = SupabaseStorageClient(
+  configuration: StorageClientConfiguration(
+    url: storageURL,
+    headers: headers,
+    http: .init(transport: URLSessionTransport(session: session))
+  )
+)
+```
+
+Realtime's `fetch:` — used for REST broadcast calls — became `http:`:
+
+```swift
+// Before
+let options = RealtimeClientOptions(fetch: { try await session.data(for: $0) })
+
+// After
+let options = RealtimeClientOptions(http: .init(transport: URLSessionTransport(session: session)))
+```
+
+And on `SupabaseClient`, one transport and one middleware chain now cover every sub-client:
+
+```swift
+let client = SupabaseClient(
+  supabaseURL: supabaseURL,
+  supabaseKey: supabaseKey,
+  options: SupabaseClientOptions(
+    global: SupabaseClientOptions.GlobalOptions(
+      http: HTTPClientConfiguration(
+        transport: URLSessionTransport(session: session),
+        middlewares: [AppVersionMiddleware()]
+      )
+    )
+  )
+)
+```
+
+**This is a compile error.** The parameters and types below were removed, not deprecated, so the
+compiler points at every call site.
+
+| Before | After |
+| --- | --- |
+| `AuthClient.FetchHandler` | `any ClientTransport` |
+| `PostgrestClient.FetchHandler` | `any ClientTransport` |
+| `FunctionsClient.FetchHandler` | `any ClientTransport` |
+| `StorageHTTPSession` | `any ClientTransport` |
+| `AuthClient(… fetch:)`, `AuthClient.Configuration(… fetch:)` | `http:` |
+| `PostgrestClient(… fetch:)`, `PostgrestClient.Configuration(… fetch:)` | `http:` |
+| `FunctionsClient(… fetch:)` | `http:` |
+| `StorageClientConfiguration(… session:)` | `StorageClientConfiguration(… http:)` |
+| `RealtimeClientOptions(… fetch:)` | `RealtimeClientOptions(… http:)` |
+
+### The escape hatch
+
+`URLSessionTransport(session:)` wraps any `URLSession` you already have — delegate, configuration,
+certificate pinning and all — so a v2 `fetch: { try await session.data(for: $0) }` becomes
+`http: .init(transport: URLSessionTransport(session: session))` with nothing else to change. There is also
+`URLSessionTransport(configuration:)`, which builds its own session from a
+`URLSessionConfiguration`.
+
+### Writing a middleware
+
+A middleware sees the request on the way out and the response on the way back. Call `next` exactly
+once to continue, or return without calling it to short-circuit:
+
+```swift
+struct AppVersionMiddleware: ClientMiddleware {
+  static let headerName = HTTPField.Name("X-App-Version")!
+
+  func intercept(
+    _ request: HTTPRequest,
+    body: HTTPBody?,
+    next: @Sendable (HTTPRequest, HTTPBody?) async throws -> (HTTPResponse, HTTPBody?)
+  ) async throws -> (HTTPResponse, HTTPBody?) {
+    var request = request
+    request.headerFields[Self.headerName] = "2.1.0"
+    return try await next(request, body)
+  }
+}
+```
+
+Middlewares run in array order on the way out and in reverse on the way back. A middleware that
+retries must check `HTTPBody.iterationBehavior` and skip the retry when it is `.single`.
+
+### Mocking the network in tests
+
+A transport is one method, so a stub is five lines:
+
+```swift
+struct StubTransport: ClientTransport {
+  func send(_ request: HTTPRequest, body: HTTPBody?) async throws -> (HTTPResponse, HTTPBody?) {
+    (HTTPResponse(status: .ok), HTTPBody(Data("[]".utf8)))
+  }
+}
+```
+
+Pass it as `http: .init(transport: StubTransport())` to any sub-client, or as
+`GlobalOptions.http` to replace the network for the whole client.
+
+### Behavior notes
+
+- **Your middlewares run before the SDK's.** `SupabaseClient` appends its own middlewares — trace
+  context, and the one that injects the bearer token — *after* yours. So a middleware you supply
+  sees the request without the `Authorization` header, while your `ClientTransport` always sees the
+  final request, token included. Read or rewrite auth headers in a transport, not a middleware.
+- **A caller-supplied Realtime transport opts out of the SDK's middlewares.** If you set
+  `RealtimeClientOptions.http.transport` yourself, `SupabaseClient` installs none of its own middlewares
+  on Realtime — it assumes you are fully in charge of that path. Leave it `nil` to get the global
+  transport plus the SDK's chain.
+- **`HTTPURLResponse.url` is now the request URL.** `HTTPError.response` and
+  `AuthError.api(underlyingResponse:)` still carry an `HTTPURLResponse`, but the transport
+  synthesizes it from the request, so its `url` is the URL that was requested rather than the URL
+  after redirects. Anything reading `error.response.url` to detect a redirect target must read the
+  `Location` header instead.
+- **Functions streaming goes through your transport now.** `_invokeWithStreamedResponse` used to
+  run on a private `URLSession` that ignored everything you configured. It now sends through the
+  client's `http` transport and middlewares, like every other call.
+- **A streamed `FunctionsError.httpError` now carries the response body.** In v2 the streamed call
+  threw `.httpError(code, Data())`; the body is now included, so anything that read the payload
+  from a non-2xx streamed invoke no longer has to special-case an empty `Data`.
+- **Streamed chunk boundaries changed.** The default transport yields one chunk per
+  `URLSession` data delivery, so boundaries follow the network, not the payload: an SSE event can
+  arrive split across chunks or several events can share one. Code that assumed one chunk per
+  `write` on the server, or one chunk per event, must reassemble on the `\n\n` frame separator.
+- **`HTTPTypes` names are now in scope.** `Helpers` re-exports `HTTPTypes`, so `import Supabase`
+  (or `import Functions`, `import Auth`, …) also brings `HTTPRequest`, `HTTPResponse`, `HTTPFields`
+  and `HTTPField` in. If you also import another library that exports those names, the reference
+  becomes ambiguous — qualify it with the module name (`HTTPTypes.HTTPRequest`).
+- **Timeouts belong to the transport.** The SDK always sets `URLRequest.timeoutInterval` itself —
+  60 seconds by default, or `FunctionInvokeOptions.timeoutInterval` for Functions — so on the
+  default transport `URLSessionConfiguration.timeoutIntervalForRequest` no longer takes effect for
+  SDK requests. A custom `ClientTransport` owns its own timeout policy and is free to ignore the
+  per-request override.
+
+## `SupabaseClientOptions.GlobalOptions.session` is removed
+
+`GlobalOptions` no longer has a `session: URLSession` property or init parameter. The `URLSession`
+that HTTP requests go through is configured on the transport instead: pass
+`URLSessionTransport(session:)` as `GlobalOptions.http.transport`.
+
+With `http` in place, `session` had two overlapping jobs. It backed the default transport only
+while `http.transport` was `nil`, so a caller who set both a custom `session` and a custom
+`transport` silently lost the session for HTTP. It was also copied into
+`RealtimeClientOptions.session` for the WebSocket, which is not an HTTP request and never goes
+through `ClientTransport`. One knob now configures HTTP, and Realtime's WebSocket session is
+configured only where it lives.
+
+```swift
+// Before
+let client = SupabaseClient(
+  supabaseURL: url,
+  supabaseKey: key,
+  options: .init(global: .init(session: mySession))
+)
+
+// After
+let client = SupabaseClient(
+  supabaseURL: url,
+  supabaseKey: key,
+  options: .init(global: .init(http: .init(transport: URLSessionTransport(session: mySession))))
+)
+```
+
+This is a compile error: `GlobalOptions.init` has no `session:` argument, and
+`options.global.session` no longer exists.
+
+One behavior change compiles without change elsewhere: Realtime no longer inherits a `URLSession`
+from `GlobalOptions`. If you relied on the global session reaching Realtime's WebSocket (for
+example for certificate pinning), pass it on the Realtime options instead:
+
+```swift
+options: .init(
+  global: .init(http: .init(transport: URLSessionTransport(session: mySession))),
+  realtime: .init(session: mySession)
+)
+```

@@ -12,12 +12,12 @@ package import HTTPTypes
   import FoundationNetworking
 #endif
 
-/// An HTTP client interceptor for retrying failed HTTP requests with exponential backoff.
+/// A ``ClientMiddleware`` for retrying failed HTTP requests with exponential backoff.
 ///
 /// The `RetryRequestInterceptor` actor intercepts HTTP requests and automatically retries them in case
 /// of failure, with exponential backoff between retries. You can configure the retry behavior by specifying
 /// the retry limit, exponential backoff base, scale, retryable HTTP methods, HTTP status codes, and URL error codes.
-package actor RetryRequestInterceptor: HTTPClientInterceptor {
+package actor RetryRequestInterceptor: ClientMiddleware {
   /// The default retry limit for the interceptor.
   package static let defaultRetryLimit = 2
   /// The default base value for exponential backoff.
@@ -106,19 +106,31 @@ package actor RetryRequestInterceptor: HTTPClientInterceptor {
   ///
   /// - Parameters:
   ///   - request: The original HTTP request to be intercepted and retried.
-  ///   - next: A closure representing the next interceptor in the chain.
+  ///   - body: The outgoing body, if any.
+  ///   - next: A closure representing the rest of the chain.
   /// - Returns: The HTTP response obtained after retrying.
   package func intercept(
-    _ request: HTTPRequest,
-    next: @Sendable (HTTPRequest) async throws -> HTTPResponse
-  ) async throws -> HTTPResponse {
-    try await retry(request, retryCount: 1, next: next)
+    _ request: HTTPTypes.HTTPRequest,
+    body: HTTPBody?,
+    next:
+      @Sendable (HTTPTypes.HTTPRequest, HTTPBody?) async throws -> (
+        HTTPTypes.HTTPResponse, HTTPBody?
+      )
+  ) async throws -> (HTTPTypes.HTTPResponse, HTTPBody?) {
+    // A one-shot body cannot be replayed, so the request is not retryable regardless of method.
+    guard body?.iterationBehavior != .single else {
+      return try await next(request, body)
+    }
+    return try await retry(request, body: body, retryCount: 1, next: next)
   }
 
-  private func shouldRetry(request: HTTPRequest, result: Result<HTTPResponse, any Error>) -> Bool {
+  private func shouldRetry(
+    request: HTTPTypes.HTTPRequest,
+    result: Result<HTTPTypes.HTTPResponse, any Error>
+  ) -> Bool {
     guard retryableHTTPMethods.contains(request.method) else { return false }
 
-    if let statusCode = result.value?.statusCode, retryableHTTPStatusCodes.contains(statusCode) {
+    if let head = result.value, retryableHTTPStatusCodes.contains(head.status.code) {
       return true
     }
 
@@ -130,20 +142,25 @@ package actor RetryRequestInterceptor: HTTPClientInterceptor {
   }
 
   private func retry(
-    _ request: HTTPRequest,
+    _ request: HTTPTypes.HTTPRequest,
+    body: HTTPBody?,
     retryCount: Int,
-    next: @Sendable (HTTPRequest) async throws -> HTTPResponse
-  ) async throws -> HTTPResponse {
-    let result: Result<HTTPResponse, any Error>
+    next:
+      @Sendable (HTTPTypes.HTTPRequest, HTTPBody?) async throws -> (
+        HTTPTypes.HTTPResponse, HTTPBody?
+      )
+  ) async throws -> (HTTPTypes.HTTPResponse, HTTPBody?) {
+    let result: Result<(HTTPTypes.HTTPResponse, HTTPBody?), any Error>
 
     do {
-      let response = try await next(request)
-      result = .success(response)
+      result = .success(try await next(request, body))
     } catch {
       result = .failure(error)
     }
 
-    if retryCount < retryLimit, shouldRetry(request: request, result: result) {
+    if retryCount < retryLimit,
+      shouldRetry(request: request, result: result.map(\.0))
+    {
       let retryDelay =
         pow(
           Double(exponentialBackoffBase),
@@ -153,7 +170,13 @@ package actor RetryRequestInterceptor: HTTPClientInterceptor {
       try? await clock.sleep(for: .seconds(retryDelay))
 
       if !Task.isCancelled {
-        return try await retry(request, retryCount: retryCount + 1, next: next)
+        // This attempt's body is about to be discarded, so drain it to termination — a streamed
+        // body holds its producer (a URLSession task) open until its stream finishes. Exceeding
+        // the cap throws, which drops the iterator and terminates the stream just the same.
+        if let responseBody = result.value?.1 {
+          _ = try? await Data(collecting: responseBody, upTo: 1 << 20)
+        }
+        return try await retry(request, body: body, retryCount: retryCount + 1, next: next)
       }
     }
 

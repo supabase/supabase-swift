@@ -3,11 +3,11 @@ import HTTPTypes
 
 extension HTTPClient {
   init(configuration: AuthClient.Configuration) {
-    var interceptors: [any HTTPClientInterceptor] = [
+    var middlewares: [any ClientMiddleware] = [
       LoggerInterceptor(logger: configuration.logger)
     ]
 
-    interceptors.append(
+    middlewares.append(
       RetryRequestInterceptor(
         retryableHTTPMethods: RetryRequestInterceptor.defaultRetryableHTTPMethods.union(
           [.post]  // Add POST method so refresh token are also retried.
@@ -15,7 +15,7 @@ extension HTTPClient {
       )
     )
 
-    self.init(fetch: configuration.fetch, interceptors: interceptors)
+    self.init(configuration: configuration.http, appending: middlewares)
   }
 }
 

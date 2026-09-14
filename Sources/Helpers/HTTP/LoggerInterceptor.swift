@@ -6,51 +6,76 @@
 //
 
 import Foundation
+package import HTTPTypes
+import HTTPTypesFoundation
 package import Logging
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
 #endif
 
-package struct LoggerInterceptor: HTTPClientInterceptor {
+package struct LoggerInterceptor: ClientMiddleware {
   let logger: Logging.Logger
+
+  /// Bodies at or under this size are buffered so they can be logged. Larger or
+  /// unknown-length bodies pass through untouched as `<streamed>`.
+  static let maxLoggedBodyBytes: Int64 = 64 * 1024
 
   package init(logger: Logging.Logger) {
     self.logger = logger
   }
 
   package func intercept(
-    _ request: HTTPRequest,
-    next: @Sendable (HTTPRequest) async throws -> HTTPResponse
-  ) async throws -> HTTPResponse {
+    _ request: HTTPTypes.HTTPRequest,
+    body: HTTPBody?,
+    next:
+      @Sendable (HTTPTypes.HTTPRequest, HTTPBody?) async throws -> (
+        HTTPTypes.HTTPResponse, HTTPBody?
+      )
+  ) async throws -> (HTTPTypes.HTTPResponse, HTTPBody?) {
     let id = UUID().uuidString
     var logger = logger
     logger[metadataKey: "requestID"] = "\(id)"
 
-    let urlRequest = request.urlRequest
-
+    let (requestBody, requestBodyText) = try await Self.loggable(body)
     logger.trace(
       """
-      Request: \(urlRequest.httpMethod ?? "") \(urlRequest.url?.absoluteString.removingPercentEncoding ?? "")
-      Body: \(stringify(request.body))
+      Request: \(request.method.rawValue) \(request.url?.absoluteString.removingPercentEncoding ?? "")
+      Body: \(requestBodyText)
       """
     )
 
     do {
-      let response = try await next(request)
+      let (head, responseBody) = try await next(request, requestBody)
+      let (loggedBody, responseBodyText) = try await Self.loggable(responseBody)
       logger.trace(
         """
-        Response: Status code: \(response.statusCode) Content-Length: \(
-          response.underlyingResponse.expectedContentLength
-        )
-        Body: \(stringify(response.data))
+        Response: Status code: \(head.status.code) Content-Length: \(head.headerFields[.contentLength] ?? "-")
+        Body: \(responseBodyText)
         """
       )
-      return response
+      return (head, loggedBody)
     } catch {
       logger.error("Response: Failure \(error)")
       throw error
     }
+  }
+
+  /// Buffers small known-length bodies for logging and re-wraps them; passes everything else
+  /// through unconsumed.
+  ///
+  /// The declared length only decides *whether* to buffer. Collecting uses a much larger ceiling,
+  /// because a body can deliver more bytes than it claims — with transparent gzip,
+  /// `Content-Length` is the compressed size while the decoded bytes come out. Capping at the
+  /// claim would throw ``HTTPBodyTooLargeError`` out of a logging middleware and fail the request,
+  /// which is unrecoverable once the body has been consumed.
+  private static func loggable(_ body: HTTPBody?) async throws -> (HTTPBody?, String) {
+    guard let body else { return (nil, "<none>") }
+    guard case .known(let count) = body.length, count <= maxLoggedBodyBytes else {
+      return (body, "<streamed>")
+    }
+    let data = try await Data(collecting: body, upTo: Int(maxLoggedBodyBytes) * 16)
+    return (HTTPBody(data), stringify(data))
   }
 }
 

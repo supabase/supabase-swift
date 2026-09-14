@@ -27,8 +27,7 @@ let version = Helpers.version
 /// ## Topics
 ///
 /// ### Creating a Client
-/// - ``init(url:headers:region:logger:fetch:decoder:accessToken:)-(_,_,FunctionRegion?,_,_,_,_)``
-/// - ``FetchHandler``
+/// - ``init(url:headers:region:logger:http:decoder:accessToken:)-(_,_,FunctionRegion?,_,_,_,_)``
 ///
 /// ### Invoking Functions
 /// - ``invoke(_:options:decode:)``
@@ -39,12 +38,6 @@ let version = Helpers.version
 /// - ``decoder``
 /// - ``requestIdleTimeout``
 public struct FunctionsClient: Sendable {
-  /// A handler that performs the underlying HTTP request for a function invocation.
-  public typealias FetchHandler =
-    @Sendable (_ request: URLRequest) async throws -> (
-      Data, URLResponse
-    )
-
   /// The maximum time an Edge Function may run before the gateway returns a 504 error (150 seconds).
   ///
   /// Can be overridden per-invocation via ``FunctionInvokeOptions/init(method:headers:region:timeoutInterval:)``.
@@ -68,7 +61,6 @@ public struct FunctionsClient: Sendable {
   let headers: HTTPFields
 
   private let http: any HTTPClientType
-  private let sessionConfiguration: URLSessionConfiguration
   private let accessToken: (@Sendable () async throws -> String?)?
 
   /// Creates a new Functions client.
@@ -77,7 +69,7 @@ public struct FunctionsClient: Sendable {
   ///   - headers: Additional headers to include in every request.
   ///   - region: The region string to invoke functions in.
   ///   - logger: A logger for request and response diagnostics. Defaults to a build-config-aware logger.
-  ///   - fetch: A custom fetch handler. Defaults to `URLSession.shared`.
+  ///   - http: The transport and middleware chain every request goes through.
   ///   - decoder: The JSON decoder used to decode response bodies.
   ///   - accessToken: An async closure returning the current access token, resolved fresh for
   ///     every request and sent as `Authorization: Bearer <token>`. `nil` (the default) sends no
@@ -89,47 +81,21 @@ public struct FunctionsClient: Sendable {
     headers: [String: String] = [:],
     region: String? = nil,
     logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.functions"),
-    fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
+    http: HTTPClientConfiguration = .init(),
     decoder: JSONDecoder = JSONDecoder(),
-    accessToken: (@Sendable () async throws -> String?)? = nil
-  ) {
-    self.init(
-      url: url,
-      headers: headers,
-      region: region,
-      logger: logger,
-      fetch: fetch,
-      decoder: decoder,
-      sessionConfiguration: .default,
-      accessToken: accessToken
-    )
-  }
-
-  init(
-    url: URL,
-    headers: [String: String] = [:],
-    region: String? = nil,
-    logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.functions"),
-    fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
-    decoder: JSONDecoder = JSONDecoder(),
-    sessionConfiguration: URLSessionConfiguration,
     accessToken: (@Sendable () async throws -> String?)? = nil
   ) {
     var logger = logger
     logger[metadataKey: "system"] = "functions"
-    let interceptors: [any HTTPClientInterceptor] = [
-      LoggerInterceptor(logger: logger)
-    ]
-
-    let http = HTTPClient(fetch: fetch, interceptors: interceptors)
+    let httpClient = HTTPClient(
+      configuration: http, appending: [LoggerInterceptor(logger: logger)])
 
     self.init(
       url: url,
       headers: headers,
       region: region,
       decoder: decoder,
-      http: http,
-      sessionConfiguration: sessionConfiguration,
+      http: httpClient,
       accessToken: accessToken
     )
   }
@@ -140,14 +106,12 @@ public struct FunctionsClient: Sendable {
     region: String?,
     decoder: JSONDecoder = JSONDecoder(),
     http: any HTTPClientType,
-    sessionConfiguration: URLSessionConfiguration = .default,
     accessToken: (@Sendable () async throws -> String?)? = nil
   ) {
     self.url = url
     self.region = region
     self.decoder = decoder
     self.http = http
-    self.sessionConfiguration = sessionConfiguration
     self.accessToken = accessToken
 
     var headers = HTTPFields(headers)
@@ -163,7 +127,7 @@ public struct FunctionsClient: Sendable {
   ///   - headers: Additional headers to include in every request.
   ///   - region: The region to invoke functions in.
   ///   - logger: A logger for request and response diagnostics. Defaults to a build-config-aware logger.
-  ///   - fetch: A custom fetch handler. Defaults to `URLSession.shared`.
+  ///   - http: The transport and middleware chain every request goes through.
   ///   - decoder: The JSON decoder used to decode response bodies.
   ///   - accessToken: An async closure returning the current access token, resolved fresh for
   ///     every request and sent as `Authorization: Bearer <token>`. `nil` (the default) sends no
@@ -174,7 +138,7 @@ public struct FunctionsClient: Sendable {
     headers: [String: String] = [:],
     region: FunctionRegion? = nil,
     logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.functions"),
-    fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
+    http: HTTPClientConfiguration = .init(),
     decoder: JSONDecoder = JSONDecoder(),
     accessToken: (@Sendable () async throws -> String?)? = nil
   ) {
@@ -183,7 +147,7 @@ public struct FunctionsClient: Sendable {
       headers: headers,
       region: region?.rawValue,
       logger: logger,
-      fetch: fetch,
+      http: http,
       decoder: decoder,
       accessToken: accessToken
     )
@@ -263,8 +227,6 @@ public struct FunctionsClient: Sendable {
   /// The function must return a `text/event-stream` content type for this to work correctly.
   ///
   /// > Warning: Experimental — the API may change without a major version bump.
-  ///
-  /// > Note: This method uses a separate `URLSession` from the rest of the client.
   /// - Parameters:
   ///   - functionName: The name of the function to invoke.
   ///   - options: Options for the invocation.
@@ -273,35 +235,32 @@ public struct FunctionsClient: Sendable {
     _ functionName: String,
     options invokeOptions: FunctionInvokeOptions = .init()
   ) -> AsyncThrowingStream<Data, any Error> {
-    streamResponse(functionName, options: invokeOptions).stream
-  }
-
-  func streamResponse(
-    _ functionName: String,
-    options invokeOptions: FunctionInvokeOptions
-  ) -> (stream: AsyncThrowingStream<Data, any Error>, delegate: StreamResponseDelegate) {
     let (stream, continuation) = AsyncThrowingStream<Data, any Error>.makeStream()
-    let delegate = StreamResponseDelegate(continuation: continuation)
-
-    let session = URLSession(
-      configuration: sessionConfiguration, delegate: delegate, delegateQueue: nil)
-
-    let requestTask = Task {
+    let task = Task {
       do {
         let request = try await buildRequest(functionName: functionName, options: invokeOptions)
-        let task = session.dataTask(with: request.urlRequest)
-        task.resume()
+        let (head, body) = try await http.stream(request)
+
+        if head.headerFields[.xRelayError] == "true" {
+          throw FunctionsError.relayError
+        }
+        guard head.status.kind == .successful else {
+          var data = Data()
+          if let body { data = try await Data(collecting: body, upTo: .max) }
+          throw FunctionsError.httpError(code: head.status.code, data: data)
+        }
+        if let body {
+          for try await chunk in body {
+            continuation.yield(Data(chunk))
+          }
+        }
+        continuation.finish()
       } catch {
         continuation.finish(throwing: error)
       }
     }
-
-    continuation.onTermination = { _ in
-      requestTask.cancel()
-      session.invalidateAndCancel()
-    }
-
-    return (stream, delegate)
+    continuation.onTermination = { _ in task.cancel() }
+    return stream
   }
 
   private func buildRequest(functionName: String, options: FunctionInvokeOptions)
@@ -330,50 +289,5 @@ public struct FunctionsClient: Sendable {
     }
 
     return request
-  }
-}
-
-final class StreamResponseDelegate: NSObject, URLSessionDataDelegate, Sendable {
-  let continuation: AsyncThrowingStream<Data, any Error>.Continuation
-
-  init(continuation: AsyncThrowingStream<Data, any Error>.Continuation) {
-    self.continuation = continuation
-  }
-
-  func urlSession(_: URLSession, dataTask _: URLSessionDataTask, didReceive data: Data) {
-    continuation.yield(data)
-  }
-
-  func urlSession(_: URLSession, task _: URLSessionTask, didCompleteWithError error: (any Error)?) {
-    continuation.finish(throwing: error)
-  }
-
-  func urlSession(
-    _: URLSession, dataTask _: URLSessionDataTask, didReceive response: URLResponse,
-    completionHandler: @escaping (URLSession.ResponseDisposition) -> Void
-  ) {
-    defer {
-      completionHandler(.allow)
-    }
-
-    guard let httpResponse = response as? HTTPURLResponse else {
-      continuation.finish(throwing: URLError(.badServerResponse))
-      return
-    }
-
-    let isRelayError = httpResponse.value(forHTTPHeaderField: "x-relay-error") == "true"
-    if isRelayError {
-      continuation.finish(throwing: FunctionsError.relayError)
-      return
-    }
-
-    guard 200..<300 ~= httpResponse.statusCode else {
-      let error = FunctionsError.httpError(
-        code: httpResponse.statusCode,
-        data: Data()
-      )
-      continuation.finish(throwing: error)
-      return
-    }
   }
 }

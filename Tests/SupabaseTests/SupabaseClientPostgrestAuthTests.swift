@@ -47,8 +47,8 @@ private func makePostgrestAuthCapturingSession() -> URLSession {
 /// suite can race against it.
 ///
 /// These pin the design decision in ``SupabaseClient/rest``: it deliberately does *not* pass an
-/// `accessToken` closure into `PostgrestClient.Configuration`, and relies on `fetchWithAuth` to
-/// resolve and inject the live session token on every request instead. Without a test, dropping that
+/// `accessToken` closure into `PostgrestClient.Configuration`, and relies on `AccessTokenMiddleware`
+/// to resolve and inject the live session token on every request instead. Without a test, dropping that
 /// transport-level injection (or adding a stale `Authorization` header to `Configuration.headers`)
 /// would silently send requests as the anon/publishable key.
 @Suite(.serialized)
@@ -66,7 +66,9 @@ struct SupabaseClientPostgrestAuthTests {
           storage: AuthLocalStorageMock(),
           accessToken: { "live-session-token" }
         ),
-        global: SupabaseClientOptions.GlobalOptions(session: makePostgrestAuthCapturingSession())
+        global: SupabaseClientOptions.GlobalOptions(
+          http: .init(transport: URLSessionTransport(session: makePostgrestAuthCapturingSession()))
+        )
       )
     )
 
@@ -87,7 +89,9 @@ struct SupabaseClientPostgrestAuthTests {
           storage: AuthLocalStorageMock(),
           autoRefreshToken: false
         ),
-        global: SupabaseClientOptions.GlobalOptions(session: makePostgrestAuthCapturingSession())
+        global: SupabaseClientOptions.GlobalOptions(
+          http: .init(transport: URLSessionTransport(session: makePostgrestAuthCapturingSession()))
+        )
       )
     )
 

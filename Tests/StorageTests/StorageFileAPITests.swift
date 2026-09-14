@@ -1,5 +1,6 @@
 import ConcurrencyExtras
 import Foundation
+import HTTPTypesFoundation
 import Mocker
 import TestHelpers
 import Testing
@@ -36,41 +37,38 @@ extension StorageMockerTests {
             "apikey":
               "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
           ],
-          session: StorageHTTPSession(
-            fetch: { try await session.data(for: $0) },
-            upload: { try await session.upload(for: $0, from: $1) }
-          )
-        )
+          http: .init(transport: URLSessionTransport(session: session)))
       )
     }
 
     /// A client whose transport records the request body, for asserting the emitted multipart
     /// headers.
     private func makeBodyCapturingSUT(body: LockIsolated<Data>) -> SupabaseStorageClient {
-      let respond: @Sendable (URLRequest) -> (Data, URLResponse) = { request in
-        (
-          Data(#"{"Key":"bucket/\#(request.url!.lastPathComponent)"}"#.utf8),
-          HTTPURLResponse(
-            url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil
-          )!
-        )
-      }
-
-      return SupabaseStorageClient(
+      SupabaseStorageClient(
         configuration: StorageClientConfiguration(
           url: url,
           headers: [:],
-          session: StorageHTTPSession(
-            fetch: { request in
-              body.setValue(request.httpBody ?? Data())
-              return respond(request)
-            },
-            upload: { request, data in
+          http: .init(
+            transport: ClosureTransport { request, requestBody in
+              guard let urlRequest = URLRequest(httpRequest: request) else {
+                throw URLError(.badURL)
+              }
+              let data: Data
+              if let requestBody {
+                data = try await Data(collecting: requestBody, upTo: .max)
+              } else {
+                data = Data()
+              }
               body.setValue(data)
-              return respond(request)
-            }
-          )
-        )
+              let response = HTTPURLResponse(
+                url: urlRequest.url!, statusCode: 200, httpVersion: nil, headerFields: nil
+              )!
+              guard let head = response.httpResponse else { throw URLError(.badServerResponse) }
+              return (
+                head,
+                HTTPBody(Data(#"{"Key":"bucket/\#(urlRequest.url!.lastPathComponent)"}"#.utf8))
+              )
+            }))
       )
     }
 

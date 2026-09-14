@@ -54,6 +54,7 @@ let package = Package(
       dependencies: [
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
+        .product(name: "HTTPTypesFoundation", package: "swift-http-types"),
         .product(name: "Clocks", package: "swift-clocks"),
         .product(name: "Logging", package: "swift-log"),
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
@@ -65,38 +66,8 @@ let package = Package(
       dependencies: [
         .product(name: "CustomDump", package: "swift-custom-dump"),
         "Helpers",
-      ]
-    ),
-    .target(
-      name: "HTTPRuntime",
-      dependencies: [
-        .product(name: "HTTPTypes", package: "swift-http-types"),
-        .product(name: "HTTPTypesFoundation", package: "swift-http-types"),
-      ]
-    ),
-    .testTarget(
-      name: "HTTPRuntimeTests",
-      dependencies: [
-        "HTTPRuntime",
-        .product(name: "HTTPTypes", package: "swift-http-types"),
-      ]
-    ),
-    .target(
-      name: "HTTPRuntimeTestHelpers",
-      dependencies: [
-        "HTTPRuntime",
-        .product(name: "HTTPTypes", package: "swift-http-types"),
-        .product(name: "HTTPTypesFoundation", package: "swift-http-types"),
-        .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
-      ]
-    ),
-    .testTarget(
-      name: "HTTPRuntimeTestHelpersTests",
-      dependencies: [
-        "HTTPRuntime",
-        "HTTPRuntimeTestHelpers",
-        .product(name: "HTTPTypes", package: "swift-http-types"),
-        .product(name: "HTTPTypesFoundation", package: "swift-http-types"),
+        "Mocker",
+        "TestHelpers",
       ]
     ),
     .target(
@@ -302,6 +273,7 @@ let package = Package(
           condition: .when(traits: ["OpenTelemetry"])
         ),
         "Supabase",
+        "TestHelpers",
       ]
     ),
     .target(

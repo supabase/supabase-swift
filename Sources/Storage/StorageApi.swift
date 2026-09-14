@@ -36,7 +36,7 @@ struct StorageApi: Sendable {
   /// Creates a ``StorageApi`` with the given configuration.
   ///
   /// - Parameter configuration: The configuration that controls the endpoint URL, authentication
-  ///   headers, JSON codecs, and HTTP session.
+  ///   headers, JSON codecs, and transport.
   init(configuration: StorageClientConfiguration) {
     var configuration = configuration
     if configuration.headers["X-Client-Info"] == nil {
@@ -71,14 +71,11 @@ struct StorageApi: Sendable {
 
     self.configuration = configuration
 
-    let interceptors: [any HTTPClientInterceptor] = [
+    let interceptors: [any ClientMiddleware] = [
       LoggerInterceptor(logger: configuration.logger)
     ]
 
-    http = HTTPClient(
-      fetch: configuration.session.fetch,
-      interceptors: interceptors
-    )
+    http = HTTPClient(configuration: configuration.http, appending: interceptors)
   }
 
   /// Returns a new ``StorageApi`` with an additional HTTP header merged into

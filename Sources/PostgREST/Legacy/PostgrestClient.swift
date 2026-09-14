@@ -1,5 +1,6 @@
 public import Foundation
 import HTTPTypes
+public import Helpers
 public import Logging
 
 #if canImport(FoundationNetworking)
@@ -31,9 +32,8 @@ public import Logging
 /// ### Creating a Client
 ///
 /// - ``init(configuration:)``
-/// - ``init(url:schema:headers:logger:fetch:encoder:decoder:retryEnabled:accessToken:)``
+/// - ``init(url:schema:headers:logger:http:encoder:decoder:retryEnabled:accessToken:)``
 /// - ``Configuration``
-/// - ``FetchHandler``
 ///
 /// ### Querying and Mutating Data
 ///
@@ -49,47 +49,24 @@ public import Logging
 ///
 /// - ``configuration``
 public struct PostgrestClient: Sendable {
-  /// A closure that performs an HTTP request and returns the raw response data and metadata.
-  ///
-  /// Provide a custom ``FetchHandler`` through ``Configuration`` when you need to intercept,
-  /// mock, or otherwise customize the HTTP transport layer. The default implementation uses
-  /// `URLSession.shared`.
-  ///
-  /// For example, apply a custom timeout by mutating the `URLRequest` before sending it:
-  ///
-  /// ```swift
-  /// let configuration = PostgrestClient.Configuration(
-  ///   url: url,
-  ///   fetch: { request in
-  ///     var request = request
-  ///     request.timeoutInterval = 10
-  ///     return try await URLSession.shared.data(for: request)
-  ///   }
-  /// )
-  /// ```
-  public typealias FetchHandler =
-    @Sendable (_ request: URLRequest) async throws -> (
-      Data, URLResponse
-    )
-
   /// Configuration options for a ``PostgrestClient`` instance.
   ///
   /// Create a ``Configuration`` value and pass it to ``PostgrestClient/init(configuration:)`` when
-  /// you need fine-grained control over the client, such as supplying a custom ``FetchHandler`` or
-  /// ``jsonEncoder``/``jsonDecoder``.
+  /// you need fine-grained control over the client, such as supplying a custom ``http`` transport
+  /// or middleware chain, or a custom ``jsonEncoder``/``jsonDecoder``.
   ///
   /// ## Topics
   ///
   /// ### Creating Configuration
   ///
-  /// - ``init(url:schema:headers:logger:fetch:encoder:decoder:retryEnabled:accessToken:)``
+  /// - ``init(url:schema:headers:logger:http:encoder:decoder:retryEnabled:accessToken:)``
   ///
   /// ### Configuration Properties
   ///
   /// - ``url``
   /// - ``schema``
   /// - ``headers``
-  /// - ``fetch``
+  /// - ``http``
   /// - ``encoder``
   /// - ``decoder``
   /// - ``retryEnabled``
@@ -110,11 +87,8 @@ public struct PostgrestClient: Sendable {
     /// Additional HTTP headers sent with every request.
     public var headers: [String: String]
 
-    /// The closure used to perform HTTP requests.
-    ///
-    /// Defaults to `URLSession.shared.data(for:)`. Supply a custom handler for
-    /// testing or when you need to add authentication, logging, or other middleware.
-    public var fetch: FetchHandler
+    /// The transport and middleware chain every request goes through.
+    public var http: HTTPClientConfiguration
 
     /// The `JSONEncoder` used to serialize request bodies.
     ///
@@ -157,7 +131,7 @@ public struct PostgrestClient: Sendable {
     ///   - schema: The PostgreSQL schema to use. Defaults to `nil` (PostgREST default).
     ///   - headers: Additional HTTP headers sent with every request.
     ///   - logger: A logger for diagnostic output. Defaults to a build-config-aware logger.
-    ///   - fetch: The HTTP transport closure. Defaults to `URLSession.shared.data(for:)`.
+    ///   - http: The transport and middleware chain every request goes through.
     ///   - encoder: The `JSONEncoder` used for request bodies. Defaults to ``jsonEncoder``.
     ///   - decoder: The `JSONDecoder` used for response bodies. Defaults to ``jsonDecoder``.
     ///   - retryEnabled: Whether to retry transient errors. Defaults to `true`.
@@ -167,7 +141,7 @@ public struct PostgrestClient: Sendable {
       schema: String? = nil,
       headers: [String: String] = [:],
       logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.postgrest"),
-      fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
+      http: HTTPClientConfiguration = .init(),
       encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
       decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder,
       retryEnabled: Bool = true,
@@ -179,7 +153,7 @@ public struct PostgrestClient: Sendable {
       var logger = logger
       logger[metadataKey: "system"] = "postgrest"
       self.logger = logger
-      self.fetch = fetch
+      self.http = http
       self.encoder = encoder
       self.decoder = decoder
       self.retryEnabled = retryEnabled
@@ -215,7 +189,7 @@ public struct PostgrestClient: Sendable {
   ///   - schema: The PostgreSQL schema to use. Defaults to `nil` (PostgREST default).
   ///   - headers: Additional HTTP headers sent with every request.
   ///   - logger: A logger for diagnostic output. Defaults to a build-config-aware logger.
-  ///   - fetch: The HTTP transport closure. Defaults to `URLSession.shared.data(for:)`.
+  ///   - http: The transport and middleware chain every request goes through.
   ///   - encoder: The `JSONEncoder` used for request bodies. Defaults to ``Configuration/jsonEncoder``.
   ///   - decoder: The `JSONDecoder` used for response bodies. Defaults to ``Configuration/jsonDecoder``.
   ///   - retryEnabled: Whether to retry transient errors. Defaults to `true`.
@@ -225,7 +199,7 @@ public struct PostgrestClient: Sendable {
     schema: String? = nil,
     headers: [String: String] = [:],
     logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.postgrest"),
-    fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
+    http: HTTPClientConfiguration = .init(),
     encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
     decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder,
     retryEnabled: Bool = true,
@@ -237,7 +211,7 @@ public struct PostgrestClient: Sendable {
         schema: schema,
         headers: headers,
         logger: logger,
-        fetch: fetch,
+        http: http,
         encoder: encoder,
         decoder: decoder,
         retryEnabled: retryEnabled,

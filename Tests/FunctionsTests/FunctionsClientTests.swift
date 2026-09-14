@@ -1,5 +1,6 @@
 import Foundation
 import HTTPTypes
+import Helpers
 import Mocker
 import TestHelpers
 import Testing
@@ -10,13 +11,15 @@ import Testing
   import FoundationNetworking
 #endif
 
-/// Captures the last `URLRequest` seen by a custom fetch handler, for tests that need to inspect
-/// properties (like `timeoutInterval`) not surfaced by Mocker's `snapshotRequest` curl output.
+/// Captures the last `HTTPRequest` seen by a custom transport, for tests that need to inspect
+/// properties (like the resolved timeout) not surfaced by Mocker's `snapshotRequest` curl output.
 private actor CapturedRequestBox {
-  var request: URLRequest?
+  var request: HTTPTypes.HTTPRequest?
+  var timeoutInterval: TimeInterval?
 
-  func set(_ request: URLRequest) {
+  func set(_ request: HTTPTypes.HTTPRequest, timeoutInterval: TimeInterval?) {
     self.request = request
+    self.timeoutInterval = timeoutInterval
   }
 }
 
@@ -45,8 +48,7 @@ struct FunctionsClientTests {
       url: url,
       headers: ["apikey": apiKey],
       region: region,
-      fetch: { try await session.data(for: $0) },
-      sessionConfiguration: sessionConfiguration,
+      http: .init(transport: URLSessionTransport(session: session)),
       accessToken: accessToken
     )
   }
@@ -398,19 +400,16 @@ struct FunctionsClientTests {
     let sut = FunctionsClient(
       url: url,
       headers: ["apikey": apiKey],
-      fetch: { request in
-        await box.set(request)
-        return (
-          Data(),
-          HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
-        )
-      }
-    )
+      http: .init(
+        transport: ClosureTransport { request, _ in
+          await box.set(request, timeoutInterval: RequestTimeout.current)
+          return (HTTPTypes.HTTPResponse(status: .ok), nil)
+        }))
 
     try await sut.invoke("hello-world", options: .init(timeoutInterval: 30))
 
-    let capturedRequest = await box.request
-    #expect(capturedRequest?.timeoutInterval == 30)
+    let capturedTimeout = await box.timeoutInterval
+    #expect(capturedTimeout == 30)
   }
 
   @Test
@@ -419,19 +418,16 @@ struct FunctionsClientTests {
     let sut = FunctionsClient(
       url: url,
       headers: ["apikey": apiKey],
-      fetch: { request in
-        await box.set(request)
-        return (
-          Data(),
-          HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
-        )
-      }
-    )
+      http: .init(
+        transport: ClosureTransport { request, _ in
+          await box.set(request, timeoutInterval: RequestTimeout.current)
+          return (HTTPTypes.HTTPResponse(status: .ok), nil)
+        }))
 
     try await sut.invoke("hello-world")
 
-    let capturedRequest = await box.request
-    #expect(capturedRequest?.timeoutInterval == FunctionsClient.requestIdleTimeout)
+    let capturedTimeout = await box.timeoutInterval
+    #expect(capturedTimeout == FunctionsClient.requestIdleTimeout)
   }
 
   @Test
@@ -440,20 +436,18 @@ struct FunctionsClientTests {
     let sut = FunctionsClient(
       url: url,
       headers: ["apikey": apiKey],
-      fetch: { request in
-        await box.set(request)
-        return (
-          Data(),
-          HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
-        )
-      },
+      http: .init(
+        transport: ClosureTransport { request, _ in
+          await box.set(request, timeoutInterval: nil)
+          return (HTTPTypes.HTTPResponse(status: .ok), nil)
+        }),
       accessToken: { "access.token" }
     )
 
     try await sut.invoke("hello-world")
 
     let capturedRequest = await box.request
-    #expect(capturedRequest?.value(forHTTPHeaderField: "Authorization") == "Bearer access.token")
+    #expect(capturedRequest?.headerFields[.authorization] == "Bearer access.token")
   }
 
   @Test
@@ -473,13 +467,11 @@ struct FunctionsClientTests {
     let sut = FunctionsClient(
       url: url,
       headers: ["apikey": apiKey],
-      fetch: { request in
-        await capture.record(request.value(forHTTPHeaderField: "Authorization"))
-        return (
-          Data(),
-          HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
-        )
-      },
+      http: .init(
+        transport: ClosureTransport { request, _ in
+          await capture.record(request.headerFields[.authorization])
+          return (HTTPTypes.HTTPResponse(status: .ok), nil)
+        }),
       accessToken: { await tokenBox.token }
     )
 
@@ -497,13 +489,11 @@ struct FunctionsClientTests {
     let sut = FunctionsClient(
       url: url,
       headers: ["apikey": apiKey],
-      fetch: { request in
-        await box.set(request)
-        return (
-          Data(),
-          HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
-        )
-      },
+      http: .init(
+        transport: ClosureTransport { request, _ in
+          await box.set(request, timeoutInterval: nil)
+          return (HTTPTypes.HTTPResponse(status: .ok), nil)
+        }),
       accessToken: { "provider.token" }
     )
 
@@ -513,7 +503,7 @@ struct FunctionsClientTests {
     )
 
     let capturedRequest = await box.request
-    #expect(capturedRequest?.value(forHTTPHeaderField: "Authorization") == "Bearer override.token")
+    #expect(capturedRequest?.headerFields[.authorization] == "Bearer override.token")
   }
 
   @Test
@@ -523,10 +513,11 @@ struct FunctionsClientTests {
     let sut = FunctionsClient(
       url: url,
       headers: ["apikey": apiKey],
-      fetch: { _ in
-        Issue.record("fetch should not be called when the access token provider throws")
-        throw TokenError()
-      },
+      http: .init(
+        transport: ClosureTransport { _, _ in
+          Issue.record("transport should not be called when the access token provider throws")
+          return (HTTPTypes.HTTPResponse(status: .ok), nil)
+        }),
       accessToken: { throw TokenError() }
     )
 
@@ -565,8 +556,8 @@ struct FunctionsClientTests {
 
   @Test
   func invokeWithStreamedResponse() async throws {
-    // `_invokeWithStreamedResponse` opens its own URLSession from the client's
-    // `sessionConfiguration`, and `makeSUT` wires `MockingURLProtocol` into it.
+    // `_invokeWithStreamedResponse` now streams through the client's `transport`, and `makeSUT`
+    // wires `MockingURLProtocol` into the session backing it.
     let sut = makeSUT()
 
     Mock(
@@ -587,9 +578,16 @@ struct FunctionsClientTests {
 
     let stream = sut._invokeWithStreamedResponse("stream")
 
+    var chunks: [Data] = []
     for try await value in stream {
-      #expect(String(decoding: value, as: UTF8.self) == "hello world")
+      chunks.append(value)
     }
+
+    // Assert on the collected chunks, not inside the loop: a stream that yields nothing would
+    // pass an in-loop assertion vacuously. The payload has no newline and is under 16 KiB, so
+    // the transport delivers it as one chunk.
+    #expect(chunks.count == 1)
+    #expect(chunks.reduce(Data(), +) == Data("hello world".utf8))
   }
 
   @Test
@@ -687,33 +685,5 @@ struct FunctionsClientTests {
       }
     } catch FunctionsError.relayError {
     }
-  }
-
-  @Test
-  func invokeWithStreamedResponseInvalidatesSession() async throws {
-    let sut = makeSUT()
-
-    Mock(
-      url: url.appendingPathComponent("stream"),
-      statusCode: 200,
-      data: [.post: Data("hello world".utf8)]
-    )
-    .register()
-
-    weak var weakDelegate: StreamResponseDelegate?
-
-    do {
-      let (stream, delegate) = sut.streamResponse("stream", options: FunctionInvokeOptions())
-      weakDelegate = delegate
-      for try await _ in stream {}
-    }
-
-    // URLSession releases its delegate asynchronously after invalidation.
-    let deadline = Date().addingTimeInterval(5)
-    while weakDelegate != nil, Date() < deadline {
-      try await Task.sleep(nanoseconds: 10_000_000)
-    }
-
-    #expect(weakDelegate == nil, "URLSession was not invalidated; its delegate leaked")
   }
 }
