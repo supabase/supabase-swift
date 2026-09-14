@@ -81,7 +81,9 @@ private actor LiveSessionManager {
         return try await inFlightRefreshTask.value
       }
 
-      inFlightRefreshTask = Task {
+      // Held in a local as well as the property, so awaiting it does not mean re-reading a
+      // property the task itself clears in its `defer`.
+      let refreshTask = Task {
         logger.debug("Refresh task started")
 
         defer {
@@ -108,8 +110,9 @@ private actor LiveSessionManager {
 
         return session
       }
+      inFlightRefreshTask = refreshTask
 
-      return try await inFlightRefreshTask!.value
+      return try await refreshTask.value
     }
   }
 

@@ -1,5 +1,6 @@
 public import Foundation
 import Helpers
+import IssueReporting
 
 /// A value that can appear as an element of a Postgres array literal, including SQL `NULL`.
 ///
@@ -147,7 +148,13 @@ extension JSONObject: PostgrestArrayElement {}
 extension JSONObject: PostgrestFilterValue {
   public var rawValue: String {
     let value = mapValues(\.value)
-    return JSONSerialization.stringify(value)!
+    // A `JSONObject` only ever holds `JSONValue`s, so serialization cannot fail. An empty object
+    // is a better fallback than trapping inside a filter the caller built from their own data.
+    guard let serialized = JSONSerialization.stringify(value) else {
+      reportIssue("Failed to serialize JSONObject as a PostgREST filter value.")
+      return "{}"
+    }
+    return serialized
   }
 }
 

@@ -75,6 +75,28 @@ DERIVED_DATA_PATH=~/.derivedData/Debug ./scripts/generate-coverage.sh
 
 This uses `swift-format` to automatically format code. All code should be formatted before committing.
 
+Lint rules live in `.swift-format` at the repo root, which enables `NeverUseForceTry` and
+`NeverUseImplicitlyUnwrappedOptionals` on top of the defaults. Library code must not trap on a
+value a caller supplied — see SDK-1793.
+
+`Tests/.swift-format` turns both back off. Test code has no users to crash: `try!` on a bundled
+fixture is the right tool (a missing fixture should fail the run loudly, and a `static let` cannot
+be `throws`), and `PostgrestMacrosTests` declares an implicitly unwrapped property on purpose, to
+cover how the `@Table` macro handles that spelling.
+
+Check the rules with:
+
+```bash
+swift-format lint --recursive --strict Sources Tests
+```
+
+Do not pass `--configuration` — swift-format finds the nearest `.swift-format` per file, and
+naming one explicitly applies it everywhere, re-flagging the test code the nested config exempts.
+
+`NeverForceUnwrap` is deliberately **not** enabled. It has no exemption for literals, so it flags
+provably-safe constants like `HTTPField.Name("Prefer")!` the same as `dictionary["key"]!` — about
+twenty such sites, all of which would need suppressing for no safety gain.
+
 ### Spell Checking
 
 Spell-checking uses [cSpell](https://cspell.org), via Node/npm:

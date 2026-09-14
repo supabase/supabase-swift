@@ -81,7 +81,8 @@ extension CharacterSet {
   /// query strings to include a URL. Therefore, all "reserved" characters with the exception of "?" and "/"
   /// should be percent-escaped in the query string.
   static let sbURLQueryAllowed: CharacterSet = {
-    let generalDelimitersToEncode = ":#[]@"  // does not include "?" or "/" due to RFC 3986 - Section 3.4
+    // does not include "?" or "/" due to RFC 3986 - Section 3.4
+    let generalDelimitersToEncode = ":#[]@"
     let subDelimitersToEncode = "!$&'()*+,;="
     let encodableDelimiters = CharacterSet(
       charactersIn: "\(generalDelimitersToEncode)\(subDelimitersToEncode)")

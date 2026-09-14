@@ -137,10 +137,12 @@ public final class SupabaseClient: Sendable {
   /// The Realtime client for subscribing to database changes and broadcasting presence events.
   public var realtimeV2: RealtimeClientV2 {
     mutableState.withValue {
-      if $0.realtime == nil {
-        $0.realtime = _initRealtimeClient()
+      if let realtime = $0.realtime {
+        return realtime
       }
-      return $0.realtime!
+      let realtime = _initRealtimeClient()
+      $0.realtime = realtime
+      return realtime
     }
   }
 

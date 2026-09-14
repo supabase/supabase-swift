@@ -153,7 +153,12 @@ public enum RealtimePostgresFilter {
       }
       return "\(parts.column)=not.\(parts.expr)"
     default:
-      let parts = parts!
+      // `parts` returns `nil` only for `.not`/`.and`, both handled above, so this branch always
+      // has parts. Report and fall back to an empty filter rather than trapping if that changes.
+      guard let parts else {
+        reportIssue("RealtimePostgresFilter has no parts to serialize: \(self)")
+        return ""
+      }
       return "\(parts.column)=\(parts.expr)"
     }
   }
