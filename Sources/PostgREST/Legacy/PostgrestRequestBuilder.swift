@@ -67,6 +67,7 @@ public enum PostgrestTransformPhase: PostgrestTransformablePhase {}
 /// ### Configuring Retries
 ///
 /// - ``retry(enabled:)``
+/// - ``timeout(_:)``
 ///
 /// ### Executing the Request
 ///
@@ -83,6 +84,9 @@ public struct PostgrestRequestBuilder<Phase>: Sendable {
 
   /// Whether automatic retries are enabled for this request.
   var retryEnabled: Bool
+
+  /// A per-request timeout, or `nil` to use the client's ``HTTPClientConfiguration/timeout``.
+  var timeout: Duration?
 
   /// An error to throw when execute() is called, set when an invalid method combination is
   /// detected.
@@ -127,6 +131,7 @@ public struct PostgrestRequestBuilder<Phase>: Sendable {
     self.query = other.query
     self.body = other.body
     self.retryEnabled = other.retryEnabled
+    self.timeout = other.timeout
     self.pendingError = other.pendingError
     self.isMaybeSingle = other.isMaybeSingle
   }
@@ -379,6 +384,27 @@ extension PostgrestRequestBuilder where Phase: PostgrestExecutablePhase {
     return copy
   }
 
+  /// Sets the idle timeout for this specific request.
+  ///
+  /// The request fails once no data has moved for `duration`. The client-wide default is
+  /// ``HTTPClientConfiguration/timeout`` on ``PostgrestClient/Configuration/http`` (60 seconds
+  /// when unset); this method overrides it per request. Each retry attempt gets the full duration.
+  ///
+  /// ```swift
+  /// let rows: [Todo] = try await client.from("todos").select()
+  ///   .timeout(.seconds(5))
+  ///   .execute()
+  ///   .value
+  /// ```
+  ///
+  /// - Parameter duration: The idle timeout.
+  /// - Returns: The same builder value so calls can be chained.
+  public func timeout(_ duration: Duration) -> Self {
+    var copy = self
+    copy.timeout = duration
+    return copy
+  }
+
   /// Executes the request and discards the response body.
   ///
   /// Use this overload for mutations (INSERT, UPDATE, DELETE) when you do not need the
@@ -493,7 +519,8 @@ extension PostgrestRequestBuilder where Phase: PostgrestExecutablePhase {
       let response: HTTPResponse
       let data: Data
       do {
-        (response, data) = try await http.send(currentRequest, body: body)
+        (response, data) = try await http.send(
+          currentRequest, body: body, timeout: timeout)
       } catch {
         if shouldRetry(
           request: currentRequest, response: nil, error: error, retryEnabled: retryEnabled,

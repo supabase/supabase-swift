@@ -40,8 +40,10 @@ let version = Helpers.version
 public struct FunctionsClient: Sendable {
   /// The maximum time an Edge Function may run before the gateway returns a 504 error (150 seconds).
   ///
-  /// Can be overridden per-invocation via ``FunctionInvokeOptions/init(method:headers:region:timeoutInterval:)``.
-  public static let requestIdleTimeout: TimeInterval = 150
+  /// This is the idle timeout for every invocation unless `HTTPClientConfiguration.timeout` on the
+  /// client's `http` configuration sets another. Either can be overridden per-invocation via
+  /// ``FunctionInvokeOptions/init(method:headers:region:timeout:)``.
+  public static let requestIdleTimeout: Duration = .seconds(150)
 
   /// The base URL for the functions.
   let url: URL
@@ -88,7 +90,8 @@ public struct FunctionsClient: Sendable {
     var logger = logger
     logger[metadataKey: "system"] = "functions"
     let httpClient = HTTPClient(
-      configuration: http, appending: [LoggerInterceptor(logger: logger)])
+      configuration: http, appending: [LoggerInterceptor(logger: logger)],
+      defaultTimeout: Self.requestIdleTimeout)
 
     self.init(
       url: url,
@@ -224,7 +227,7 @@ public struct FunctionsClient: Sendable {
     let data: Data
     do {
       (response, data) = try await http.send(
-        request, body: body, timeout: Self.timeout(for: invokeOptions))
+        request, body: body, timeout: invokeOptions.timeout)
     } catch {
       // Only the network layer's own failures are relabelled. `CancellationError`, and anything
       // thrown by user code that runs inside `send` (a custom `ClientTransport` or middleware, an `accessToken` closure),
@@ -282,7 +285,7 @@ public struct FunctionsClient: Sendable {
 
       do {
         let (head, body) = try await http.stream(
-          request, body: requestBody.map { HTTPBody($0) }, timeout: Self.timeout(for: invokeOptions)
+          request, body: requestBody.map { HTTPBody($0) }, timeout: invokeOptions.timeout
         )
 
         if head.headerFields[.xRelayError] == "true" {
@@ -322,10 +325,6 @@ public struct FunctionsClient: Sendable {
     }
     continuation.onTermination = { _ in task.cancel() }
     return stream
-  }
-
-  private static func timeout(for options: FunctionInvokeOptions) -> TimeInterval {
-    options.timeoutInterval ?? requestIdleTimeout
   }
 
   private func buildRequest(functionName: String, options: FunctionInvokeOptions)

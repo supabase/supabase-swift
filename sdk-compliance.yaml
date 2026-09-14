@@ -1236,7 +1236,12 @@ features:
     symbols:
       - PostgrestClient.Configuration.retryEnabled
       - PostgrestRequestBuilder.retry
-  database.configuration.request_timeout: not_implemented
+  database.configuration.request_timeout:
+    status: implemented
+    note: "A Duration, not milliseconds, and an idle timeout (URLRequest.timeoutInterval) rather than a total deadline. Set per client on HTTPClientConfiguration.timeout (PostgrestClient.Configuration.http, or GlobalOptions.http through SupabaseClient), or per request with timeout(_:)."
+    symbols:
+      - HTTPClientConfiguration.timeout
+      - PostgrestRequestBuilder.timeout
 
   # ── Functions ──────────────────────────────────────────────────────────────
 
@@ -1297,6 +1302,7 @@ features:
     status: implemented
     symbols:
       - FunctionsClient.requestIdleTimeout
+      - HTTPClientConfiguration.timeout
 
   # ── Realtime ───────────────────────────────────────────────────────────────
 

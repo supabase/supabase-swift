@@ -14,19 +14,31 @@ import HTTPTypesFoundation
 /// The one internal seam every sub-client sends through. Tests swap the ``ClientTransport``
 /// (`ClosureTransport` in TestHelpers) instead of this type.
 package struct HTTPClient: Sendable {
+  /// The per-request timeout used when neither the call nor the configuration sets one.
+  package static let defaultTimeout: Duration = .seconds(60)
+
   let transport: any ClientTransport
   let middlewares: [any ClientMiddleware]
+  /// The timeout applied to a request that does not pass its own `timeout:`.
+  let timeout: Duration
 
-  package init(transport: any ClientTransport, middlewares: [any ClientMiddleware] = []) {
+  package init(
+    transport: any ClientTransport,
+    middlewares: [any ClientMiddleware] = [],
+    timeout: Duration = HTTPClient.defaultTimeout
+  ) {
     self.transport = transport
     self.middlewares = middlewares
+    self.timeout = timeout
   }
 
   /// Buffered exchange: uploads `body` from memory and collects the whole response body.
+  ///
+  /// `timeout` overrides the client-wide ``timeout`` for this one request.
   package func send(
     _ request: HTTPTypes.HTTPRequest,
     body: Data? = nil,
-    timeout: TimeInterval = 60
+    timeout: Duration? = nil
   ) async throws -> (HTTPTypes.HTTPResponse, Data) {
     let (head, responseBody) = try await stream(
       request, body: body.map { HTTPBody($0) }, timeout: timeout)
@@ -42,7 +54,7 @@ package struct HTTPClient: Sendable {
   package func stream(
     _ request: HTTPTypes.HTTPRequest,
     body: HTTPBody? = nil,
-    timeout: TimeInterval = 60
+    timeout: Duration? = nil
   ) async throws -> (HTTPTypes.HTTPResponse, HTTPBody?) {
     var request = request
     if body != nil, request.headerFields[.contentType] == nil {
@@ -60,7 +72,7 @@ package struct HTTPClient: Sendable {
       next = { try await middleware.intercept($0, body: $1, next: tmp) }
     }
 
-    return try await RequestTimeout.$current.withValue(timeout) {
+    return try await RequestTimeout.$current.withValue(timeout ?? self.timeout) {
       try await next(request, body)
     }
   }
