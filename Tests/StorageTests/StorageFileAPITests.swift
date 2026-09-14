@@ -79,10 +79,7 @@ extension StorageMockerTests {
         configuration: StorageClientConfiguration(
           url: url,
           headers: [:],
-          session: StorageHTTPSession(
-            fetch: { _ in try failure() },
-            upload: { _, _ in try failure() }
-          )
+          http: .init(transport: ClosureTransport { _, _ in try failure() })
         )
       )
     }
