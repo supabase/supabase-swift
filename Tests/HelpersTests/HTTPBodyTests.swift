@@ -37,6 +37,26 @@ struct HTTPBodyTests {
   }
 
   @Test
+  func chunkSequenceIsPulledOnlyWhenTheConsumerAsks() async throws {
+    let pulls = LockIsolated(0)
+    let chunks = AsyncStream<ArraySlice<UInt8>> {
+      let count = pulls.withValue { value -> Int in
+        value += 1
+        return value
+      }
+      return count <= 5 ? ArraySlice([UInt8(count)]) : nil
+    }
+    let body = HTTPBody(chunks, length: .unknown, iterationBehavior: .single)
+
+    var iterator = body.makeAsyncIterator()
+    #expect(try await iterator.next() == [1])
+    try await Task.sleep(for: .milliseconds(50))
+
+    // One pull per `next()`: nothing reads ahead into a buffer the consumer has not asked for.
+    #expect(pulls.value == 1)
+  }
+
+  @Test
   func collectingPastTheCapThrows() async throws {
     let body = HTTPBody(Data(repeating: 0, count: 10))
     await #expect(throws: HTTPBodyTooLargeError.self) {
@@ -96,5 +116,35 @@ struct HTTPBodyTests {
     _ = try await Data(collecting: body, upTo: 100)
     #expect(seen.value == [3, 5])
     #expect(body.length == .known(5))
+  }
+
+  @Test
+  func reportingProgressKeepsStorageAndForwardsUploadProgress() async throws {
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try Data("file contents".utf8).write(to: url)
+    defer { try? FileManager.default.removeItem(at: url) }
+
+    let seen = LockIsolated<[Int64]>([])
+    let body = try HTTPBody(fileURL: url)
+      .reportingProgress { bytes in seen.withValue { $0.append(bytes) } }
+
+    // A file body must keep uploading flat from disk, so the storage kind survives wrapping and
+    // the transport reports progress through `onUploadProgress` instead of iterating the chunks.
+    guard case .file(let storedURL) = body.storage else {
+      Issue.record("expected .file storage, got \(body.storage)")
+      return
+    }
+    #expect(storedURL == url)
+    #expect(body.length == .known(13))
+    #expect(body.iterationBehavior == .multiple)
+
+    let onUploadProgress = try #require(body.onUploadProgress)
+    onUploadProgress(5)
+    onUploadProgress(13)
+    #expect(seen.value == [5, 13])
+
+    // Iterating still reports, for transports that read the chunks themselves.
+    _ = try await Data(collecting: body, upTo: 100)
+    #expect(seen.value == [5, 13, 13])
   }
 }

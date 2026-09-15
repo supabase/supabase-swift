@@ -17,7 +17,14 @@ import HTTPTypesFoundation
 /// The default ``ClientTransport``, backed by `URLSession`.
 ///
 /// - Bodies created with ``HTTPBody/init(_:)`` upload from memory; bodies created with
-///   ``HTTPBody/init(fileURL:)`` stream from disk through `upload(for:fromFile:)`.
+///   ``HTTPBody/init(fileURL:)`` stream from disk through an upload task. Any other body streams
+///   chunk by chunk on Apple platforms through `uploadTask(withStreamedRequest:)`, pulling the
+///   next chunk only when `URLSession` has room for it; a ``HTTPBody/Length/known(_:)`` length
+///   is sent as `Content-Length`, an ``HTTPBody/Length/unknown`` one uses chunked transfer. If
+///   `URLSession` asks for the body a second time (a redirect or an authentication retry), a
+///   ``HTTPBody/IterationBehavior/single`` body fails the request with
+///   ``HTTPBodyAlreadyConsumedError`` instead of replaying. On Linux such bodies are collected
+///   into memory first, up to 64 MiB; past that the request fails with ``HTTPBodyTooLargeError``.
 /// - Response bodies stream on Apple platforms: the head is returned as soon as it arrives and
 ///   each chunk is one `didReceive(data:)` delivery from `URLSession`, so chunk boundaries follow
 ///   the network, not the payload. swift-corelibs-foundation has no per-task delegates, so on
@@ -58,47 +65,59 @@ public struct URLSessionTransport: ClientTransport {
     if let timeout = RequestTimeout.current {
       urlRequest.timeoutInterval = timeout.timeInterval
     }
-    // URLSession treats Content-Length as reserved and recomputes it from the body; setting it
-    // here keeps custom URLProtocol observers (tests) and non-URLSession callers of this header
-    // path consistent.
+    // URLSession recomputes Content-Length from an in-memory or file body, but it cannot see the
+    // length of a streamed one and falls back to chunked transfer without this header. Setting
+    // it here also keeps custom URLProtocol observers (tests) consistent across body kinds.
     if let body, case .known(let count) = body.length,
       urlRequest.value(forHTTPHeaderField: "Content-Length") == nil
     {
       urlRequest.setValue(String(count), forHTTPHeaderField: "Content-Length")
     }
-
-    if let body {
-      switch body.storage {
-      case .file(let fileURL):
-        let (data, response) = try await session.upload(for: urlRequest, fromFile: fileURL)
-        return (try Self.makeHead(response), Self.makeBody(data))
-      case .data(let data):
-        urlRequest.httpBody = data
-      case .stream:
-        // ponytail: streamed request bodies buffer in memory; uploadTask(withStreamedRequest:)
-        // with an InputStream bridge is the upgrade when SDK-850 needs progress on them.
-        urlRequest.httpBody = try await Data(collecting: body, upTo: .max)
-      }
+    if case .data(let data)? = body?.storage {
+      urlRequest.httpBody = data
     }
-    return try await streamResponse(for: urlRequest)
+
+    #if canImport(FoundationNetworking)
+      if let body {
+        switch body.storage {
+        case .file(let fileURL):
+          let (data, response) = try await session.upload(for: urlRequest, fromFile: fileURL)
+          return (try Self.makeHead(response), Self.makeBody(data))
+        case .stream:
+          // swift-corelibs-foundation has no per-task delegates to feed a body stream from, so
+          // the body is collected first; the cap keeps that from growing without bound.
+          urlRequest.httpBody = try await Data(collecting: body, upTo: Self.bufferedBodyLimit)
+        case .data:
+          break
+        }
+      }
+      let (data, response) = try await session.data(for: urlRequest)
+      return (try Self.makeHead(response), Self.makeBody(data))
+    #else
+      let task: URLSessionTask
+      switch body?.storage {
+      case .file(let fileURL)?:
+        task = session.uploadTask(with: urlRequest, fromFile: fileURL)
+      case .stream?:
+        task = session.uploadTask(withStreamedRequest: urlRequest)
+      case .data?, nil:
+        task = session.dataTask(with: urlRequest)
+      }
+      return try await streamResponse(from: task, requestBody: body)
+    #endif
   }
 
   #if canImport(FoundationNetworking)
-    private func streamResponse(for urlRequest: URLRequest) async throws -> (
-      HTTPTypes.HTTPResponse, HTTPBody?
-    ) {
-      let (data, response) = try await session.data(for: urlRequest)
-      return (try Self.makeHead(response), Self.makeBody(data))
-    }
+    /// How much of a streamed request body Linux collects into memory before giving up.
+    private static let bufferedBodyLimit = 64 << 20
   #else
-    private func streamResponse(for urlRequest: URLRequest) async throws -> (
-      HTTPTypes.HTTPResponse, HTTPBody?
-    ) {
+    private func streamResponse(from task: URLSessionTask, requestBody: HTTPBody?) async throws
+      -> (HTTPTypes.HTTPResponse, HTTPBody?)
+    {
       // ponytail: the chunk stream is unbounded, so a consumer slower than the network holds
       // the backlog; suspend/resume the task on a watermark if that shows up (SDK-1833).
       let (chunks, continuation) = AsyncThrowingStream<ArraySlice<UInt8>, any Error>.makeStream()
-      let task = session.dataTask(with: urlRequest)
-      let delegate = StreamingTaskDelegate(body: continuation)
+      let delegate = StreamingTaskDelegate(body: continuation, requestBody: requestBody)
       task.delegate = delegate
       continuation.onTermination = { _ in task.cancel() }
 
@@ -135,9 +154,10 @@ public struct URLSessionTransport: ClientTransport {
 }
 
 #if !canImport(FoundationNetworking)
-  /// Per-task delegate that hands the response head to `head(starting:)` and forwards every
-  /// `didReceive(data:)` delivery to the body stream as one chunk.
-  private final class StreamingTaskDelegate: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+  /// Per-task delegate that hands the response head to `head(starting:)`, forwards every
+  /// `didReceive(data:)` delivery to the body stream as one chunk, and feeds a streamed request
+  /// body to `URLSession` through ``HTTPBodyOutputStreamBridge`` whenever it asks for one.
+  final class StreamingTaskDelegate: NSObject, URLSessionDataDelegate, @unchecked Sendable {
     private enum State {
       case idle
       case waitingForHead(CheckedContinuation<URLResponse, any Error>)
@@ -146,10 +166,57 @@ public struct URLSessionTransport: ClientTransport {
     }
 
     private let body: AsyncThrowingStream<ArraySlice<UInt8>, any Error>.Continuation
+    private let requestBody: HTTPBody?
     private let state = LockIsolated(State.idle)
+    /// Feeds the current request body stream; replaced on every `needNewBodyStream`.
+    private let bridge = LockIsolated<HTTPBodyOutputStreamBridge?>(nil)
+    /// Why the request body could not be sent, reported in place of URLSession's `.cancelled`.
+    private let requestBodyError = LockIsolated<(any Error)?>(nil)
 
-    init(body: AsyncThrowingStream<ArraySlice<UInt8>, any Error>.Continuation) {
+    init(
+      body: AsyncThrowingStream<ArraySlice<UInt8>, any Error>.Continuation,
+      requestBody: HTTPBody? = nil
+    ) {
       self.body = body
+      self.requestBody = requestBody
+    }
+
+    func urlSession(
+      _ session: URLSession, task: URLSessionTask,
+      needNewBodyStream completionHandler: @escaping @Sendable (InputStream?) -> Void
+    ) {
+      var input: InputStream?
+      var output: OutputStream?
+      if requestBody != nil {
+        Stream.getBoundStreams(
+          withBufferSize: 64 * 1024, inputStream: &input, outputStream: &output)
+      }
+      guard let requestBody, let input, let output else {
+        completionHandler(nil)
+        return
+      }
+      // Each call gets a fresh iterator: a `.multiple` body replays, a `.single` body throws
+      // `HTTPBodyAlreadyConsumedError` on its first pull, which fails the task through here.
+      let next = HTTPBodyOutputStreamBridge(body: requestBody, output: output) {
+        [requestBodyError] error in
+        requestBodyError.withValue { $0 = $0 ?? error }
+        task.cancel()
+      }
+      bridge.withValue { current in
+        current?.cancel()
+        current = next
+      }
+      completionHandler(input)
+    }
+
+    func urlSession(
+      _ session: URLSession, task: URLSessionTask, didSendBodyData bytesSent: Int64,
+      totalBytesSent: Int64, totalBytesExpectedToSend: Int64
+    ) {
+      // A streamed body already reports per chunk as the bridge pulls it.
+      guard let requestBody, let onUploadProgress = requestBody.onUploadProgress else { return }
+      if case .stream = requestBody.storage { return }
+      onUploadProgress(totalBytesSent)
     }
 
     /// Starts `task` and returns its response as soon as the headers arrive. Throws if the task
@@ -176,8 +243,13 @@ public struct URLSessionTransport: ClientTransport {
     func urlSession(
       _ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?
     ) {
+      bridge.withValue { current in
+        current?.cancel()
+        current = nil
+      }
       let pending = takePendingHead(finished: true)
       if let error {
+        let error = requestBodyError.value ?? error
         pending?.resume(throwing: error)
         body.finish(throwing: error)
       } else {
