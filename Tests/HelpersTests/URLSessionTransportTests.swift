@@ -22,7 +22,8 @@ import Testing
 // Mocker 3.0.2's `URLRequest.httpBodyStreamData()` is a `private extension`, not `public` as
 // documented, so it isn't visible here. URLSession converts a POST/PUT `httpBody` into an
 // `httpBodyStream` before `MockingURLProtocol` observes the request, so tests need their own
-// reader to recover the bytes.
+// reader to recover the bytes. The stream is read until the writer closes it, which for a
+// streamed request body means until the transport has pumped every chunk through.
 extension URLRequest {
   fileprivate func testBodyData() -> Data? {
     guard let stream = httpBodyStream else { return httpBody }
@@ -32,7 +33,7 @@ extension URLRequest {
     let bufferSize = 1024
     let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
     defer { buffer.deallocate() }
-    while stream.hasBytesAvailable {
+    while true {
       let read = stream.read(buffer, maxLength: bufferSize)
       guard read > 0 else { break }
       data.append(buffer, count: read)
@@ -122,6 +123,126 @@ struct URLSessionTransportTests {
     #endif
     #expect(try await Data(collecting: try #require(body), upTo: 100) == Data("done".utf8))
   }
+
+  @Test
+  func streamedBodyIsPulledWhileTheRequestIsInFlight() async throws {
+    let transport = makeTransport()
+    var mock = Mock(url: url, statusCode: 200, data: [.post: Data()])
+    let secondChunkReleased = LockIsolated(false)
+    let releasedBeforeRequestStarted = LockIsolated<Bool?>(nil)
+    let seenContentLength = LockIsolated<String?>(nil)
+    let seenBody = LockIsolated<Data?>(nil)
+    mock.onRequestHandler = OnRequestHandler(requestCallback: { request in
+      releasedBeforeRequestStarted.setValue(secondChunkReleased.value)
+      seenContentLength.setValue(request.value(forHTTPHeaderField: "Content-Length"))
+      seenBody.setValue(request.testBodyData())
+    })
+    mock.register()
+
+    // The second chunk arrives late. A transport that collects the body first cannot start the
+    // request until it has both chunks; a streaming transport starts with the first one.
+    let chunks = AsyncThrowingStream<ArraySlice<UInt8>, any Error> { continuation in
+      continuation.yield(ArraySlice("abc".utf8))
+      Task {
+        try await Task.sleep(for: .milliseconds(300))
+        secondChunkReleased.setValue(true)
+        continuation.yield(ArraySlice("def".utf8))
+        continuation.finish()
+      }
+    }
+    let body = HTTPBody(chunks, length: .known(6), iterationBehavior: .single)
+
+    let (head, _) = try await transport.send(HTTPRequest(method: .post, url: url), body: body)
+
+    #expect(head.status == 200)
+    #expect(releasedBeforeRequestStarted.value == false)
+    #expect(seenContentLength.value == "6")
+    #expect(seenBody.value == Data("abcdef".utf8))
+  }
+
+  #if !canImport(FoundationNetworking)
+    private func makeDelegate(requestBody: HTTPBody) -> (
+      StreamingTaskDelegate, AsyncThrowingStream<ArraySlice<UInt8>, any Error>
+    ) {
+      let (chunks, continuation) = AsyncThrowingStream<ArraySlice<UInt8>, any Error>.makeStream()
+      return (StreamingTaskDelegate(body: continuation, requestBody: requestBody), chunks)
+    }
+
+    @Test
+    func fileBodyProgressComesFromDidSendBodyData() async throws {
+      let fileURL = FileManager.default.temporaryDirectory.appendingPathComponent(
+        UUID().uuidString)
+      try Data("file".utf8).write(to: fileURL)
+      defer { try? FileManager.default.removeItem(at: fileURL) }
+      let seen = LockIsolated<[Int64]>([])
+      let body = try HTTPBody(fileURL: fileURL)
+        .reportingProgress { bytes in seen.withValue { $0.append(bytes) } }
+      let (delegate, _) = makeDelegate(requestBody: body)
+      let session = URLSession.shared
+      let task = session.dataTask(with: url)
+
+      delegate.urlSession(
+        session, task: task, didSendBodyData: 2, totalBytesSent: 2, totalBytesExpectedToSend: 4)
+      delegate.urlSession(
+        session, task: task, didSendBodyData: 2, totalBytesSent: 4, totalBytesExpectedToSend: 4)
+
+      #expect(seen.value == [2, 4])
+    }
+
+    @Test
+    func streamedBodyProgressIsNotReportedTwice() async throws {
+      let seen = LockIsolated<[Int64]>([])
+      let chunks = AsyncStream<ArraySlice<UInt8>> { $0.finish() }
+      let body = HTTPBody(chunks, length: .unknown, iterationBehavior: .single)
+        .reportingProgress { bytes in seen.withValue { $0.append(bytes) } }
+      let (delegate, _) = makeDelegate(requestBody: body)
+      let session = URLSession.shared
+      let task = session.dataTask(with: url)
+
+      // A streamed body reports as its chunks are pulled, so the task-level callback stays quiet.
+      delegate.urlSession(
+        session, task: task, didSendBodyData: 2, totalBytesSent: 2, totalBytesExpectedToSend: 4)
+
+      #expect(seen.value.isEmpty)
+    }
+
+    @Test
+    func singleBodyFailsTheRequestOnASecondBodyStream() async throws {
+      let chunks = AsyncStream<ArraySlice<UInt8>> { continuation in
+        continuation.yield(ArraySlice("abcd".utf8))
+        continuation.finish()
+      }
+      let body = HTTPBody(chunks, length: .known(4), iterationBehavior: .single)
+      let (delegate, responseChunks) = makeDelegate(requestBody: body)
+      let session = URLSession.shared
+      let task = session.uploadTask(withStreamedRequest: URLRequest(url: url))
+
+      let first = LockIsolated<UncheckedSendable<InputStream>?>(nil)
+      delegate.urlSession(
+        session, task: task,
+        needNewBodyStream: { stream in
+          let boxed = stream.map { UncheckedSendable($0) }
+          first.setValue(boxed)
+        })
+      var request = URLRequest(url: url)
+      request.httpBodyStream = try #require(first.value?.value)
+      #expect(request.testBodyData() == Data("abcd".utf8))
+
+      // A redirect or auth retry asks for the body again. The one-shot body cannot replay, so
+      // the delegate cancels the task and reports why instead of a bare `URLError.cancelled`.
+      delegate.urlSession(session, task: task, needNewBodyStream: { _ in })
+      let deadline = ContinuousClock.now + .seconds(2)
+      while task.state == .suspended && ContinuousClock.now < deadline {
+        try await Task.sleep(for: .milliseconds(5))
+      }
+      #expect(task.state != .suspended)
+
+      delegate.urlSession(session, task: task, didCompleteWithError: URLError(.cancelled))
+      await #expect(throws: HTTPBodyAlreadyConsumedError.self) {
+        for try await _ in responseChunks {}
+      }
+    }
+  #endif
 
   @Test
   func requestTimeoutTaskLocalIsAppliedToTheURLRequest() async throws {

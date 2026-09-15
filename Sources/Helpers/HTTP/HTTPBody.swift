@@ -55,6 +55,9 @@ public final class HTTPBody: AsyncSequence, @unchecked Sendable {
   /// Whether the body can be iterated more than once.
   public let iterationBehavior: IterationBehavior
   package let storage: Storage
+  /// Set by ``reportingProgress(_:)``. ``URLSessionTransport`` calls it from
+  /// `didSendBodyData` for `.file` and `.data` bodies, which it uploads without iterating.
+  package let onUploadProgress: (@Sendable (_ bytesSoFar: Int64) -> Void)?
 
   private let makeChunks: @Sendable () -> AsyncThrowingStream<ArraySlice<UInt8>, any Error>
   private let consumed = LockIsolated(false)
@@ -80,25 +83,17 @@ public final class HTTPBody: AsyncSequence, @unchecked Sendable {
     let attributes = try FileManager.default.attributesOfItem(atPath: fileURL.path)
     let size = (attributes[.size] as? NSNumber)?.int64Value ?? 0
     self.init(storage: .file(fileURL), length: .known(size), iterationBehavior: .multiple) {
-      AsyncThrowingStream { continuation in
-        // ponytail: the stream's buffer is unbounded, so a consumer slower than the disk still
-        // ends up holding the whole file; a back-pressured reader that only reads the next chunk
-        // when the consumer asks for it is the upgrade.
-        let task = Task {
-          do {
-            let handle = try FileHandle(forReadingFrom: fileURL)
-            defer { try? handle.close() }
-            while !Task.isCancelled,
-              let chunk = try handle.read(upToCount: 64 * 1024), !chunk.isEmpty
-            {
-              continuation.yield(ArraySlice(chunk))
-            }
-            continuation.finish()
-          } catch {
-            continuation.finish(throwing: error)
-          }
+      // Opened on the first pull and read 64 KiB per pull, so a consumer that stops early never
+      // reads the rest of the file. `FileHandle` closes its descriptor when it is released.
+      let handle = Box<FileHandle?>(nil)
+      return AsyncThrowingStream {
+        let open = try handle.value ?? FileHandle(forReadingFrom: fileURL)
+        handle.value = open
+        guard let chunk = try open.read(upToCount: 64 * 1024), !chunk.isEmpty else {
+          try open.close()
+          return nil
         }
-        continuation.onTermination = { _ in task.cancel() }
+        return ArraySlice(chunk)
       }
     }
   }
@@ -106,7 +101,8 @@ public final class HTTPBody: AsyncSequence, @unchecked Sendable {
   /// Creates a body from any async sequence of byte chunks.
   ///
   /// - Parameters:
-  ///   - chunks: The chunk source. Iterated once per pass.
+  ///   - chunks: The chunk source. Iterated once per pass, and pulled one element at a time
+  ///     as the consumer asks, so nothing is read ahead.
   ///   - length: The byte count, if known.
   ///   - iterationBehavior: Pass ``IterationBehavior/multiple`` only if iterating `chunks`
   ///     again yields the same bytes.
@@ -116,17 +112,8 @@ public final class HTTPBody: AsyncSequence, @unchecked Sendable {
     iterationBehavior: IterationBehavior
   ) where S.Element == ArraySlice<UInt8> {
     self.init(storage: .stream, length: length, iterationBehavior: iterationBehavior) {
-      AsyncThrowingStream { continuation in
-        let task = Task {
-          do {
-            for try await chunk in chunks { continuation.yield(chunk) }
-            continuation.finish()
-          } catch {
-            continuation.finish(throwing: error)
-          }
-        }
-        continuation.onTermination = { _ in task.cancel() }
-      }
+      let iterator = Box(chunks.makeAsyncIterator())
+      return AsyncThrowingStream { try await iterator.value.next() }
     }
   }
 
@@ -134,11 +121,13 @@ public final class HTTPBody: AsyncSequence, @unchecked Sendable {
     storage: Storage,
     length: Length,
     iterationBehavior: IterationBehavior,
+    onUploadProgress: (@Sendable (_ bytesSoFar: Int64) -> Void)? = nil,
     makeChunks: @escaping @Sendable () -> AsyncThrowingStream<ArraySlice<UInt8>, any Error>
   ) {
     self.storage = storage
     self.length = length
     self.iterationBehavior = iterationBehavior
+    self.onUploadProgress = onUploadProgress
     self.makeChunks = makeChunks
   }
 
@@ -232,30 +221,38 @@ extension HTTPBody {
   /// Works in both directions: wrap a request body to observe upload progress, or a response
   /// body to observe download progress. ``length`` and ``iterationBehavior`` are preserved.
   ///
-  /// The returned body's storage is always `.stream`, even when the receiver's storage is
-  /// `.file` or `.data` — a file-backed body wrapped this way no longer uploads straight from
-  /// disk; it is re-read chunk by chunk instead.
+  /// A file-backed body stays file-backed, so wrapping it does not change how
+  /// ``URLSessionTransport`` uploads it: the bytes still go straight from disk and progress
+  /// comes from `URLSession`'s own byte counts instead of from re-reading the file.
   public func reportingProgress(
     _ onProgress: @escaping @Sendable (_ bytesSoFar: Int64) -> Void
   ) -> HTTPBody {
     let base = self
-    return HTTPBody(storage: .stream, length: length, iterationBehavior: iterationBehavior) {
-      AsyncThrowingStream { continuation in
-        let task = Task {
-          var total: Int64 = 0
-          do {
-            for try await chunk in base {
-              total += Int64(chunk.count)
-              onProgress(total)
-              continuation.yield(chunk)
-            }
-            continuation.finish()
-          } catch {
-            continuation.finish(throwing: error)
-          }
-        }
-        continuation.onTermination = { _ in task.cancel() }
+    return HTTPBody(
+      storage: storage, length: length, iterationBehavior: iterationBehavior,
+      onUploadProgress: { bytesSoFar in
+        base.onUploadProgress?(bytesSoFar)
+        onProgress(bytesSoFar)
+      }
+    ) {
+      let iterator = Box(base.makeAsyncIterator())
+      let total = Box<Int64>(0)
+      return AsyncThrowingStream {
+        guard let chunk = try await iterator.value.next() else { return nil }
+        total.value += Int64(chunk.count)
+        onProgress(total.value)
+        return chunk
       }
     }
+  }
+}
+
+/// Mutable state for a pull closure. The consuming `AsyncThrowingStream` serializes pulls, so
+/// the value is never touched from two places at once.
+private final class Box<Value>: @unchecked Sendable {
+  var value: Value
+
+  init(_ value: Value) {
+    self.value = value
   }
 }
