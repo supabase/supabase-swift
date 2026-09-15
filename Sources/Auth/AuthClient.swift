@@ -1756,8 +1756,7 @@ public actor AuthClient {
     // fallback to server-side verification via getUser()
     guard
       let signingKey,
-      let alg = signingKey.alg,
-      let algorithm = JWTAlgorithm(rawValue: alg)
+      let algorithm = (signingKey.alg ?? alg).flatMap(JWTAlgorithm.init(rawValue:))
     else {
       _ = try await user(jwt: token)
       // getUser succeeds, so claims can be trusted

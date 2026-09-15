@@ -3174,6 +3174,91 @@ extension AuthMockerTests {
     }
 
     @Test
+    func getClaims_withJWKMissingAlg_shouldVerifyLocally() async throws {
+      let signer = ES256TestSigner()
+      let jwt = try signer.sign(
+        header: #"{"alg":"ES256","kid":"es256-test-kid","typ":"JWT"}"#,
+        payload:
+          #"{"sub":"1234567890","iss":"http://localhost:54321/auth/v1","aud":"authenticated","exp":9999999999,"iat":1516239022,"role":"authenticated"}"#
+      )
+      let key = signer.jwk
+      let keyWithoutAlg = JWK(
+        kty: key.kty,
+        keyOps: key.keyOps,
+        alg: nil,
+        kid: key.kid,
+        n: key.n,
+        e: key.e,
+        crv: key.crv,
+        x: key.x,
+        y: key.y,
+        k: key.k
+      )
+
+      Mock(
+        url: clientURL.appendingPathComponent("user"),
+        ignoreQuery: true,
+        contentType: .json,
+        statusCode: 401,
+        data: [.get: Data()]
+      ).register()
+
+      let sut = makeSUT()
+
+      let result = try await sut.getClaims(
+        jwt: jwt,
+        options: GetClaimsOptions(jwks: JWKS(keys: [keyWithoutAlg]))
+      )
+
+      #expect(result.claims.sub == "1234567890")
+      #expect(result.claims.role == "authenticated")
+      #expect(result.header.alg == "ES256")
+    }
+
+    @Test
+    func getClaims_withJWKMissingAlgAndMismatchedHeaderAlg_shouldNotVerify() async throws {
+      let signer = ES256TestSigner()
+      let jwt = try signer.sign(
+        header: #"{"alg":"RS256","kid":"es256-test-kid","typ":"JWT"}"#,
+        payload: #"{"sub":"1234567890","exp":9999999999,"role":"authenticated"}"#
+      )
+      let key = signer.jwk
+      let keyWithoutAlg = JWK(
+        kty: key.kty,
+        keyOps: key.keyOps,
+        alg: nil,
+        kid: key.kid,
+        n: key.n,
+        e: key.e,
+        crv: key.crv,
+        x: key.x,
+        y: key.y,
+        k: key.k
+      )
+
+      let user = User(fromMockNamed: "user")
+
+      Mock(
+        url: clientURL.appendingPathComponent("user"),
+        ignoreQuery: true,
+        contentType: .json,
+        statusCode: 200,
+        data: [.get: try! AuthClient.Configuration.jsonEncoder.encode(user)]
+      ).register()
+
+      let sut = makeSUT()
+
+      let error = await #expect(throws: AuthError.self) {
+        _ = try await sut.getClaims(
+          jwt: jwt,
+          options: GetClaimsOptions(jwks: JWKS(keys: [keyWithoutAlg]))
+        )
+      }
+      #expect(error?.kind == .jwtVerificationFailed)
+      #expect(error?.message == "Invalid JWT signature")
+    }
+
+    @Test
     func getClaims_withTamperedES256JWT_shouldThrowWithoutFallback() async throws {
       let signer = ES256TestSigner()
       let jwt = try signer.sign(
