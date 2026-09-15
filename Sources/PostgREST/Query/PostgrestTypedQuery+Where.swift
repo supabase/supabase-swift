@@ -108,4 +108,16 @@ extension PostgrestTypedQuery where Phase: PostgrestTransformablePhase {
   public func limit(_ count: Int) -> PostgrestTypedQuery<R, Output, PostgrestTransformPhase> {
     PostgrestTypedQuery<R, Output, PostgrestTransformPhase>(builder: builder.limit(count))
   }
+
+  /// Returns only the rows within the zero-based, inclusive index range.
+  ///
+  /// `range(10...19)` is the second page of ten. Like `limit(_:)` this moves the request into
+  /// ``PostgrestTransformPhase``.
+  public func range(
+    _ bounds: ClosedRange<Int>
+  ) -> PostgrestTypedQuery<R, Output, PostgrestTransformPhase> {
+    PostgrestTypedQuery<R, Output, PostgrestTransformPhase>(
+      builder: builder.range(from: bounds.lowerBound, to: bounds.upperBound)
+    )
+  }
 }
