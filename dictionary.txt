@@ -274,5 +274,4 @@ loggable
 
 # Retry-After / Duration terms from RetryPolicy.swift.
 asctime
-attoseconds
 fixdate

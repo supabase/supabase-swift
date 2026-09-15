@@ -22,7 +22,7 @@ struct RetryPolicyTests {
     #expect(policy.maxDelay == .seconds(20))
     #expect(
       policy.retryableStatuses == [408, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524, 530])
-    #expect(policy.retryableMethods == [.get, .head, .options, .put, .delete])
+    #expect(policy.retryableMethods == [.get, .head, .options])
   }
 
   @Test
@@ -31,11 +31,11 @@ struct RetryPolicyTests {
   }
 
   @Test
-  func backoffIsFullJitterBelowTheExponentialCap() {
+  func backoffIsEqualJitterBetweenHalfTheCapAndTheCap() {
     let policy = RetryPolicy(baseDelay: .seconds(1), maxDelay: .seconds(60))
     for _ in 0..<50 {
-      #expect((Duration.zero...(.seconds(1))).contains(policy.backoffDelay(retry: 1)))
-      #expect((Duration.zero...(.seconds(4))).contains(policy.backoffDelay(retry: 3)))
+      #expect((Duration.milliseconds(500)...(.seconds(1))).contains(policy.backoffDelay(retry: 1)))
+      #expect((Duration.seconds(2)...(.seconds(4))).contains(policy.backoffDelay(retry: 3)))
     }
   }
 
@@ -46,6 +46,13 @@ struct RetryPolicyTests {
       #expect(policy.backoffDelay(retry: 10) <= .seconds(5))
       #expect(policy.backoffDelay(retry: 500) <= .seconds(5))
     }
+  }
+
+  @Test
+  func backoffDoesNotOverflowForAHugeBaseDelay() {
+    // `baseDelay * 2^30` would overflow `Duration`; the cap must be applied before multiplying.
+    let policy = RetryPolicy(baseDelay: .seconds(Int.max), maxDelay: .seconds(5))
+    #expect(policy.backoffDelay(retry: 40) <= .seconds(5))
   }
 
   @Test
@@ -86,10 +93,8 @@ struct RetryPolicyTests {
   @Test
   func missingOrInvalidRetryAfterFallsBackToBackoff() {
     let policy = RetryPolicy(baseDelay: .seconds(1), maxDelay: .seconds(20))
-    #expect(
-      (Duration.zero...(.seconds(1))).contains(policy.delay(retry: 1, retryAfter: nil, now: now)))
-    #expect(
-      (Duration.zero...(.seconds(1))).contains(policy.delay(retry: 1, retryAfter: "soon", now: now))
-    )
+    let backoff = Duration.milliseconds(500)...(.seconds(1))
+    #expect(backoff.contains(policy.delay(retry: 1, retryAfter: nil, now: now)))
+    #expect(backoff.contains(policy.delay(retry: 1, retryAfter: "soon", now: now)))
   }
 }

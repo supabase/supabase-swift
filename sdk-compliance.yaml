@@ -1424,7 +1424,7 @@ features:
   realtime.configuration.custom_websocket_transport: not_applicable
   realtime.configuration.reconnect_backoff:
     status: partially_implemented
-    note: "RealtimeClientOptions.reconnectDelay configures a fixed base delay; there is no hook to supply a custom attempt-count-to-delay function — the backoff curve itself (ConnectionManager.reconnectBackoffDelay) is a private, hardcoded exponential."
+    note: "RealtimeClientOptions.reconnectDelay configures a fixed base delay; there is no hook to supply a custom attempt-count-to-delay function — the backoff curve itself (ConnectionManager.reconnectBackoff, built on RetryPolicy's equal-jitter exponential) is hardcoded."
   realtime.configuration.heartbeat_interval:
     status: implemented
     note: "Set via the heartbeatInterval parameter of RealtimeClientOptions.init; the backing stored property is internal, not public."
@@ -1633,11 +1633,6 @@ features:
   storage.analytics.register_table: not_implemented
   storage.analytics.table_exists: not_implemented
   storage.analytics.update_namespace_properties: not_implemented
-  storage.configuration.auto_retry:
-    status: implemented
-    symbols:
-      - StorageClientConfiguration.retryPolicy
-    supporting_symbols:
-      - RetryPolicy
   # Newly synced from the canonical spec; no local group yet, place manually.
+  storage.configuration.auto_retry: not_implemented
   storage.errors.error_codes: not_implemented

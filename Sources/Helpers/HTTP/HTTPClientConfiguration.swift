@@ -12,7 +12,9 @@
 /// default ``URLSessionTransport`` (`URLSession.shared`, or `GlobalOptions.session` when used
 /// through `SupabaseClient`).
 /// Middlewares run in array order for requests (index 0 first) and in reverse for responses,
-/// before the SDK's own middlewares and the transport.
+/// before the SDK's own middlewares and the transport. In a module that retries (Auth,
+/// PostgREST) the retry middleware sits outside them, so a retried request runs through them
+/// once per attempt.
 public struct HTTPClientConfiguration: Sendable {
   /// The transport, or `nil` for the default ``URLSessionTransport``.
   public var transport: (any ClientTransport)?
@@ -35,13 +37,18 @@ public struct HTTPClientConfiguration: Sendable {
 }
 
 extension HTTPClient {
-  /// Builds the client for `configuration`, appending the module's own middlewares after the caller's.
+  /// Builds the client for `configuration`: `retry` outermost, then the caller's middlewares,
+  /// then the module's own.
+  ///
+  /// Retry runs first so every attempt re-runs the whole chain — a replayed request gets a fresh
+  /// access token and trace context instead of the first attempt's.
   package init(
     configuration: HTTPClientConfiguration,
+    retrying retry: RetryRequestInterceptor? = nil,
     appending moduleMiddlewares: [any ClientMiddleware]
   ) {
     self.init(
       transport: configuration.transport ?? URLSessionTransport(),
-      middlewares: configuration.middlewares + moduleMiddlewares)
+      middlewares: (retry.map { [$0] } ?? []) + configuration.middlewares + moduleMiddlewares)
   }
 }

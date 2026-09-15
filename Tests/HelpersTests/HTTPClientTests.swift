@@ -83,6 +83,31 @@ struct HTTPClientTests {
   }
 
   @Test
+  func retryRunsOutsideTheCallersMiddlewares() async throws {
+    // The caller's middlewares (and the SDK's access-token one) must run once per attempt, so a
+    // replayed request carries a freshly resolved token rather than the first attempt's.
+    let seen = LockIsolated<[(HTTPTypes.HTTPRequest, HTTPBody?)]>([])
+    let log = LockIsolated<[String]>([])
+    let client = HTTPClient(
+      configuration: HTTPClientConfiguration(
+        transport: StubTransport(seen: seen) {
+          (HTTPTypes.HTTPResponse(status: seen.value.count < 2 ? .serviceUnavailable : .ok), nil)
+        },
+        middlewares: [TagMiddleware(tag: "Caller", log: log)]),
+      retrying: RetryRequestInterceptor(policy: RetryPolicy(baseDelay: .zero)),
+      appending: [TagMiddleware(tag: "Module", log: log)]
+    )
+
+    let (response, _) = try await client.send(
+      HTTPRequest(method: .get, url: URL(string: "https://example.com")!), timeout: 42)
+
+    #expect(response.status == .ok)
+    #expect(seen.value.count == 2)
+    #expect(log.value.filter { $0 == "Caller:request" }.count == 2)
+    #expect(log.value.filter { $0 == "Module:request" }.count == 2)
+  }
+
+  @Test
   func bodilessRequestSendsNoBodyAndNoContentType() async throws {
     let seen = LockIsolated<[(HTTPTypes.HTTPRequest, HTTPBody?)]>([])
     let client = HTTPClient(

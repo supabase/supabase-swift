@@ -27,7 +27,7 @@ let version = Helpers.version
 /// ## Topics
 ///
 /// ### Creating a Client
-/// - ``init(url:headers:region:logger:http:decoder:retryPolicy:accessToken:)-(_,_,FunctionRegion?,_,_,_,_,_)``
+/// - ``init(url:headers:region:logger:http:decoder:accessToken:)-(_,_,FunctionRegion?,_,_,_,_)``
 ///
 /// ### Invoking Functions
 /// - ``invoke(_:options:decode:)``
@@ -71,8 +71,6 @@ public struct FunctionsClient: Sendable {
   ///   - logger: A logger for request and response diagnostics. Defaults to a build-config-aware logger.
   ///   - http: The transport and middleware chain every request goes through.
   ///   - decoder: The JSON decoder used to decode response bodies.
-  ///   - retryPolicy: How transient failures are retried. Defaults to ``RetryPolicy/default``,
-  ///     which only replays idempotent methods, so a plain `POST` invocation is never retried.
   ///   - accessToken: An async closure returning the current access token, resolved fresh for
   ///     every request and sent as `Authorization: Bearer <token>`. `nil` (the default) sends no
   ///     bearer token; a per-invocation header set via ``FunctionInvokeOptions`` still takes
@@ -85,17 +83,12 @@ public struct FunctionsClient: Sendable {
     logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.functions"),
     http: HTTPClientConfiguration = .init(),
     decoder: JSONDecoder = JSONDecoder(),
-    retryPolicy: RetryPolicy = .default,
     accessToken: (@Sendable () async throws -> String?)? = nil
   ) {
     var logger = logger
     logger[metadataKey: "system"] = "functions"
     let httpClient = HTTPClient(
-      configuration: http,
-      appending: [
-        RetryRequestInterceptor(policy: retryPolicy),
-        LoggerInterceptor(logger: logger),
-      ])
+      configuration: http, appending: [LoggerInterceptor(logger: logger)])
 
     self.init(
       url: url,
@@ -136,8 +129,6 @@ public struct FunctionsClient: Sendable {
   ///   - logger: A logger for request and response diagnostics. Defaults to a build-config-aware logger.
   ///   - http: The transport and middleware chain every request goes through.
   ///   - decoder: The JSON decoder used to decode response bodies.
-  ///   - retryPolicy: How transient failures are retried. Defaults to ``RetryPolicy/default``,
-  ///     which only replays idempotent methods, so a plain `POST` invocation is never retried.
   ///   - accessToken: An async closure returning the current access token, resolved fresh for
   ///     every request and sent as `Authorization: Bearer <token>`. `nil` (the default) sends no
   ///     bearer token; a per-invocation header set via ``FunctionInvokeOptions`` still takes
@@ -149,7 +140,6 @@ public struct FunctionsClient: Sendable {
     logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.functions"),
     http: HTTPClientConfiguration = .init(),
     decoder: JSONDecoder = JSONDecoder(),
-    retryPolicy: RetryPolicy = .default,
     accessToken: (@Sendable () async throws -> String?)? = nil
   ) {
     self.init(
@@ -159,7 +149,6 @@ public struct FunctionsClient: Sendable {
       logger: logger,
       http: http,
       decoder: decoder,
-      retryPolicy: retryPolicy,
       accessToken: accessToken
     )
   }

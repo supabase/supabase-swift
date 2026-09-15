@@ -130,8 +130,7 @@ public final class SupabaseClient: Sendable {
         headers: headers,
         http: authenticatedHTTP,
         logger: options.global.logger,
-        useNewHostname: options.storage.useNewHostname,
-        retryPolicy: options.storage.retryPolicy
+        useNewHostname: options.storage.useNewHostname
       )
     )
   }
@@ -164,7 +163,6 @@ public final class SupabaseClient: Sendable {
         middlewares: options.global.http.middlewares + [TraceContextMiddleware()]
       ),
       decoder: options.functions.decoder,
-      retryPolicy: options.functions.retryPolicy,
       accessToken: { [weak self] in
         try await self?._getAccessToken()
       }
