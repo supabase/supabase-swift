@@ -109,6 +109,25 @@ extension StorageMockerTests {
       }
     }
 
+    /// `URLSession`'s async APIs report a cancelled `Task` as `URLError(.cancelled)`, not
+    /// `CancellationError`, so cancelling lands here rather than in `cancellationIsNotWrapped`
+    /// above. It is wrapped like any other `URLError`: callers check the code on
+    /// `underlyingError`, not `error is CancellationError` (SDK-1849).
+    @Test
+    func cancelledURLErrorIsWrapped() async {
+      let storage = makeFailingSUT { throw URLError(.cancelled) }
+
+      do {
+        _ = try await storage.from("bucket").list()
+        Issue.record("Expected failure")
+      } catch let error as StorageError {
+        #expect(error.kind == .transport)
+        #expect((error.underlyingError as? URLError)?.code == .cancelled)
+      } catch {
+        Issue.record("Unexpected error \(error)")
+      }
+    }
+
     @Test
     func customFetchErrorIsNotWrapped() async {
       struct FetchError: Error {}
