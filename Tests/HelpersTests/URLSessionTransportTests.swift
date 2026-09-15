@@ -168,10 +168,32 @@ struct URLSessionTransportTests {
       #expect(releasedBeforeRequestStarted.value == false)
     #endif
     #expect(seenContentLength.value == "6")
-    #expect(seenBody.value == Data("abcdef".utf8))
+    // Linux uploads the spooled file from the task, which `MockingURLProtocol` cannot see.
+    #if !canImport(FoundationNetworking)
+      #expect(seenBody.value == Data("abcdef".utf8))
+    #endif
   }
 
   #if canImport(FoundationNetworking)
+    @Test
+    func spooledBodyShorterThanDeclaredLengthFailsBeforeUploadOnLinux() async throws {
+      let transport = makeTransport()
+      let started = LockIsolated(false)
+      var mock = Mock(url: url, statusCode: 200, data: [.post: Data()])
+      mock.onRequestHandler = OnRequestHandler(requestCallback: { _ in started.setValue(true) })
+      mock.register()
+      let chunks = AsyncStream<ArraySlice<UInt8>> {
+        $0.yield(ArraySlice("abc".utf8))
+        $0.finish()
+      }
+      let body = HTTPBody(chunks, length: .known(6), iterationBehavior: .single)
+
+      await #expect(throws: HTTPBodyLengthMismatchError.self) {
+        _ = try await transport.send(HTTPRequest(method: .post, url: url), body: body)
+      }
+      #expect(started.value == false)
+    }
+
     @Test
     func fileBodyProgressReportsOnceOnCompletionOnLinux() async throws {
       let transport = makeTransport()
