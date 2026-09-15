@@ -3,17 +3,17 @@ import HTTPTypes
 
 extension HTTPClient {
   init(configuration: AuthClient.Configuration) {
-    // POST is added so token refreshes are retried too; GoTrue's `/token` is safe to replay
-    // within its reuse interval.
+    // GoTrue's writes are all safe to replay — `/token` within its refresh reuse interval — so
+    // POST, PUT and DELETE are retried too. A 429 is not: GoTrue's limiters count every attempt
+    // and their windows are minutes long, so replaying within seconds only burns the quota.
     var policy = RetryPolicy.default
-    policy.retryableMethods.insert(.post)
+    policy.retryableMethods.formUnion([.post, .put, .delete])
+    policy.retryableStatuses.remove(429)
 
     self.init(
       configuration: configuration.http,
-      appending: [
-        RetryRequestInterceptor(policy: policy),
-        LoggerInterceptor(logger: configuration.logger),
-      ])
+      retrying: RetryRequestInterceptor(policy: policy),
+      appending: [LoggerInterceptor(logger: configuration.logger)])
   }
 }
 

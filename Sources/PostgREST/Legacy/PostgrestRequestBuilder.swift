@@ -499,15 +499,14 @@ extension PostgrestRequestBuilder where Phase: PostgrestExecutablePhase {
     }
 
     // The retry middleware is built per request because the switch is per request
-    // (``retry(enabled:)``); it wraps the logger so every attempt is logged.
+    // (``retry(enabled:)``); it wraps the whole chain so every attempt is logged and carries a
+    // freshly resolved access token.
     let http = HTTPClient(
       configuration: configuration.http,
-      appending: [
-        RetryRequestInterceptor(
-          policy: retryEnabled ? PostgrestClient.Configuration.retryPolicy : .disabled,
-          clock: clock),
-        LoggerInterceptor(logger: configuration.logger),
-      ])
+      retrying: RetryRequestInterceptor(
+        policy: retryEnabled ? PostgrestClient.Configuration.retryPolicy : .disabled,
+        clock: clock),
+      appending: [LoggerInterceptor(logger: configuration.logger)])
 
     // Separate the network send from decoding so that decode errors are never retried.
     let response: HTTPResponse

@@ -123,17 +123,19 @@ struct RetryRequestInterceptorTests {
   }
 
   @Test
-  func retriesNonIdempotentMethodWithIdempotencyKey() async throws {
+  func doesNotRetryDeterministicURLErrors() async {
     let interceptor = makeInterceptor()
-    let callCount = LockIsolated(0)
-    let request = makeRequest(method: .post, headers: [.idempotencyKey: "abc"])
 
-    let (head, _) = try await interceptor.intercept(request, body: nil) { _, _ in
-      callCount.withValue { $0 += 1 }
-      return self.makeResponse(statusCode: callCount.value < 2 ? 503 : 200)
+    for code in [URLError.Code.serverCertificateUntrusted, .badURL, .fileDoesNotExist] {
+      let callCount = LockIsolated(0)
+      await #expect(throws: URLError.self) {
+        try await interceptor.intercept(makeRequest(), body: nil) { _, _ in
+          callCount.withValue { $0 += 1 }
+          throw URLError(code)
+        }
+      }
+      #expect(callCount.value == 1, "\(code) is not transient and should not be retried")
     }
-    #expect(head.status.code == 200)
-    #expect(callCount.value == 2)
   }
 
   @Test
@@ -202,6 +204,22 @@ struct RetryRequestInterceptorTests {
       }
     }
     #expect(callCount.value == 1)
+  }
+
+  @Test
+  func cancelledTaskSurfacesAsCancellationErrorNotURLError() async {
+    let interceptor = makeInterceptor()
+
+    let task = Task {
+      try await interceptor.intercept(makeRequest(), body: nil) { _, _ in
+        // Stand in for URLSession: the exchange of a cancelled task fails with `URLError.cancelled`.
+        while !Task.isCancelled { await Task.yield() }
+        throw URLError(.cancelled)
+      }
+    }
+    task.cancel()
+
+    await #expect(throws: CancellationError.self) { try await task.value }
   }
 
   @Test
@@ -304,8 +322,8 @@ struct RetryRequestInterceptorTests {
 
     let durations = clock.durations.value
     #expect(durations.count == 2)
-    #expect((Duration.zero...(.seconds(1))).contains(durations[0]))
-    #expect((Duration.zero...(.seconds(2))).contains(durations[1]))
+    #expect((Duration.milliseconds(500)...(.seconds(1))).contains(durations[0]))
+    #expect((Duration.seconds(1)...(.seconds(2))).contains(durations[1]))
   }
 
   @Test

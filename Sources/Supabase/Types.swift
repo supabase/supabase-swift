@@ -108,7 +108,8 @@ public struct SupabaseClientOptions: Sendable {
     /// A `nil` ``HTTPClientConfiguration/transport`` (the default) uses ``URLSessionTransport``
     /// over `URLSession.shared`. To send through your own `URLSession`, pass
     /// `URLSessionTransport(session:)` as the transport. The middlewares run before the SDK's own
-    /// (trace context, access-token injection) and before the request reaches the transport.
+    /// (trace context, access-token injection) and before the request reaches the transport; in
+    /// a module that retries (Auth, PostgREST) they run once per attempt.
     /// ``HTTPClientConfiguration/timeout`` is the idle timeout for every request; leave it `nil`
     /// for the defaults (60 seconds; 150 for Edge Functions).
     public let http: HTTPClientConfiguration
@@ -139,27 +140,20 @@ public struct SupabaseClientOptions: Sendable {
     /// The JSON decoder to use for decoding function response bodies.
     public let decoder: JSONDecoder
 
-    /// How transient failures are retried. Defaults to ``RetryPolicy/default``, which only
-    /// replays idempotent methods, so a plain `POST` invocation is never retried.
-    public let retryPolicy: RetryPolicy
-
     @_disfavoredOverload
     public init(
       region: String? = nil,
-      decoder: JSONDecoder = JSONDecoder(),
-      retryPolicy: RetryPolicy = .default
+      decoder: JSONDecoder = JSONDecoder()
     ) {
       self.region = region
       self.decoder = decoder
-      self.retryPolicy = retryPolicy
     }
 
     public init(
       region: FunctionRegion? = nil,
-      decoder: JSONDecoder = JSONDecoder(),
-      retryPolicy: RetryPolicy = .default
+      decoder: JSONDecoder = JSONDecoder()
     ) {
-      self.init(region: region?.rawValue, decoder: decoder, retryPolicy: retryPolicy)
+      self.init(region: region?.rawValue, decoder: decoder)
     }
   }
 
@@ -168,12 +162,8 @@ public struct SupabaseClientOptions: Sendable {
     /// Whether storage client should be initialized with the new hostname format, i.e. `project-ref.storage.supabase.co`
     public let useNewHostname: Bool
 
-    /// How transient failures are retried. Defaults to ``RetryPolicy/default``.
-    public let retryPolicy: RetryPolicy
-
-    public init(useNewHostname: Bool = false, retryPolicy: RetryPolicy = .default) {
+    public init(useNewHostname: Bool = false) {
       self.useNewHostname = useNewHostname
-      self.retryPolicy = retryPolicy
     }
   }
 
