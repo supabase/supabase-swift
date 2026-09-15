@@ -13,6 +13,7 @@ let package = Package(
     .macOS(.v13),
     .watchOS(.v9),
     .tvOS(.v16),
+    .visionOS(.v1),
   ],
   products: [
     .library(name: "Auth", targets: ["Auth"]),

@@ -18,9 +18,9 @@ import Testing
 final class StorageFileIntegrationTests {
   let storage = SupabaseStorageClient(
     configuration: StorageClientConfiguration(
-      url: URL(string: "\(DotEnv.SUPABASE_URL)/storage/v1")!,
+      url: URL(string: "\(DotEnv.supabaseURL)/storage/v1")!,
       headers: [
-        "Authorization": "Bearer \(DotEnv.SUPABASE_SECRET_KEY)"
+        "Authorization": "Bearer \(DotEnv.supabaseSecretKey)"
       ]
     )
   )
@@ -51,7 +51,7 @@ final class StorageFileIntegrationTests {
     let publicURL = try storage.from(bucketName).getPublicURL(path: uploadPath)
     #expect(
       publicURL.absoluteString
-        == "\(DotEnv.SUPABASE_URL)/storage/v1/object/public/\(bucketName)/\(uploadPath)"
+        == "\(DotEnv.supabaseURL)/storage/v1/object/public/\(bucketName)/\(uploadPath)"
     )
   }
 
@@ -61,7 +61,7 @@ final class StorageFileIntegrationTests {
       path: uploadPath, download: .withOriginalName)
     #expect(
       publicURL.absoluteString
-        == "\(DotEnv.SUPABASE_URL)/storage/v1/object/public/\(bucketName)/\(uploadPath)?download="
+        == "\(DotEnv.supabaseURL)/storage/v1/object/public/\(bucketName)/\(uploadPath)?download="
     )
   }
 
@@ -71,7 +71,7 @@ final class StorageFileIntegrationTests {
       path: uploadPath, download: "test.jpg")
     #expect(
       publicURL.absoluteString
-        == "\(DotEnv.SUPABASE_URL)/storage/v1/object/public/\(bucketName)/\(uploadPath)?download=test.jpg"
+        == "\(DotEnv.supabaseURL)/storage/v1/object/public/\(bucketName)/\(uploadPath)?download=test.jpg"
     )
   }
 
@@ -82,7 +82,7 @@ final class StorageFileIntegrationTests {
     let url = try await storage.from(bucketName).createSignedURL(path: uploadPath, expiresIn: 2000)
     #expect(
       url.absoluteString.contains(
-        "\(DotEnv.SUPABASE_URL)/storage/v1/object/sign/\(bucketName)/\(uploadPath)")
+        "\(DotEnv.supabaseURL)/storage/v1/object/sign/\(bucketName)/\(uploadPath)")
     )
   }
 
@@ -94,7 +94,7 @@ final class StorageFileIntegrationTests {
       path: uploadPath, expiresIn: 2000, download: .withOriginalName)
     #expect(
       url.absoluteString.contains(
-        "\(DotEnv.SUPABASE_URL)/storage/v1/object/sign/\(bucketName)/\(uploadPath)")
+        "\(DotEnv.supabaseURL)/storage/v1/object/sign/\(bucketName)/\(uploadPath)")
     )
     #expect(url.absoluteString.contains("&download="))
   }
@@ -107,7 +107,7 @@ final class StorageFileIntegrationTests {
       path: uploadPath, expiresIn: 2000, download: "test.jpg")
     #expect(
       url.absoluteString.contains(
-        "\(DotEnv.SUPABASE_URL)/storage/v1/object/sign/\(bucketName)/\(uploadPath)")
+        "\(DotEnv.supabaseURL)/storage/v1/object/sign/\(bucketName)/\(uploadPath)")
     )
     #expect(url.absoluteString.contains("&download=test.jpg"))
   }
@@ -204,7 +204,7 @@ final class StorageFileIntegrationTests {
     #expect(res.path == uploadPath)
     #expect(
       res.signedURL.absoluteString.contains(
-        "\(DotEnv.SUPABASE_URL)/storage/v1/object/upload/sign/\(bucketName)/\(uploadPath)"
+        "\(DotEnv.supabaseURL)/storage/v1/object/upload/sign/\(bucketName)/\(uploadPath)"
       )
     )
   }
@@ -340,7 +340,7 @@ final class StorageFileIntegrationTests {
 
     #expect(
       res.absoluteString
-        == "\(DotEnv.SUPABASE_URL)/storage/v1/render/image/public/\(bucketName)/\(uploadPath)?width=700&height=300&quality=70"
+        == "\(DotEnv.supabaseURL)/storage/v1/render/image/public/\(bucketName)/\(uploadPath)?width=700&height=300&quality=70"
     )
   }
 

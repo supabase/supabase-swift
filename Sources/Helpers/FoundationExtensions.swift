@@ -10,7 +10,11 @@ package import Foundation
 #if canImport(FoundationNetworking)
   import FoundationNetworking
 
+  // Mirrors the names Darwin exposes as C macros from <time.h>, so call sites read the same
+  // on every platform.
+  // swift-format-ignore: AlwaysUseLowerCamelCase
   package let NSEC_PER_SEC: UInt64 = 1_000_000_000
+  // swift-format-ignore: AlwaysUseLowerCamelCase
   package let NSEC_PER_MSEC: UInt64 = 1_000_000
 #endif
 
