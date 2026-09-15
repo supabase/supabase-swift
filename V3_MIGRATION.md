@@ -2276,6 +2276,28 @@ Errors thrown by your own code that runs inside the request — a custom `Client
 error is in `underlyingError`. `CancellationError` is never wrapped and still propagates as
 itself.
 
+Cancelling a request is the case worth spelling out. `URLSession`'s async APIs do not throw
+`CancellationError` when the enclosing `Task` is cancelled — they throw `URLError(.cancelled)`,
+which is a `URLError` like any other and so is wrapped as `.transport`. A `catch is
+CancellationError` does not match a cancelled request; check the code on `underlyingError`
+instead:
+
+```swift
+// Before
+} catch is CancellationError {
+  // the user cancelled — no error banner
+}
+
+// After
+} catch let error as any SupabaseError
+  where (error.underlyingError as? URLError)?.code == .cancelled {
+  // the user cancelled — no error banner
+}
+```
+
+This also compiles silently — the old `catch` block simply stops being reached. Search for `is
+CancellationError` near Supabase calls. A cancelled request is never retried.
+
 Without this, one `catch let error as any SupabaseError` missed exactly the failures a user is
 most likely to hit in the field: no network, and a schema drift between the app's model and the
 server. swift-openapi-runtime and Auth0 wrap the same way.
