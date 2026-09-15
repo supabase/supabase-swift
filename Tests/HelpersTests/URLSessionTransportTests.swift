@@ -133,7 +133,7 @@ struct URLSessionTransportTests {
     })
     mock.register()
 
-    try await RequestTimeout.$current.withValue(150) {
+    try await RequestTimeout.$current.withValue(.seconds(150)) {
       _ = try await transport.send(HTTPRequest(method: .get, url: url), body: nil)
     }
 

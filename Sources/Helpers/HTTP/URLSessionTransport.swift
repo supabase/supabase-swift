@@ -22,9 +22,9 @@ import HTTPTypesFoundation
 ///   each chunk is one `didReceive(data:)` delivery from `URLSession`, so chunk boundaries follow
 ///   the network, not the payload. swift-corelibs-foundation has no per-task delegates, so on
 ///   Linux the response is buffered and delivered as one chunk.
-/// - The SDK sets `URLRequest.timeoutInterval` on every request it sends (60 seconds by default,
-///   `FunctionInvokeOptions.timeoutInterval` for Functions), so it wins over the session's
-///   `timeoutIntervalForRequest`.
+/// - The SDK sets `URLRequest.timeoutInterval` on every request it sends
+///   (``HTTPClientConfiguration/timeout``, or 60 seconds — 150 for Functions — when unset), so
+///   it wins over the session's `timeoutIntervalForRequest`.
 /// - A buffered response body is `.multiple`, while a streamed one is `.single`, so
 ///   replay-sensitive middleware behaves differently per platform.
 /// - An empty response body comes back as `nil` on Linux but as a non-nil body that yields no
@@ -56,7 +56,7 @@ public struct URLSessionTransport: ClientTransport {
   ) {
     var urlRequest = try Self.makeURLRequest(request)
     if let timeout = RequestTimeout.current {
-      urlRequest.timeoutInterval = timeout
+      urlRequest.timeoutInterval = timeout.timeInterval
     }
     // URLSession treats Content-Length as reserved and recomputes it from the body; setting it
     // here keeps custom URLProtocol observers (tests) and non-URLSession callers of this header
