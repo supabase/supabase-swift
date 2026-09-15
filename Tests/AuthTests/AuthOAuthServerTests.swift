@@ -122,6 +122,38 @@ extension AuthMockerTests {
     }
 
     @Test
+    func decodeOAuthAuthorizationDetailsWithoutClientNameUserEmailOrScope() throws {
+      let json = """
+        {
+          "authorization_id": "abc123def456",
+          "redirect_uri": "https://example.com/callback",
+          "client": {
+            "id": "\(clientId)"
+          },
+          "user": {
+            "id": "\(userId)"
+          }
+        }
+        """.data(using: .utf8)!
+
+      let response = try AuthClient.Configuration.jsonDecoder.decode(
+        OAuthAuthorizationDetailsResponse.self, from: json
+      )
+
+      guard case .details(let details) = response else {
+        Issue.record("Expected .details case, got \(response)")
+        return
+      }
+
+      #expect(details.authorizationId == "abc123def456")
+      #expect(details.client.id == clientId)
+      #expect(details.client.name == nil)
+      #expect(details.user.id == userId)
+      #expect(details.user.email == nil)
+      #expect(details.scope == nil)
+    }
+
+    @Test
     func decodeOAuthAuthorizationDetailsAutoApproveRedirect() throws {
       // The server auto-approves (and returns a bare redirect) when the user
       // already has an active consent covering the requested scopes.

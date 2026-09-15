@@ -2429,3 +2429,26 @@ do {
 
 For `httpSend`, a non-202 answer is `.server` with `response?.statusCode` and `response?.body`
 set; a request that never completes is `.transport` with the `URLError` in `underlyingError`.
+
+## OAuth server fields the API leaves out are now optional
+
+`OAuthClient.clientName`, `OAuthAuthorizationClient.name`, `OAuthAuthorizationUser.email` and
+`OAuthAuthorizationDetails.scope` are `String?` rather than `String`.
+
+Auth marks all four `omitempty`, so it drops the key instead of sending an empty string. One
+client registered without a name, or one user who signed up by phone, anonymously or with Web3,
+was enough to fail the whole response: `getClient` threw a decoding error, and
+`getAuthorizationDetails` threw an opaque aggregate error, since neither the consent shape nor the
+redirect shape could decode.
+
+This is a compile error wherever you read one of the four as a non-optional `String`.
+
+```swift
+// Before
+Text(details.client.name)
+Text(details.user.email)
+
+// After
+Text(details.client.name ?? "Unnamed app")
+Text(details.user.email ?? "No email on file")
+```

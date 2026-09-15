@@ -261,6 +261,37 @@ extension AuthMockerTests {
     }
 
     @Test
+    func getOAuthClientWithoutClientName() async throws {
+      let responseData = """
+        {
+          "client_id": "\(clientId)",
+          "client_type": "confidential",
+          "token_endpoint_auth_method": "client_secret_post",
+          "registration_type": "manual",
+          "redirect_uris": ["https://example.com/callback"],
+          "grant_types": ["authorization_code", "refresh_token"],
+          "response_types": ["code"],
+          "created_at": "2024-01-01T00:00:00.000Z",
+          "updated_at": "2024-01-01T00:00:00.000Z"
+        }
+        """.data(using: .utf8)!
+
+      Mock(
+        url: clientURL.appendingPathComponent("admin/oauth/clients/\(clientId)"),
+        statusCode: 200,
+        data: [.get: responseData]
+      )
+      .register()
+
+      let sut = makeSUT()
+
+      let client = try await sut.admin.oauth.getClient(clientId: clientId)
+
+      #expect(client.clientId == clientId)
+      #expect(client.clientName == nil)
+    }
+
+    @Test
     func deleteOAuthClient() async throws {
       Mock(
         url: clientURL.appendingPathComponent("admin/oauth/clients/\(clientId)"),
