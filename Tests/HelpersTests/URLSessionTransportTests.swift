@@ -155,7 +155,12 @@ struct URLSessionTransportTests {
     let (head, _) = try await transport.send(HTTPRequest(method: .post, url: url), body: body)
 
     #expect(head.status == 200)
-    #expect(releasedBeforeRequestStarted.value == false)
+    #if canImport(FoundationNetworking)
+      // Linux collects the body before the request starts (documented on the transport).
+      #expect(releasedBeforeRequestStarted.value == true)
+    #else
+      #expect(releasedBeforeRequestStarted.value == false)
+    #endif
     #expect(seenContentLength.value == "6")
     #expect(seenBody.value == Data("abcdef".utf8))
   }
