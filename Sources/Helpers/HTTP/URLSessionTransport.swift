@@ -20,11 +20,17 @@ import HTTPTypesFoundation
 ///   ``HTTPBody/init(fileURL:)`` stream from disk through an upload task. Any other body streams
 ///   chunk by chunk on Apple platforms through `uploadTask(withStreamedRequest:)`, pulling the
 ///   next chunk only when `URLSession` has room for it; a ``HTTPBody/Length/known(_:)`` length
-///   is sent as `Content-Length`, an ``HTTPBody/Length/unknown`` one uses chunked transfer. If
-///   `URLSession` asks for the body a second time (a redirect or an authentication retry), a
-///   ``HTTPBody/IterationBehavior/single`` body fails the request with
-///   ``HTTPBodyAlreadyConsumedError`` instead of replaying. On Linux such bodies are collected
-///   into memory first, up to 64 MiB; past that the request fails with ``HTTPBodyTooLargeError``.
+///   is sent as `Content-Length` and the body must yield exactly that many bytes or the request
+///   fails with ``HTTPBodyLengthMismatchError``, an ``HTTPBody/Length/unknown`` one uses chunked
+///   transfer. Because the body is pulled while the request is in flight, a gap between chunks
+///   longer than the request timeout fails the request with `URLError.timedOut`. On Linux,
+///   swift-corelibs-foundation has no per-task delegates to feed a stream from, so such bodies
+///   are first spooled to a temporary file and uploaded from there, and a progress wrapper on an
+///   in-memory or file body reports once, when the upload completes.
+/// - A ``HTTPBody/IterationBehavior/single`` body cannot be sent twice. A 307 or 308 redirect,
+///   which would resend it, is not followed: the redirect response is returned to the caller
+///   as-is. If `URLSession` asks for the body again for any other reason (an authentication
+///   retry), the request fails with ``HTTPBodyAlreadyConsumedError``.
 /// - Response bodies stream on Apple platforms: the head is returned as soon as it arrives and
 ///   each chunk is one `didReceive(data:)` delivery from `URLSession`, so chunk boundaries follow
 ///   the network, not the payload. swift-corelibs-foundation has no per-task delegates, so on
@@ -78,20 +84,31 @@ public struct URLSessionTransport: ClientTransport {
     }
 
     #if canImport(FoundationNetworking)
-      if let body {
-        switch body.storage {
-        case .file(let fileURL):
-          let (data, response) = try await session.upload(for: urlRequest, fromFile: fileURL)
-          return (try Self.makeHead(response), Self.makeBody(data))
-        case .stream:
-          // swift-corelibs-foundation has no per-task delegates to feed a body stream from, so
-          // the body is collected first; the cap keeps that from growing without bound.
-          urlRequest.httpBody = try await Data(collecting: body, upTo: Self.bufferedBodyLimit)
-        case .data:
-          break
-        }
+      var fileURL: URL?
+      var spool: URL?
+      defer { if let spool { try? FileManager.default.removeItem(at: spool) } }
+      switch body?.storage {
+      case .file(let url)?:
+        fileURL = url
+      case .stream?:
+        // swift-corelibs-foundation has no per-task delegates to feed a body stream from, so the
+        // body is spooled to disk first and uploaded from there; memory stays flat either way.
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        spool = url
+        try await body?.write(to: url)
+        fileURL = url
+      case .data?, nil:
+        break
       }
-      let (data, response) = try await session.data(for: urlRequest)
+      let (data, response) =
+        if let fileURL {
+          try await session.upload(for: urlRequest, fromFile: fileURL)
+        } else {
+          try await session.data(for: urlRequest)
+        }
+      // Nothing reports sent bytes on this platform, so a progress wrapper on an in-memory or
+      // file body hears once, when the upload has completed.
+      if let body, case .known(let count) = body.length { body.onUploadProgress?(count) }
       return (try Self.makeHead(response), Self.makeBody(data))
     #else
       let task: URLSessionTask
@@ -107,10 +124,7 @@ public struct URLSessionTransport: ClientTransport {
     #endif
   }
 
-  #if canImport(FoundationNetworking)
-    /// How much of a streamed request body Linux collects into memory before giving up.
-    private static let bufferedBodyLimit = 64 << 20
-  #else
+  #if !canImport(FoundationNetworking)
     private func streamResponse(from task: URLSessionTask, requestBody: HTTPBody?) async throws
       -> (HTTPTypes.HTTPResponse, HTTPBody?)
     {
@@ -197,6 +211,7 @@ public struct URLSessionTransport: ClientTransport {
       }
       // Each call gets a fresh iterator: a `.multiple` body replays, a `.single` body throws
       // `HTTPBodyAlreadyConsumedError` on its first pull, which fails the task through here.
+      // (307/308 redirects never get this far for a `.single` body; see below.)
       let next = HTTPBodyOutputStreamBridge(body: requestBody, output: output) {
         [requestBodyError] error in
         requestBodyError.withValue { $0 = $0 ?? error }
@@ -210,13 +225,23 @@ public struct URLSessionTransport: ClientTransport {
     }
 
     func urlSession(
+      _ session: URLSession, task: URLSessionTask,
+      willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest,
+      completionHandler: @escaping @Sendable (URLRequest?) -> Void
+    ) {
+      // 307 and 308 keep the method and resend the body (the other 3xx codes turn into a bodiless
+      // GET). A one-shot body cannot be sent again, so the redirect response is returned as-is
+      // rather than failing the request halfway through — the same rule Go's net/http applies.
+      let resendsBody = response.statusCode == 307 || response.statusCode == 308
+      completionHandler(resendsBody && requestBody?.iterationBehavior == .single ? nil : request)
+    }
+
+    func urlSession(
       _ session: URLSession, task: URLSessionTask, didSendBodyData bytesSent: Int64,
       totalBytesSent: Int64, totalBytesExpectedToSend: Int64
     ) {
-      // A streamed body already reports per chunk as the bridge pulls it.
-      guard let requestBody, let onUploadProgress = requestBody.onUploadProgress else { return }
-      if case .stream = requestBody.storage { return }
-      onUploadProgress(totalBytesSent)
+      // Only `.file` and `.data` bodies set this hook; a streamed body reports as it is pulled.
+      requestBody?.onUploadProgress?(totalBytesSent)
     }
 
     /// Starts `task` and returns its response as soon as the headers arrive. Throws if the task

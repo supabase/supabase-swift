@@ -13,29 +13,40 @@
   ///
   /// The bridge pulls one chunk at a time and writes only while the stream reports space, so
   /// the body is never read further ahead than the pair's buffer plus one chunk. Stream events
-  /// and all mutable state live on one private queue.
+  /// and all mutable state live on one private queue. A ``HTTPBody/Length/known(_:)`` body that
+  /// yields a different number of bytes fails with ``HTTPBodyLengthMismatchError``: the declared
+  /// count has already gone out as `Content-Length`, and a short body would otherwise leave
+  /// `URLSession` waiting for bytes that never come.
   final class HTTPBodyOutputStreamBridge: NSObject, StreamDelegate, @unchecked Sendable {
-    private static let queue = DispatchQueue(label: "supabase.HTTPBodyOutputStreamBridge")
+    private let queue = DispatchQueue(label: "supabase.HTTPBodyOutputStreamBridge")
 
     private let output: OutputStream
+    private let declaredLength: Int64?
     private let onFailure: @Sendable (any Error) -> Void
     // Touched only on `queue`.
     private var iterator: HTTPBody.Iterator
     private var pending: ArraySlice<UInt8> = []
+    private var pulled: Int64 = 0
     private var fetch: Task<Void, Never>?
     private var isClosed = false
 
-    /// Starts pumping `body` into `output`. Calls `onFailure` at most once, when the body throws
-    /// or the stream fails; reaching the end of the body just closes the stream.
+    /// Starts pumping `body` into `output`. Calls `onFailure` at most once, when the body throws,
+    /// the stream fails, or the body's byte count disagrees with its declared length; reaching
+    /// the end of the body just closes the stream.
     init(
       body: HTTPBody, output: OutputStream, onFailure: @escaping @Sendable (any Error) -> Void
     ) {
       self.output = output
       self.onFailure = onFailure
       self.iterator = body.makeAsyncIterator()
+      if case .known(let count) = body.length {
+        declaredLength = count
+      } else {
+        declaredLength = nil
+      }
       super.init()
       output.delegate = self
-      CFWriteStreamSetDispatchQueue(output as CFWriteStream, Self.queue)
+      CFWriteStreamSetDispatchQueue(output as CFWriteStream, queue)
       output.open()
     }
 
@@ -45,7 +56,7 @@
 
     /// Stops pumping and closes the write end. Safe to call more than once.
     func cancel() {
-      Self.queue.async { self.close() }
+      queue.async { self.close() }
     }
 
     func stream(_ stream: Stream, handle event: Stream.Event) {
@@ -73,7 +84,7 @@
           } catch {
             result = .failure(error)
           }
-          Self.queue.async { self.resume(with: result) }
+          queue.async { self.resume(with: result) }
         }
         return
       }
@@ -94,9 +105,19 @@
       fetch = nil
       switch result {
       case .success(let chunk?):
+        pulled += Int64(chunk.count)
+        if let declaredLength, pulled > declaredLength {
+          fail(HTTPBodyLengthMismatchError(declared: declaredLength, actual: pulled))
+          return
+        }
         pending = chunk
         pump()
       case .success(nil):
+        // `pump` only pulls once `pending` is empty, so everything pulled has been written.
+        if let declaredLength, pulled != declaredLength {
+          fail(HTTPBodyLengthMismatchError(declared: declaredLength, actual: pulled))
+          return
+        }
         close()
       case .failure(let error):
         fail(error)
