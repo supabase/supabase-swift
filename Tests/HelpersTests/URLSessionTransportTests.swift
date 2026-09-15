@@ -132,19 +132,25 @@ struct URLSessionTransportTests {
     let releasedBeforeRequestStarted = LockIsolated<Bool?>(nil)
     let seenContentLength = LockIsolated<String?>(nil)
     let seenBody = LockIsolated<Data?>(nil)
+    let (requestStarted, started) = AsyncStream<Void>.makeStream()
     mock.onRequestHandler = OnRequestHandler(requestCallback: { request in
       releasedBeforeRequestStarted.setValue(secondChunkReleased.value)
+      started.finish()
       seenContentLength.setValue(request.value(forHTTPHeaderField: "Content-Length"))
       seenBody.setValue(request.testBodyData())
     })
     mock.register()
 
-    // The second chunk arrives late. A transport that collects the body first cannot start the
-    // request until it has both chunks; a streaming transport starts with the first one.
+    // The second chunk is held back until the request has started. A streaming transport starts
+    // with the first chunk and then drains the second; a transport that collects the body first
+    // would never start (Linux does collect first, so there the gate is skipped and the flag is
+    // set before the request can begin).
     let chunks = AsyncThrowingStream<ArraySlice<UInt8>, any Error> { continuation in
       continuation.yield(ArraySlice("abc".utf8))
       Task {
-        try await Task.sleep(for: .milliseconds(300))
+        #if !canImport(FoundationNetworking)
+          for await _ in requestStarted {}
+        #endif
         secondChunkReleased.setValue(true)
         continuation.yield(ArraySlice("def".utf8))
         continuation.finish()
@@ -156,7 +162,7 @@ struct URLSessionTransportTests {
 
     #expect(head.status == 200)
     #if canImport(FoundationNetworking)
-      // Linux collects the body before the request starts (documented on the transport).
+      // Linux spools the body before the request starts (documented on the transport).
       #expect(releasedBeforeRequestStarted.value == true)
     #else
       #expect(releasedBeforeRequestStarted.value == false)
@@ -164,6 +170,28 @@ struct URLSessionTransportTests {
     #expect(seenContentLength.value == "6")
     #expect(seenBody.value == Data("abcdef".utf8))
   }
+
+  #if canImport(FoundationNetworking)
+    @Test
+    func fileBodyProgressReportsOnceOnCompletionOnLinux() async throws {
+      let transport = makeTransport()
+      let fileURL = FileManager.default.temporaryDirectory.appendingPathComponent(
+        UUID().uuidString)
+      try Data("file".utf8).write(to: fileURL)
+      defer { try? FileManager.default.removeItem(at: fileURL) }
+      Mock(url: url, statusCode: 200, data: [.put: Data()]).register()
+      let seen = LockIsolated<[Int64]>([])
+
+      _ = try await transport.send(
+        HTTPRequest(method: .put, url: url),
+        body: try HTTPBody(fileURL: fileURL).reportingProgress { bytes in
+          seen.withValue { $0.append(bytes) }
+        })
+
+      // No per-task delegate here, so the only honest report is the total, after the fact.
+      #expect(seen.value == [4])
+    }
+  #endif
 
   #if !canImport(FoundationNetworking)
     private func makeDelegate(requestBody: HTTPBody) -> (
@@ -209,6 +237,45 @@ struct URLSessionTransportTests {
         session, task: task, didSendBodyData: 2, totalBytesSent: 2, totalBytesExpectedToSend: 4)
 
       #expect(seen.value.isEmpty)
+    }
+
+    @Test
+    func singleBodyDoesNotFollowARedirectThatResendsIt() async throws {
+      let redirected = LockIsolated<[URLRequest?]>([])
+      let follow: @Sendable (URLRequest?) -> Void = { next in
+        redirected.withValue { $0.append(next) }
+      }
+      let session = URLSession.shared
+      let task = session.uploadTask(withStreamedRequest: URLRequest(url: url))
+      let target = URLRequest(url: URL(string: "https://example.com/moved")!)
+      func response(_ status: Int) -> HTTPURLResponse {
+        HTTPURLResponse(url: url, statusCode: status, httpVersion: nil, headerFields: nil)!
+      }
+      func body(_ behavior: HTTPBody.IterationBehavior) -> HTTPBody {
+        HTTPBody(
+          AsyncStream<ArraySlice<UInt8>> { $0.finish() }, length: .known(0),
+          iterationBehavior: behavior)
+      }
+
+      // 307/308 resend the body, which a one-shot body cannot do, so the 3xx is handed back.
+      let (single, _) = makeDelegate(requestBody: body(.single))
+      single.urlSession(
+        session, task: task, willPerformHTTPRedirection: response(307), newRequest: target,
+        completionHandler: follow)
+      single.urlSession(
+        session, task: task, willPerformHTTPRedirection: response(308), newRequest: target,
+        completionHandler: follow)
+      // 303 turns the request into a bodiless GET, so nothing needs replaying.
+      single.urlSession(
+        session, task: task, willPerformHTTPRedirection: response(303), newRequest: target,
+        completionHandler: follow)
+      // A body that can replay follows every redirect.
+      let (multiple, _) = makeDelegate(requestBody: body(.multiple))
+      multiple.urlSession(
+        session, task: task, willPerformHTTPRedirection: response(307), newRequest: target,
+        completionHandler: follow)
+
+      #expect(redirected.value.map { $0?.url } == [nil, nil, target.url, target.url])
     }
 
     @Test

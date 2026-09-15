@@ -143,8 +143,22 @@ struct HTTPBodyTests {
     onUploadProgress(13)
     #expect(seen.value == [5, 13])
 
-    // Iterating still reports, for transports that read the chunks themselves.
+    // Iterating does not report again: a middleware that buffers the body must not make the
+    // observer see the upload twice.
     _ = try await Data(collecting: body, upTo: 100)
-    #expect(seen.value == [5, 13, 13])
+    #expect(seen.value == [5, 13])
+  }
+
+  @Test
+  func reportingProgressOnAStreamedBodyReportsOnlyOnPull() async throws {
+    let chunks = AsyncStream<ArraySlice<UInt8>> {
+      $0.yield(ArraySlice([1, 2]))
+      $0.finish()
+    }
+    let body = HTTPBody(chunks, length: .known(2), iterationBehavior: .single)
+      .reportingProgress { _ in }
+
+    // The transport hook stays unset, so `didSendBodyData` cannot double up on the pull counter.
+    #expect(body.onUploadProgress == nil)
   }
 }

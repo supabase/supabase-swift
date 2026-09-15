@@ -15,9 +15,8 @@
   /// Builds bodies of `count` chunks of `size` bytes, each filled with its index, and counts how
   /// many times a consumer pulled so a test can tell whether the bridge read ahead of the reader.
   ///
-  /// Goes through the package initializer with a pull-based stream on purpose: the public
-  /// `HTTPBody.init(_:length:iterationBehavior:)` pumps the caller's sequence eagerly into a
-  /// buffer (SDK-1833), which would hide the bridge's own pacing.
+  /// Goes through the package initializer so the pull counter sits right at the source, with no
+  /// wrapping sequence between it and the bridge.
   private struct CountingChunks: Sendable {
     let count: Int
     let size: Int
@@ -122,6 +121,41 @@
       #expect(failure.value is HTTPBodyAlreadyConsumedError)
       // The writer closed its end without writing anything.
       #expect(drain(secondInput).isEmpty)
+    }
+
+    @Test
+    func bodyShorterThanDeclaredLengthFails() async throws {
+      let chunks = CountingChunks(count: 2, size: 10)
+      let body = chunks.body(length: .known(30), iterationBehavior: .single)
+      let (input, output) = makeBoundStreams(bufferSize: 64)
+      let failure = LockIsolated<(any Error)?>(nil)
+      let bridge = HTTPBodyOutputStreamBridge(body: body, output: output) { failure.setValue($0) }
+      defer { bridge.cancel() }
+
+      // Content-Length promised 30 bytes; the stream closes after 20 so the request fails instead
+      // of hanging until URLSession's timeout.
+      #expect(drain(input) == chunks.expectedBytes)
+      await poll { failure.value != nil }
+      let error = try #require(failure.value as? HTTPBodyLengthMismatchError)
+      #expect(error.declared == 30)
+      #expect(error.actual == 20)
+    }
+
+    @Test
+    func bodyLongerThanDeclaredLengthFails() async throws {
+      let chunks = CountingChunks(count: 3, size: 10)
+      let body = chunks.body(length: .known(20), iterationBehavior: .single)
+      let (input, output) = makeBoundStreams(bufferSize: 64)
+      let failure = LockIsolated<(any Error)?>(nil)
+      let bridge = HTTPBodyOutputStreamBridge(body: body, output: output) { failure.setValue($0) }
+      defer { bridge.cancel() }
+
+      // The third chunk would overrun Content-Length; it is never written.
+      #expect(drain(input) == chunks.expectedBytes.prefix(20))
+      await poll { failure.value != nil }
+      let error = try #require(failure.value as? HTTPBodyLengthMismatchError)
+      #expect(error.declared == 20)
+      #expect(error.actual == 30)
     }
 
     @Test

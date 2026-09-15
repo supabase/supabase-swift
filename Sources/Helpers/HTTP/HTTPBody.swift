@@ -55,8 +55,9 @@ public final class HTTPBody: AsyncSequence, @unchecked Sendable {
   /// Whether the body can be iterated more than once.
   public let iterationBehavior: IterationBehavior
   package let storage: Storage
-  /// Set by ``reportingProgress(_:)``. ``URLSessionTransport`` calls it from
-  /// `didSendBodyData` for `.file` and `.data` bodies, which it uploads without iterating.
+  /// Set by ``reportingProgress(_:)`` on `.file` and `.data` bodies, which the transport uploads
+  /// without iterating; it reports through this hook instead. `nil` on `.stream` bodies, which
+  /// report as their chunks are pulled.
   package let onUploadProgress: (@Sendable (_ bytesSoFar: Int64) -> Void)?
 
   private let makeChunks: @Sendable () -> AsyncThrowingStream<ArraySlice<UInt8>, any Error>
@@ -168,6 +169,22 @@ public struct HTTPBodyAlreadyConsumedError: Error, Sendable {
   public init() {}
 }
 
+/// Thrown when a ``HTTPBody/Length/known(_:)`` request body yields a different number of bytes
+/// than it declared. The declared count has already been sent as `Content-Length`, so the
+/// request cannot complete correctly either way.
+public struct HTTPBodyLengthMismatchError: Error, Sendable {
+  /// The byte count the body declared.
+  public let declared: Int64
+  /// The byte count the body actually yielded, or had yielded when it first exceeded `declared`.
+  public let actual: Int64
+
+  /// Creates the error.
+  public init(declared: Int64, actual: Int64) {
+    self.declared = declared
+    self.actual = actual
+  }
+}
+
 /// Thrown by ``Foundation/Data/init(collecting:upTo:)`` when the body exceeds the cap.
 public struct HTTPBodyTooLargeError: Error, Sendable {
   /// The cap that was exceeded, in bytes.
@@ -216,31 +233,43 @@ extension HTTPBody {
     }
   }
 
-  /// Returns a body that reports the cumulative byte count each time a chunk passes through.
+  /// Returns a body that reports the cumulative byte count as its bytes move.
   ///
   /// Works in both directions: wrap a request body to observe upload progress, or a response
   /// body to observe download progress. ``length`` and ``iterationBehavior`` are preserved.
   ///
-  /// A file-backed body stays file-backed, so wrapping it does not change how
-  /// ``URLSessionTransport`` uploads it: the bytes still go straight from disk and progress
-  /// comes from `URLSession`'s own byte counts instead of from re-reading the file.
+  /// Exactly one path reports, chosen by how the body is backed:
+  /// - A streamed body reports each time a chunk is pulled from it. For a request body sent
+  ///   through ``URLSessionTransport`` that is when the chunk is handed to `URLSession`, which
+  ///   runs a little ahead of the bytes leaving the device.
+  /// - An in-memory or file-backed body stays that way, so ``URLSessionTransport`` still uploads
+  ///   it without reading it through the body, and reports `URLSession`'s own sent-byte counts
+  ///   instead. Iterating such a body (a middleware that buffers it, for example) reports
+  ///   nothing, so progress is never counted twice.
   public func reportingProgress(
     _ onProgress: @escaping @Sendable (_ bytesSoFar: Int64) -> Void
   ) -> HTTPBody {
     let base = self
-    return HTTPBody(
-      storage: storage, length: length, iterationBehavior: iterationBehavior,
-      onUploadProgress: { bytesSoFar in
+    let reportsOnPull = if case .stream = storage { true } else { false }
+    var onUploadProgress: (@Sendable (Int64) -> Void)?
+    if !reportsOnPull {
+      onUploadProgress = { bytesSoFar in
         base.onUploadProgress?(bytesSoFar)
         onProgress(bytesSoFar)
       }
+    }
+    return HTTPBody(
+      storage: storage, length: length, iterationBehavior: iterationBehavior,
+      onUploadProgress: onUploadProgress
     ) {
       let iterator = Box(base.makeAsyncIterator())
       let total = Box<Int64>(0)
       return AsyncThrowingStream {
         guard let chunk = try await iterator.value.next() else { return nil }
-        total.value += Int64(chunk.count)
-        onProgress(total.value)
+        if reportsOnPull {
+          total.value += Int64(chunk.count)
+          onProgress(total.value)
+        }
         return chunk
       }
     }
