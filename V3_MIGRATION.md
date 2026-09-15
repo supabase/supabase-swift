@@ -2429,3 +2429,45 @@ do {
 
 For `httpSend`, a non-202 answer is `.server` with `response?.statusCode` and `response?.body`
 set; a request that never completes is `.transport` with the `URLError` in `underlyingError`.
+
+## Retries share one implementation: jittered backoff, `Retry-After`, and Storage/Functions gain `retryPolicy`
+
+Auth, PostgREST, Storage and Functions now retry through one middleware, driven by a new public
+`RetryPolicy` value in `Helpers` (re-exported by every module). Each module keeps its own rule:
+
+- **PostgREST** is unchanged in what it retries: GET and HEAD only, on a network failure or a
+  503/520, up to three retries. `retryEnabled`, `retry(enabled:)` and `db.retry` stay as they
+  were. What changes is the wait: a random duration in `0...min(30s, 1s · 2^n)` instead of a
+  fixed `2^n` seconds, and a `Retry-After` header is honoured up to 30 s.
+- **Auth** makes 3 attempts instead of 2, with the same jittered wait (500 ms base, 20 s cap)
+  instead of a fixed `0.5 · 2^n` seconds. It still retries POST so token refreshes are replayed.
+- **Storage** and **Functions**, which never retried, now do, with a configurable policy:
+  `StorageClientConfiguration.retryPolicy`, `SupabaseClientOptions.StorageOptions.retryPolicy`,
+  `FunctionsClient.init(…, retryPolicy:)` and `SupabaseClientOptions.FunctionsOptions.retryPolicy`.
+  The default is `RetryPolicy.default`: 3 attempts, 500 ms base, 20 s cap, statuses 408, 429,
+  500, 502, 503, 504 and Cloudflare's 520–524 and 530, methods GET, HEAD, OPTIONS, PUT and DELETE.
+  A request carrying an `Idempotency-Key` header is retried whatever its method. A plain `POST`
+  invocation is never retried.
+- **Every module** treats only a `URLError` as a transport failure. An error thrown by your own
+  `ClientTransport`, `ClientMiddleware` or `accessToken` closure is never retried; PostgREST used
+  to retry those too.
+- **Realtime** reconnects carry the same full jitter, capped at 30 s. A reconnect can fire sooner
+  than `reconnectDelay`, never later than before.
+
+Without jitter every client that lost the same connection retried at the same instant, and each
+module had its own idea of a transient failure. This follows the AWS/Smithy retry guidance.
+
+This compiles silently. If you relied on PostgREST retrying a custom transport error, handle the
+retry in your transport. To keep Storage or Functions from retrying at all, pass
+`RetryPolicy.disabled`:
+
+```swift
+let supabase = SupabaseClient(
+  supabaseURL: url, supabaseKey: key,
+  options: .init(
+    auth: .init(storage: storage),
+    functions: .init(retryPolicy: .disabled),
+    storage: .init(retryPolicy: .disabled)
+  )
+)
+```

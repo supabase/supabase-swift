@@ -271,3 +271,8 @@ orderability
 
 # Term from the logging middleware's body-buffering helper (LoggerInterceptor.swift).
 loggable
+
+# Retry-After / Duration terms from RetryPolicy.swift.
+asctime
+attoseconds
+fixdate
