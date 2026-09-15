@@ -1781,7 +1781,7 @@ public struct OAuthClient: Decodable, Hashable, Sendable {
   public let clientId: UUID
 
   /// Human-readable name of the OAuth client
-  public let clientName: String
+  public let clientName: String?
 
   /// Client secret (only returned on registration and regeneration)
   public let clientSecret: String?
@@ -1936,7 +1936,7 @@ public struct OAuthAuthorizationClient: Decodable, Hashable, Sendable {
   public let id: UUID
 
   /// Human-readable name of the OAuth client.
-  public let name: String
+  public let name: String?
 
   /// URI of the OAuth client's homepage.
   public let uri: URL?
@@ -1952,7 +1952,7 @@ public struct OAuthAuthorizationUser: Decodable, Hashable, Sendable {
   public let id: UUID
 
   /// The user's email address.
-  public let email: String
+  public let email: String?
 }
 
 /// Details about a pending OAuth authorization request, returned by
@@ -1973,7 +1973,7 @@ public struct OAuthAuthorizationDetails: Decodable, Hashable, Sendable {
   public let user: OAuthAuthorizationUser
 
   /// The requested scope.
-  public let scope: String
+  public let scope: String?
 }
 
 /// A redirect URL returned after approving or denying an OAuth authorization
