@@ -28,6 +28,26 @@ struct PostgrestTypedSourceTests {
     static let columns = Columns()
   }
 
+  struct Secret: PostgrestWritableRelation {
+    static let relationName = "secrets"
+    static let schema = "private"
+    static let selectString = "*"
+
+    var id: Int
+    var value: String
+
+    struct Columns: Sendable {
+      let id = PostgrestColumn<Secret, Int>("id")
+      let value = PostgrestColumn<Secret, String>("value")
+    }
+
+    static let columns = Columns()
+
+    struct Draft: Encodable, Sendable {
+      var value: String
+    }
+  }
+
   @Test
   func fromUsesTheRelationName() async throws {
     let capture = QueryCapture()
@@ -42,5 +62,37 @@ struct PostgrestTypedSourceTests {
     let todos = try await capture.client.from(Todo.self).select().execute().value
     #expect(todos.count == 1)
     #expect(todos.first?.task == "buy milk")
+  }
+
+  @Test
+  func fromSendsTheRelationSchemaOnReads() async throws {
+    let capture = QueryCapture()
+    _ = try await capture.client.from(Secret.self).select().execute()
+    #expect(capture.path?.hasSuffix("/secrets") == true)
+    #expect(capture.header("Accept-Profile") == "private")
+    #expect(capture.header("Content-Profile") == nil)
+  }
+
+  @Test
+  func fromSendsTheRelationSchemaOnWrites() async throws {
+    let capture = QueryCapture()
+    _ = try await capture.client.from(Secret.self).insert(Secret.Draft(value: "shh")).execute()
+    #expect(capture.header("Content-Profile") == "private")
+    #expect(capture.header("Accept-Profile") == nil)
+  }
+
+  @Test
+  func clientSchemaWinsOverTheRelationSchema() async throws {
+    let capture = QueryCapture()
+    _ = try await capture.client.schema("tenant_a").from(Secret.self).select().execute()
+    #expect(capture.header("Accept-Profile") == "tenant_a")
+  }
+
+  @Test
+  func publicRelationOnUnscopedClientSendsNoProfile() async throws {
+    let capture = QueryCapture()
+    _ = try await capture.client.from(Todo.self).select().execute()
+    #expect(capture.header("Accept-Profile") == nil)
+    #expect(capture.header("Content-Profile") == nil)
   }
 }

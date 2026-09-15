@@ -16,7 +16,12 @@ extension PostgrestClient {
   /// - Parameter relation: The relation type to query.
   /// - Returns: A ``PostgrestTypedSource`` for that relation.
   public func from<R: PostgrestRelation>(_ relation: R.Type) -> PostgrestTypedSource<R> {
-    PostgrestTypedSource(builder: from(R.relationName))
+    PostgrestTypedSource(builder: scoped(to: relation).from(R.relationName))
+  }
+
+  private func scoped<R: PostgrestRelation>(to relation: R.Type) -> PostgrestClient {
+    guard configuration.schema == nil, R.schema != "public" else { return self }
+    return schema(R.schema)
   }
 }
 
