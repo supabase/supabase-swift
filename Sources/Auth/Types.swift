@@ -1802,13 +1802,13 @@ public struct OAuthClient: Decodable, Hashable, Sendable {
   public let logoUri: String?
 
   /// Array of allowed redirect URIs
-  public let redirectUris: [String]
+  public let redirectUris: [String]?
 
   /// Array of allowed grant types
-  public let grantTypes: [OAuthClientGrantType]
+  public let grantTypes: [OAuthClientGrantType]?
 
   /// Array of allowed response types
-  public let responseTypes: [OAuthClientResponseType]
+  public let responseTypes: [OAuthClientResponseType]?
 
   /// Scope of the OAuth client
   public let scope: String?
