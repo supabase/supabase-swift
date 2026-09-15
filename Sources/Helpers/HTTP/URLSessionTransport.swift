@@ -25,12 +25,14 @@ import HTTPTypesFoundation
 ///   transfer. Because the body is pulled while the request is in flight, a gap between chunks
 ///   longer than the request timeout fails the request with `URLError.timedOut`. On Linux,
 ///   swift-corelibs-foundation has no per-task delegates to feed a stream from, so such bodies
-///   are first spooled to a temporary file and uploaded from there, and a progress wrapper on an
-///   in-memory or file body reports once, when the upload completes.
-/// - A ``HTTPBody/IterationBehavior/single`` body cannot be sent twice. A 307 or 308 redirect,
-///   which would resend it, is not followed: the redirect response is returned to the caller
-///   as-is. If `URLSession` asks for the body again for any other reason (an authentication
-///   retry), the request fails with ``HTTPBodyAlreadyConsumedError``.
+///   are first spooled to a temporary file (checked against a known length the same way) and
+///   uploaded from there, and a progress wrapper on an in-memory or file body reports once, when
+///   the upload completes.
+/// - On Apple platforms a ``HTTPBody/IterationBehavior/single`` body cannot be sent twice. A 307
+///   or 308 redirect, which would resend it, is not followed: the redirect response is returned
+///   to the caller as-is. If `URLSession` asks for the body again for any other reason (an
+///   authentication retry), the request fails with ``HTTPBodyAlreadyConsumedError``. On Linux the
+///   spooled copy can be resent, so redirects are followed for every body kind.
 /// - Response bodies stream on Apple platforms: the head is returned as soon as it arrives and
 ///   each chunk is one `didReceive(data:)` delivery from `URLSession`, so chunk boundaries follow
 ///   the network, not the payload. swift-corelibs-foundation has no per-task delegates, so on
@@ -87,18 +89,23 @@ public struct URLSessionTransport: ClientTransport {
       var fileURL: URL?
       var spool: URL?
       defer { if let spool { try? FileManager.default.removeItem(at: spool) } }
-      switch body?.storage {
-      case .file(let url)?:
+      if case .file(let url)? = body?.storage {
         fileURL = url
-      case .stream?:
+      } else if let body, case .stream = body.storage {
         // swift-corelibs-foundation has no per-task delegates to feed a body stream from, so the
         // body is spooled to disk first and uploaded from there; memory stays flat either way.
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         spool = url
-        try await body?.write(to: url)
+        try await body.write(to: url)
+        // Content-Length already carries the declared count, so the spooled size must match it.
+        if case .known(let declared) = body.length {
+          let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+          let actual = (attributes[.size] as? NSNumber)?.int64Value ?? 0
+          guard actual == declared else {
+            throw HTTPBodyLengthMismatchError(declared: declared, actual: actual)
+          }
+        }
         fileURL = url
-      case .data?, nil:
-        break
       }
       let (data, response) =
         if let fileURL {

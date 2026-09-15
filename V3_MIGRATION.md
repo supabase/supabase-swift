@@ -2515,9 +2515,11 @@ This is a compile error: the `timeoutInterval:` argument label no longer exists,
 
 ## `URLSessionTransport` no longer follows a 307/308 redirect for a one-shot request body
 
-A request whose body is `HTTPBody.IterationBehavior.single` and that receives a `307 Temporary
-Redirect` or `308 Permanent Redirect` now returns that redirect response to the caller instead
-of following it. Every other body kind, and every other redirect status, is followed as before.
+On Apple platforms, a request whose body is `HTTPBody.IterationBehavior.single` and that receives
+a `307 Temporary Redirect` or `308 Permanent Redirect` now returns that redirect response to the
+caller instead of following it. Every other body kind, and every other redirect status, is
+followed as before. Linux is unchanged: it spools the body to disk before sending, so the copy can
+be resent and the redirect is followed.
 
 **Why**: request bodies are now streamed to `URLSession` as they are produced instead of being
 buffered into memory first. A 307/308 keeps the method and resends the body, and a `.single`
