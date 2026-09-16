@@ -272,6 +272,10 @@ orderability
 # Term from the logging middleware's body-buffering helper (LoggerInterceptor.swift).
 loggable
 
+# Terms from the live memory probe (MemoryProbeIntegrationTests.swift).
+memprobe
+attoseconds
+
 # Retry-After / Duration terms from RetryPolicy.swift.
 asctime
 fixdate

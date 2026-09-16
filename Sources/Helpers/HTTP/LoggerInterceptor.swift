@@ -75,7 +75,9 @@ package struct LoggerInterceptor: ClientMiddleware {
       return (body, "<streamed>")
     }
     let data = try await Data(collecting: body, upTo: Int(maxLoggedBodyBytes) * 16)
-    return (HTTPBody(data), stringify(data))
+    // Re-wrapping must keep a progress hook, or the transport uploads the copy in silence.
+    let rewrapped = HTTPBody(data)
+    return (body.onUploadProgress.map(rewrapped.reportingProgress) ?? rewrapped, stringify(data))
   }
 }
 

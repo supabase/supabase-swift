@@ -22,22 +22,42 @@ import Testing
 // Mocker 3.0.2's `URLRequest.httpBodyStreamData()` is a `private extension`, not `public` as
 // documented, so it isn't visible here. URLSession converts a POST/PUT `httpBody` into an
 // `httpBodyStream` before `MockingURLProtocol` observes the request, so tests need their own
-// reader to recover the bytes.
+// reader to recover the bytes. The stream is read until the writer closes it, which for a
+// streamed request body means until the transport has pumped every chunk through.
 extension URLRequest {
   fileprivate func testBodyData() -> Data? {
     guard let stream = httpBodyStream else { return httpBody }
-    stream.open()
-    defer { stream.close() }
+    return stream.readToEnd()
+  }
+}
+
+extension InputStream {
+  /// Blocks the calling thread until the writer closes its end. Only call this from a thread
+  /// that owns nothing else, such as Mocker's request callback on URLSession's own thread.
+  fileprivate func readToEnd() -> Data {
+    open()
+    defer { close() }
     var data = Data()
     let bufferSize = 1024
     let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
     defer { buffer.deallocate() }
-    while stream.hasBytesAvailable {
-      let read = stream.read(buffer, maxLength: bufferSize)
+    while true {
+      let read = self.read(buffer, maxLength: bufferSize)
       guard read > 0 else { break }
       data.append(buffer, count: read)
     }
     return data
+  }
+
+  /// `readToEnd()` on a global queue. A bound pair's blocking read spins the calling thread's
+  /// run loop while it waits, so it must never run on the test's own thread: in a full parallel
+  /// run Swift Testing can place the test on the main thread, and parking the main run loop
+  /// there deadlocks everything else that needs it.
+  fileprivate func readToEndOffThread() async -> Data {
+    let stream = UncheckedSendable(self)
+    return await withCheckedContinuation { continuation in
+      DispatchQueue.global().async { continuation.resume(returning: stream.value.readToEnd()) }
+    }
   }
 }
 
@@ -122,6 +142,219 @@ struct URLSessionTransportTests {
     #endif
     #expect(try await Data(collecting: try #require(body), upTo: 100) == Data("done".utf8))
   }
+
+  @Test
+  func streamedBodyIsPulledWhileTheRequestIsInFlight() async throws {
+    let transport = makeTransport()
+    var mock = Mock(url: url, statusCode: 200, data: [.post: Data()])
+    let secondChunkReleased = LockIsolated(false)
+    let releasedBeforeRequestStarted = LockIsolated<Bool?>(nil)
+    let seenContentLength = LockIsolated<String?>(nil)
+    let seenBody = LockIsolated<Data?>(nil)
+    let (requestStarted, started) = AsyncStream<Void>.makeStream()
+    mock.onRequestHandler = OnRequestHandler(requestCallback: { request in
+      releasedBeforeRequestStarted.setValue(secondChunkReleased.value)
+      started.finish()
+      seenContentLength.setValue(request.value(forHTTPHeaderField: "Content-Length"))
+      seenBody.setValue(request.testBodyData())
+    })
+    mock.register()
+
+    // The second chunk is held back until the request has started. A streaming transport starts
+    // with the first chunk and then drains the second; a transport that collects the body first
+    // would never start (Linux does collect first, so there the gate is skipped and the flag is
+    // set before the request can begin).
+    let chunks = AsyncThrowingStream<ArraySlice<UInt8>, any Error> { continuation in
+      continuation.yield(ArraySlice("abc".utf8))
+      Task {
+        #if !canImport(FoundationNetworking)
+          for await _ in requestStarted {}
+        #endif
+        secondChunkReleased.setValue(true)
+        continuation.yield(ArraySlice("def".utf8))
+        continuation.finish()
+      }
+    }
+    let body = HTTPBody(chunks, length: .known(6), iterationBehavior: .single)
+
+    let (head, _) = try await transport.send(HTTPRequest(method: .post, url: url), body: body)
+
+    #expect(head.status == 200)
+    #if canImport(FoundationNetworking)
+      // Linux spools the body before the request starts (documented on the transport).
+      #expect(releasedBeforeRequestStarted.value == true)
+    #else
+      #expect(releasedBeforeRequestStarted.value == false)
+    #endif
+    #expect(seenContentLength.value == "6")
+    // Linux uploads the spooled file from the task, which `MockingURLProtocol` cannot see.
+    #if !canImport(FoundationNetworking)
+      #expect(seenBody.value == Data("abcdef".utf8))
+    #endif
+  }
+
+  #if canImport(FoundationNetworking)
+    @Test
+    func spooledBodyShorterThanDeclaredLengthFailsBeforeUploadOnLinux() async throws {
+      let transport = makeTransport()
+      let started = LockIsolated(false)
+      var mock = Mock(url: url, statusCode: 200, data: [.post: Data()])
+      mock.onRequestHandler = OnRequestHandler(requestCallback: { _ in started.setValue(true) })
+      mock.register()
+      let chunks = AsyncStream<ArraySlice<UInt8>> {
+        $0.yield(ArraySlice("abc".utf8))
+        $0.finish()
+      }
+      let body = HTTPBody(chunks, length: .known(6), iterationBehavior: .single)
+
+      await #expect(throws: HTTPBodyLengthMismatchError.self) {
+        _ = try await transport.send(HTTPRequest(method: .post, url: url), body: body)
+      }
+      #expect(started.value == false)
+    }
+
+    @Test
+    func fileBodyProgressReportsOnceOnCompletionOnLinux() async throws {
+      let transport = makeTransport()
+      let fileURL = FileManager.default.temporaryDirectory.appendingPathComponent(
+        UUID().uuidString)
+      try Data("file".utf8).write(to: fileURL)
+      defer { try? FileManager.default.removeItem(at: fileURL) }
+      Mock(url: url, statusCode: 200, data: [.put: Data()]).register()
+      let seen = LockIsolated<[Int64]>([])
+
+      _ = try await transport.send(
+        HTTPRequest(method: .put, url: url),
+        body: try HTTPBody(fileURL: fileURL).reportingProgress { bytes in
+          seen.withValue { $0.append(bytes) }
+        })
+
+      // No per-task delegate here, so the only honest report is the total, after the fact.
+      #expect(seen.value == [4])
+    }
+  #endif
+
+  #if !canImport(FoundationNetworking)
+    private func makeDelegate(requestBody: HTTPBody) -> (
+      StreamingTaskDelegate, AsyncThrowingStream<ArraySlice<UInt8>, any Error>
+    ) {
+      let (chunks, continuation) = AsyncThrowingStream<ArraySlice<UInt8>, any Error>.makeStream()
+      return (StreamingTaskDelegate(body: continuation, requestBody: requestBody), chunks)
+    }
+
+    @Test
+    func fileBodyProgressComesFromDidSendBodyData() async throws {
+      let fileURL = FileManager.default.temporaryDirectory.appendingPathComponent(
+        UUID().uuidString)
+      try Data("file".utf8).write(to: fileURL)
+      defer { try? FileManager.default.removeItem(at: fileURL) }
+      let seen = LockIsolated<[Int64]>([])
+      let body = try HTTPBody(fileURL: fileURL)
+        .reportingProgress { bytes in seen.withValue { $0.append(bytes) } }
+      let (delegate, _) = makeDelegate(requestBody: body)
+      let session = URLSession.shared
+      let task = session.dataTask(with: url)
+
+      delegate.urlSession(
+        session, task: task, didSendBodyData: 2, totalBytesSent: 2, totalBytesExpectedToSend: 4)
+      delegate.urlSession(
+        session, task: task, didSendBodyData: 2, totalBytesSent: 4, totalBytesExpectedToSend: 4)
+
+      #expect(seen.value == [2, 4])
+    }
+
+    @Test
+    func streamedBodyProgressIsNotReportedTwice() async throws {
+      let seen = LockIsolated<[Int64]>([])
+      let chunks = AsyncStream<ArraySlice<UInt8>> { $0.finish() }
+      let body = HTTPBody(chunks, length: .unknown, iterationBehavior: .single)
+        .reportingProgress { bytes in seen.withValue { $0.append(bytes) } }
+      let (delegate, _) = makeDelegate(requestBody: body)
+      let session = URLSession.shared
+      let task = session.dataTask(with: url)
+
+      // A streamed body reports as its chunks are pulled, so the task-level callback stays quiet.
+      delegate.urlSession(
+        session, task: task, didSendBodyData: 2, totalBytesSent: 2, totalBytesExpectedToSend: 4)
+
+      #expect(seen.value.isEmpty)
+    }
+
+    @Test
+    func singleBodyDoesNotFollowARedirectThatResendsIt() async throws {
+      let redirected = LockIsolated<[URLRequest?]>([])
+      let follow: @Sendable (URLRequest?) -> Void = { next in
+        redirected.withValue { $0.append(next) }
+      }
+      let session = URLSession.shared
+      let task = session.uploadTask(withStreamedRequest: URLRequest(url: url))
+      let target = URLRequest(url: URL(string: "https://example.com/moved")!)
+      func response(_ status: Int) -> HTTPURLResponse {
+        HTTPURLResponse(url: url, statusCode: status, httpVersion: nil, headerFields: nil)!
+      }
+      func body(_ behavior: HTTPBody.IterationBehavior) -> HTTPBody {
+        HTTPBody(
+          AsyncStream<ArraySlice<UInt8>> { $0.finish() }, length: .known(0),
+          iterationBehavior: behavior)
+      }
+
+      // 307/308 resend the body, which a one-shot body cannot do, so the 3xx is handed back.
+      let (single, _) = makeDelegate(requestBody: body(.single))
+      single.urlSession(
+        session, task: task, willPerformHTTPRedirection: response(307), newRequest: target,
+        completionHandler: follow)
+      single.urlSession(
+        session, task: task, willPerformHTTPRedirection: response(308), newRequest: target,
+        completionHandler: follow)
+      // 303 turns the request into a bodiless GET, so nothing needs replaying.
+      single.urlSession(
+        session, task: task, willPerformHTTPRedirection: response(303), newRequest: target,
+        completionHandler: follow)
+      // A body that can replay follows every redirect.
+      let (multiple, _) = makeDelegate(requestBody: body(.multiple))
+      multiple.urlSession(
+        session, task: task, willPerformHTTPRedirection: response(307), newRequest: target,
+        completionHandler: follow)
+
+      #expect(redirected.value.map { $0?.url } == [nil, nil, target.url, target.url])
+    }
+
+    @Test
+    func singleBodyFailsTheRequestOnASecondBodyStream() async throws {
+      let chunks = AsyncStream<ArraySlice<UInt8>> { continuation in
+        continuation.yield(ArraySlice("abcd".utf8))
+        continuation.finish()
+      }
+      let body = HTTPBody(chunks, length: .known(4), iterationBehavior: .single)
+      let (delegate, responseChunks) = makeDelegate(requestBody: body)
+      let session = URLSession.shared
+      let task = session.uploadTask(withStreamedRequest: URLRequest(url: url))
+
+      let first = LockIsolated<UncheckedSendable<InputStream>?>(nil)
+      delegate.urlSession(
+        session, task: task,
+        needNewBodyStream: { stream in
+          let boxed = stream.map { UncheckedSendable($0) }
+          first.setValue(boxed)
+        })
+      let firstStream = try #require(first.value?.value)
+      #expect(await firstStream.readToEndOffThread() == Data("abcd".utf8))
+
+      // A redirect or auth retry asks for the body again. The one-shot body cannot replay, so
+      // the delegate cancels the task and reports why instead of a bare `URLError.cancelled`.
+      delegate.urlSession(session, task: task, needNewBodyStream: { _ in })
+      let deadline = ContinuousClock.now + .seconds(2)
+      while task.state == .suspended && ContinuousClock.now < deadline {
+        try await Task.sleep(for: .milliseconds(5))
+      }
+      #expect(task.state != .suspended)
+
+      delegate.urlSession(session, task: task, didCompleteWithError: URLError(.cancelled))
+      await #expect(throws: HTTPBodyAlreadyConsumedError.self) {
+        for try await _ in responseChunks {}
+      }
+    }
+  #endif
 
   @Test
   func requestTimeoutTaskLocalIsAppliedToTheURLRequest() async throws {
