@@ -13,7 +13,7 @@ import Testing
 @Suite
 struct StorageApiTests {
   #if os(macOS) || os(Linux)
-    /// `useNewHostname` rewrites the host at construction, so a URL with no host is a programmer
+    /// `usesNewHostname` rewrites the host at construction, so a URL with no host is a programmer
     /// error the initializer traps on, rather than a `URLError` surfacing on the first request.
     @Test
     func newHostnameWithoutAHostTraps() async {
@@ -22,7 +22,7 @@ struct StorageApiTests {
           configuration: StorageClientConfiguration(
             url: URL(string: "project-ref")!,
             headers: [:],
-            useNewHostname: true
+            usesNewHostname: true
           )
         )
       }

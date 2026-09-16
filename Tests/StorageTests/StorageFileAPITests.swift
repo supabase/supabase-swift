@@ -1198,7 +1198,7 @@ extension StorageMockerTests {
       let storage = makeSUT()
 
       let publicURL = try storage.from("bucket")
-        .getPublicURL(path: "image.png", options: TransformOptions())
+        .publicURL(path: "image.png", options: TransformOptions())
 
       #expect(
         publicURL.absoluteString.contains("/object/public/"),
@@ -1215,7 +1215,7 @@ extension StorageMockerTests {
       let storage = makeSUT()
 
       let publicURL = try storage.from("bucket")
-        .getPublicURL(path: "image.png", options: TransformOptions(width: 200))
+        .publicURL(path: "image.png", options: TransformOptions(width: 200))
 
       #expect(
         publicURL.absoluteString.contains("/render/image/"),
@@ -1228,7 +1228,7 @@ extension StorageMockerTests {
       let storage = makeSUT()
 
       let publicURL = try storage.from("bucket")
-        .getPublicURL(path: "/folder/image.png")
+        .publicURL(path: "/folder/image.png")
 
       #expect(
         publicURL.absoluteString
@@ -1484,7 +1484,7 @@ extension StorageMockerTests {
         .createSignedUploadURL(
           path: "file.txt",
           options: CreateSignedUploadURLOptions(
-            upsert: true
+            shouldUpsert: true
           )
         )
 
@@ -1800,7 +1800,7 @@ extension StorageMockerTests {
     func getPublicURL_cacheNonce() throws {
       let storage = makeSUT()
 
-      let url = try storage.from("bucket").getPublicURL(
+      let url = try storage.from("bucket").publicURL(
         path: "file.txt",
         cacheNonce: "abc123"
       )

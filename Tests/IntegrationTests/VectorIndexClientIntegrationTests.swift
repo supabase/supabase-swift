@@ -64,7 +64,7 @@ final class VectorIndexClientIntegrationTests {
       )
     )
 
-    let index = try await bucket.getIndex(indexName)
+    let index = try await bucket.indexDetails(indexName)
     #expect(index.indexName == indexName)
     #expect(index.vectorBucketName == bucketName)
     #expect(index.dataType == .float32)
@@ -93,7 +93,7 @@ final class VectorIndexClientIntegrationTests {
       VectorEntry(key: "b", data: VectorData(float32: [0.4, 0.5, 0.6])),
     ])
 
-    let fetched = try await index.getVectors(
+    let fetched = try await index.vectors(
       keys: ["a", "b"], returnData: true, returnMetadata: true)
     #expect(fetched.count == 2)
     let a = try #require(fetched.first { $0.key == "a" })

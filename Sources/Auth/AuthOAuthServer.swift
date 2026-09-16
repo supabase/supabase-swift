@@ -23,13 +23,13 @@ import HTTPTypes
 /// ## Topics
 ///
 /// ### Handling a pending authorization
-/// - ``getAuthorizationDetails(authorizationId:)``
-/// - ``approveAuthorization(authorizationId:)``
-/// - ``denyAuthorization(authorizationId:)``
+/// - ``authorizationDetails(id:)``
+/// - ``approveAuthorization(id:)``
+/// - ``denyAuthorization(id:)``
 ///
 /// ### Managing grants
 /// - ``listGrants()``
-/// - ``revokeGrant(clientId:)``
+/// - ``revokeGrant(id:)``
 public struct AuthOAuthServer: Sendable {
   let clientID: AuthClientID
 
@@ -47,24 +47,24 @@ public struct AuthOAuthServer: Sendable {
   /// ``OAuthAuthorizationDetailsResponse/details(_:)`` — callers must handle
   /// both cases.
   ///
-  /// - Important: Call this before ``approveAuthorization(authorizationId:)``
-  ///   or ``denyAuthorization(authorizationId:)``. The authorization request
+  /// - Important: Call this before ``approveAuthorization(id:)``
+  ///   or ``denyAuthorization(id:)``. The authorization request
   ///   is created without an owning user (to support flows where the user
   ///   hasn't signed in yet), and this call is what claims it for the
   ///   current user server-side. Calling approve/deny first fails as if the
   ///   authorization didn't exist.
   ///
-  /// - Parameter authorizationId: The opaque identifier of the authorization request.
+  /// - Parameter id: The opaque identifier of the authorization request.
   /// - Returns: Either the details to present for consent, or a redirect if already approved.
-  public func getAuthorizationDetails(
-    authorizationId: String
+  public func authorizationDetails(
+    id: String
   ) async throws -> OAuthAuthorizationDetailsResponse {
     try await api.authorizedExecute(
       HTTPRequest(
         method: .get,
         url: configuration.url
           .appendingPathComponent("oauth/authorizations")
-          .appendingPathComponent(authorizationId)
+          .appendingPathComponent(id)
       )
     )
     .decoded(decoder: decoder)
@@ -72,15 +72,15 @@ public struct AuthOAuthServer: Sendable {
 
   /// Approves a pending OAuth authorization request.
   ///
-  /// - Important: ``getAuthorizationDetails(authorizationId:)`` must be
-  ///   called for this `authorizationId` first — it claims the request for
+  /// - Important: ``authorizationDetails(id:)`` must be
+  ///   called for this `id` first — it claims the request for
   ///   the current user, without which this fails as if the authorization
   ///   didn't exist.
   ///
-  /// - Parameter authorizationId: The opaque identifier of the authorization request.
+  /// - Parameter id: The opaque identifier of the authorization request.
   /// - Returns: The URL to redirect the user to, completing the third-party app's OAuth flow.
-  public func approveAuthorization(authorizationId: String) async throws -> OAuthRedirect {
-    try await consent(authorizationId: authorizationId, action: "approve")
+  public func approveAuthorization(id: String) async throws -> OAuthRedirect {
+    try await consent(authorizationId: id, action: "approve")
   }
 
   /// Denies a pending OAuth authorization request.
@@ -90,15 +90,15 @@ public struct AuthOAuthServer: Sendable {
   /// (RFC 6749), which the caller should navigate the user to so the
   /// third-party app receives the OAuth error.
   ///
-  /// - Important: ``getAuthorizationDetails(authorizationId:)`` must be
-  ///   called for this `authorizationId` first — it claims the request for
+  /// - Important: ``authorizationDetails(id:)`` must be
+  ///   called for this `id` first — it claims the request for
   ///   the current user, without which this fails as if the authorization
   ///   didn't exist.
   ///
-  /// - Parameter authorizationId: The opaque identifier of the authorization request.
+  /// - Parameter id: The opaque identifier of the authorization request.
   /// - Returns: The URL to redirect the user to, carrying the OAuth error.
-  public func denyAuthorization(authorizationId: String) async throws -> OAuthRedirect {
-    try await consent(authorizationId: authorizationId, action: "deny")
+  public func denyAuthorization(id: String) async throws -> OAuthRedirect {
+    try await consent(authorizationId: id, action: "deny")
   }
 
   private func consent(authorizationId: String, action: String) async throws -> OAuthRedirect {
@@ -132,13 +132,13 @@ public struct AuthOAuthServer: Sendable {
   /// This marks the consent as revoked, deletes active sessions for that
   /// OAuth client, and invalidates its associated refresh tokens.
   ///
-  /// - Parameter clientId: The unique identifier of the OAuth client to revoke access for.
-  public func revokeGrant(clientId: UUID) async throws {
+  /// - Parameter id: The unique identifier of the OAuth client to revoke access for.
+  public func revokeGrant(id: UUID) async throws {
     _ = try await api.authorizedExecute(
       HTTPRequest(
         method: .delete,
         url: configuration.url.appendingPathComponent("user/oauth/grants"),
-        query: [URLQueryItem(name: "client_id", value: clientId.uuidString)]
+        query: [URLQueryItem(name: "client_id", value: id.uuidString)]
       )
     )
   }

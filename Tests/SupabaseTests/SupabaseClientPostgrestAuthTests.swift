@@ -87,7 +87,7 @@ struct SupabaseClientPostgrestAuthTests {
       options: SupabaseClientOptions(
         auth: SupabaseClientOptions.AuthOptions(
           storage: AuthLocalStorageMock(),
-          autoRefreshToken: false
+          automaticallyRefreshesToken: false
         ),
         global: SupabaseClientOptions.GlobalOptions(
           http: .init(transport: URLSessionTransport(session: makePostgrestAuthCapturingSession()))

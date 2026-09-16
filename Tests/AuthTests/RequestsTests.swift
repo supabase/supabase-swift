@@ -127,9 +127,9 @@ struct RequestsTests {
   }
 
   @Test
-  func getOAuthSignInURL() async throws {
+  func oauthSignInURL() async throws {
     let sut = makeSUT()
-    let url = try sut.getOAuthSignInURL(
+    let url = try sut.oauthSignInURL(
       provider: .github, scopes: "read,write",
       redirectTo: URL(string: "https://dummy-url.com/redirect")!,
       queryParams: [("extra_key", "extra_value")]
@@ -371,7 +371,7 @@ struct RequestsTests {
 
     let userId = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
     await assert {
-      _ = try await sut.admin.listPasskeys(userId: userId)
+      _ = try await sut.admin.listPasskeys(forUser: userId)
     }
   }
 
@@ -382,7 +382,7 @@ struct RequestsTests {
     let userId = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
     let passkeyId = UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B")!
     await assert {
-      try await sut.admin.deletePasskey(userId: userId, passkeyId: passkeyId)
+      try await sut.admin.deletePasskey(id: passkeyId, forUser: userId)
     }
   }
 
@@ -458,13 +458,13 @@ struct RequestsTests {
   }
 
   @Test
-  func getLinkIdentityURL() async throws {
+  func linkIdentityURL() async throws {
     let sut = makeSUT()
 
     Dependencies[sut.clientID].sessionStorage.store(.valid)
 
     await assert {
-      _ = try await sut.getLinkIdentityURL(
+      _ = try await sut.linkIdentityURL(
         provider: .github,
         scopes: "user:email",
         redirectTo: URL(string: "https://supabase.com"),
@@ -607,13 +607,13 @@ struct RequestsTests {
   }
 
   @Test
-  func getPasskeyRegistrationOptions() async throws {
+  func passkeyRegistrationOptions() async throws {
     let sut = makeSUT()
 
     Dependencies[sut.clientID].sessionStorage.store(.valid)
 
     await assert {
-      _ = try await sut.getPasskeyRegistrationOptions()
+      _ = try await sut.passkeyRegistrationOptions()
     }
   }
 
@@ -640,12 +640,12 @@ struct RequestsTests {
   }
 
   @Test
-  func getPasskeyAuthenticationOptions() async throws {
+  func passkeyAuthenticationOptions() async throws {
     let sut = makeSUT()
 
     // No session stored: passkey authentication options must not require auth.
     await assert {
-      _ = try await sut.getPasskeyAuthenticationOptions()
+      _ = try await sut.passkeyAuthenticationOptions()
     }
   }
 
