@@ -93,8 +93,8 @@
 
     let storage = SupabaseStorageClient(
       configuration: StorageClientConfiguration(
-        url: URL(string: "\(DotEnv.SUPABASE_URL)/storage/v1")!,
-        headers: ["Authorization": "Bearer \(DotEnv.SUPABASE_SECRET_KEY)"]
+        url: URL(string: "\(DotEnv.supabaseURL)/storage/v1")!,
+        headers: ["Authorization": "Bearer \(DotEnv.supabaseSecretKey)"]
       )
     )
     let transport = URLSessionTransport()
@@ -102,13 +102,13 @@
 
     var authHeaders: HTTPFields {
       [
-        .authorization: "Bearer \(DotEnv.SUPABASE_SECRET_KEY)",
-        .init("apikey")!: DotEnv.SUPABASE_SECRET_KEY,
+        .authorization: "Bearer \(DotEnv.supabaseSecretKey)",
+        .init("apikey")!: DotEnv.supabaseSecretKey,
       ]
     }
 
     func objectURL(_ path: String) -> URL {
-      URL(string: "\(DotEnv.SUPABASE_URL)/storage/v1/object/\(bucket)/\(path)")!
+      URL(string: "\(DotEnv.supabaseURL)/storage/v1/object/\(bucket)/\(path)")!
     }
 
     /// Writes `fileSize` bytes of non-constant content to a temp file without holding it in memory.

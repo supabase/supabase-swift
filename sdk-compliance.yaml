@@ -837,6 +837,10 @@ features:
       - HTTPBodyTooLargeError
       - HTTPBodyTooLargeError.init
       - HTTPBodyTooLargeError.maxBytes
+      - HTTPBodyLengthMismatchError
+      - HTTPBodyLengthMismatchError.init
+      - HTTPBodyLengthMismatchError.declared
+      - HTTPBodyLengthMismatchError.actual
       - Data.init
   client.request_configuration.global_headers:
     status: implemented
