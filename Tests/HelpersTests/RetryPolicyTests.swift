@@ -73,8 +73,17 @@ struct RetryPolicyTests {
   }
 
   @Test
-  func retryAfterHTTPDateInThePastIsZero() {
-    #expect(RetryPolicy.retryAfterDelay("Wed, 21 Oct 2015 07:27:00 GMT", now: now) == .zero)
+  func retryAfterHTTPDateNotInTheFutureFallsBackToBackoff() {
+    // A stale date carries no timing information; a zero wait would make every client that saw
+    // it replay at the same instant, which is what the jittered backoff exists to prevent.
+    let past = "Wed, 21 Oct 2015 07:27:00 GMT"
+    let exactlyNow = "Wed, 21 Oct 2015 07:28:00 GMT"
+    #expect(RetryPolicy.retryAfterDelay(past, now: now) == nil)
+    #expect(RetryPolicy.retryAfterDelay(exactlyNow, now: now) == nil)
+
+    let policy = RetryPolicy(baseDelay: .seconds(1), maxDelay: .seconds(20))
+    let backoff = Duration.milliseconds(500)...(.seconds(1))
+    #expect(backoff.contains(policy.delay(retry: 1, retryAfter: past, now: now)))
   }
 
   @Test

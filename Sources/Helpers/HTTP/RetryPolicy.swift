@@ -82,7 +82,9 @@ extension RetryPolicy {
   }
 
   /// Parses a `Retry-After` value (RFC 9110 §10.2.3): non-negative delta-seconds or an
-  /// IMF-fixdate. A date in the past is `.zero`; anything else is `nil`.
+  /// IMF-fixdate in the future. Anything else is `nil`, so the jittered backoff applies — a
+  /// date that has already passed carries no timing information, and a zero wait would make
+  /// every client that saw it replay at the same instant.
   package static func retryAfterDelay(_ value: String, now: Date) -> Duration? {
     let value = value.trimmingCharacters(in: .whitespaces)
     if let seconds = Int(value) {
@@ -93,7 +95,7 @@ extension RetryPolicy {
     formatter.locale = Locale(identifier: "en_US_POSIX")
     formatter.timeZone = TimeZone(secondsFromGMT: 0)
     formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
-    guard let date = formatter.date(from: value) else { return nil }
-    return .seconds(max(0, date.timeIntervalSince(now)))
+    guard let date = formatter.date(from: value), date > now else { return nil }
+    return .seconds(date.timeIntervalSince(now))
   }
 }
