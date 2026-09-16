@@ -743,6 +743,26 @@ extension PostgrestMockerTests {
     }
 
     @Test
+    func perCallTimeoutOverridesTheConfiguredTimeout() async throws {
+      let seen = LockIsolated<[Duration?]>([])
+      let sut = PostgrestClient(
+        url: url,
+        http: .init(
+          transport: ClosureTransport { _, _ in
+            seen.withValue { $0.append(RequestTimeout.current) }
+            return (HTTPTypes.HTTPResponse(status: .ok), HTTPBody(Data("[]".utf8)))
+          },
+          timeout: .seconds(7)))
+
+      try await sut.from("users").select().execute()
+      try await sut.from("users").select().timeout(.seconds(3)).execute()
+      // The override must survive a phase change (filter -> transform).
+      try await sut.from("users").select().timeout(.seconds(3)).order("id").execute()
+
+      #expect(seen.value == [.seconds(7), .seconds(3), .seconds(3)])
+    }
+
+    @Test
     func clientLevelRetryDisabled() async throws {
       let callCount = LockIsolated(0)
 

@@ -27,7 +27,7 @@ struct HTTPClientTests {
       HTTPTypes.HTTPResponse, HTTPBody?
     ) {
       seen.withValue { $0.append((request, body)) }
-      #expect(RequestTimeout.current == 42)
+      #expect(RequestTimeout.current == .seconds(42))
       return respond()
     }
   }
@@ -67,7 +67,7 @@ struct HTTPClientTests {
       HTTPRequest(
         method: .post, url: URL(string: "https://example.com/rest")!,
         query: [URLQueryItem(name: "select", value: "*")]),
-      body: Data("{}".utf8), timeout: 42
+      body: Data("{}".utf8), timeout: .seconds(42)
     )
 
     #expect(log.value == ["A:request", "B:request", "B:response", "A:response"])
@@ -91,7 +91,7 @@ struct HTTPClientTests {
     )
 
     let (response, data) = try await client.send(
-      HTTPRequest(method: .get, url: URL(string: "https://example.com")!), timeout: 42)
+      HTTPRequest(method: .get, url: URL(string: "https://example.com")!), timeout: .seconds(42))
 
     let sent = try #require(seen.value.first)
     #expect(sent.1 == nil)
@@ -115,7 +115,7 @@ struct HTTPClientTests {
     )
 
     let (head, body) = try await client.stream(
-      HTTPRequest(method: .get, url: URL(string: "https://example.com")!), timeout: 42)
+      HTTPRequest(method: .get, url: URL(string: "https://example.com")!), timeout: .seconds(42))
     #expect(head.status == .ok)
 
     continuation.yield(ArraySlice("data: 1\n".utf8))
@@ -123,5 +123,62 @@ struct HTTPClientTests {
     #expect(try await iterator.next() == ArraySlice("data: 1\n".utf8))
     continuation.finish()
     #expect(try await iterator.next() == nil)
+  }
+
+  /// Records the `RequestTimeout` task local the transport sees — the value
+  /// `URLSessionTransport` writes to `URLRequest.timeoutInterval`.
+  struct TimeoutProbe: ClientTransport {
+    let seen: LockIsolated<[Duration?]>
+
+    func send(_ request: HTTPTypes.HTTPRequest, body: HTTPBody?) async throws -> (
+      HTTPTypes.HTTPResponse, HTTPBody?
+    ) {
+      seen.withValue { $0.append(RequestTimeout.current) }
+      return (HTTPTypes.HTTPResponse(status: .ok), nil)
+    }
+  }
+
+  private var probeRequest: HTTPRequest {
+    HTTPRequest(method: .get, url: URL(string: "https://example.com")!)
+  }
+
+  @Test
+  func requestsTimeOutAfterSixtySecondsUnlessConfigured() async throws {
+    let seen = LockIsolated<[Duration?]>([])
+    let client = HTTPClient(
+      configuration: .init(transport: TimeoutProbe(seen: seen)), appending: [])
+
+    _ = try await client.send(probeRequest)
+
+    #expect(seen.value == [.seconds(60)])
+  }
+
+  @Test
+  func configurationTimeoutIntervalBeatsTheModuleDefault() async throws {
+    let seen = LockIsolated<[Duration?]>([])
+    let unset = HTTPClient(
+      configuration: .init(transport: TimeoutProbe(seen: seen)),
+      appending: [], defaultTimeout: .seconds(150))
+    let configured = HTTPClient(
+      configuration: .init(transport: TimeoutProbe(seen: seen), timeout: .seconds(5)),
+      appending: [], defaultTimeout: .seconds(150))
+
+    _ = try await unset.send(probeRequest)
+    _ = try await configured.send(probeRequest)
+
+    #expect(seen.value == [.seconds(150), .seconds(5)])
+  }
+
+  @Test
+  func perCallTimeoutBeatsTheConfiguration() async throws {
+    let seen = LockIsolated<[Duration?]>([])
+    let client = HTTPClient(
+      configuration: .init(transport: TimeoutProbe(seen: seen), timeout: .seconds(5)),
+      appending: [])
+
+    _ = try await client.send(probeRequest, timeout: .seconds(9))
+    _ = try await client.stream(probeRequest, timeout: .seconds(9))
+
+    #expect(seen.value == [.seconds(9), .seconds(9)])
   }
 }

@@ -79,10 +79,11 @@ public protocol ClientMiddleware: Sendable {
 
 /// Carries the internal per-request timeout from `HTTPClient` to ``URLSessionTransport``.
 ///
-/// `HTTPTypes.HTTPRequest` has no timeout field, and this SDK promises per-request timeouts
-/// (`FunctionInvokeOptions.timeoutInterval`). A task local flows through every middleware
+/// `HTTPTypes.HTTPRequest` has no timeout field, and this SDK promises per-client
+/// (``HTTPClientConfiguration/timeout``) and per-request (`FunctionInvokeOptions.timeout`,
+/// `PostgrestRequestBuilder.timeout(_:)`) timeouts. A task local flows through every middleware
 /// without appearing in the public protocol. Custom transports own their own timeouts and can
 /// ignore it.
 package enum RequestTimeout {
-  @TaskLocal package static var current: TimeInterval?
+  @TaskLocal package static var current: Duration?
 }

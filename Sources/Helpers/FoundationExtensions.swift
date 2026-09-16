@@ -18,6 +18,13 @@ package import Foundation
   package let NSEC_PER_MSEC: UInt64 = 1_000_000
 #endif
 
+extension Duration {
+  /// The duration in seconds, for Foundation APIs such as `URLRequest.timeoutInterval`.
+  package var timeInterval: TimeInterval {
+    TimeInterval(components.seconds) + TimeInterval(components.attoseconds) / 1e18
+  }
+}
+
 extension Result {
   package var value: Success? {
     if case .success(let value) = self {

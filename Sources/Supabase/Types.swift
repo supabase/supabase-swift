@@ -103,19 +103,22 @@ public struct SupabaseClientOptions: Sendable {
     /// logger: visible (warning+) in debug builds, silent in release builds.
     public let logger: Logging.Logger
 
-    /// The transport and middleware chain every sub-client sends through.
+    /// The transport, middleware chain and request timeout every sub-client sends through.
     ///
     /// A `nil` ``HTTPClientConfiguration/transport`` (the default) uses ``URLSessionTransport``
     /// over `URLSession.shared`. To send through your own `URLSession`, pass
     /// `URLSessionTransport(session:)` as the transport. The middlewares run before the SDK's own
     /// (trace context, access-token injection) and before the request reaches the transport.
+    /// ``HTTPClientConfiguration/timeout`` is the idle timeout for every request; leave it `nil`
+    /// for the defaults (60 seconds; 150 for Edge Functions).
     public let http: HTTPClientConfiguration
 
     /// Creates the shared options.
     /// - Parameters:
     ///   - headers: Extra headers sent on every request made by every sub-client.
-    ///   - http: The transport and middleware chain every sub-client sends through. A `nil`
-    ///     transport (the default) uses ``URLSessionTransport`` over `URLSession.shared`.
+    ///   - http: The transport, middleware chain and request timeout every sub-client sends
+    ///     through. A `nil` transport (the default) uses ``URLSessionTransport`` over
+    ///     `URLSession.shared`.
     ///   - logger: The logger used across all Supabase sub-packages.
     public init(
       headers: [String: String] = [:],

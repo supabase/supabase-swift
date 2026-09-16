@@ -160,7 +160,8 @@ public final class SupabaseClient: Sendable {
       logger: options.global.logger,
       http: HTTPClientConfiguration(
         transport: transport,
-        middlewares: options.global.http.middlewares + [TraceContextMiddleware()]
+        middlewares: options.global.http.middlewares + [TraceContextMiddleware()],
+        timeout: options.global.http.timeout
       ),
       decoder: options.functions.decoder,
       accessToken: { [weak self] in
@@ -273,7 +274,8 @@ public final class SupabaseClient: Sendable {
       // through the AuthClient itself, which may cause a deadlock.
       http: HTTPClientConfiguration(
         transport: options.global.http.transport ?? URLSessionTransport(),
-        middlewares: options.global.http.middlewares + [TraceContextMiddleware()]
+        middlewares: options.global.http.middlewares + [TraceContextMiddleware()],
+        timeout: options.global.http.timeout
       ),
       autoRefreshToken: options.auth.autoRefreshToken
     )
@@ -436,7 +438,8 @@ public final class SupabaseClient: Sendable {
       transport: transport,
       middlewares: options.global.http.middlewares + [
         TraceContextMiddleware(), AccessTokenMiddleware(getAccessToken: accessTokenProvider),
-      ]
+      ],
+      timeout: options.global.http.timeout
     )
   }
 
@@ -516,7 +519,8 @@ public final class SupabaseClient: Sendable {
       realtimeOptions.http = HTTPClientConfiguration(
         transport: transport,
         middlewares: options.global.http.middlewares + realtimeOptions.http.middlewares
-          + [TraceContextMiddleware()]
+          + [TraceContextMiddleware()],
+        timeout: realtimeOptions.http.timeout ?? options.global.http.timeout
       )
     }
 

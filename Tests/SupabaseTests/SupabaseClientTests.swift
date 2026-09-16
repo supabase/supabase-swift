@@ -2,6 +2,7 @@ import ConcurrencyExtras
 import CustomDump
 import Foundation
 import HTTPTypes
+import Helpers
 import InlineSnapshotTesting
 import Logging
 import SnapshotTestingCustomDump
@@ -568,6 +569,43 @@ struct SupabaseClientTests {
       authorization(in: seenByTransport.value, forPathPrefix: "/functions/v1/hello")
         == "Bearer live-session-token"
     )
+  }
+
+  @Test
+  func globalTimeoutIntervalReachesEverySubClient() async throws {
+    let seen = LockIsolated<[(path: String, timeout: Duration?)]>([])
+    let transport = ClosureTransport { request, _ in
+      seen.withValue { $0.append((request.path ?? "", RequestTimeout.current)) }
+      return (
+        HTTPTypes.HTTPResponse(status: .ok, headerFields: [.contentType: "application/json"]),
+        HTTPBody(Data("[]".utf8))
+      )
+    }
+    let client = SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      options: SupabaseClientOptions(
+        auth: SupabaseClientOptions.AuthOptions(
+          storage: AuthLocalStorageMock(),
+          autoRefreshToken: false
+        ),
+        global: SupabaseClientOptions.GlobalOptions(
+          http: .init(transport: transport, timeout: .seconds(7)))
+      )
+    )
+
+    _ = try await client.from("todos").select().execute()
+    _ = try? await client.storage.listBuckets()
+    _ = try? await client.functions.invoke("hello")
+    _ = try? await client.auth.resetPasswordForEmail("a@b.c")
+
+    for prefix in [
+      "/rest/v1/todos", "/storage/v1/bucket", "/functions/v1/hello", "/auth/v1/recover",
+    ] {
+      let entry = try #require(seen.value.first { $0.path.hasPrefix(prefix) }, "\(prefix)")
+      #expect(entry.timeout == .seconds(7), "\(prefix)")
+    }
+    #expect(client.realtimeV2.options.http.timeout == .seconds(7))
   }
 
   @Test

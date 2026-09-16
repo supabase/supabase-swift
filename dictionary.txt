@@ -271,3 +271,4 @@ orderability
 
 # Term from the logging middleware's body-buffering helper (LoggerInterceptor.swift).
 loggable
+attoseconds
