@@ -2452,3 +2452,27 @@ Text(details.user.email)
 Text(details.client.name ?? "Unnamed app")
 Text(details.user.email ?? "No email on file")
 ```
+
+## `OAuthClient` array fields the API leaves out are now optional
+
+`OAuthClient.redirectUris` is `[String]?`, `OAuthClient.grantTypes` is `[OAuthClientGrantType]?`
+and `OAuthClient.responseTypes` is `[OAuthClientResponseType]?`.
+
+Auth marks all three `omitempty`, and Go drops an `omitempty` slice from the JSON when it is empty
+as well as when it is nil, so a client holding none of them sends no key at all. Every call
+returning an `OAuthClient` threw a decoding error on such a client: `listClients`, `createClient`,
+`getClient`, `updateClient` and `regenerateClientSecret`.
+
+`OAuthGrant.scopes` is unaffected: Auth sends it without `omitempty`, so the key is always there.
+
+This is a compile error wherever you read one of the three as a non-optional array.
+
+```swift
+// Before
+let uris = client.redirectUris
+let supportsRefresh = client.grantTypes.contains(.refreshToken)
+
+// After
+let uris = client.redirectUris ?? []
+let supportsRefresh = client.grantTypes?.contains(.refreshToken) ?? false
+```
