@@ -585,131 +585,155 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       }
 
       switch eventType {
-      case .system:
-        if message.status == .ok {
-          await stateManager.didReceiveSubscribedOK()
-        } else {
-          logger.debug(
-            "Failed to subscribe to channel \(message.topic): \(message.payload)"
-          )
-        }
-
-        callbackManager.triggerSystem(message: message)
-
-      case .reply:
-        guard
-          let ref = message.ref,
-          let status = message.payload["status"]?.stringValue
-        else {
-          throw RealtimeError.decoding("Received a reply with unexpected payload: \(message)")
-        }
-
-        await didReceiveReply(ref: ref, status: status)
-
-        if message.payload["response"]?.objectValue?.keys
-          .contains(ChannelEvent.postgresChanges) == true
-        {
-          let serverPostgresChanges = try message.payload["response"]?
-            .objectValue?["postgres_changes"]?
-            .decode(as: [PostgresJoinConfig].self)
-
-          callbackManager.setServerChanges(changes: serverPostgresChanges ?? [])
-          await stateManager.didReceiveSubscribedOK()
-        }
-
-      case .postgresChanges:
-        guard let data = message.payload["data"] else {
-          logger.debug("Expected \"data\" key in message payload.")
-          return
-        }
-
-        let ids = message.payload["ids"]?.arrayValue?.compactMap(\.intValue) ?? []
-
-        let postgresActions = try data.decode(as: PostgresActionData.self)
-
-        let action: AnyAction
-        switch postgresActions.type {
-        case "UPDATE":
-          action = .update(
-            UpdateAction(
-              columns: postgresActions.columns,
-              commitTimestamp: postgresActions.commitTimestamp,
-              record: postgresActions.record ?? [:],
-              oldRecord: postgresActions.oldRecord ?? [:],
-              rawMessage: message
-            )
-          )
-
-        case "DELETE":
-          action = .delete(
-            DeleteAction(
-              columns: postgresActions.columns,
-              commitTimestamp: postgresActions.commitTimestamp,
-              oldRecord: postgresActions.oldRecord ?? [:],
-              rawMessage: message
-            )
-          )
-
-        case "INSERT":
-          action = .insert(
-            InsertAction(
-              columns: postgresActions.columns,
-              commitTimestamp: postgresActions.commitTimestamp,
-              record: postgresActions.record ?? [:],
-              rawMessage: message
-            )
-          )
-
-        default:
-          throw RealtimeError.decoding("Unknown event type: \(postgresActions.type)")
-        }
-
-        callbackManager.triggerPostgresChanges(ids: ids, data: action)
-
-      case .broadcast:
-        let payload = message.payload
-
-        guard let event = payload["event"]?.stringValue else {
-          throw RealtimeError.decoding("Expected 'event' key in 'payload' for broadcast event.")
-        }
-
-        callbackManager.triggerBroadcast(event: event, json: payload)
-
-      case .close:
-        // Phoenix tags `phx_close` with the `join_ref` of the join it closes.
-        // A close for a previous incarnation of this topic (e.g. a join
-        // abandoned during a reconnect) must not tear down the current
-        // subscription (issue #1145, defect 3). The join_ref check runs on
-        // the state-manager actor, atomically with the close, so a concurrent
-        // subscribe attempt can't swap `joinRef` in between.
-        guard await stateManager.didReceiveClose(joinRef: message.joinRef) else {
-          return
-        }
-        socket._remove(self)
-
-      case .error:
-        logger.error(
-          "Received an error in channel \(message.topic). That could be as a result of an invalid access token"
-        )
-        // Like `phx_close`, `phx_error` is tagged with the `join_ref` of the
-        // join it belongs to — an error from a stale join must not tear down
-        // the current subscription (#1148). Errors without a `join_ref`
-        // (e.g. auth errors before a join completes) are applied
-        // unconditionally.
-        await stateManager.didReceiveClose(joinRef: message.joinRef)
-
-      case .presenceDiff:
-        let joins = try message.payload["joins"]?.decode(as: [String: PresenceV2].self) ?? [:]
-        let leaves = try message.payload["leaves"]?.decode(as: [String: PresenceV2].self) ?? [:]
-        callbackManager.triggerPresenceDiffs(joins: joins, leaves: leaves, rawMessage: message)
-
-      case .presenceState:
-        let joins = try message.payload.decode(as: [String: PresenceV2].self)
-        callbackManager.triggerPresenceDiffs(joins: joins, leaves: [:], rawMessage: message)
+      case .system: await handleSystem(message)
+      case .reply: try await handleReply(message)
+      case .postgresChanges: try handlePostgresChanges(message)
+      case .broadcast: try handleBroadcast(message)
+      case .close: await handleClose(message)
+      case .error: await handleError(message)
+      case .presenceDiff: try handlePresenceDiff(message)
+      case .presenceState: try handlePresenceState(message)
       }
     } catch {
       logger.debug("Failed: \(error)")
     }
+  }
+
+  private func handleSystem(_ message: RealtimeMessageV2) async {
+    if message.status == .ok {
+      await stateManager.didReceiveSubscribedOK()
+    } else {
+      logger.debug(
+        "Failed to subscribe to channel \(message.topic): \(message.payload)"
+      )
+    }
+
+    callbackManager.triggerSystem(message: message)
+  }
+
+  private func handleReply(_ message: RealtimeMessageV2) async throws {
+    guard
+      let ref = message.ref,
+      let status = message.payload["status"]?.stringValue
+    else {
+      throw RealtimeError.decoding("Received a reply with unexpected payload: \(message)")
+    }
+
+    await didReceiveReply(ref: ref, status: status)
+
+    guard
+      message.payload["response"]?.objectValue?.keys
+        .contains(ChannelEvent.postgresChanges) == true
+    else { return }
+
+    let serverPostgresChanges = try message.payload["response"]?
+      .objectValue?["postgres_changes"]?
+      .decode(as: [PostgresJoinConfig].self)
+
+    callbackManager.setServerChanges(changes: serverPostgresChanges ?? [])
+    await stateManager.didReceiveSubscribedOK()
+  }
+
+  private func handlePostgresChanges(_ message: RealtimeMessageV2) throws {
+    guard let data = message.payload["data"] else {
+      logger.debug("Expected \"data\" key in message payload.")
+      return
+    }
+
+    let ids = message.payload["ids"]?.arrayValue?.compactMap(\.intValue) ?? []
+    let action = try Self.makeAction(
+      from: data.decode(as: PostgresActionData.self),
+      rawMessage: message
+    )
+
+    callbackManager.triggerPostgresChanges(ids: ids, data: action)
+  }
+
+  private static func makeAction(
+    from data: PostgresActionData,
+    rawMessage: RealtimeMessageV2
+  ) throws -> AnyAction {
+    switch data.type {
+    case "UPDATE":
+      return .update(
+        UpdateAction(
+          columns: data.columns,
+          commitTimestamp: data.commitTimestamp,
+          record: data.record ?? [:],
+          oldRecord: data.oldRecord ?? [:],
+          rawMessage: rawMessage
+        )
+      )
+
+    case "DELETE":
+      return .delete(
+        DeleteAction(
+          columns: data.columns,
+          commitTimestamp: data.commitTimestamp,
+          oldRecord: data.oldRecord ?? [:],
+          rawMessage: rawMessage
+        )
+      )
+
+    case "INSERT":
+      return .insert(
+        InsertAction(
+          columns: data.columns,
+          commitTimestamp: data.commitTimestamp,
+          record: data.record ?? [:],
+          rawMessage: rawMessage
+        )
+      )
+
+    default:
+      throw RealtimeError.decoding("Unknown event type: \(data.type)")
+    }
+  }
+
+  private func handleBroadcast(_ message: RealtimeMessageV2) throws {
+    let payload = message.payload
+
+    guard let event = payload["event"]?.stringValue else {
+      throw RealtimeError.decoding("Expected 'event' key in 'payload' for broadcast event.")
+    }
+
+    callbackManager.triggerBroadcast(event: event, json: payload)
+  }
+
+  private func handleClose(_ message: RealtimeMessageV2) async {
+    // Phoenix tags `phx_close` with the `join_ref` of the join it closes.
+    // A close for a previous incarnation of this topic (e.g. a join
+    // abandoned during a reconnect) must not tear down the current
+    // subscription (issue #1145, defect 3). The join_ref check runs on
+    // the state-manager actor, atomically with the close, so a concurrent
+    // subscribe attempt can't swap `joinRef` in between.
+    guard await stateManager.didReceiveClose(joinRef: message.joinRef) else {
+      return
+    }
+    socket._remove(self)
+  }
+
+  private func handleError(_ message: RealtimeMessageV2) async {
+    logger.error(
+      "Received an error in channel \(message.topic). That could be as a result of an invalid access token"
+    )
+    // Like `phx_close`, `phx_error` is tagged with the `join_ref` of the
+    // join it belongs to — an error from a stale join must not tear down
+    // the current subscription (#1148). Errors without a `join_ref`
+    // (e.g. auth errors before a join completes) are applied
+    // unconditionally.
+    await stateManager.didReceiveClose(joinRef: message.joinRef)
+  }
+
+  private func handlePresenceDiff(_ message: RealtimeMessageV2) throws {
+    let joins = try message.payload["joins"]?.decode(as: [String: PresenceV2].self) ?? [:]
+    let leaves = try message.payload["leaves"]?.decode(as: [String: PresenceV2].self) ?? [:]
+    callbackManager.triggerPresenceDiffs(joins: joins, leaves: leaves, rawMessage: message)
+  }
+
+  private func handlePresenceState(_ message: RealtimeMessageV2) throws {
+    let joins = try message.payload.decode(as: [String: PresenceV2].self)
+    callbackManager.triggerPresenceDiffs(joins: joins, leaves: [:], rawMessage: message)
   }
 
   /// Called by the client when a binary broadcast frame (type 0x04) is received.
