@@ -1602,8 +1602,14 @@ features:
   # already claimed by their own capabilities above.
   storage.file_buckets.url_cache_nonce: implemented
   storage.file_buckets.download_as_stream: not_implemented
-  storage.file_buckets.purge_bucket_cache: not_implemented
-  storage.file_buckets.purge_cache: not_implemented
+  storage.file_buckets.purge_bucket_cache:
+    status: implemented
+    symbols:
+      - SupabaseStorageClient.purgeBucketCache
+  storage.file_buckets.purge_cache:
+    status: implemented
+    symbols:
+      - StorageFileApi.purgeCache
   storage.file_buckets.request_cancellation: implemented
 
   # ── Storage — Vector Buckets ───────────────────────────────────────────────

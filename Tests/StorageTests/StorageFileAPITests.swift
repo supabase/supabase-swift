@@ -1357,6 +1357,83 @@ extension StorageMockerTests {
     }
 
     @Test
+    func purgeCache() async throws {
+      let storage = makeSUT()
+
+      Mock(
+        url: url.appendingPathComponent("cdn/bucket/folder/file.txt"),
+        statusCode: 200,
+        data: [
+          .delete: Data(#"{"message":"success"}"#.utf8)
+        ]
+      )
+      .snapshotRequest {
+        #"""
+        curl \
+        	--request DELETE \
+        	--header "X-Client-Info: storage-swift/0.0.0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	"http://localhost:54321/storage/v1/cdn/bucket/folder/file.txt"
+        """#
+      }
+      .register()
+
+      try await storage.from("bucket").purgeCache(path: "folder/file.txt")
+    }
+
+    @Test
+    func purgeCacheTransformationsOnly() async throws {
+      let storage = makeSUT()
+
+      Mock(
+        url: url.appendingPathComponent("cdn/bucket/folder/file.txt"),
+        ignoreQuery: true,
+        statusCode: 200,
+        data: [
+          .delete: Data(#"{"message":"success"}"#.utf8)
+        ]
+      )
+      .snapshotRequest {
+        #"""
+        curl \
+        	--request DELETE \
+        	--header "X-Client-Info: storage-swift/0.0.0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	"http://localhost:54321/storage/v1/cdn/bucket/folder/file.txt?transformations=true"
+        """#
+      }
+      .register()
+
+      try await storage.from("bucket").purgeCache(
+        path: "folder/file.txt", transformationsOnly: true)
+    }
+
+    @Test
+    func purgeCachePercentEncodesThePath() async throws {
+      let storage = makeSUT()
+
+      Mock(
+        url: url.appendingPathComponent("cdn/bucket/folder/my file.png"),
+        statusCode: 200,
+        data: [
+          .delete: Data(#"{"message":"success"}"#.utf8)
+        ]
+      )
+      .snapshotRequest {
+        #"""
+        curl \
+        	--request DELETE \
+        	--header "X-Client-Info: storage-swift/0.0.0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	"http://localhost:54321/storage/v1/cdn/bucket/folder/my%20file.png"
+        """#
+      }
+      .register()
+
+      try await storage.from("bucket").purgeCache(path: "folder/my file.png")
+    }
+
+    @Test
     func createSignedUploadURL() async throws {
       let storage = makeSUT()
 

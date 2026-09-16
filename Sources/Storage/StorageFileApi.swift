@@ -102,6 +102,7 @@ enum FileUpload {
 /// - ``list(path:options:)``
 /// - ``info(path:)``
 /// - ``exists(path:)``
+/// - ``purgeCache(path:transformationsOnly:)``
 ///
 /// ### Creating signed URLs
 ///
@@ -772,6 +773,27 @@ public struct StorageFileApi: Sendable {
       }
       throw error
     }
+  }
+
+  /// Purges the CDN cache for a file, so the next request for it is served from Storage again.
+  ///
+  /// > Important: This requires the `secret` key. On self-hosted Storage, the `purgeCache` tenant
+  /// > feature and a CDN purge endpoint must be configured, otherwise the request fails.
+  ///
+  /// - Parameters:
+  ///   - path: The file path including the file name, e.g. `"folder/image.png"`. Only that exact
+  ///     file is purged; there is no wildcard or folder purge.
+  ///   - transformationsOnly: Pass `true` to purge only the resized and reformatted variants,
+  ///     leaving the original file cached.
+  /// - Throws: ``StorageError`` if the caller is not authorized or cache purging is not enabled.
+  public func purgeCache(path: String, transformationsOnly: Bool = false) async throws {
+    try await api.execute(
+      HTTPRequest(
+        method: .delete,
+        url: api.configuration.url.appendingPathComponent("cdn/\(_getFinalPath(path))"),
+        query: transformationsOnly ? [URLQueryItem(name: "transformations", value: "true")] : []
+      )
+    )
   }
 
   /// Returns the public URL for a file in a public bucket.

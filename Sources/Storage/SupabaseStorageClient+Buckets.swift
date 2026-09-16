@@ -143,4 +143,25 @@ extension SupabaseStorageClient {
       )
     )
   }
+
+  /// Purges the CDN cache for every file in a bucket, so the next request for each one is served
+  /// from Storage again.
+  ///
+  /// > Important: This requires the `secret` key. On self-hosted Storage, the `purgeCache` tenant
+  /// > feature and a CDN purge endpoint must be configured, otherwise the request fails.
+  ///
+  /// - Parameters:
+  ///   - id: The unique identifier of the bucket to purge.
+  ///   - transformationsOnly: Pass `true` to purge only the resized and reformatted variants,
+  ///     leaving the original files cached.
+  /// - Throws: ``StorageError`` if the caller is not authorized or cache purging is not enabled.
+  public func purgeBucketCache(_ id: String, transformationsOnly: Bool = false) async throws {
+    try await api.execute(
+      HTTPRequest(
+        method: .delete,
+        url: api.configuration.url.appendingPathComponent("cdn/\(id)"),
+        query: transformationsOnly ? [URLQueryItem(name: "transformations", value: "true")] : []
+      )
+    )
+  }
 }
