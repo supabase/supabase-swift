@@ -53,9 +53,7 @@ let package = Package(
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
         .product(name: "HTTPTypesFoundation", package: "swift-http-types"),
-        .product(name: "Clocks", package: "swift-clocks"),
         .product(name: "Logging", package: "swift-log"),
-        .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
         .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
       ]
     ),
@@ -72,6 +70,7 @@ let package = Package(
     .target(
       name: "Auth",
       dependencies: [
+        .product(name: "Clocks", package: "swift-clocks"),
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "Crypto", package: "swift-crypto"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
@@ -122,6 +121,7 @@ let package = Package(
     .testTarget(
       name: "IntegrationTests",
       dependencies: [
+        .product(name: "Clocks", package: "swift-clocks"),
         .product(name: "CustomDump", package: "swift-custom-dump"),
         .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
@@ -188,6 +188,7 @@ let package = Package(
     .target(
       name: "RealtimeV2",
       dependencies: [
+        .product(name: "Clocks", package: "swift-clocks"),
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
         .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
@@ -207,6 +208,7 @@ let package = Package(
     .testTarget(
       name: "RealtimeTests",
       dependencies: [
+        .product(name: "Clocks", package: "swift-clocks"),
         .product(name: "CustomDump", package: "swift-custom-dump"),
         .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
@@ -241,6 +243,7 @@ let package = Package(
     .target(
       name: "Supabase",
       dependencies: [
+        .product(name: "Clocks", package: "swift-clocks"),
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
         .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
