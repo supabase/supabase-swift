@@ -1,5 +1,7 @@
 {
   "version": 1,
+  "lineLength": 100,
+  "indentation": { "spaces": 2 },
   "rules": {
     "NeverUseForceTry": false,
     "NeverUseImplicitlyUnwrappedOptionals": false

@@ -27,10 +27,10 @@ struct AuthClientIntegrationTests {
   let authClient = makeClient()
 
   static func makeClient(serviceRole: Bool = false) -> AuthClient {
-    let key = serviceRole ? DotEnv.SUPABASE_SECRET_KEY : DotEnv.SUPABASE_PUBLISHABLE_KEY
+    let key = serviceRole ? DotEnv.supabaseSecretKey : DotEnv.supabasePublishableKey
     return AuthClient(
       configuration: AuthClient.Configuration(
-        url: URL(string: "\(DotEnv.SUPABASE_URL)/auth/v1")!,
+        url: URL(string: "\(DotEnv.supabaseURL)/auth/v1")!,
         headers: [
           "apikey": key,
           "Authorization": "Bearer \(key)",
@@ -316,9 +316,9 @@ struct AuthClientIntegrationTests {
 
     let session = try #require(response.session)
 
-    var request = URLRequest(url: URL(string: "\(DotEnv.SUPABASE_URL)/rest/v1/rpc/delete_user")!)
+    var request = URLRequest(url: URL(string: "\(DotEnv.supabaseURL)/rest/v1/rpc/delete_user")!)
     request.httpMethod = "POST"
-    request.setValue(DotEnv.SUPABASE_PUBLISHABLE_KEY, forHTTPHeaderField: "apikey")
+    request.setValue(DotEnv.supabasePublishableKey, forHTTPHeaderField: "apikey")
     request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
 
     _ = try await URLSession.shared.data(for: request)
@@ -521,7 +521,7 @@ struct AuthClientIntegrationTests {
   /// `GET /user` even though the SDK can verify it.
   @Test
   func wellKnownJWKSServesES256Key() async throws {
-    let url = URL(string: "\(DotEnv.SUPABASE_URL)/auth/v1/.well-known/jwks.json")!
+    let url = URL(string: "\(DotEnv.supabaseURL)/auth/v1/.well-known/jwks.json")!
     let (data, _) = try await URLSession.shared.data(from: url)
     let jwks = try AuthClient.Configuration.jsonDecoder.decode(JWKS.self, from: data)
 

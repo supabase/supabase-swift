@@ -186,8 +186,13 @@ public struct StorageFileApi: Sendable {
     file.encode(to: formData, withPath: path, options: options)
 
     struct UploadResponse: Decodable {
-      let Key: String
-      let Id: String
+      let key: String
+      let id: String
+
+      enum CodingKeys: String, CodingKey {
+        case key = "Key"
+        case id = "Id"
+      }
     }
 
     let cleanPath = _removeEmptyFolders(path)
@@ -205,9 +210,9 @@ public struct StorageFileApi: Sendable {
     .decoded(as: UploadResponse.self, decoder: api.configuration.decoder)
 
     return FileUploadResponse(
-      id: response.Id,
+      id: response.id,
       path: cleanPath,
-      fullPath: response.Key
+      fullPath: response.key
     )
   }
 
@@ -371,7 +376,11 @@ public struct StorageFileApi: Sendable {
     options: DestinationOptions? = nil
   ) async throws -> String {
     struct UploadResponse: Decodable {
-      let Key: String
+      let key: String
+
+      enum CodingKeys: String, CodingKey {
+        case key = "Key"
+      }
     }
 
     return try await api.execute(
@@ -389,7 +398,7 @@ public struct StorageFileApi: Sendable {
       )
     )
     .decoded(as: UploadResponse.self, decoder: api.configuration.decoder)
-    .Key
+    .key
   }
 
   /// Creates a signed URL for sharing a private file for a fixed period of time.
@@ -996,7 +1005,11 @@ public struct StorageFileApi: Sendable {
     file.encode(to: formData, withPath: path, options: options)
 
     struct UploadResponse: Decodable {
-      let Key: String
+      let key: String
+
+      enum CodingKeys: String, CodingKey {
+        case key = "Key"
+      }
     }
 
     let cleanPath = _removeEmptyFolders(path)
@@ -1013,7 +1026,7 @@ public struct StorageFileApi: Sendable {
       options: options
     )
     .decoded(as: UploadResponse.self, decoder: api.configuration.decoder)
-    .Key
+    .key
 
     return SignedURLUploadResponse(path: cleanPath, fullPath: fullPath)
   }

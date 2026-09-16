@@ -892,7 +892,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
 
   private func flushSendBuffer() {
     mutableState.withValue {
-      $0.sendBuffer.forEach { $0(self) }
+      for send in $0.sendBuffer { send(self) }
       $0.sendBuffer = []
     }
   }

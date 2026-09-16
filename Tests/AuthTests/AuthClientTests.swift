@@ -36,7 +36,7 @@ extension AuthMockerTests {
     @Test
     func onAuthStateChanges() async throws {
       await withMainSerialExecutor {
-        let session = Session.validSession
+        let session = Session.valid
         let sut = makeSUT()
         Dependencies[sut.clientID].sessionStorage.store(session)
 
@@ -57,7 +57,7 @@ extension AuthMockerTests {
     @Test
     func authStateChanges() async throws {
       await withMainSerialExecutor {
-        let session = Session.validSession
+        let session = Session.valid
         let sut = makeSUT()
         Dependencies[sut.clientID].sessionStorage.store(session)
 
@@ -93,7 +93,7 @@ extension AuthMockerTests {
         }
         .register()
 
-        Dependencies[sut.clientID].sessionStorage.store(.validSession)
+        Dependencies[sut.clientID].sessionStorage.store(.valid)
 
         try await assertAuthStateChanges(
           sut: sut,
@@ -136,7 +136,7 @@ extension AuthMockerTests {
 
         let sut = makeSUT()
 
-        Dependencies[sut.clientID].sessionStorage.store(.validSession)
+        Dependencies[sut.clientID].sessionStorage.store(.valid)
 
         try await sut.signOut(scope: .others)
 
@@ -172,7 +172,7 @@ extension AuthMockerTests {
 
         let sut = makeSUT()
 
-        let validSession = Session.validSession
+        let validSession = Session.valid
         Dependencies[sut.clientID].sessionStorage.store(validSession)
 
         let eventsTask = Task {
@@ -187,7 +187,7 @@ extension AuthMockerTests {
         let sessions = await eventsTask.value.map(\.session)
 
         expectNoDifference(events, [.initialSession, .signedOut])
-        expectNoDifference(sessions, [.validSession, nil])
+        expectNoDifference(sessions, [.valid, nil])
 
         let sessionRemoved = Dependencies[sut.clientID].sessionStorage.get() == nil
         #expect(sessionRemoved)
@@ -221,7 +221,7 @@ extension AuthMockerTests {
 
         let sut = makeSUT()
 
-        let validSession = Session.validSession
+        let validSession = Session.valid
         Dependencies[sut.clientID].sessionStorage.store(validSession)
 
         let eventsTask = Task {
@@ -270,7 +270,7 @@ extension AuthMockerTests {
 
         let sut = makeSUT()
 
-        let validSession = Session.validSession
+        let validSession = Session.valid
         Dependencies[sut.clientID].sessionStorage.store(validSession)
 
         let eventsTask = Task {
@@ -429,7 +429,7 @@ extension AuthMockerTests {
     func concurrentPKCEFlowsKeepIndependentVerifiers() async throws {
       try await withMainSerialExecutor {
         let sut = makeSUT()
-        Dependencies[sut.clientID].sessionStorage.store(.validSession)
+        Dependencies[sut.clientID].sessionStorage.store(.valid)
 
         Mock(
           url: clientURL.appendingPathComponent("user/identities/authorize"),
@@ -505,7 +505,7 @@ extension AuthMockerTests {
         }
         .register()
 
-        Dependencies[sut.clientID].sessionStorage.store(.validSession)
+        Dependencies[sut.clientID].sessionStorage.store(.valid)
 
         let response = try await sut.getLinkIdentityURL(provider: .github)
 
@@ -549,7 +549,7 @@ extension AuthMockerTests {
 
         let sut = makeSUT()
 
-        Dependencies[sut.clientID].sessionStorage.store(.validSession)
+        Dependencies[sut.clientID].sessionStorage.store(.valid)
 
         let receivedURL = LockIsolated<URL?>(nil)
         Dependencies[sut.clientID].urlOpener.open = { url in
@@ -589,7 +589,7 @@ extension AuthMockerTests {
 
         let sut = makeSUT()
 
-        Dependencies[sut.clientID].sessionStorage.store(.validSession)
+        Dependencies[sut.clientID].sessionStorage.store(.valid)
 
         let updatedSession = try await assertAuthStateChanges(
           sut: sut,
@@ -1391,7 +1391,7 @@ extension AuthMockerTests {
       .register()
 
       let sut = makeSUT()
-      Dependencies[sut.clientID].sessionStorage.store(.validSession)
+      Dependencies[sut.clientID].sessionStorage.store(.valid)
 
       let accessToken =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjo0ODUyMTYzNTkzLCJzdWIiOiJmMzNkM2VjOS1hMmVlLTQ3YzQtODBlMS01YmQ5MTlmM2Q4YjgiLCJlbWFpbCI6ImhpQGJpbmFyeXNjcmFwaW5nLmNvIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJlbWFpbCIsInByb3ZpZGVycyI6WyJlbWFpbCJdfSwidXNlcl9tZXRhZGF0YSI6e30sInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.UiEhoahP9GNrBKw_OHBWyqYudtoIlZGkrjs7Qa8hU7I"
@@ -1581,7 +1581,7 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      Dependencies[sut.clientID].sessionStorage.store(.validSession)
+      Dependencies[sut.clientID].sessionStorage.store(.valid)
 
       try await sut.update(
         user: UserAttributes(
@@ -1846,7 +1846,7 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      Dependencies[sut.clientID].sessionStorage.store(.validSession)
+      Dependencies[sut.clientID].sessionStorage.store(.valid)
 
       try await sut.reauthenticate()
     }
@@ -1874,7 +1874,7 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      Dependencies[sut.clientID].sessionStorage.store(.validSession)
+      Dependencies[sut.clientID].sessionStorage.store(.valid)
 
       try await sut.unlinkIdentity(
         UserIdentity(
@@ -1992,7 +1992,7 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      Dependencies[sut.clientID].sessionStorage.store(.validSession)
+      Dependencies[sut.clientID].sessionStorage.store(.valid)
 
       let response = try await sut.mfa.enroll(
         params: MFATotpEnrollParams(
@@ -2039,7 +2039,7 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      Dependencies[sut.clientID].sessionStorage.store(.validSession)
+      Dependencies[sut.clientID].sessionStorage.store(.valid)
 
       let response = try await sut.mfa.enroll(
         params: .totp(
@@ -2086,7 +2086,7 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      Dependencies[sut.clientID].sessionStorage.store(.validSession)
+      Dependencies[sut.clientID].sessionStorage.store(.valid)
 
       let response = try await sut.mfa.enroll(
         params: .phone(
@@ -2133,7 +2133,7 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      Dependencies[sut.clientID].sessionStorage.store(.validSession)
+      Dependencies[sut.clientID].sessionStorage.store(.valid)
 
       let response = try await sut.mfa.challenge(params: .init(factorId: factorId))
 
@@ -2184,7 +2184,7 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      Dependencies[sut.clientID].sessionStorage.store(.validSession)
+      Dependencies[sut.clientID].sessionStorage.store(.valid)
 
       let response = try await sut.mfa.challenge(
         params: .init(
@@ -2234,7 +2234,7 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      Dependencies[sut.clientID].sessionStorage.store(.validSession)
+      Dependencies[sut.clientID].sessionStorage.store(.valid)
 
       let response = try await sut.mfa.challenge(
         params: .init(factorId: factorId, webAuthn: .init(rpId: "example.com"))
@@ -2277,7 +2277,7 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      Dependencies[sut.clientID].sessionStorage.store(.validSession)
+      Dependencies[sut.clientID].sessionStorage.store(.valid)
 
       try await sut.mfa.verify(
         params: .init(
@@ -2310,7 +2310,7 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      Dependencies[sut.clientID].sessionStorage.store(.validSession)
+      Dependencies[sut.clientID].sessionStorage.store(.valid)
 
       let id = try await sut.mfa.unenroll(params: .init(factorId: "123")).id
 
@@ -2375,7 +2375,7 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      Dependencies[sut.clientID].sessionStorage.store(.validSession)
+      Dependencies[sut.clientID].sessionStorage.store(.valid)
 
       try await sut.mfa.challengeAndVerify(
         params: MFAChallengeAndVerifyParams(
@@ -2389,7 +2389,7 @@ extension AuthMockerTests {
     func mfaListFactors() async throws {
       let sut = makeSUT()
 
-      var session = Session.validSession
+      var session = Session.valid
       session.user.factors = [
         Factor(
           id: "1",
@@ -2436,7 +2436,7 @@ extension AuthMockerTests {
     func mfaListFactorsIncludesWebAuthn() async throws {
       let sut = makeSUT()
 
-      var session = Session.validSession
+      var session = Session.valid
       session.user.factors = [
         Factor(
           id: "1",
@@ -2496,7 +2496,7 @@ extension AuthMockerTests {
       .register()
 
       let sut = makeSUT()
-      Dependencies[sut.clientID].sessionStorage.store(.validSession)
+      Dependencies[sut.clientID].sessionStorage.store(.valid)
 
       let options = try await sut.getPasskeyRegistrationOptions()
 
@@ -2535,7 +2535,7 @@ extension AuthMockerTests {
       .register()
 
       let sut = makeSUT()
-      Dependencies[sut.clientID].sessionStorage.store(.validSession)
+      Dependencies[sut.clientID].sessionStorage.store(.valid)
 
       let passkeys = try await sut.listPasskeys()
 
@@ -2694,7 +2694,7 @@ extension AuthMockerTests {
         )
 
         let sut = makeSUT()
-        Dependencies[sut.clientID].sessionStorage.store(.validSession)
+        Dependencies[sut.clientID].sessionStorage.store(.valid)
 
         let passkey = try await sut._registerPasskey(
           presentationAnchor: ASPresentationAnchor(),
@@ -2742,7 +2742,7 @@ extension AuthMockerTests {
         )
 
         let sut = makeSUT()
-        Dependencies[sut.clientID].sessionStorage.store(.validSession)
+        Dependencies[sut.clientID].sessionStorage.store(.valid)
 
         let session = try await sut.mfa._enrollWebAuthnFactor(
           friendlyName: "My Passkey",
@@ -2788,7 +2788,7 @@ extension AuthMockerTests {
         )
 
         let sut = makeSUT()
-        Dependencies[sut.clientID].sessionStorage.store(.validSession)
+        Dependencies[sut.clientID].sessionStorage.store(.valid)
 
         let session = try await sut.mfa._verifyWebAuthnFactor(
           factorId: "factor-1",
@@ -2804,7 +2804,7 @@ extension AuthMockerTests {
 
     @Test
     func getAuthenticatorAssuranceLevel_whenAALAndVerifiedFactor_shouldReturnAAL2() async throws {
-      var session = Session.validSession
+      var session = Session.valid
 
       // access token with aal token
       session.accessToken =
@@ -2995,7 +2995,7 @@ extension AuthMockerTests {
       )
       .register()
 
-      Dependencies[sut.clientID].sessionStorage.store(.validSession)
+      Dependencies[sut.clientID].sessionStorage.store(.valid)
 
       try await assertAuthStateChanges(
         sut: sut,
@@ -3035,7 +3035,7 @@ extension AuthMockerTests {
       )
       .register()
 
-      Dependencies[sut.clientID].sessionStorage.store(.expiredSession)
+      Dependencies[sut.clientID].sessionStorage.store(.expired)
 
       let expectedEvents = [AuthChangeEvent.initialSession, .signedOut]
 
@@ -3064,11 +3064,11 @@ extension AuthMockerTests {
           URLQueryItem(name: "grant_type", value: "refresh_token")
         ]),
         statusCode: 200,
-        data: [.post: try AuthClient.Configuration.jsonEncoder.encode(Session.validSession)]
+        data: [.post: try AuthClient.Configuration.jsonEncoder.encode(Session.valid)]
       )
       .register()
 
-      Dependencies[sut.clientID].sessionStorage.store(.expiredSession)
+      Dependencies[sut.clientID].sessionStorage.store(.expired)
 
       let expectedEvents = [AuthChangeEvent.initialSession, .tokenRefreshed]
 
@@ -3121,7 +3121,7 @@ extension AuthMockerTests {
       let jwt =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6OTk5OTk5OTk5OSwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.4Adcj0vZKqXRB_mPpDVkWvB3xw7yHYjpzGJLKFQjKEc"
 
-      var session = Session.validSession
+      var session = Session.valid
       session.accessToken = jwt
 
       let user = User(fromMockNamed: "user")

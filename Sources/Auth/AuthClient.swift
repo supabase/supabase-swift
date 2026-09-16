@@ -24,7 +24,7 @@ import struct HTTPTypes.HTTPFields
 typealias AuthClientID = Int
 
 /// JWKS cache TTL (Time To Live) - 10 minutes
-private let JWKS_TTL: TimeInterval = 10 * 60
+private let jwksTTL: TimeInterval = 10 * 60
 
 /// Cached JWKS value with timestamp
 private struct CachedJWKS {
@@ -1663,7 +1663,7 @@ public actor AuthClient {
       let jwk = cached.jwks.keys.first(where: { $0.kid == kid })
     {
       // Check if cache is still valid (not stale)
-      if cached.cachedAt.addingTimeInterval(JWKS_TTL) > now {
+      if cached.cachedAt.addingTimeInterval(jwksTTL) > now {
         return jwk
       }
     }

@@ -37,8 +37,8 @@
 
     init() async throws {
       client = SupabaseClient(
-        supabaseURL: URL(string: DotEnv.SUPABASE_URL) ?? URL(string: "http://127.0.0.1:54321")!,
-        supabaseKey: DotEnv.SUPABASE_PUBLISHABLE_KEY,
+        supabaseURL: URL(string: DotEnv.supabaseURL) ?? URL(string: "http://127.0.0.1:54321")!,
+        supabaseKey: DotEnv.supabasePublishableKey,
         options: SupabaseClientOptions(
           auth: .init(storage: InMemoryLocalStorage()),
           global: .init(
@@ -51,8 +51,8 @@
       )
 
       client2 = SupabaseClient(
-        supabaseURL: URL(string: DotEnv.SUPABASE_URL) ?? URL(string: "http://127.0.0.1:54321")!,
-        supabaseKey: DotEnv.SUPABASE_PUBLISHABLE_KEY,
+        supabaseURL: URL(string: DotEnv.supabaseURL) ?? URL(string: "http://127.0.0.1:54321")!,
+        supabaseKey: DotEnv.supabasePublishableKey,
         options: SupabaseClientOptions(
           auth: .init(storage: InMemoryLocalStorage()),
           global: .init(

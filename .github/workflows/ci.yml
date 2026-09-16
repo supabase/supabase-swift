@@ -123,6 +123,34 @@ jobs:
         if: matrix.skip_release != '1'
         run: CONFIG=Release PLATFORM="${{ matrix.platform }}" XCODEBUILD_ARGUMENT="${{ matrix.command }}" ./scripts/xcodebuild.sh
 
+  additional-platforms:
+    name: xcodebuild (${{ matrix.platform }})
+    runs-on: blacksmith-6vcpu-macos-latest
+    timeout-minutes: 30
+    strategy:
+      matrix:
+        platform: [WATCHOS, TVOS, VISIONOS]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Cache derived data
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.derivedData
+          key: |
+            deriveddata-xcodebuild-${{ matrix.platform }}-${{ hashFiles('**/Package.resolved') }}
+          restore-keys: |
+            deriveddata-xcodebuild-${{ matrix.platform }}-
+      - name: Select Xcode 26.4
+        run: sudo xcode-select -s /Applications/Xcode_26.4.app
+      - name: List available devices
+        run: xcrun simctl list devices available
+      - name: Set IgnoreFileSystemDeviceInodeChanges flag
+        run: defaults write com.apple.dt.XCBuild IgnoreFileSystemDeviceInodeChanges -bool YES
+      - name: Update mtime for incremental builds
+        uses: chetan/git-restore-mtime-action@d186aca54f8760da4dec55313195e51ed3ebb0b3 # v2.3
+      - name: Build
+        run: PLATFORM="${{ matrix.platform }}" XCODEBUILD_ARGUMENT=build ./scripts/xcodebuild.sh
+
   spm:
     runs-on: blacksmith-6vcpu-macos-latest
     timeout-minutes: 30
@@ -140,20 +168,32 @@ jobs:
       - run: swift build -c ${{ matrix.config }}
 
   linux:
-    name: Linux
+    name: Linux (${{ matrix.container }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    continue-on-error: ${{ matrix.container == 'swiftlang/swift:nightly-main-noble' }}
+    container: ${{ matrix.container }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # The stable releases live under the `swift` image; nightly snapshots are only
+        # published under `swiftlang/swift` (there is no `swift:nightly`).
+        container:
+          ["swift:6.2-noble", "swift:6.3-noble", "swiftlang/swift:nightly-main-noble"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Official Swift images run as root, so files the container writes into the
+      # bind-mounted workspace end up root-owned. That breaks hashFiles() in the cache
+      # action's post-step (it stats the workspace from the runner's own, non-root
+      # context), so this key can't depend on hashFiles('**/Package.resolved') the way
+      # the uncontainerized jobs' keys do.
       - name: "Cache Swift Package"
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .build
-          key: ${{ runner.os }}-spm-${{ hashFiles('**/Package.resolved') }}
-          restore-keys: |
-            ${{ runner.os }}-spm-
+          key: ${{ runner.os }}-spm-${{ matrix.container }}
       - name: "Build Swift Package"
-        run: swift build
+        run: swift build --explicit-target-dependency-import-check error
       - name: "Test Swift Package"
         run: swift test --skip IntegrationTests
       - name: "Test Swift Package (OpenTelemetry trait)"
@@ -301,49 +341,12 @@ jobs:
         run: ./scripts/test-docs.sh
 
   format-check:
-    name: Format check (changed files only)
-    if: github.event_name == 'pull_request'
+    name: Format check
     runs-on: blacksmith-6vcpu-macos-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-      - name: Get changed Swift files
-        id: changed-files
-        run: |
-          # Get list of changed Swift files in this PR
-          git fetch origin ${{ github.base_ref }}
-          CHANGED_FILES=$(git diff --name-only --diff-filter=ACMR origin/${{ github.base_ref }}...HEAD | grep '\.swift$' || true)
-          if [ -z "$CHANGED_FILES" ]; then
-            echo "No Swift files changed"
-            echo "has_changes=false" >> $GITHUB_OUTPUT
-          else
-            echo "Changed Swift files:"
-            echo "$CHANGED_FILES"
-            echo "$CHANGED_FILES" > changed_files.txt
-            echo "has_changes=true" >> $GITHUB_OUTPUT
-          fi
-      - name: Check formatting
-        if: steps.changed-files.outputs.has_changes == 'true'
-        run: |
-          # Format only the changed files
-          while IFS= read -r file; do
-            if [ -f "$file" ]; then
-              swift format --in-place "$file"
-            fi
-          done < changed_files.txt
-
-          # Check if formatting made any changes
-          if ! git diff --exit-code; then
-            echo "❌ Some files are not formatted correctly."
-            echo "📝 Please run './scripts/format.sh' locally on the changed files and commit the changes."
-            echo ""
-            echo "Files that need formatting:"
-            git diff --name-only
-            exit 1
-          else
-            echo "✅ All changed Swift files are properly formatted"
-          fi
+      - name: Lint formatting
+        run: swift format lint --strict --recursive Sources Tests Package.swift Examples
 
   ci-success:
     name: CI Success
@@ -352,6 +355,7 @@ jobs:
       [
         macos,
         macos-legacy,
+        additional-platforms,
         spm,
         linux,
         integration-tests,

@@ -67,7 +67,7 @@ struct SessionManagerTests {
   @Test
   func cancellationFromTransportIsNotWrapped() async {
     http.respond { _, _ in throw CancellationError() }
-    Dependencies[clientID].sessionStorage.store(.expiredSession)
+    Dependencies[clientID].sessionStorage.store(.expired)
 
     await #expect(throws: CancellationError.self) {
       _ = try await sut.session()
@@ -78,7 +78,7 @@ struct SessionManagerTests {
   func customFetchErrorIsNotWrapped() async {
     struct FetchError: Error {}
     http.respond { _, _ in throw FetchError() }
-    Dependencies[clientID].sessionStorage.store(.expiredSession)
+    Dependencies[clientID].sessionStorage.store(.expired)
 
     await #expect(throws: FetchError.self) {
       _ = try await sut.session()
@@ -88,7 +88,7 @@ struct SessionManagerTests {
   @Test
   func session_shouldReturnValidSession() async throws {
     try await withMainSerialExecutor {
-      let session = Session.validSession
+      let session = Session.valid
       Dependencies[clientID].sessionStorage.store(session)
 
       let returnedSession = try await sut.session()
@@ -99,10 +99,10 @@ struct SessionManagerTests {
   @Test
   func session_shouldRefreshSession_whenCurrentSessionExpired() async throws {
     try await withMainSerialExecutor {
-      let currentSession = Session.expiredSession
+      let currentSession = Session.expired
       Dependencies[clientID].sessionStorage.store(currentSession)
 
-      let validSession = Session.validSession
+      let validSession = Session.valid
 
       let refreshSessionCallCount = LockIsolated(0)
 

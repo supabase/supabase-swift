@@ -273,7 +273,7 @@ extension AuthMockerTests {
       .register()
 
       let sut = makeSUT()
-      Dependencies[sut.clientID].sessionStorage.store(.validSession)
+      Dependencies[sut.clientID].sessionStorage.store(.valid)
 
       let response = try await sut.oauthServer.getAuthorizationDetails(
         authorizationId: "abc123def456"
@@ -314,7 +314,7 @@ extension AuthMockerTests {
       .register()
 
       let sut = makeSUT()
-      Dependencies[sut.clientID].sessionStorage.store(.validSession)
+      Dependencies[sut.clientID].sessionStorage.store(.valid)
 
       do {
         _ = try await sut.oauthServer.getAuthorizationDetails(authorizationId: "missing")
@@ -355,7 +355,7 @@ extension AuthMockerTests {
       .register()
 
       let sut = makeSUT()
-      Dependencies[sut.clientID].sessionStorage.store(.validSession)
+      Dependencies[sut.clientID].sessionStorage.store(.valid)
 
       let redirect = try await sut.oauthServer.approveAuthorization(
         authorizationId: "abc123def456"
@@ -394,7 +394,7 @@ extension AuthMockerTests {
       .register()
 
       let sut = makeSUT()
-      Dependencies[sut.clientID].sessionStorage.store(.validSession)
+      Dependencies[sut.clientID].sessionStorage.store(.valid)
 
       // Denial must NOT throw — it's a successful API call, per RFC 6749 the
       // OAuth error is embedded in the redirect URL's query string.
@@ -440,7 +440,7 @@ extension AuthMockerTests {
       .register()
 
       let sut = makeSUT()
-      Dependencies[sut.clientID].sessionStorage.store(.validSession)
+      Dependencies[sut.clientID].sessionStorage.store(.valid)
 
       let grants = try await sut.oauthServer.listGrants()
 
@@ -473,7 +473,7 @@ extension AuthMockerTests {
       .register()
 
       let sut = makeSUT()
-      Dependencies[sut.clientID].sessionStorage.store(.validSession)
+      Dependencies[sut.clientID].sessionStorage.store(.valid)
 
       try await sut.oauthServer.revokeGrant(clientId: clientId)
     }
@@ -493,7 +493,7 @@ extension AuthMockerTests {
       .register()
 
       let sut = makeSUT()
-      Dependencies[sut.clientID].sessionStorage.store(.validSession)
+      Dependencies[sut.clientID].sessionStorage.store(.valid)
 
       do {
         try await sut.oauthServer.revokeGrant(clientId: clientId)

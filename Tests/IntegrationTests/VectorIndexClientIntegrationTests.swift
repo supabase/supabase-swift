@@ -17,9 +17,9 @@ import Testing
 final class VectorIndexClientIntegrationTests {
   let vectors = SupabaseStorageClient(
     configuration: StorageClientConfiguration(
-      url: URL(string: "\(DotEnv.SUPABASE_URL)/storage/v1")!,
+      url: URL(string: "\(DotEnv.supabaseURL)/storage/v1")!,
       headers: [
-        "Authorization": "Bearer \(DotEnv.SUPABASE_SECRET_KEY)"
+        "Authorization": "Bearer \(DotEnv.supabaseSecretKey)"
       ]
     )
   ).vectors
