@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 13/05/24.
 //
 
+public import Clocks
 public import Foundation
 package import HTTPTypes
 public import Helpers
@@ -60,7 +61,7 @@ public enum RealtimeProtocolVersion: String, Sendable {
 /// - ``defaultDisconnectOnEmptyChannelsAfter``
 /// - ``defaultHandleAppLifecycle``
 /// ### Initialization
-/// - ``init(headers:heartbeatInterval:reconnectDelay:timeoutInterval:disconnectOnSessionLoss:connectOnSubscribe:maxRetryAttempts:disconnectOnEmptyChannelsAfter:vsn:logLevel:http:accessToken:logger:session:handleAppLifecycle:)``
+/// - ``init(headers:heartbeatInterval:reconnectDelay:timeoutInterval:disconnectOnSessionLoss:connectOnSubscribe:maxRetryAttempts:disconnectOnEmptyChannelsAfter:vsn:logLevel:http:accessToken:logger:session:handleAppLifecycle:clock:)``
 public struct RealtimeClientOptions: Sendable {
   package var headers: HTTPFields
   var heartbeatInterval: TimeInterval
@@ -97,6 +98,12 @@ public struct RealtimeClientOptions: Sendable {
   package var http: HTTPClientConfiguration
   package var accessToken: (@Sendable () async throws -> String?)?
   package var logger: Logging.Logger
+
+  /// The clock the heartbeat timer and reconnect backoff sleep on.
+  ///
+  /// Defaults to `ContinuousClock()`. Pass a `TestClock` (swift-clocks) to drive those
+  /// behaviors deterministically in tests instead of waiting out real seconds.
+  public var clock: any Clock<Duration>
 
   /// A template `URLSession` used to configure the Realtime WebSocket connection.
   ///
@@ -164,6 +171,8 @@ public struct RealtimeClientOptions: Sendable {
   ///   - logger: The logger used for Realtime client diagnostics. Defaults to a logger labeled `"io.supabase.realtime"`.
   ///   - session: A template `URLSession` to configure the WebSocket connection from. Defaults to `nil`.
   ///   - handleAppLifecycle: Whether to automatically reconnect on app foreground. Defaults to ``defaultHandleAppLifecycle``.
+  ///   - clock: The clock the heartbeat timer and reconnect backoff sleep on. Defaults to
+  ///     `ContinuousClock()`; pass a `TestClock` to drive them deterministically in tests.
   public init(
     headers: [String: String] = [:],
     heartbeatInterval: TimeInterval = Self.defaultHeartbeatInterval,
@@ -179,7 +188,8 @@ public struct RealtimeClientOptions: Sendable {
     accessToken: (@Sendable () async throws -> String?)? = nil,
     logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.realtime"),
     session: URLSession? = nil,
-    handleAppLifecycle: Bool = Self.defaultHandleAppLifecycle
+    handleAppLifecycle: Bool = Self.defaultHandleAppLifecycle,
+    clock: any Clock<Duration> = ContinuousClock()
   ) {
     self.headers = HTTPFields(headers)
     self.heartbeatInterval = heartbeatInterval
@@ -198,6 +208,7 @@ public struct RealtimeClientOptions: Sendable {
     logger[metadataKey: "system"] = "realtime"
     self.logger = logger
     self.session = session
+    self.clock = clock
   }
 
   /// Backward-compatible initializer preserving the pre-`vsn` signature.
@@ -337,7 +348,7 @@ extension HTTPField.Name {
 
 /// Verbosity of log output emitted by the Realtime client.
 ///
-/// Pass a value to ``RealtimeClientOptions/init(headers:heartbeatInterval:reconnectDelay:timeoutInterval:disconnectOnSessionLoss:connectOnSubscribe:maxRetryAttempts:disconnectOnEmptyChannelsAfter:vsn:logLevel:http:accessToken:logger:session:handleAppLifecycle:)``
+/// Pass a value to ``RealtimeClientOptions/init(headers:heartbeatInterval:reconnectDelay:timeoutInterval:disconnectOnSessionLoss:connectOnSubscribe:maxRetryAttempts:disconnectOnEmptyChannelsAfter:vsn:logLevel:http:accessToken:logger:session:handleAppLifecycle:clock:)``
 /// to control how much detail the Realtime server logs.
 ///
 /// ## Topics

@@ -1,3 +1,4 @@
+import Clocks
 import ConcurrencyExtras
 import Foundation
 import HTTPTypes
@@ -42,6 +43,11 @@ private actor LiveSessionManager {
       ?? supabaseDefaultLogger(label: "io.supabase.auth")
   }
   private var api: APIClient { Dependencies[clientID].api }
+  // Looked up leniently for the same reason as `logger` above: the auto-refresh loop can
+  // outlive its client's dependencies entry.
+  private var clock: any Clock<Duration> {
+    Dependencies.instances.value[clientID]?.configuration.clock ?? ContinuousClock()
+  }
 
   private var inFlightRefreshTask: Task<Session, any Error>?
   private var startAutoRefreshTokenTask: Task<Void, Never>?
@@ -131,7 +137,7 @@ private actor LiveSessionManager {
     startAutoRefreshTokenTask = Task {
       while !Task.isCancelled {
         await autoRefreshTokenTick()
-        try? await Task.sleep(nanoseconds: NSEC_PER_SEC * UInt64(autoRefreshTickDuration))
+        try? await clock.sleep(for: .seconds(autoRefreshTickDuration))
       }
     }
   }

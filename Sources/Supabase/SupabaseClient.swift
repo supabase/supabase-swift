@@ -207,31 +207,15 @@ public final class SupabaseClient: Sendable {
   ///   - supabaseURL: Your Supabase project URL, found in the project dashboard.
   ///   - supabaseKey: Your Supabase project anon key, found in the project dashboard.
   ///   - options: Configuration options for the client and its sub-clients.
-  public convenience init(
+  public init(
     supabaseURL: URL,
     supabaseKey: String,
     options: SupabaseClientOptions
   ) {
-    self.init(
-      supabaseURL: supabaseURL,
-      supabaseKey: supabaseKey,
-      options: options,
-      clock: ContinuousClock()
-    )
-  }
-
-  /// `package`-visibility so callers in other targets of this package (e.g. `IntegrationTests`)
-  /// can inject a test clock without exposing it publicly.
-  package init(
-    supabaseURL: URL,
-    supabaseKey: String,
-    options: SupabaseClientOptions,
-    clock: any Clock<Duration>
-  ) {
     self.supabaseURL = supabaseURL
     self.supabaseKey = supabaseKey
     self.options = options
-    self.clock = clock
+    self.clock = options.global.clock
 
     APIKeyFormat.checkFormat(supabaseKey)
 
@@ -277,7 +261,8 @@ public final class SupabaseClient: Sendable {
         middlewares: options.global.http.middlewares + [TraceContextMiddleware()],
         timeout: options.global.http.timeout
       ),
-      autoRefreshToken: options.auth.autoRefreshToken
+      autoRefreshToken: options.auth.autoRefreshToken,
+      clock: clock
     )
 
     if options.auth.accessToken == nil {
@@ -539,10 +524,11 @@ public final class SupabaseClient: Sendable {
       )
     }
 
+    realtimeOptions.clock = clock
+
     return RealtimeClientV2(
       url: supabaseURL.appendingPathComponent("/realtime/v1"),
-      options: realtimeOptions,
-      clock: clock
+      options: realtimeOptions
     )
   }
 }

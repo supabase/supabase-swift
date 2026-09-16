@@ -346,7 +346,9 @@ public actor AuthClient {
         event: AuthChangeEvent,
         session: Session?
       )
-    >.makeStream()
+      // Unbounded: consumers commonly wait for one specific event (`.signedIn`, `.initialSession`).
+      // A bounded policy could evict exactly that one when events arrive back to back.
+    >.makeStream(bufferingPolicy: .unbounded)
 
     Task {
       let handle = await onAuthStateChange { event, session in

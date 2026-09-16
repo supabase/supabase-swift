@@ -22,7 +22,12 @@ extension RealtimeClientV2 {
   /// ```
   public var statusChange: AsyncStream<RealtimeClientStatus> {
     let id = UUID()
-    let (stream, continuation) = AsyncStream<RealtimeClientStatus>.makeStream()
+    // Unbounded: consumers wait for a specific status (`.connected`) rather than sampling the
+    // latest, and transitions arrive back to back (`.disconnected` then `.connecting` on an
+    // auto-reconnect), so a bounded policy would evict the one being waited on.
+    let (stream, continuation) = AsyncStream<RealtimeClientStatus>.makeStream(
+      bufferingPolicy: .unbounded
+    )
     let lastStatus = mutableState.withValue {
       $0.statusContinuations.append((id, continuation))
       return $0.status

@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 23/10/23.
 //
 
+import Clocks
 import ConcurrencyExtras
 import CustomDump
 import Foundation
@@ -140,5 +141,59 @@ struct SessionManagerTests {
         (0..<10).map { _ in validSession.accessToken }
       )
     }
+  }
+
+  @Test
+  func autoRefreshTicksOnTheInjectedClock() async throws {
+    let clock = TestClock()
+    Dependencies[clientID] = .init(
+      configuration: .init(
+        url: clientURL,
+        localStorage: InMemoryLocalStorage(),
+        autoRefreshToken: false,
+        clock: clock
+      ),
+      http: HTTPClient(transport: http),
+      api: APIClient(clientID: clientID),
+      codeVerifierStorage: .mock,
+      sessionStorage: SessionStorage.live(clientID: clientID),
+      sessionManager: SessionManager.live(clientID: clientID),
+      logger: supabaseDefaultLogger(label: "io.supabase.auth")
+    )
+
+    // `.expired` is close enough to expiry that every tick refreshes, and the
+    // response is expired too, so the next tick refreshes again.
+    Dependencies[clientID].sessionStorage.store(.expired)
+
+    let refreshCount = LockIsolated(0)
+    http.respond(when: { $0.url?.path.contains("/token") == true }) { _, _ in
+      refreshCount.withValue { $0 += 1 }
+      return (
+        HTTPResponse(status: .ok),
+        try AuthClient.Configuration.jsonEncoder.encode(Session.expired)
+      )
+    }
+
+    await sut.startAutoRefresh()
+
+    // The loop refreshes once before its first sleep.
+    let sawFirstTick = await waitUntil { refreshCount.value >= 1 }
+
+    // Only advancing the injected clock releases the next tick — no wall-clock
+    // time passes. Advance in a loop so the test does not depend on the
+    // auto-refresh task having reached its `sleep` at any exact moment.
+    for _ in 0..<50 where refreshCount.value < 2 {
+      await clock.advance(by: .seconds(autoRefreshTickDuration))
+      try? await Task.sleep(nanoseconds: 10_000_000)
+    }
+    let tickCount = refreshCount.value
+
+    // Awaited, not deferred into a fire-and-forget Task: `LiveSessionManager` resolves
+    // `Dependencies[clientID]` on every access, so a loop still running when this test returns
+    // starts refreshing against the *next* test's transport and storage.
+    await sut.stopAutoRefresh()
+
+    #expect(sawFirstTick)
+    #expect(tickCount >= 2)
   }
 }

@@ -144,14 +144,6 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   ///   - url: The Realtime server URL (e.g. `https://<project>.supabase.co/realtime/v1`).
   ///   - options: Configuration options for the client.
   public convenience init(url: URL, options: RealtimeClientOptions) {
-    self.init(url: url, options: options, clock: ContinuousClock())
-  }
-
-  /// Creates a new ``RealtimeClientV2`` using the default URLSession WebSocket transport,
-  /// with an explicit clock. `package`-visibility so callers below the public API in other
-  /// targets of this package (e.g. `SupabaseClient`) can inject a test clock without
-  /// exposing it publicly.
-  package convenience init(url: URL, options: RealtimeClientOptions, clock: any Clock<Duration>) {
     let interceptors: [any ClientMiddleware] = [
       LoggerInterceptor(logger: options.logger)
     ]
@@ -167,10 +159,15 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
         )
       },
       http: HTTPClient(configuration: options.http, appending: interceptors),
-      clock: clock
+      clock: options.clock
     )
   }
 
+  /// Designated initializer.
+  ///
+  /// `clock` is a separate parameter from ``RealtimeClientOptions/clock`` so tests can pair a
+  /// `TestClock` with a stub `wsTransport`. The public initializer forwards `options.clock`, so
+  /// the two only ever differ inside this package's own tests.
   init(
     url: URL,
     options: RealtimeClientOptions,

@@ -1,21 +1,21 @@
 //
-//  TestSupport.swift
-//  RealtimeTests
+//  WaitUntil.swift
+//  TestHelpers
 //
-//  Shared helpers used across the Swift Testing migration of RealtimeTests.
+//  Created by Guilherme Souza on 16/09/26.
 //
 
-import Foundation
+public import Foundation
 
 /// Polls `condition` until it returns `true` or `timeout` elapses.
 ///
 /// Swift Testing has no direct equivalent of `XCTestExpectation` +
 /// `fulfillment(of:timeout:)` for "wait for an async condition driven by a
 /// concurrently-running task". Tests that used to fulfill an expectation from
-/// a background task now flip a `LockIsolated` flag/counter instead, and await
+/// a background task flip a `LockIsolated` flag/counter instead, and await
 /// this helper to observe it.
 @discardableResult
-func waitUntil(
+public func waitUntil(
   timeout: TimeInterval = 10.0,
   pollInterval: UInt64 = 10_000_000,
   condition: @escaping @Sendable () -> Bool

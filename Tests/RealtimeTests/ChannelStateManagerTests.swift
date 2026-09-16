@@ -1,6 +1,7 @@
 import ConcurrencyExtras
 import Foundation
 import Logging
+import TestHelpers
 import Testing
 
 @testable import Realtime
