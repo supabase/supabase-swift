@@ -47,6 +47,7 @@ dummysignature
 ecdsa
 halfvec
 emaillink
+enotconn
 entrancy
 etag
 ethereum
