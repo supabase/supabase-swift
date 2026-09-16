@@ -332,6 +332,10 @@ supporting_symbols:
   - AuthError.underlyingError
   - AuthError.description
   - AuthError.sessionMissing
+  # The admin MFA namespace is shared by auth.admin.list_mfa_factors and
+  # auth.admin.delete_mfa_factor rather than owned by one.
+  - AuthAdmin.mfa
+  - AuthAdminMFA
   # RealtimeError (SDK-1788) is thrown by every realtime.* capability rather
   # than owned by one.
   - RealtimeError
@@ -658,8 +662,14 @@ features:
       - GenerateLinkType.recovery
       - GenerateLinkType.emailChangeCurrent
       - GenerateLinkType.emailChangeNew
-  auth.admin.list_mfa_factors: not_implemented
-  auth.admin.delete_mfa_factor: not_implemented
+  auth.admin.list_mfa_factors:
+    status: implemented
+    symbols:
+      - AuthAdminMFA.listFactors
+  auth.admin.delete_mfa_factor:
+    status: implemented
+    symbols:
+      - AuthAdminMFA.deleteFactor
   auth.admin.create_provider: not_implemented
   auth.admin.delete_provider: not_implemented
   auth.admin.update_provider: not_implemented
