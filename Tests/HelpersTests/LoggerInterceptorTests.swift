@@ -420,6 +420,30 @@ struct LoggerInterceptorTests {
   }
 
   @Test
+  func bufferedBodyKeepsItsUploadProgressHook() async throws {
+    let (logger, _) = makeLogger()
+    let sut = LoggerInterceptor(logger: logger)
+    let seen = LockIsolated<[Int64]>([])
+    let body = HTTPBody(Data("small".utf8)).reportingProgress { bytes in
+      seen.withValue { $0.append(bytes) }
+    }
+
+    let forwarded = LockIsolated<HTTPBody?>(nil)
+    _ = try await sut.intercept(
+      HTTPTypes.HTTPRequest(method: .post, url: URL(string: "https://example.com")!),
+      body: body
+    ) { _, next in
+      forwarded.setValue(next)
+      return (HTTPTypes.HTTPResponse(status: .ok), nil)
+    }
+
+    // The logger buffered and re-wrapped the body; the transport must still be able to report.
+    let hook = try #require(forwarded.value?.onUploadProgress)
+    hook(5)
+    #expect(seen.value == [5])
+  }
+
+  @Test
   func underDeclaredBodyStillReachesTheNextHandlerWhole() async throws {
     // Transparent gzip makes `Content-Length` the *compressed* size while the body yields the
     // decoded bytes, so a body can deliver more than it declares. Logging must not fail the

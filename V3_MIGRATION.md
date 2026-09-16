@@ -2512,3 +2512,39 @@ let fallback: Duration = FunctionsClient.requestIdleTimeout
 This is a compile error: the `timeoutInterval:` argument label no longer exists, and a
 `TimeInterval` value no longer type-checks where `requestIdleTimeout` is used. Search for
 `timeoutInterval:` at `FunctionInvokeOptions` call sites and for `requestIdleTimeout`.
+
+## `URLSessionTransport` no longer follows a 307/308 redirect for a one-shot request body
+
+On Apple platforms, a request whose body is `HTTPBody.IterationBehavior.single` and that receives
+a `307 Temporary Redirect` or `308 Permanent Redirect` now returns that redirect response to the
+caller instead of following it. Every other body kind, and every other redirect status, is
+followed as before. Linux is unchanged: it spools the body to disk before sending, so the copy can
+be resent and the redirect is followed.
+
+**Why**: request bodies are now streamed to `URLSession` as they are produced instead of being
+buffered into memory first. A 307/308 keeps the method and resends the body, and a `.single`
+body cannot be produced a second time. Failing the request halfway through with
+`HTTPBodyAlreadyConsumedError` would hide what actually happened, so the transport hands the
+redirect back the same way Go's `net/http` does for a non-rewindable body. Only bodies you build
+with `HTTPBody(_:length:iterationBehavior: .single)` are affected; `HTTPBody(_ data:)` and
+`HTTPBody(fileURL:)` are `.multiple` and replay.
+
+```swift
+// Before — the 307 was followed and the body resent from the buffered copy
+let body = HTTPBody(chunks, length: .known(size), iterationBehavior: .single)
+let (head, _) = try await transport.send(request, body: body)
+head.status  // 200, from the redirect target
+
+// After — the 307 itself comes back
+let (head, _) = try await transport.send(request, body: body)
+head.status  // 307; `head.headerFields[.location]` names the target
+```
+
+This is a behavior change, not a compile error. Search for `iterationBehavior: .single` on a
+request body; if that endpoint can redirect with 307/308, either send the request to the final
+URL directly or make the body `.multiple` by giving it a sequence that can be iterated again.
+
+The same change also means a `.single` body whose `length` is `.known(n)` must yield exactly `n`
+bytes: the count goes out as `Content-Length` before the body is read, and a mismatch now fails
+the request with the new `HTTPBodyLengthMismatchError` instead of stalling until the request
+timeout (too few bytes) or truncating on the server (too many).
