@@ -1474,7 +1474,7 @@ public struct OAuthResponse: Hashable, Sendable {
 }
 
 /// Pagination parameters for list endpoints.
-public struct PageParams {
+public struct PageParams: Hashable, Sendable {
   /// The page number.
   public let page: Int?
 

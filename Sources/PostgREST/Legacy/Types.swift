@@ -85,6 +85,11 @@ public struct PostgrestResponse<T> {
   }
 }
 
+// Conditional rather than unconditional: `T` is the caller's decoded row type, and constraining
+// it to `Sendable` on the type itself would reject the non-`Sendable` models some callers decode
+// into today.
+extension PostgrestResponse: Sendable where T: Sendable {}
+
 /// The algorithm PostgREST uses to count the total number of rows matching a query.
 ///
 /// Pass a ``CountOption`` to query methods such as ``PostgrestRequestBuilder/select(_:head:count:)``

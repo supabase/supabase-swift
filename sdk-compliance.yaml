@@ -627,6 +627,13 @@ features:
     status: implemented
     symbols:
       - AuthAdmin.listUsers
+      - AuthAdmin.users
+    supporting_symbols:
+      - AuthAdmin.UserSequence
+      - AuthAdmin.UserSequence.Element
+      - AuthAdmin.UserSequence.makeAsyncIterator
+      - AuthAdmin.UserSequence.AsyncIterator
+      - AuthAdmin.UserSequence.AsyncIterator.next
   auth.admin.invite_user:
     status: implemented
     symbols:

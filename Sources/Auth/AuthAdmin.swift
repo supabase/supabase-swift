@@ -24,6 +24,7 @@ import HTTPTypes
 /// - ``inviteUserByEmail(_:data:redirectTo:)``
 /// - ``deleteUser(id:shouldSoftDelete:)``
 /// - ``listUsers(params:)``
+/// - ``users(perPage:)``
 /// - ``generateLink(params:)``
 /// - ``signOut(jwt:scope:)``
 ///
