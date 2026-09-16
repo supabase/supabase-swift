@@ -27,18 +27,37 @@ import Testing
 extension URLRequest {
   fileprivate func testBodyData() -> Data? {
     guard let stream = httpBodyStream else { return httpBody }
-    stream.open()
-    defer { stream.close() }
+    return stream.readToEnd()
+  }
+}
+
+extension InputStream {
+  /// Blocks the calling thread until the writer closes its end. Only call this from a thread
+  /// that owns nothing else, such as Mocker's request callback on URLSession's own thread.
+  fileprivate func readToEnd() -> Data {
+    open()
+    defer { close() }
     var data = Data()
     let bufferSize = 1024
     let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
     defer { buffer.deallocate() }
     while true {
-      let read = stream.read(buffer, maxLength: bufferSize)
+      let read = self.read(buffer, maxLength: bufferSize)
       guard read > 0 else { break }
       data.append(buffer, count: read)
     }
     return data
+  }
+
+  /// `readToEnd()` on a global queue. A bound pair's blocking read spins the calling thread's
+  /// run loop while it waits, so it must never run on the test's own thread: in a full parallel
+  /// run Swift Testing can place the test on the main thread, and parking the main run loop
+  /// there deadlocks everything else that needs it.
+  fileprivate func readToEndOffThread() async -> Data {
+    let stream = UncheckedSendable(self)
+    return await withCheckedContinuation { continuation in
+      DispatchQueue.global().async { continuation.resume(returning: stream.value.readToEnd()) }
+    }
   }
 }
 
@@ -318,9 +337,8 @@ struct URLSessionTransportTests {
           let boxed = stream.map { UncheckedSendable($0) }
           first.setValue(boxed)
         })
-      var request = URLRequest(url: url)
-      request.httpBodyStream = try #require(first.value?.value)
-      #expect(request.testBodyData() == Data("abcd".utf8))
+      let firstStream = try #require(first.value?.value)
+      #expect(await firstStream.readToEndOffThread() == Data("abcd".utf8))
 
       // A redirect or auth retry asks for the body again. The one-shot body cannot replay, so
       // the delegate cancels the task and reports why instead of a bare `URLError.cancelled`.

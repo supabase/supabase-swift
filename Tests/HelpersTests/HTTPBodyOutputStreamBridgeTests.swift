@@ -49,19 +49,28 @@
     return (input!, output!)
   }
 
-  /// Reads `input` until the writer closes its end.
-  private func drain(_ input: InputStream) -> Data {
-    input.open()
-    defer { input.close() }
-    var data = Data()
-    let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: 64)
-    defer { buffer.deallocate() }
-    while true {
-      let read = input.read(buffer, maxLength: 64)
-      guard read > 0 else { break }
-      data.append(buffer, count: read)
+  /// Reads `input` until the writer closes its end, on a global queue. A bound pair's blocking
+  /// read spins the calling thread's run loop while it waits, so it must never run on the test's
+  /// own thread: in a full parallel run Swift Testing can place the test on the main thread, and
+  /// parking the main run loop there deadlocks everything else that needs it.
+  private func drain(_ input: InputStream) async -> Data {
+    let input = UncheckedSendable(input)
+    return await withCheckedContinuation { continuation in
+      DispatchQueue.global().async {
+        let stream = input.value
+        stream.open()
+        defer { stream.close() }
+        var data = Data()
+        let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: 64)
+        defer { buffer.deallocate() }
+        while true {
+          let read = stream.read(buffer, maxLength: 64)
+          guard read > 0 else { break }
+          data.append(buffer, count: read)
+        }
+        continuation.resume(returning: data)
+      }
     }
-    return data
   }
 
   private func poll(
@@ -92,7 +101,7 @@
       try await Task.sleep(for: .milliseconds(100))
       #expect(chunks.pulls.value == 2)
 
-      let received = drain(input)
+      let received = await drain(input)
       #expect(received == chunks.expectedBytes)
       // Eight chunks plus the terminating `nil`.
       #expect(chunks.pulls.value == 9)
@@ -108,7 +117,7 @@
         Issue.record("unexpected failure: \(error)")
       }
       defer { first.cancel() }
-      #expect(drain(firstInput) == chunks.expectedBytes)
+      #expect(await drain(firstInput) == chunks.expectedBytes)
 
       let (secondInput, secondOutput) = makeBoundStreams(bufferSize: 64)
       let failure = LockIsolated<(any Error)?>(nil)
@@ -120,7 +129,7 @@
       await poll { failure.value != nil }
       #expect(failure.value is HTTPBodyAlreadyConsumedError)
       // The writer closed its end without writing anything.
-      #expect(drain(secondInput).isEmpty)
+      #expect(await drain(secondInput).isEmpty)
     }
 
     @Test
@@ -134,7 +143,7 @@
 
       // Content-Length promised 30 bytes; the stream closes after 20 so the request fails instead
       // of hanging until URLSession's timeout.
-      #expect(drain(input) == chunks.expectedBytes)
+      #expect(await drain(input) == chunks.expectedBytes)
       await poll { failure.value != nil }
       let error = try #require(failure.value as? HTTPBodyLengthMismatchError)
       #expect(error.declared == 30)
@@ -151,7 +160,7 @@
       defer { bridge.cancel() }
 
       // The third chunk would overrun Content-Length; it is never written.
-      #expect(drain(input) == chunks.expectedBytes.prefix(20))
+      #expect(await drain(input) == chunks.expectedBytes.prefix(20))
       await poll { failure.value != nil }
       let error = try #require(failure.value as? HTTPBodyLengthMismatchError)
       #expect(error.declared == 20)
@@ -169,7 +178,7 @@
           Issue.record("unexpected failure: \(error)")
         }
         defer { bridge.cancel() }
-        #expect(drain(input) == chunks.expectedBytes)
+        #expect(await drain(input) == chunks.expectedBytes)
       }
     }
   }
