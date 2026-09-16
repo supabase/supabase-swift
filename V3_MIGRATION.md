@@ -8,6 +8,20 @@ Supabase Swift SDK, together with the steps required to migrate your code. All m
 > v3 has not been released yet. This document is updated as breaking changes land on `main`, so
 > treat it as the running list rather than the final one.
 
+## Minimum toolchain is now Xcode 26.0 / Swift 6.2
+
+The package now requires Xcode 26.0 or later and Swift 6.2 or later (`swift-tools-version:6.2`).
+The previous floor was Xcode 16.4 / Swift 6.1.
+
+The [support policy](README.md#support-policy) ties the minimum Xcode to the versions eligible for
+App Store submission. Since April 28, 2026, App Store Connect only accepts uploads built with
+Xcode 26 or later, so Xcode 16.x is already out of policy. Dropping it is not a breaking change
+under that policy, but it is listed here because it changes what you need installed to build v3.
+
+### Migration
+
+Update to Xcode 26.0 or later. No source changes are required.
+
 ## `verifyOTP` now returns `VerifyOTPResponse` instead of `AuthResponse`
 
 `verifyOTP` and its overloads return a new `VerifyOTPResponse` type instead of `AuthResponse`.
