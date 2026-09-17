@@ -815,13 +815,27 @@ public actor AuthClient {
       url: configuration.url.appendingPathComponent("authorize"),
       provider: provider,
       scopes: scopes,
-      redirectTo: redirectTo ?? configuration.redirectToURL,
+      redirectTo: Self.oauthRedirectURL(
+        redirectTo: redirectTo,
+        configured: configuration.redirectToURL
+      ),
       queryParams: queryParams
     )
 
     let resultURL = try await launchFlow(url)
 
     return try await session(from: resultURL, flowId: flowId)
+  }
+
+  /// The redirect an OAuth flow will actually use: a per-call `redirectTo` overrides the
+  /// client-wide ``Configuration/redirectToURL``.
+  ///
+  /// Both halves of the flow have to agree on this — the authorize request tells the provider
+  /// where to send the user, and `ASWebAuthenticationSession` is told which scheme to listen
+  /// on. They are resolved in different places, and writing the rule out twice is exactly how
+  /// they drifted apart and stopped agreeing (SDK-1873), so it lives here once instead.
+  static func oauthRedirectURL(redirectTo: URL?, configured: URL?) -> URL? {
+    redirectTo ?? configured
   }
 
   #if canImport(AuthenticationServices)
@@ -853,10 +867,14 @@ public actor AuthClient {
         queryParams: queryParams
       ) { @MainActor [configuration] url in
         // Resolved before the continuation exists, so a missing scheme simply throws instead of
-        // creating a continuation only to immediately fail it.
+        // creating a continuation only to immediately fail it. Derived from the same
+        // `oauthRedirectURL` the authorize request used, so the scheme listened on and the
+        // redirect the provider was given cannot disagree.
         let callbackScheme = try Self.oauthCallbackScheme(
-          configured: configuration.redirectToURL,
-          redirectTo: redirectTo
+          for: Self.oauthRedirectURL(
+            redirectTo: redirectTo,
+            configured: configuration.redirectToURL
+          )
         )
 
         return try await withCheckedThrowingContinuation { continuation in
@@ -900,16 +918,14 @@ public actor AuthClient {
 
     /// The URL scheme `ASWebAuthenticationSession` listens on to capture the OAuth callback.
     ///
-    /// - Important: This resolves `configured` *before* `redirectTo`, the opposite of the order
-    ///   ``signInWithOAuth(provider:redirectTo:scopes:queryParams:launchFlow:)`` uses to build
-    ///   the authorize URL. When both are set with different schemes the session listens on a
-    ///   scheme the provider never redirects to, and the callback is never captured. Tracked as
-    ///   SDK-1873 and pinned as-is here, so that fix lands as its own reviewable change.
+    /// Takes the already-resolved redirect — see ``oauthRedirectURL(redirectTo:configured:)`` —
+    /// rather than resolving it again, so this can only ever name the scheme of the URL the
+    /// provider was actually given.
     ///
-    /// Pure so the resolution order and the guidance message can both be covered without
+    /// Pure so the scheme extraction and the guidance message can both be covered without
     /// presenting a session.
-    static func oauthCallbackScheme(configured: URL?, redirectTo: URL?) throws -> String {
-      guard let scheme = (configured ?? redirectTo)?.scheme else {
+    static func oauthCallbackScheme(for redirectURL: URL?) throws -> String {
+      guard let scheme = redirectURL?.scheme else {
         throw AuthError.oauthFlowFailed(
           """
           Provide a redirect URL with a scheme, either through the `redirectTo` parameter \
