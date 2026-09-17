@@ -123,6 +123,7 @@ public struct StorageClientConfiguration: Sendable {
 /// - ``updateBucket(_:options:)``
 /// - ``emptyBucket(_:)``
 /// - ``deleteBucket(_:)``
+/// - ``purgeCache(bucket:transformationsOnly:)``
 public struct SupabaseStorageClient: Sendable {
   let api: StorageApi
 
