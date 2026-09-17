@@ -8,6 +8,20 @@ Supabase Swift SDK, together with the steps required to migrate your code. All m
 > v3 has not been released yet. This document is updated as breaking changes land on `main`, so
 > treat it as the running list rather than the final one.
 
+## Minimum toolchain is now Xcode 26.0 / Swift 6.2
+
+The package now requires Xcode 26.0 or later and Swift 6.2 or later (`swift-tools-version:6.2`).
+The previous floor was Xcode 16.4 / Swift 6.1.
+
+The [support policy](README.md#support-policy) ties the minimum Xcode to the versions eligible for
+App Store submission. Since April 28, 2026, App Store Connect only accepts uploads built with
+Xcode 26 or later, so Xcode 16.x is already out of policy. Dropping it is not a breaking change
+under that policy, but it is listed here because it changes what you need installed to build v3.
+
+### Migration
+
+Update to Xcode 26.0 or later. No source changes are required.
+
 ## `verifyOTP` now returns `VerifyOTPResponse` instead of `AuthResponse`
 
 `verifyOTP` and its overloads return a new `VerifyOTPResponse` type instead of `AuthResponse`.
@@ -2279,6 +2293,28 @@ Errors thrown by your own code that runs inside the request — a custom `Client
 error is in `underlyingError`. `CancellationError` is never wrapped and still propagates as
 itself.
 
+Cancelling a request is the case worth spelling out. `URLSession`'s async APIs do not throw
+`CancellationError` when the enclosing `Task` is cancelled — they throw `URLError(.cancelled)`,
+which is a `URLError` like any other and so is wrapped as `.transport`. A `catch is
+CancellationError` does not match a cancelled request; check the code on `underlyingError`
+instead:
+
+```swift
+// Before
+} catch is CancellationError {
+  // the user cancelled — no error banner
+}
+
+// After
+} catch let error as any SupabaseError
+  where (error.underlyingError as? URLError)?.code == .cancelled {
+  // the user cancelled — no error banner
+}
+```
+
+This also compiles silently — the old `catch` block simply stops being reached. Search for `is
+CancellationError` near Supabase calls. A cancelled request is never retried.
+
 Without this, one `catch let error as any SupabaseError` missed exactly the failures a user is
 most likely to hit in the field: no network, and a schema drift between the app's model and the
 server. swift-openapi-runtime and Auth0 wrap the same way.
@@ -2336,7 +2372,7 @@ This is a compile error: `statusCode` and `error` no longer exist on `StorageErr
 
 Kinds: `.server` (recognized body, `serverError` set), `.unexpectedResponse` (non-2xx with an
 unrecognized body, raw bytes in `response?.body`), `.transport`, `.decoding`, and `.invalidURL`
-for the URL-building helpers such as `getPublicURL`, which threw `URLError(.badURL)` before.
+for the URL-building helpers such as `publicURL`, which threw `URLError(.badURL)` before.
 
 ## `PostgrestError` gains `kind` and `response`; server fields move to `serverError`
 
@@ -2548,3 +2584,212 @@ The same change also means a `.single` body whose `length` is `.known(n)` must y
 bytes: the count goes out as `Content-Length` before the body is read, and a mismatch now fails
 the request with the new `HTTPBodyLengthMismatchError` instead of stalling until the request
 timeout (too few bytes) or truncating on the server (too many).
+
+## Auth and PostgREST retries share one implementation: jittered backoff and `Retry-After`
+
+Auth and PostgREST — the two modules that already retried — now do so through one middleware
+driven by an internal `RetryPolicy`. It runs outermost, so a replayed attempt re-runs your
+`ClientMiddleware`s and resolves a fresh access token instead of reusing the first attempt's.
+Storage and Functions are unchanged: they do not retry.
+
+- **PostgREST** is unchanged in what it retries: GET and HEAD only, on a transient network
+  failure or a 503/520, up to three retries. `retryEnabled`, `retry(enabled:)` and `db.retry`
+  stay as they were. What changes is the wait: a random duration in `cap/2...cap` with
+  `cap = min(30s, 1s · 2^n)` instead of a fixed `2^n` seconds, and a `Retry-After` header is
+  honoured up to 30 s. Only a transient `URLError` (timeout, connection lost, DNS failure and the
+  like) is retried; PostgREST used to retry any error thrown by a custom `ClientTransport`,
+  `ClientMiddleware` or `accessToken` closure too.
+- **Auth** makes 3 attempts instead of 2, with the same jittered wait (500 ms base, 20 s cap)
+  instead of a fixed `0.5 · 2^n` seconds. What it retries is unchanged: GET, HEAD, OPTIONS, PUT,
+  DELETE and POST (so token refreshes are replayed), on a transient `URLError` or a 408, 500,
+  502, 503, 504 or Cloudflare 520–524/530.
+- **Both** report a cancelled task as `CancellationError`, even when the transport reported it
+  as `URLError.cancelled`.
+- **Realtime** reconnects carry the same equal jitter, capped at 30 s: the first attempt waits
+  between half of `reconnectDelay` and `reconnectDelay`, never longer than before.
+
+Without jitter every client that lost the same connection retried at the same instant, and the
+two modules had their own idea of a transient failure. This follows the AWS/Smithy retry
+guidance.
+
+```swift
+// A middleware passed through `SupabaseClientOptions.GlobalOptions.http`:
+struct RequestCounter: ClientMiddleware {
+  let count: LockIsolated<Int>
+  func intercept(
+    _ request: HTTPRequest, body: HTTPBody?,
+    next: @Sendable (HTTPRequest, HTTPBody?) async throws -> (HTTPResponse, HTTPBody?)
+  ) async throws -> (HTTPResponse, HTTPBody?) {
+    count.withValue { $0 += 1 }
+    return try await next(request, body)
+  }
+}
+
+// Before — one `intercept` per `execute()`, even when PostgREST retried the request.
+// After — one `intercept` per attempt, up to four for a PostgREST GET that keeps getting a 503.
+try await supabase.from("todos").select().execute()
+```
+
+This compiles silently. Search your codebase for `ClientTransport` and `ClientMiddleware`
+conformances — they now run once per attempt — and, in Auth or PostgREST error handling, for
+code that expected a cancelled request to surface as `AuthError` or `PostgrestError`; it now
+throws `CancellationError`. If you relied on PostgREST retrying a custom transport error, handle
+the retry in your transport.
+
+## `get`-prefixed accessors drop the prefix
+
+Twelve public methods that only fetch a value lost their `get` prefix, per the Swift API Design
+Guidelines rule that a method without side effects reads as a noun phrase.
+
+| Before | After |
+| --- | --- |
+| `AuthAdmin.getUserById(_:)` | `AuthAdmin.user(id:)` |
+| `AuthAdminOAuth.getClient(clientId:)` | `AuthAdminOAuth.client(id:)` |
+| `AuthMFA.getAuthenticatorAssuranceLevel()` | `AuthMFA.authenticatorAssuranceLevel()` |
+| `AuthClient.getOAuthSignInURL(...)` | `AuthClient.oauthSignInURL(...)` |
+| `AuthClient.getLinkIdentityURL(...)` | `AuthClient.linkIdentityURL(...)` |
+| `AuthClient.getClaims(...)` | `AuthClient.claims(...)` |
+| `AuthOAuthServer.getAuthorizationDetails(...)` | `AuthOAuthServer.authorizationDetails(id:)` |
+| `AuthClient.getPasskeyRegistrationOptions()` | `AuthClient.passkeyRegistrationOptions()` |
+| `AuthClient.getPasskeyAuthenticationOptions()` | `AuthClient.passkeyAuthenticationOptions()` |
+| `SupabaseStorageClient.getBucket(_:)` | `SupabaseStorageClient.bucket(_:)` |
+| `StorageVectorsClient.getBucket(_:)` | `StorageVectorsClient.bucket(_:)` |
+| `VectorBucketClient.getIndex(_:)` | `VectorBucketClient.indexDetails(_:)` |
+| `VectorIndexClient.getVectors(keys:returnMetadata:)` | `VectorIndexClient.vectors(keys:returnMetadata:)` |
+| `StorageFileApi.getPublicURL(...)` | `StorageFileApi.publicURL(...)` |
+
+```swift
+// Before
+let user = try await supabase.auth.admin.getUserById(id)
+let url = try supabase.storage.from("avatars").getPublicURL(path: "me.png")
+
+// After
+let user = try await supabase.auth.admin.user(id: id)
+let url = try supabase.storage.from("avatars").publicURL(path: "me.png")
+```
+
+`getIndex(_:)` is the one that did not simply lose its prefix: `VectorBucketClient` already has an
+`index(_:)` returning a `VectorIndexClient` handle, so a second `index(_:)` returning a
+`VectorIndex` would have made `try await bucket.index("embeddings")` ambiguous. It is
+`indexDetails(_:)` instead, which also reads closer to what it returns.
+
+These are all compile errors. Search for `get` immediately followed by a capital letter at
+Supabase call sites.
+
+## Identifier argument labels are `id:`
+
+Methods that took a label repeating the noun already in the method name now take `id:`.
+
+| Before | After |
+| --- | --- |
+| `AuthAdminOAuth.updateClient(clientId:params:)` | `AuthAdminOAuth.updateClient(id:params:)` |
+| `AuthAdminOAuth.deleteClient(clientId:)` | `AuthAdminOAuth.deleteClient(id:)` |
+| `AuthAdminOAuth.regenerateClientSecret(clientId:)` | `AuthAdminOAuth.regenerateClientSecret(id:)` |
+| `AuthOAuthServer.approveAuthorization(authorizationId:)` | `AuthOAuthServer.approveAuthorization(id:)` |
+| `AuthOAuthServer.denyAuthorization(authorizationId:)` | `AuthOAuthServer.denyAuthorization(id:)` |
+| `AuthOAuthServer.revokeGrant(clientId:)` | `AuthOAuthServer.revokeGrant(id:)` |
+| `AuthAdmin.listPasskeys(userId:)` | `AuthAdmin.listPasskeys(forUser:)` |
+| `AuthAdmin.deletePasskey(userId:passkeyId:)` | `AuthAdmin.deletePasskey(id:forUser:)` |
+
+```swift
+// Before
+try await supabase.auth.admin.oauth.deleteClient(clientId: client.clientId)
+try await supabase.auth.admin.deletePasskey(userId: user.id, passkeyId: passkey.id)
+
+// After
+try await supabase.auth.admin.oauth.deleteClient(id: client.clientId)
+try await supabase.auth.admin.deletePasskey(id: passkey.id, forUser: user.id)
+```
+
+`deletePasskey` also swapped its parameter order, so the passkey comes first — the thing being
+deleted, with the user as context. The `OAuthClient.clientId` *property* is unchanged; only the
+argument labels moved.
+
+These are all compile errors.
+
+## Boolean properties read as assertions
+
+| Before | After |
+| --- | --- |
+| `FileOptions.upsert` | `FileOptions.shouldUpsert` |
+| `CreateSignedUploadURLOptions.upsert` | `CreateSignedUploadURLOptions.shouldUpsert` |
+| `SupabaseClientOptions.StorageOptions.useNewHostname` | `usesNewHostname` |
+| `AuthClient.Configuration.autoRefreshToken` | `automaticallyRefreshesToken` |
+| `AuthClient.Configuration.defaultAutoRefreshToken` | `defaultAutomaticallyRefreshesToken` |
+| `SupabaseClientOptions.AuthOptions.autoRefreshToken` | `automaticallyRefreshesToken` |
+| `GetClaimsOptions.allowExpired` | `allowsExpired` |
+| `AdminUserAttributes.emailConfirm` | `AdminUserAttributes.confirmsEmail` |
+| `AdminUserAttributes.phoneConfirm` | `AdminUserAttributes.confirmsPhone` |
+
+```swift
+// Before
+try await supabase.storage.from("avatars").upload(
+  "me.png", data: data, options: FileOptions(upsert: true)
+)
+let client = SupabaseClient(
+  supabaseURL: url,
+  supabaseKey: key,
+  options: .init(auth: .init(autoRefreshToken: false))
+)
+
+// After
+try await supabase.storage.from("avatars").upload(
+  "me.png", data: data, options: FileOptions(shouldUpsert: true)
+)
+let client = SupabaseClient(
+  supabaseURL: url,
+  supabaseKey: key,
+  options: .init(auth: .init(automaticallyRefreshesToken: false))
+)
+```
+
+These are all compile errors. The wire formats are untouched: `FileOptions.shouldUpsert` still
+sends the `x-upsert` header, and `AdminUserAttributes.confirmsEmail` still encodes to
+`email_confirm`.
+
+`head:` on `select` and `rpc` deliberately keeps its name — it names the HTTP method the request
+switches to, rather than asserting a state.
+
+## `RealtimeClientOptions.vsn` is now `protocolVersion`
+
+`vsn` is the query parameter Realtime's server reads; it was never a good name for the Swift
+property.
+
+```swift
+// Before
+let client = SupabaseClient(
+  supabaseURL: url, supabaseKey: key,
+  options: .init(realtime: RealtimeClientOptions(vsn: .v2))
+)
+
+// After
+let client = SupabaseClient(
+  supabaseURL: url, supabaseKey: key,
+  options: .init(realtime: RealtimeClientOptions(protocolVersion: .v2))
+)
+```
+
+This is a compile error. The socket URL still carries `vsn=2.0.0` — only the Swift spelling moved.
+
+## `User.aud` is now `User.audience`
+
+`User.aud` is `User.audience`, and the `aud` field on `ListUsersPaginatedResponse` and
+`ListOAuthClientsPaginatedResponse` is `audience` on both.
+
+```swift
+// Before
+if user.aud == "authenticated" { ... }
+
+// After
+if user.audience == "authenticated" { ... }
+```
+
+`User` gained an explicit `CodingKeys` (mapping `audience` back to `"aud"`) so the wire format is
+unchanged — a `User` encoded by v2 still decodes in v3, and vice versa.
+
+`JWTClaims.aud` deliberately keeps its name. That type is a direct RFC 7519 claims bag whose
+fields are all the registered abbreviations — `iss`, `sub`, `exp`, `iat`, `nbf`, `jti` — and
+spelling out one of them would be less consistent, not more.
+
+This is a compile error where you read the property. If you encode a `User` to your own storage
+under a hand-written coder, check that it still expects `aud`.

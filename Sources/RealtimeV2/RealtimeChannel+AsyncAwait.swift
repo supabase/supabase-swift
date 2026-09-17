@@ -16,7 +16,10 @@ extension RealtimeChannelV2 {
   ///
   /// - Returns: An `AsyncStream` of ``PresenceAction`` values.
   public func presenceChange() -> AsyncStream<any PresenceAction> {
-    let (stream, continuation) = AsyncStream<any PresenceAction>.makeStream()
+    // Unbounded: these streams carry server payloads, so any bounded policy is silent data loss.
+    let (stream, continuation) = AsyncStream<any PresenceAction>.makeStream(
+      bufferingPolicy: .unbounded
+    )
 
     let subscription = onPresenceChange {
       continuation.yield($0)
@@ -127,7 +130,8 @@ extension RealtimeChannelV2 {
     filter: String?,
     select: [String]? = nil
   ) -> AsyncStream<AnyAction> {
-    let (stream, continuation) = AsyncStream<AnyAction>.makeStream()
+    // Unbounded: dropping a database change is silent data loss for the caller.
+    let (stream, continuation) = AsyncStream<AnyAction>.makeStream(bufferingPolicy: .unbounded)
     let subscription = _onPostgresChange(
       event: event,
       schema: schema,
@@ -150,7 +154,8 @@ extension RealtimeChannelV2 {
   /// - Parameter event: The broadcast event name to listen for.
   /// - Returns: An `AsyncStream<JSONObject>`.
   public func broadcastStream(event: String) -> AsyncStream<JSONObject> {
-    let (stream, continuation) = AsyncStream<JSONObject>.makeStream()
+    // Unbounded: dropping a broadcast is silent data loss for the caller.
+    let (stream, continuation) = AsyncStream<JSONObject>.makeStream(bufferingPolicy: .unbounded)
 
     let subscription = onBroadcast(event: event) {
       continuation.yield($0)
@@ -171,7 +176,8 @@ extension RealtimeChannelV2 {
   /// - Parameter event: The broadcast event name to listen for.
   /// - Returns: An `AsyncStream<Data>`.
   public func broadcastDataStream(event: String) -> AsyncStream<Data> {
-    let (stream, continuation) = AsyncStream<Data>.makeStream()
+    // Unbounded: dropping a broadcast is silent data loss for the caller.
+    let (stream, continuation) = AsyncStream<Data>.makeStream(bufferingPolicy: .unbounded)
 
     let subscription = onBroadcastData(event: event) {
       continuation.yield($0)
@@ -190,7 +196,10 @@ extension RealtimeChannelV2 {
   ///
   /// - Returns: An `AsyncStream<RealtimeMessageV2>`.
   public func system() -> AsyncStream<RealtimeMessageV2> {
-    let (stream, continuation) = AsyncStream<RealtimeMessageV2>.makeStream()
+    // Unbounded: dropping a system message is silent data loss for the caller.
+    let (stream, continuation) = AsyncStream<RealtimeMessageV2>.makeStream(
+      bufferingPolicy: .unbounded
+    )
 
     let subscription = onSystem {
       continuation.yield($0)

@@ -18,7 +18,7 @@ import HTTPTypes
 ///
 /// ### Listing factors
 /// - ``listFactors()``
-/// - ``getAuthenticatorAssuranceLevel()``
+/// - ``authenticatorAssuranceLevel()``
 public struct AuthMFA: Sendable {
   let clientID: AuthClientID
 
@@ -162,7 +162,7 @@ public struct AuthMFA: Sendable {
   /// Returns the Authenticator Assurance Level (AAL) for the active session.
   ///
   /// - Returns: An authentication response with the Authenticator Assurance Level.
-  public func getAuthenticatorAssuranceLevel() async throws
+  public func authenticatorAssuranceLevel() async throws
     -> AuthMFAGetAuthenticatorAssuranceLevelResponse
   {
     do {

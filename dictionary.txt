@@ -47,7 +47,10 @@ dummysignature
 ecdsa
 halfvec
 emaillink
+enotconn
 entrancy
+eproto
+errno
 etag
 ethereum
 Ethereum
@@ -275,3 +278,10 @@ loggable
 # Terms from the live memory probe (MemoryProbeIntegrationTests.swift).
 memprobe
 attoseconds
+
+# Retry-After / Duration terms from RetryPolicy.swift.
+asctime
+fixdate
+
+# Term from the privacy manifest resource declared on the Helpers target (Package.swift).
+xcprivacy

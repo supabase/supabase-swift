@@ -23,8 +23,8 @@ This is the official Supabase SDK for Swift, mirroring the design of supabase-js
 
 ### Requirements
 
-- Xcode 16.4+ (supports versions eligible for App Store submission)
-- Swift 6.1+
+- Xcode 26.0+ (supports versions eligible for App Store submission)
+- Swift 6.2+
 - Supported platforms: iOS 16.0+, macOS 13.0+, tvOS 16+, watchOS 9+, visionOS 1+
 - Linux is supported for building but not officially supported for production use
 
@@ -210,7 +210,7 @@ The dividing line is *when the value is fixed*, not who supplied it.
   tuning constant. `precondition`/`preconditionFailure` is the right tool: the value cannot change
   afterwards, so a bad one is a programmer error, and trapping reports it at the exact point it
   was introduced. `SupabaseClient.init` traps on a `supabaseURL` with no host; `StorageApi` traps
-  on a URL it cannot decompose; `RetryRequestInterceptor` traps on a backoff base below 2.
+  on a URL it cannot decompose.
   Degrading instead would bury the mistake behind an unrelated failure much later.
 - **Varies at runtime, or comes from the server** — a per-call parameter, a response header, a
   decoded payload, a WebSocket close code. Never trap. Throw if the context already throws;

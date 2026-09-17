@@ -631,8 +631,9 @@ import Testing
         await Task.megaYield()
 
         // The heartbeat timer ticks while the reconnect is still sleeping out
-        // its 10s `reconnectDelay` — the still-alive old heartbeat task must
-        // not observe `status != .connected` and publish `.disconnected`.
+        // its 10s `reconnectDelay` (jittered, but never below 5s) — the
+        // still-alive old heartbeat task must not observe `status != .connected`
+        // and publish `.disconnected`.
         await testClock.advance(by: .seconds(1))
 
         #expect(

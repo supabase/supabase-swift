@@ -1,4 +1,4 @@
-// swift-tools-version:6.1
+// swift-tools-version:6.2
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import CompilerPluginSupport
@@ -34,9 +34,6 @@ let package = Package(
     .package(url: "https://github.com/apple/swift-crypto.git", "3.0.0"..<"5.0.0"),
     .package(url: "https://github.com/apple/swift-http-types.git", from: "1.3.0"),
     .package(url: "https://github.com/swiftlang/swift-syntax", "601.0.0"..<"605.0.0"),
-    // Pinned below 1.11.0: that version requires swift-tools-version 6.2, above this
-    // package's current floor (Xcode 16.4+ / Swift 6.1). Widening this range raises
-    // the effective minimum toolchain for every consumer — see SDK-1412.
     .package(url: "https://github.com/apple/swift-log.git", "1.5.0"..<"2.0.0"),
     .package(url: "https://github.com/open-telemetry/opentelemetry-swift-core.git", from: "2.5.0"),
     .package(url: "https://github.com/pointfreeco/swift-clocks", from: "1.0.0"),
@@ -56,11 +53,14 @@ let package = Package(
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
         .product(name: "HTTPTypesFoundation", package: "swift-http-types"),
-        .product(name: "Clocks", package: "swift-clocks"),
         .product(name: "Logging", package: "swift-log"),
-        .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
         .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
-      ]
+      ],
+      // One manifest covers the whole SDK: every product links `Helpers`, so the bundle this
+      // resource produces is present however a consumer imports us. Duplicating it per library
+      // target would buy nothing while multiplying the places a future required-reason API has
+      // to be declared.
+      resources: [.copy("PrivacyInfo.xcprivacy")]
     ),
     .testTarget(
       name: "HelpersTests",
@@ -75,6 +75,7 @@ let package = Package(
     .target(
       name: "Auth",
       dependencies: [
+        .product(name: "Clocks", package: "swift-clocks"),
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "Crypto", package: "swift-crypto"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
@@ -125,6 +126,7 @@ let package = Package(
     .testTarget(
       name: "IntegrationTests",
       dependencies: [
+        .product(name: "Clocks", package: "swift-clocks"),
         .product(name: "CustomDump", package: "swift-custom-dump"),
         .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
@@ -191,6 +193,7 @@ let package = Package(
     .target(
       name: "RealtimeV2",
       dependencies: [
+        .product(name: "Clocks", package: "swift-clocks"),
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
         .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
@@ -210,6 +213,7 @@ let package = Package(
     .testTarget(
       name: "RealtimeTests",
       dependencies: [
+        .product(name: "Clocks", package: "swift-clocks"),
         .product(name: "CustomDump", package: "swift-custom-dump"),
         .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
@@ -244,6 +248,7 @@ let package = Package(
     .target(
       name: "Supabase",
       dependencies: [
+        .product(name: "Clocks", package: "swift-clocks"),
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
         .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
@@ -278,6 +283,10 @@ let package = Package(
         "TestHelpers",
       ]
     ),
+    .testTarget(
+      name: "DefaultIsolationTests",
+      dependencies: ["Supabase"]
+    ),
     .target(
       name: "TestHelpers",
       dependencies: [
@@ -306,6 +315,12 @@ for target in package.targets {
   if target.name != "PostgrestMacrosPlugin" {
     swiftSettings.append(.enableUpcomingFeature("InternalImportsByDefault"))
     swiftSettings.append(.enableUpcomingFeature("MemberImportVisibility"))
+  }
+
+  // Compile-only guard that the public API stays usable from a module that opts into Swift 6.2's
+  // default `@MainActor` isolation (SE-0466). The SDK targets themselves stay nonisolated.
+  if target.name == "DefaultIsolationTests" {
+    swiftSettings.append(.defaultIsolation(MainActor.self))
   }
 
   target.swiftSettings = swiftSettings

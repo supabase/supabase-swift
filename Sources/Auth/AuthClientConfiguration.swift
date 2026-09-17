@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 29/04/24.
 //
 
+public import Clocks
 public import Foundation
 public import Helpers
 public import Logging
@@ -34,8 +35,9 @@ extension AuthClient {
   /// - ``jsonDecoder``
   ///
   /// ### Token refresh
-  /// - ``autoRefreshToken``
-  /// - ``defaultAutoRefreshToken``
+  /// - ``automaticallyRefreshesToken``
+  /// - ``defaultAutomaticallyRefreshesToken``
+  /// - ``clock``
   ///
   /// ### Defaults
   /// - ``defaultFlowType``
@@ -74,7 +76,13 @@ extension AuthClient {
     public let http: HTTPClientConfiguration
 
     /// Set to `true` if you want to automatically refresh the token before expiring.
-    public let autoRefreshToken: Bool
+    public let automaticallyRefreshesToken: Bool
+
+    /// The clock the auto-refresh loop sleeps on between ticks.
+    ///
+    /// Defaults to `ContinuousClock()`. Pass a `TestClock` to drive token refresh
+    /// deterministically in tests instead of waiting out real seconds.
+    public let clock: any Clock<Duration>
 
     /// Initializes a AuthClient Configuration with optional parameters.
     ///
@@ -87,7 +95,8 @@ extension AuthClient {
     ///   - localStorage: The storage mechanism for local data.
     ///   - logger: The logger to use. Defaults to a build-config-aware logger — see `Configuration.logger`.
     ///   - http: The transport and middleware chain every request goes through.
-    ///   - autoRefreshToken: Set to `true` if you want to automatically refresh the token before expiring.
+    ///   - automaticallyRefreshesToken: Set to `true` if you want to automatically refresh the token before expiring.
+    ///   - clock: The clock the auto-refresh loop sleeps on. Defaults to `ContinuousClock()`.
     public init(
       url: URL? = nil,
       headers: [String: String] = [:],
@@ -97,7 +106,9 @@ extension AuthClient {
       localStorage: any AuthLocalStorage,
       logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.auth"),
       http: HTTPClientConfiguration = .init(),
-      autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken
+      automaticallyRefreshesToken: Bool = AuthClient.Configuration
+        .defaultAutomaticallyRefreshesToken,
+      clock: any Clock<Duration> = ContinuousClock()
     ) {
       self.init(
         url: url,
@@ -110,7 +121,8 @@ extension AuthClient {
         resolvedEncoder: AuthClient.Configuration.jsonEncoder,
         resolvedDecoder: AuthClient.Configuration.jsonDecoder,
         http: http,
-        autoRefreshToken: autoRefreshToken
+        automaticallyRefreshesToken: automaticallyRefreshesToken,
+        clock: clock
       )
     }
 
@@ -129,7 +141,9 @@ extension AuthClient {
       resolvedEncoder: JSONEncoder,
       resolvedDecoder: JSONDecoder,
       http: HTTPClientConfiguration = .init(),
-      autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken
+      automaticallyRefreshesToken: Bool = AuthClient.Configuration
+        .defaultAutomaticallyRefreshesToken,
+      clock: any Clock<Duration> = ContinuousClock()
     ) {
       let headers = headers.merging(Configuration.defaultHeaders) { l, _ in l }
 
@@ -145,7 +159,8 @@ extension AuthClient {
       self.resolvedEncoder = resolvedEncoder
       self.resolvedDecoder = resolvedDecoder
       self.http = http
-      self.autoRefreshToken = autoRefreshToken
+      self.automaticallyRefreshesToken = automaticallyRefreshesToken
+      self.clock = clock
     }
   }
 
@@ -160,7 +175,8 @@ extension AuthClient {
   ///   - localStorage: The storage mechanism for local data..
   ///   - logger: The logger to use. Defaults to a build-config-aware logger — see `Configuration.logger`.
   ///   - http: The transport and middleware chain every request goes through.
-  ///   - autoRefreshToken: Set to `true` if you want to automatically refresh the token before expiring.
+  ///   - automaticallyRefreshesToken: Set to `true` if you want to automatically refresh the token before expiring.
+  ///   - clock: The clock the auto-refresh loop sleeps on. Defaults to `ContinuousClock()`.
   public init(
     url: URL? = nil,
     headers: [String: String] = [:],
@@ -170,7 +186,8 @@ extension AuthClient {
     localStorage: any AuthLocalStorage,
     logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.auth"),
     http: HTTPClientConfiguration = .init(),
-    autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken
+    automaticallyRefreshesToken: Bool = AuthClient.Configuration.defaultAutomaticallyRefreshesToken,
+    clock: any Clock<Duration> = ContinuousClock()
   ) {
     self.init(
       configuration: Configuration(
@@ -182,7 +199,8 @@ extension AuthClient {
         localStorage: localStorage,
         logger: logger,
         http: http,
-        autoRefreshToken: autoRefreshToken
+        automaticallyRefreshesToken: automaticallyRefreshesToken,
+        clock: clock
       )
     )
   }

@@ -85,7 +85,7 @@ extension StorageMockerTests {
         ]
       ).register()
 
-      let vectors = try await index.getVectors(
+      let vectors = try await index.vectors(
         keys: ["doc-1"], returnData: true, returnMetadata: true)
       #expect(vectors.count == 1)
       #expect(vectors[0].key == "doc-1")

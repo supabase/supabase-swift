@@ -27,7 +27,7 @@ extension SupabaseStorageClient {
   /// - Parameter id: The unique identifier of the bucket to retrieve.
   /// - Returns: The ``Bucket`` with the given identifier.
   /// - Throws: ``StorageError`` if the bucket does not exist or the caller is not authorized.
-  public func getBucket(_ id: String) async throws -> Bucket {
+  public func bucket(_ id: String) async throws -> Bucket {
     try await api.execute(
       HTTPRequest(
         method: .get,

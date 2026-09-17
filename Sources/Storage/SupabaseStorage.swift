@@ -19,7 +19,7 @@ public import Logging
 ///
 /// ### Creating a configuration
 ///
-/// - ``init(url:headers:http:logger:useNewHostname:)``
+/// - ``init(url:headers:http:logger:usesNewHostname:)``
 ///
 /// ### Configuration properties
 ///
@@ -27,7 +27,7 @@ public import Logging
 /// - ``headers``
 /// - ``http``
 /// - ``logger``
-/// - ``useNewHostname``
+/// - ``usesNewHostname``
 public struct StorageClientConfiguration: Sendable {
   /// The base URL of the Storage API endpoint (e.g. `https://project.supabase.co/storage/v1`).
   public var url: URL
@@ -51,7 +51,7 @@ public struct StorageClientConfiguration: Sendable {
 
   /// When `true`, rewrites `project.supabase.co` hostnames to `project.storage.supabase.co`,
   /// which disables request buffering and enables uploads larger than 50 GB.
-  public let useNewHostname: Bool
+  public let usesNewHostname: Bool
 
   /// Creates a ``StorageClientConfiguration``.
   ///
@@ -61,13 +61,13 @@ public struct StorageClientConfiguration: Sendable {
   ///   - http: The transport and middleware chain every request goes through.
   ///   - logger: The logger to use. Defaults to a build-config-aware logger; pass a logger backed by
   ///     `SwiftLogNoOpLogHandler` to disable logging entirely.
-  ///   - useNewHostname: When `true`, the storage-specific hostname is used, enabling uploads over 50 GB.
+  ///   - usesNewHostname: When `true`, the storage-specific hostname is used, enabling uploads over 50 GB.
   public init(
     url: URL,
     headers: [String: String],
     http: HTTPClientConfiguration = .init(),
     logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.storage"),
-    useNewHostname: Bool = false
+    usesNewHostname: Bool = false
   ) {
     self.url = url
     self.headers = headers
@@ -75,7 +75,7 @@ public struct StorageClientConfiguration: Sendable {
     var logger = logger
     logger[metadataKey: "system"] = "storage"
     self.logger = logger
-    self.useNewHostname = useNewHostname
+    self.usesNewHostname = usesNewHostname
   }
 }
 
@@ -118,7 +118,7 @@ public struct StorageClientConfiguration: Sendable {
 /// ### Bucket management
 ///
 /// - ``listBuckets()``
-/// - ``getBucket(_:)``
+/// - ``bucket(_:)``
 /// - ``createBucket(_:options:)``
 /// - ``updateBucket(_:options:)``
 /// - ``emptyBucket(_:)``

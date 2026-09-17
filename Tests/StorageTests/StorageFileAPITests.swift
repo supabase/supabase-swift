@@ -109,6 +109,62 @@ extension StorageMockerTests {
       }
     }
 
+    /// `URLSession`'s async APIs report a cancelled `Task` as `URLError(.cancelled)`, not
+    /// `CancellationError`, so cancelling lands here rather than in `cancellationIsNotWrapped`
+    /// above. It is wrapped like any other `URLError`: callers check the code on
+    /// `underlyingError`, not `error is CancellationError` (SDK-1849).
+    @Test
+    func cancelledURLErrorIsWrapped() async {
+      let storage = makeFailingSUT { throw URLError(.cancelled) }
+
+      do {
+        _ = try await storage.from("bucket").list()
+        Issue.record("Expected failure")
+      } catch let error as StorageError {
+        #expect(error.kind == .transport)
+        #expect((error.underlyingError as? URLError)?.code == .cancelled)
+      } catch {
+        Issue.record("Unexpected error \(error)")
+      }
+    }
+
+    /// End-to-end cover for what `cancelledURLErrorIsWrapped()` above stubs: cancelling the
+    /// enclosing `Task` mid-flight makes the real ``URLSessionTransport`` fail with
+    /// `URLError(.cancelled)`, which Storage then wraps as `.transport`. Without this, nothing
+    /// checks that cancellation actually reaches a caller the way `V3_MIGRATION.md` says it does
+    /// — `cancelledURLErrorIsWrapped()` assumes the code rather than producing it.
+    @Test
+    func cancellingTheTaskSurfacesAWrappedCancelledURLError() async {
+      let storage = makeSUT()
+      let (requestStarted, onRequestStarted) = AsyncStream<Void>.makeStream()
+
+      var mock = Mock(
+        url: url.appendingPathComponent("object/list/bucket"),
+        statusCode: 200,
+        data: [.post: Data("[]".utf8)]
+      )
+      // `MockingURLProtocol` runs the request callback before it schedules the delayed
+      // response, so the cancel below always lands while the request is in flight. The delay
+      // is never waited out: cancelling makes `stopLoading()` drop the pending response.
+      mock.delay = .seconds(10)
+      mock.onRequestHandler = OnRequestHandler(requestCallback: { _ in onRequestStarted.yield() })
+      mock.register()
+
+      let task = Task { try await storage.from("bucket").list() }
+      for await _ in requestStarted { break }
+      task.cancel()
+
+      do {
+        _ = try await task.value
+        Issue.record("Expected failure")
+      } catch let error as StorageError {
+        #expect(error.kind == .transport)
+        #expect((error.underlyingError as? URLError)?.code == .cancelled)
+      } catch {
+        Issue.record("Unexpected error \(error)")
+      }
+    }
+
     @Test
     func customFetchErrorIsNotWrapped() async {
       struct FetchError: Error {}
@@ -1142,7 +1198,7 @@ extension StorageMockerTests {
       let storage = makeSUT()
 
       let publicURL = try storage.from("bucket")
-        .getPublicURL(path: "image.png", options: TransformOptions())
+        .publicURL(path: "image.png", options: TransformOptions())
 
       #expect(
         publicURL.absoluteString.contains("/object/public/"),
@@ -1159,7 +1215,7 @@ extension StorageMockerTests {
       let storage = makeSUT()
 
       let publicURL = try storage.from("bucket")
-        .getPublicURL(path: "image.png", options: TransformOptions(width: 200))
+        .publicURL(path: "image.png", options: TransformOptions(width: 200))
 
       #expect(
         publicURL.absoluteString.contains("/render/image/"),
@@ -1172,7 +1228,7 @@ extension StorageMockerTests {
       let storage = makeSUT()
 
       let publicURL = try storage.from("bucket")
-        .getPublicURL(path: "/folder/image.png")
+        .publicURL(path: "/folder/image.png")
 
       #expect(
         publicURL.absoluteString
@@ -1505,7 +1561,7 @@ extension StorageMockerTests {
         .createSignedUploadURL(
           path: "file.txt",
           options: CreateSignedUploadURLOptions(
-            upsert: true
+            shouldUpsert: true
           )
         )
 
@@ -1821,7 +1877,7 @@ extension StorageMockerTests {
     func getPublicURL_cacheNonce() throws {
       let storage = makeSUT()
 
-      let url = try storage.from("bucket").getPublicURL(
+      let url = try storage.from("bucket").publicURL(
         path: "file.txt",
         cacheNonce: "abc123"
       )

@@ -7,7 +7,7 @@
 
 import ConcurrencyExtras
 package import Foundation
-import XCTestDynamicOverlay
+import IssueReporting
 
 extension JSONDecoder {
   /// Default `JSONDecoder` for decoding types from Supabase.

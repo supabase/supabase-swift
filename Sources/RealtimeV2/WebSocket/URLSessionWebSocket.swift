@@ -38,7 +38,9 @@ final class URLSessionWebSocket: WebSocket {
     self._protocol = _protocol
     self.session = session
 
-    (events, eventsContinuation) = AsyncStream.makeStream()
+    // Unbounded, and load-bearing: this stream carries protocol frames. Dropping a `phx_reply`
+    // leaves the push that is waiting on it hanging until it times out.
+    (events, eventsContinuation) = AsyncStream.makeStream(bufferingPolicy: .unbounded)
 
     _scheduleReceive()
   }
@@ -251,7 +253,6 @@ final class URLSessionWebSocket: WebSocket {
     case .data(let data):
       event = .binary(data)
     @unknown default:
-      // Handle unknown message types gracefully by closing the connection
       _closeConnectionWithError(RealtimeError.connection("Received unsupported message type"))
       return
     }
@@ -276,38 +277,43 @@ final class URLSessionWebSocket: WebSocket {
   /// Closes the connection due to an error and maps the error to appropriate WebSocket close codes.
   /// - Parameter error: The error that caused the connection to close.
   private func _closeConnectionWithError(_ error: any Error) {
-    let nsError = error as NSError
-
-    // Handle socket not connected error - delegate callbacks will handle this
-    if nsError.domain == NSPOSIXErrorDomain && nsError.code == 57 {
-      // Socket is not connected.
-      // onWebsocketTaskClosed/onComplete will be invoked and may indicate a close code.
-      return
-    }
-
-    // Map errors to appropriate WebSocket close codes per RFC 6455
-    let (code, reason): (Int, String) = {
-      switch (nsError.domain, nsError.code) {
-      case (NSPOSIXErrorDomain, 100):
-        // Network protocol error
-        return (1002, nsError.localizedDescription)
-      case (NSURLErrorDomain, NSURLErrorTimedOut):
-        // Connection timeout
-        return (1006, "Connection timed out")
-      case (NSURLErrorDomain, NSURLErrorNetworkConnectionLost):
-        // Network connection lost
-        return (1006, "Network connection lost")
-      case (NSURLErrorDomain, NSURLErrorNotConnectedToInternet):
-        // No internet connection
-        return (1006, "No internet connection")
-      default:
-        // Abnormal closure for other errors
-        return (1006, nsError.localizedDescription)
-      }
-    }()
+    guard let frame = Self.closeFrame(for: error) else { return }
 
     _task.cancel()
-    _connectionClosed(code: code, reason: Data(reason.utf8))
+    _connectionClosed(code: frame.code, reason: Data(frame.reason.utf8))
+  }
+
+  /// Maps a transport error onto the close code and reason to report, per RFC 6455.
+  ///
+  /// Returns `nil` when the connection must be left alone: a POSIX `ENOTCONN` means the socket
+  /// is already gone, and `onWebsocketTaskClosed`/`onComplete` will fire with the peer's own
+  /// close code. Synthesizing an abnormal closure here instead would race that callback and
+  /// hand the reconnect path a code the peer never sent.
+  ///
+  /// Pure by design, for the same reason as ``validatedCloseCode(_:)``: it lets the whole
+  /// mapping be tested from a plain `NSError`, with no socket or network involved.
+  static func closeFrame(for error: any Error) -> (code: Int, reason: String)? {
+    let nsError = error as NSError
+
+    switch (nsError.domain, nsError.code) {
+    // Matched through `POSIXErrorCode` rather than the raw numbers: errno values are
+    // platform-specific, and Darwin's differ from Linux's (ENOTCONN 57 vs 107, EPROTO 100
+    // vs 71). Hard-coding Darwin's meant a disconnected socket on Linux fell through to
+    // `default` and reported a close the peer never sent.
+    case (NSPOSIXErrorDomain, Int(POSIXErrorCode.ENOTCONN.rawValue)):
+      // Socket is not connected — the delegate callbacks report the close code.
+      return nil
+    case (NSPOSIXErrorDomain, Int(POSIXErrorCode.EPROTO.rawValue)):
+      return (1002, nsError.localizedDescription)
+    case (NSURLErrorDomain, NSURLErrorTimedOut):
+      return (1006, "Connection timed out")
+    case (NSURLErrorDomain, NSURLErrorNetworkConnectionLost):
+      return (1006, "Network connection lost")
+    case (NSURLErrorDomain, NSURLErrorNotConnectedToInternet):
+      return (1006, "No internet connection")
+    default:
+      return (1006, nsError.localizedDescription)
+    }
   }
 
   /// Handles the connection being closed and triggers the close event.
@@ -347,7 +353,6 @@ final class URLSessionWebSocket: WebSocket {
     // Update state under the lock, but yield the continuation only after
     // releasing it — see the comment on `onComplete` above for why.
     let shouldInvalidate = mutableState.withValue {
-      // Update state when connection closes
       if case .close(let code, let reason) = event {
         let wasClosed = $0.isClosed
         $0.isClosed = true

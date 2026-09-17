@@ -45,7 +45,7 @@ struct StorageApi: Sendable {
 
     // if legacy uri is used, replace with new storage host (disables request buffering to allow > 50GB uploads)
     // "project-ref.supabase.co" becomes "project-ref.storage.supabase.co"
-    if configuration.useNewHostname == true {
+    if configuration.usesNewHostname == true {
       // `configuration.url` is supplied once, at construction, so a URL that cannot be decomposed
       // into host components is a programmer error, not a runtime condition. Trap here, where the
       // offending value is, rather than letting it fail later as an opaque `URLError`.

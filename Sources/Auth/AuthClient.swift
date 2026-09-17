@@ -36,7 +36,7 @@ private struct CachedJWKS {
 /// This is especially useful for shared-memory execution environments such as
 /// AWS Lambda or serverless functions. Regardless of how many clients are created,
 /// if they share the same storage key they will use the same JWKS cache,
-/// significantly speeding up getClaims() with asymmetric JWTs.
+/// significantly speeding up claims() with asymmetric JWTs.
 private actor GlobalJWKSCache {
   private var cache: [String: CachedJWKS] = [:]
 
@@ -124,11 +124,11 @@ private let globalJWKSCache = GlobalJWKSCache()
 /// - ``linkIdentity(provider:scopes:redirectTo:queryParams:launchURL:)``
 /// - ``linkIdentity(provider:scopes:redirectTo:queryParams:)``
 /// - ``linkIdentityWithIdToken(credentials:)``
-/// - ``getLinkIdentityURL(provider:scopes:redirectTo:queryParams:)``
+/// - ``linkIdentityURL(provider:scopes:redirectTo:queryParams:)``
 /// - ``unlinkIdentity(_:)``
 ///
 /// ### JWT claims
-/// - ``getClaims(jwt:options:)``
+/// - ``claims(jwt:options:)``
 ///
 /// ### Namespaces
 /// - ``mfa``
@@ -298,13 +298,13 @@ public actor AuthClient {
     }
 
     private func handleDidBecomeActive() {
-      if configuration.autoRefreshToken {
+      if configuration.automaticallyRefreshesToken {
         startAutoRefresh()
       }
     }
 
     private func handleWillResignActive() {
-      if configuration.autoRefreshToken {
+      if configuration.automaticallyRefreshesToken {
         stopAutoRefresh()
       }
     }
@@ -346,7 +346,9 @@ public actor AuthClient {
         event: AuthChangeEvent,
         session: Session?
       )
-    >.makeStream()
+      // Unbounded: consumers commonly wait for one specific event (`.signedIn`, `.initialSession`).
+      // A bounded policy could evict exactly that one when events arrive back to back.
+    >.makeStream(bufferingPolicy: .unbounded)
 
     Task {
       let handle = await onAuthStateChange { event, session in
@@ -731,7 +733,7 @@ public actor AuthClient {
   ///   - authCode: The auth code received from the PKCE callback.
   ///   - flowId: The id of the flow that generated `authCode`, as returned by
   /// ``signInWithOAuth(provider:redirectTo:scopes:queryParams:launchFlow:)`` or
-  /// ``getLinkIdentityURL(provider:scopes:redirectTo:queryParams:)``. Pass this when several
+  /// ``linkIdentityURL(provider:scopes:redirectTo:queryParams:)``. Pass this when several
   /// PKCE flows may be pending at once, so the correct code verifier is used. When `nil`, the
   /// most recently started flow's verifier is used.
   public func exchangeCodeForSession(authCode: String, flowId: String? = nil) async throws
@@ -777,7 +779,7 @@ public actor AuthClient {
   /// If that isn't the case, you should consider using
   /// ``signInWithOAuth(provider:redirectTo:scopes:queryParams:launchFlow:)`` or
   /// ``signInWithOAuth(provider:redirectTo:scopes:queryParams:configure:)``.
-  nonisolated public func getOAuthSignInURL(
+  nonisolated public func oauthSignInURL(
     provider: Provider,
     scopes: String? = nil,
     redirectTo: URL? = nil,
@@ -815,13 +817,27 @@ public actor AuthClient {
       url: configuration.url.appendingPathComponent("authorize"),
       provider: provider,
       scopes: scopes,
-      redirectTo: redirectTo ?? configuration.redirectToURL,
+      redirectTo: Self.oauthRedirectURL(
+        redirectTo: redirectTo,
+        configured: configuration.redirectToURL
+      ),
       queryParams: queryParams
     )
 
     let resultURL = try await launchFlow(url)
 
     return try await session(from: resultURL, flowId: flowId)
+  }
+
+  /// The redirect an OAuth flow will actually use: a per-call `redirectTo` overrides the
+  /// client-wide ``Configuration/redirectToURL``.
+  ///
+  /// Both halves of the flow have to agree on this — the authorize request tells the provider
+  /// where to send the user, and `ASWebAuthenticationSession` is told which scheme to listen
+  /// on. They are resolved in different places, and writing the rule out twice is exactly how
+  /// they drifted apart and stopped agreeing (SDK-1873), so it lives here once instead.
+  static func oauthRedirectURL(redirectTo: URL?, configured: URL?) -> URL? {
+    redirectTo ?? configured
   }
 
   #if canImport(AuthenticationServices)
@@ -851,20 +867,19 @@ public actor AuthClient {
         redirectTo: redirectTo,
         scopes: scopes,
         queryParams: queryParams
-      ) { @MainActor url in
-        try await withCheckedThrowingContinuation { [configuration] continuation in
-          guard let callbackScheme = (configuration.redirectToURL ?? redirectTo)?.scheme else {
-            continuation.resume(
-              throwing: AuthError.oauthFlowFailed(
-                """
-                Provide a redirect URL with a scheme, either through the `redirectTo` parameter \
-                or globally through `AuthClient.Configuration.redirectToURL`.
-                """
-              )
-            )
-            return
-          }
+      ) { @MainActor [configuration] url in
+        // Resolved before the continuation exists, so a missing scheme simply throws instead of
+        // creating a continuation only to immediately fail it. Derived from the same
+        // `oauthRedirectURL` the authorize request used, so the scheme listened on and the
+        // redirect the provider was given cannot disagree.
+        let callbackScheme = try Self.oauthCallbackScheme(
+          for: Self.oauthRedirectURL(
+            redirectTo: redirectTo,
+            configured: configuration.redirectToURL
+          )
+        )
 
+        return try await withCheckedThrowingContinuation { continuation in
           #if !os(tvOS) && !os(watchOS)
             var presentationContextProvider: DefaultPresentationContextProvider?
           #endif
@@ -873,18 +888,14 @@ public actor AuthClient {
             url: url,
             callbackURLScheme: callbackScheme
           ) { url, error in
-            if let error {
-              continuation.resume(throwing: error)
-            } else if let url {
-              continuation.resume(returning: url)
+            if let result = Self.oauthCallbackResult(url: url, error: error) {
+              continuation.resume(with: result)
             } else {
               // `ASWebAuthenticationSession` always reports a URL or an error. Surface a broken
               // contract as a thrown error rather than taking the host app down with it.
-              reportIssue("ASWebAuthenticationSession returned neither a URL nor an error.")
+              reportIssue(Self.oauthSessionContractViolation)
               continuation.resume(
-                throwing: AuthError.oauthFlowFailed(
-                  "ASWebAuthenticationSession returned neither a URL nor an error."
-                )
+                throwing: AuthError.oauthFlowFailed(Self.oauthSessionContractViolation)
               )
             }
 
@@ -897,16 +908,71 @@ public actor AuthClient {
           configure(session)
 
           #if !os(tvOS) && !os(watchOS)
-            if session.presentationContextProvider == nil {
-              presentationContextProvider = DefaultPresentationContextProvider()
-              session.presentationContextProvider = presentationContextProvider
-            }
+            presentationContextProvider = Self.installDefaultPresentationContextIfNeeded(
+              on: session
+            )
           #endif
 
           session.start()
         }
       }
     }
+
+    /// The URL scheme `ASWebAuthenticationSession` listens on to capture the OAuth callback.
+    ///
+    /// Takes the already-resolved redirect — see ``oauthRedirectURL(redirectTo:configured:)`` —
+    /// rather than resolving it again, so this can only ever name the scheme of the URL the
+    /// provider was actually given.
+    ///
+    /// Pure so the scheme extraction and the guidance message can both be covered without
+    /// presenting a session.
+    static func oauthCallbackScheme(for redirectURL: URL?) throws -> String {
+      guard let scheme = redirectURL?.scheme else {
+        throw AuthError.oauthFlowFailed(
+          """
+          Provide a redirect URL with a scheme, either through the `redirectTo` parameter \
+          or globally through `AuthClient.Configuration.redirectToURL`.
+          """
+        )
+      }
+      return scheme
+    }
+
+    /// Reported when `ASWebAuthenticationSession` completes with neither a URL nor an error.
+    static let oauthSessionContractViolation =
+      "ASWebAuthenticationSession returned neither a URL nor an error."
+
+    /// Maps the `(url, error)` pair `ASWebAuthenticationSession` reports onto a result, favouring
+    /// the error when it somehow reports both.
+    ///
+    /// Returns `nil` for the combination it documents as impossible — neither value present —
+    /// which the caller turns into ``oauthSessionContractViolation``. The reporting stays with
+    /// the caller because driving `reportIssue` from a `@Test` function segfaults under
+    /// `xcodebuild test` (SDK-435); keeping it out here is what lets this be tested directly.
+    static func oauthCallbackResult(url: URL?, error: (any Error)?) -> Result<URL, any Error>? {
+      if let error { return .failure(error) }
+      if let url { return .success(url) }
+      return nil
+    }
+
+    #if !os(tvOS) && !os(watchOS)
+      /// Installs a default presentation anchor unless `configure` already supplied one.
+      ///
+      /// Returns the provider it created, because
+      /// `ASWebAuthenticationSession.presentationContextProvider` is a weak reference — the
+      /// caller has to hold it until the flow completes, or the anchor is gone before the
+      /// session can present.
+      @MainActor
+      static func installDefaultPresentationContextIfNeeded(
+        on session: ASWebAuthenticationSession
+      ) -> DefaultPresentationContextProvider? {
+        guard session.presentationContextProvider == nil else { return nil }
+
+        let provider = DefaultPresentationContextProvider()
+        session.presentationContextProvider = provider
+        return provider
+      }
+    #endif
   #endif
 
   /// Handles an incoming URL received by the app.
@@ -1407,7 +1473,7 @@ public actor AuthClient {
     queryParams: [(name: String, value: String?)] = [],
     launchURL: @MainActor (_ url: URL) -> Void
   ) async throws {
-    let response = try await getLinkIdentityURL(
+    let response = try await linkIdentityURL(
       provider: provider,
       scopes: scopes,
       redirectTo: redirectTo,
@@ -1452,7 +1518,7 @@ public actor AuthClient {
   ///   - scopes: A space-separated list of scopes granted to the OAuth application.
   ///   - redirectTo: A URL to send the user to after they are confirmed.
   ///   - queryParams: Additional query parameters to use.
-  public func getLinkIdentityURL(
+  public func linkIdentityURL(
     provider: Provider,
     scopes: String? = nil,
     redirectTo: URL? = nil,
@@ -1540,7 +1606,7 @@ public actor AuthClient {
 
   /// Starts an auto-refresh process in the background. The session is checked every few seconds. Close to the time of expiration a process is started to refresh the session. If refreshing fails it will be retried for as long as necessary.
   ///
-  /// If you set ``Configuration/autoRefreshToken`` you don't need to call this function, it will be called for you.
+  /// If you set ``Configuration/automaticallyRefreshesToken`` you don't need to call this function, it will be called for you.
   public func startAutoRefresh() {
     Task { await sessionManager.startAutoRefresh() }
   }
@@ -1650,7 +1716,6 @@ public actor AuthClient {
   /// Fetches a JWK from the JWKS endpoint with caching
   /// Returns nil if the key is not found, allowing graceful fallback to server-side verification
   private func fetchJWK(kid: String, jwks: JWKS? = nil) async throws -> JWK? {
-    // Try fetching from the supplied jwks
     if let jwk = jwks?.keys.first(where: { $0.kid == kid }) {
       return jwk
     }
@@ -1658,17 +1723,14 @@ public actor AuthClient {
     let now = date()
     let storageKey = configuration.storageKey ?? defaultStorageKey
 
-    // Try fetching from global cache
     if let cached = await globalJWKSCache.get(for: storageKey),
       let jwk = cached.jwks.keys.first(where: { $0.kid == kid })
     {
-      // Check if cache is still valid (not stale)
       if cached.cachedAt.addingTimeInterval(jwksTTL) > now {
         return jwk
       }
     }
 
-    // Fetch from well-known endpoint
     let response = try await api.execute(
       HTTPRequest(
         method: .get,
@@ -1678,19 +1740,16 @@ public actor AuthClient {
 
     let fetchedJWKS = try response.decoded(as: JWKS.self, decoder: configuration.resolvedDecoder)
 
-    // Return nil if JWKS is empty (will fallback to getUser)
     guard !fetchedJWKS.keys.isEmpty else {
       return nil
     }
 
-    // Cache the JWKS globally
     await globalJWKSCache.set(
       CachedJWKS(jwks: fetchedJWKS, cachedAt: now),
       for: storageKey
     )
 
-    // Find the signing key - return nil if not found (will fallback to getUser)
-    // This handles key rotation scenarios where the JWT is signed with a key not yet in the cache
+    // A key rotation can sign a JWT with a key the freshly fetched set does not carry yet.
     return fetchedJWKS.keys.first(where: { $0.kid == kid })
   }
 
@@ -1711,7 +1770,7 @@ public actor AuthClient {
   /// - Returns: A `JWTClaimsResponse` containing the verified claims, header, and signature.
   ///
   /// - Throws: ``AuthError`` with kind `.jwtVerificationFailed` if verification fails, or ``AuthError/sessionMissing`` if no session exists.
-  public func getClaims(
+  public func claims(
     jwt: String? = nil,
     options: GetClaimsOptions = GetClaimsOptions()
   ) async throws -> JWTClaimsResponse {
@@ -1729,8 +1788,7 @@ public actor AuthClient {
       throw AuthError.jwtVerificationFailed("Invalid JWT structure")
     }
 
-    // Validate expiration unless allowExpired is true
-    if !options.allowExpired {
+    if !options.allowsExpired {
       if let exp = decodedJWT.payload["exp"] as? TimeInterval {
         let now = date().timeIntervalSince1970
         if exp <= now {
@@ -1742,18 +1800,13 @@ public actor AuthClient {
     let alg = decodedJWT.header["alg"] as? String
     let kid = decodedJWT.header["kid"] as? String
 
-    // Try to fetch the signing key for asymmetric JWTs
-    // Returns nil if: no alg, symmetric algorithm (HS256/HS512), no kid, or key not found in JWKS
     let signingKey: JWK?
     if let alg, !alg.hasPrefix("HS"), let kid {
-      // Only attempt to fetch JWK for asymmetric algorithms with a kid
       signingKey = try await fetchJWK(kid: kid, jwks: options.jwks)
     } else {
       signingKey = nil
     }
 
-    // If no signing key available (symmetric algorithm, RS256, no kid, or key not found),
-    // fallback to server-side verification via getUser()
     guard
       let signingKey,
       let algorithm = (signingKey.alg ?? alg).flatMap(JWTAlgorithm.init(rawValue:))
@@ -1777,7 +1830,6 @@ public actor AuthClient {
       throw AuthError.jwtVerificationFailed("Invalid JWT signature")
     }
 
-    // Decode claims and header
     let claims = try configuration.resolvedDecoder.decode(
       JWTClaims.self,
       from: JSONSerialization.data(withJSONObject: decodedJWT.payload)

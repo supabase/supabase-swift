@@ -40,8 +40,8 @@
 ### Requirements
 
 - iOS 16.0+ / macOS 13.0+ / tvOS 16+ / watchOS 9+ / visionOS 1+
-- Xcode 16.4+
-- Swift 6.1+
+- Xcode 26.0+
+- Swift 6.2+
 
 > [!IMPORTANT]
 > Check the [Support Policy](#support-policy) to learn when dropping Xcode, Swift, and platform versions will not be considered a **breaking change**.

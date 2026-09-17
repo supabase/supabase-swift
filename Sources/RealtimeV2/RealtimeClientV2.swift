@@ -144,14 +144,6 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   ///   - url: The Realtime server URL (e.g. `https://<project>.supabase.co/realtime/v1`).
   ///   - options: Configuration options for the client.
   public convenience init(url: URL, options: RealtimeClientOptions) {
-    self.init(url: url, options: options, clock: ContinuousClock())
-  }
-
-  /// Creates a new ``RealtimeClientV2`` using the default URLSession WebSocket transport,
-  /// with an explicit clock. `package`-visibility so callers below the public API in other
-  /// targets of this package (e.g. `SupabaseClient`) can inject a test clock without
-  /// exposing it publicly.
-  package convenience init(url: URL, options: RealtimeClientOptions, clock: any Clock<Duration>) {
     let interceptors: [any ClientMiddleware] = [
       LoggerInterceptor(logger: options.logger)
     ]
@@ -167,10 +159,15 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
         )
       },
       http: HTTPClient(configuration: options.http, appending: interceptors),
-      clock: clock
+      clock: options.clock
     )
   }
 
+  /// Designated initializer.
+  ///
+  /// `clock` is a separate parameter from ``RealtimeClientOptions/clock`` so tests can pair a
+  /// `TestClock` with a stub `wsTransport`. The public initializer forwards `options.clock`, so
+  /// the two only ever differ inside this package's own tests.
   init(
     url: URL,
     options: RealtimeClientOptions,
@@ -200,7 +197,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       url: Self.realtimeWebSocketURL(
         baseURL: Self.realtimeBaseURL(url: url),
         apikey: options.apikey,
-        vsn: options.vsn,
+        protocolVersion: options.protocolVersion,
         logLevel: options.logLevel
       ),
       headers: options.headers.dictionary,
@@ -502,10 +499,10 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
 
             switch event {
             case .binary(let data):
-              switch self.options.vsn {
+              switch self.options.protocolVersion {
               case .v1:
                 options.logger.warning(
-                  "Received binary frame but vsn is 1.0.0; binary frames are only supported in 2.0.0"
+                  "Received binary frame but protocolVersion is 1.0.0; binary frames are only supported in 2.0.0"
                 )
               case .v2:
                 do {
@@ -518,7 +515,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
 
             case .text(let text):
               let message: RealtimeMessageV2
-              switch self.options.vsn {
+              switch self.options.protocolVersion {
               case .v1:
                 message = try JSONDecoder().decode(RealtimeMessageV2.self, from: Data(text.utf8))
               case .v2:
@@ -540,7 +537,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
           if Task.isCancelled { return }
           options.logger
             .debug(
-              "WebSocket error \(error.localizedDescription). Trying again in \(options.reconnectDelay)"
+              "WebSocket error \(error.localizedDescription). Trying again in up to \(options.reconnectDelay)s"
             )
           await connectionManager.handleError(error, from: conn)
         }
@@ -772,7 +769,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     let callback = { @Sendable (_ client: RealtimeClientV2) in
       do {
         let text: String
-        switch client.options.vsn {
+        switch client.options.protocolVersion {
         case .v1:
           let data = try JSONEncoder().encode(message)
           guard let encoded = String(data: data, encoding: .utf8) else {
@@ -923,7 +920,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   }
 
   static func realtimeWebSocketURL(
-    baseURL: URL, apikey: String?, vsn: RealtimeProtocolVersion, logLevel: LogLevel?
+    baseURL: URL, apikey: String?, protocolVersion: RealtimeProtocolVersion, logLevel: LogLevel?
   ) -> URL {
     guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)
     else {
@@ -936,7 +933,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       queryItems.append(URLQueryItem(name: "apikey", value: apikey))
     }
 
-    queryItems.append(URLQueryItem(name: "vsn", value: vsn.rawValue))
+    queryItems.append(URLQueryItem(name: "vsn", value: protocolVersion.rawValue))
 
     if let logLevel {
       queryItems.append(URLQueryItem(name: "log_level", value: logLevel.rawValue))

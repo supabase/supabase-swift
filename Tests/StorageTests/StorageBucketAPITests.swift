@@ -105,12 +105,12 @@ extension StorageMockerTests {
         configuration: StorageClientConfiguration(
           url: URL(string: input)!,
           headers: [:],
-          useNewHostname: true
+          usesNewHostname: true
         )
       )
       #expect(
         storage.configuration.url.absoluteString == expected,
-        "should \(description) if useNewHostname is true"
+        "should \(description) if usesNewHostname is true"
       )
     }
 
@@ -128,14 +128,14 @@ extension StorageMockerTests {
         configuration: StorageClientConfiguration(
           url: URL(string: input)!,
           headers: [:],
-          useNewHostname: false
+          usesNewHostname: false
         )
       )
       #expect(storage.configuration.url.absoluteString == input)
     }
 
     @Test
-    func getBucket() async throws {
+    func bucket() async throws {
       let storage = makeSUT()
 
       Mock(
@@ -166,7 +166,7 @@ extension StorageMockerTests {
       }
       .register()
 
-      let bucket = try await storage.getBucket("bucket123")
+      let bucket = try await storage.bucket("bucket123")
       #expect(bucket.id == "bucket123")
       #expect(bucket.name == "test-bucket")
     }

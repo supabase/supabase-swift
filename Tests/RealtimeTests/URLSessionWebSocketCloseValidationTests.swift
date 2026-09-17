@@ -16,10 +16,14 @@ import Testing
   import FoundationNetworking
 #endif
 
-/// `close(code:reason:)` takes both values straight from user code, so neither may trap.
+/// Covers the two pure helpers that decide what close code and reason a socket ends up
+/// reporting: ``URLSessionWebSocket/validatedCloseCode(_:)``/
+/// ``URLSessionWebSocket/validatedCloseReason(_:)`` for values arriving from user code via
+/// `close(code:reason:)`, and ``URLSessionWebSocket/closeFrame(for:)`` for a transport error
+/// arriving from the receive loop.
 ///
-/// The validators are pure — `close` reports the rejection — so these tests never drive
-/// `reportIssue`, which segfaults under `xcodebuild test` (SDK-435).
+/// All three are pure — the callers report the rejection and drive the teardown — so these
+/// tests never drive `reportIssue`, which segfaults under `xcodebuild test` (SDK-435).
 @Suite
 struct URLSessionWebSocketCloseValidationTests {
   @Test(arguments: [1000, 3000, 4000, 4999])
@@ -101,5 +105,89 @@ struct URLSessionWebSocketCloseValidationTests {
     }
     #expect(error?.kind == .connection)
     #expect(error?.underlyingError is URLError)
+  }
+
+  // MARK: - Transport error → close frame
+
+  /// `ENOTCONN` is the one error that must *not* produce a close frame: the socket is already
+  /// gone and `onWebsocketTaskClosed`/`onComplete` will fire with the peer's own code. Reporting
+  /// an abnormal closure here would race that callback and feed the reconnect path a code the
+  /// peer never sent.
+  @Test
+  func reportsNoCloseFrameForASocketThatIsAlreadyDisconnected() {
+    let error = NSError(
+      domain: NSPOSIXErrorDomain,
+      code: Int(POSIXErrorCode.ENOTCONN.rawValue),
+      userInfo: nil
+    )
+
+    #expect(URLSessionWebSocket.closeFrame(for: error) == nil)
+  }
+
+  /// Only `ENOTCONN` is special, and only in its own domain — the same number elsewhere is an
+  /// unrelated error and still has to close the connection.
+  @Test
+  func treatsTheENOTCONNCodeInAnotherDomainAsAnOrdinaryError() throws {
+    let error = NSError(
+      domain: NSURLErrorDomain,
+      code: Int(POSIXErrorCode.ENOTCONN.rawValue),
+      userInfo: nil
+    )
+    let frame = try #require(URLSessionWebSocket.closeFrame(for: error))
+
+    #expect(frame.code == 1006)
+    #expect(frame.reason == error.localizedDescription)
+  }
+
+  /// A POSIX protocol error is the only case that reports a code other than 1006.
+  @Test
+  func mapsAProtocolErrorToProtocolError() throws {
+    let error = NSError(
+      domain: NSPOSIXErrorDomain,
+      code: Int(POSIXErrorCode.EPROTO.rawValue),
+      userInfo: nil
+    )
+    let frame = try #require(URLSessionWebSocket.closeFrame(for: error))
+
+    #expect(frame.code == 1002)
+    #expect(frame.reason == error.localizedDescription)
+  }
+
+  @Test(
+    arguments: [
+      (NSURLErrorTimedOut, "Connection timed out"),
+      (NSURLErrorNetworkConnectionLost, "Network connection lost"),
+      (NSURLErrorNotConnectedToInternet, "No internet connection"),
+    ]
+  )
+  func mapsKnownURLErrorsToAbnormalClosureWithAFixedReason(code: Int, reason: String) throws {
+    let error = NSError(domain: NSURLErrorDomain, code: code, userInfo: nil)
+    let frame = try #require(URLSessionWebSocket.closeFrame(for: error))
+
+    #expect(frame.code == 1006)
+    // These carry a written reason rather than `localizedDescription`, so the peer sees the
+    // same text regardless of the host's locale.
+    #expect(frame.reason == reason)
+  }
+
+  @Test
+  func mapsAnUnrecognizedErrorToAbnormalClosure() throws {
+    let error = NSError(domain: NSCocoaErrorDomain, code: 42, userInfo: nil)
+    let frame = try #require(URLSessionWebSocket.closeFrame(for: error))
+
+    #expect(frame.code == 1006)
+    #expect(frame.reason == error.localizedDescription)
+  }
+
+  /// The receive loop hands this helper whatever `URLSessionWebSocketTask.receive()` threw, and
+  /// `_handleMessage` passes a `RealtimeError` of its own for an unsupported frame type. Neither
+  /// is an `NSError` to begin with, so pin that bridging still lands on abnormal closure.
+  @Test
+  func mapsANativeSwiftErrorToAbnormalClosure() throws {
+    let error = RealtimeError.connection("Received unsupported message type")
+    let frame = try #require(URLSessionWebSocket.closeFrame(for: error))
+
+    #expect(frame.code == 1006)
+    #expect(frame.reason == (error as NSError).localizedDescription)
   }
 }

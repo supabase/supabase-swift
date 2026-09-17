@@ -100,7 +100,7 @@ public struct SortBy: Encodable, Sendable {
 /// let options = FileOptions(
 ///   cacheControl: "86400",
 ///   contentType: "image/png",
-///   upsert: true
+///   shouldUpsert: true
 /// )
 /// try await storage.from("avatars").upload("user123.png", data: imageData, options: options)
 /// ```
@@ -109,13 +109,13 @@ public struct SortBy: Encodable, Sendable {
 ///
 /// ### Creating file options
 ///
-/// - ``init(cacheControl:contentType:upsert:duplex:metadata:headers:)``
+/// - ``init(cacheControl:contentType:shouldUpsert:duplex:metadata:headers:)``
 ///
 /// ### Upload configuration
 ///
 /// - ``cacheControl``
 /// - ``contentType``
-/// - ``upsert``
+/// - ``shouldUpsert``
 /// - ``duplex``
 /// - ``metadata``
 /// - ``headers``
@@ -131,7 +131,7 @@ public struct FileOptions: Sendable {
 
   /// When `true`, overwrites an existing file at the same path. When `false` (the default), an
   /// error is thrown if an object already exists at the destination path.
-  public var upsert: Bool
+  public var shouldUpsert: Bool
 
   /// Enables or disables duplex streaming on the underlying `fetch()` call, allowing simultaneous
   /// reading and writing within the same stream.
@@ -149,21 +149,21 @@ public struct FileOptions: Sendable {
   /// - Parameters:
   ///   - cacheControl: Seconds for the `Cache-Control: max-age` header. Defaults to `"3600"`.
   ///   - contentType: MIME type for the `Content-Type` header. Inferred from the extension when `nil`.
-  ///   - upsert: Whether to overwrite an existing file. Defaults to `false`.
+  ///   - shouldUpsert: Whether to overwrite an existing file. Defaults to `false`.
   ///   - duplex: Duplex streaming mode string, if needed.
   ///   - metadata: Arbitrary metadata key-value pairs to attach to the object.
   ///   - headers: Extra HTTP headers for the upload request.
   public init(
     cacheControl: String = "3600",
     contentType: String? = nil,
-    upsert: Bool = false,
+    shouldUpsert: Bool = false,
     duplex: String? = nil,
     metadata: [String: JSONValue]? = nil,
     headers: [String: String]? = nil
   ) {
     self.cacheControl = cacheControl
     self.contentType = contentType
-    self.upsert = upsert
+    self.shouldUpsert = shouldUpsert
     self.duplex = duplex
     self.metadata = metadata
     self.headers = headers
@@ -336,16 +336,16 @@ public struct SignedURLUploadResponse: Sendable {
 ///
 /// ### Properties
 ///
-/// - ``upsert``
+/// - ``shouldUpsert``
 public struct CreateSignedUploadURLOptions: Sendable {
   /// When `true`, an existing file at the destination path is overwritten by the subsequent upload.
-  public var upsert: Bool
+  public var shouldUpsert: Bool
 
   /// Creates a ``CreateSignedUploadURLOptions`` value.
   ///
-  /// - Parameter upsert: Whether to overwrite an existing object at the destination path.
-  public init(upsert: Bool) {
-    self.upsert = upsert
+  /// - Parameter shouldUpsert: Whether to overwrite an existing object at the destination path.
+  public init(shouldUpsert: Bool) {
+    self.shouldUpsert = shouldUpsert
   }
 }
 
@@ -561,7 +561,7 @@ public struct FileObjectV2: Identifiable, Hashable, Decodable, Sendable {
 /// A Supabase Storage bucket.
 ///
 /// Buckets are the top-level containers for files. Retrieve bucket details with
-/// ``SupabaseStorageClient/getBucket(_:)`` or ``SupabaseStorageClient/listBuckets()``.
+/// ``SupabaseStorageClient/bucket(_:)`` or ``SupabaseStorageClient/listBuckets()``.
 ///
 /// ## Topics
 ///
@@ -889,8 +889,8 @@ extension SortOrder: Encodable {
 /// Controls the `Content-Disposition` header behavior for signed and public URLs.
 ///
 /// ```swift
-/// storage.from("docs").getPublicURL(path: "report.pdf", download: .withOriginalName)
-/// storage.from("docs").getPublicURL(path: "report.pdf", download: .named("annual-2024.pdf"))
+/// storage.from("docs").publicURL(path: "report.pdf", download: .withOriginalName)
+/// storage.from("docs").publicURL(path: "report.pdf", download: .named("annual-2024.pdf"))
 /// ```
 ///
 /// ## Topics
@@ -975,7 +975,7 @@ public struct BucketOptions: Sendable {
 /// Options for server-side image transformation applied before the asset is served to the client.
 ///
 /// Pass a ``TransformOptions`` value to ``StorageFileApi/download(path:options:query:cacheNonce:)``,
-/// ``StorageFileApi/getPublicURL(path:download:options:cacheNonce:)-(_,DownloadBehavior?,_,_)``, or
+/// ``StorageFileApi/publicURL(path:download:options:cacheNonce:)-(_,DownloadBehavior?,_,_)``, or
 /// ``StorageFileApi/createSignedURL(path:expiresIn:download:transform:cacheNonce:)-(_,_,DownloadBehavior?,_,_)`` to resize,
 /// reformat, or adjust the quality of images on the fly.
 ///

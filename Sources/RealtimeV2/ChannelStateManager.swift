@@ -70,7 +70,10 @@ actor ChannelStateManager {
   /// subscribers. Reading from outside the actor crosses the actor boundary.
   var stateChanges: AsyncStream<State> {
     let id = UUID()
-    let (stream, continuation) = AsyncStream<State>.makeStream()
+    // Unbounded, and load-bearing: `runOneSubscribeAttempt` waits here for `.subscribed` and
+    // `runUnsubscribe` for `.unsubscribed`. A bounded policy could evict the transition the
+    // waiter needs, hanging the subscribe until it times out.
+    let (stream, continuation) = AsyncStream<State>.makeStream(bufferingPolicy: .unbounded)
     stateChangeContinuations.append((id, continuation))
 
     // `onTermination`'s closure is synchronous — it can't `await` back into

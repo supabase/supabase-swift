@@ -186,7 +186,7 @@ struct FileUploadView: View {
       let options = FileOptions(
         cacheControl: cacheControl,
         contentType: "image/jpeg",
-        upsert: upsertEnabled
+        shouldUpsert: upsertEnabled
       )
 
       // Simulate progress
@@ -225,7 +225,7 @@ struct FileUploadView: View {
 
       let options = FileOptions(
         cacheControl: cacheControl,
-        upsert: upsertEnabled
+        shouldUpsert: upsertEnabled
       )
 
       for i in 1...3 {
@@ -267,7 +267,7 @@ struct FileUploadView: View {
       let options = FileOptions(
         cacheControl: cacheControl,
         contentType: "text/plain",
-        upsert: upsertEnabled
+        shouldUpsert: upsertEnabled
       )
 
       for i in 1...3 {

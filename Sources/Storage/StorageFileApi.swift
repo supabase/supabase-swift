@@ -17,7 +17,7 @@ let defaultSearchOptions = SearchOptions(
 private let defaultFileOptions = FileOptions(
   cacheControl: "3600",
   contentType: "text/plain;charset=UTF-8",
-  upsert: false
+  shouldUpsert: false
 )
 
 enum FileUpload {
@@ -92,7 +92,7 @@ enum FileUpload {
 /// ### Downloading files
 ///
 /// - ``download(path:options:query:cacheNonce:)``
-/// - ``getPublicURL(path:download:options:cacheNonce:)-(_,DownloadBehavior?,_,_)``
+/// - ``publicURL(path:download:options:cacheNonce:)-(_,DownloadBehavior?,_,_)``
 ///
 /// ### Managing files
 ///
@@ -174,7 +174,7 @@ public struct StorageFileApi: Sendable {
     var headers = options.headers.map { HTTPFields($0) } ?? HTTPFields()
 
     if method == .post {
-      headers[.xUpsert] = "\(options.upsert)"
+      headers[.xUpsert] = "\(options.shouldUpsert)"
     }
 
     headers[.duplex] = options.duplex
@@ -274,7 +274,7 @@ public struct StorageFileApi: Sendable {
 
   /// Replaces an existing file at the specified path with new data.
   ///
-  /// Unlike ``upload(_:data:options:)`` with `upsert: true`, this method always targets an
+  /// Unlike ``upload(_:data:options:)`` with `shouldUpsert: true`, this method always targets an
   /// existing object and will throw if the path does not exist.
   ///
   /// - Parameters:
@@ -689,7 +689,7 @@ public struct StorageFileApi: Sendable {
   /// Downloads a file from a private bucket and returns its raw bytes.
   ///
   /// For public buckets, prefer requesting the URL returned by
-  /// ``getPublicURL(path:download:options:cacheNonce:)-(_,DownloadBehavior?,_,_)`` directly.
+  /// ``publicURL(path:download:options:cacheNonce:)-(_,DownloadBehavior?,_,_)`` directly.
   ///
   /// ```swift
   /// let data = try await storage.from("avatars").download(path: "user123.png")
@@ -810,7 +810,7 @@ public struct StorageFileApi: Sendable {
   /// - Returns: The publicly accessible `URL` for the file.
   /// - Throws: ``StorageError`` with kind ``StorageError/Kind-swift.struct/invalidURL`` if the resulting URL cannot be constructed.
   @_disfavoredOverload
-  public func getPublicURL(
+  public func publicURL(
     path: String,
     download: String? = nil,
     options: TransformOptions? = nil,
@@ -851,10 +851,10 @@ public struct StorageFileApi: Sendable {
   ///
   /// ```swift
   /// // Inline display URL
-  /// let url = try storage.from("avatars").getPublicURL(path: "user123.png")
+  /// let url = try storage.from("avatars").publicURL(path: "user123.png")
   ///
   /// // Force download with original file name
-  /// let dlURL = try storage.from("docs").getPublicURL(path: "report.pdf", download: .withOriginalName)
+  /// let dlURL = try storage.from("docs").publicURL(path: "report.pdf", download: .withOriginalName)
   /// ```
   ///
   /// > Note: The bucket must be set to public for this URL to be accessible without authentication.
@@ -869,13 +869,13 @@ public struct StorageFileApi: Sendable {
   ///     cache-busting purposes.
   /// - Returns: The publicly accessible `URL` for the file.
   /// - Throws: ``StorageError`` with kind ``StorageError/Kind-swift.struct/invalidURL`` if the resulting URL cannot be constructed.
-  public func getPublicURL(
+  public func publicURL(
     path: String,
     download: DownloadBehavior? = nil,
     options: TransformOptions? = nil,
     cacheNonce: String? = nil
   ) throws -> URL {
-    try getPublicURL(
+    try publicURL(
       path: path,
       download: download?.queryValue,
       options: options,
@@ -912,7 +912,7 @@ public struct StorageFileApi: Sendable {
     }
 
     var headers = HTTPFields()
-    if let upsert = options?.upsert, upsert {
+    if let shouldUpsert = options?.shouldUpsert, shouldUpsert {
       headers[.xUpsert] = "true"
     }
 
@@ -1016,7 +1016,7 @@ public struct StorageFileApi: Sendable {
     let options = options ?? FileOptions()
     var headers = options.headers.map { HTTPFields($0) } ?? HTTPFields()
 
-    headers[.xUpsert] = "\(options.upsert)"
+    headers[.xUpsert] = "\(options.shouldUpsert)"
     headers[.duplex] = options.duplex
 
     #if DEBUG
