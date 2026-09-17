@@ -84,7 +84,7 @@ jobs:
       matrix:
         command: [test, ""]
         platform: [IOS, MACOS, MAC_CATALYST]
-        xcode: ["16.4"]
+        xcode: ["26.0"]
         include:
           - { command: test, skip_release: 1 }
           - { command: "", skip_debug: 1 }
