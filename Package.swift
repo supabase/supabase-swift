@@ -275,6 +275,10 @@ let package = Package(
         "TestHelpers",
       ]
     ),
+    .testTarget(
+      name: "DefaultIsolationTests",
+      dependencies: ["Supabase"]
+    ),
     .target(
       name: "TestHelpers",
       dependencies: [
@@ -303,6 +307,12 @@ for target in package.targets {
   if target.name != "PostgrestMacrosPlugin" {
     swiftSettings.append(.enableUpcomingFeature("InternalImportsByDefault"))
     swiftSettings.append(.enableUpcomingFeature("MemberImportVisibility"))
+  }
+
+  // Compile-only guard that the public API stays usable from a module that opts into Swift 6.2's
+  // default `@MainActor` isolation (SE-0466). The SDK targets themselves stay nonisolated.
+  if target.name == "DefaultIsolationTests" {
+    swiftSettings.append(.defaultIsolation(MainActor.self))
   }
 
   target.swiftSettings = swiftSettings
