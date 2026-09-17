@@ -117,7 +117,7 @@ struct URLSessionWebSocketCloseValidationTests {
   func reportsNoCloseFrameForASocketThatIsAlreadyDisconnected() {
     let error = NSError(
       domain: NSPOSIXErrorDomain,
-      code: Int(POSIXErrorCode.ENOTCONN.rawValue),
+      code: Int(ENOTCONN),
       userInfo: nil
     )
 
@@ -130,7 +130,7 @@ struct URLSessionWebSocketCloseValidationTests {
   func treatsTheENOTCONNCodeInAnotherDomainAsAnOrdinaryError() throws {
     let error = NSError(
       domain: NSURLErrorDomain,
-      code: Int(POSIXErrorCode.ENOTCONN.rawValue),
+      code: Int(ENOTCONN),
       userInfo: nil
     )
     let frame = try #require(URLSessionWebSocket.closeFrame(for: error))
@@ -144,7 +144,7 @@ struct URLSessionWebSocketCloseValidationTests {
   func mapsAProtocolErrorToProtocolError() throws {
     let error = NSError(
       domain: NSPOSIXErrorDomain,
-      code: Int(POSIXErrorCode.EPROTO.rawValue),
+      code: Int(EPROTO),
       userInfo: nil
     )
     let frame = try #require(URLSessionWebSocket.closeFrame(for: error))
