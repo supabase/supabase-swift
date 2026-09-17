@@ -851,20 +851,15 @@ public actor AuthClient {
         redirectTo: redirectTo,
         scopes: scopes,
         queryParams: queryParams
-      ) { @MainActor url in
-        try await withCheckedThrowingContinuation { [configuration] continuation in
-          guard let callbackScheme = (configuration.redirectToURL ?? redirectTo)?.scheme else {
-            continuation.resume(
-              throwing: AuthError.oauthFlowFailed(
-                """
-                Provide a redirect URL with a scheme, either through the `redirectTo` parameter \
-                or globally through `AuthClient.Configuration.redirectToURL`.
-                """
-              )
-            )
-            return
-          }
+      ) { @MainActor [configuration] url in
+        // Resolved before the continuation exists, so a missing scheme simply throws instead of
+        // creating a continuation only to immediately fail it.
+        let callbackScheme = try Self.oauthCallbackScheme(
+          configured: configuration.redirectToURL,
+          redirectTo: redirectTo
+        )
 
+        return try await withCheckedThrowingContinuation { continuation in
           #if !os(tvOS) && !os(watchOS)
             var presentationContextProvider: DefaultPresentationContextProvider?
           #endif
@@ -873,18 +868,14 @@ public actor AuthClient {
             url: url,
             callbackURLScheme: callbackScheme
           ) { url, error in
-            if let error {
-              continuation.resume(throwing: error)
-            } else if let url {
-              continuation.resume(returning: url)
+            if let result = Self.oauthCallbackResult(url: url, error: error) {
+              continuation.resume(with: result)
             } else {
               // `ASWebAuthenticationSession` always reports a URL or an error. Surface a broken
               // contract as a thrown error rather than taking the host app down with it.
-              reportIssue("ASWebAuthenticationSession returned neither a URL nor an error.")
+              reportIssue(Self.oauthSessionContractViolation)
               continuation.resume(
-                throwing: AuthError.oauthFlowFailed(
-                  "ASWebAuthenticationSession returned neither a URL nor an error."
-                )
+                throwing: AuthError.oauthFlowFailed(Self.oauthSessionContractViolation)
               )
             }
 
@@ -897,16 +888,73 @@ public actor AuthClient {
           configure(session)
 
           #if !os(tvOS) && !os(watchOS)
-            if session.presentationContextProvider == nil {
-              presentationContextProvider = DefaultPresentationContextProvider()
-              session.presentationContextProvider = presentationContextProvider
-            }
+            presentationContextProvider = Self.installDefaultPresentationContextIfNeeded(
+              on: session
+            )
           #endif
 
           session.start()
         }
       }
     }
+
+    /// The URL scheme `ASWebAuthenticationSession` listens on to capture the OAuth callback.
+    ///
+    /// - Important: This resolves `configured` *before* `redirectTo`, the opposite of the order
+    ///   ``signInWithOAuth(provider:redirectTo:scopes:queryParams:launchFlow:)`` uses to build
+    ///   the authorize URL. When both are set with different schemes the session listens on a
+    ///   scheme the provider never redirects to, and the callback is never captured. Tracked as
+    ///   SDK-1873 and pinned as-is here, so that fix lands as its own reviewable change.
+    ///
+    /// Pure so the resolution order and the guidance message can both be covered without
+    /// presenting a session.
+    static func oauthCallbackScheme(configured: URL?, redirectTo: URL?) throws -> String {
+      guard let scheme = (configured ?? redirectTo)?.scheme else {
+        throw AuthError.oauthFlowFailed(
+          """
+          Provide a redirect URL with a scheme, either through the `redirectTo` parameter \
+          or globally through `AuthClient.Configuration.redirectToURL`.
+          """
+        )
+      }
+      return scheme
+    }
+
+    /// Reported when `ASWebAuthenticationSession` completes with neither a URL nor an error.
+    static let oauthSessionContractViolation =
+      "ASWebAuthenticationSession returned neither a URL nor an error."
+
+    /// Maps the `(url, error)` pair `ASWebAuthenticationSession` reports onto a result, favouring
+    /// the error when it somehow reports both.
+    ///
+    /// Returns `nil` for the combination it documents as impossible — neither value present —
+    /// which the caller turns into ``oauthSessionContractViolation``. The reporting stays with
+    /// the caller because driving `reportIssue` from a `@Test` function segfaults under
+    /// `xcodebuild test` (SDK-435); keeping it out here is what lets this be tested directly.
+    static func oauthCallbackResult(url: URL?, error: (any Error)?) -> Result<URL, any Error>? {
+      if let error { return .failure(error) }
+      if let url { return .success(url) }
+      return nil
+    }
+
+    #if !os(tvOS) && !os(watchOS)
+      /// Installs a default presentation anchor unless `configure` already supplied one.
+      ///
+      /// Returns the provider it created, because
+      /// `ASWebAuthenticationSession.presentationContextProvider` is a weak reference — the
+      /// caller has to hold it until the flow completes, or the anchor is gone before the
+      /// session can present.
+      @MainActor
+      static func installDefaultPresentationContextIfNeeded(
+        on session: ASWebAuthenticationSession
+      ) -> DefaultPresentationContextProvider? {
+        guard session.presentationContextProvider == nil else { return nil }
+
+        let provider = DefaultPresentationContextProvider()
+        session.presentationContextProvider = provider
+        return provider
+      }
+    #endif
   #endif
 
   /// Handles an incoming URL received by the app.
