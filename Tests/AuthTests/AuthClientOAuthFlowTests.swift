@@ -22,49 +22,78 @@ import Testing
   @Suite
   struct AuthClientOAuthFlowTests {
 
-    // MARK: - Callback scheme resolution
+    // MARK: - Redirect resolution
 
     @Test
-    func resolvesTheSchemeFromTheConfiguredURL() throws {
-      let scheme = try AuthClient.oauthCallbackScheme(
-        configured: URL(string: "myapp://callback")!,
-        redirectTo: nil
-      )
+    func fallsBackToTheConfiguredURLWhenNoPerCallOneIsGiven() {
+      let configured = URL(string: "configured://callback")!
 
-      #expect(scheme == "myapp")
+      #expect(
+        AuthClient.oauthRedirectURL(redirectTo: nil, configured: configured) == configured
+      )
     }
 
     @Test
-    func resolvesTheSchemeFromThePerCallURL() throws {
-      let scheme = try AuthClient.oauthCallbackScheme(
-        configured: nil,
-        redirectTo: URL(string: "myapp://callback")!
-      )
+    func usesThePerCallURLWhenNoConfiguredOneIsSet() {
+      let perCall = URL(string: "myapp://callback")!
 
-      #expect(scheme == "myapp")
+      #expect(AuthClient.oauthRedirectURL(redirectTo: perCall, configured: nil) == perCall)
     }
 
-    /// Pins today's precedence, which is **not** the one the authorize URL uses: the base
-    /// `signInWithOAuth(…launchFlow:)` overload builds that with `redirectTo ?? configuration
-    /// .redirectToURL`, so when both are set with different schemes the session ends up
-    /// listening on a scheme the provider never redirects to.
-    ///
-    /// Recorded as-is rather than fixed here so the behavior change lands as its own
-    /// reviewable commit — see SDK-1873, which flips this expectation.
+    /// The per-call `redirectTo` wins. This is the precedence the authorize request has always
+    /// used, and the session now derives its scheme from the same value — before SDK-1873 the
+    /// callback scheme resolved the other way round, so a client setting both with different
+    /// schemes listened on one the provider never redirected to and the flow hung with no error.
     @Test
-    func prefersTheConfiguredURLOverThePerCallOne() throws {
-      let scheme = try AuthClient.oauthCallbackScheme(
-        configured: URL(string: "configured://callback")!,
-        redirectTo: URL(string: "myapp://callback")!
+    func prefersThePerCallURLOverTheConfiguredOne() {
+      let perCall = URL(string: "myapp://callback")!
+
+      #expect(
+        AuthClient.oauthRedirectURL(
+          redirectTo: perCall,
+          configured: URL(string: "configured://callback")!
+        ) == perCall
+      )
+    }
+
+    @Test
+    func resolvesToNothingWhenNeitherURLIsSet() {
+      #expect(AuthClient.oauthRedirectURL(redirectTo: nil, configured: nil) == nil)
+    }
+
+    /// The regression guard for SDK-1873. The two halves of the flow resolve the redirect in
+    /// different places — the authorize request in the base overload, the callback scheme in the
+    /// `configure:` one — and they only agree because both route through `oauthRedirectURL`.
+    /// Anything that re-derives the precedence separately can invert it again, which is how the
+    /// original bug happened, so pin the scheme against the resolved URL across every
+    /// combination rather than against a hard-coded string.
+    @Test(
+      arguments: [
+        (perCall: "myapp://callback", configured: "configured://callback"),
+        (perCall: "myapp://callback", configured: nil),
+        (perCall: nil, configured: "configured://callback"),
+      ] as [(perCall: String?, configured: String?)]
+    )
+    func theCallbackSchemeAlwaysMatchesTheResolvedRedirect(
+      perCall: String?,
+      configured: String?
+    ) throws {
+      let resolved = AuthClient.oauthRedirectURL(
+        redirectTo: perCall.map { URL(string: $0)! },
+        configured: configured.map { URL(string: $0)! }
       )
 
-      #expect(scheme == "configured")
+      let scheme = try AuthClient.oauthCallbackScheme(for: resolved)
+
+      #expect(scheme == resolved?.scheme)
     }
+
+    // MARK: - Callback scheme extraction
 
     @Test
     func throwsWhenNeitherURLIsProvided() throws {
       let error = #expect(throws: AuthError.self) {
-        try AuthClient.oauthCallbackScheme(configured: nil, redirectTo: nil)
+        try AuthClient.oauthCallbackScheme(for: nil)
       }
 
       #expect(error?.kind == .oauthFlowFailed)
@@ -81,7 +110,7 @@ import Testing
       #expect(withoutScheme.scheme == nil, "precondition: this fixture must have no scheme")
 
       let error = #expect(throws: AuthError.self) {
-        try AuthClient.oauthCallbackScheme(configured: nil, redirectTo: withoutScheme)
+        try AuthClient.oauthCallbackScheme(for: withoutScheme)
       }
 
       #expect(error?.kind == .oauthFlowFailed)
