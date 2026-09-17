@@ -55,7 +55,12 @@ let package = Package(
         .product(name: "HTTPTypesFoundation", package: "swift-http-types"),
         .product(name: "Logging", package: "swift-log"),
         .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
-      ]
+      ],
+      // One manifest covers the whole SDK: every product links `Helpers`, so the bundle this
+      // resource produces is present however a consumer imports us. Duplicating it per library
+      // target would buy nothing while multiplying the places a future required-reason API has
+      // to be declared.
+      resources: [.copy("PrivacyInfo.xcprivacy")]
     ),
     .testTarget(
       name: "HelpersTests",
