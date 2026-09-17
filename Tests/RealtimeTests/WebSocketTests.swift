@@ -202,6 +202,73 @@ struct WebSocketTests {
       secondSocket.close(code: 1000, reason: nil)
     }
 
+    /// Drives `_handleMessage` over a real connection: it is private and only ever reached from
+    /// the `_task.receive()` loop, so a server that actually pushes frames is the only way in.
+    ///
+    /// Both frames matter. The second one can only arrive if handling the first re-armed the
+    /// receive loop — if `_scheduleReceive()` stopped being called on the success path, the
+    /// socket would go quiet after exactly one message and every other test here would still
+    /// pass.
+    @Test
+    func deliversServerFramesAndKeepsListeningAfterEachOne() async throws {
+      let server = try LoopbackWebSocketServer()
+      let port = try server.start()
+      defer { server.stop() }
+
+      let url = URL(string: "ws://127.0.0.1:\(port)")!
+      let socket = try await URLSessionWebSocket.connect(to: url)
+      defer { socket.close(code: 1000, reason: nil) }
+
+      let received = LockIsolated([WebSocketEvent]())
+      let pump = Task { [socket] in
+        for await event in socket.events {
+          received.withValue { $0.append(event) }
+        }
+      }
+      defer { pump.cancel() }
+
+      server.send(text: "hello")
+      #expect(await waitUntil { received.value.contains(.text("hello")) })
+
+      let payload = Data([0x01, 0x02, 0x03])
+      server.send(binary: payload)
+      #expect(await waitUntil { received.value.contains(.binary(payload)) })
+    }
+
+    /// Pins the observable contract: nothing surfaces on `events` once the socket is closed, so
+    /// a late frame can't reopen a stream a caller has already finished iterating.
+    ///
+    /// Deliberately not claimed as coverage of the `isClosed` guard in `_handleMessage`. Two
+    /// mechanisms enforce this — that guard, and `events` having already finished — and removing
+    /// either one on its own leaves this test green (verified by mutation). It pins the property,
+    /// not the line.
+    @Test
+    func deliversNothingOnceTheSocketIsClosed() async throws {
+      let server = try LoopbackWebSocketServer()
+      let port = try server.start()
+      defer { server.stop() }
+
+      let url = URL(string: "ws://127.0.0.1:\(port)")!
+      let socket = try await URLSessionWebSocket.connect(to: url)
+
+      let received = LockIsolated([WebSocketEvent]())
+      let pump = Task { [socket] in
+        for await event in socket.events {
+          received.withValue { $0.append(event) }
+        }
+      }
+      defer { pump.cancel() }
+
+      socket.close(code: 1000, reason: nil)
+      #expect(await waitUntil { socket.isClosed })
+
+      server.send(text: "too late")
+
+      // Give the frame a chance to be mishandled before concluding it was dropped.
+      try await Task.sleep(for: .milliseconds(200))
+      #expect(received.value.contains(.text("too late")) == false)
+    }
+
     #if os(macOS)
       @Test
       func certPinningAcceptsMatchingCertificate() async throws {
@@ -516,6 +583,36 @@ private struct LoopbackError: Error {
 
         guard error == nil else { return }
         self?.receive(on: connection)
+      }
+    }
+
+    /// Pushes a frame from the server to every connected client.
+    ///
+    /// Every other test here only drives traffic client→server, which is why
+    /// `URLSessionWebSocket._handleMessage` had no coverage: nothing ever arrived for it to
+    /// handle. Dispatched on `queue` so it is ordered after the `newConnectionHandler` that
+    /// appended the connection.
+    func send(text: String) {
+      send(Data(text.utf8), opcode: .text)
+    }
+
+    func send(binary: Data) {
+      send(binary, opcode: .binary)
+    }
+
+    private func send(_ payload: Data, opcode: NWProtocolWebSocket.Opcode) {
+      queue.async { [self] in
+        let metadata = NWProtocolWebSocket.Metadata(opcode: opcode)
+        let context = NWConnection.ContentContext(identifier: "send", metadata: [metadata])
+
+        for connection in connections {
+          connection.send(
+            content: payload,
+            contentContext: context,
+            isComplete: true,
+            completion: .contentProcessed { _ in }
+          )
+        }
       }
     }
 
