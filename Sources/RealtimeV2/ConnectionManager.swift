@@ -63,7 +63,6 @@ actor ConnectionManager {
     case .connecting(let task):
       logger.debug("Connection already in progress, waiting...")
       try await task.value
-      // After waiting, get the connection from state
       guard case .connected(let conn) = state else {
         throw RealtimeError.connection("Connection failed")
       }
@@ -132,7 +131,6 @@ actor ConnectionManager {
 
     logger.debug("Connection error, initiating reconnect: \(error.localizedDescription)")
 
-    // Close the connection and update to disconnected before reconnecting
     current.close(code: nil, reason: "error: \(error.localizedDescription)")
     updateState(.disconnected)
 

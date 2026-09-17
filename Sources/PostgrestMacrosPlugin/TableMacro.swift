@@ -81,12 +81,10 @@ public struct TableMacro: ExtensionMacro {
       "  \(access)static let selectString = \"*\"",
       columnsNamespace(access: access, type: type.trimmedDescription, properties: properties),
     ]
-    // The one thing `@PrimaryKey` uniquely does. Without this the marker is inert: after the key
-    // stopped gating `Draft` optionality and stopped being filtered out of `Update`, writing it or
-    // omitting it expanded byte-for-byte the same. Emitted only when a key is declared, and the
-    // `PostgrestKeyedRelation` conformance below rides on the same condition — the requirement has
-    // no default, so a keyless relation does not conform, which is what withholds the
-    // derived-conflict-target `upsert` from it at compile time.
+    // The one thing `@PrimaryKey` uniquely does — the marker changes nothing else about the
+    // expansion. The `PostgrestKeyedRelation` conformance below rides on the same condition, and
+    // its requirement has no default, so a keyless relation does not conform and the
+    // derived-conflict-target `upsert` is withheld from it at compile time.
     let keyColumns = properties.filter(\.isPrimaryKey).map(\.columnName)
     if !keyColumns.isEmpty {
       let list = keyColumns.map { "\"\($0)\"" }.joined(separator: ", ")
@@ -96,21 +94,15 @@ public struct TableMacro: ExtensionMacro {
       body.append(codingKeys)
     }
     if !arguments.readOnly {
-      // `Draft` carries every column, and a column is optional exactly when the database can
-      // fill it in: it is nullable, or it has a default. Being the primary key is not one of the
-      // reasons — `postgres-meta`, which generates supabase-js's types from the same column
-      // metadata, computes `is_nullable || is_identity || default_value !== null` and never
-      // consults the key. `@Default` already carries what `is_identity || default_value !== null`
-      // means, so a generated key is spelled `@PrimaryKey @Default var id: Int` and a natural one
-      // — including each half of a compound key — is required, which is what makes a join table
-      // insertable and an incomplete key a compile error rather than a 400.
+      // A `Draft` column is optional exactly when the database can fill it in — nullable, or
+      // has a default — and never because it is the key, matching the
+      // `is_nullable || is_identity || default_value !== null` that `postgres-meta` computes for
+      // supabase-js from the same column metadata. So a generated key is spelled
+      // `@PrimaryKey @Default var id: Int` and a natural one is required.
       //
-      // There is no matching `Update` shape. An update names the columns it writes, and a row
-      // type cannot say that: one optional field would have to mean both "not assigned" and
-      // "assigned null", so a nullable column could never be cleared. `PostgrestUpdate` builds
-      // the assignments from key paths into the `Columns` namespace above instead, so it needs
-      // nothing further from the macro. Targeting stays a separate concern — the caller filters
-      // the mutation — so the key is assignable like any other column.
+      // There is no matching `Update` shape: one optional field would have to mean both "not
+      // assigned" and "assigned null", so a nullable column could never be cleared.
+      // `PostgrestUpdate` builds the assignments from key paths into `Columns` instead.
       body.append(
         writeShape(
           named: "Draft",

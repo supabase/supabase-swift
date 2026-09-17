@@ -2078,14 +2078,12 @@ public struct JWK: Decodable, Hashable, Sendable {
   /// Key ID.
   public let kid: String?
 
-  // RSA-specific fields
   /// RSA modulus (base64url-encoded).
   public let n: String?
 
   /// RSA exponent (base64url-encoded).
   public let e: String?
 
-  // EC-specific fields
   /// EC curve name (e.g., `"P-256"`).
   public let crv: String?
 
@@ -2095,7 +2093,6 @@ public struct JWK: Decodable, Hashable, Sendable {
   /// EC y coordinate (base64url-encoded).
   public let y: String?
 
-  // Symmetric key field
   /// Symmetric key value (base64url-encoded).
   public let k: String?
 
@@ -2212,7 +2209,6 @@ public struct JWTClaims: Decodable, Hashable, Sendable {
     appMetadata = try container.decodeIfPresent([String: JSONValue].self, forKey: .appMetadata)
     userMetadata = try container.decodeIfPresent([String: JSONValue].self, forKey: .userMetadata)
 
-    // Decode additional claims
     let allKeys = try decoder.container(keyedBy: AnyCodingKey.self)
     var additional: [String: JSONValue] = [:]
     for key in allKeys.allKeys where CodingKeys(stringValue: key.stringValue) == nil {

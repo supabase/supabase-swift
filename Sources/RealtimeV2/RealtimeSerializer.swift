@@ -150,7 +150,6 @@ struct RealtimeSerializer: Sendable {
     let refBytes = Data((ref ?? "").utf8)
     let topicBytes = Data(topic.utf8)
     let eventBytes = Data(event.utf8)
-    // No metadata for now (empty).
     let metaBytes = Data()
 
     guard joinRefBytes.count <= 255,

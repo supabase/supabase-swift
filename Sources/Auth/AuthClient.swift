@@ -1716,7 +1716,6 @@ public actor AuthClient {
   /// Fetches a JWK from the JWKS endpoint with caching
   /// Returns nil if the key is not found, allowing graceful fallback to server-side verification
   private func fetchJWK(kid: String, jwks: JWKS? = nil) async throws -> JWK? {
-    // Try fetching from the supplied jwks
     if let jwk = jwks?.keys.first(where: { $0.kid == kid }) {
       return jwk
     }
@@ -1724,17 +1723,14 @@ public actor AuthClient {
     let now = date()
     let storageKey = configuration.storageKey ?? defaultStorageKey
 
-    // Try fetching from global cache
     if let cached = await globalJWKSCache.get(for: storageKey),
       let jwk = cached.jwks.keys.first(where: { $0.kid == kid })
     {
-      // Check if cache is still valid (not stale)
       if cached.cachedAt.addingTimeInterval(jwksTTL) > now {
         return jwk
       }
     }
 
-    // Fetch from well-known endpoint
     let response = try await api.execute(
       HTTPRequest(
         method: .get,
@@ -1744,19 +1740,16 @@ public actor AuthClient {
 
     let fetchedJWKS = try response.decoded(as: JWKS.self, decoder: configuration.resolvedDecoder)
 
-    // Return nil if JWKS is empty (will fallback to getUser)
     guard !fetchedJWKS.keys.isEmpty else {
       return nil
     }
 
-    // Cache the JWKS globally
     await globalJWKSCache.set(
       CachedJWKS(jwks: fetchedJWKS, cachedAt: now),
       for: storageKey
     )
 
-    // Find the signing key - return nil if not found (will fallback to getUser)
-    // This handles key rotation scenarios where the JWT is signed with a key not yet in the cache
+    // A key rotation can sign a JWT with a key the freshly fetched set does not carry yet.
     return fetchedJWKS.keys.first(where: { $0.kid == kid })
   }
 
@@ -1795,7 +1788,6 @@ public actor AuthClient {
       throw AuthError.jwtVerificationFailed("Invalid JWT structure")
     }
 
-    // Validate expiration unless allowsExpired is true
     if !options.allowsExpired {
       if let exp = decodedJWT.payload["exp"] as? TimeInterval {
         let now = date().timeIntervalSince1970
@@ -1808,18 +1800,13 @@ public actor AuthClient {
     let alg = decodedJWT.header["alg"] as? String
     let kid = decodedJWT.header["kid"] as? String
 
-    // Try to fetch the signing key for asymmetric JWTs
-    // Returns nil if: no alg, symmetric algorithm (HS256/HS512), no kid, or key not found in JWKS
     let signingKey: JWK?
     if let alg, !alg.hasPrefix("HS"), let kid {
-      // Only attempt to fetch JWK for asymmetric algorithms with a kid
       signingKey = try await fetchJWK(kid: kid, jwks: options.jwks)
     } else {
       signingKey = nil
     }
 
-    // If no signing key available (symmetric algorithm, RS256, no kid, or key not found),
-    // fallback to server-side verification via getUser()
     guard
       let signingKey,
       let algorithm = (signingKey.alg ?? alg).flatMap(JWTAlgorithm.init(rawValue:))
@@ -1843,7 +1830,6 @@ public actor AuthClient {
       throw AuthError.jwtVerificationFailed("Invalid JWT signature")
     }
 
-    // Decode claims and header
     let claims = try configuration.resolvedDecoder.decode(
       JWTClaims.self,
       from: JSONSerialization.data(withJSONObject: decodedJWT.payload)
