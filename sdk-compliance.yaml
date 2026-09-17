@@ -1620,7 +1620,7 @@ features:
   storage.file_buckets.purge_bucket_cache:
     status: implemented
     symbols:
-      - SupabaseStorageClient.purgeBucketCache
+      - SupabaseStorageClient.purgeCache
   storage.file_buckets.purge_cache:
     status: implemented
     symbols:
