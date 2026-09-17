@@ -29,8 +29,18 @@ struct StorageErrorTests {
 
     let payload = try JSONDecoder().decode(StorageError.ServerError.self, from: json)
 
-    #expect(payload.code == "NoSuchKey")
+    #expect(payload.code == .noSuchKey)
     #expect(payload.error == "not_found")
+  }
+
+  @Test
+  func serverErrorKeepsACodeItDoesNotKnow() throws {
+    let json = Data(#"{"message":"Error","code":"SomeFutureCode"}"#.utf8)
+
+    let payload = try JSONDecoder().decode(StorageError.ServerError.self, from: json)
+
+    #expect(payload.code == StorageError.Code("SomeFutureCode"))
+    #expect(payload.code?.rawValue == "SomeFutureCode")
   }
 
   @Test

@@ -936,7 +936,7 @@ extension StorageMockerTests {
         Issue.record()
       } catch let error as StorageError {
         #expect(error.kind == .server)
-        #expect(error.serverError?.code == "NoSuchKey")
+        #expect(error.serverError?.code == .noSuchKey)
         #expect(error.serverError?.error == "not_found")
         #expect(error.response?.statusCode == 400)
       }
