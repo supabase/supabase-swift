@@ -1186,6 +1186,7 @@ features:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.range
+      - PostgrestTypedQuery.range
   database.using_modifiers.single_row:
     status: implemented
     symbols:
