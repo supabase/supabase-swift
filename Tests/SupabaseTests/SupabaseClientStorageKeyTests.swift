@@ -14,8 +14,9 @@ import Testing
 /// The default auth storage key namespaces the stored session by project ref, so two projects in
 /// the same app do not share a session.
 ///
-/// A `supabaseURL` with no host is a construction-time programmer error and traps, so that case is
-/// covered here at the derivation helper rather than by constructing a client.
+/// A `supabaseURL` with no host is a construction-time programmer error and traps. The derivation
+/// helper covers that case everywhere; the exit test below also constructs a client and checks the
+/// trap itself, on the platforms where Swift Testing can run one.
 @Suite
 struct SupabaseClientStorageKeyTests {
   @Test(
@@ -62,4 +63,13 @@ struct SupabaseClientStorageKeyTests {
 
     #expect(client.auth.configuration.storageKey == "sb-project-ref-auth-token")
   }
+
+  #if os(macOS) || os(Linux)
+    @Test
+    func constructingAClientWithoutAHostTraps() async {
+      await #expect(processExitsWith: .failure) {
+        _ = SupabaseClient(supabaseURL: URL(string: "project-ref")!, supabaseKey: "anon-key")
+      }
+    }
+  #endif
 }
