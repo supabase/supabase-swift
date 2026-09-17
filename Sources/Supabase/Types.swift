@@ -36,8 +36,8 @@ public struct SupabaseClientOptions: Sendable {
     /// The JSONDecoder to use when decoding database response objects.
     public let decoder: JSONDecoder
 
-    /// Whether to automatically retry transient (network or 5xx) PostgREST errors.
-    /// Defaults to `true`.
+    /// Whether to automatically retry transient (network, 503 or 520) PostgREST errors on GET
+    /// and HEAD requests. Defaults to `true`.
     public let retry: Bool
 
     public init(
@@ -108,7 +108,8 @@ public struct SupabaseClientOptions: Sendable {
     /// A `nil` ``HTTPClientConfiguration/transport`` (the default) uses ``URLSessionTransport``
     /// over `URLSession.shared`. To send through your own `URLSession`, pass
     /// `URLSessionTransport(session:)` as the transport. The middlewares run before the SDK's own
-    /// (trace context, access-token injection) and before the request reaches the transport.
+    /// (trace context, access-token injection) and before the request reaches the transport; in
+    /// a module that retries (Auth, PostgREST) they run once per attempt.
     /// ``HTTPClientConfiguration/timeout`` is the idle timeout for every request; leave it `nil`
     /// for the defaults (60 seconds; 150 for Edge Functions).
     public let http: HTTPClientConfiguration

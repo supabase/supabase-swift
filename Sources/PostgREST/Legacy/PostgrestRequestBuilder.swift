@@ -75,7 +75,6 @@ public enum PostgrestTransformPhase: PostgrestTransformablePhase {}
 /// - ``execute(options:decoder:)``
 public struct PostgrestRequestBuilder<Phase>: Sendable {
   let configuration: PostgrestClient.Configuration
-  let http: HTTPClient
   let clock: any Clock<Duration>
 
   var request: HTTPRequest
@@ -103,12 +102,6 @@ public struct PostgrestRequestBuilder<Phase>: Sendable {
   ) {
     self.configuration = configuration
     self.clock = clock
-
-    let middlewares: [any ClientMiddleware] = [
-      LoggerInterceptor(logger: configuration.logger)
-    ]
-    self.http = HTTPClient(configuration: configuration.http, appending: middlewares)
-
     self.request = request
     self.body = body
     self.retryEnabled = configuration.retryEnabled
@@ -125,7 +118,6 @@ public struct PostgrestRequestBuilder<Phase>: Sendable {
   /// the `isMaybeSingle` flag just because `order` also changes the phase.
   init<From>(carryingFrom other: PostgrestRequestBuilder<From>) {
     self.configuration = other.configuration
-    self.http = other.http
     self.clock = other.clock
     self.request = other.request
     self.query = other.query
@@ -372,12 +364,12 @@ extension PostgrestRequestBuilder where Phase: PostgrestExecutablePhase {
   /// Controls whether automatic retries are enabled for this specific request.
   ///
   /// When enabled, GET and HEAD requests that receive an HTTP 503 or 520 response, or encounter
-  /// a network error, are retried up to three times with exponential back-off. The global
-  /// default is set via ``PostgrestClient/Configuration/retryEnabled``; this method overrides it
-  /// per request.
+  /// a network error, are retried up to three times with jittered exponential back-off. That
+  /// rule is fixed; the global default is set via ``PostgrestClient/Configuration/retryEnabled``
+  /// and this method overrides it per request.
   ///
   /// - Parameter enabled: Pass `false` to disable retries for this request.
-  /// - Returns: The same builder value so calls can be chained.
+  /// - Returns: A new builder value carrying the setting.
   public func retry(enabled: Bool) -> Self {
     var copy = self
     copy.retryEnabled = enabled
@@ -506,109 +498,62 @@ extension PostgrestRequestBuilder where Phase: PostgrestExecutablePhase {
       }
     }
 
-    var attempt = 0
-    while true {
-      try Task.checkCancellation()
+    // The retry middleware is built per request because the switch is per request
+    // (``retry(enabled:)``); it wraps the whole chain so every attempt is logged and carries a
+    // freshly resolved access token.
+    let http = HTTPClient(
+      configuration: configuration.http,
+      retrying: RetryRequestInterceptor(
+        policy: retryEnabled ? PostgrestClient.Configuration.retryPolicy : .disabled,
+        clock: clock),
+      appending: [LoggerInterceptor(logger: configuration.logger)])
 
-      var currentRequest = request
-      if attempt > 0 {
-        currentRequest.headerFields[.xRetryCount] = "\(attempt)"
-      }
+    // Separate the network send from decoding so that decode errors are never retried.
+    let response: HTTPResponse
+    let data: Data
+    do {
+      (response, data) = try await http.send(request, body: body, timeout: timeout)
+    } catch {
+      // Only the network layer's own failures are relabelled. `CancellationError`, and anything
+      // thrown by user code that runs inside `send` (a custom `ClientTransport` or middleware, an `accessToken`
+      // closure), propagate as themselves.
+      guard let urlError = error as? URLError else { throw error }
+      throw PostgrestError(
+        kind: .transport, message: urlError.localizedDescription, underlyingError: urlError)
+    }
 
-      // Separate the network send from decoding so that decode errors are never retried.
-      let response: HTTPResponse
-      let data: Data
-      do {
-        (response, data) = try await http.send(
-          currentRequest, body: body, timeout: timeout)
-      } catch {
-        if shouldRetry(
-          request: currentRequest, response: nil, error: error, retryEnabled: retryEnabled,
-          attempt: attempt)
-        {
-          try await clock.sleep(for: .seconds(retryDelay(attempt: attempt)))
-          attempt += 1
-          continue
-        }
-        // Only the network layer's own failures are relabelled. `CancellationError`, and anything
-        // thrown by user code that runs inside `send` (a custom `ClientTransport` or middleware, an `accessToken`
-        // closure), propagate as themselves.
-        guard let urlError = error as? URLError else { throw error }
-        throw PostgrestError(
-          kind: .transport, message: urlError.localizedDescription, underlyingError: urlError)
-      }
+    if 200..<300 ~= response.status.code {
+      let value = try decode(data)
+      return PostgrestResponse(data: data, response: response, value: value)
+    }
 
-      if 200..<300 ~= response.status.code {
-        let value = try decode(data)
+    // `ServerError`'s fields match PostgREST's JSON keys exactly, so a plain, fixed
+    // `JSONDecoder` decodes it regardless of any user-supplied key/date strategy on
+    // `configuration.decoder` or a per-call override — those are for user-defined row types.
+    if let serverError = try? JSONDecoder().decode(PostgrestError.ServerError.self, from: data) {
+      // `maybeSingle()` turns the "no rows" variant of PGRST116 into a `nil` value, but
+      // rethrows the "multiple rows" variant since that indicates a query that should have
+      // been scoped to match at most one row.
+      if isMaybeSingle, serverError.code == "PGRST116", serverError.matchedZeroRows {
+        let value = try decode(Data("null".utf8))
         return PostgrestResponse(data: data, response: response, value: value)
       }
-
-      if shouldRetry(
-        request: currentRequest, response: response, error: nil, retryEnabled: retryEnabled,
-        attempt: attempt)
-      {
-        try await clock.sleep(for: .seconds(retryDelay(attempt: attempt)))
-        attempt += 1
-        continue
-      }
-
-      // `ServerError`'s fields match PostgREST's JSON keys exactly, so a plain, fixed
-      // `JSONDecoder` decodes it regardless of any user-supplied key/date strategy on
-      // `configuration.decoder` or a per-call override — those are for user-defined row types.
-      if let serverError = try? JSONDecoder().decode(PostgrestError.ServerError.self, from: data) {
-        // `maybeSingle()` turns the "no rows" variant of PGRST116 into a `nil` value, but
-        // rethrows the "multiple rows" variant since that indicates a query that should have
-        // been scoped to match at most one row.
-        if isMaybeSingle, serverError.code == "PGRST116", serverError.matchedZeroRows {
-          let value = try decode(Data("null".utf8))
-          return PostgrestResponse(data: data, response: response, value: value)
-        }
-        throw PostgrestError(
-          kind: .server,
-          message: serverError.message,
-          serverError: serverError,
-          response: HTTPErrorResponse(response, body: data)
-        )
-      }
       throw PostgrestError(
-        kind: .unexpectedResponse,
-        message: "Unexpected response with status code \(response.status.code).",
+        kind: .server,
+        message: serverError.message,
+        serverError: serverError,
         response: HTTPErrorResponse(response, body: data)
       )
     }
-  }
-
-  private static var maxDelay: Double { 30.0 }
-  private static var maxRetries: Int { 3 }
-  private static var retryableMethods: Set<HTTPRequest.Method> { [.get, .head] }
-  private static var retryableStatusCodes: Set<Int> { [503, 520] }
-
-  /// Check if a request should be retried based on method, status code, and error type.
-  private func shouldRetry(
-    request: HTTPRequest,
-    response: HTTPResponse?,
-    error: (any Error)?,
-    retryEnabled: Bool,
-    attempt: Int
-  ) -> Bool {
-    guard retryEnabled, attempt < Self.maxRetries else { return false }
-    guard !(error is CancellationError) else { return false }
-    guard Self.retryableMethods.contains(request.method) else { return false }
-
-    if let statusCode = response?.status.code {
-      return Self.retryableStatusCodes.contains(statusCode)
-    }
-
-    return true
-  }
-
-  private func retryDelay(attempt: Int) -> TimeInterval {
-    min(pow(2.0, Double(attempt)), Self.maxDelay)
+    throw PostgrestError(
+      kind: .unexpectedResponse,
+      message: "Unexpected response with status code \(response.status.code).",
+      response: HTTPErrorResponse(response, body: data)
+    )
   }
 }
 
 extension HTTPField.Name {
   static let acceptProfile = Self("Accept-Profile")!
   static let contentProfile = Self("Content-Profile")!
-  static let xRetryCount = Self("X-Retry-Count")!
 }

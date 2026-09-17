@@ -111,9 +111,9 @@ public struct RealtimeClientOptions: Sendable {
   /// Default interval, in seconds, between heartbeat messages sent to keep the connection alive.
   public static let defaultHeartbeatInterval: TimeInterval = 25
 
-  /// Default base delay, in seconds, before attempting to reconnect after a connection drop.
-  /// Later automatic attempts back off exponentially (capped at 30s) from this base until
-  /// the connection is reestablished.
+  /// Default base delay, in seconds, for reconnecting after a connection drop. The first
+  /// attempt waits a random duration between half of this and this; later attempts double the
+  /// range (capped at 30s) until the connection is reestablished.
   public static let defaultReconnectDelay: TimeInterval = 7
 
   /// Default maximum time, in seconds, to wait for a server reply before treating a request as timed out.
@@ -151,7 +151,7 @@ public struct RealtimeClientOptions: Sendable {
   /// - Parameters:
   ///   - headers: Additional HTTP headers sent with each WebSocket upgrade request.
   ///   - heartbeatInterval: Interval in seconds between heartbeat messages. Defaults to ``defaultHeartbeatInterval``.
-  ///   - reconnectDelay: Base delay in seconds before attempting to reconnect after a disconnection; later automatic attempts back off exponentially from this base until reconnected. Defaults to ``defaultReconnectDelay``.
+  ///   - reconnectDelay: Base delay in seconds for reconnecting after a disconnection. The first attempt waits a random duration between half of this and this; later attempts double the range (capped at 30s) until reconnected. Defaults to ``defaultReconnectDelay``.
   ///   - timeoutInterval: Maximum time in seconds to wait for a server reply. Defaults to ``defaultTimeoutInterval``.
   ///   - disconnectOnSessionLoss: Whether to disconnect the channel when the authentication session is lost. Defaults to ``defaultDisconnectOnSessionLoss``.
   ///   - connectOnSubscribe: Whether to automatically call ``RealtimeClientV2/connect()`` when subscribing to a channel. Defaults to ``defaultConnectOnSubscribe``.

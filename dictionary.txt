@@ -275,3 +275,7 @@ loggable
 # Terms from the live memory probe (MemoryProbeIntegrationTests.swift).
 memprobe
 attoseconds
+
+# Retry-After / Duration terms from RetryPolicy.swift.
+asctime
+fixdate

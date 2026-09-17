@@ -540,7 +540,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
           if Task.isCancelled { return }
           options.logger
             .debug(
-              "WebSocket error \(error.localizedDescription). Trying again in \(options.reconnectDelay)"
+              "WebSocket error \(error.localizedDescription). Trying again in up to \(options.reconnectDelay)s"
             )
           await connectionManager.handleError(error, from: conn)
         }
