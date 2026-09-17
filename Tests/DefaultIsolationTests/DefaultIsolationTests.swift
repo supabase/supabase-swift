@@ -16,10 +16,20 @@ import Testing
 /// constructed. The SDK modules themselves stay nonisolated.
 @Suite
 struct DefaultIsolationTests {
+  /// `AuthLocalStorage` refines `Sendable`, so its conformance cannot be main-actor isolated. A
+  /// consumer under default isolation opts the type out with `nonisolated`, as an app would. An
+  /// explicit storage also keeps this target building on Linux, which has no default storage.
+  nonisolated struct NoopAuthStorage: AuthLocalStorage {
+    func store(key: String, value: Data) throws {}
+    func retrieve(key: String) throws -> Data? { nil }
+    func remove(key: String) throws {}
+  }
+
   final class Model {
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
-      supabaseKey: "anon-key"
+      supabaseKey: "anon-key",
+      options: SupabaseClientOptions(auth: .init(storage: NoopAuthStorage()))
     )
     var rows: [String] = []
 

@@ -68,7 +68,11 @@ struct SupabaseClientStorageKeyTests {
     @Test
     func constructingAClientWithoutAHostTraps() async {
       await #expect(processExitsWith: .failure) {
-        _ = SupabaseClient(supabaseURL: URL(string: "project-ref")!, supabaseKey: "anon-key")
+        _ = SupabaseClient(
+          supabaseURL: URL(string: "project-ref")!,
+          supabaseKey: "anon-key",
+          options: SupabaseClientOptions(auth: .init(storage: AuthLocalStorageMock()))
+        )
       }
     }
   #endif
