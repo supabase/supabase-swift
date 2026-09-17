@@ -91,7 +91,7 @@ public struct StorageClientConfiguration: Sendable {
 /// let storage = client.storage
 ///
 /// // Upload a file
-/// try await storage.from("avatars").upload("user123.png", data: imageData)
+/// try await storage.from("avatars").upload(path: "user123.png", data: imageData)
 ///
 /// // List all buckets
 /// let buckets = try await storage.listBuckets()

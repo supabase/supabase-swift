@@ -93,7 +93,7 @@ struct SortByTests {
   @Test
   func initWithSortOrder() {
     let sortBy = SortBy(column: "name", order: .ascending)
-    #expect(sortBy.order == "asc")
+    #expect(sortBy.order == .ascending)
   }
 }
 

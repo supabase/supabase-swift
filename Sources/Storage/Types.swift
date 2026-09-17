@@ -80,8 +80,8 @@ public struct SortBy: Encodable, Sendable {
   /// The name of the column to sort by, e.g. `"name"` or `"created_at"`.
   public var column: String?
 
-  /// The raw sort direction string (`"asc"` or `"desc"`).
-  public var order: String?
+  /// The sort direction.
+  public var order: SortOrder?
 
   /// Creates a ``SortBy`` value.
   ///
@@ -90,7 +90,7 @@ public struct SortBy: Encodable, Sendable {
   ///   - order: The sort direction. Use ``SortOrder/ascending`` or ``SortOrder/descending``.
   public init(column: String? = nil, order: SortOrder? = nil) {
     self.column = column
-    self.order = order?.rawValue
+    self.order = order
   }
 }
 
@@ -102,7 +102,7 @@ public struct SortBy: Encodable, Sendable {
 ///   contentType: "image/png",
 ///   shouldUpsert: true
 /// )
-/// try await storage.from("avatars").upload("user123.png", data: imageData, options: options)
+/// try await storage.from("avatars").upload(path: "user123.png", data: imageData, options: options)
 /// ```
 ///
 /// ## Topics
@@ -270,7 +270,7 @@ public enum SignedURLResult: Sendable {
 
 /// A signed upload URL created by ``StorageFileApi/createSignedUploadURL(path:options:)``.
 ///
-/// Pass ``token`` to ``StorageFileApi/uploadToSignedURL(_:token:data:options:)`` to perform the
+/// Pass ``token`` to ``StorageFileApi/uploadToSignedURL(path:token:data:options:)`` to perform the
 /// authenticated upload.
 ///
 /// ## Topics

@@ -950,7 +950,7 @@ extension StorageMockerTests {
 
       let response = try await storage.from("bucket")
         .update(
-          "file.txt",
+          path: "file.txt",
           data: Data("hello world".utf8),
           options: FileOptions(
             metadata: [
@@ -986,7 +986,7 @@ extension StorageMockerTests {
 
       let response = try await storage.from("bucket")
         .upload(
-          "/folder//file.txt",
+          path: "/folder//file.txt",
           data: Data("hello world!".utf8),
           options: FileOptions(contentType: "text/plain")
         )
@@ -1042,7 +1042,7 @@ extension StorageMockerTests {
 
       let response = try await storage.from("bucket")
         .upload(
-          "file.txt",
+          path: "file.txt",
           fileURL: Bundle.module.url(forResource: "file", withExtension: "txt")!,
           options: FileOptions(contentType: "image/png")
         )
@@ -1102,7 +1102,7 @@ extension StorageMockerTests {
 
       let response = try await storage.from("bucket")
         .update(
-          "file.txt",
+          path: "file.txt",
           fileURL: Bundle.module.url(forResource: "file", withExtension: "txt")!,
           options: FileOptions(
             metadata: [
@@ -1576,7 +1576,7 @@ extension StorageMockerTests {
 
       let response = try await storage.from("bucket")
         .uploadToSignedURL(
-          "/folder//file.txt", token: "abc.def.ghi", data: Data("hello world".utf8))
+          path: "/folder//file.txt", token: "abc.def.ghi", data: Data("hello world".utf8))
 
       #expect(response.path == "folder/file.txt")
       #expect(response.fullPath == "bucket/folder/file.txt")
@@ -1626,7 +1626,7 @@ extension StorageMockerTests {
       .register()
 
       let response = try await storage.from("bucket")
-        .uploadToSignedURL("file.txt", token: "abc.def.ghi", data: Data("hello world".utf8))
+        .uploadToSignedURL(path: "file.txt", token: "abc.def.ghi", data: Data("hello world".utf8))
 
       #expect(response.path == "file.txt")
       #expect(response.fullPath == "bucket/file.txt")
@@ -1639,7 +1639,7 @@ extension StorageMockerTests {
 
       _ = try await storage.from("bucket")
         .uploadToSignedURL(
-          "cat.png",
+          path: "cat.png",
           token: "abc.def.ghi",
           data: Data("not-really-a-png".utf8)
         )
@@ -1659,7 +1659,7 @@ extension StorageMockerTests {
 
       _ = try await storage.from("bucket")
         .uploadToSignedURL(
-          "cat.jpg",
+          path: "cat.jpg",
           token: "abc.def.ghi",
           fileURL: Bundle.module.url(forResource: "sadcat", withExtension: "jpg")!
         )
@@ -1719,7 +1719,7 @@ extension StorageMockerTests {
 
       let response = try await storage.from("bucket")
         .uploadToSignedURL(
-          "file.txt",
+          path: "file.txt",
           token: "abc.def.ghi",
           fileURL: Bundle.module.url(forResource: "file", withExtension: "txt")!,
           options: FileOptions(

@@ -157,7 +157,7 @@ struct SupabaseStorageTests {
 
       try await sut.from(bucketId)
         .upload(
-          "file1.txt",
+          path: "file1.txt",
           data: "test data".data(using: .utf8)!,
           options: FileOptions(
             cacheControl: "14400",
@@ -202,7 +202,7 @@ struct SupabaseStorageTests {
 
       try await sut.from(bucketId)
         .upload(
-          "sadcat.jpg",
+          path: "sadcat.jpg",
           fileURL: uploadFileURL("sadcat.jpg"),
           options: FileOptions(
             metadata: ["key": "value"]

@@ -2793,3 +2793,44 @@ spelling out one of them would be less consistent, not more.
 
 This is a compile error where you read the property. If you encode a `User` to your own storage
 under a hand-written coder, check that it still expects `aud`.
+
+## `SortBy.order` is now `SortOrder`, not `String`
+
+`SortBy.order` stored the raw `"asc"`/`"desc"` string even though the initializer already took a
+type-safe `SortOrder`, throwing that type safety away one property read later.
+
+```swift
+// Before
+var sortBy = SortBy(column: "name", order: .ascending)
+let raw: String? = sortBy.order   // "asc"
+
+// After
+var sortBy = SortBy(column: "name", order: .ascending)
+let order: SortOrder? = sortBy.order   // .ascending
+```
+
+Reading or declaring `.order` as a `String` is a compile error. Assigning or comparing it against
+the raw string literals (`sortBy.order = "asc"`, `sortBy.order == "asc"`) keeps compiling unchanged
+— `SortOrder` is `ExpressibleByStringLiteral` — but now produces a `SortOrder`, not a `String`, so
+comparing against any value other than `"asc"`/`"desc"` no longer type-checks. The wire format is
+unchanged either way: `SortOrder` still encodes to `"asc"`/`"desc"`.
+
+## Storage's `upload`/`update`/`uploadToSignedURL` label their file path
+
+Every other `StorageFileApi` method that takes a file path labels it `path:` — `download(path:)`,
+`info(path:)`, `exists(path:)`, `createSignedURL(path:...)`. `upload`, `update`, and
+`uploadToSignedURL` were the exception, taking it positionally.
+
+```swift
+// Before
+try await storage.from("avatars").upload("user123.png", data: imageData)
+try await storage.from("avatars").update("user123.png", data: imageData)
+try await storage.from("avatars").uploadToSignedURL("user123.png", token: token, data: imageData)
+
+// After
+try await storage.from("avatars").upload(path: "user123.png", data: imageData)
+try await storage.from("avatars").update(path: "user123.png", data: imageData)
+try await storage.from("avatars").uploadToSignedURL(path: "user123.png", token: token, data: imageData)
+```
+
+This is a compile error. All six overloads move together (`data:` and `fileURL:` variants of each).

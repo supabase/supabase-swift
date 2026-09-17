@@ -172,7 +172,7 @@ struct ProfileView: View {
     try await supabase.storage
       .from("avatars")
       .upload(
-        filePath,
+        path: filePath,
         data: data,
         options: FileOptions(contentType: "image/jpeg", shouldUpsert: true)
       )
