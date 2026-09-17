@@ -5,7 +5,7 @@
 //  Created by Guilherme Souza on 16/09/26.
 //
 
-public import Foundation
+package import Foundation
 
 /// Polls `condition` until it returns `true` or `timeout` elapses.
 ///
@@ -15,7 +15,7 @@ public import Foundation
 /// a background task flip a `LockIsolated` flag/counter instead, and await
 /// this helper to observe it.
 @discardableResult
-public func waitUntil(
+package func waitUntil(
   timeout: TimeInterval = 10.0,
   pollInterval: UInt64 = 10_000_000,
   condition: @escaping @Sendable () -> Bool
