@@ -50,12 +50,19 @@ public struct StorageError: SupabaseError {
     public var statusCode: String?
     /// A short identifier such as `"not_found"` or `"Duplicate"`, when Storage sends one.
     public var error: String?
+    /// A machine-readable code such as `"NoSuchKey"` or `"AccessDenied"`, when Storage sends one.
+    ///
+    /// See [Storage error codes](https://supabase.com/docs/guides/storage/debugging/error-codes).
+    public var code: String?
     /// The human-readable message.
     public var message: String
 
-    public init(statusCode: String? = nil, error: String? = nil, message: String) {
+    public init(
+      statusCode: String? = nil, error: String? = nil, code: String? = nil, message: String
+    ) {
       self.statusCode = statusCode
       self.error = error
+      self.code = code
       self.message = message
     }
   }

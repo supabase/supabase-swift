@@ -1665,6 +1665,13 @@ features:
   storage.analytics.register_table: not_implemented
   storage.analytics.table_exists: not_implemented
   storage.analytics.update_namespace_properties: not_implemented
+
+  # ── Storage — Errors ───────────────────────────────────────────────────────
+
+  storage.errors.error_codes:
+    status: implemented
+    symbols:
+      - StorageError.ServerError.code
+
   # Newly synced from the canonical spec; no local group yet, place manually.
   storage.configuration.auto_retry: not_implemented
-  storage.errors.error_codes: not_implemented

@@ -902,6 +902,47 @@ extension StorageMockerTests {
     }
 
     @Test
+    func nonSuccessStatusCodeExposesTheServerErrorCode() async throws {
+      let storage = makeSUT()
+
+      Mock(
+        url: url.appendingPathComponent("object/bucket/missing.txt"),
+        statusCode: 400,
+        data: [
+          .get: Data(
+            """
+            {
+              "statusCode":"404",
+              "error":"not_found",
+              "message":"Object not found",
+              "code":"NoSuchKey"
+            }
+            """.utf8
+          )
+        ]
+      )
+      .snapshotRequest {
+        #"""
+        curl \
+        	--header "X-Client-Info: storage-swift/0.0.0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	"http://localhost:54321/storage/v1/object/bucket/missing.txt"
+        """#
+      }
+      .register()
+
+      do {
+        _ = try await storage.from("bucket").download(path: "missing.txt")
+        Issue.record()
+      } catch let error as StorageError {
+        #expect(error.kind == .server)
+        #expect(error.serverError?.code == "NoSuchKey")
+        #expect(error.serverError?.error == "not_found")
+        #expect(error.response?.statusCode == 400)
+      }
+    }
+
+    @Test
     func updateFromData() async throws {
       let storage = makeSUT()
 
