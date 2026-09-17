@@ -68,7 +68,7 @@ enum FileUpload {
 /// let fileApi = storage.from("avatars")
 ///
 /// // Upload a PNG
-/// try await fileApi.upload("user123.png", data: imageData)
+/// try await fileApi.upload(path: "user123.png", data: imageData)
 ///
 /// // Generate a signed URL valid for 60 seconds
 /// let url = try await fileApi.createSignedURL(path: "user123.png", expiresIn: 60)
@@ -78,16 +78,16 @@ enum FileUpload {
 ///
 /// ### Uploading files
 ///
-/// - ``upload(_:data:options:)``
-/// - ``upload(_:fileURL:options:)``
-/// - ``update(_:data:options:)``
-/// - ``update(_:fileURL:options:)``
+/// - ``upload(path:data:options:)``
+/// - ``upload(path:fileURL:options:)``
+/// - ``update(path:data:options:)``
+/// - ``update(path:fileURL:options:)``
 ///
 /// ### Uploading via signed URLs
 ///
 /// - ``createSignedUploadURL(path:options:)``
-/// - ``uploadToSignedURL(_:token:data:options:)``
-/// - ``uploadToSignedURL(_:token:fileURL:options:)``
+/// - ``uploadToSignedURL(path:token:data:options:)``
+/// - ``uploadToSignedURL(path:token:fileURL:options:)``
 ///
 /// ### Downloading files
 ///
@@ -220,7 +220,7 @@ public struct StorageFileApi: Sendable {
   /// Uploads a file to an existing bucket.
   ///
   /// ```swift
-  /// let response = try await storage.from("avatars").upload("user123.png", data: imageData)
+  /// let response = try await storage.from("avatars").upload(path: "user123.png", data: imageData)
   /// print(response.fullPath) // "avatars/user123.png"
   /// ```
   ///
@@ -233,7 +233,7 @@ public struct StorageFileApi: Sendable {
   /// - Throws: ``StorageError`` if the upload fails or the caller is not authorized.
   @discardableResult
   public func upload(
-    _ path: String,
+    path: String,
     data: Data,
     options: FileOptions = FileOptions()
   ) async throws -> FileUploadResponse {
@@ -260,7 +260,7 @@ public struct StorageFileApi: Sendable {
   /// - Throws: ``StorageError`` if the upload fails or the caller is not authorized.
   @discardableResult
   public func upload(
-    _ path: String,
+    path: String,
     fileURL: URL,
     options: FileOptions = FileOptions()
   ) async throws -> FileUploadResponse {
@@ -274,7 +274,7 @@ public struct StorageFileApi: Sendable {
 
   /// Replaces an existing file at the specified path with new data.
   ///
-  /// Unlike ``upload(_:data:options:)`` with `shouldUpsert: true`, this method always targets an
+  /// Unlike ``upload(path:data:options:)`` with `shouldUpsert: true`, this method always targets an
   /// existing object and will throw if the path does not exist.
   ///
   /// - Parameters:
@@ -286,7 +286,7 @@ public struct StorageFileApi: Sendable {
   /// - Throws: ``StorageError`` if the path does not exist or the caller is not authorized.
   @discardableResult
   public func update(
-    _ path: String,
+    path: String,
     data: Data,
     options: FileOptions = FileOptions()
   ) async throws -> FileUploadResponse {
@@ -312,7 +312,7 @@ public struct StorageFileApi: Sendable {
   /// - Throws: ``StorageError`` if the path does not exist or the caller is not authorized.
   @discardableResult
   public func update(
-    _ path: String,
+    path: String,
     fileURL: URL,
     options: FileOptions = FileOptions()
   ) async throws -> FileUploadResponse {
@@ -886,13 +886,13 @@ public struct StorageFileApi: Sendable {
   /// Creates a signed upload URL that allows uploading a file without further authentication.
   ///
   /// Signed upload URLs are valid for 2 hours. Pass the returned ``SignedUploadURL/token`` to
-  /// ``uploadToSignedURL(_:token:data:options:)`` (or the file-URL variant) to perform the upload.
+  /// ``uploadToSignedURL(path:token:data:options:)`` (or the file-URL variant) to perform the upload.
   ///
   /// ```swift
   /// let signedUpload = try await storage.from("avatars").createSignedUploadURL(path: "user123.png")
   /// // Share signedUpload.token with the uploader
   /// try await storage.from("avatars").uploadToSignedURL(
-  ///   "user123.png",
+  ///   path: "user123.png",
   ///   token: signedUpload.token,
   ///   data: imageData
   /// )
@@ -965,7 +965,7 @@ public struct StorageFileApi: Sendable {
   /// - Throws: ``StorageError`` if the token is invalid, expired, or the upload fails.
   @discardableResult
   public func uploadToSignedURL(
-    _ path: String,
+    path: String,
     token: String,
     data: Data,
     options: FileOptions? = nil
@@ -994,7 +994,7 @@ public struct StorageFileApi: Sendable {
   /// - Throws: ``StorageError`` if the token is invalid, expired, or the upload fails.
   @discardableResult
   public func uploadToSignedURL(
-    _ path: String,
+    path: String,
     token: String,
     fileURL: URL,
     options: FileOptions? = nil

@@ -196,12 +196,12 @@
         // The caller already holds `data`; the delta is what the SDK adds on top of it.
         let data = try Data(contentsOf: fileURL)
         try await measure("storage.upload(data:) multipart") {
-          try await storage.from(bucket).upload("o.bin", data: data)
+          try await storage.from(bucket).upload(path: "o.bin", data: data)
         }
       case "upload-api-file":
         // Storage public API, file URL → multipart → `formData.encode()` reads the file into Data.
         try await measure("storage.upload(fileURL:) multipart") {
-          try await storage.from(bucket).upload("o.bin", fileURL: fileURL)
+          try await storage.from(bucket).upload(path: "o.bin", fileURL: fileURL)
         }
       case "upload-transport-file":
         // HTTPBody(fileURL:) → URLSession.upload(for:fromFile:).

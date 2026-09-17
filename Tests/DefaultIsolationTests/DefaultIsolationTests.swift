@@ -39,7 +39,7 @@ struct DefaultIsolationTests {
       rows = try await client.from("table").select().execute().value
       let channel = client.channel("room")
       for await status in channel.statusChange { _ = status }
-      try await client.storage.from("bucket").upload("key", data: Data())
+      try await client.storage.from("bucket").upload(path: "key", data: Data())
       _ = try await client.functions.invoke("function")
       for await (event, session) in client.auth.authStateChanges { _ = (event, session) }
     }
