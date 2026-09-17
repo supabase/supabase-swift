@@ -1,3 +1,4 @@
+import Clocks
 import ConcurrencyExtras
 import CustomDump
 import Foundation
@@ -65,6 +66,24 @@ final class AuthLocalStorageMock: AuthLocalStorage {
 
 @Suite
 struct SupabaseClientTests {
+  @Test
+  func globalClockReachesAuthAndRealtime() {
+    let clock = TestClock()
+    let client = SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      options: SupabaseClientOptions(
+        auth: SupabaseClientOptions.AuthOptions(storage: AuthLocalStorageMock()),
+        global: SupabaseClientOptions.GlobalOptions(clock: clock)
+      )
+    )
+
+    // Identity, not equality: `any Clock<Duration>` is not `Equatable`, and what matters is that
+    // the very instance the caller passed is the one the sub-clients sleep on.
+    #expect(client.auth.configuration.clock as AnyObject === clock)
+    #expect(client.realtimeV2.options.clock as AnyObject === clock)
+  }
+
   @Test
   func clientInitialization() async {
     let logger = Logging.Logger(label: "test") { _ in SwiftLogNoOpLogHandler() }

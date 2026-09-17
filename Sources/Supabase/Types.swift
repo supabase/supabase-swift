@@ -1,3 +1,4 @@
+public import Clocks
 public import Foundation
 public import Helpers
 public import Logging
@@ -114,6 +115,13 @@ public struct SupabaseClientOptions: Sendable {
     /// for the defaults (60 seconds; 150 for Edge Functions).
     public let http: HTTPClientConfiguration
 
+    /// The clock the time-based sub-client behaviors sleep on: Auth's token auto-refresh and
+    /// request-retry backoff, and Realtime's heartbeat timer and reconnect backoff.
+    ///
+    /// Defaults to `ContinuousClock()`. Pass a `TestClock` (swift-clocks) to drive those
+    /// behaviors deterministically in tests instead of waiting out real seconds.
+    public let clock: any Clock<Duration>
+
     /// Creates the shared options.
     /// - Parameters:
     ///   - headers: Extra headers sent on every request made by every sub-client.
@@ -121,14 +129,18 @@ public struct SupabaseClientOptions: Sendable {
     ///     through. A `nil` transport (the default) uses ``URLSessionTransport`` over
     ///     `URLSession.shared`.
     ///   - logger: The logger used across all Supabase sub-packages.
+    ///   - clock: The clock every time-based sub-client behavior sleeps on. Defaults to
+    ///     `ContinuousClock()`.
     public init(
       headers: [String: String] = [:],
       http: HTTPClientConfiguration = .init(),
-      logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase")
+      logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase"),
+      clock: any Clock<Duration> = ContinuousClock()
     ) {
       self.headers = headers
       self.http = http
       self.logger = logger
+      self.clock = clock
     }
   }
 

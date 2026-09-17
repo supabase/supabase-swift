@@ -19,7 +19,11 @@ extension RealtimeChannelV2 {
   /// subsequent change. Use ``onStatusChange(_:)`` for a closure-based alternative.
   public var statusChange: AsyncStream<RealtimeChannelStatus> {
     let id = UUID()
-    let (stream, continuation) = AsyncStream<RealtimeChannelStatus>.makeStream()
+    // Unbounded, for the same reason as `RealtimeClientV2.statusChange`: consumers wait for a
+    // specific status, and `.subscribing` → `.subscribed` arrive back to back.
+    let (stream, continuation) = AsyncStream<RealtimeChannelStatus>.makeStream(
+      bufferingPolicy: .unbounded
+    )
     let lastStatus = statusStorage.withValue {
       $0.continuations.append((id, continuation))
       return $0.status

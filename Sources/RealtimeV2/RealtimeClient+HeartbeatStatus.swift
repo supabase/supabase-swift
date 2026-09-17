@@ -15,7 +15,11 @@ extension RealtimeClientV2 {
   /// ```
   public var heartbeat: AsyncStream<HeartbeatStatus> {
     let id = UUID()
-    let (stream, continuation) = AsyncStream<HeartbeatStatus>.makeStream()
+    // Unbounded: a cycle yields `.sent` then `.ok` within one ack, and consumers observe the
+    // pair rather than only the latest, so `.bufferingNewest(1)` would hide every `.sent`.
+    let (stream, continuation) = AsyncStream<HeartbeatStatus>.makeStream(
+      bufferingPolicy: .unbounded
+    )
     let lastHeartbeatStatus = mutableState.withValue {
       $0.heartbeatStatusContinuations.append((id, continuation))
       return $0.lastHeartbeatStatus

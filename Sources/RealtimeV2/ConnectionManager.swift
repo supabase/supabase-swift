@@ -10,7 +10,12 @@ actor ConnectionManager {
     case reconnecting(Task<Void, any Error>, reason: String)
   }
 
-  private let (stateStream, stateContinuation) = AsyncStream<State>.makeStream()
+  // Unbounded, and load-bearing: the observer in `RealtimeClientV2.init` latches on seeing
+  // `.reconnecting` to tell an automatic reconnect apart from a fresh `connect()`. Drop that
+  // transition and a reconnect is misclassified, resetting channels mid-join.
+  private let (stateStream, stateContinuation) = AsyncStream<State>.makeStream(
+    bufferingPolicy: .unbounded
+  )
   private(set) var state: State = .disconnected
 
   private let transport: WebSocketTransport

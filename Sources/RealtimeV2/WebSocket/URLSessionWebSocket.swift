@@ -38,7 +38,9 @@ final class URLSessionWebSocket: WebSocket {
     self._protocol = _protocol
     self.session = session
 
-    (events, eventsContinuation) = AsyncStream.makeStream()
+    // Unbounded, and load-bearing: this stream carries protocol frames. Dropping a `phx_reply`
+    // leaves the push that is waiting on it hanging until it times out.
+    (events, eventsContinuation) = AsyncStream.makeStream(bufferingPolicy: .unbounded)
 
     _scheduleReceive()
   }

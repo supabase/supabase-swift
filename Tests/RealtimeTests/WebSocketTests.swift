@@ -7,6 +7,7 @@
 
 import ConcurrencyExtras
 import Foundation
+import TestHelpers
 import Testing
 
 @testable import Realtime

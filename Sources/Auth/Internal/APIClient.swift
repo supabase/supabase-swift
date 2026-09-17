@@ -12,7 +12,7 @@ extension HTTPClient {
 
     self.init(
       configuration: configuration.http,
-      retrying: RetryRequestInterceptor(policy: policy),
+      retrying: RetryRequestInterceptor(policy: policy, clock: configuration.clock),
       appending: [LoggerInterceptor(logger: configuration.logger)])
   }
 }
