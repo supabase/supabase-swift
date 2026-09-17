@@ -115,16 +115,24 @@ struct URLSessionWebSocketCloseValidationTests {
   /// peer never sent.
   @Test
   func reportsNoCloseFrameForASocketThatIsAlreadyDisconnected() {
-    let error = NSError(domain: NSPOSIXErrorDomain, code: 57, userInfo: nil)
+    let error = NSError(
+      domain: NSPOSIXErrorDomain,
+      code: Int(POSIXErrorCode.ENOTCONN.rawValue),
+      userInfo: nil
+    )
 
     #expect(URLSessionWebSocket.closeFrame(for: error) == nil)
   }
 
-  /// Only `ENOTCONN` is special, and only in its own domain — 57 elsewhere is an unrelated
-  /// error and still has to close the connection.
+  /// Only `ENOTCONN` is special, and only in its own domain — the same number elsewhere is an
+  /// unrelated error and still has to close the connection.
   @Test
-  func treatsCode57InAnotherDomainAsAnOrdinaryError() throws {
-    let error = NSError(domain: NSURLErrorDomain, code: 57, userInfo: nil)
+  func treatsTheENOTCONNCodeInAnotherDomainAsAnOrdinaryError() throws {
+    let error = NSError(
+      domain: NSURLErrorDomain,
+      code: Int(POSIXErrorCode.ENOTCONN.rawValue),
+      userInfo: nil
+    )
     let frame = try #require(URLSessionWebSocket.closeFrame(for: error))
 
     #expect(frame.code == 1006)
@@ -134,7 +142,11 @@ struct URLSessionWebSocketCloseValidationTests {
   /// A POSIX protocol error is the only case that reports a code other than 1006.
   @Test
   func mapsAProtocolErrorToProtocolError() throws {
-    let error = NSError(domain: NSPOSIXErrorDomain, code: 100, userInfo: nil)
+    let error = NSError(
+      domain: NSPOSIXErrorDomain,
+      code: Int(POSIXErrorCode.EPROTO.rawValue),
+      userInfo: nil
+    )
     let frame = try #require(URLSessionWebSocket.closeFrame(for: error))
 
     #expect(frame.code == 1002)

@@ -49,6 +49,8 @@ halfvec
 emaillink
 enotconn
 entrancy
+eproto
+errno
 etag
 ethereum
 Ethereum

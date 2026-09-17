@@ -295,10 +295,14 @@ final class URLSessionWebSocket: WebSocket {
     let nsError = error as NSError
 
     switch (nsError.domain, nsError.code) {
-    case (NSPOSIXErrorDomain, 57):
+    // Matched through `POSIXErrorCode` rather than the raw numbers: errno values are
+    // platform-specific, and Darwin's differ from Linux's (ENOTCONN 57 vs 107, EPROTO 100
+    // vs 71). Hard-coding Darwin's meant a disconnected socket on Linux fell through to
+    // `default` and reported a close the peer never sent.
+    case (NSPOSIXErrorDomain, Int(POSIXErrorCode.ENOTCONN.rawValue)):
       // Socket is not connected — the delegate callbacks report the close code.
       return nil
-    case (NSPOSIXErrorDomain, 100):
+    case (NSPOSIXErrorDomain, Int(POSIXErrorCode.EPROTO.rawValue)):
       // Network protocol error.
       return (1002, nsError.localizedDescription)
     case (NSURLErrorDomain, NSURLErrorTimedOut):
