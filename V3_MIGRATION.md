@@ -2372,7 +2372,7 @@ This is a compile error: `statusCode` and `error` no longer exist on `StorageErr
 
 Kinds: `.server` (recognized body, `serverError` set), `.unexpectedResponse` (non-2xx with an
 unrecognized body, raw bytes in `response?.body`), `.transport`, `.decoding`, and `.invalidURL`
-for the URL-building helpers such as `getPublicURL`, which threw `URLError(.badURL)` before.
+for the URL-building helpers such as `publicURL`, which threw `URLError(.badURL)` before.
 
 ## `PostgrestError` gains `kind` and `response`; server fields move to `serverError`
 
@@ -2635,3 +2635,161 @@ conformances — they now run once per attempt — and, in Auth or PostgREST err
 code that expected a cancelled request to surface as `AuthError` or `PostgrestError`; it now
 throws `CancellationError`. If you relied on PostgREST retrying a custom transport error, handle
 the retry in your transport.
+
+## `get`-prefixed accessors drop the prefix
+
+Twelve public methods that only fetch a value lost their `get` prefix, per the Swift API Design
+Guidelines rule that a method without side effects reads as a noun phrase.
+
+| Before | After |
+| --- | --- |
+| `AuthAdmin.getUserById(_:)` | `AuthAdmin.user(id:)` |
+| `AuthAdminOAuth.getClient(clientId:)` | `AuthAdminOAuth.client(id:)` |
+| `AuthMFA.getAuthenticatorAssuranceLevel()` | `AuthMFA.authenticatorAssuranceLevel()` |
+| `AuthClient.getOAuthSignInURL(...)` | `AuthClient.oauthSignInURL(...)` |
+| `AuthClient.getLinkIdentityURL(...)` | `AuthClient.linkIdentityURL(...)` |
+| `AuthClient.getClaims(...)` | `AuthClient.claims(...)` |
+| `AuthOAuthServer.getAuthorizationDetails(...)` | `AuthOAuthServer.authorizationDetails(id:)` |
+| `AuthClient.getPasskeyRegistrationOptions()` | `AuthClient.passkeyRegistrationOptions()` |
+| `AuthClient.getPasskeyAuthenticationOptions()` | `AuthClient.passkeyAuthenticationOptions()` |
+| `SupabaseStorageClient.getBucket(_:)` | `SupabaseStorageClient.bucket(_:)` |
+| `StorageVectorsClient.getBucket(_:)` | `StorageVectorsClient.bucket(_:)` |
+| `VectorBucketClient.getIndex(_:)` | `VectorBucketClient.indexDetails(_:)` |
+| `VectorIndexClient.getVectors(keys:returnMetadata:)` | `VectorIndexClient.vectors(keys:returnMetadata:)` |
+| `StorageFileApi.getPublicURL(...)` | `StorageFileApi.publicURL(...)` |
+
+```swift
+// Before
+let user = try await supabase.auth.admin.getUserById(id)
+let url = try supabase.storage.from("avatars").getPublicURL(path: "me.png")
+
+// After
+let user = try await supabase.auth.admin.user(id: id)
+let url = try supabase.storage.from("avatars").publicURL(path: "me.png")
+```
+
+`getIndex(_:)` is the one that did not simply lose its prefix: `VectorBucketClient` already has an
+`index(_:)` returning a `VectorIndexClient` handle, so a second `index(_:)` returning a
+`VectorIndex` would have made `try await bucket.index("embeddings")` ambiguous. It is
+`indexDetails(_:)` instead, which also reads closer to what it returns.
+
+These are all compile errors. Search for `get` immediately followed by a capital letter at
+Supabase call sites.
+
+## Identifier argument labels are `id:`
+
+Methods that took a label repeating the noun already in the method name now take `id:`.
+
+| Before | After |
+| --- | --- |
+| `AuthAdminOAuth.updateClient(clientId:params:)` | `AuthAdminOAuth.updateClient(id:params:)` |
+| `AuthAdminOAuth.deleteClient(clientId:)` | `AuthAdminOAuth.deleteClient(id:)` |
+| `AuthAdminOAuth.regenerateClientSecret(clientId:)` | `AuthAdminOAuth.regenerateClientSecret(id:)` |
+| `AuthOAuthServer.approveAuthorization(authorizationId:)` | `AuthOAuthServer.approveAuthorization(id:)` |
+| `AuthOAuthServer.denyAuthorization(authorizationId:)` | `AuthOAuthServer.denyAuthorization(id:)` |
+| `AuthOAuthServer.revokeGrant(clientId:)` | `AuthOAuthServer.revokeGrant(id:)` |
+| `AuthAdmin.listPasskeys(userId:)` | `AuthAdmin.listPasskeys(forUser:)` |
+| `AuthAdmin.deletePasskey(userId:passkeyId:)` | `AuthAdmin.deletePasskey(id:forUser:)` |
+
+```swift
+// Before
+try await supabase.auth.admin.oauth.deleteClient(clientId: client.clientId)
+try await supabase.auth.admin.deletePasskey(userId: user.id, passkeyId: passkey.id)
+
+// After
+try await supabase.auth.admin.oauth.deleteClient(id: client.clientId)
+try await supabase.auth.admin.deletePasskey(id: passkey.id, forUser: user.id)
+```
+
+`deletePasskey` also swapped its parameter order, so the passkey comes first — the thing being
+deleted, with the user as context. The `OAuthClient.clientId` *property* is unchanged; only the
+argument labels moved.
+
+These are all compile errors.
+
+## Boolean properties read as assertions
+
+| Before | After |
+| --- | --- |
+| `FileOptions.upsert` | `FileOptions.shouldUpsert` |
+| `CreateSignedUploadURLOptions.upsert` | `CreateSignedUploadURLOptions.shouldUpsert` |
+| `SupabaseClientOptions.StorageOptions.useNewHostname` | `usesNewHostname` |
+| `AuthClient.Configuration.autoRefreshToken` | `automaticallyRefreshesToken` |
+| `AuthClient.Configuration.defaultAutoRefreshToken` | `defaultAutomaticallyRefreshesToken` |
+| `SupabaseClientOptions.AuthOptions.autoRefreshToken` | `automaticallyRefreshesToken` |
+| `GetClaimsOptions.allowExpired` | `allowsExpired` |
+| `AdminUserAttributes.emailConfirm` | `AdminUserAttributes.confirmsEmail` |
+| `AdminUserAttributes.phoneConfirm` | `AdminUserAttributes.confirmsPhone` |
+
+```swift
+// Before
+try await supabase.storage.from("avatars").upload(
+  "me.png", data: data, options: FileOptions(upsert: true)
+)
+let client = SupabaseClient(
+  supabaseURL: url,
+  supabaseKey: key,
+  options: .init(auth: .init(autoRefreshToken: false))
+)
+
+// After
+try await supabase.storage.from("avatars").upload(
+  "me.png", data: data, options: FileOptions(shouldUpsert: true)
+)
+let client = SupabaseClient(
+  supabaseURL: url,
+  supabaseKey: key,
+  options: .init(auth: .init(automaticallyRefreshesToken: false))
+)
+```
+
+These are all compile errors. The wire formats are untouched: `FileOptions.shouldUpsert` still
+sends the `x-upsert` header, and `AdminUserAttributes.confirmsEmail` still encodes to
+`email_confirm`.
+
+`head:` on `select` and `rpc` deliberately keeps its name — it names the HTTP method the request
+switches to, rather than asserting a state.
+
+## `RealtimeClientOptions.vsn` is now `protocolVersion`
+
+`vsn` is the query parameter Realtime's server reads; it was never a good name for the Swift
+property.
+
+```swift
+// Before
+let client = SupabaseClient(
+  supabaseURL: url, supabaseKey: key,
+  options: .init(realtime: RealtimeClientOptions(vsn: .v2))
+)
+
+// After
+let client = SupabaseClient(
+  supabaseURL: url, supabaseKey: key,
+  options: .init(realtime: RealtimeClientOptions(protocolVersion: .v2))
+)
+```
+
+This is a compile error. The socket URL still carries `vsn=2.0.0` — only the Swift spelling moved.
+
+## `User.aud` is now `User.audience`
+
+`User.aud` is `User.audience`, and the `aud` field on `ListUsersPaginatedResponse` and
+`ListOAuthClientsPaginatedResponse` is `audience` on both.
+
+```swift
+// Before
+if user.aud == "authenticated" { ... }
+
+// After
+if user.audience == "authenticated" { ... }
+```
+
+`User` gained an explicit `CodingKeys` (mapping `audience` back to `"aud"`) so the wire format is
+unchanged — a `User` encoded by v2 still decodes in v3, and vice versa.
+
+`JWTClaims.aud` deliberately keeps its name. That type is a direct RFC 7519 claims bag whose
+fields are all the registered abbreviations — `iss`, `sub`, `exp`, `iat`, `nbf`, `jti` — and
+spelling out one of them would be less consistent, not more.
+
+This is a compile error where you read the property. If you encode a `User` to your own storage
+under a hand-written coder, check that it still expects `aud`.

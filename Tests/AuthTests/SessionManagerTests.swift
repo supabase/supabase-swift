@@ -42,7 +42,7 @@ struct SessionManagerTests {
       configuration: .init(
         url: clientURL,
         localStorage: InMemoryLocalStorage(),
-        autoRefreshToken: false
+        automaticallyRefreshesToken: false
       ),
       http: HTTPClient(transport: http),
       api: APIClient(clientID: clientID),
@@ -150,7 +150,7 @@ struct SessionManagerTests {
       configuration: .init(
         url: clientURL,
         localStorage: InMemoryLocalStorage(),
-        autoRefreshToken: false,
+        automaticallyRefreshesToken: false,
         clock: clock
       ),
       http: HTTPClient(transport: http),

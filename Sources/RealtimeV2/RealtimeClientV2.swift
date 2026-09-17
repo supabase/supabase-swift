@@ -197,7 +197,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       url: Self.realtimeWebSocketURL(
         baseURL: Self.realtimeBaseURL(url: url),
         apikey: options.apikey,
-        vsn: options.vsn,
+        protocolVersion: options.protocolVersion,
         logLevel: options.logLevel
       ),
       headers: options.headers.dictionary,
@@ -499,10 +499,10 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
 
             switch event {
             case .binary(let data):
-              switch self.options.vsn {
+              switch self.options.protocolVersion {
               case .v1:
                 options.logger.warning(
-                  "Received binary frame but vsn is 1.0.0; binary frames are only supported in 2.0.0"
+                  "Received binary frame but protocolVersion is 1.0.0; binary frames are only supported in 2.0.0"
                 )
               case .v2:
                 do {
@@ -515,7 +515,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
 
             case .text(let text):
               let message: RealtimeMessageV2
-              switch self.options.vsn {
+              switch self.options.protocolVersion {
               case .v1:
                 message = try JSONDecoder().decode(RealtimeMessageV2.self, from: Data(text.utf8))
               case .v2:
@@ -769,7 +769,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     let callback = { @Sendable (_ client: RealtimeClientV2) in
       do {
         let text: String
-        switch client.options.vsn {
+        switch client.options.protocolVersion {
         case .v1:
           let data = try JSONEncoder().encode(message)
           guard let encoded = String(data: data, encoding: .utf8) else {
@@ -920,7 +920,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   }
 
   static func realtimeWebSocketURL(
-    baseURL: URL, apikey: String?, vsn: RealtimeProtocolVersion, logLevel: LogLevel?
+    baseURL: URL, apikey: String?, protocolVersion: RealtimeProtocolVersion, logLevel: LogLevel?
   ) -> URL {
     guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)
     else {
@@ -933,7 +933,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       queryItems.append(URLQueryItem(name: "apikey", value: apikey))
     }
 
-    queryItems.append(URLQueryItem(name: "vsn", value: vsn.rawValue))
+    queryItems.append(URLQueryItem(name: "vsn", value: protocolVersion.rawValue))
 
     if let logLevel {
       queryItems.append(URLQueryItem(name: "log_level", value: logLevel.rawValue))

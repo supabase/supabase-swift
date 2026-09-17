@@ -89,7 +89,7 @@ struct StoredSessionTests {
         userMetadata: [
           "referrer_id": nil
         ],
-        aud: "authenticated",
+        audience: "authenticated",
         confirmationSentAt: ISO8601DateFormatter().date(from: "2022-04-09T11:57:01Z")!,
         recoverySentAt: nil,
         emailChangeSentAt: nil,

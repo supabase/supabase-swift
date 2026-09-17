@@ -70,7 +70,7 @@ public struct SupabaseClientOptions: Sendable {
     public let flowType: AuthFlowType
 
     /// Set to `true` if you want to automatically refresh the token before expiring.
-    public let autoRefreshToken: Bool
+    public let automaticallyRefreshesToken: Bool
 
     /// Optional function for using a third-party authentication system with Supabase. The function should return an access token or ID token (JWT) by obtaining it from the third-party auth client library.
     /// Note that this function may be called concurrently and many times. Use memoization and locking techniques if this is not supported by the client libraries.
@@ -83,14 +83,15 @@ public struct SupabaseClientOptions: Sendable {
       redirectToURL: URL? = nil,
       storageKey: String? = nil,
       flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
-      autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken,
+      automaticallyRefreshesToken: Bool = AuthClient.Configuration
+        .defaultAutomaticallyRefreshesToken,
       accessToken: (@Sendable () async throws -> String?)? = nil
     ) {
       self.storage = storage
       self.redirectToURL = redirectToURL
       self.storageKey = storageKey
       self.flowType = flowType
-      self.autoRefreshToken = autoRefreshToken
+      self.automaticallyRefreshesToken = automaticallyRefreshesToken
       self.accessToken = accessToken
     }
   }
@@ -172,10 +173,10 @@ public struct SupabaseClientOptions: Sendable {
   /// Options for the Storage sub-client.
   public struct StorageOptions: Sendable {
     /// Whether storage client should be initialized with the new hostname format, i.e. `project-ref.storage.supabase.co`
-    public let useNewHostname: Bool
+    public let usesNewHostname: Bool
 
-    public init(useNewHostname: Bool = false) {
-      self.useNewHostname = useNewHostname
+    public init(usesNewHostname: Bool = false) {
+      self.usesNewHostname = usesNewHostname
     }
   }
 
@@ -229,7 +230,8 @@ extension SupabaseClientOptions.AuthOptions {
       redirectToURL: URL? = nil,
       storageKey: String? = nil,
       flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
-      autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken,
+      automaticallyRefreshesToken: Bool = AuthClient.Configuration
+        .defaultAutomaticallyRefreshesToken,
       accessToken: (@Sendable () async throws -> String?)? = nil
     ) {
       self.init(
@@ -237,7 +239,7 @@ extension SupabaseClientOptions.AuthOptions {
         redirectToURL: redirectToURL,
         storageKey: storageKey,
         flowType: flowType,
-        autoRefreshToken: autoRefreshToken,
+        automaticallyRefreshesToken: automaticallyRefreshesToken,
         accessToken: accessToken
       )
     }

@@ -379,7 +379,7 @@ features:
     status: implemented
     symbols:
       - AuthClient.signInWithOAuth
-      - AuthClient.getOAuthSignInURL
+      - AuthClient.oauthSignInURL
     supporting_symbols:
       - Provider
       - Provider.init
@@ -515,7 +515,7 @@ features:
   auth.session.get_claims:
     status: implemented
     symbols:
-      - AuthClient.getClaims
+      - AuthClient.claims
   auth.session.refresh_session:
     status: implemented
     symbols:
@@ -555,7 +555,7 @@ features:
     status: implemented
     symbols:
       - AuthClient.linkIdentity
-      - AuthClient.getLinkIdentityURL
+      - AuthClient.linkIdentityURL
       - AuthClient.linkIdentityWithIdToken
   auth.identities.unlink_identity:
     status: implemented
@@ -605,7 +605,7 @@ features:
   auth.mfa.get_authenticator_assurance_level:
     status: implemented
     symbols:
-      - AuthMFA.getAuthenticatorAssuranceLevel
+      - AuthMFA.authenticatorAssuranceLevel
 
   auth.admin.create_user:
     status: implemented
@@ -622,7 +622,7 @@ features:
   auth.admin.get_user:
     status: implemented
     symbols:
-      - AuthAdmin.getUserById
+      - AuthAdmin.user
   auth.admin.list_users:
     status: implemented
     symbols:
@@ -697,7 +697,7 @@ features:
     symbols:
       - AuthClient.oauthServer
       - AuthOAuthServer
-      - AuthOAuthServer.getAuthorizationDetails
+      - AuthOAuthServer.authorizationDetails
       - OAuthAuthorizationDetailsResponse
       - OAuthAuthorizationDetailsResponse.details
       - OAuthAuthorizationDetailsResponse.redirect
@@ -758,7 +758,7 @@ features:
   auth.oauth_admin.get_client:
     status: implemented
     symbols:
-      - AuthAdminOAuth.getClient
+      - AuthAdminOAuth.client
   auth.oauth_admin.list_clients:
     status: implemented
     symbols:
@@ -1473,7 +1473,7 @@ features:
   realtime.configuration.binary_protocol:
     status: implemented
     symbols:
-      - RealtimeClientOptions.vsn
+      - RealtimeClientOptions.protocolVersion
 
   # ── Storage ────────────────────────────────────────────────────────────────
 
@@ -1492,7 +1492,7 @@ features:
   storage.file_buckets.get_bucket:
     status: implemented
     symbols:
-      - SupabaseStorageClient.getBucket
+      - SupabaseStorageClient.bucket
   storage.file_buckets.list_file_buckets:
     status: implemented
     symbols:
@@ -1545,7 +1545,7 @@ features:
   storage.file_buckets.get_public_url:
     status: implemented
     symbols:
-      - StorageFileApi.getPublicURL
+      - StorageFileApi.publicURL
       - DownloadBehavior
       - DownloadBehavior.withOriginalName
       - DownloadBehavior.named
@@ -1612,7 +1612,7 @@ features:
       - FileOptions.cacheControl
       - FileOptions.contentType
   # Not a separate method: a bare `cacheNonce: String?` parameter repeated on
-  # createSignedURL, createSignedURLs, download, and getPublicURL — no
+  # createSignedURL, createSignedURLs, download, and publicURL — no
   # dedicated named symbol exists distinct from those methods, which are
   # already claimed by their own capabilities above.
   storage.file_buckets.url_cache_nonce: implemented

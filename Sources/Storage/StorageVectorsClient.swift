@@ -30,7 +30,7 @@ import HTTPTypes
 /// ### Managing vector buckets
 ///
 /// - ``createBucket(_:)``
-/// - ``getBucket(_:)``
+/// - ``bucket(_:)``
 /// - ``listBuckets(prefix:maxResults:nextToken:)``
 /// - ``deleteBucket(_:)``
 ///
@@ -82,7 +82,7 @@ public struct StorageVectorsClient: Sendable {
   /// Retrieves the details of an existing vector bucket.
   ///
   /// ```swift
-  /// let bucket = try await client.storage.vectors.getBucket("documents")
+  /// let bucket = try await client.storage.vectors.bucket("documents")
   /// print(bucket.vectorBucketName)
   /// ```
   ///
@@ -91,7 +91,7 @@ public struct StorageVectorsClient: Sendable {
   /// - Parameter name: The name of the vector bucket to fetch.
   /// - Returns: The matching ``VectorBucket``.
   /// - Throws: ``StorageError`` when the API rejects the request.
-  public func getBucket(_ name: String) async throws -> VectorBucket {
+  public func bucket(_ name: String) async throws -> VectorBucket {
     let response: GetVectorBucketResponseBody = try await api.execute(
       HTTPRequest(
         method: .post,

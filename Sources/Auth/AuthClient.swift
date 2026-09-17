@@ -36,7 +36,7 @@ private struct CachedJWKS {
 /// This is especially useful for shared-memory execution environments such as
 /// AWS Lambda or serverless functions. Regardless of how many clients are created,
 /// if they share the same storage key they will use the same JWKS cache,
-/// significantly speeding up getClaims() with asymmetric JWTs.
+/// significantly speeding up claims() with asymmetric JWTs.
 private actor GlobalJWKSCache {
   private var cache: [String: CachedJWKS] = [:]
 
@@ -124,11 +124,11 @@ private let globalJWKSCache = GlobalJWKSCache()
 /// - ``linkIdentity(provider:scopes:redirectTo:queryParams:launchURL:)``
 /// - ``linkIdentity(provider:scopes:redirectTo:queryParams:)``
 /// - ``linkIdentityWithIdToken(credentials:)``
-/// - ``getLinkIdentityURL(provider:scopes:redirectTo:queryParams:)``
+/// - ``linkIdentityURL(provider:scopes:redirectTo:queryParams:)``
 /// - ``unlinkIdentity(_:)``
 ///
 /// ### JWT claims
-/// - ``getClaims(jwt:options:)``
+/// - ``claims(jwt:options:)``
 ///
 /// ### Namespaces
 /// - ``mfa``
@@ -298,13 +298,13 @@ public actor AuthClient {
     }
 
     private func handleDidBecomeActive() {
-      if configuration.autoRefreshToken {
+      if configuration.automaticallyRefreshesToken {
         startAutoRefresh()
       }
     }
 
     private func handleWillResignActive() {
-      if configuration.autoRefreshToken {
+      if configuration.automaticallyRefreshesToken {
         stopAutoRefresh()
       }
     }
@@ -733,7 +733,7 @@ public actor AuthClient {
   ///   - authCode: The auth code received from the PKCE callback.
   ///   - flowId: The id of the flow that generated `authCode`, as returned by
   /// ``signInWithOAuth(provider:redirectTo:scopes:queryParams:launchFlow:)`` or
-  /// ``getLinkIdentityURL(provider:scopes:redirectTo:queryParams:)``. Pass this when several
+  /// ``linkIdentityURL(provider:scopes:redirectTo:queryParams:)``. Pass this when several
   /// PKCE flows may be pending at once, so the correct code verifier is used. When `nil`, the
   /// most recently started flow's verifier is used.
   public func exchangeCodeForSession(authCode: String, flowId: String? = nil) async throws
@@ -779,7 +779,7 @@ public actor AuthClient {
   /// If that isn't the case, you should consider using
   /// ``signInWithOAuth(provider:redirectTo:scopes:queryParams:launchFlow:)`` or
   /// ``signInWithOAuth(provider:redirectTo:scopes:queryParams:configure:)``.
-  nonisolated public func getOAuthSignInURL(
+  nonisolated public func oauthSignInURL(
     provider: Provider,
     scopes: String? = nil,
     redirectTo: URL? = nil,
@@ -1473,7 +1473,7 @@ public actor AuthClient {
     queryParams: [(name: String, value: String?)] = [],
     launchURL: @MainActor (_ url: URL) -> Void
   ) async throws {
-    let response = try await getLinkIdentityURL(
+    let response = try await linkIdentityURL(
       provider: provider,
       scopes: scopes,
       redirectTo: redirectTo,
@@ -1518,7 +1518,7 @@ public actor AuthClient {
   ///   - scopes: A space-separated list of scopes granted to the OAuth application.
   ///   - redirectTo: A URL to send the user to after they are confirmed.
   ///   - queryParams: Additional query parameters to use.
-  public func getLinkIdentityURL(
+  public func linkIdentityURL(
     provider: Provider,
     scopes: String? = nil,
     redirectTo: URL? = nil,
@@ -1606,7 +1606,7 @@ public actor AuthClient {
 
   /// Starts an auto-refresh process in the background. The session is checked every few seconds. Close to the time of expiration a process is started to refresh the session. If refreshing fails it will be retried for as long as necessary.
   ///
-  /// If you set ``Configuration/autoRefreshToken`` you don't need to call this function, it will be called for you.
+  /// If you set ``Configuration/automaticallyRefreshesToken`` you don't need to call this function, it will be called for you.
   public func startAutoRefresh() {
     Task { await sessionManager.startAutoRefresh() }
   }
@@ -1777,7 +1777,7 @@ public actor AuthClient {
   /// - Returns: A `JWTClaimsResponse` containing the verified claims, header, and signature.
   ///
   /// - Throws: ``AuthError`` with kind `.jwtVerificationFailed` if verification fails, or ``AuthError/sessionMissing`` if no session exists.
-  public func getClaims(
+  public func claims(
     jwt: String? = nil,
     options: GetClaimsOptions = GetClaimsOptions()
   ) async throws -> JWTClaimsResponse {
@@ -1795,8 +1795,8 @@ public actor AuthClient {
       throw AuthError.jwtVerificationFailed("Invalid JWT structure")
     }
 
-    // Validate expiration unless allowExpired is true
-    if !options.allowExpired {
+    // Validate expiration unless allowsExpired is true
+    if !options.allowsExpired {
       if let exp = decodedJWT.payload["exp"] as? TimeInterval {
         let now = date().timeIntervalSince1970
         if exp <= now {

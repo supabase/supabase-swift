@@ -442,12 +442,12 @@ extension AuthMockerTests {
         .register()
 
         // Flow A starts (e.g. linking a GitHub identity)...
-        let flowA = try await sut.getLinkIdentityURL(provider: .github)
+        let flowA = try await sut.linkIdentityURL(provider: .github)
 
         // ...then flow B starts before flow A's callback arrives (e.g. the user also kicks off
         // a Google sign-in in another window). Before flow ids, flow B's verifier would have
         // silently overwritten flow A's in the single shared slot.
-        let flowB = try await sut.getLinkIdentityURL(provider: .google)
+        let flowB = try await sut.linkIdentityURL(provider: .google)
 
         #expect(flowA.flowId != nil)
         #expect(flowB.flowId != nil)
@@ -473,7 +473,7 @@ extension AuthMockerTests {
     }
 
     @Test
-    func getLinkIdentityURL() async throws {
+    func linkIdentityURL() async throws {
       try await withMainSerialExecutor {
         let url =
           "https://github.com/login/oauth/authorize?client_id=1234&redirect_to=com.supabase.swift-examples://&redirect_uri=http://127.0.0.1:54321/auth/v1/callback&response_type=code&scope=user:email&skip_http_redirect=true&state=jwt"
@@ -507,7 +507,7 @@ extension AuthMockerTests {
 
         Dependencies[sut.clientID].sessionStorage.store(.valid)
 
-        let response = try await sut.getLinkIdentityURL(provider: .github)
+        let response = try await sut.linkIdentityURL(provider: .github)
 
         expectNoDifference(response.provider, .github)
         expectNoDifference(response.url, URL(string: url)!)
@@ -1068,9 +1068,9 @@ extension AuthMockerTests {
     }
 
     @Test
-    func getOAuthSignInURL() async throws {
+    func oauthSignInURL() async throws {
       let sut = makeSUT(flowType: .implicit)
-      let url = try sut.getOAuthSignInURL(
+      let url = try sut.oauthSignInURL(
         provider: .github,
         scopes: "read,write",
         redirectTo: URL(string: "https://dummy-url.com/redirect")!,
@@ -1785,7 +1785,7 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      let passkeys = try await sut.admin.listPasskeys(userId: userId)
+      let passkeys = try await sut.admin.listPasskeys(forUser: userId)
 
       expectNoDifference(
         passkeys.map(\.id),
@@ -1822,7 +1822,7 @@ extension AuthMockerTests {
       .register()
 
       let sut = makeSUT()
-      try await sut.admin.deletePasskey(userId: userId, passkeyId: passkeyId)
+      try await sut.admin.deletePasskey(id: passkeyId, forUser: userId)
     }
 
     @Test
@@ -2498,7 +2498,7 @@ extension AuthMockerTests {
       let sut = makeSUT()
       Dependencies[sut.clientID].sessionStorage.store(.valid)
 
-      let options = try await sut.getPasskeyRegistrationOptions()
+      let options = try await sut.passkeyRegistrationOptions()
 
       expectNoDifference(options.challengeId, "challenge-1")
       expectNoDifference(options.options.objectValue?["challenge"]?.stringValue, "Y2hhbGxlbmdl")
@@ -2825,7 +2825,7 @@ extension AuthMockerTests {
 
       Dependencies[sut.clientID].sessionStorage.store(session)
 
-      let aal = try await sut.mfa.getAuthenticatorAssuranceLevel()
+      let aal = try await sut.mfa.authenticatorAssuranceLevel()
 
       expectNoDifference(
         aal,
@@ -2867,7 +2867,7 @@ extension AuthMockerTests {
       }
       .register()
 
-      let user = try await sut.admin.getUserById(id)
+      let user = try await sut.admin.user(id: id)
 
       expectNoDifference(user.id, id)
     }
@@ -3081,7 +3081,7 @@ extension AuthMockerTests {
       )
     }
 
-    // MARK: - getClaims Tests
+    // MARK: - claims Tests
 
     @Test
     func getClaims_withHS256JWT_shouldFallbackAndReturnClaims() async throws {
@@ -3101,7 +3101,7 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      let result = try await sut.getClaims(jwt: jwt)
+      let result = try await sut.claims(jwt: jwt)
 
       #expect(result.claims.sub == "1234567890")
       #expect(result.claims.iss == "http://localhost:54321/auth/v1")
@@ -3137,7 +3137,7 @@ extension AuthMockerTests {
       let sut = makeSUT()
       Dependencies[sut.clientID].sessionStorage.store(session)
 
-      let result = try await sut.getClaims()
+      let result = try await sut.claims()
 
       #expect(result.claims.sub == "1234567890")
       #expect(result.claims.role == "authenticated")
@@ -3162,7 +3162,7 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      let result = try await sut.getClaims(
+      let result = try await sut.claims(
         jwt: jwt,
         options: GetClaimsOptions(jwks: JWKS(keys: [signer.jwk]))
       )
@@ -3205,7 +3205,7 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      let result = try await sut.getClaims(
+      let result = try await sut.claims(
         jwt: jwt,
         options: GetClaimsOptions(jwks: JWKS(keys: [keyWithoutAlg]))
       )
@@ -3249,7 +3249,7 @@ extension AuthMockerTests {
       let sut = makeSUT()
 
       let error = await #expect(throws: AuthError.self) {
-        _ = try await sut.getClaims(
+        _ = try await sut.claims(
           jwt: jwt,
           options: GetClaimsOptions(jwks: JWKS(keys: [keyWithoutAlg]))
         )
@@ -3284,7 +3284,7 @@ extension AuthMockerTests {
       let sut = makeSUT()
 
       let error = await #expect(throws: AuthError.self) {
-        _ = try await sut.getClaims(
+        _ = try await sut.claims(
           jwt: tamperedJWT,
           options: GetClaimsOptions(jwks: JWKS(keys: [signer.jwk]))
         )
@@ -3311,7 +3311,7 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      let result = try await sut.getClaims(jwt: jwt)
+      let result = try await sut.claims(jwt: jwt)
 
       #expect(result.claims.sub == "1234567890")
       #expect(result.claims.role == "authenticated")
@@ -3357,7 +3357,7 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      let result = try await sut.getClaims(jwt: jwt)
+      let result = try await sut.claims(jwt: jwt)
 
       #expect(result.claims.sub == "1234567890")
       #expect(result.claims.role == "authenticated")
@@ -3381,7 +3381,7 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      let result = try await sut.getClaims(jwt: jwt)
+      let result = try await sut.claims(jwt: jwt)
 
       #expect(result.claims.sub == "987654321")
       #expect(result.claims.role == "authenticated")
@@ -3392,7 +3392,7 @@ extension AuthMockerTests {
       let sut = makeSUT()
 
       do {
-        _ = try await sut.getClaims()
+        _ = try await sut.claims()
         Issue.record("Expected sessionMissing error")
       } catch let error as AuthError {
         #expect(error.kind == .sessionMissing)
@@ -3408,7 +3408,7 @@ extension AuthMockerTests {
       let sut = makeSUT()
 
       do {
-        _ = try await sut.getClaims(jwt: invalidJWT)
+        _ = try await sut.claims(jwt: invalidJWT)
         Issue.record("Expected jwtVerificationFailed error")
       } catch let error as AuthError {
         #expect(error.kind == .jwtVerificationFailed)
@@ -3427,7 +3427,7 @@ extension AuthMockerTests {
       let sut = makeSUT()
 
       do {
-        _ = try await sut.getClaims(jwt: expiredJWT)
+        _ = try await sut.claims(jwt: expiredJWT)
         Issue.record("Expected jwtVerificationFailed error")
       } catch let error as AuthError {
         #expect(error.kind == .jwtVerificationFailed)
@@ -3439,7 +3439,7 @@ extension AuthMockerTests {
 
     @Test
     func getClaims_withExpiredJWTAndAllowExpired_shouldReturnClaims() async throws {
-      // JWT with exp in the past but allowExpired option - falls back to server
+      // JWT with exp in the past but allowsExpired option - falls back to server
       let expiredJWT =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6MTUxNjIzOTAyMiwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.aN0HLYHkp7nKZp4xWvBaDqSrCFBxk2tq0KZc4BXGqYs"
 
@@ -3455,9 +3455,9 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      let result = try await sut.getClaims(
+      let result = try await sut.claims(
         jwt: expiredJWT,
-        options: GetClaimsOptions(allowExpired: true)
+        options: GetClaimsOptions(allowsExpired: true)
       )
 
       #expect(result.claims.sub == "1234567890")
@@ -3486,7 +3486,7 @@ extension AuthMockerTests {
       let sut = makeSUT()
 
       do {
-        _ = try await sut.getClaims(jwt: jwt)
+        _ = try await sut.claims(jwt: jwt)
         Issue.record("Expected error from server")
       } catch {
         // Expected to fail
@@ -3512,7 +3512,7 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      let result = try await sut.getClaims(jwt: jwt)
+      let result = try await sut.claims(jwt: jwt)
 
       #expect(result.claims.sub == "1234567890")
       #expect(result.claims.iss == "http://localhost:54321/auth/v1")
@@ -3548,7 +3548,7 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      let result = try await sut.getClaims(jwt: jwt)
+      let result = try await sut.claims(jwt: jwt)
 
       #expect(result.claims.sub == "1234567890")
       #expect(result.claims.aud != nil)

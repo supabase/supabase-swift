@@ -130,7 +130,7 @@ public final class SupabaseClient: Sendable {
         headers: headers,
         http: authenticatedHTTP,
         logger: options.global.logger,
-        useNewHostname: options.storage.useNewHostname
+        usesNewHostname: options.storage.usesNewHostname
       )
     )
   }
@@ -261,7 +261,7 @@ public final class SupabaseClient: Sendable {
         middlewares: options.global.http.middlewares + [TraceContextMiddleware()],
         timeout: options.global.http.timeout
       ),
-      autoRefreshToken: options.auth.autoRefreshToken,
+      automaticallyRefreshesToken: options.auth.automaticallyRefreshesToken,
       clock: clock
     )
 

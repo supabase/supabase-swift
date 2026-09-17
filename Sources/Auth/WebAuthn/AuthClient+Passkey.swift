@@ -30,7 +30,7 @@ extension AuthClient {
   /// the authenticator, submit the result with
   /// ``verifyPasskeyRegistration(challengeId:credentialResponse:)``.
   @_spi(Experimental)
-  public func getPasskeyRegistrationOptions() async throws -> PasskeyRegistrationOptions {
+  public func passkeyRegistrationOptions() async throws -> PasskeyRegistrationOptions {
     try await Dependencies[clientID].api.authorizedExecute(
       HTTPRequest(
         method: .post,
@@ -43,7 +43,7 @@ extension AuthClient {
   /// Stores a newly created passkey for the current user.
   ///
   /// - Parameters:
-  ///   - challengeId: The challenge ID returned by ``getPasskeyRegistrationOptions()``.
+  ///   - challengeId: The challenge ID returned by ``passkeyRegistrationOptions()``.
   ///   - credentialResponse: The W3C credential produced by the authenticator.
   /// - Returns: The stored passkey.
   @_spi(Experimental)
@@ -72,7 +72,7 @@ extension AuthClient {
   /// the authenticator, submit the result with
   /// ``verifyPasskeyAuthentication(challengeId:credentialResponse:)``.
   @_spi(Experimental)
-  public func getPasskeyAuthenticationOptions() async throws -> PasskeyAuthenticationOptions {
+  public func passkeyAuthenticationOptions() async throws -> PasskeyAuthenticationOptions {
     try await Dependencies[clientID].api.execute(
       HTTPRequest(
         method: .post,
@@ -85,7 +85,7 @@ extension AuthClient {
   /// Verifies a passkey assertion and establishes a session.
   ///
   /// - Parameters:
-  ///   - challengeId: The challenge ID returned by ``getPasskeyAuthenticationOptions()``.
+  ///   - challengeId: The challenge ID returned by ``passkeyAuthenticationOptions()``.
   ///   - credentialResponse: The W3C assertion produced by the authenticator.
   /// - Returns: The authentication response containing the new session.
   @_spi(Experimental)
@@ -189,7 +189,7 @@ extension AuthClient {
       presentationAnchor: ASPresentationAnchor,
       authenticator: WebAuthnAuthenticator
     ) async throws -> AuthResponse {
-      let options = try await getPasskeyAuthenticationOptions()
+      let options = try await passkeyAuthenticationOptions()
       let rpId = try options.options.webAuthnAssertionRpId()
       let credentialResponse = try await authenticator.authenticate(
         options.options, rpId, presentationAnchor
@@ -224,7 +224,7 @@ extension AuthClient {
       presentationAnchor: ASPresentationAnchor,
       authenticator: WebAuthnAuthenticator
     ) async throws -> PasskeyListItem {
-      let options = try await getPasskeyRegistrationOptions()
+      let options = try await passkeyRegistrationOptions()
       let rpId = try options.options.webAuthnCreationRpId()
       let credentialResponse = try await authenticator.register(
         options.options, rpId, presentationAnchor

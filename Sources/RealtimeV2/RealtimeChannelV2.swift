@@ -472,7 +472,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
         }
       }
     } else {
-      switch socket.options.vsn {
+      switch socket.options.protocolVersion {
       case .v1:
         await push(
           ChannelEvent.broadcast,
@@ -515,10 +515,10 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       return
     }
 
-    if socket.options.vsn == .v1 {
+    if socket.options.protocolVersion == .v1 {
       if !isTesting {
         reportIssue(
-          "Binary broadcast requires protocol version 2.0.0. Set `vsn: .v2` in RealtimeClientOptions."
+          "Binary broadcast requires protocol version 2.0.0. Set `protocolVersion: .v2` in RealtimeClientOptions."
         )
       }
       return

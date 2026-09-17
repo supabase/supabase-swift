@@ -18,7 +18,7 @@ import HTTPTypes
 /// ## Topics
 ///
 /// ### User management
-/// - ``getUserById(_:)``
+/// - ``user(id:)``
 /// - ``updateUserById(_:attributes:)``
 /// - ``createUser(attributes:)``
 /// - ``inviteUserByEmail(_:data:redirectTo:)``
@@ -46,13 +46,13 @@ public struct AuthAdmin: Sendable {
   }
 
   /// Get user by id.
-  /// - Parameter uid: The user's unique identifier.
+  /// - Parameter id: The user's unique identifier.
   /// - Note: This function should only be called on a server. Never expose your `secret` key in the browser.
-  public func getUserById(_ uid: UUID) async throws -> User {
+  public func user(id: UUID) async throws -> User {
     try await api.execute(
       HTTPRequest(
         method: .get,
-        url: configuration.url.appendingPathComponent("admin/users/\(uid)")
+        url: configuration.url.appendingPathComponent("admin/users/\(id)")
       )
     ).decoded(decoder: configuration.resolvedDecoder)
   }
@@ -73,9 +73,9 @@ public struct AuthAdmin: Sendable {
 
   /// Creates a new user.
   ///
-  /// - To confirm the user's email address or phone number, set ``AdminUserAttributes/emailConfirm`` or ``AdminUserAttributes/phoneConfirm`` to `true`. Both arguments default to `false`.
+  /// - To confirm the user's email address or phone number, set ``AdminUserAttributes/confirmsEmail`` or ``AdminUserAttributes/confirmsPhone`` to `true`. Both arguments default to `false`.
   /// - ``createUser(attributes:)`` will not send a confirmation email to the user. You can use ``inviteUserByEmail(_:data:redirectTo:)`` if you want to send them an email invite instead.
-  /// - If you are sure that the created user's email or phone number is legitimate and verified, you can set the ``AdminUserAttributes/emailConfirm`` or ``AdminUserAttributes/phoneConfirm`` param to true.
+  /// - If you are sure that the created user's email or phone number is legitimate and verified, you can set the ``AdminUserAttributes/confirmsEmail`` or ``AdminUserAttributes/confirmsPhone`` param to true.
   /// - Warning: Never expose your `secret` key on the client.
   @discardableResult
   public func createUser(attributes: AdminUserAttributes) async throws -> User {
@@ -193,7 +193,7 @@ public struct AuthAdmin: Sendable {
 
     var pagination = ListUsersPaginatedResponse(
       users: response.users,
-      aud: response.aud,
+      audience: response.aud,
       lastPage: 0,
       total: httpResponse.headerFields[.xTotalCount].flatMap(Int.init) ?? 0
     )

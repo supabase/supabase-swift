@@ -153,7 +153,7 @@ public struct User: Codable, Hashable, Identifiable, Sendable {
   public var userMetadata: [String: JSONValue]
 
   /// The audience claim (`aud`) of the user's JWT.
-  public var aud: String
+  public var audience: String
 
   /// Timestamp when a confirmation email was last sent to this user.
   public var confirmationSentAt: Date?
@@ -215,7 +215,7 @@ public struct User: Codable, Hashable, Identifiable, Sendable {
   ///   - id: The unique identifier.
   ///   - appMetadata: Application-level metadata.
   ///   - userMetadata: User-supplied metadata.
-  ///   - aud: The JWT audience claim.
+  ///   - audience: The JWT audience claim.
   ///   - confirmationSentAt: Timestamp a confirmation email was sent.
   ///   - recoverySentAt: Timestamp a recovery email was sent.
   ///   - emailChangeSentAt: Timestamp an email-change email was sent.
@@ -238,7 +238,7 @@ public struct User: Codable, Hashable, Identifiable, Sendable {
     id: UUID,
     appMetadata: [String: JSONValue],
     userMetadata: [String: JSONValue],
-    aud: String,
+    audience: String,
     confirmationSentAt: Date? = nil,
     recoverySentAt: Date? = nil,
     emailChangeSentAt: Date? = nil,
@@ -261,7 +261,7 @@ public struct User: Codable, Hashable, Identifiable, Sendable {
     self.id = id
     self.appMetadata = appMetadata
     self.userMetadata = userMetadata
-    self.aud = aud
+    self.audience = audience
     self.confirmationSentAt = confirmationSentAt
     self.recoverySentAt = recoverySentAt
     self.emailChangeSentAt = emailChangeSentAt
@@ -282,6 +282,32 @@ public struct User: Codable, Hashable, Identifiable, Sendable {
     self.factors = factors
   }
 
+  private enum CodingKeys: String, CodingKey {
+    case id
+    case appMetadata
+    case userMetadata
+    // The wire field is the JWT `aud` claim; only the Swift spelling changed.
+    case audience = "aud"
+    case confirmationSentAt
+    case recoverySentAt
+    case emailChangeSentAt
+    case newEmail
+    case invitedAt
+    case actionLink
+    case email
+    case phone
+    case createdAt
+    case confirmedAt
+    case emailConfirmedAt
+    case phoneConfirmedAt
+    case lastSignInAt
+    case role
+    case updatedAt
+    case identities
+    case isAnonymous
+    case factors
+  }
+
   public init(from decoder: any Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     id = try container.decode(UUID.self, forKey: .id)
@@ -289,7 +315,7 @@ public struct User: Codable, Hashable, Identifiable, Sendable {
       try container.decodeIfPresent([String: JSONValue].self, forKey: .appMetadata) ?? [:]
     userMetadata =
       try container.decodeIfPresent([String: JSONValue].self, forKey: .userMetadata) ?? [:]
-    aud = try container.decode(String.self, forKey: .aud)
+    audience = try container.decode(String.self, forKey: .audience)
     confirmationSentAt = try container.decodeIfPresent(Date.self, forKey: .confirmationSentAt)
     recoverySentAt = try container.decodeIfPresent(Date.self, forKey: .recoverySentAt)
     emailChangeSentAt = try container.decodeIfPresent(Date.self, forKey: .emailChangeSentAt)
@@ -852,7 +878,7 @@ public struct AdminUserAttributes: Encodable, Hashable, Sendable {
   public var email: String?
 
   /// Confirms the user's email address if set to `true`.
-  public var emailConfirm: Bool?
+  public var confirmsEmail: Bool?
 
   /// The `id` for the user.
   public var id: String?
@@ -870,7 +896,7 @@ public struct AdminUserAttributes: Encodable, Hashable, Sendable {
   public var phone: String?
 
   /// Confirms the user's phone number if set to `true`.
-  public var phoneConfirm: Bool?
+  public var confirmsPhone: Bool?
 
   /// The role claim set in the user's access token JWT.
   public var role: String?
@@ -884,39 +910,39 @@ public struct AdminUserAttributes: Encodable, Hashable, Sendable {
   ///   - appMetadata: Application-level metadata.
   ///   - banDuration: Ban duration string, e.g. `"24h"`, or `"none"` to lift a ban.
   ///   - email: The user's email address.
-  ///   - emailConfirm: Whether to mark the email as confirmed.
+  ///   - confirmsEmail: Whether to mark the email as confirmed.
   ///   - id: The user's UUID (string form).
   ///   - nonce: Reauthentication nonce for password updates.
   ///   - password: Plain-text password.
   ///   - passwordHash: Pre-hashed password.
   ///   - phone: The user's phone number.
-  ///   - phoneConfirm: Whether to mark the phone as confirmed.
+  ///   - confirmsPhone: Whether to mark the phone as confirmed.
   ///   - role: The JWT role claim.
   ///   - userMetadata: User-supplied metadata.
   public init(
     appMetadata: [String: JSONValue]? = nil,
     banDuration: String? = nil,
     email: String? = nil,
-    emailConfirm: Bool? = nil,
+    confirmsEmail: Bool? = nil,
     id: String? = nil,
     nonce: String? = nil,
     password: String? = nil,
     passwordHash: String? = nil,
     phone: String? = nil,
-    phoneConfirm: Bool? = nil,
+    confirmsPhone: Bool? = nil,
     role: String? = nil,
     userMetadata: [String: JSONValue]? = nil
   ) {
     self.appMetadata = appMetadata
     self.banDuration = banDuration
     self.email = email
-    self.emailConfirm = emailConfirm
+    self.confirmsEmail = confirmsEmail
     self.id = id
     self.nonce = nonce
     self.password = password
     self.passwordHash = passwordHash
     self.phone = phone
-    self.phoneConfirm = phoneConfirm
+    self.confirmsPhone = confirmsPhone
     self.role = role
     self.userMetadata = userMetadata
   }
@@ -1282,7 +1308,7 @@ extension AMREntry {
   }
 }
 
-/// The response returned by ``AuthMFA/getAuthenticatorAssuranceLevel()``.
+/// The response returned by ``AuthMFA/authenticatorAssuranceLevel()``.
 public struct AuthMFAGetAuthenticatorAssuranceLevelResponse: Decodable, Hashable, Sendable {
   /// Current AAL level of the session.
   public let currentLevel: AuthenticatorAssuranceLevels?
@@ -1498,7 +1524,7 @@ public struct ListUsersPaginatedResponse: Hashable, Sendable {
   public let users: [User]
 
   /// The audience the users belong to.
-  public let aud: String
+  public let audience: String
 
   /// The page number of the next page, if one exists.
   public var nextPage: Int?
@@ -1915,7 +1941,7 @@ public struct ListOAuthClientsPaginatedResponse: Hashable, Sendable {
   public let clients: [OAuthClient]
 
   /// The audience the clients belong to.
-  public let aud: String
+  public let audience: String
 
   /// The page number of the next page, if one exists.
   public var nextPage: Int?
@@ -1956,7 +1982,7 @@ public struct OAuthAuthorizationUser: Decodable, Hashable, Sendable {
 }
 
 /// Details about a pending OAuth authorization request, returned by
-/// ``AuthOAuthServer/getAuthorizationDetails(authorizationId:)`` when the
+/// ``AuthOAuthServer/authorizationDetails(id:)`` when the
 /// request still requires the user's consent.
 /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
 public struct OAuthAuthorizationDetails: Decodable, Hashable, Sendable {
@@ -1995,7 +2021,7 @@ public struct OAuthRedirect: Decodable, Hashable, Sendable {
   }
 }
 
-/// The response from ``AuthOAuthServer/getAuthorizationDetails(authorizationId:)``.
+/// The response from ``AuthOAuthServer/authorizationDetails(id:)``.
 ///
 /// The server auto-approves an authorization request if the user already has
 /// an active consent covering the requested scopes for that client, returning
@@ -2239,7 +2265,7 @@ private struct AnyCodingKey: CodingKey {
   }
 }
 
-/// The result returned by ``AuthClient/getClaims(jwt:options:)``.
+/// The result returned by ``AuthClient/claims(jwt:options:)``.
 public struct JWTClaimsResponse: Sendable {
   /// The decoded JWT claims.
   public let claims: JWTClaims
@@ -2251,10 +2277,10 @@ public struct JWTClaimsResponse: Sendable {
   public let signature: Data
 }
 
-/// Options for ``AuthClient/getClaims(jwt:options:)``.
+/// Options for ``AuthClient/claims(jwt:options:)``.
 public struct GetClaimsOptions: Sendable {
   /// When `true`, the `exp` claim is not validated against the current time, allowing expired tokens to be decoded.
-  public let allowExpired: Bool
+  public let allowsExpired: Bool
 
   /// When set, this JSON Web Key Set takes precedence over any cached JWKS from the server.
   public let jwks: JWKS?
@@ -2262,10 +2288,10 @@ public struct GetClaimsOptions: Sendable {
   /// Creates claim-decoding options.
   ///
   /// - Parameters:
-  ///   - allowExpired: Pass `true` to skip expiration validation.
+  ///   - allowsExpired: Pass `true` to skip expiration validation.
   ///   - jwks: An explicit JWKS to use instead of the cached server JWKS.
-  public init(allowExpired: Bool = false, jwks: JWKS? = nil) {
-    self.allowExpired = allowExpired
+  public init(allowsExpired: Bool = false, jwks: JWKS? = nil) {
+    self.allowsExpired = allowsExpired
     self.jwks = jwks
   }
 }

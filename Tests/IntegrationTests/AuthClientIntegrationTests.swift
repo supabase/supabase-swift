@@ -342,7 +342,7 @@ struct AuthClientIntegrationTests {
     let client = Self.makeClient(serviceRole: true)
     let pagination = try await client.admin.listUsers(params: PageParams(perPage: 10))
     #expect(pagination.users.count == 10)
-    #expect(pagination.aud == "authenticated")
+    #expect(pagination.audience == "authenticated")
     #expect(pagination.nextPage == 2)
   }
 
@@ -354,7 +354,7 @@ struct AuthClientIntegrationTests {
     let session = try await authClient.session
 
     let client = Self.makeClient(serviceRole: true)
-    let passkeys = try await client.admin.listPasskeys(userId: session.user.id)
+    let passkeys = try await client.admin.listPasskeys(forUser: session.user.id)
     #expect(passkeys.isEmpty)
   }
 
@@ -367,7 +367,7 @@ struct AuthClientIntegrationTests {
 
     let client = Self.makeClient(serviceRole: true)
     do {
-      try await client.admin.deletePasskey(userId: session.user.id, passkeyId: UUID())
+      try await client.admin.deletePasskey(id: UUID(), forUser: session.user.id)
       Issue.record("Expected deletePasskey to throw for a nonexistent passkey")
     } catch let error as AuthError {
       #expect(error.kind == .api)
@@ -513,10 +513,10 @@ struct AuthClientIntegrationTests {
     withExtendedLifetime(adminClient) {}
   }
 
-  /// Pins the shape of the live JWKS that `getClaims` local verification depends on.
+  /// Pins the shape of the live JWKS that `claims` local verification depends on.
   ///
   /// A stock local project has no `auth.signing_keys_path`, so the CLI falls back to its
-  /// built-in ES256 key. `getClaims` picks its verifier from the JWK's `alg` field, not from
+  /// built-in ES256 key. `claims` picks its verifier from the JWK's `alg` field, not from
   /// the JWT header, so an ES256 key served without `alg` would silently fall back to
   /// `GET /user` even though the SDK can verify it.
   @Test
@@ -539,7 +539,7 @@ struct AuthClientIntegrationTests {
     #expect(jwk.p256PublicKey != nil)
   }
 
-  /// A live access token is ES256, and `getClaims` returns its claims.
+  /// A live access token is ES256, and `claims` returns its claims.
   @Test
   func getClaimsWithLiveES256Session() async throws {
     let email = mockEmail()
@@ -554,7 +554,7 @@ struct AuthClientIntegrationTests {
     // The JWS signature is raw r||s, which is what `ECDSASignature(rawRepresentation:)` takes.
     expectNoDifference(decoded.signature.count, 64)
 
-    let result = try await authClient.getClaims()
+    let result = try await authClient.claims()
 
     expectNoDifference(result.header.alg, "ES256")
     expectNoDifference(result.claims.sub, session.user.id.uuidString.lowercased())
@@ -584,7 +584,7 @@ struct AuthClientIntegrationTests {
     let tamperedJWT = "\(parts[0]).\(tamperedPayload).\(parts[2])"
 
     let error = await #expect(throws: AuthError.self) {
-      _ = try await authClient.getClaims(jwt: tamperedJWT)
+      _ = try await authClient.claims(jwt: tamperedJWT)
     }
     #expect(error?.kind == .jwtVerificationFailed)
     #expect(error?.message == "Invalid JWT signature")
