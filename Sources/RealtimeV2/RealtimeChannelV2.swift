@@ -396,7 +396,6 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
 
   private static func validateHTTPSendResponse(_ response: HTTPResponse, data: Data) throws {
     guard response.status.code == 202 else {
-      // Try to parse error message from response body
       var errorMessage = "Status Code: \(response.status.code)"
       if let errorBody = try? data.decoded(as: [String: String].self) {
         errorMessage = errorBody["error"] ?? errorBody["message"] ?? errorMessage
@@ -436,8 +435,8 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   @MainActor
   public func broadcast(event: String, message: JSONObject) async {
     if status != .subscribed {
-      // Properly expecting issues during tests isn't working as expected, I think because the reportIssue is usually triggered inside an unstructured Task
-      // because of this I'm disabling issue reporting during tests, so we can use it only for advising developers when running their applications.
+      // `reportIssue` fires from an unstructured Task, which `withExpectedIssue` cannot
+      // capture, so the advisory is for applications only.
       if !isTesting {
         reportIssue(
           """
@@ -742,7 +741,6 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
 
     switch broadcast.payload {
     case .json(let json):
-      // Route JSON payload to existing JSON broadcast callbacks.
       callbackManager.triggerBroadcast(
         event: event,
         json: [
@@ -1081,10 +1079,9 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       select: select
     )
 
-    // Synchronous append — the buffer lives on the channel, not the actor,
-    // so this write cannot be reordered against a subsequent `subscribe()`
-    // call (previously a fire-and-forget `Task` could lose this race,
-    // causing `phx_join` to be sent with an empty `postgres_changes` set).
+    // Synchronous append — the buffer lives on the channel, not the actor, so this write
+    // cannot be reordered against a subsequent `subscribe()` call, which would send
+    // `phx_join` with an empty `postgres_changes` set.
     clientChanges.withValue { $0.append(config) }
 
     let id = callbackManager.addPostgresCallback(filter: config, callback: callback)

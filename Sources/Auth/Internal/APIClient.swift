@@ -157,7 +157,6 @@ struct APIClient: Sendable {
   }
 }
 
-// Struct for mapping all fields possibly returned by API.
 struct _RawAPIErrorResponse: Decodable {
   let msg: String?
   let message: String?

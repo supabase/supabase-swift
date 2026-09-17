@@ -253,7 +253,6 @@ final class URLSessionWebSocket: WebSocket {
     case .data(let data):
       event = .binary(data)
     @unknown default:
-      // Handle unknown message types gracefully by closing the connection
       _closeConnectionWithError(RealtimeError.connection("Received unsupported message type"))
       return
     }
@@ -305,7 +304,6 @@ final class URLSessionWebSocket: WebSocket {
       // Socket is not connected — the delegate callbacks report the close code.
       return nil
     case (NSPOSIXErrorDomain, Int(POSIXErrorCode.EPROTO.rawValue)):
-      // Network protocol error.
       return (1002, nsError.localizedDescription)
     case (NSURLErrorDomain, NSURLErrorTimedOut):
       return (1006, "Connection timed out")
@@ -314,7 +312,6 @@ final class URLSessionWebSocket: WebSocket {
     case (NSURLErrorDomain, NSURLErrorNotConnectedToInternet):
       return (1006, "No internet connection")
     default:
-      // Abnormal closure for everything else.
       return (1006, nsError.localizedDescription)
     }
   }
@@ -356,7 +353,6 @@ final class URLSessionWebSocket: WebSocket {
     // Update state under the lock, but yield the continuation only after
     // releasing it — see the comment on `onComplete` above for why.
     let shouldInvalidate = mutableState.withValue {
-      // Update state when connection closes
       if case .close(let code, let reason) = event {
         let wasClosed = $0.isClosed
         $0.isClosed = true

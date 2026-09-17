@@ -11,9 +11,8 @@ package import Foundation
 ///
 /// Swift Testing has no direct equivalent of `XCTestExpectation` +
 /// `fulfillment(of:timeout:)` for "wait for an async condition driven by a
-/// concurrently-running task". Tests that used to fulfill an expectation from
-/// a background task flip a `LockIsolated` flag/counter instead, and await
-/// this helper to observe it.
+/// concurrently-running task". A background task flips a `LockIsolated`
+/// flag/counter instead, and the test awaits this helper to observe it.
 @discardableResult
 package func waitUntil(
   timeout: TimeInterval = 10.0,

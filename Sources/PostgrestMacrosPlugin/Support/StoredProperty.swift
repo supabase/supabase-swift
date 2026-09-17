@@ -91,10 +91,9 @@ func postgrestUnwrapElementType(_ type: String) -> String? {
 
 /// Whether a written type is spelled as an `Optional`.
 ///
-/// Derived from ``postgrestUnwrapOptionalType(_:)`` rather than testing its own set of spellings:
-/// the two used to disagree — one accepted a bare `Optional<` prefix, the other required the
-/// closing `>` as well — and any spelling that satisfied one and not the other produced a column
-/// whose `Value` was itself optional.
+/// Derived from ``postgrestUnwrapOptionalType(_:)`` rather than testing its own set of spellings,
+/// so the two cannot disagree: a spelling that satisfied one and not the other would produce a
+/// column whose `Value` was itself optional.
 func postgrestIsOptionalType(_ type: String) -> Bool {
   postgrestUnwrapOptionalType(type) != nil
 }

@@ -98,7 +98,6 @@ extension StorageMigration {
       let newKey = SessionStorage.key(clientID)
 
       if let storedData = try? storage.retrieve(key: "supabase.session") {
-        // migrate to new key.
         try storage.store(key: newKey, value: storedData)
         try? storage.remove(key: "supabase.session")
       }
