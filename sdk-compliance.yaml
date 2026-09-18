@@ -682,16 +682,17 @@ features:
   auth.admin.get_provider: not_implemented
   auth.admin.list_providers: not_implemented
 
-  # AuthClient+Passkey.swift methods are all @_spi(Experimental), so the public
-  # symbol graph the compliance scanner reads from never contains them.
+  # AuthClient+Passkey.swift and AuthAdmin+Passkey.swift methods are all
+  # @_spi(Experimental), so the public symbol graph the compliance scanner reads
+  # from never contains them.
   auth.passkey.register_passkey: implemented
   auth.passkey.sign_in_with_passkey: implemented
-  auth.passkey.delete_passkey: not_implemented
-  auth.passkey.list_passkeys: not_implemented
-  auth.passkey.update_passkey: not_implemented
+  auth.passkey.delete_passkey: implemented
+  auth.passkey.list_passkeys: implemented
+  auth.passkey.update_passkey: implemented
 
-  auth.passkey_admin.list_passkeys: not_implemented
-  auth.passkey_admin.delete_passkey: not_implemented
+  auth.passkey_admin.list_passkeys: implemented
+  auth.passkey_admin.delete_passkey: implemented
 
   auth.oauth_server.get_authorization_details:
     status: implemented
