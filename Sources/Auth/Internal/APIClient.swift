@@ -28,6 +28,10 @@ struct APIClient: Sendable {
     Dependencies[clientID].sessionManager
   }
 
+  var sessionStorage: SessionStorage {
+    Dependencies[clientID].sessionStorage
+  }
+
   var eventEmitter: AuthStateChangeEventEmitter {
     Dependencies[clientID].eventEmitter
   }
@@ -45,14 +49,27 @@ struct APIClient: Sendable {
   ]
 
   /// Sends `request` with the client's default headers and returns the response body.
-  func execute(_ request: HTTPRequest, body: Data? = nil) async throws -> Data {
-    try await send(request, body: body).data
+  ///
+  /// `session` is the session the request is issued for, when the caller has one. It scopes the
+  /// session cleanup that a `sessionCleanupErrorCodes` response triggers — see
+  /// ``send(_:body:for:)``.
+  func execute(
+    _ request: HTTPRequest, body: Data? = nil, for session: Session? = nil
+  ) async throws -> Data {
+    try await send(request, body: body, for: session).data
   }
 
-  /// Like ``execute(_:body:)`` but also returns the response head, for callers that read headers.
-  func send(_ request: HTTPRequest, body: Data? = nil) async throws -> (
-    response: HTTPResponse, data: Data
-  ) {
+  /// Like ``execute(_:body:for:)`` but also returns the response head, for callers that read
+  /// headers.
+  ///
+  /// Pass `session` whenever the caller knows which session the request belongs to. A response
+  /// carrying a `sessionCleanupErrorCodes` code then only clears storage if that session is still
+  /// the stored one, so a request that outlived a sign-out cannot sign out whoever signed in
+  /// after it. Callers with no session of their own (sign-in, sign-up, `/logout`) pass `nil` and
+  /// keep the unconditional cleanup they have always had.
+  func send(
+    _ request: HTTPRequest, body: Data? = nil, for session: Session? = nil
+  ) async throws -> (response: HTTPResponse, data: Data) {
     var request = request
     request.headerFields = HTTPFields(configuration.headers).merging(with: request.headerFields)
 
@@ -74,7 +91,7 @@ struct APIClient: Sendable {
     }
 
     guard 200..<300 ~= response.status.code else {
-      throw await handleError(response: response, data: data)
+      throw await handleError(response: response, data: data, for: session)
     }
 
     return (response, data)
@@ -91,10 +108,12 @@ struct APIClient: Sendable {
     var request = request
     request.headerFields[.authorization] = "Bearer \(session.accessToken)"
 
-    return try await execute(request, body: body)
+    return try await execute(request, body: body, for: session)
   }
 
-  func handleError(response: HTTPResponse, data: Data) async -> AuthError {
+  func handleError(
+    response: HTTPResponse, data: Data, for session: Session?
+  ) async -> AuthError {
     let errorResponse = HTTPErrorResponse(response, body: data)
 
     guard
@@ -133,8 +152,14 @@ struct APIClient: Sendable {
       // The `session_id` inside the JWT does not correspond to a row in the
       // `sessions` table. This usually means the user has signed out, has been
       // deleted, or their session has somehow been terminated.
-      await sessionManager.remove()
-      eventEmitter.emit(.signedOut, session: nil)
+      //
+      // Only `session`'s own storage slot may be cleared. A request that was still in flight when
+      // the user signed out — and another user signed in — would otherwise delete the session
+      // that replaced it and sign that user out.
+      if !sessionStorage.changed(since: session) {
+        await sessionManager.remove()
+        eventEmitter.emit(.signedOut, session: nil)
+      }
       var result = AuthError.sessionMissing
       result.response = errorResponse
       return result

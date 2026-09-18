@@ -49,7 +49,9 @@ private actor LiveSessionManager {
     Dependencies.instances.value[clientID]?.configuration.clock ?? ContinuousClock()
   }
 
-  private var inFlightRefreshTask: Task<Session, any Error>?
+  // Keyed by the refresh token it was started for: a refresh asked for a different token is a
+  // different operation and must not be served this one's result.
+  private var inFlightRefresh: (refreshToken: String, task: Task<Session, any Error>)?
   private var startAutoRefreshTokenTask: Task<Void, Never>?
 
   let clientID: AuthClientID
@@ -75,6 +77,10 @@ private actor LiveSessionManager {
   }
 
   func refreshSession(_ refreshToken: String) async throws -> Session {
+    // Read before any suspension point, so a `signOut` cannot land between entering the actor and
+    // this read and leave the commit guard below with nothing to compare against.
+    let storedAtStart = sessionStorage.get()
+
     let logger: Logging.Logger = {
       var scopedLogger = self.logger
       scopedLogger[metadataKey: "refresh_id"] = "\(UUID().uuidString)"
@@ -82,9 +88,9 @@ private actor LiveSessionManager {
     }()
 
     return try await trace(using: logger) {
-      if let inFlightRefreshTask {
+      if let inFlightRefresh, inFlightRefresh.refreshToken == refreshToken {
         logger.debug("Refresh already in flight")
-        return try await inFlightRefreshTask.value
+        return try await inFlightRefresh.task.value
       }
 
       // Held in a local as well as the property, so awaiting it does not mean re-reading a
@@ -93,7 +99,10 @@ private actor LiveSessionManager {
         logger.debug("Refresh task started")
 
         defer {
-          inFlightRefreshTask = nil
+          // Only if it is still ours: a refresh started for another token owns the slot now.
+          if inFlightRefresh?.refreshToken == refreshToken {
+            inFlightRefresh = nil
+          }
           logger.debug("Refresh task ended")
         }
 
@@ -107,16 +116,30 @@ private actor LiveSessionManager {
           ),
           body: configuration.resolvedEncoder.encode(
             UserCredentials(refreshToken: refreshToken)
-          )
+          ),
+          for: storedAtStart
         )
         .decoded(as: Session.self, decoder: configuration.resolvedDecoder)
+
+        // The rotated tokens belong to `storedAtStart`. If that session was signed out, or
+        // replaced by another user signing in, while this request was in flight, committing them
+        // would hand the next user the previous user's session. Drop them instead.
+        //
+        // Only the success path needs this. A failure has already been through
+        // `APIClient.handleError(response:data:for:)`, which scopes its own cleanup to
+        // `storedAtStart` — and which clears storage itself when the cleanup is legitimate, so a
+        // check here could not tell that apart from a concurrent sign-out.
+        if sessionStorage.changed(since: storedAtStart) {
+          logger.debug("Refresh discarded: the session it started from is no longer stored")
+          throw AuthError.refreshDiscarded
+        }
 
         update(session)
         eventEmitter.emit(.tokenRefreshed, session: session)
 
         return session
       }
-      inFlightRefreshTask = refreshTask
+      inFlightRefresh = (refreshToken, refreshTask)
 
       return try await refreshTask.value
     }

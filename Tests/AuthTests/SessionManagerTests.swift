@@ -196,4 +196,183 @@ struct SessionManagerTests {
     #expect(sawFirstTick)
     #expect(tickCount >= 2)
   }
+
+  // MARK: - Commit guard (SDK-1882)
+
+  /// A session with tokens derived from `name`, so two sessions in one test are distinguishable.
+  private func session(_ name: String) -> Session {
+    Session(
+      accessToken: "\(name)-access",
+      tokenType: "bearer",
+      expiresIn: 120,
+      expiresAt: Date().addingTimeInterval(120).timeIntervalSince1970,
+      refreshToken: "\(name)-refresh",
+      user: User(fromMockNamed: "user")
+    )
+  }
+
+  /// Holds the `/token` response until `release()` is called, so a sign-out can interleave.
+  private func heldTokenResponse(
+    _ response: @escaping @Sendable () throws -> (HTTPResponse, Data)
+  ) -> (requestSeen: LockIsolated<Bool>, release: @Sendable () -> Void) {
+    let (gate, continuation) = AsyncStream<Void>.makeStream()
+    let requestSeen = LockIsolated(false)
+
+    http.respond(when: { $0.url?.path.contains("/token") == true }) { _, _ in
+      requestSeen.setValue(true)
+      _ = await gate.first(where: { _ in true })
+      return try response()
+    }
+
+    return (
+      requestSeen,
+      {
+        continuation.yield(())
+        continuation.finish()
+      }
+    )
+  }
+
+  private func collectAuthEvents() -> (events: LockIsolated<[AuthChangeEvent]>, stop: () -> Void) {
+    let events = LockIsolated<[AuthChangeEvent]>([])
+    let token = Dependencies[clientID].eventEmitter.attach { event, _ in
+      events.withValue { $0.append(event) }
+    }
+    return (events, { token.cancel() })
+  }
+
+  @Test
+  func staleRefreshDoesNotOverwriteANewerStoredSession() async throws {
+    let userA = session("A")
+    let userB = session("B")
+    let refreshedA = session("A2")
+
+    Dependencies[clientID].sessionStorage.store(userA)
+    let (requestSeen, release) = heldTokenResponse {
+      (HTTPResponse(status: .ok), try AuthClient.Configuration.jsonEncoder.encode(refreshedA))
+    }
+    let (events, stopCollecting) = collectAuthEvents()
+    defer { stopCollecting() }
+
+    let refresh = Task { try await sut.refreshSession(userA.refreshToken) }
+    let sawRequest = await waitUntil { requestSeen.value }
+    #expect(sawRequest)
+
+    // User A signs out, then user B signs in — both land while A's refresh is in flight.
+    await sut.remove()
+    await sut.update(userB)
+
+    release()
+    let result = await refresh.result
+
+    expectNoDifference(
+      Dependencies[clientID].sessionStorage.get()?.refreshToken, userB.refreshToken)
+    #expect(!events.value.contains(.tokenRefreshed))
+    #expect((result.error as? AuthError)?.kind == .refreshDiscarded)
+  }
+
+  @Test
+  func staleRefreshDoesNotDeleteANewerStoredSessionOnACleanupError() async throws {
+    let userA = session("A")
+    let userB = session("B")
+
+    Dependencies[clientID].sessionStorage.store(userA)
+    // `/logout` has already revoked A's refresh token by the time this answer arrives.
+    let (requestSeen, release) = heldTokenResponse {
+      (
+        HTTPResponse(status: .badRequest, headerFields: [.apiVersionHeaderName: "2024-01-01"]),
+        Data(#"{"code":"refresh_token_not_found","message":"Refresh Token Not Found"}"#.utf8)
+      )
+    }
+    let (events, stopCollecting) = collectAuthEvents()
+    defer { stopCollecting() }
+
+    let refresh = Task { try await sut.refreshSession(userA.refreshToken) }
+    let sawRequest = await waitUntil { requestSeen.value }
+    #expect(sawRequest)
+
+    await sut.remove()
+    await sut.update(userB)
+
+    release()
+    let result = await refresh.result
+
+    expectNoDifference(
+      Dependencies[clientID].sessionStorage.get()?.refreshToken, userB.refreshToken)
+    #expect(!events.value.contains(.signedOut))
+    // A's caller still learns its own session is gone — the server did reject A's refresh token.
+    // What must not happen is B being signed out along with it.
+    #expect((result.error as? AuthError)?.kind == .sessionMissing)
+  }
+
+  @Test
+  func refreshForADifferentTokenDoesNotJoinAnInFlightRefresh() async throws {
+    let userA = session("A")
+    let userB = session("B")
+    let refreshedA = session("A2")
+    let refreshedB = session("B2")
+
+    Dependencies[clientID].sessionStorage.store(userA)
+
+    let tokensRequested = LockIsolated<[String]>([])
+    let (gate, continuation) = AsyncStream<Void>.makeStream()
+
+    struct RefreshBody: Decodable { let refreshToken: String }
+
+    // Answers each token with its own rotated session, so joining the wrong task is visible in
+    // the result and not only in the request count.
+    http.respond(when: { $0.url?.path.contains("/token") == true }) { _, body in
+      let refreshToken = try AuthClient.Configuration.jsonDecoder.decode(
+        RefreshBody.self, from: body ?? Data()
+      ).refreshToken
+      tokensRequested.withValue { $0.append(refreshToken) }
+
+      // Hold A's request only, so B's refresh is requested while A's is still in flight.
+      if refreshToken == userA.refreshToken {
+        _ = await gate.first(where: { _ in true })
+      }
+      return (
+        HTTPResponse(status: .ok),
+        try AuthClient.Configuration.jsonEncoder.encode(
+          refreshToken == userA.refreshToken ? refreshedA : refreshedB
+        )
+      )
+    }
+
+    let refreshA = Task { try await sut.refreshSession(userA.refreshToken) }
+    let sawRequest = await waitUntil { tokensRequested.value.contains(userA.refreshToken) }
+    #expect(sawRequest)
+
+    await sut.update(userB)
+    // Started as a task, not awaited inline: while the bug is present B joins A's gated task, and
+    // awaiting inline would deadlock against the release below instead of failing.
+    let refreshB = Task { try await sut.refreshSession(userB.refreshToken) }
+    _ = await waitUntil { tokensRequested.value.count == 2 }
+
+    continuation.yield(())
+    continuation.finish()
+    _ = await refreshA.result
+    let resultB = await refreshB.result
+
+    // B asked to refresh its own token, so it must not be served A's in-flight task.
+    expectNoDifference(try resultB.get().refreshToken, refreshedB.refreshToken)
+    expectNoDifference(tokensRequested.value.sorted(), [userA, userB].map(\.refreshToken).sorted())
+  }
+
+  @Test
+  func refreshCommitsWhenStorageStartsEmpty() async throws {
+    // `setSession(accessToken:refreshToken:)` refreshes an externally-sourced token with nothing
+    // stored yet. The guard must not mistake that for a session replaced under it.
+    let hydrated = session("hydrated")
+
+    http.respond(when: { $0.url?.path.contains("/token") == true }) { _, _ in
+      (HTTPResponse(status: .ok), try AuthClient.Configuration.jsonEncoder.encode(hydrated))
+    }
+
+    let result = try await sut.refreshSession("externally-sourced-refresh")
+
+    expectNoDifference(result.refreshToken, hydrated.refreshToken)
+    expectNoDifference(
+      Dependencies[clientID].sessionStorage.get()?.refreshToken, hydrated.refreshToken)
+  }
 }

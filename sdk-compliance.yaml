@@ -322,6 +322,7 @@ supporting_symbols:
   - AuthError.Kind.rawValue
   - AuthError.Kind.api
   - AuthError.Kind.sessionMissing
+  - AuthError.Kind.refreshDiscarded
   - AuthError.Kind.weakPassword
   - AuthError.Kind.pkceGrantCodeExchange
   - AuthError.Kind.implicitGrantRedirect
