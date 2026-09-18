@@ -31,6 +31,15 @@ public protocol PostgrestRelation: PostgrestSelection where Source == Self {
   static var relationName: String { get }
 
   /// The Postgres schema the relation belongs to.
+  ///
+  /// `@Table` sets it from its `schema:` argument, which defaults to ``PublicSchema``. Naming it
+  /// as a type is what lets ``PostgrestSchemaScope`` reject a relation from another schema at
+  /// compile time.
+  associatedtype Schema: PostgrestSchema = PublicSchema
+
+  /// The Postgres schema the relation belongs to, as PostgREST addresses it.
+  ///
+  /// Defaults to ``Schema``'s name.
   static var schema: String { get }
 
   /// The namespace of this relation's columns.
@@ -44,6 +53,10 @@ public protocol PostgrestRelation: PostgrestSelection where Source == Self {
   /// A filter closure receives this value, so a call site names a column as `$0.isDone` rather
   /// than spelling the relation out.
   static var columns: Columns { get }
+}
+
+extension PostgrestRelation {
+  public static var schema: String { Schema.name }
 }
 
 /// A relation that declares a primary key.

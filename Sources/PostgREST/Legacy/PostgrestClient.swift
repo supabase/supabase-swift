@@ -43,7 +43,7 @@ public import Logging
 ///
 /// ### Switching the Schema
 ///
-/// - ``schema(_:)``
+/// - ``schema(_:)->PostgrestClient``
 ///
 /// ### Inspecting Configuration
 ///

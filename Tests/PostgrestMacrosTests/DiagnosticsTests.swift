@@ -60,6 +60,30 @@ struct DiagnosticsTests {
   }
 
   @Test
+  func tableRejectsASchemaThatIsNotAType() {
+    // The string is how `schema:` was spelled before, so this is the diagnostic a migrating
+    // relation lands on. Defaulting it to the public schema instead would send the query
+    // somewhere the author did not ask for.
+    assertMacro {
+      """
+      @Table("secrets", schema: "private")
+      struct Secret {
+        var id: Int
+      }
+      """
+    } diagnostics: {
+      """
+      @Table("secrets", schema: "private")
+                                ┬────────
+                                ╰─ 🛑 schema: needs a schema type, as in `PrivateSchema.self`
+      struct Secret {
+        var id: Int
+      }
+      """
+    }
+  }
+
+  @Test
   func selectionOfRejectsARelationshipWithNoRoot() {
     // `\.todoID` infers its root from context a macro cannot see, so the expansion would have
     // nothing to name the foreign key's relation by. Left unreported, the property falls through
@@ -211,7 +235,7 @@ struct DiagnosticsTests {
       extension Todo {
         static let relationName = "todos"
 
-        static let schema = "public"
+        typealias Schema = PublicSchema
 
         static let selectString = "*"
 

@@ -64,6 +64,15 @@ struct IntegrationActiveTodo {
   var task: String
 }
 
+enum IntegrationPrivateSchema: PostgrestSchema {
+  static let name = "private"
+}
+
+@Table("secrets", schema: IntegrationPrivateSchema.self)
+struct IntegrationSecret {
+  var id: Int
+}
+
 @Suite
 struct TableIntegrationTests {
   typealias Todo = IntegrationTodo
@@ -73,6 +82,13 @@ struct TableIntegrationTests {
     #expect(Todo.relationName == "todos")
     #expect(Todo.schema == "public")
     #expect(Todo.selectString == "*")
+  }
+
+  @Test
+  func macroSuppliesTheSchemaType() {
+    #expect(Todo.Schema.self == PublicSchema.self)
+    #expect(IntegrationSecret.Schema.self == IntegrationPrivateSchema.self)
+    #expect(IntegrationSecret.schema == "private")
   }
 
   /// `assertMacro` checks the emitted text. This checks the expansion compiles into usable

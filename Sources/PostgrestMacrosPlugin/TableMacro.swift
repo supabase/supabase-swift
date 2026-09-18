@@ -30,15 +30,17 @@ public struct TableMacro: ExtensionMacro {
 
   static func arguments(from node: AttributeSyntax) -> Arguments {
     var name = ""
-    var schema = "public"
+    var schema = "PublicSchema"
     var readOnly = false
     for argument in node.arguments?.as(LabeledExprListSyntax.self) ?? [] {
       switch argument.label?.text {
       case nil:
         name = argument.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue ?? ""
       case "schema":
+        // `PrivateSchema.self`, so the base of the member access is the type to name.
         schema =
-          argument.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue ?? "public"
+          argument.expression.as(MemberAccessExprSyntax.self)?.base?.trimmedDescription
+          ?? "PublicSchema"
       case "readOnly":
         readOnly = argument.expression.as(BooleanLiteralExprSyntax.self)?.literal.text == "true"
       default:
@@ -46,6 +48,10 @@ public struct TableMacro: ExtensionMacro {
       }
     }
     return Arguments(name: name, schema: schema, readOnly: readOnly)
+  }
+
+  static func schemaArgument(of node: AttributeSyntax) -> LabeledExprSyntax? {
+    node.arguments?.as(LabeledExprListSyntax.self)?.first { $0.label?.text == "schema" }
   }
 
   // MARK: Expansion
@@ -71,13 +77,24 @@ public struct TableMacro: ExtensionMacro {
     if declaration.postgrestDiagnoseUnannotatedProperties(macro: "@Table", in: context) {
       return []
     }
+    if let schema = schemaArgument(of: node),
+      schema.expression.as(MemberAccessExprSyntax.self)?.base == nil
+    {
+      // Without a written type the expansion has no name to alias, and defaulting to the public
+      // schema silently would send the query to the wrong one.
+      context.error(
+        "schema: needs a schema type, as in `PrivateSchema.self`",
+        at: schema.expression
+      )
+      return []
+    }
     let arguments = arguments(from: node)
     let access = declaration.postgrestAccessLevel
     let properties = declaration.postgrestStoredProperties()
 
     var body: [String] = [
       "  \(access)static let relationName = \"\(arguments.name)\"",
-      "  \(access)static let schema = \"\(arguments.schema)\"",
+      "  \(access)typealias Schema = \(arguments.schema)",
       "  \(access)static let selectString = \"*\"",
       columnsNamespace(access: access, type: type.trimmedDescription, properties: properties),
     ]

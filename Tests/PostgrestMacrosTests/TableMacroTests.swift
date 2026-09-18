@@ -41,7 +41,7 @@ struct TableMacroTests {
       extension Todo {
         static let relationName = "todos"
 
-        static let schema = "public"
+        typealias Schema = PublicSchema
 
         static let selectString = "*"
 
@@ -109,7 +109,7 @@ struct TableMacroTests {
       extension ActiveTodo {
         static let relationName = "active_todos"
 
-        static let schema = "public"
+        typealias Schema = PublicSchema
 
         static let selectString = "*"
 
@@ -151,7 +151,7 @@ struct TableMacroTests {
       extension AuditEvent {
         static let relationName = "audit_events"
 
-        static let schema = "public"
+        typealias Schema = PublicSchema
 
         static let selectString = "*"
 
@@ -188,7 +188,7 @@ struct TableMacroTests {
   func propagatesTheAccessLevel() {
     assertMacro {
       """
-      @Table("todos", schema: "app")
+      @Table("todos", schema: AppSchema.self)
       public struct Todo {
         @PrimaryKey var id: Int
         var task: String
@@ -204,7 +204,7 @@ struct TableMacroTests {
       extension Todo {
         public static let relationName = "todos"
 
-        public static let schema = "app"
+        public typealias Schema = AppSchema
 
         public static let selectString = "*"
 
@@ -266,7 +266,7 @@ struct TableMacroTests {
       extension Todo {
         static let relationName = "todos"
 
-        static let schema = "public"
+        typealias Schema = PublicSchema
 
         static let selectString = "*"
 
@@ -320,7 +320,7 @@ struct TableMacroTests {
       extension Todo {
         static let relationName = "todos"
 
-        static let schema = "public"
+        typealias Schema = PublicSchema
 
         static let selectString = "*"
 
@@ -405,7 +405,7 @@ struct TableMacroTests {
       extension Todo {
         static let relationName = "todos"
 
-        static let schema = "public"
+        typealias Schema = PublicSchema
 
         static let selectString = "*"
 
@@ -469,7 +469,7 @@ struct TableMacroTests {
       extension UserRole {
         static let relationName = "user_roles"
 
-        static let schema = "public"
+        typealias Schema = PublicSchema
 
         static let selectString = "*"
 
@@ -537,7 +537,7 @@ struct TableMacroTests {
       extension UserRole {
         static let relationName = "user_roles"
 
-        static let schema = "public"
+        typealias Schema = PublicSchema
 
         static let selectString = "*"
 
@@ -604,7 +604,7 @@ struct TableMacroTests {
       extension Todo {
         static let relationName = "todos"
 
-        static let schema = "public"
+        typealias Schema = PublicSchema
 
         static let selectString = "*"
 
@@ -674,7 +674,7 @@ struct TableMacroTests {
       extension Todo {
         static let relationName = "todos"
 
-        static let schema = "public"
+        typealias Schema = PublicSchema
 
         static let selectString = "*"
 

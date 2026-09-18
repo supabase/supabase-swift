@@ -13,10 +13,17 @@ extension PostgrestClient {
   /// let todos = try await client.from(Todo.self).select().execute().value
   /// ```
   ///
+  /// A relation that names a schema other than ``PublicSchema`` is queried in that schema, unless
+  /// this client was already scoped to one, in which case the client's schema wins.
+  ///
   /// - Parameter relation: The relation type to query.
   /// - Returns: A ``PostgrestTypedSource`` for that relation.
   public func from<R: PostgrestRelation>(_ relation: R.Type) -> PostgrestTypedSource<R> {
-    PostgrestTypedSource(builder: from(R.relationName))
+    let client =
+      configuration.schema == nil && R.schema != PublicSchema.name
+      ? schema(R.schema)
+      : self
+    return PostgrestTypedSource(builder: client.from(R.relationName))
   }
 }
 

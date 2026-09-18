@@ -2834,3 +2834,44 @@ try await storage.from("avatars").uploadToSignedURL(path: "user123.png", token: 
 ```
 
 This is a compile error. All six overloads move together (`data:` and `fileURL:` variants of each).
+
+## `@Table`'s `schema:` takes a type, not a string
+
+A relation names its schema with a type, so a relation queried through the wrong schema is a
+compile error rather than a request the database rejects.
+
+```swift
+// Before
+@Table("secrets", schema: "private")
+struct Secret { ... }
+
+// After
+enum PrivateSchema: PostgrestSchema {
+  static let name = "private"
+}
+
+@Table("secrets", schema: PrivateSchema.self)
+struct Secret { ... }
+```
+
+`@Table("todos")` is unchanged: a relation that names no schema belongs to `PublicSchema`.
+
+The type is what the new scope checks against:
+
+```swift
+try await client.schema(PrivateSchema.self).from(Secret.self).select().execute()  // valid
+try await client.schema(PrivateSchema.self).from(Todo.self).select().execute()    // compile error
+```
+
+`client.schema("private")` still exists and still returns a `PostgrestClient`. Reach for it when the
+schema is not known at compile time, or when addressing a relation by name.
+
+Two things the compiler will not catch:
+
+- `client.from(Secret.self)` now sends `Accept-Profile: private`, taken from the relation. It
+  previously ignored the relation's schema and queried `public`. A client scoped with
+  `client.schema("...")` still wins over the relation.
+- `PostgrestRelation.schema` is still a `String` and now defaults to the declared type's name, so a
+  hand-written conformance that sets the string keeps compiling and keeps routing to that schema.
+  Its `Schema` type defaults to `PublicSchema` though, so add `typealias Schema = PrivateSchema` to
+  it before passing it to the typed scope.

@@ -93,6 +93,7 @@ supporting_symbols:
   - PostgrestRelation.columns
   - PostgrestRelation.relationName
   - PostgrestRelation.schema
+  - PostgrestRelation.Schema
   - PostgrestKeyedRelation
   - PostgrestKeyedRelation.primaryKeyColumns
   - PostgrestRequestBuilder
@@ -902,6 +903,12 @@ features:
       - PostgrestClient.schema
     supporting_symbols:
       - PostgrestClient.Configuration.schema
+      - PostgrestSchema
+      - PostgrestSchema.name
+      - PublicSchema
+      - PublicSchema.name
+      - PostgrestSchemaScope
+      - PostgrestSchemaScope.from
   database.query.rpc:
     status: implemented
     symbols:
