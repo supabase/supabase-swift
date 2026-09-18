@@ -14,7 +14,6 @@ import Testing
 struct PostgrestDerivedColumnTests {
   struct Item: PostgrestRelation {
     static let relationName = "items"
-    static let schema = "public"
     static let selectString = "*"
 
     var cost: Double

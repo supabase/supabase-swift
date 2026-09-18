@@ -24,23 +24,20 @@ public struct TableMacro: ExtensionMacro {
 
   struct Arguments {
     var name: String
-    var schema: String
+    var schema: ExprSyntax?
     var readOnly: Bool
   }
 
   static func arguments(from node: AttributeSyntax) -> Arguments {
     var name = ""
-    var schema = "PublicSchema"
+    var schema: ExprSyntax?
     var readOnly = false
     for argument in node.arguments?.as(LabeledExprListSyntax.self) ?? [] {
       switch argument.label?.text {
       case nil:
         name = argument.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue ?? ""
       case "schema":
-        // `PrivateSchema.self`, so the base of the member access is the type to name.
-        schema =
-          argument.expression.as(MemberAccessExprSyntax.self)?.base?.trimmedDescription
-          ?? "PublicSchema"
+        schema = argument.expression
       case "readOnly":
         readOnly = argument.expression.as(BooleanLiteralExprSyntax.self)?.literal.text == "true"
       default:
@@ -50,8 +47,12 @@ public struct TableMacro: ExtensionMacro {
     return Arguments(name: name, schema: schema, readOnly: readOnly)
   }
 
-  static func schemaArgument(of node: AttributeSyntax) -> LabeledExprSyntax? {
-    node.arguments?.as(LabeledExprListSyntax.self)?.first { $0.label?.text == "schema" }
+  static func schemaType(of expression: ExprSyntax) -> String? {
+    guard let access = expression.as(MemberAccessExprSyntax.self),
+      access.declName.baseName.tokenKind == .keyword(.self),
+      let base = access.base
+    else { return nil }
+    return base.trimmedDescription
   }
 
   // MARK: Expansion
@@ -77,24 +78,21 @@ public struct TableMacro: ExtensionMacro {
     if declaration.postgrestDiagnoseUnannotatedProperties(macro: "@Table", in: context) {
       return []
     }
-    if let schema = schemaArgument(of: node),
-      schema.expression.as(MemberAccessExprSyntax.self)?.base == nil
-    {
-      // Without a written type the expansion has no name to alias, and defaulting to the public
-      // schema silently would send the query to the wrong one.
-      context.error(
-        "schema: needs a schema type, as in `PrivateSchema.self`",
-        at: schema.expression
-      )
-      return []
-    }
     let arguments = arguments(from: node)
+    var schema = "PostgREST.PublicSchema"
+    if let expression = arguments.schema {
+      guard let written = schemaType(of: expression) else {
+        context.error("schema: needs a schema type, as in `PrivateSchema.self`", at: expression)
+        return []
+      }
+      schema = written
+    }
     let access = declaration.postgrestAccessLevel
     let properties = declaration.postgrestStoredProperties()
 
     var body: [String] = [
       "  \(access)static let relationName = \"\(arguments.name)\"",
-      "  \(access)typealias Schema = \(arguments.schema)",
+      "  \(access)typealias Schema = \(schema)",
       "  \(access)static let selectString = \"*\"",
       columnsNamespace(access: access, type: type.trimmedDescription, properties: properties),
     ]

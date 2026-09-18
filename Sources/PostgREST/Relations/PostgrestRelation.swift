@@ -37,11 +37,6 @@ public protocol PostgrestRelation: PostgrestSelection where Source == Self {
   /// compile time.
   associatedtype Schema: PostgrestSchema = PublicSchema
 
-  /// The Postgres schema the relation belongs to, as PostgREST addresses it.
-  ///
-  /// Defaults to ``Schema``'s name.
-  static var schema: String { get }
-
   /// The namespace of this relation's columns.
   ///
   /// `@Table` generates it as a nested `Columns` struct holding one ``PostgrestColumn`` per
@@ -56,6 +51,7 @@ public protocol PostgrestRelation: PostgrestSelection where Source == Self {
 }
 
 extension PostgrestRelation {
+  /// The name of the relation's ``Schema``, as PostgREST addresses it.
   public static var schema: String { Schema.name }
 }
 

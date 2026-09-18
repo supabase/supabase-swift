@@ -41,7 +41,8 @@
 ///
 /// - Parameters:
 ///   - name: The relation's name as PostgREST addresses it.
-///   - schema: The type naming the Postgres schema. Defaults to ``PostgREST/PublicSchema``.
+///   - schema: The type naming the Postgres schema, written as `PrivateSchema.self`. Defaults to
+///     ``PostgREST/PublicSchema``.
 ///   - readOnly: Pass `true` for a view. The type then conforms to ``PostgREST/PostgrestRelation``
 ///     only, and the write methods are not available on it.
 @attached(

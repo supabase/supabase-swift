@@ -60,21 +60,18 @@ struct DiagnosticsTests {
   }
 
   @Test
-  func tableRejectsASchemaThatIsNotAType() {
-    // The string is how `schema:` was spelled before, so this is the diagnostic a migrating
-    // relation lands on. Defaulting it to the public schema instead would send the query
-    // somewhere the author did not ask for.
+  func tableRejectsASchemaThatIsNotATypeLiteral() {
     assertMacro {
       """
-      @Table("secrets", schema: "private")
+      @Table("secrets", schema: Schemas.privateOne)
       struct Secret {
         var id: Int
       }
       """
     } diagnostics: {
       """
-      @Table("secrets", schema: "private")
-                                ┬────────
+      @Table("secrets", schema: Schemas.privateOne)
+                                ┬─────────────────
                                 ╰─ 🛑 schema: needs a schema type, as in `PrivateSchema.self`
       struct Secret {
         var id: Int
@@ -235,7 +232,7 @@ struct DiagnosticsTests {
       extension Todo {
         static let relationName = "todos"
 
-        typealias Schema = PublicSchema
+        typealias Schema = PostgREST.PublicSchema
 
         static let selectString = "*"
 

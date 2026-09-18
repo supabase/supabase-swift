@@ -1,3 +1,10 @@
+//
+//  PostgrestSchema.swift
+//  PostgREST
+//
+//  Created by Ranbir Singh on 18/09/26.
+//
+
 /// A Postgres schema, named by a type so a relation can say which schema it lives in.
 ///
 /// Conform an uninhabited type to it, the way the request phases are declared, and point a

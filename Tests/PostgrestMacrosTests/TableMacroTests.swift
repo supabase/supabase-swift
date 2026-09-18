@@ -41,7 +41,7 @@ struct TableMacroTests {
       extension Todo {
         static let relationName = "todos"
 
-        typealias Schema = PublicSchema
+        typealias Schema = PostgREST.PublicSchema
 
         static let selectString = "*"
 
@@ -109,7 +109,7 @@ struct TableMacroTests {
       extension ActiveTodo {
         static let relationName = "active_todos"
 
-        typealias Schema = PublicSchema
+        typealias Schema = PostgREST.PublicSchema
 
         static let selectString = "*"
 
@@ -151,7 +151,7 @@ struct TableMacroTests {
       extension AuditEvent {
         static let relationName = "audit_events"
 
-        typealias Schema = PublicSchema
+        typealias Schema = PostgREST.PublicSchema
 
         static let selectString = "*"
 
@@ -266,7 +266,7 @@ struct TableMacroTests {
       extension Todo {
         static let relationName = "todos"
 
-        typealias Schema = PublicSchema
+        typealias Schema = PostgREST.PublicSchema
 
         static let selectString = "*"
 
@@ -320,7 +320,7 @@ struct TableMacroTests {
       extension Todo {
         static let relationName = "todos"
 
-        typealias Schema = PublicSchema
+        typealias Schema = PostgREST.PublicSchema
 
         static let selectString = "*"
 
@@ -405,7 +405,7 @@ struct TableMacroTests {
       extension Todo {
         static let relationName = "todos"
 
-        typealias Schema = PublicSchema
+        typealias Schema = PostgREST.PublicSchema
 
         static let selectString = "*"
 
@@ -469,7 +469,7 @@ struct TableMacroTests {
       extension UserRole {
         static let relationName = "user_roles"
 
-        typealias Schema = PublicSchema
+        typealias Schema = PostgREST.PublicSchema
 
         static let selectString = "*"
 
@@ -537,7 +537,7 @@ struct TableMacroTests {
       extension UserRole {
         static let relationName = "user_roles"
 
-        typealias Schema = PublicSchema
+        typealias Schema = PostgREST.PublicSchema
 
         static let selectString = "*"
 
@@ -604,7 +604,7 @@ struct TableMacroTests {
       extension Todo {
         static let relationName = "todos"
 
-        typealias Schema = PublicSchema
+        typealias Schema = PostgREST.PublicSchema
 
         static let selectString = "*"
 
@@ -674,7 +674,7 @@ struct TableMacroTests {
       extension Todo {
         static let relationName = "todos"
 
-        typealias Schema = PublicSchema
+        typealias Schema = PostgREST.PublicSchema
 
         static let selectString = "*"
 

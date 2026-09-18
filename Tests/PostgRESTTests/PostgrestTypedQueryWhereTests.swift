@@ -14,7 +14,6 @@ import Testing
 struct PostgrestTypedQueryWhereTests {
   struct Todo: PostgrestWritableRelation {
     static let relationName = "todos"
-    static let schema = "public"
     static let selectString = "*"
 
     var id: Int

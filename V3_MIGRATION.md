@@ -2856,22 +2856,26 @@ struct Secret { ... }
 
 `@Table("todos")` is unchanged: a relation that names no schema belongs to `PublicSchema`.
 
-The type is what the new scope checks against:
+The type is what the new scope checks against. `SupabaseClient` and `PostgrestClient` both have it:
 
 ```swift
-try await client.schema(PrivateSchema.self).from(Secret.self).select().execute()  // valid
-try await client.schema(PrivateSchema.self).from(Todo.self).select().execute()    // compile error
+try await supabase.schema(PrivateSchema.self).from(Secret.self).select().execute()  // valid
+try await supabase.schema(PrivateSchema.self).from(Todo.self).select().execute()    // compile error
 ```
 
-`client.schema("private")` still exists and still returns a `PostgrestClient`. Reach for it when the
-schema is not known at compile time, or when addressing a relation by name.
+`schema("private")` still exists and still returns a `PostgrestClient`. Reach for it when the
+schema is not known at compile time.
 
-Two things the compiler will not catch:
+Three things the compiler will not catch:
 
-- `client.from(Secret.self)` now sends `Accept-Profile: private`, taken from the relation. It
-  previously ignored the relation's schema and queried `public`. A client scoped with
-  `client.schema("...")` still wins over the relation.
-- `PostgrestRelation.schema` is still a `String` and now defaults to the declared type's name, so a
-  hand-written conformance that sets the string keeps compiling and keeps routing to that schema.
-  Its `Schema` type defaults to `PublicSchema` though, so add `typealias Schema = PrivateSchema` to
-  it before passing it to the typed scope.
+- `from(Secret.self)` now sends `Accept-Profile: private`, taken from the relation. It previously
+  ignored the relation's schema. A schema already set on the client wins over the relation, and
+  that includes `"public"`: with `SupabaseClientOptions(db: .init(schema: "public"))`,
+  `supabase.from(Secret.self)` queries `public`.
+- The typed `schema(_:)` traps on a client that already has a schema, so
+  `client.schema("other").schema(PrivateSchema.self)` is a programmer error, as is
+  `supabase.schema(PrivateSchema.self)` when `db.schema` is set.
+- `PostgrestRelation` no longer requires `static var schema: String`; the schema comes from the
+  `Schema` type. A hand-written conformance that declares `static let schema = "private"` still
+  compiles, but the string is no longer read and the relation is queried in `public`. Replace it
+  with `typealias Schema = PrivateSchema`.

@@ -64,6 +64,10 @@ struct IntegrationActiveTodo {
   var task: String
 }
 
+/// Shadows `PostgREST.PublicSchema` the way the postgres-meta Swift generator's output does, so
+/// every `@Table` in this module compiles against the collision.
+enum PublicSchema {}
+
 enum IntegrationPrivateSchema: PostgrestSchema {
   static let name = "private"
 }
@@ -86,7 +90,7 @@ struct TableIntegrationTests {
 
   @Test
   func macroSuppliesTheSchemaType() {
-    #expect(Todo.Schema.self == PublicSchema.self)
+    #expect(Todo.Schema.self == PostgREST.PublicSchema.self)
     #expect(IntegrationSecret.Schema.self == IntegrationPrivateSchema.self)
     #expect(IntegrationSecret.schema == "private")
   }

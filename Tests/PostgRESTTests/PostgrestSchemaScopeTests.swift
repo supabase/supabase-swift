@@ -1,3 +1,10 @@
+//
+//  PostgrestSchemaScopeTests.swift
+//  Supabase
+//
+//  Created by Ranbir Singh on 18/09/26.
+//
+
 import Foundation
 import Testing
 
@@ -9,7 +16,7 @@ struct PostgrestSchemaScopeTests {
     static let name = "private"
   }
 
-  struct Secret: PostgrestRelation {
+  struct Secret: PostgrestWritableRelation {
     typealias Schema = PrivateSchema
     static let relationName = "secrets"
     static let selectString = "*"
@@ -21,6 +28,10 @@ struct PostgrestSchemaScopeTests {
     }
 
     static let columns = Columns()
+
+    struct Draft: Encodable, Sendable {
+      var id: Int
+    }
   }
 
   struct Todo: PostgrestRelation {
@@ -71,13 +82,22 @@ struct PostgrestSchemaScopeTests {
   }
 
   @Test
-  func theScopeStillTakesARelationName() async throws {
+  func thePublicScopeSendsItsProfile() async throws {
     let capture = QueryCapture()
 
-    _ = try await capture.client.schema(PrivateSchema.self).from("secrets").select().execute()
+    _ = try await capture.client.schema(PublicSchema.self).from(Todo.self).select().execute()
 
-    #expect(capture.header("Accept-Profile") == "private")
-    #expect(capture.path?.hasSuffix("/secrets") == true)
+    #expect(capture.header("Accept-Profile") == "public")
+  }
+
+  @Test
+  func insertSendsTheRelationsProfile() async throws {
+    let capture = QueryCapture()
+
+    _ = try await capture.client.from(Secret.self).insert(Secret.Draft(id: 1)).execute()
+
+    #expect(capture.httpMethod == "POST")
+    #expect(capture.header("Content-Profile") == "private")
   }
 
   @Test
@@ -88,4 +108,22 @@ struct PostgrestSchemaScopeTests {
 
     #expect(capture.header("Accept-Profile") == "other")
   }
+
+  @Test
+  func anExplicitPublicSchemaOnTheClientWins() async throws {
+    let capture = QueryCapture()
+
+    _ = try await capture.client.schema("public").from(Secret.self).select().execute()
+
+    #expect(capture.header("Accept-Profile") == "public")
+  }
+
+  #if os(macOS) || os(Linux)
+    @Test
+    func scopingAClientThatAlreadyHasASchemaTraps() async {
+      await #expect(processExitsWith: .failure) {
+        _ = QueryCapture().client.schema("other").schema(PrivateSchema.self)
+      }
+    }
+  #endif
 }
