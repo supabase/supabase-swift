@@ -1665,6 +1665,77 @@ features:
   storage.analytics.register_table: not_implemented
   storage.analytics.table_exists: not_implemented
   storage.analytics.update_namespace_properties: not_implemented
+
+  # ── Storage — Errors ───────────────────────────────────────────────────────
+
+  storage.errors.error_codes:
+    status: implemented
+    symbols:
+      - StorageError.ServerError.code
+    supporting_symbols:
+      - StorageError.Code
+      - StorageError.Code.init
+      - StorageError.Code.rawValue
+      - StorageError.Code.noSuchBucket
+      - StorageError.Code.noSuchLifecycleConfiguration
+      - StorageError.Code.noSuchKey
+      - StorageError.Code.noSuchUpload
+      - StorageError.Code.invalidJWT
+      - StorageError.Code.invalidRequest
+      - StorageError.Code.invalidArgument
+      - StorageError.Code.malformedXML
+      - StorageError.Code.tenantNotFound
+      - StorageError.Code.entityTooLarge
+      - StorageError.Code.internalError
+      - StorageError.Code.resourceAlreadyExists
+      - StorageError.Code.resourceNotEmpty
+      - StorageError.Code.invalidBucketName
+      - StorageError.Code.invalidKey
+      - StorageError.Code.invalidRange
+      - StorageError.Code.invalidMimeType
+      - StorageError.Code.invalidUploadId
+      - StorageError.Code.keyAlreadyExists
+      - StorageError.Code.bucketAlreadyExists
+      - StorageError.Code.databaseTimeout
+      - StorageError.Code.databaseReadOnly
+      - StorageError.Code.databaseTransactionAborted
+      - StorageError.Code.databaseInvalidObjectDefinition
+      - StorageError.Code.databaseSchemaMismatch
+      - StorageError.Code.invalidSignature
+      - StorageError.Code.expiredToken
+      - StorageError.Code.signatureDoesNotMatch
+      - StorageError.Code.accessDenied
+      - StorageError.Code.resourceLocked
+      - StorageError.Code.resourceReferenced
+      - StorageError.Code.databaseError
+      - StorageError.Code.transactionError
+      - StorageError.Code.missingContentLength
+      - StorageError.Code.missingParameter
+      - StorageError.Code.invalidParameter
+      - StorageError.Code.invalidUploadSignature
+      - StorageError.Code.lockTimeout
+      - StorageError.Code.s3Error
+      - StorageError.Code.invalidAccessKeyId
+      - StorageError.Code.maximumCredentialsLimit
+      - StorageError.Code.invalidChecksum
+      - StorageError.Code.missingPart
+      - StorageError.Code.slowDown
+      - StorageError.Code.tusError
+      - StorageError.Code.aborted
+      - StorageError.Code.abortedTerminate
+      - StorageError.Code.featureNotEnabled
+      - StorageError.Code.notSupported
+      - StorageError.Code.icebergMaximumResourceLimit
+      - StorageError.Code.icebergResourceNotEmpty
+      - StorageError.Code.noSuchCatalog
+      - StorageError.Code.unknownError
+      - StorageError.Code.conflictException
+      - StorageError.Code.notFoundException
+      - StorageError.Code.vectorBucketNotEmpty
+      - StorageError.Code.s3VectorMaxBucketsExceeded
+      - StorageError.Code.s3VectorMaxIndexesExceeded
+      - StorageError.Code.noAvailableShard
+      - StorageError.Code.shardNotFound
+
   # Newly synced from the canonical spec; no local group yet, place manually.
   storage.configuration.auto_retry: not_implemented
-  storage.errors.error_codes: not_implemented
