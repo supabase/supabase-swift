@@ -28,10 +28,6 @@ struct APIClient: Sendable {
     Dependencies[clientID].sessionManager
   }
 
-  var sessionStorage: SessionStorage {
-    Dependencies[clientID].sessionStorage
-  }
-
   var eventEmitter: AuthStateChangeEventEmitter {
     Dependencies[clientID].eventEmitter
   }
@@ -155,9 +151,9 @@ struct APIClient: Sendable {
       //
       // Only `session`'s own storage slot may be cleared. A request that was still in flight when
       // the user signed out — and another user signed in — would otherwise delete the session
-      // that replaced it and sign that user out.
-      if !sessionStorage.changed(since: session) {
-        await sessionManager.remove()
+      // that replaced it and sign that user out. The check and the delete happen together inside
+      // the session manager's actor, so a sign-in cannot land between them.
+      if await sessionManager.removeIfUnchanged(session) {
         eventEmitter.emit(.signedOut, session: nil)
       }
       var result = AuthError.sessionMissing

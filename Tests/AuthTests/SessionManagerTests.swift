@@ -360,6 +360,54 @@ struct SessionManagerTests {
   }
 
   @Test
+  func refreshForTheSameTokenJoinsTheInFlightRefreshAfterAnotherTokenIntervened() async throws {
+    let userA = session("A")
+    let userB = session("B")
+
+    Dependencies[clientID].sessionStorage.store(userA)
+
+    let tokensRequested = LockIsolated<[String]>([])
+    let (gate, continuation) = AsyncStream<Void>.makeStream()
+
+    struct RefreshBody: Decodable { let refreshToken: String }
+
+    http.respond(when: { $0.url?.path.contains("/token") == true }) { _, body in
+      let refreshToken = try AuthClient.Configuration.jsonDecoder.decode(
+        RefreshBody.self, from: body ?? Data()
+      ).refreshToken
+      tokensRequested.withValue { $0.append(refreshToken) }
+
+      if refreshToken == userA.refreshToken {
+        _ = await gate.first(where: { _ in true })
+      }
+      return (
+        HTTPResponse(status: .ok), try AuthClient.Configuration.jsonEncoder.encode(userA)
+      )
+    }
+
+    let firstA = Task { try await sut.refreshSession(userA.refreshToken) }
+    let sawFirstA = await waitUntil { tokensRequested.value.contains(userA.refreshToken) }
+    #expect(sawFirstA)
+
+    // B's refresh must not evict A's in-flight task, so this second A joins the first rather than
+    // redeeming A's refresh token a second time.
+    let refreshB = Task { try await sut.refreshSession(userB.refreshToken) }
+    _ = await waitUntil { tokensRequested.value.contains(userB.refreshToken) }
+    let secondA = Task { try await sut.refreshSession(userA.refreshToken) }
+    // A short window: while the bug is present the third request is issued as soon as the join
+    // check misses, so this only has to outlast that — not wait out a full timeout.
+    _ = await waitUntil(timeout: 0.5) { tokensRequested.value.count > 2 }
+
+    continuation.yield(())
+    continuation.finish()
+    _ = await firstA.result
+    _ = await refreshB.result
+    _ = await secondA.result
+
+    expectNoDifference(tokensRequested.value.filter { $0 == userA.refreshToken }.count, 1)
+  }
+
+  @Test
   func refreshCommitsWhenStorageStartsEmpty() async throws {
     // `setSession(accessToken:refreshToken:)` refreshes an externally-sourced token with nothing
     // stored yet. The guard must not mistake that for a session replaced under it.
