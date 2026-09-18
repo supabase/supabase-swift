@@ -14,7 +14,6 @@ import Testing
 struct PostgrestRelatedColumnsTests {
   struct Order: PostgrestRelation {
     static let relationName = "orders"
-    static let schema = "public"
     static let selectString = "*"
 
     var id: Int
@@ -35,7 +34,6 @@ struct PostgrestRelatedColumnsTests {
 
   struct Todo: PostgrestRelation {
     static let relationName = "todos"
-    static let schema = "public"
     static let selectString = "*"
 
     var id: Int

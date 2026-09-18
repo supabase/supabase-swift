@@ -14,7 +14,6 @@ import Testing
 struct PostgrestTypedMutationTests {
   struct Todo: PostgrestWritableRelation, PostgrestKeyedRelation {
     static let relationName = "todos"
-    static let schema = "public"
     static let selectString = "*"
 
     var id: Int
@@ -57,7 +56,6 @@ struct PostgrestTypedMutationTests {
   /// A view: conforms to `PostgrestRelation` only, so the writes must not be offered.
   struct ActiveTodo: PostgrestRelation {
     static let relationName = "active_todos"
-    static let schema = "public"
     static let selectString = "*"
 
     var id: Int

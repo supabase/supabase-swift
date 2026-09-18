@@ -14,7 +14,6 @@ import Testing
 struct PostgrestAggregateTests {
   struct Order: PostgrestRelation {
     static let relationName = "orders"
-    static let schema = "public"
     static let selectString = "*"
 
     var amount: Double

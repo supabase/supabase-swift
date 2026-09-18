@@ -60,6 +60,27 @@ struct DiagnosticsTests {
   }
 
   @Test
+  func tableRejectsASchemaThatIsNotATypeLiteral() {
+    assertMacro {
+      """
+      @Table("secrets", schema: Schemas.privateOne)
+      struct Secret {
+        var id: Int
+      }
+      """
+    } diagnostics: {
+      """
+      @Table("secrets", schema: Schemas.privateOne)
+                                ┬─────────────────
+                                ╰─ 🛑 schema: needs a schema type, as in `PrivateSchema.self`
+      struct Secret {
+        var id: Int
+      }
+      """
+    }
+  }
+
+  @Test
   func selectionOfRejectsARelationshipWithNoRoot() {
     // `\.todoID` infers its root from context a macro cannot see, so the expansion would have
     // nothing to name the foreign key's relation by. Left unreported, the property falls through
@@ -211,7 +232,7 @@ struct DiagnosticsTests {
       extension Todo {
         static let relationName = "todos"
 
-        static let schema = "public"
+        typealias Schema = PostgREST.PublicSchema
 
         static let selectString = "*"
 
