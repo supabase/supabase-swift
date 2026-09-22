@@ -121,6 +121,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   /// Lock-protected status + subscribers for ``status``/``statusChange``/``onStatusChange(_:)``.
   /// See `RealtimeChannel+Status.swift`.
   let statusStorage = LockIsolated(StatusStorage())
+  let lifecycleStorage = LockIsolated(LifecycleStorage())
 
   init(
     topic: String,
@@ -166,12 +167,21 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
         guard let channel = weakSelfRef.value else { return }
         await channel.push(ChannelEvent.leave)
       },
-      stateDidChange: { [weakSelfRef] state in
+      stateDidChange: { [weakSelfRef] state, joinIdentity in
         // Forward every state-machine transition to the public status
         // storage synchronously. Running this on the actor avoids the
         // async observer-Task delay, so reads of ``status`` right after
         // ``subscribeWithError()`` returns see the latest value.
-        weakSelfRef.value?.yieldStatus(Self.mapState(state))
+        guard let channel = weakSelfRef.value else { return }
+        let status = Self.mapState(state)
+        channel.yieldStatus(status)
+        channel.yieldLifecycleEvent(.statusChanged(status, join: joinIdentity))
+      },
+      joinDidStart: { [weakSelfRef] identity in
+        weakSelfRef.value?.yieldLifecycleEvent(.joinStarted(identity))
+      },
+      joinDidInvalidate: { [weakSelfRef] identity in
+        weakSelfRef.value?.yieldLifecycleEvent(.joinInvalidated(identity))
       }
     )
 
@@ -186,6 +196,14 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       return storage.continuations.map { $1 }
     }
     for continuation in continuations {
+      continuation.finish()
+    }
+    let lifecycleContinuations = lifecycleStorage.withValue {
+      storage -> [AsyncStream<RealtimeChannelLifecycleEvent>.Continuation] in
+      defer { storage.continuations.removeAll() }
+      return storage.continuations.map { $1 }
+    }
+    for continuation in lifecycleContinuations {
       continuation.finish()
     }
   }
@@ -599,15 +617,30 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   }
 
   private func handleSystem(_ message: RealtimeMessageV2) async {
-    if message.status == .ok {
-      await stateManager.didReceiveSubscribedOK()
-    } else {
+    let accepted = await stateManager.acceptSystemMessage(
+      joinRef: message.joinRef,
+      successful: message.status == .ok
+    ) { [weak self] joinIdentity in
+      self?.yieldLifecycleEvent(.system(message, join: joinIdentity))
+      self?.callbackManager.triggerSystem(message: message)
+    }
+    if !accepted {
+      // Preserve the legacy callback behavior for an unscoped system frame
+      // received before a channel has joined. A join-scoped frame is never
+      // delivered without actor validation, so it cannot be misattributed to
+      // a newer join.
+      if message.joinRef == nil, status == .unsubscribed {
+        callbackManager.triggerSystem(message: message)
+        return
+      }
+      logger.debug(
+        "Ignoring system message for stale join_ref \(message.joinRef ?? "<none>") on \(message.topic)"
+      )
+    } else if message.status != .ok {
       logger.debug(
         "Failed to subscribe to channel \(message.topic): \(message.payload)"
       )
     }
-
-    callbackManager.triggerSystem(message: message)
   }
 
   private func handleReply(_ message: RealtimeMessageV2) async throws {
@@ -618,7 +651,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       throw RealtimeError.decoding("Received a reply with unexpected payload: \(message)")
     }
 
-    await didReceiveReply(ref: ref, status: status)
+    await didReceiveReply(ref: ref, status: status, joinRef: message.joinRef)
 
     guard
       message.payload["response"]?.objectValue?.keys
@@ -629,8 +662,23 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       .objectValue?["postgres_changes"]?
       .decode(as: [PostgresJoinConfig].self)
 
-    callbackManager.setServerChanges(changes: serverPostgresChanges ?? [])
-    await stateManager.didReceiveSubscribedOK()
+    // Preserve the previous behavior for a reply that arrives before a join
+    // exists. Once a join is active, a reply must carry the current join ref
+    // and be accepted by the actor before it can mutate subscription state.
+    if message.joinRef == nil, self.status == .unsubscribed {
+      callbackManager.setServerChanges(changes: serverPostgresChanges ?? [])
+      return
+    }
+
+    let accepted = await stateManager.acceptJoinReply(joinRef: message.joinRef) {
+      [weak callbackManager] _ in
+      callbackManager?.setServerChanges(changes: serverPostgresChanges ?? [])
+    }
+    if !accepted {
+      logger.debug(
+        "Ignoring join reply for stale join_ref \(message.joinRef ?? "<none>") on \(message.topic)"
+      )
+    }
   }
 
   private func handlePostgresChanges(_ message: RealtimeMessageV2) throws {
@@ -1215,9 +1263,13 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   }
 
   @MainActor
-  private func didReceiveReply(ref: String, status: String) async {
-    let push = await stateManager.removePush(ref: ref)
+  private func didReceiveReply(ref: String, status: String, joinRef: String?) async {
+    let push = await stateManager.removePush(ref: ref, joinRef: joinRef)
     push?.didReceive(status: PushStatus(rawValue: status) ?? .ok)
+  }
+
+  func transportUnavailable() async {
+    await stateManager.transportUnavailable()
   }
 }
 

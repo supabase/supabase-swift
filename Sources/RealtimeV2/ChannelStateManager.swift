@@ -60,11 +60,15 @@ actor ChannelStateManager {
   /// uses this to push status updates to observers without an async hop, so
   /// reading ``RealtimeChannelV2/status`` right after ``subscribe()`` returns
   /// sees the latest value.
-  typealias StateDidChange = @Sendable (State) -> Void
+  typealias StateDidChange = @Sendable (State, RealtimeChannelJoinIdentity?) -> Void
+  typealias JoinDidStart = @Sendable (RealtimeChannelJoinIdentity) -> Void
+  typealias JoinDidInvalidate = @Sendable (RealtimeChannelJoinIdentity) -> Void
 
   private(set) var state: State = .unsubscribed
   private var stateChangeContinuations: [(UUID, AsyncStream<State>.Continuation)] = []
   private let stateDidChange: StateDidChange?
+  private let joinDidStart: JoinDidStart?
+  private let joinDidInvalidate: JoinDidInvalidate?
 
   /// Publishes every state transition, replaying the current state to new
   /// subscribers. Reading from outside the actor crosses the actor boundary.
@@ -97,6 +101,7 @@ actor ChannelStateManager {
   // MARK: - Per-subscription mutable state
 
   private(set) var joinRef: String?
+  private(set) var joinIdentity: RealtimeChannelJoinIdentity?
   private var pushes: [String: PushV2] = [:]
 
   // MARK: - Config & injected operations
@@ -133,7 +138,9 @@ actor ChannelStateManager {
     joinOperation: @escaping JoinOperation,
     leaveOperation: @escaping LeaveOperation,
     retryDelay: @escaping RetryDelay = ChannelStateManager.defaultRetryDelay,
-    stateDidChange: StateDidChange? = nil
+    stateDidChange: StateDidChange? = nil,
+    joinDidStart: JoinDidStart? = nil,
+    joinDidInvalidate: JoinDidInvalidate? = nil
   ) {
     self.topic = topic
     self.logger = logger
@@ -148,6 +155,8 @@ actor ChannelStateManager {
     self.leaveOperation = leaveOperation
     self.retryDelay = retryDelay
     self.stateDidChange = stateDidChange
+    self.joinDidStart = joinDidStart
+    self.joinDidInvalidate = joinDidInvalidate
   }
 
   // MARK: - Mutable state accessors
@@ -171,6 +180,11 @@ actor ChannelStateManager {
     guard self.joinRef == joinRef else { return false }
     pushes[ref] = push
     return true
+  }
+
+  func removePush(ref: String, joinRef expectedJoinRef: String?) -> PushV2? {
+    guard expectedJoinRef == joinRef else { return nil }
+    return pushes.removeValue(forKey: ref)
   }
 
   func removePush(ref: String) -> PushV2? {
@@ -258,7 +272,7 @@ actor ChannelStateManager {
   /// immediately — the server's `phx_close` won't arrive on the dead socket
   /// anyway.
   func resetForReconnect() {
-    joinRef = nil
+    clearJoin()
     pushes = [:]
     switch state {
     case .subscribed:
@@ -283,6 +297,45 @@ actor ChannelStateManager {
     updateState(.subscribed)
   }
 
+  /// Invalidates the current join at the transport-loss boundary without
+  /// changing the legacy public channel status. A later reconnect reset owns
+  /// the status transition, while lifecycle consumers immediately stop
+  /// accepting messages from the dead transport.
+  func transportUnavailable() {
+    clearJoin()
+    pushes = [:]
+  }
+
+  /// Atomically validates, applies, and publishes a join-scoped system
+  /// message. The callback runs on this actor before another join can replace
+  /// the validated identity.
+  @discardableResult
+  func acceptSystemMessage(
+    joinRef expectedJoinRef: String?,
+    successful: Bool,
+    onAccepted: @Sendable (RealtimeChannelJoinIdentity) -> Void
+  ) -> Bool {
+    guard let joinIdentity, expectedJoinRef == joinIdentity.joinReference else { return false }
+    if successful {
+      didReceiveSubscribedOK()
+    }
+    onAccepted(joinIdentity)
+    return true
+  }
+
+  /// Atomically validates a join reply, applies its join-scoped payload, and
+  /// transitions the same join to subscribed.
+  @discardableResult
+  func acceptJoinReply(
+    joinRef expectedJoinRef: String?,
+    onAccepted: @Sendable (RealtimeChannelJoinIdentity) -> Void
+  ) -> Bool {
+    guard let joinIdentity, expectedJoinRef == joinIdentity.joinReference else { return false }
+    onAccepted(joinIdentity)
+    didReceiveSubscribedOK()
+    return true
+  }
+
   /// Called when the server closes the channel (phx_close or system error
   /// that should drop the channel).
   ///
@@ -304,7 +357,7 @@ actor ChannelStateManager {
       return false
     }
     logger.debug("Server closed channel '\(topic)'")
-    joinRef = nil
+    clearJoin()
     pushes = [:]
     if case .subscribing(let task) = state {
       // Record why the task is being cancelled so `beginSubscribe` can
@@ -344,7 +397,7 @@ actor ChannelStateManager {
       // If the subscribe attempt didn't transition us to .subscribed, make
       // sure external observers see .unsubscribed.
       if case .subscribing = state {
-        joinRef = nil
+        clearJoin()
         pushes = [:]
         updateState(.unsubscribed)
       }
@@ -413,7 +466,7 @@ actor ChannelStateManager {
     }
 
     let ref = makeRef()
-    joinRef = ref
+    replaceJoin(with: ref)
     // Read through the injected closure — the channel owns the buffer so
     // `onPostgresChange` can append synchronously without a racy
     // fire-and-forget Task.
@@ -468,7 +521,7 @@ actor ChannelStateManager {
       }
     }
 
-    joinRef = nil
+    clearJoin()
     pushes = [:]
     if case .unsubscribing = state {
       updateState(.unsubscribed)
@@ -483,7 +536,25 @@ actor ChannelStateManager {
     }
     // Invoke the synchronous observer after the subject is updated so the
     // callback sees the new value via ``state`` as well.
-    stateDidChange?(newState)
+    stateDidChange?(newState, joinIdentity)
+  }
+
+  private func replaceJoin(with joinReference: String) {
+    clearJoin()
+    let identity = RealtimeChannelJoinIdentity(joinReference: joinReference)
+    joinRef = joinReference
+    joinIdentity = identity
+    joinDidStart?(identity)
+  }
+
+  private func clearJoin() {
+    guard let identity = joinIdentity else {
+      joinRef = nil
+      return
+    }
+    joinRef = nil
+    joinIdentity = nil
+    joinDidInvalidate?(identity)
   }
 
   deinit {
