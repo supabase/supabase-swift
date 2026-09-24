@@ -221,6 +221,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
             self.yieldStatusIfChanged(.connected)
           }
         case .disconnected:
+          await self.invalidateChannelJoins()
           // A failed auto-reconnect lands here (.reconnecting → .connecting →
           // .disconnected). Clear the latch so a later successful `connect()`
           // (e.g. from `connectOnSubscribe`) isn't misclassified as a
@@ -234,6 +235,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
           break
         case .reconnecting:
           sawReconnecting = true
+          await self.invalidateChannelJoins()
           self.yieldStatusIfChanged(.connecting)
         }
       }
@@ -478,6 +480,17 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
           await channel.resetForReconnect()
           try? await channel.subscribeWithError()
         }
+      }
+    }
+  }
+
+  /// Invalidate every retained channel's authoritative join identity before
+  /// publishing transport loss. The state-manager actor serializes this with
+  /// join-scoped message acceptance, closing the stale-message TOCTOU window.
+  private func invalidateChannelJoins() async {
+    await withTaskGroup(of: Void.self) { group in
+      for channel in channels.values {
+        group.addTask { await channel.transportUnavailable() }
       }
     }
   }
