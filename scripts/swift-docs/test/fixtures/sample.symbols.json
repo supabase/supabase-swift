@@ -1,0 +1,121 @@
+{
+  "module": {
+    "name": "Auth",
+    "platform": { "operatingSystem": { "name": "macosx" }, "architecture": "arm64" }
+  },
+  "symbols": [
+    {
+      "identifier": { "precise": "s:4Auth10AuthClientC", "interfaceLanguage": "swift" },
+      "kind": { "identifier": "swift.class", "displayName": "Class" },
+      "names": { "title": "AuthClient" },
+      "docComment": { "lines": [{ "text": "Manages authentication state." }] },
+      "accessLevel": "public",
+      "location": { "uri": "file:///Sources/Auth/AuthClient.swift", "position": { "line": 10, "character": 0 } }
+    },
+    {
+      "identifier": { "precise": "s:4Auth10AuthClientC6signInSSSSF", "interfaceLanguage": "swift" },
+      "kind": { "identifier": "swift.method", "displayName": "Instance Method" },
+      "names": { "title": "signIn(email:password:)" },
+      "docComment": {
+        "lines": [
+          { "text": "Signs in a user." },
+          { "text": "" },
+          { "text": "- Parameter email: The user's email address." },
+          { "text": "- Parameter password: The user's password." },
+          { "text": "- Returns: The authenticated session." }
+        ]
+      },
+      "functionSignature": {
+        "parameters": [
+          { "name": "email",    "declarationFragments": [{ "kind": "typeIdentifier", "spelling": "String" }] },
+          { "name": "password", "declarationFragments": [{ "kind": "typeIdentifier", "spelling": "String" }] }
+        ],
+        "returns": [{ "kind": "typeIdentifier", "spelling": "AuthSession" }]
+      },
+      "accessLevel": "public",
+      "location": { "uri": "file:///Sources/Auth/AuthClient.swift", "position": { "line": 20, "character": 4 } }
+    },
+    {
+      "identifier": { "precise": "s:4Auth11AuthSessionV", "interfaceLanguage": "swift" },
+      "kind": { "identifier": "swift.struct", "displayName": "Structure" },
+      "names": { "title": "AuthSession" },
+      "docComment": { "lines": [{ "text": "Represents an active user session." }] },
+      "accessLevel": "public",
+      "location": { "uri": "file:///Sources/Auth/AuthSession.swift", "position": { "line": 5, "character": 0 } }
+    },
+    {
+      "identifier": { "precise": "s:4Auth11AuthSessionV5tokenSSvp", "interfaceLanguage": "swift" },
+      "kind": { "identifier": "swift.property", "displayName": "Instance Property" },
+      "names": { "title": "token" },
+      "declarationFragments": [{ "kind": "typeIdentifier", "spelling": "String" }],
+      "accessLevel": "public",
+      "location": { "uri": "file:///Sources/Auth/AuthSession.swift", "position": { "line": 7, "character": 4 } }
+    },
+    {
+      "identifier": { "precise": "s:4Auth9AuthErrorO", "interfaceLanguage": "swift" },
+      "kind": { "identifier": "swift.enum", "displayName": "Enumeration" },
+      "names": { "title": "AuthError" },
+      "docComment": { "lines": [{ "text": "Errors thrown by authentication operations." }] },
+      "accessLevel": "public",
+      "location": { "uri": "file:///Sources/Auth/AuthError.swift", "position": { "line": 3, "character": 0 } }
+    },
+    {
+      "identifier": { "precise": "s:4Auth9AuthErrorO12invalidEmailyA2CmF", "interfaceLanguage": "swift" },
+      "kind": { "identifier": "swift.enum.case", "displayName": "Case" },
+      "names": { "title": "invalidEmail" },
+      "accessLevel": "public",
+      "location": { "uri": "file:///Sources/Auth/AuthError.swift", "position": { "line": 5, "character": 4 } }
+    },
+    {
+      "identifier": { "precise": "s:4Auth9AuthErrorO12networkErroryA2CmF", "interfaceLanguage": "swift" },
+      "kind": { "identifier": "swift.enum.case", "displayName": "Case" },
+      "names": { "title": "networkError" },
+      "accessLevel": "public",
+      "location": { "uri": "file:///Sources/Auth/AuthError.swift", "position": { "line": 6, "character": 4 } }
+    },
+    {
+      "identifier": { "precise": "s:4Auth15AuthProviderableP", "interfaceLanguage": "swift" },
+      "kind": { "identifier": "swift.protocol", "displayName": "Protocol" },
+      "names": { "title": "AuthProviderable" },
+      "accessLevel": "public",
+      "location": { "uri": "file:///Sources/Auth/AuthProviderable.swift", "position": { "line": 1, "character": 0 } }
+    },
+    {
+      "identifier": { "precise": "s:4Auth14BaseAuthClientC", "interfaceLanguage": "swift" },
+      "kind": { "identifier": "swift.class", "displayName": "Class" },
+      "names": { "title": "BaseAuthClient" },
+      "accessLevel": "public",
+      "location": { "uri": "file:///Sources/Auth/BaseAuthClient.swift", "position": { "line": 1, "character": 0 } }
+    },
+    {
+      "identifier": { "precise": "s:4Auth10AuthClientC7signOutyyF", "interfaceLanguage": "swift" },
+      "kind": { "identifier": "swift.method", "displayName": "Instance Method" },
+      "names": { "title": "signOut()" },
+      "functionSignature": {
+        "parameters": []
+      },
+      "accessLevel": "public",
+      "location": { "uri": "file:///Sources/Auth/AuthClient.swift", "position": { "line": 30, "character": 4 } }
+    },
+    {
+      "identifier": { "precise": "s:4Auth10AuthClientC8refreshySSSSF", "interfaceLanguage": "swift" },
+      "kind": { "identifier": "swift.method", "displayName": "Instance Method" },
+      "names": { "title": "refresh(token:)" },
+      "functionSignature": {
+        "returns": [{ "kind": "typeIdentifier", "spelling": "AuthSession" }]
+      },
+      "accessLevel": "public",
+      "location": { "uri": "file:///Sources/Auth/AuthClient.swift", "position": { "line": 35, "character": 4 } }
+    }
+  ],
+  "relationships": [
+    { "kind": "memberOf", "source": "s:4Auth10AuthClientC6signInSSSSF",      "target": "s:4Auth10AuthClientC" },
+    { "kind": "memberOf", "source": "s:4Auth11AuthSessionV5tokenSSvp",         "target": "s:4Auth11AuthSessionV" },
+    { "kind": "memberOf", "source": "s:4Auth9AuthErrorO12invalidEmailyA2CmF", "target": "s:4Auth9AuthErrorO" },
+    { "kind": "memberOf", "source": "s:4Auth9AuthErrorO12networkErroryA2CmF", "target": "s:4Auth9AuthErrorO" },
+    { "kind": "conformsTo", "source": "s:4Auth10AuthClientC", "target": "s:4Auth15AuthProviderableP" },
+    { "kind": "inheritsFrom", "source": "s:4Auth10AuthClientC", "target": "s:4Auth14BaseAuthClientC" },
+    { "kind": "memberOf", "source": "s:4Auth10AuthClientC7signOutyyF",     "target": "s:4Auth10AuthClientC" },
+    { "kind": "memberOf", "source": "s:4Auth10AuthClientC8refreshySSSSF",  "target": "s:4Auth10AuthClientC" }
+  ]
+}
