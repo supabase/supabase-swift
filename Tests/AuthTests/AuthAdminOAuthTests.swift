@@ -393,5 +393,35 @@ extension AuthMockerTests {
       #expect(client.clientId == clientId)
       #expect(client.clientSecret == "new-secret456")
     }
+
+    @Test
+    func listOAuthClientsWithAnEmptyLinkHeader() async throws {
+      let responseData = """
+        {
+          "clients": [],
+          "aud": "authenticated"
+        }
+        """.data(using: .utf8)!
+
+      Mock(
+        url: clientURL.appendingPathComponent("admin/oauth/clients"),
+        ignoreQuery: true,
+        statusCode: 200,
+        data: [.get: responseData],
+        additionalHeaders: [
+          "x-total-count": "0",
+          "link": "",
+        ]
+      )
+      .register()
+
+      let sut = makeSUT()
+
+      let response = try await sut.admin.oauth.listClients()
+
+      #expect(response.clients.isEmpty)
+      #expect(response.nextPage == nil)
+      #expect(response.lastPage == 0)
+    }
   }
 }
