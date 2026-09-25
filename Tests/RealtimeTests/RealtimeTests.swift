@@ -216,7 +216,7 @@ import Testing
       }
     }
 
-    @Test
+    @Test(.requiresMainSerialExecutor)
     func subscribeTimeout() async throws {
       try await withMainSerialExecutor {
         let channel = sut.channel("public:messages")
@@ -325,7 +325,7 @@ import Testing
     }
 
     // Succeeds after 2 retries (on 3rd attempt)
-    @Test
+    @Test(.requiresMainSerialExecutor)
     func subscribeTimeout_successAfterRetries() async throws {
       try await withMainSerialExecutor {
         let successAttempt = 3
@@ -382,7 +382,7 @@ import Testing
     }
 
     // Fails after max retries (should unsubscribe)
-    @Test
+    @Test(.requiresMainSerialExecutor)
     func subscribeTimeout_failsAfterMaxRetries() async throws {
       try await withMainSerialExecutor {
         let channel = sut.channel("public:messages")
@@ -496,7 +496,7 @@ import Testing
       }
     }
 
-    @Test
+    @Test(.requiresMainSerialExecutor)
     func heartbeat() async throws {
       try await withMainSerialExecutor {
         let heartbeatCount = LockIsolated(0)
@@ -679,7 +679,7 @@ import Testing
     // then race to nil out the live `onEvent`, leaving the socket connected
     // but deaf — heartbeat and `phx_join` replies were silently dropped,
     // stalling subscribe for tens of seconds to minutes.
-    @Test
+    @Test(.requiresMainSerialExecutor)
     func redundantConnect_doesNotDropIncomingFrames() async throws {
       try await withMainSerialExecutor {
         let serverTask = Task { @Sendable [server = server] in
