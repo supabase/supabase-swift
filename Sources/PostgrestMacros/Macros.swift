@@ -41,19 +41,20 @@
 ///
 /// - Parameters:
 ///   - name: The relation's name as PostgREST addresses it.
-///   - schema: The Postgres schema. Defaults to `"public"`.
+///   - schema: The type naming the Postgres schema, written as `PrivateSchema.self`. Defaults to
+///     ``PostgREST/PublicSchema``.
 ///   - readOnly: Pass `true` for a view. The type then conforms to ``PostgREST/PostgrestRelation``
 ///     only, and the write methods are not available on it.
 @attached(
   extension,
   conformances: Decodable, Sendable, PostgrestRelation, PostgrestKeyedRelation,
   PostgrestWritableRelation,
-  names: named(relationName), named(schema), named(selectString), named(Columns),
+  names: named(relationName), named(Schema), named(selectString), named(Columns),
   named(columns), named(primaryKeyColumns), named(CodingKeys), named(Draft)
 )
 public macro Table(
   _ name: String,
-  schema: String = "public",
+  schema: any PostgrestSchema.Type = PublicSchema.self,
   readOnly: Bool = false
 ) = #externalMacro(module: "PostgrestMacrosPlugin", type: "TableMacro")
 

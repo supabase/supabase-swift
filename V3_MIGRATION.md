@@ -2834,3 +2834,48 @@ try await storage.from("avatars").uploadToSignedURL(path: "user123.png", token: 
 ```
 
 This is a compile error. All six overloads move together (`data:` and `fileURL:` variants of each).
+
+## `@Table`'s `schema:` takes a type, not a string
+
+A relation names its schema with a type, so a relation queried through the wrong schema is a
+compile error rather than a request the database rejects.
+
+```swift
+// Before
+@Table("secrets", schema: "private")
+struct Secret { ... }
+
+// After
+enum PrivateSchema: PostgrestSchema {
+  static let name = "private"
+}
+
+@Table("secrets", schema: PrivateSchema.self)
+struct Secret { ... }
+```
+
+`@Table("todos")` is unchanged: a relation that names no schema belongs to `PublicSchema`.
+
+The type is what the new scope checks against. `SupabaseClient` and `PostgrestClient` both have it:
+
+```swift
+try await supabase.schema(PrivateSchema.self).from(Secret.self).select().execute()  // valid
+try await supabase.schema(PrivateSchema.self).from(Todo.self).select().execute()    // compile error
+```
+
+`schema("private")` still exists and still returns a `PostgrestClient`. Reach for it when the
+schema is not known at compile time.
+
+Three things the compiler will not catch:
+
+- `from(Secret.self)` now sends `Accept-Profile: private`, taken from the relation. It previously
+  ignored the relation's schema. A schema already set on the client wins over the relation, and
+  that includes `"public"`: with `SupabaseClientOptions(db: .init(schema: "public"))`,
+  `supabase.from(Secret.self)` queries `public`.
+- The typed `schema(_:)` traps on a client that already has a schema, so
+  `client.schema("other").schema(PrivateSchema.self)` is a programmer error, as is
+  `supabase.schema(PrivateSchema.self)` when `db.schema` is set.
+- `PostgrestRelation` no longer requires `static var schema: String`; the schema comes from the
+  `Schema` type. A hand-written conformance that declares `static let schema = "private"` still
+  compiles, but the string is no longer read and the relation is queried in `public`. Replace it
+  with `typealias Schema = PrivateSchema`.

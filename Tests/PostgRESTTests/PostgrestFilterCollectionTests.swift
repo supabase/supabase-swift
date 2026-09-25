@@ -14,7 +14,6 @@ import Testing
 struct PostgrestFilterCollectionTests {
   struct Post: PostgrestRelation {
     static let relationName = "posts"
-    static let schema = "public"
     static let selectString = "*"
 
     var tags: [String]

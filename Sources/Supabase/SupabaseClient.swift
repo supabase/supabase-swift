@@ -33,10 +33,12 @@ import Logging
 /// - ``realtimeV2``
 ///
 /// ### Querying the Database
-/// - ``from(_:)``
+/// - ``from(_:)->PostgrestQueryBuilder``
+/// - ``from(_:)->PostgrestTypedSource<R>``
 /// - ``rpc(_:params:count:)``
 /// - ``rpc(_:count:)``
-/// - ``schema(_:)``
+/// - ``schema(_:)->PostgrestClient``
+/// - ``schema(_:)->PostgrestSchemaScope<S>``
 ///
 /// ### Realtime Channels
 /// - ``channels``
@@ -277,6 +279,13 @@ public final class SupabaseClient: Sendable {
     rest.from(table)
   }
 
+  /// Creates a typed source for a relation, queried in the schema the relation declares.
+  /// - Parameter relation: The relation type to query.
+  /// - Returns: A ``PostgrestTypedSource`` for that relation.
+  public func from<R: PostgrestRelation>(_ relation: R.Type) -> PostgrestTypedSource<R> {
+    rest.from(relation)
+  }
+
   /// Calls a Postgres function.
   /// - Parameters:
   ///   - fn: The name of the function to call.
@@ -311,6 +320,15 @@ public final class SupabaseClient: Sendable {
   /// - Parameter schema: The schema to query.
   /// - Returns: A ``PostgrestClient`` configured for the given schema.
   public func schema(_ schema: String) -> PostgrestClient {
+    rest.schema(schema)
+  }
+
+  /// Returns a scope that only queries relations declared to live in the given schema.
+  ///
+  /// - Precondition: ``SupabaseClientOptions/DatabaseOptions/schema`` is not set.
+  /// - Parameter schema: The schema type to query.
+  /// - Returns: A ``PostgrestSchemaScope`` for that schema.
+  public func schema<S: PostgrestSchema>(_ schema: S.Type) -> PostgrestSchemaScope<S> {
     rest.schema(schema)
   }
 
