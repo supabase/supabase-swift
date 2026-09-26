@@ -19,6 +19,9 @@ import HTTPTypes
 /// ### Listing factors
 /// - ``listFactors()``
 /// - ``authenticatorAssuranceLevel()``
+///
+/// ### Recovery codes
+/// - ``recoveryCodes``
 public struct AuthMFA: Sendable {
   let clientID: AuthClientID
 
@@ -28,6 +31,11 @@ public struct AuthMFA: Sendable {
   var decoder: JSONDecoder { Dependencies[clientID].resolvedDecoder }
   var sessionManager: SessionManager { Dependencies[clientID].sessionManager }
   var eventEmitter: AuthStateChangeEventEmitter { Dependencies[clientID].eventEmitter }
+
+  /// Contains all recovery code methods.
+  public var recoveryCodes: AuthMFARecoveryCodes {
+    AuthMFARecoveryCodes(clientID: clientID)
+  }
 
   /// Starts the enrollment process for a new Multi-Factor Authentication (MFA) factor. This method
   /// creates a new `unverified` factor.

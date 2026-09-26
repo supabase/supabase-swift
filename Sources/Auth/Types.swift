@@ -1262,6 +1262,36 @@ public struct AuthMFAUnenrollResponse: Decodable, Hashable, Sendable {
   public let id: String
 }
 
+/// The response returned by ``AuthMFARecoveryCodes/status()``.
+public struct AuthMFARecoveryCodesStatusResponse: Decodable, Hashable, Sendable {
+  /// ID of the recovery codes factor, as it appears in ``User/factors``.
+  public let id: String
+
+  /// Number of codes in the current set.
+  public let total: Int
+
+  /// Number of codes in the current set that have not been used yet. Zero when every code has been
+  /// consumed.
+  public let remaining: Int
+}
+
+/// The response returned by ``AuthMFARecoveryCodes/generate(friendlyName:)`` and
+/// ``AuthMFARecoveryCodes/regenerate()``.
+public struct AuthMFARecoveryCodesGenerateResponse: Decodable, Hashable, Sendable {
+  /// ID of the recovery codes factor.
+  public let id: String
+
+  /// Friendly name of the recovery codes factor.
+  public var friendlyName: String?
+
+  /// Number of codes in the new set.
+  public let total: Int
+
+  /// The codes themselves. Returned only here, so show them to the user and ask them to store
+  /// the codes safely.
+  public let codes: [String]
+}
+
 /// The response returned by ``AuthMFA/listFactors()``.
 public struct AuthMFAListFactorsResponse: Decodable, Hashable, Sendable {
   /// All available factors (verified and unverified).

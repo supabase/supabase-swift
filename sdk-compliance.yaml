@@ -340,6 +340,16 @@ supporting_symbols:
   - AuthError.underlyingError
   - AuthError.description
   - AuthError.sessionMissing
+  # The recovery codes namespace is shared by every auth.mfa_recovery_codes.*
+  # capability rather than owned by one, and its generate response is returned
+  # by both generate and regenerate.
+  - AuthMFA.recoveryCodes
+  - AuthMFARecoveryCodes
+  - AuthMFARecoveryCodesGenerateResponse
+  - AuthMFARecoveryCodesGenerateResponse.id
+  - AuthMFARecoveryCodesGenerateResponse.friendlyName
+  - AuthMFARecoveryCodesGenerateResponse.total
+  - AuthMFARecoveryCodesGenerateResponse.codes
   # RealtimeError (SDK-1788) is thrown by every realtime.* capability rather
   # than owned by one.
   - RealtimeError
@@ -606,6 +616,32 @@ features:
     status: implemented
     symbols:
       - AuthMFA.authenticatorAssuranceLevel
+
+  auth.mfa_recovery_codes.generate:
+    status: implemented
+    symbols:
+      - AuthMFARecoveryCodes.generate
+  auth.mfa_recovery_codes.get_status:
+    status: implemented
+    symbols:
+      - AuthMFARecoveryCodes.status
+    supporting_symbols:
+      - AuthMFARecoveryCodesStatusResponse
+      - AuthMFARecoveryCodesStatusResponse.id
+      - AuthMFARecoveryCodesStatusResponse.total
+      - AuthMFARecoveryCodesStatusResponse.remaining
+  auth.mfa_recovery_codes.regenerate:
+    status: implemented
+    symbols:
+      - AuthMFARecoveryCodes.regenerate
+  auth.mfa_recovery_codes.unenroll:
+    status: implemented
+    symbols:
+      - AuthMFARecoveryCodes.unenroll
+  auth.mfa_recovery_codes.verify:
+    status: implemented
+    symbols:
+      - AuthMFARecoveryCodes.verify
 
   auth.admin.create_user:
     status: implemented
