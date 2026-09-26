@@ -330,7 +330,7 @@ struct SupabaseClientTests {
 
     // Not asserting that `client.auth` reports an issue here (as the XCTest version of this
     // test did via `withExpectedIssue`/`withKnownIssue`): under Xcode 26's Swift Testing +
-    // XCTest bundle hosting, `reportIssue` (xctest-dynamic-overlay) segfaults the test process
+    // XCTest bundle hosting, `reportIssue` (swift-issue-reporting) segfaults the test process
     // when called from a `@Test` function, regardless of which "expected/known issue" wrapper
     // is used. Reproduced locally via `xcodebuild test`; does not reproduce under `swift test`.
     // Tracked as a migration-wide risk in SDK-435 for any later phase whose tests exercise
