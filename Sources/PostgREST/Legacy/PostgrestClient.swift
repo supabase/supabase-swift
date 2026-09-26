@@ -380,7 +380,7 @@ public struct PostgrestClient: Sendable {
     case .string(let string):
       return string
     case .array(let array):
-      return "{\(array.map(queryValue(for:)).joined(separator: ","))}"
+      return "{\(array.map(arrayElementValue(for:)).joined(separator: ","))}"
     case .object:
       let encoder = JSONEncoder()
       encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
@@ -390,6 +390,18 @@ public struct PostgrestClient: Sendable {
         return json
       }
       return ""
+    }
+  }
+
+  /// One element of a Postgres array literal. An element that is empty, spells NULL, or holds
+  /// `,` `{` `}` `"` `\` is double-quoted, as for the `cs`/`cd` filters, so it stays one element
+  /// with its own text. A nested array stays a bare sub-literal, and a JSON null a bare `null`.
+  private func arrayElementValue(for value: JSONValue) -> String {
+    switch value {
+    case .null, .array:
+      return queryValue(for: value)
+    case .bool, .integer, .double, .string, .object:
+      return escapePostgRESTArrayLiteralElement(queryValue(for: value))
     }
   }
 }
