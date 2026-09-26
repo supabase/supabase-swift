@@ -5,7 +5,7 @@ import Helpers
 import InlineSnapshotTesting
 import TestHelpers
 import Testing
-import XCTestDynamicOverlay
+import IssueReporting
 
 @testable import Storage
 
