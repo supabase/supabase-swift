@@ -201,8 +201,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestTransformablePhase {
   /// - Returns: A ``PostgrestTransformBuilder`` so calls can be chained.
   public func csv() -> PostgrestTransformBuilder {
     var copy = PostgrestTransformBuilder(carryingFrom: self)
-    let preferComponents = copy.request.headerFields[.prefer]?.components(separatedBy: ",") ?? []
-    if preferComponents.contains("return=stripped-nulls") {
+    if copy.stripsNulls {
       copy.pendingError = "`.csv()` cannot be combined with `.stripNulls()`"
     }
     copy.request.headerFields[.accept] = "text/csv"
@@ -221,7 +220,10 @@ extension PostgrestRequestBuilder where Phase: PostgrestTransformablePhase {
     if copy.request.headerFields[.accept] == "text/csv" {
       copy.pendingError = "`.stripNulls()` cannot be combined with `.csv()`"
     }
-    copy.request.headerFields.appendOrUpdate(.prefer, value: "return=stripped-nulls")
+    // PostgREST strips nulls through a `nulls=stripped` parameter on the vendor media type in
+    // `Accept`; there is no `Prefer` for it. The media type is only final once the chain runs
+    // (`single()` may come later), so `execute` applies it.
+    copy.stripsNulls = true
     return copy
   }
 
