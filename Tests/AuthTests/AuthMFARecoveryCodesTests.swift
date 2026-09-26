@@ -5,6 +5,7 @@
 //  Created by Ranbir Singh on 23/09/26.
 //
 
+import ConcurrencyExtras
 import CustomDump
 import Foundation
 import Mocker
@@ -228,16 +229,33 @@ extension AuthMockerTests {
       }
       .register()
 
-      let sut = makeSUT()
-      Dependencies[sut.clientID].sessionStorage.store(.valid)
+      try await withMainSerialExecutor {
+        let sut = makeSUT()
+        Dependencies[sut.clientID].sessionStorage.store(.valid)
 
-      let response = try await sut.mfa.recoveryCodes.verify(code: "K4M9-X7QP-2AB8-HT3Z")
+        let events = LockIsolated([AuthChangeEvent]())
+        let sessions = LockIsolated([Session?]())
+        let handle = await sut.onAuthStateChange { event, session in
+          events.withValue { $0.append(event) }
+          sessions.withValue { $0.append(session) }
+        }
 
-      expectNoDifference(response.refreshToken, "GGduTeu95GraIXQ56jppkw")
-      expectNoDifference(
-        Dependencies[sut.clientID].sessionStorage.get()?.refreshToken,
-        "GGduTeu95GraIXQ56jppkw"
-      )
+        let response = try await sut.mfa.recoveryCodes.verify(code: "K4M9-X7QP-2AB8-HT3Z")
+
+        await Task.megaYield()
+        handle.remove()
+
+        expectNoDifference(response.refreshToken, "GGduTeu95GraIXQ56jppkw")
+        expectNoDifference(
+          Dependencies[sut.clientID].sessionStorage.get()?.refreshToken,
+          "GGduTeu95GraIXQ56jppkw"
+        )
+        expectNoDifference(events.value, [.initialSession, .mfaChallengeVerified])
+        expectNoDifference(
+          sessions.value.map { $0?.refreshToken },
+          [Session.valid.refreshToken, "GGduTeu95GraIXQ56jppkw"]
+        )
+      }
     }
 
     @Test
