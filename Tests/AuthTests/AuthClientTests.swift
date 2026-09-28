@@ -2944,6 +2944,74 @@ extension AuthMockerTests {
     }
 
     @Test
+    func createUserConfirmingEmailAndPhone() async throws {
+      let sut = makeSUT()
+
+      Mock(
+        url: clientURL.appendingPathComponent("admin/users"),
+        statusCode: 200,
+        data: [.post: MockData.user]
+      )
+      .snapshotRequest {
+        #"""
+        curl \
+        	--request POST \
+        	--header "Content-Length: 113" \
+        	--header "Content-Type: application/json" \
+        	--header "X-Client-Info: auth-swift/0.0.0" \
+        	--header "X-Supabase-Api-Version: 2024-01-01" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	--data "{\"email\":\"test@example.com\",\"email_confirm\":true,\"password\":\"password\",\"phone\":\"1234567890\",\"phone_confirm\":true}" \
+        	"http://localhost:54321/auth/v1/admin/users"
+        """#
+      }
+      .register()
+
+      let attributes = AdminUserAttributes(
+        email: "test@example.com",
+        confirmsEmail: true,
+        password: "password",
+        phone: "1234567890",
+        confirmsPhone: true
+      )
+
+      _ = try await sut.admin.createUser(attributes: attributes)
+    }
+
+    @Test
+    func updateUserByIdConfirmingEmail() async throws {
+      let id = UUID(uuidString: "859f402d-b3de-4105-a1b9-932836d9193b")!
+      let sut = makeSUT()
+
+      Mock(
+        url: clientURL.appendingPathComponent("admin/users/\(id)"),
+        statusCode: 200,
+        data: [.put: MockData.user]
+      )
+      .snapshotRequest {
+        #"""
+        curl \
+        	--request PUT \
+        	--header "Content-Length: 22" \
+        	--header "Content-Type: application/json" \
+        	--header "X-Client-Info: auth-swift/0.0.0" \
+        	--header "X-Supabase-Api-Version: 2024-01-01" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	--data "{\"email_confirm\":true}" \
+        	"http://localhost:54321/auth/v1/admin/users/859F402D-B3DE-4105-A1B9-932836D9193B"
+        """#
+      }
+      .register()
+
+      let user = try await sut.admin.updateUserById(
+        id,
+        attributes: AdminUserAttributes(confirmsEmail: true)
+      )
+
+      expectNoDifference(user.id, id)
+    }
+
+    @Test
     func inviteUserByEmail() async throws {
       let sut = makeSUT()
 
