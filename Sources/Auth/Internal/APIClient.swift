@@ -47,7 +47,14 @@ struct APIClient: Sendable {
     .refreshTokenAlreadyUsed,
   ]
 
-  func execute(_ request: Helpers.HTTPRequest) async throws -> Helpers.HTTPResponse {
+  /// Sends `request` with the client's default headers and returns the response.
+  ///
+  /// `session` is the session the request is issued for, when the caller has one. It scopes the
+  /// session cleanup that a `sessionCleanupErrorCodes` response triggers — see
+  /// ``handleError(response:for:)``.
+  func execute(
+    _ request: Helpers.HTTPRequest, for session: Session? = nil
+  ) async throws -> Helpers.HTTPResponse {
     var request = request
     request.headers = HTTPFields(configuration.headers).merging(with: request.headers)
 
@@ -58,7 +65,7 @@ struct APIClient: Sendable {
     let response = try await http.send(request)
 
     guard 200..<300 ~= response.statusCode else {
-      throw await handleError(response: response)
+      throw await handleError(response: response, for: session)
     }
 
     return response
@@ -75,10 +82,15 @@ struct APIClient: Sendable {
     var request = request
     request.headers[.authorization] = "Bearer \(session.accessToken)"
 
-    return try await execute(request)
+    return try await execute(request, for: session)
   }
 
-  func handleError(response: Helpers.HTTPResponse) async -> AuthError {
+  /// Pass `session` whenever the caller knows which session the request belongs to. A response
+  /// carrying a `sessionCleanupErrorCodes` code then only clears storage if that session is still
+  /// the stored one, so a request that outlived a sign-out cannot sign out whoever signed in
+  /// after it. Callers with no session of their own (sign-in, sign-up, `/logout`) pass `nil` and
+  /// keep the unconditional cleanup they have always had.
+  func handleError(response: Helpers.HTTPResponse, for session: Session? = nil) async -> AuthError {
     guard
       let error = try? response.decoded(
         as: _RawAPIErrorResponse.self,
@@ -118,8 +130,14 @@ struct APIClient: Sendable {
       // The `session_id` inside the JWT does not correspond to a row in the
       // `sessions` table. This usually means the user has signed out, has been
       // deleted, or their session has somehow been terminated.
-      await sessionManager.remove()
-      eventEmitter.emit(.signedOut, session: nil)
+      //
+      // Only `session`'s own storage slot may be cleared. A request that was still in flight when
+      // the user signed out — and another user signed in — would otherwise delete the session
+      // that replaced it and sign that user out. The check and the delete happen together inside
+      // the session manager's actor, so a sign-in cannot land between them.
+      if await sessionManager.removeIfUnchanged(session) {
+        eventEmitter.emit(.signedOut, session: nil)
+      }
       return .sessionMissing
     } else {
       return .api(

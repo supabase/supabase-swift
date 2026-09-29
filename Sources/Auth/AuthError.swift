@@ -360,6 +360,12 @@ public enum AuthError: LocalizedError, Equatable {
   /// Error thrown when a session is required to proceed, but none was found, either thrown by the client, or returned by the server.
   case sessionMissing
 
+  /// Error thrown when a token refresh finished after the session it started from was signed out
+  /// or replaced, so its result was dropped instead of applied to the stored session. Distinct
+  /// from ``sessionMissing``: a session may well be stored, just not the one that refresh
+  /// belonged to.
+  case refreshDiscarded
+
   /// Error thrown when password is deemed weak, check associated reasons to know why.
   case weakPassword(message: String, reasons: [String])
 
@@ -384,6 +390,8 @@ public enum AuthError: LocalizedError, Equatable {
   public var message: String {
     switch self {
     case .sessionMissing: "Auth session missing."
+    case .refreshDiscarded:
+      "Token refresh discarded: the session it started from is no longer stored."
     case .weakPassword(let message, _),
       .api(let message, _, _, _),
       .pkceGrantCodeExchange(let message, _, _),
@@ -401,6 +409,7 @@ public enum AuthError: LocalizedError, Equatable {
   public var errorCode: ErrorCode {
     switch self {
     case .sessionMissing: .sessionNotFound
+    case .refreshDiscarded: .unknown
     case .weakPassword: .weakPassword
     case .api(_, let errorCode, _, _): errorCode
     case .pkceGrantCodeExchange, .implicitGrantRedirect: .unknown
