@@ -11,16 +11,6 @@ import Foundation
   import AuthenticationServices
 #endif
 
-/// Errors produced while driving a WebAuthn ceremony.
-enum WebAuthnError: Error, Equatable {
-  /// A required field was missing from the W3C credential options.
-  case missingField(String)
-  /// A field expected to be base64url-encoded could not be decoded.
-  case invalidBase64URL(String)
-  /// The authenticator returned a credential of an unexpected type.
-  case unexpectedCredentialType
-}
-
 // MARK: - W3C options parsing (platform independent, testable)
 
 extension JSONValue {
@@ -37,7 +27,7 @@ extension JSONValue {
   /// Reads the `user.name` field of W3C creation options.
   func webAuthnUserName() throws -> String {
     guard let name = value(at: ["user", "name"])?.stringValue else {
-      throw WebAuthnError.missingField("user.name")
+      throw AuthError.webAuthn("Missing field 'user.name' in WebAuthn credential options.")
     }
     return name
   }
@@ -45,7 +35,7 @@ extension JSONValue {
   /// Reads the `rpId` field of W3C assertion options (`PublicKeyCredentialRequestOptions`).
   func webAuthnAssertionRpId() throws -> String {
     guard let id = value(at: ["rpId"])?.stringValue else {
-      throw WebAuthnError.missingField("rpId")
+      throw AuthError.webAuthn("Missing field 'rpId' in WebAuthn credential options.")
     }
     return id
   }
@@ -53,7 +43,7 @@ extension JSONValue {
   /// Reads the `rp.id` field of W3C creation options (`PublicKeyCredentialCreationOptions`).
   func webAuthnCreationRpId() throws -> String {
     guard let id = value(at: ["rp", "id"])?.stringValue else {
-      throw WebAuthnError.missingField("rp.id")
+      throw AuthError.webAuthn("Missing field 'rp.id' in WebAuthn credential options.")
     }
     return id
   }
@@ -68,10 +58,11 @@ extension JSONValue {
 
   private func base64URLDecoded(at path: [String]) throws -> Data {
     guard let string = value(at: path)?.stringValue else {
-      throw WebAuthnError.missingField(path.joined(separator: "."))
+      throw AuthError.webAuthn(
+        "Missing field '\(path.joined(separator: "."))' in WebAuthn credential options.")
     }
     guard let data = Base64URL.decode(string) else {
-      throw WebAuthnError.invalidBase64URL(path.joined(separator: "."))
+      throw AuthError.webAuthn("Field '\(path.joined(separator: "."))' is not valid base64url.")
     }
     return data
   }
@@ -134,7 +125,7 @@ extension JSONValue {
       let credential = authorization.credential
         as? ASAuthorizationPlatformPublicKeyCredentialRegistration
     else {
-      throw WebAuthnError.unexpectedCredentialType
+      throw AuthError.webAuthn("The authenticator returned an unexpected credential type.")
     }
     return [
       "id": .string(Base64URL.encode(credential.credentialID)),
@@ -153,7 +144,7 @@ extension JSONValue {
       let credential = authorization.credential
         as? ASAuthorizationPlatformPublicKeyCredentialAssertion
     else {
-      throw WebAuthnError.unexpectedCredentialType
+      throw AuthError.webAuthn("The authenticator returned an unexpected credential type.")
     }
     return [
       "id": .string(Base64URL.encode(credential.credentialID)),

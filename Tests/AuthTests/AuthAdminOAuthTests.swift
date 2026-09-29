@@ -48,10 +48,7 @@ extension AuthMockerTests {
           "Authorization": "Bearer supabase.secret.key",
         ],
         localStorage: storage,
-        fetch: { request in
-          try await session.data(for: request)
-        }
-      )
+        http: .init(transport: URLSessionTransport(session: session)))
 
       return AuthClient(configuration: configuration)
     }
@@ -107,7 +104,7 @@ extension AuthMockerTests {
       #expect(response.clients.count == 1)
       #expect(response.clients[0].clientId == clientId)
       #expect(response.clients[0].clientName == "Test Client")
-      #expect(response.aud == "authenticated")
+      #expect(response.audience == "authenticated")
       #expect(response.total == 1)
     }
 
@@ -154,7 +151,7 @@ extension AuthMockerTests {
       let sut = makeSUT()
 
       let client = try await sut.admin.oauth.updateClient(
-        clientId: clientId,
+        id: clientId,
         params: UpdateOAuthClientParams(
           clientName: "Update Client name",
           redirectUris: ["https://example.com/callback"],
@@ -257,10 +254,75 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      let client = try await sut.admin.oauth.getClient(clientId: clientId)
+      let client = try await sut.admin.oauth.client(id: clientId)
 
       #expect(client.clientId == clientId)
       #expect(client.clientName == "Test Client")
+      #expect(client.redirectUris == ["https://example.com/callback"])
+      #expect(client.grantTypes == [.authorizationCode, .refreshToken])
+      #expect(client.responseTypes == [.code])
+    }
+
+    @Test
+    func getOAuthClientWithoutClientName() async throws {
+      let responseData = """
+        {
+          "client_id": "\(clientId)",
+          "client_type": "confidential",
+          "token_endpoint_auth_method": "client_secret_post",
+          "registration_type": "manual",
+          "redirect_uris": ["https://example.com/callback"],
+          "grant_types": ["authorization_code", "refresh_token"],
+          "response_types": ["code"],
+          "created_at": "2024-01-01T00:00:00.000Z",
+          "updated_at": "2024-01-01T00:00:00.000Z"
+        }
+        """.data(using: .utf8)!
+
+      Mock(
+        url: clientURL.appendingPathComponent("admin/oauth/clients/\(clientId)"),
+        statusCode: 200,
+        data: [.get: responseData]
+      )
+      .register()
+
+      let sut = makeSUT()
+
+      let client = try await sut.admin.oauth.client(id: clientId)
+
+      #expect(client.clientId == clientId)
+      #expect(client.clientName == nil)
+    }
+
+    @Test
+    func getOAuthClientWithoutRedirectUrisGrantTypesOrResponseTypes() async throws {
+      let responseData = """
+        {
+          "client_id": "\(clientId)",
+          "client_name": "Test Client",
+          "client_type": "confidential",
+          "token_endpoint_auth_method": "client_secret_post",
+          "registration_type": "manual",
+          "created_at": "2024-01-01T00:00:00.000Z",
+          "updated_at": "2024-01-01T00:00:00.000Z"
+        }
+        """.data(using: .utf8)!
+
+      Mock(
+        url: clientURL.appendingPathComponent("admin/oauth/clients/\(clientId)"),
+        statusCode: 200,
+        data: [.get: responseData]
+      )
+      .register()
+
+      let sut = makeSUT()
+
+      let client = try await sut.admin.oauth.client(id: clientId)
+
+      #expect(client.clientId == clientId)
+      #expect(client.redirectUris == nil)
+      #expect(client.grantTypes == nil)
+      #expect(client.responseTypes == nil)
     }
 
     @Test
@@ -285,7 +347,7 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      try await sut.admin.oauth.deleteClient(clientId: clientId)
+      try await sut.admin.oauth.deleteClient(id: clientId)
     }
 
     @Test
@@ -326,7 +388,7 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      let client = try await sut.admin.oauth.regenerateClientSecret(clientId: clientId)
+      let client = try await sut.admin.oauth.regenerateClientSecret(id: clientId)
 
       #expect(client.clientId == clientId)
       #expect(client.clientSecret == "new-secret456")

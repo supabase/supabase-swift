@@ -7,7 +7,6 @@ import TestHelpers
 import Testing
 
 @testable import Realtime
-@testable import RealtimeV2
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -32,7 +31,7 @@ import Testing
 
     let server: FakeWebSocket
     let client: FakeWebSocket
-    let http: HTTPClientMock
+    let http: RecordingTransport
     let sut: RealtimeClientV2
     let testClock: TestClock<Duration>
 
@@ -44,7 +43,7 @@ import Testing
       let (client, server) = FakeWebSocket.fakes()
       self.client = client
       self.server = server
-      http = HTTPClientMock()
+      http = RecordingTransport()
       testClock = TestClock()
 
       sut = RealtimeClientV2(
@@ -56,7 +55,7 @@ import Testing
           }
         ),
         wsTransport: { _, _ in client },
-        http: http,
+        http: HTTPClient(transport: http),
         clock: testClock
       )
     }
@@ -85,7 +84,7 @@ import Testing
             }
             return FakeWebSocket.fakes().0
           },
-          http: http,
+          http: HTTPClient(transport: http),
           clock: testClock
         )
 
@@ -612,7 +611,7 @@ import Testing
             accessToken: { "custom.access.token" }
           ),
           wsTransport: { _, _ in client },
-          http: http,
+          http: HTTPClient(transport: http),
           clock: testClock
         )
         defer { sut.disconnect() }
@@ -631,8 +630,9 @@ import Testing
         await Task.megaYield()
 
         // The heartbeat timer ticks while the reconnect is still sleeping out
-        // its 10s `reconnectDelay` — the still-alive old heartbeat task must
-        // not observe `status != .connected` and publish `.disconnected`.
+        // its 10s `reconnectDelay` (jittered, but never below 5s) — the
+        // still-alive old heartbeat task must not observe `status != .connected`
+        // and publish `.disconnected`.
         await testClock.advance(by: .seconds(1))
 
         #expect(
@@ -730,18 +730,8 @@ import Testing
     @Test
     func broadcastWithHTTP() async throws {
       try await withMainSerialExecutor {
-        await http.when {
-          $0.url.path.contains("/api/broadcast/")
-        } return: { _ in
-          HTTPResponse(
-            data: "{}".data(using: .utf8)!,
-            response: HTTPURLResponse(
-              url: self.url,
-              statusCode: 200,
-              httpVersion: nil,
-              headerFields: nil
-            )!
-          )
+        http.respond(when: { $0.url?.path.contains("/api/broadcast/") == true }) { _, _ in
+          (HTTPResponse(status: .init(code: 200)), "{}".data(using: .utf8)!)
         }
 
         let channel = sut.channel("public:messages") {
@@ -750,8 +740,10 @@ import Testing
 
         try await channel.broadcast(event: "test", message: ["value": 42])
 
-        let request = await http.receivedRequests.last
-        assertInlineSnapshot(of: request?.urlRequest, as: .curl) {
+        let request = try #require(http.requests.last)
+        var urlRequest = try #require(URLRequest(httpRequest: request.head))
+        urlRequest.httpBody = request.body
+        assertInlineSnapshot(of: urlRequest, as: .curl) {
           #"""
           curl \
           	--request POST \
@@ -796,7 +788,7 @@ import Testing
             accessToken: { throw FetchError() }
           ),
           wsTransport: { [client = self.client] _, _ in client },
-          http: http,
+          http: HTTPClient(transport: http),
           clock: testClock
         )
         defer { sut.disconnect() }
@@ -831,7 +823,7 @@ import Testing
             }
           ),
           wsTransport: { [client = self.client] _, _ in client },
-          http: http,
+          http: HTTPClient(transport: http),
           clock: testClock
         )
         defer { sut.disconnect() }
@@ -1134,7 +1126,7 @@ import Testing
           disconnectOnEmptyChannelsAfter: delay
         ),
         wsTransport: { [client = self.client] _, _ in client },
-        http: http,
+        http: HTTPClient(transport: http),
         clock: testClock
       )
     }

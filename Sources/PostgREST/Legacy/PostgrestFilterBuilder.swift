@@ -27,56 +27,62 @@ public struct PostgrestOperator: RawRepresentable, Hashable, Sendable, Expressib
     self.init(rawValue: value)
   }
 
+  /// The legacy spelling of a typed operator, so every token is declared once, on
+  /// ``PostgrestFilterOperator``.
+  init(_ operator: PostgrestFilterOperator) {
+    self.init(rawValue: `operator`.token)
+  }
+
   /// Equals (`=`).
-  public static let eq: PostgrestOperator = "eq"
+  public static let eq = PostgrestOperator(.eq)
   /// Not equals (`!=`).
-  public static let neq: PostgrestOperator = "neq"
+  public static let neq = PostgrestOperator(.neq)
   /// Greater than (`>`).
-  public static let gt: PostgrestOperator = "gt"
+  public static let gt = PostgrestOperator(.gt)
   /// Greater than or equal (`>=`).
-  public static let gte: PostgrestOperator = "gte"
+  public static let gte = PostgrestOperator(.gte)
   /// Less than (`<`).
-  public static let lt: PostgrestOperator = "lt"
+  public static let lt = PostgrestOperator(.lt)
   /// Less than or equal (`<=`).
-  public static let lte: PostgrestOperator = "lte"
+  public static let lte = PostgrestOperator(.lte)
   /// Case-sensitive LIKE pattern match.
-  public static let like: PostgrestOperator = "like"
+  public static let like = PostgrestOperator(.like)
   /// Case-insensitive ILIKE pattern match.
-  public static let ilike: PostgrestOperator = "ilike"
+  public static let ilike = PostgrestOperator(.ilike)
   /// Case-sensitive regex match.
-  public static let match: PostgrestOperator = "match"
+  public static let match = PostgrestOperator(.regexMatch)
   /// Case-insensitive regex match.
-  public static let imatch: PostgrestOperator = "imatch"
+  public static let imatch = PostgrestOperator(.regexIMatch)
   /// IS (for NULL / boolean checks).
-  public static let `is`: PostgrestOperator = "is"
+  public static let `is` = PostgrestOperator(.is)
   /// IS DISTINCT FROM.
-  public static let isdistinct: PostgrestOperator = "isdistinct"
+  public static let isdistinct = PostgrestOperator(.isDistinct)
   /// IN — value is in a list.
-  public static let `in`: PostgrestOperator = "in"
+  public static let `in` = PostgrestOperator(.in)
   /// Contains (`@>`).
-  public static let cs: PostgrestOperator = "cs"
+  public static let cs = PostgrestOperator(.contains)
   /// Contained by (`<@`).
-  public static let cd: PostgrestOperator = "cd"
+  public static let cd = PostgrestOperator(.containedBy)
   /// Range strictly left of (`<<`).
-  public static let sl: PostgrestOperator = "sl"
+  public static let sl = PostgrestOperator(.rangeLt)
   /// Range strictly right of (`>>`).
-  public static let sr: PostgrestOperator = "sr"
+  public static let sr = PostgrestOperator(.rangeGt)
   /// Range does not extend to the left (`&>`).
-  public static let nxl: PostgrestOperator = "nxl"
+  public static let nxl = PostgrestOperator(.rangeGte)
   /// Range does not extend to the right (`&<`).
-  public static let nxr: PostgrestOperator = "nxr"
+  public static let nxr = PostgrestOperator(.rangeLte)
   /// Range is adjacent (`-|-`).
-  public static let adj: PostgrestOperator = "adj"
+  public static let adj = PostgrestOperator(.rangeAdjacent)
   /// Overlaps (`&&`).
-  public static let ov: PostgrestOperator = "ov"
+  public static let ov = PostgrestOperator(.overlaps)
   /// Full-text search using `to_tsquery`.
-  public static let fts: PostgrestOperator = "fts"
+  public static let fts = PostgrestOperator(.textSearch(config: nil, type: nil))
   /// Full-text search using `plainto_tsquery`.
-  public static let plfts: PostgrestOperator = "plfts"
+  public static let plfts = PostgrestOperator(.textSearch(config: nil, type: .plain))
   /// Full-text search using `phraseto_tsquery`.
-  public static let phfts: PostgrestOperator = "phfts"
+  public static let phfts = PostgrestOperator(.textSearch(config: nil, type: .phrase))
   /// Full-text search using `websearch_to_tsquery`.
-  public static let wfts: PostgrestOperator = "wfts"
+  public static let wfts = PostgrestOperator(.textSearch(config: nil, type: .websearch))
 }
 
 extension PostgrestRequestBuilder {
@@ -112,7 +118,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
   ) -> Self {
     let queryValue = value.rawValue
     var copy = self
-    copy.request.query.append(
+    copy.query.append(
       URLQueryItem(name: column, value: "not.\(op.rawValue).\(queryValue)")
     )
     return copy
@@ -140,7 +146,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
     let key = referencedTable.map { "\($0).or" } ?? "or"
     let queryValue = filters.rawValue
     var copy = self
-    copy.request.query.append(URLQueryItem(name: key, value: "(\(queryValue))"))
+    copy.query.append(URLQueryItem(name: key, value: "(\(queryValue))"))
     return copy
   }
 
@@ -163,7 +169,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
   ) -> Self {
     let queryValue = value.rawValue
     var copy = self
-    copy.request.query.append(URLQueryItem(name: column, value: "eq.\(queryValue)"))
+    copy.query.append(URLQueryItem(name: column, value: "eq.\(queryValue)"))
     return copy
   }
 
@@ -184,7 +190,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
   ) -> Self {
     let queryValue = value.rawValue
     var copy = self
-    copy.request.query.append(URLQueryItem(name: column, value: "neq.\(queryValue)"))
+    copy.query.append(URLQueryItem(name: column, value: "neq.\(queryValue)"))
     return copy
   }
 
@@ -205,7 +211,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
   ) -> Self {
     let queryValue = value.rawValue
     var copy = self
-    copy.request.query.append(URLQueryItem(name: column, value: "gt.\(queryValue)"))
+    copy.query.append(URLQueryItem(name: column, value: "gt.\(queryValue)"))
     return copy
   }
 
@@ -226,7 +232,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
   ) -> Self {
     let queryValue = value.rawValue
     var copy = self
-    copy.request.query.append(URLQueryItem(name: column, value: "gte.\(queryValue)"))
+    copy.query.append(URLQueryItem(name: column, value: "gte.\(queryValue)"))
     return copy
   }
 
@@ -247,7 +253,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
   ) -> Self {
     let queryValue = value.rawValue
     var copy = self
-    copy.request.query.append(URLQueryItem(name: column, value: "lt.\(queryValue)"))
+    copy.query.append(URLQueryItem(name: column, value: "lt.\(queryValue)"))
     return copy
   }
 
@@ -268,7 +274,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
   ) -> Self {
     let queryValue = value.rawValue
     var copy = self
-    copy.request.query.append(URLQueryItem(name: column, value: "lte.\(queryValue)"))
+    copy.query.append(URLQueryItem(name: column, value: "lte.\(queryValue)"))
     return copy
   }
 
@@ -291,7 +297,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
   ) -> Self {
     let queryValue = pattern.rawValue
     var copy = self
-    copy.request.query.append(URLQueryItem(name: column, value: "like.\(queryValue)"))
+    copy.query.append(URLQueryItem(name: column, value: "like.\(queryValue)"))
     return copy
   }
 
@@ -312,7 +318,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
   ) -> Self {
     let queryValue = patterns.rawValue
     var copy = self
-    copy.request.query.append(URLQueryItem(name: column, value: "like(all).\(queryValue)"))
+    copy.query.append(URLQueryItem(name: column, value: "like(all).\(queryValue)"))
     return copy
   }
 
@@ -333,7 +339,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
   ) -> Self {
     let queryValue = patterns.rawValue
     var copy = self
-    copy.request.query.append(URLQueryItem(name: column, value: "like(any).\(queryValue)"))
+    copy.query.append(URLQueryItem(name: column, value: "like(any).\(queryValue)"))
     return copy
   }
 
@@ -356,7 +362,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
   ) -> Self {
     let queryValue = pattern.rawValue
     var copy = self
-    copy.request.query.append(URLQueryItem(name: column, value: "ilike.\(queryValue)"))
+    copy.query.append(URLQueryItem(name: column, value: "ilike.\(queryValue)"))
     return copy
   }
 
@@ -377,7 +383,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
   ) -> Self {
     let queryValue = patterns.rawValue
     var copy = self
-    copy.request.query.append(URLQueryItem(name: column, value: "ilike(all).\(queryValue)"))
+    copy.query.append(URLQueryItem(name: column, value: "ilike(all).\(queryValue)"))
     return copy
   }
 
@@ -398,7 +404,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
   ) -> Self {
     let queryValue = patterns.rawValue
     var copy = self
-    copy.request.query.append(URLQueryItem(name: column, value: "ilike(any).\(queryValue)"))
+    copy.query.append(URLQueryItem(name: column, value: "ilike(any).\(queryValue)"))
     return copy
   }
 
@@ -421,7 +427,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
   ) -> Self {
     let queryValue = pattern.rawValue
     var copy = self
-    copy.request.query.append(URLQueryItem(name: column, value: "match.\(queryValue)"))
+    copy.query.append(URLQueryItem(name: column, value: "match.\(queryValue)"))
     return copy
   }
 
@@ -444,7 +450,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
   ) -> Self {
     let queryValue = pattern.rawValue
     var copy = self
-    copy.request.query.append(URLQueryItem(name: column, value: "imatch.\(queryValue)"))
+    copy.query.append(URLQueryItem(name: column, value: "imatch.\(queryValue)"))
     return copy
   }
 
@@ -472,7 +478,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
     // `Optional` is not a `PostgrestFilterValue`, so spell the NULL case out here.
     let queryValue = value.map(\.rawValue) ?? "NULL"
     var copy = self
-    copy.request.query.append(URLQueryItem(name: column, value: "is.\(queryValue)"))
+    copy.query.append(URLQueryItem(name: column, value: "is.\(queryValue)"))
     return copy
   }
 
@@ -496,7 +502,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
   ) -> Self {
     let queryValue = value.rawValue
     var copy = self
-    copy.request.query.append(URLQueryItem(name: column, value: "isdistinct.\(queryValue)"))
+    copy.query.append(URLQueryItem(name: column, value: "isdistinct.\(queryValue)"))
     return copy
   }
 
@@ -519,7 +525,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
   ) -> Self {
     let queryValues = values.map { escapePostgRESTFilterValue($0.rawValue) }
     var copy = self
-    copy.request.query.append(
+    copy.query.append(
       URLQueryItem(
         name: column,
         value: "in.(\(queryValues.joined(separator: ",")))"
@@ -547,7 +553,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
   ) -> Self {
     let queryValues = values.map { escapePostgRESTFilterValue($0.rawValue) }
     var copy = self
-    copy.request.query.append(
+    copy.query.append(
       URLQueryItem(
         name: column,
         value: "not.in.(\(queryValues.joined(separator: ",")))"
@@ -575,7 +581,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
   ) -> Self {
     let queryValue = value.rawValue
     var copy = self
-    copy.request.query.append(URLQueryItem(name: column, value: "cs.\(queryValue)"))
+    copy.query.append(URLQueryItem(name: column, value: "cs.\(queryValue)"))
     return copy
   }
 
@@ -598,7 +604,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
   ) -> Self {
     let queryValue = value.rawValue
     var copy = self
-    copy.request.query.append(URLQueryItem(name: column, value: "cd.\(queryValue)"))
+    copy.query.append(URLQueryItem(name: column, value: "cd.\(queryValue)"))
     return copy
   }
 
@@ -621,7 +627,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
   ) -> Self {
     let queryValue = range.rawValue
     var copy = self
-    copy.request.query.append(URLQueryItem(name: column, value: "sl.\(queryValue)"))
+    copy.query.append(URLQueryItem(name: column, value: "sl.\(queryValue)"))
     return copy
   }
 
@@ -644,7 +650,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
   ) -> Self {
     let queryValue = range.rawValue
     var copy = self
-    copy.request.query.append(URLQueryItem(name: column, value: "sr.\(queryValue)"))
+    copy.query.append(URLQueryItem(name: column, value: "sr.\(queryValue)"))
     return copy
   }
 
@@ -667,7 +673,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
   ) -> Self {
     let queryValue = range.rawValue
     var copy = self
-    copy.request.query.append(URLQueryItem(name: column, value: "nxl.\(queryValue)"))
+    copy.query.append(URLQueryItem(name: column, value: "nxl.\(queryValue)"))
     return copy
   }
 
@@ -690,7 +696,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
   ) -> Self {
     let queryValue = range.rawValue
     var copy = self
-    copy.request.query.append(URLQueryItem(name: column, value: "nxr.\(queryValue)"))
+    copy.query.append(URLQueryItem(name: column, value: "nxr.\(queryValue)"))
     return copy
   }
 
@@ -714,7 +720,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
   ) -> Self {
     let queryValue = range.rawValue
     var copy = self
-    copy.request.query.append(URLQueryItem(name: column, value: "adj.\(queryValue)"))
+    copy.query.append(URLQueryItem(name: column, value: "adj.\(queryValue)"))
     return copy
   }
 
@@ -737,7 +743,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
   ) -> Self {
     let queryValue = value.rawValue
     var copy = self
-    copy.request.query.append(URLQueryItem(name: column, value: "ov.\(queryValue)"))
+    copy.query.append(URLQueryItem(name: column, value: "ov.\(queryValue)"))
     return copy
   }
 
@@ -771,7 +777,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
     let configPart = config.map { "(\($0))" }
 
     var copy = self
-    copy.request.query.append(
+    copy.query.append(
       URLQueryItem(
         name: column, value: "\(type?.rawValue ?? "")fts\(configPart ?? "").\(queryValue)"
       )
@@ -824,7 +830,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
     value: String
   ) -> Self {
     var copy = self
-    copy.request.query.append(
+    copy.query.append(
       URLQueryItem(
         name: column,
         value: "\(`operator`).\(value)"
@@ -849,7 +855,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
     let query = query.mapValues(\.rawValue)
     var copy = self
     for (key, value) in query {
-      copy.request.query.append(
+      copy.query.append(
         URLQueryItem(
           name: key,
           value: "eq.\(value.rawValue)"

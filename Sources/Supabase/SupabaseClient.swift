@@ -1,6 +1,7 @@
 import ConcurrencyExtras
 public import Foundation
 import HTTPTypes
+import Helpers
 import IssueReporting
 import Logging
 
@@ -67,6 +68,17 @@ import Logging
 /// span is active (via `opentelemetry-swift`) when a request is made gets propagated; with no
 /// active span, or with the trait disabled, requests go out unchanged.
 public final class SupabaseClient: Sendable {
+  /// Derives the default auth storage key from the project ref in `url`'s host, so two projects
+  /// in the same app do not share a stored session.
+  ///
+  /// - Returns: `nil` when `url` has no host, and so no project ref to namespace by. An empty
+  ///   host counts as none: `"".split(separator: ".")` is empty.
+  static func defaultStorageKey(for url: URL) -> String? {
+    url.host(percentEncoded: false)?
+      .split(separator: ".").first
+      .map { "sb-\($0)-auth-token" }
+  }
+
   let options: SupabaseClientOptions
   let supabaseURL: URL
   let supabaseKey: String
@@ -103,7 +115,7 @@ public final class SupabaseClient: Sendable {
       schema: options.db.schema,
       headers: headers,
       logger: options.global.logger,
-      fetch: fetchWithAuth,
+      http: authenticatedHTTP,
       encoder: options.db.encoder,
       decoder: options.db.decoder,
       retryEnabled: options.db.retry
@@ -116,9 +128,9 @@ public final class SupabaseClient: Sendable {
       configuration: StorageClientConfiguration(
         url: storageURL,
         headers: headers,
-        session: StorageHTTPSession(fetch: fetchWithAuth, upload: uploadWithAuth),
+        http: authenticatedHTTP,
         logger: options.global.logger,
-        useNewHostname: options.storage.useNewHostname
+        usesNewHostname: options.storage.usesNewHostname
       )
     )
   }
@@ -126,10 +138,12 @@ public final class SupabaseClient: Sendable {
   /// The Realtime client for subscribing to database changes and broadcasting presence events.
   public var realtimeV2: RealtimeClientV2 {
     mutableState.withValue {
-      if $0.realtime == nil {
-        $0.realtime = _initRealtimeClient()
+      if let realtime = $0.realtime {
+        return realtime
       }
-      return $0.realtime!
+      let realtime = _initRealtimeClient()
+      $0.realtime = realtime
+      return realtime
     }
   }
 
@@ -144,9 +158,11 @@ public final class SupabaseClient: Sendable {
       headers: functionsHeaders.dictionary,
       region: options.functions.region,
       logger: options.global.logger,
-      fetch: { [session = options.global.session] request in
-        try await session.data(for: TraceContext.inject(into: request))
-      },
+      http: HTTPClientConfiguration(
+        transport: transport,
+        middlewares: options.global.http.middlewares + [TraceContextMiddleware()],
+        timeout: options.global.http.timeout
+      ),
       decoder: options.functions.decoder,
       accessToken: { [weak self] in
         try await self?._getAccessToken()
@@ -191,31 +207,15 @@ public final class SupabaseClient: Sendable {
   ///   - supabaseURL: Your Supabase project URL, found in the project dashboard.
   ///   - supabaseKey: Your Supabase project anon key, found in the project dashboard.
   ///   - options: Configuration options for the client and its sub-clients.
-  public convenience init(
+  public init(
     supabaseURL: URL,
     supabaseKey: String,
     options: SupabaseClientOptions
   ) {
-    self.init(
-      supabaseURL: supabaseURL,
-      supabaseKey: supabaseKey,
-      options: options,
-      clock: ContinuousClock()
-    )
-  }
-
-  /// `package`-visibility so callers in other targets of this package (e.g. `IntegrationTests`)
-  /// can inject a test clock without exposing it publicly.
-  package init(
-    supabaseURL: URL,
-    supabaseKey: String,
-    options: SupabaseClientOptions,
-    clock: any Clock<Duration>
-  ) {
     self.supabaseURL = supabaseURL
     self.supabaseKey = supabaseKey
     self.options = options
-    self.clock = clock
+    self.clock = options.global.clock
 
     APIKeyFormat.checkFormat(supabaseKey)
 
@@ -234,11 +234,17 @@ public final class SupabaseClient: Sendable {
       )
       .merging(with: HTTPFields(options.global.headers))
 
-    // default storage key uses the supabase project ref as a namespace
-    guard let host = supabaseURL.host(percentEncoded: false) else {
-      preconditionFailure("supabaseURL must have a valid host.")
+    // The default storage key namespaces the stored session by project ref, taken from the URL's
+    // host. `supabaseURL` is supplied once, at construction, so a URL without a host is a
+    // programmer error rather than a runtime condition — trap on it, where the offending value is,
+    // instead of degrading into a shared storage key that silently collides across projects.
+    guard let defaultStorageKey = Self.defaultStorageKey(for: supabaseURL) else {
+      preconditionFailure(
+        """
+        supabaseURL must have a host to derive the auth storage key from, got \(supabaseURL).
+        """
+      )
     }
-    let defaultStorageKey = "sb-\(host.split(separator: ".")[0])-auth-token"
 
     _auth = AuthClient(
       url: supabaseURL.appendingPathComponent("/auth/v1"),
@@ -248,11 +254,15 @@ public final class SupabaseClient: Sendable {
       storageKey: options.auth.storageKey ?? defaultStorageKey,
       localStorage: options.auth.storage,
       logger: options.global.logger,
-      fetch: {
-        // DON'T use `fetchWithAuth` method within the AuthClient as it may cause a deadlock.
-        try await options.global.session.data(for: TraceContext.inject(into: $0))
-      },
-      autoRefreshToken: options.auth.autoRefreshToken
+      // DON'T give the AuthClient `AccessTokenMiddleware` — resolving the access token goes
+      // through the AuthClient itself, which may cause a deadlock.
+      http: HTTPClientConfiguration(
+        transport: options.global.http.transport ?? URLSessionTransport(),
+        middlewares: options.global.http.middlewares + [TraceContextMiddleware()],
+        timeout: options.global.http.timeout
+      ),
+      automaticallyRefreshesToken: options.auth.automaticallyRefreshesToken,
+      clock: clock
     )
 
     if options.auth.accessToken == nil {
@@ -394,45 +404,28 @@ public final class SupabaseClient: Sendable {
     mutableState.listenForAuthEventsTask?.cancel()
   }
 
-  /// A `fetch` closure handed to the REST, Storage and Functions sub-clients.
-  ///
-  /// Captures only the dependencies it needs — never `self` — because each sub-client stores this
-  /// closure for its whole lifetime, and the cached sub-clients (`storage`, `realtimeV2`) are held
-  /// in ``mutableState`` for the lifetime of the client. Capturing `self` here would form a
-  /// `self -> mutableState -> sub-client -> closure -> self` retain cycle that keeps ``deinit`` from
-  /// ever running. `rest` is rebuilt per access and not cached, but it gets the same closure, so the
-  /// no-`self`-capture rule applies uniformly.
-  private var fetchWithAuth: @Sendable (_ request: URLRequest) async throws -> (Data, URLResponse) {
-    { [session = options.global.session, adapt = adaptRequest] request in
-      try await session.data(for: adapt(request))
-    }
+  /// The resolved transport shared by every sub-client.
+  private var transport: any ClientTransport {
+    options.global.http.transport ?? URLSessionTransport()
   }
 
-  /// An `upload` closure handed to the Storage sub-client.
+  /// The shared transport plus the user's middlewares followed by the SDK's, for sub-clients that
+  /// send the user's token.
   ///
-  /// Same no-`self`-capture rationale as ``fetchWithAuth``.
-  private var uploadWithAuth:
-    @Sendable (_ request: URLRequest, _ data: Data) async throws -> (Data, URLResponse)
-  {
-    { [session = options.global.session, adapt = adaptRequest] request, data in
-      try await session.upload(for: adapt(request), from: data)
-    }
-  }
-
-  /// Builds a request adapter that injects trace context and the current access token.
-  ///
-  /// The returned closure captures the auth dependencies by value instead of `self`. `AuthClient`
-  /// holds no reference back to ``SupabaseClient``, so no cycle is formed.
-  private var adaptRequest: @Sendable (_ request: URLRequest) async throws -> URLRequest {
-    { [getAccessToken = accessTokenProvider] request in
-      let token = try await getAccessToken()
-
-      var request = TraceContext.inject(into: request)
-      if let token {
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-      }
-      return request
-    }
+  /// ``AccessTokenMiddleware`` captures only the dependencies it needs — never `self` — because
+  /// each sub-client stores its middlewares for its whole lifetime: the cached ``realtimeV2``
+  /// sub-client is held in ``mutableState`` for the lifetime of the client, and a caller may hold
+  /// any sub-client for that long too. Capturing `self` here would form a
+  /// `self -> sub-client -> middleware -> self` retain cycle that keeps ``deinit`` from ever
+  /// running.
+  private var authenticatedHTTP: HTTPClientConfiguration {
+    HTTPClientConfiguration(
+      transport: transport,
+      middlewares: options.global.http.middlewares + [
+        TraceContextMiddleware(), AccessTokenMiddleware(getAccessToken: accessTokenProvider),
+      ],
+      timeout: options.global.http.timeout
+    )
   }
 
   /// Resolves the access token to send on outgoing requests, without capturing `self`.
@@ -449,7 +442,7 @@ public final class SupabaseClient: Sendable {
           return try await accessToken()
         }
         return try await auth.session.accessToken
-      } catch AuthError.sessionMissing {
+      } catch let error as AuthError where error.kind == .sessionMissing {
         return nil
       }
     }
@@ -507,14 +500,13 @@ public final class SupabaseClient: Sendable {
     realtimeOptions.logger = options.global.logger
     realtimeOptions.logger[metadataKey: "system"] = "realtime"
 
-    if realtimeOptions.fetch == nil {
-      realtimeOptions.fetch = { [session = options.global.session] request in
-        try await session.data(for: TraceContext.inject(into: request))
-      }
-    }
-
-    if realtimeOptions.session == nil {
-      realtimeOptions.session = options.global.session
+    if realtimeOptions.http.transport == nil {
+      realtimeOptions.http = HTTPClientConfiguration(
+        transport: transport,
+        middlewares: options.global.http.middlewares + realtimeOptions.http.middlewares
+          + [TraceContextMiddleware()],
+        timeout: realtimeOptions.http.timeout ?? options.global.http.timeout
+      )
     }
 
     if realtimeOptions.accessToken == nil {
@@ -532,10 +524,11 @@ public final class SupabaseClient: Sendable {
       )
     }
 
+    realtimeOptions.clock = clock
+
     return RealtimeClientV2(
       url: supabaseURL.appendingPathComponent("/realtime/v1"),
-      options: realtimeOptions,
-      clock: clock
+      options: realtimeOptions
     )
   }
 }

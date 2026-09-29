@@ -38,11 +38,11 @@ extension PostgrestRequestBuilder where Phase: PostgrestTransformablePhase {
     }
     .joined(separator: "")
 
-    var request = self.request
-    request.query.appendOrUpdate(URLQueryItem(name: "select", value: cleanedColumns))
-    request.headers.appendOrUpdate(.prefer, value: "return=representation")
+    var copy = PostgrestTransformBuilder(carryingFrom: self)
+    copy.query.appendOrUpdate(URLQueryItem(name: "select", value: cleanedColumns))
+    copy.request.headerFields.appendOrUpdate(.prefer, value: "return=representation")
 
-    return PostgrestTransformBuilder(carryingFrom: self, request: request)
+    return copy
   }
 
   /// Sorts the query result by the specified column.
@@ -69,24 +69,24 @@ extension PostgrestRequestBuilder where Phase: PostgrestTransformablePhase {
     nullsFirst: Bool = false,
     referencedTable: String? = nil
   ) -> PostgrestTransformBuilder {
-    var request = self.request
+    var copy = PostgrestTransformBuilder(carryingFrom: self)
     let key = referencedTable.map { "\($0).order" } ?? "order"
-    let existingOrderIndex = request.query.firstIndex { $0.name == key }
+    let existingOrderIndex = copy.query.firstIndex { $0.name == key }
     let value =
       "\(column).\(ascending ? "asc" : "desc").\(nullsFirst ? "nullsfirst" : "nullslast")"
 
     if let existingOrderIndex,
-      let currentValue = request.query[existingOrderIndex].value
+      let currentValue = copy.query[existingOrderIndex].value
     {
-      request.query[existingOrderIndex] = URLQueryItem(
+      copy.query[existingOrderIndex] = URLQueryItem(
         name: key,
         value: "\(currentValue),\(value)"
       )
     } else {
-      request.query.append(URLQueryItem(name: key, value: value))
+      copy.query.append(URLQueryItem(name: key, value: value))
     }
 
-    return PostgrestTransformBuilder(carryingFrom: self, request: request)
+    return copy
   }
 
   /// Limits the number of rows returned by the query.
@@ -96,10 +96,10 @@ extension PostgrestRequestBuilder where Phase: PostgrestTransformablePhase {
   ///   - referencedTable: The name of an embedded table to limit instead of the parent table. Defaults to `nil`.
   /// - Returns: A ``PostgrestTransformBuilder`` so calls can be chained.
   public func limit(_ count: Int, referencedTable: String? = nil) -> PostgrestTransformBuilder {
-    var request = self.request
+    var copy = PostgrestTransformBuilder(carryingFrom: self)
     let key = referencedTable.map { "\($0).limit" } ?? "limit"
-    request.query.appendOrUpdate(URLQueryItem(name: key, value: "\(count)"))
-    return PostgrestTransformBuilder(carryingFrom: self, request: request)
+    copy.query.appendOrUpdate(URLQueryItem(name: key, value: "\(count)"))
+    return copy
   }
 
   /// Returns only the rows within the specified zero-based, inclusive index range.
@@ -130,12 +130,12 @@ extension PostgrestRequestBuilder where Phase: PostgrestTransformablePhase {
     let keyOffset = referencedTable.map { "\($0).offset" } ?? "offset"
     let keyLimit = referencedTable.map { "\($0).limit" } ?? "limit"
 
-    var request = self.request
-    request.query.appendOrUpdate(URLQueryItem(name: keyOffset, value: "\(from)"))
+    var copy = PostgrestTransformBuilder(carryingFrom: self)
+    copy.query.appendOrUpdate(URLQueryItem(name: keyOffset, value: "\(from)"))
     // Range is inclusive, so add 1
-    request.query.appendOrUpdate(URLQueryItem(name: keyLimit, value: "\(to - from + 1)"))
+    copy.query.appendOrUpdate(URLQueryItem(name: keyLimit, value: "\(to - from + 1)"))
 
-    return PostgrestTransformBuilder(carryingFrom: self, request: request)
+    return copy
   }
 
   /// Instructs PostgREST to return a single JSON object instead of an array.
@@ -155,9 +155,9 @@ extension PostgrestRequestBuilder where Phase: PostgrestTransformablePhase {
   ///
   /// - Returns: A ``PostgrestTransformBuilder`` so calls can be chained.
   public func single() -> PostgrestTransformBuilder {
-    var request = self.request
-    request.headers[.accept] = "application/vnd.pgrst.object+json"
-    return PostgrestTransformBuilder(carryingFrom: self, request: request)
+    var copy = PostgrestTransformBuilder(carryingFrom: self)
+    copy.request.headerFields[.accept] = "application/vnd.pgrst.object+json"
+    return copy
   }
 
   /// Instructs PostgREST to return a single JSON object, returning `nil` when no row matches.
@@ -185,9 +185,8 @@ extension PostgrestRequestBuilder where Phase: PostgrestTransformablePhase {
   ///
   /// - Returns: A ``PostgrestTransformBuilder`` so calls can be chained.
   public func maybeSingle() -> PostgrestTransformBuilder {
-    var request = self.request
-    request.headers[.accept] = "application/vnd.pgrst.object+json"
-    var copy = PostgrestTransformBuilder(carryingFrom: self, request: request)
+    var copy = PostgrestTransformBuilder(carryingFrom: self)
+    copy.request.headerFields[.accept] = "application/vnd.pgrst.object+json"
     copy.isMaybeSingle = true
     return copy
   }
@@ -201,12 +200,12 @@ extension PostgrestRequestBuilder where Phase: PostgrestTransformablePhase {
   ///
   /// - Returns: A ``PostgrestTransformBuilder`` so calls can be chained.
   public func csv() -> PostgrestTransformBuilder {
-    var copy = PostgrestTransformBuilder(carryingFrom: self, request: self.request)
-    let preferComponents = copy.request.headers[.prefer]?.components(separatedBy: ",") ?? []
+    var copy = PostgrestTransformBuilder(carryingFrom: self)
+    let preferComponents = copy.request.headerFields[.prefer]?.components(separatedBy: ",") ?? []
     if preferComponents.contains("return=stripped-nulls") {
       copy.pendingError = "`.csv()` cannot be combined with `.stripNulls()`"
     }
-    copy.request.headers[.accept] = "text/csv"
+    copy.request.headerFields[.accept] = "text/csv"
     return copy
   }
 
@@ -218,11 +217,11 @@ extension PostgrestRequestBuilder where Phase: PostgrestTransformablePhase {
   ///
   /// - Returns: A ``PostgrestTransformBuilder`` so calls can be chained.
   public func stripNulls() -> PostgrestTransformBuilder {
-    var copy = PostgrestTransformBuilder(carryingFrom: self, request: self.request)
-    if copy.request.headers[.accept] == "text/csv" {
+    var copy = PostgrestTransformBuilder(carryingFrom: self)
+    if copy.request.headerFields[.accept] == "text/csv" {
       copy.pendingError = "`.stripNulls()` cannot be combined with `.csv()`"
     }
-    copy.request.headers.appendOrUpdate(.prefer, value: "return=stripped-nulls")
+    copy.request.headerFields.appendOrUpdate(.prefer, value: "return=stripped-nulls")
     return copy
   }
 
@@ -233,9 +232,9 @@ extension PostgrestRequestBuilder where Phase: PostgrestTransformablePhase {
   ///
   /// - Returns: A ``PostgrestTransformBuilder`` so calls can be chained.
   public func geojson() -> PostgrestTransformBuilder {
-    var request = self.request
-    request.headers[.accept] = "application/geo+json"
-    return PostgrestTransformBuilder(carryingFrom: self, request: request)
+    var copy = PostgrestTransformBuilder(carryingFrom: self)
+    copy.request.headerFields[.accept] = "application/geo+json"
+    return copy
   }
 
   /// Returns the PostgreSQL EXPLAIN plan for the query instead of the query results.
@@ -279,12 +278,12 @@ extension PostgrestRequestBuilder where Phase: PostgrestTransformablePhase {
     .compactMap { $0 }
     .joined(separator: "|")
 
-    var request = self.request
-    let forMediaType = request.headers[.accept] ?? "application/json"
-    request.headers[.accept] =
+    var copy = PostgrestTransformBuilder(carryingFrom: self)
+    let forMediaType = copy.request.headerFields[.accept] ?? "application/json"
+    copy.request.headerFields[.accept] =
       "application/vnd.pgrst.plan+\(format.rawValue); for=\"\(forMediaType)\"; options=\(options);"
 
-    return PostgrestTransformBuilder(carryingFrom: self, request: request)
+    return copy
   }
 
   /// Limits the maximum number of rows that a write operation may affect.
@@ -303,10 +302,10 @@ extension PostgrestRequestBuilder where Phase: PostgrestTransformablePhase {
   /// - Parameter value: The maximum number of rows that the operation may affect.
   /// - Returns: A ``PostgrestTransformBuilder`` so calls can be chained.
   public func maxAffected(_ value: Int) -> PostgrestTransformBuilder {
-    var request = self.request
-    request.headers.appendOrUpdate(.prefer, value: "handling=strict")
-    request.headers.appendOrUpdate(.prefer, value: "max-affected=\(value)")
-    return PostgrestTransformBuilder(carryingFrom: self, request: request)
+    var copy = PostgrestTransformBuilder(carryingFrom: self)
+    copy.request.headerFields.appendOrUpdate(.prefer, value: "handling=strict")
+    copy.request.headerFields.appendOrUpdate(.prefer, value: "max-affected=\(value)")
+    return copy
   }
 
   /// Executes the query but rolls back the transaction instead of committing it.
@@ -331,8 +330,8 @@ extension PostgrestRequestBuilder where Phase: PostgrestTransformablePhase {
   ///
   /// - Returns: A ``PostgrestTransformBuilder`` so calls can be chained.
   public func dryRun() -> PostgrestTransformBuilder {
-    var request = self.request
-    request.headers.appendOrUpdate(.prefer, value: "tx=rollback")
-    return PostgrestTransformBuilder(carryingFrom: self, request: request)
+    var copy = PostgrestTransformBuilder(carryingFrom: self)
+    copy.request.headerFields.appendOrUpdate(.prefer, value: "tx=rollback")
+    return copy
   }
 }

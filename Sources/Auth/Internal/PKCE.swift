@@ -13,12 +13,9 @@ extension PKCE {
       return Data(buffer).pkceBase64EncodedString()
     },
     generateCodeChallenge: { codeVerifier in
-      guard let data = codeVerifier.data(using: .utf8) else {
-        preconditionFailure("provided string should be utf8 encoded.")
-      }
-
+      // `Data(_:)` over a String's UTF-8 view cannot fail, unlike `data(using: .utf8)`.
       var hasher = SHA256()
-      hasher.update(data: data)
+      hasher.update(data: Data(codeVerifier.utf8))
       let hashed = hasher.finalize()
       return Data(hashed).pkceBase64EncodedString()
     }

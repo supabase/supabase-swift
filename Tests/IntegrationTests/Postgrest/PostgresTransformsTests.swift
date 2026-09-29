@@ -15,9 +15,9 @@ import Testing
 struct PostgrestTransformsTests {
   let client = PostgrestClient(
     configuration: PostgrestClient.Configuration(
-      url: URL(string: "\(DotEnv.SUPABASE_URL)/rest/v1")!,
+      url: URL(string: "\(DotEnv.supabaseURL)/rest/v1")!,
       headers: [
-        "apikey": DotEnv.SUPABASE_PUBLISHABLE_KEY
+        "apikey": DotEnv.supabasePublishableKey
       ]
     )
   )

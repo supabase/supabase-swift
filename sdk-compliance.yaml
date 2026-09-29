@@ -30,6 +30,14 @@ supporting_symbols:
   - JSONValue.description
   - JSONValue.rawValue
 
+  # The injected clock is a testability seam shared across Auth's token auto-refresh and
+  # request-retry backoff and Realtime's heartbeat timer and reconnect backoff, rather than a
+  # capability any one feature implements. `SupabaseClient` forwards `GlobalOptions.clock` to the
+  # per-sub-client properties, so all three spell the same knob at a different layer.
+  - SupabaseClientOptions.GlobalOptions.clock
+  - AuthClient.Configuration.clock
+  - RealtimeClientOptions.clock
+
   # A handful of PostgrestRequestBuilder members are used across many
   # database.* capabilities simultaneously (executing every query/mutate/rpc,
   # or acting as structural phase markers) rather than owned by a single
@@ -141,6 +149,37 @@ supporting_symbols:
   # sits here instead of being attributed to a capability it does not implement.
   - PostgrestFilter
   - "&&"
+  # The operator every typed filter is built through, one case per wire token. The operator
+  # methods on the expression protocols are attributed to their capabilities below; the enum is the
+  # shared spelling behind all of them, so it sits here rather than under any one of them.
+  - PostgrestFilterOperator
+  - PostgrestFilterOperator.token
+  - PostgrestFilterOperator.eq
+  - PostgrestFilterOperator.neq
+  - PostgrestFilterOperator.gt
+  - PostgrestFilterOperator.gte
+  - PostgrestFilterOperator.lt
+  - PostgrestFilterOperator.lte
+  - PostgrestFilterOperator.is
+  - PostgrestFilterOperator.isDistinct
+  - PostgrestFilterOperator.in
+  - PostgrestFilterOperator.like
+  - PostgrestFilterOperator.ilike
+  - PostgrestFilterOperator.likeAllOf
+  - PostgrestFilterOperator.likeAnyOf
+  - PostgrestFilterOperator.ilikeAllOf
+  - PostgrestFilterOperator.ilikeAnyOf
+  - PostgrestFilterOperator.regexMatch
+  - PostgrestFilterOperator.regexIMatch
+  - PostgrestFilterOperator.contains
+  - PostgrestFilterOperator.containedBy
+  - PostgrestFilterOperator.overlaps
+  - PostgrestFilterOperator.rangeLt
+  - PostgrestFilterOperator.rangeGt
+  - PostgrestFilterOperator.rangeGte
+  - PostgrestFilterOperator.rangeLte
+  - PostgrestFilterOperator.rangeAdjacent
+  - PostgrestFilterOperator.textSearch
 
   # Casts, JSON paths and aggregates. These are absent from `capabilities/database.yaml` in every
   # SDK — there is no `database.*` id to attribute them to yet — so they are registered here,
@@ -196,6 +235,135 @@ supporting_symbols:
   - PrimaryKey
   - Default
   - Relationship
+  # Error root shared by every module error (SDK-1788). Each module's error
+  # struct conforms to SupabaseError and carries the failed HTTP response as an
+  # HTTPErrorResponse, so one catch clause serves the whole SDK. The
+  # sb-request-id header name is exposed for callers that read it directly.
+  - SupabaseError
+  - SupabaseError.message
+  - SupabaseError.response
+  - SupabaseError.underlyingError
+  - SupabaseError.errorDescription
+  - HTTPErrorResponse
+  - HTTPErrorResponse.init
+  - HTTPErrorResponse.statusCode
+  - HTTPErrorResponse.headers
+  - HTTPErrorResponse.body
+  - HTTPErrorResponse.requestID
+  - HTTPField.Name.sbRequestID
+  # FunctionsError (SDK-1788) is thrown by every functions.* capability rather
+  # than owned by one.
+  - FunctionsError
+  - FunctionsError.Kind
+  - FunctionsError.Kind.init
+  - FunctionsError.Kind.rawValue
+  - FunctionsError.Kind.relay
+  - FunctionsError.Kind.http
+  - FunctionsError.Kind.transport
+  - FunctionsError.Kind.decoding
+  - FunctionsError.init
+  - FunctionsError.kind
+  - FunctionsError.message
+  - FunctionsError.response
+  - FunctionsError.underlyingError
+  - FunctionsError.description
+  # StorageError (SDK-1788) is thrown by every storage.* capability rather than
+  # owned by one. ServerError is the decoded Storage error payload.
+  - StorageError
+  - StorageError.Kind
+  - StorageError.Kind.init
+  - StorageError.Kind.rawValue
+  - StorageError.Kind.server
+  - StorageError.Kind.unexpectedResponse
+  - StorageError.Kind.transport
+  - StorageError.Kind.decoding
+  - StorageError.Kind.invalidURL
+  - StorageError.ServerError
+  - StorageError.ServerError.init
+  - StorageError.ServerError.statusCode
+  - StorageError.ServerError.error
+  - StorageError.ServerError.message
+  - StorageError.init
+  - StorageError.kind
+  - StorageError.message
+  - StorageError.serverError
+  - StorageError.response
+  - StorageError.underlyingError
+  - StorageError.description
+  # PostgrestError (SDK-1788) is thrown by every database.* capability rather
+  # than owned by one. ServerError is the decoded PostgREST error payload.
+  - PostgrestError
+  - PostgrestError.Kind
+  - PostgrestError.Kind.init
+  - PostgrestError.Kind.rawValue
+  - PostgrestError.Kind.server
+  - PostgrestError.Kind.unexpectedResponse
+  - PostgrestError.Kind.transport
+  - PostgrestError.Kind.decoding
+  - PostgrestError.Kind.invalidRequest
+  - PostgrestError.ServerError
+  - PostgrestError.ServerError.init
+  - PostgrestError.ServerError.code
+  - PostgrestError.ServerError.message
+  - PostgrestError.ServerError.details
+  - PostgrestError.ServerError.hint
+  - PostgrestError.init
+  - PostgrestError.kind
+  - PostgrestError.message
+  - PostgrestError.serverError
+  - PostgrestError.response
+  - PostgrestError.underlyingError
+  - PostgrestError.description
+  # AuthError (SDK-1788) is thrown by every auth.* capability rather than owned
+  # by one. ErrorCode values are attributed to their features below.
+  - AuthError
+  - AuthError.Kind
+  - AuthError.Kind.init
+  - AuthError.Kind.rawValue
+  - AuthError.Kind.api
+  - AuthError.Kind.sessionMissing
+  - AuthError.Kind.refreshDiscarded
+  - AuthError.Kind.weakPassword
+  - AuthError.Kind.pkceGrantCodeExchange
+  - AuthError.Kind.implicitGrantRedirect
+  - AuthError.Kind.oauthFlowFailed
+  - AuthError.Kind.jwtVerificationFailed
+  - AuthError.Kind.webAuthn
+  - AuthError.Kind.unexpectedResponse
+  - AuthError.Kind.transport
+  - AuthError.Kind.decoding
+  - AuthError.init
+  - AuthError.kind
+  - AuthError.message
+  - AuthError.errorCode
+  - AuthError.weakPasswordReasons
+  - AuthError.response
+  - AuthError.underlyingError
+  - AuthError.description
+  - AuthError.sessionMissing
+  - AuthError.refreshDiscarded
+  # RealtimeError (SDK-1788) is thrown by every realtime.* capability rather
+  # than owned by one.
+  - RealtimeError
+  - RealtimeError.Kind
+  - RealtimeError.Kind.init
+  - RealtimeError.Kind.rawValue
+  - RealtimeError.Kind.connection
+  - RealtimeError.Kind.timeout
+  - RealtimeError.Kind.accessTokenMissing
+  - RealtimeError.Kind.maxRetryAttemptsReached
+  - RealtimeError.Kind.channelClosedByServer
+  - RealtimeError.Kind.server
+  - RealtimeError.Kind.transport
+  - RealtimeError.Kind.decoding
+  - RealtimeError.init
+  - RealtimeError.kind
+  - RealtimeError.message
+  - RealtimeError.response
+  - RealtimeError.underlyingError
+  - RealtimeError.description
+  - RealtimeError.maxRetryAttemptsReached
+  - RealtimeError.channelClosedByServer
 
 features:
 
@@ -213,7 +381,7 @@ features:
     status: implemented
     symbols:
       - AuthClient.signInWithOAuth
-      - AuthClient.getOAuthSignInURL
+      - AuthClient.oauthSignInURL
     supporting_symbols:
       - Provider
       - Provider.init
@@ -349,7 +517,7 @@ features:
   auth.session.get_claims:
     status: implemented
     symbols:
-      - AuthClient.getClaims
+      - AuthClient.claims
   auth.session.refresh_session:
     status: implemented
     symbols:
@@ -389,7 +557,7 @@ features:
     status: implemented
     symbols:
       - AuthClient.linkIdentity
-      - AuthClient.getLinkIdentityURL
+      - AuthClient.linkIdentityURL
       - AuthClient.linkIdentityWithIdToken
   auth.identities.unlink_identity:
     status: implemented
@@ -439,7 +607,7 @@ features:
   auth.mfa.get_authenticator_assurance_level:
     status: implemented
     symbols:
-      - AuthMFA.getAuthenticatorAssuranceLevel
+      - AuthMFA.authenticatorAssuranceLevel
 
   auth.admin.create_user:
     status: implemented
@@ -456,11 +624,18 @@ features:
   auth.admin.get_user:
     status: implemented
     symbols:
-      - AuthAdmin.getUserById
+      - AuthAdmin.user
   auth.admin.list_users:
     status: implemented
     symbols:
       - AuthAdmin.listUsers
+      - AuthAdmin.users
+    supporting_symbols:
+      - AuthAdmin.UserSequence
+      - AuthAdmin.UserSequence.Element
+      - AuthAdmin.UserSequence.makeAsyncIterator
+      - AuthAdmin.UserSequence.AsyncIterator
+      - AuthAdmin.UserSequence.AsyncIterator.next
   auth.admin.invite_user:
     status: implemented
     symbols:
@@ -508,23 +683,24 @@ features:
   auth.admin.get_provider: not_implemented
   auth.admin.list_providers: not_implemented
 
-  # AuthClient+Passkey.swift methods are all @_spi(Experimental), so the public
-  # symbol graph the compliance scanner reads from never contains them.
+  # AuthClient+Passkey.swift and AuthAdmin+Passkey.swift methods are all
+  # @_spi(Experimental), so the public symbol graph the compliance scanner reads
+  # from never contains them.
   auth.passkey.register_passkey: implemented
   auth.passkey.sign_in_with_passkey: implemented
-  auth.passkey.delete_passkey: not_implemented
-  auth.passkey.list_passkeys: not_implemented
-  auth.passkey.update_passkey: not_implemented
+  auth.passkey.delete_passkey: implemented
+  auth.passkey.list_passkeys: implemented
+  auth.passkey.update_passkey: implemented
 
-  auth.passkey_admin.list_passkeys: not_implemented
-  auth.passkey_admin.delete_passkey: not_implemented
+  auth.passkey_admin.list_passkeys: implemented
+  auth.passkey_admin.delete_passkey: implemented
 
   auth.oauth_server.get_authorization_details:
     status: implemented
     symbols:
       - AuthClient.oauthServer
       - AuthOAuthServer
-      - AuthOAuthServer.getAuthorizationDetails
+      - AuthOAuthServer.authorizationDetails
       - OAuthAuthorizationDetailsResponse
       - OAuthAuthorizationDetailsResponse.details
       - OAuthAuthorizationDetailsResponse.redirect
@@ -585,7 +761,7 @@ features:
   auth.oauth_admin.get_client:
     status: implemented
     symbols:
-      - AuthAdminOAuth.getClient
+      - AuthAdminOAuth.client
   auth.oauth_admin.list_clients:
     status: implemented
     symbols:
@@ -640,8 +816,50 @@ features:
       - AuthLocalStorage.defaultLocalStorage
 
   client.request_configuration.custom_http_client:
-    status: partially_implemented
-    note: "A custom URLSession can be supplied; a full HTTP client adapter protocol is not exposed."
+    status: implemented
+    symbols:
+      - SupabaseClientOptions.GlobalOptions.http
+      - AuthClient.Configuration.http
+      - PostgrestClient.Configuration.http
+      - StorageClientConfiguration.http
+    supporting_symbols:
+      - HTTPClientConfiguration
+      - HTTPClientConfiguration.init
+      - HTTPClientConfiguration.transport
+      - HTTPClientConfiguration.middlewares
+      - ClientTransport
+      - ClientTransport.send
+      - ClientMiddleware
+      - ClientMiddleware.intercept
+      - URLSessionTransport
+      - URLSessionTransport.init
+      - URLSessionTransport.send
+      - HTTPBody
+      - HTTPBody.init
+      - HTTPBody.Element
+      - HTTPBody.Length
+      - HTTPBody.Length.known
+      - HTTPBody.Length.unknown
+      - HTTPBody.length
+      - HTTPBody.IterationBehavior
+      - HTTPBody.IterationBehavior.single
+      - HTTPBody.IterationBehavior.multiple
+      - HTTPBody.iterationBehavior
+      - HTTPBody.Iterator
+      - HTTPBody.Iterator.next
+      - HTTPBody.makeAsyncIterator
+      - HTTPBody.write
+      - HTTPBody.reportingProgress
+      - HTTPBodyAlreadyConsumedError
+      - HTTPBodyAlreadyConsumedError.init
+      - HTTPBodyTooLargeError
+      - HTTPBodyTooLargeError.init
+      - HTTPBodyTooLargeError.maxBytes
+      - HTTPBodyLengthMismatchError
+      - HTTPBodyLengthMismatchError.init
+      - HTTPBodyLengthMismatchError.declared
+      - HTTPBodyLengthMismatchError.actual
+      - Data.init
   client.request_configuration.global_headers:
     status: implemented
     symbols:
@@ -656,7 +874,7 @@ features:
   database.query.from_table:
     status: implemented
     symbols:
-      - PostgrestError.details
+      - PostgrestClient.from
     supporting_symbols:
       # The value `from(_ type:)` returns once a relation has been chosen but
       # no operation has been picked yet.
@@ -971,6 +1189,7 @@ features:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.range
+      - PostgrestTypedQuery.range
   database.using_modifiers.single_row:
     status: implemented
     symbols:
@@ -1040,7 +1259,12 @@ features:
     symbols:
       - PostgrestClient.Configuration.retryEnabled
       - PostgrestRequestBuilder.retry
-  database.configuration.request_timeout: not_implemented
+  database.configuration.request_timeout:
+    status: implemented
+    note: "A Duration, not milliseconds, and an idle timeout (URLRequest.timeoutInterval) rather than a total deadline. Set per client on HTTPClientConfiguration.timeout (PostgrestClient.Configuration.http, or GlobalOptions.http through SupabaseClient), or per request with timeout(_:)."
+    symbols:
+      - HTTPClientConfiguration.timeout
+      - PostgrestRequestBuilder.timeout
 
   # ── Functions ──────────────────────────────────────────────────────────────
 
@@ -1101,6 +1325,7 @@ features:
     status: implemented
     symbols:
       - FunctionsClient.requestIdleTimeout
+      - HTTPClientConfiguration.timeout
 
   # ── Realtime ───────────────────────────────────────────────────────────────
 
@@ -1228,7 +1453,7 @@ features:
   realtime.configuration.custom_websocket_transport: not_applicable
   realtime.configuration.reconnect_backoff:
     status: partially_implemented
-    note: "RealtimeClientOptions.reconnectDelay configures a fixed base delay; there is no hook to supply a custom attempt-count-to-delay function — the backoff curve itself (ConnectionManager.reconnectBackoffDelay) is a private, hardcoded exponential."
+    note: "RealtimeClientOptions.reconnectDelay configures a fixed base delay; there is no hook to supply a custom attempt-count-to-delay function — the backoff curve itself (ConnectionManager.reconnectBackoff, built on RetryPolicy's equal-jitter exponential) is hardcoded."
   realtime.configuration.heartbeat_interval:
     status: implemented
     note: "Set via the heartbeatInterval parameter of RealtimeClientOptions.init; the backing stored property is internal, not public."
@@ -1252,7 +1477,7 @@ features:
   realtime.configuration.binary_protocol:
     status: implemented
     symbols:
-      - RealtimeClientOptions.vsn
+      - RealtimeClientOptions.protocolVersion
 
   # ── Storage ────────────────────────────────────────────────────────────────
 
@@ -1271,7 +1496,7 @@ features:
   storage.file_buckets.get_bucket:
     status: implemented
     symbols:
-      - SupabaseStorageClient.getBucket
+      - SupabaseStorageClient.bucket
   storage.file_buckets.list_file_buckets:
     status: implemented
     symbols:
@@ -1324,7 +1549,7 @@ features:
   storage.file_buckets.get_public_url:
     status: implemented
     symbols:
-      - StorageFileApi.getPublicURL
+      - StorageFileApi.publicURL
       - DownloadBehavior
       - DownloadBehavior.withOriginalName
       - DownloadBehavior.named
@@ -1391,14 +1616,20 @@ features:
       - FileOptions.cacheControl
       - FileOptions.contentType
   # Not a separate method: a bare `cacheNonce: String?` parameter repeated on
-  # createSignedURL, createSignedURLs, download, and getPublicURL — no
+  # createSignedURL, createSignedURLs, download, and publicURL — no
   # dedicated named symbol exists distinct from those methods, which are
   # already claimed by their own capabilities above.
   storage.file_buckets.url_cache_nonce: implemented
   storage.file_buckets.download_as_stream: not_implemented
-  storage.file_buckets.purge_bucket_cache: not_implemented
-  storage.file_buckets.purge_cache: not_implemented
-  storage.file_buckets.request_cancellation: not_implemented
+  storage.file_buckets.purge_bucket_cache:
+    status: implemented
+    symbols:
+      - SupabaseStorageClient.purgeCache
+  storage.file_buckets.purge_cache:
+    status: implemented
+    symbols:
+      - StorageFileApi.purgeCache
+  storage.file_buckets.request_cancellation: implemented
 
   # ── Storage — Vector Buckets ───────────────────────────────────────────────
 
@@ -1437,6 +1668,77 @@ features:
   storage.analytics.register_table: not_implemented
   storage.analytics.table_exists: not_implemented
   storage.analytics.update_namespace_properties: not_implemented
+
+  # ── Storage — Errors ───────────────────────────────────────────────────────
+
+  storage.errors.error_codes:
+    status: implemented
+    symbols:
+      - StorageError.ServerError.code
+    supporting_symbols:
+      - StorageError.Code
+      - StorageError.Code.init
+      - StorageError.Code.rawValue
+      - StorageError.Code.noSuchBucket
+      - StorageError.Code.noSuchLifecycleConfiguration
+      - StorageError.Code.noSuchKey
+      - StorageError.Code.noSuchUpload
+      - StorageError.Code.invalidJWT
+      - StorageError.Code.invalidRequest
+      - StorageError.Code.invalidArgument
+      - StorageError.Code.malformedXML
+      - StorageError.Code.tenantNotFound
+      - StorageError.Code.entityTooLarge
+      - StorageError.Code.internalError
+      - StorageError.Code.resourceAlreadyExists
+      - StorageError.Code.resourceNotEmpty
+      - StorageError.Code.invalidBucketName
+      - StorageError.Code.invalidKey
+      - StorageError.Code.invalidRange
+      - StorageError.Code.invalidMimeType
+      - StorageError.Code.invalidUploadId
+      - StorageError.Code.keyAlreadyExists
+      - StorageError.Code.bucketAlreadyExists
+      - StorageError.Code.databaseTimeout
+      - StorageError.Code.databaseReadOnly
+      - StorageError.Code.databaseTransactionAborted
+      - StorageError.Code.databaseInvalidObjectDefinition
+      - StorageError.Code.databaseSchemaMismatch
+      - StorageError.Code.invalidSignature
+      - StorageError.Code.expiredToken
+      - StorageError.Code.signatureDoesNotMatch
+      - StorageError.Code.accessDenied
+      - StorageError.Code.resourceLocked
+      - StorageError.Code.resourceReferenced
+      - StorageError.Code.databaseError
+      - StorageError.Code.transactionError
+      - StorageError.Code.missingContentLength
+      - StorageError.Code.missingParameter
+      - StorageError.Code.invalidParameter
+      - StorageError.Code.invalidUploadSignature
+      - StorageError.Code.lockTimeout
+      - StorageError.Code.s3Error
+      - StorageError.Code.invalidAccessKeyId
+      - StorageError.Code.maximumCredentialsLimit
+      - StorageError.Code.invalidChecksum
+      - StorageError.Code.missingPart
+      - StorageError.Code.slowDown
+      - StorageError.Code.tusError
+      - StorageError.Code.aborted
+      - StorageError.Code.abortedTerminate
+      - StorageError.Code.featureNotEnabled
+      - StorageError.Code.notSupported
+      - StorageError.Code.icebergMaximumResourceLimit
+      - StorageError.Code.icebergResourceNotEmpty
+      - StorageError.Code.noSuchCatalog
+      - StorageError.Code.unknownError
+      - StorageError.Code.conflictException
+      - StorageError.Code.notFoundException
+      - StorageError.Code.vectorBucketNotEmpty
+      - StorageError.Code.s3VectorMaxBucketsExceeded
+      - StorageError.Code.s3VectorMaxIndexesExceeded
+      - StorageError.Code.noAvailableShard
+      - StorageError.Code.shardNotFound
+
   # Newly synced from the canonical spec; no local group yet, place manually.
   storage.configuration.auto_retry: not_implemented
-  storage.errors.error_codes: not_implemented

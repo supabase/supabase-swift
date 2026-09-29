@@ -1,5 +1,6 @@
 import ConcurrencyExtras
 import Foundation
+import HTTPTypesFoundation
 import Mocker
 import TestHelpers
 import Testing
@@ -36,42 +37,164 @@ extension StorageMockerTests {
             "apikey":
               "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
           ],
-          session: StorageHTTPSession(
-            fetch: { try await session.data(for: $0) },
-            upload: { try await session.upload(for: $0, from: $1) }
-          )
-        )
+          http: .init(transport: URLSessionTransport(session: session)))
       )
     }
 
     /// A client whose transport records the request body, for asserting the emitted multipart
     /// headers.
     private func makeBodyCapturingSUT(body: LockIsolated<Data>) -> SupabaseStorageClient {
-      let respond: @Sendable (URLRequest) -> (Data, URLResponse) = { request in
-        (
-          Data(#"{"Key":"bucket/\#(request.url!.lastPathComponent)"}"#.utf8),
-          HTTPURLResponse(
-            url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil
-          )!
-        )
-      }
-
-      return SupabaseStorageClient(
+      SupabaseStorageClient(
         configuration: StorageClientConfiguration(
           url: url,
           headers: [:],
-          session: StorageHTTPSession(
-            fetch: { request in
-              body.setValue(request.httpBody ?? Data())
-              return respond(request)
-            },
-            upload: { request, data in
+          http: .init(
+            transport: ClosureTransport { request, requestBody in
+              guard let urlRequest = URLRequest(httpRequest: request) else {
+                throw URLError(.badURL)
+              }
+              let data: Data
+              if let requestBody {
+                data = try await Data(collecting: requestBody, upTo: .max)
+              } else {
+                data = Data()
+              }
               body.setValue(data)
-              return respond(request)
-            }
-          )
+              let response = HTTPURLResponse(
+                url: urlRequest.url!, statusCode: 200, httpVersion: nil, headerFields: nil
+              )!
+              guard let head = response.httpResponse else { throw URLError(.badServerResponse) }
+              return (
+                head,
+                HTTPBody(Data(#"{"Key":"bucket/\#(urlRequest.url!.lastPathComponent)"}"#.utf8))
+              )
+            }))
+      )
+    }
+
+    private func makeFailingSUT(_ failure: @escaping @Sendable () throws -> Never)
+      -> SupabaseStorageClient
+    {
+      SupabaseStorageClient(
+        configuration: StorageClientConfiguration(
+          url: url,
+          headers: [:],
+          http: .init(transport: ClosureTransport { _, _ in try failure() })
         )
       )
+    }
+
+    @Test
+    func transportFailureIsWrapped() async {
+      let storage = makeFailingSUT { throw URLError(.timedOut) }
+
+      do {
+        _ = try await storage.from("bucket").list()
+        Issue.record("Expected failure")
+      } catch let error as StorageError {
+        #expect(error.kind == .transport)
+        #expect(error.response == nil)
+        #expect((error.underlyingError as? URLError)?.code == .timedOut)
+      } catch {
+        Issue.record("Unexpected error \(error)")
+      }
+    }
+
+    @Test
+    func cancellationIsNotWrapped() async {
+      let storage = makeFailingSUT { throw CancellationError() }
+
+      await #expect(throws: CancellationError.self) {
+        _ = try await storage.from("bucket").list()
+      }
+    }
+
+    /// `URLSession`'s async APIs report a cancelled `Task` as `URLError(.cancelled)`, not
+    /// `CancellationError`, so cancelling lands here rather than in `cancellationIsNotWrapped`
+    /// above. It is wrapped like any other `URLError`: callers check the code on
+    /// `underlyingError`, not `error is CancellationError` (SDK-1849).
+    @Test
+    func cancelledURLErrorIsWrapped() async {
+      let storage = makeFailingSUT { throw URLError(.cancelled) }
+
+      do {
+        _ = try await storage.from("bucket").list()
+        Issue.record("Expected failure")
+      } catch let error as StorageError {
+        #expect(error.kind == .transport)
+        #expect((error.underlyingError as? URLError)?.code == .cancelled)
+      } catch {
+        Issue.record("Unexpected error \(error)")
+      }
+    }
+
+    /// End-to-end cover for what `cancelledURLErrorIsWrapped()` above stubs: cancelling the
+    /// enclosing `Task` mid-flight makes the real ``URLSessionTransport`` fail with
+    /// `URLError(.cancelled)`, which Storage then wraps as `.transport`. Without this, nothing
+    /// checks that cancellation actually reaches a caller the way `V3_MIGRATION.md` says it does
+    /// — `cancelledURLErrorIsWrapped()` assumes the code rather than producing it.
+    @Test
+    func cancellingTheTaskSurfacesAWrappedCancelledURLError() async {
+      let storage = makeSUT()
+      let (requestStarted, onRequestStarted) = AsyncStream<Void>.makeStream()
+
+      var mock = Mock(
+        url: url.appendingPathComponent("object/list/bucket"),
+        statusCode: 200,
+        data: [.post: Data("[]".utf8)]
+      )
+      // `MockingURLProtocol` runs the request callback before it schedules the delayed
+      // response, so the cancel below always lands while the request is in flight. The delay
+      // is never waited out: cancelling makes `stopLoading()` drop the pending response.
+      mock.delay = .seconds(10)
+      mock.onRequestHandler = OnRequestHandler(requestCallback: { _ in onRequestStarted.yield() })
+      mock.register()
+
+      let task = Task { try await storage.from("bucket").list() }
+      for await _ in requestStarted { break }
+      task.cancel()
+
+      do {
+        _ = try await task.value
+        Issue.record("Expected failure")
+      } catch let error as StorageError {
+        #expect(error.kind == .transport)
+        #expect((error.underlyingError as? URLError)?.code == .cancelled)
+      } catch {
+        Issue.record("Unexpected error \(error)")
+      }
+    }
+
+    @Test
+    func customFetchErrorIsNotWrapped() async {
+      struct FetchError: Error {}
+      let storage = makeFailingSUT { throw FetchError() }
+
+      await #expect(throws: FetchError.self) {
+        _ = try await storage.from("bucket").list()
+      }
+    }
+
+    @Test
+    func undecodableSuccessBodyIsWrapped() async {
+      let storage = makeSUT()
+
+      Mock(
+        url: url.appendingPathComponent("object/list/bucket"),
+        statusCode: 200,
+        data: [.post: Data("not json".utf8)]
+      )
+      .register()
+
+      do {
+        _ = try await storage.from("bucket").list()
+        Issue.record("Expected failure")
+      } catch let error as StorageError {
+        #expect(error.kind == .decoding)
+        #expect(error.underlyingError is DecodingError)
+      } catch {
+        Issue.record("Unexpected error \(error)")
+      }
     }
 
     @Test
@@ -408,6 +531,37 @@ extension StorageMockerTests {
     }
 
     @Test
+    func createSignedURL_invalidURL() async throws {
+      let storage = makeSUT()
+
+      Mock(
+        url: url.appendingPathComponent("object/sign/bucket/file.txt"),
+        statusCode: 200,
+        data: [
+          .post: Data(
+            """
+            {
+              "signedURL": "http://[::1"
+            }
+            """.utf8
+          )
+        ]
+      )
+      .register()
+
+      do {
+        _ = try await storage.from("bucket").createSignedURL(
+          path: "file.txt",
+          expiresIn: 3600
+        )
+        Issue.record("expected createSignedURL to throw")
+      } catch let error as StorageError {
+        #expect(error.kind == .invalidURL)
+        #expect(error.response == nil)
+      }
+    }
+
+    @Test
     func createSignedURL_download() async throws {
       let storage = makeSUT()
 
@@ -703,7 +857,10 @@ extension StorageMockerTests {
           .move(from: "source", to: "destination")
         Issue.record()
       } catch let error as StorageError {
+        #expect(error.kind == .server)
         #expect(error.message == "Error")
+        #expect(error.serverError?.message == "Error")
+        #expect(error.response?.statusCode == 400)
       }
     }
 
@@ -736,9 +893,52 @@ extension StorageMockerTests {
         try await storage.from("bucket")
           .move(from: "source", to: "destination")
         Issue.record()
-      } catch let error as HTTPError {
-        #expect(error.data == Data("error".utf8))
-        #expect(error.response.statusCode == 412)
+      } catch let error as StorageError {
+        #expect(error.kind == .unexpectedResponse)
+        #expect(error.serverError == nil)
+        #expect(error.response?.body == Data("error".utf8))
+        #expect(error.response?.statusCode == 412)
+      }
+    }
+
+    @Test
+    func nonSuccessStatusCodeExposesTheServerErrorCode() async throws {
+      let storage = makeSUT()
+
+      Mock(
+        url: url.appendingPathComponent("object/bucket/missing.txt"),
+        statusCode: 400,
+        data: [
+          .get: Data(
+            """
+            {
+              "statusCode":"404",
+              "error":"not_found",
+              "message":"Object not found",
+              "code":"NoSuchKey"
+            }
+            """.utf8
+          )
+        ]
+      )
+      .snapshotRequest {
+        #"""
+        curl \
+        	--header "X-Client-Info: storage-swift/0.0.0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	"http://localhost:54321/storage/v1/object/bucket/missing.txt"
+        """#
+      }
+      .register()
+
+      do {
+        _ = try await storage.from("bucket").download(path: "missing.txt")
+        Issue.record()
+      } catch let error as StorageError {
+        #expect(error.kind == .server)
+        #expect(error.serverError?.code == .noSuchKey)
+        #expect(error.serverError?.error == "not_found")
+        #expect(error.response?.statusCode == 400)
       }
     }
 
@@ -791,7 +991,7 @@ extension StorageMockerTests {
 
       let response = try await storage.from("bucket")
         .update(
-          "file.txt",
+          path: "file.txt",
           data: Data("hello world".utf8),
           options: FileOptions(
             metadata: [
@@ -827,7 +1027,7 @@ extension StorageMockerTests {
 
       let response = try await storage.from("bucket")
         .upload(
-          "/folder//file.txt",
+          path: "/folder//file.txt",
           data: Data("hello world!".utf8),
           options: FileOptions(contentType: "text/plain")
         )
@@ -883,7 +1083,7 @@ extension StorageMockerTests {
 
       let response = try await storage.from("bucket")
         .upload(
-          "file.txt",
+          path: "file.txt",
           fileURL: Bundle.module.url(forResource: "file", withExtension: "txt")!,
           options: FileOptions(contentType: "image/png")
         )
@@ -943,7 +1143,7 @@ extension StorageMockerTests {
 
       let response = try await storage.from("bucket")
         .update(
-          "file.txt",
+          path: "file.txt",
           fileURL: Bundle.module.url(forResource: "file", withExtension: "txt")!,
           options: FileOptions(
             metadata: [
@@ -1039,7 +1239,7 @@ extension StorageMockerTests {
       let storage = makeSUT()
 
       let publicURL = try storage.from("bucket")
-        .getPublicURL(path: "image.png", options: TransformOptions())
+        .publicURL(path: "image.png", options: TransformOptions())
 
       #expect(
         publicURL.absoluteString.contains("/object/public/"),
@@ -1056,7 +1256,7 @@ extension StorageMockerTests {
       let storage = makeSUT()
 
       let publicURL = try storage.from("bucket")
-        .getPublicURL(path: "image.png", options: TransformOptions(width: 200))
+        .publicURL(path: "image.png", options: TransformOptions(width: 200))
 
       #expect(
         publicURL.absoluteString.contains("/render/image/"),
@@ -1069,7 +1269,7 @@ extension StorageMockerTests {
       let storage = makeSUT()
 
       let publicURL = try storage.from("bucket")
-        .getPublicURL(path: "/folder/image.png")
+        .publicURL(path: "/folder/image.png")
 
       #expect(
         publicURL.absoluteString
@@ -1254,6 +1454,83 @@ extension StorageMockerTests {
     }
 
     @Test
+    func purgeCache() async throws {
+      let storage = makeSUT()
+
+      Mock(
+        url: url.appendingPathComponent("cdn/bucket/folder/file.txt"),
+        statusCode: 200,
+        data: [
+          .delete: Data(#"{"message":"success"}"#.utf8)
+        ]
+      )
+      .snapshotRequest {
+        #"""
+        curl \
+        	--request DELETE \
+        	--header "X-Client-Info: storage-swift/0.0.0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	"http://localhost:54321/storage/v1/cdn/bucket/folder/file.txt"
+        """#
+      }
+      .register()
+
+      try await storage.from("bucket").purgeCache(path: "folder/file.txt")
+    }
+
+    @Test
+    func purgeCacheTransformationsOnly() async throws {
+      let storage = makeSUT()
+
+      Mock(
+        url: url.appendingPathComponent("cdn/bucket/folder/file.txt"),
+        ignoreQuery: true,
+        statusCode: 200,
+        data: [
+          .delete: Data(#"{"message":"success"}"#.utf8)
+        ]
+      )
+      .snapshotRequest {
+        #"""
+        curl \
+        	--request DELETE \
+        	--header "X-Client-Info: storage-swift/0.0.0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	"http://localhost:54321/storage/v1/cdn/bucket/folder/file.txt?transformations=true"
+        """#
+      }
+      .register()
+
+      try await storage.from("bucket").purgeCache(
+        path: "folder/file.txt", transformationsOnly: true)
+    }
+
+    @Test
+    func purgeCachePercentEncodesThePath() async throws {
+      let storage = makeSUT()
+
+      Mock(
+        url: url.appendingPathComponent("cdn/bucket/folder/my file.png"),
+        statusCode: 200,
+        data: [
+          .delete: Data(#"{"message":"success"}"#.utf8)
+        ]
+      )
+      .snapshotRequest {
+        #"""
+        curl \
+        	--request DELETE \
+        	--header "X-Client-Info: storage-swift/0.0.0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	"http://localhost:54321/storage/v1/cdn/bucket/folder/my%20file.png"
+        """#
+      }
+      .register()
+
+      try await storage.from("bucket").purgeCache(path: "folder/my file.png")
+    }
+
+    @Test
     func createSignedUploadURL() async throws {
       let storage = makeSUT()
 
@@ -1325,7 +1602,7 @@ extension StorageMockerTests {
         .createSignedUploadURL(
           path: "file.txt",
           options: CreateSignedUploadURLOptions(
-            upsert: true
+            shouldUpsert: true
           )
         )
 
@@ -1417,7 +1694,7 @@ extension StorageMockerTests {
 
       let response = try await storage.from("bucket")
         .uploadToSignedURL(
-          "/folder//file.txt", token: "abc.def.ghi", data: Data("hello world".utf8))
+          path: "/folder//file.txt", token: "abc.def.ghi", data: Data("hello world".utf8))
 
       #expect(response.path == "folder/file.txt")
       #expect(response.fullPath == "bucket/folder/file.txt")
@@ -1467,7 +1744,7 @@ extension StorageMockerTests {
       .register()
 
       let response = try await storage.from("bucket")
-        .uploadToSignedURL("file.txt", token: "abc.def.ghi", data: Data("hello world".utf8))
+        .uploadToSignedURL(path: "file.txt", token: "abc.def.ghi", data: Data("hello world".utf8))
 
       #expect(response.path == "file.txt")
       #expect(response.fullPath == "bucket/file.txt")
@@ -1480,7 +1757,7 @@ extension StorageMockerTests {
 
       _ = try await storage.from("bucket")
         .uploadToSignedURL(
-          "cat.png",
+          path: "cat.png",
           token: "abc.def.ghi",
           data: Data("not-really-a-png".utf8)
         )
@@ -1500,7 +1777,7 @@ extension StorageMockerTests {
 
       _ = try await storage.from("bucket")
         .uploadToSignedURL(
-          "cat.jpg",
+          path: "cat.jpg",
           token: "abc.def.ghi",
           fileURL: Bundle.module.url(forResource: "sadcat", withExtension: "jpg")!
         )
@@ -1560,7 +1837,7 @@ extension StorageMockerTests {
 
       let response = try await storage.from("bucket")
         .uploadToSignedURL(
-          "file.txt",
+          path: "file.txt",
           token: "abc.def.ghi",
           fileURL: Bundle.module.url(forResource: "file", withExtension: "txt")!,
           options: FileOptions(
@@ -1641,7 +1918,7 @@ extension StorageMockerTests {
     func getPublicURL_cacheNonce() throws {
       let storage = makeSUT()
 
-      let url = try storage.from("bucket").getPublicURL(
+      let url = try storage.from("bucket").publicURL(
         path: "file.txt",
         cacheNonce: "abc123"
       )

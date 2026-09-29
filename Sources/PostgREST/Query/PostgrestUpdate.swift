@@ -95,7 +95,7 @@ public struct PostgrestUpdate<R: PostgrestWritableRelation>: Encodable, Sendable
       // Not `encodeIfPresent`. An assigned `nil` reaches here as a boxed `Optional.none`, and
       // this call routes it to `encodeNil`, which is the explicit `null` on the wire. The
       // synthesized `Encodable` of a struct with optional fields calls `encodeIfPresent`
-      // instead, which is exactly why the previous `Update` row shape could not clear a column.
+      // instead, which cannot clear a column.
       try container.encode(value, forKey: PostgrestUpdateColumnKey(column))
     }
   }

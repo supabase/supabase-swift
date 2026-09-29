@@ -4,7 +4,7 @@ import Logging
 
 struct Dependencies: Sendable {
   var configuration: AuthClient.Configuration
-  var http: any HTTPClientType
+  var http: HTTPClient
   var api: APIClient
   var codeVerifierStorage: CodeVerifierStorage
   var sessionStorage: SessionStorage

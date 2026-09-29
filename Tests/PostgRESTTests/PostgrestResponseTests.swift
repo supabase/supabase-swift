@@ -1,11 +1,8 @@
 import Foundation
+import HTTPTypes
 import Testing
 
 @testable import PostgREST
-
-#if canImport(FoundationNetworking)
-  import FoundationNetworking
-#endif
 
 @Suite
 struct PostgrestResponseTests {
@@ -13,12 +10,7 @@ struct PostgrestResponseTests {
   func initWithCount() {
     // Prepare data and response
     let data = Data()
-    let response = HTTPURLResponse(
-      url: URL(string: "http://example.com")!,
-      statusCode: 200,
-      httpVersion: nil,
-      headerFields: ["Content-Range": "bytes 0-100/200"]
-    )!
+    let response = HTTPResponse(status: .ok, headerFields: [.contentRange: "bytes 0-100/200"])
     let value = "Test Value"
 
     // Create the PostgrestResponse instance
@@ -36,12 +28,7 @@ struct PostgrestResponseTests {
   func initWithNoCount() {
     // Prepare data and response
     let data = Data()
-    let response = HTTPURLResponse(
-      url: URL(string: "http://example.com")!,
-      statusCode: 200,
-      httpVersion: nil,
-      headerFields: ["Content-Range": "*"]
-    )!
+    let response = HTTPResponse(status: .ok, headerFields: [.contentRange: "*"])
     let value = "Test Value"
 
     // Create the PostgrestResponse instance

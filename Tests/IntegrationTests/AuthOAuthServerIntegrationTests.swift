@@ -30,7 +30,7 @@ struct AuthOAuthServerIntegrationTests {
     scope: String
   ) async throws -> String {
     var components = URLComponents(
-      url: URL(string: "\(DotEnv.SUPABASE_URL)/auth/v1/oauth/authorize")!,
+      url: URL(string: "\(DotEnv.supabaseURL)/auth/v1/oauth/authorize")!,
       resolvingAgainstBaseURL: false
     )!
     components.queryItems = [
@@ -44,7 +44,7 @@ struct AuthOAuthServerIntegrationTests {
     ]
 
     var request = URLRequest(url: components.url!)
-    request.setValue(DotEnv.SUPABASE_PUBLISHABLE_KEY, forHTTPHeaderField: "apikey")
+    request.setValue(DotEnv.supabasePublishableKey, forHTTPHeaderField: "apikey")
     request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
 
     let delegate = NoRedirectSessionDelegate()
@@ -89,8 +89,8 @@ struct AuthOAuthServerIntegrationTests {
       scope: "email"
     )
 
-    let detailsResponse = try await authClient.oauthServer.getAuthorizationDetails(
-      authorizationId: authorizationId
+    let detailsResponse = try await authClient.oauthServer.authorizationDetails(
+      id: authorizationId
     )
 
     guard case .details(let details) = detailsResponse else {
@@ -101,18 +101,18 @@ struct AuthOAuthServerIntegrationTests {
     #expect(details.scope == "email")
 
     let approveRedirect = try await authClient.oauthServer.approveAuthorization(
-      authorizationId: authorizationId
+      id: authorizationId
     )
     #expect(approveRedirect.redirectURL.query?.contains("code=") == true)
     let grants = try await authClient.oauthServer.listGrants()
     #expect(grants.contains { $0.client.id == oauthClient.clientId })
 
-    try await authClient.oauthServer.revokeGrant(clientId: oauthClient.clientId)
+    try await authClient.oauthServer.revokeGrant(id: oauthClient.clientId)
 
     let grantsAfterRevoke = try await authClient.oauthServer.listGrants()
     #expect(!grantsAfterRevoke.contains { $0.client.id == oauthClient.clientId })
 
-    try await serviceRoleClient.admin.oauth.deleteClient(clientId: oauthClient.clientId)
+    try await serviceRoleClient.admin.oauth.deleteClient(id: oauthClient.clientId)
   }
 
   @Test
@@ -138,20 +138,20 @@ struct AuthOAuthServerIntegrationTests {
       scope: "email"
     )
 
-    // getAuthorizationDetails must be called before approve/deny — it's what
+    // authorizationDetails must be called before approve/deny — it's what
     // claims the authorization for the calling user server-side (the backend
     // creates the row with no owner, to support unauthenticated visitors, and
     // only the GET assigns it). Skipping straight to consent 404s.
-    _ = try await authClient.oauthServer.getAuthorizationDetails(authorizationId: authorizationId)
+    _ = try await authClient.oauthServer.authorizationDetails(id: authorizationId)
 
     // Denial must not throw — it's a successful call carrying an
     // access_denied error in the redirect URL.
     let denyRedirect = try await authClient.oauthServer.denyAuthorization(
-      authorizationId: authorizationId
+      id: authorizationId
     )
     #expect(denyRedirect.redirectURL.query?.contains("error=access_denied") == true)
 
-    try await serviceRoleClient.admin.oauth.deleteClient(clientId: oauthClient.clientId)
+    try await serviceRoleClient.admin.oauth.deleteClient(id: oauthClient.clientId)
   }
 
   // NOTE: `AuthClientIntegrationTests` has similar helpers, but they are `private` to that file.

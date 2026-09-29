@@ -23,12 +23,28 @@ import Helpers
 /// A top-level `&&` renders as separate query parameters, `||` as one `or=(…)`, and an `&&`
 /// nested inside an `||` as `and(…)`.
 public struct PostgrestFilter<R: PostgrestRelation>: Sendable {
-  indirect enum Node: Sendable {
-    case comparison(column: String, operator: String, value: String)
+  /// The right-hand side of a comparison, in the shape the operator method received it.
+  ///
+  /// Each shape has its own quoting rule inside `or=(…)`, so the shape is kept and the rule is
+  /// applied when the request is rendered.
+  enum Operand: Sendable {
+    /// One value, as its ``PostgrestFilterValue/rawValue``. Quoted inside a group.
+    case value(String)
 
-    /// Everything after the `=` as one unparsed string. Separate from `comparison` because the
-    /// operator and value cannot be split, and because `in`'s own `in.(…)` delimiters must
-    /// survive `group()` unescaped.
+    /// The members of the `(a,b)` list `in` takes, each as its raw value. Members are quoted in
+    /// every position, with the filter escaper rather than the array one: an `in.(…)` list is
+    /// filter-value syntax, and with the array escaper `name=in.(p(q),Ada)` answers 200 with
+    /// zero rows. The list's own parentheses are the operator's grammar and are never quoted.
+    case list([String])
+
+    /// The `IS` keyword: `null` for `nil`, otherwise `true` or `false`. Never quoted.
+    case `is`(Bool?)
+  }
+
+  indirect enum Node: Sendable {
+    case comparison(column: String, operator: PostgrestFilterOperator, operand: Operand)
+
+    /// Everything after the `=` as one string the caller wrote, sent as is in every position.
     case raw(column: String, operand: String)
 
     case and([Node])
@@ -42,8 +58,12 @@ public struct PostgrestFilter<R: PostgrestRelation>: Sendable {
     self.node = node
   }
 
-  init(column: String, operator: String, value: String) {
-    self.node = .comparison(column: column, operator: `operator`, value: value)
+  init(column: String, operator: PostgrestFilterOperator, value: some PostgrestFilterValue) {
+    self.node = .comparison(column: column, operator: `operator`, operand: .value(value.rawValue))
+  }
+
+  init(column: String, operator: PostgrestFilterOperator, operand: Operand) {
+    self.node = .comparison(column: column, operator: `operator`, operand: operand)
   }
 
   init(rawColumn: String, operand: String) {
@@ -111,6 +131,33 @@ prefix public func ! <R>(operand: PostgrestFilter<R>) -> PostgrestFilter<R> {
 
 // MARK: - Rendering
 
+extension PostgrestFilter.Operand {
+  /// The operand as sent at top level, where a value runs to the end of the parameter and needs
+  /// no quoting.
+  var topLevel: String {
+    switch self {
+    case .value(let raw):
+      return raw
+    case .list(let members):
+      return "(\(members.map(escapePostgRESTFilterValue).joined(separator: ",")))"
+    case .is(let bool):
+      return bool.map { "\($0)" } ?? "null"
+    }
+  }
+
+  /// The operand as sent inside `or=(…)`, where a bare `,` or `)` in a value ends the group early.
+  /// Only a single value gains quoting here: list members are quoted in every position already,
+  /// and an `IS` keyword never is.
+  var grouped: String {
+    switch self {
+    case .value(let raw):
+      return escapePostgRESTFilterValue(raw)
+    case .list, .is:
+      return topLevel
+    }
+  }
+}
+
 extension PostgrestFilter {
   /// The query items this filter contributes to a request.
   func queryItems() -> [URLQueryItem] {
@@ -119,8 +166,8 @@ extension PostgrestFilter {
 
   private static func queryItems(for node: Node) -> [URLQueryItem] {
     switch node {
-    case .comparison(let column, let `operator`, let value):
-      return [URLQueryItem(name: column, value: "\(`operator`).\(value)")]
+    case .comparison(let column, let `operator`, let operand):
+      return [URLQueryItem(name: column, value: "\(`operator`.token).\(operand.topLevel)")]
 
     case .raw(let column, let operand):
       return [URLQueryItem(name: column, value: operand)]
@@ -142,8 +189,10 @@ extension PostgrestFilter {
         return [
           URLQueryItem(name: "not.or", value: "(\(children.map(group).joined(separator: ",")))")
         ]
-      case .comparison(let column, let `operator`, let value):
-        return [URLQueryItem(name: column, value: "not.\(`operator`).\(value)")]
+      case .comparison(let column, let `operator`, let operand):
+        return [
+          URLQueryItem(name: column, value: "not.\(`operator`.token).\(operand.topLevel)")
+        ]
       case .raw(let column, let operand):
         return [URLQueryItem(name: column, value: "not.\(operand)")]
       case .not(let doubleNegated):
@@ -162,12 +211,11 @@ extension PostgrestFilter {
   /// - Double negation must collapse, or `!!a || b` renders `not.not.` and 400s.
   private static func group(_ node: Node) -> String {
     switch node {
-    case .comparison(let column, let `operator`, let value):
-      return "\(column).\(`operator`).\(escapePostgRESTFilterValue(value))"
+    case .comparison(let column, let `operator`, let operand):
+      return "\(column).\(`operator`.token).\(operand.grouped)"
     case .raw(let column, let operand):
-      // Not escaped: quoting would break the caller's own syntax, and `in`'s own `in.(…)`
-      // delimiters must stay literal. The cost is that a raw node cannot always sit in a group —
-      // a `::` in the column is a parse error inside `or=(…)`.
+      // Not escaped: quoting would break the caller's own syntax. The cost is that a raw node
+      // cannot always sit in a group — a `::` in the column is a parse error inside `or=(…)`.
       return "\(column).\(operand)"
     case .and(let children):
       return "and(\(children.map(group).joined(separator: ",")))"
@@ -180,8 +228,8 @@ extension PostgrestFilter {
       case .and, .or:
         // `not.` in front of a group is the only spelling PostgREST accepts here.
         return "not.\(group(inner))"
-      case .comparison(let column, let `operator`, let value):
-        return "\(column).not.\(`operator`).\(escapePostgRESTFilterValue(value))"
+      case .comparison(let column, let `operator`, let operand):
+        return "\(column).not.\(`operator`.token).\(operand.grouped)"
       case .raw(let column, let operand):
         return "\(column).not.\(operand)"
       }

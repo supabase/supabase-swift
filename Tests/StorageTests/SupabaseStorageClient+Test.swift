@@ -6,13 +6,14 @@
 //
 
 import Foundation
+import Helpers
 import Storage
 
 extension SupabaseStorageClient {
   static func test(
     supabaseURL: String,
     apiKey: String,
-    session: StorageHTTPSession = .init()
+    http: HTTPClientConfiguration = .init()
   ) -> SupabaseStorageClient {
     SupabaseStorageClient(
       configuration: StorageClientConfiguration(
@@ -22,8 +23,7 @@ extension SupabaseStorageClient {
           "Apikey": apiKey,
           "X-Client-Info": "storage-swift/x.y.z",
         ],
-        session: session
-      )
+        http: http)
     )
   }
 }

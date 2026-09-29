@@ -18,7 +18,7 @@ import HTTPTypes
 ///
 /// ### Listing factors
 /// - ``listFactors()``
-/// - ``getAuthenticatorAssuranceLevel()``
+/// - ``authenticatorAssuranceLevel()``
 public struct AuthMFA: Sendable {
   let clientID: AuthClientID
 
@@ -43,10 +43,9 @@ public struct AuthMFA: Sendable {
   public func enroll(params: any MFAEnrollParamsType) async throws -> AuthMFAEnrollResponse {
     try await api.authorizedExecute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("factors"),
         method: .post,
-        body: encoder.encode(params)
-      )
+        url: configuration.url.appendingPathComponent("factors")
+      ), body: encoder.encode(params)
     )
     .decoded(decoder: decoder)
   }
@@ -67,10 +66,9 @@ public struct AuthMFA: Sendable {
 
     return try await api.authorizedExecute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("factors/\(params.factorId)/challenge"),
         method: .post,
-        body: body
-      )
+        url: configuration.url.appendingPathComponent("factors/\(params.factorId)/challenge")
+      ), body: body
     )
     .decoded(decoder: decoder)
   }
@@ -97,10 +95,9 @@ public struct AuthMFA: Sendable {
 
     let response: AuthMFAVerifyResponse = try await api.authorizedExecute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("factors/\(params.factorId)/verify"),
         method: .post,
-        body: body
-      )
+        url: configuration.url.appendingPathComponent("factors/\(params.factorId)/verify")
+      ), body: body
     ).decoded(decoder: decoder)
 
     await sessionManager.update(response)
@@ -119,8 +116,8 @@ public struct AuthMFA: Sendable {
   public func unenroll(params: MFAUnenrollParams) async throws -> AuthMFAUnenrollResponse {
     try await api.authorizedExecute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("factors/\(params.factorId)"),
-        method: .delete
+        method: .delete,
+        url: configuration.url.appendingPathComponent("factors/\(params.factorId)")
       )
     )
     .decoded(decoder: decoder)
@@ -165,7 +162,7 @@ public struct AuthMFA: Sendable {
   /// Returns the Authenticator Assurance Level (AAL) for the active session.
   ///
   /// - Returns: An authentication response with the Authenticator Assurance Level.
-  public func getAuthenticatorAssuranceLevel() async throws
+  public func authenticatorAssuranceLevel() async throws
     -> AuthMFAGetAuthenticatorAssuranceLevelResponse
   {
     do {
@@ -196,7 +193,7 @@ public struct AuthMFA: Sendable {
         nextLevel: nextLevel,
         currentAuthenticationMethods: currentAuthenticationMethods
       )
-    } catch AuthError.sessionMissing {
+    } catch let error as AuthError where error.kind == .sessionMissing {
       return AuthMFAGetAuthenticatorAssuranceLevelResponse(
         currentLevel: nil,
         nextLevel: nil,

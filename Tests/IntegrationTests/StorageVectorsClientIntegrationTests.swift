@@ -14,9 +14,9 @@ import Testing
 struct StorageVectorsClientIntegrationTests {
   let vectors = SupabaseStorageClient(
     configuration: StorageClientConfiguration(
-      url: URL(string: "\(DotEnv.SUPABASE_URL)/storage/v1")!,
+      url: URL(string: "\(DotEnv.supabaseURL)/storage/v1")!,
       headers: [
-        "Authorization": "Bearer \(DotEnv.SUPABASE_SECRET_KEY)"
+        "Authorization": "Bearer \(DotEnv.supabaseSecretKey)"
       ]
     )
   ).vectors
@@ -36,7 +36,7 @@ struct StorageVectorsClientIntegrationTests {
 
     try await vectors.createBucket(bucketName)
 
-    let bucket = try await vectors.getBucket(bucketName)
+    let bucket = try await vectors.bucket(bucketName)
     #expect(bucket.vectorBucketName == bucketName)
 
     page = try await vectors.listBuckets()
@@ -65,20 +65,15 @@ struct StorageVectorsClientIntegrationTests {
   @Test
   func getBucketWithWrongName() async {
     do {
-      _ = try await vectors.getBucket("not-exist-bucket")
+      _ = try await vectors.bucket("not-exist-bucket")
       Issue.record("Unexpected success")
+    } catch let error as StorageError {
+      #expect(error.kind == .server)
+      #expect(error.serverError?.error == "NotFoundException")
+      #expect(error.message == "resource \"not-exist-bucket\" not found")
+      #expect(error.response?.statusCode == 404)
     } catch {
-      assertInlineSnapshot(of: error, as: .dump) {
-        """
-        ▿ StorageError
-          ▿ error: Optional<String>
-            - some: "NotFoundException"
-          - message: "resource \\"not-exist-bucket\\" not found"
-          ▿ statusCode: Optional<String>
-            - some: "404"
-
-        """
-      }
+      Issue.record("Unexpected error \(error)")
     }
   }
 }

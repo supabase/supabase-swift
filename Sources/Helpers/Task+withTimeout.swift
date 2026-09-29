@@ -33,7 +33,12 @@ package func withTimeout<R: Sendable>(
       throw TimeoutError()
     }
 
-    return try await group.next()!
+    // Two tasks were just added, so `next()` always has one to return. Treat an empty group as a
+    // timeout rather than trapping.
+    guard let result = try await group.next() else {
+      throw TimeoutError()
+    }
+    return result
   }
 }
 

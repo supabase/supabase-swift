@@ -67,6 +67,7 @@ public enum PostgrestTransformPhase: PostgrestTransformablePhase {}
 /// ### Configuring Retries
 ///
 /// - ``retry(enabled:)``
+/// - ``timeout(_:)``
 ///
 /// ### Executing the Request
 ///
@@ -74,13 +75,17 @@ public enum PostgrestTransformPhase: PostgrestTransformablePhase {}
 /// - ``execute(options:decoder:)``
 public struct PostgrestRequestBuilder<Phase>: Sendable {
   let configuration: PostgrestClient.Configuration
-  let http: any HTTPClientType
   let clock: any Clock<Duration>
 
-  var request: Helpers.HTTPRequest
+  var request: HTTPRequest
+  var query: [URLQueryItem] = []
+  var body: Data?
 
   /// Whether automatic retries are enabled for this request.
   var retryEnabled: Bool
+
+  /// A per-request timeout, or `nil` to use the client's ``HTTPClientConfiguration/timeout``.
+  var timeout: Duration?
 
   /// An error to throw when execute() is called, set when an invalid method combination is
   /// detected.
@@ -91,36 +96,34 @@ public struct PostgrestRequestBuilder<Phase>: Sendable {
 
   init(
     configuration: PostgrestClient.Configuration,
-    request: Helpers.HTTPRequest,
+    request: HTTPRequest,
+    body: Data? = nil,
     clock: any Clock<Duration>
   ) {
     self.configuration = configuration
     self.clock = clock
-
-    let interceptors: [any HTTPClientInterceptor] = [
-      LoggerInterceptor(logger: configuration.logger)
-    ]
-    self.http = HTTPClient(fetch: configuration.fetch, interceptors: interceptors)
-
     self.request = request
+    self.body = body
     self.retryEnabled = configuration.retryEnabled
     self.pendingError = nil
     self.isMaybeSingle = false
   }
 
-  /// Recasts an existing builder to a different phase, preserving every field except `request`.
+  /// Recasts an existing builder to a different phase, preserving every field.
   ///
   /// Every method that changes phase (e.g. `select`/`insert` moving from ``PostgrestQueryPhase``
   /// to ``PostgrestFilterPhase``, or any transform method moving to ``PostgrestTransformPhase``)
   /// goes through this initializer instead of resetting state, because `pendingError` and
   /// `isMaybeSingle` must survive a phase change — e.g. `.maybeSingle().order(...)` must not lose
   /// the `isMaybeSingle` flag just because `order` also changes the phase.
-  init<From>(carryingFrom other: PostgrestRequestBuilder<From>, request: Helpers.HTTPRequest) {
+  init<From>(carryingFrom other: PostgrestRequestBuilder<From>) {
     self.configuration = other.configuration
-    self.http = other.http
     self.clock = other.clock
-    self.request = request
+    self.request = other.request
+    self.query = other.query
+    self.body = other.body
     self.retryEnabled = other.retryEnabled
+    self.timeout = other.timeout
     self.pendingError = other.pendingError
     self.isMaybeSingle = other.isMaybeSingle
   }
@@ -345,7 +348,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestExecutablePhase {
   /// Set a HTTP header for the request.
   func setHeader(name: HTTPField.Name, value: String) -> Self {
     var copy = self
-    copy.request.headers[name] = value
+    copy.request.headerFields[name] = value
     return copy
   }
 
@@ -354,22 +357,43 @@ extension PostgrestRequestBuilder where Phase: PostgrestExecutablePhase {
   /// wholesale.
   func mergingPreferHeader(_ value: String) -> Self {
     var copy = self
-    copy.request.headers.appendOrUpdate(.prefer, value: value)
+    copy.request.headerFields.appendOrUpdate(.prefer, value: value)
     return copy
   }
 
   /// Controls whether automatic retries are enabled for this specific request.
   ///
   /// When enabled, GET and HEAD requests that receive an HTTP 503 or 520 response, or encounter
-  /// a network error, are retried up to three times with exponential back-off. The global
-  /// default is set via ``PostgrestClient/Configuration/retryEnabled``; this method overrides it
-  /// per request.
+  /// a network error, are retried up to three times with jittered exponential back-off. That
+  /// rule is fixed; the global default is set via ``PostgrestClient/Configuration/retryEnabled``
+  /// and this method overrides it per request.
   ///
   /// - Parameter enabled: Pass `false` to disable retries for this request.
-  /// - Returns: The same builder value so calls can be chained.
+  /// - Returns: A new builder value carrying the setting.
   public func retry(enabled: Bool) -> Self {
     var copy = self
     copy.retryEnabled = enabled
+    return copy
+  }
+
+  /// Sets the idle timeout for this specific request.
+  ///
+  /// The request fails once no data has moved for `duration`. The client-wide default is
+  /// ``HTTPClientConfiguration/timeout`` on ``PostgrestClient/Configuration/http`` (60 seconds
+  /// when unset); this method overrides it per request. Each retry attempt gets the full duration.
+  ///
+  /// ```swift
+  /// let rows: [Todo] = try await client.from("todos").select()
+  ///   .timeout(.seconds(5))
+  ///   .execute()
+  ///   .value
+  /// ```
+  ///
+  /// - Parameter duration: The idle timeout.
+  /// - Returns: The same builder value so calls can be chained.
+  public func timeout(_ duration: Duration) -> Self {
+    var copy = self
+    copy.timeout = duration
     return copy
   }
 
@@ -382,8 +406,9 @@ extension PostgrestRequestBuilder where Phase: PostgrestExecutablePhase {
   /// - Parameter options: Options controlling whether to include a row count and whether to
   ///   use the HEAD method. Defaults to ``FetchOptions/init(head:count:)``.
   /// - Returns: A ``PostgrestResponse`` whose `value` is `Void`.
-  /// - Throws: ``PostgrestError`` if PostgREST returns an error response, or any error thrown by
-  ///   the fetch handler.
+  /// - Throws: ``PostgrestError`` with kind `.server` if PostgREST returns an error response,
+  ///   `.transport` if the request never completes, or `.unexpectedResponse` if the body is not
+  ///   a PostgREST error.
   @discardableResult
   public func execute(
     options: FetchOptions = FetchOptions()
@@ -406,10 +431,10 @@ extension PostgrestRequestBuilder where Phase: PostgrestExecutablePhase {
   ///     use the HEAD method. Defaults to ``FetchOptions/init(head:count:)``.
   ///   - decoder: The `JSONDecoder` used to decode the response body into `T`. Overrides
   ///     ``PostgrestClient/Configuration/decoder`` when non-`nil`. Never used to decode
-  ///     ``PostgrestError`` — that always uses a fixed internal decoder.
+  ///     ``PostgrestError/ServerError`` — that always uses a fixed internal decoder.
   /// - Returns: A ``PostgrestResponse`` whose `value` is the decoded `T`.
-  /// - Throws: ``PostgrestError`` if PostgREST returns an error response, a decoding error if
-  ///   the response body cannot be decoded as `T`, or any error thrown by the fetch handler.
+  /// - Throws: ``PostgrestError`` with kind `.decoding` if the body cannot be decoded as `T`, or
+  ///   another kind for server, transport and unexpected responses.
   @discardableResult
   public func execute<T: Decodable>(
     options: FetchOptions = FetchOptions(),
@@ -421,7 +446,11 @@ extension PostgrestRequestBuilder where Phase: PostgrestExecutablePhase {
         return try decoder.decode(T.self, from: data)
       } catch {
         configuration.logger.error("Failed to decode type '\(T.self) with error: \(error)")
-        throw error
+        throw PostgrestError(
+          kind: .decoding,
+          message: "Failed to decode the PostgREST response as \(T.self).",
+          underlyingError: error
+        )
       }
     }
   }
@@ -431,17 +460,20 @@ extension PostgrestRequestBuilder where Phase: PostgrestExecutablePhase {
     decode: (Data) throws -> T
   ) async throws -> PostgrestResponse<T> {
     if let message = pendingError {
-      throw PostgrestError(message: message)
+      throw PostgrestError(kind: .invalidRequest, message: message)
     }
 
     var request = self.request
+    if let url = request.url {
+      request.url = url.appendingQueryItems(query)
+    }
 
     // Resolve the access token fresh for every request. An `Authorization` header already set
     // on the request — whether from `PostgrestClient.Configuration.headers` or from an explicit
     // `.setHeader("Authorization", ...)` call — always wins over the resolved token.
-    if let accessToken = configuration.accessToken, request.headers[.authorization] == nil {
+    if let accessToken = configuration.accessToken, request.headerFields[.authorization] == nil {
       if let token = try await accessToken() {
-        request.headers[.authorization] = "Bearer \(token)"
+        request.headerFields[.authorization] = "Bearer \(token)"
       }
     }
 
@@ -450,130 +482,78 @@ extension PostgrestRequestBuilder where Phase: PostgrestExecutablePhase {
     }
 
     if let count = options.count {
-      request.headers.appendOrUpdate(.prefer, value: "count=\(count.rawValue)")
+      request.headerFields.appendOrUpdate(.prefer, value: "count=\(count.rawValue)")
     }
 
-    if request.headers[.accept] == nil {
-      request.headers[.accept] = "application/json"
+    if request.headerFields[.accept] == nil {
+      request.headerFields[.accept] = "application/json"
     }
-    request.headers[.contentType] = "application/json"
+    request.headerFields[.contentType] = "application/json"
 
     if let schema = configuration.schema {
       if request.method == .get || request.method == .head {
-        request.headers[.acceptProfile] = schema
+        request.headerFields[.acceptProfile] = schema
       } else {
-        request.headers[.contentProfile] = schema
+        request.headerFields[.contentProfile] = schema
       }
     }
 
-    var attempt = 0
-    while true {
-      try Task.checkCancellation()
+    // The retry middleware is built per request because the switch is per request
+    // (``retry(enabled:)``); it wraps the whole chain so every attempt is logged and carries a
+    // freshly resolved access token.
+    let http = HTTPClient(
+      configuration: configuration.http,
+      retrying: RetryRequestInterceptor(
+        policy: retryEnabled ? PostgrestClient.Configuration.retryPolicy : .disabled,
+        clock: clock),
+      appending: [LoggerInterceptor(logger: configuration.logger)])
 
-      var currentRequest = request
-      if attempt > 0 {
-        currentRequest.headers[.xRetryCount] = "\(attempt)"
-      }
-
-      // Separate the network send from decoding so that decode errors are never retried.
-      let response: Helpers.HTTPResponse
-      do {
-        response = try await http.send(currentRequest)
-      } catch {
-        if shouldRetry(
-          request: currentRequest, response: nil, error: error, retryEnabled: retryEnabled,
-          attempt: attempt)
-        {
-          try await clock.sleep(for: .seconds(retryDelay(attempt: attempt)))
-          attempt += 1
-          continue
-        }
-        throw error
-      }
-
-      if 200..<300 ~= response.statusCode {
-        let value = try decode(response.data)
-        return PostgrestResponse(
-          data: response.data, response: response.underlyingResponse, value: value)
-      }
-
-      if shouldRetry(
-        request: currentRequest, response: response, error: nil, retryEnabled: retryEnabled,
-        attempt: attempt)
-      {
-        try await clock.sleep(for: .seconds(retryDelay(attempt: attempt)))
-        attempt += 1
-        continue
-      }
-
-      // `PostgrestError`'s fields match PostgREST's JSON keys exactly, so a plain, fixed
-      // `JSONDecoder` decodes it regardless of any user-supplied key/date strategy on
-      // `configuration.decoder` or a per-call override — those are for user-defined row types.
-      if let error = try? JSONDecoder().decode(PostgrestError.self, from: response.data) {
-        // `maybeSingle()` turns the "no rows" variant of PGRST116 into a `nil` value, but
-        // rethrows the "multiple rows" variant since that indicates a query that should have
-        // been scoped to match at most one row.
-        if isMaybeSingle, error.code == "PGRST116", error.matchedZeroRows {
-          let value = try decode(Data("null".utf8))
-          return PostgrestResponse(
-            data: response.data, response: response.underlyingResponse, value: value)
-        }
-        throw error
-      }
-      throw HTTPError(data: response.data, response: response.underlyingResponse)
-    }
-  }
-
-  private static var maxDelay: Double { 30.0 }
-  private static var maxRetries: Int { 3 }
-  private static var retryableMethods: Set<HTTPTypes.HTTPRequest.Method> { [.get, .head] }
-  private static var retryableStatusCodes: Set<Int> { [503, 520] }
-
-  /// Check if a request should be retried based on method, status code, and error type.
-  private func shouldRetry(
-    request: Helpers.HTTPRequest,
-    response: Helpers.HTTPResponse?,
-    error: (any Error)?,
-    retryEnabled: Bool,
-    attempt: Int
-  ) -> Bool {
-    guard retryEnabled, attempt < Self.maxRetries else { return false }
-    guard !(error is CancellationError) else { return false }
-    guard Self.retryableMethods.contains(request.method) else { return false }
-
-    if let statusCode = response?.statusCode {
-      return Self.retryableStatusCodes.contains(statusCode)
+    // Separate the network send from decoding so that decode errors are never retried.
+    let response: HTTPResponse
+    let data: Data
+    do {
+      (response, data) = try await http.send(request, body: body, timeout: timeout)
+    } catch {
+      // Only the network layer's own failures are relabelled. `CancellationError`, and anything
+      // thrown by user code that runs inside `send` (a custom `ClientTransport` or middleware, an `accessToken`
+      // closure), propagate as themselves.
+      guard let urlError = error as? URLError else { throw error }
+      throw PostgrestError(
+        kind: .transport, message: urlError.localizedDescription, underlyingError: urlError)
     }
 
-    return true
-  }
+    if 200..<300 ~= response.status.code {
+      let value = try decode(data)
+      return PostgrestResponse(data: data, response: response, value: value)
+    }
 
-  private func retryDelay(attempt: Int) -> TimeInterval {
-    min(pow(2.0, Double(attempt)), Self.maxDelay)
+    // `ServerError`'s fields match PostgREST's JSON keys exactly, so a plain, fixed
+    // `JSONDecoder` decodes it regardless of any user-supplied key/date strategy on
+    // `configuration.decoder` or a per-call override — those are for user-defined row types.
+    if let serverError = try? JSONDecoder().decode(PostgrestError.ServerError.self, from: data) {
+      // `maybeSingle()` turns the "no rows" variant of PGRST116 into a `nil` value, but
+      // rethrows the "multiple rows" variant since that indicates a query that should have
+      // been scoped to match at most one row.
+      if isMaybeSingle, serverError.code == "PGRST116", serverError.matchedZeroRows {
+        let value = try decode(Data("null".utf8))
+        return PostgrestResponse(data: data, response: response, value: value)
+      }
+      throw PostgrestError(
+        kind: .server,
+        message: serverError.message,
+        serverError: serverError,
+        response: HTTPErrorResponse(response, body: data)
+      )
+    }
+    throw PostgrestError(
+      kind: .unexpectedResponse,
+      message: "Unexpected response with status code \(response.status.code).",
+      response: HTTPErrorResponse(response, body: data)
+    )
   }
 }
 
 extension HTTPField.Name {
   static let acceptProfile = Self("Accept-Profile")!
   static let contentProfile = Self("Content-Profile")!
-  static let xRetryCount = Self("X-Retry-Count")!
-}
-
-extension PostgrestError {
-  /// Whether a `PGRST116` error was caused by the query matching zero rows, as opposed to more
-  /// than one row.
-  ///
-  /// PostgREST reports both cases with the same error code; the row count is only distinguishable
-  /// via the `details` message. The exact wording has varied across PostgREST versions, e.g.
-  /// "Results contain 0 rows, application/vnd.pgrst.object+json requires 1 row" and "The result
-  /// contains 0 rows". Both mention the matched row count immediately before a "row"/"rows" word,
-  /// so look for that instead of matching a fixed prefix.
-  fileprivate var matchedZeroRows: Bool {
-    guard let details else { return false }
-    let words = details.split(separator: " ")
-    guard let rowsIndex = words.firstIndex(where: { $0.hasPrefix("row") }), rowsIndex > 0,
-      let count = Int(words[rowsIndex - 1])
-    else { return false }
-    return count == 0
-  }
 }

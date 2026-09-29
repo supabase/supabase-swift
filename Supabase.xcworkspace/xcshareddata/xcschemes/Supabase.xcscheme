@@ -182,28 +182,6 @@
             parallelizable = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "HTTPRuntimeTestHelpersTests"
-               BuildableName = "HTTPRuntimeTestHelpersTests"
-               BlueprintName = "HTTPRuntimeTestHelpersTests"
-               ReferencedContainer = "container:">
-            </BuildableReference>
-         </TestableReference>
-         <TestableReference
-            skipped = "NO"
-            parallelizable = "NO">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "HTTPRuntimeTests"
-               BuildableName = "HTTPRuntimeTests"
-               BlueprintName = "HTTPRuntimeTests"
-               ReferencedContainer = "container:">
-            </BuildableReference>
-         </TestableReference>
-         <TestableReference
-            skipped = "NO"
-            parallelizable = "NO">
-            <BuildableReference
-               BuildableIdentifier = "primary"
                BlueprintIdentifier = "PostgRESTTests"
                BuildableName = "PostgRESTTests"
                BlueprintName = "PostgRESTTests"
@@ -240,6 +218,17 @@
                BlueprintIdentifier = "SupabaseTests"
                BuildableName = "SupabaseTests"
                BlueprintName = "SupabaseTests"
+               ReferencedContainer = "container:">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "DefaultIsolationTests"
+               BuildableName = "DefaultIsolationTests"
+               BlueprintName = "DefaultIsolationTests"
                ReferencedContainer = "container:">
             </BuildableReference>
          </TestableReference>

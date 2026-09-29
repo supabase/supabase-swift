@@ -704,6 +704,7 @@ extension PostgrestMockerTests {
           .execute()
         Issue.record("Expected error to be thrown")
       } catch let error as PostgrestError {
+        #expect(error.kind == .invalidRequest)
         #expect(error.message == "`.stripNulls()` cannot be combined with `.csv()`")
       }
     }
@@ -719,6 +720,7 @@ extension PostgrestMockerTests {
           .execute()
         Issue.record("Expected error to be thrown")
       } catch let error as PostgrestError {
+        #expect(error.kind == .invalidRequest)
         #expect(error.message == "`.csv()` cannot be combined with `.stripNulls()`")
       }
     }

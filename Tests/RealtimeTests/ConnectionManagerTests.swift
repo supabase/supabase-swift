@@ -1,13 +1,23 @@
 import ConcurrencyExtras
 import Foundation
 import Logging
+import TestHelpers
 import Testing
 
 @testable import Realtime
-@testable import RealtimeV2
 
 @Suite
 struct ConnectionManagerTests {
+  @Test
+  func reconnectBackoffClampsAnUnusableBaseDelay() {
+    // `Duration.seconds(_:)` traps on a non-finite or huge Double; `reconnectDelay` is
+    // user-supplied, so the backoff must clamp it instead of crashing on the first disconnect.
+    for base in [Double.infinity, .nan, 1e20, -5] {
+      let delay = ConnectionManager.reconnectBackoff(baseDelay: base).backoffDelay(retry: 1)
+      #expect(delay <= .seconds(30), "baseDelay \(base)")
+    }
+  }
+
   private enum TestError: LocalizedError {
     case sample
 

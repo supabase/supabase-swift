@@ -47,7 +47,10 @@ dummysignature
 ecdsa
 halfvec
 emaillink
+enotconn
 entrancy
+eproto
+errno
 etag
 ethereum
 Ethereum
@@ -88,6 +91,7 @@ keccak
 Keccak
 keyout
 kiwicopple
+Klingsbo
 letterboxing
 libro
 libros
@@ -95,6 +99,7 @@ lifecycles
 linkedin
 LinkedIn
 lnbm
+Lukas
 magiclink
 magnifyingglass
 metamask
@@ -224,17 +229,10 @@ xcodeproj
 xctest
 XVCJ
 
-# Terms from HTTPRuntime (Sources/HTTPRuntime) and its tests.
-CFURL
+# Term from Sources/Helpers/HTTP and Sources/RealtimeV2 (Linux corelibs-Foundation).
 corelibs
-reencoded
-schemeless
-subdata
-Subrange
-TESTBOUNDARY
-unmodeled
 
-# Terms from HTTPRuntimeTestHelpers planning and scheme configuration.
+# Terms from Xcode scheme configuration, shared across module test targets.
 fileprivate
 parallelizable
 Testables
@@ -273,3 +271,17 @@ citext
 # Terms from the embedded-relations column namespace (PostgrestRelatedColumns.swift).
 unshadowed
 orderability
+
+# Term from the logging middleware's body-buffering helper (LoggerInterceptor.swift).
+loggable
+
+# Terms from the live memory probe (MemoryProbeIntegrationTests.swift).
+memprobe
+attoseconds
+
+# Retry-After / Duration terms from RetryPolicy.swift.
+asctime
+fixdate
+
+# Term from the privacy manifest resource declared on the Helpers target (Package.swift).
+xcprivacy

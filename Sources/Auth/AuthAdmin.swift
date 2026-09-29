@@ -18,12 +18,13 @@ import HTTPTypes
 /// ## Topics
 ///
 /// ### User management
-/// - ``getUserById(_:)``
+/// - ``user(id:)``
 /// - ``updateUserById(_:attributes:)``
 /// - ``createUser(attributes:)``
 /// - ``inviteUserByEmail(_:data:redirectTo:)``
 /// - ``deleteUser(id:shouldSoftDelete:)``
 /// - ``listUsers(params:)``
+/// - ``users(perPage:)``
 /// - ``generateLink(params:)``
 /// - ``signOut(jwt:scope:)``
 ///
@@ -45,13 +46,13 @@ public struct AuthAdmin: Sendable {
   }
 
   /// Get user by id.
-  /// - Parameter uid: The user's unique identifier.
+  /// - Parameter id: The user's unique identifier.
   /// - Note: This function should only be called on a server. Never expose your `secret` key in the browser.
-  public func getUserById(_ uid: UUID) async throws -> User {
+  public func user(id: UUID) async throws -> User {
     try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("admin/users/\(uid)"),
-        method: .get
+        method: .get,
+        url: configuration.url.appendingPathComponent("admin/users/\(id)")
       )
     ).decoded(decoder: configuration.resolvedDecoder)
   }
@@ -64,27 +65,25 @@ public struct AuthAdmin: Sendable {
   public func updateUserById(_ uid: UUID, attributes: AdminUserAttributes) async throws -> User {
     try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("admin/users/\(uid)"),
         method: .put,
-        body: configuration.resolvedEncoder.encode(attributes)
-      )
+        url: configuration.url.appendingPathComponent("admin/users/\(uid)")
+      ), body: configuration.resolvedEncoder.encode(attributes)
     ).decoded(decoder: configuration.resolvedDecoder)
   }
 
   /// Creates a new user.
   ///
-  /// - To confirm the user's email address or phone number, set ``AdminUserAttributes/emailConfirm`` or ``AdminUserAttributes/phoneConfirm`` to `true`. Both arguments default to `false`.
+  /// - To confirm the user's email address or phone number, set ``AdminUserAttributes/confirmsEmail`` or ``AdminUserAttributes/confirmsPhone`` to `true`. Both arguments default to `false`.
   /// - ``createUser(attributes:)`` will not send a confirmation email to the user. You can use ``inviteUserByEmail(_:data:redirectTo:)`` if you want to send them an email invite instead.
-  /// - If you are sure that the created user's email or phone number is legitimate and verified, you can set the ``AdminUserAttributes/emailConfirm`` or ``AdminUserAttributes/phoneConfirm`` param to true.
+  /// - If you are sure that the created user's email or phone number is legitimate and verified, you can set the ``AdminUserAttributes/confirmsEmail`` or ``AdminUserAttributes/confirmsPhone`` param to true.
   /// - Warning: Never expose your `secret` key on the client.
   @discardableResult
   public func createUser(attributes: AdminUserAttributes) async throws -> User {
     try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("admin/users"),
         method: .post,
-        body: encoder.encode(attributes)
-      )
+        url: configuration.url.appendingPathComponent("admin/users")
+      ), body: encoder.encode(attributes)
     )
     .decoded(decoder: configuration.resolvedDecoder)
   }
@@ -106,8 +105,8 @@ public struct AuthAdmin: Sendable {
   ) async throws -> User {
     try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("admin/invite"),
         method: .post,
+        url: configuration.url.appendingPathComponent("admin/invite"),
         query: [
           (redirectTo ?? configuration.redirectToURL).map {
             URLQueryItem(
@@ -115,13 +114,13 @@ public struct AuthAdmin: Sendable {
               value: $0.absoluteString
             )
           }
-        ].compactMap { $0 },
-        body: encoder.encode(
-          [
-            "email": .string(email),
-            "data": data.map({ JSONValue.object($0) }) ?? .null,
-          ]
-        )
+        ].compactMap { $0 }
+      ),
+      body: encoder.encode(
+        [
+          "email": .string(email),
+          "data": data.map({ JSONValue.object($0) }) ?? .null,
+        ]
       )
     )
     .decoded(decoder: configuration.resolvedDecoder)
@@ -137,11 +136,11 @@ public struct AuthAdmin: Sendable {
   public func deleteUser(id: UUID, shouldSoftDelete: Bool = false) async throws {
     _ = try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("admin/users/\(id)"),
         method: .delete,
-        body: encoder.encode(
-          DeleteUserRequest(shouldSoftDelete: shouldSoftDelete)
-        )
+        url: configuration.url.appendingPathComponent("admin/users/\(id)")
+      ),
+      body: encoder.encode(
+        DeleteUserRequest(shouldSoftDelete: shouldSoftDelete)
       )
     )
   }
@@ -159,10 +158,10 @@ public struct AuthAdmin: Sendable {
   public func signOut(jwt: String, scope: SignOutScope = .global) async throws {
     _ = try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("logout"),
         method: .post,
+        url: configuration.url.appendingPathComponent("logout"),
         query: [URLQueryItem(name: "scope", value: scope.rawValue)],
-        headers: [.authorization: "Bearer \(jwt)"]
+        headerFields: [.authorization: "Bearer \(jwt)"]
       )
     )
   }
@@ -178,10 +177,10 @@ public struct AuthAdmin: Sendable {
       let aud: String
     }
 
-    let httpResponse = try await api.execute(
+    let (httpResponse, data) = try await api.send(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("admin/users"),
         method: .get,
+        url: configuration.url.appendingPathComponent("admin/users"),
         query: [
           URLQueryItem(name: "page", value: params?.page?.description ?? ""),
           URLQueryItem(name: "per_page", value: params?.perPage?.description ?? ""),
@@ -189,17 +188,17 @@ public struct AuthAdmin: Sendable {
       )
     )
 
-    let response = try httpResponse.decoded(
+    let response = try data.decoded(
       as: Response.self, decoder: configuration.resolvedDecoder)
 
     var pagination = ListUsersPaginatedResponse(
       users: response.users,
-      aud: response.aud,
+      audience: response.aud,
       lastPage: 0,
-      total: httpResponse.headers[.xTotalCount].flatMap(Int.init) ?? 0
+      total: httpResponse.headerFields[.xTotalCount].flatMap(Int.init) ?? 0
     )
 
-    let links = httpResponse.headers[.link]?.components(separatedBy: ",") ?? []
+    let links = httpResponse.headerFields[.link]?.components(separatedBy: ",") ?? []
     if !links.isEmpty {
       for link in links {
         let page = link.components(separatedBy: ";")[0].components(separatedBy: "=")[1].prefix(
@@ -226,8 +225,8 @@ public struct AuthAdmin: Sendable {
   public func generateLink(params: GenerateLinkParams) async throws -> GenerateLinkResponse {
     try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("admin/generate_link"),
         method: .post,
+        url: configuration.url.appendingPathComponent("admin/generate_link"),
         query: [
           (params.redirectTo ?? configuration.redirectToURL).map {
             URLQueryItem(
@@ -235,9 +234,8 @@ public struct AuthAdmin: Sendable {
               value: $0.absoluteString
             )
           }
-        ].compactMap { $0 },
-        body: encoder.encode(params.body)
-      )
+        ].compactMap { $0 }
+      ), body: encoder.encode(params.body)
     ).decoded(decoder: configuration.resolvedDecoder)
   }
 }

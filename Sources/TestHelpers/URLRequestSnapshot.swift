@@ -34,7 +34,6 @@
 
       var components = ["curl"]
 
-      // HTTP Method
       let httpMethod = request.httpMethod!
       switch httpMethod {
       case "GET": break
@@ -42,7 +41,6 @@
       default: components.append("--request \(httpMethod)")
       }
 
-      // Headers
       if let headers = request.allHTTPHeaderFields {
         for field in headers.keys.sorted() where field != "Cookie" {
           let escapedValue = headers[field]!.replacingOccurrences(of: "\"", with: "\\\"")
@@ -50,7 +48,6 @@
         }
       }
 
-      // Body
       if let httpBodyData = request.data,
         let httpBody = String(data: httpBodyData, encoding: .utf8)
       {
@@ -60,13 +57,11 @@
         components.append("--data \"\(escapedBody)\"")
       }
 
-      // Cookies
       if let cookie = request.allHTTPHeaderFields?["Cookie"] {
         let escapedValue = cookie.replacingOccurrences(of: "\"", with: "\\\"")
         components.append("--cookie \"\(escapedValue)\"")
       }
 
-      // URL
       components.append("\"\(request.url!.sortingQueryItems()!.absoluteString)\"")
 
       return components.joined(separator: " \\\n\t")

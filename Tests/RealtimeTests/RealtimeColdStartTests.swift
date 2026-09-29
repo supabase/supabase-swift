@@ -4,7 +4,6 @@ import TestHelpers
 import Testing
 
 @testable import Realtime
-@testable import RealtimeV2
 
 /// Regression tests for SDK-959: deaf-socket stalls on cold-start subscribe.
 ///
@@ -36,7 +35,7 @@ struct RealtimeColdStartTests {
         try await Task.sleep(nanoseconds: 20_000_000)
         return socket
       },
-      http: HTTPClientMock(),
+      http: HTTPClient(transport: RecordingTransport()),
       clock: ContinuousClock()
     )
   }
@@ -133,7 +132,7 @@ struct RealtimeColdStartTests {
         sockets.withValue { $0.append(socket) }
         return socket
       },
-      http: HTTPClientMock(),
+      http: HTTPClient(transport: RecordingTransport()),
       clock: ContinuousClock()
     )
     defer { sut.disconnect() }
@@ -207,7 +206,7 @@ struct RealtimeColdStartTests {
         sockets.withValue { $0.append(socket) }
         return socket
       },
-      http: HTTPClientMock(),
+      http: HTTPClient(transport: RecordingTransport()),
       clock: ContinuousClock()
     )
     defer { sut.disconnect() }
