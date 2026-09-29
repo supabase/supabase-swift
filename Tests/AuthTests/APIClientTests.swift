@@ -58,7 +58,7 @@ struct APIClientTests {
   func nonJSONServerErrorUsesStatusCodeAndDescription() async {
     let data = Data("<html><body>proxy failure</body></html>".utf8)
     let error = await apiClient.handleError(
-      response: HTTPTypes.HTTPResponse(status: .init(code: 500)), data: data)
+      response: HTTPTypes.HTTPResponse(status: .init(code: 500)), data: data, for: nil)
 
     #expect(error.kind == .unexpectedResponse)
     #expect(error.message == "HTTP 500: \(HTTPURLResponse.localizedString(forStatusCode: 500))")
@@ -69,7 +69,7 @@ struct APIClientTests {
   @Test
   func nonJSONServerErrorWithEmptyBodyPreservesStatusCode() async {
     let error = await apiClient.handleError(
-      response: HTTPTypes.HTTPResponse(status: .init(code: 503)), data: Data())
+      response: HTTPTypes.HTTPResponse(status: .init(code: 503)), data: Data(), for: nil)
 
     #expect(error.message == "HTTP 503: \(HTTPURLResponse.localizedString(forStatusCode: 503))")
   }
@@ -78,7 +78,7 @@ struct APIClientTests {
   func jsonErrorKeepsServerMessage() async {
     let error = await apiClient.handleError(
       response: HTTPTypes.HTTPResponse(status: .init(code: 500)),
-      data: Data(#"{"msg":"Error sending confirmation email"}"#.utf8))
+      data: Data(#"{"msg":"Error sending confirmation email"}"#.utf8), for: nil)
 
     #expect(error.message == "Error sending confirmation email")
   }
@@ -86,7 +86,7 @@ struct APIClientTests {
   @Test
   func nonJSONServerErrorUpperBoundaryPreservesStatusCode() async {
     let error = await apiClient.handleError(
-      response: HTTPTypes.HTTPResponse(status: .init(code: 599)), data: Data())
+      response: HTTPTypes.HTTPResponse(status: .init(code: 599)), data: Data(), for: nil)
 
     #expect(error.message == "HTTP 599: \(HTTPURLResponse.localizedString(forStatusCode: 599))")
   }
@@ -95,7 +95,7 @@ struct APIClientTests {
   func nonJSONErrorOutsideServerRangeKeepsExistingFallback(statusCode: Int) async {
     let error = await apiClient.handleError(
       response: HTTPTypes.HTTPResponse(status: .init(code: statusCode)),
-      data: Data("<html><body>bad request</body></html>".utf8))
+      data: Data("<html><body>bad request</body></html>".utf8), for: nil)
 
     #expect(error.message == "Unexpected response with status code \(statusCode).")
   }
