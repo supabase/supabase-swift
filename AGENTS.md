@@ -200,7 +200,8 @@ Use standard file headers with copyright:
 - Use strongly-typed errors conforming to `Error` protocol
 - Provide `LocalizedError` conformance where appropriate
 - Use `async throws` for async error handling
-- Report issues using `IssueReporting` from swift-issue-reporting
+- Report issues using `IssueReporting` (from swift-issue-reporting on Swift 6.4+, from
+  xctest-dynamic-overlay on earlier toolchains — see the comment atop `Package@swift-6.2.swift`)
 
 #### When trapping is allowed
 
@@ -272,7 +273,8 @@ struct FeatureTests {
 
 - `swift-snapshot-testing`: Snapshot testing
 - `swift-custom-dump`: Better test output
-- `swift-issue-reporting`: Test utilities and issue reporting
+- `swift-issue-reporting` (Swift 6.4+) / `xctest-dynamic-overlay` (earlier toolchains): test
+  utilities and issue reporting
 - `Mocker`: URL mocking
 
 ## Architecture Notes
