@@ -285,6 +285,11 @@ public struct AuthError: SupabaseError {
     /// A success body could not be decoded. ``AuthError/underlyingError`` is usually a
     /// `DecodingError`.
     public static let decoding: Kind = "decoding"
+    /// A token refresh finished after the session it started from was signed out or replaced, so
+    /// its rotated tokens were dropped rather than applied to whichever session is stored now.
+    /// Distinct from ``sessionMissing``: a session may well be stored, just not the one that
+    /// refresh belonged to.
+    public static let refreshDiscarded: Kind = "refreshDiscarded"
   }
 
   public var kind: Kind
@@ -320,6 +325,12 @@ public struct AuthError: SupabaseError {
   /// reported by the server.
   public static let sessionMissing = AuthError(
     kind: .sessionMissing, message: "Auth session missing.", errorCode: .sessionNotFound)
+
+  /// Thrown when a token refresh finished after the session it started from was signed out or
+  /// replaced, so its result was dropped instead of applied to the stored session.
+  public static let refreshDiscarded = AuthError(
+    kind: .refreshDiscarded,
+    message: "Token refresh discarded: the session it started from is no longer stored.")
 }
 
 extension AuthError {
