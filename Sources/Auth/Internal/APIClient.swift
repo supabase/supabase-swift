@@ -1,6 +1,10 @@
 import Foundation
 import HTTPTypes
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 extension HTTPClient {
   init(configuration: AuthClient.Configuration) {
     // GoTrue's writes are all safe to replay — `/token` within its refresh reuse interval — so
@@ -115,9 +119,21 @@ struct APIClient: Sendable {
     guard
       let error = try? configuration.resolvedDecoder.decode(_RawAPIErrorResponse.self, from: data)
     else {
+      let statusCode = response.status.code
+      // `HTTPURLResponse` does not expose the reason phrase, so the status description is the
+      // closest analog. The status code is always included because the description is localized
+      // on Darwin and differs from the Linux one; the empty check is defensive only.
+      let message: String
+      if 500..<600 ~= statusCode {
+        let description = HTTPURLResponse.localizedString(forStatusCode: statusCode)
+        message = description.isEmpty ? "HTTP \(statusCode)" : "HTTP \(statusCode): \(description)"
+      } else {
+        message = "Unexpected response with status code \(statusCode)."
+      }
+
       return AuthError(
         kind: .unexpectedResponse,
-        message: "Unexpected response with status code \(response.status.code).",
+        message: message,
         errorCode: .unexpectedFailure,
         response: errorResponse
       )
