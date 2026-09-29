@@ -8,7 +8,7 @@
 import Foundation
 import Testing
 
-@testable import RealtimeV2
+@testable import Realtime
 
 #if canImport(FoundationNetworking)
   // `URLSessionWebSocketTask` lives in `FoundationNetworking` on Linux, matching the guard in

@@ -322,6 +322,7 @@ supporting_symbols:
   - AuthError.Kind.rawValue
   - AuthError.Kind.api
   - AuthError.Kind.sessionMissing
+  - AuthError.Kind.refreshDiscarded
   - AuthError.Kind.weakPassword
   - AuthError.Kind.pkceGrantCodeExchange
   - AuthError.Kind.implicitGrantRedirect
@@ -340,6 +341,7 @@ supporting_symbols:
   - AuthError.underlyingError
   - AuthError.description
   - AuthError.sessionMissing
+  - AuthError.refreshDiscarded
   # RealtimeError (SDK-1788) is thrown by every realtime.* capability rather
   # than owned by one.
   - RealtimeError
