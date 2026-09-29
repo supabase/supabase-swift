@@ -144,11 +144,11 @@ struct SessionManagerTests {
   /// Holds the `/token` response until `release()` is called, so a sign-out can interleave.
   private func heldTokenResponse(
     _ response: @escaping @Sendable () throws -> HTTPResponse
-  ) -> (requestSeen: LockIsolated<Bool>, release: @Sendable () -> Void) {
+  ) async -> (requestSeen: LockIsolated<Bool>, release: @Sendable () -> Void) {
     let (gate, continuation) = AsyncStream<Void>.makeStream()
     let requestSeen = LockIsolated(false)
 
-    http.when(
+    await http.when(
       { $0.url.path.contains("/token") },
       return: { _ in
         requestSeen.setValue(true)
@@ -181,7 +181,7 @@ struct SessionManagerTests {
     let refreshedA = session("A2")
 
     Dependencies[clientID].sessionStorage.store(userA)
-    let (requestSeen, release) = heldTokenResponse {
+    let (requestSeen, release) = await heldTokenResponse {
       .stub(refreshedA)
     }
     let (events, stopCollecting) = collectAuthEvents()
@@ -211,7 +211,7 @@ struct SessionManagerTests {
 
     Dependencies[clientID].sessionStorage.store(userA)
     // `/logout` has already revoked A's refresh token by the time this answer arrives.
-    let (requestSeen, release) = heldTokenResponse {
+    let (requestSeen, release) = await heldTokenResponse {
       .stub(
         #"{"code":"refresh_token_not_found","message":"Refresh Token Not Found"}"#,
         code: 400,
@@ -255,7 +255,7 @@ struct SessionManagerTests {
 
     // Answers each token with its own rotated session, so joining the wrong task is visible in
     // the result and not only in the request count.
-    http.when(
+    await http.when(
       { $0.url.path.contains("/token") },
       return: { request in
         let refreshToken = try AuthClient.Configuration.jsonDecoder.decode(
@@ -303,7 +303,7 @@ struct SessionManagerTests {
 
     struct RefreshBody: Decodable { let refreshToken: String }
 
-    http.when(
+    await http.when(
       { $0.url.path.contains("/token") },
       return: { request in
         let refreshToken = try AuthClient.Configuration.jsonDecoder.decode(
@@ -346,7 +346,7 @@ struct SessionManagerTests {
     // stored yet. The guard must not mistake that for a session replaced under it.
     let hydrated = session("hydrated")
 
-    http.when(
+    await http.when(
       { $0.url.path.contains("/token") },
       return: { _ in .stub(hydrated) }
     )
