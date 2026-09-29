@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.55.3-beta](https://github.com/supabase/supabase-swift/compare/v2.55.2...v2.55.3-beta) (2026-09-29)
+
+
+### Bug Fixes
+
+* **auth:** discard a token refresh that outlived its session ([#1374](https://github.com/supabase/supabase-swift/issues/1374)) ([#1389](https://github.com/supabase/supabase-swift/issues/1389)) ([8edd308](https://github.com/supabase/supabase-swift/commit/8edd308d8f5cfdb367fb8b9618225a270ea3d3e7))
+
 ## [2.55.2](https://github.com/supabase/supabase-swift/compare/v2.55.1...v2.55.2) (2026-09-09)
 
 ### Bug Fixes
