@@ -43,15 +43,15 @@ struct APIClientTests {
     #expect(attempts.value == 1)
   }
 
-  private var apiClient: APIClient {
-    APIClient(
-      clientID: AuthClient(
-        configuration: AuthClient.Configuration(
-          url: URL(string: "https://project.supabase.co")!,
-          localStorage: InMemoryLocalStorage()
-        )
-      ).clientID
+  private let authClient = AuthClient(
+    configuration: AuthClient.Configuration(
+      url: URL(string: "https://project.supabase.co")!,
+      localStorage: InMemoryLocalStorage()
     )
+  )
+
+  private var apiClient: APIClient {
+    APIClient(clientID: authClient.clientID)
   }
 
   @Test
