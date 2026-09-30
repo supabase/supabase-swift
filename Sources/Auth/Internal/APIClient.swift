@@ -1,5 +1,6 @@
 import Foundation
 import HTTPTypes
+import Logging
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -7,6 +8,10 @@ import HTTPTypes
 
 extension HTTPClient {
   init(configuration: AuthClient.Configuration) {
+    self.init(http: configuration.http, clock: configuration.clock, logger: configuration.logger)
+  }
+
+  init(http: HTTPClientConfiguration, clock: any Clock<Duration>, logger: Logging.Logger) {
     // GoTrue's writes are all safe to replay — `/token` within its refresh reuse interval — so
     // POST, PUT and DELETE are retried too. A 429 is not: GoTrue's limiters count every attempt
     // and their windows are minutes long, so replaying within seconds only burns the quota.
@@ -15,9 +20,9 @@ extension HTTPClient {
     policy.retryableStatuses.remove(429)
 
     self.init(
-      configuration: configuration.http,
-      retrying: RetryRequestInterceptor(policy: policy, clock: configuration.clock),
-      appending: [LoggerInterceptor(logger: configuration.logger)])
+      configuration: http,
+      retrying: RetryRequestInterceptor(policy: policy, clock: clock),
+      appending: [LoggerInterceptor(logger: logger)])
   }
 }
 

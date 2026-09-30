@@ -5,7 +5,6 @@
 //  Created by Guilherme Souza on 13/08/26.
 //
 
-import ConcurrencyExtras
 import Foundation
 import Logging
 import TestHelpers
