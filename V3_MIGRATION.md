@@ -2036,7 +2036,7 @@ Pass it as `http: .init(transport: StubTransport())` to any sub-client, or as
 - **Functions streaming goes through your transport now.** `_invokeWithStreamedResponse` used to
   run on a private `URLSession` that ignored everything you configured. It now sends through the
   client's `http` transport and middlewares, like every other call.
-- **A streamed `FunctionsError` with kind `.http` now carries the response body.** In v2 the
+- **A streamed `FunctionsError` with kind `.server` now carries the response body.** In v2 the
   streamed call threw `.httpError(code, Data())`; the body is now in `response?.body`, so anything
   that read the payload from a non-2xx streamed invoke no longer has to special-case an empty
   `Data`.
@@ -2210,7 +2210,7 @@ re-exports alongside `HTTPTypes`.
 
 `FunctionsError` is a struct with a `kind: FunctionsError.Kind` property instead of an enum with
 `.relayError` and `.httpError(code:data:)` cases. `Kind` is a `RawRepresentable` struct with
-static members: `.relay`, `.http`, `.transport` and `.decoding`.
+static members: `.relay`, `.server`, `.transport` and `.decoding`.
 
 The package builds with library evolution enabled, so adding a case to a public enum was a
 binary-breaking change. Every new failure the SDK learned to report would have needed a major
@@ -2235,14 +2235,14 @@ do {
   try await supabase.functions.invoke("hello")
 } catch let error as FunctionsError where error.kind == .relay {
   retryLater()
-} catch let error as FunctionsError where error.kind == .http {
-  let response = error.response!  // always set for `.http` and `.relay`
+} catch let error as FunctionsError where error.kind == .server {
+  let response = error.response!  // always set for `.server` and `.relay`
   print(response.statusCode, String(decoding: response.body, as: UTF8.self), response.requestID ?? "")
 }
 ```
 
 `FunctionsError` is not `Equatable`. Compare `kind`, `message` and `response` instead. String
-interpolation of the error now prints `FunctionsError(http): Edge Function returned a non-2xx
+interpolation of the error now prints `FunctionsError(server): Edge Function returned a non-2xx
 status code: 500 [status 500]` instead of the case name.
 
 ## Network and decoding failures are wrapped in the module error
