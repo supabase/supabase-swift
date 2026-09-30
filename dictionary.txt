@@ -186,6 +186,7 @@ supabase
 SUPABASE
 supabaseswiftintegrationtest
 supabot
+swiftlint
 testpath
 testuser
 timestamptz

@@ -550,7 +550,7 @@ struct AuthClientIntegrationTests {
     let decoded = try #require(JWT.decode(session.accessToken))
     expectNoDifference(decoded.header["alg"] as? String, "ES256")
     // Local verification needs a `kid` to look the key up; without one it falls back.
-    #expect(decoded.header["kid"] as? String != nil)
+    #expect(decoded.header["kid"] is String)
     // The JWS signature is raw r||s, which is what `ECDSASignature(rawRepresentation:)` takes.
     expectNoDifference(decoded.signature.count, 64)
 
