@@ -50,7 +50,7 @@ import Foundation
         params: MFAChallengeParams(factorId: enrolled.id)
       )
       guard let webauthn = challengeResponse.webauthn else {
-        throw AuthError.webAuthn("The MFA challenge response has no 'webauthn' field.")
+        throw AuthError.decoding("The MFA challenge response has no 'webauthn' field.")
       }
       let rpId = try webauthn.credentialOptions.webAuthnCreationRpId()
       let credentialResponse = try await authenticator.register(
@@ -99,7 +99,7 @@ import Foundation
         params: MFAChallengeParams(factorId: factorId)
       )
       guard let webauthn = challengeResponse.webauthn else {
-        throw AuthError.webAuthn("The MFA challenge response has no 'webauthn' field.")
+        throw AuthError.decoding("The MFA challenge response has no 'webauthn' field.")
       }
       let rpId = try webauthn.credentialOptions.webAuthnAssertionRpId()
       let credentialResponse = try await authenticator.authenticate(

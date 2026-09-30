@@ -184,9 +184,9 @@ message) is now mandatory. This is a compile error everywhere: the old symbols n
 | `MFAEnrollParams` | `MFATotpEnrollParams` or `MFAPhoneEnrollParams` |
 | `AuthAdmin.deleteUser(id: String, shouldSoftDelete:)` | `AuthAdmin.deleteUser(id: UUID, shouldSoftDelete:)` |
 | `AuthError.sessionNotFound` | `AuthError.sessionMissing` |
-| `AuthError.pkce(_:)` / `AuthError.PKCEFailureReason` | `AuthError` with `kind == .pkceGrantCodeExchange` |
-| `AuthError.invalidImplicitGrantFlowURL` | `AuthError` with `kind == .implicitGrantRedirect` |
-| `AuthError.api(_ error: APIError)` / `AuthError.APIError` | `AuthError` with `kind == .api`; `errorCode` and `response` carry the details |
+| `AuthError.pkce(_:)` / `AuthError.PKCEFailureReason` | `AuthError` with `kind == .oauthFlowFailed` |
+| `AuthError.invalidImplicitGrantFlowURL` | `AuthError` with `kind == .oauthFlowFailed` |
+| `AuthError.api(_ error: APIError)` / `AuthError.APIError` | `AuthError` with `kind == .server`; `errorCode` and `response` carry the details |
 | `UserAttributes.emailChangeToken` | *(removed, no replacement — was unused by GoTrue)* |
 
 Also removed, with no replacement, because they no longer represent something GoTrue can throw:
@@ -1733,8 +1733,9 @@ and the `@Table` macro — not a different spelling of the same builder.
 static let oauthFlowFailed: AuthError.Kind
 ```
 
-It covers OAuth failures that happen entirely on the client, before any request reaches GoTrue.
-Two call sites in `signInWithOAuth(provider:redirectTo:scopes:queryParams:configure:)` (the
+It covers redirect-based sign-in failures that happen entirely on the client: a redirect URL
+that carried an error or no session (what v2 reported as `.pkce(_:)` and
+`.invalidImplicitGrantFlowURL`), and two call sites in `signInWithOAuth(provider:redirectTo:scopes:queryParams:configure:)` (the
 `ASWebAuthenticationSession` overload) used to end the process instead of throwing:
 
 | Condition | Before | After |
@@ -1771,17 +1772,21 @@ do {
 This is not a compile error. `Kind` is an open struct (see "`AuthError` is now a struct, not an
 enum" below), so a new member is additive; a `switch` over `kind` already needs a `default`.
 
-`errorCode` for this kind is `.unknown`, matching the other client-side kinds
-(`.pkceGrantCodeExchange`, `.implicitGrantRedirect`).
+`errorCode` for this kind is `.unknown`, unless the redirect URL carried an `error_code`
+parameter, in which case it is that value.
 
 ## `AuthError` is now a struct, not an enum
 
 `AuthError` is a struct with `kind: AuthError.Kind`, `message`, `errorCode`,
 `weakPasswordReasons`, `response` and `underlyingError`. `Kind` is a `RawRepresentable` struct
-with static members that mirror the old cases (`.api`, `.sessionMissing`, `.weakPassword`,
-`.pkceGrantCodeExchange`, `.implicitGrantRedirect`, `.oauthFlowFailed`, `.jwtVerificationFailed`)
-plus `.webAuthn`, `.unexpectedResponse`, `.transport` and `.decoding`. `AuthError.sessionMissing` still exists as a
+with static members: `.server`, `.sessionMissing`, `.oauthFlowFailed`, `.jwtVerificationFailed`,
+`.refreshDiscarded`, `.transport` and `.decoding`. `AuthError.sessionMissing` still exists as a
 static value, so `throw AuthError.sessionMissing` compiles unchanged.
+
+`Kind` says which party failed, not why. The old `.api` and `.weakPassword` cases are both
+`.server`; GoTrue's reason is in `errorCode`, and `weakPasswordReasons` is filled when
+`errorCode == .weakPassword`. The old `.pkce(_:)` and `.invalidImplicitGrantFlowURL` cases are
+both `.oauthFlowFailed`; the flow type is your own `AuthClient.Configuration.flowType`.
 
 The package builds with library evolution enabled, so adding a case to a public enum was a
 binary-breaking change; every new failure GoTrue learned to report needed a major version. The
@@ -1794,9 +1799,9 @@ This is a compile error for every `case`-based pattern and for the removed `~=` 
 | Before | After |
 | --- | --- |
 | `catch AuthError.sessionMissing` | `catch let error as AuthError where error.kind == .sessionMissing` |
-| `catch let AuthError.api(message, code, data, response)` | `catch let error as AuthError where error.kind == .api` then `error.message`, `error.errorCode`, `error.response?.body`, `error.response?.statusCode` |
-| `catch let AuthError.weakPassword(message, reasons)` | `catch let error as AuthError where error.kind == .weakPassword` then `error.weakPasswordReasons` |
-| `catch let AuthError.pkceGrantCodeExchange(message, error, code)` | `error.kind == .pkceGrantCodeExchange`; `message` is now `"<error>: <description>"` and `code` is in `error.errorCode` |
+| `catch let AuthError.api(message, code, data, response)` | `catch let error as AuthError where error.kind == .server` then `error.message`, `error.errorCode`, `error.response?.body`, `error.response?.statusCode` |
+| `catch let AuthError.weakPassword(message, reasons)` | `catch let error as AuthError where error.errorCode == .weakPassword` then `error.weakPasswordReasons` |
+| `catch let AuthError.pkceGrantCodeExchange(message, error, code)` | `error.kind == .oauthFlowFailed`; `message` is now `"<error>: <description>"` and `code` is in `error.errorCode` |
 | `catch let AuthError.oauthFlowFailed(message)` | `error.kind == .oauthFlowFailed` then `error.message` |
 | `catch let AuthError.jwtVerificationFailed(message)` | `error.kind == .jwtVerificationFailed` then `error.message` |
 | `AuthError.sessionMissing ~= error` | `(error as? AuthError)?.kind == .sessionMissing` |
@@ -1814,7 +1819,7 @@ do {
 // After
 do {
   try await supabase.auth.signIn(email: email, password: password)
-} catch let error as AuthError where error.kind == .api {
+} catch let error as AuthError where error.kind == .server {
   print(error.response?.statusCode ?? 0, error.errorCode, error.message)
 } catch let error as AuthError where error.kind == .sessionMissing {
   showLogin()
@@ -1823,13 +1828,14 @@ do {
 
 `AuthError` is no longer `Equatable`. `error == .sessionMissing` and any `Equatable` state type
 that stores an `AuthError` stop compiling; compare `kind`, `errorCode` and `message`, or store
-those instead. String interpolation prints `AuthError(api): Invalid login credentials [status
+those instead. String interpolation prints `AuthError(server): Invalid login credentials [status
 400, request ...]` instead of the case name.
 
-`signOut` keeps swallowing 401, 403 and 404 responses from the `/logout` endpoint, whether or not the body was a recognizable GoTrue error. In v2 that fallback surfaced as `.api(message: "Unexpected error", ...)`; in v3 it is kind `.unexpectedResponse`, and `signOut` treats both kinds the same way for those statuses. No change in behavior.
+`signOut` keeps swallowing 401, 403 and 404 responses from the `/logout` endpoint, whether or not the body was a recognizable GoTrue error. In v2 that fallback surfaced as `.api(message: "Unexpected error", ...)`; in v3 it is kind `.server` with `errorCode == .unexpectedFailure`. No change in behavior.
 
 The internal `WebAuthnError` type, which could leak from the passkey and WebAuthn MFA flows, is
-folded into `AuthError` with kind `.webAuthn`.
+folded into `AuthError` with kind `.decoding`: every case was a payload the SDK could not
+interpret, either from GoTrue or from the platform authenticator.
 
 ## `fetch:` closures and `StorageHTTPSession` replaced by `ClientTransport` and `ClientMiddleware`
 

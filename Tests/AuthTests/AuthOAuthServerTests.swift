@@ -318,9 +318,9 @@ extension AuthMockerTests {
 
       do {
         _ = try await sut.oauthServer.authorizationDetails(id: "missing")
-        Issue.record("Expected AuthError.api")
+        Issue.record("Expected AuthError.server")
       } catch let error as AuthError {
-        #expect(error.kind == .api)
+        #expect(error.kind == .server)
         #expect(error.errorCode == .oauthAuthorizationNotFound)
       }
     }
@@ -497,9 +497,9 @@ extension AuthMockerTests {
 
       do {
         try await sut.oauthServer.revokeGrant(id: clientId)
-        Issue.record("Expected AuthError.api")
+        Issue.record("Expected AuthError.server")
       } catch let error as AuthError {
-        #expect(error.kind == .api)
+        #expect(error.kind == .server)
         #expect(error.errorCode == .oauthConsentNotFound)
       }
     }
