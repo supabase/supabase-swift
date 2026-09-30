@@ -550,7 +550,7 @@ extension StorageMockerTests {
         )
         Issue.record("expected createSignedURL to throw")
       } catch let error as StorageError {
-        #expect(error.kind == .invalidURL)
+        #expect(error.kind == .invalidRequest)
         #expect(error.response == nil)
       }
     }
@@ -888,7 +888,7 @@ extension StorageMockerTests {
           .move(from: "source", to: "destination")
         Issue.record()
       } catch let error as StorageError {
-        #expect(error.kind == .unexpectedResponse)
+        #expect(error.kind == .server)
         #expect(error.serverError == nil)
         #expect(error.response?.body == Data("error".utf8))
         #expect(error.response?.statusCode == 412)

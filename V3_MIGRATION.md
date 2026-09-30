@@ -2332,9 +2332,10 @@ This is a compile error: `statusCode` and `error` no longer exist on `StorageErr
 }
 ```
 
-Kinds: `.server` (recognized body, `serverError` set), `.unexpectedResponse` (non-2xx with an
-unrecognized body, raw bytes in `response?.body`), `.transport`, `.decoding`, and `.invalidURL`
-for the URL-building helpers such as `publicURL`, which threw `URLError(.badURL)` before.
+Kinds: `.server` for any non-2xx (`serverError` is set when the body was a recognizable Storage
+payload, `nil` otherwise; the raw bytes are always in `response?.body`), `.transport`, `.decoding`,
+and `.invalidRequest` for the URL-building helpers such as `publicURL`, which threw
+`URLError(.badURL)` before.
 
 ## `PostgrestError` gains `kind` and `response`; server fields move to `serverError`
 
