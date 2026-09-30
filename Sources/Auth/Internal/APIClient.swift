@@ -65,8 +65,8 @@ struct APIClient: Sendable {
   /// Pass `session` whenever the caller knows which session the request belongs to. A response
   /// carrying a `sessionCleanupErrorCodes` code then only clears storage if that session is still
   /// the stored one, so a request that outlived a sign-out cannot sign out whoever signed in
-  /// after it. Callers with no session of their own (sign-in, sign-up, `/logout`) pass `nil` and
-  /// keep the unconditional cleanup they have always had.
+  /// after it. Callers with no session of their own (sign-in, sign-up) pass `nil` and keep the
+  /// unconditional cleanup they have always had.
   func send(
     _ request: HTTPRequest, body: Data? = nil, for session: Session? = nil
   ) async throws -> (response: HTTPResponse, data: Data) {
