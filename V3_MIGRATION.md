@@ -422,44 +422,6 @@ out. This is a silent behavior change, not a compile error: search your codebase
 Construct `RealtimeClientV2` directly (not through `SupabaseClient`) if you need a
 Realtime-specific logger distinct from the rest of the client.
 
-## `KeychainLocalStorage`'s default Keychain service is now the host app's bundle identifier
-
-`KeychainLocalStorage()` no longer stores sessions under the fixed service
-`"supabase.gotrue.swift"`. It now defaults to `Bundle.main.bundleIdentifier`, falling back to the
-old constant only when there is no bundle identifier to read (command-line tools, some test
-bundles).
-
-The fixed string put every app that embeds the SDK in the same Keychain namespace. On
-iOS/iPadOS/tvOS/watchOS/visionOS this was not a cross-app collision risk, since items are
-implicitly scoped to the app's own default access group
-(`$(AppIdentifierPrefix)$(CFBundleIdentifier)`), so unrelated apps could not read or overwrite each
-other's session there. On macOS's file-based login Keychain, and for any apps deliberately sharing
-an access group on any platform, the shared service name was a real collision risk: two such apps
-could read and overwrite each other's session under that one service name. Either way, sharing a
-single hardcoded service name is poor namespacing hygiene. Scoping the service to the bundle
-identifier gives each app its own Keychain location by default.
-
-Existing sessions are not lost. On the first `retrieve` after upgrading, `KeychainLocalStorage`
-probes the old `"supabase.gotrue.swift"` location, moves whatever it finds to the new
-per-app location, and returns it — so users stay signed in. This is a behavior change, not a
-compile error: nothing in the type signature changed, but the on-disk Keychain location did. If
-you rely on the exact service name (for example, to inspect the Keychain from another tool, or
-because several of your own apps intentionally shared the old namespace), pass it explicitly to
-keep the pre-v3 location:
-
-```swift
-// Before (implicit, shared "supabase.gotrue.swift" service)
-let storage = KeychainLocalStorage()
-
-// After: keeps the pre-v3 location, no migration performed
-let storage = KeychainLocalStorage(service: "supabase.gotrue.swift")
-```
-
-Note that passing `service:` explicitly — whether the old constant or a new value of your own —
-selects the second, non-migrating initializer: `init(service:accessGroup:useDataProtectionKeychain:)`.
-Only the parameterless-service initializer, `init(accessGroup:useDataProtectionKeychain:)`, probes
-the legacy location.
-
 ## `KeychainLocalStorage.retrieve` returns `nil` for a missing key instead of throwing
 
 `AuthLocalStorage.retrieve(key:)` has always been documented as returning `nil` when the key is
@@ -517,8 +479,8 @@ defaulting to `false`. This is additive — existing call sites keep compiling a
 current behavior — but it's documented here because it's the fix for a common source of
 confusion: on macOS, the legacy file-based Keychain that `KeychainLocalStorage` targets by default
 still shows the user a consent prompt tied to your app's designated requirement, regardless of the
-service name — the service-namespacing change above does not affect it, since the ACL that
-triggers the prompt is governed by code-signing identity, not by `kSecAttrService` (see [Apple TN3137](https://developer.apple.com/documentation/technotes/tn3137-on-mac-keychains)).
+service name — the ACL that triggers the prompt is governed by code-signing identity, not by
+`kSecAttrService` (see [Apple TN3137](https://developer.apple.com/documentation/technotes/tn3137-on-mac-keychains)).
 Passing `useDataProtectionKeychain: true` moves storage to the data-protection Keychain, which
 does not show that prompt.
 
