@@ -20,14 +20,16 @@ import HTTPTypes
 /// - ``listFactors()``
 /// - ``authenticatorAssuranceLevel()``
 public struct AuthMFA: Sendable {
-  let clientID: AuthClientID
+  /// Held strongly: the client vends this value and never stores it, so there is no cycle, and a
+  /// value kept past its call site keeps the client alive instead of dangling.
+  let client: AuthClient
 
-  var configuration: AuthClient.Configuration { Dependencies[clientID].configuration }
-  var api: APIClient { Dependencies[clientID].api }
-  var encoder: JSONEncoder { Dependencies[clientID].resolvedEncoder }
-  var decoder: JSONDecoder { Dependencies[clientID].resolvedDecoder }
-  var sessionManager: SessionManager { Dependencies[clientID].sessionManager }
-  var eventEmitter: AuthStateChangeEventEmitter { Dependencies[clientID].eventEmitter }
+  var configuration: AuthClient.Configuration { client.configuration }
+  var api: SessionAPIClient { client.dependencies.sessionAPI }
+  var encoder: JSONEncoder { configuration.resolvedEncoder }
+  var decoder: JSONDecoder { configuration.resolvedDecoder }
+  var sessionManager: SessionManager { client.dependencies.sessionManager }
+  var eventEmitter: AuthStateChangeEventEmitter { client.dependencies.eventEmitter }
 
   /// Starts the enrollment process for a new Multi-Factor Authentication (MFA) factor. This method
   /// creates a new `unverified` factor.

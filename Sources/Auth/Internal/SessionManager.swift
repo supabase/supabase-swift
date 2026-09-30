@@ -21,8 +21,20 @@ struct SessionManager: Sendable {
 }
 
 extension SessionManager {
-  static func live(clientID: AuthClientID) -> Self {
-    let instance = LiveSessionManager(clientID: clientID)
+  static func live(
+    configuration: AuthClient.Configuration,
+    api: APIClient,
+    sessionStorage: SessionStorage,
+    eventEmitter: AuthStateChangeEventEmitter,
+    logger: Logging.Logger
+  ) -> Self {
+    let instance = LiveSessionManager(
+      configuration: configuration,
+      api: api,
+      sessionStorage: sessionStorage,
+      eventEmitter: eventEmitter,
+      logger: logger
+    )
     return Self(
       session: { try await instance.session() },
       refreshSession: { try await instance.refreshSession($0) },
@@ -37,21 +49,13 @@ extension SessionManager {
 }
 
 private actor LiveSessionManager {
-  private var configuration: AuthClient.Configuration { Dependencies[clientID].configuration }
-  private var sessionStorage: SessionStorage { Dependencies[clientID].sessionStorage }
-  private var eventEmitter: AuthStateChangeEventEmitter { Dependencies[clientID].eventEmitter }
-  // Looked up leniently, as the session manager outlives its client while the auto-refresh loop is
-  // torn down from `AuthClient.deinit`, at which point the dependencies entry is already gone.
-  private var logger: Logging.Logger {
-    Dependencies.instances.value[clientID]?.logger
-      ?? supabaseDefaultLogger(label: "io.supabase.auth")
-  }
-  private var api: APIClient { Dependencies[clientID].api }
-  // Looked up leniently for the same reason as `logger` above: the auto-refresh loop can
-  // outlive its client's dependencies entry.
-  private var clock: any Clock<Duration> {
-    Dependencies.instances.value[clientID]?.configuration.clock ?? ContinuousClock()
-  }
+  private let configuration: AuthClient.Configuration
+  private let api: APIClient
+  private let sessionStorage: SessionStorage
+  private let eventEmitter: AuthStateChangeEventEmitter
+  private let logger: Logging.Logger
+
+  private var clock: any Clock<Duration> { configuration.clock }
 
   // Keyed by the refresh token each task was started for: a refresh asked for a different token
   // is a different operation and must not be served another's result, while a second request for
@@ -59,10 +63,18 @@ private actor LiveSessionManager {
   private var inFlightRefreshes: [String: Task<Session, any Error>] = [:]
   private var startAutoRefreshTokenTask: Task<Void, Never>?
 
-  let clientID: AuthClientID
-
-  init(clientID: AuthClientID) {
-    self.clientID = clientID
+  init(
+    configuration: AuthClient.Configuration,
+    api: APIClient,
+    sessionStorage: SessionStorage,
+    eventEmitter: AuthStateChangeEventEmitter,
+    logger: Logging.Logger
+  ) {
+    self.configuration = configuration
+    self.api = api
+    self.sessionStorage = sessionStorage
+    self.eventEmitter = eventEmitter
+    self.logger = logger
   }
 
   func session() async throws -> Session {
@@ -108,29 +120,37 @@ private actor LiveSessionManager {
           logger.debug("Refresh task ended")
         }
 
-        let session = try await api.execute(
-          HTTPRequest(
-            method: .post,
-            url: configuration.url.appendingPathComponent("token"),
-            query: [
-              URLQueryItem(name: "grant_type", value: "refresh_token")
-            ]
-          ),
-          body: configuration.resolvedEncoder.encode(
-            UserCredentials(refreshToken: refreshToken)
-          ),
-          for: storedAtStart
-        )
-        .decoded(as: Session.self, decoder: configuration.resolvedDecoder)
+        let session: Session
+        do {
+          session = try await api.execute(
+            HTTPRequest(
+              method: .post,
+              url: configuration.url.appendingPathComponent("token"),
+              query: [
+                URLQueryItem(name: "grant_type", value: "refresh_token")
+              ]
+            ),
+            body: configuration.resolvedEncoder.encode(
+              UserCredentials(refreshToken: refreshToken)
+            )
+          )
+          .decoded(as: Session.self, decoder: configuration.resolvedDecoder)
+        } catch let error as AuthError where error.invalidatesSession {
+          // The server says the session this refresh started from is gone. Clear it only while it
+          // is still the stored one, so a sign-in that landed meanwhile is untouched.
+          if removeIfUnchanged(since: storedAtStart) {
+            eventEmitter.emit(.signedOut, session: nil)
+          }
+          throw error
+        }
 
         // The rotated tokens belong to `storedAtStart`. If that session was signed out, or
         // replaced by another user signing in, while this request was in flight, committing them
         // would hand the next user the previous user's session. Drop them instead.
         //
-        // Only the success path needs this. A failure has already been through
-        // `APIClient.handleError(response:data:for:)`, which scopes its own cleanup to
-        // `storedAtStart` — and which clears storage itself when the cleanup is legitimate, so a
-        // check here could not tell that apart from a concurrent sign-out.
+        // Only the success path needs this. The failure path above clears storage itself when the
+        // server says the session is gone, scoped to `storedAtStart`, so a check there could not
+        // tell that apart from a concurrent sign-out.
         if sessionStorage.changed(since: storedAtStart) {
           logger.debug("Refresh discarded: the session it started from is no longer stored")
           throw AuthError.refreshDiscarded

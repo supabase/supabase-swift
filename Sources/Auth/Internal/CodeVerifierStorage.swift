@@ -26,9 +26,7 @@ struct CodeVerifierStorage: Sendable {
 extension CodeVerifierStorage {
   static let maxConcurrentFlows = 5
 
-  static func live(clientID: AuthClientID) -> Self {
-    var configuration: AuthClient.Configuration { Dependencies[clientID].configuration }
-
+  static func live(configuration: AuthClient.Configuration) -> Self {
     // Serializes the index read-modify-write in `set`/`remove`/`removeAll`: these are called
     // `nonisolated`, so concurrent flow starts can genuinely run on different threads, not just
     // interleave at await points. Without this, two concurrent writers can each read the index

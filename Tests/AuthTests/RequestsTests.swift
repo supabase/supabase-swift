@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 07/10/23.
 //
 
+import ConcurrencyExtras
 import Foundation
 import HTTPTypesFoundation
 import Helpers
@@ -154,15 +155,16 @@ struct RequestsTests {
   #if !os(Linux) && !os(Windows) && !os(Android)
     @Test
     func sessionFromURL() async throws {
-      let sut = makeSUT(fetch: { request in
-        let authorizationHeader = request.allHTTPHeaderFields?["Authorization"]
-        #expect(authorizationHeader == "bearer accesstoken")
-        return (json(named: "user"), HTTPURLResponse.stub())
-      })
-
       let currentDate = Date()
 
-      Dependencies[sut.clientID].date = { currentDate }
+      let sut = makeSUT(
+        fetch: { request in
+          let authorizationHeader = request.allHTTPHeaderFields?["Authorization"]
+          #expect(authorizationHeader == "bearer accesstoken")
+          return (json(named: "user"), HTTPURLResponse.stub())
+        },
+        date: { currentDate }
+      )
 
       let url = URL(
         string:
@@ -203,7 +205,7 @@ struct RequestsTests {
   @Test
   func setSessionWithAFutureExpirationDate() async throws {
     let sut = makeSUT()
-    Dependencies[sut.clientID].sessionStorage.store(.valid)
+    sut.dependencies.sessionStorage.store(.valid)
 
     let accessToken =
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjo0ODUyMTYzNTkzLCJzdWIiOiJmMzNkM2VjOS1hMmVlLTQ3YzQtODBlMS01YmQ5MTlmM2Q4YjgiLCJlbWFpbCI6ImhpQGJpbmFyeXNjcmFwaW5nLmNvIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJlbWFpbCIsInByb3ZpZGVycyI6WyJlbWFpbCJdfSwidXNlcl9tZXRhZGF0YSI6e30sInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.UiEhoahP9GNrBKw_OHBWyqYudtoIlZGkrjs7Qa8hU7I"
@@ -228,7 +230,7 @@ struct RequestsTests {
   @Test
   func signOut() async throws {
     let sut = makeSUT()
-    Dependencies[sut.clientID].sessionStorage.store(.valid)
+    sut.dependencies.sessionStorage.store(.valid)
 
     await assert {
       try await sut.signOut()
@@ -238,7 +240,7 @@ struct RequestsTests {
   @Test
   func signOutWithLocalScope() async throws {
     let sut = makeSUT()
-    Dependencies[sut.clientID].sessionStorage.store(.valid)
+    sut.dependencies.sessionStorage.store(.valid)
 
     await assert {
       try await sut.signOut(scope: .local)
@@ -249,7 +251,7 @@ struct RequestsTests {
   func signOutWithOthersScope() async throws {
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.valid)
+    sut.dependencies.sessionStorage.store(.valid)
 
     await assert {
       try await sut.signOut(scope: .others)
@@ -301,7 +303,7 @@ struct RequestsTests {
   func updateUser() async throws {
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.valid)
+    sut.dependencies.sessionStorage.store(.valid)
 
     await assert {
       try await sut.update(
@@ -390,7 +392,7 @@ struct RequestsTests {
   func reauthenticate() async throws {
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.valid)
+    sut.dependencies.sessionStorage.store(.valid)
 
     await assert {
       try await sut.reauthenticate()
@@ -401,7 +403,7 @@ struct RequestsTests {
   func unlinkIdentity() async throws {
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.valid)
+    sut.dependencies.sessionStorage.store(.valid)
 
     await assert {
       try await sut.unlinkIdentity(
@@ -461,7 +463,7 @@ struct RequestsTests {
   func linkIdentityURL() async throws {
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.valid)
+    sut.dependencies.sessionStorage.store(.valid)
 
     await assert {
       _ = try await sut.linkIdentityURL(
@@ -477,7 +479,7 @@ struct RequestsTests {
   func mfaEnrollLegacy() async throws {
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.valid)
+    sut.dependencies.sessionStorage.store(.valid)
 
     await assert {
       _ = try await sut.mfa.enroll(
@@ -489,7 +491,7 @@ struct RequestsTests {
   func mfaEnrollTotp() async throws {
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.valid)
+    sut.dependencies.sessionStorage.store(.valid)
 
     await assert {
       _ = try await sut.mfa.enroll(params: .totp(issuer: "supabase.com", friendlyName: "test"))
@@ -500,7 +502,7 @@ struct RequestsTests {
   func mfaEnrollPhone() async throws {
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.valid)
+    sut.dependencies.sessionStorage.store(.valid)
 
     await assert {
       _ = try await sut.mfa.enroll(params: .phone(friendlyName: "test", phone: "+1 202-918-2132"))
@@ -511,7 +513,7 @@ struct RequestsTests {
   func mfaChallenge() async throws {
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.valid)
+    sut.dependencies.sessionStorage.store(.valid)
 
     await assert {
       _ = try await sut.mfa.challenge(params: .init(factorId: "123"))
@@ -522,7 +524,7 @@ struct RequestsTests {
   func mfaChallengePhone() async throws {
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.valid)
+    sut.dependencies.sessionStorage.store(.valid)
 
     await assert {
       _ = try await sut.mfa.challenge(params: .init(factorId: "123", channel: .whatsapp))
@@ -533,7 +535,7 @@ struct RequestsTests {
   func mfaVerify() async throws {
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.valid)
+    sut.dependencies.sessionStorage.store(.valid)
 
     await assert {
       _ = try await sut.mfa.verify(
@@ -545,7 +547,7 @@ struct RequestsTests {
   func mfaUnenroll() async throws {
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.valid)
+    sut.dependencies.sessionStorage.store(.valid)
 
     await assert {
       _ = try await sut.mfa.unenroll(params: .init(factorId: "123"))
@@ -556,7 +558,7 @@ struct RequestsTests {
   func mfaEnrollWebAuthn() async throws {
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.valid)
+    sut.dependencies.sessionStorage.store(.valid)
 
     await assert {
       _ = try await sut.mfa.enroll(params: .webAuthn(friendlyName: "My Passkey"))
@@ -567,7 +569,7 @@ struct RequestsTests {
   func mfaChallengeWebAuthn() async throws {
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.valid)
+    sut.dependencies.sessionStorage.store(.valid)
 
     await assert {
       _ = try await sut.mfa.challenge(
@@ -583,7 +585,7 @@ struct RequestsTests {
   func mfaVerifyWebAuthn() async throws {
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.valid)
+    sut.dependencies.sessionStorage.store(.valid)
 
     // The credential response carries W3C camelCase keys (e.g. `clientDataJSON`)
     // that MUST survive encoding untouched by the snake_case strategy.
@@ -610,7 +612,7 @@ struct RequestsTests {
   func passkeyRegistrationOptions() async throws {
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.valid)
+    sut.dependencies.sessionStorage.store(.valid)
 
     await assert {
       _ = try await sut.passkeyRegistrationOptions()
@@ -621,7 +623,7 @@ struct RequestsTests {
   func verifyPasskeyRegistration() async throws {
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.valid)
+    sut.dependencies.sessionStorage.store(.valid)
 
     await assert {
       _ = try await sut.verifyPasskeyRegistration(
@@ -675,7 +677,7 @@ struct RequestsTests {
   func listPasskeys() async throws {
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.valid)
+    sut.dependencies.sessionStorage.store(.valid)
 
     await assert {
       _ = try await sut.listPasskeys()
@@ -686,7 +688,7 @@ struct RequestsTests {
   func renamePasskey() async throws {
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.valid)
+    sut.dependencies.sessionStorage.store(.valid)
 
     await assert {
       _ = try await sut.renamePasskey(
@@ -700,7 +702,7 @@ struct RequestsTests {
   func deletePasskey() async throws {
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.valid)
+    sut.dependencies.sessionStorage.store(.valid)
 
     await assert {
       try await sut.deletePasskey(id: UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B")!)
@@ -720,6 +722,7 @@ struct RequestsTests {
     record: Bool = false,
     flowType: AuthFlowType = .implicit,
     fetch: (@Sendable (URLRequest) async throws -> (Data, URLResponse))? = nil,
+    date: @escaping @Sendable () -> Date = { Date() },
     file: StaticString = #filePath,
     testName: String = #function,
     line: UInt = #line
@@ -751,7 +754,7 @@ struct RequestsTests {
           throw UnimplementedError()
         }))
 
-    return AuthClient(configuration: configuration)
+    return AuthClient(configuration: configuration, date: date, pkce: .live, urlOpener: .live)
   }
 }
 

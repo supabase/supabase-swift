@@ -21,57 +21,27 @@ extension HTTPClient {
   }
 }
 
+/// Sends requests to the Auth server with the client's default headers and maps failures to
+/// ``AuthError``.
+///
+/// Knows nothing about sessions. `AuthAdmin` uses it standalone; ``SessionAPIClient`` layers the
+/// session bookkeeping on top for the user-facing client.
 struct APIClient: Sendable {
-  let clientID: AuthClientID
+  let headers: [String: String]
+  let http: HTTPClient
+  let decoder: JSONDecoder
 
-  var configuration: AuthClient.Configuration {
-    Dependencies[clientID].configuration
+  /// Sends `request` and returns the response body.
+  func execute(_ request: HTTPRequest, body: Data? = nil) async throws -> Data {
+    try await send(request, body: body).data
   }
 
-  var sessionManager: SessionManager {
-    Dependencies[clientID].sessionManager
-  }
-
-  var eventEmitter: AuthStateChangeEventEmitter {
-    Dependencies[clientID].eventEmitter
-  }
-
-  var http: HTTPClient {
-    Dependencies[clientID].http
-  }
-
-  /// Error codes that should clean up local session.
-  private let sessionCleanupErrorCodes: [ErrorCode] = [
-    .sessionNotFound,
-    .sessionExpired,
-    .refreshTokenNotFound,
-    .refreshTokenAlreadyUsed,
-  ]
-
-  /// Sends `request` with the client's default headers and returns the response body.
-  ///
-  /// `session` is the session the request is issued for, when the caller has one. It scopes the
-  /// session cleanup that a `sessionCleanupErrorCodes` response triggers — see
-  /// ``send(_:body:for:)``.
-  func execute(
-    _ request: HTTPRequest, body: Data? = nil, for session: Session? = nil
-  ) async throws -> Data {
-    try await send(request, body: body, for: session).data
-  }
-
-  /// Like ``execute(_:body:for:)`` but also returns the response head, for callers that read
-  /// headers.
-  ///
-  /// Pass `session` whenever the caller knows which session the request belongs to. A response
-  /// carrying a `sessionCleanupErrorCodes` code then only clears storage if that session is still
-  /// the stored one, so a request that outlived a sign-out cannot sign out whoever signed in
-  /// after it. Callers with no session of their own (sign-in, sign-up, `/logout`) pass `nil` and
-  /// keep the unconditional cleanup they have always had.
+  /// Like ``execute(_:body:)`` but also returns the response head, for callers that read headers.
   func send(
-    _ request: HTTPRequest, body: Data? = nil, for session: Session? = nil
+    _ request: HTTPRequest, body: Data? = nil
   ) async throws -> (response: HTTPResponse, data: Data) {
     var request = request
-    request.headerFields = HTTPFields(configuration.headers).merging(with: request.headerFields)
+    request.headerFields = HTTPFields(headers).merging(with: request.headerFields)
 
     if request.headerFields[.apiVersionHeaderName] == nil {
       request.headerFields[.apiVersionHeaderName] = apiVersions[._20240101]!.name.rawValue
@@ -91,34 +61,30 @@ struct APIClient: Sendable {
     }
 
     guard 200..<300 ~= response.status.code else {
-      throw await handleError(response: response, data: data, for: session)
+      throw Self.error(response: response, data: data, decoder: decoder)
     }
 
     return (response, data)
   }
 
-  @discardableResult
-  func authorizedExecute(_ request: HTTPRequest, body: Data? = nil) async throws -> Data {
-    var sessionManager: SessionManager {
-      Dependencies[clientID].sessionManager
-    }
+  /// Error codes GoTrue returns when the session a request was issued for no longer exists: the
+  /// user signed out, was deleted, or the session was otherwise terminated.
+  static let sessionCleanupErrorCodes: [ErrorCode] = [
+    .sessionNotFound,
+    .sessionExpired,
+    .refreshTokenNotFound,
+    .refreshTokenAlreadyUsed,
+  ]
 
-    let session = try await sessionManager.session()
-
-    var request = request
-    request.headerFields[.authorization] = "Bearer \(session.accessToken)"
-
-    return try await execute(request, body: body, for: session)
-  }
-
-  func handleError(
-    response: HTTPResponse, data: Data, for session: Session?
-  ) async -> AuthError {
+  /// Maps a non-2xx response to the error the caller sees.
+  ///
+  /// Pure: no storage or session access. A response carrying one of ``sessionCleanupErrorCodes``
+  /// maps to ``AuthError/sessionMissing`` with the response attached, which is what
+  /// ``AuthError/invalidatesSession`` keys off. Acting on it is the session layer's job.
+  static func error(response: HTTPResponse, data: Data, decoder: JSONDecoder) -> AuthError {
     let errorResponse = HTTPErrorResponse(response, body: data)
 
-    guard
-      let error = try? configuration.resolvedDecoder.decode(_RawAPIErrorResponse.self, from: data)
-    else {
+    guard let error = try? decoder.decode(_RawAPIErrorResponse.self, from: data) else {
       let statusCode = response.status.code
       // `HTTPURLResponse` does not expose the reason phrase, so the status description is the
       // closest analog. The status code is always included because the description is localized
@@ -161,17 +127,6 @@ struct APIClient: Sendable {
       result.response = errorResponse
       return result
     } else if let errorCode, sessionCleanupErrorCodes.contains(errorCode) {
-      // The `session_id` inside the JWT does not correspond to a row in the
-      // `sessions` table. This usually means the user has signed out, has been
-      // deleted, or their session has somehow been terminated.
-      //
-      // Only `session`'s own storage slot may be cleared. A request that was still in flight when
-      // the user signed out — and another user signed in — would otherwise delete the session
-      // that replaced it and sign that user out. The check and the delete happen together inside
-      // the session manager's actor, so a sign-in cannot land between them.
-      if await sessionManager.removeIfUnchanged(session) {
-        eventEmitter.emit(.signedOut, session: nil)
-      }
       var result = AuthError.sessionMissing
       result.response = errorResponse
       return result
@@ -185,12 +140,22 @@ struct APIClient: Sendable {
     }
   }
 
-  private func parseResponseAPIVersion(_ response: HTTPResponse) -> Date? {
+  private static func parseResponseAPIVersion(_ response: HTTPResponse) -> Date? {
     guard let apiVersion = response.headerFields[.apiVersionHeaderName] else { return nil }
 
     let formatter = ISO8601DateFormatter()
     formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
     return formatter.date(from: "\(apiVersion)T00:00:00.0Z")
+  }
+}
+
+extension AuthError {
+  /// Whether the server reported that the session the request was issued for is gone.
+  ///
+  /// Only ``APIClient/error(response:data:decoder:)`` produces a `sessionMissing` error with a
+  /// response attached; a locally raised one (nothing in storage) has none.
+  var invalidatesSession: Bool {
+    kind == .sessionMissing && response != nil
   }
 }
 
