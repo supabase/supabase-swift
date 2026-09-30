@@ -102,17 +102,29 @@ struct StorageApi: Sendable {
 
   /// Sends `request` with the client's default headers and returns the response body.
   @discardableResult
-  func execute(_ request: HTTPRequest, body: Data? = nil) async throws -> Data {
+  func execute(_ request: HTTPRequest, body: Data) async throws -> Data {
+    try await execute(request, body: HTTPBody(body))
+  }
+
+  /// Sends `request` with the client's default headers and returns the response body.
+  @discardableResult
+  func execute(_ request: HTTPRequest, body: HTTPBody? = nil) async throws -> Data {
     var request = request
     request.headerFields = HTTPFields(configuration.headers).merging(with: request.headerFields)
 
     let response: HTTPResponse
     let data: Data
     do {
-      (response, data) = try await http.send(request, body: body)
+      let (head, responseBody) = try await http.stream(request, body: body)
+      response = head
+      if let responseBody {
+        data = try await Data(collecting: responseBody, upTo: .max)
+      } else {
+        data = Data()
+      }
     } catch {
       // Only the network layer's own failures are relabelled. `CancellationError`, and anything
-      // thrown by user code that runs inside `send` (a custom `ClientTransport` or middleware, an `accessToken` closure),
+      // thrown by user code that runs inside `stream` (a custom `ClientTransport` or middleware, an `accessToken` closure),
       // propagate as themselves.
       guard let urlError = error as? URLError else { throw error }
       throw StorageError(
@@ -141,20 +153,26 @@ struct StorageApi: Sendable {
     return data
   }
 
-  /// Sends `formData` as a multipart upload, defaulting `Content-Type` and `Cache-Control`.
+  /// Sends `file` as the raw request body, the same shape supabase-js uses for `ArrayBuffer`
+  /// uploads. What a multipart form would carry as fields travels in headers instead:
+  /// `Content-Type`, `Cache-Control`, and base64 JSON in `x-metadata`.
   func upload(
     _ request: HTTPRequest,
-    formData: MultipartFormData,
+    file: FileUpload,
+    path: String,
     options: FileOptions
   ) async throws -> Data {
     var request = request
     if request.headerFields[.contentType] == nil {
-      request.headerFields[.contentType] = formData.contentType
+      request.headerFields[.contentType] = file.contentType(forPath: path, options: options)
     }
     if request.headerFields[.cacheControl] == nil {
       request.headerFields[.cacheControl] = "max-age=\(options.cacheControl)"
     }
-    return try await execute(request, body: try formData.encode())
+    if let metadata = options.metadata {
+      request.headerFields[.xMetadata] = encodeMetadata(metadata).base64EncodedString()
+    }
+    return try await execute(request, body: try file.httpBody())
   }
 }
 
