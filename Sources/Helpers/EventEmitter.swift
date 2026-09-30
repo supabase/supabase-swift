@@ -35,11 +35,6 @@ public final class ObservationToken: @unchecked Sendable, Hashable {
     mutableState.withValue { $0.onCancel = handler }
   }
 
-  @available(*, deprecated, renamed: "cancel")
-  public func remove() {
-    cancel()
-  }
-
   public func cancel() {
     mutableState.withValue { state in
       guard !state.isCancelled else { return }

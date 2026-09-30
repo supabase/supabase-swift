@@ -6,10 +6,13 @@
 //
 
 import ConcurrencyExtras
+import Foundation
+import HTTPTypes
+import HTTPTypesFoundation
 import Helpers
-import InlineSnapshotTesting
 import Mocker
-import XCTest
+import TestHelpers
+import Testing
 
 @testable import PostgREST
 
@@ -17,460 +20,884 @@ import XCTest
   import FoundationNetworking
 #endif
 
-final class PostgrestBuilderTests: PostgrestQueryTests {
-  func testCustomHeaderOnAPerCallBasis() throws {
-    let url = URL(string: "http://localhost:54321/rest/v1")!
-    let postgrest1 = PostgrestClient(url: url, headers: ["apikey": "foo"], logger: nil)
-    let postgrest2 = try postgrest1.rpc("void_func").setHeader(name: .init("apikey")!, value: "bar")
+extension PostgrestMockerTests {
+  @Suite(.mockerSerialized)
+  struct PostgrestBuilderTests {
+    let fixture = PostgrestQueryFixture()
+    var url: URL { fixture.url }
+    var sut: PostgrestClient { fixture.sut }
 
-    // Original client object isn't affected
-    XCTAssertEqual(
-      postgrest1.from("users").select().mutableState.request.headers[.init("apikey")!], "foo")
-    // Derived client object uses new header value
-    XCTAssertEqual(postgrest2.mutableState.request.headers[.init("apikey")!], "bar")
-  }
+    @Test
+    func customHeaderOnAPerCallBasis() throws {
+      let url = URL(string: "http://localhost:54321/rest/v1")!
+      let postgrest1 = PostgrestClient(url: url, headers: ["apikey": "foo"])
+      let postgrest2 = try postgrest1.rpc("void_func").setHeader(
+        name: .init("apikey")!, value: "bar")
 
-  func testExecuteWithNonSuccessStatusCode() async throws {
-    Mock(
-      url: url.appendingPathComponent("users"),
-      ignoreQuery: true,
-      statusCode: 400,
-      data: [
-        .get: Data(
-          """
-          {
-            "message": "Bad Request"
-          }
-          """.utf8
+      // Original client object isn't affected
+      #expect(
+        postgrest1.from("users").select().request.headerFields[.init("apikey")!] == "foo")
+      // Derived client object uses new header value
+      #expect(postgrest2.request.headerFields[.init("apikey")!] == "bar")
+    }
+
+    @Test
+    func executeWithNonSuccessStatusCode() async throws {
+      Mock(
+        url: url.appendingPathComponent("users"),
+        ignoreQuery: true,
+        statusCode: 400,
+        data: [
+          .get: Data(
+            """
+            {
+              "message": "Bad Request"
+            }
+            """.utf8
+          )
+        ]
+      )
+      .register()
+
+      do {
+        try await sut
+          .from("users")
+          .select()
+          .execute()
+        Issue.record("Expected error to be thrown")
+      } catch let error as PostgrestError {
+        #expect(error.kind == .server)
+        #expect(error.message == "Bad Request")
+        #expect(error.serverError?.message == "Bad Request")
+        #expect(error.response?.statusCode == 400)
+      }
+    }
+
+    @Test
+    func executeWithNonJSONError() async throws {
+      Mock(
+        url: url.appendingPathComponent("users"),
+        ignoreQuery: true,
+        statusCode: 400,
+        data: [
+          .get: Data("Bad Request".utf8)
+        ]
+      )
+      .register()
+
+      do {
+        try await sut
+          .from("users")
+          .select()
+          .execute()
+        Issue.record("Expected error to be thrown")
+      } catch let error as PostgrestError {
+        #expect(error.kind == .unexpectedResponse)
+        #expect(error.serverError == nil)
+        #expect(error.response?.body == Data("Bad Request".utf8))
+        #expect(error.response?.statusCode == 400)
+      }
+    }
+
+    @Test
+    func maybeSingleReturnsNilOnZeroRows() async throws {
+      Mock(
+        url: url.appendingPathComponent("users"),
+        ignoreQuery: true,
+        statusCode: 406,
+        data: [
+          .get: Data(
+            """
+            {
+              "code": "PGRST116",
+              "details": "Results contain 0 rows, application/vnd.pgrst.object+json requires 1 row",
+              "message": "JSON object requested, multiple (or no) rows returned"
+            }
+            """.utf8
+          )
+        ]
+      )
+      .register()
+
+      let user: User? =
+        try await sut
+        .from("users")
+        .select()
+        .maybeSingle()
+        .execute()
+        .value
+
+      #expect(user == nil)
+    }
+
+    @Test
+    func maybeSingleReturnsNilOnZeroRowsWithNewerPostgrestWording() async throws {
+      Mock(
+        url: url.appendingPathComponent("users"),
+        ignoreQuery: true,
+        statusCode: 406,
+        data: [
+          .get: Data(
+            """
+            {
+              "code": "PGRST116",
+              "details": "The result contains 0 rows",
+              "message": "Cannot coerce the result to a single JSON object"
+            }
+            """.utf8
+          )
+        ]
+      )
+      .register()
+
+      let user: User? =
+        try await sut
+        .from("users")
+        .select()
+        .maybeSingle()
+        .execute()
+        .value
+
+      #expect(user == nil)
+    }
+
+    @Test
+    func maybeSingleThrowsOnMultipleRows() async throws {
+      Mock(
+        url: url.appendingPathComponent("users"),
+        ignoreQuery: true,
+        statusCode: 406,
+        data: [
+          .get: Data(
+            """
+            {
+              "code": "PGRST116",
+              "details": "Results contain 2 rows, application/vnd.pgrst.object+json requires 1 row",
+              "message": "JSON object requested, multiple (or no) rows returned"
+            }
+            """.utf8
+          )
+        ]
+      )
+      .register()
+
+      do {
+        let _: User? =
+          try await sut
+          .from("users")
+          .select()
+          .maybeSingle()
+          .execute()
+          .value
+        Issue.record("Expected error to be thrown")
+      } catch let error as PostgrestError {
+        #expect(error.serverError?.code == "PGRST116")
+      }
+    }
+
+    @Test
+    func maybeSingleReturnsValueOnSingleRow() async throws {
+      Mock(
+        url: url.appendingPathComponent("users"),
+        ignoreQuery: true,
+        statusCode: 200,
+        data: [
+          .get: Data(
+            """
+            {
+              "id": 1,
+              "username": "admin"
+            }
+            """.utf8
+          )
+        ]
+      )
+      .register()
+
+      let user: User? =
+        try await sut
+        .from("users")
+        .select()
+        .maybeSingle()
+        .execute()
+        .value
+
+      #expect(user?.id == 1)
+      #expect(user?.username == "admin")
+    }
+
+    @Test
+    func executeWithHead() async throws {
+      Mock(
+        url: url.appendingPathComponent("users"),
+        ignoreQuery: true,
+        statusCode: 200,
+        data: [
+          .head: Data()
+        ]
+      )
+      .snapshotRequest {
+        #"""
+        curl \
+        	--head \
+        	--header "Accept: application/json" \
+        	--header "Content-Type: application/json" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	"http://localhost:54321/rest/v1/users?select=*"
+        """#
+      }
+      .register()
+
+      try await sut.from("users")
+        .select()
+        .execute(options: FetchOptions(head: true))
+    }
+
+    @Test
+    func executeWithCount() async throws {
+      Mock(
+        url: url.appendingPathComponent("users"),
+        ignoreQuery: true,
+        statusCode: 200,
+        data: [
+          .get: Data("[]".utf8)
+        ]
+      )
+      .snapshotRequest {
+        #"""
+        curl \
+        	--header "Accept: application/json" \
+        	--header "Content-Type: application/json" \
+        	--header "Prefer: count=exact" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	"http://localhost:54321/rest/v1/users?select=*"
+        """#
+      }
+      .register()
+
+      try await sut.from("users")
+        .select()
+        .execute(options: FetchOptions(count: .exact))
+    }
+
+    @Test
+    func executeWithCustomSchema() async throws {
+      Mock(
+        url: url.appendingPathComponent("users"),
+        ignoreQuery: true,
+        statusCode: 200,
+        data: [
+          .get: Data("[]".utf8)
+        ]
+      )
+      .snapshotRequest {
+        #"""
+        curl \
+        	--header "Accept: application/json" \
+        	--header "Accept-Profile: private" \
+        	--header "Content-Type: application/json" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	"http://localhost:54321/rest/v1/users?select=*"
+        """#
+      }
+      .register()
+
+      try await sut
+        .schema("private")
+        .from("users")
+        .select()
+        .execute()
+    }
+
+    @Test
+    func executeWithCustomSchemaAndHeadMethod() async throws {
+      Mock(
+        url: url.appendingPathComponent("users"),
+        ignoreQuery: true,
+        statusCode: 200,
+        data: [
+          .head: Data()
+        ]
+      )
+      .snapshotRequest {
+        #"""
+        curl \
+        	--head \
+        	--header "Accept: application/json" \
+        	--header "Accept-Profile: private" \
+        	--header "Content-Type: application/json" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	"http://localhost:54321/rest/v1/users?select=*"
+        """#
+      }
+      .register()
+
+      try await sut
+        .schema("private")
+        .from("users")
+        .select()
+        .execute(options: FetchOptions(head: true))
+    }
+
+    @Test
+    func executeWithCustomSchemaAndPostMethod() async throws {
+      Mock(
+        url: url.appendingPathComponent("users"),
+        ignoreQuery: true,
+        statusCode: 201,
+        data: [
+          .post: Data()
+        ]
+      )
+      .snapshotRequest {
+        #"""
+        curl \
+        	--request POST \
+        	--header "Accept: application/json" \
+        	--header "Content-Length: 19" \
+        	--header "Content-Profile: private" \
+        	--header "Content-Type: application/json" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	--data "{\"username\":\"test\"}" \
+        	"http://localhost:54321/rest/v1/users"
+        """#
+      }
+      .register()
+
+      try await sut
+        .schema("private")
+        .from("users")
+        .insert(["username": "test"])
+        .execute()
+    }
+
+    @Test
+    func setHeader() {
+      let query = sut.from("users")
+        .select()
+        .setHeader(name: "key", value: "value")
+
+      #expect(query.request.headerFields[.init("key")!] == "value")
+    }
+
+    // MARK: - Encoder/decoder override tests
+
+    @Test
+    func insertPerCallEncoderOverridesClientDefault() async throws {
+      let capturedBody = LockIsolated<Data?>(nil)
+      let sut = makeSUTWithCustomFetch { request in
+        capturedBody.setValue(request.httpBody)
+        return (Data(), self.makeHTTPURLResponse(statusCode: 201))
+      }
+
+      let snakeCaseEncoder = JSONEncoder()
+      snakeCaseEncoder.keyEncodingStrategy = .convertToSnakeCase
+
+      try await sut.from("users")
+        .insert(EncoderOverrideRow(userName: "abc"), encoder: snakeCaseEncoder)
+        .execute()
+
+      let body = try #require(capturedBody.value)
+      let json = try #require(JSONSerialization.jsonObject(with: body) as? [String: Any])
+      #expect(json["user_name"] as? String == "abc")
+      #expect(json["userName"] == nil)
+    }
+
+    @Test
+    func updatePerCallEncoderOverridesClientDefault() async throws {
+      let capturedBody = LockIsolated<Data?>(nil)
+      let sut = makeSUTWithCustomFetch { request in
+        capturedBody.setValue(request.httpBody)
+        return (Data(), self.makeHTTPURLResponse(statusCode: 200))
+      }
+
+      let snakeCaseEncoder = JSONEncoder()
+      snakeCaseEncoder.keyEncodingStrategy = .convertToSnakeCase
+
+      try await sut.from("users")
+        .update(EncoderOverrideRow(userName: "abc"), encoder: snakeCaseEncoder)
+        .eq("id", value: 1)
+        .execute()
+
+      let body = try #require(capturedBody.value)
+      let json = try #require(JSONSerialization.jsonObject(with: body) as? [String: Any])
+      #expect(json["user_name"] as? String == "abc")
+      #expect(json["userName"] == nil)
+    }
+
+    @Test
+    func upsertPerCallEncoderOverridesClientDefault() async throws {
+      let capturedBody = LockIsolated<Data?>(nil)
+      let sut = makeSUTWithCustomFetch { request in
+        capturedBody.setValue(request.httpBody)
+        return (Data(), self.makeHTTPURLResponse(statusCode: 201))
+      }
+
+      let snakeCaseEncoder = JSONEncoder()
+      snakeCaseEncoder.keyEncodingStrategy = .convertToSnakeCase
+
+      try await sut.from("users")
+        .upsert(EncoderOverrideRow(userName: "abc"), encoder: snakeCaseEncoder)
+        .execute()
+
+      let body = try #require(capturedBody.value)
+      let json = try #require(JSONSerialization.jsonObject(with: body) as? [String: Any])
+      #expect(json["user_name"] as? String == "abc")
+      #expect(json["userName"] == nil)
+    }
+
+    @Test
+    func executePerCallDecoderOverridesClientDefault() async throws {
+      struct SnakeCasePayload: Decodable, Sendable {
+        let userId: Int
+      }
+
+      let sut = makeSUTWithCustomFetch { _ in
+        (Data(#"{"user_id": 1}"#.utf8), self.makeHTTPURLResponse(statusCode: 200))
+      }
+
+      // The client's default decoder has no key conversion, so it can't match `user_id` to `userId`.
+      do {
+        let _: SnakeCasePayload = try await sut.from("users").select().execute().value
+        Issue.record("Expected a decoding error without a matching key strategy")
+      } catch let error as PostgrestError {
+        #expect(error.kind == .decoding)
+        #expect(error.underlyingError is DecodingError)
+      }
+
+      let snakeCaseDecoder = JSONDecoder()
+      snakeCaseDecoder.keyDecodingStrategy = .convertFromSnakeCase
+
+      let result: SnakeCasePayload =
+        try await sut.from("users").select().execute(decoder: snakeCaseDecoder).value
+      #expect(result.userId == 1)
+    }
+
+    @Test
+    func errorDecodingIsUnaffectedByClientDecoderCustomization() async throws {
+      // A decoder aggressive enough to remap every key would prevent `PostgrestError` from ever
+      // finding its required `message` field, if it were used to decode the error response.
+      // Error decoding must use a fixed internal decoder instead, decoupled from this setting.
+      let poisonedDecoder = JSONDecoder()
+      poisonedDecoder.keyDecodingStrategy = .custom { _ in TestCodingKey(stringValue: "unmatched") }
+
+      let sut = makeSUTWithCustomFetch(decoder: poisonedDecoder) { _ in
+        (
+          Data(#"{"code":"PGRST000","message":"Bad Request"}"#.utf8),
+          self.makeHTTPURLResponse(statusCode: 400)
         )
-      ]
-    )
-    .register()
+      }
 
-    do {
-      try await sut
-        .from("users")
-        .select()
-        .execute()
-    } catch let error as PostgrestError {
-      XCTAssertEqual(error.message, "Bad Request")
-    }
-  }
-
-  func testExecuteWithNonJSONError() async throws {
-    Mock(
-      url: url.appendingPathComponent("users"),
-      ignoreQuery: true,
-      statusCode: 400,
-      data: [
-        .get: Data("Bad Request".utf8)
-      ]
-    )
-    .register()
-
-    do {
-      try await sut
-        .from("users")
-        .select()
-        .execute()
-    } catch let error as HTTPError {
-      XCTAssertEqual(error.data, Data("Bad Request".utf8))
-      XCTAssertEqual(error.response.statusCode, 400)
-    }
-  }
-
-  func testExecuteWithHead() async throws {
-    Mock(
-      url: url.appendingPathComponent("users"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [
-        .head: Data()
-      ]
-    )
-    .snapshotRequest {
-      #"""
-      curl \
-      	--head \
-      	--header "Accept: application/json" \
-      	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
-      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	"http://localhost:54321/rest/v1/users?select=*"
-      """#
-    }
-    .register()
-
-    try await sut.from("users")
-      .select()
-      .execute(options: FetchOptions(head: true))
-  }
-
-  func testExecuteWithCount() async throws {
-    Mock(
-      url: url.appendingPathComponent("users"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [
-        .get: Data("[]".utf8)
-      ]
-    )
-    .snapshotRequest {
-      #"""
-      curl \
-      	--header "Accept: application/json" \
-      	--header "Content-Type: application/json" \
-      	--header "Prefer: count=exact" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
-      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	"http://localhost:54321/rest/v1/users?select=*"
-      """#
-    }
-    .register()
-
-    try await sut.from("users")
-      .select()
-      .execute(options: FetchOptions(count: .exact))
-  }
-
-  func testExecuteWithCustomSchema() async throws {
-    Mock(
-      url: url.appendingPathComponent("users"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [
-        .get: Data("[]".utf8)
-      ]
-    )
-    .snapshotRequest {
-      #"""
-      curl \
-      	--header "Accept: application/json" \
-      	--header "Accept-Profile: private" \
-      	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
-      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	"http://localhost:54321/rest/v1/users?select=*"
-      """#
-    }
-    .register()
-
-    try await sut
-      .schema("private")
-      .from("users")
-      .select()
-      .execute()
-  }
-
-  func testExecuteWithCustomSchemaAndHeadMethod() async throws {
-    Mock(
-      url: url.appendingPathComponent("users"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [
-        .head: Data()
-      ]
-    )
-    .snapshotRequest {
-      #"""
-      curl \
-      	--head \
-      	--header "Accept: application/json" \
-      	--header "Accept-Profile: private" \
-      	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
-      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	"http://localhost:54321/rest/v1/users?select=*"
-      """#
-    }
-    .register()
-
-    try await sut
-      .schema("private")
-      .from("users")
-      .select()
-      .execute(options: FetchOptions(head: true))
-  }
-
-  func testExecuteWithCustomSchemaAndPostMethod() async throws {
-    Mock(
-      url: url.appendingPathComponent("users"),
-      ignoreQuery: true,
-      statusCode: 201,
-      data: [
-        .post: Data()
-      ]
-    )
-    .snapshotRequest {
-      #"""
-      curl \
-      	--request POST \
-      	--header "Accept: application/json" \
-      	--header "Content-Length: 19" \
-      	--header "Content-Profile: private" \
-      	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
-      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	--data "{\"username\":\"test\"}" \
-      	"http://localhost:54321/rest/v1/users"
-      """#
-    }
-    .register()
-
-    try await sut
-      .schema("private")
-      .from("users")
-      .insert(["username": "test"])
-      .execute()
-  }
-
-  func testSetHeader() {
-    let query = sut.from("users")
-      .setHeader(name: "key", value: "value")
-
-    XCTAssertEqual(query.mutableState.request.headers[.init("key")!], "value")
-  }
-
-  // MARK: - Retry tests
-
-  override func setUp() {
-    super.setUp()
-    #if DEBUG
-      _clock = ImmediateRetryTestClock()
-    #endif
-  }
-
-  override func tearDown() {
-    super.tearDown()
-    #if DEBUG
-      _clock = ContinuousClock()
-    #endif
-  }
-
-  func testRetryOn520ForGETRequest() async throws {
-    struct MutableState {
-      var callCount = 0
-      var capturedHeaders = [[String: String]]()
+      do {
+        try await sut.from("users").select().execute()
+        Issue.record("Expected PostgrestError to be thrown")
+      } catch let error as PostgrestError {
+        #expect(error.message == "Bad Request")
+        #expect(error.serverError?.code == "PGRST000")
+      }
     }
 
-    let state = LockIsolated(MutableState())
+    @Test
+    func errorDecodingIsUnaffectedByPerCallDecoderOverride() async throws {
+      let poisonedDecoder = JSONDecoder()
+      poisonedDecoder.keyDecodingStrategy = .custom { _ in TestCodingKey(stringValue: "unmatched") }
 
-    let sut = makeSUTWithCustomFetch { request in
+      let sut = makeSUTWithCustomFetch { _ in
+        (
+          Data(#"{"code":"PGRST000","message":"Bad Request"}"#.utf8),
+          self.makeHTTPURLResponse(statusCode: 400)
+        )
+      }
+
+      do {
+        let _: [User] = try await sut.from("users").select().execute(decoder: poisonedDecoder).value
+        Issue.record("Expected PostgrestError to be thrown")
+      } catch let error as PostgrestError {
+        #expect(error.message == "Bad Request")
+        #expect(error.serverError?.code == "PGRST000")
+      }
+    }
+
+    // MARK: - Retry tests
+
+    @Test
+    func retryOn520ForGETRequest() async throws {
+      struct MutableState {
+        var callCount = 0
+        var capturedHeaders = [[String: String]]()
+      }
+
+      let state = LockIsolated(MutableState())
+
+      let sut = makeSUTWithCustomFetch { request in
+        state.withValue { state in
+          state.callCount += 1
+          state.capturedHeaders.append(
+            Dictionary(uniqueKeysWithValues: (request.allHTTPHeaderFields ?? [:]).map { $0 }))
+
+          if state.callCount < 3 {
+            return (Data(), self.makeHTTPURLResponse(statusCode: 520))
+          }
+          return (Data("[]".utf8), self.makeHTTPURLResponse(statusCode: 200))
+        }
+      }
+
+      let result: PostgrestResponse<[User]> = try await sut.from("users").select().execute()
+
       state.withValue { state in
-        state.callCount += 1
-        state.capturedHeaders.append(
-          Dictionary(uniqueKeysWithValues: (request.allHTTPHeaderFields ?? [:]).map { $0 }))
+        #expect(state.callCount == 3)
+        #expect(state.capturedHeaders[0]["X-Retry-Count"] == nil)
+        #expect(state.capturedHeaders[1]["X-Retry-Count"] == "1")
+        #expect(state.capturedHeaders[2]["X-Retry-Count"] == "2")
+      }
+      #expect(result.value.isEmpty)
+    }
 
-        if state.callCount < 3 {
+    @Test
+    func retryAfterSchemaChangeUsesInjectedClock() async throws {
+      let callCount = LockIsolated(0)
+
+      let sut = makeSUTWithCustomFetch { _ in
+        callCount.withValue { $0 += 1 }
+        if callCount.value < 3 {
           return (Data(), self.makeHTTPURLResponse(statusCode: 520))
         }
         return (Data("[]".utf8), self.makeHTTPURLResponse(statusCode: 200))
       }
+
+      let clock = ContinuousClock()
+      let start = clock.now
+      let result: PostgrestResponse<[User]> =
+        try await sut
+        .schema("private")
+        .from("users")
+        .select()
+        .execute()
+      let elapsed = clock.now - start
+
+      #expect(callCount.value == 3)
+      #expect(result.value.isEmpty)
+      #expect(
+        elapsed < .seconds(1),
+        "schema(_:) must propagate the injected clock instead of falling back to the real one")
     }
 
-    let result: PostgrestResponse<[User]> = try await sut.from("users").select().execute()
+    @Test
+    func retryOn520ForHEADRequest() async throws {
+      let callCount = LockIsolated(0)
 
-    state.withValue { state in
-      XCTAssertEqual(state.callCount, 3)
-      XCTAssertNil(state.capturedHeaders[0]["X-Retry-Count"])
-      XCTAssertEqual(state.capturedHeaders[1]["X-Retry-Count"], "1")
-      XCTAssertEqual(state.capturedHeaders[2]["X-Retry-Count"], "2")
-      XCTAssertTrue(result.value.isEmpty)
+      let sut = makeSUTWithCustomFetch { _ in
+        callCount.withValue { $0 += 1 }
+        if callCount.value < 2 {
+          return (Data(), self.makeHTTPURLResponse(statusCode: 520))
+        }
+        return (Data(), self.makeHTTPURLResponse(statusCode: 200))
+      }
+
+      try await sut.from("users").select().execute(options: FetchOptions(head: true))
+      #expect(callCount.value == 2)
     }
-  }
 
-  func testRetryOn520ForHEADRequest() async throws {
-    let callCount = LockIsolated(0)
+    @Test
+    func noRetryOn520ForPOSTRequest() async throws {
+      let callCount = LockIsolated(0)
 
-    let sut = makeSUTWithCustomFetch { _ in
-      callCount.withValue { $0 += 1 }
-      if callCount.value < 2 {
+      let sut = makeSUTWithCustomFetch { _ in
+        callCount.withValue { $0 += 1 }
         return (Data(), self.makeHTTPURLResponse(statusCode: 520))
       }
-      return (Data(), self.makeHTTPURLResponse(statusCode: 200))
+
+      do {
+        try await sut.from("users").insert(["username": "test"]).execute()
+        Issue.record("Expected error to be thrown")
+      } catch {
+        #expect(callCount.value == 1)
+      }
     }
 
-    try await sut.from("users").select().execute(options: FetchOptions(head: true))
-    XCTAssertEqual(callCount.value, 2)
-  }
+    @Test
+    func noRetryOnNon520ErrorForGET() async throws {
+      let callCount = LockIsolated(0)
 
-  func testNoRetryOn520ForPOSTRequest() async throws {
-    let callCount = LockIsolated(0)
+      let sut = makeSUTWithCustomFetch { _ in
+        callCount.withValue { $0 += 1 }
+        return (
+          Data(#"{"message":"Bad Request"}"#.utf8),
+          self.makeHTTPURLResponse(statusCode: 400)
+        )
+      }
 
-    let sut = makeSUTWithCustomFetch { _ in
-      callCount.withValue { $0 += 1 }
-      return (Data(), self.makeHTTPURLResponse(statusCode: 520))
+      do {
+        try await sut.from("users").select().execute()
+        Issue.record("Expected error to be thrown")
+      } catch let error as PostgrestError {
+        #expect(callCount.value == 1)
+        #expect(error.message == "Bad Request")
+      }
     }
 
-    do {
-      try await sut.from("users").insert(["username": "test"]).execute()
-      XCTFail("Expected error to be thrown")
-    } catch {
-      XCTAssertEqual(callCount.value, 1)
+    @Test
+    func noRetryOn500ForGET() async throws {
+      // PostgREST's retryable set is fixed at 503/520, mirroring postgrest-js; a 500 is a real
+      // server answer (a failing function, a bad query) and must surface at once.
+      let callCount = LockIsolated(0)
+
+      let sut = makeSUTWithCustomFetch { _ in
+        callCount.withValue { $0 += 1 }
+        return (Data(), self.makeHTTPURLResponse(statusCode: 500))
+      }
+
+      do {
+        try await sut.from("users").select().execute()
+        Issue.record("Expected error to be thrown")
+      } catch {
+        #expect(callCount.value == 1)
+      }
     }
-  }
 
-  func testNoRetryOnNon520ErrorForGET() async throws {
-    let callCount = LockIsolated(0)
+    @Test
+    func retryOn503ForGETRequest() async throws {
+      let callCount = LockIsolated(0)
 
-    let sut = makeSUTWithCustomFetch { _ in
-      callCount.withValue { $0 += 1 }
-      return (
-        Data(#"{"message":"Bad Request"}"#.utf8),
-        self.makeHTTPURLResponse(statusCode: 400)
+      let sut = makeSUTWithCustomFetch { _ in
+        callCount.withValue { $0 += 1 }
+        if callCount.value < 2 {
+          return (Data(), self.makeHTTPURLResponse(statusCode: 503))
+        }
+        return (Data("[]".utf8), self.makeHTTPURLResponse(statusCode: 200))
+      }
+
+      let result: PostgrestResponse<[User]> = try await sut.from("users").select().execute()
+      #expect(callCount.value == 2)
+      #expect(result.value.isEmpty)
+    }
+
+    @Test
+    func retryOn503ForHEADRequest() async throws {
+      let callCount = LockIsolated(0)
+
+      let sut = makeSUTWithCustomFetch { _ in
+        callCount.withValue { $0 += 1 }
+        if callCount.value < 2 {
+          return (Data(), self.makeHTTPURLResponse(statusCode: 503))
+        }
+        return (Data(), self.makeHTTPURLResponse(statusCode: 200))
+      }
+
+      try await sut.from("users").select().execute(options: FetchOptions(head: true))
+      #expect(callCount.value == 2)
+    }
+
+    @Test
+    func retryOnNetworkErrorForGET() async throws {
+      let callCount = LockIsolated(0)
+
+      let sut = makeSUTWithCustomFetch { _ in
+        callCount.withValue { $0 += 1 }
+        if callCount.value < 2 {
+          throw URLError(.networkConnectionLost)
+        }
+        return (Data("[]".utf8), self.makeHTTPURLResponse(statusCode: 200))
+      }
+
+      let result: PostgrestResponse<[User]> = try await sut.from("users").select().execute()
+      #expect(callCount.value == 2)
+      #expect(result.value.isEmpty)
+    }
+
+    @Test
+    func noRetryOnNetworkErrorForPOST() async throws {
+      let callCount = LockIsolated(0)
+
+      let sut = makeSUTWithCustomFetch { _ in
+        callCount.withValue { $0 += 1 }
+        throw URLError(.networkConnectionLost)
+      }
+
+      do {
+        try await sut.from("users").insert(["username": "test"]).execute()
+        Issue.record("Expected error to be thrown")
+      } catch {
+        #expect(callCount.value == 1)
+      }
+    }
+
+    @Test
+    func exhaustAllRetries() async throws {
+      let callCount = LockIsolated(0)
+
+      let sut = makeSUTWithCustomFetch { _ in
+        callCount.withValue { $0 += 1 }
+        return (Data(), self.makeHTTPURLResponse(statusCode: 520))
+      }
+
+      do {
+        try await sut.from("users").select().execute()
+        Issue.record("Expected error to be thrown")
+      } catch {
+        #expect(callCount.value == 4)  // 1 initial + 3 retries
+      }
+    }
+
+    @Test
+    func perRequestRetryDisabled() async throws {
+      let callCount = LockIsolated(0)
+
+      let sut = makeSUTWithCustomFetch { _ in
+        callCount.withValue { $0 += 1 }
+        return (Data(), self.makeHTTPURLResponse(statusCode: 520))
+      }
+
+      do {
+        try await sut.from("users").select().retry(enabled: false).execute()
+        Issue.record("Expected error to be thrown")
+      } catch {
+        #expect(callCount.value == 1)
+      }
+    }
+
+    @Test
+    func perCallTimeoutOverridesTheConfiguredTimeout() async throws {
+      let seen = LockIsolated<[Duration?]>([])
+      let sut = PostgrestClient(
+        url: url,
+        http: .init(
+          transport: ClosureTransport { _, _ in
+            seen.withValue { $0.append(RequestTimeout.current) }
+            return (HTTPTypes.HTTPResponse(status: .ok), HTTPBody(Data("[]".utf8)))
+          },
+          timeout: .seconds(7)))
+
+      try await sut.from("users").select().execute()
+      try await sut.from("users").select().timeout(.seconds(3)).execute()
+      // The override must survive a phase change (filter -> transform).
+      try await sut.from("users").select().timeout(.seconds(3)).order("id").execute()
+
+      #expect(seen.value == [.seconds(7), .seconds(3), .seconds(3)])
+    }
+
+    @Test
+    func clientLevelRetryDisabled() async throws {
+      let callCount = LockIsolated(0)
+
+      let sut = makeSUTWithCustomFetch(retryEnabled: false) { _ in
+        callCount.withValue { $0 += 1 }
+        return (Data(), self.makeHTTPURLResponse(statusCode: 520))
+      }
+
+      do {
+        try await sut.from("users").select().execute()
+        Issue.record("Expected error to be thrown")
+      } catch {
+        #expect(callCount.value == 1)
+      }
+    }
+
+    @Test
+    func retryEnabledPerRequestOverridesClientDisabled() async throws {
+      let callCount = LockIsolated(0)
+
+      let sut = makeSUTWithCustomFetch(retryEnabled: false) { _ in
+        callCount.withValue { $0 += 1 }
+        if callCount.value < 2 {
+          return (Data(), self.makeHTTPURLResponse(statusCode: 520))
+        }
+        return (Data("[]".utf8), self.makeHTTPURLResponse(statusCode: 200))
+      }
+
+      let result: PostgrestResponse<[User]> = try await sut.from("users").select()
+        .retry(enabled: true)
+        .execute()
+      #expect(callCount.value == 2)
+      #expect(result.value.isEmpty)
+    }
+
+    @Test
+    func transportFailureIsWrapped() async {
+      let sut = makeSUTWithCustomFetch(retryEnabled: false) { _ in
+        throw URLError(.notConnectedToInternet)
+      }
+
+      do {
+        try await sut.from("users").select().execute()
+        Issue.record("Expected error to be thrown")
+      } catch let error as PostgrestError {
+        #expect(error.kind == .transport)
+        #expect((error.underlyingError as? URLError)?.code == .notConnectedToInternet)
+      } catch {
+        Issue.record("Unexpected error \(error)")
+      }
+    }
+
+    @Test
+    func cancellationIsNotWrapped() async {
+      let sut = makeSUTWithCustomFetch(retryEnabled: false) { _ in throw CancellationError() }
+
+      await #expect(throws: CancellationError.self) {
+        try await sut.from("users").select().execute()
+      }
+    }
+
+    @Test
+    func customFetchErrorIsNotWrapped() async {
+      struct FetchError: Error {}
+      let sut = makeSUTWithCustomFetch(retryEnabled: false) { _ in throw FetchError() }
+
+      await #expect(throws: FetchError.self) {
+        try await sut.from("users").select().execute()
+      }
+    }
+
+    @Test
+    func undecodableSuccessBodyIsWrapped() async {
+      let sut = makeSUTWithCustomFetch { _ in
+        (Data("not json".utf8), self.makeHTTPURLResponse(statusCode: 200))
+      }
+
+      do {
+        let _: [User] = try await sut.from("users").select().execute().value
+        Issue.record("Expected error to be thrown")
+      } catch let error as PostgrestError {
+        #expect(error.kind == .decoding)
+        #expect(error.underlyingError is DecodingError)
+      } catch {
+        Issue.record("Unexpected error \(error)")
+      }
+    }
+
+    // MARK: - Helpers
+
+    private func makeSUTWithCustomFetch(
+      retryEnabled: Bool = true,
+      decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder,
+      fetch: @escaping @Sendable (URLRequest) async throws -> (Data, URLResponse)
+    ) -> PostgrestClient {
+      let transport = ClosureTransport { request, body in
+        guard var urlRequest = URLRequest(httpRequest: request) else {
+          throw URLError(.badURL)
+        }
+        if let body { urlRequest.httpBody = try await Data(collecting: body, upTo: .max) }
+        let (data, response) = try await fetch(urlRequest)
+        guard let head = (response as? HTTPURLResponse)?.httpResponse else {
+          throw URLError(.badServerResponse)
+        }
+        return (head, data.isEmpty ? nil : HTTPBody(data))
+      }
+      return PostgrestClient(
+        configuration: .init(
+          url: url, http: .init(transport: transport), decoder: decoder, retryEnabled: retryEnabled),
+        clock: ImmediateRetryTestClock()
       )
     }
 
-    do {
-      try await sut.from("users").select().execute()
-      XCTFail("Expected error to be thrown")
-    } catch let error as PostgrestError {
-      XCTAssertEqual(callCount.value, 1)
-      XCTAssertEqual(error.message, "Bad Request")
+    private func makeHTTPURLResponse(statusCode: Int) -> HTTPURLResponse {
+      HTTPURLResponse(url: url, statusCode: statusCode, httpVersion: nil, headerFields: nil)!
     }
-  }
-
-  func testRetryOn503ForGETRequest() async throws {
-    let callCount = LockIsolated(0)
-
-    let sut = makeSUTWithCustomFetch { _ in
-      callCount.withValue { $0 += 1 }
-      if callCount.value < 2 {
-        return (Data(), self.makeHTTPURLResponse(statusCode: 503))
-      }
-      return (Data("[]".utf8), self.makeHTTPURLResponse(statusCode: 200))
-    }
-
-    let result: PostgrestResponse<[User]> = try await sut.from("users").select().execute()
-    XCTAssertEqual(callCount.value, 2)
-    XCTAssertTrue(result.value.isEmpty)
-  }
-
-  func testRetryOn503ForHEADRequest() async throws {
-    let callCount = LockIsolated(0)
-
-    let sut = makeSUTWithCustomFetch { _ in
-      callCount.withValue { $0 += 1 }
-      if callCount.value < 2 {
-        return (Data(), self.makeHTTPURLResponse(statusCode: 503))
-      }
-      return (Data(), self.makeHTTPURLResponse(statusCode: 200))
-    }
-
-    try await sut.from("users").select().execute(options: FetchOptions(head: true))
-    XCTAssertEqual(callCount.value, 2)
-  }
-
-  func testRetryOnNetworkErrorForGET() async throws {
-    let callCount = LockIsolated(0)
-
-    let sut = makeSUTWithCustomFetch { _ in
-      callCount.withValue { $0 += 1 }
-      if callCount.value < 2 {
-        throw URLError(.networkConnectionLost)
-      }
-      return (Data("[]".utf8), self.makeHTTPURLResponse(statusCode: 200))
-    }
-
-    let result: PostgrestResponse<[User]> = try await sut.from("users").select().execute()
-    XCTAssertEqual(callCount.value, 2)
-    XCTAssertTrue(result.value.isEmpty)
-  }
-
-  func testNoRetryOnNetworkErrorForPOST() async throws {
-    let callCount = LockIsolated(0)
-
-    let sut = makeSUTWithCustomFetch { _ in
-      callCount.withValue { $0 += 1 }
-      throw URLError(.networkConnectionLost)
-    }
-
-    do {
-      try await sut.from("users").insert(["username": "test"]).execute()
-      XCTFail("Expected error to be thrown")
-    } catch {
-      XCTAssertEqual(callCount.value, 1)
-    }
-  }
-
-  func testExhaustAllRetries() async throws {
-    let callCount = LockIsolated(0)
-
-    let sut = makeSUTWithCustomFetch { _ in
-      callCount.withValue { $0 += 1 }
-      return (Data(), self.makeHTTPURLResponse(statusCode: 520))
-    }
-
-    do {
-      try await sut.from("users").select().execute()
-      XCTFail("Expected error to be thrown")
-    } catch {
-      XCTAssertEqual(callCount.value, 4)  // 1 initial + 3 retries
-    }
-  }
-
-  func testPerRequestRetryDisabled() async throws {
-    let callCount = LockIsolated(0)
-
-    let sut = makeSUTWithCustomFetch { _ in
-      callCount.withValue { $0 += 1 }
-      return (Data(), self.makeHTTPURLResponse(statusCode: 520))
-    }
-
-    do {
-      try await sut.from("users").select().retry(enabled: false).execute()
-      XCTFail("Expected error to be thrown")
-    } catch {
-      XCTAssertEqual(callCount.value, 1)
-    }
-  }
-
-  func testClientLevelRetryDisabled() async throws {
-    let callCount = LockIsolated(0)
-
-    let sut = makeSUTWithCustomFetch(retryEnabled: false) { _ in
-      callCount.withValue { $0 += 1 }
-      return (Data(), self.makeHTTPURLResponse(statusCode: 520))
-    }
-
-    do {
-      try await sut.from("users").select().execute()
-      XCTFail("Expected error to be thrown")
-    } catch {
-      XCTAssertEqual(callCount.value, 1)
-    }
-  }
-
-  func testRetryEnabledPerRequestOverridesClientDisabled() async throws {
-    let callCount = LockIsolated(0)
-
-    let sut = makeSUTWithCustomFetch(retryEnabled: false) { _ in
-      callCount.withValue { $0 += 1 }
-      if callCount.value < 2 {
-        return (Data(), self.makeHTTPURLResponse(statusCode: 520))
-      }
-      return (Data("[]".utf8), self.makeHTTPURLResponse(statusCode: 200))
-    }
-
-    let result: PostgrestResponse<[User]> = try await sut.from("users").select().retry(
-      enabled: true
-    )
-    .execute()
-    XCTAssertEqual(callCount.value, 2)
-    XCTAssertTrue(result.value.isEmpty)
-  }
-
-  // MARK: - Helpers
-
-  private func makeSUTWithCustomFetch(
-    retryEnabled: Bool = true,
-    fetch: @escaping PostgrestClient.FetchHandler
-  ) -> PostgrestClient {
-    PostgrestClient(url: url, fetch: fetch, retryEnabled: retryEnabled)
-  }
-
-  private func makeHTTPURLResponse(statusCode: Int) -> HTTPURLResponse {
-    HTTPURLResponse(url: url, statusCode: statusCode, httpVersion: nil, headerFields: nil)!
   }
 }
 
@@ -480,4 +907,26 @@ struct ImmediateRetryTestClock: Clock {
   var minimumResolution: ContinuousClock.Instant.Duration { ContinuousClock().minimumResolution }
 
   func sleep(until deadline: ContinuousClock.Instant, tolerance: Duration?) async throws {}
+}
+
+/// A row with a camelCase property, used to prove a custom `keyEncodingStrategy` was applied.
+/// `keyEncodingStrategy` only affects keys derived from a type's synthesized `CodingKeys`, not
+/// raw `Dictionary` keys, so this can't be a `[String: String]` literal.
+private struct EncoderOverrideRow: Encodable, Sendable {
+  let userName: String
+}
+
+/// A `CodingKey` that remaps to a fixed, unmatched key — used to simulate a decoder whose key
+/// strategy is aggressive enough to break decoding of any fixed-shape response.
+private struct TestCodingKey: CodingKey {
+  var stringValue: String
+  var intValue: Int? { nil }
+
+  init(stringValue: String) {
+    self.stringValue = stringValue
+  }
+
+  init?(intValue: Int) {
+    nil
+  }
 }

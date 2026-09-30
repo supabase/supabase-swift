@@ -1,6 +1,7 @@
 import ConcurrencyExtras
 public import Foundation
 import IssueReporting
+import Logging
 
 import struct HTTPTypes.HTTPFields
 
@@ -22,19 +23,8 @@ import struct HTTPTypes.HTTPFields
 
 typealias AuthClientID = Int
 
-struct AuthClientLoggerDecorator: SupabaseLogger {
-  let clientID: AuthClientID
-  let decoratee: any SupabaseLogger
-
-  func log(message: SupabaseLogMessage) {
-    var message = message
-    message.additionalContext["client_id"] = .integer(clientID)
-    decoratee.log(message: message)
-  }
-}
-
 /// JWKS cache TTL (Time To Live) - 10 minutes
-private let JWKS_TTL: TimeInterval = 10 * 60
+private let jwksTTL: TimeInterval = 10 * 60
 
 /// Cached JWKS value with timestamp
 private struct CachedJWKS {
@@ -46,7 +36,7 @@ private struct CachedJWKS {
 /// This is especially useful for shared-memory execution environments such as
 /// AWS Lambda or serverless functions. Regardless of how many clients are created,
 /// if they share the same storage key they will use the same JWKS cache,
-/// significantly speeding up getClaims() with asymmetric JWTs.
+/// significantly speeding up claims() with asymmetric JWTs.
 private actor GlobalJWKSCache {
   private var cache: [String: CachedJWKS] = [:]
 
@@ -64,8 +54,8 @@ private let globalJWKSCache = GlobalJWKSCache()
 /// The primary interface to Supabase Auth.
 ///
 /// Use `AuthClient` to sign users up, sign them in, manage sessions, and subscribe to
-/// authentication-state changes. It is an `actor`, so all mutable state is protected by Swift
-/// concurrency.
+/// authentication-state changes. It is `Sendable`: one instance can be shared across tasks and
+/// actors, and every member that does not need the network is synchronous.
 ///
 /// ```swift
 /// let auth = AuthClient(
@@ -108,7 +98,7 @@ private let globalJWKSCache = GlobalJWKSCache()
 /// - ``signInWithOAuth(provider:redirectTo:scopes:queryParams:launchFlow:)``
 ///
 /// ### Session management
-/// - ``exchangeCodeForSession(authCode:)``
+/// - ``exchangeCodeForSession(authCode:flowId:)``
 /// - ``session(from:)``
 /// - ``setSession(accessToken:refreshToken:)``
 /// - ``refreshSession(refreshToken:)``
@@ -134,21 +124,22 @@ private let globalJWKSCache = GlobalJWKSCache()
 /// - ``linkIdentity(provider:scopes:redirectTo:queryParams:launchURL:)``
 /// - ``linkIdentity(provider:scopes:redirectTo:queryParams:)``
 /// - ``linkIdentityWithIdToken(credentials:)``
-/// - ``getLinkIdentityURL(provider:scopes:redirectTo:queryParams:)``
+/// - ``linkIdentityURL(provider:scopes:redirectTo:queryParams:)``
 /// - ``unlinkIdentity(_:)``
 ///
 /// ### JWT claims
-/// - ``getClaims(jwt:options:)``
+/// - ``claims(jwt:options:)``
 ///
 /// ### Namespaces
 /// - ``mfa``
 /// - ``admin``
+/// - ``oauthServer``
 ///
 /// ### Notifications
 /// - ``didChangeAuthStateNotification``
 /// - ``authChangeEventInfoKey``
 /// - ``authChangeSessionInfoKey``
-public actor AuthClient {
+public final class AuthClient: Sendable {
   private static let _globalClientID = LockIsolated(0)
 
   /// Thread-safe auto-incrementing client ID generator.
@@ -159,26 +150,33 @@ public actor AuthClient {
     }
   }
 
-  nonisolated let clientID: AuthClientID
+  let clientID: AuthClientID
 
-  nonisolated private var api: APIClient { Dependencies[clientID].api }
+  let dependencies: Dependencies
 
-  nonisolated var configuration: AuthClient.Configuration { Dependencies[clientID].configuration }
+  private var api: SessionAPIClient { dependencies.sessionAPI }
 
-  nonisolated private var codeVerifierStorage: CodeVerifierStorage {
-    Dependencies[clientID].codeVerifierStorage
+  var configuration: AuthClient.Configuration { dependencies.configuration }
+
+  private var codeVerifierStorage: CodeVerifierStorage {
+    dependencies.codeVerifierStorage
   }
 
-  nonisolated private var date: @Sendable () -> Date { Dependencies[clientID].date }
-  nonisolated private var sessionManager: SessionManager { Dependencies[clientID].sessionManager }
-  nonisolated private var eventEmitter: AuthStateChangeEventEmitter {
-    Dependencies[clientID].eventEmitter
+  private var date: @Sendable () -> Date { dependencies.date }
+  private var sessionManager: SessionManager { dependencies.sessionManager }
+  private var eventEmitter: AuthStateChangeEventEmitter {
+    dependencies.eventEmitter
   }
-  nonisolated private var logger: (any SupabaseLogger)? {
-    Dependencies[clientID].configuration.logger
+  private var logger: Logging.Logger {
+    dependencies.configuration.logger
   }
-  nonisolated private var sessionStorage: SessionStorage { Dependencies[clientID].sessionStorage }
-  nonisolated private var pkce: PKCE { Dependencies[clientID].pkce }
+  private var sessionStorage: SessionStorage { dependencies.sessionStorage }
+  private var pkce: PKCE { dependencies.pkce }
+
+  #if canImport(ObjectiveC) && canImport(Combine)
+    @MainActor
+    private var appLifecycleCancellables = Set<AnyCancellable>()
+  #endif
 
   /// Returns the session, refreshing it if necessary.
   ///
@@ -192,49 +190,84 @@ public actor AuthClient {
   /// Returns the current session, if any.
   ///
   /// The session returned by this property may be expired. Use ``session`` for a session that is guaranteed to be valid.
-  nonisolated public var currentSession: Session? {
+  public var currentSession: Session? {
     sessionStorage.get()
   }
 
   /// Returns the current user, if any.
   ///
   /// The user returned by this property may be outdated. Use ``user(jwt:)`` method to get an up-to-date user instance.
-  nonisolated public var currentUser: User? {
+  public var currentUser: User? {
     currentSession?.user
   }
 
   /// Namespace for accessing multi-factor authentication API.
-  nonisolated public var mfa: AuthMFA {
-    AuthMFA(clientID: clientID)
+  public var mfa: AuthMFA {
+    AuthMFA(client: self)
   }
 
   /// Namespace for the GoTrue admin methods.
   /// - Warning: This methods requires `secret` key, be careful to never expose `secret`
   /// key in the client.
-  nonisolated public var admin: AuthAdmin {
-    AuthAdmin(clientID: clientID)
+  public var admin: AuthAdmin {
+    AuthAdmin(
+      url: configuration.url,
+      redirectToURL: configuration.redirectToURL,
+      api: dependencies.api,
+      encoder: configuration.resolvedEncoder,
+      decoder: configuration.resolvedDecoder
+    )
+  }
+
+  /// Namespace for the OAuth 2.1 authorization server consent and grant-management API.
+  public var oauthServer: AuthOAuthServer {
+    AuthOAuthServer(client: self)
   }
 
   /// Initializes a AuthClient with a specific configuration.
   ///
   /// - Parameters:
   ///   - configuration: The client configuration.
-  public init(configuration: Configuration) {
-    clientID = AuthClient.nextClientID()
+  public convenience init(configuration: Configuration) {
+    self.init(configuration: configuration, date: { Date() }, pkce: .live, urlOpener: .live)
+  }
 
-    Dependencies[clientID] = Dependencies(
+  /// Test seam: pins the clock, the PKCE material, and the URL opener at construction.
+  init(
+    configuration: Configuration,
+    date: @escaping @Sendable () -> Date,
+    pkce: PKCE,
+    urlOpener: URLOpener
+  ) {
+    let clientID = AuthClient.nextClientID()
+    self.clientID = clientID
+
+    let logger: Logging.Logger = {
+      var logger = configuration.logger
+      logger[metadataKey: "client_id"] = "\(clientID)"
+      return logger
+    }()
+
+    dependencies = .live(
       configuration: configuration,
-      http: HTTPClient(configuration: configuration),
-      api: APIClient(clientID: clientID),
-      codeVerifierStorage: .live(clientID: clientID),
-      sessionStorage: .live(clientID: clientID),
-      sessionManager: .live(clientID: clientID),
-      logger: configuration.logger.map {
-        AuthClientLoggerDecorator(clientID: clientID, decoratee: $0)
-      }
+      logger: logger,
+      date: date,
+      pkce: pkce,
+      urlOpener: urlOpener
     )
 
     Task { @MainActor in observeAppLifecycleChanges() }
+  }
+
+  deinit {
+    // Capture only the session manager in the task below, capturing `self` would resurrect this
+    // client while it is being deallocated.
+    let sessionManager = dependencies.sessionManager
+
+    // The auto-refresh loop retains the session manager, so it keeps ticking forever unless it is
+    // explicitly stopped. `observeAppLifecycleChanges()` only stops it when the app resigns active,
+    // which never happens for short-lived clients, or when auto-refresh was started manually.
+    Task { await sessionManager.stopAutoRefresh() }
   }
 
   #if canImport(ObjectiveC) && canImport(Combine)
@@ -257,49 +290,31 @@ public actor AuthClient {
       #endif
 
       if let didBecomeActiveNotification, let willResignActiveNotification {
-        var cancellables = Set<AnyCancellable>()
-
         NotificationCenter.default
           .publisher(for: didBecomeActiveNotification)
-          .sink(
-            receiveCompletion: { _ in
-              // hold ref to cancellable until it completes
-              _ = cancellables
-            },
-            receiveValue: { [weak self] _ in
-              Task {
-                await self?.handleDidBecomeActive()
-              }
-            }
-          )
-          .store(in: &cancellables)
+          .sink { [weak self] _ in
+            self?.handleDidBecomeActive()
+          }
+          .store(in: &appLifecycleCancellables)
 
         NotificationCenter.default
           .publisher(for: willResignActiveNotification)
-          .sink(
-            receiveCompletion: { _ in
-              // hold ref to cancellable until it completes
-              _ = cancellables
-            },
-            receiveValue: { [weak self] _ in
-              Task {
-                await self?.handleWillResignActive()
-              }
-            }
-          )
-          .store(in: &cancellables)
+          .sink { [weak self] _ in
+            self?.handleWillResignActive()
+          }
+          .store(in: &appLifecycleCancellables)
       }
 
     }
 
     private func handleDidBecomeActive() {
-      if configuration.autoRefreshToken {
+      if configuration.automaticallyRefreshesToken {
         startAutoRefresh()
       }
     }
 
     private func handleWillResignActive() {
-      if configuration.autoRefreshToken {
+      if configuration.automaticallyRefreshesToken {
         stopAutoRefresh()
       }
     }
@@ -328,7 +343,7 @@ public actor AuthClient {
   /// Listen for auth state changes.
   ///
   /// An `.initialSession` is always emitted when this method is called.
-  nonisolated public var authStateChanges:
+  public var authStateChanges:
     AsyncStream<
       (
         event: AuthChangeEvent,
@@ -341,7 +356,9 @@ public actor AuthClient {
         event: AuthChangeEvent,
         session: Session?
       )
-    >.makeStream()
+      // Unbounded: consumers commonly wait for one specific event (`.signedIn`, `.initialSession`).
+      // A bounded policy could evict exactly that one when events arrive back to back.
+    >.makeStream(bufferingPolicy: .unbounded)
 
     Task {
       let handle = await onAuthStateChange { event, session in
@@ -367,16 +384,16 @@ public actor AuthClient {
   public func signUp(
     email: String,
     password: String,
-    data: [String: AnyJSON]? = nil,
+    data: [String: JSONValue]? = nil,
     redirectTo: URL? = nil,
     captchaToken: String? = nil
   ) async throws -> AuthResponse {
-    let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
+    let (codeChallenge, codeChallengeMethod, _) = prepareForPKCE()
 
     return try await _signUp(
       request: .init(
-        url: configuration.url.appendingPathComponent("signup"),
         method: .post,
+        url: configuration.url.appendingPathComponent("signup"),
         query: [
           (redirectTo ?? configuration.redirectToURL).map {
             URLQueryItem(
@@ -384,16 +401,16 @@ public actor AuthClient {
               value: $0.absoluteString
             )
           }
-        ].compactMap { $0 },
-        body: configuration.encoder.encode(
-          SignUpRequest(
-            email: email,
-            password: password,
-            data: data,
-            gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:)),
-            codeChallenge: codeChallenge,
-            codeChallengeMethod: codeChallengeMethod
-          )
+        ].compactMap { $0 }
+      ),
+      body: configuration.resolvedEncoder.encode(
+        SignUpRequest(
+          email: email,
+          password: password,
+          data: data,
+          gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:)),
+          codeChallenge: codeChallenge,
+          codeChallengeMethod: codeChallengeMethod
         )
       )
     )
@@ -411,30 +428,30 @@ public actor AuthClient {
     phone: String,
     password: String,
     channel: MessagingChannel = .sms,
-    data: [String: AnyJSON]? = nil,
+    data: [String: JSONValue]? = nil,
     captchaToken: String? = nil
   ) async throws -> AuthResponse {
     try await _signUp(
       request: .init(
-        url: configuration.url.appendingPathComponent("signup"),
         method: .post,
-        body: configuration.encoder.encode(
-          SignUpRequest(
-            password: password,
-            phone: phone,
-            channel: channel,
-            data: data,
-            gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
-          )
+        url: configuration.url.appendingPathComponent("signup")
+      ),
+      body: configuration.resolvedEncoder.encode(
+        SignUpRequest(
+          password: password,
+          phone: phone,
+          channel: channel,
+          data: data,
+          gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
         )
       )
     )
   }
 
-  private func _signUp(request: HTTPRequest) async throws -> AuthResponse {
-    let response = try await api.execute(request).decoded(
+  private func _signUp(request: HTTPRequest, body: Data) async throws -> AuthResponse {
+    let response = try await api.execute(request, body: body).decoded(
       as: AuthResponse.self,
-      decoder: configuration.decoder
+      decoder: configuration.resolvedDecoder
     )
 
     if let session = response.session {
@@ -458,15 +475,15 @@ public actor AuthClient {
   ) async throws -> Session {
     try await _signIn(
       request: .init(
-        url: configuration.url.appendingPathComponent("token"),
         method: .post,
-        query: [URLQueryItem(name: "grant_type", value: "password")],
-        body: configuration.encoder.encode(
-          UserCredentials(
-            email: email,
-            password: password,
-            gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
-          )
+        url: configuration.url.appendingPathComponent("token"),
+        query: [URLQueryItem(name: "grant_type", value: "password")]
+      ),
+      body: configuration.resolvedEncoder.encode(
+        UserCredentials(
+          email: email,
+          password: password,
+          gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
         )
       )
     )
@@ -485,15 +502,15 @@ public actor AuthClient {
   ) async throws -> Session {
     try await _signIn(
       request: .init(
-        url: configuration.url.appendingPathComponent("token"),
         method: .post,
-        query: [URLQueryItem(name: "grant_type", value: "password")],
-        body: configuration.encoder.encode(
-          UserCredentials(
-            password: password,
-            phone: phone,
-            gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
-          )
+        url: configuration.url.appendingPathComponent("token"),
+        query: [URLQueryItem(name: "grant_type", value: "password")]
+      ),
+      body: configuration.resolvedEncoder.encode(
+        UserCredentials(
+          password: password,
+          phone: phone,
+          gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
         )
       )
     )
@@ -505,11 +522,35 @@ public actor AuthClient {
   public func signInWithIdToken(credentials: OpenIDConnectCredentials) async throws -> Session {
     try await _signIn(
       request: .init(
-        url: configuration.url.appendingPathComponent("token"),
         method: .post,
-        query: [URLQueryItem(name: "grant_type", value: "id_token")],
-        body: configuration.encoder.encode(credentials)
-      )
+        url: configuration.url.appendingPathComponent("token"),
+        query: [URLQueryItem(name: "grant_type", value: "id_token")]
+      ), body: configuration.resolvedEncoder.encode(credentials)
+    )
+  }
+
+  /// Signs in a user via a signed Sign in with Ethereum (EIP-4361) or Sign in with Solana message.
+  ///
+  /// The app is responsible for building the message and obtaining the signature from the user's
+  /// wallet (e.g. via a WalletConnect session or native wallet SDK) before calling this method.
+  ///
+  /// ```swift
+  /// let session = try await client.auth.signInWithWeb3(
+  ///   credentials: Web3Credentials(
+  ///     chain: .ethereum,
+  ///     message: siweMessage,
+  ///     signature: signatureHex
+  ///   )
+  /// )
+  /// ```
+  @discardableResult
+  public func signInWithWeb3(credentials: Web3Credentials) async throws -> Session {
+    try await _signIn(
+      request: .init(
+        method: .post,
+        url: configuration.url.appendingPathComponent("token"),
+        query: [URLQueryItem(name: "grant_type", value: "web3")]
+      ), body: configuration.resolvedEncoder.encode(credentials)
     )
   }
 
@@ -521,27 +562,27 @@ public actor AuthClient {
   ///   - captchaToken: Verification token received when the user completes the captcha.
   @discardableResult
   public func signInAnonymously(
-    data: [String: AnyJSON]? = nil,
+    data: [String: JSONValue]? = nil,
     captchaToken: String? = nil
   ) async throws -> Session {
     try await _signIn(
       request: HTTPRequest(
-        url: configuration.url.appendingPathComponent("signup"),
         method: .post,
-        body: configuration.encoder.encode(
-          SignUpRequest(
-            data: data,
-            gotrueMetaSecurity: captchaToken.map { AuthMetaSecurity(captchaToken: $0) }
-          )
+        url: configuration.url.appendingPathComponent("signup")
+      ),
+      body: configuration.resolvedEncoder.encode(
+        SignUpRequest(
+          data: data,
+          gotrueMetaSecurity: captchaToken.map { AuthMetaSecurity(captchaToken: $0) }
         )
       )
     )
   }
 
-  private func _signIn(request: HTTPRequest) async throws -> Session {
-    let session = try await api.execute(request).decoded(
+  private func _signIn(request: HTTPRequest, body: Data) async throws -> Session {
+    let session = try await api.execute(request, body: body).decoded(
       as: Session.self,
-      decoder: configuration.decoder
+      decoder: configuration.resolvedDecoder
     )
 
     await sessionManager.update(session)
@@ -565,15 +606,15 @@ public actor AuthClient {
     email: String,
     redirectTo: URL? = nil,
     shouldCreateUser: Bool = true,
-    data: [String: AnyJSON]? = nil,
+    data: [String: JSONValue]? = nil,
     captchaToken: String? = nil
   ) async throws {
-    let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
+    let (codeChallenge, codeChallengeMethod, _) = prepareForPKCE()
 
     _ = try await api.execute(
       .init(
-        url: configuration.url.appendingPathComponent("otp"),
         method: .post,
+        url: configuration.url.appendingPathComponent("otp"),
         query: [
           (redirectTo ?? configuration.redirectToURL).map {
             URLQueryItem(
@@ -581,16 +622,16 @@ public actor AuthClient {
               value: $0.absoluteString
             )
           }
-        ].compactMap { $0 },
-        body: configuration.encoder.encode(
-          OTPParams(
-            email: email,
-            createUser: shouldCreateUser,
-            data: data,
-            gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:)),
-            codeChallenge: codeChallenge,
-            codeChallengeMethod: codeChallengeMethod
-          )
+        ].compactMap { $0 }
+      ),
+      body: configuration.resolvedEncoder.encode(
+        OTPParams(
+          email: email,
+          createUser: shouldCreateUser,
+          data: data,
+          gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:)),
+          codeChallenge: codeChallenge,
+          codeChallengeMethod: codeChallengeMethod
         )
       )
     )
@@ -610,21 +651,21 @@ public actor AuthClient {
     phone: String,
     channel: MessagingChannel = .sms,
     shouldCreateUser: Bool = true,
-    data: [String: AnyJSON]? = nil,
+    data: [String: JSONValue]? = nil,
     captchaToken: String? = nil
   ) async throws {
     _ = try await api.execute(
       .init(
-        url: configuration.url.appendingPathComponent("otp"),
         method: .post,
-        body: configuration.encoder.encode(
-          OTPParams(
-            phone: phone,
-            createUser: shouldCreateUser,
-            channel: channel,
-            data: data,
-            gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
-          )
+        url: configuration.url.appendingPathComponent("otp")
+      ),
+      body: configuration.resolvedEncoder.encode(
+        OTPParams(
+          phone: phone,
+          createUser: shouldCreateUser,
+          channel: channel,
+          data: data,
+          gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
         )
       )
     )
@@ -641,25 +682,26 @@ public actor AuthClient {
     redirectTo: URL? = nil,
     captchaToken: String? = nil
   ) async throws -> SSOResponse {
-    let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
+    let (codeChallenge, codeChallengeMethod, _) = prepareForPKCE()
 
     return try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("sso"),
         method: .post,
-        body: configuration.encoder.encode(
-          SignInWithSSORequest(
-            providerId: nil,
-            domain: domain,
-            redirectTo: redirectTo ?? configuration.redirectToURL,
-            gotrueMetaSecurity: captchaToken.map { AuthMetaSecurity(captchaToken: $0) },
-            codeChallenge: codeChallenge,
-            codeChallengeMethod: codeChallengeMethod
-          )
+        url: configuration.url.appendingPathComponent("sso")
+      ),
+      body: configuration.resolvedEncoder.encode(
+        SignInWithSSORequest(
+          providerId: nil,
+          domain: domain,
+          redirectTo: redirectTo ?? configuration.redirectToURL,
+          gotrueMetaSecurity: captchaToken.map { AuthMetaSecurity(captchaToken: $0) },
+          codeChallenge: codeChallenge,
+          codeChallengeMethod: codeChallengeMethod,
+          skipHttpRedirect: true
         )
       )
     )
-    .decoded(decoder: configuration.decoder)
+    .decoded(decoder: configuration.resolvedDecoder)
   }
 
   /// Attempts a single-sign on using an enterprise Identity Provider.
@@ -674,53 +716,63 @@ public actor AuthClient {
     redirectTo: URL? = nil,
     captchaToken: String? = nil
   ) async throws -> SSOResponse {
-    let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
+    let (codeChallenge, codeChallengeMethod, _) = prepareForPKCE()
 
     return try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("sso"),
         method: .post,
-        body: configuration.encoder.encode(
-          SignInWithSSORequest(
-            providerId: providerId,
-            domain: nil,
-            redirectTo: redirectTo ?? configuration.redirectToURL,
-            gotrueMetaSecurity: captchaToken.map { AuthMetaSecurity(captchaToken: $0) },
-            codeChallenge: codeChallenge,
-            codeChallengeMethod: codeChallengeMethod
-          )
+        url: configuration.url.appendingPathComponent("sso")
+      ),
+      body: configuration.resolvedEncoder.encode(
+        SignInWithSSORequest(
+          providerId: providerId,
+          domain: nil,
+          redirectTo: redirectTo ?? configuration.redirectToURL,
+          gotrueMetaSecurity: captchaToken.map { AuthMetaSecurity(captchaToken: $0) },
+          codeChallenge: codeChallenge,
+          codeChallengeMethod: codeChallengeMethod,
+          skipHttpRedirect: true
         )
       )
     )
-    .decoded(decoder: configuration.decoder)
+    .decoded(decoder: configuration.resolvedDecoder)
   }
 
   /// Log in an existing user by exchanging an Auth Code issued during the PKCE flow.
-  public func exchangeCodeForSession(authCode: String) async throws -> Session {
-    let codeVerifier = codeVerifierStorage.get()
+  /// - Parameters:
+  ///   - authCode: The auth code received from the PKCE callback.
+  ///   - flowId: The id of the flow that generated `authCode`, as returned by
+  /// ``signInWithOAuth(provider:redirectTo:scopes:queryParams:launchFlow:)`` or
+  /// ``linkIdentityURL(provider:scopes:redirectTo:queryParams:)``. Pass this when several
+  /// PKCE flows may be pending at once, so the correct code verifier is used. When `nil`, the
+  /// most recently started flow's verifier is used.
+  public func exchangeCodeForSession(authCode: String, flowId: String? = nil) async throws
+    -> Session
+  {
+    let codeVerifier = codeVerifierStorage.get(flowId)
 
     if codeVerifier == nil {
-      logger?.error(
+      logger.error(
         "code verifier not found, a code verifier should exist when calling this method."
       )
     }
 
     let session: Session = try await api.execute(
       .init(
-        url: configuration.url.appendingPathComponent("token"),
         method: .post,
-        query: [URLQueryItem(name: "grant_type", value: "pkce")],
-        body: configuration.encoder.encode(
-          [
-            "auth_code": authCode,
-            "code_verifier": codeVerifier,
-          ]
-        )
+        url: configuration.url.appendingPathComponent("token"),
+        query: [URLQueryItem(name: "grant_type", value: "pkce")]
+      ),
+      body: configuration.resolvedEncoder.encode(
+        [
+          "auth_code": authCode,
+          "code_verifier": codeVerifier,
+        ]
       )
     )
-    .decoded(decoder: configuration.decoder)
+    .decoded(decoder: configuration.resolvedDecoder)
 
-    codeVerifierStorage.set(nil)
+    codeVerifierStorage.remove(flowId)
 
     await sessionManager.update(session)
     eventEmitter.emit(.signedIn, session: session)
@@ -737,7 +789,7 @@ public actor AuthClient {
   /// If that isn't the case, you should consider using
   /// ``signInWithOAuth(provider:redirectTo:scopes:queryParams:launchFlow:)`` or
   /// ``signInWithOAuth(provider:redirectTo:scopes:queryParams:configure:)``.
-  nonisolated public func getOAuthSignInURL(
+  public func oauthSignInURL(
     provider: Provider,
     scopes: String? = nil,
     redirectTo: URL? = nil,
@@ -749,7 +801,7 @@ public actor AuthClient {
       scopes: scopes,
       redirectTo: redirectTo,
       queryParams: queryParams
-    )
+    ).url
   }
 
   /// Sign-in an existing user via a third-party provider.
@@ -771,20 +823,35 @@ public actor AuthClient {
     queryParams: [(name: String, value: String?)] = [],
     launchFlow: @MainActor @Sendable (_ url: URL) async throws -> URL
   ) async throws -> Session {
-    let url = try getOAuthSignInURL(
+    let (url, flowId) = try getURLForProvider(
+      url: configuration.url.appendingPathComponent("authorize"),
       provider: provider,
       scopes: scopes,
-      redirectTo: redirectTo ?? configuration.redirectToURL,
+      redirectTo: Self.oauthRedirectURL(
+        redirectTo: redirectTo,
+        configured: configuration.redirectToURL
+      ),
       queryParams: queryParams
     )
 
     let resultURL = try await launchFlow(url)
 
-    return try await session(from: resultURL)
+    return try await session(from: resultURL, flowId: flowId)
+  }
+
+  /// The redirect an OAuth flow will actually use: a per-call `redirectTo` overrides the
+  /// client-wide ``Configuration/redirectToURL``.
+  ///
+  /// Both halves of the flow have to agree on this — the authorize request tells the provider
+  /// where to send the user, and `ASWebAuthenticationSession` is told which scheme to listen
+  /// on. They are resolved in different places, and writing the rule out twice is exactly how
+  /// they drifted apart and stopped agreeing (SDK-1873), so it lives here once instead.
+  static func oauthRedirectURL(redirectTo: URL?, configured: URL?) -> URL? {
+    redirectTo ?? configured
   }
 
   #if canImport(AuthenticationServices)
-    /// Sign-in an existing user via a third-party provider using ``ASWebAuthenticationSession``.
+    /// Sign-in an existing user via a third-party provider using `ASWebAuthenticationSession`.
     ///
     /// - Parameters:
     ///   - provider: The third-party provider.
@@ -792,7 +859,7 @@ public actor AuthClient {
     ///   - scopes: A space-separated list of scopes granted to the OAuth application.
     ///   - queryParams: Additional query params.
     ///   - configure: A configuration closure that you can use to customize the internal
-    /// ``ASWebAuthenticationSession`` object.
+    /// `ASWebAuthenticationSession` object.
     ///
     /// - Note: This method support the PKCE flow.
     /// - Warning: Do not call `start()` on the `ASWebAuthenticationSession` object inside the
@@ -810,14 +877,19 @@ public actor AuthClient {
         redirectTo: redirectTo,
         scopes: scopes,
         queryParams: queryParams
-      ) { @MainActor url in
-        try await withCheckedThrowingContinuation { [configuration] continuation in
-          guard let callbackScheme = (configuration.redirectToURL ?? redirectTo)?.scheme else {
-            preconditionFailure(
-              "Please, provide a valid redirect URL, either through `redirectTo` param, or globally through `AuthClient.Configuration.redirectToURL`."
-            )
-          }
+      ) { @MainActor [configuration] url in
+        // Resolved before the continuation exists, so a missing scheme simply throws instead of
+        // creating a continuation only to immediately fail it. Derived from the same
+        // `oauthRedirectURL` the authorize request used, so the scheme listened on and the
+        // redirect the provider was given cannot disagree.
+        let callbackScheme = try Self.oauthCallbackScheme(
+          for: Self.oauthRedirectURL(
+            redirectTo: redirectTo,
+            configured: configuration.redirectToURL
+          )
+        )
 
+        return try await withCheckedThrowingContinuation { continuation in
           #if !os(tvOS) && !os(watchOS)
             var presentationContextProvider: DefaultPresentationContextProvider?
           #endif
@@ -826,12 +898,15 @@ public actor AuthClient {
             url: url,
             callbackURLScheme: callbackScheme
           ) { url, error in
-            if let error {
-              continuation.resume(throwing: error)
-            } else if let url {
-              continuation.resume(returning: url)
+            if let result = Self.oauthCallbackResult(url: url, error: error) {
+              continuation.resume(with: result)
             } else {
-              fatalError("Expected url or error, but got none.")
+              // `ASWebAuthenticationSession` always reports a URL or an error. Surface a broken
+              // contract as a thrown error rather than taking the host app down with it.
+              reportIssue(Self.oauthSessionContractViolation)
+              continuation.resume(
+                throwing: AuthError.oauthFlowFailed(Self.oauthSessionContractViolation)
+              )
             }
 
             #if !os(tvOS) && !os(watchOS)
@@ -843,16 +918,71 @@ public actor AuthClient {
           configure(session)
 
           #if !os(tvOS) && !os(watchOS)
-            if session.presentationContextProvider == nil {
-              presentationContextProvider = DefaultPresentationContextProvider()
-              session.presentationContextProvider = presentationContextProvider
-            }
+            presentationContextProvider = Self.installDefaultPresentationContextIfNeeded(
+              on: session
+            )
           #endif
 
           session.start()
         }
       }
     }
+
+    /// The URL scheme `ASWebAuthenticationSession` listens on to capture the OAuth callback.
+    ///
+    /// Takes the already-resolved redirect — see ``oauthRedirectURL(redirectTo:configured:)`` —
+    /// rather than resolving it again, so this can only ever name the scheme of the URL the
+    /// provider was actually given.
+    ///
+    /// Pure so the scheme extraction and the guidance message can both be covered without
+    /// presenting a session.
+    static func oauthCallbackScheme(for redirectURL: URL?) throws -> String {
+      guard let scheme = redirectURL?.scheme else {
+        throw AuthError.oauthFlowFailed(
+          """
+          Provide a redirect URL with a scheme, either through the `redirectTo` parameter \
+          or globally through `AuthClient.Configuration.redirectToURL`.
+          """
+        )
+      }
+      return scheme
+    }
+
+    /// Reported when `ASWebAuthenticationSession` completes with neither a URL nor an error.
+    static let oauthSessionContractViolation =
+      "ASWebAuthenticationSession returned neither a URL nor an error."
+
+    /// Maps the `(url, error)` pair `ASWebAuthenticationSession` reports onto a result, favouring
+    /// the error when it somehow reports both.
+    ///
+    /// Returns `nil` for the combination it documents as impossible — neither value present —
+    /// which the caller turns into ``oauthSessionContractViolation``. The reporting stays with
+    /// the caller because driving `reportIssue` from a `@Test` function segfaults under
+    /// `xcodebuild test` (SDK-435); keeping it out here is what lets this be tested directly.
+    static func oauthCallbackResult(url: URL?, error: (any Error)?) -> Result<URL, any Error>? {
+      if let error { return .failure(error) }
+      if let url { return .success(url) }
+      return nil
+    }
+
+    #if !os(tvOS) && !os(watchOS)
+      /// Installs a default presentation anchor unless `configure` already supplied one.
+      ///
+      /// Returns the provider it created, because
+      /// `ASWebAuthenticationSession.presentationContextProvider` is a weak reference — the
+      /// caller has to hold it until the flow completes, or the anchor is gone before the
+      /// session can present.
+      @MainActor
+      static func installDefaultPresentationContextIfNeeded(
+        on session: ASWebAuthenticationSession
+      ) -> DefaultPresentationContextProvider? {
+        guard session.presentationContextProvider == nil else { return nil }
+
+        let provider = DefaultPresentationContextProvider()
+        session.presentationContextProvider = provider
+        return provider
+      }
+    #endif
   #endif
 
   /// Handles an incoming URL received by the app.
@@ -906,12 +1036,12 @@ public actor AuthClient {
   ///     supabase.auth.handle(url)
   ///   }
   /// ```
-  nonisolated public func handle(_ url: URL) {
+  public func handle(_ url: URL) {
     Task {
       do {
         try await session(from: url)
       } catch {
-        logger?.error("Failure loading session from url '\(url)' error: \(error)")
+        logger.error("Failure loading session from url '\(url)' error: \(error)")
       }
     }
   }
@@ -919,32 +1049,38 @@ public actor AuthClient {
   /// Gets the session data from a OAuth2 callback URL.
   @discardableResult
   public func session(from url: URL) async throws -> Session {
-    logger?.debug("Received URL: \(url)")
+    try await session(from: url, flowId: nil)
+  }
+
+  /// Gets the session data from a OAuth2 callback URL.
+  /// - Parameter flowId: The id of the PKCE flow that produced this callback, when known ahead
+  /// of time (e.g. the flow that was just launched by ``signInWithOAuth(provider:redirectTo:scopes:queryParams:launchFlow:)``).
+  /// `nil` falls back to the most recently started flow's verifier.
+  private func session(from url: URL, flowId: String?) async throws -> Session {
+    logger.debug("Received URL: \(url)")
 
     let params = extractParams(from: url)
 
     switch configuration.flowType {
     case .implicit:
       guard isImplicitGrantFlow(params: params) else {
-        throw AuthError.implicitGrantRedirect(
-          message: "Not a valid implicit grant flow URL: \(url)"
-        )
+        throw AuthError.implicitGrantRedirect("Not a valid implicit grant flow URL: \(url)")
       }
       return try await handleImplicitGrantFlow(params: params)
 
     case .pkce:
       guard isPKCEFlow(params: params) else {
-        throw AuthError.pkceGrantCodeExchange(message: "Not a valid PKCE flow URL: \(url)")
+        throw AuthError.pkceGrantCodeExchange("Not a valid PKCE flow URL: \(url)")
       }
-      return try await handlePKCEFlow(params: params)
+      return try await handlePKCEFlow(params: params, flowId: flowId)
     }
   }
 
+  /// Only reached from ``session(from:)``, under `case .implicit` of its switch on
+  /// `configuration.flowType`, which is what guarantees the flow type here.
   private func handleImplicitGrantFlow(params: [String: String]) async throws -> Session {
-    precondition(configuration.flowType == .implicit, "Method only allowed for implicit flow.")
-
     if let errorMessage = params["error_description"] ?? params["error"] {
-      throw AuthError.implicitGrantRedirect(message: errorMessage)
+      throw AuthError.implicitGrantRedirect(errorMessage)
     }
 
     guard
@@ -953,7 +1089,7 @@ public actor AuthClient {
       let refreshToken = params["refresh_token"],
       let tokenType = params["token_type"]
     else {
-      throw AuthError.implicitGrantRedirect(message: "No session defined in URL")
+      throw AuthError.implicitGrantRedirect("No session defined in URL")
     }
 
     let expiresAt = params["expires_at"].flatMap(TimeInterval.init)
@@ -962,11 +1098,11 @@ public actor AuthClient {
 
     let user = try await api.execute(
       .init(
-        url: configuration.url.appendingPathComponent("user"),
         method: .get,
-        headers: [.authorization: "\(tokenType) \(accessToken)"]
+        url: configuration.url.appendingPathComponent("user"),
+        headerFields: [.authorization: "\(tokenType) \(accessToken)"]
       )
-    ).decoded(as: User.self, decoder: configuration.decoder)
+    ).decoded(as: User.self, decoder: configuration.resolvedDecoder)
 
     let session = Session(
       providerToken: providerToken,
@@ -989,23 +1125,24 @@ public actor AuthClient {
     return session
   }
 
-  private func handlePKCEFlow(params: [String: String]) async throws -> Session {
-    precondition(configuration.flowType == .pkce, "Method only allowed for PKCE flow.")
-
+  /// Only reached from ``session(from:)``, under `case .pkce` of its switch on
+  /// `configuration.flowType`, which is what guarantees the flow type here.
+  private func handlePKCEFlow(params: [String: String], flowId: String?) async throws -> Session {
     if params["error"] != nil || params["error_description"] != nil || params["error_code"] != nil {
+      let oauthError = params["error"] ?? "unspecified_error"
+      let description =
+        params["error_description"] ?? "Error in URL with unspecified error_description."
       throw AuthError.pkceGrantCodeExchange(
-        message: params["error_description"]
-          ?? "Error in URL with unspecified error_description.",
-        error: params["error"] ?? "unspecified_error",
-        code: params["error_code"] ?? "unspecified_code"
+        "\(oauthError): \(description)",
+        errorCode: params["error_code"].map { ErrorCode($0) } ?? .unknown
       )
     }
 
     guard let code = params["code"] else {
-      throw AuthError.pkceGrantCodeExchange(message: "No code detected.")
+      throw AuthError.pkceGrantCodeExchange("No code detected.")
     }
 
-    return try await exchangeCodeForSession(authCode: code)
+    return try await exchangeCodeForSession(authCode: code, flowId: flowId)
   }
 
   /// Sets the session data from the current session. If the current session is expired, setSession
@@ -1055,7 +1192,7 @@ public actor AuthClient {
   /// - Parameter scope: Specifies which sessions should be logged out.
   public func signOut(scope: SignOutScope = .global) async throws {
     guard let accessToken = currentSession?.accessToken else {
-      configuration.logger?.warning("signOut called without a session")
+      configuration.logger.warning("signOut called without a session")
       return
     }
 
@@ -1067,17 +1204,20 @@ public actor AuthClient {
     do {
       _ = try await api.execute(
         .init(
-          url: configuration.url.appendingPathComponent("logout"),
           method: .post,
+          url: configuration.url.appendingPathComponent("logout"),
           query: [URLQueryItem(name: "scope", value: scope.rawValue)],
-          headers: [.authorization: "Bearer \(accessToken)"]
+          headerFields: [.authorization: "Bearer \(accessToken)"]
         )
       )
-    } catch let AuthError.api(_, _, _, response)
-      where [404, 403, 401].contains(response.statusCode)
+    } catch let error as AuthError
+      where [.api, .unexpectedResponse].contains(error.kind)
+      && [404, 403, 401].contains(error.response?.statusCode ?? 0)
     {
       // ignore 404s since user might not exist anymore
       // ignore 401s, and 403s since an invalid or expired JWT should sign out the current session.
+      // A body-less error response (e.g. from a proxy) reports as `.unexpectedResponse` rather
+      // than `.api`, but the status code alone is enough to know it's still safe to swallow here.
     }
   }
 
@@ -1089,11 +1229,11 @@ public actor AuthClient {
     type: EmailOTPType,
     redirectTo: URL? = nil,
     captchaToken: String? = nil
-  ) async throws -> AuthResponse {
+  ) async throws -> VerifyOTPResponse {
     try await _verifyOTP(
       request: .init(
-        url: configuration.url.appendingPathComponent("verify"),
         method: .post,
+        url: configuration.url.appendingPathComponent("verify"),
         query: [
           (redirectTo ?? configuration.redirectToURL).map {
             URLQueryItem(
@@ -1101,15 +1241,15 @@ public actor AuthClient {
               value: $0.absoluteString
             )
           }
-        ].compactMap { $0 },
-        body: configuration.encoder.encode(
-          VerifyOTPParams.email(
-            VerifyEmailOTPParams(
-              email: email,
-              token: token,
-              type: type,
-              gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
-            )
+        ].compactMap { $0 }
+      ),
+      body: configuration.resolvedEncoder.encode(
+        VerifyOTPParams.email(
+          VerifyEmailOTPParams(
+            email: email,
+            token: token,
+            type: type,
+            gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
           )
         )
       )
@@ -1123,19 +1263,19 @@ public actor AuthClient {
     token: String,
     type: MobileOTPType,
     captchaToken: String? = nil
-  ) async throws -> AuthResponse {
+  ) async throws -> VerifyOTPResponse {
     try await _verifyOTP(
       request: .init(
-        url: configuration.url.appendingPathComponent("verify"),
         method: .post,
-        body: configuration.encoder.encode(
-          VerifyOTPParams.mobile(
-            VerifyMobileOTPParams(
-              phone: phone,
-              token: token,
-              type: type,
-              gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
-            )
+        url: configuration.url.appendingPathComponent("verify")
+      ),
+      body: configuration.resolvedEncoder.encode(
+        VerifyOTPParams.mobile(
+          VerifyMobileOTPParams(
+            phone: phone,
+            token: token,
+            type: type,
+            gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
           )
         )
       )
@@ -1147,24 +1287,24 @@ public actor AuthClient {
   public func verifyOTP(
     tokenHash: String,
     type: EmailOTPType
-  ) async throws -> AuthResponse {
+  ) async throws -> VerifyOTPResponse {
     try await _verifyOTP(
       request: .init(
-        url: configuration.url.appendingPathComponent("verify"),
         method: .post,
-        body: configuration.encoder.encode(
-          VerifyOTPParams.tokenHash(
-            VerifyTokenHashParams(tokenHash: tokenHash, type: type)
-          )
+        url: configuration.url.appendingPathComponent("verify")
+      ),
+      body: configuration.resolvedEncoder.encode(
+        VerifyOTPParams.tokenHash(
+          VerifyTokenHashParams(tokenHash: tokenHash, type: type)
         )
       )
     )
   }
 
-  private func _verifyOTP(request: HTTPRequest) async throws -> AuthResponse {
-    let response = try await api.execute(request).decoded(
-      as: AuthResponse.self,
-      decoder: configuration.decoder
+  private func _verifyOTP(request: HTTPRequest, body: Data) async throws -> VerifyOTPResponse {
+    let response = try await api.execute(request, body: body).decoded(
+      as: VerifyOTPResponse.self,
+      decoder: configuration.resolvedDecoder
     )
 
     if let session = response.session {
@@ -1185,10 +1325,12 @@ public actor AuthClient {
     emailRedirectTo: URL? = nil,
     captchaToken: String? = nil
   ) async throws {
+    let (codeChallenge, codeChallengeMethod, _) = prepareForPKCE()
+
     _ = try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("resend"),
         method: .post,
+        url: configuration.url.appendingPathComponent("resend"),
         query: [
           (emailRedirectTo ?? configuration.redirectToURL).map {
             URLQueryItem(
@@ -1196,13 +1338,15 @@ public actor AuthClient {
               value: $0.absoluteString
             )
           }
-        ].compactMap { $0 },
-        body: configuration.encoder.encode(
-          ResendEmailParams(
-            type: type,
-            email: email,
-            gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
-          )
+        ].compactMap { $0 }
+      ),
+      body: configuration.resolvedEncoder.encode(
+        ResendEmailParams(
+          type: type,
+          email: email,
+          gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:)),
+          codeChallenge: codeChallenge,
+          codeChallengeMethod: codeChallengeMethod
         )
       )
     )
@@ -1222,26 +1366,26 @@ public actor AuthClient {
   ) async throws -> ResendMobileResponse {
     try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("resend"),
         method: .post,
-        body: configuration.encoder.encode(
-          ResendMobileParams(
-            type: type,
-            phone: phone,
-            gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
-          )
+        url: configuration.url.appendingPathComponent("resend")
+      ),
+      body: configuration.resolvedEncoder.encode(
+        ResendMobileParams(
+          type: type,
+          phone: phone,
+          gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
         )
       )
     )
-    .decoded(decoder: configuration.decoder)
+    .decoded(decoder: configuration.resolvedDecoder)
   }
 
   /// Sends a re-authentication OTP to the user's email or phone number.
   public func reauthenticate() async throws {
     try await api.authorizedExecute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("reauthenticate"),
-        method: .get
+        method: .get,
+        url: configuration.url.appendingPathComponent("reauthenticate")
       )
     )
   }
@@ -1252,14 +1396,14 @@ public actor AuthClient {
   ///
   /// Should be used only when you require the most current user data. For faster results, ``currentUser`` is recommended.
   public func user(jwt: String? = nil) async throws -> User {
-    var request = HTTPRequest(url: configuration.url.appendingPathComponent("user"), method: .get)
+    var request = HTTPRequest(method: .get, url: configuration.url.appendingPathComponent("user"))
 
     if let jwt {
-      request.headers[.authorization] = "Bearer \(jwt)"
-      return try await api.execute(request).decoded(decoder: configuration.decoder)
+      request.headerFields[.authorization] = "Bearer \(jwt)"
+      return try await api.execute(request).decoded(decoder: configuration.resolvedDecoder)
     }
 
-    return try await api.authorizedExecute(request).decoded(decoder: configuration.decoder)
+    return try await api.authorizedExecute(request).decoded(decoder: configuration.resolvedDecoder)
   }
 
   /// Updates user data, if there is a logged in user.
@@ -1268,7 +1412,7 @@ public actor AuthClient {
     var user = user
 
     if user.email != nil {
-      let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
+      let (codeChallenge, codeChallengeMethod, _) = prepareForPKCE()
       user.codeChallenge = codeChallenge
       user.codeChallengeMethod = codeChallengeMethod
     }
@@ -1276,8 +1420,8 @@ public actor AuthClient {
     var session = try await sessionManager.session()
     let updatedUser = try await api.authorizedExecute(
       .init(
-        url: configuration.url.appendingPathComponent("user"),
         method: .put,
+        url: configuration.url.appendingPathComponent("user"),
         query: [
           (redirectTo ?? configuration.redirectToURL).map {
             URLQueryItem(
@@ -1285,10 +1429,9 @@ public actor AuthClient {
               value: $0.absoluteString
             )
           }
-        ].compactMap { $0 },
-        body: configuration.encoder.encode(user)
-      )
-    ).decoded(as: User.self, decoder: configuration.decoder)
+        ].compactMap { $0 }
+      ), body: configuration.resolvedEncoder.encode(user)
+    ).decoded(as: User.self, decoder: configuration.resolvedDecoder)
     session.user = updatedUser
     await sessionManager.update(session)
     eventEmitter.emit(.userUpdated, session: session)
@@ -1310,13 +1453,12 @@ public actor AuthClient {
 
     let session = try await api.execute(
       .init(
-        url: configuration.url.appendingPathComponent("token"),
         method: .post,
+        url: configuration.url.appendingPathComponent("token"),
         query: [URLQueryItem(name: "grant_type", value: "id_token")],
-        headers: [.authorization: "Bearer \(session.accessToken)"],
-        body: configuration.encoder.encode(credentials)
-      )
-    ).decoded(as: Session.self, decoder: configuration.decoder)
+        headerFields: [.authorization: "Bearer \(session.accessToken)"]
+      ), body: configuration.resolvedEncoder.encode(credentials)
+    ).decoded(as: Session.self, decoder: configuration.resolvedDecoder)
 
     await sessionManager.update(session)
     eventEmitter.emit(.userUpdated, session: session)
@@ -1341,7 +1483,7 @@ public actor AuthClient {
     queryParams: [(name: String, value: String?)] = [],
     launchURL: @MainActor (_ url: URL) -> Void
   ) async throws {
-    let response = try await getLinkIdentityURL(
+    let response = try await linkIdentityURL(
       provider: provider,
       scopes: scopes,
       redirectTo: redirectTo,
@@ -1373,7 +1515,7 @@ public actor AuthClient {
       scopes: scopes,
       redirectTo: redirectTo,
       queryParams: queryParams,
-      launchURL: { Dependencies[clientID].urlOpener.open($0) }
+      launchURL: { dependencies.urlOpener.open($0) }
     )
   }
 
@@ -1386,13 +1528,13 @@ public actor AuthClient {
   ///   - scopes: A space-separated list of scopes granted to the OAuth application.
   ///   - redirectTo: A URL to send the user to after they are confirmed.
   ///   - queryParams: Additional query parameters to use.
-  public func getLinkIdentityURL(
+  public func linkIdentityURL(
     provider: Provider,
     scopes: String? = nil,
     redirectTo: URL? = nil,
     queryParams: [(name: String, value: String?)] = []
   ) async throws -> OAuthResponse {
-    let url = try getURLForProvider(
+    let (url, flowId) = try getURLForProvider(
       url: configuration.url.appendingPathComponent("user/identities/authorize"),
       provider: provider,
       scopes: scopes,
@@ -1407,13 +1549,13 @@ public actor AuthClient {
 
     let response = try await api.authorizedExecute(
       HTTPRequest(
-        url: url,
-        method: .get
+        method: .get,
+        url: url
       )
     )
-    .decoded(as: Response.self, decoder: configuration.decoder)
+    .decoded(as: Response.self, decoder: configuration.resolvedDecoder)
 
-    return OAuthResponse(provider: provider, url: response.url)
+    return OAuthResponse(provider: provider, url: response.url, flowId: flowId)
   }
 
   /// Unlinks an identity from a user by deleting it. The user will no longer be able to sign in
@@ -1421,8 +1563,8 @@ public actor AuthClient {
   public func unlinkIdentity(_ identity: UserIdentity) async throws {
     try await api.authorizedExecute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("user/identities/\(identity.identityId)"),
-        method: .delete
+        method: .delete,
+        url: configuration.url.appendingPathComponent("user/identities/\(identity.identityId)")
       )
     )
   }
@@ -1433,12 +1575,12 @@ public actor AuthClient {
     redirectTo: URL? = nil,
     captchaToken: String? = nil
   ) async throws {
-    let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
+    let (codeChallenge, codeChallengeMethod, _) = prepareForPKCE()
 
     _ = try await api.execute(
       .init(
-        url: configuration.url.appendingPathComponent("recover"),
         method: .post,
+        url: configuration.url.appendingPathComponent("recover"),
         query: [
           (redirectTo ?? configuration.redirectToURL).map {
             URLQueryItem(
@@ -1446,14 +1588,14 @@ public actor AuthClient {
               value: $0.absoluteString
             )
           }
-        ].compactMap { $0 },
-        body: configuration.encoder.encode(
-          RecoverParams(
-            email: email,
-            gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:)),
-            codeChallenge: codeChallenge,
-            codeChallengeMethod: codeChallengeMethod
-          )
+        ].compactMap { $0 }
+      ),
+      body: configuration.resolvedEncoder.encode(
+        RecoverParams(
+          email: email,
+          gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:)),
+          codeChallenge: codeChallenge,
+          codeChallengeMethod: codeChallengeMethod
         )
       )
     )
@@ -1474,7 +1616,7 @@ public actor AuthClient {
 
   /// Starts an auto-refresh process in the background. The session is checked every few seconds. Close to the time of expiration a process is started to refresh the session. If refreshing fails it will be retried for as long as necessary.
   ///
-  /// If you set ``Configuration/autoRefreshToken`` you don't need to call this function, it will be called for you.
+  /// If you set ``Configuration/automaticallyRefreshesToken`` you don't need to call this function, it will be called for you.
   public func startAutoRefresh() {
     Task { await sessionManager.startAutoRefresh() }
   }
@@ -1485,56 +1627,36 @@ public actor AuthClient {
   }
 
   private func emitInitialSession(forToken token: ObservationToken) async {
-    if configuration.emitLocalSessionAsInitialSession {
-      guard let currentSession else {
-        eventEmitter.emit(.initialSession, session: nil, token: token)
-        return
-      }
+    guard let currentSession else {
+      eventEmitter.emit(.initialSession, session: nil, token: token)
+      return
+    }
 
-      eventEmitter.emit(.initialSession, session: currentSession, token: token)
+    eventEmitter.emit(.initialSession, session: currentSession, token: token)
 
+    if currentSession.isExpired {
       Task {
-        if currentSession.isExpired {
-          _ = try? await sessionManager.refreshSession(currentSession.refreshToken)
-          // No need to emit `tokenRefreshed` nor `signOut` event since the `refreshSession` does it already.
-        }
-      }
-    } else {
-      let session = try? await session
-      eventEmitter.emit(.initialSession, session: session, token: token)
-
-      // Properly expecting issues during tests isn't working as expected, I think because the reportIssue is usually triggered inside an unstructured Task
-      // because of this I'm disabling issue reporting during tests, so we can use it only for advising developers when running their applications.
-      if !isTesting {
-        reportIssue(
-          """
-          Initial session emitted after attempting to refresh the local stored session.
-          This is incorrect behavior and will be fixed in the next major release since it's a breaking change.
-          To opt-in to the new behavior now, set `emitLocalSessionAsInitialSession: true` in your AuthClient configuration.
-          The new behavior ensures that the locally stored session is always emitted, regardless of its validity or expiration.
-          If you rely on the initial session to opt users in, you need to add an additional check for `session.isExpired` in the session.
-
-          Check https://github.com/supabase/supabase-swift/pull/822 for more information.
-          """
-        )
+        _ = try? await sessionManager.refreshSession(currentSession.refreshToken)
+        // No need to emit `tokenRefreshed` nor `signOut` event since the `refreshSession` does it already.
       }
     }
   }
 
-  nonisolated private func prepareForPKCE() -> (
-    codeChallenge: String?, codeChallengeMethod: String?
+  private func prepareForPKCE() -> (
+    codeChallenge: String?, codeChallengeMethod: String?, flowId: String?
   ) {
     guard configuration.flowType == .pkce else {
-      return (nil, nil)
+      return (nil, nil, nil)
     }
 
+    let flowId = UUID().uuidString
     let codeVerifier = pkce.generateCodeVerifier()
-    codeVerifierStorage.set(codeVerifier)
+    codeVerifierStorage.set(codeVerifier, flowId)
 
     let codeChallenge = pkce.generateCodeChallenge(codeVerifier)
     let codeChallengeMethod = codeVerifier == codeChallenge ? "plain" : "s256"
 
-    return (codeChallenge, codeChallengeMethod)
+    return (codeChallenge, codeChallengeMethod, flowId)
   }
 
   private func isImplicitGrantFlow(params: [String: String]) -> Bool {
@@ -1542,19 +1664,19 @@ public actor AuthClient {
   }
 
   private func isPKCEFlow(params: [String: String]) -> Bool {
-    let currentCodeVerifier = codeVerifierStorage.get()
+    let currentCodeVerifier = codeVerifierStorage.get(nil)
     return params["code"] != nil || params["error_description"] != nil || params["error"] != nil
       || params["error_code"] != nil && currentCodeVerifier != nil
   }
 
-  nonisolated private func getURLForProvider(
+  private func getURLForProvider(
     url: URL,
     provider: Provider,
     scopes: String? = nil,
     redirectTo: URL? = nil,
     queryParams: [(name: String, value: String?)] = [],
     skipBrowserRedirect: Bool? = nil
-  ) throws -> URL {
+  ) throws -> (url: URL, flowId: String?) {
     guard
       var components = URLComponents(
         url: url,
@@ -1576,7 +1698,7 @@ public actor AuthClient {
       queryItems.append(URLQueryItem(name: "redirect_to", value: redirectTo.absoluteString))
     }
 
-    let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
+    let (codeChallenge, codeChallengeMethod, flowId) = prepareForPKCE()
 
     if let codeChallenge {
       queryItems.append(URLQueryItem(name: "code_challenge", value: codeChallenge))
@@ -1598,13 +1720,12 @@ public actor AuthClient {
       throw URLError(.badURL)
     }
 
-    return url
+    return (url, flowId)
   }
 
   /// Fetches a JWK from the JWKS endpoint with caching
   /// Returns nil if the key is not found, allowing graceful fallback to server-side verification
   private func fetchJWK(kid: String, jwks: JWKS? = nil) async throws -> JWK? {
-    // Try fetching from the supplied jwks
     if let jwk = jwks?.keys.first(where: { $0.kid == kid }) {
       return jwk
     }
@@ -1612,39 +1733,33 @@ public actor AuthClient {
     let now = date()
     let storageKey = configuration.storageKey ?? defaultStorageKey
 
-    // Try fetching from global cache
     if let cached = await globalJWKSCache.get(for: storageKey),
       let jwk = cached.jwks.keys.first(where: { $0.kid == kid })
     {
-      // Check if cache is still valid (not stale)
-      if cached.cachedAt.addingTimeInterval(JWKS_TTL) > now {
+      if cached.cachedAt.addingTimeInterval(jwksTTL) > now {
         return jwk
       }
     }
 
-    // Fetch from well-known endpoint
     let response = try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent(".well-known/jwks.json"),
-        method: .get
+        method: .get,
+        url: configuration.url.appendingPathComponent(".well-known/jwks.json")
       )
     )
 
-    let fetchedJWKS = try response.decoded(as: JWKS.self, decoder: configuration.decoder)
+    let fetchedJWKS = try response.decoded(as: JWKS.self, decoder: configuration.resolvedDecoder)
 
-    // Return nil if JWKS is empty (will fallback to getUser)
     guard !fetchedJWKS.keys.isEmpty else {
       return nil
     }
 
-    // Cache the JWKS globally
     await globalJWKSCache.set(
       CachedJWKS(jwks: fetchedJWKS, cachedAt: now),
       for: storageKey
     )
 
-    // Find the signing key - return nil if not found (will fallback to getUser)
-    // This handles key rotation scenarios where the JWT is signed with a key not yet in the cache
+    // A key rotation can sign a JWT with a key the freshly fetched set does not carry yet.
     return fetchedJWKS.keys.first(where: { $0.kid == kid })
   }
 
@@ -1664,8 +1779,8 @@ public actor AuthClient {
   ///
   /// - Returns: A `JWTClaimsResponse` containing the verified claims, header, and signature.
   ///
-  /// - Throws: `AuthError.jwtVerificationFailed` if verification fails, or `AuthError.sessionMissing` if no session exists.
-  public func getClaims(
+  /// - Throws: ``AuthError`` with kind `.jwtVerificationFailed` if verification fails, or ``AuthError/sessionMissing`` if no session exists.
+  public func claims(
     jwt: String? = nil,
     options: GetClaimsOptions = GetClaimsOptions()
   ) async throws -> JWTClaimsResponse {
@@ -1680,15 +1795,14 @@ public actor AuthClient {
     }
 
     guard let decodedJWT = JWT.decode(token) else {
-      throw AuthError.jwtVerificationFailed(message: "Invalid JWT structure")
+      throw AuthError.jwtVerificationFailed("Invalid JWT structure")
     }
 
-    // Validate expiration unless allowExpired is true
-    if !options.allowExpired {
+    if !options.allowsExpired {
       if let exp = decodedJWT.payload["exp"] as? TimeInterval {
         let now = date().timeIntervalSince1970
         if exp <= now {
-          throw AuthError.jwtVerificationFailed(message: "JWT has expired")
+          throw AuthError.jwtVerificationFailed("JWT has expired")
         }
       }
     }
@@ -1696,30 +1810,24 @@ public actor AuthClient {
     let alg = decodedJWT.header["alg"] as? String
     let kid = decodedJWT.header["kid"] as? String
 
-    // Try to fetch the signing key for asymmetric JWTs
-    // Returns nil if: no alg, symmetric algorithm (HS256/HS512), no kid, or key not found in JWKS
     let signingKey: JWK?
     if let alg, !alg.hasPrefix("HS"), let kid {
-      // Only attempt to fetch JWK for asymmetric algorithms with a kid
       signingKey = try await fetchJWK(kid: kid, jwks: options.jwks)
     } else {
       signingKey = nil
     }
 
-    // If no signing key available (symmetric algorithm, RS256, no kid, or key not found),
-    // fallback to server-side verification via getUser()
     guard
       let signingKey,
-      let alg = signingKey.alg,
-      let algorithm = JWTAlgorithm(rawValue: alg)
+      let algorithm = (signingKey.alg ?? alg).flatMap(JWTAlgorithm.init(rawValue:))
     else {
       _ = try await user(jwt: token)
       // getUser succeeds, so claims can be trusted
-      let claims = try configuration.decoder.decode(
+      let claims = try configuration.resolvedDecoder.decode(
         JWTClaims.self,
         from: JSONSerialization.data(withJSONObject: decodedJWT.payload)
       )
-      let header = try configuration.decoder.decode(
+      let header = try configuration.resolvedDecoder.decode(
         JWTHeader.self,
         from: JSONSerialization.data(withJSONObject: decodedJWT.header)
       )
@@ -1729,15 +1837,14 @@ public actor AuthClient {
     let isValid = algorithm.verify(jwt: decodedJWT, jwk: signingKey)
 
     guard isValid else {
-      throw AuthError.jwtVerificationFailed(message: "Invalid JWT signature")
+      throw AuthError.jwtVerificationFailed("Invalid JWT signature")
     }
 
-    // Decode claims and header
-    let claims = try configuration.decoder.decode(
+    let claims = try configuration.resolvedDecoder.decode(
       JWTClaims.self,
       from: JSONSerialization.data(withJSONObject: decodedJWT.payload)
     )
-    let header = try configuration.decoder.decode(
+    let header = try configuration.resolvedDecoder.decode(
       JWTHeader.self,
       from: JSONSerialization.data(withJSONObject: decodedJWT.header)
     )

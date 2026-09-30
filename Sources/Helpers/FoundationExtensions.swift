@@ -10,9 +10,20 @@ package import Foundation
 #if canImport(FoundationNetworking)
   import FoundationNetworking
 
+  // Mirrors the names Darwin exposes as C macros from <time.h>, so call sites read the same
+  // on every platform.
+  // swift-format-ignore: AlwaysUseLowerCamelCase
   package let NSEC_PER_SEC: UInt64 = 1_000_000_000
+  // swift-format-ignore: AlwaysUseLowerCamelCase
   package let NSEC_PER_MSEC: UInt64 = 1_000_000
 #endif
+
+extension Duration {
+  /// The duration in seconds, for Foundation APIs such as `URLRequest.timeoutInterval`.
+  package var timeInterval: TimeInterval {
+    TimeInterval(components.seconds) + TimeInterval(components.attoseconds) / 1e18
+  }
+}
 
 extension Result {
   package var value: Success? {
@@ -65,6 +76,26 @@ extension URL {
   }
 }
 
+extension [URLQueryItem] {
+  /// Replaces the item named like `queryItem`, or appends it when there is none.
+  package mutating func appendOrUpdate(_ queryItem: URLQueryItem) {
+    if let index = firstIndex(where: { $0.name == queryItem.name }) {
+      self[index] = queryItem
+    } else {
+      append(queryItem)
+    }
+  }
+}
+
+extension Data {
+  /// Decodes a JSON response body.
+  package func decoded<T: Decodable>(as _: T.Type = T.self, decoder: JSONDecoder = JSONDecoder())
+    throws -> T
+  {
+    try decoder.decode(T.self, from: self)
+  }
+}
+
 func escape(_ string: String) -> String {
   string.addingPercentEncoding(withAllowedCharacters: .sbURLQueryAllowed) ?? string
 }
@@ -81,7 +112,8 @@ extension CharacterSet {
   /// query strings to include a URL. Therefore, all "reserved" characters with the exception of "?" and "/"
   /// should be percent-escaped in the query string.
   static let sbURLQueryAllowed: CharacterSet = {
-    let generalDelimitersToEncode = ":#[]@"  // does not include "?" or "/" due to RFC 3986 - Section 3.4
+    // does not include "?" or "/" due to RFC 3986 - Section 3.4
+    let generalDelimitersToEncode = ":#[]@"
     let subDelimitersToEncode = "!$&'()*+,;="
     let encodableDelimiters = CharacterSet(
       charactersIn: "\(generalDelimitersToEncode)\(subDelimitersToEncode)")

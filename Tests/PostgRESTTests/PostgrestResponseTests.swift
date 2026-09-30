@@ -1,53 +1,44 @@
-import XCTest
+import Foundation
+import HTTPTypes
+import Testing
 
 @testable import PostgREST
 
-#if canImport(FoundationNetworking)
-  import FoundationNetworking
-#endif
-
-class PostgrestResponseTests: XCTestCase {
-  func testInit() {
+@Suite
+struct PostgrestResponseTests {
+  @Test
+  func initWithCount() {
     // Prepare data and response
     let data = Data()
-    let response = HTTPURLResponse(
-      url: URL(string: "http://example.com")!,
-      statusCode: 200,
-      httpVersion: nil,
-      headerFields: ["Content-Range": "bytes 0-100/200"]
-    )!
+    let response = HTTPResponse(status: .ok, headerFields: [.contentRange: "bytes 0-100/200"])
     let value = "Test Value"
 
     // Create the PostgrestResponse instance
     let postgrestResponse = PostgrestResponse(data: data, response: response, value: value)
 
     // Assert the properties
-    XCTAssertEqual(postgrestResponse.data, data)
-    XCTAssertEqual(postgrestResponse.response, response)
-    XCTAssertEqual(postgrestResponse.value, value)
-    XCTAssertEqual(postgrestResponse.status, 200)
-    XCTAssertEqual(postgrestResponse.count, 200)
+    #expect(postgrestResponse.data == data)
+    #expect(postgrestResponse.response == response)
+    #expect(postgrestResponse.value == value)
+    #expect(postgrestResponse.status == 200)
+    #expect(postgrestResponse.count == 200)
   }
 
-  func testInitWithNoCount() {
+  @Test
+  func initWithNoCount() {
     // Prepare data and response
     let data = Data()
-    let response = HTTPURLResponse(
-      url: URL(string: "http://example.com")!,
-      statusCode: 200,
-      httpVersion: nil,
-      headerFields: ["Content-Range": "*"]
-    )!
+    let response = HTTPResponse(status: .ok, headerFields: [.contentRange: "*"])
     let value = "Test Value"
 
     // Create the PostgrestResponse instance
     let postgrestResponse = PostgrestResponse(data: data, response: response, value: value)
 
     // Assert the properties
-    XCTAssertEqual(postgrestResponse.data, data)
-    XCTAssertEqual(postgrestResponse.response, response)
-    XCTAssertEqual(postgrestResponse.value, value)
-    XCTAssertEqual(postgrestResponse.status, 200)
-    XCTAssertNil(postgrestResponse.count)
+    #expect(postgrestResponse.data == data)
+    #expect(postgrestResponse.response == response)
+    #expect(postgrestResponse.value == value)
+    #expect(postgrestResponse.status == 200)
+    #expect(postgrestResponse.count == nil)
   }
 }

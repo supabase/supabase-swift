@@ -5,40 +5,53 @@
 //  Created by Guilherme Souza on 23/04/24.
 //
 
+import Foundation
+import HTTPTypesFoundation
 import SnapshotTesting
-import XCTest
+import TestHelpers
+import Testing
 
 @testable import Functions
 
-final class RequestTests: XCTestCase {
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
+@Suite
+struct RequestTests {
   let url = URL(string: "http://localhost:5432/functions/v1")!
   let apiKey = "supabase.publishable.key"
 
-  func testInvokeWithDefaultOptions() async {
+  @Test
+  func invokeWithDefaultOptions() async {
     await snapshot {
       try await $0.invoke("hello-world")
     }
   }
 
-  func testInvokeWithCustomMethod() async {
+  @Test
+  func invokeWithCustomMethod() async {
     await snapshot {
       try await $0.invoke("hello-world", options: .init(method: .patch))
     }
   }
 
-  func testInvokeWithCustomRegion() async {
+  @Test
+  func invokeWithCustomRegion() async {
     await snapshot {
       try await $0.invoke("hello-world", options: .init(region: .apNortheast1))
     }
   }
 
-  func testInvokeWithCustomHeader() async {
+  @Test
+  func invokeWithCustomHeader() async {
     await snapshot {
       try await $0.invoke("hello-world", options: .init(headers: ["x-custom-key": "custom value"]))
     }
   }
 
-  func testInvokeWithBody() async {
+  @Test
+  func invokeWithBody() async {
     await snapshot {
       try await $0.invoke("hello-world", options: .init(body: ["name": "Supabase"]))
     }
@@ -47,24 +60,40 @@ final class RequestTests: XCTestCase {
   func snapshot(
     record: Bool = false,
     _ test: (FunctionsClient) async throws -> Void,
-    file: StaticString = #file,
+    fileID: StaticString = #fileID,
+    file filePath: StaticString = #filePath,
     testName: String = #function,
-    line: UInt = #line
+    line: UInt = #line,
+    column: UInt = #column
   ) async {
     let sut = FunctionsClient(
       url: url,
-      headers: ["apikey": apiKey, "x-client-info": "functions-swift/x.y.z"]
-    ) { request in
-      await MainActor.run {
-        #if os(Android)
-          // missing snapshots for Android
-          return
-        #endif
-        assertSnapshot(
-          of: request, as: .curl, record: record, file: file, testName: testName, line: line)
-      }
-      throw NSError(domain: "Error", code: 0, userInfo: nil)
-    }
+      headers: ["apikey": apiKey, "x-client-info": "functions-swift/x.y.z"],
+      http: .init(
+        transport: ClosureTransport { request, body in
+          guard var urlRequest = URLRequest(httpRequest: request) else {
+            throw URLError(.badURL)
+          }
+          if let body { urlRequest.httpBody = try await Data(collecting: body, upTo: .max) }
+
+          await MainActor.run {
+            #if os(Android)
+              // missing snapshots for Android
+              return
+            #endif
+            assertSnapshot(
+              of: urlRequest,
+              as: .curl,
+              record: record,
+              fileID: fileID,
+              file: filePath,
+              testName: testName,
+              line: line,
+              column: column
+            )
+          }
+          throw NSError(domain: "Error", code: 0, userInfo: nil)
+        }))
 
     try? await test(sut)
   }

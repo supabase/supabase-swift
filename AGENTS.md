@@ -23,8 +23,8 @@ This is the official Supabase SDK for Swift, mirroring the design of supabase-js
 
 ### Requirements
 
-- Xcode 16.4+ (supports versions eligible for App Store submission)
-- Swift 6.1+
+- Xcode 26.0+ (supports versions eligible for App Store submission)
+- Swift 6.2+
 - Supported platforms: iOS 16.0+, macOS 13.0+, tvOS 16+, watchOS 9+, visionOS 1+
 - Linux is supported for building but not officially supported for production use
 
@@ -75,6 +75,28 @@ DERIVED_DATA_PATH=~/.derivedData/Debug ./scripts/generate-coverage.sh
 
 This uses `swift-format` to automatically format code. All code should be formatted before committing.
 
+Lint rules live in `.swift-format` at the repo root, which enables `NeverUseForceTry` and
+`NeverUseImplicitlyUnwrappedOptionals` on top of the defaults. Library code must not trap on a
+value a caller supplied — see SDK-1793.
+
+`Tests/.swift-format` turns both back off. Test code has no users to crash: `try!` on a bundled
+fixture is the right tool (a missing fixture should fail the run loudly, and a `static let` cannot
+be `throws`), and `PostgrestMacrosTests` declares an implicitly unwrapped property on purpose, to
+cover how the `@Table` macro handles that spelling.
+
+Check the rules with:
+
+```bash
+swift-format lint --recursive --strict Sources Tests
+```
+
+Do not pass `--configuration` — swift-format finds the nearest `.swift-format` per file, and
+naming one explicitly applies it everywhere, re-flagging the test code the nested config exempts.
+
+`NeverForceUnwrap` is deliberately **not** enabled. It has no exemption for literals, so it flags
+provably-safe constants like `HTTPField.Name("Prefer")!` the same as `dictionary["key"]!` — about
+twenty such sites, all of which would need suppressing for no safety gain.
+
 ### Spell Checking
 
 Spell-checking uses [cSpell](https://cspell.org), via Node/npm:
@@ -121,6 +143,32 @@ Ensures DocC documentation builds without warnings.
 - Prefer `async/await` over completion handlers
 - Mark types as `Sendable` where appropriate for concurrency safety
 
+### Enum-like Values
+
+- Use a Swift `enum` only when the value is genuinely closed: every case is fixed by the language or protocol itself (HTTP methods, a `CodingKeys` set) or the value is entirely client-side and never crosses the wire (e.g. `AuthChangeEvent`, `LogLevel`).
+- Any enum-like value sent to or received from the backend must be a `RawRepresentable` struct instead, so a value the backend adds later (or that this SDK just doesn't have a case for yet) round-trips through `.rawValue` instead of failing to decode or blocking construction until an SDK upgrade:
+
+  ```swift
+  public struct Provider: RawRepresentable, Codable, Hashable, Sendable, ExpressibleByStringLiteral {
+    public let rawValue: String
+
+    public init(rawValue: String) {
+      self.rawValue = rawValue
+    }
+
+    public init(stringLiteral value: String) {
+      self.init(rawValue: value)
+    }
+
+    public static let apple: Provider = "apple"
+    public static let github: Provider = "github"
+  }
+  ```
+
+- Conform to exactly what the value's actual usage needs — `Codable` only if it's ever decoded, `Encodable`-only if it's write-only, no `Codable`/`Encodable` at all if it's read via `.rawValue` directly into a header or query string (never through `JSONEncoder`/`JSONDecoder`). Don't upgrade a type's conformance just because a sibling type in the same file has more.
+- Don't add a `CaseIterable`/`Identifiable` replacement (a `knownCases` array, a custom `Identifiable`) to the SDK type unless something inside this package actually needs one — a consuming app can keep its own list of the values it cares about (see `Examples/Examples/Auth/KnownProviders.swift`).
+- `init(rawValue:)` is intentionally non-failable — it always succeeds, which is what makes constructing/decoding an unrecognized value safe instead of an error. Any breaking-change migration note for a type like this must call out that `if let x = X(rawValue:)` goes from compiling to a compile error, and that interpolating the value directly (`"\(x)"`) silently stops printing the case name.
+
 ### File Headers
 
 Use standard file headers with copyright:
@@ -141,6 +189,27 @@ Use standard file headers with copyright:
 - Keep module dependencies minimal
 - Prefer protocol-oriented design
 
+### Codable Conformance
+
+- Only conform a type to the direction the SDK actually uses: a type the SDK
+  only decodes from a server response gets `Decodable`, a type the SDK only
+  encodes into a request body gets `Encodable`. Conform to full `Codable`
+  only when the same type is genuinely used in both directions (e.g. a type
+  the SDK both sends and receives over the wire, or persists to disk via
+  `JSONEncoder`/`JSONDecoder`, like Auth's `Session`).
+- Before narrowing a type from `Codable` to `Decodable`/`Encodable`, check
+  whether any other type embeds it and relies on synthesized `Codable` — a
+  container relying on synthesized conformance stops compiling the moment a
+  field it holds drops the direction the container needs, so the container
+  must narrow the same way (or gain its own hand-written coder). The same
+  check applies in reverse when widening a type back toward `Codable`: every
+  stored property must be at least as conformant as the type you're widening
+  to.
+- Don't hand-write `encode(to:)`/`init(from:)` for the unused direction "for
+  symmetry" — dead coders accumulate and mislead readers about how the type
+  is actually used. See `V3_MIGRATION.md` for prior cleanup along these
+  lines (`VerifyOTPResponse`, and the broader SDK-1473 pass).
+
 ### Error Handling
 
 - Use strongly-typed errors conforming to `Error` protocol
@@ -148,32 +217,59 @@ Use standard file headers with copyright:
 - Use `async throws` for async error handling
 - Report issues using `IssueReporting` from xctest-dynamic-overlay
 
+#### When trapping is allowed
+
+The dividing line is *when the value is fixed*, not who supplied it.
+
+- **Fixed once, at construction** — an initializer argument, a configuration field, a `package`
+  tuning constant. `precondition`/`preconditionFailure` is the right tool: the value cannot change
+  afterwards, so a bad one is a programmer error, and trapping reports it at the exact point it
+  was introduced. `SupabaseClient.init` traps on a `supabaseURL` with no host; `StorageApi` traps
+  on a URL it cannot decompose.
+  Degrading instead would bury the mistake behind an unrelated failure much later.
+- **Varies at runtime, or comes from the server** — a per-call parameter, a response header, a
+  decoded payload, a WebSocket close code. Never trap. Throw if the context already throws;
+  otherwise `reportIssue` and fall back. `HTTPFields.init(_:)` drops invalid field names rather
+  than trapping precisely because `HTTPResponse.init` builds it from `response.allHeaderFields`,
+  which a proxy or a hostile server controls.
+
+A value being "user input" is not on its own a reason to avoid trapping — `supabaseURL` is user
+input and traps. A value being *dynamic* is. See SDK-1793.
+
 ### Testing Conventions
 
-- Use XCTest framework
+This project uses the [Swift Testing](https://developer.apple.com/documentation/testing) framework, and only Swift Testing — do not use XCTest or `XCTestCase`.
+
 - Test files should mirror source file structure (`Foo.swift` → `FooTests.swift`)
+- Suite naming: the type name matches the file name (`FooTests.swift` → `struct FooTests`), with an explicit `@Suite` attribute even when no custom name/tags are needed
+- Test function names drop the `test` prefix (the `@Test` attribute already conveys that) — write `fooBehavior()`, not `testFooBehavior()`
 - Use `@testable import` for internal access
-- Use snapshot testing for complex data structures (via swift-snapshot-testing)
-- Use Mocker for URLSession mocking in unit tests
+- Prefer `#expect`/`#require` for assertions; `#expect(x != nil, "message")` reads the same as `XCTAssertNotNil(x, "message")` did
+- `expectNoDifference` (CustomDump) and `withExpectedIssue`/`reportIssue` (IssueReporting) work unchanged at call sites
+- Use snapshot testing for complex data structures (via swift-snapshot-testing); `assertSnapshot`/`assertInlineSnapshot` work inside `@Test` functions
+- Use Mocker for URLSession mocking
 - Use CustomDump for test assertions with better output
 - Keep integration tests separate in `IntegrationTests` directory
+- Test targets get full Swift 6 language mode checking, matching production targets
 
-Example test structure:
+Example test structure (Swift Testing):
 
 ```swift
-import XCTest
+import Testing
 @testable import ModuleName
 
-final class FeatureTests: XCTestCase {
-  func testFeatureBehavior() {
+@Suite
+struct FeatureTests {
+  @Test
+  func featureBehavior() {
     // Arrange
     let input = "test"
-    
+
     // Act
     let result = feature(input)
-    
+
     // Assert
-    XCTAssertEqual(result, expected)
+    #expect(result == expected)
   }
 }
 ```
@@ -210,7 +306,7 @@ All public types should conform to `Sendable` where appropriate for Swift 6 comp
 
 ### HTTP Layer
 
-Uses modern `HTTPTypes` for request/response handling. Custom `StorageHTTPSession` abstraction allows for testing and custom implementations.
+Uses modern `HTTPTypes` for request/response handling. Every module shares one public seam: a `ClientTransport` performs the exchange and an ordered `ClientMiddleware` chain runs in front of it, grouped into one `HTTPClientConfiguration` that every client takes as a single `http:` parameter, so a custom networking stack, extra headers, or a test stub can be injected once for the whole SDK.
 
 ### Configuration
 
@@ -242,6 +338,10 @@ This project uses [Conventional Commits](https://www.conventionalcommits.org/) w
 - `feat!:` or `BREAKING CHANGE:` - Breaking changes (major version bump)
 
 Example: `feat(auth): add PKCE flow support`
+
+The `!`/`BREAKING CHANGE:` marker is the same one release-please and the API stability check key
+off to bump majors and flag reviewers. Every commit carrying it also requires an entry in the
+root `V<N>_MIGRATION.md` — see the writing-migration-guides skill for the format.
 
 ## CI/CD
 
@@ -304,8 +404,22 @@ cd Tests/IntegrationTests
 supabase start
 supabase db reset
 cd ../..
-swift test --filter IntegrationTests
+swift test --filter IntegrationTests --skip verifyOTPForSecureEmailChange
 cd Tests/IntegrationTests
+supabase stop
+```
+
+`verifyOTPForSecureEmailChange` needs `auth.email.enable_confirmations = true` to reach GoTrue's
+secure-email-change "single confirmation" response, which every other integration test relies on
+being `false` (so `signUp`/`signIn` resolve without confirming an email). It runs against a
+second, minimal project instead of forking that setting for the whole suite:
+
+```bash
+cd Tests/IntegrationTests/supabase-secure-email-change
+supabase start
+cd ../../..
+swift test --filter verifyOTPForSecureEmailChange
+cd Tests/IntegrationTests/supabase-secure-email-change
 supabase stop
 ```
 

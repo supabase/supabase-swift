@@ -217,7 +217,7 @@ struct FileSearchView: View {
                   offset: 0,
                   sortBy: SortBy(
                     column: "\(sortColumn.rawValue)",
-                    order: "\(sortOrder.rawValue)"
+                    order: .\(sortOrder == .ascending ? "ascending" : "descending")
                   ),
                   search: "\(searchText.isEmpty ? "photo" : searchText)"
                 )
@@ -300,7 +300,7 @@ struct FileSearchView: View {
         offset: 0,
         sortBy: SortBy(
           column: sortColumn.rawValue,
-          order: sortOrder.rawValue
+          order: sortOrder == .ascending ? .ascending : .descending
         ),
         search: searchText.isEmpty ? nil : searchText
       )

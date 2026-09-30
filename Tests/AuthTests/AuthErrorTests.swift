@@ -5,145 +5,126 @@
 //  Created by Guilherme Souza on 29/08/24.
 //
 
-import XCTest
+import Foundation
+import HTTPTypes
+import Testing
 
 @_spi(Experimental) @testable import Auth
 
-#if canImport(FoundationNetworking)
-  import FoundationNetworking
-#endif
+@Suite
+struct AuthErrorTests {
+  @Test
+  func sessionMissingStatic() {
+    let error = AuthError.sessionMissing
 
-final class AuthErrorTests: XCTestCase {
-  func testErrors() {
-    let sessionMissing = AuthError.sessionMissing
-    XCTAssertEqual(sessionMissing.errorCode, .sessionNotFound)
-    XCTAssertEqual(sessionMissing.message, "Auth session missing.")
+    #expect(error.kind == .sessionMissing)
+    #expect(error.errorCode == .sessionNotFound)
+    #expect(error.message == "Auth session missing.")
+    #expect(error.weakPasswordReasons.isEmpty)
+    #expect(error.response == nil)
+  }
 
-    let weakPassword = AuthError.weakPassword(message: "Weak password", reasons: [])
-    XCTAssertEqual(weakPassword.errorCode, .weakPassword)
-    XCTAssertEqual(weakPassword.message, "Weak password")
+  @Test
+  func defaultsForErrorCodeAndReasons() {
+    let error = AuthError(kind: .implicitGrantRedirect, message: "Implicit grant failure")
 
-    let api = AuthError.api(
+    #expect(error.errorCode == .unknown)
+    #expect(error.weakPasswordReasons.isEmpty)
+    #expect(error.errorDescription == "Implicit grant failure")
+  }
+
+  @Test
+  func oauthFlowFailedIsClientSide() {
+    let error = AuthError.oauthFlowFailed("No redirect URL configured")
+
+    #expect(error.kind == .oauthFlowFailed)
+    #expect(error.errorCode == .unknown)
+    #expect(error.response == nil)
+    #expect(error.errorDescription == "No redirect URL configured")
+  }
+
+  @Test
+  func weakPasswordCarriesReasons() {
+    let error = AuthError(
+      kind: .weakPassword,
+      message: "Password is weak",
+      errorCode: .weakPassword,
+      weakPasswordReasons: ["length", "characters", "pwned"]
+    )
+
+    #expect(error.kind == .weakPassword)
+    #expect(error.weakPasswordReasons == ["length", "characters", "pwned"])
+  }
+
+  @Test
+  func apiErrorCarriesResponse() {
+    var headers = HTTPFields()
+    headers[.sbRequestID] = "req-1"
+    let error = AuthError(
+      kind: .api,
       message: "API Error",
       errorCode: .emailConflictIdentityNotDeletable,
-      underlyingData: Data(),
-      underlyingResponse: HTTPURLResponse(
-        url: URL(string: "http://localhost")!, statusCode: 400, httpVersion: nil, headerFields: nil)!
-    )
-    XCTAssertEqual(api.errorCode, .emailConflictIdentityNotDeletable)
-    XCTAssertEqual(api.message, "API Error")
-
-    let pkceGrantCodeExchange = AuthError.pkceGrantCodeExchange(
-      message: "PKCE failure", error: nil, code: nil)
-    XCTAssertEqual(pkceGrantCodeExchange.errorCode, .unknown)
-    XCTAssertEqual(pkceGrantCodeExchange.message, "PKCE failure")
-
-    let implicitGrantRedirect = AuthError.implicitGrantRedirect(message: "Implicit grant failure")
-    XCTAssertEqual(implicitGrantRedirect.errorCode, .unknown)
-    XCTAssertEqual(implicitGrantRedirect.message, "Implicit grant failure")
-  }
-
-  func testWeakPasswordWithReasons() {
-    let reasons = ["length", "characters", "pwned"]
-    let weakPassword = AuthError.weakPassword(message: "Password is weak", reasons: reasons)
-
-    XCTAssertEqual(weakPassword.message, "Password is weak")
-    XCTAssertEqual(weakPassword.errorCode, .weakPassword)
-    XCTAssertEqual(weakPassword.errorDescription, "Password is weak")
-  }
-
-  func testJWTVerificationFailed() {
-    let jwtError = AuthError.jwtVerificationFailed(message: "Invalid JWT signature")
-
-    XCTAssertEqual(jwtError.message, "Invalid JWT signature")
-    XCTAssertEqual(jwtError.errorCode, .invalidJWT)
-    XCTAssertEqual(jwtError.errorDescription, "Invalid JWT signature")
-  }
-
-  func testPKCEGrantCodeExchangeWithErrorAndCode() {
-    let pkceError = AuthError.pkceGrantCodeExchange(
-      message: "Exchange failed",
-      error: "invalid_grant",
-      code: "auth_code_123"
+      response: HTTPErrorResponse(statusCode: 422, headers: headers, body: Data())
     )
 
-    XCTAssertEqual(pkceError.message, "Exchange failed")
-    XCTAssertEqual(pkceError.errorCode, .unknown)
+    #expect(error.errorCode == .emailConflictIdentityNotDeletable)
+    #expect(error.response?.statusCode == 422)
+    #expect(error.response?.requestID == "req-1")
+    #expect(error.description == "AuthError(api): API Error [status 422, request req-1]")
   }
 
-  func testAPIErrorWithDifferentCodes() {
-    let errorCodes: [ErrorCode] = [
-      .badJWT,
-      .sessionExpired,
-      .userNotFound,
-      .invalidCredentials,
-      .emailExists,
-      .overRequestRateLimit,
-    ]
+  @Test
+  func kindIsOpen() {
+    let future = AuthError.Kind(rawValue: "somethingNew")
 
-    for code in errorCodes {
-      let error = AuthError.api(
-        message: "Test error",
-        errorCode: code,
-        underlyingData: Data(),
-        underlyingResponse: HTTPURLResponse(
-          url: URL(string: "http://localhost")!,
-          statusCode: 400,
-          httpVersion: nil,
-          headerFields: nil
-        )!
-      )
-
-      XCTAssertEqual(error.errorCode, code)
-      XCTAssertEqual(error.message, "Test error")
-    }
+    #expect(future.rawValue == "somethingNew")
+    #expect(future != .api)
   }
 
-  func testWebAuthnErrorCodeRawValues() {
-    XCTAssertEqual(ErrorCode.webAuthnChallengeNotFound.rawValue, "webauthn_challenge_not_found")
-    XCTAssertEqual(ErrorCode.webAuthnChallengeExpired.rawValue, "webauthn_challenge_expired")
-    XCTAssertEqual(ErrorCode.webAuthnVerificationFailed.rawValue, "webauthn_verification_failed")
-    XCTAssertEqual(ErrorCode.webAuthnCredentialExists.rawValue, "webauthn_credential_exists")
-    XCTAssertEqual(ErrorCode.tooManyPasskeys.rawValue, "too_many_passkeys")
+  @Test
+  func conformsToSupabaseError() {
+    let error: any Error = AuthError.sessionMissing
+
+    #expect((error as? any SupabaseError)?.message == "Auth session missing.")
   }
 
-  func testErrorCodeEquality() {
-    XCTAssertEqual(ErrorCode.badJWT, ErrorCode("bad_jwt"))
-    XCTAssertEqual(ErrorCode.sessionExpired, ErrorCode("session_expired"))
-    XCTAssertNotEqual(ErrorCode.badJWT, ErrorCode.sessionExpired)
+  @Test
+  func webAuthnErrorCodeRawValues() {
+    #expect(ErrorCode.webAuthnChallengeNotFound.rawValue == "webauthn_challenge_not_found")
+    #expect(ErrorCode.webAuthnChallengeExpired.rawValue == "webauthn_challenge_expired")
+    #expect(ErrorCode.webAuthnVerificationFailed.rawValue == "webauthn_verification_failed")
+    #expect(ErrorCode.webAuthnCredentialExists.rawValue == "webauthn_credential_exists")
+    #expect(ErrorCode.tooManyPasskeys.rawValue == "too_many_passkeys")
   }
 
-  func testErrorCodeRawValue() {
-    XCTAssertEqual(ErrorCode.badJWT.rawValue, "bad_jwt")
-    XCTAssertEqual(ErrorCode.sessionExpired.rawValue, "session_expired")
-    XCTAssertEqual(ErrorCode.unknown.rawValue, "unknown")
+  @Test
+  func errorCodeEquality() {
+    #expect(ErrorCode.badJWT == ErrorCode("bad_jwt"))
+    #expect(ErrorCode.sessionExpired == ErrorCode("session_expired"))
+    #expect(ErrorCode.badJWT != ErrorCode.sessionExpired)
   }
 
-  func testErrorCodeInitWithString() {
+  @Test
+  func errorCodeRawValue() {
+    #expect(ErrorCode.badJWT.rawValue == "bad_jwt")
+    #expect(ErrorCode.sessionExpired.rawValue == "session_expired")
+    #expect(ErrorCode.unknown.rawValue == "unknown")
+  }
+
+  @Test
+  func errorCodeInitWithString() {
     let code1 = ErrorCode("custom_error")
-    XCTAssertEqual(code1.rawValue, "custom_error")
+    #expect(code1.rawValue == "custom_error")
 
     let code2 = ErrorCode(rawValue: "another_error")
-    XCTAssertEqual(code2.rawValue, "another_error")
+    #expect(code2.rawValue == "another_error")
   }
 
-  func testErrorCodeHashable() {
+  @Test
+  func errorCodeHashable() {
     let set: Set<ErrorCode> = [.badJWT, .sessionExpired, .userNotFound]
-    XCTAssertTrue(set.contains(.badJWT))
-    XCTAssertTrue(set.contains(.sessionExpired))
-    XCTAssertFalse(set.contains(.emailExists))
-  }
-
-  func testAuthErrorPatternMatching() {
-    let error1: Error = AuthError.sessionMissing
-    XCTAssertTrue(AuthError.sessionMissing ~= error1)
-
-    let error2: Error = AuthError.weakPassword(message: "weak", reasons: [])
-    XCTAssertTrue(AuthError.weakPassword(message: "weak", reasons: []) ~= error2)
-
-    // Test non-AuthError
-    struct OtherError: Error {}
-    let error3: Error = OtherError()
-    XCTAssertFalse(AuthError.sessionMissing ~= error3)
+    #expect(set.contains(.badJWT))
+    #expect(set.contains(.sessionExpired))
+    #expect(!set.contains(.emailExists))
   }
 }

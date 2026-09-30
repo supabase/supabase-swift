@@ -5,11 +5,9 @@
 //  Created by Guilherme Souza on 19/04/24.
 //
 
-import Foundation
 import Helpers
-import XCTest
 
-final class WithTimeoutTests: XCTestCase {
+struct WithTimeoutTests {
   //  func testWithTimeout() async {
   //    do {
   //      try await withTimeout(interval: 0.25) {

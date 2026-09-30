@@ -80,8 +80,8 @@ public struct SortBy: Encodable, Sendable {
   /// The name of the column to sort by, e.g. `"name"` or `"created_at"`.
   public var column: String?
 
-  /// The raw sort direction string (`"asc"` or `"desc"`).
-  public var order: String?
+  /// The sort direction.
+  public var order: SortOrder?
 
   /// Creates a ``SortBy`` value.
   ///
@@ -90,7 +90,7 @@ public struct SortBy: Encodable, Sendable {
   ///   - order: The sort direction. Use ``SortOrder/ascending`` or ``SortOrder/descending``.
   public init(column: String? = nil, order: SortOrder? = nil) {
     self.column = column
-    self.order = order?.rawValue
+    self.order = order
   }
 }
 
@@ -100,22 +100,22 @@ public struct SortBy: Encodable, Sendable {
 /// let options = FileOptions(
 ///   cacheControl: "86400",
 ///   contentType: "image/png",
-///   upsert: true
+///   shouldUpsert: true
 /// )
-/// try await storage.from("avatars").upload("user123.png", data: imageData, options: options)
+/// try await storage.from("avatars").upload(path: "user123.png", data: imageData, options: options)
 /// ```
 ///
 /// ## Topics
 ///
 /// ### Creating file options
 ///
-/// - ``init(cacheControl:contentType:upsert:duplex:metadata:headers:)``
+/// - ``init(cacheControl:contentType:shouldUpsert:duplex:metadata:headers:)``
 ///
 /// ### Upload configuration
 ///
 /// - ``cacheControl``
 /// - ``contentType``
-/// - ``upsert``
+/// - ``shouldUpsert``
 /// - ``duplex``
 /// - ``metadata``
 /// - ``headers``
@@ -131,7 +131,7 @@ public struct FileOptions: Sendable {
 
   /// When `true`, overwrites an existing file at the same path. When `false` (the default), an
   /// error is thrown if an object already exists at the destination path.
-  public var upsert: Bool
+  public var shouldUpsert: Bool
 
   /// Enables or disables duplex streaming on the underlying `fetch()` call, allowing simultaneous
   /// reading and writing within the same stream.
@@ -139,7 +139,7 @@ public struct FileOptions: Sendable {
 
   /// Arbitrary key-value metadata to attach to the uploaded object. You can later use this to
   /// filter or search for files.
-  public var metadata: [String: AnyJSON]?
+  public var metadata: [String: JSONValue]?
 
   /// Extra HTTP headers to include with the upload request.
   public var headers: [String: String]?
@@ -149,21 +149,21 @@ public struct FileOptions: Sendable {
   /// - Parameters:
   ///   - cacheControl: Seconds for the `Cache-Control: max-age` header. Defaults to `"3600"`.
   ///   - contentType: MIME type for the `Content-Type` header. Inferred from the extension when `nil`.
-  ///   - upsert: Whether to overwrite an existing file. Defaults to `false`.
+  ///   - shouldUpsert: Whether to overwrite an existing file. Defaults to `false`.
   ///   - duplex: Duplex streaming mode string, if needed.
   ///   - metadata: Arbitrary metadata key-value pairs to attach to the object.
   ///   - headers: Extra HTTP headers for the upload request.
   public init(
     cacheControl: String = "3600",
     contentType: String? = nil,
-    upsert: Bool = false,
+    shouldUpsert: Bool = false,
     duplex: String? = nil,
-    metadata: [String: AnyJSON]? = nil,
+    metadata: [String: JSONValue]? = nil,
     headers: [String: String]? = nil
   ) {
     self.cacheControl = cacheControl
     self.contentType = contentType
-    self.upsert = upsert
+    self.shouldUpsert = shouldUpsert
     self.duplex = duplex
     self.metadata = metadata
     self.headers = headers
@@ -172,7 +172,7 @@ public struct FileOptions: Sendable {
 
 /// A single signed URL returned as part of a batch sign operation.
 ///
-/// Returned by ``StorageFileApi/createSignedURLs(paths:expiresIn:download:cacheNonce:)-5lkmo`` // cspell:ignore lkmo
+/// Returned by ``StorageFileApi/createSignedURLs(paths:expiresIn:download:cacheNonce:)-(_,_,DownloadBehavior?,_)``
 /// (the legacy `[SignedURL]` overload). Prefer the ``SignedURLResult`` overload for new code.
 ///
 /// ## Topics
@@ -205,7 +205,7 @@ public struct SignedURL: Decodable, Sendable {
   }
 }
 
-/// Represents the per-item result of a ``StorageFileApi/createSignedURLs(paths:expiresIn:download:cacheNonce:)`` call.
+/// Represents the per-item result of a ``StorageFileApi/createSignedURLs(paths:expiresIn:download:cacheNonce:)-(_,_,DownloadBehavior?,_)`` call.
 ///
 /// It is guaranteed that exactly one case applies per item: either the URL was signed
 /// successfully, or the path did not exist or was inaccessible.
@@ -270,7 +270,7 @@ public enum SignedURLResult: Sendable {
 
 /// A signed upload URL created by ``StorageFileApi/createSignedUploadURL(path:options:)``.
 ///
-/// Pass ``token`` to ``StorageFileApi/uploadToSignedURL(_:token:data:options:)`` to perform the
+/// Pass ``token`` to ``StorageFileApi/uploadToSignedURL(path:token:data:options:)`` to perform the
 /// authenticated upload.
 ///
 /// ## Topics
@@ -336,16 +336,16 @@ public struct SignedURLUploadResponse: Sendable {
 ///
 /// ### Properties
 ///
-/// - ``upsert``
+/// - ``shouldUpsert``
 public struct CreateSignedUploadURLOptions: Sendable {
   /// When `true`, an existing file at the destination path is overwritten by the subsequent upload.
-  public var upsert: Bool
+  public var shouldUpsert: Bool
 
   /// Creates a ``CreateSignedUploadURLOptions`` value.
   ///
-  /// - Parameter upsert: Whether to overwrite an existing object at the destination path.
-  public init(upsert: Bool) {
-    self.upsert = upsert
+  /// - Parameter shouldUpsert: Whether to overwrite an existing object at the destination path.
+  public init(shouldUpsert: Bool) {
+    self.shouldUpsert = shouldUpsert
   }
 }
 
@@ -395,7 +395,7 @@ public struct DestinationOptions: Sendable {
 ///
 /// - ``metadata``
 /// - ``buckets``
-public struct FileObject: Identifiable, Hashable, Codable, Sendable {
+public struct FileObject: Identifiable, Hashable, Decodable, Sendable {
   /// The name of the file, including its extension.
   public var name: String
 
@@ -418,7 +418,7 @@ public struct FileObject: Identifiable, Hashable, Codable, Sendable {
   public var lastAccessedAt: Date?
 
   /// Arbitrary key-value metadata attached to the file at upload time.
-  public var metadata: [String: AnyJSON]?
+  public var metadata: [String: JSONValue]?
 
   /// The bucket associated with this file, if it was eagerly loaded.
   public var buckets: Bucket?
@@ -443,7 +443,7 @@ public struct FileObject: Identifiable, Hashable, Codable, Sendable {
     updatedAt: Date? = nil,
     createdAt: Date? = nil,
     lastAccessedAt: Date? = nil,
-    metadata: [String: AnyJSON]? = nil,
+    metadata: [String: JSONValue]? = nil,
     buckets: Bucket? = nil
   ) {
     self.name = name
@@ -539,7 +539,7 @@ public struct FileObjectV2: Identifiable, Hashable, Decodable, Sendable {
   public let lastModified: Date?
 
   /// Arbitrary key-value metadata attached to the file at upload time.
-  public let metadata: [String: AnyJSON]?
+  public let metadata: [String: JSONValue]?
 
   enum CodingKeys: String, CodingKey {
     case id
@@ -561,7 +561,7 @@ public struct FileObjectV2: Identifiable, Hashable, Decodable, Sendable {
 /// A Supabase Storage bucket.
 ///
 /// Buckets are the top-level containers for files. Retrieve bucket details with
-/// ``StorageBucketApi/getBucket(_:)`` or ``StorageBucketApi/listBuckets()``.
+/// ``SupabaseStorageClient/bucket(_:)`` or ``SupabaseStorageClient/listBuckets()``.
 ///
 /// ## Topics
 ///
@@ -581,7 +581,7 @@ public struct FileObjectV2: Identifiable, Hashable, Decodable, Sendable {
 ///
 /// - ``createdAt``
 /// - ``updatedAt``
-public struct Bucket: Identifiable, Hashable, Codable, Sendable {
+public struct Bucket: Identifiable, Hashable, Decodable, Sendable {
   /// The unique identifier of the bucket.
   public var id: String
 
@@ -791,15 +791,10 @@ extension ResizeMode: ExpressibleByStringLiteral {
   public init(stringLiteral value: String) { self.init(rawValue: value) }
 }
 
-extension ResizeMode: Codable {
+extension ResizeMode: Encodable {
   public func encode(to encoder: any Encoder) throws {
     var container = encoder.singleValueContainer()
     try container.encode(rawValue)
-  }
-
-  public init(from decoder: any Decoder) throws {
-    let container = try decoder.singleValueContainer()
-    self.init(rawValue: try container.decode(String.self))
   }
 }
 
@@ -841,15 +836,10 @@ extension ImageFormat: ExpressibleByStringLiteral {
   public init(stringLiteral value: String) { self.init(rawValue: value) }
 }
 
-extension ImageFormat: Codable {
+extension ImageFormat: Encodable {
   public func encode(to encoder: any Encoder) throws {
     var container = encoder.singleValueContainer()
     try container.encode(rawValue)
-  }
-
-  public init(from decoder: any Decoder) throws {
-    let container = try decoder.singleValueContainer()
-    self.init(rawValue: try container.decode(String.self))
   }
 }
 
@@ -887,15 +877,10 @@ extension SortOrder: ExpressibleByStringLiteral {
   public init(stringLiteral value: String) { self.init(rawValue: value) }
 }
 
-extension SortOrder: Codable {
+extension SortOrder: Encodable {
   public func encode(to encoder: any Encoder) throws {
     var container = encoder.singleValueContainer()
     try container.encode(rawValue)
-  }
-
-  public init(from decoder: any Decoder) throws {
-    let container = try decoder.singleValueContainer()
-    self.init(rawValue: try container.decode(String.self))
   }
 }
 
@@ -904,8 +889,8 @@ extension SortOrder: Codable {
 /// Controls the `Content-Disposition` header behavior for signed and public URLs.
 ///
 /// ```swift
-/// storage.from("docs").getPublicURL(path: "report.pdf", download: .withOriginalName)
-/// storage.from("docs").getPublicURL(path: "report.pdf", download: .named("annual-2024.pdf"))
+/// storage.from("docs").publicURL(path: "report.pdf", download: .withOriginalName)
+/// storage.from("docs").publicURL(path: "report.pdf", download: .named("annual-2024.pdf"))
 /// ```
 ///
 /// ## Topics
@@ -990,8 +975,8 @@ public struct BucketOptions: Sendable {
 /// Options for server-side image transformation applied before the asset is served to the client.
 ///
 /// Pass a ``TransformOptions`` value to ``StorageFileApi/download(path:options:query:cacheNonce:)``,
-/// ``StorageFileApi/getPublicURL(path:download:options:cacheNonce:)``, or
-/// ``StorageFileApi/createSignedURL(path:expiresIn:download:transform:cacheNonce:)`` to resize,
+/// ``StorageFileApi/publicURL(path:download:options:cacheNonce:)-(_,DownloadBehavior?,_,_)``, or
+/// ``StorageFileApi/createSignedURL(path:expiresIn:download:transform:cacheNonce:)-(_,_,DownloadBehavior?,_,_)`` to resize,
 /// reformat, or adjust the quality of images on the fly.
 ///
 /// ```swift

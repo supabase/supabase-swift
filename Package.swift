@@ -1,6 +1,7 @@
-// swift-tools-version:6.1
+// swift-tools-version:6.2
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
+import CompilerPluginSupport
 import Foundation
 import PackageDescription
 
@@ -12,24 +13,38 @@ let package = Package(
     .macOS(.v13),
     .watchOS(.v9),
     .tvOS(.v16),
+    .visionOS(.v1),
   ],
   products: [
     .library(name: "Auth", targets: ["Auth"]),
     .library(name: "Functions", targets: ["Functions"]),
     .library(name: "PostgREST", targets: ["PostgREST"]),
+    // Opt-in. `Supabase` deliberately does not re-export this, so swift-syntax is compiled
+    // only for users who write `import PostgrestMacros`.
+    .library(name: "PostgrestMacros", targets: ["PostgrestMacros"]),
     .library(name: "Realtime", targets: ["Realtime"]),
     .library(name: "Storage", targets: ["Storage"]),
     .library(name: "Supabase", targets: ["Supabase"]),
   ],
+  traits: [
+    // Enables W3C traceparent header propagation using opentelemetry-swift's active span.
+    "OpenTelemetry"
+  ],
   dependencies: [
-    .package(url: "https://github.com/apple/swift-crypto.git", "3.0.0"..<"5.0.0"),
+    .package(url: "https://github.com/apple/swift-crypto.git", "3.0.0"..<"6.0.0"),
     .package(url: "https://github.com/apple/swift-http-types.git", from: "1.3.0"),
+    .package(url: "https://github.com/swiftlang/swift-syntax", "601.0.0"..<"605.0.0"),
+    .package(url: "https://github.com/apple/swift-log.git", "1.5.0"..<"2.0.0"),
+    .package(url: "https://github.com/open-telemetry/opentelemetry-swift-core.git", from: "2.5.0"),
     .package(url: "https://github.com/pointfreeco/swift-clocks", from: "1.0.0"),
     .package(url: "https://github.com/pointfreeco/swift-concurrency-extras", from: "1.1.0"),
     .package(url: "https://github.com/pointfreeco/swift-custom-dump", from: "1.3.2"),
+    .package(url: "https://github.com/pointfreeco/swift-macro-testing", from: "0.6.0"),
     .package(url: "https://github.com/pointfreeco/swift-snapshot-testing", from: "1.17.0"),
     .package(url: "https://github.com/pointfreeco/xctest-dynamic-overlay", from: "1.2.2"),
     .package(url: "https://github.com/WeTransfer/Mocker", from: "3.0.0"),
+    .package(url: "https://github.com/21-DOT-DEV/swift-secp256k1.git", from: "0.23.2"),
+    .package(url: "https://github.com/krzyzanowskim/CryptoSwift.git", from: "1.10.0"),
   ],
   targets: [
     .target(
@@ -37,25 +52,35 @@ let package = Package(
       dependencies: [
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
-        .product(name: "Clocks", package: "swift-clocks"),
-        .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
+        .product(name: "HTTPTypesFoundation", package: "swift-http-types"),
+        .product(name: "Logging", package: "swift-log"),
         .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
-      ]
+      ],
+      // One manifest covers the whole SDK: every product links `Helpers`, so the bundle this
+      // resource produces is present however a consumer imports us. Duplicating it per library
+      // target would buy nothing while multiplying the places a future required-reason API has
+      // to be declared.
+      resources: [.copy("PrivacyInfo.xcprivacy")]
     ),
     .testTarget(
       name: "HelpersTests",
       dependencies: [
         .product(name: "CustomDump", package: "swift-custom-dump"),
+        .product(name: "HTTPTypes", package: "swift-http-types"),
         "Helpers",
+        "Mocker",
+        "TestHelpers",
       ]
     ),
     .target(
       name: "Auth",
       dependencies: [
+        .product(name: "Clocks", package: "swift-clocks"),
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "Crypto", package: "swift-crypto"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
         .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
+        .product(name: "Logging", package: "swift-log"),
         "Helpers",
       ]
     ),
@@ -68,6 +93,7 @@ let package = Package(
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
         "Auth",
         "Helpers",
+        "Mocker",
         "TestHelpers",
       ],
       exclude: [
@@ -80,16 +106,15 @@ let package = Package(
       dependencies: [
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
+        .product(name: "Logging", package: "swift-log"),
         "Helpers",
       ]
     ),
     .testTarget(
       name: "FunctionsTests",
       dependencies: [
-        .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
-        .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
+        .product(name: "HTTPTypes", package: "swift-http-types"),
         .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
-        .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
         "Functions",
         "Mocker",
         "TestHelpers",
@@ -101,9 +126,12 @@ let package = Package(
     .testTarget(
       name: "IntegrationTests",
       dependencies: [
+        .product(name: "Clocks", package: "swift-clocks"),
         .product(name: "CustomDump", package: "swift-custom-dump"),
         .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
+        .product(name: "P256K", package: "swift-secp256k1"),
+        .product(name: "CryptoSwift", package: "CryptoSwift"),
         "Helpers",
         "Supabase",
         "TestHelpers",
@@ -118,13 +146,16 @@ let package = Package(
       dependencies: [
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
+        .product(name: "Logging", package: "swift-log"),
         "Helpers",
+      ],
+      exclude: [
+        "Legacy/README.md"
       ]
     ),
     .testTarget(
       name: "PostgRESTTests",
       dependencies: [
-        .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
         .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
         "Helpers",
         "Mocker",
@@ -135,32 +166,49 @@ let package = Package(
         "__Snapshots__"
       ]
     ),
-    .target(
-      name: "RealtimeV2",
+    .macro(
+      name: "PostgrestMacrosPlugin",
       dependencies: [
-        .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
-        .product(name: "HTTPTypes", package: "swift-http-types"),
-        .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
-        "Helpers",
+        .product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
+        .product(name: "SwiftDiagnostics", package: "swift-syntax"),
+        .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
+      ]
+    ),
+    .target(
+      name: "PostgrestMacros",
+      dependencies: [
+        "PostgREST",
+        "PostgrestMacrosPlugin",
+      ]
+    ),
+    .testTarget(
+      name: "PostgrestMacrosTests",
+      dependencies: [
+        .product(name: "MacroTesting", package: "swift-macro-testing"),
+        .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
+        "PostgrestMacros",
+        "PostgrestMacrosPlugin",
       ]
     ),
     .target(
       name: "Realtime",
       dependencies: [
+        .product(name: "Clocks", package: "swift-clocks"),
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
+        .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
+        .product(name: "Logging", package: "swift-log"),
         "Helpers",
-        "RealtimeV2",
       ]
     ),
     .testTarget(
       name: "RealtimeTests",
       dependencies: [
+        .product(name: "Clocks", package: "swift-clocks"),
         .product(name: "CustomDump", package: "swift-custom-dump"),
         .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
         "Realtime",
-        "RealtimeV2",
         "TestHelpers",
       ]
     ),
@@ -169,21 +217,18 @@ let package = Package(
       dependencies: [
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
+        .product(name: "Logging", package: "swift-log"),
         "Helpers",
       ]
     ),
     .testTarget(
       name: "StorageTests",
       dependencies: [
-        .product(name: "CustomDump", package: "swift-custom-dump"),
         .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
         "Mocker",
         "TestHelpers",
         "Storage",
-      ],
-      exclude: [
-        "__Snapshots__"
       ],
       resources: [
         .copy("sadcat.jpg"),
@@ -193,9 +238,15 @@ let package = Package(
     .target(
       name: "Supabase",
       dependencies: [
+        .product(name: "Clocks", package: "swift-clocks"),
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
         .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
+        .product(name: "Logging", package: "swift-log"),
+        .product(
+          name: "OpenTelemetryApi", package: "opentelemetry-swift-core",
+          condition: .when(traits: ["OpenTelemetry"])
+        ),
         "Auth",
         "Functions",
         "PostgREST",
@@ -206,10 +257,25 @@ let package = Package(
     .testTarget(
       name: "SupabaseTests",
       dependencies: [
+        .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "CustomDump", package: "swift-custom-dump"),
+        .product(name: "HTTPTypes", package: "swift-http-types"),
         .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
+        .product(
+          name: "OpenTelemetryApi", package: "opentelemetry-swift-core",
+          condition: .when(traits: ["OpenTelemetry"])
+        ),
+        .product(
+          name: "OpenTelemetrySdk", package: "opentelemetry-swift-core",
+          condition: .when(traits: ["OpenTelemetry"])
+        ),
         "Supabase",
+        "TestHelpers",
       ]
+    ),
+    .testTarget(
+      name: "DefaultIsolationTests",
+      dependencies: ["Supabase"]
     ),
     .target(
       name: "TestHelpers",
@@ -226,28 +292,25 @@ let package = Package(
 )
 
 for target in package.targets {
-  // Test targets never opted into `ExistentialAny` below, so bumping swift-tools-version
-  // to 6.1 must not silently switch their *default* language mode to Swift 6 either —
-  // pin them to v5 to preserve their pre-6.1 compilation behavior exactly.
-  if target.isTest {
-    target.swiftSettings = [.swiftLanguageMode(.v5)]
-    continue
-  }
-
   var swiftSettings: [SwiftSetting] = [
     .enableUpcomingFeature("ExistentialAny"),
     .enableUpcomingFeature("ImmutableWeakCaptures"),
     .enableUpcomingFeature("InferIsolatedConformances"),
-    .enableUpcomingFeature("InternalImportsByDefault"),
-    .enableUpcomingFeature("MemberImportVisibility"),
   ]
 
-  // The `Realtime` target hosts the legacy pre-async/await Phoenix client under
-  // `Deprecated/`, which predates Swift concurrency and isn't safe under Swift 6's
-  // strict checking. Keep it on the Swift 5 language mode so it keeps compiling
-  // unchanged, while `RealtimeV2` (its replacement) gets full Swift 6 checking.
-  if target.name == "Realtime" {
-    swiftSettings.append(.swiftLanguageMode(.v5))
+  // The compiler-plugin target must declare its macro types `public` to satisfy SwiftSyntax's
+  // `CompilerPlugin` protocol, and `InternalImportsByDefault` rejects a public conformance to a
+  // protocol from an internally-imported module. Plugins run at build time and ship no
+  // distributable API, so the two import-visibility features gain nothing there.
+  if target.name != "PostgrestMacrosPlugin" {
+    swiftSettings.append(.enableUpcomingFeature("InternalImportsByDefault"))
+    swiftSettings.append(.enableUpcomingFeature("MemberImportVisibility"))
+  }
+
+  // Compile-only guard that the public API stays usable from a module that opts into Swift 6.2's
+  // default `@MainActor` isolation (SE-0466). The SDK targets themselves stay nonisolated.
+  if target.name == "DefaultIsolationTests" {
+    swiftSettings.append(.defaultIsolation(MainActor.self))
   }
 
   target.swiftSettings = swiftSettings

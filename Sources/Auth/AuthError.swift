@@ -1,8 +1,5 @@
-public import Foundation
-
-#if canImport(FoundationNetworking)
-  public import FoundationNetworking
-#endif
+import Foundation
+public import Helpers
 
 /// An error code thrown by the server.
 public struct ErrorCode: Decodable, RawRepresentable, Sendable, Hashable {
@@ -204,208 +201,164 @@ extension ErrorCode {
   public static let invalidCredentials = ErrorCode("invalid_credentials")
   /// The email address is not on the allow-list for this project.
   public static let emailAddressNotAuthorized = ErrorCode("email_address_not_authorized")
+  /// The Web3 provider for the requested chain is disabled for this project.
+  public static let web3ProviderDisabled = ErrorCode("web3_provider_disabled")
+  /// The requested Web3 chain is not supported.
+  public static let web3UnsupportedChain = ErrorCode("web3_unsupported_chain")
   /// The provided JWT is invalid (malformed, bad signature, or expired).
   public static let invalidJWT = ErrorCode("invalid_jwt")
+  /// No pending OAuth authorization request exists with the given ID, it has expired, or it belongs to a different user.
+  public static let oauthAuthorizationNotFound = ErrorCode("oauth_authorization_not_found")
+  /// No active OAuth consent/grant exists for the given client.
+  public static let oauthConsentNotFound = ErrorCode("oauth_consent_not_found")
+  /// The OAuth 2.1 authorization server feature is disabled for this project.
+  public static let featureDisabled = ErrorCode("feature_disabled")
 }
 
-/// Errors that can be thrown by ``AuthClient`` and related Auth types.
+/// An error thrown by ``AuthClient`` and related Auth types.
+///
+/// Check ``kind`` to learn what failed, and ``errorCode`` for the GoTrue error code when the
+/// server rejected the request. ``response`` carries the status, headers, body and request id
+/// for ``Kind-swift.struct/api`` and ``Kind-swift.struct/unexpectedResponse``.
+///
+/// ```swift
+/// do {
+///   try await supabase.auth.signIn(email: email, password: password)
+/// } catch let error as AuthError where error.errorCode == .invalidCredentials {
+///   showWrongPassword()
+/// } catch let error as AuthError where error.kind == .weakPassword {
+///   showReasons(error.weakPasswordReasons)
+/// }
+/// ```
 ///
 /// ## Topics
 ///
-/// ### Common errors
+/// ### Inspecting an error
+/// - ``kind``
+/// - ``errorCode``
+/// - ``message``
+/// - ``weakPasswordReasons``
+/// - ``response``
+/// - ``underlyingError``
+///
+/// ### Common values
 /// - ``sessionMissing``
-/// - ``weakPassword(message:reasons:)``
-/// - ``api(message:errorCode:underlyingData:underlyingResponse:)``
-///
-/// ### OAuth flow errors
-/// - ``pkceGrantCodeExchange(message:error:code:)``
-/// - ``implicitGrantRedirect(message:)``
-///
-/// ### JWT errors
-/// - ``jwtVerificationFailed(message:)``
-public enum AuthError: LocalizedError, Equatable {
-  @available(
-    *,
-    deprecated,
-    message:
-      "Error used to be thrown when no exp claim was found in JWT during setSession(accessToken:refreshToken:) method."
-  )
-  case missingExpClaim
+/// - ``Kind-swift.struct``
+public struct AuthError: SupabaseError {
+  /// What failed. Compare against the static members and keep a fallback branch.
+  public struct Kind: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+    public let rawValue: String
 
-  @available(
-    *,
-    deprecated,
-    message:
-      "Error used to be thrown when provided JWT wasn't valid during setSession(accessToken:refreshToken:) method."
-  )
-  case malformedJWT
-
-  @available(*, deprecated, renamed: "sessionMissing")
-  public static var sessionNotFound: AuthError { .sessionMissing }
-
-  /// Error thrown during PKCE flow.
-  @available(
-    *,
-    deprecated,
-    renamed: "pkceGrantCodeExchange",
-    message: "Error was grouped in `pkceGrantCodeExchange`, please use it instead of `pkce`."
-  )
-  public static func pkce(_ reason: PKCEFailureReason) -> AuthError {
-    switch reason {
-    case .codeVerifierNotFound:
-      .pkceGrantCodeExchange(message: "A code verifier wasn't found in PKCE flow.")
-    case .invalidPKCEFlowURL:
-      .pkceGrantCodeExchange(message: "Not a valid PKCE flow url.")
-    }
-  }
-
-  @available(*, deprecated, message: "Use `pkceGrantCodeExchange` instead.")
-  public enum PKCEFailureReason: Sendable {
-    /// Code verifier not found in the URL.
-    case codeVerifierNotFound
-
-    /// Not a valid PKCE flow URL.
-    case invalidPKCEFlowURL
-  }
-
-  @available(*, deprecated, renamed: "implicitGrantRedirect")
-  public static var invalidImplicitGrantFlowURL: AuthError {
-    .implicitGrantRedirect(message: "Not a valid implicit grant flow url.")
-  }
-
-  @available(
-    *,
-    deprecated,
-    message:
-      "This error is never thrown, if you depend on it, you can remove the logic as it never happens."
-  )
-  case missingURL
-
-  @available(
-    *,
-    deprecated,
-    message:
-      "Error used to be thrown on methods which required a valid redirect scheme, such as signInWithOAuth. This is now considered a programming error an a assertion is triggered in case redirect scheme isn't provided."
-  )
-  case invalidRedirectScheme
-
-  @available(
-    *,
-    deprecated,
-    renamed: "api(message:errorCode:underlyingData:underlyingResponse:)"
-  )
-  public static func api(_ error: APIError) -> AuthError {
-    let message = error.msg ?? error.error ?? error.errorDescription ?? "Unexpected API error."
-    if let weakPassword = error.weakPassword {
-      return .weakPassword(message: message, reasons: weakPassword.reasons)
+    public init(rawValue: String) {
+      self.rawValue = rawValue
     }
 
-    return .api(
-      message: message,
-      errorCode: .unknown,
-      underlyingData: (try? AuthClient.Configuration.jsonEncoder.encode(error)) ?? Data(),
-      underlyingResponse: HTTPURLResponse(
-        url: defaultAuthURL,
-        statusCode: error.code ?? 500,
-        httpVersion: nil,
-        headerFields: nil
-      )!
-    )
+    public init(stringLiteral value: String) {
+      self.init(rawValue: value)
+    }
+
+    /// GoTrue rejected the request. ``AuthError/errorCode`` says why and
+    /// ``AuthError/response`` has the body.
+    public static let api: Kind = "api"
+    /// A session is required but none is stored, or the server reported the session as gone.
+    public static let sessionMissing: Kind = "sessionMissing"
+    /// The password does not meet the project's strength rules. See
+    /// ``AuthError/weakPasswordReasons``.
+    public static let weakPassword: Kind = "weakPassword"
+    /// The PKCE redirect URL carried an error, or the code exchange failed.
+    public static let pkceGrantCodeExchange: Kind = "pkceGrantCodeExchange"
+    /// The implicit-flow redirect URL carried an error or no session.
+    public static let implicitGrantRedirect: Kind = "implicitGrantRedirect"
+    /// An OAuth flow could not start or finish on the client, before any request reached the
+    /// server. Most often no redirect URL with a scheme is configured.
+    public static let oauthFlowFailed: Kind = "oauthFlowFailed"
+    /// Local JWT verification failed (malformed, expired or bad signature).
+    public static let jwtVerificationFailed: Kind = "jwtVerificationFailed"
+    /// A WebAuthn ceremony could not be driven: a required field was missing or malformed, or
+    /// the authenticator returned an unexpected credential type.
+    public static let webAuthn: Kind = "webAuthn"
+    /// A non-2xx status whose body was not a GoTrue error payload. ``AuthError/response`` has the
+    /// raw body.
+    public static let unexpectedResponse: Kind = "unexpectedResponse"
+    /// The request never completed. ``AuthError/underlyingError`` is usually a `URLError`.
+    public static let transport: Kind = "transport"
+    /// A success body could not be decoded. ``AuthError/underlyingError`` is usually a
+    /// `DecodingError`.
+    public static let decoding: Kind = "decoding"
+    /// A token refresh finished after the session it started from was signed out or replaced, so
+    /// its rotated tokens were dropped rather than applied to whichever session is stored now.
+    /// Distinct from ``sessionMissing``: a session may well be stored, just not the one that
+    /// refresh belonged to.
+    public static let refreshDiscarded: Kind = "refreshDiscarded"
   }
 
-  /// An error returned by the API.
-  @available(
-    *,
-    deprecated,
-    renamed: "api(message:errorCode:underlyingData:underlyingResponse:)"
-  )
-  public struct APIError: Error, Codable, Sendable, Equatable {
-    /// A basic message describing the problem with the request. Usually missing if
-    /// ``AuthError/APIError/error`` is present.
-    public var msg: String?
+  public var kind: Kind
+  public var message: String
+  /// The GoTrue error code. `.unknown` when the failure did not come from the server.
+  public var errorCode: ErrorCode
+  /// Why the password was rejected. Empty unless ``kind`` is ``Kind-swift.struct/weakPassword``.
+  public var weakPasswordReasons: [String]
+  public var response: HTTPErrorResponse?
+  public var underlyingError: (any Error)?
 
-    /// The HTTP status code. Usually missing if ``AuthError/APIError/error`` is present.
-    public var code: Int?
-
-    /// Certain responses will contain this property with the provided values.
-    ///
-    /// Usually one of these:
-    ///   - `invalid_request`
-    ///   - `unauthorized_client`
-    ///   - `access_denied`
-    ///   - `server_error`
-    ///   - `temporarily_unavailable`
-    ///   - `unsupported_otp_type`
-    public var error: String?
-
-    /// Certain responses that have an ``AuthError/APIError/error`` property may have this property
-    /// which describes the error.
-    public var errorDescription: String?
-
-    /// Only returned when signing up if the password used is too weak. Inspect the
-    /// ``WeakPassword/reasons`` and ``AuthError/APIError/msg`` property to identify the causes.
-    public var weakPassword: WeakPassword?
-  }
-
-  /// Error thrown when a session is required to proceed, but none was found, either thrown by the client, or returned by the server.
-  case sessionMissing
-
-  /// Error thrown when password is deemed weak, check associated reasons to know why.
-  case weakPassword(message: String, reasons: [String])
-
-  /// Error thrown by API when an error occurs, check `errorCode` to know more,
-  /// or use `underlyingData` or `underlyingResponse` for access to the response which originated this error.
-  case api(
+  public init(
+    kind: Kind,
     message: String,
-    errorCode: ErrorCode,
-    underlyingData: Data,
-    underlyingResponse: HTTPURLResponse
-  )
-
-  /// Error thrown when an error happens during PKCE grant flow.
-  case pkceGrantCodeExchange(message: String, error: String? = nil, code: String? = nil)
-
-  /// Error thrown when an error happens during implicit grant flow.
-  case implicitGrantRedirect(message: String)
-
-  /// Error thrown when JWT verification fails.
-  case jwtVerificationFailed(message: String)
-
-  public var message: String {
-    switch self {
-    case .sessionMissing: "Auth session missing."
-    case .weakPassword(let message, _),
-      .api(let message, _, _, _),
-      .pkceGrantCodeExchange(let message, _, _),
-      .implicitGrantRedirect(let message),
-      .jwtVerificationFailed(let message):
-      message
-    // Deprecated cases
-    case .missingExpClaim: "Missing expiration claim in the access token."
-    case .malformedJWT: "A malformed JWT received."
-    case .invalidRedirectScheme: "Invalid redirect scheme."
-    case .missingURL: "Missing URL."
-    }
+    errorCode: ErrorCode = .unknown,
+    weakPasswordReasons: [String] = [],
+    response: HTTPErrorResponse? = nil,
+    underlyingError: (any Error)? = nil
+  ) {
+    self.kind = kind
+    self.message = message
+    self.errorCode = errorCode
+    self.weakPasswordReasons = weakPasswordReasons
+    self.response = response
+    self.underlyingError = underlyingError
   }
 
-  public var errorCode: ErrorCode {
-    switch self {
-    case .sessionMissing: .sessionNotFound
-    case .weakPassword: .weakPassword
-    case .api(_, let errorCode, _, _): errorCode
-    case .pkceGrantCodeExchange, .implicitGrantRedirect: .unknown
-    case .jwtVerificationFailed: .invalidJWT
-    // Deprecated cases
-    case .missingExpClaim, .malformedJWT, .invalidRedirectScheme, .missingURL: .unknown
-    }
+  public var description: String {
+    formattedDescription(kind: kind.rawValue)
   }
 
-  public var errorDescription: String? {
-    message
+  /// Thrown when a session is required to proceed but none was found, either locally or as
+  /// reported by the server.
+  public static let sessionMissing = AuthError(
+    kind: .sessionMissing, message: "Auth session missing.", errorCode: .sessionNotFound)
+
+  /// Thrown when a token refresh finished after the session it started from was signed out or
+  /// replaced, so its result was dropped instead of applied to the stored session.
+  public static let refreshDiscarded = AuthError(
+    kind: .refreshDiscarded,
+    message: "Token refresh discarded: the session it started from is no longer stored.")
+}
+
+extension AuthError {
+  static func weakPassword(message: String, reasons: [String]) -> AuthError {
+    AuthError(
+      kind: .weakPassword, message: message, errorCode: .weakPassword,
+      weakPasswordReasons: reasons)
   }
 
-  public static func ~= (lhs: AuthError, rhs: any Error) -> Bool {
-    guard let rhs = rhs as? AuthError else { return false }
-    return lhs == rhs
+  static func implicitGrantRedirect(_ message: String) -> AuthError {
+    AuthError(kind: .implicitGrantRedirect, message: message)
+  }
+
+  static func oauthFlowFailed(_ message: String) -> AuthError {
+    AuthError(kind: .oauthFlowFailed, message: message)
+  }
+
+  static func pkceGrantCodeExchange(_ message: String, errorCode: ErrorCode = .unknown)
+    -> AuthError
+  {
+    AuthError(kind: .pkceGrantCodeExchange, message: message, errorCode: errorCode)
+  }
+
+  static func jwtVerificationFailed(_ message: String) -> AuthError {
+    AuthError(kind: .jwtVerificationFailed, message: message, errorCode: .invalidJWT)
+  }
+
+  static func webAuthn(_ message: String) -> AuthError {
+    AuthError(kind: .webAuthn, message: message)
   }
 }

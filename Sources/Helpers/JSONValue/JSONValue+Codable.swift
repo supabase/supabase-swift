@@ -1,0 +1,82 @@
+//
+//  JSONValue+Codable.swift
+//
+//
+//  Created by Guilherme Souza on 20/01/24.
+//
+
+public import Foundation
+
+extension JSONValue {
+  /// The decoder instance used for transforming JSONValue to some Codable type.
+  public static let decoder: JSONDecoder = JSONDecoder.supabase()
+
+  /// The encoder instance used for transforming JSONValue to some Codable type.
+  public static let encoder: JSONEncoder = JSONEncoder.supabase()
+}
+
+extension JSONValue {
+  /// Initialize an ``JSONValue`` from an `Encodable` value.
+  /// - Parameter encoder: The `JSONEncoder` used to serialize `value`. Defaults to ``encoder``.
+  public init(_ value: some Encodable, encoder: JSONEncoder = JSONValue.encoder) throws {
+    if let value = value as? JSONValue {
+      self = value
+    } else if let string = value as? String {
+      self = .string(string)
+    } else if let bool = value as? Bool {
+      self = .bool(bool)
+    } else if let int = value as? Int {
+      self = .integer(int)
+    } else if let double = value as? Double {
+      self = .double(double)
+    } else {
+      let data = try encoder.encode(value)
+      self = try JSONValue.decoder.decode(JSONValue.self, from: data)
+    }
+  }
+
+  /// Decodes self instance as `Decodable` type.
+  public func decode<T: Decodable>(
+    as type: T.Type = T.self,
+    decoder: JSONDecoder = JSONValue.decoder
+  ) throws -> T {
+    let data = try JSONValue.encoder.encode(self)
+    return try decoder.decode(type, from: data)
+  }
+}
+
+extension JSONArray {
+  /// Decodes self instance as array of `Decodable` type.
+  public func decode<T: Decodable>(
+    as _: T.Type = T.self,
+    decoder: JSONDecoder = JSONValue.decoder
+  ) throws -> [T] {
+    try JSONValue.array(self).decode(as: [T].self, decoder: decoder)
+  }
+}
+
+extension JSONObject {
+  /// Decodes self instance as `Decodable` type.
+  public func decode<T: Decodable>(
+    as _: T.Type = T.self,
+    decoder: JSONDecoder = JSONValue.decoder
+  ) throws -> T {
+    try JSONValue.object(self).decode(as: T.self, decoder: decoder)
+  }
+
+  /// Initialize JSONObject from an `Encodable` type
+  /// - Parameter encoder: The `JSONEncoder` used to serialize `value`. Defaults to ``JSONValue/encoder``.
+  public init(_ value: some Encodable, encoder: JSONEncoder = JSONValue.encoder) throws {
+    guard let object = try JSONValue(value, encoder: encoder).objectValue else {
+      throw DecodingError.typeMismatch(
+        JSONObject.self,
+        DecodingError.Context(
+          codingPath: [],
+          debugDescription: "Expected to decode value to \(JSONObject.self)."
+        )
+      )
+    }
+
+    self = object
+  }
+}

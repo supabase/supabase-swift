@@ -8,10 +8,12 @@
 import ConcurrencyExtras
 import Foundation
 import Helpers
-import XCTest
+import Testing
 
-final class ObservationTokenTests: XCTestCase {
-  func testRemove() {
+@Suite
+struct ObservationTokenTests {
+  @Test
+  func remove() {
     let onRemoveCallCount = LockIsolated(0)
     let handle = ObservationToken {
       onRemoveCallCount.withValue {
@@ -22,10 +24,11 @@ final class ObservationTokenTests: XCTestCase {
     handle.cancel()
     handle.cancel()
 
-    XCTAssertEqual(onRemoveCallCount.value, 1)
+    #expect(onRemoveCallCount.value == 1)
   }
 
-  func testDeinit() {
+  @Test
+  func deinitCancelsToken() {
     let onRemoveCallCount = LockIsolated(0)
     var handle: ObservationToken? = ObservationToken {
       onRemoveCallCount.withValue {
@@ -36,6 +39,6 @@ final class ObservationTokenTests: XCTestCase {
     _ = handle  // Silence unused variable warning
     handle = nil
 
-    XCTAssertEqual(onRemoveCallCount.value, 1)
+    #expect(onRemoveCallCount.value == 1)
   }
 }

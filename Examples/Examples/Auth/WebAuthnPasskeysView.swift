@@ -172,7 +172,7 @@ struct WebAuthnPasskeysView: View {
                   .font(.caption)
                   .foregroundColor(.secondary)
               }
-              Text(passkey.id)
+              Text(passkey.id.uuidString)
                 .font(.system(.caption2, design: .monospaced))
                 .foregroundColor(.secondary)
                 .lineLimit(1)

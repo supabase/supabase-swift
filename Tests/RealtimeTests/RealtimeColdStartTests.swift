@@ -1,10 +1,9 @@
 import ConcurrencyExtras
 import Foundation
 import TestHelpers
-import XCTest
+import Testing
 
 @testable import Realtime
-@testable import RealtimeV2
 
 /// Regression tests for SDK-959: deaf-socket stalls on cold-start subscribe.
 ///
@@ -13,15 +12,11 @@ import XCTest
 /// frames asynchronously on a separate queue (like URLSession's delegate
 /// queue) — instead of the synchronous delivery of `FakeWebSocket`, which
 /// masks the races involved. They run against the real clock with compressed
-/// intervals, deliberately NOT under `withMainSerialExecutor`.
-final class RealtimeColdStartTests: XCTestCase {
+/// intervals.
+@Suite
+struct RealtimeColdStartTests {
   let url = URL(string: "http://localhost:54321/realtime/v1")!
   let apiKey = "anon.api.key"
-
-  override func setUp() {
-    super.setUp()
-    _clock = ContinuousClock()
-  }
 
   private func makeClient(socket: AsyncFakeWebSocket) -> RealtimeClientV2 {
     RealtimeClientV2(
@@ -40,27 +35,17 @@ final class RealtimeColdStartTests: XCTestCase {
         try await Task.sleep(nanoseconds: 20_000_000)
         return socket
       },
-      http: HTTPClientMock()
+      http: HTTPClient(transport: RecordingTransport()),
+      clock: ContinuousClock()
     )
-  }
-
-  /// Polls `condition` until it holds or `timeout` elapses.
-  private func waitUntil(
-    timeout: TimeInterval = 5.0,
-    _ condition: @escaping @Sendable () -> Bool
-  ) async {
-    let deadline = Date().addingTimeInterval(timeout)
-    while Date() < deadline {
-      if condition() { return }
-      try? await Task.sleep(nanoseconds: 10_000_000)
-    }
   }
 
   /// Reporter's flow from SDK-959: cold client, one channel, postgresChange
   /// streams consumed in detached tasks, then `subscribeWithError()`.
   /// With the deaf-socket bug this throws `maxRetryAttemptsReached` because
   /// the `phx_join` reply is never seen.
-  func testColdStartSubscribe_realTimingProfile() async throws {
+  @Test
+  func coldStartSubscribe_realTimingProfile() async throws {
     for iteration in 1...5 {
       let socket = AsyncFakeWebSocket()
       socket.serverResponder = AsyncFakeWebSocket.realtimeServerResponder()
@@ -82,11 +67,11 @@ final class RealtimeColdStartTests: XCTestCase {
       do {
         try await channel.subscribeWithError()
       } catch {
-        XCTFail("Iteration \(iteration): subscribe failed: \(error)")
+        Issue.record("Iteration \(iteration): subscribe failed: \(error)")
         return
       }
 
-      XCTAssertEqual(channel.status, .subscribed, "Iteration \(iteration)")
+      #expect(channel.status == .subscribed, "Iteration \(iteration)")
     }
   }
 
@@ -96,7 +81,8 @@ final class RealtimeColdStartTests: XCTestCase {
   /// both used to call `handleConnected(conn:)`, reading `conn.events` twice
   /// and leaving the socket deaf (no heartbeat acks, no phx_join replies) —
   /// the SDK-959 stall, thrown here as `maxRetryAttemptsReached`.
-  func testColdStartConcurrentSubscribes_doNotGoDeaf() async throws {
+  @Test
+  func coldStartConcurrentSubscribes_doNotGoDeaf() async throws {
     for iteration in 1...5 {
       let socket = AsyncFakeWebSocket()
       socket.serverResponder = AsyncFakeWebSocket.realtimeServerResponder()
@@ -113,12 +99,12 @@ final class RealtimeColdStartTests: XCTestCase {
       do {
         _ = try await (s1, s2)
       } catch {
-        XCTFail("Iteration \(iteration): subscribe failed: \(error)")
+        Issue.record("Iteration \(iteration): subscribe failed: \(error)")
         return
       }
 
-      XCTAssertEqual(channel1.status, .subscribed, "Iteration \(iteration)")
-      XCTAssertEqual(channel2.status, .subscribed, "Iteration \(iteration)")
+      #expect(channel1.status == .subscribed, "Iteration \(iteration)")
+      #expect(channel2.status == .subscribed, "Iteration \(iteration)")
     }
   }
 
@@ -127,7 +113,8 @@ final class RealtimeColdStartTests: XCTestCase {
   /// `ChannelStateManager.subscribe()` was a no-op for `.subscribed` channels,
   /// so `rejoinChannels()` silently skipped them — channels went deaf after
   /// the first reconnect (reported by rpiacent on PR #1003). // cspell:ignore rpiacent
-  func testChannelsRejoinAfterReconnect() async throws {
+  @Test
+  func channelsRejoinAfterReconnect() async throws {
     let sockets = LockIsolated<[AsyncFakeWebSocket]>([])
 
     let sut = RealtimeClientV2(
@@ -145,24 +132,26 @@ final class RealtimeColdStartTests: XCTestCase {
         sockets.withValue { $0.append(socket) }
         return socket
       },
-      http: HTTPClientMock()
+      http: HTTPClient(transport: RecordingTransport()),
+      clock: ContinuousClock()
     )
     defer { sut.disconnect() }
 
     let channel = sut.channel("room-rejoin")
 
     try await channel.subscribeWithError()
-    XCTAssertEqual(channel.status, .subscribed)
-    XCTAssertEqual(sockets.value.count, 1)
+    #expect(channel.status == .subscribed)
+    #expect(sockets.value.count == 1)
 
     // Inject a malformed frame: listenForMessages throws → handleError →
     // initiateReconnect. A remote .close with a transport-level code would also
     // reconnect, but application-level codes (4000–4999) skip reconnect by design
     // (auth errors should not loop with the same token).
     sockets.value[0].receiveFromServer(.text("not a valid frame"))
-    await waitUntil(timeout: 5) { sockets.value.count >= 2 }
-    guard sockets.value.count >= 2 else {
-      return XCTFail("No reconnect within 5 s")
+    let reconnected = await waitUntil(timeout: 5) { sockets.value.count >= 2 }
+    guard reconnected else {
+      Issue.record("No reconnect within 5 s")
+      return
     }
 
     // Channel must re-subscribe on the new socket. Waiting only for
@@ -175,11 +164,11 @@ final class RealtimeColdStartTests: XCTestCase {
       sockets.value[1].sentMessages.contains { $0.event == "phx_join" }
         && channel.status == .subscribed
     }
-    XCTAssertEqual(channel.status, .subscribed, "Channel did not rejoin after reconnect")
+    #expect(channel.status == .subscribed, "Channel did not rejoin after reconnect")
 
     // Exactly one phx_join sent on socket 2 (index 1).
     let joinsSentOnNewSocket = sockets.value[1].sentMessages.filter { $0.event == "phx_join" }
-    XCTAssertEqual(joinsSentOnNewSocket.count, 1, "Expected one phx_join on the new socket")
+    #expect(joinsSentOnNewSocket.count == 1, "Expected one phx_join on the new socket")
   }
 
   /// A heartbeat left pending on a connection that errors out must not be
@@ -194,7 +183,8 @@ final class RealtimeColdStartTests: XCTestCase {
   /// the first reconnect the socket count stabilizes. With the bug, socket 2's
   /// first heartbeat immediately times out → a second reconnect → socket 3 →
   /// etc. With the fix, socket 2 stays connected.
-  func testPendingHeartbeatDoesNotLeakAcrossReconnect() async throws {
+  @Test
+  func pendingHeartbeatDoesNotLeakAcrossReconnect() async throws {
     let sockets = LockIsolated<[AsyncFakeWebSocket]>([])
 
     let sut = RealtimeClientV2(
@@ -216,7 +206,8 @@ final class RealtimeColdStartTests: XCTestCase {
         sockets.withValue { $0.append(socket) }
         return socket
       },
-      http: HTTPClientMock()
+      http: HTTPClient(transport: RecordingTransport()),
+      clock: ContinuousClock()
     )
     defer { sut.disconnect() }
 
@@ -238,9 +229,10 @@ final class RealtimeColdStartTests: XCTestCase {
     sockets.value[0].receiveFromServer(.text("not a valid frame"))
 
     // Wait for the first reconnect to complete.
-    await waitUntil(timeout: 5) { sockets.value.count >= 2 }
-    guard sockets.value.count >= 2 else {
-      return XCTFail("No reconnect within 5 s — socket count: \(sockets.value.count)")
+    let reconnected = await waitUntil(timeout: 5) { sockets.value.count >= 2 }
+    guard reconnected else {
+      Issue.record("No reconnect within 5 s — socket count: \(sockets.value.count)")
+      return
     }
 
     // Record the count right after the first reconnect. If pendingHeartbeatRef
@@ -252,8 +244,8 @@ final class RealtimeColdStartTests: XCTestCase {
       sockets.value.count > countAfterFirstReconnect
     }
 
-    XCTAssertEqual(
-      sockets.value.count, countAfterFirstReconnect,
+    #expect(
+      sockets.value.count == countAfterFirstReconnect,
       """
       Perpetual reconnects detected — pendingHeartbeatRef likely leaked \
       into the replacement connection: \(heartbeatStatuses.value)

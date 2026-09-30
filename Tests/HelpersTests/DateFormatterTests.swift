@@ -5,15 +5,18 @@
 //  Created by Coverage Tests
 //
 
-import XCTest
+import Foundation
+import Testing
 
 @testable import Helpers
 
-final class DateFormatterTests: XCTestCase {
+@Suite
+struct DateFormatterTests {
 
   // MARK: - Date to ISO8601 String Tests
 
-  func testDateToISO8601String() {
+  @Test
+  func dateToISO8601String() throws {
     // Create a specific date: 2024-01-15 10:30:45.123 UTC
     var components = DateComponents()
     components.year = 2024
@@ -26,37 +29,33 @@ final class DateFormatterTests: XCTestCase {
     components.timeZone = TimeZone(secondsFromGMT: 0)
 
     let calendar = Calendar(identifier: .iso8601)
-    guard let date = calendar.date(from: components) else {
-      XCTFail("Failed to create test date")
-      return
-    }
+    let date = try #require(calendar.date(from: components), "Failed to create test date")
 
     let iso8601String = date.iso8601String
 
     // Should contain the date and time
-    XCTAssertTrue(iso8601String.contains("2024-01-15"))
-    XCTAssertTrue(iso8601String.contains("10:30:45"))
+    #expect(iso8601String.contains("2024-01-15"))
+    #expect(iso8601String.contains("10:30:45"))
   }
 
-  func testCurrentDateToISO8601String() {
+  @Test
+  func currentDateToISO8601String() {
     let now = Date()
     let iso8601String = now.iso8601String
 
     // Verify it's not empty and has proper format
-    XCTAssertFalse(iso8601String.isEmpty)
-    XCTAssertTrue(iso8601String.contains("T"))  // Should have date-time separator
-    XCTAssertTrue(iso8601String.contains("-"))  // Should have date separators
-    XCTAssertTrue(iso8601String.contains(":"))  // Should have time separators
+    #expect(!iso8601String.isEmpty)
+    #expect(iso8601String.contains("T"))  // Should have date-time separator
+    #expect(iso8601String.contains("-"))  // Should have date separators
+    #expect(iso8601String.contains(":"))  // Should have time separators
   }
 
   // MARK: - String to Date Parsing Tests
 
-  func testParseISO8601StringWithFractionalSeconds() {
+  @Test
+  func parseISO8601StringWithFractionalSeconds() throws {
     let dateString = "2024-01-15T10:30:45.123"
-    guard let parsedDate = dateString.date else {
-      XCTFail("Failed to parse date string")
-      return
-    }
+    let parsedDate = try #require(dateString.date, "Failed to parse date string")
 
     let calendar = Calendar(identifier: .iso8601)
     let components = calendar.dateComponents(
@@ -64,20 +63,18 @@ final class DateFormatterTests: XCTestCase {
       from: parsedDate
     )
 
-    XCTAssertEqual(components.year, 2024)
-    XCTAssertEqual(components.month, 1)
-    XCTAssertEqual(components.day, 15)
-    XCTAssertEqual(components.hour, 10)
-    XCTAssertEqual(components.minute, 30)
-    XCTAssertEqual(components.second, 45)
+    #expect(components.year == 2024)
+    #expect(components.month == 1)
+    #expect(components.day == 15)
+    #expect(components.hour == 10)
+    #expect(components.minute == 30)
+    #expect(components.second == 45)
   }
 
-  func testParseISO8601StringWithoutFractionalSeconds() {
+  @Test
+  func parseISO8601StringWithoutFractionalSeconds() throws {
     let dateString = "2024-01-15T10:30:45"
-    guard let parsedDate = dateString.date else {
-      XCTFail("Failed to parse date string")
-      return
-    }
+    let parsedDate = try #require(dateString.date, "Failed to parse date string")
 
     let calendar = Calendar(identifier: .iso8601)
     let components = calendar.dateComponents(
@@ -85,15 +82,16 @@ final class DateFormatterTests: XCTestCase {
       from: parsedDate
     )
 
-    XCTAssertEqual(components.year, 2024)
-    XCTAssertEqual(components.month, 1)
-    XCTAssertEqual(components.day, 15)
-    XCTAssertEqual(components.hour, 10)
-    XCTAssertEqual(components.minute, 30)
-    XCTAssertEqual(components.second, 45)
+    #expect(components.year == 2024)
+    #expect(components.month == 1)
+    #expect(components.day == 15)
+    #expect(components.hour == 10)
+    #expect(components.minute == 30)
+    #expect(components.second == 45)
   }
 
-  func testParseInvalidDateString() {
+  @Test
+  func parseInvalidDateString() {
     let invalidStrings = [
       "not a date",
       "2024-13-45",  // Invalid month and day
@@ -104,21 +102,23 @@ final class DateFormatterTests: XCTestCase {
     ]
 
     for invalidString in invalidStrings {
-      XCTAssertNil(
-        invalidString.date,
+      #expect(
+        invalidString.date == nil,
         "Should return nil for invalid date string: \(invalidString)"
       )
     }
   }
 
-  func testParseEmptyString() {
+  @Test
+  func parseEmptyString() {
     let emptyString = ""
-    XCTAssertNil(emptyString.date)
+    #expect(emptyString.date == nil)
   }
 
   // MARK: - Round-trip Tests
 
-  func testRoundTripConversion() {
+  @Test
+  func roundTripConversion() throws {
     // Create a date, convert to string, parse back to date
     var components = DateComponents()
     components.year = 2023
@@ -130,43 +130,36 @@ final class DateFormatterTests: XCTestCase {
     components.timeZone = TimeZone(secondsFromGMT: 0)
 
     let calendar = Calendar(identifier: .iso8601)
-    guard let originalDate = calendar.date(from: components) else {
-      XCTFail("Failed to create original date")
-      return
-    }
+    let originalDate = try #require(
+      calendar.date(from: components), "Failed to create original date")
 
     let dateString = originalDate.iso8601String
-    guard let parsedDate = dateString.date else {
-      XCTFail("Failed to parse date from string: \(dateString)")
-      return
-    }
+    let parsedDate = try #require(
+      dateString.date, "Failed to parse date from string: \(dateString)")
 
     // Compare timestamps (allowing small tolerance for milliseconds)
     let timeDifference = abs(originalDate.timeIntervalSince(parsedDate))
-    XCTAssertLessThan(timeDifference, 1.0, "Dates should be within 1 second of each other")
+    #expect(timeDifference < 1.0, "Dates should be within 1 second of each other")
   }
 
-  func testRoundTripWithCurrentDate() {
+  @Test
+  func roundTripWithCurrentDate() throws {
     let now = Date()
     let dateString = now.iso8601String
-    guard let parsedDate = dateString.date else {
-      XCTFail("Failed to parse current date from string: \(dateString)")
-      return
-    }
+    let parsedDate = try #require(
+      dateString.date, "Failed to parse current date from string: \(dateString)")
 
     // Compare timestamps (allowing small tolerance for milliseconds)
     let timeDifference = abs(now.timeIntervalSince(parsedDate))
-    XCTAssertLessThan(timeDifference, 1.0, "Dates should be within 1 second of each other")
+    #expect(timeDifference < 1.0, "Dates should be within 1 second of each other")
   }
 
   // MARK: - Edge Cases
 
-  func testParseDateAtMidnight() {
+  @Test
+  func parseDateAtMidnight() throws {
     let dateString = "2024-01-01T00:00:00"
-    guard let parsedDate = dateString.date else {
-      XCTFail("Failed to parse midnight date")
-      return
-    }
+    let parsedDate = try #require(dateString.date, "Failed to parse midnight date")
 
     let calendar = Calendar(identifier: .iso8601)
     let components = calendar.dateComponents(
@@ -174,17 +167,15 @@ final class DateFormatterTests: XCTestCase {
       from: parsedDate
     )
 
-    XCTAssertEqual(components.hour, 0)
-    XCTAssertEqual(components.minute, 0)
-    XCTAssertEqual(components.second, 0)
+    #expect(components.hour == 0)
+    #expect(components.minute == 0)
+    #expect(components.second == 0)
   }
 
-  func testParseDateAtEndOfDay() {
+  @Test
+  func parseDateAtEndOfDay() throws {
     let dateString = "2024-12-31T23:59:59"
-    guard let parsedDate = dateString.date else {
-      XCTFail("Failed to parse end-of-day date")
-      return
-    }
+    let parsedDate = try #require(dateString.date, "Failed to parse end-of-day date")
 
     let calendar = Calendar(identifier: .iso8601)
     let components = calendar.dateComponents(
@@ -192,19 +183,21 @@ final class DateFormatterTests: XCTestCase {
       from: parsedDate
     )
 
-    XCTAssertEqual(components.month, 12)
-    XCTAssertEqual(components.day, 31)
-    XCTAssertEqual(components.hour, 23)
-    XCTAssertEqual(components.minute, 59)
-    XCTAssertEqual(components.second, 59)
+    #expect(components.month == 12)
+    #expect(components.day == 31)
+    #expect(components.hour == 23)
+    #expect(components.minute == 59)
+    #expect(components.second == 59)
   }
 
-  func testParseLeapYearDate() {
+  @Test
+  func parseLeapYearDate() {
     let dateString = "2024-02-29T12:00:00"  // 2024 is a leap year
-    XCTAssertNotNil(dateString.date, "Should parse leap year date")
+    #expect(dateString.date != nil, "Should parse leap year date")
   }
 
-  func testParseVariousFractionalSecondFormats() {
+  @Test
+  func parseVariousFractionalSecondFormats() {
     let formats = [
       "2024-01-15T10:30:45.1",
       "2024-01-15T10:30:45.12",
@@ -220,7 +213,8 @@ final class DateFormatterTests: XCTestCase {
 
   // MARK: - Multiple Date Conversion Tests
 
-  func testConvertMultipleDates() {
+  @Test
+  func convertMultipleDates() {
     let dates = [
       "2020-01-01T00:00:00",
       "2021-06-15T12:30:45",
@@ -230,18 +224,19 @@ final class DateFormatterTests: XCTestCase {
     ]
 
     for dateString in dates {
-      XCTAssertNotNil(
-        dateString.date,
+      #expect(
+        dateString.date != nil,
         "Should parse date: \(dateString)"
       )
     }
   }
 
-  func testConvertDatesInDifferentYears() {
+  @Test
+  func convertDatesInDifferentYears() {
     for year in 2020...2025 {
       let dateString = "\(year)-06-15T12:00:00"
       guard let parsedDate = dateString.date else {
-        XCTFail("Failed to parse date for year \(year)")
+        Issue.record("Failed to parse date for year \(year)")
         continue
       }
 
@@ -251,7 +246,7 @@ final class DateFormatterTests: XCTestCase {
         from: parsedDate
       )
 
-      XCTAssertEqual(components.year, year)
+      #expect(components.year == year)
     }
   }
 }

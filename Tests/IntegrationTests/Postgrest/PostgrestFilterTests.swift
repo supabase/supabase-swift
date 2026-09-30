@@ -5,42 +5,37 @@
 //  Created by Guilherme Souza on 06/05/24.
 //
 
+import Foundation
 import InlineSnapshotTesting
 import PostgREST
-import XCTest
+import Testing
 
-final class PostgrestFilterTests: XCTestCase {
+@Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil))
+struct PostgrestFilterTests {
   let client = PostgrestClient(
     configuration: PostgrestClient.Configuration(
-      url: URL(string: "\(DotEnv.SUPABASE_URL)/rest/v1")!,
+      url: URL(string: "\(DotEnv.supabaseURL)/rest/v1")!,
       headers: [
-        "apikey": DotEnv.SUPABASE_PUBLISHABLE_KEY
-      ],
-      logger: nil
+        "apikey": DotEnv.supabasePublishableKey
+      ]
     )
   )
 
-  override func setUp() async throws {
-    try await super.setUp()
-
-    try XCTSkipUnless(
-      ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil,
-      "INTEGRATION_TESTS not defined."
-    )
-
+  init() async throws {
     // Clean up test data before running tests.
     // Delete users with email (test data), preserving seed data (users with username only).
-    try await client.from("users").delete().not("email", operator: .is, value: AnyJSON.null)
+    try await client.from("users").delete().not("email", operator: .is, value: JSONValue.null)
       .execute()
   }
 
-  func testNot() async throws {
+  @Test
+  func not() async throws {
     let res =
       try await client.from("users")
       .select("status")
       .not("status", operator: .eq, value: "OFFLINE")
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
     assertInlineSnapshot(of: res, as: .json) {
       """
       [
@@ -58,13 +53,14 @@ final class PostgrestFilterTests: XCTestCase {
     }
   }
 
-  func testOr() async throws {
+  @Test
+  func or() async throws {
     let res =
       try await client.from("users")
       .select("status,username")
       .or("status.eq.OFFLINE,username.eq.supabot")
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
     assertInlineSnapshot(of: res, as: .json) {
       """
       [
@@ -81,13 +77,14 @@ final class PostgrestFilterTests: XCTestCase {
     }
   }
 
-  func testEq() async throws {
+  @Test
+  func eq() async throws {
     let res =
       try await client.from("users")
       .select("username")
       .eq("username", value: "supabot")
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
     assertInlineSnapshot(of: res, as: .json) {
       """
       [
@@ -99,13 +96,14 @@ final class PostgrestFilterTests: XCTestCase {
     }
   }
 
-  func testNeq() async throws {
+  @Test
+  func neq() async throws {
     let res =
       try await client.from("users")
       .select("username")
       .neq("username", value: "supabot")
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
     assertInlineSnapshot(of: res, as: .json) {
       """
       [
@@ -123,13 +121,14 @@ final class PostgrestFilterTests: XCTestCase {
     }
   }
 
-  func testGt() async throws {
+  @Test
+  func gt() async throws {
     let res =
       try await client.from("messages")
       .select("id")
       .gt("id", value: 1)
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
     assertInlineSnapshot(of: res, as: .json) {
       """
       [
@@ -141,13 +140,14 @@ final class PostgrestFilterTests: XCTestCase {
     }
   }
 
-  func testGte() async throws {
+  @Test
+  func gte() async throws {
     let res =
       try await client.from("messages")
       .select("id")
       .gte("id", value: 1)
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
     assertInlineSnapshot(of: res, as: .json) {
       """
       [
@@ -162,13 +162,14 @@ final class PostgrestFilterTests: XCTestCase {
     }
   }
 
-  func testLe() async throws {
+  @Test
+  func le() async throws {
     let res =
       try await client.from("messages")
       .select("id")
       .lt("id", value: 2)
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
     assertInlineSnapshot(of: res, as: .json) {
       """
       [
@@ -180,13 +181,14 @@ final class PostgrestFilterTests: XCTestCase {
     }
   }
 
-  func testLte() async throws {
+  @Test
+  func lte() async throws {
     let res =
       try await client.from("messages")
       .select("id")
       .lte("id", value: 2)
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
     assertInlineSnapshot(of: res, as: .json) {
       """
       [
@@ -201,13 +203,14 @@ final class PostgrestFilterTests: XCTestCase {
     }
   }
 
-  func testLike() async throws {
+  @Test
+  func like() async throws {
     let res =
       try await client.from("users")
       .select("username")
       .like("username", pattern: "%supa%")
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
     assertInlineSnapshot(of: res, as: .json) {
       """
       [
@@ -219,13 +222,14 @@ final class PostgrestFilterTests: XCTestCase {
     }
   }
 
-  func testLikeAllOf() async throws {
+  @Test
+  func likeAllOf() async throws {
     let res =
       try await client.from("users")
       .select("username")
       .likeAllOf("username", patterns: ["%supa%", "%bot%"])
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
     assertInlineSnapshot(of: res, as: .json) {
       """
       [
@@ -237,13 +241,14 @@ final class PostgrestFilterTests: XCTestCase {
     }
   }
 
-  func testLikeAnyOf() async throws {
+  @Test
+  func likeAnyOf() async throws {
     let res =
       try await client.from("users")
       .select("username")
       .likeAnyOf("username", patterns: ["%supa%", "%kiwi%"])
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
     assertInlineSnapshot(of: res, as: .json) {
       """
       [
@@ -258,13 +263,14 @@ final class PostgrestFilterTests: XCTestCase {
     }
   }
 
-  func testIlike() async throws {
+  @Test
+  func ilike() async throws {
     let res =
       try await client.from("users")
       .select("username")
       .ilike("username", pattern: "%SUPA%")
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
     assertInlineSnapshot(of: res, as: .json) {
       """
       [
@@ -276,13 +282,14 @@ final class PostgrestFilterTests: XCTestCase {
     }
   }
 
-  func testIlikeAllOf() async throws {
+  @Test
+  func ilikeAllOf() async throws {
     let res =
       try await client.from("users")
       .select("username")
       .iLikeAllOf("username", patterns: ["%SUPA%", "%bot%"])
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
     assertInlineSnapshot(of: res, as: .json) {
       """
       [
@@ -294,13 +301,14 @@ final class PostgrestFilterTests: XCTestCase {
     }
   }
 
-  func testIlikeAnyOf() async throws {
+  @Test
+  func ilikeAnyOf() async throws {
     let res =
       try await client.from("users")
       .select("username")
       .iLikeAnyOf("username", patterns: ["%supa%", "%KIWI%"])
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
     assertInlineSnapshot(of: res, as: .json) {
       """
       [
@@ -315,11 +323,12 @@ final class PostgrestFilterTests: XCTestCase {
     }
   }
 
-  func testIs() async throws {
+  @Test
+  func `is`() async throws {
     let res =
       try await client.from("users").select("data").is("data", value: nil)
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """
@@ -341,12 +350,13 @@ final class PostgrestFilterTests: XCTestCase {
     }
   }
 
-  func testIn() async throws {
+  @Test
+  func `in`() async throws {
     let statuses = ["ONLINE", "OFFLINE"]
     let res =
       try await client.from("users").select("status").in("status", values: statuses)
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """
@@ -368,11 +378,36 @@ final class PostgrestFilterTests: XCTestCase {
     }
   }
 
-  func testContains() async throws {
+  @Test
+  func notIn() async throws {
+    let res =
+      try await client.from("users").select("status").notIn("status", values: ["OFFLINE"])
+      .execute()
+      .value as JSONValue
+
+    assertInlineSnapshot(of: res, as: .json) {
+      """
+      [
+        {
+          "status" : "ONLINE"
+        },
+        {
+          "status" : "ONLINE"
+        },
+        {
+          "status" : "ONLINE"
+        }
+      ]
+      """
+    }
+  }
+
+  @Test
+  func contains() async throws {
     let res =
       try await client.from("users").select("age_range").contains("age_range", value: "[1,2)")
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """
@@ -385,11 +420,12 @@ final class PostgrestFilterTests: XCTestCase {
     }
   }
 
-  func testContainedBy() async throws {
+  @Test
+  func containedBy() async throws {
     let res =
       try await client.from("users").select("age_range").containedBy("age_range", value: "[1,2)")
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """
@@ -402,11 +438,12 @@ final class PostgrestFilterTests: XCTestCase {
     }
   }
 
-  func testRangeLt() async throws {
+  @Test
+  func rangeLt() async throws {
     let res =
       try await client.from("users").select("age_range").rangeLt("age_range", range: "[2,25)")
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """
@@ -419,11 +456,12 @@ final class PostgrestFilterTests: XCTestCase {
     }
   }
 
-  func testRangeGt() async throws {
+  @Test
+  func rangeGt() async throws {
     let res =
       try await client.from("users").select("age_range").rangeGt("age_range", range: "[2,25)")
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """
@@ -439,11 +477,12 @@ final class PostgrestFilterTests: XCTestCase {
     }
   }
 
-  func testRangeLte() async throws {
+  @Test
+  func rangeLte() async throws {
     let res =
       try await client.from("users").select("age_range").rangeLte("age_range", range: "[2,25)")
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """
@@ -456,11 +495,12 @@ final class PostgrestFilterTests: XCTestCase {
     }
   }
 
-  func testRangeGte() async throws {
+  @Test
+  func rangeGte() async throws {
     let res =
       try await client.from("users").select("age_range").rangeGte("age_range", range: "[2,25)")
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """
@@ -479,11 +519,12 @@ final class PostgrestFilterTests: XCTestCase {
     }
   }
 
-  func testRangeAdjacent() async throws {
+  @Test
+  func rangeAdjacent() async throws {
     let res =
       try await client.from("users").select("age_range").rangeAdjacent("age_range", range: "[2,25)")
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """
@@ -502,11 +543,12 @@ final class PostgrestFilterTests: XCTestCase {
     }
   }
 
-  func testOverlaps() async throws {
+  @Test
+  func overlaps() async throws {
     let res =
       try await client.from("users").select("age_range").overlaps("age_range", value: "[2,25)")
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """
@@ -519,12 +561,13 @@ final class PostgrestFilterTests: XCTestCase {
     }
   }
 
-  func testTextSearch() async throws {
+  @Test
+  func textSearch() async throws {
     let res =
       try await client.from("users").select("catchphrase")
       .textSearch("catchphrase", query: "'fat' & 'cat'", config: "english")
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """
@@ -537,12 +580,13 @@ final class PostgrestFilterTests: XCTestCase {
     }
   }
 
-  func testTextSearchWithPlain() async throws {
+  @Test
+  func textSearchWithPlain() async throws {
     let res =
       try await client.from("users").select("catchphrase")
       .textSearch("catchphrase", query: "'fat' & 'cat'", config: "english", type: .plain)
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """
@@ -555,12 +599,13 @@ final class PostgrestFilterTests: XCTestCase {
     }
   }
 
-  func testTextSearchWithPhrase() async throws {
+  @Test
+  func textSearchWithPhrase() async throws {
     let res =
       try await client.from("users").select("catchphrase")
       .textSearch("catchphrase", query: "cat", config: "english", type: .phrase)
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """
@@ -576,12 +621,13 @@ final class PostgrestFilterTests: XCTestCase {
     }
   }
 
-  func testTextSearchWithWebsearch() async throws {
+  @Test
+  func textSearchWithWebsearch() async throws {
     let res =
       try await client.from("users").select("catchphrase")
       .textSearch("catchphrase", query: "'fat' & 'cat'", config: "english", type: .websearch)
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """
@@ -594,7 +640,8 @@ final class PostgrestFilterTests: XCTestCase {
     }
   }
 
-  func testMultipleFilters() async throws {
+  @Test
+  func multipleFilters() async throws {
     let res =
       try await client.from("users")
       .select("age_range,catchphrase,data,status,username")
@@ -604,7 +651,7 @@ final class PostgrestFilterTests: XCTestCase {
       .eq("status", value: "ONLINE")
       .textSearch("catchphrase", query: "cat")
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """
@@ -621,13 +668,14 @@ final class PostgrestFilterTests: XCTestCase {
     }
   }
 
-  func testFilter() async throws {
+  @Test
+  func filter() async throws {
     let res =
       try await client.from("users")
       .select("username")
       .filter("username", operator: "eq", value: "supabot")
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """
@@ -640,13 +688,14 @@ final class PostgrestFilterTests: XCTestCase {
     }
   }
 
-  func testMatch() async throws {
+  @Test
+  func match() async throws {
     let res =
       try await client.from("users")
       .select("username,status")
       .match(["username": "supabot", "status": "ONLINE"])
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """
@@ -660,12 +709,13 @@ final class PostgrestFilterTests: XCTestCase {
     }
   }
 
-  func testFilterOnRpc() async throws {
+  @Test
+  func filterOnRpc() async throws {
     let res =
       try await client.rpc("get_username_and_status", params: ["name_param": "supabot"])
       .neq("status", value: "ONLINE")
       .execute()
-      .value as AnyJSON
+      .value as JSONValue
 
     assertInlineSnapshot(of: res, as: .json) {
       """

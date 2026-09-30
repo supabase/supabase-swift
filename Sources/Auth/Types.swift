@@ -27,19 +27,14 @@ public enum AuthChangeEvent: String, Sendable {
   case mfaChallengeVerified = "MFA_CHALLENGE_VERIFIED"
 }
 
-@available(
-  *,
-  deprecated,
-  message: "Access to UserCredentials will be removed on the next major release."
-)
-public struct UserCredentials: Codable, Hashable, Sendable {
-  public var email: String?
-  public var password: String?
-  public var phone: String?
-  public var refreshToken: String?
-  public var gotrueMetaSecurity: AuthMetaSecurity?
+struct UserCredentials: Encodable, Hashable, Sendable {
+  var email: String?
+  var password: String?
+  var phone: String?
+  var refreshToken: String?
+  var gotrueMetaSecurity: AuthMetaSecurity?
 
-  public init(
+  init(
     email: String? = nil,
     password: String? = nil,
     phone: String? = nil,
@@ -54,12 +49,12 @@ public struct UserCredentials: Codable, Hashable, Sendable {
   }
 }
 
-struct SignUpRequest: Codable, Hashable, Sendable {
+struct SignUpRequest: Encodable, Hashable, Sendable {
   var email: String?
   var password: String?
   var phone: String?
   var channel: MessagingChannel?
-  var data: [String: AnyJSON]?
+  var data: [String: JSONValue]?
   var gotrueMetaSecurity: AuthMetaSecurity?
   var codeChallenge: String?
   var codeChallengeMethod: String?
@@ -152,13 +147,13 @@ public struct User: Codable, Hashable, Identifiable, Sendable {
   public var id: UUID
 
   /// Application-specific metadata stored by the administrator in `auth.users.app_metadata`.
-  public var appMetadata: [String: AnyJSON]
+  public var appMetadata: [String: JSONValue]
 
   /// User-supplied metadata stored in `auth.users.raw_user_meta_data`.
-  public var userMetadata: [String: AnyJSON]
+  public var userMetadata: [String: JSONValue]
 
   /// The audience claim (`aud`) of the user's JWT.
-  public var aud: String
+  public var audience: String
 
   /// Timestamp when a confirmation email was last sent to this user.
   public var confirmationSentAt: Date?
@@ -220,7 +215,7 @@ public struct User: Codable, Hashable, Identifiable, Sendable {
   ///   - id: The unique identifier.
   ///   - appMetadata: Application-level metadata.
   ///   - userMetadata: User-supplied metadata.
-  ///   - aud: The JWT audience claim.
+  ///   - audience: The JWT audience claim.
   ///   - confirmationSentAt: Timestamp a confirmation email was sent.
   ///   - recoverySentAt: Timestamp a recovery email was sent.
   ///   - emailChangeSentAt: Timestamp an email-change email was sent.
@@ -241,9 +236,9 @@ public struct User: Codable, Hashable, Identifiable, Sendable {
   ///   - factors: Registered MFA factors.
   public init(
     id: UUID,
-    appMetadata: [String: AnyJSON],
-    userMetadata: [String: AnyJSON],
-    aud: String,
+    appMetadata: [String: JSONValue],
+    userMetadata: [String: JSONValue],
+    audience: String,
     confirmationSentAt: Date? = nil,
     recoverySentAt: Date? = nil,
     emailChangeSentAt: Date? = nil,
@@ -266,7 +261,7 @@ public struct User: Codable, Hashable, Identifiable, Sendable {
     self.id = id
     self.appMetadata = appMetadata
     self.userMetadata = userMetadata
-    self.aud = aud
+    self.audience = audience
     self.confirmationSentAt = confirmationSentAt
     self.recoverySentAt = recoverySentAt
     self.emailChangeSentAt = emailChangeSentAt
@@ -287,13 +282,40 @@ public struct User: Codable, Hashable, Identifiable, Sendable {
     self.factors = factors
   }
 
+  private enum CodingKeys: String, CodingKey {
+    case id
+    case appMetadata
+    case userMetadata
+    // The wire field is the JWT `aud` claim; only the Swift spelling changed.
+    case audience = "aud"
+    case confirmationSentAt
+    case recoverySentAt
+    case emailChangeSentAt
+    case newEmail
+    case invitedAt
+    case actionLink
+    case email
+    case phone
+    case createdAt
+    case confirmedAt
+    case emailConfirmedAt
+    case phoneConfirmedAt
+    case lastSignInAt
+    case role
+    case updatedAt
+    case identities
+    case isAnonymous
+    case factors
+  }
+
   public init(from decoder: any Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     id = try container.decode(UUID.self, forKey: .id)
-    appMetadata = try container.decodeIfPresent([String: AnyJSON].self, forKey: .appMetadata) ?? [:]
+    appMetadata =
+      try container.decodeIfPresent([String: JSONValue].self, forKey: .appMetadata) ?? [:]
     userMetadata =
-      try container.decodeIfPresent([String: AnyJSON].self, forKey: .userMetadata) ?? [:]
-    aud = try container.decode(String.self, forKey: .aud)
+      try container.decodeIfPresent([String: JSONValue].self, forKey: .userMetadata) ?? [:]
+    audience = try container.decode(String.self, forKey: .audience)
     confirmationSentAt = try container.decodeIfPresent(Date.self, forKey: .confirmationSentAt)
     recoverySentAt = try container.decodeIfPresent(Date.self, forKey: .recoverySentAt)
     emailChangeSentAt = try container.decodeIfPresent(Date.self, forKey: .emailChangeSentAt)
@@ -327,7 +349,7 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
   public var userId: UUID
 
   /// Provider-specific identity data returned by the third-party.
-  public var identityData: [String: AnyJSON]?
+  public var identityData: [String: JSONValue]?
 
   /// The name of the provider (e.g. `google`, `github`).
   public var provider: String
@@ -356,7 +378,7 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
     id: String,
     identityId: UUID,
     userId: UUID,
-    identityData: [String: AnyJSON],
+    identityData: [String: JSONValue],
     provider: String,
     createdAt: Date?,
     lastSignInAt: Date?,
@@ -391,7 +413,7 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
       try container.decodeIfPresent(UUID.self, forKey: .identityId)
       ?? UUID(uuidString: "00000000-0000-0000-0000-000000000000")!
     userId = try container.decode(UUID.self, forKey: .userId)
-    identityData = try container.decodeIfPresent([String: AnyJSON].self, forKey: .identityData)
+    identityData = try container.decodeIfPresent([String: JSONValue].self, forKey: .identityData)
     provider = try container.decode(String.self, forKey: .provider)
     createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt)
     lastSignInAt = try container.decodeIfPresent(Date.self, forKey: .lastSignInAt)
@@ -413,40 +435,52 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
 }
 
 /// One of the providers supported by Auth.
-public enum Provider: String, Identifiable, Codable, CaseIterable, Sendable {
-  case apple
-  case azure
-  case bitbucket
-  case discord
-  case email
-  case facebook
-  case figma
-  case github
-  case gitlab
-  case google
-  case kakao
-  case keycloak
-  case linkedin
-  case linkedinOIDC = "linkedin_oidc"
-  case notion
-  case slack
-  case slackOIDC = "slack_oidc"
-  case spotify
-  case twitch
-  /// Uses OAuth 1.0a
-  case twitter
-  /// Uses OAuth 2.0
-  case x
-  case workos
-  case zoom
-  case fly
+public struct Provider: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+  public let rawValue: String
 
-  /// The raw string value of the provider, used as the stable identifier.
-  public var id: RawValue { rawValue }
+  /// Creates a ``Provider`` from a raw string value.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  /// Creates a ``Provider`` from a string literal.
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
+  public static let apple: Provider = "apple"
+  public static let azure: Provider = "azure"
+  public static let bitbucket: Provider = "bitbucket"
+  public static let discord: Provider = "discord"
+  public static let email: Provider = "email"
+  public static let facebook: Provider = "facebook"
+  public static let figma: Provider = "figma"
+  public static let github: Provider = "github"
+  public static let gitlab: Provider = "gitlab"
+  public static let google: Provider = "google"
+  public static let kakao: Provider = "kakao"
+  public static let keycloak: Provider = "keycloak"
+  public static let linkedin: Provider = "linkedin"
+  public static let linkedinOIDC: Provider = "linkedin_oidc"
+  public static let notion: Provider = "notion"
+  public static let slack: Provider = "slack"
+  public static let slackOIDC: Provider = "slack_oidc"
+  public static let spotify: Provider = "spotify"
+  public static let twitch: Provider = "twitch"
+
+  /// Uses OAuth 1.0a
+  public static let twitter: Provider = "twitter"
+
+  /// Uses OAuth 2.0
+  public static let x: Provider = "x"
+
+  public static let workos: Provider = "workos"
+  public static let zoom: Provider = "zoom"
+  public static let fly: Provider = "fly"
 }
 
 /// Credentials for signing in with an OpenID Connect (OIDC) ID token issued by a third-party.
-public struct OpenIDConnectCredentials: Codable, Hashable, Sendable {
+public struct OpenIDConnectCredentials: Encodable, Hashable, Sendable {
   /// Provider name or OIDC `iss` value identifying which provider should be used to verify the
   /// provided token. Supported names: `google`, `apple`, `azure`, `facebook`.
   public var provider: Provider
@@ -493,13 +527,30 @@ public struct OpenIDConnectCredentials: Codable, Hashable, Sendable {
   }
 
   /// Providers supported by the OIDC sign-in flow.
-  public enum Provider: String, Codable, Hashable, Sendable {
-    case google, apple, azure, facebook
+  public struct Provider: RawRepresentable, Encodable, Hashable, Sendable,
+    ExpressibleByStringLiteral
+  {
+    public let rawValue: String
+
+    /// Creates a ``Provider`` from a raw string value.
+    public init(rawValue: String) {
+      self.rawValue = rawValue
+    }
+
+    /// Creates a ``Provider`` from a string literal.
+    public init(stringLiteral value: String) {
+      self.init(rawValue: value)
+    }
+
+    public static let google: Provider = "google"
+    public static let apple: Provider = "apple"
+    public static let azure: Provider = "azure"
+    public static let facebook: Provider = "facebook"
   }
 }
 
 /// A captcha verification token used to secure Auth endpoints.
-public struct AuthMetaSecurity: Codable, Hashable, Sendable {
+public struct AuthMetaSecurity: Encodable, Hashable, Sendable {
   /// The captcha token obtained after the user completes a captcha challenge.
   public var captchaToken: String
 
@@ -511,12 +562,73 @@ public struct AuthMetaSecurity: Codable, Hashable, Sendable {
   }
 }
 
-struct OTPParams: Codable, Hashable, Sendable {
+/// A Web3 chain supported by Sign in with Web3.
+public struct Web3Chain: RawRepresentable, Encodable, Hashable, Sendable, ExpressibleByStringLiteral
+{
+  public let rawValue: String
+
+  /// Creates a ``Web3Chain`` from a raw string value.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  /// Creates a ``Web3Chain`` from a string literal.
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
+  /// The Ethereum chain, authenticated via Sign in with Ethereum (EIP-4361).
+  public static let ethereum: Web3Chain = "ethereum"
+
+  /// The Solana chain, authenticated via Sign in with Solana.
+  public static let solana: Web3Chain = "solana"
+}
+
+/// Credentials for signing in with a Web3 wallet (Sign in with Ethereum / Sign in with Solana).
+///
+/// The caller is responsible for constructing a spec-compliant SIWE (EIP-4361) or SIWS message and
+/// obtaining a signature over it from the user's wallet (e.g. via WalletConnect or a native wallet
+/// SDK) — this type only carries the already-signed result to the server for verification.
+public struct Web3Credentials: Encodable, Hashable, Sendable {
+  public var chain: Web3Chain
+
+  /// The SIWE- or SIWS-formatted message that was signed.
+  public var message: String
+
+  /// The signature over `message`.
+  /// - Ethereum: `0x`-prefixed 65-byte secp256k1 signature, hex-encoded (130 hex chars after `0x`).
+  /// - Solana: base64 (standard or URL-safe, padded or not) encoding of the 64-byte Ed25519 signature.
+  public var signature: String
+
+  /// Verification token received when the user completes the captcha on the site.
+  public var gotrueMetaSecurity: AuthMetaSecurity?
+
+  /// Creates Web3 credentials for sign-in.
+  ///
+  /// - Parameters:
+  ///   - chain: The Web3 chain the message was signed for.
+  ///   - message: The SIWE/SIWS-formatted message that was signed.
+  ///   - signature: The signature over `message`.
+  ///   - captchaToken: Optional captcha verification token.
+  public init(
+    chain: Web3Chain,
+    message: String,
+    signature: String,
+    captchaToken: String? = nil
+  ) {
+    self.chain = chain
+    self.message = message
+    self.signature = signature
+    self.gotrueMetaSecurity = captchaToken.map(AuthMetaSecurity.init(captchaToken:))
+  }
+}
+
+struct OTPParams: Encodable, Hashable, Sendable {
   var email: String?
   var phone: String?
   var createUser: Bool
   var channel: MessagingChannel?
-  var data: [String: AnyJSON]?
+  var data: [String: JSONValue]?
   var gotrueMetaSecurity: AuthMetaSecurity?
   var codeChallenge: String?
   var codeChallengeMethod: String?
@@ -560,38 +672,66 @@ struct VerifyMobileOTPParams: Encodable, Hashable {
 }
 
 /// The OTP type used when verifying a mobile (SMS/WhatsApp) one-time password.
-public enum MobileOTPType: String, Encodable, Sendable {
+public struct MobileOTPType: RawRepresentable, Encodable, Hashable, Sendable,
+  ExpressibleByStringLiteral
+{
+  public let rawValue: String
+
+  /// Creates a ``MobileOTPType`` from a raw string value.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  /// Creates a ``MobileOTPType`` from a string literal.
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
   /// A standard SMS OTP sent to the phone number.
-  case sms
+  public static let sms: MobileOTPType = "sms"
 
   /// An OTP used when confirming a phone number change.
-  case phoneChange = "phone_change"
+  public static let phoneChange: MobileOTPType = "phone_change"
 }
 
 /// The OTP type used when verifying an email one-time password.
-public enum EmailOTPType: String, Encodable, CaseIterable, Sendable {
+public struct EmailOTPType: RawRepresentable, Encodable, Hashable, Sendable,
+  ExpressibleByStringLiteral
+{
+  public let rawValue: String
+
+  /// Creates an ``EmailOTPType`` from a raw string value.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  /// Creates an ``EmailOTPType`` from a string literal.
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
   /// OTP sent during initial sign-up email confirmation.
-  case signup
+  public static let signup: EmailOTPType = "signup"
 
   /// OTP sent when an admin invites a user by email.
-  case invite
+  public static let invite: EmailOTPType = "invite"
 
   /// OTP sent as part of a magic-link sign-in flow.
-  case magiclink
+  public static let magiclink: EmailOTPType = "magiclink"
 
   /// OTP sent when the user requests a password reset.
-  case recovery
+  public static let recovery: EmailOTPType = "recovery"
 
   /// OTP sent when the user requests an email address change.
-  case emailChange = "email_change"
+  public static let emailChange: EmailOTPType = "email_change"
 
   /// Generic email OTP.
-  case email
+  public static let email: EmailOTPType = "email"
 }
 
-/// The response from sign-up and OTP-verification calls that may return either a session or a
-/// user depending on whether email confirmation is required.
-public enum AuthResponse: Codable, Hashable, Sendable {
+/// The response from sign-up and passkey calls that may return either a session or a user,
+/// depending on whether email confirmation is required.
+public enum AuthResponse: Decodable, Hashable, Sendable {
   /// A full session was created, meaning the user is immediately signed in.
   case session(Session)
 
@@ -612,14 +752,6 @@ public enum AuthResponse: Codable, Hashable, Sendable {
     }
   }
 
-  public func encode(to encoder: any Encoder) throws {
-    var container = encoder.singleValueContainer()
-    switch self {
-    case .session(let value): try container.encode(value)
-    case .user(let value): try container.encode(value)
-    }
-  }
-
   /// The user in either case of the response.
   public var user: User {
     switch self {
@@ -635,8 +767,57 @@ public enum AuthResponse: Codable, Hashable, Sendable {
   }
 }
 
+/// The response from ``AuthClient/verifyOTP(tokenHash:type:)`` and its overloads.
+public enum VerifyOTPResponse: Decodable, Hashable, Sendable {
+  /// A full session was created, meaning the user is signed in.
+  case session(Session)
+
+  /// Neither a session nor a user was returned. GoTrue sends this for the first of the two
+  /// confirmations required by a secure email change: whichever of the current or new email
+  /// address hasn't confirmed its link yet still needs to, before the change takes effect and a
+  /// session is issued.
+  case emailChangeConfirmationPending(EmailChangeConfirmation)
+
+  public init(from decoder: any Decoder) throws {
+    let container = try decoder.singleValueContainer()
+    if let value = try? container.decode(Session.self) {
+      self = .session(value)
+    } else if let value = try? container.decode(EmailChangeConfirmation.self) {
+      self = .emailChangeConfirmationPending(value)
+    } else {
+      throw DecodingError.dataCorruptedError(
+        in: container,
+        debugDescription:
+          "Data could not be decoded as any of the expected types (Session, EmailChangeConfirmation)."
+      )
+    }
+  }
+
+  /// The session, or `nil` if the email change is still pending its other confirmation. Access
+  /// the user through ``session``, e.g. `response.session?.user`.
+  public var session: Session? {
+    if case .session(let session) = self { return session }
+    return nil
+  }
+}
+
+/// The body GoTrue returns for the first of the two confirmations required by a secure email
+/// change, before a session can be issued.
+public struct EmailChangeConfirmation: Decodable, Hashable, Sendable {
+  /// A human-readable description of what happened, meant for display.
+  public let message: String
+
+  /// The HTTP status code of the response, as a string.
+  public let code: String
+
+  private enum CodingKeys: String, CodingKey {
+    case message = "msg"
+    case code
+  }
+}
+
 /// Attributes that a user can update for their own account.
-public struct UserAttributes: Codable, Hashable, Sendable {
+public struct UserAttributes: Encodable, Hashable, Sendable {
   /// The user's email.
   public var email: String?
 
@@ -651,14 +832,10 @@ public struct UserAttributes: Codable, Hashable, Sendable {
   /// > Note: Call ``AuthClient/reauthenticate()`` to obtain the nonce first.
   public var nonce: String?
 
-  /// An email change token.
-  @available(*, deprecated, message: "This is an old field, stop relying on it.")
-  public var emailChangeToken: String?
-
   /// A custom data object to store the user's metadata. This maps to the `auth.users.user_metadata`
   /// column. The `data` should be a JSON object that includes user-specific info, such as their
   /// first and last name.
-  public var data: [String: AnyJSON]?
+  public var data: [String: JSONValue]?
 
   var codeChallenge: String?
   var codeChallengeMethod: String?
@@ -670,21 +847,18 @@ public struct UserAttributes: Codable, Hashable, Sendable {
   ///   - phone: New phone number.
   ///   - password: New password.
   ///   - nonce: Reauthentication nonce, required when updating the password.
-  ///   - emailChangeToken: Deprecated email-change token.
   ///   - data: Additional user metadata to merge.
   public init(
     email: String? = nil,
     phone: String? = nil,
     password: String? = nil,
     nonce: String? = nil,
-    emailChangeToken: String? = nil,
-    data: [String: AnyJSON]? = nil
+    data: [String: JSONValue]? = nil
   ) {
     self.email = email
     self.phone = phone
     self.password = password
     self.nonce = nonce
-    self.emailChangeToken = emailChangeToken
     self.data = data
   }
 }
@@ -693,7 +867,7 @@ public struct UserAttributes: Codable, Hashable, Sendable {
 public struct AdminUserAttributes: Encodable, Hashable, Sendable {
 
   /// A custom data object to store the user's application specific metadata. This maps to the `auth.users.app_metadata` column.
-  public var appMetadata: [String: AnyJSON]?
+  public var appMetadata: [String: JSONValue]?
 
   /// Determines how long a user is banned for.
   ///
@@ -704,7 +878,7 @@ public struct AdminUserAttributes: Encodable, Hashable, Sendable {
   public var email: String?
 
   /// Confirms the user's email address if set to `true`.
-  public var emailConfirm: Bool?
+  public var confirmsEmail: Bool?
 
   /// The `id` for the user.
   public var id: String?
@@ -722,13 +896,13 @@ public struct AdminUserAttributes: Encodable, Hashable, Sendable {
   public var phone: String?
 
   /// Confirms the user's phone number if set to `true`.
-  public var phoneConfirm: Bool?
+  public var confirmsPhone: Bool?
 
   /// The role claim set in the user's access token JWT.
   public var role: String?
 
   /// A custom data object to store the user's metadata. This maps to the `auth.users.raw_user_meta_data` column.
-  public var userMetadata: [String: AnyJSON]?
+  public var userMetadata: [String: JSONValue]?
 
   /// Creates admin user attributes.
   ///
@@ -736,45 +910,45 @@ public struct AdminUserAttributes: Encodable, Hashable, Sendable {
   ///   - appMetadata: Application-level metadata.
   ///   - banDuration: Ban duration string, e.g. `"24h"`, or `"none"` to lift a ban.
   ///   - email: The user's email address.
-  ///   - emailConfirm: Whether to mark the email as confirmed.
+  ///   - confirmsEmail: Whether to mark the email as confirmed.
   ///   - id: The user's UUID (string form).
   ///   - nonce: Reauthentication nonce for password updates.
   ///   - password: Plain-text password.
   ///   - passwordHash: Pre-hashed password.
   ///   - phone: The user's phone number.
-  ///   - phoneConfirm: Whether to mark the phone as confirmed.
+  ///   - confirmsPhone: Whether to mark the phone as confirmed.
   ///   - role: The JWT role claim.
   ///   - userMetadata: User-supplied metadata.
   public init(
-    appMetadata: [String: AnyJSON]? = nil,
+    appMetadata: [String: JSONValue]? = nil,
     banDuration: String? = nil,
     email: String? = nil,
-    emailConfirm: Bool? = nil,
+    confirmsEmail: Bool? = nil,
     id: String? = nil,
     nonce: String? = nil,
     password: String? = nil,
     passwordHash: String? = nil,
     phone: String? = nil,
-    phoneConfirm: Bool? = nil,
+    confirmsPhone: Bool? = nil,
     role: String? = nil,
-    userMetadata: [String: AnyJSON]? = nil
+    userMetadata: [String: JSONValue]? = nil
   ) {
     self.appMetadata = appMetadata
     self.banDuration = banDuration
     self.email = email
-    self.emailConfirm = emailConfirm
+    self.confirmsEmail = confirmsEmail
     self.id = id
     self.nonce = nonce
     self.password = password
     self.passwordHash = passwordHash
     self.phone = phone
-    self.phoneConfirm = phoneConfirm
+    self.confirmsPhone = confirmsPhone
     self.role = role
     self.userMetadata = userMetadata
   }
 }
 
-struct RecoverParams: Codable, Hashable, Sendable {
+struct RecoverParams: Encodable, Hashable, Sendable {
   var email: String
   var gotrueMetaSecurity: AuthMetaSecurity?
   var codeChallenge: String?
@@ -799,12 +973,26 @@ public enum AuthFlowType: Sendable {
 public typealias FactorType = String
 
 /// The enrollment status of an MFA factor.
-public enum FactorStatus: String, Codable, Sendable {
+public struct FactorStatus: RawRepresentable, Codable, Hashable, Sendable,
+  ExpressibleByStringLiteral
+{
+  public let rawValue: String
+
+  /// Creates a ``FactorStatus`` from a raw string value.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  /// Creates a ``FactorStatus`` from a string literal.
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
   /// The factor has been verified and is active.
-  case verified
+  public static let verified: FactorStatus = "verified"
 
   /// The factor has been enrolled but not yet verified.
-  case unverified
+  public static let unverified: FactorStatus = "unverified"
 }
 
 /// An MFA Factor.
@@ -983,12 +1171,12 @@ public struct MFAVerifyParams: Encodable, Hashable {
   public let challengeId: String
 
   /// Verification code provided by the user. Used for `totp` and `phone` factors; empty for
-  /// `webauthn` factors (which use ``credentialResponse`` instead).
+  /// `webauthn` factors (which use `credentialResponse` instead).
   public let code: String
 
   /// The W3C credential (assertion) response produced by the authenticator. Used for `webauthn`
   /// factors. Forwarded verbatim to the backend, preserving the W3C field names.
-  @_spi(Experimental) public let credentialResponse: AnyJSON?
+  @_spi(Experimental) public let credentialResponse: JSONValue?
 
   /// Verifies a `totp` or `phone` factor using a user-provided code.
   ///
@@ -1010,7 +1198,7 @@ public struct MFAVerifyParams: Encodable, Hashable {
   ///   - challengeId: The challenge ID being verified.
   ///   - credentialResponse: The W3C assertion produced by the platform authenticator.
   @_spi(Experimental)
-  public init(factorId: String, challengeId: String, credentialResponse: AnyJSON) {
+  public init(factorId: String, challengeId: String, credentialResponse: JSONValue) {
     self.factorId = factorId
     self.challengeId = challengeId
     self.code = ""
@@ -1120,7 +1308,7 @@ extension AMREntry {
   }
 }
 
-/// The response returned by ``AuthMFA/getAuthenticatorAssuranceLevel()``.
+/// The response returned by ``AuthMFA/authenticatorAssuranceLevel()``.
 public struct AuthMFAGetAuthenticatorAssuranceLevelResponse: Decodable, Hashable, Sendable {
   /// Current AAL level of the session.
   public let currentLevel: AuthenticatorAssuranceLevels?
@@ -1135,41 +1323,83 @@ public struct AuthMFAGetAuthenticatorAssuranceLevelResponse: Decodable, Hashable
 }
 
 /// The scope of a sign-out operation.
-public enum SignOutScope: String, Sendable {
+public struct SignOutScope: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+  public let rawValue: String
+
+  /// Creates a ``SignOutScope`` from a raw string value.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  /// Creates a ``SignOutScope`` from a string literal.
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
   /// All sessions by this account will be signed out.
-  case global
+  public static let global: SignOutScope = "global"
 
   /// Only this session will be signed out.
-  case local
+  public static let local: SignOutScope = "local"
 
   /// All other sessions except the current one will be signed out. When using
   /// ``SignOutScope/others``, there is no ``AuthChangeEvent/signedOut`` event fired on the current
   /// session.
-  case others
+  public static let others: SignOutScope = "others"
 }
 
 /// The type of email to resend when calling ``AuthClient/resend(email:type:emailRedirectTo:captchaToken:)``.
-public enum ResendEmailType: String, Hashable, Sendable, Encodable {
+public struct ResendEmailType: RawRepresentable, Encodable, Hashable, Sendable,
+  ExpressibleByStringLiteral
+{
+  public let rawValue: String
+
+  /// Creates a ``ResendEmailType`` from a raw string value.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  /// Creates a ``ResendEmailType`` from a string literal.
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
   /// Resends the initial sign-up confirmation email.
-  case signup
+  public static let signup: ResendEmailType = "signup"
 
   /// Resends the email-change confirmation email.
-  case emailChange = "email_change"
+  public static let emailChange: ResendEmailType = "email_change"
 }
 
 struct ResendEmailParams: Encodable {
   let type: ResendEmailType
   let email: String
   let gotrueMetaSecurity: AuthMetaSecurity?
+  let codeChallenge: String?
+  let codeChallengeMethod: String?
 }
 
 /// The type of mobile OTP to resend when calling ``AuthClient/resend(phone:type:captchaToken:)``.
-public enum ResendMobileType: String, Hashable, Sendable, Encodable {
+public struct ResendMobileType: RawRepresentable, Encodable, Hashable, Sendable,
+  ExpressibleByStringLiteral
+{
+  public let rawValue: String
+
+  /// Creates a ``ResendMobileType`` from a raw string value.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  /// Creates a ``ResendMobileType`` from a string literal.
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
   /// Resends the SMS OTP for the current phone sign-in.
-  case sms
+  public static let sms: ResendMobileType = "sms"
 
   /// Resends the OTP for confirming a phone number change.
-  case phoneChange = "phone_change"
+  public static let phoneChange: ResendMobileType = "phone_change"
 }
 
 struct ResendMobileParams: Encodable {
@@ -1203,12 +1433,26 @@ struct DeleteUserRequest: Encodable {
 }
 
 /// The messaging channel used to deliver OTPs.
-public enum MessagingChannel: String, Codable, Sendable {
+public struct MessagingChannel: RawRepresentable, Encodable, Hashable, Sendable,
+  ExpressibleByStringLiteral
+{
+  public let rawValue: String
+
+  /// Creates a ``MessagingChannel`` from a raw string value.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  /// Creates a ``MessagingChannel`` from a string literal.
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
   /// Deliver the OTP via SMS.
-  case sms
+  public static let sms: MessagingChannel = "sms"
 
   /// Deliver the OTP via WhatsApp.
-  case whatsapp
+  public static let whatsapp: MessagingChannel = "whatsapp"
 }
 
 struct SignInWithSSORequest: Encodable {
@@ -1218,26 +1462,45 @@ struct SignInWithSSORequest: Encodable {
   let gotrueMetaSecurity: AuthMetaSecurity?
   let codeChallenge: String?
   let codeChallengeMethod: String?
+  let skipHttpRedirect: Bool?
 }
 
 /// The response from a single sign-on (SSO) initiation request.
-public struct SSOResponse: Codable, Hashable, Sendable {
+public struct SSOResponse: Decodable, Hashable, Sendable {
   /// URL to open in a browser which will complete the sign-in flow by taking the user to the
   /// identity provider's authentication flow.
   public let url: URL
 }
 
 /// The URL and provider returned when building an OAuth sign-in URL.
-public struct OAuthResponse: Codable, Hashable, Sendable {
+public struct OAuthResponse: Hashable, Sendable {
   /// The OAuth provider.
   public let provider: Provider
 
   /// The URL to open in order to start the OAuth flow.
   public let url: URL
+
+  /// The id of the PKCE flow this call started, when the client is configured for the PKCE
+  /// flow. Pass it to ``AuthClient/exchangeCodeForSession(authCode:flowId:)`` to select this
+  /// flow's code verifier when multiple PKCE flows may be pending at once. `nil` when not
+  /// using the PKCE flow.
+  public let flowId: String?
+
+  /// Creates an ``OAuthResponse``.
+  ///
+  /// - Parameters:
+  ///   - provider: The OAuth provider.
+  ///   - url: The URL to open in order to start the OAuth flow.
+  ///   - flowId: The id of the PKCE flow this call started, if any.
+  public init(provider: Provider, url: URL, flowId: String? = nil) {
+    self.provider = provider
+    self.url = url
+    self.flowId = flowId
+  }
 }
 
 /// Pagination parameters for list endpoints.
-public struct PageParams {
+public struct PageParams: Hashable, Sendable {
   /// The page number.
   public let page: Int?
 
@@ -1261,7 +1524,7 @@ public struct ListUsersPaginatedResponse: Hashable, Sendable {
   public let users: [User]
 
   /// The audience the users belong to.
-  public let aud: String
+  public let audience: String
 
   /// The page number of the next page, if one exists.
   public var nextPage: Int?
@@ -1273,126 +1536,170 @@ public struct ListUsersPaginatedResponse: Hashable, Sendable {
   public var total: Int
 }
 
-//public struct GenerateLinkParams: Sendable {
-//  struct Body: Encodable {
-//    var type: GenerateLinkType
-//    var email: String
-//    var password: String?
-//    var newEmail: String?
-//    var data: [String: AnyJSON]?
-//  }
-//  var body: Body
-//  var redirectTo: URL?
-//
-//  /// Generates a signup link.
-//  public static func signUp(
-//    email: String,
-//    password: String,
-//    data: [String: AnyJSON]? = nil,
-//    redirectTo: URL? = nil
-//  ) -> GenerateLinkParams {
-//    GenerateLinkParams(
-//      body: .init(
-//        type: .signup,
-//        email: email,
-//        password: password,
-//        data: data
-//      ),
-//      redirectTo: redirectTo
-//    )
-//  }
-//
-//  /// Generates an invite link.
-//  public static func invite(
-//    email: String,
-//    data: [String: AnyJSON]? = nil,
-//    redirectTo: URL? = nil
-//  ) -> GenerateLinkParams {
-//    GenerateLinkParams(
-//      body: .init(
-//        type: .invite,
-//        email: email,
-//        data: data
-//      ),
-//      redirectTo: redirectTo
-//    )
-//  }
-//
-//  /// Generates a magic link.
-//  public static func magicLink(
-//    email: String,
-//    data: [String: AnyJSON]? = nil,
-//    redirectTo: URL? = nil
-//  ) -> GenerateLinkParams {
-//    GenerateLinkParams(
-//      body: .init(
-//        type: .magiclink,
-//        email: email,
-//        data: data
-//      ),
-//      redirectTo: redirectTo
-//    )
-//  }
-//
-//  /// Generates a recovery link.
-//  public static func recovery(
-//    email: String,
-//    redirectTo: URL? = nil
-//  ) -> GenerateLinkParams {
-//    GenerateLinkParams(
-//      body: .init(
-//        type: .recovery,
-//        email: email
-//      ),
-//      redirectTo: redirectTo
-//    )
-//  }
-//
-//}
-//
-///// The response from the ``AuthAdmin/generateLink(params:)`` function.
-//public struct GenerateLinkResponse: Hashable, Sendable, Decodable {
-//  /// The properties related to the email link generated.
-//  public let properties: GenerateLinkProperties
-//  /// The user that the email link is associated to.
-//  public let user: User
-//
-//  public init(from decoder: any Decoder) throws {
-//    self.properties = try GenerateLinkProperties(from: decoder)
-//    self.user = try User(from: decoder)
-//  }
-//}
-//
-///// The properties related to the email link generated.
-//public struct GenerateLinkProperties: Decodable, Hashable, Sendable {
-//  /// The email link to send to the users.
-//  /// The action link follows the following format: auth/v1/verify?type={verification_type}&token={hashed_token}&redirect_to={redirect_to}
-//  public let actionLink: URL
-//  /// The raw email OTP.
-//  /// You should send this in the email if you want your users to verify using an OTP instead of the action link.
-//  public let emailOTP: String
-//  /// The hashed token appended to the action link.
-//  public let hashedToken: String
-//  /// The URL appended to the action link.
-//  public let redirectTo: URL
-//  /// The verification type that the emaillink is associated to.
-//  public let verificationType: GenerateLinkType
-//}
-//
-//public struct GenerateLinkType: RawRepresentable, Codable, Hashable, Sendable {
-//  public let rawValue: String
-//
-//  public init(rawValue: String) {
-//    self.rawValue = rawValue
-//  }
-//
-//  public static let signup = GenerateLinkType(rawValue: "signup")
-//  public static let invite = GenerateLinkType(rawValue: "invite")
-//  public static let magiclink = GenerateLinkType(rawValue: "magiclink")
-//  public static let recovery = GenerateLinkType(rawValue: "recovery")
-//  public static let emailChangeCurrent = GenerateLinkType(rawValue: "email_change_current")
-//  public static let emailChangeNew = GenerateLinkType(rawValue: "email_change_new")
-//}
+/// The parameters for ``AuthAdmin/generateLink(params:)``.
+public struct GenerateLinkParams: Sendable {
+  struct Body: Encodable {
+    var type: GenerateLinkType
+    var email: String
+    var password: String?
+    var newEmail: String?
+    var data: [String: JSONValue]?
+  }
+  var body: Body
+  var redirectTo: URL?
+
+  /// Generates a signup link.
+  public static func signUp(
+    email: String,
+    password: String,
+    data: [String: JSONValue]? = nil,
+    redirectTo: URL? = nil
+  ) -> GenerateLinkParams {
+    GenerateLinkParams(
+      body: .init(
+        type: .signup,
+        email: email,
+        password: password,
+        data: data
+      ),
+      redirectTo: redirectTo
+    )
+  }
+
+  /// Generates an invite link.
+  public static func invite(
+    email: String,
+    data: [String: JSONValue]? = nil,
+    redirectTo: URL? = nil
+  ) -> GenerateLinkParams {
+    GenerateLinkParams(
+      body: .init(
+        type: .invite,
+        email: email,
+        data: data
+      ),
+      redirectTo: redirectTo
+    )
+  }
+
+  /// Generates a magic link.
+  public static func magicLink(
+    email: String,
+    data: [String: JSONValue]? = nil,
+    redirectTo: URL? = nil
+  ) -> GenerateLinkParams {
+    GenerateLinkParams(
+      body: .init(
+        type: .magiclink,
+        email: email,
+        data: data
+      ),
+      redirectTo: redirectTo
+    )
+  }
+
+  /// Generates a recovery link.
+  public static func recovery(
+    email: String,
+    redirectTo: URL? = nil
+  ) -> GenerateLinkParams {
+    GenerateLinkParams(
+      body: .init(
+        type: .recovery,
+        email: email
+      ),
+      redirectTo: redirectTo
+    )
+  }
+
+  /// Generates a link to change the current email address of a user.
+  public static func emailChangeCurrent(
+    email: String,
+    newEmail: String,
+    redirectTo: URL? = nil
+  ) -> GenerateLinkParams {
+    GenerateLinkParams(
+      body: .init(
+        type: .emailChangeCurrent,
+        email: email,
+        newEmail: newEmail
+      ),
+      redirectTo: redirectTo
+    )
+  }
+
+  /// Generates a link to change the email address of a user to a new one.
+  public static func emailChangeNew(
+    email: String,
+    newEmail: String,
+    redirectTo: URL? = nil
+  ) -> GenerateLinkParams {
+    GenerateLinkParams(
+      body: .init(
+        type: .emailChangeNew,
+        email: email,
+        newEmail: newEmail
+      ),
+      redirectTo: redirectTo
+    )
+  }
+}
+
+/// The response from the ``AuthAdmin/generateLink(params:)`` function.
+public struct GenerateLinkResponse: Hashable, Sendable, Decodable {
+  /// The properties related to the email link generated.
+  public let properties: GenerateLinkProperties
+  /// The user that the email link is associated to.
+  public let user: User
+
+  public init(from decoder: any Decoder) throws {
+    self.properties = try GenerateLinkProperties(from: decoder)
+    self.user = try User(from: decoder)
+  }
+}
+
+/// The properties related to the email link generated.
+public struct GenerateLinkProperties: Decodable, Hashable, Sendable {
+  /// The email link to send to the users.
+  /// The action link follows the following format: auth/v1/verify?type={verification_type}&token={hashed_token}&redirect_to={redirect_to}
+  public let actionLink: URL
+  /// The raw email OTP.
+  /// You should send this in the email if you want your users to verify using an OTP instead of the action link.
+  public let emailOTP: String
+  /// The hashed token appended to the action link.
+  public let hashedToken: String
+  /// The URL appended to the action link.
+  public let redirectTo: URL
+  /// The verification type that the emaillink is associated to.
+  public let verificationType: GenerateLinkType
+
+  private enum CodingKeys: String, CodingKey {
+    case actionLink
+    // The decoder's `.convertFromSnakeCase` strategy converts the JSON key
+    // "email_otp" to "emailOtp" (not "emailOTP") before matching against this
+    // raw value, since it doesn't know to capitalize the "OTP" acronym.
+    case emailOTP = "emailOtp"
+    case hashedToken
+    case redirectTo
+    case verificationType
+  }
+}
+
+/// The type of link generated by ``AuthAdmin/generateLink(params:)``.
+public struct GenerateLinkType: RawRepresentable, Codable, Hashable, Sendable {
+  public let rawValue: String
+
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  public static let signup = GenerateLinkType(rawValue: "signup")
+  public static let invite = GenerateLinkType(rawValue: "invite")
+  public static let magiclink = GenerateLinkType(rawValue: "magiclink")
+  public static let recovery = GenerateLinkType(rawValue: "recovery")
+  public static let emailChangeCurrent = GenerateLinkType(rawValue: "email_change_current")
+  public static let emailChangeNew = GenerateLinkType(rawValue: "email_change_new")
+}
 
 // MARK: - OAuth Client Types
 
@@ -1445,7 +1752,7 @@ public struct OAuthClientResponseType: RawRepresentable, Codable, Hashable, Send
 
 /// OAuth client type indicating whether the client can keep credentials confidential.
 /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
-public struct OAuthClientType: RawRepresentable, Codable, Hashable, Sendable,
+public struct OAuthClientType: RawRepresentable, Decodable, Hashable, Sendable,
   ExpressibleByStringLiteral
 {
   /// The raw string value of the client type.
@@ -1470,7 +1777,7 @@ public struct OAuthClientType: RawRepresentable, Codable, Hashable, Sendable,
 
 /// OAuth client registration type.
 /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
-public struct OAuthClientRegistrationType: RawRepresentable, Codable, Hashable, Sendable,
+public struct OAuthClientRegistrationType: RawRepresentable, Decodable, Hashable, Sendable,
   ExpressibleByStringLiteral
 {
   /// The raw string value of the registration type.
@@ -1495,12 +1802,12 @@ public struct OAuthClientRegistrationType: RawRepresentable, Codable, Hashable, 
 
 /// OAuth client object returned from the OAuth 2.1 server.
 /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
-public struct OAuthClient: Codable, Hashable, Sendable {
+public struct OAuthClient: Decodable, Hashable, Sendable {
   /// Unique identifier for the OAuth client
   public let clientId: UUID
 
   /// Human-readable name of the OAuth client
-  public let clientName: String
+  public let clientName: String?
 
   /// Client secret (only returned on registration and regeneration)
   public let clientSecret: String?
@@ -1521,13 +1828,13 @@ public struct OAuthClient: Codable, Hashable, Sendable {
   public let logoUri: String?
 
   /// Array of allowed redirect URIs
-  public let redirectUris: [String]
+  public let redirectUris: [String]?
 
   /// Array of allowed grant types
-  public let grantTypes: [OAuthClientGrantType]
+  public let grantTypes: [OAuthClientGrantType]?
 
   /// Array of allowed response types
-  public let responseTypes: [OAuthClientResponseType]
+  public let responseTypes: [OAuthClientResponseType]?
 
   /// Scope of the OAuth client
   public let scope: String?
@@ -1634,7 +1941,7 @@ public struct ListOAuthClientsPaginatedResponse: Hashable, Sendable {
   public let clients: [OAuthClient]
 
   /// The audience the clients belong to.
-  public let aud: String
+  public let audience: String
 
   /// The page number of the next page, if one exists.
   public var nextPage: Int?
@@ -1646,10 +1953,119 @@ public struct ListOAuthClientsPaginatedResponse: Hashable, Sendable {
   public var total: Int
 }
 
+// MARK: - OAuth Authorization Server Types
+
+/// Details about the OAuth client requesting authorization.
+/// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
+public struct OAuthAuthorizationClient: Decodable, Hashable, Sendable {
+  /// Unique identifier for the OAuth client.
+  public let id: UUID
+
+  /// Human-readable name of the OAuth client.
+  public let name: String?
+
+  /// URI of the OAuth client's homepage.
+  public let uri: URL?
+
+  /// URL of the OAuth client's logo.
+  public let logoUri: URL?
+}
+
+/// The authenticated user considering the authorization request.
+/// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
+public struct OAuthAuthorizationUser: Decodable, Hashable, Sendable {
+  /// Unique identifier for the user.
+  public let id: UUID
+
+  /// The user's email address.
+  public let email: String?
+}
+
+/// Details about a pending OAuth authorization request, returned by
+/// ``AuthOAuthServer/authorizationDetails(id:)`` when the
+/// request still requires the user's consent.
+/// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
+public struct OAuthAuthorizationDetails: Decodable, Hashable, Sendable {
+  /// Opaque identifier for this authorization request.
+  public let authorizationId: String
+
+  /// The redirect URI the client registered for this request.
+  public let redirectUri: URL
+
+  /// The OAuth client requesting authorization.
+  public let client: OAuthAuthorizationClient
+
+  /// The user considering the request.
+  public let user: OAuthAuthorizationUser
+
+  /// The requested scope.
+  public let scope: String?
+}
+
+/// A redirect URL returned after approving or denying an OAuth authorization
+/// request, or in place of ``OAuthAuthorizationDetails`` when the server
+/// auto-approves a request the user has already consented to.
+/// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
+public struct OAuthRedirect: Decodable, Hashable, Sendable {
+  /// The URL the client app should be redirected to. On denial, this URL's
+  /// query string carries an `error=access_denied` parameter (RFC 6749) —
+  /// denial is a successful API call, not a thrown error.
+  public let redirectURL: URL
+
+  private enum CodingKeys: String, CodingKey {
+    // The decoder's `.convertFromSnakeCase` strategy converts the JSON key
+    // "redirect_url" to "redirectUrl" (not "redirectURL") before matching
+    // against this raw value, since it doesn't know to capitalize the "URL"
+    // acronym.
+    case redirectURL = "redirectUrl"
+  }
+}
+
+/// The response from ``AuthOAuthServer/authorizationDetails(id:)``.
+///
+/// The server auto-approves an authorization request if the user already has
+/// an active consent covering the requested scopes for that client, returning
+/// ``redirect(_:)`` instead of ``details(_:)``.
+/// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
+public enum OAuthAuthorizationDetailsResponse: Hashable, Sendable {
+  /// The authorization is pending; present these details to the user for consent.
+  case details(OAuthAuthorizationDetails)
+
+  /// The authorization was already approved automatically; redirect the user.
+  case redirect(OAuthRedirect)
+}
+
+extension OAuthAuthorizationDetailsResponse: Decodable {
+  public init(from decoder: any Decoder) throws {
+    // Neither shape decoding failing surfaces both underlying errors, instead
+    // of a naive try?/fallback silently discarding a genuine decoding
+    // failure in .details (not just "this is the .redirect shape") in favor
+    // of the (less useful) .redirect error.
+    self = try decodeOneOf(
+      { .details(try OAuthAuthorizationDetails(from: decoder)) },
+      { .redirect(try OAuthRedirect(from: decoder)) }
+    )
+  }
+}
+
+/// An OAuth grant the user has given to a third-party client app, returned by
+/// ``AuthOAuthServer/listGrants()``.
+/// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
+public struct OAuthGrant: Decodable, Hashable, Sendable {
+  /// The OAuth client the grant was given to.
+  public let client: OAuthAuthorizationClient
+
+  /// The scopes granted to the client.
+  public let scopes: [String]
+
+  /// When the grant was given.
+  public let grantedAt: Date
+}
+
 // MARK: - JWT Claims
 
 /// JSON Web Key (JWK) representation.
-public struct JWK: Codable, Hashable, Sendable {
+public struct JWK: Decodable, Hashable, Sendable {
   /// Key type (e.g., `"RSA"`, `"EC"`, `"oct"`).
   public let kty: String
 
@@ -1662,14 +2078,12 @@ public struct JWK: Codable, Hashable, Sendable {
   /// Key ID.
   public let kid: String?
 
-  // RSA-specific fields
   /// RSA modulus (base64url-encoded).
   public let n: String?
 
   /// RSA exponent (base64url-encoded).
   public let e: String?
 
-  // EC-specific fields
   /// EC curve name (e.g., `"P-256"`).
   public let crv: String?
 
@@ -1679,7 +2093,6 @@ public struct JWK: Codable, Hashable, Sendable {
   /// EC y coordinate (base64url-encoded).
   public let y: String?
 
-  // Symmetric key field
   /// Symmetric key value (base64url-encoded).
   public let k: String?
 
@@ -1698,13 +2111,13 @@ public struct JWK: Codable, Hashable, Sendable {
 }
 
 /// A JSON Web Key Set (JWKS) containing one or more JWKs.
-public struct JWKS: Codable, Hashable, Sendable {
+public struct JWKS: Decodable, Hashable, Sendable {
   /// The set of JSON Web Keys.
   public let keys: [JWK]
 }
 
 /// The header portion of a decoded JSON Web Token.
-public struct JWTHeader: Codable, Hashable, Sendable {
+public struct JWTHeader: Decodable, Hashable, Sendable {
   /// Algorithm (e.g., `"RS256"`, `"ES256"`, `"HS256"`).
   public let alg: String
 
@@ -1716,7 +2129,7 @@ public struct JWTHeader: Codable, Hashable, Sendable {
 }
 
 /// The decoded claims from a JSON Web Token.
-public struct JWTClaims: Codable, Hashable, Sendable {
+public struct JWTClaims: Decodable, Hashable, Sendable {
   /// Issuer (`iss` claim).
   public let iss: String?
 
@@ -1754,13 +2167,13 @@ public struct JWTClaims: Codable, Hashable, Sendable {
   public let phone: String?
 
   /// Application metadata.
-  public let appMetadata: [String: AnyJSON]?
+  public let appMetadata: [String: JSONValue]?
 
   /// User metadata.
-  public let userMetadata: [String: AnyJSON]?
+  public let userMetadata: [String: JSONValue]?
 
-  /// Any claims not recognized by the standard set of ``CodingKeys``.
-  public var additionalClaims: [String: AnyJSON] = [:]
+  /// Any claims not recognized by the standard set of `CodingKeys`.
+  public var additionalClaims: [String: JSONValue] = [:]
 
   enum CodingKeys: String, CodingKey {
     case iss
@@ -1793,46 +2206,22 @@ public struct JWTClaims: Codable, Hashable, Sendable {
     sessionId = try container.decodeIfPresent(String.self, forKey: .sessionId)
     email = try container.decodeIfPresent(String.self, forKey: .email)
     phone = try container.decodeIfPresent(String.self, forKey: .phone)
-    appMetadata = try container.decodeIfPresent([String: AnyJSON].self, forKey: .appMetadata)
-    userMetadata = try container.decodeIfPresent([String: AnyJSON].self, forKey: .userMetadata)
+    appMetadata = try container.decodeIfPresent([String: JSONValue].self, forKey: .appMetadata)
+    userMetadata = try container.decodeIfPresent([String: JSONValue].self, forKey: .userMetadata)
 
-    // Decode additional claims
     let allKeys = try decoder.container(keyedBy: AnyCodingKey.self)
-    var additional: [String: AnyJSON] = [:]
+    var additional: [String: JSONValue] = [:]
     for key in allKeys.allKeys where CodingKeys(stringValue: key.stringValue) == nil {
-      if let value = try? allKeys.decode(AnyJSON.self, forKey: key) {
+      if let value = try? allKeys.decode(JSONValue.self, forKey: key) {
         additional[key.stringValue] = value
       }
     }
     additionalClaims = additional
   }
-
-  public func encode(to encoder: any Encoder) throws {
-    var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encodeIfPresent(self.iss, forKey: .iss)
-    try container.encodeIfPresent(self.sub, forKey: .sub)
-    try container.encodeIfPresent(self.aud, forKey: .aud)
-    try container.encodeIfPresent(self.exp, forKey: .exp)
-    try container.encodeIfPresent(self.iat, forKey: .iat)
-    try container.encodeIfPresent(self.nbf, forKey: .nbf)
-    try container.encodeIfPresent(self.jti, forKey: .jti)
-    try container.encodeIfPresent(self.role, forKey: .role)
-    try container.encodeIfPresent(self.aal, forKey: .aal)
-    try container.encodeIfPresent(self.sessionId, forKey: .sessionId)
-    try container.encodeIfPresent(self.email, forKey: .email)
-    try container.encodeIfPresent(self.phone, forKey: .phone)
-    try container.encodeIfPresent(self.appMetadata, forKey: .appMetadata)
-    try container.encodeIfPresent(self.userMetadata, forKey: .userMetadata)
-
-    var additionalClaimsContainer = encoder.container(keyedBy: AnyCodingKey.self)
-    for (key, value) in additionalClaims {
-      try additionalClaimsContainer.encode(value, forKey: AnyCodingKey(stringValue: key)!)
-    }
-  }
 }
 
 /// A JWT `aud` (audience) claim that may be either a single string or an array of strings.
-public enum AudienceClaim: Codable, Hashable, Sendable {
+public enum AudienceClaim: Decodable, Hashable, Sendable {
   /// A single audience string.
   case string(String)
 
@@ -1855,16 +2244,6 @@ public enum AudienceClaim: Codable, Hashable, Sendable {
       )
     }
   }
-
-  public func encode(to encoder: any Encoder) throws {
-    var container = encoder.singleValueContainer()
-    switch self {
-    case .string(let value):
-      try container.encode(value)
-    case .array(let value):
-      try container.encode(value)
-    }
-  }
 }
 
 private struct AnyCodingKey: CodingKey {
@@ -1882,7 +2261,7 @@ private struct AnyCodingKey: CodingKey {
   }
 }
 
-/// The result returned by ``AuthClient/getClaims(jwt:options:)``.
+/// The result returned by ``AuthClient/claims(jwt:options:)``.
 public struct JWTClaimsResponse: Sendable {
   /// The decoded JWT claims.
   public let claims: JWTClaims
@@ -1894,10 +2273,10 @@ public struct JWTClaimsResponse: Sendable {
   public let signature: Data
 }
 
-/// Options for ``AuthClient/getClaims(jwt:options:)``.
+/// Options for ``AuthClient/claims(jwt:options:)``.
 public struct GetClaimsOptions: Sendable {
   /// When `true`, the `exp` claim is not validated against the current time, allowing expired tokens to be decoded.
-  public let allowExpired: Bool
+  public let allowsExpired: Bool
 
   /// When set, this JSON Web Key Set takes precedence over any cached JWKS from the server.
   public let jwks: JWKS?
@@ -1905,10 +2284,10 @@ public struct GetClaimsOptions: Sendable {
   /// Creates claim-decoding options.
   ///
   /// - Parameters:
-  ///   - allowExpired: Pass `true` to skip expiration validation.
+  ///   - allowsExpired: Pass `true` to skip expiration validation.
   ///   - jwks: An explicit JWKS to use instead of the cached server JWKS.
-  public init(allowExpired: Bool = false, jwks: JWKS? = nil) {
-    self.allowExpired = allowExpired
+  public init(allowsExpired: Bool = false, jwks: JWKS? = nil) {
+    self.allowsExpired = allowsExpired
     self.jwks = jwks
   }
 }

@@ -5,19 +5,16 @@
 //  Created by Guilherme Souza on 29/04/24.
 //
 
+public import Clocks
 public import Foundation
+public import Helpers
+public import Logging
 
 #if canImport(FoundationNetworking)
   public import FoundationNetworking
 #endif
 
 extension AuthClient {
-  /// FetchHandler is a type alias for asynchronous network request handling.
-  public typealias FetchHandler =
-    @Sendable (
-      _ request: URLRequest
-    ) async throws -> (Data, URLResponse)
-
   /// Configuration options for ``AuthClient``.
   ///
   /// ## Topics
@@ -27,22 +24,20 @@ extension AuthClient {
   /// - ``headers``
   /// - ``flowType``
   /// - ``redirectToURL``
-  /// - ``fetch``
+  /// - ``http``
   ///
   /// ### Storage
   /// - ``localStorage``
   /// - ``storageKey``
   ///
   /// ### Encoding / decoding
-  /// - ``encoder``
-  /// - ``decoder``
   /// - ``jsonEncoder``
   /// - ``jsonDecoder``
   ///
   /// ### Token refresh
-  /// - ``autoRefreshToken``
-  /// - ``defaultAutoRefreshToken``
-  /// - ``emitLocalSessionAsInitialSession``
+  /// - ``automaticallyRefreshesToken``
+  /// - ``defaultAutomaticallyRefreshesToken``
+  /// - ``clock``
   ///
   /// ### Defaults
   /// - ``defaultFlowType``
@@ -66,30 +61,28 @@ extension AuthClient {
     /// Provider your own local storage implementation to use instead of the default one.
     public let localStorage: any AuthLocalStorage
 
-    /// Custom SupabaseLogger implementation used to inspecting log messages from the Auth library.
-    public let logger: (any SupabaseLogger)?
+    /// The logger used by the Auth library. Defaults to a build-config-aware logger: visible
+    /// (warning+) in debug builds, silent in release builds. Pass your own `Logging.Logger` for
+    /// custom behavior — see swift-log's documentation for available `LogHandler`s.
+    public let logger: Logging.Logger
 
     /// The JSON encoder used to serialize request bodies sent to the Auth server.
-    public let encoder: JSONEncoder
+    let resolvedEncoder: JSONEncoder
 
     /// The JSON decoder used to deserialize responses received from the Auth server.
-    public let decoder: JSONDecoder
+    let resolvedDecoder: JSONDecoder
 
-    /// A custom fetch implementation.
-    public let fetch: FetchHandler
+    /// The transport and middleware chain every request goes through.
+    public let http: HTTPClientConfiguration
 
     /// Set to `true` if you want to automatically refresh the token before expiring.
-    public let autoRefreshToken: Bool
+    public let automaticallyRefreshesToken: Bool
 
-    /// When `true`, emits the locally stored session immediately as the initial session,
-    /// regardless of its validity or expiration. When `false`, emits the initial session
-    /// after attempting to refresh the local stored session (legacy behavior).
+    /// The clock the auto-refresh loop sleeps on between ticks.
     ///
-    /// Default is `false` for backward compatibility. This will change to `true` in the next major release.
-    ///
-    /// - Note: If you rely on the initial session to opt users in, you need to add an additional
-    ///   check for `session.isExpired` when this is set to `true`.
-    public let emitLocalSessionAsInitialSession: Bool
+    /// Defaults to `ContinuousClock()`. Pass a `TestClock` to drive token refresh
+    /// deterministically in tests instead of waiting out real seconds.
+    public let clock: any Clock<Duration>
 
     /// Initializes a AuthClient Configuration with optional parameters.
     ///
@@ -100,12 +93,10 @@ extension AuthClient {
     ///   - redirectToURL: Default URL to be used for redirect on the flows that requires it.
     ///   - storageKey: Optional key name used for storing tokens in local storage.
     ///   - localStorage: The storage mechanism for local data.
-    ///   - logger: The logger to use.
-    ///   - encoder: The JSON encoder to use for encoding requests.
-    ///   - decoder: The JSON decoder to use for decoding responses.
-    ///   - fetch: The asynchronous fetch handler for network requests.
-    ///   - autoRefreshToken: Set to `true` if you want to automatically refresh the token before expiring.
-    ///   - emitLocalSessionAsInitialSession: When `true`, emits the locally stored session immediately as the initial session.
+    ///   - logger: The logger to use. Defaults to a build-config-aware logger — see `Configuration.logger`.
+    ///   - http: The transport and middleware chain every request goes through.
+    ///   - automaticallyRefreshesToken: Set to `true` if you want to automatically refresh the token before expiring.
+    ///   - clock: The clock the auto-refresh loop sleeps on. Defaults to `ContinuousClock()`.
     public init(
       url: URL? = nil,
       headers: [String: String] = [:],
@@ -113,12 +104,46 @@ extension AuthClient {
       redirectToURL: URL? = nil,
       storageKey: String? = nil,
       localStorage: any AuthLocalStorage,
-      logger: (any SupabaseLogger)? = nil,
-      encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
-      decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
-      fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
-      autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken,
-      emitLocalSessionAsInitialSession: Bool = false
+      logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.auth"),
+      http: HTTPClientConfiguration = .init(),
+      automaticallyRefreshesToken: Bool = AuthClient.Configuration
+        .defaultAutomaticallyRefreshesToken,
+      clock: any Clock<Duration> = ContinuousClock()
+    ) {
+      self.init(
+        url: url,
+        headers: headers,
+        flowType: flowType,
+        redirectToURL: redirectToURL,
+        storageKey: storageKey,
+        localStorage: localStorage,
+        logger: logger,
+        resolvedEncoder: AuthClient.Configuration.jsonEncoder,
+        resolvedDecoder: AuthClient.Configuration.jsonDecoder,
+        http: http,
+        automaticallyRefreshesToken: automaticallyRefreshesToken,
+        clock: clock
+      )
+    }
+
+    /// Designated initializer that stores the resolved JSON encoder/decoder.
+    ///
+    /// Kept internal since customizing Auth's JSON encoding/decoding is not a
+    /// publicly supported customization point.
+    init(
+      url: URL? = nil,
+      headers: [String: String] = [:],
+      flowType: AuthFlowType = Configuration.defaultFlowType,
+      redirectToURL: URL? = nil,
+      storageKey: String? = nil,
+      localStorage: any AuthLocalStorage,
+      logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.auth"),
+      resolvedEncoder: JSONEncoder,
+      resolvedDecoder: JSONDecoder,
+      http: HTTPClientConfiguration = .init(),
+      automaticallyRefreshesToken: Bool = AuthClient.Configuration
+        .defaultAutomaticallyRefreshesToken,
+      clock: any Clock<Duration> = ContinuousClock()
     ) {
       let headers = headers.merging(Configuration.defaultHeaders) { l, _ in l }
 
@@ -128,12 +153,14 @@ extension AuthClient {
       self.redirectToURL = redirectToURL
       self.storageKey = storageKey
       self.localStorage = localStorage
+      var logger = logger
+      logger[metadataKey: "system"] = "auth"
       self.logger = logger
-      self.encoder = encoder
-      self.decoder = decoder
-      self.fetch = fetch
-      self.autoRefreshToken = autoRefreshToken
-      self.emitLocalSessionAsInitialSession = emitLocalSessionAsInitialSession
+      self.resolvedEncoder = resolvedEncoder
+      self.resolvedDecoder = resolvedDecoder
+      self.http = http
+      self.automaticallyRefreshesToken = automaticallyRefreshesToken
+      self.clock = clock
     }
   }
 
@@ -146,25 +173,21 @@ extension AuthClient {
   ///   - redirectToURL: Default URL to be used for redirect on the flows that requires it.
   ///   - storageKey: Optional key name used for storing tokens in local storage.
   ///   - localStorage: The storage mechanism for local data..
-  ///   - logger: The logger to use.
-  ///   - encoder: The JSON encoder to use for encoding requests.
-  ///   - decoder: The JSON decoder to use for decoding responses.
-  ///   - fetch: The asynchronous fetch handler for network requests.
-  ///   - autoRefreshToken: Set to `true` if you want to automatically refresh the token before expiring.
-  ///   - emitLocalSessionAsInitialSession: When `true`, emits the locally stored session immediately as the initial session.
-  public init(
+  ///   - logger: The logger to use. Defaults to a build-config-aware logger — see `Configuration.logger`.
+  ///   - http: The transport and middleware chain every request goes through.
+  ///   - automaticallyRefreshesToken: Set to `true` if you want to automatically refresh the token before expiring.
+  ///   - clock: The clock the auto-refresh loop sleeps on. Defaults to `ContinuousClock()`.
+  public convenience init(
     url: URL? = nil,
     headers: [String: String] = [:],
     flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
     redirectToURL: URL? = nil,
     storageKey: String? = nil,
     localStorage: any AuthLocalStorage,
-    logger: (any SupabaseLogger)? = nil,
-    encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
-    decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
-    fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
-    autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken,
-    emitLocalSessionAsInitialSession: Bool = false
+    logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.auth"),
+    http: HTTPClientConfiguration = .init(),
+    automaticallyRefreshesToken: Bool = AuthClient.Configuration.defaultAutomaticallyRefreshesToken,
+    clock: any Clock<Duration> = ContinuousClock()
   ) {
     self.init(
       configuration: Configuration(
@@ -175,11 +198,9 @@ extension AuthClient {
         storageKey: storageKey,
         localStorage: localStorage,
         logger: logger,
-        encoder: encoder,
-        decoder: decoder,
-        fetch: fetch,
-        autoRefreshToken: autoRefreshToken,
-        emitLocalSessionAsInitialSession: emitLocalSessionAsInitialSession
+        http: http,
+        automaticallyRefreshesToken: automaticallyRefreshesToken,
+        clock: clock
       )
     )
   }

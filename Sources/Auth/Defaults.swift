@@ -32,5 +32,5 @@ extension AuthClient.Configuration {
   public static let defaultFlowType: AuthFlowType = .pkce
 
   /// The default value when initializing a ``AuthClient`` instance.
-  public static let defaultAutoRefreshToken: Bool = true
+  public static let defaultAutomaticallyRefreshesToken: Bool = true
 }

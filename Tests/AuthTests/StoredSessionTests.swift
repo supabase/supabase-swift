@@ -1,61 +1,53 @@
 import ConcurrencyExtras
+import Foundation
+import Logging
 import SnapshotTesting
 import TestHelpers
-import XCTest
+import Testing
 
 @testable import Auth
 
-final class StoredSessionTests: XCTestCase {
-  let clientID = AuthClientID()
+#if os(Android)
+  private let isAndroid = true
+#else
+  private let isAndroid = false
+#endif
 
-  func testGet_withCorruptedJSON_returnsNil() throws {
+@Suite
+struct StoredSessionTests {
+  @Test
+  func get_withCorruptedJSON_returnsNil() throws {
     let localStorage = InMemoryLocalStorage()
     try localStorage.store(
       key: "supabase.auth.token",
       value: Data("not-valid-json".utf8)
     )
 
-    let testClientID = AuthClientID()
-    Dependencies[testClientID] = Dependencies(
+    let sut = SessionStorage.live(
       configuration: AuthClient.Configuration(
         url: URL(string: "http://localhost")!,
         storageKey: "supabase.auth.token",
-        localStorage: localStorage,
-        logger: nil
-      ),
-      http: HTTPClientMock(),
-      api: .init(clientID: testClientID),
-      codeVerifierStorage: .mock,
-      sessionStorage: .live(clientID: testClientID),
-      sessionManager: .live(clientID: testClientID)
+        localStorage: localStorage
+      )
     )
-
-    let sut = Dependencies[testClientID].sessionStorage
-    XCTAssertNil(sut.get())
+    #expect(sut.get() == nil)
   }
 
-  func testStoredSession() throws {
-    #if os(Android)
-      throw XCTSkip("Disabled for android due to #filePath not existing on emulator")
-    #endif
-
-    Dependencies[clientID] = Dependencies(
+  @Test(
+    .disabled(
+      if: isAndroid, "Disabled for android due to #filePath not existing on emulator"
+    )
+  )
+  func storedSession() throws {
+    let sut = SessionStorage.live(
       configuration: AuthClient.Configuration(
         url: URL(string: "http://localhost")!,
         storageKey: "supabase.auth.token",
-        localStorage: try! DiskTestStorage(),
-        logger: nil
-      ),
-      http: HTTPClientMock(),
-      api: .init(clientID: clientID),
-      codeVerifierStorage: .mock,
-      sessionStorage: .live(clientID: clientID),
-      sessionManager: .live(clientID: clientID)
+        localStorage: try! DiskTestStorage()
+      )
     )
 
-    let sut = Dependencies[clientID].sessionStorage
-
-    XCTAssertNotNil(sut.get())
+    #expect(sut.get() != nil)
 
     let session = Session(
       accessToken: "accesstoken",
@@ -74,7 +66,7 @@ final class StoredSessionTests: XCTestCase {
         userMetadata: [
           "referrer_id": nil
         ],
-        aud: "authenticated",
+        audience: "authenticated",
         confirmationSentAt: ISO8601DateFormatter().date(from: "2022-04-09T11:57:01Z")!,
         recoverySentAt: nil,
         emailChangeSentAt: nil,
@@ -109,12 +101,12 @@ final class StoredSessionTests: XCTestCase {
     )
 
     sut.store(session)
-    XCTAssertNotNil(sut.get())
+    #expect(sut.get() != nil)
   }
 
   private final class DiskTestStorage: AuthLocalStorage {
     let url: URL
-    let storage: LockIsolated<[String: AnyJSON]>
+    let storage: LockIsolated<[String: JSONValue]>
 
     let encoder = JSONEncoder()
     let decoder = JSONDecoder()
@@ -133,11 +125,11 @@ final class StoredSessionTests: XCTestCase {
       }
 
       let contents = try Data(contentsOf: url)
-      storage = try LockIsolated(decoder.decode([String: AnyJSON].self, from: contents))
+      storage = try LockIsolated(decoder.decode([String: JSONValue].self, from: contents))
     }
 
     func store(key: String, value: Data) throws {
-      let json = try decoder.decode(AnyJSON.self, from: value)
+      let json = try decoder.decode(JSONValue.self, from: value)
       storage.withValue {
         $0[key] = json
       }

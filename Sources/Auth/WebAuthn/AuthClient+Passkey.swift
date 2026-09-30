@@ -5,7 +5,7 @@
 //  Created by Guilherme Souza on 11/06/26.
 //
 
-import Foundation
+public import Foundation
 import HTTPTypes
 
 #if canImport(AuthenticationServices)
@@ -30,39 +30,39 @@ extension AuthClient {
   /// the authenticator, submit the result with
   /// ``verifyPasskeyRegistration(challengeId:credentialResponse:)``.
   @_spi(Experimental)
-  public func getPasskeyRegistrationOptions() async throws -> PasskeyRegistrationOptions {
-    try await Dependencies[clientID].api.authorizedExecute(
+  public func passkeyRegistrationOptions() async throws -> PasskeyRegistrationOptions {
+    try await dependencies.sessionAPI.authorizedExecute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("passkeys/registration/options"),
-        method: .post
+        method: .post,
+        url: configuration.url.appendingPathComponent("passkeys/registration/options")
       )
     )
-    .decoded(decoder: configuration.decoder)
+    .decoded(decoder: configuration.resolvedDecoder)
   }
 
   /// Stores a newly created passkey for the current user.
   ///
   /// - Parameters:
-  ///   - challengeId: The challenge ID returned by ``getPasskeyRegistrationOptions()``.
+  ///   - challengeId: The challenge ID returned by ``passkeyRegistrationOptions()``.
   ///   - credentialResponse: The W3C credential produced by the authenticator.
   /// - Returns: The stored passkey.
   @_spi(Experimental)
   @discardableResult
   public func verifyPasskeyRegistration(
     challengeId: String,
-    credentialResponse: AnyJSON
+    credentialResponse: JSONValue
   ) async throws -> PasskeyListItem {
-    try await Dependencies[clientID].api.authorizedExecute(
+    try await dependencies.sessionAPI.authorizedExecute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("passkeys/registration/verify"),
         method: .post,
-        body: encodeWebAuthnBody([
-          "challenge_id": .string(challengeId),
-          "credential": credentialResponse,
-        ])
-      )
+        url: configuration.url.appendingPathComponent("passkeys/registration/verify")
+      ),
+      body: encodeWebAuthnBody([
+        "challenge_id": .string(challengeId),
+        "credential": credentialResponse,
+      ])
     )
-    .decoded(decoder: configuration.decoder)
+    .decoded(decoder: configuration.resolvedDecoder)
   }
 
   /// Fetches assertion options to authenticate with a passkey.
@@ -72,43 +72,43 @@ extension AuthClient {
   /// the authenticator, submit the result with
   /// ``verifyPasskeyAuthentication(challengeId:credentialResponse:)``.
   @_spi(Experimental)
-  public func getPasskeyAuthenticationOptions() async throws -> PasskeyAuthenticationOptions {
-    try await Dependencies[clientID].api.execute(
+  public func passkeyAuthenticationOptions() async throws -> PasskeyAuthenticationOptions {
+    try await dependencies.sessionAPI.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("passkeys/authentication/options"),
-        method: .post
+        method: .post,
+        url: configuration.url.appendingPathComponent("passkeys/authentication/options")
       )
     )
-    .decoded(decoder: configuration.decoder)
+    .decoded(decoder: configuration.resolvedDecoder)
   }
 
   /// Verifies a passkey assertion and establishes a session.
   ///
   /// - Parameters:
-  ///   - challengeId: The challenge ID returned by ``getPasskeyAuthenticationOptions()``.
+  ///   - challengeId: The challenge ID returned by ``passkeyAuthenticationOptions()``.
   ///   - credentialResponse: The W3C assertion produced by the authenticator.
   /// - Returns: The authentication response containing the new session.
   @_spi(Experimental)
   @discardableResult
   public func verifyPasskeyAuthentication(
     challengeId: String,
-    credentialResponse: AnyJSON
+    credentialResponse: JSONValue
   ) async throws -> AuthResponse {
-    let response: AuthResponse = try await Dependencies[clientID].api.execute(
+    let response: AuthResponse = try await dependencies.sessionAPI.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("passkeys/authentication/verify"),
         method: .post,
-        body: encodeWebAuthnBody([
-          "challenge_id": .string(challengeId),
-          "credential": credentialResponse,
-        ])
-      )
+        url: configuration.url.appendingPathComponent("passkeys/authentication/verify")
+      ),
+      body: encodeWebAuthnBody([
+        "challenge_id": .string(challengeId),
+        "credential": credentialResponse,
+      ])
     )
-    .decoded(decoder: configuration.decoder)
+    .decoded(decoder: configuration.resolvedDecoder)
 
     if let session = response.session {
-      await Dependencies[clientID].sessionManager.update(session)
-      Dependencies[clientID].eventEmitter.emit(.signedIn, session: session)
+      await dependencies.sessionManager.update(session)
+      dependencies.eventEmitter.emit(.signedIn, session: session)
     }
 
     return response
@@ -117,13 +117,13 @@ extension AuthClient {
   /// Lists the passkeys registered for the current user.
   @_spi(Experimental)
   public func listPasskeys() async throws -> [PasskeyListItem] {
-    try await Dependencies[clientID].api.authorizedExecute(
+    try await dependencies.sessionAPI.authorizedExecute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("passkeys/"),
-        method: .get
+        method: .get,
+        url: configuration.url.appendingPathComponent("passkeys/")
       )
     )
-    .decoded(decoder: configuration.decoder)
+    .decoded(decoder: configuration.resolvedDecoder)
   }
 
   /// Renames a passkey.
@@ -134,27 +134,27 @@ extension AuthClient {
   /// - Returns: The updated passkey.
   @_spi(Experimental)
   @discardableResult
-  public func renamePasskey(id: String, friendlyName: String) async throws -> PasskeyListItem {
-    try await Dependencies[clientID].api.authorizedExecute(
+  public func renamePasskey(id: UUID, friendlyName: String) async throws -> PasskeyListItem {
+    try await dependencies.sessionAPI.authorizedExecute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("passkeys/\(id)"),
         method: .patch,
-        // Dictionary keys are not transformed by the snake_case strategy, so spell it out.
-        body: configuration.encoder.encode(["friendly_name": friendlyName])
-      )
+        url: configuration.url.appendingPathComponent("passkeys/\(id)")
+      ),
+      // Dictionary keys are not transformed by the snake_case strategy, so spell it out.
+      body: configuration.resolvedEncoder.encode(["friendly_name": friendlyName])
     )
-    .decoded(decoder: configuration.decoder)
+    .decoded(decoder: configuration.resolvedDecoder)
   }
 
   /// Removes a passkey.
   ///
   /// - Parameter id: The ID of the passkey to remove.
   @_spi(Experimental)
-  public func deletePasskey(id: String) async throws {
-    try await Dependencies[clientID].api.authorizedExecute(
+  public func deletePasskey(id: UUID) async throws {
+    try await dependencies.sessionAPI.authorizedExecute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("passkeys/\(id)"),
-        method: .delete
+        method: .delete,
+        url: configuration.url.appendingPathComponent("passkeys/\(id)")
       )
     )
   }
@@ -189,7 +189,7 @@ extension AuthClient {
       presentationAnchor: ASPresentationAnchor,
       authenticator: WebAuthnAuthenticator
     ) async throws -> AuthResponse {
-      let options = try await getPasskeyAuthenticationOptions()
+      let options = try await passkeyAuthenticationOptions()
       let rpId = try options.options.webAuthnAssertionRpId()
       let credentialResponse = try await authenticator.authenticate(
         options.options, rpId, presentationAnchor
@@ -224,7 +224,7 @@ extension AuthClient {
       presentationAnchor: ASPresentationAnchor,
       authenticator: WebAuthnAuthenticator
     ) async throws -> PasskeyListItem {
-      let options = try await getPasskeyRegistrationOptions()
+      let options = try await passkeyRegistrationOptions()
       let rpId = try options.options.webAuthnCreationRpId()
       let credentialResponse = try await authenticator.register(
         options.options, rpId, presentationAnchor

@@ -24,8 +24,8 @@ import Foundation
 #endif
 
 func encodeMetadata(_ metadata: JSONObject) -> Data {
-  let encoder = AnyJSON.encoder
-  return (try? encoder.encode(metadata)) ?? "{}".data(using: .utf8)!
+  let encoder = JSONValue.encoder
+  return (try? encoder.encode(metadata)) ?? Data("{}".utf8)
 }
 
 extension String {

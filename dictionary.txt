@@ -26,21 +26,36 @@ chan
 checkmark
 Cloudflare
 cloudflare
+conformances
 confirmer
+corelibs
 CREDENTIALW
+dapp
 datastructure
 Dedup
 dedup
 dedupe
 decoratee
+deeplinking
+discardable
+docc
 dollarsign
+dotproduct
 dont
 dragarcia
 dummysignature
+ecdsa
+halfvec
 emaillink
+enotconn
 entrancy
+eproto
+errno
 etag
+ethereum
+Ethereum
 externaldrive
+failable
 figma
 Figma
 flutterquickstart
@@ -53,6 +68,7 @@ gotrue
 GoTrue
 Guilherme
 Gxlbmdl
+Hashability
 heartbeating
 Heartbeating
 hostnames
@@ -62,13 +78,20 @@ ilike
 imatch
 Imatch
 Inbucket
+initializers
+insertable
+inkey
 isdistinct
 johndoe
 jwks
 JWKS
 kakao
 Kakao
+keccak
+Keccak
+keyout
 kiwicopple
+Klingsbo
 letterboxing
 libro
 libros
@@ -76,30 +99,47 @@ lifecycles
 linkedin
 LinkedIn
 lnbm
+Lukas
 magiclink
 magnifyingglass
+metamask
 metas
 Metas
+mmsdk
+myapp
 newbucket
+newkey
 niled
 Nlci
+nonisolated
 nosec
 NSEC
 NSPOSIX
 NSURL
+nullable
 nullsfirst
 nullslast
+oauthserver
 oidc
 OIDC
+posix
+omitempty
+openssl
+opentelemetry
+parameterless
+passout
 passwordless
 Passwordless
 Pathable
 PCREDENTIALW
 pgrst
+pgvector
 phfts
 phraseto
 pkce
 PKCE
+pkcs
+pkey
 plainto
 plfts
 postalcode
@@ -122,11 +162,19 @@ Resends
 Rlbn
 Rvci
 sadcat
+secp256k1
+siwe
+SIWE
+siws
+SIWS
+solana
+Solana
 Souza
 sourcery
 Sourcery
 spotify
 Spotify
+subclassing
 subheadline
 Subview
 subview
@@ -136,6 +184,7 @@ supa
 Supabase
 supabase
 SUPABASE
+supabaseswiftintegrationtest
 supabot
 swiftlint
 testpath
@@ -144,9 +193,11 @@ timestamptz
 totp
 Totp
 TOTP
+traceparent
 tsquery
 tsvector
 Twilio
+typealias
 Typealiases
 unconfigured
 unenroll
@@ -157,10 +208,13 @@ uniquing
 unsubscription
 untracks
 upserted
+upserts
 URLAPI
 uuid
 UUID
 WASI
+web3
+Web3
 webauthn
 WebAuthn
 webcredentials
@@ -176,6 +230,18 @@ xcodeproj
 xctest
 XVCJ
 
+# Term from Sources/Helpers/HTTP and Sources/RealtimeV2 (Linux corelibs-Foundation).
+corelibs
+
+# Terms from Xcode scheme configuration, shared across module test targets.
+fileprivate
+parallelizable
+Testables
+xcscheme
+xcschemes
+xcshareddata
+xcworkspace
+
 # Non-ASCII fixture data used to exercise Unicode-handling and URL-encoding
 # edge cases (BuildURLRequestTests, HTTPErrorTests).
 Cigányka
@@ -183,3 +249,40 @@ cskm
 vízrajzi
 állomás
 áéíóú
+deinits
+
+# Term from AGENTS.md's Enum-like Values section (describing non-failable init(rawValue:)).
+failable
+memberwise
+
+# Term from PostgrestTypedMutation's upsert doc (an empty conflict target cannot be
+# written, so it is unrepresentable rather than merely invalid).
+unrepresentable
+
+# Terms from the typed column-expression surface (Sources/PostgREST/Columns).
+associatedtype
+uncast
+
+# Term from the comparison operators' documentation (PostgrestFilter+Comparison.swift).
+someop
+
+# Term from the cast target list (PostgrestDerivedColumn.swift).
+citext
+
+# Terms from the embedded-relations column namespace (PostgrestRelatedColumns.swift).
+unshadowed
+orderability
+
+# Term from the logging middleware's body-buffering helper (LoggerInterceptor.swift).
+loggable
+
+# Terms from the live memory probe (MemoryProbeIntegrationTests.swift).
+memprobe
+attoseconds
+
+# Retry-After / Duration terms from RetryPolicy.swift.
+asctime
+fixdate
+
+# Term from the privacy manifest resource declared on the Helpers target (Package.swift).
+xcprivacy

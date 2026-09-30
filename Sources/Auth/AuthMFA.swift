@@ -18,16 +18,18 @@ import HTTPTypes
 ///
 /// ### Listing factors
 /// - ``listFactors()``
-/// - ``getAuthenticatorAssuranceLevel()``
+/// - ``authenticatorAssuranceLevel()``
 public struct AuthMFA: Sendable {
-  let clientID: AuthClientID
+  /// Held strongly: the client vends this value and never stores it, so there is no cycle, and a
+  /// value kept past its call site keeps the client alive instead of dangling.
+  let client: AuthClient
 
-  var configuration: AuthClient.Configuration { Dependencies[clientID].configuration }
-  var api: APIClient { Dependencies[clientID].api }
-  var encoder: JSONEncoder { Dependencies[clientID].encoder }
-  var decoder: JSONDecoder { Dependencies[clientID].decoder }
-  var sessionManager: SessionManager { Dependencies[clientID].sessionManager }
-  var eventEmitter: AuthStateChangeEventEmitter { Dependencies[clientID].eventEmitter }
+  var configuration: AuthClient.Configuration { client.configuration }
+  var api: SessionAPIClient { client.dependencies.sessionAPI }
+  var encoder: JSONEncoder { configuration.resolvedEncoder }
+  var decoder: JSONDecoder { configuration.resolvedDecoder }
+  var sessionManager: SessionManager { client.dependencies.sessionManager }
+  var eventEmitter: AuthStateChangeEventEmitter { client.dependencies.eventEmitter }
 
   /// Starts the enrollment process for a new Multi-Factor Authentication (MFA) factor. This method
   /// creates a new `unverified` factor.
@@ -43,10 +45,9 @@ public struct AuthMFA: Sendable {
   public func enroll(params: any MFAEnrollParamsType) async throws -> AuthMFAEnrollResponse {
     try await api.authorizedExecute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("factors"),
         method: .post,
-        body: encoder.encode(params)
-      )
+        url: configuration.url.appendingPathComponent("factors")
+      ), body: encoder.encode(params)
     )
     .decoded(decoder: decoder)
   }
@@ -67,10 +68,9 @@ public struct AuthMFA: Sendable {
 
     return try await api.authorizedExecute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("factors/\(params.factorId)/challenge"),
         method: .post,
-        body: body
-      )
+        url: configuration.url.appendingPathComponent("factors/\(params.factorId)/challenge")
+      ), body: body
     )
     .decoded(decoder: decoder)
   }
@@ -97,10 +97,9 @@ public struct AuthMFA: Sendable {
 
     let response: AuthMFAVerifyResponse = try await api.authorizedExecute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("factors/\(params.factorId)/verify"),
         method: .post,
-        body: body
-      )
+        url: configuration.url.appendingPathComponent("factors/\(params.factorId)/verify")
+      ), body: body
     ).decoded(decoder: decoder)
 
     await sessionManager.update(response)
@@ -119,8 +118,8 @@ public struct AuthMFA: Sendable {
   public func unenroll(params: MFAUnenrollParams) async throws -> AuthMFAUnenrollResponse {
     try await api.authorizedExecute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("factors/\(params.factorId)"),
-        method: .delete
+        method: .delete,
+        url: configuration.url.appendingPathComponent("factors/\(params.factorId)")
       )
     )
     .decoded(decoder: decoder)
@@ -165,7 +164,7 @@ public struct AuthMFA: Sendable {
   /// Returns the Authenticator Assurance Level (AAL) for the active session.
   ///
   /// - Returns: An authentication response with the Authenticator Assurance Level.
-  public func getAuthenticatorAssuranceLevel() async throws
+  public func authenticatorAssuranceLevel() async throws
     -> AuthMFAGetAuthenticatorAssuranceLevelResponse
   {
     do {
@@ -196,7 +195,7 @@ public struct AuthMFA: Sendable {
         nextLevel: nextLevel,
         currentAuthenticationMethods: currentAuthenticationMethods
       )
-    } catch AuthError.sessionMissing {
+    } catch let error as AuthError where error.kind == .sessionMissing {
       return AuthMFAGetAuthenticatorAssuranceLevelResponse(
         currentLevel: nil,
         nextLevel: nil,

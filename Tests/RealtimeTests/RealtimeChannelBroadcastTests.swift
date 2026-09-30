@@ -8,34 +8,30 @@
 import ConcurrencyExtras
 import Foundation
 import TestHelpers
-import XCTest
+import Testing
 
 @testable import Realtime
-@testable import RealtimeV2
 
 #if os(Linux)
-  @available(
-    *, unavailable,
-    message: "RealtimeChannelBroadcastTests are disabled on Linux due to timing flakiness"
-  )
-  final class RealtimeChannelBroadcastTests: XCTestCase {}
+  // RealtimeChannelBroadcastTests are disabled on Linux due to timing flakiness.
 #else
 
-  final class RealtimeChannelBroadcastTests: XCTestCase, @unchecked Sendable {
+  @Suite
+  final class RealtimeChannelBroadcastTests: Sendable {
     let url = URL(string: "http://localhost:54321/realtime/v1")!
     let apiKey = "publishable.api.key"
 
-    var server: FakeWebSocket!
-    var client: FakeWebSocket!
-    var http: HTTPClientMock!
-    var sut: RealtimeClientV2!
-    var serverTask: Task<Void, Never>?
+    let server: FakeWebSocket
+    let client: FakeWebSocket
+    let http: RecordingTransport
+    let sut: RealtimeClientV2
+    let serverTask = LockIsolated<Task<Void, Never>?>(nil)
 
-    override func setUp() {
-      super.setUp()
-
-      (client, server) = FakeWebSocket.fakes()
-      http = HTTPClientMock()
+    init() {
+      let (client, server) = FakeWebSocket.fakes()
+      self.client = client
+      self.server = server
+      http = RecordingTransport()
 
       sut = RealtimeClientV2(
         url: url,
@@ -45,21 +41,20 @@ import XCTest
             "custom.access.token"
           }
         ),
-        wsTransport: { _, _ in self.client },
-        http: http
+        wsTransport: { _, _ in client },
+        http: HTTPClient(transport: http),
+        clock: ContinuousClock()
       )
     }
 
-    override func tearDown() {
-      serverTask?.cancel()
-      serverTask = nil
+    deinit {
+      serverTask.value?.cancel()
       sut.disconnect()
-      super.tearDown()
     }
 
     /// Sets up the server to auto-respond to heartbeats and phx_join events.
     private func setupServerAutoResponder(topic: String = "realtime:test") {
-      serverTask = Task { @Sendable [server = server!] in
+      let task = Task { @Sendable [server] in
         for await event in server.events {
           guard let msg = event.realtimeMessage else { continue }
 
@@ -89,11 +84,13 @@ import XCTest
           }
         }
       }
+      serverTask.setValue(task)
     }
 
     // MARK: - Sending JSON broadcast via binary frame
 
-    func testBroadcast_sendsJsonViaBinaryFrame() async throws {
+    @Test
+    func broadcast_sendsJsonViaBinaryFrame() async throws {
       setupServerAutoResponder()
       await sut.connect()
 
@@ -111,21 +108,18 @@ import XCTest
         return nil
       }
 
-      XCTAssertFalse(binaryEvents.isEmpty, "Expected at least one binary frame to be sent")
+      #expect(!binaryEvents.isEmpty, "Expected at least one binary frame to be sent")
 
       if let binaryData = binaryEvents.last {
-        XCTAssertEqual(
-          binaryData[0], RealtimeSerializer.BinaryKind.userBroadcastPush.rawValue
-        )
-        XCTAssertEqual(
-          binaryData[6], RealtimeSerializer.PayloadEncoding.json.rawValue
-        )
+        #expect(binaryData[0] == RealtimeSerializer.BinaryKind.userBroadcastPush.rawValue)
+        #expect(binaryData[6] == RealtimeSerializer.PayloadEncoding.json.rawValue)
       }
     }
 
     // MARK: - Sending Data broadcast via binary frame
 
-    func testBroadcast_sendsDataViaBinaryFrame() async throws {
+    @Test
+    func broadcast_sendsDataViaBinaryFrame() async throws {
       setupServerAutoResponder()
       await sut.connect()
 
@@ -141,41 +135,44 @@ import XCTest
         return nil
       }
 
-      XCTAssertFalse(binaryFrames.isEmpty, "Expected at least one binary frame to be sent")
+      #expect(!binaryFrames.isEmpty, "Expected at least one binary frame to be sent")
 
       if let frame = binaryFrames.last {
-        XCTAssertEqual(frame[0], RealtimeSerializer.BinaryKind.userBroadcastPush.rawValue)
-        XCTAssertEqual(frame[6], RealtimeSerializer.PayloadEncoding.binary.rawValue)
+        #expect(frame[0] == RealtimeSerializer.BinaryKind.userBroadcastPush.rawValue)
+        #expect(frame[6] == RealtimeSerializer.PayloadEncoding.binary.rawValue)
       }
     }
 
     // MARK: - Basic callback manager test
 
-    func testCallbackManager_triggerBroadcast() {
+    @Test
+    func callbackManager_triggerBroadcast() {
       let mgr = CallbackManager()
       let received = LockIsolated<JSONObject?>(nil)
       mgr.addBroadcastCallback(event: "test") { json in
         received.setValue(json)
       }
       mgr.triggerBroadcast(event: "test", json: ["hello": .string("world")])
-      XCTAssertNotNil(received.value)
-      XCTAssertEqual(received.value?["hello"]?.stringValue, "world")
+      #expect(received.value != nil)
+      #expect(received.value?["hello"]?.stringValue == "world")
     }
 
-    func testCallbackManager_triggerBroadcastData() {
+    @Test
+    func callbackManager_triggerBroadcastData() {
       let mgr = CallbackManager()
       let received = LockIsolated<Data?>(nil)
       mgr.addBroadcastDataCallback(event: "test") { data in
         received.setValue(data)
       }
       mgr.triggerBroadcastData(event: "test", data: Data([0x01, 0x02]))
-      XCTAssertNotNil(received.value)
-      XCTAssertEqual(received.value, Data([0x01, 0x02]))
+      #expect(received.value != nil)
+      #expect(received.value == Data([0x01, 0x02]))
     }
 
     // MARK: - Receiving JSON broadcast from binary frame
 
-    func testReceive_jsonBroadcastFromBinaryFrame() async throws {
+    @Test
+    func receive_jsonBroadcastFromBinaryFrame() async throws {
       let channel = sut.channel("test")
 
       let receivedPayload = LockIsolated<JSONObject?>(nil)
@@ -193,14 +190,15 @@ import XCTest
       await channel.handleBinaryBroadcast(broadcast)
 
       let payload = receivedPayload.value
-      XCTAssertNotNil(payload, "Expected to receive broadcast payload")
-      XCTAssertEqual(payload?["event"]?.stringValue, "my_event")
-      XCTAssertEqual(payload?["payload"]?.objectValue?["count"]?.intValue, 99)
+      #expect(payload != nil, "Expected to receive broadcast payload")
+      #expect(payload?["event"]?.stringValue == "my_event")
+      #expect(payload?["payload"]?.objectValue?["count"]?.intValue == 99)
     }
 
     // MARK: - Receiving binary broadcast from binary frame
 
-    func testReceive_binaryBroadcastFromBinaryFrame() async throws {
+    @Test
+    func receive_binaryBroadcastFromBinaryFrame() async throws {
       let channel = sut.channel("test")
 
       let receivedData = LockIsolated<Data?>(nil)
@@ -218,12 +216,13 @@ import XCTest
       )
       await channel.handleBinaryBroadcast(broadcast)
 
-      XCTAssertEqual(receivedData.value, binaryPayload)
+      #expect(receivedData.value == binaryPayload)
     }
 
     // MARK: - JSON broadcast callback receives correct wrapper format
 
-    func testReceive_jsonBroadcastHasCorrectFormat() async throws {
+    @Test
+    func receive_jsonBroadcastHasCorrectFormat() async throws {
       let channel = sut.channel("test")
 
       let receivedPayload = LockIsolated<JSONObject?>(nil)
@@ -240,44 +239,72 @@ import XCTest
       await channel.handleBinaryBroadcast(broadcast)
 
       let payload = receivedPayload.value
-      XCTAssertNotNil(payload)
-      XCTAssertEqual(payload?["type"]?.stringValue, "broadcast")
-      XCTAssertEqual(payload?["event"]?.stringValue, "evt")
-      XCTAssertEqual(payload?["payload"]?.objectValue?["key"]?.stringValue, "value")
+      #expect(payload != nil)
+      #expect(payload?["type"]?.stringValue == "broadcast")
+      #expect(payload?["event"]?.stringValue == "evt")
+      #expect(payload?["payload"]?.objectValue?["key"]?.stringValue == "value")
     }
 
-    // MARK: - REST broadcast body uses the sub-topic (without `realtime:` prefix)
+    // MARK: - Per-call encoder override
 
-    func testHttpSend_bodyTopicHasNoRealtimePrefix() async throws {
-      await http.any { _ in
-        HTTPResponse(
-          data: Data(),
-          response: HTTPURLResponse(
-            url: self.sut.broadcastURL,
-            statusCode: 202,
-            httpVersion: nil,
-            headerFields: nil
-          )!
-        )
+    @Test
+    func broadcast_perCallEncoderOverridesFixedInternalEncoder() async throws {
+      http.respond { _, _ in
+        (HTTPResponse(status: .init(code: 202)), Data())
+      }
+
+      // Not subscribed, so this falls back to the REST broadcast endpoint. Ack the broadcast so
+      // `broadcast(event:message:encoder:)` awaits the REST call before returning.
+      let channel = sut.channel("test") { config in
+        config.broadcast.acknowledgeBroadcasts = true
+      }
+
+      struct Message: Codable {
+        let userName: String
+      }
+
+      let snakeCaseEncoder = JSONEncoder()
+      snakeCaseEncoder.keyEncodingStrategy = .convertToSnakeCase
+
+      try await channel.broadcast(
+        event: "my_event", message: Message(userName: "abc"), encoder: snakeCaseEncoder
+      )
+
+      let request = http.requests.last
+      let body = try #require(request?.body)
+      let json = try #require(try JSONSerialization.jsonObject(with: body) as? [String: Any])
+      #expect(json["user_name"] as? String == "abc")
+      #expect(json["userName"] == nil)
+    }
+
+    // MARK: - REST broadcast URL uses the sub-topic (without `realtime:` prefix)
+
+    @Test
+    func httpSend_urlUsesSubTopicWithoutRealtimePrefix() async throws {
+      http.respond { _, _ in
+        (HTTPResponse(status: .init(code: 202)), Data())
       }
 
       let channel = sut.channel("test")
-      XCTAssertEqual(channel.topic, "realtime:test")
+      #expect(channel.topic == "realtime:test")
 
       try await channel.httpSend(
         event: "my_event", message: ["hello": .string("world")] as JSONObject
       )
 
-      let request = await http.receivedRequests.last
-      let body = try XCTUnwrap(request?.body)
+      let request = http.requests.last
+      let url = try #require(request?.head.url)
+      #expect(url.path == "/realtime/v1/api/broadcast/test/events/my_event")
+
+      let body = try #require(request?.body)
       let json = try JSONSerialization.jsonObject(with: body) as? [String: Any]
-      let messages = json?["messages"] as? [[String: Any]]
-      XCTAssertEqual(messages?.first?["topic"] as? String, "test")
+      #expect(json?["hello"] as? String == "world")
     }
 
     // MARK: - End-to-end binary frame via WebSocket
 
-    func testEndToEnd_binaryFrameViaWebSocket() async throws {
+    @Test
+    func endToEnd_binaryFrameViaWebSocket() async throws {
       setupServerAutoResponder()
       await sut.connect()
 
@@ -312,24 +339,20 @@ import XCTest
       server.send(frame)
 
       // Wait for the message to be processed
-      var attempts = 0
-      while receivedPayload.value == nil && attempts < 50 {
-        try await Task.sleep(nanoseconds: 10_000_000)  // 10ms
-        attempts += 1
-      }
+      let received = await waitUntil(timeout: 0.5) { receivedPayload.value != nil }
 
       let payload = receivedPayload.value
-      if payload == nil {
+      if !received {
         // This test can be flaky in CI due to async scheduling, mark as known limitation
         print(
-          "WARNING: End-to-end binary frame test did not receive payload after \(attempts) attempts"
+          "WARNING: End-to-end binary frame test did not receive payload in time"
         )
         print("Client received events: \(client.receivedEvents)")
       }
       // Only assert if we received something - the unit tests above cover the logic
       if let payload {
-        XCTAssertEqual(payload["event"]?.stringValue, "my_event")
-        XCTAssertEqual(payload["payload"]?.objectValue?["count"]?.intValue, 99)
+        #expect(payload["event"]?.stringValue == "my_event")
+        #expect(payload["payload"]?.objectValue?["count"]?.intValue == 99)
       }
     }
   }

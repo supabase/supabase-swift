@@ -6,22 +6,16 @@
 //
 
 import ConcurrencyExtras
-public import Foundation
+import Foundation
 
 extension JSONEncoder {
-  @available(*, deprecated, message: "Access to storage encoder is going to be removed.")
-  public static let defaultStorageEncoder: JSONEncoder = {
+  /// Default encoder used by ``StorageClientConfiguration`` when no `encoder` is supplied,
+  /// converting Swift's `camelCase` property names to the API's `snake_case` keys.
+  static let storageEncoder: JSONEncoder = {
     let encoder = JSONEncoder()
     encoder.keyEncodingStrategy = .convertToSnakeCase
     return encoder
   }()
 
   static let unconfiguredEncoder: JSONEncoder = .init()
-}
-
-extension JSONDecoder {
-  @available(*, deprecated, message: "Access to storage decoder is going to be removed.")
-  public static let defaultStorageDecoder: JSONDecoder = {
-    JSONDecoder.supabase()
-  }()
 }

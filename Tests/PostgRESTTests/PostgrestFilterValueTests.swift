@@ -1,44 +1,103 @@
+import Foundation
 import PostgREST
-import XCTest
+import Testing
 
-final class PostgrestFilterValue: XCTestCase {
-  func testArray() {
+@Suite
+struct PostgrestFilterValueTests {
+  @Test
+  func array() {
     let array = ["is:online", "faction:red"]
     let queryValue = array.rawValue
-    XCTAssertEqual(queryValue, "{is:online,faction:red}")
+    #expect(queryValue == "{is:online,faction:red}")
   }
 
-  func testAnyJSON() {
-    XCTAssertEqual(
-      AnyJSON.array(["is:online", "faction:red"]).rawValue,
-      "{is:online,faction:red}"
+  @Test
+  func arrayQuotesElementsContainingReservedCharacters() {
+    #expect(["a,b"].rawValue == "{\"a,b\"}")
+    #expect(["a", "b,c", "d"].rawValue == "{a,\"b,c\",d}")
+    #expect(["a{b"].rawValue == "{\"a{b\"}")
+  }
+
+  @Test
+  func arrayEscapesQuotesAndBackslashes() {
+    #expect([#"a"b"#].rawValue == #"{"a\"b"}"#)
+    #expect([#"a\b"#].rawValue == #"{"a\\b"}"#)
+  }
+
+  @Test
+  func arrayQuotesWhitespaceEmptyAndNullElements() {
+    #expect([" a"].rawValue == "{\" a\"}")
+    #expect([""].rawValue == "{\"\"}")
+    #expect(["NULL"].rawValue == "{\"NULL\"}")
+    #expect(["null"].rawValue == "{\"null\"}")
+  }
+
+  @Test
+  func arrayLeavesSafeAndNumericElementsUnquoted() {
+    #expect([1, 2, 3].rawValue == "{1,2,3}")
+    #expect(["admin", "user"].rawValue == "{admin,user}")
+    #expect(["9:00", "17:00"].rawValue == "{9:00,17:00}")
+  }
+
+  @Test
+  func arrayPreservesNestedArrayLiterals() {
+    #expect([[1, 2], [3, 4]].rawValue == "{{1,2},{3,4}}")
+  }
+
+  @Test
+  func arrayQuotesScalarStringsThatLookLikeArrayLiterals() {
+    #expect(["{a,b}"].rawValue == "{\"{a,b}\"}")
+  }
+
+  @Test
+  func arrayEncodesNilOptionalElementsAsRealNull() {
+    #expect([Optional(1), nil].rawValue == "{1,NULL}")
+  }
+
+  @Test
+  func arrayEncodesJSONValueNullElementsAsRealNull() {
+    #expect(JSONValue.array([.integer(1), .null]).rawValue == "{1,NULL}")
+  }
+
+  @Test
+  func anyJSONArrayEscapesReservedCharacters() {
+    #expect(JSONValue.array(["a,b"]).rawValue == "{\"a,b\"}")
+  }
+
+  @Test
+  func anyJSON() {
+    #expect(
+      JSONValue.array(["is:online", "faction:red"]).rawValue == "{is:online,faction:red}"
     )
-    XCTAssertEqual(
-      AnyJSON.object(["postalcode": 90210]).rawValue,
-      "{\"postalcode\":90210}"
+    #expect(
+      JSONValue.object(["postalcode": 90210]).rawValue == "{\"postalcode\":90210}"
     )
-    XCTAssertEqual(AnyJSON.string("string").rawValue, "string")
-    XCTAssertEqual(AnyJSON.double(3.14).rawValue, "3.14")
-    XCTAssertEqual(AnyJSON.integer(3).rawValue, "3")
-    XCTAssertEqual(AnyJSON.bool(true).rawValue, "true")
-    XCTAssertEqual(AnyJSON.null.rawValue, "NULL")
+    #expect(JSONValue.string("string").rawValue == "string")
+    #expect(JSONValue.double(3.14).rawValue == "3.14")
+    #expect(JSONValue.integer(3).rawValue == "3")
+    #expect(JSONValue.bool(true).rawValue == "true")
+    #expect(JSONValue.null.rawValue == "NULL")
   }
 
-  func testOptional() {
-    XCTAssertEqual(Optional.some([1, 2]).rawValue, "{1,2}")
-    XCTAssertEqual(Optional<[Int]>.none.rawValue, "NULL")
+  /// `Optional` is a ``PostgrestArrayElement`` but deliberately not a ``PostgrestFilterValue``,
+  /// so it encodes for an array literal and has no `rawValue` to pass to a comparison filter.
+  @Test
+  func optionalIsAnArrayElementNotAFilterValue() {
+    #expect(Optional.some([1, 2]).postgrestArrayElement == "{1,2}")
+    #expect(Optional<[Int]>.none.postgrestArrayElement == "NULL")
   }
 
-  func testUUID() {
-    XCTAssertEqual(
-      UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!.rawValue,
-      "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")
+  @Test
+  func uuid() {
+    #expect(
+      UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!.rawValue
+        == "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")
   }
 
-  func testDate() {
-    XCTAssertEqual(
-      Date(timeIntervalSince1970: 1_737_465_985).rawValue,
-      "2025-01-21T13:26:25.000Z"
+  @Test
+  func date() {
+    #expect(
+      Date(timeIntervalSince1970: 1_737_465_985).rawValue == "2025-01-21T13:26:25.000Z"
     )
   }
 }

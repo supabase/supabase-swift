@@ -5,10 +5,13 @@
 //  Created by Guilherme Souza on 07/10/23.
 //
 
+import Foundation
+import HTTPTypesFoundation
+import Helpers
 import InlineSnapshotTesting
 import SnapshotTesting
 import TestHelpers
-import XCTest
+import Testing
 
 @_spi(Experimental) @testable import Auth
 
@@ -18,8 +21,10 @@ import XCTest
 
 struct UnimplementedError: Error {}
 
-final class RequestsTests: XCTestCase {
-  func testSignUpWithEmailAndPassword() async {
+@Suite
+struct RequestsTests {
+  @Test
+  func signUpWithEmailAndPassword() async {
     let sut = makeSUT()
 
     await assert {
@@ -33,7 +38,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testSignUpWithPhoneAndPassword() async {
+  @Test
+  func signUpWithPhoneAndPassword() async {
     let sut = makeSUT()
 
     await assert {
@@ -46,7 +52,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testSignInWithEmailAndPassword() async {
+  @Test
+  func signInWithEmailAndPassword() async {
     let sut = makeSUT()
 
     await assert {
@@ -58,7 +65,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testSignInWithPhoneAndPassword() async {
+  @Test
+  func signInWithPhoneAndPassword() async {
     let sut = makeSUT()
 
     await assert {
@@ -70,7 +78,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testSignInWithIdToken() async {
+  @Test
+  func signInWithIdToken() async {
     let sut = makeSUT()
 
     await assert {
@@ -88,7 +97,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testSignInWithOTPUsingEmail() async {
+  @Test
+  func signInWithOTPUsingEmail() async {
     let sut = makeSUT()
 
     await assert {
@@ -102,7 +112,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testSignInWithOTPUsingPhone() async {
+  @Test
+  func signInWithOTPUsingPhone() async {
     let sut = makeSUT()
 
     await assert {
@@ -115,23 +126,25 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testGetOAuthSignInURL() async throws {
+  @Test
+  func oauthSignInURL() async throws {
     let sut = makeSUT()
-    let url = try sut.getOAuthSignInURL(
+    let url = try sut.oauthSignInURL(
       provider: .github, scopes: "read,write",
       redirectTo: URL(string: "https://dummy-url.com/redirect")!,
       queryParams: [("extra_key", "extra_value")]
     )
-    XCTAssertEqual(
-      url,
-      URL(
-        string:
-          "http://localhost:54321/auth/v1/authorize?provider=github&scopes=read,write&redirect_to=https://dummy-url.com/redirect&extra_key=extra_value"
-      )!
+    #expect(
+      url
+        == URL(
+          string:
+            "http://localhost:54321/auth/v1/authorize?provider=github&scopes=read,write&redirect_to=https://dummy-url.com/redirect&extra_key=extra_value"
+        )!
     )
   }
 
-  func testRefreshSession() async {
+  @Test
+  func refreshSession() async {
     let sut = makeSUT()
     await assert {
       try await sut.refreshSession(refreshToken: "refresh-token")
@@ -139,16 +152,18 @@ final class RequestsTests: XCTestCase {
   }
 
   #if !os(Linux) && !os(Windows) && !os(Android)
-    func testSessionFromURL() async throws {
-      let sut = makeSUT(fetch: { request in
-        let authorizationHeader = request.allHTTPHeaderFields?["Authorization"]
-        XCTAssertEqual(authorizationHeader, "bearer accesstoken")
-        return (json(named: "user"), HTTPURLResponse.stub())
-      })
-
+    @Test
+    func sessionFromURL() async throws {
       let currentDate = Date()
 
-      Dependencies[sut.clientID].date = { currentDate }
+      let sut = makeSUT(
+        fetch: { request in
+          let authorizationHeader = request.allHTTPHeaderFields?["Authorization"]
+          #expect(authorizationHeader == "bearer accesstoken")
+          return (json(named: "user"), HTTPURLResponse.stub())
+        },
+        date: { currentDate }
+      )
 
       let url = URL(
         string:
@@ -164,11 +179,12 @@ final class RequestsTests: XCTestCase {
         refreshToken: "refreshtoken",
         user: User(fromMockNamed: "user")
       )
-      XCTAssertEqual(session, expectedSession)
+      #expect(session == expectedSession)
     }
   #endif
 
-  func testSessionFromURLWithMissingComponent() async {
+  @Test
+  func sessionFromURLWithMissingComponent() async {
     let sut = makeSUT()
 
     let url = URL(
@@ -179,20 +195,16 @@ final class RequestsTests: XCTestCase {
     do {
       _ = try await sut.session(from: url)
     } catch {
-      assertInlineSnapshot(of: error, as: .dump) {
-        """
-        ▿ AuthError
-          ▿ implicitGrantRedirect: (1 element)
-            - message: "No session defined in URL"
-
-        """
-      }
+      let authError = error as? AuthError
+      #expect(authError?.kind == .implicitGrantRedirect)
+      #expect(authError?.message == "No session defined in URL")
     }
   }
 
-  func testSetSessionWithAFutureExpirationDate() async throws {
+  @Test
+  func setSessionWithAFutureExpirationDate() async throws {
     let sut = makeSUT()
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    sut.dependencies.sessionStorage.store(.valid)
 
     let accessToken =
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjo0ODUyMTYzNTkzLCJzdWIiOiJmMzNkM2VjOS1hMmVlLTQ3YzQtODBlMS01YmQ5MTlmM2Q4YjgiLCJlbWFpbCI6ImhpQGJpbmFyeXNjcmFwaW5nLmNvIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJlbWFpbCIsInByb3ZpZGVycyI6WyJlbWFpbCJdfSwidXNlcl9tZXRhZGF0YSI6e30sInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.UiEhoahP9GNrBKw_OHBWyqYudtoIlZGkrjs7Qa8hU7I"
@@ -202,7 +214,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testSetSessionWithAExpiredToken() async throws {
+  @Test
+  func setSessionWithAExpiredToken() async throws {
     let sut = makeSUT()
 
     let accessToken =
@@ -213,35 +226,39 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testSignOut() async throws {
+  @Test
+  func signOut() async throws {
     let sut = makeSUT()
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    sut.dependencies.sessionStorage.store(.valid)
 
     await assert {
       try await sut.signOut()
     }
   }
 
-  func testSignOutWithLocalScope() async throws {
+  @Test
+  func signOutWithLocalScope() async throws {
     let sut = makeSUT()
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    sut.dependencies.sessionStorage.store(.valid)
 
     await assert {
       try await sut.signOut(scope: .local)
     }
   }
 
-  func testSignOutWithOthersScope() async throws {
+  @Test
+  func signOutWithOthersScope() async throws {
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    sut.dependencies.sessionStorage.store(.valid)
 
     await assert {
       try await sut.signOut(scope: .others)
     }
   }
 
-  func testVerifyOTPUsingEmail() async {
+  @Test
+  func verifyOTPUsingEmail() async {
     let sut = makeSUT()
 
     await assert {
@@ -255,7 +272,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testVerifyOTPUsingPhone() async {
+  @Test
+  func verifyOTPUsingPhone() async {
     let sut = makeSUT()
 
     await assert {
@@ -268,7 +286,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testVerifyOTPUsingTokenHash() async {
+  @Test
+  func verifyOTPUsingTokenHash() async {
     let sut = makeSUT()
 
     await assert {
@@ -279,10 +298,11 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testUpdateUser() async throws {
+  @Test
+  func updateUser() async throws {
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    sut.dependencies.sessionStorage.store(.valid)
 
     await assert {
       try await sut.update(
@@ -291,14 +311,14 @@ final class RequestsTests: XCTestCase {
           phone: "+1 202-918-2132",
           password: "another.pass",
           nonce: "abcdef",
-          emailChangeToken: "123456",
           data: ["custom_key": .string("custom_value")]
         )
       )
     }
   }
 
-  func testResetPasswordForEmail() async {
+  @Test
+  func resetPasswordForEmail() async {
     let sut = makeSUT()
     await assert {
       try await sut.resetPasswordForEmail(
@@ -309,7 +329,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testResendEmail() async {
+  @Test
+  func resendEmail() async {
     let sut = makeSUT()
 
     await assert {
@@ -322,7 +343,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testResendPhone() async {
+  @Test
+  func resendPhone() async {
     let sut = makeSUT()
 
     await assert {
@@ -334,7 +356,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testDeleteUser() async {
+  @Test
+  func deleteUser() async {
     let sut = makeSUT()
 
     let id = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
@@ -343,20 +366,43 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testReauthenticate() async throws {
+  @Test
+  func adminListPasskeys() async throws {
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    let userId = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
+    await assert {
+      _ = try await sut.admin.listPasskeys(forUser: userId)
+    }
+  }
+
+  @Test
+  func adminDeletePasskey() async throws {
+    let sut = makeSUT()
+
+    let userId = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
+    let passkeyId = UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B")!
+    await assert {
+      try await sut.admin.deletePasskey(id: passkeyId, forUser: userId)
+    }
+  }
+
+  @Test
+  func reauthenticate() async throws {
+    let sut = makeSUT()
+
+    sut.dependencies.sessionStorage.store(.valid)
 
     await assert {
       try await sut.reauthenticate()
     }
   }
 
-  func testUnlinkIdentity() async throws {
+  @Test
+  func unlinkIdentity() async throws {
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    sut.dependencies.sessionStorage.store(.valid)
 
     await assert {
       try await sut.unlinkIdentity(
@@ -374,7 +420,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testSignInWithSSOUsingDomain() async {
+  @Test
+  func signInWithSSOUsingDomain() async {
     let sut = makeSUT()
 
     await assert {
@@ -386,7 +433,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testSignInWithSSOUsingProviderId() async {
+  @Test
+  func signInWithSSOUsingProviderId() async {
     let sut = makeSUT()
 
     await assert {
@@ -398,7 +446,8 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testSignInAnonymously() async {
+  @Test
+  func signInAnonymously() async {
     let sut = makeSUT()
 
     await assert {
@@ -409,13 +458,14 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testGetLinkIdentityURL() async throws {
+  @Test
+  func linkIdentityURL() async throws {
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    sut.dependencies.sessionStorage.store(.valid)
 
     await assert {
-      _ = try await sut.getLinkIdentityURL(
+      _ = try await sut.linkIdentityURL(
         provider: .github,
         scopes: "user:email",
         redirectTo: URL(string: "https://supabase.com"),
@@ -424,61 +474,67 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testMFAEnrollLegacy() async throws {
+  @Test
+  func mfaEnrollLegacy() async throws {
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    sut.dependencies.sessionStorage.store(.valid)
 
     await assert {
       _ = try await sut.mfa.enroll(
-        params: MFAEnrollParams(issuer: "supabase.com", friendlyName: "test"))
+        params: MFATotpEnrollParams(issuer: "supabase.com", friendlyName: "test"))
     }
   }
 
-  func testMFAEnrollTotp() async throws {
+  @Test
+  func mfaEnrollTotp() async throws {
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    sut.dependencies.sessionStorage.store(.valid)
 
     await assert {
       _ = try await sut.mfa.enroll(params: .totp(issuer: "supabase.com", friendlyName: "test"))
     }
   }
 
-  func testMFAEnrollPhone() async throws {
+  @Test
+  func mfaEnrollPhone() async throws {
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    sut.dependencies.sessionStorage.store(.valid)
 
     await assert {
       _ = try await sut.mfa.enroll(params: .phone(friendlyName: "test", phone: "+1 202-918-2132"))
     }
   }
 
-  func testMFAChallenge() async throws {
+  @Test
+  func mfaChallenge() async throws {
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    sut.dependencies.sessionStorage.store(.valid)
 
     await assert {
       _ = try await sut.mfa.challenge(params: .init(factorId: "123"))
     }
   }
 
-  func testMFAChallengePhone() async throws {
+  @Test
+  func mfaChallengePhone() async throws {
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    sut.dependencies.sessionStorage.store(.valid)
 
     await assert {
       _ = try await sut.mfa.challenge(params: .init(factorId: "123", channel: .whatsapp))
     }
   }
 
-  func testMFAVerify() async throws {
+  @Test
+  func mfaVerify() async throws {
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    sut.dependencies.sessionStorage.store(.valid)
 
     await assert {
       _ = try await sut.mfa.verify(
@@ -486,30 +542,33 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testMFAUnenroll() async throws {
+  @Test
+  func mfaUnenroll() async throws {
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    sut.dependencies.sessionStorage.store(.valid)
 
     await assert {
       _ = try await sut.mfa.unenroll(params: .init(factorId: "123"))
     }
   }
 
-  func testMFAEnrollWebAuthn() async throws {
+  @Test
+  func mfaEnrollWebAuthn() async throws {
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    sut.dependencies.sessionStorage.store(.valid)
 
     await assert {
       _ = try await sut.mfa.enroll(params: .webAuthn(friendlyName: "My Passkey"))
     }
   }
 
-  func testMFAChallengeWebAuthn() async throws {
+  @Test
+  func mfaChallengeWebAuthn() async throws {
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    sut.dependencies.sessionStorage.store(.valid)
 
     await assert {
       _ = try await sut.mfa.challenge(
@@ -521,10 +580,11 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testMFAVerifyWebAuthn() async throws {
+  @Test
+  func mfaVerifyWebAuthn() async throws {
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    sut.dependencies.sessionStorage.store(.valid)
 
     // The credential response carries W3C camelCase keys (e.g. `clientDataJSON`)
     // that MUST survive encoding untouched by the snake_case strategy.
@@ -547,20 +607,22 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testGetPasskeyRegistrationOptions() async throws {
+  @Test
+  func passkeyRegistrationOptions() async throws {
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    sut.dependencies.sessionStorage.store(.valid)
 
     await assert {
-      _ = try await sut.getPasskeyRegistrationOptions()
+      _ = try await sut.passkeyRegistrationOptions()
     }
   }
 
-  func testVerifyPasskeyRegistration() async throws {
+  @Test
+  func verifyPasskeyRegistration() async throws {
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    sut.dependencies.sessionStorage.store(.valid)
 
     await assert {
       _ = try await sut.verifyPasskeyRegistration(
@@ -578,16 +640,18 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testGetPasskeyAuthenticationOptions() async throws {
+  @Test
+  func passkeyAuthenticationOptions() async throws {
     let sut = makeSUT()
 
     // No session stored: passkey authentication options must not require auth.
     await assert {
-      _ = try await sut.getPasskeyAuthenticationOptions()
+      _ = try await sut.passkeyAuthenticationOptions()
     }
   }
 
-  func testVerifyPasskeyAuthentication() async throws {
+  @Test
+  func verifyPasskeyAuthentication() async throws {
     let sut = makeSUT()
 
     await assert {
@@ -608,33 +672,39 @@ final class RequestsTests: XCTestCase {
     }
   }
 
-  func testListPasskeys() async throws {
+  @Test
+  func listPasskeys() async throws {
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    sut.dependencies.sessionStorage.store(.valid)
 
     await assert {
       _ = try await sut.listPasskeys()
     }
   }
 
-  func testRenamePasskey() async throws {
+  @Test
+  func renamePasskey() async throws {
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    sut.dependencies.sessionStorage.store(.valid)
 
     await assert {
-      _ = try await sut.renamePasskey(id: "passkey-1", friendlyName: "Renamed Passkey")
+      _ = try await sut.renamePasskey(
+        id: UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B")!,
+        friendlyName: "Renamed Passkey"
+      )
     }
   }
 
-  func testDeletePasskey() async throws {
+  @Test
+  func deletePasskey() async throws {
     let sut = makeSUT()
 
-    Dependencies[sut.clientID].sessionStorage.store(.validSession)
+    sut.dependencies.sessionStorage.store(.valid)
 
     await assert {
-      try await sut.deletePasskey(id: "passkey-1")
+      try await sut.deletePasskey(id: UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B")!)
     }
   }
 
@@ -643,44 +713,47 @@ final class RequestsTests: XCTestCase {
       try await block()
     } catch is UnimplementedError {
     } catch {
-      XCTFail("Unexpected error: \(error)")
+      Issue.record("Unexpected error: \(error)")
     }
   }
 
   private func makeSUT(
     record: Bool = false,
     flowType: AuthFlowType = .implicit,
-    fetch: AuthClient.FetchHandler? = nil,
-    file: StaticString = #file,
+    fetch: (@Sendable (URLRequest) async throws -> (Data, URLResponse))? = nil,
+    date: @escaping @Sendable () -> Date = { Date() },
+    file: StaticString = #filePath,
     testName: String = #function,
     line: UInt = #line
   ) -> AuthClient {
-    let encoder = AuthClient.Configuration.jsonEncoder
-    encoder.outputFormatting = .sortedKeys
-
     let configuration = AuthClient.Configuration(
       url: clientURL,
       headers: ["Apikey": "dummy.api.key", "X-Client-Info": "gotrue-swift/x.y.z"],
       flowType: flowType,
       localStorage: InMemoryLocalStorage(),
-      logger: nil,
-      encoder: encoder,
-      fetch: { request in
-        DispatchQueue.main.sync {
-          assertSnapshot(
-            of: request, as: ._curl, record: record, file: file, testName: testName, line: line
-          )
-        }
+      http: .init(
+        transport: ClosureTransport { request, body in
+          guard var urlRequest = URLRequest(httpRequest: request) else { throw URLError(.badURL) }
+          if let body { urlRequest.httpBody = try await Data(collecting: body, upTo: .max) }
 
-        if let fetch {
-          return try await fetch(request)
-        }
+          await MainActor.run {
+            assertSnapshot(
+              of: urlRequest, as: ._curl, record: record, file: file, testName: testName, line: line
+            )
+          }
 
-        throw UnimplementedError()
-      }
-    )
+          if let fetch {
+            let (data, response) = try await fetch(urlRequest)
+            guard let head = (response as? HTTPURLResponse)?.httpResponse else {
+              throw URLError(.badServerResponse)
+            }
+            return (head, data.isEmpty ? nil : HTTPBody(data))
+          }
 
-    return AuthClient(configuration: configuration)
+          throw UnimplementedError()
+        }))
+
+    return AuthClient(configuration: configuration, date: date, pkce: .live, urlOpener: .live)
   }
 }
 

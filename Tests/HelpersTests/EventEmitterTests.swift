@@ -7,15 +7,17 @@
 
 import ConcurrencyExtras
 import Helpers
-import XCTest
+import Testing
 
-final class EventEmitterTests: XCTestCase {
+@Suite
+struct EventEmitterTests {
 
-  func testBasics() {
+  @Test
+  func basics() {
     let sut = EventEmitter(initialEvent: "0")
-    XCTAssertTrue(sut.emitsLastEventWhenAttaching)
+    #expect(sut.emitsLastEventWhenAttaching)
 
-    XCTAssertEqual(sut.lastEvent, "0")
+    #expect(sut.lastEvent == "0")
 
     let receivedEvents = LockIsolated<[String]>([])
 
@@ -40,17 +42,18 @@ final class EventEmitterTests: XCTestCase {
     sut.emit("7")
     sut.emit("8")
 
-    XCTAssertEqual(sut.lastEvent, "8")
+    #expect(sut.lastEvent == "8")
 
-    XCTAssertEqual(
-      receivedEvents.value,
-      ["a0", "b0", "a1", "b1", "a2", "b2", "a3", "b3", "a4", "b4", "a5", "b6", "b7", "b8"]
+    #expect(
+      receivedEvents.value
+        == ["a0", "b0", "a1", "b1", "a2", "b2", "a3", "b3", "a4", "b4", "a5", "b6", "b7", "b8"]
     )
   }
 
-  func test_dontEmitLastEventWhenAttaching() {
+  @Test
+  func dontEmitLastEventWhenAttaching() {
     let sut = EventEmitter(initialEvent: "0", emitsLastEventWhenAttaching: false)
-    XCTAssertFalse(sut.emitsLastEventWhenAttaching)
+    #expect(!sut.emitsLastEventWhenAttaching)
 
     let receivedEvent = LockIsolated<[String]>([])
     let token = sut.attach { value in
@@ -59,7 +62,7 @@ final class EventEmitterTests: XCTestCase {
 
     sut.emit("1")
 
-    XCTAssertEqual(receivedEvent.value, ["1"])
+    #expect(receivedEvent.value == ["1"])
 
     token.cancel()
   }

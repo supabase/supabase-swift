@@ -18,7 +18,19 @@ struct FileObjectDetailView: View {
   var body: some View {
     List {
       Section {
-        AnyJSONView(value: try! AnyJSON(fileObject))
+        JSONValueView(
+          value: .object([
+            "name": .string(fileObject.name),
+            "bucketId": fileObject.bucketId.map(JSONValue.string) ?? .null,
+            "owner": fileObject.owner.map(JSONValue.string) ?? .null,
+            "id": fileObject.id.map { .string($0.uuidString) } ?? .null,
+            "updatedAt": fileObject.updatedAt.map { .string($0.description) } ?? .null,
+            "createdAt": fileObject.createdAt.map { .string($0.description) } ?? .null,
+            "lastAccessedAt": fileObject.lastAccessedAt.map { .string($0.description) } ?? .null,
+            "metadata": fileObject.metadata.map(JSONValue.object) ?? .null,
+            "buckets": fileObject.buckets.map { .string($0.name) } ?? .null,
+          ])
+        )
       }
 
       Section("Actions") {
@@ -38,7 +50,7 @@ struct FileObjectDetailView: View {
               let url = try await api.createSignedURL(
                 path: fileObject.name,
                 expiresIn: 60,
-                download: true
+                download: .withOriginalName
               )
               lastActionResult = ("createSignedURL (download)", url)
               openURL(url)

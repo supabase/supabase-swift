@@ -1,4 +1,7 @@
+public import Clocks
 public import Foundation
+public import Helpers
+public import Logging
 
 #if canImport(FoundationNetworking)
   public import FoundationNetworking
@@ -34,14 +37,20 @@ public struct SupabaseClientOptions: Sendable {
     /// The JSONDecoder to use when decoding database response objects.
     public let decoder: JSONDecoder
 
+    /// Whether to automatically retry transient (network, 503 or 520) PostgREST errors on GET
+    /// and HEAD requests. Defaults to `true`.
+    public let retry: Bool
+
     public init(
       schema: String? = nil,
       encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
-      decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder
+      decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder,
+      retry: Bool = true
     ) {
       self.schema = schema
       self.encoder = encoder
       self.decoder = decoder
+      self.retry = retry
     }
   }
 
@@ -60,21 +69,8 @@ public struct SupabaseClientOptions: Sendable {
     /// applications.
     public let flowType: AuthFlowType
 
-    /// The JSON encoder to use for encoding requests.
-    public let encoder: JSONEncoder
-
-    /// The JSON decoder to use for decoding responses.
-    public let decoder: JSONDecoder
-
     /// Set to `true` if you want to automatically refresh the token before expiring.
-    public let autoRefreshToken: Bool
-
-    /// When `true`, emits the locally stored session immediately as the initial session,
-    /// regardless of its validity or expiration. When `false`, emits the initial session
-    /// after attempting to refresh the local stored session (legacy behavior).
-    ///
-    /// Default is `false` for backward compatibility. This will change to `true` in the next major release.
-    public let emitLocalSessionAsInitialSession: Bool
+    public let automaticallyRefreshesToken: Bool
 
     /// Optional function for using a third-party authentication system with Supabase. The function should return an access token or ID token (JWT) by obtaining it from the third-party auth client library.
     /// Note that this function may be called concurrently and many times. Use memoization and locking techniques if this is not supported by the client libraries.
@@ -87,20 +83,15 @@ public struct SupabaseClientOptions: Sendable {
       redirectToURL: URL? = nil,
       storageKey: String? = nil,
       flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
-      encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
-      decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
-      autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken,
-      emitLocalSessionAsInitialSession: Bool = false,
+      automaticallyRefreshesToken: Bool = AuthClient.Configuration
+        .defaultAutomaticallyRefreshesToken,
       accessToken: (@Sendable () async throws -> String?)? = nil
     ) {
       self.storage = storage
       self.redirectToURL = redirectToURL
       self.storageKey = storageKey
       self.flowType = flowType
-      self.encoder = encoder
-      self.decoder = decoder
-      self.autoRefreshToken = autoRefreshToken
-      self.emitLocalSessionAsInitialSession = emitLocalSessionAsInitialSession
+      self.automaticallyRefreshesToken = automaticallyRefreshesToken
       self.accessToken = accessToken
     }
   }
@@ -110,20 +101,47 @@ public struct SupabaseClientOptions: Sendable {
     /// Optional headers for initializing the client, it will be passed down to all sub-clients.
     public let headers: [String: String]
 
-    /// A session to use for making requests, defaults to `URLSession.shared`.
-    public let session: URLSession
+    /// The logger to use across all Supabase sub-packages. Defaults to a build-config-aware
+    /// logger: visible (warning+) in debug builds, silent in release builds.
+    public let logger: Logging.Logger
 
-    /// The logger  to use across all Supabase sub-packages.
-    public let logger: (any SupabaseLogger)?
+    /// The transport, middleware chain and request timeout every sub-client sends through.
+    ///
+    /// A `nil` ``HTTPClientConfiguration/transport`` (the default) uses ``URLSessionTransport``
+    /// over `URLSession.shared`. To send through your own `URLSession`, pass
+    /// `URLSessionTransport(session:)` as the transport. The middlewares run before the SDK's own
+    /// (trace context, access-token injection) and before the request reaches the transport; in
+    /// a module that retries (Auth, PostgREST) they run once per attempt.
+    /// ``HTTPClientConfiguration/timeout`` is the idle timeout for every request; leave it `nil`
+    /// for the defaults (60 seconds; 150 for Edge Functions).
+    public let http: HTTPClientConfiguration
 
+    /// The clock the time-based sub-client behaviors sleep on: Auth's token auto-refresh and
+    /// request-retry backoff, and Realtime's heartbeat timer and reconnect backoff.
+    ///
+    /// Defaults to `ContinuousClock()`. Pass a `TestClock` (swift-clocks) to drive those
+    /// behaviors deterministically in tests instead of waiting out real seconds.
+    public let clock: any Clock<Duration>
+
+    /// Creates the shared options.
+    /// - Parameters:
+    ///   - headers: Extra headers sent on every request made by every sub-client.
+    ///   - http: The transport, middleware chain and request timeout every sub-client sends
+    ///     through. A `nil` transport (the default) uses ``URLSessionTransport`` over
+    ///     `URLSession.shared`.
+    ///   - logger: The logger used across all Supabase sub-packages.
+    ///   - clock: The clock every time-based sub-client behavior sleeps on. Defaults to
+    ///     `ContinuousClock()`.
     public init(
       headers: [String: String] = [:],
-      session: URLSession = .shared,
-      logger: (any SupabaseLogger)? = nil
+      http: HTTPClientConfiguration = .init(),
+      logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase"),
+      clock: any Clock<Duration> = ContinuousClock()
     ) {
       self.headers = headers
-      self.session = session
+      self.http = http
       self.logger = logger
+      self.clock = clock
     }
   }
 
@@ -155,10 +173,10 @@ public struct SupabaseClientOptions: Sendable {
   /// Options for the Storage sub-client.
   public struct StorageOptions: Sendable {
     /// Whether storage client should be initialized with the new hostname format, i.e. `project-ref.storage.supabase.co`
-    public let useNewHostname: Bool
+    public let usesNewHostname: Bool
 
-    public init(useNewHostname: Bool = false) {
-      self.useNewHostname = useNewHostname
+    public init(usesNewHostname: Bool = false) {
+      self.usesNewHostname = usesNewHostname
     }
   }
 
@@ -212,10 +230,8 @@ extension SupabaseClientOptions.AuthOptions {
       redirectToURL: URL? = nil,
       storageKey: String? = nil,
       flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
-      encoder: JSONEncoder = AuthClient.Configuration.jsonEncoder,
-      decoder: JSONDecoder = AuthClient.Configuration.jsonDecoder,
-      autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken,
-      emitLocalSessionAsInitialSession: Bool = false,
+      automaticallyRefreshesToken: Bool = AuthClient.Configuration
+        .defaultAutomaticallyRefreshesToken,
       accessToken: (@Sendable () async throws -> String?)? = nil
     ) {
       self.init(
@@ -223,10 +239,7 @@ extension SupabaseClientOptions.AuthOptions {
         redirectToURL: redirectToURL,
         storageKey: storageKey,
         flowType: flowType,
-        encoder: encoder,
-        decoder: decoder,
-        autoRefreshToken: autoRefreshToken,
-        emitLocalSessionAsInitialSession: emitLocalSessionAsInitialSession,
+        automaticallyRefreshesToken: automaticallyRefreshesToken,
         accessToken: accessToken
       )
     }

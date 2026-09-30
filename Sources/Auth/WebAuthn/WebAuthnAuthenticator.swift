@@ -11,19 +11,9 @@ import Foundation
   import AuthenticationServices
 #endif
 
-/// Errors produced while driving a WebAuthn ceremony.
-enum WebAuthnError: Error, Equatable {
-  /// A required field was missing from the W3C credential options.
-  case missingField(String)
-  /// A field expected to be base64url-encoded could not be decoded.
-  case invalidBase64URL(String)
-  /// The authenticator returned a credential of an unexpected type.
-  case unexpectedCredentialType
-}
-
 // MARK: - W3C options parsing (platform independent, testable)
 
-extension AnyJSON {
+extension JSONValue {
   /// Base64url-decodes the `challenge` field of W3C credential options.
   func webAuthnChallengeData() throws -> Data {
     try base64URLDecoded(at: ["challenge"])
@@ -37,7 +27,7 @@ extension AnyJSON {
   /// Reads the `user.name` field of W3C creation options.
   func webAuthnUserName() throws -> String {
     guard let name = value(at: ["user", "name"])?.stringValue else {
-      throw WebAuthnError.missingField("user.name")
+      throw AuthError.webAuthn("Missing field 'user.name' in WebAuthn credential options.")
     }
     return name
   }
@@ -45,7 +35,7 @@ extension AnyJSON {
   /// Reads the `rpId` field of W3C assertion options (`PublicKeyCredentialRequestOptions`).
   func webAuthnAssertionRpId() throws -> String {
     guard let id = value(at: ["rpId"])?.stringValue else {
-      throw WebAuthnError.missingField("rpId")
+      throw AuthError.webAuthn("Missing field 'rpId' in WebAuthn credential options.")
     }
     return id
   }
@@ -53,13 +43,13 @@ extension AnyJSON {
   /// Reads the `rp.id` field of W3C creation options (`PublicKeyCredentialCreationOptions`).
   func webAuthnCreationRpId() throws -> String {
     guard let id = value(at: ["rp", "id"])?.stringValue else {
-      throw WebAuthnError.missingField("rp.id")
+      throw AuthError.webAuthn("Missing field 'rp.id' in WebAuthn credential options.")
     }
     return id
   }
 
-  private func value(at path: [String]) -> AnyJSON? {
-    var current: AnyJSON? = self
+  private func value(at path: [String]) -> JSONValue? {
+    var current: JSONValue? = self
     for key in path {
       current = current?.objectValue?[key]
     }
@@ -68,10 +58,11 @@ extension AnyJSON {
 
   private func base64URLDecoded(at path: [String]) throws -> Data {
     guard let string = value(at: path)?.stringValue else {
-      throw WebAuthnError.missingField(path.joined(separator: "."))
+      throw AuthError.webAuthn(
+        "Missing field '\(path.joined(separator: "."))' in WebAuthn credential options.")
     }
     guard let data = Base64URL.decode(string) else {
-      throw WebAuthnError.invalidBase64URL(path.joined(separator: "."))
+      throw AuthError.webAuthn("Field '\(path.joined(separator: "."))' is not valid base64url.")
     }
     return data
   }
@@ -91,14 +82,14 @@ extension AnyJSON {
     /// Presents the registration UI for the given W3C creation options and returns the resulting
     /// W3C credential JSON.
     var register:
-      @MainActor @Sendable (_ options: AnyJSON, _ rpId: String, _ anchor: ASPresentationAnchor)
-        async throws -> AnyJSON
+      @MainActor @Sendable (_ options: JSONValue, _ rpId: String, _ anchor: ASPresentationAnchor)
+        async throws -> JSONValue
 
     /// Presents the assertion UI for the given W3C request options and returns the resulting W3C
     /// credential JSON.
     var authenticate:
-      @MainActor @Sendable (_ options: AnyJSON, _ rpId: String, _ anchor: ASPresentationAnchor)
-        async throws -> AnyJSON
+      @MainActor @Sendable (_ options: JSONValue, _ rpId: String, _ anchor: ASPresentationAnchor)
+        async throws -> JSONValue
   }
 
   extension WebAuthnAuthenticator {
@@ -129,12 +120,12 @@ extension AnyJSON {
   }
 
   /// Serializes a platform registration credential into the W3C JSON shape the backend expects.
-  private func registrationCredentialJSON(from authorization: ASAuthorization) throws -> AnyJSON {
+  private func registrationCredentialJSON(from authorization: ASAuthorization) throws -> JSONValue {
     guard
       let credential = authorization.credential
         as? ASAuthorizationPlatformPublicKeyCredentialRegistration
     else {
-      throw WebAuthnError.unexpectedCredentialType
+      throw AuthError.webAuthn("The authenticator returned an unexpected credential type.")
     }
     return [
       "id": .string(Base64URL.encode(credential.credentialID)),
@@ -148,12 +139,12 @@ extension AnyJSON {
   }
 
   /// Serializes a platform assertion credential into the W3C JSON shape the backend expects.
-  private func assertionCredentialJSON(from authorization: ASAuthorization) throws -> AnyJSON {
+  private func assertionCredentialJSON(from authorization: ASAuthorization) throws -> JSONValue {
     guard
       let credential = authorization.credential
         as? ASAuthorizationPlatformPublicKeyCredentialAssertion
     else {
-      throw WebAuthnError.unexpectedCredentialType
+      throw AuthError.webAuthn("The authenticator returned an unexpected credential type.")
     }
     return [
       "id": .string(Base64URL.encode(credential.credentialID)),

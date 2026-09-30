@@ -1,9 +1,9 @@
-import ConcurrencyExtras
+import Foundation
 import HTTPTypes
-import InlineSnapshotTesting
+import Helpers
 import Mocker
 import TestHelpers
-import XCTest
+import Testing
 
 @testable import Functions
 
@@ -11,46 +11,78 @@ import XCTest
   import FoundationNetworking
 #endif
 
-final class FunctionsClientTests: XCTestCase {
+/// Captures the last `HTTPRequest` seen by a custom transport, for tests that need to inspect
+/// properties (like the resolved timeout) not surfaced by Mocker's `snapshotRequest` curl output.
+private actor CapturedRequestBox {
+  var request: HTTPTypes.HTTPRequest?
+  var timeout: Duration?
+
+  func set(_ request: HTTPTypes.HTTPRequest, timeout: Duration?) {
+    self.request = request
+    self.timeout = timeout
+  }
+}
+
+/// `.serialized`: Mocker registers stubs in a process-global table with no per-test isolation, so
+/// tests that stub overlapping URLs (e.g. `hello-world`) would otherwise race against each other
+/// under Swift Testing's default parallel execution. `.mockerSerialized` (see
+/// `TestHelpers/MockerSerialization.swift`) extends that guarantee across test *targets* too --
+/// StorageTests and PostgRESTTests have their own Mocker-backed suites, and without it this suite
+/// can still run concurrently with theirs and race on Mocker's shared registry.
+@Suite(.serialized, .mockerSerialized)
+struct FunctionsClientTests {
   let url = URL(string: "http://localhost:5432/functions/v1")!
   let apiKey =
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
 
-  let sessionConfiguration: URLSessionConfiguration = {
-    let sessionConfiguration = URLSessionConfiguration.default
+  private func makeSUT(
+    region: String? = nil,
+    accessToken: (@Sendable () async throws -> String?)? = nil
+  ) -> FunctionsClient {
+    Mocker.removeAll()
+
+    let sessionConfiguration = URLSessionConfiguration.ephemeral
     sessionConfiguration.protocolClasses = [MockingURLProtocol.self]
-    return sessionConfiguration
-  }()
+    let session = URLSession(configuration: sessionConfiguration)
+    return FunctionsClient(
+      url: url,
+      headers: ["apikey": apiKey],
+      region: region,
+      http: .init(transport: URLSessionTransport(session: session)),
+      accessToken: accessToken
+    )
+  }
 
-  lazy var session = URLSession(configuration: sessionConfiguration)
+  private func makeSUT(
+    transport:
+      @escaping @Sendable (HTTPTypes.HTTPRequest, HTTPBody?) async throws -> (
+        HTTPTypes.HTTPResponse, HTTPBody?
+      )
+  ) -> FunctionsClient {
+    FunctionsClient(
+      url: url,
+      headers: ["apikey": apiKey],
+      region: nil,
+      http: .init(transport: ClosureTransport(handler: transport)),
+      accessToken: nil
+    )
+  }
 
-  var region: String?
-
-  lazy var sut = FunctionsClient(
-    url: url,
-    headers: [
-      "apikey": apiKey
-    ],
-    region: region,
-    fetch: { request in
-      try await self.session.data(for: request)
-    },
-    sessionConfiguration: sessionConfiguration
-  )
-
-  func testInit() async {
+  @Test
+  func `init`() async {
     let client = FunctionsClient(
       url: url,
       headers: ["apikey": apiKey],
       region: .saEast1
     )
-    XCTAssertEqual(client.region, "sa-east-1")
+    #expect(client.region == "sa-east-1")
 
-    XCTAssertEqual(client.headers[.init("apikey")!], apiKey)
-    XCTAssertNotNil(client.headers[.init("X-Client-Info")!])
+    #expect(client.headers[.init("apikey")!] == apiKey)
+    #expect(client.headers[.init("X-Client-Info")!] != nil)
   }
 
-  func testInitWithCustomDecoder() async {
+  @Test
+  func initWithCustomDecoder() async {
     let decoder = JSONDecoder()
     decoder.keyDecodingStrategy = .convertFromSnakeCase
 
@@ -60,10 +92,13 @@ final class FunctionsClientTests: XCTestCase {
       decoder: decoder
     )
 
-    XCTAssertTrue(client.decoder === decoder)
+    #expect(client.decoder === decoder)
   }
 
-  func testInvoke() async throws {
+  @Test
+  func invoke() async throws {
+    let sut = makeSUT()
+
     Mock(
       url: self.url.appendingPathComponent("hello_world"),
       statusCode: 200,
@@ -90,7 +125,10 @@ final class FunctionsClientTests: XCTestCase {
     )
   }
 
-  func testInvokeReturningDecodable() async throws {
+  @Test
+  func invokeReturningDecodable() async throws {
+    let sut = makeSUT()
+
     Mock(
       url: url.appendingPathComponent("hello"),
       statusCode: 200,
@@ -115,11 +153,14 @@ final class FunctionsClientTests: XCTestCase {
     }
 
     let response = try await sut.invoke("hello") as Payload
-    XCTAssertEqual(response.message, "Hello, world!")
-    XCTAssertEqual(response.status, "ok")
+    #expect(response.message == "Hello, world!")
+    #expect(response.status == "ok")
   }
 
-  func testInvokeWithCustomMethod() async throws {
+  @Test
+  func invokeWithCustomMethod() async throws {
+    let sut = makeSUT()
+
     Mock(
       url: url.appendingPathComponent("hello-world"),
       statusCode: 200,
@@ -139,7 +180,10 @@ final class FunctionsClientTests: XCTestCase {
     try await sut.invoke("hello-world", options: .init(method: .delete))
   }
 
-  func testInvokeWithQuery() async throws {
+  @Test
+  func invokeWithQuery() async throws {
+    let sut = makeSUT()
+
     Mock(
       url: url.appendingPathComponent("hello-world"),
       ignoreQuery: true,
@@ -167,8 +211,9 @@ final class FunctionsClientTests: XCTestCase {
     )
   }
 
-  func testInvokeWithRegionDefinedInClient() async throws {
-    region = FunctionRegion.caCentral1.rawValue
+  @Test
+  func invokeWithRegionDefinedInClient() async throws {
+    let sut = makeSUT(region: FunctionRegion.caCentral1.rawValue)
 
     Mock(
       url: url.appendingPathComponent("hello-world"),
@@ -191,7 +236,10 @@ final class FunctionsClientTests: XCTestCase {
     try await sut.invoke("hello-world")
   }
 
-  func testInvokeWithRegion() async throws {
+  @Test
+  func invokeWithRegion() async throws {
+    let sut = makeSUT()
+
     Mock(
       url: url.appendingPathComponent("hello-world"),
       ignoreQuery: true,
@@ -213,8 +261,9 @@ final class FunctionsClientTests: XCTestCase {
     try await sut.invoke("hello-world", options: .init(region: .caCentral1))
   }
 
-  func testInvokeWithoutRegion() async throws {
-    region = nil
+  @Test
+  func invokeWithoutRegion() async throws {
+    let sut = makeSUT()
 
     Mock(
       url: url.appendingPathComponent("hello-world"),
@@ -235,7 +284,10 @@ final class FunctionsClientTests: XCTestCase {
     try await sut.invoke("hello-world")
   }
 
-  func testInvoke_shouldThrow_URLError_badServerResponse() async {
+  @Test
+  func invoke_badServerResponse_wrapsAsTransport() async {
+    let sut = makeSUT()
+
     Mock(
       url: url.appendingPathComponent("hello_world"),
       statusCode: 200,
@@ -255,15 +307,19 @@ final class FunctionsClientTests: XCTestCase {
 
     do {
       try await sut.invoke("hello_world")
-      XCTFail("Invoke should fail.")
-    } catch let urlError as URLError {
-      XCTAssertEqual(urlError.code, .badServerResponse)
+      Issue.record("Invoke should fail.")
+    } catch let error as FunctionsError {
+      #expect(error.kind == .transport)
+      #expect((error.underlyingError as? URLError)?.code == .badServerResponse)
     } catch {
-      XCTFail("Unexpected error thrown \(error)")
+      Issue.record("Unexpected error thrown \(error)")
     }
   }
 
-  func testInvoke_shouldThrow_FunctionsError_httpError() async {
+  @Test
+  func invoke_shouldThrow_FunctionsError_httpError() async {
+    let sut = makeSUT()
+
     Mock(
       url: url.appendingPathComponent("hello_world"),
       statusCode: 300,
@@ -282,15 +338,20 @@ final class FunctionsClientTests: XCTestCase {
 
     do {
       try await sut.invoke("hello_world")
-      XCTFail("Invoke should fail.")
-    } catch let FunctionsError.httpError(code, _) {
-      XCTAssertEqual(code, 300)
+      Issue.record("Invoke should fail.")
+    } catch let error as FunctionsError {
+      #expect(error.kind == .http)
+      #expect(error.response?.statusCode == 300)
+      #expect(error.response?.body == Data())
     } catch {
-      XCTFail("Unexpected error thrown \(error)")
+      Issue.record("Unexpected error thrown \(error)")
     }
   }
 
-  func testInvoke_shouldThrow_FunctionsError_relayError() async {
+  @Test
+  func invoke_shouldThrow_FunctionsError_relayError() async {
+    let sut = makeSUT()
+
     Mock(
       url: url.appendingPathComponent("hello_world"),
       statusCode: 200,
@@ -312,22 +373,316 @@ final class FunctionsClientTests: XCTestCase {
 
     do {
       try await sut.invoke("hello_world")
-      XCTFail("Invoke should fail.")
-    } catch FunctionsError.relayError {
+      Issue.record("Invoke should fail.")
+    } catch let error as FunctionsError {
+      #expect(error.kind == .relay)
     } catch {
-      XCTFail("Unexpected error thrown \(error)")
+      Issue.record("Unexpected error thrown \(error)")
     }
   }
 
-  func test_setAuth() {
-    sut.setAuth(token: "access.token")
-    XCTAssertEqual(sut.headers[.authorization], "Bearer access.token")
+  @Test
+  func invoke_relayErrorWithNon2xxStatus_shouldThrowRelayError() async {
+    let sut = makeSUT()
 
-    sut.setAuth(token: nil)
-    XCTAssertNil(sut.headers[.authorization])
+    Mock(
+      url: url.appendingPathComponent("hello_world"),
+      statusCode: 500,
+      data: [.post: Data()],
+      additionalHeaders: [
+        "x-relay-error": "true"
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
+      	--header "X-Client-Info: functions-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:5432/functions/v1/hello_world"
+      """#
+    }
+    .register()
+
+    do {
+      try await sut.invoke("hello_world")
+      Issue.record("Invoke should fail.")
+    } catch let error as FunctionsError {
+      #expect(error.kind == .relay)
+    } catch {
+      Issue.record("Unexpected error thrown \(error)")
+    }
   }
 
-  func testInvokeWithStreamedResponse() async throws {
+  @Test
+  func invoke_transportFailure_wrapsURLError() async {
+    let sut = makeSUT { _, _ in throw URLError(.notConnectedToInternet) }
+
+    do {
+      try await sut.invoke("hello_world")
+      Issue.record("Invoke should fail.")
+    } catch let error as FunctionsError {
+      #expect(error.kind == .transport)
+      #expect(error.response == nil)
+      #expect((error.underlyingError as? URLError)?.code == .notConnectedToInternet)
+    } catch {
+      Issue.record("Unexpected error thrown \(error)")
+    }
+  }
+
+  @Test
+  func invoke_cancellation_isNotWrapped() async {
+    let sut = makeSUT { _, _ in throw CancellationError() }
+
+    await #expect(throws: CancellationError.self) {
+      try await sut.invoke("hello_world")
+    }
+  }
+
+  @Test
+  func invoke_customFetchError_isNotWrapped() async {
+    struct FetchError: Error {}
+    let sut = makeSUT { _, _ in throw FetchError() }
+
+    await #expect(throws: FetchError.self) {
+      try await sut.invoke("hello_world")
+    }
+  }
+
+  @Test
+  func invoke_undecodableBody_wrapsDecodingError() async {
+    let sut = makeSUT()
+
+    Mock(
+      url: url.appendingPathComponent("hello_world"),
+      statusCode: 200,
+      data: [.post: Data("not json".utf8)]
+    )
+    .register()
+
+    do {
+      let _: [String: String] = try await sut.invoke("hello_world")
+      Issue.record("Invoke should fail.")
+    } catch let error as FunctionsError {
+      #expect(error.kind == .decoding)
+      #expect(error.response == nil)
+      #expect(error.underlyingError is DecodingError)
+    } catch {
+      Issue.record("Unexpected error thrown \(error)")
+    }
+  }
+
+  @Test
+  func invokeWithTimeoutOverride() async throws {
+    let box = CapturedRequestBox()
+    let sut = FunctionsClient(
+      url: url,
+      headers: ["apikey": apiKey],
+      http: .init(
+        transport: ClosureTransport { request, _ in
+          await box.set(request, timeout: RequestTimeout.current)
+          return (HTTPTypes.HTTPResponse(status: .ok), nil)
+        }))
+
+    try await sut.invoke("hello-world", options: .init(timeout: .seconds(30)))
+
+    let capturedTimeout = await box.timeout
+    #expect(capturedTimeout == .seconds(30))
+  }
+
+  @Test
+  func invokeWithDefaultTimeout() async throws {
+    let box = CapturedRequestBox()
+    let sut = FunctionsClient(
+      url: url,
+      headers: ["apikey": apiKey],
+      http: .init(
+        transport: ClosureTransport { request, _ in
+          await box.set(request, timeout: RequestTimeout.current)
+          return (HTTPTypes.HTTPResponse(status: .ok), nil)
+        }))
+
+    try await sut.invoke("hello-world")
+
+    let capturedTimeout = await box.timeout
+    #expect(capturedTimeout == FunctionsClient.requestIdleTimeout)
+  }
+
+  @Test
+  func configuredTimeoutIntervalReplacesTheFunctionsDefault() async throws {
+    let box = CapturedRequestBox()
+    let sut = FunctionsClient(
+      url: url,
+      headers: ["apikey": apiKey],
+      http: .init(
+        transport: ClosureTransport { request, _ in
+          await box.set(request, timeout: RequestTimeout.current)
+          return (HTTPTypes.HTTPResponse(status: .ok), nil)
+        },
+        timeout: .seconds(20)))
+
+    try await sut.invoke("hello-world")
+    let configuredTimeout = await box.timeout
+    #expect(configuredTimeout == .seconds(20))
+
+    try await sut.invoke("hello-world", options: .init(timeout: .seconds(30)))
+    let perInvocationTimeout = await box.timeout
+    #expect(perInvocationTimeout == .seconds(30))
+  }
+
+  @Test
+  func accessTokenProviderSetsAuthorizationHeader() async throws {
+    let box = CapturedRequestBox()
+    let sut = FunctionsClient(
+      url: url,
+      headers: ["apikey": apiKey],
+      http: .init(
+        transport: ClosureTransport { request, _ in
+          await box.set(request, timeout: nil)
+          return (HTTPTypes.HTTPResponse(status: .ok), nil)
+        }),
+      accessToken: { "access.token" }
+    )
+
+    try await sut.invoke("hello-world")
+
+    let capturedRequest = await box.request
+    #expect(capturedRequest?.headerFields[.authorization] == "Bearer access.token")
+  }
+
+  @Test
+  func accessTokenProviderIsResolvedPerInvoke() async throws {
+    actor TokenBox {
+      var token = "first.token"
+      func update(_ newValue: String) { token = newValue }
+    }
+    actor Capture {
+      var authorizationHeaders: [String?] = []
+      func record(_ value: String?) { authorizationHeaders.append(value) }
+    }
+
+    let tokenBox = TokenBox()
+    let capture = Capture()
+
+    let sut = FunctionsClient(
+      url: url,
+      headers: ["apikey": apiKey],
+      http: .init(
+        transport: ClosureTransport { request, _ in
+          await capture.record(request.headerFields[.authorization])
+          return (HTTPTypes.HTTPResponse(status: .ok), nil)
+        }),
+      accessToken: { await tokenBox.token }
+    )
+
+    try await sut.invoke("hello-world")
+    await tokenBox.update("second.token")
+    try await sut.invoke("hello-world")
+
+    let recorded = await capture.authorizationHeaders
+    #expect(recorded == ["Bearer first.token", "Bearer second.token"])
+  }
+
+  @Test
+  func invokeOptionsHeaderOverridesAccessTokenProvider() async throws {
+    let box = CapturedRequestBox()
+    let sut = FunctionsClient(
+      url: url,
+      headers: ["apikey": apiKey],
+      http: .init(
+        transport: ClosureTransport { request, _ in
+          await box.set(request, timeout: nil)
+          return (HTTPTypes.HTTPResponse(status: .ok), nil)
+        }),
+      accessToken: { "provider.token" }
+    )
+
+    try await sut.invoke(
+      "hello-world",
+      options: .init(headers: ["Authorization": "Bearer override.token"])
+    )
+
+    let capturedRequest = await box.request
+    #expect(capturedRequest?.headerFields[.authorization] == "Bearer override.token")
+  }
+
+  @Test
+  func accessTokenProviderErrorPropagatesToInvoke() async throws {
+    struct TokenError: Error {}
+
+    let sut = FunctionsClient(
+      url: url,
+      headers: ["apikey": apiKey],
+      http: .init(
+        transport: ClosureTransport { _, _ in
+          Issue.record("transport should not be called when the access token provider throws")
+          return (HTTPTypes.HTTPResponse(status: .ok), nil)
+        }),
+      accessToken: { throw TokenError() }
+    )
+
+    await #expect(throws: TokenError.self) {
+      try await sut.invoke("hello-world")
+    }
+  }
+
+  @Test
+  func invokeWithStreamedResponseDoesNotWrapAccessTokenError() async {
+    let sut = FunctionsClient(
+      url: url,
+      headers: ["apikey": apiKey],
+      http: .init(
+        transport: ClosureTransport { _, _ in
+          Issue.record("transport should not be called when the access token provider throws")
+          return (HTTPTypes.HTTPResponse(status: .ok), nil)
+        }),
+      accessToken: { throw URLError(.userAuthenticationRequired) }
+    )
+
+    do {
+      for try await _ in sut._invokeWithStreamedResponse("stream") {}
+      Issue.record("expected the stream to fail")
+    } catch let error as URLError {
+      #expect(error.code == .userAuthenticationRequired)
+    } catch {
+      Issue.record("Unexpected error \(error)")
+    }
+  }
+
+  @Test
+  func invokeWithStreamedResponseUsesAccessTokenProvider() async throws {
+    let sut = makeSUT(accessToken: { "stream.token" })
+
+    Mock(
+      url: url.appendingPathComponent("stream"),
+      statusCode: 200,
+      data: [.post: Data("hello world".utf8)]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
+      	--header "Authorization: Bearer stream.token" \
+      	--header "X-Client-Info: functions-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:5432/functions/v1/stream"
+      """#
+    }
+    .register()
+
+    let stream = sut._invokeWithStreamedResponse("stream")
+
+    for try await value in stream {
+      #expect(String(decoding: value, as: UTF8.self) == "hello world")
+    }
+  }
+
+  @Test
+  func invokeWithStreamedResponse() async throws {
+    // `_invokeWithStreamedResponse` now streams through the client's `transport`, and `makeSUT`
+    // wires `MockingURLProtocol` into the session backing it.
+    let sut = makeSUT()
+
     Mock(
       url: url.appendingPathComponent("stream"),
       statusCode: 200,
@@ -346,12 +701,22 @@ final class FunctionsClientTests: XCTestCase {
 
     let stream = sut._invokeWithStreamedResponse("stream")
 
+    var chunks: [Data] = []
     for try await value in stream {
-      XCTAssertEqual(String(decoding: value, as: UTF8.self), "hello world")
+      chunks.append(value)
     }
+
+    // Assert on the collected chunks, not inside the loop: a stream that yields nothing would
+    // pass an in-loop assertion vacuously. The payload has no newline and is under 16 KiB, so
+    // the transport delivers it as one chunk.
+    #expect(chunks.count == 1)
+    #expect(chunks.reduce(Data(), +) == Data("hello world".utf8))
   }
 
-  func testInvokeWithStreamedResponseHTTPError() async throws {
+  @Test
+  func invokeWithStreamedResponseHTTPError() async throws {
+    let sut = makeSUT()
+
     Mock(
       url: url.appendingPathComponent("stream"),
       statusCode: 300,
@@ -372,14 +737,18 @@ final class FunctionsClientTests: XCTestCase {
 
     do {
       for try await _ in stream {
-        XCTFail("should throw error")
+        Issue.record("should throw error")
       }
-    } catch let FunctionsError.httpError(code, _) {
-      XCTAssertEqual(code, 300)
+    } catch let error as FunctionsError {
+      #expect(error.kind == .http)
+      #expect(error.response?.statusCode == 300)
     }
   }
 
-  func testInvokeWithStreamedResponseRelayError() async throws {
+  @Test
+  func invokeWithStreamedResponseRelayError() async throws {
+    let sut = makeSUT()
+
     Mock(
       url: url.appendingPathComponent("stream"),
       statusCode: 200,
@@ -403,9 +772,44 @@ final class FunctionsClientTests: XCTestCase {
 
     do {
       for try await _ in stream {
-        XCTFail("should throw error")
+        Issue.record("should throw error")
       }
-    } catch FunctionsError.relayError {
+    } catch let error as FunctionsError {
+      #expect(error.kind == .relay)
+    }
+  }
+
+  @Test
+  func invokeWithStreamedResponseRelayErrorWithNon2xxStatus() async throws {
+    let sut = makeSUT()
+
+    Mock(
+      url: url.appendingPathComponent("stream"),
+      statusCode: 500,
+      data: [.post: Data()],
+      additionalHeaders: [
+        "x-relay-error": "true"
+      ]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
+      	--header "X-Client-Info: functions-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:5432/functions/v1/stream"
+      """#
+    }
+    .register()
+
+    let stream = sut._invokeWithStreamedResponse("stream")
+
+    do {
+      for try await _ in stream {
+        Issue.record("should throw error")
+      }
+    } catch let error as FunctionsError {
+      #expect(error.kind == .relay)
     }
   }
 }

@@ -110,6 +110,18 @@ struct AuthExamplesView: View {
           )
         }
       }
+
+      #if canImport(UIKit)
+        Section("Web3") {
+          NavigationLink(destination: SignInWithMetaMaskView()) {
+            ExampleRow(
+              title: "Sign in with MetaMask",
+              description: "Sign in with an Ethereum wallet via Sign-In-With-Ethereum (SIWE)",
+              icon: "wallet.pass.fill"
+            )
+          }
+        }
+      #endif
     }
     .navigationTitle("Authentication")
   }

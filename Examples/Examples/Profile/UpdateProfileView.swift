@@ -288,7 +288,7 @@ struct UpdateProfileView: View {
       id: UUID(),
       appMetadata: [:],
       userMetadata: [:],
-      aud: "",
+      audience: "",
       createdAt: Date(),
       updatedAt: Date()
     )

@@ -5,49 +5,46 @@
 //  Created by Guilherme Souza on 29/07/25.
 //
 
-import XCTest
+import Foundation
+import HTTPTypes
+import Testing
 
 @testable import Realtime
-@testable import RealtimeV2
 
-final class RealtimeErrorTests: XCTestCase {
-  func testRealtimeErrorInitialization() {
-    let errorMessage = "Connection failed"
-    let error = RealtimeError(errorMessage)
+@Suite
+struct RealtimeErrorTests {
+  @Test
+  func errorDescriptionIsTheMessage() {
+    let error = RealtimeError(kind: .connection, message: "Connection failed")
 
-    XCTAssertEqual(error.errorDescription, errorMessage)
+    #expect(error.errorDescription == "Connection failed")
+    #expect(error.localizedDescription == "Connection failed")
   }
 
-  func testRealtimeErrorLocalizedDescription() {
-    let errorMessage = "Test error message"
-    let error = RealtimeError(errorMessage)
-
-    // LocalizedError protocol provides localizedDescription
-    XCTAssertEqual(error.localizedDescription, errorMessage)
+  @Test
+  func statics() {
+    #expect(RealtimeError.maxRetryAttemptsReached.kind == .maxRetryAttemptsReached)
+    #expect(RealtimeError.maxRetryAttemptsReached.message == "Maximum retry attempts reached.")
+    #expect(RealtimeError.channelClosedByServer.kind == .channelClosedByServer)
+    #expect(RealtimeError.accessTokenMissing.kind == .accessTokenMissing)
+    #expect(RealtimeError.heartbeatTimeout.kind == .timeout)
   }
 
-  func testRealtimeErrorWithEmptyMessage() {
-    let error = RealtimeError("")
-    XCTAssertEqual(error.errorDescription, "")
+  @Test
+  func descriptionIncludesKindAndStatus() {
+    let error = RealtimeError(
+      kind: .server,
+      message: "Server error",
+      response: HTTPErrorResponse(statusCode: 500, headers: HTTPFields(), body: Data())
+    )
+
+    #expect(error.description == "RealtimeError(server): Server error [status 500]")
   }
 
-  func testRealtimeErrorAsError() {
-    let errorMessage = "Network timeout"
-    let realtimeError = RealtimeError(errorMessage)
-    let error: Error = realtimeError
+  @Test
+  func isPublicAndConformsToSupabaseError() {
+    let error: any Error = RealtimeError(kind: .decoding, message: "bad frame")
 
-    // Test that it can be used as a general Error
-    XCTAssertNotNil(error)
-    XCTAssertEqual(error.localizedDescription, errorMessage)
-  }
-
-  func testRealtimeErrorEquality() {
-    let error1 = RealtimeError("Same message")
-    let error2 = RealtimeError("Same message")
-    let error3 = RealtimeError("Different message")
-
-    // Since RealtimeError doesn't implement Equatable, we test the description
-    XCTAssertEqual(error1.errorDescription, error2.errorDescription)
-    XCTAssertNotEqual(error1.errorDescription, error3.errorDescription)
+    #expect((error as? any SupabaseError)?.message == "bad frame")
   }
 }
