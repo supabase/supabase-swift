@@ -21,7 +21,7 @@ actor ConnectionManager {
   private let transport: WebSocketTransport
   private let url: URL
   private let headers: [String: String]
-  private let reconnectDelay: TimeInterval
+  private let reconnectDelay: Duration
   private let logger: Logging.Logger
   let clock: any Clock<Duration>
 
@@ -39,7 +39,7 @@ actor ConnectionManager {
     transport: @escaping WebSocketTransport,
     url: URL,
     headers: [String: String],
-    reconnectDelay: TimeInterval,
+    reconnectDelay: Duration,
     logger: Logging.Logger,
     clock: any Clock<Duration>
   ) {
@@ -249,11 +249,10 @@ actor ConnectionManager {
   /// so a test that advances a manual clock by `cap` always fires the sleep, and
   /// one that advances by less than `cap/2` never does.
   ///
-  /// `baseDelay` is user-supplied and checked nowhere else, so it is clamped to
-  /// `0...30` here: `Duration.seconds(_:)` traps on a non-finite or huge `Double`.
-  static func reconnectBackoff(baseDelay: TimeInterval) -> RetryPolicy {
-    let base = baseDelay.isFinite ? min(max(baseDelay, 0), 30) : 30
-    return RetryPolicy(baseDelay: .seconds(base), maxDelay: .seconds(30))
+  /// `baseDelay` is user-supplied and checked nowhere else, so it is clamped to `0...30s` here.
+  static func reconnectBackoff(baseDelay: Duration) -> RetryPolicy {
+    let maxDelay: Duration = .seconds(30)
+    return RetryPolicy(baseDelay: min(max(baseDelay, .zero), maxDelay), maxDelay: maxDelay)
   }
 
   private func updateState(_ state: State) {

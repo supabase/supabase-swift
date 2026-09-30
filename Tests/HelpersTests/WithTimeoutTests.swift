@@ -6,27 +6,22 @@
 //
 
 import Helpers
+import Testing
 
+@Suite
 struct WithTimeoutTests {
-  //  func testWithTimeout() async {
-  //    do {
-  //      try await withTimeout(interval: 0.25) {
-  //        try await Task.sleep(nanoseconds: NSEC_PER_SEC)
-  //      }
-  //      XCTFail("Task should timeout.")
-  //    } catch {
-  //      XCTAssertTrue(error is TimeoutError)
-  //    }
-  //
-  //    do {
-  //      let answer = try await withTimeout(interval: 1.25) {
-  //        try await Task.sleep(nanoseconds: NSEC_PER_SEC)
-  //        return 42
-  //      }
-  //
-  //      XCTAssertEqual(answer, 42)
-  //    } catch {
-  //      XCTFail("Should not throw error: \(error)")
-  //    }
-  //  }
+  @Test
+  func throwsTimeoutErrorWhenOperationOutlivesDuration() async {
+    await #expect(throws: TimeoutError.self) {
+      try await withTimeout(.milliseconds(50)) {
+        try await Task.sleep(for: .seconds(10))
+      }
+    }
+  }
+
+  @Test
+  func returnsResultWhenOperationFinishesInTime() async throws {
+    let answer = try await withTimeout(.seconds(10)) { 42 }
+    #expect(answer == 42)
+  }
 }

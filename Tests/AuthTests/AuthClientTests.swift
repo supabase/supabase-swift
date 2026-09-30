@@ -3673,7 +3673,7 @@ extension AuthMockerTests {
       // concurrently-running suite in the process gets its own task scheduling funneled onto the
       // same queue too. Under CI's loaded simulator that queue can back up well past what a fast
       // local run would ever see — 30s gives real headroom without masking a genuinely stuck test.
-      timeout: TimeInterval = 30,
+      timeout: Duration = .seconds(30),
       fileID: StaticString = #fileID,
       filePath: StaticString = #filePath,
       line: UInt = #line,
@@ -3695,7 +3695,7 @@ extension AuthMockerTests {
 
       let result = try await action()
 
-      try await withTimeout(interval: timeout) {
+      try await withTimeout(timeout) {
         defer { finished.setValue(true) }
         while receivedEvents.count < expectedEvents.count {
           await Task.yield()
