@@ -31,18 +31,19 @@ import HTTPTypes
 /// ### OAuth 2.1 clients
 /// - ``oauth``
 public struct AuthAdmin: Sendable {
-  let clientID: AuthClientID
-
-  var configuration: AuthClient.Configuration { Dependencies[clientID].configuration }
-  var api: APIClient { Dependencies[clientID].api }
-  var encoder: JSONEncoder { Dependencies[clientID].resolvedEncoder }
+  let url: URL
+  /// Default redirect for the flows that take one, when the caller passes none.
+  let redirectToURL: URL?
+  let api: APIClient
+  let encoder: JSONEncoder
+  let decoder: JSONDecoder
 
   /// Contains all OAuth client administration methods.
   /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
   ///
   /// - Warning: This property requires `secret` key. Be careful to never expose your `secret` key in the browser.
   public var oauth: AuthAdminOAuth {
-    AuthAdminOAuth(clientID: clientID)
+    AuthAdminOAuth(admin: self)
   }
 
   /// Get user by id.
@@ -52,9 +53,9 @@ public struct AuthAdmin: Sendable {
     try await api.execute(
       HTTPRequest(
         method: .get,
-        url: configuration.url.appendingPathComponent("admin/users/\(id)")
+        url: url.appendingPathComponent("admin/users/\(id)")
       )
-    ).decoded(decoder: configuration.resolvedDecoder)
+    ).decoded(decoder: decoder)
   }
 
   /// Updates the user data.
@@ -66,9 +67,9 @@ public struct AuthAdmin: Sendable {
     try await api.execute(
       HTTPRequest(
         method: .put,
-        url: configuration.url.appendingPathComponent("admin/users/\(uid)")
-      ), body: configuration.resolvedEncoder.encode(attributes)
-    ).decoded(decoder: configuration.resolvedDecoder)
+        url: url.appendingPathComponent("admin/users/\(uid)")
+      ), body: encoder.encode(attributes)
+    ).decoded(decoder: decoder)
   }
 
   /// Creates a new user.
@@ -82,10 +83,10 @@ public struct AuthAdmin: Sendable {
     try await api.execute(
       HTTPRequest(
         method: .post,
-        url: configuration.url.appendingPathComponent("admin/users")
+        url: url.appendingPathComponent("admin/users")
       ), body: encoder.encode(attributes)
     )
-    .decoded(decoder: configuration.resolvedDecoder)
+    .decoded(decoder: decoder)
   }
 
   /// Sends an invite link to an email address.
@@ -106,9 +107,9 @@ public struct AuthAdmin: Sendable {
     try await api.execute(
       HTTPRequest(
         method: .post,
-        url: configuration.url.appendingPathComponent("admin/invite"),
+        url: url.appendingPathComponent("admin/invite"),
         query: [
-          (redirectTo ?? configuration.redirectToURL).map {
+          (redirectTo ?? redirectToURL).map {
             URLQueryItem(
               name: "redirect_to",
               value: $0.absoluteString
@@ -123,7 +124,7 @@ public struct AuthAdmin: Sendable {
         ]
       )
     )
-    .decoded(decoder: configuration.resolvedDecoder)
+    .decoded(decoder: decoder)
   }
 
   /// Delete a user. Requires `secret` key.
@@ -137,7 +138,7 @@ public struct AuthAdmin: Sendable {
     _ = try await api.execute(
       HTTPRequest(
         method: .delete,
-        url: configuration.url.appendingPathComponent("admin/users/\(id)")
+        url: url.appendingPathComponent("admin/users/\(id)")
       ),
       body: encoder.encode(
         DeleteUserRequest(shouldSoftDelete: shouldSoftDelete)
@@ -159,7 +160,7 @@ public struct AuthAdmin: Sendable {
     _ = try await api.execute(
       HTTPRequest(
         method: .post,
-        url: configuration.url.appendingPathComponent("logout"),
+        url: url.appendingPathComponent("logout"),
         query: [URLQueryItem(name: "scope", value: scope.rawValue)],
         headerFields: [.authorization: "Bearer \(jwt)"]
       )
@@ -180,7 +181,7 @@ public struct AuthAdmin: Sendable {
     let (httpResponse, data) = try await api.send(
       HTTPRequest(
         method: .get,
-        url: configuration.url.appendingPathComponent("admin/users"),
+        url: url.appendingPathComponent("admin/users"),
         query: [
           URLQueryItem(name: "page", value: params?.page?.description ?? ""),
           URLQueryItem(name: "per_page", value: params?.perPage?.description ?? ""),
@@ -189,7 +190,7 @@ public struct AuthAdmin: Sendable {
     )
 
     let response = try data.decoded(
-      as: Response.self, decoder: configuration.resolvedDecoder)
+      as: Response.self, decoder: decoder)
 
     var pagination = ListUsersPaginatedResponse(
       users: response.users,
@@ -226,9 +227,9 @@ public struct AuthAdmin: Sendable {
     try await api.execute(
       HTTPRequest(
         method: .post,
-        url: configuration.url.appendingPathComponent("admin/generate_link"),
+        url: url.appendingPathComponent("admin/generate_link"),
         query: [
-          (params.redirectTo ?? configuration.redirectToURL).map {
+          (params.redirectTo ?? redirectToURL).map {
             URLQueryItem(
               name: "redirect_to",
               value: $0.absoluteString
@@ -236,7 +237,7 @@ public struct AuthAdmin: Sendable {
           }
         ].compactMap { $0 }
       ), body: encoder.encode(params.body)
-    ).decoded(decoder: configuration.resolvedDecoder)
+    ).decoded(decoder: decoder)
   }
 }
 

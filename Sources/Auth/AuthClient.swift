@@ -152,24 +152,26 @@ public actor AuthClient {
 
   nonisolated let clientID: AuthClientID
 
-  nonisolated private var api: APIClient { Dependencies[clientID].api }
+  nonisolated let dependencies: Dependencies
 
-  nonisolated var configuration: AuthClient.Configuration { Dependencies[clientID].configuration }
+  nonisolated private var api: SessionAPIClient { dependencies.sessionAPI }
+
+  nonisolated var configuration: AuthClient.Configuration { dependencies.configuration }
 
   nonisolated private var codeVerifierStorage: CodeVerifierStorage {
-    Dependencies[clientID].codeVerifierStorage
+    dependencies.codeVerifierStorage
   }
 
-  nonisolated private var date: @Sendable () -> Date { Dependencies[clientID].date }
-  nonisolated private var sessionManager: SessionManager { Dependencies[clientID].sessionManager }
+  nonisolated private var date: @Sendable () -> Date { dependencies.date }
+  nonisolated private var sessionManager: SessionManager { dependencies.sessionManager }
   nonisolated private var eventEmitter: AuthStateChangeEventEmitter {
-    Dependencies[clientID].eventEmitter
+    dependencies.eventEmitter
   }
   nonisolated private var logger: Logging.Logger {
-    Dependencies[clientID].configuration.logger
+    dependencies.configuration.logger
   }
-  nonisolated private var sessionStorage: SessionStorage { Dependencies[clientID].sessionStorage }
-  nonisolated private var pkce: PKCE { Dependencies[clientID].pkce }
+  nonisolated private var sessionStorage: SessionStorage { dependencies.sessionStorage }
+  nonisolated private var pkce: PKCE { dependencies.pkce }
 
   #if canImport(ObjectiveC) && canImport(Combine)
     @MainActor
@@ -201,19 +203,25 @@ public actor AuthClient {
 
   /// Namespace for accessing multi-factor authentication API.
   nonisolated public var mfa: AuthMFA {
-    AuthMFA(clientID: clientID)
+    AuthMFA(client: self)
   }
 
   /// Namespace for the GoTrue admin methods.
   /// - Warning: This methods requires `secret` key, be careful to never expose `secret`
   /// key in the client.
   nonisolated public var admin: AuthAdmin {
-    AuthAdmin(clientID: clientID)
+    AuthAdmin(
+      url: configuration.url,
+      redirectToURL: configuration.redirectToURL,
+      api: dependencies.api,
+      encoder: configuration.resolvedEncoder,
+      decoder: configuration.resolvedDecoder
+    )
   }
 
   /// Namespace for the OAuth 2.1 authorization server consent and grant-management API.
   nonisolated public var oauthServer: AuthOAuthServer {
-    AuthOAuthServer(clientID: clientID)
+    AuthOAuthServer(client: self)
   }
 
   /// Initializes a AuthClient with a specific configuration.
@@ -221,7 +229,18 @@ public actor AuthClient {
   /// - Parameters:
   ///   - configuration: The client configuration.
   public init(configuration: Configuration) {
-    clientID = AuthClient.nextClientID()
+    self.init(configuration: configuration, date: { Date() }, pkce: .live, urlOpener: .live)
+  }
+
+  /// Test seam: pins the clock, the PKCE material, and the URL opener at construction.
+  init(
+    configuration: Configuration,
+    date: @escaping @Sendable () -> Date,
+    pkce: PKCE,
+    urlOpener: URLOpener
+  ) {
+    let clientID = AuthClient.nextClientID()
+    self.clientID = clientID
 
     let logger: Logging.Logger = {
       var logger = configuration.logger
@@ -229,31 +248,26 @@ public actor AuthClient {
       return logger
     }()
 
-    Dependencies[clientID] = Dependencies(
+    dependencies = .live(
       configuration: configuration,
-      http: HTTPClient(configuration: configuration),
-      api: APIClient(clientID: clientID),
-      codeVerifierStorage: .live(clientID: clientID),
-      sessionStorage: .live(clientID: clientID),
-      sessionManager: .live(clientID: clientID),
-      eventEmitter: AuthStateChangeEventEmitter(logger: logger),
-      logger: logger
+      logger: logger,
+      date: date,
+      pkce: pkce,
+      urlOpener: urlOpener
     )
 
     Task { @MainActor in observeAppLifecycleChanges() }
   }
 
   deinit {
-    // Grab the session manager before dropping the dependencies entry, and capture only it in the
-    // task below, capturing `self` would resurrect this client while it is being deallocated.
-    let sessionManager = Dependencies.instances.value[clientID]?.sessionManager
-
-    Dependencies.instances.withValue { $0.removeValue(forKey: clientID) }
+    // Capture only the session manager in the task below, capturing `self` would resurrect this
+    // client while it is being deallocated.
+    let sessionManager = dependencies.sessionManager
 
     // The auto-refresh loop retains the session manager, so it keeps ticking forever unless it is
     // explicitly stopped. `observeAppLifecycleChanges()` only stops it when the app resigns active,
     // which never happens for short-lived clients, or when auto-refresh was started manually.
-    Task { await sessionManager?.stopAutoRefresh() }
+    Task { await sessionManager.stopAutoRefresh() }
   }
 
   #if canImport(ObjectiveC) && canImport(Combine)
@@ -1505,7 +1519,7 @@ public actor AuthClient {
       scopes: scopes,
       redirectTo: redirectTo,
       queryParams: queryParams,
-      launchURL: { Dependencies[clientID].urlOpener.open($0) }
+      launchURL: { dependencies.urlOpener.open($0) }
     )
   }
 

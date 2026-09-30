@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 13/08/26.
 //
 
+import ConcurrencyExtras
 import Foundation
 import Logging
 import TestHelpers
@@ -34,7 +35,7 @@ struct AuthClientConfigurationTests {
     )
 
     let sut = AuthClient(configuration: configuration)
-    let dependenciesLogger = Dependencies[sut.clientID].logger
+    let dependenciesLogger = sut.dependencies.logger
 
     #expect(dependenciesLogger[metadataKey: "system"] == "auth")
     #expect(dependenciesLogger[metadataKey: "client_id"] != nil)
