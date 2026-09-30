@@ -154,9 +154,16 @@ struct AuthClientMultipleInstancesTests {
       sessionManager = client.dependencies.sessionManager
 
       client.startAutoRefresh()
-      await Task.megaYield()
 
-      #expect(await sessionManager.isAutoRefreshRunning())
+      // `startAutoRefresh()` schedules the start on a detached task, so poll instead of asserting
+      // after a single yield; on a small cooperative thread pool (Linux CI) one yield is not
+      // always enough for that task to have run.
+      var didStart = await sessionManager.isAutoRefreshRunning()
+      for _ in 0..<100 where !didStart {
+        try? await Task.sleep(nanoseconds: NSEC_PER_MSEC * 10)
+        didStart = await sessionManager.isAutoRefreshRunning()
+      }
+      #expect(didStart)
     }
 
     // `deinit` stops the auto-refresh loop from a detached task, so poll instead of asserting
