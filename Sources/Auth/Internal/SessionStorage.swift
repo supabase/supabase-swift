@@ -15,18 +15,18 @@ struct SessionStorage {
 }
 
 extension SessionStorage {
-  /// Whether storage no longer holds `snapshot`, the session an operation started from — a
-  /// concurrent sign-out cleared it, or another refresh or sign-in replaced it.
+  /// Whether storage no longer holds `snapshot`, what an operation saw stored when it started — a
+  /// concurrent sign-out cleared it, another refresh or sign-in replaced it, or a sign-in filled
+  /// storage that was empty.
   ///
   /// Callers use this as a commit guard: a request that outlived the session it was issued for
   /// must not apply its result to whichever session is stored now. The comparison is between two
   /// storage reads, not between a caller's input and storage, because a `nil` snapshot is
   /// legitimate — `setSession(accessToken:refreshToken:)` refreshes an externally-sourced token
-  /// with nothing stored yet, and that is a hydration, not a session replaced underneath.
+  /// with nothing stored yet. That is a hydration only for as long as storage stays empty; once
+  /// another sign-in lands, the hydration is the stale one.
   func changed(since snapshot: Session?) -> Bool {
-    guard let snapshot else { return false }
-    guard let current = get() else { return true }
-    return current.refreshToken != snapshot.refreshToken
+    get()?.refreshToken != snapshot?.refreshToken
   }
 
   /// Key used to store session on ``AuthLocalStorage``.
