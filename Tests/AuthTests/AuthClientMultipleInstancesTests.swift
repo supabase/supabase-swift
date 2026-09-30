@@ -153,7 +153,7 @@ struct AuthClientMultipleInstancesTests {
       )
       sessionManager = client.dependencies.sessionManager
 
-      await client.startAutoRefresh()
+      client.startAutoRefresh()
       await Task.megaYield()
 
       #expect(await sessionManager.isAutoRefreshRunning())

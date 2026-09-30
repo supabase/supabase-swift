@@ -2834,3 +2834,39 @@ try await storage.from("avatars").uploadToSignedURL(path: "user123.png", token: 
 ```
 
 This is a compile error. All six overloads move together (`data:` and `fileURL:` variants of each).
+
+## `AuthClient` is now a `final class`, not an `actor`
+
+`AuthClient` is declared `public final class AuthClient: Sendable` instead of
+`public actor AuthClient`.
+
+Almost every member was already `nonisolated`, so the actor protected no state. Its one side effect
+was a process-global registry that those `nonisolated` members used to reach the client's
+dependencies, and that registry trapped with `fatalError` as soon as an `AuthAdmin`, `AuthMFA`, or
+`AuthOAuthServer` value outlived the `AuthClient` it came from. Dependencies now live on the
+instance. `AuthMFA` and `AuthOAuthServer` retain their client, and `AuthAdmin` carries its own
+transport, so those values keep working for as long as you hold them.
+
+Ordinary use is source-compatible. Every member that talks to the server is still `async`, and the
+members that were `nonisolated` keep working without `await`. Two synchronous methods that used to
+need `await` because of actor isolation no longer do: `startAutoRefresh()` and `stopAutoRefresh()`.
+Calling them with `await` still compiles but produces a "no 'async' operations occur within
+'await' expression" warning; drop the `await`.
+
+It is a compile error only where `AuthClient` was used *as an actor*: an `isolated AuthClient`
+parameter, passing it where `any Actor` is expected, or calling `assumeIsolated` on it.
+
+```swift
+// Before
+func inspect(_ auth: isolated AuthClient) {
+  print(auth.currentUser?.email ?? "signed out")
+}
+
+// After
+func inspect(_ auth: AuthClient) {
+  print(auth.currentUser?.email ?? "signed out")
+}
+```
+
+Search your code for `isolated AuthClient`, `assumeIsolated` on an `AuthClient` value, and
+`await` in front of `startAutoRefresh()` / `stopAutoRefresh()`.

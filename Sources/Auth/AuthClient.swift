@@ -54,8 +54,8 @@ private let globalJWKSCache = GlobalJWKSCache()
 /// The primary interface to Supabase Auth.
 ///
 /// Use `AuthClient` to sign users up, sign them in, manage sessions, and subscribe to
-/// authentication-state changes. It is an `actor`, so all mutable state is protected by Swift
-/// concurrency.
+/// authentication-state changes. It is `Sendable`: one instance can be shared across tasks and
+/// actors, and every member that does not need the network is synchronous.
 ///
 /// ```swift
 /// let auth = AuthClient(
@@ -139,7 +139,7 @@ private let globalJWKSCache = GlobalJWKSCache()
 /// - ``didChangeAuthStateNotification``
 /// - ``authChangeEventInfoKey``
 /// - ``authChangeSessionInfoKey``
-public actor AuthClient {
+public final class AuthClient: Sendable {
   private static let _globalClientID = LockIsolated(0)
 
   /// Thread-safe auto-incrementing client ID generator.
@@ -150,28 +150,28 @@ public actor AuthClient {
     }
   }
 
-  nonisolated let clientID: AuthClientID
+  let clientID: AuthClientID
 
-  nonisolated let dependencies: Dependencies
+  let dependencies: Dependencies
 
-  nonisolated private var api: SessionAPIClient { dependencies.sessionAPI }
+  private var api: SessionAPIClient { dependencies.sessionAPI }
 
-  nonisolated var configuration: AuthClient.Configuration { dependencies.configuration }
+  var configuration: AuthClient.Configuration { dependencies.configuration }
 
-  nonisolated private var codeVerifierStorage: CodeVerifierStorage {
+  private var codeVerifierStorage: CodeVerifierStorage {
     dependencies.codeVerifierStorage
   }
 
-  nonisolated private var date: @Sendable () -> Date { dependencies.date }
-  nonisolated private var sessionManager: SessionManager { dependencies.sessionManager }
-  nonisolated private var eventEmitter: AuthStateChangeEventEmitter {
+  private var date: @Sendable () -> Date { dependencies.date }
+  private var sessionManager: SessionManager { dependencies.sessionManager }
+  private var eventEmitter: AuthStateChangeEventEmitter {
     dependencies.eventEmitter
   }
-  nonisolated private var logger: Logging.Logger {
+  private var logger: Logging.Logger {
     dependencies.configuration.logger
   }
-  nonisolated private var sessionStorage: SessionStorage { dependencies.sessionStorage }
-  nonisolated private var pkce: PKCE { dependencies.pkce }
+  private var sessionStorage: SessionStorage { dependencies.sessionStorage }
+  private var pkce: PKCE { dependencies.pkce }
 
   #if canImport(ObjectiveC) && canImport(Combine)
     @MainActor
@@ -190,26 +190,26 @@ public actor AuthClient {
   /// Returns the current session, if any.
   ///
   /// The session returned by this property may be expired. Use ``session`` for a session that is guaranteed to be valid.
-  nonisolated public var currentSession: Session? {
+  public var currentSession: Session? {
     sessionStorage.get()
   }
 
   /// Returns the current user, if any.
   ///
   /// The user returned by this property may be outdated. Use ``user(jwt:)`` method to get an up-to-date user instance.
-  nonisolated public var currentUser: User? {
+  public var currentUser: User? {
     currentSession?.user
   }
 
   /// Namespace for accessing multi-factor authentication API.
-  nonisolated public var mfa: AuthMFA {
+  public var mfa: AuthMFA {
     AuthMFA(client: self)
   }
 
   /// Namespace for the GoTrue admin methods.
   /// - Warning: This methods requires `secret` key, be careful to never expose `secret`
   /// key in the client.
-  nonisolated public var admin: AuthAdmin {
+  public var admin: AuthAdmin {
     AuthAdmin(
       url: configuration.url,
       redirectToURL: configuration.redirectToURL,
@@ -220,7 +220,7 @@ public actor AuthClient {
   }
 
   /// Namespace for the OAuth 2.1 authorization server consent and grant-management API.
-  nonisolated public var oauthServer: AuthOAuthServer {
+  public var oauthServer: AuthOAuthServer {
     AuthOAuthServer(client: self)
   }
 
@@ -228,7 +228,7 @@ public actor AuthClient {
   ///
   /// - Parameters:
   ///   - configuration: The client configuration.
-  public init(configuration: Configuration) {
+  public convenience init(configuration: Configuration) {
     self.init(configuration: configuration, date: { Date() }, pkce: .live, urlOpener: .live)
   }
 
@@ -293,18 +293,14 @@ public actor AuthClient {
         NotificationCenter.default
           .publisher(for: didBecomeActiveNotification)
           .sink { [weak self] _ in
-            Task {
-              await self?.handleDidBecomeActive()
-            }
+            self?.handleDidBecomeActive()
           }
           .store(in: &appLifecycleCancellables)
 
         NotificationCenter.default
           .publisher(for: willResignActiveNotification)
           .sink { [weak self] _ in
-            Task {
-              await self?.handleWillResignActive()
-            }
+            self?.handleWillResignActive()
           }
           .store(in: &appLifecycleCancellables)
       }
@@ -347,7 +343,7 @@ public actor AuthClient {
   /// Listen for auth state changes.
   ///
   /// An `.initialSession` is always emitted when this method is called.
-  nonisolated public var authStateChanges:
+  public var authStateChanges:
     AsyncStream<
       (
         event: AuthChangeEvent,
@@ -793,7 +789,7 @@ public actor AuthClient {
   /// If that isn't the case, you should consider using
   /// ``signInWithOAuth(provider:redirectTo:scopes:queryParams:launchFlow:)`` or
   /// ``signInWithOAuth(provider:redirectTo:scopes:queryParams:configure:)``.
-  nonisolated public func oauthSignInURL(
+  public func oauthSignInURL(
     provider: Provider,
     scopes: String? = nil,
     redirectTo: URL? = nil,
@@ -1040,7 +1036,7 @@ public actor AuthClient {
   ///     supabase.auth.handle(url)
   ///   }
   /// ```
-  nonisolated public func handle(_ url: URL) {
+  public func handle(_ url: URL) {
     Task {
       do {
         try await session(from: url)
@@ -1646,7 +1642,7 @@ public actor AuthClient {
     }
   }
 
-  nonisolated private func prepareForPKCE() -> (
+  private func prepareForPKCE() -> (
     codeChallenge: String?, codeChallengeMethod: String?, flowId: String?
   ) {
     guard configuration.flowType == .pkce else {
@@ -1673,7 +1669,7 @@ public actor AuthClient {
       || params["error_code"] != nil && currentCodeVerifier != nil
   }
 
-  nonisolated private func getURLForProvider(
+  private func getURLForProvider(
     url: URL,
     provider: Provider,
     scopes: String? = nil,
