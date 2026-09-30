@@ -7,15 +7,22 @@
 
 public import Foundation
 import HTTPTypes
+public import Helpers
+public import Logging
 
 /// Admin-only Auth operations that require the secret key.
 ///
-/// Access this namespace via ``AuthClient/admin``.
+/// Get one from ``AuthClient/admin``, or create one directly with
+/// ``init(url:headers:redirectToURL:http:logger:)`` on a server that has no user session. It
+/// carries its own transport and never reads or writes a session.
 ///
 /// > Warning: These methods require the secret key. Never expose this key
 /// > in a browser or mobile app — call these methods from a secure server-side environment only.
 ///
 /// ## Topics
+///
+/// ### Creating an admin client
+/// - ``init(url:headers:redirectToURL:http:logger:)``
 ///
 /// ### User management
 /// - ``user(id:)``
@@ -244,4 +251,54 @@ public struct AuthAdmin: Sendable {
 extension HTTPField.Name {
   static let xTotalCount = Self("x-total-count")!
   static let link = Self("link")!
+}
+
+extension AuthAdmin {
+  /// Creates an admin client that talks to the Auth server on its own, with no user session.
+  ///
+  /// Use this on a server where nobody is signed in, the same way supabase-js exposes
+  /// `GoTrueAdminApi`. When you already have an ``AuthClient``, ``AuthClient/admin`` builds one
+  /// from its configuration instead.
+  ///
+  /// ```swift
+  /// let admin = AuthAdmin(
+  ///   url: URL(string: "https://<project>.supabase.co/auth/v1")!,
+  ///   headers: [
+  ///     "apikey": secretKey,
+  ///     "Authorization": "Bearer \(secretKey)",
+  ///   ]
+  /// )
+  /// let users = try await admin.listUsers()
+  /// ```
+  ///
+  /// > Warning: The secret key grants full access to your project's users. Never ship it in a
+  /// > client app.
+  ///
+  /// - Parameters:
+  ///   - url: The base URL of the Auth server, such as `https://<project>.supabase.co/auth/v1`.
+  ///   - headers: Headers sent with every request. Include `apikey` and an
+  ///     `Authorization: Bearer <secret key>` header.
+  ///   - redirectToURL: Default redirect for ``inviteUserByEmail(_:data:redirectTo:)`` and
+  ///     ``generateLink(params:)`` when the call passes none.
+  ///   - http: The transport and middleware chain every request goes through.
+  ///   - logger: The logger to use. Defaults to a build-config-aware logger.
+  public init(
+    url: URL,
+    headers: [String: String] = [:],
+    redirectToURL: URL? = nil,
+    http: HTTPClientConfiguration = .init(),
+    logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.auth")
+  ) {
+    self.init(
+      url: url,
+      redirectToURL: redirectToURL,
+      api: APIClient(
+        headers: headers,
+        http: HTTPClient(http: http, clock: ContinuousClock(), logger: logger),
+        decoder: AuthClient.Configuration.jsonDecoder
+      ),
+      encoder: AuthClient.Configuration.jsonEncoder,
+      decoder: AuthClient.Configuration.jsonDecoder
+    )
+  }
 }

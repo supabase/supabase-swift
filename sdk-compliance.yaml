@@ -342,6 +342,9 @@ supporting_symbols:
   - AuthError.description
   - AuthError.sessionMissing
   - AuthError.refreshDiscarded
+  # AuthAdmin.init (SDK-1983) creates the standalone admin client that every
+  # auth.admin.* capability runs on, rather than belonging to one of them.
+  - AuthAdmin.init
   # RealtimeError (SDK-1788) is thrown by every realtime.* capability rather
   # than owned by one.
   - RealtimeError
