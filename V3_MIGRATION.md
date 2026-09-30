@@ -257,7 +257,7 @@ try await client.from("users").select().ilike("email", pattern: "john%").execute
 | `TransformOptions.init(...resize: String?..., format: String?)` | `TransformOptions.init(...resize: ResizeMode?..., format: ImageFormat?)` |
 | `JSONEncoder.defaultStorageEncoder` / `JSONDecoder.defaultStorageDecoder` | *(removed, no public replacement — was only ever the client's internal default)* |
 | `StorageClientConfiguration.init(...encoder:decoder:session:...)` | `StorageClientConfiguration.init(...logger:...)` |
-| `Storage.File` / `Storage.FormData` | `MultipartFormData` |
+| `Storage.File` / `Storage.FormData` | *(removed — uploads no longer build a multipart form; see "Storage uploads send the raw file body" below)* |
 
 ```swift
 // Before
@@ -2832,3 +2832,38 @@ func inspect(_ auth: AuthClient) {
 
 Search your code for `isolated AuthClient`, `assumeIsolated` on an `AuthClient` value, and
 `await` in front of `startAutoRefresh()` / `stopAutoRefresh()`.
+
+## Storage uploads send the raw file body instead of a `multipart/form-data` form
+
+`StorageFileApi.upload`, `update`, and `uploadToSignedURL` put the file bytes directly in the
+request body. The form fields the multipart body used to carry travel as headers instead:
+
+| Multipart form field | Header |
+| --- | --- |
+| `cacheControl` | `Cache-Control: max-age=<seconds>` (already sent before) |
+| file part `Content-Type` | `Content-Type: <contentType, or inferred from the extension>` |
+| `metadata` | `x-metadata: <base64 of the JSON object>` |
+
+This is the shape supabase-js sends for `ArrayBuffer` and stream uploads, and storage-api has
+accepted it for as long as it has accepted the form. The multipart encoder buffered the whole
+file three times over (measured at +610 MB for a 200 MiB upload); the raw body adds nothing on top
+of the caller's data, and `upload(path:fileURL:)` now streams from disk without reading the file
+into memory. The internal `MultipartFormData` type is gone.
+
+```swift
+// Before and after — the call is unchanged
+try await storage.from("avatars").upload(
+  path: "user123.png",
+  data: imageData,
+  options: FileOptions(cacheControl: "7200", metadata: ["source": "camera"])
+)
+```
+
+This compiles unchanged. It is a silent wire change: anything that inspects the outgoing request
+sees a different body and `Content-Type`. Search your code for a `ClientMiddleware`, a
+`ClientTransport`, a proxy rule, or a test fixture that matches on `multipart/form-data`, a
+`boundary=` parameter, or a `Content-Disposition: form-data` part, and read the file from the body
+and the metadata from `x-metadata` instead.
+
+A `Content-Type` passed through `FileOptions.headers` now wins over the inferred one, where before
+it silently replaced the multipart header and broke the request.
