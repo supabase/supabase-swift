@@ -344,7 +344,6 @@ supporting_symbols:
   - RealtimeError.Kind
   - RealtimeError.Kind.init
   - RealtimeError.Kind.rawValue
-  - RealtimeError.Kind.connection
   - RealtimeError.Kind.timeout
   - RealtimeError.Kind.accessTokenMissing
   - RealtimeError.Kind.maxRetryAttemptsReached

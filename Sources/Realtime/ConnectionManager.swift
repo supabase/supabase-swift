@@ -64,7 +64,7 @@ actor ConnectionManager {
       logger.debug("Connection already in progress, waiting...")
       try await task.value
       guard case .connected(let conn) = state else {
-        throw RealtimeError.connection("Connection failed")
+        throw RealtimeError.transport("Connection failed")
       }
       return conn
 
@@ -72,7 +72,7 @@ actor ConnectionManager {
       logger.debug("Initiating new connection")
       try await performConnection()
       guard case .connected(let conn) = state else {
-        throw RealtimeError.connection("Connection failed")
+        throw RealtimeError.transport("Connection failed")
       }
       return conn
 
@@ -80,7 +80,7 @@ actor ConnectionManager {
       logger.debug("Reconnection in progress, waiting...")
       try await task.value
       guard case .connected(let conn) = state else {
-        throw RealtimeError.connection("Connection failed")
+        throw RealtimeError.transport("Connection failed")
       }
       return conn
     }
