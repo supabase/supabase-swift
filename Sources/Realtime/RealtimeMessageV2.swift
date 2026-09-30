@@ -15,6 +15,7 @@ import Foundation
 /// - ``payload``
 /// - ``status``
 /// ### Event Classification
+/// - ``eventType``
 /// - ``EventType``
 /// ### Initialization
 /// - ``init(joinRef:ref:topic:event:payload:)``
@@ -60,35 +61,21 @@ public struct RealtimeMessageV2: Hashable, Codable, Sendable {
   public var status: PushStatus? {
     payload["status"]
       .flatMap(\.stringValue)
-      .flatMap(PushStatus.init(rawValue:))
+      .map(PushStatus.init(rawValue:))
   }
 
-  var _eventType: EventType? {
-    switch event {
-    case ChannelEvent.system: .system
-    case ChannelEvent.postgresChanges:
-      .postgresChanges
-    case ChannelEvent.broadcast:
-      .broadcast
-    case ChannelEvent.close:
-      .close
-    case ChannelEvent.error:
-      .error
-    case ChannelEvent.presenceDiff:
-      .presenceDiff
-    case ChannelEvent.presenceState:
-      .presenceState
-    case ChannelEvent.reply:
-      .reply
-    default:
-      nil
-    }
+  /// The ``event`` name as an ``EventType``.
+  public var eventType: EventType {
+    EventType(rawValue: event)
   }
 
-  /// A structured representation of the channel event type.
+  /// A channel event name, with static members for the events this SDK handles.
+  ///
+  /// The server can introduce new event names, so a `switch` over this value needs a `default:`
+  /// case.
   ///
   /// ## Topics
-  /// ### Cases
+  /// ### Events
   /// - ``system``
   /// - ``postgresChanges``
   /// - ``broadcast``
@@ -97,30 +84,42 @@ public struct RealtimeMessageV2: Hashable, Codable, Sendable {
   /// - ``presenceDiff``
   /// - ``presenceState``
   /// - ``reply``
-  public enum EventType {
+  public struct EventType: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+    public let rawValue: String
+
+    /// Creates a ``EventType`` from a raw string value.
+    public init(rawValue: String) {
+      self.rawValue = rawValue
+    }
+
+    /// Creates a ``EventType`` from a string literal.
+    public init(stringLiteral value: String) {
+      self.init(rawValue: value)
+    }
+
     /// A channel-level system message (e.g. subscribe confirmation).
-    case system
+    public static let system = EventType(rawValue: ChannelEvent.system)
 
     /// A Postgres row change event.
-    case postgresChanges
+    public static let postgresChanges = EventType(rawValue: ChannelEvent.postgresChanges)
 
     /// A broadcast message from another client.
-    case broadcast
+    public static let broadcast = EventType(rawValue: ChannelEvent.broadcast)
 
     /// The channel was closed by the server.
-    case close
+    public static let close = EventType(rawValue: ChannelEvent.close)
 
     /// The server reported an error on this channel.
-    case error
+    public static let error = EventType(rawValue: ChannelEvent.error)
 
     /// A presence diff event describing joins and leaves.
-    case presenceDiff
+    public static let presenceDiff = EventType(rawValue: ChannelEvent.presenceDiff)
 
     /// A full presence state snapshot.
-    case presenceState
+    public static let presenceState = EventType(rawValue: ChannelEvent.presenceState)
 
     /// A reply to a client-originated push.
-    case reply
+    public static let reply = EventType(rawValue: ChannelEvent.reply)
   }
 
   private enum CodingKeys: String, CodingKey {

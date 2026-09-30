@@ -578,12 +578,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
 
   func onMessage(_ message: RealtimeMessageV2) async {
     do {
-      guard let eventType = message._eventType else {
-        logger.debug("Received message without event type: \(message)")
-        return
-      }
-
-      switch eventType {
+      switch message.eventType {
       case .system: await handleSystem(message)
       case .reply: try await handleReply(message)
       case .postgresChanges: try handlePostgresChanges(message)
@@ -592,6 +587,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       case .error: await handleError(message)
       case .presenceDiff: try handlePresenceDiff(message)
       case .presenceState: try handlePresenceState(message)
+      default: logger.debug("Received message with unhandled event type: \(message)")
       }
     } catch {
       logger.debug("Failed: \(error)")
@@ -1217,7 +1213,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   @MainActor
   private func didReceiveReply(ref: String, status: String) async {
     let push = await stateManager.removePush(ref: ref)
-    push?.didReceive(status: PushStatus(rawValue: status) ?? .ok)
+    push?.didReceive(status: PushStatus(rawValue: status))
   }
 }
 
