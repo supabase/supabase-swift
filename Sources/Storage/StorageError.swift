@@ -30,8 +30,9 @@ public struct StorageError: SupabaseError {
     /// status code and on ``StorageError/serverError`` for the code and message Storage sent;
     /// `serverError` is `nil` when the body was not a Storage error payload.
     public static let server: Kind = "server"
-    /// The request never completed, so nothing changed on the server. Retry or check
-    /// connectivity. ``StorageError/underlyingError`` is usually a `URLError`.
+    /// No response arrived, so whether Storage applied the request is unknown. Retry reads
+    /// freely; before retrying an upload, move or delete, check that it was not applied.
+    /// ``StorageError/underlyingError`` is usually a `URLError`.
     public static let transport: Kind = "transport"
     /// Storage answered 2xx but the body could not be used: it did not decode as the expected
     /// type, or a required field was missing. Nothing to retry; report it.
