@@ -297,7 +297,6 @@ supporting_symbols:
   - PostgrestError.Kind.init
   - PostgrestError.Kind.rawValue
   - PostgrestError.Kind.server
-  - PostgrestError.Kind.unexpectedResponse
   - PostgrestError.Kind.transport
   - PostgrestError.Kind.decoding
   - PostgrestError.Kind.invalidRequest

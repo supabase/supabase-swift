@@ -1602,7 +1602,7 @@ or `dateDecodingStrategy` that didn't match `PostgrestError`'s plain `details`/`
 `message` shape could cause a real PostgREST error response to fail decoding, and was reported as a
 generic `HTTPError` instead of a `PostgrestError`. Now, a recognized PostgREST error body throws
 `PostgrestError` with kind `.server` and the decoded `PostgrestError.ServerError` in `serverError`.
-An unrecognized body throws kind `.unexpectedResponse` with `serverError == nil` and the raw bytes
+An unrecognized body throws the same kind `.server` with `serverError == nil` and the raw bytes
 in `response?.body`. This is a silent behavior change, not a compile error: if you
 `catch`-typed on `PostgrestError` while also customizing `Configuration.decoder`'s key or date
 strategy, error responses that previously fell through as `HTTPError` are now caught as
@@ -2365,9 +2365,10 @@ This is a compile error: `code`, `details` and `hint` no longer exist on `Postgr
 }
 ```
 
-Kinds: `.server` (recognized body, `serverError` set), `.unexpectedResponse` (raw body in
-`response?.body`), `.transport`, `.decoding`, and `.invalidRequest` for client-side rejections
-such as `.csv()` combined with `.stripNulls()`.
+Kinds: `.server` for any non-2xx (`serverError` is set when the body was a recognizable PostgREST
+payload, `nil` otherwise; the raw bytes are always in `response?.body`), `.transport`, `.decoding`
+(also for a 2xx the SDK cannot use, such as a `count(_:)` reply with no `Content-Range`), and
+`.invalidRequest` for client-side rejections such as `.csv()` combined with `.stripNulls()`.
 
 If you constructed `PostgrestError(message:)` yourself, pass a kind:
 `PostgrestError(kind: .invalidRequest, message:)`.
@@ -2377,7 +2378,7 @@ If you constructed `PostgrestError(message:)` yourself, pass a kind:
 The generic `HTTPError` type is gone. Storage and PostgREST threw it when a non-2xx body did not
 decode as their own error payload, which meant two catch clauses per module. Each module error
 now carries `response: HTTPErrorResponse?` with the status code, `HTTPFields` headers, raw body
-and `requestID`, and an unrecognized body is reported with kind `.unexpectedResponse`.
+and `requestID`, and an unrecognized body is reported with kind `.server` and `serverError == nil`.
 
 This is a compile error for any `catch let error as HTTPError`.
 
