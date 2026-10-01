@@ -346,6 +346,7 @@ supporting_symbols:
   - AuthMFA.recoveryCodes
   - AuthMFARecoveryCodes
   - AuthMFARecoveryCodesGenerateResponse
+  - AuthMFARecoveryCodesGenerateResponse.init
   - AuthMFARecoveryCodesGenerateResponse.id
   - AuthMFARecoveryCodesGenerateResponse.friendlyName
   - AuthMFARecoveryCodesGenerateResponse.total
@@ -627,6 +628,7 @@ features:
       - AuthMFARecoveryCodes.status
     supporting_symbols:
       - AuthMFARecoveryCodesStatusResponse
+      - AuthMFARecoveryCodesStatusResponse.init
       - AuthMFARecoveryCodesStatusResponse.id
       - AuthMFARecoveryCodesStatusResponse.total
       - AuthMFARecoveryCodesStatusResponse.remaining
