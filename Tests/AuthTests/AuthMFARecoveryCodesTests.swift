@@ -21,7 +21,7 @@ import Testing
 extension AuthMockerTests {
   @Suite(.mockerSerialized)
   struct AuthMFARecoveryCodesTests {
-    let factorId = "0d3aa138-da96-4aea-8d9e-c8b0e1234567"
+    let factorId = UUID(uuidString: "0d3aa138-da96-4aea-8d9e-c8b0e1234567")!
 
     let storage = InMemoryLocalStorage()
 

@@ -1280,7 +1280,7 @@ public struct AuthMFAUnenrollResponse: Decodable, Hashable, Sendable {
 /// The response returned by ``AuthMFARecoveryCodes/status()``.
 public struct AuthMFARecoveryCodesStatusResponse: Decodable, Hashable, Sendable {
   /// ID of the recovery codes factor, as it appears in ``User/factors``.
-  public let id: String
+  public let id: UUID
 
   /// Number of codes in the current set.
   public let total: Int
@@ -1294,7 +1294,7 @@ public struct AuthMFARecoveryCodesStatusResponse: Decodable, Hashable, Sendable 
 /// ``AuthMFARecoveryCodes/regenerate()``.
 public struct AuthMFARecoveryCodesGenerateResponse: Decodable, Hashable, Sendable {
   /// ID of the recovery codes factor.
-  public let id: String
+  public let id: UUID
 
   /// Friendly name of the recovery codes factor.
   public var friendlyName: String?
