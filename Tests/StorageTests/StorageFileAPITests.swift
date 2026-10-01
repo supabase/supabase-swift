@@ -525,7 +525,7 @@ extension StorageMockerTests {
     }
 
     @Test
-    func createSignedURL_invalidURL() async throws {
+    func createSignedURL_malformedSignedURL() async throws {
       let storage = makeSUT()
 
       Mock(
@@ -550,7 +550,7 @@ extension StorageMockerTests {
         )
         Issue.record("expected createSignedURL to throw")
       } catch let error as StorageError {
-        #expect(error.kind == .invalidRequest)
+        #expect(error.kind == .decoding)
         #expect(error.response == nil)
       }
     }

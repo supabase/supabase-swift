@@ -566,7 +566,7 @@ public struct StorageFileApi: Sendable {
         url: api.configuration.url, resolvingAgainstBaseURL: false)
     else {
       throw StorageError(
-        kind: .invalidRequest, message: "Cannot build a signed URL from '\(signedURL)'.")
+        kind: .decoding, message: "Cannot build a signed URL from '\(signedURL)'.")
     }
 
     baseComponents.path +=
@@ -592,7 +592,7 @@ public struct StorageFileApi: Sendable {
 
     guard let signedURL = baseComponents.url else {
       throw StorageError(
-        kind: .invalidRequest, message: "Cannot build a signed URL from '\(signedURL)'.")
+        kind: .decoding, message: "Cannot build a signed URL from '\(signedURL)'.")
     }
 
     return signedURL
@@ -902,7 +902,7 @@ public struct StorageFileApi: Sendable {
 
     guard let components = URLComponents(url: signedURL, resolvingAgainstBaseURL: false) else {
       throw StorageError(
-        kind: .invalidRequest, message: "Cannot build a signed upload URL for '\(path)'.")
+        kind: .decoding, message: "Cannot build a signed upload URL for '\(path)'.")
     }
 
     guard let token = components.queryItems?.first(where: { $0.name == "token" })?.value else {
@@ -911,7 +911,7 @@ public struct StorageFileApi: Sendable {
 
     guard let url = components.url else {
       throw StorageError(
-        kind: .invalidRequest, message: "Cannot build a signed upload URL for '\(path)'.")
+        kind: .decoding, message: "Cannot build a signed upload URL for '\(path)'.")
     }
 
     return SignedUploadURL(
