@@ -257,7 +257,7 @@ try await client.from("users").select().ilike("email", pattern: "john%").execute
 | `TransformOptions.init(...resize: String?..., format: String?)` | `TransformOptions.init(...resize: ResizeMode?..., format: ImageFormat?)` |
 | `JSONEncoder.defaultStorageEncoder` / `JSONDecoder.defaultStorageDecoder` | *(removed, no public replacement — was only ever the client's internal default)* |
 | `StorageClientConfiguration.init(...encoder:decoder:session:...)` | `StorageClientConfiguration.init(...logger:...)` |
-| `Storage.File` / `Storage.FormData` | `MultipartFormData` |
+| `Storage.File` / `Storage.FormData` | *(removed — uploads no longer build a multipart form; see "Storage uploads send the raw file body" below)* |
 
 ```swift
 // Before
@@ -422,44 +422,6 @@ out. This is a silent behavior change, not a compile error: search your codebase
 Construct `RealtimeClientV2` directly (not through `SupabaseClient`) if you need a
 Realtime-specific logger distinct from the rest of the client.
 
-## `KeychainLocalStorage`'s default Keychain service is now the host app's bundle identifier
-
-`KeychainLocalStorage()` no longer stores sessions under the fixed service
-`"supabase.gotrue.swift"`. It now defaults to `Bundle.main.bundleIdentifier`, falling back to the
-old constant only when there is no bundle identifier to read (command-line tools, some test
-bundles).
-
-The fixed string put every app that embeds the SDK in the same Keychain namespace. On
-iOS/iPadOS/tvOS/watchOS/visionOS this was not a cross-app collision risk, since items are
-implicitly scoped to the app's own default access group
-(`$(AppIdentifierPrefix)$(CFBundleIdentifier)`), so unrelated apps could not read or overwrite each
-other's session there. On macOS's file-based login Keychain, and for any apps deliberately sharing
-an access group on any platform, the shared service name was a real collision risk: two such apps
-could read and overwrite each other's session under that one service name. Either way, sharing a
-single hardcoded service name is poor namespacing hygiene. Scoping the service to the bundle
-identifier gives each app its own Keychain location by default.
-
-Existing sessions are not lost. On the first `retrieve` after upgrading, `KeychainLocalStorage`
-probes the old `"supabase.gotrue.swift"` location, moves whatever it finds to the new
-per-app location, and returns it — so users stay signed in. This is a behavior change, not a
-compile error: nothing in the type signature changed, but the on-disk Keychain location did. If
-you rely on the exact service name (for example, to inspect the Keychain from another tool, or
-because several of your own apps intentionally shared the old namespace), pass it explicitly to
-keep the pre-v3 location:
-
-```swift
-// Before (implicit, shared "supabase.gotrue.swift" service)
-let storage = KeychainLocalStorage()
-
-// After: keeps the pre-v3 location, no migration performed
-let storage = KeychainLocalStorage(service: "supabase.gotrue.swift")
-```
-
-Note that passing `service:` explicitly — whether the old constant or a new value of your own —
-selects the second, non-migrating initializer: `init(service:accessGroup:useDataProtectionKeychain:)`.
-Only the parameterless-service initializer, `init(accessGroup:useDataProtectionKeychain:)`, probes
-the legacy location.
-
 ## `KeychainLocalStorage.retrieve` returns `nil` for a missing key instead of throwing
 
 `AuthLocalStorage.retrieve(key:)` has always been documented as returning `nil` when the key is
@@ -517,8 +479,8 @@ defaulting to `false`. This is additive — existing call sites keep compiling a
 current behavior — but it's documented here because it's the fix for a common source of
 confusion: on macOS, the legacy file-based Keychain that `KeychainLocalStorage` targets by default
 still shows the user a consent prompt tied to your app's designated requirement, regardless of the
-service name — the service-namespacing change above does not affect it, since the ACL that
-triggers the prompt is governed by code-signing identity, not by `kSecAttrService` (see [Apple TN3137](https://developer.apple.com/documentation/technotes/tn3137-on-mac-keychains)).
+service name — the ACL that triggers the prompt is governed by code-signing identity, not by
+`kSecAttrService` (see [Apple TN3137](https://developer.apple.com/documentation/technotes/tn3137-on-mac-keychains)).
 Passing `useDataProtectionKeychain: true` moves storage to the data-protection Keychain, which
 does not show that prompt.
 
@@ -2879,3 +2841,74 @@ Three things the compiler will not catch:
   `Schema` type. A hand-written conformance that declares `static let schema = "private"` still
   compiles, but the string is no longer read and the relation is queried in `public`. Replace it
   with `typealias Schema = PrivateSchema`.
+
+## `AuthClient` is now a `final class`, not an `actor`
+
+`AuthClient` is declared `public final class AuthClient: Sendable` instead of
+`public actor AuthClient`.
+
+Almost every member was already `nonisolated`, so the actor protected no state. Its one side effect
+was a process-global registry that those `nonisolated` members used to reach the client's
+dependencies, and that registry trapped with `fatalError` as soon as an `AuthAdmin`, `AuthMFA`, or
+`AuthOAuthServer` value outlived the `AuthClient` it came from. Dependencies now live on the
+instance. `AuthMFA` and `AuthOAuthServer` retain their client, and `AuthAdmin` carries its own
+transport, so those values keep working for as long as you hold them.
+
+Ordinary use is source-compatible. Every member that talks to the server is still `async`, and the
+members that were `nonisolated` keep working without `await`. Two synchronous methods that used to
+need `await` because of actor isolation no longer do: `startAutoRefresh()` and `stopAutoRefresh()`.
+Calling them with `await` still compiles but produces a "no 'async' operations occur within
+'await' expression" warning; drop the `await`.
+
+It is a compile error only where `AuthClient` was used *as an actor*: an `isolated AuthClient`
+parameter, passing it where `any Actor` is expected, or calling `assumeIsolated` on it.
+
+```swift
+// Before
+func inspect(_ auth: isolated AuthClient) {
+  print(auth.currentUser?.email ?? "signed out")
+}
+
+// After
+func inspect(_ auth: AuthClient) {
+  print(auth.currentUser?.email ?? "signed out")
+}
+```
+
+Search your code for `isolated AuthClient`, `assumeIsolated` on an `AuthClient` value, and
+`await` in front of `startAutoRefresh()` / `stopAutoRefresh()`.
+
+## Storage uploads send the raw file body instead of a `multipart/form-data` form
+
+`StorageFileApi.upload`, `update`, and `uploadToSignedURL` put the file bytes directly in the
+request body. The form fields the multipart body used to carry travel as headers instead:
+
+| Multipart form field | Header |
+| --- | --- |
+| `cacheControl` | `Cache-Control: max-age=<seconds>` (already sent before) |
+| file part `Content-Type` | `Content-Type: <contentType, or inferred from the extension>` |
+| `metadata` | `x-metadata: <base64 of the JSON object>` |
+
+This is the shape supabase-js sends for `ArrayBuffer` and stream uploads, and storage-api has
+accepted it for as long as it has accepted the form. The multipart encoder buffered the whole
+file three times over (measured at +610 MB for a 200 MiB upload); the raw body adds nothing on top
+of the caller's data, and `upload(path:fileURL:)` now streams from disk without reading the file
+into memory. The internal `MultipartFormData` type is gone.
+
+```swift
+// Before and after — the call is unchanged
+try await storage.from("avatars").upload(
+  path: "user123.png",
+  data: imageData,
+  options: FileOptions(cacheControl: "7200", metadata: ["source": "camera"])
+)
+```
+
+This compiles unchanged. It is a silent wire change: anything that inspects the outgoing request
+sees a different body and `Content-Type`. Search your code for a `ClientMiddleware`, a
+`ClientTransport`, a proxy rule, or a test fixture that matches on `multipart/form-data`, a
+`boundary=` parameter, or a `Content-Disposition: form-data` part, and read the file from the body
+and the metadata from `x-metadata` instead.
+
+A `Content-Type` passed through `FileOptions.headers` now wins over the inferred one, where before
+it silently replaced the multipart header and broke the request.

@@ -15,8 +15,8 @@
   #endif
 
   extension Snapshotting where Value == URLRequest, Format == String {
-    /// A snapshot strategy for comparing requests based on a cURL representation.
-    ///
+    // A snapshot strategy for comparing requests based on a cURL representation.
+    //
     // ``` swift
     // assertSnapshot(of: request, as: .curl)
     // ```

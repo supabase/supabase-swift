@@ -37,7 +37,7 @@ struct IntegrationUserRole {
 struct IntegrationNote {
   @PrimaryKey @Default var id: Int
   var body: String
-  var tag: Optional<String>
+  var tag: Optional<String>  // swiftlint:disable:this syntactic_sugar
 }
 
 // A writable table with no declared key — an append-only log. It must not conform to

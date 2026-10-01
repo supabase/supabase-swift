@@ -13,7 +13,6 @@ import Testing
 @testable import Auth
 @testable import Functions
 @testable import Realtime
-@testable import RealtimeV2
 @testable import Supabase
 
 #if canImport(FoundationNetworking)
@@ -32,8 +31,8 @@ final class RequestCapturingProtocol: URLProtocol {
     set { storage.setValue(newValue) }
   }
 
-  override class func canInit(with request: URLRequest) -> Bool { true }
-  override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+  override static func canInit(with request: URLRequest) -> Bool { true }
+  override static func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
   override func startLoading() {
     Self.capturedRequests.append(request)
@@ -346,8 +345,8 @@ struct SupabaseClientTests {
     // `RequestCapturingProtocol`: that's also used by `TracingTests` (a `.serialized` suite that
     // still runs concurrently with this one), so touching its static storage here would race.
     final class UnreachableProtocol: URLProtocol {
-      override class func canInit(with request: URLRequest) -> Bool { true }
-      override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+      override static func canInit(with request: URLRequest) -> Bool { true }
+      override static func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
       override func startLoading() {
         client?.urlProtocol(self, didFailWithError: URLError(.unknown))
@@ -389,8 +388,8 @@ struct SupabaseClientTests {
         set { storage.setValue(newValue) }
       }
 
-      override class func canInit(with request: URLRequest) -> Bool { true }
-      override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+      override static func canInit(with request: URLRequest) -> Bool { true }
+      override static func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
       override func startLoading() {
         Self.capturedRequest = request
