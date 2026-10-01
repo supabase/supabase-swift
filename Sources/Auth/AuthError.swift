@@ -273,8 +273,9 @@ public struct AuthError: SupabaseError {
     /// Local JWT verification failed: malformed, expired or bad signature. Discard the token and
     /// refresh the session or sign in again.
     public static let jwtVerificationFailed: Kind = "jwtVerificationFailed"
-    /// The request never completed, so nothing changed on the server. Retry or check
-    /// connectivity. ``AuthError/underlyingError`` is usually a `URLError`.
+    /// No response arrived, so whether GoTrue applied the request is unknown. Retry reads
+    /// freely; before retrying a sign-up or an update, check that it was not applied.
+    /// ``AuthError/underlyingError`` is usually a `URLError`.
     public static let transport: Kind = "transport"
     /// A payload could not be interpreted: a 2xx body did not decode, a WebAuthn options object
     /// was missing a field, or the authenticator returned an unexpected credential. Nothing to
