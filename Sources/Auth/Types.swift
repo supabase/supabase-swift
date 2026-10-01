@@ -904,6 +904,21 @@ public struct AdminUserAttributes: Encodable, Hashable, Sendable {
   /// A custom data object to store the user's metadata. This maps to the `auth.users.raw_user_meta_data` column.
   public var userMetadata: [String: JSONValue]?
 
+  private enum CodingKeys: String, CodingKey {
+    case appMetadata
+    case banDuration
+    case email
+    case confirmsEmail = "email_confirm"
+    case id
+    case nonce
+    case password
+    case passwordHash
+    case phone
+    case confirmsPhone = "phone_confirm"
+    case role
+    case userMetadata
+  }
+
   /// Creates admin user attributes.
   ///
   /// - Parameters:
