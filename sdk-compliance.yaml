@@ -259,7 +259,7 @@ supporting_symbols:
   - FunctionsError.Kind.init
   - FunctionsError.Kind.rawValue
   - FunctionsError.Kind.relay
-  - FunctionsError.Kind.http
+  - FunctionsError.Kind.server
   - FunctionsError.Kind.transport
   - FunctionsError.Kind.decoding
   - FunctionsError.init
