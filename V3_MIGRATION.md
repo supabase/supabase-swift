@@ -2940,3 +2940,37 @@ This is a compile error anywhere a factor ID was treated as a `String` directly 
 (`"\(factor.id)"`). The common pattern of reading `.id` off a `Factor`/`AuthMFAEnrollResponse` and
 passing it straight into another MFA call keeps compiling unchanged, since both sides are now
 `UUID`. If you display or log a factor ID, use `.uuidString` to get the string form back.
+
+## MFA challenge IDs are now `UUID` instead of `String`
+
+`AuthMFAChallengeResponse.id` and `MFAVerifyParams.challengeId` are `UUID` instead of `String`.
+Both `MFAVerifyParams` initializers take `challengeId: UUID`.
+
+The Auth server stores a challenge ID in a `uuid` column, returns it as a UUID, and rejects a
+`challenge_id` in `POST /factors/{id}/verify` that does not parse as one. A `String` let callers
+build a request the server could only refuse.
+
+```swift
+// Before
+let challenge = try await supabase.auth.mfa.challenge(params: .init(factorId: factorId))
+let challengeId: String = challenge.id
+try await supabase.auth.mfa.verify(
+  params: .init(factorId: factorId, challengeId: challengeId, code: code)
+)
+
+// After
+let challenge = try await supabase.auth.mfa.challenge(params: .init(factorId: factorId))
+let challengeId: UUID = challenge.id
+try await supabase.auth.mfa.verify(
+  params: .init(factorId: factorId, challengeId: challengeId, code: code)
+)
+```
+
+Code that passes `challenge.id` straight into `verify` compiles unchanged. Code that stores the
+ID as a `String`, or builds `MFAVerifyParams` from a string, gets a compile error. Convert with
+`challenge.id.uuidString` and `UUID(uuidString:)`. A `UUID` prints in uppercase, so
+`"\(challenge.id)"` changes case if you compare it with a lowercase ID.
+
+`challengeAndVerify(params:)` is unchanged. Passkey challenge IDs
+(`PasskeyRegistrationOptions.challengeId`, `PasskeyAuthenticationOptions.challengeId`) stay
+`String`, because the passkey endpoints type `challenge_id` as a string.

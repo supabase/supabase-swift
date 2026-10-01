@@ -1183,7 +1183,7 @@ public struct MFAVerifyParams: Encodable, Hashable {
   public let factorId: UUID
 
   /// ID of the challenge being verified. Returned in challenge().
-  public let challengeId: String
+  public let challengeId: UUID
 
   /// Verification code provided by the user. Used for `totp` and `phone` factors; empty for
   /// `webauthn` factors (which use `credentialResponse` instead).
@@ -1199,7 +1199,7 @@ public struct MFAVerifyParams: Encodable, Hashable {
   ///   - factorId: The factor ID being verified.
   ///   - challengeId: The challenge ID being verified.
   ///   - code: The verification code from the authenticator app or SMS.
-  public init(factorId: UUID, challengeId: String, code: String) {
+  public init(factorId: UUID, challengeId: UUID, code: String) {
     self.factorId = factorId
     self.challengeId = challengeId
     self.code = code
@@ -1213,7 +1213,7 @@ public struct MFAVerifyParams: Encodable, Hashable {
   ///   - challengeId: The challenge ID being verified.
   ///   - credentialResponse: The W3C assertion produced by the platform authenticator.
   @_spi(Experimental)
-  public init(factorId: UUID, challengeId: String, credentialResponse: JSONValue) {
+  public init(factorId: UUID, challengeId: UUID, credentialResponse: JSONValue) {
     self.factorId = factorId
     self.challengeId = challengeId
     self.code = ""
@@ -1256,7 +1256,7 @@ public struct MFAChallengeAndVerifyParams: Encodable, Hashable, Sendable {
 /// The response returned after creating an MFA challenge.
 public struct AuthMFAChallengeResponse: Decodable, Hashable, Sendable {
   /// ID of the newly created challenge.
-  public let id: String
+  public let id: UUID
 
   /// Factor type which generated the challenge.
   public let type: FactorType
