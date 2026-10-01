@@ -18,9 +18,9 @@ extension AuthAdmin {
     try await api.execute(
       HTTPRequest(
         method: .get,
-        url: configuration.url.appendingPathComponent("admin/users/\(userId)/passkeys")
+        url: url.appendingPathComponent("admin/users/\(userId)/passkeys")
       )
-    ).decoded(decoder: configuration.resolvedDecoder)
+    ).decoded(decoder: decoder)
   }
 
   /// Deletes a passkey belonging to a user.
@@ -34,7 +34,7 @@ extension AuthAdmin {
     _ = try await api.execute(
       HTTPRequest(
         method: .delete,
-        url: configuration.url.appendingPathComponent(
+        url: url.appendingPathComponent(
           "admin/users/\(userId)/passkeys/\(passkeyId)")
       )
     )

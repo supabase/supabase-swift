@@ -96,7 +96,7 @@ struct PostgrestClientAccessTokenTests {
     let sut = PostgrestClient(
       url: url,
       http: .init(
-        transport: ClosureTransport { request, _ in
+        transport: ClosureTransport { _, _ in
           Issue.record("transport should not be called when the access token provider throws")
           return self.okResponse()
         }),

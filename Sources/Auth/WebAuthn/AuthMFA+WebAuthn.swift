@@ -79,7 +79,7 @@ import Foundation
     @discardableResult
     @MainActor
     public func verifyWebAuthnFactor(
-      factorId: String,
+      factorId: UUID,
       presentationAnchor: ASPresentationAnchor
     ) async throws -> AuthMFAVerifyResponse {
       try await _verifyWebAuthnFactor(
@@ -91,7 +91,7 @@ import Foundation
 
     @MainActor
     func _verifyWebAuthnFactor(
-      factorId: String,
+      factorId: UUID,
       presentationAnchor: ASPresentationAnchor,
       authenticator: WebAuthnAuthenticator
     ) async throws -> AuthMFAVerifyResponse {

@@ -40,6 +40,11 @@ patterns:
   - name: base64-blob
     pattern: /['"][A-Za-z0-9+/_=-]{16,}['"]/g
 
+  # The same blobs as header values inside a cURL request snapshot, where a
+  # `: ` rather than a quote precedes them (`"x-metadata: eyJ...=="`).
+  - name: base64-header-value
+    pattern: "/: [A-Za-z0-9+/_=-]{16,}[\"']/g"
+
   # Percent-encoded URL fragments can produce artificial tokens such as
   # "Blimit" from strings like "%3Blimit". Ignore those encoded fragments.
   - name: url-encoded-fragment
@@ -48,4 +53,5 @@ patterns:
 ignoreRegExpList:
   - github-url-host
   - base64-blob
+  - base64-header-value
   - url-encoded-fragment

@@ -25,7 +25,7 @@ struct TableMacroSupportTests {
   ) -> String {
     inheritanceClause(
       wanted: TableMacro.wantedConformances(
-        TableMacro.Arguments(name: "todos", schema: "public", readOnly: readOnly),
+        TableMacro.Arguments(name: "todos", schema: nil, readOnly: readOnly),
         hasPrimaryKey: hasPrimaryKey
       ),
       missing: missing.map { TypeSyntax(stringLiteral: $0) }

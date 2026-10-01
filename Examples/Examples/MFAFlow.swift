@@ -386,7 +386,7 @@ struct MFAVerifiedView: View {
                   Text("ID:")
                     .font(.caption)
                     .foregroundColor(.secondary)
-                  Text(factor.id)
+                  Text(factor.id.uuidString)
                     .font(.system(.caption, design: .monospaced))
                 }
 

@@ -14,50 +14,27 @@ let defaultSearchOptions = SearchOptions(
   )
 )
 
-private let defaultFileOptions = FileOptions(
-  cacheControl: "3600",
-  contentType: "text/plain;charset=UTF-8",
-  shouldUpsert: false
-)
-
 enum FileUpload {
   case data(Data)
   case url(URL)
 
-  func encode(to formData: MultipartFormData, withPath path: String, options: FileOptions) {
-    formData.append(
-      Data(options.cacheControl.utf8),
-      withName: "cacheControl"
-    )
-
-    if let metadata = options.metadata {
-      formData.append(encodeMetadata(metadata), withName: "metadata")
-    }
-
+  /// The raw request body. A `Data` upload is sent from memory; a file URL streams from disk
+  /// through `URLSession`'s upload task, so neither shape is copied by the SDK.
+  func httpBody() throws -> HTTPBody {
     switch self {
-    case .data(let data):
-      formData.append(
-        data,
-        withName: "",
-        fileName: path.fileName,
-        mimeType: options.contentType ?? mimeType(forPathExtension: path.pathExtension)
-      )
+    case .data(let data): HTTPBody(data)
+    case .url(let url): try HTTPBody(fileURL: url)
+    }
+  }
 
-    case .url(let url):
-      formData.append(
-        url,
-        withName: "",
-        fileName: url.lastPathComponent,
-        mimeType: options.contentType ?? mimeType(forPathExtension: url.pathExtension)
-      )
+  func contentType(forPath path: String, options: FileOptions) -> String {
+    if let contentType = options.contentType { return contentType }
+    switch self {
+    case .data: return mimeType(forPathExtension: path.pathExtension)
+    case .url(let url): return mimeType(forPathExtension: url.pathExtension)
     }
   }
 }
-
-#if DEBUG
-  import ConcurrencyExtras
-  let testingBoundary = LockIsolated<String?>(nil)
-#endif
 
 /// Supabase Storage File API for file operations within a specific bucket.
 ///
@@ -168,9 +145,8 @@ public struct StorageFileApi: Sendable {
     method: HTTPRequest.Method,
     path: String,
     file: FileUpload,
-    options: FileOptions?
+    options: FileOptions
   ) async throws -> FileUploadResponse {
-    let options = options ?? defaultFileOptions
     var headers = options.headers.map { HTTPFields($0) } ?? HTTPFields()
 
     if method == .post {
@@ -178,13 +154,6 @@ public struct StorageFileApi: Sendable {
     }
 
     headers[.duplex] = options.duplex
-
-    #if DEBUG
-      let formData = MultipartFormData(boundary: testingBoundary.value)
-    #else
-      let formData = MultipartFormData()
-    #endif
-    file.encode(to: formData, withPath: path, options: options)
 
     struct UploadResponse: Decodable {
       let key: String
@@ -205,7 +174,8 @@ public struct StorageFileApi: Sendable {
         url: api.configuration.url.appendingPathComponent("object/\(_path)"),
         headerFields: headers
       ),
-      formData: formData,
+      file: file,
+      path: path,
       options: options
     )
     .decoded(as: UploadResponse.self, decoder: api.configuration.decoder)
@@ -1019,13 +989,6 @@ public struct StorageFileApi: Sendable {
     headers[.xUpsert] = "\(options.shouldUpsert)"
     headers[.duplex] = options.duplex
 
-    #if DEBUG
-      let formData = MultipartFormData(boundary: testingBoundary.value)
-    #else
-      let formData = MultipartFormData()
-    #endif
-    file.encode(to: formData, withPath: path, options: options)
-
     struct UploadResponse: Decodable {
       let key: String
 
@@ -1044,7 +1007,8 @@ public struct StorageFileApi: Sendable {
         query: [URLQueryItem(name: "token", value: token)],
         headerFields: headers
       ),
-      formData: formData,
+      file: file,
+      path: path,
       options: options
     )
     .decoded(as: UploadResponse.self, decoder: api.configuration.decoder)
@@ -1071,5 +1035,6 @@ public struct StorageFileApi: Sendable {
 
 extension HTTPField.Name {
   static let duplex = Self("duplex")!
+  static let xMetadata = Self("x-metadata")!
   static let xUpsert = Self("x-upsert")!
 }

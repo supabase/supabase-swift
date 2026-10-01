@@ -153,6 +153,7 @@ PostgREST
 preconcurrency
 questionmark
 radiowaves
+Ranbir
 reauthentication
 Reauthentication
 Reconnections
@@ -187,6 +188,7 @@ supabase
 SUPABASE
 supabaseswiftintegrationtest
 supabot
+swiftlint
 testpath
 testuser
 timestamptz
