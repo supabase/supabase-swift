@@ -35,24 +35,27 @@ public struct RealtimeError: SupabaseError {
       self.init(rawValue: value)
     }
 
-    /// The WebSocket could not be opened, or closed before it was ready.
-    public static let connection: Kind = "connection"
     /// A subscribe, push, heartbeat or REST broadcast did not complete within the configured
-    /// timeout.
+    /// timeout. Retry, or raise `RealtimeClientOptions.timeoutInterval` if it happens often.
     public static let timeout: Kind = "timeout"
-    /// `httpSend` needs an access token and none was available.
+    /// `httpSend` needs an access token and none was available. Sign in, or pass an
+    /// `accessToken` closure, before sending. No request was sent.
     public static let accessTokenMissing: Kind = "accessTokenMissing"
-    /// Every subscribe attempt failed. See `RealtimeClientOptions.maxRetryAttempts`.
+    /// Every subscribe attempt failed and the SDK gave up. Schedule a retry later, or raise
+    /// `RealtimeClientOptions.maxRetryAttempts`.
     public static let maxRetryAttemptsReached: Kind = "maxRetryAttemptsReached"
-    /// The server closed the channel while a subscribe was in flight.
+    /// The server closed the channel while a subscribe was in flight. Retrying as-is is unlikely
+    /// to help; check the topic and the user's access to it.
     public static let channelClosedByServer: Kind = "channelClosedByServer"
-    /// The REST broadcast endpoint answered with a non-202 status. ``RealtimeError/response``
-    /// has the body.
+    /// The REST broadcast endpoint answered with a non-202 status. Read
+    /// ``RealtimeError/response`` for the status and body.
     public static let server: Kind = "server"
-    /// A REST broadcast request never completed. ``RealtimeError/underlyingError`` is usually a
-    /// `URLError`.
+    /// The network path failed: a REST broadcast never completed, or the WebSocket could not be
+    /// opened or closed before it was ready. Retry or check connectivity.
+    /// ``RealtimeError/underlyingError`` is the `URLError` when there was one.
     public static let transport: Kind = "transport"
     /// A frame from the server could not be decoded, or a message had an unexpected shape.
+    /// Nothing to retry; report it.
     public static let decoding: Kind = "decoding"
   }
 
@@ -96,7 +99,7 @@ extension RealtimeError {
     RealtimeError(kind: .decoding, message: message)
   }
 
-  static func connection(_ message: String, underlyingError: (any Error)? = nil) -> RealtimeError {
-    RealtimeError(kind: .connection, message: message, underlyingError: underlyingError)
+  static func transport(_ message: String, underlyingError: (any Error)? = nil) -> RealtimeError {
+    RealtimeError(kind: .transport, message: message, underlyingError: underlyingError)
   }
 }

@@ -118,7 +118,7 @@ struct WebSocketTests {
         _ = try await URLSessionWebSocket.connect(to: url, session: session)
         Issue.record("expected connect to throw")
       } catch let error as RealtimeError {
-        #expect(error.kind == .connection)
+        #expect(error.kind == .transport)
         #expect(error.message.hasPrefix("connection ended unexpectedly"))
         #expect(error.underlyingError is URLError)
       } catch {

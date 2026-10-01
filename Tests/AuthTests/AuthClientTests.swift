@@ -759,7 +759,7 @@ extension AuthMockerTests {
         Issue.record("Expect failure")
       } catch {
         let authError = error as? AuthError
-        #expect(authError?.kind == .pkceGrantCodeExchange)
+        #expect(authError?.kind == .oauthFlowFailed)
         #expect(authError?.message == "server_error: Identity is already linked to another user")
         #expect(authError?.errorCode == ErrorCode("422"))
       }
@@ -1055,9 +1055,9 @@ extension AuthMockerTests {
             signature: "irrelevant"
           )
         )
-        Issue.record("Expected AuthError.api")
+        Issue.record("Expected AuthError.server")
       } catch let error as AuthError {
-        #expect(error.kind == .api)
+        #expect(error.kind == .server)
         #expect(error.errorCode == .web3UnsupportedChain)
         #expect(error.response?.statusCode == 400)
       }
@@ -1259,9 +1259,9 @@ extension AuthMockerTests {
 
       do {
         try await sut.session(from: url)
-        Issue.record("Expected implicitGrantRedirect error")
+        Issue.record("Expected oauthFlowFailed error")
       } catch let error as AuthError {
-        #expect(error.kind == .implicitGrantRedirect)
+        #expect(error.kind == .oauthFlowFailed)
         expectNoDifference(error.message, "Not a valid implicit grant flow URL: \(url)")
       }
     }
@@ -1277,9 +1277,9 @@ extension AuthMockerTests {
 
       do {
         try await sut.session(from: url)
-        Issue.record("Expected implicitGrantRedirect error")
+        Issue.record("Expected oauthFlowFailed error")
       } catch let error as AuthError {
-        #expect(error.kind == .implicitGrantRedirect)
+        #expect(error.kind == .oauthFlowFailed)
         expectNoDifference(error.message, "Invalid code")
       }
     }
@@ -1295,9 +1295,9 @@ extension AuthMockerTests {
 
       do {
         try await sut.session(from: url)
-        Issue.record("Expected implicitGrantRedirect error")
+        Issue.record("Expected oauthFlowFailed error")
       } catch let error as AuthError {
-        #expect(error.kind == .implicitGrantRedirect)
+        #expect(error.kind == .oauthFlowFailed)
         expectNoDifference(error.message, "User denied access")
       }
     }
@@ -1310,9 +1310,9 @@ extension AuthMockerTests {
 
       do {
         try await sut.session(from: url)
-        Issue.record("Expected implicitGrantRedirect error")
+        Issue.record("Expected oauthFlowFailed error")
       } catch let error as AuthError {
-        #expect(error.kind == .implicitGrantRedirect)
+        #expect(error.kind == .oauthFlowFailed)
         expectNoDifference(error.message, "access_denied")
       }
     }
@@ -1325,9 +1325,9 @@ extension AuthMockerTests {
 
       do {
         try await sut.session(from: url)
-        Issue.record("Expected implicitGrantRedirect error")
+        Issue.record("Expected oauthFlowFailed error")
       } catch let error as AuthError {
-        #expect(error.kind == .implicitGrantRedirect)
+        #expect(error.kind == .oauthFlowFailed)
         expectNoDifference(error.message, "access_denied")
       }
     }
@@ -1383,9 +1383,9 @@ extension AuthMockerTests {
 
       do {
         try await sut.session(from: url)
-        Issue.record("Expected pkceGrantCodeExchange error")
+        Issue.record("Expected oauthFlowFailed error")
       } catch let error as AuthError {
-        #expect(error.kind == .pkceGrantCodeExchange)
+        #expect(error.kind == .oauthFlowFailed)
         expectNoDifference(error.message, "invalid_grant: Invalid code")
         expectNoDifference(error.errorCode, ErrorCode("500"))
       }
@@ -1402,9 +1402,9 @@ extension AuthMockerTests {
 
       do {
         try await sut.session(from: url)
-        Issue.record("Expected pkceGrantCodeExchange error")
+        Issue.record("Expected oauthFlowFailed error")
       } catch let error as AuthError {
-        #expect(error.kind == .pkceGrantCodeExchange)
+        #expect(error.kind == .oauthFlowFailed)
         expectNoDifference(
           error.message, "invalid_grant: Error in URL with unspecified error_description.")
         expectNoDifference(error.errorCode, ErrorCode("500"))
@@ -1424,7 +1424,7 @@ extension AuthMockerTests {
         _ = try await sut.session(from: url)
       } catch {
         let authError = error as? AuthError
-        #expect(authError?.kind == .pkceGrantCodeExchange)
+        #expect(authError?.kind == .oauthFlowFailed)
         #expect(
           authError?.message
             == "Not a valid PKCE flow URL: https://dummy-url.com/callback#access_token=accesstoken&expires_in=60&refresh_token=refreshtoken"
@@ -3741,7 +3741,7 @@ extension AuthMockerTests {
         try await sut.signIn(email: "a@b.c", password: "secret")
         Issue.record("Expected failure")
       } catch let error as AuthError {
-        #expect(error.kind == .unexpectedResponse)
+        #expect(error.kind == .server)
         #expect(error.errorCode == .unexpectedFailure)
         #expect(error.response?.statusCode == 502)
         #expect(error.response?.body == Data("<html>bad gateway</html>".utf8))

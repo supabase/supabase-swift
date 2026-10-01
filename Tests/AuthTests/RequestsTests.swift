@@ -196,7 +196,7 @@ struct RequestsTests {
       _ = try await sut.session(from: url)
     } catch {
       let authError = error as? AuthError
-      #expect(authError?.kind == .implicitGrantRedirect)
+      #expect(authError?.kind == .oauthFlowFailed)
       #expect(authError?.message == "No session defined in URL")
     }
   }

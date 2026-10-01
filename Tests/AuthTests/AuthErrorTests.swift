@@ -26,7 +26,7 @@ struct AuthErrorTests {
 
   @Test
   func defaultsForErrorCodeAndReasons() {
-    let error = AuthError(kind: .implicitGrantRedirect, message: "Implicit grant failure")
+    let error = AuthError(kind: .oauthFlowFailed, message: "Implicit grant failure")
 
     #expect(error.errorCode == .unknown)
     #expect(error.weakPasswordReasons.isEmpty)
@@ -45,14 +45,11 @@ struct AuthErrorTests {
 
   @Test
   func weakPasswordCarriesReasons() {
-    let error = AuthError(
-      kind: .weakPassword,
-      message: "Password is weak",
-      errorCode: .weakPassword,
-      weakPasswordReasons: ["length", "characters", "pwned"]
-    )
+    let error = AuthError.weakPassword(
+      message: "Password is weak", reasons: ["length", "characters", "pwned"])
 
-    #expect(error.kind == .weakPassword)
+    #expect(error.kind == .server)
+    #expect(error.errorCode == .weakPassword)
     #expect(error.weakPasswordReasons == ["length", "characters", "pwned"])
   }
 
@@ -61,7 +58,7 @@ struct AuthErrorTests {
     var headers = HTTPFields()
     headers[.sbRequestID] = "req-1"
     let error = AuthError(
-      kind: .api,
+      kind: .server,
       message: "API Error",
       errorCode: .emailConflictIdentityNotDeletable,
       response: HTTPErrorResponse(statusCode: 422, headers: headers, body: Data())
@@ -70,7 +67,7 @@ struct AuthErrorTests {
     #expect(error.errorCode == .emailConflictIdentityNotDeletable)
     #expect(error.response?.statusCode == 422)
     #expect(error.response?.requestID == "req-1")
-    #expect(error.description == "AuthError(api): API Error [status 422, request req-1]")
+    #expect(error.description == "AuthError(server): API Error [status 422, request req-1]")
   }
 
   @Test
@@ -78,7 +75,7 @@ struct AuthErrorTests {
     let future = AuthError.Kind(rawValue: "somethingNew")
 
     #expect(future.rawValue == "somethingNew")
-    #expect(future != .api)
+    #expect(future != .server)
   }
 
   @Test

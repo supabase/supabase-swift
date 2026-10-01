@@ -15,7 +15,7 @@ import Testing
 struct RealtimeErrorTests {
   @Test
   func errorDescriptionIsTheMessage() {
-    let error = RealtimeError(kind: .connection, message: "Connection failed")
+    let error = RealtimeError(kind: .transport, message: "Connection failed")
 
     #expect(error.errorDescription == "Connection failed")
     #expect(error.localizedDescription == "Connection failed")
