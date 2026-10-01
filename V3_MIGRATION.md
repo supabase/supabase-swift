@@ -2407,9 +2407,9 @@ This is a compile error for any `catch let error as HTTPError`.
 ## Realtime throws `RealtimeError` for every failure
 
 `RealtimeError` is now public. It is a struct with `kind: RealtimeError.Kind`, `message`,
-`response` and `underlyingError`, conforming to `SupabaseError`. Kinds: `.connection`,
+`response` and `underlyingError`, conforming to `SupabaseError`. Kinds: `.transport`,
 `.timeout`, `.accessTokenMissing`, `.maxRetryAttemptsReached`, `.channelClosedByServer`,
-`.server`, `.transport` and `.decoding`.
+`.server` and `.decoding`.
 
 Before, `RealtimeError` was `package`-scoped, so `subscribeWithError()` and `httpSend` handed you
 an `any Error` you could only inspect through `localizedDescription`. `httpSend` could also leak
@@ -2438,6 +2438,8 @@ do {
 
 For `httpSend`, a non-202 answer is `.server` with `response?.statusCode` and `response?.body`
 set; a request that never completes is `.transport` with the `URLError` in `underlyingError`.
+A WebSocket that could not be opened, or closed before it was ready, is also `.transport`: the
+recovery is the same (retry, check connectivity), so it does not get a kind of its own.
 
 ## OAuth server fields the API leaves out are now optional
 
