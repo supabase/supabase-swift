@@ -14,7 +14,6 @@ import Testing
 struct PostgrestFilterComparisonTests {
   struct Todo: PostgrestRelation {
     static let relationName = "todos"
-    static let schema = "public"
     static let selectString = "*"
 
     var id: Int

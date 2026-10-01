@@ -17,14 +17,6 @@
       self.useDataProtectionKeychain = useDataProtectionKeychain
     }
 
-    init(_ configuration: KeychainConfiguration) {
-      self.init(
-        service: configuration.service,
-        accessGroup: configuration.accessGroup,
-        useDataProtectionKeychain: configuration.useDataProtectionKeychain
-      )
-    }
-
     private func assertSuccess(forStatus status: OSStatus) throws {
       if status != errSecSuccess {
         throw KeychainError(code: KeychainError.Code(rawValue: status))

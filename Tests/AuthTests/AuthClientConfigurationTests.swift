@@ -34,7 +34,7 @@ struct AuthClientConfigurationTests {
     )
 
     let sut = AuthClient(configuration: configuration)
-    let dependenciesLogger = Dependencies[sut.clientID].logger
+    let dependenciesLogger = sut.dependencies.logger
 
     #expect(dependenciesLogger[metadataKey: "system"] == "auth")
     #expect(dependenciesLogger[metadataKey: "client_id"] != nil)

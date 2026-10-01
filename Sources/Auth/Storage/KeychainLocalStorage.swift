@@ -1,53 +1,59 @@
 #if !os(Windows) && !os(Linux) && !os(Android)
   public import Foundation
 
-  /// The Keychain service used by versions of the SDK before v3.
-  let legacyKeychainService = "supabase.gotrue.swift"
-
-  /// Identifies a single Keychain location.
-  struct KeychainConfiguration: Equatable, Sendable {
-    var service: String?
-    var accessGroup: String?
-    var useDataProtectionKeychain: Bool
-  }
+  /// The Keychain service ``KeychainLocalStorage`` stores its items under by default.
+  ///
+  /// Fixed since v2 so that sessions are read in place across SDK versions and shared across
+  /// every target of an app that passes the same access group.
+  let defaultKeychainService = "supabase.gotrue.swift"
 
   /// ``AuthLocalStorage`` implementation using Keychain. This is the default local storage used by the library.
   public struct KeychainLocalStorage: AuthLocalStorage {
     let keychain: any KeychainProtocol
     let legacyKeychains: [any KeychainProtocol]
 
-    /// Creates a Keychain-backed storage instance scoped to the host application.
+    /// Creates a Keychain-backed storage instance using the SDK's default service.
     ///
-    /// The Keychain service defaults to the host app's bundle identifier, so items are namespaced
-    /// per application. Sessions written by earlier SDK versions, which used a fixed
-    /// `"supabase.gotrue.swift"` service, migrate automatically on first read.
+    /// Items are stored under the fixed service `"supabase.gotrue.swift"`. The service is the
+    /// same in every target and every SDK version, so sessions written by earlier versions are
+    /// read in place, and an app and its extensions that pass the same access group share one
+    /// session. Isolation between unrelated apps comes from the Keychain access group, not from
+    /// the service name.
     ///
     /// - Parameters:
-    ///   - accessGroup: An optional Keychain access group for sharing items between apps.
+    ///   - accessGroup: An optional Keychain access group. Pass the same group from every target
+    ///     that should see the same session: an app and its widget, share extension, or Watch
+    ///     app, or several apps in one app group. `nil` scopes items to the app's own default
+    ///     access group.
     ///   - useDataProtectionKeychain: Targets the macOS data-protection Keychain instead of the
     ///     legacy file-based one. This removes the macOS consent prompt, but requires the app to
     ///     be signed with entitlements authorized by a provisioning profile — otherwise Keychain
-    ///     operations fail with `errSecMissingEntitlement` (-34018). Has no effect on platforms
-    ///     other than macOS. Defaults to `false`.
+    ///     operations fail with `errSecMissingEntitlement` (-34018). Items do not move between
+    ///     the two Keychains on their own, so a session written to the file-based one is
+    ///     migrated on first read. Has no effect on platforms other than macOS. Defaults to
+    ///     `false`.
     public init(accessGroup: String? = nil, useDataProtectionKeychain: Bool = false) {
-      let primary = Self.primaryConfiguration(
-        bundleIdentifier: Bundle.main.bundleIdentifier,
+      keychain = Keychain(
+        service: defaultKeychainService,
         accessGroup: accessGroup,
         useDataProtectionKeychain: useDataProtectionKeychain
       )
-
-      keychain = Keychain(primary)
-      legacyKeychains = Self.legacyConfigurations(primary: primary).map { Keychain($0) }
+      legacyKeychains =
+        useDataProtectionKeychain
+        ? [Keychain(service: defaultKeychainService, accessGroup: accessGroup)]
+        : []
     }
 
     /// Creates a Keychain-backed storage instance with an explicit service.
     ///
-    /// No migration is performed: the given service is used exactly as provided.
+    /// No other location is probed: the given service is used exactly as provided.
     ///
     /// - Parameters:
     ///   - service: The Keychain service name used to namespace stored items. Pass `nil` to omit
     ///     the attribute entirely.
-    ///   - accessGroup: An optional Keychain access group for sharing items between apps.
+    ///   - accessGroup: An optional Keychain access group. Every target that should see the same
+    ///     session must pass the same `service` and the same `accessGroup`; the group alone does
+    ///     not make items with different services match.
     ///   - useDataProtectionKeychain: See ``init(accessGroup:useDataProtectionKeychain:)``.
     public init(
       service: String?,
@@ -79,8 +85,8 @@
 
     /// Returns the data stored in the Keychain for `key`, or `nil` if not present.
     ///
-    /// If the item is absent but exists in a location used by an earlier SDK version, it is moved
-    /// to the current location and returned.
+    /// If the item is absent but exists in a legacy location (the macOS file-based Keychain,
+    /// once the data-protection one is in use), it is moved to the current location and returned.
     ///
     /// - Parameter key: The Keychain item key.
     /// - Returns: The stored bytes, or `nil` if the item does not exist.
@@ -131,57 +137,6 @@
       if let primaryError {
         throw primaryError
       }
-    }
-  }
-
-  extension KeychainLocalStorage {
-    /// Resolves the Keychain location used when the caller accepts the default service.
-    ///
-    /// Falls back to ``legacyKeychainService`` when there is no bundle identifier, which is the
-    /// case for command-line tools and some test bundles.
-    static func primaryConfiguration(
-      bundleIdentifier: String?,
-      accessGroup: String?,
-      useDataProtectionKeychain: Bool
-    ) -> KeychainConfiguration {
-      KeychainConfiguration(
-        service: bundleIdentifier ?? legacyKeychainService,
-        accessGroup: accessGroup,
-        useDataProtectionKeychain: useDataProtectionKeychain
-      )
-    }
-
-    /// The locations to probe, in order, when `primary` holds no value.
-    ///
-    /// Entries equal to `primary`, and duplicates, are removed.
-    static func legacyConfigurations(
-      primary: KeychainConfiguration
-    ) -> [KeychainConfiguration] {
-      var candidates: [KeychainConfiguration] = [
-        KeychainConfiguration(
-          service: legacyKeychainService,
-          accessGroup: primary.accessGroup,
-          useDataProtectionKeychain: false
-        )
-      ]
-
-      if primary.useDataProtectionKeychain {
-        // Items do not move between the two macOS Keychain implementations, so the previously
-        // used file-based location has to be probed too.
-        candidates.append(
-          KeychainConfiguration(
-            service: primary.service,
-            accessGroup: primary.accessGroup,
-            useDataProtectionKeychain: false
-          )
-        )
-      }
-
-      var result: [KeychainConfiguration] = []
-      for candidate in candidates where candidate != primary && !result.contains(candidate) {
-        result.append(candidate)
-      }
-      return result
     }
   }
 #endif

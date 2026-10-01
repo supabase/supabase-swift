@@ -6,7 +6,6 @@ import Testing
 struct PostgrestNumericFilterValueTests {
   struct Product: PostgrestRelation {
     static let relationName = "products"
-    static let schema = "public"
     static let selectString = "*"
 
     var id: Int64

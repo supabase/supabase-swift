@@ -8,7 +8,7 @@
 import ConcurrencyExtras
 import Foundation
 import TestHelpers
-import XCTestDynamicOverlay
+import IssueReporting
 
 @testable import Auth
 

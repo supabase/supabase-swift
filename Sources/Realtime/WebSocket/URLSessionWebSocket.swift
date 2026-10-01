@@ -97,7 +97,7 @@ final class URLSessionWebSocket: WebSocket {
     // a lock-order inversion with cancellation (see the fix for the
     // equivalent bug in `AsyncValueSubject`, supabase/supabase-swift#1154).
     let onComplete: @Sendable (URLSession, URLSessionTask, (any Error)?) -> Void = {
-      session, task, error in
+      session, _, error in
       let afterUnlock: @Sendable () -> Void = mutableState.withValue {
         if let webSocket = $0.webSocket {
           // There are three possibilities here:
@@ -150,7 +150,7 @@ final class URLSessionWebSocket: WebSocket {
     }
     let onWebSocketTaskClosed:
       @Sendable (URLSession, URLSessionWebSocketTask, Int?, Data?) -> Void =
-        { session, task, code, reason in
+        { _, _, code, reason in
           mutableState.withValue {
             assert($0.webSocket != nil, "connection should exist by this time")
             $0.webSocket?._connectionClosed(code: code, reason: reason)
