@@ -37,6 +37,9 @@ public import Logging
 ///
 /// ### OAuth 2.1 clients
 /// - ``oauth``
+///
+/// ### Multi-factor authentication
+/// - ``mfa``
 public struct AuthAdmin: Sendable {
   let url: URL
   /// Default redirect for the flows that take one, when the caller passes none.
@@ -51,6 +54,13 @@ public struct AuthAdmin: Sendable {
   /// - Warning: This property requires `secret` key. Be careful to never expose your `secret` key in the browser.
   public var oauth: AuthAdminOAuth {
     AuthAdminOAuth(admin: self)
+  }
+
+  /// Contains all multi-factor authentication administration methods.
+  ///
+  /// - Warning: This property requires `secret` key. Be careful to never expose your `secret` key in the browser.
+  public var mfa: AuthAdminMFA {
+    AuthAdminMFA(admin: self)
   }
 
   /// Get user by id.
