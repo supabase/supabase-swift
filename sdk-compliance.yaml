@@ -319,16 +319,11 @@ supporting_symbols:
   - AuthError.Kind
   - AuthError.Kind.init
   - AuthError.Kind.rawValue
-  - AuthError.Kind.api
+  - AuthError.Kind.server
   - AuthError.Kind.sessionMissing
   - AuthError.Kind.refreshDiscarded
-  - AuthError.Kind.weakPassword
-  - AuthError.Kind.pkceGrantCodeExchange
-  - AuthError.Kind.implicitGrantRedirect
   - AuthError.Kind.oauthFlowFailed
   - AuthError.Kind.jwtVerificationFailed
-  - AuthError.Kind.webAuthn
-  - AuthError.Kind.unexpectedResponse
   - AuthError.Kind.transport
   - AuthError.Kind.decoding
   - AuthError.init
