@@ -1964,7 +1964,7 @@ extension AuthMockerTests {
           .post: Data(
             """
             {
-              "id": "12345",
+              "id": "00000000-0000-0000-0000-000000012345",
               "type": "totp"
             }
             """.utf8
@@ -1998,7 +1998,7 @@ extension AuthMockerTests {
         )
       )
 
-      expectNoDifference(response.id, "12345")
+      expectNoDifference(response.id, UUID(uuidString: "00000000-0000-0000-0000-000000012345")!)
       expectNoDifference(response.type, "totp")
     }
 
@@ -2011,7 +2011,7 @@ extension AuthMockerTests {
           .post: Data(
             """
             {
-              "id": "12345",
+              "id": "00000000-0000-0000-0000-000000012345",
               "type": "totp"
             }
             """.utf8
@@ -2045,7 +2045,7 @@ extension AuthMockerTests {
         )
       )
 
-      expectNoDifference(response.id, "12345")
+      expectNoDifference(response.id, UUID(uuidString: "00000000-0000-0000-0000-000000012345")!)
       expectNoDifference(response.type, "totp")
     }
 
@@ -2058,7 +2058,7 @@ extension AuthMockerTests {
           .post: Data(
             """
             {
-              "id": "12345",
+              "id": "00000000-0000-0000-0000-000000012345",
               "type": "phone"
             }
             """.utf8
@@ -2092,7 +2092,7 @@ extension AuthMockerTests {
         )
       )
 
-      expectNoDifference(response.id, "12345")
+      expectNoDifference(response.id, UUID(uuidString: "00000000-0000-0000-0000-000000012345")!)
       expectNoDifference(response.type, "phone")
     }
 
