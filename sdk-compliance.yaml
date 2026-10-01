@@ -275,10 +275,9 @@ supporting_symbols:
   - StorageError.Kind.init
   - StorageError.Kind.rawValue
   - StorageError.Kind.server
-  - StorageError.Kind.unexpectedResponse
   - StorageError.Kind.transport
   - StorageError.Kind.decoding
-  - StorageError.Kind.invalidURL
+  - StorageError.Kind.invalidRequest
   - StorageError.ServerError
   - StorageError.ServerError.init
   - StorageError.ServerError.statusCode
