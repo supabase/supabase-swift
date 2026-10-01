@@ -36,7 +36,7 @@ public struct AuthMFA: Sendable {
 
   /// Contains all recovery code methods.
   public var recoveryCodes: AuthMFARecoveryCodes {
-    AuthMFARecoveryCodes(clientID: clientID)
+    AuthMFARecoveryCodes(client: client)
   }
 
   /// Starts the enrollment process for a new Multi-Factor Authentication (MFA) factor. This method

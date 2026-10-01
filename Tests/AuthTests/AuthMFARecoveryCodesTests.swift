@@ -73,7 +73,7 @@ extension AuthMockerTests {
       .register()
 
       let sut = makeSUT()
-      Dependencies[sut.clientID].sessionStorage.store(.valid)
+      sut.dependencies.sessionStorage.store(.valid)
 
       let response = try await sut.mfa.recoveryCodes.status()
 
@@ -118,7 +118,7 @@ extension AuthMockerTests {
       .register()
 
       let sut = makeSUT()
-      Dependencies[sut.clientID].sessionStorage.store(.valid)
+      sut.dependencies.sessionStorage.store(.valid)
 
       let response = try await sut.mfa.recoveryCodes.generate(friendlyName: "Backup codes")
 
@@ -160,7 +160,7 @@ extension AuthMockerTests {
       .register()
 
       let sut = makeSUT()
-      Dependencies[sut.clientID].sessionStorage.store(.valid)
+      sut.dependencies.sessionStorage.store(.valid)
 
       let response = try await sut.mfa.recoveryCodes.generate()
 
@@ -199,7 +199,7 @@ extension AuthMockerTests {
       .register()
 
       let sut = makeSUT()
-      Dependencies[sut.clientID].sessionStorage.store(.valid)
+      sut.dependencies.sessionStorage.store(.valid)
 
       let response = try await sut.mfa.recoveryCodes.regenerate()
 
@@ -231,7 +231,7 @@ extension AuthMockerTests {
 
       try await withMainSerialExecutor {
         let sut = makeSUT()
-        Dependencies[sut.clientID].sessionStorage.store(.valid)
+        sut.dependencies.sessionStorage.store(.valid)
 
         let events = LockIsolated([AuthChangeEvent]())
         let sessions = LockIsolated([Session?]())
@@ -247,7 +247,7 @@ extension AuthMockerTests {
 
         expectNoDifference(response.refreshToken, "GGduTeu95GraIXQ56jppkw")
         expectNoDifference(
-          Dependencies[sut.clientID].sessionStorage.get()?.refreshToken,
+          sut.dependencies.sessionStorage.get()?.refreshToken,
           "GGduTeu95GraIXQ56jppkw"
         )
         expectNoDifference(events.value, [.initialSession, .mfaChallengeVerified])
@@ -279,7 +279,7 @@ extension AuthMockerTests {
       .register()
 
       let sut = makeSUT()
-      Dependencies[sut.clientID].sessionStorage.store(.valid)
+      sut.dependencies.sessionStorage.store(.valid)
 
       let id = try await sut.mfa.recoveryCodes.unenroll().id
 
