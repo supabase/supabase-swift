@@ -37,8 +37,9 @@ public struct PostgrestError: SupabaseError {
     /// status code and on ``PostgrestError/serverError`` for the PostgreSQL or PostgREST error
     /// code; `serverError` is `nil` when the body was not a PostgREST error payload.
     public static let server: Kind = "server"
-    /// The request never completed, so nothing changed in the database. Retry or check
-    /// connectivity. ``PostgrestError/underlyingError`` is usually a `URLError`.
+    /// No response arrived, so whether the database applied the request is unknown. Retry reads
+    /// freely; before retrying a write, check that it was not applied.
+    /// ``PostgrestError/underlyingError`` is usually a `URLError`.
     public static let transport: Kind = "transport"
     /// PostgREST answered 2xx but the body could not be used: the rows did not decode as the
     /// requested type, or a `count(_:)` reply had no `Content-Range`. Nothing to retry; fix the
