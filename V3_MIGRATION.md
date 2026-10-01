@@ -2548,3 +2548,31 @@ The same change also means a `.single` body whose `length` is `.known(n)` must y
 bytes: the count goes out as `Content-Length` before the body is read, and a mismatch now fails
 the request with the new `HTTPBodyLengthMismatchError` instead of stalling until the request
 timeout (too few bytes) or truncating on the server (too many).
+
+## MFA factor IDs are now `UUID`, not `String`
+
+Every place in the Auth module that holds an MFA factor's identifier now uses `UUID` instead of
+`String`: `Factor.id`, `AuthMFAEnrollResponse.id`, `AuthMFAUnenrollResponse.id`,
+`MFAChallengeParams.factorId`, `MFAVerifyParams.factorId`, `MFAUnenrollParams.factorId`,
+`MFAChallengeAndVerifyParams.factorId`, `AuthMFA.verifyWebAuthnFactor(factorId:presentationAnchor:)`,
+and the new `AuthAdminMFA.deleteFactor(id:forUser:)`.
+
+GoTrue always generates factor IDs as UUIDv4 (`internal/models/factor.go`); keeping them as
+`String` on the client meant every one of these APIs accepted values GoTrue could never actually
+return.
+
+```swift
+// Before
+let factors = try await supabase.auth.mfa.listFactors()
+try await supabase.auth.mfa.unenroll(params: MFAUnenrollParams(factorId: factors.totp[0].id))
+
+// After — factor.id is already a UUID, nothing to convert
+let factors = try await supabase.auth.mfa.listFactors()
+try await supabase.auth.mfa.unenroll(params: MFAUnenrollParams(factorId: factors.totp[0].id))
+```
+
+This is a compile error anywhere a factor ID was treated as a `String` directly — stored in a
+`String` property, passed to an API expecting `String`, or interpolated and then passed back
+(`"\(factor.id)"`). The common pattern of reading `.id` off a `Factor`/`AuthMFAEnrollResponse` and
+passing it straight into another MFA call keeps compiling unchanged, since both sides are now
+`UUID`. If you display or log a factor ID, use `.uuidString` to get the string form back.

@@ -2101,7 +2101,7 @@ extension AuthMockerTests {
 
     @Test
     func mfaChallenge() async throws {
-      let factorId = "123"
+      let factorId = UUID(uuidString: "00000000-0000-0000-0000-000000000123")!
 
       Mock(
         url: clientURL.appendingPathComponent("factors/\(factorId)/challenge"),
@@ -2126,7 +2126,7 @@ extension AuthMockerTests {
         	--header "X-Client-Info: auth-swift/0.0.0" \
         	--header "X-Supabase-Api-Version: 2024-01-01" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	"http://localhost:54321/auth/v1/factors/123/challenge"
+        	"http://localhost:54321/auth/v1/factors/00000000-0000-0000-0000-000000000123/challenge"
         """#
       }
       .register()
@@ -2149,7 +2149,7 @@ extension AuthMockerTests {
 
     @Test
     func mfaChallengeWithPhoneType() async throws {
-      let factorId = "123"
+      let factorId = UUID(uuidString: "00000000-0000-0000-0000-000000000123")!
 
       Mock(
         url: clientURL.appendingPathComponent("factors/\(factorId)/challenge"),
@@ -2177,7 +2177,7 @@ extension AuthMockerTests {
         	--header "X-Supabase-Api-Version: 2024-01-01" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	--data "{\"channel\":\"sms\"}" \
-        	"http://localhost:54321/auth/v1/factors/123/challenge"
+        	"http://localhost:54321/auth/v1/factors/00000000-0000-0000-0000-000000000123/challenge"
         """#
       }
       .register()
@@ -2205,7 +2205,7 @@ extension AuthMockerTests {
 
     @Test
     func mfaChallengeWebAuthnReturnsCredentialOptions() async throws {
-      let factorId = "123"
+      let factorId = UUID(uuidString: "00000000-0000-0000-0000-000000000123")!
 
       Mock(
         url: clientURL.appendingPathComponent("factors/\(factorId)/challenge"),
@@ -2252,7 +2252,7 @@ extension AuthMockerTests {
 
     @Test
     func mfaVerify() async throws {
-      let factorId = "123"
+      let factorId = UUID(uuidString: "00000000-0000-0000-0000-000000000123")!
 
       Mock(
         url: clientURL.appendingPathComponent("factors/\(factorId)/verify"),
@@ -2264,13 +2264,13 @@ extension AuthMockerTests {
         curl \
         	--request POST \
         	--header "Authorization: Bearer accesstoken" \
-        	--header "Content-Length: 56" \
+        	--header "Content-Length: 89" \
         	--header "Content-Type: application/json" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
         	--header "X-Supabase-Api-Version: 2024-01-01" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	--data "{\"challenge_id\":\"123\",\"code\":\"123456\",\"factor_id\":\"123\"}" \
-        	"http://localhost:54321/auth/v1/factors/123/verify"
+        	--data "{\"challenge_id\":\"123\",\"code\":\"123456\",\"factor_id\":\"00000000-0000-0000-0000-000000000123\"}" \
+        	"http://localhost:54321/auth/v1/factors/00000000-0000-0000-0000-000000000123/verify"
         """#
       }
       .register()
@@ -2290,10 +2290,12 @@ extension AuthMockerTests {
 
     @Test
     func mfaUnenroll() async throws {
+      let factorId = UUID(uuidString: "00000000-0000-0000-0000-000000000123")!
+
       Mock(
-        url: clientURL.appendingPathComponent("factors/123"),
+        url: clientURL.appendingPathComponent("factors/\(factorId)"),
         statusCode: 200,
-        data: [.delete: Data(#"{"id":"123"}"#.utf8)]
+        data: [.delete: Data(#"{"id":"00000000-0000-0000-0000-000000000123"}"#.utf8)]
       )
       .snapshotRequest {
         #"""
@@ -2303,7 +2305,7 @@ extension AuthMockerTests {
         	--header "X-Client-Info: auth-swift/0.0.0" \
         	--header "X-Supabase-Api-Version: 2024-01-01" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	"http://localhost:54321/auth/v1/factors/123"
+        	"http://localhost:54321/auth/v1/factors/00000000-0000-0000-0000-000000000123"
         """#
       }
       .register()
@@ -2312,14 +2314,14 @@ extension AuthMockerTests {
 
       Dependencies[sut.clientID].sessionStorage.store(.valid)
 
-      let id = try await sut.mfa.unenroll(params: .init(factorId: "123")).id
+      let id = try await sut.mfa.unenroll(params: .init(factorId: factorId)).id
 
-      expectNoDifference(id, "123")
+      expectNoDifference(id, factorId)
     }
 
     @Test
     func mfaChallengeAndVerify() async throws {
-      let factorId = "123"
+      let factorId = UUID(uuidString: "00000000-0000-0000-0000-000000000123")!
       let code = "456"
 
       Mock(
@@ -2345,7 +2347,7 @@ extension AuthMockerTests {
         	--header "X-Client-Info: auth-swift/0.0.0" \
         	--header "X-Supabase-Api-Version: 2024-01-01" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	"http://localhost:54321/auth/v1/factors/123/challenge"
+        	"http://localhost:54321/auth/v1/factors/00000000-0000-0000-0000-000000000123/challenge"
         """#
       }
       .register()
@@ -2362,13 +2364,13 @@ extension AuthMockerTests {
         curl \
         	--request POST \
         	--header "Authorization: Bearer accesstoken" \
-        	--header "Content-Length: 55" \
+        	--header "Content-Length: 88" \
         	--header "Content-Type: application/json" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
         	--header "X-Supabase-Api-Version: 2024-01-01" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	--data "{\"challenge_id\":\"12345\",\"code\":\"456\",\"factor_id\":\"123\"}" \
-        	"http://localhost:54321/auth/v1/factors/123/verify"
+        	--data "{\"challenge_id\":\"12345\",\"code\":\"456\",\"factor_id\":\"00000000-0000-0000-0000-000000000123\"}" \
+        	"http://localhost:54321/auth/v1/factors/00000000-0000-0000-0000-000000000123/verify"
         """#
       }
       .register()
@@ -2389,10 +2391,15 @@ extension AuthMockerTests {
     func mfaListFactors() async throws {
       let sut = makeSUT()
 
+      let factorId1 = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
+      let factorId2 = UUID(uuidString: "00000000-0000-0000-0000-000000000002")!
+      let factorId3 = UUID(uuidString: "00000000-0000-0000-0000-000000000003")!
+      let factorId4 = UUID(uuidString: "00000000-0000-0000-0000-000000000004")!
+
       var session = Session.valid
       session.user.factors = [
         Factor(
-          id: "1",
+          id: factorId1,
           friendlyName: nil,
           factorType: "totp",
           status: .verified,
@@ -2400,7 +2407,7 @@ extension AuthMockerTests {
           updatedAt: Date()
         ),
         Factor(
-          id: "2",
+          id: factorId2,
           friendlyName: nil,
           factorType: "totp",
           status: .unverified,
@@ -2408,7 +2415,7 @@ extension AuthMockerTests {
           updatedAt: Date()
         ),
         Factor(
-          id: "3",
+          id: factorId3,
           friendlyName: nil,
           factorType: "phone",
           status: .verified,
@@ -2416,7 +2423,7 @@ extension AuthMockerTests {
           updatedAt: Date()
         ),
         Factor(
-          id: "4",
+          id: factorId4,
           friendlyName: nil,
           factorType: "phone",
           status: .unverified,
@@ -2428,18 +2435,22 @@ extension AuthMockerTests {
       Dependencies[sut.clientID].sessionStorage.store(session)
 
       let factors = try await sut.mfa.listFactors()
-      expectNoDifference(factors.totp.map(\.id), ["1"])
-      expectNoDifference(factors.phone.map(\.id), ["3"])
+      expectNoDifference(factors.totp.map(\.id), [factorId1])
+      expectNoDifference(factors.phone.map(\.id), [factorId3])
     }
 
     @Test
     func mfaListFactorsIncludesWebAuthn() async throws {
       let sut = makeSUT()
 
+      let factorId1 = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
+      let factorId2 = UUID(uuidString: "00000000-0000-0000-0000-000000000002")!
+      let factorId3 = UUID(uuidString: "00000000-0000-0000-0000-000000000003")!
+
       var session = Session.valid
       session.user.factors = [
         Factor(
-          id: "1",
+          id: factorId1,
           friendlyName: "My Passkey",
           factorType: "webauthn",
           status: .verified,
@@ -2447,7 +2458,7 @@ extension AuthMockerTests {
           updatedAt: Date()
         ),
         Factor(
-          id: "2",
+          id: factorId2,
           friendlyName: nil,
           factorType: "webauthn",
           status: .unverified,
@@ -2455,7 +2466,7 @@ extension AuthMockerTests {
           updatedAt: Date()
         ),
         Factor(
-          id: "3",
+          id: factorId3,
           friendlyName: nil,
           factorType: "totp",
           status: .verified,
@@ -2467,8 +2478,8 @@ extension AuthMockerTests {
       Dependencies[sut.clientID].sessionStorage.store(session)
 
       let factors = try await sut.mfa.listFactors()
-      expectNoDifference(factors.webauthn.map(\.id), ["1"])
-      expectNoDifference(factors.totp.map(\.id), ["3"])
+      expectNoDifference(factors.webauthn.map(\.id), [factorId1])
+      expectNoDifference(factors.totp.map(\.id), [factorId3])
     }
 
     @Test
@@ -2711,11 +2722,14 @@ extension AuthMockerTests {
         Mock(
           url: clientURL.appendingPathComponent("factors"),
           statusCode: 200,
-          data: [.post: Data(#"{"id":"factor-1","type":"webauthn"}"#.utf8)]
+          data: [
+            .post: Data(#"{"id":"00000000-0000-0000-0000-000000000001","type":"webauthn"}"#.utf8)
+          ]
         )
         .register()
         Mock(
-          url: clientURL.appendingPathComponent("factors/factor-1/challenge"),
+          url: clientURL.appendingPathComponent(
+            "factors/00000000-0000-0000-0000-000000000001/challenge"),
           statusCode: 200,
           data: [
             .post: Data(
@@ -2725,7 +2739,8 @@ extension AuthMockerTests {
         )
         .register()
         Mock(
-          url: clientURL.appendingPathComponent("factors/factor-1/verify"),
+          url: clientURL.appendingPathComponent(
+            "factors/00000000-0000-0000-0000-000000000001/verify"),
           statusCode: 200,
           data: [.post: MockData.session]
         )
@@ -2757,7 +2772,8 @@ extension AuthMockerTests {
       @MainActor
       func verifyWebAuthnFactorDrivesFullFlow() async throws {
         Mock(
-          url: clientURL.appendingPathComponent("factors/factor-1/challenge"),
+          url: clientURL.appendingPathComponent(
+            "factors/00000000-0000-0000-0000-000000000001/challenge"),
           statusCode: 200,
           data: [
             .post: Data(
@@ -2767,7 +2783,8 @@ extension AuthMockerTests {
         )
         .register()
         Mock(
-          url: clientURL.appendingPathComponent("factors/factor-1/verify"),
+          url: clientURL.appendingPathComponent(
+            "factors/00000000-0000-0000-0000-000000000001/verify"),
           statusCode: 200,
           data: [.post: MockData.session]
         )
@@ -2791,7 +2808,7 @@ extension AuthMockerTests {
         Dependencies[sut.clientID].sessionStorage.store(.valid)
 
         let session = try await sut.mfa._verifyWebAuthnFactor(
-          factorId: "factor-1",
+          factorId: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,
           presentationAnchor: ASPresentationAnchor(),
           authenticator: authenticator
         )
@@ -2812,7 +2829,7 @@ extension AuthMockerTests {
 
       session.user.factors = [
         Factor(
-          id: "1",
+          id: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,
           friendlyName: nil,
           factorType: "totp",
           status: .verified,

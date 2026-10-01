@@ -514,7 +514,8 @@ struct RequestsTests {
     Dependencies[sut.clientID].sessionStorage.store(.valid)
 
     await assert {
-      _ = try await sut.mfa.challenge(params: .init(factorId: "123"))
+      _ = try await sut.mfa.challenge(
+        params: .init(factorId: UUID(uuidString: "00000000-0000-0000-0000-000000000123")!))
     }
   }
 
@@ -525,7 +526,10 @@ struct RequestsTests {
     Dependencies[sut.clientID].sessionStorage.store(.valid)
 
     await assert {
-      _ = try await sut.mfa.challenge(params: .init(factorId: "123", channel: .whatsapp))
+      _ = try await sut.mfa.challenge(
+        params: .init(
+          factorId: UUID(uuidString: "00000000-0000-0000-0000-000000000123")!, channel: .whatsapp)
+      )
     }
   }
 
@@ -537,7 +541,9 @@ struct RequestsTests {
 
     await assert {
       _ = try await sut.mfa.verify(
-        params: .init(factorId: "123", challengeId: "123", code: "123456"))
+        params: .init(
+          factorId: UUID(uuidString: "00000000-0000-0000-0000-000000000123")!, challengeId: "123",
+          code: "123456"))
     }
   }
 
@@ -548,7 +554,8 @@ struct RequestsTests {
     Dependencies[sut.clientID].sessionStorage.store(.valid)
 
     await assert {
-      _ = try await sut.mfa.unenroll(params: .init(factorId: "123"))
+      _ = try await sut.mfa.unenroll(
+        params: .init(factorId: UUID(uuidString: "00000000-0000-0000-0000-000000000123")!))
     }
   }
 
@@ -572,7 +579,7 @@ struct RequestsTests {
     await assert {
       _ = try await sut.mfa.challenge(
         params: .init(
-          factorId: "123",
+          factorId: UUID(uuidString: "00000000-0000-0000-0000-000000000123")!,
           webAuthn: .init(rpId: "example.com", rpOrigins: ["https://example.com"])
         )
       )
@@ -590,7 +597,7 @@ struct RequestsTests {
     await assert {
       _ = try await sut.mfa.verify(
         params: .init(
-          factorId: "123",
+          factorId: UUID(uuidString: "00000000-0000-0000-0000-000000000123")!,
           challengeId: "456",
           credentialResponse: [
             "id": "credential-id",

@@ -46,7 +46,7 @@ public struct AuthAdminMFA: Sendable {
   ///   - id: The identifier of the factor to delete, as found on ``Factor/id``.
   ///   - userId: The user's unique identifier.
   /// - Note: This function should only be called on a server. Never expose your `secret` key in the client.
-  public func deleteFactor(id: String, forUser userId: UUID) async throws {
+  public func deleteFactor(id: UUID, forUser userId: UUID) async throws {
     _ = try await api.execute(
       HTTPRequest(
         method: .delete,

@@ -20,7 +20,7 @@ extension AuthMockerTests {
   @Suite(.mockerSerialized)
   struct AuthAdminMFATests {
     let userId = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
-    let factorId = "0d3aa138-da96-4aea-8d9e-c8b0e1234567"
+    let factorId = UUID(uuidString: "0d3aa138-da96-4aea-8d9e-c8b0e1234567")!
 
     let storage = InMemoryLocalStorage()
 
@@ -153,7 +153,7 @@ extension AuthMockerTests {
         	--header "X-Client-Info: auth-swift/0.0.0" \
         	--header "X-Supabase-Api-Version: 2024-01-01" \
         	--header "apikey: supabase.publishable.key" \
-        	"http://localhost:54321/auth/v1/admin/users/E621E1F8-C36C-495A-93FC-0C247A3E6E5F/factors/0d3aa138-da96-4aea-8d9e-c8b0e1234567"
+        	"http://localhost:54321/auth/v1/admin/users/E621E1F8-C36C-495A-93FC-0C247A3E6E5F/factors/0D3AA138-DA96-4AEA-8D9E-C8B0E1234567"
         """#
       }
       .register()
