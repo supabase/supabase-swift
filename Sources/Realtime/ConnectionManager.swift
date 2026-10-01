@@ -10,7 +10,12 @@ actor ConnectionManager {
     case reconnecting(Task<Void, any Error>, reason: String)
   }
 
-  private let (stateStream, stateContinuation) = AsyncStream<State>.makeStream()
+  // Unbounded, and load-bearing: the observer in `RealtimeClientV2.init` latches on seeing
+  // `.reconnecting` to tell an automatic reconnect apart from a fresh `connect()`. Drop that
+  // transition and a reconnect is misclassified, resetting channels mid-join.
+  private let (stateStream, stateContinuation) = AsyncStream<State>.makeStream(
+    bufferingPolicy: .unbounded
+  )
   private(set) var state: State = .disconnected
 
   private let transport: WebSocketTransport
@@ -58,7 +63,6 @@ actor ConnectionManager {
     case .connecting(let task):
       logger.debug("Connection already in progress, waiting...")
       try await task.value
-      // After waiting, get the connection from state
       guard case .connected(let conn) = state else {
         throw RealtimeError.connection("Connection failed")
       }
@@ -127,7 +131,6 @@ actor ConnectionManager {
 
     logger.debug("Connection error, initiating reconnect: \(error.localizedDescription)")
 
-    // Close the connection and update to disconnected before reconnecting
     current.close(code: nil, reason: "error: \(error.localizedDescription)")
     updateState(.disconnected)
 
@@ -198,15 +201,14 @@ actor ConnectionManager {
     // wait. Otherwise a released client would keep this actor (and everything
     // it captures) alive for up to the current attempt's delay.
     let clock = self.clock
-    let baseDelay = reconnectDelay
+    let backoff = Self.reconnectBackoff(baseDelay: reconnectDelay)
     let logger = self.logger
 
     let reconnectTask = Task { [weak self] in
       var attempt = 0
       while true {
         attempt += 1
-        let delay = Self.reconnectBackoffDelay(attempt: attempt, baseDelay: baseDelay)
-        try await clock.sleep(for: .seconds(delay))
+        try await clock.sleep(for: backoff.backoffDelay(retry: attempt))
 
         guard let self else { return }
         logger.debug("Attempting to reconnect (attempt \(attempt))...")
@@ -236,16 +238,22 @@ actor ConnectionManager {
     updateState(.connected(conn))
   }
 
-  /// Exponential backoff capped at 30s (phoenix.js's `reconnectAfterMs` ladder
-  /// is the same shape: a growing delay that levels off rather than giving up).
-  /// Deliberately no jitter — unlike `ChannelStateManager.defaultRetryDelay`,
-  /// this backoff has no bounded attempt count to spread out, and jitter would
-  /// make the delay before any given attempt unpredictable for callers using a
-  /// manual/test clock.
-  private static func reconnectBackoffDelay(attempt: Int, baseDelay: TimeInterval) -> TimeInterval {
-    let maxDelay: TimeInterval = 30
-    let exponentialDelay = baseDelay * pow(2.0, Double(attempt - 1))
-    return min(exponentialDelay, maxDelay)
+  /// Equal-jitter exponential backoff capped at 30s (phoenix.js's `reconnectAfterMs`
+  /// ladder is the same shape: a growing delay that levels off rather than giving
+  /// up). Jitter spreads the clients that lost the same connection instead of
+  /// letting them all reconnect at the same instant. Only the delay math of
+  /// `RetryPolicy` is used here: attempts are unbounded, and there is no HTTP
+  /// status or method to consult.
+  ///
+  /// The n-th wait is in `cap/2...cap` with `cap = min(30s, baseDelay · 2^(n-1))`,
+  /// so a test that advances a manual clock by `cap` always fires the sleep, and
+  /// one that advances by less than `cap/2` never does.
+  ///
+  /// `baseDelay` is user-supplied and checked nowhere else, so it is clamped to
+  /// `0...30` here: `Duration.seconds(_:)` traps on a non-finite or huge `Double`.
+  static func reconnectBackoff(baseDelay: TimeInterval) -> RetryPolicy {
+    let base = baseDelay.isFinite ? min(max(baseDelay, 0), 30) : 30
+    return RetryPolicy(baseDelay: .seconds(base), maxDelay: .seconds(30))
   }
 
   private func updateState(_ state: State) {

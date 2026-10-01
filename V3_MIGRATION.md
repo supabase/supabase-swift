@@ -8,6 +8,20 @@ Supabase Swift SDK, together with the steps required to migrate your code. All m
 > v3 has not been released yet. This document is updated as breaking changes land on `main`, so
 > treat it as the running list rather than the final one.
 
+## Minimum toolchain is now Xcode 26.0 / Swift 6.2
+
+The package now requires Xcode 26.0 or later and Swift 6.2 or later (`swift-tools-version:6.2`).
+The previous floor was Xcode 16.4 / Swift 6.1.
+
+The [support policy](README.md#support-policy) ties the minimum Xcode to the versions eligible for
+App Store submission. Since April 28, 2026, App Store Connect only accepts uploads built with
+Xcode 26 or later, so Xcode 16.x is already out of policy. Dropping it is not a breaking change
+under that policy, but it is listed here because it changes what you need installed to build v3.
+
+### Migration
+
+Update to Xcode 26.0 or later. No source changes are required.
+
 ## `verifyOTP` now returns `VerifyOTPResponse` instead of `AuthResponse`
 
 `verifyOTP` and its overloads return a new `VerifyOTPResponse` type instead of `AuthResponse`.
@@ -243,7 +257,7 @@ try await client.from("users").select().ilike("email", pattern: "john%").execute
 | `TransformOptions.init(...resize: String?..., format: String?)` | `TransformOptions.init(...resize: ResizeMode?..., format: ImageFormat?)` |
 | `JSONEncoder.defaultStorageEncoder` / `JSONDecoder.defaultStorageDecoder` | *(removed, no public replacement — was only ever the client's internal default)* |
 | `StorageClientConfiguration.init(...encoder:decoder:session:...)` | `StorageClientConfiguration.init(...logger:...)` |
-| `Storage.File` / `Storage.FormData` | `MultipartFormData` |
+| `Storage.File` / `Storage.FormData` | *(removed — uploads no longer build a multipart form; see "Storage uploads send the raw file body" below)* |
 
 ```swift
 // Before
@@ -408,44 +422,6 @@ out. This is a silent behavior change, not a compile error: search your codebase
 Construct `RealtimeClientV2` directly (not through `SupabaseClient`) if you need a
 Realtime-specific logger distinct from the rest of the client.
 
-## `KeychainLocalStorage`'s default Keychain service is now the host app's bundle identifier
-
-`KeychainLocalStorage()` no longer stores sessions under the fixed service
-`"supabase.gotrue.swift"`. It now defaults to `Bundle.main.bundleIdentifier`, falling back to the
-old constant only when there is no bundle identifier to read (command-line tools, some test
-bundles).
-
-The fixed string put every app that embeds the SDK in the same Keychain namespace. On
-iOS/iPadOS/tvOS/watchOS/visionOS this was not a cross-app collision risk, since items are
-implicitly scoped to the app's own default access group
-(`$(AppIdentifierPrefix)$(CFBundleIdentifier)`), so unrelated apps could not read or overwrite each
-other's session there. On macOS's file-based login Keychain, and for any apps deliberately sharing
-an access group on any platform, the shared service name was a real collision risk: two such apps
-could read and overwrite each other's session under that one service name. Either way, sharing a
-single hardcoded service name is poor namespacing hygiene. Scoping the service to the bundle
-identifier gives each app its own Keychain location by default.
-
-Existing sessions are not lost. On the first `retrieve` after upgrading, `KeychainLocalStorage`
-probes the old `"supabase.gotrue.swift"` location, moves whatever it finds to the new
-per-app location, and returns it — so users stay signed in. This is a behavior change, not a
-compile error: nothing in the type signature changed, but the on-disk Keychain location did. If
-you rely on the exact service name (for example, to inspect the Keychain from another tool, or
-because several of your own apps intentionally shared the old namespace), pass it explicitly to
-keep the pre-v3 location:
-
-```swift
-// Before (implicit, shared "supabase.gotrue.swift" service)
-let storage = KeychainLocalStorage()
-
-// After: keeps the pre-v3 location, no migration performed
-let storage = KeychainLocalStorage(service: "supabase.gotrue.swift")
-```
-
-Note that passing `service:` explicitly — whether the old constant or a new value of your own —
-selects the second, non-migrating initializer: `init(service:accessGroup:useDataProtectionKeychain:)`.
-Only the parameterless-service initializer, `init(accessGroup:useDataProtectionKeychain:)`, probes
-the legacy location.
-
 ## `KeychainLocalStorage.retrieve` returns `nil` for a missing key instead of throwing
 
 `AuthLocalStorage.retrieve(key:)` has always been documented as returning `nil` when the key is
@@ -503,8 +479,8 @@ defaulting to `false`. This is additive — existing call sites keep compiling a
 current behavior — but it's documented here because it's the fix for a common source of
 confusion: on macOS, the legacy file-based Keychain that `KeychainLocalStorage` targets by default
 still shows the user a consent prompt tied to your app's designated requirement, regardless of the
-service name — the service-namespacing change above does not affect it, since the ACL that
-triggers the prompt is governed by code-signing identity, not by `kSecAttrService` (see [Apple TN3137](https://developer.apple.com/documentation/technotes/tn3137-on-mac-keychains)).
+service name — the ACL that triggers the prompt is governed by code-signing identity, not by
+`kSecAttrService` (see [Apple TN3137](https://developer.apple.com/documentation/technotes/tn3137-on-mac-keychains)).
 Passing `useDataProtectionKeychain: true` moves storage to the data-protection Keychain, which
 does not show that prompt.
 
@@ -2279,6 +2255,28 @@ Errors thrown by your own code that runs inside the request — a custom `Client
 error is in `underlyingError`. `CancellationError` is never wrapped and still propagates as
 itself.
 
+Cancelling a request is the case worth spelling out. `URLSession`'s async APIs do not throw
+`CancellationError` when the enclosing `Task` is cancelled — they throw `URLError(.cancelled)`,
+which is a `URLError` like any other and so is wrapped as `.transport`. A `catch is
+CancellationError` does not match a cancelled request; check the code on `underlyingError`
+instead:
+
+```swift
+// Before
+} catch is CancellationError {
+  // the user cancelled — no error banner
+}
+
+// After
+} catch let error as any SupabaseError
+  where (error.underlyingError as? URLError)?.code == .cancelled {
+  // the user cancelled — no error banner
+}
+```
+
+This also compiles silently — the old `catch` block simply stops being reached. Search for `is
+CancellationError` near Supabase calls. A cancelled request is never retried.
+
 Without this, one `catch let error as any SupabaseError` missed exactly the failures a user is
 most likely to hit in the field: no network, and a schema drift between the app's model and the
 server. swift-openapi-runtime and Auth0 wrap the same way.
@@ -2336,7 +2334,7 @@ This is a compile error: `statusCode` and `error` no longer exist on `StorageErr
 
 Kinds: `.server` (recognized body, `serverError` set), `.unexpectedResponse` (non-2xx with an
 unrecognized body, raw bytes in `response?.body`), `.transport`, `.decoding`, and `.invalidURL`
-for the URL-building helpers such as `getPublicURL`, which threw `URLError(.badURL)` before.
+for the URL-building helpers such as `publicURL`, which threw `URLError(.badURL)` before.
 
 ## `PostgrestError` gains `kind` and `response`; server fields move to `serverError`
 
@@ -2548,6 +2546,327 @@ The same change also means a `.single` body whose `length` is `.known(n)` must y
 bytes: the count goes out as `Content-Length` before the body is read, and a mismatch now fails
 the request with the new `HTTPBodyLengthMismatchError` instead of stalling until the request
 timeout (too few bytes) or truncating on the server (too many).
+
+## Auth and PostgREST retries share one implementation: jittered backoff and `Retry-After`
+
+Auth and PostgREST — the two modules that already retried — now do so through one middleware
+driven by an internal `RetryPolicy`. It runs outermost, so a replayed attempt re-runs your
+`ClientMiddleware`s and resolves a fresh access token instead of reusing the first attempt's.
+Storage and Functions are unchanged: they do not retry.
+
+- **PostgREST** is unchanged in what it retries: GET and HEAD only, on a transient network
+  failure or a 503/520, up to three retries. `retryEnabled`, `retry(enabled:)` and `db.retry`
+  stay as they were. What changes is the wait: a random duration in `cap/2...cap` with
+  `cap = min(30s, 1s · 2^n)` instead of a fixed `2^n` seconds, and a `Retry-After` header is
+  honoured up to 30 s. Only a transient `URLError` (timeout, connection lost, DNS failure and the
+  like) is retried; PostgREST used to retry any error thrown by a custom `ClientTransport`,
+  `ClientMiddleware` or `accessToken` closure too.
+- **Auth** makes 3 attempts instead of 2, with the same jittered wait (500 ms base, 20 s cap)
+  instead of a fixed `0.5 · 2^n` seconds. What it retries is unchanged: GET, HEAD, OPTIONS, PUT,
+  DELETE and POST (so token refreshes are replayed), on a transient `URLError` or a 408, 500,
+  502, 503, 504 or Cloudflare 520–524/530.
+- **Both** report a cancelled task as `CancellationError`, even when the transport reported it
+  as `URLError.cancelled`.
+- **Realtime** reconnects carry the same equal jitter, capped at 30 s: the first attempt waits
+  between half of `reconnectDelay` and `reconnectDelay`, never longer than before.
+
+Without jitter every client that lost the same connection retried at the same instant, and the
+two modules had their own idea of a transient failure. This follows the AWS/Smithy retry
+guidance.
+
+```swift
+// A middleware passed through `SupabaseClientOptions.GlobalOptions.http`:
+struct RequestCounter: ClientMiddleware {
+  let count: LockIsolated<Int>
+  func intercept(
+    _ request: HTTPRequest, body: HTTPBody?,
+    next: @Sendable (HTTPRequest, HTTPBody?) async throws -> (HTTPResponse, HTTPBody?)
+  ) async throws -> (HTTPResponse, HTTPBody?) {
+    count.withValue { $0 += 1 }
+    return try await next(request, body)
+  }
+}
+
+// Before — one `intercept` per `execute()`, even when PostgREST retried the request.
+// After — one `intercept` per attempt, up to four for a PostgREST GET that keeps getting a 503.
+try await supabase.from("todos").select().execute()
+```
+
+This compiles silently. Search your codebase for `ClientTransport` and `ClientMiddleware`
+conformances — they now run once per attempt — and, in Auth or PostgREST error handling, for
+code that expected a cancelled request to surface as `AuthError` or `PostgrestError`; it now
+throws `CancellationError`. If you relied on PostgREST retrying a custom transport error, handle
+the retry in your transport.
+
+## `get`-prefixed accessors drop the prefix
+
+Twelve public methods that only fetch a value lost their `get` prefix, per the Swift API Design
+Guidelines rule that a method without side effects reads as a noun phrase.
+
+| Before | After |
+| --- | --- |
+| `AuthAdmin.getUserById(_:)` | `AuthAdmin.user(id:)` |
+| `AuthAdminOAuth.getClient(clientId:)` | `AuthAdminOAuth.client(id:)` |
+| `AuthMFA.getAuthenticatorAssuranceLevel()` | `AuthMFA.authenticatorAssuranceLevel()` |
+| `AuthClient.getOAuthSignInURL(...)` | `AuthClient.oauthSignInURL(...)` |
+| `AuthClient.getLinkIdentityURL(...)` | `AuthClient.linkIdentityURL(...)` |
+| `AuthClient.getClaims(...)` | `AuthClient.claims(...)` |
+| `AuthOAuthServer.getAuthorizationDetails(...)` | `AuthOAuthServer.authorizationDetails(id:)` |
+| `AuthClient.getPasskeyRegistrationOptions()` | `AuthClient.passkeyRegistrationOptions()` |
+| `AuthClient.getPasskeyAuthenticationOptions()` | `AuthClient.passkeyAuthenticationOptions()` |
+| `SupabaseStorageClient.getBucket(_:)` | `SupabaseStorageClient.bucket(_:)` |
+| `StorageVectorsClient.getBucket(_:)` | `StorageVectorsClient.bucket(_:)` |
+| `VectorBucketClient.getIndex(_:)` | `VectorBucketClient.indexDetails(_:)` |
+| `VectorIndexClient.getVectors(keys:returnMetadata:)` | `VectorIndexClient.vectors(keys:returnMetadata:)` |
+| `StorageFileApi.getPublicURL(...)` | `StorageFileApi.publicURL(...)` |
+
+```swift
+// Before
+let user = try await supabase.auth.admin.getUserById(id)
+let url = try supabase.storage.from("avatars").getPublicURL(path: "me.png")
+
+// After
+let user = try await supabase.auth.admin.user(id: id)
+let url = try supabase.storage.from("avatars").publicURL(path: "me.png")
+```
+
+`getIndex(_:)` is the one that did not simply lose its prefix: `VectorBucketClient` already has an
+`index(_:)` returning a `VectorIndexClient` handle, so a second `index(_:)` returning a
+`VectorIndex` would have made `try await bucket.index("embeddings")` ambiguous. It is
+`indexDetails(_:)` instead, which also reads closer to what it returns.
+
+These are all compile errors. Search for `get` immediately followed by a capital letter at
+Supabase call sites.
+
+## Identifier argument labels are `id:`
+
+Methods that took a label repeating the noun already in the method name now take `id:`.
+
+| Before | After |
+| --- | --- |
+| `AuthAdminOAuth.updateClient(clientId:params:)` | `AuthAdminOAuth.updateClient(id:params:)` |
+| `AuthAdminOAuth.deleteClient(clientId:)` | `AuthAdminOAuth.deleteClient(id:)` |
+| `AuthAdminOAuth.regenerateClientSecret(clientId:)` | `AuthAdminOAuth.regenerateClientSecret(id:)` |
+| `AuthOAuthServer.approveAuthorization(authorizationId:)` | `AuthOAuthServer.approveAuthorization(id:)` |
+| `AuthOAuthServer.denyAuthorization(authorizationId:)` | `AuthOAuthServer.denyAuthorization(id:)` |
+| `AuthOAuthServer.revokeGrant(clientId:)` | `AuthOAuthServer.revokeGrant(id:)` |
+| `AuthAdmin.listPasskeys(userId:)` | `AuthAdmin.listPasskeys(forUser:)` |
+| `AuthAdmin.deletePasskey(userId:passkeyId:)` | `AuthAdmin.deletePasskey(id:forUser:)` |
+
+```swift
+// Before
+try await supabase.auth.admin.oauth.deleteClient(clientId: client.clientId)
+try await supabase.auth.admin.deletePasskey(userId: user.id, passkeyId: passkey.id)
+
+// After
+try await supabase.auth.admin.oauth.deleteClient(id: client.clientId)
+try await supabase.auth.admin.deletePasskey(id: passkey.id, forUser: user.id)
+```
+
+`deletePasskey` also swapped its parameter order, so the passkey comes first — the thing being
+deleted, with the user as context. The `OAuthClient.clientId` *property* is unchanged; only the
+argument labels moved.
+
+These are all compile errors.
+
+## Boolean properties read as assertions
+
+| Before | After |
+| --- | --- |
+| `FileOptions.upsert` | `FileOptions.shouldUpsert` |
+| `CreateSignedUploadURLOptions.upsert` | `CreateSignedUploadURLOptions.shouldUpsert` |
+| `SupabaseClientOptions.StorageOptions.useNewHostname` | `usesNewHostname` |
+| `AuthClient.Configuration.autoRefreshToken` | `automaticallyRefreshesToken` |
+| `AuthClient.Configuration.defaultAutoRefreshToken` | `defaultAutomaticallyRefreshesToken` |
+| `SupabaseClientOptions.AuthOptions.autoRefreshToken` | `automaticallyRefreshesToken` |
+| `GetClaimsOptions.allowExpired` | `allowsExpired` |
+| `AdminUserAttributes.emailConfirm` | `AdminUserAttributes.confirmsEmail` |
+| `AdminUserAttributes.phoneConfirm` | `AdminUserAttributes.confirmsPhone` |
+
+```swift
+// Before
+try await supabase.storage.from("avatars").upload(
+  "me.png", data: data, options: FileOptions(upsert: true)
+)
+let client = SupabaseClient(
+  supabaseURL: url,
+  supabaseKey: key,
+  options: .init(auth: .init(autoRefreshToken: false))
+)
+
+// After
+try await supabase.storage.from("avatars").upload(
+  "me.png", data: data, options: FileOptions(shouldUpsert: true)
+)
+let client = SupabaseClient(
+  supabaseURL: url,
+  supabaseKey: key,
+  options: .init(auth: .init(automaticallyRefreshesToken: false))
+)
+```
+
+These are all compile errors. The wire formats are untouched: `FileOptions.shouldUpsert` still
+sends the `x-upsert` header, and `AdminUserAttributes.confirmsEmail` still encodes to
+`email_confirm`.
+
+`head:` on `select` and `rpc` deliberately keeps its name — it names the HTTP method the request
+switches to, rather than asserting a state.
+
+## `RealtimeClientOptions.vsn` is now `protocolVersion`
+
+`vsn` is the query parameter Realtime's server reads; it was never a good name for the Swift
+property.
+
+```swift
+// Before
+let client = SupabaseClient(
+  supabaseURL: url, supabaseKey: key,
+  options: .init(realtime: RealtimeClientOptions(vsn: .v2))
+)
+
+// After
+let client = SupabaseClient(
+  supabaseURL: url, supabaseKey: key,
+  options: .init(realtime: RealtimeClientOptions(protocolVersion: .v2))
+)
+```
+
+This is a compile error. The socket URL still carries `vsn=2.0.0` — only the Swift spelling moved.
+
+## `User.aud` is now `User.audience`
+
+`User.aud` is `User.audience`, and the `aud` field on `ListUsersPaginatedResponse` and
+`ListOAuthClientsPaginatedResponse` is `audience` on both.
+
+```swift
+// Before
+if user.aud == "authenticated" { ... }
+
+// After
+if user.audience == "authenticated" { ... }
+```
+
+`User` gained an explicit `CodingKeys` (mapping `audience` back to `"aud"`) so the wire format is
+unchanged — a `User` encoded by v2 still decodes in v3, and vice versa.
+
+`JWTClaims.aud` deliberately keeps its name. That type is a direct RFC 7519 claims bag whose
+fields are all the registered abbreviations — `iss`, `sub`, `exp`, `iat`, `nbf`, `jti` — and
+spelling out one of them would be less consistent, not more.
+
+This is a compile error where you read the property. If you encode a `User` to your own storage
+under a hand-written coder, check that it still expects `aud`.
+
+## `SortBy.order` is now `SortOrder`, not `String`
+
+`SortBy.order` stored the raw `"asc"`/`"desc"` string even though the initializer already took a
+type-safe `SortOrder`, throwing that type safety away one property read later.
+
+```swift
+// Before
+var sortBy = SortBy(column: "name", order: .ascending)
+let raw: String? = sortBy.order   // "asc"
+
+// After
+var sortBy = SortBy(column: "name", order: .ascending)
+let order: SortOrder? = sortBy.order   // .ascending
+```
+
+Reading or declaring `.order` as a `String` is a compile error. Assigning or comparing it against
+the raw string literals (`sortBy.order = "asc"`, `sortBy.order == "asc"`) keeps compiling unchanged
+— `SortOrder` is `ExpressibleByStringLiteral` — but now produces a `SortOrder`, not a `String`, so
+comparing against any value other than `"asc"`/`"desc"` no longer type-checks. The wire format is
+unchanged either way: `SortOrder` still encodes to `"asc"`/`"desc"`.
+
+## Storage's `upload`/`update`/`uploadToSignedURL` label their file path
+
+Every other `StorageFileApi` method that takes a file path labels it `path:` — `download(path:)`,
+`info(path:)`, `exists(path:)`, `createSignedURL(path:...)`. `upload`, `update`, and
+`uploadToSignedURL` were the exception, taking it positionally.
+
+```swift
+// Before
+try await storage.from("avatars").upload("user123.png", data: imageData)
+try await storage.from("avatars").update("user123.png", data: imageData)
+try await storage.from("avatars").uploadToSignedURL("user123.png", token: token, data: imageData)
+
+// After
+try await storage.from("avatars").upload(path: "user123.png", data: imageData)
+try await storage.from("avatars").update(path: "user123.png", data: imageData)
+try await storage.from("avatars").uploadToSignedURL(path: "user123.png", token: token, data: imageData)
+```
+
+This is a compile error. All six overloads move together (`data:` and `fileURL:` variants of each).
+
+## `AuthClient` is now a `final class`, not an `actor`
+
+`AuthClient` is declared `public final class AuthClient: Sendable` instead of
+`public actor AuthClient`.
+
+Almost every member was already `nonisolated`, so the actor protected no state. Its one side effect
+was a process-global registry that those `nonisolated` members used to reach the client's
+dependencies, and that registry trapped with `fatalError` as soon as an `AuthAdmin`, `AuthMFA`, or
+`AuthOAuthServer` value outlived the `AuthClient` it came from. Dependencies now live on the
+instance. `AuthMFA` and `AuthOAuthServer` retain their client, and `AuthAdmin` carries its own
+transport, so those values keep working for as long as you hold them.
+
+Ordinary use is source-compatible. Every member that talks to the server is still `async`, and the
+members that were `nonisolated` keep working without `await`. Two synchronous methods that used to
+need `await` because of actor isolation no longer do: `startAutoRefresh()` and `stopAutoRefresh()`.
+Calling them with `await` still compiles but produces a "no 'async' operations occur within
+'await' expression" warning; drop the `await`.
+
+It is a compile error only where `AuthClient` was used *as an actor*: an `isolated AuthClient`
+parameter, passing it where `any Actor` is expected, or calling `assumeIsolated` on it.
+
+```swift
+// Before
+func inspect(_ auth: isolated AuthClient) {
+  print(auth.currentUser?.email ?? "signed out")
+}
+
+// After
+func inspect(_ auth: AuthClient) {
+  print(auth.currentUser?.email ?? "signed out")
+}
+```
+
+Search your code for `isolated AuthClient`, `assumeIsolated` on an `AuthClient` value, and
+`await` in front of `startAutoRefresh()` / `stopAutoRefresh()`.
+
+## Storage uploads send the raw file body instead of a `multipart/form-data` form
+
+`StorageFileApi.upload`, `update`, and `uploadToSignedURL` put the file bytes directly in the
+request body. The form fields the multipart body used to carry travel as headers instead:
+
+| Multipart form field | Header |
+| --- | --- |
+| `cacheControl` | `Cache-Control: max-age=<seconds>` (already sent before) |
+| file part `Content-Type` | `Content-Type: <contentType, or inferred from the extension>` |
+| `metadata` | `x-metadata: <base64 of the JSON object>` |
+
+This is the shape supabase-js sends for `ArrayBuffer` and stream uploads, and storage-api has
+accepted it for as long as it has accepted the form. The multipart encoder buffered the whole
+file three times over (measured at +610 MB for a 200 MiB upload); the raw body adds nothing on top
+of the caller's data, and `upload(path:fileURL:)` now streams from disk without reading the file
+into memory. The internal `MultipartFormData` type is gone.
+
+```swift
+// Before and after — the call is unchanged
+try await storage.from("avatars").upload(
+  path: "user123.png",
+  data: imageData,
+  options: FileOptions(cacheControl: "7200", metadata: ["source": "camera"])
+)
+```
+
+This compiles unchanged. It is a silent wire change: anything that inspects the outgoing request
+sees a different body and `Content-Type`. Search your code for a `ClientMiddleware`, a
+`ClientTransport`, a proxy rule, or a test fixture that matches on `multipart/form-data`, a
+`boundary=` parameter, or a `Content-Disposition: form-data` part, and read the file from the body
+and the metadata from `x-metadata` instead.
+
+A `Content-Type` passed through `FileOptions.headers` now wins over the inferred one, where before
+it silently replaced the multipart header and broke the request.
 
 ## MFA factor IDs are now `UUID`, not `String`
 

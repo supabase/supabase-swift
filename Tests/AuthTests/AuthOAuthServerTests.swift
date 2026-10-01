@@ -233,10 +233,10 @@ extension AuthMockerTests {
       #expect(grant.scopes == ["read", "write"])
     }
 
-    // MARK: - getAuthorizationDetails
+    // MARK: - authorizationDetails
 
     @Test
-    func getAuthorizationDetails() async throws {
+    func authorizationDetails() async throws {
       let responseData = """
         {
           "authorization_id": "abc123def456",
@@ -273,10 +273,10 @@ extension AuthMockerTests {
       .register()
 
       let sut = makeSUT()
-      Dependencies[sut.clientID].sessionStorage.store(.valid)
+      sut.dependencies.sessionStorage.store(.valid)
 
-      let response = try await sut.oauthServer.getAuthorizationDetails(
-        authorizationId: "abc123def456"
+      let response = try await sut.oauthServer.authorizationDetails(
+        id: "abc123def456"
       )
 
       guard case .details(let details) = response else {
@@ -293,7 +293,7 @@ extension AuthMockerTests {
       let sut = makeSUT()
 
       do {
-        _ = try await sut.oauthServer.getAuthorizationDetails(authorizationId: "abc123def456")
+        _ = try await sut.oauthServer.authorizationDetails(id: "abc123def456")
         Issue.record("Expected AuthError.sessionMissing")
       } catch let error as AuthError where error.kind == .sessionMissing {
         // expected
@@ -314,10 +314,10 @@ extension AuthMockerTests {
       .register()
 
       let sut = makeSUT()
-      Dependencies[sut.clientID].sessionStorage.store(.valid)
+      sut.dependencies.sessionStorage.store(.valid)
 
       do {
-        _ = try await sut.oauthServer.getAuthorizationDetails(authorizationId: "missing")
+        _ = try await sut.oauthServer.authorizationDetails(id: "missing")
         Issue.record("Expected AuthError.api")
       } catch let error as AuthError {
         #expect(error.kind == .api)
@@ -355,10 +355,10 @@ extension AuthMockerTests {
       .register()
 
       let sut = makeSUT()
-      Dependencies[sut.clientID].sessionStorage.store(.valid)
+      sut.dependencies.sessionStorage.store(.valid)
 
       let redirect = try await sut.oauthServer.approveAuthorization(
-        authorizationId: "abc123def456"
+        id: "abc123def456"
       )
 
       #expect(redirect.redirectURL == URL(string: "https://example.com/callback?code=abc123"))
@@ -394,11 +394,11 @@ extension AuthMockerTests {
       .register()
 
       let sut = makeSUT()
-      Dependencies[sut.clientID].sessionStorage.store(.valid)
+      sut.dependencies.sessionStorage.store(.valid)
 
       // Denial must NOT throw — it's a successful API call, per RFC 6749 the
       // OAuth error is embedded in the redirect URL's query string.
-      let redirect = try await sut.oauthServer.denyAuthorization(authorizationId: "abc123def456")
+      let redirect = try await sut.oauthServer.denyAuthorization(id: "abc123def456")
 
       #expect(redirect.redirectURL.query?.contains("error=access_denied") == true)
     }
@@ -440,7 +440,7 @@ extension AuthMockerTests {
       .register()
 
       let sut = makeSUT()
-      Dependencies[sut.clientID].sessionStorage.store(.valid)
+      sut.dependencies.sessionStorage.store(.valid)
 
       let grants = try await sut.oauthServer.listGrants()
 
@@ -473,9 +473,9 @@ extension AuthMockerTests {
       .register()
 
       let sut = makeSUT()
-      Dependencies[sut.clientID].sessionStorage.store(.valid)
+      sut.dependencies.sessionStorage.store(.valid)
 
-      try await sut.oauthServer.revokeGrant(clientId: clientId)
+      try await sut.oauthServer.revokeGrant(id: clientId)
     }
 
     @Test
@@ -493,10 +493,10 @@ extension AuthMockerTests {
       .register()
 
       let sut = makeSUT()
-      Dependencies[sut.clientID].sessionStorage.store(.valid)
+      sut.dependencies.sessionStorage.store(.valid)
 
       do {
-        try await sut.oauthServer.revokeGrant(clientId: clientId)
+        try await sut.oauthServer.revokeGrant(id: clientId)
         Issue.record("Expected AuthError.api")
       } catch let error as AuthError {
         #expect(error.kind == .api)

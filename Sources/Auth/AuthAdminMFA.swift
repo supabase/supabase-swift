@@ -21,10 +21,11 @@ import HTTPTypes
 /// - ``listFactors(forUser:)``
 /// - ``deleteFactor(id:forUser:)``
 public struct AuthAdminMFA: Sendable {
-  let clientID: AuthClientID
+  let admin: AuthAdmin
 
-  var configuration: AuthClient.Configuration { Dependencies[clientID].configuration }
-  var api: APIClient { Dependencies[clientID].api }
+  var url: URL { admin.url }
+  var api: APIClient { admin.api }
+  var decoder: JSONDecoder { admin.decoder }
 
   /// Lists the MFA factors enrolled by a user.
   ///
@@ -34,10 +35,10 @@ public struct AuthAdminMFA: Sendable {
     try await api.execute(
       HTTPRequest(
         method: .get,
-        url: configuration.url.appendingPathComponent("admin/users/\(userId)/factors")
+        url: url.appendingPathComponent("admin/users/\(userId)/factors")
       )
     )
-    .decoded(decoder: configuration.resolvedDecoder)
+    .decoded(decoder: decoder)
   }
 
   /// Deletes an MFA factor enrolled by a user, and downgrades that user's sessions to AAL1.
@@ -50,7 +51,7 @@ public struct AuthAdminMFA: Sendable {
     _ = try await api.execute(
       HTTPRequest(
         method: .delete,
-        url: configuration.url.appendingPathComponent("admin/users/\(userId)/factors/\(id)")
+        url: url.appendingPathComponent("admin/users/\(userId)/factors/\(id)")
       )
     )
   }

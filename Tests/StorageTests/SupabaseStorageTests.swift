@@ -19,15 +19,15 @@ struct SupabaseStorageTests {
   let bucketId = "tests"
 
   @Test
-  func getPublicURL() throws {
+  func publicURL() throws {
     let sut = makeSUT()
 
     let path = "README.md"
 
-    let baseUrl = try sut.from(bucketId).getPublicURL(path: path)
+    let baseUrl = try sut.from(bucketId).publicURL(path: path)
     #expect(baseUrl.absoluteString == "\(supabaseURL)/object/public/\(bucketId)/\(path)")
 
-    let baseUrlWithDownload = try sut.from(bucketId).getPublicURL(
+    let baseUrlWithDownload = try sut.from(bucketId).publicURL(
       path: path,
       download: .withOriginalName
     )
@@ -37,7 +37,7 @@ struct SupabaseStorageTests {
       """
     }
 
-    let baseUrlWithDownloadAndFileName = try sut.from(bucketId).getPublicURL(
+    let baseUrlWithDownloadAndFileName = try sut.from(bucketId).publicURL(
       path: path, download: "test"
     )
     assertInlineSnapshot(of: baseUrlWithDownloadAndFileName, as: .description) {
@@ -46,7 +46,7 @@ struct SupabaseStorageTests {
       """
     }
 
-    let baseUrlWithAllOptions = try sut.from(bucketId).getPublicURL(
+    let baseUrlWithAllOptions = try sut.from(bucketId).publicURL(
       path: path, download: "test",
       options: TransformOptions(width: 300, height: 300)
     )
@@ -108,8 +108,6 @@ struct SupabaseStorageTests {
   #if !os(Linux) && !os(Android)
     @Test
     func uploadData() async throws {
-      testingBoundary.setValue("alamofire.boundary.c21f947c1c7b0c57")
-
       let sut = makeSUT(fetch: { request in
         assertInlineSnapshot(of: request, as: .curl) {
           #"""
@@ -118,24 +116,11 @@ struct SupabaseStorageTests {
           	--header "Apikey: test.api.key" \
           	--header "Authorization: Bearer test.api.key" \
           	--header "Cache-Control: max-age=14400" \
-          	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.c21f947c1c7b0c57" \
+          	--header "Content-Type: text/plain" \
           	--header "X-Client-Info: storage-swift/x.y.z" \
+          	--header "x-metadata: eyJrZXkiOiJ2YWx1ZSJ9" \
           	--header "x-upsert: false" \
-          	--data "--alamofire.boundary.c21f947c1c7b0c57\#r
-          Content-Disposition: form-data; name=\"cacheControl\"\#r
-          \#r
-          14400\#r
-          --alamofire.boundary.c21f947c1c7b0c57\#r
-          Content-Disposition: form-data; name=\"metadata\"\#r
-          \#r
-          {\"key\":\"value\"}\#r
-          --alamofire.boundary.c21f947c1c7b0c57\#r
-          Content-Disposition: form-data; name=\"\"; filename=\"file1.txt\"\#r
-          Content-Type: text/plain\#r
-          \#r
-          test data\#r
-          --alamofire.boundary.c21f947c1c7b0c57--\#r
-          " \
+          	--data "test data" \
           	"http://localhost:54321/storage/v1/object/tests/file1.txt"
           """#
         }
@@ -157,7 +142,7 @@ struct SupabaseStorageTests {
 
       try await sut.from(bucketId)
         .upload(
-          "file1.txt",
+          path: "file1.txt",
           data: "test data".data(using: .utf8)!,
           options: FileOptions(
             cacheControl: "14400",
@@ -168,8 +153,6 @@ struct SupabaseStorageTests {
 
     @Test
     func uploadFileURL() async throws {
-      testingBoundary.setValue("alamofire.boundary.c21f947c1c7b0c57")
-
       let sut = makeSUT(fetch: { request in
         assertInlineSnapshot(of: request, as: .curl) {
           #"""
@@ -178,8 +161,9 @@ struct SupabaseStorageTests {
           	--header "Apikey: test.api.key" \
           	--header "Authorization: Bearer test.api.key" \
           	--header "Cache-Control: max-age=3600" \
-          	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.c21f947c1c7b0c57" \
+          	--header "Content-Type: image/jpeg" \
           	--header "X-Client-Info: storage-swift/x.y.z" \
+          	--header "x-metadata: eyJrZXkiOiJ2YWx1ZSJ9" \
           	--header "x-upsert: false" \
           	"http://localhost:54321/storage/v1/object/tests/sadcat.jpg"
           """#
@@ -202,7 +186,7 @@ struct SupabaseStorageTests {
 
       try await sut.from(bucketId)
         .upload(
-          "sadcat.jpg",
+          path: "sadcat.jpg",
           fileURL: uploadFileURL("sadcat.jpg"),
           options: FileOptions(
             metadata: ["key": "value"]

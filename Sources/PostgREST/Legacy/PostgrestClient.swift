@@ -93,9 +93,9 @@ public struct PostgrestClient: Sendable {
     /// The `JSONEncoder` used to serialize request bodies.
     ///
     /// Defaults to ``jsonEncoder``, which is pre-configured with Supabase-compatible settings.
-    /// Individual calls to ``PostgrestRequestBuilder/insert(_:returning:count:encoder:)``,
+    /// Individual calls to ``PostgrestRequestBuilder/insert(_:returning:count:defaultToNull:encoder:)``,
     /// ``PostgrestRequestBuilder/update(_:returning:count:encoder:)``, and
-    /// ``PostgrestRequestBuilder/upsert(_:onConflict:returning:count:ignoreDuplicates:encoder:)``
+    /// ``PostgrestRequestBuilder/upsert(_:onConflict:returning:count:ignoreDuplicates:defaultToNull:encoder:)``
     /// can override this per call.
     public let encoder: JSONEncoder
 
@@ -110,10 +110,22 @@ public struct PostgrestClient: Sendable {
     /// Whether the client should automatically retry transient errors.
     ///
     /// When `true` (the default), GET and HEAD requests that receive an HTTP 503 or 520
-    /// response, or encounter a network error, are retried up to three times with
-    /// exponential back-off. Set to `false` to disable retries globally; individual
-    /// requests can also override this via ``PostgrestRequestBuilder/retry(enabled:)``.
+    /// response, or encounter a network error, are retried up to three times with jittered
+    /// exponential back-off. Set to `false` to disable retries globally; individual requests
+    /// can also override this via ``PostgrestRequestBuilder/retry(enabled:)``.
     public var retryEnabled: Bool
+
+    /// The one retry rule PostgREST applies when ``retryEnabled`` is `true`, mirroring
+    /// postgrest-js. Fixed on purpose: only GET and HEAD are replayed, and only a 503 or a
+    /// Cloudflare 520 counts as transient — both mean the schema cache or the edge is
+    /// reloading. Every other status is a real answer from the database and is never retried.
+    static let retryPolicy = RetryPolicy(
+      maxAttempts: 4,
+      baseDelay: .seconds(1),
+      maxDelay: .seconds(30),
+      retryableStatuses: [503, 520],
+      retryableMethods: [.get, .head]
+    )
 
     /// An async closure returning the current access token, resolved fresh for every request and
     /// sent as `Authorization: Bearer <token>`. `nil` (the default) sends no bearer token from this
@@ -223,9 +235,9 @@ public struct PostgrestClient: Sendable {
   /// Returns a query builder targeting the specified table or view.
   ///
   /// Call ``PostgrestRequestBuilder/select(_:head:count:)`` on the returned builder to begin a
-  /// `SELECT`, or use ``PostgrestRequestBuilder/insert(_:returning:count:encoder:)``,
+  /// `SELECT`, or use ``PostgrestRequestBuilder/insert(_:returning:count:defaultToNull:encoder:)``,
   /// ``PostgrestRequestBuilder/update(_:returning:count:encoder:)``,
-  /// ``PostgrestRequestBuilder/upsert(_:onConflict:returning:count:ignoreDuplicates:encoder:)``, or
+  /// ``PostgrestRequestBuilder/upsert(_:onConflict:returning:count:ignoreDuplicates:defaultToNull:encoder:)``, or
   /// ``PostgrestRequestBuilder/delete(returning:count:)`` for write operations.
   ///
   /// - Parameter table: The name of the table or view to query.

@@ -20,7 +20,7 @@ struct DownloadBehaviorURLTests {
 
   @Test
   func getPublicURL_noDownload() throws {
-    let url = try bucket.getPublicURL(path: "image.png")
+    let url = try bucket.publicURL(path: "image.png")
     let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
     let downloadItem = components?.queryItems?.first { $0.name == "download" }
     #expect(downloadItem == nil)
@@ -28,7 +28,7 @@ struct DownloadBehaviorURLTests {
 
   @Test
   func getPublicURL_withOriginalName() throws {
-    let url = try bucket.getPublicURL(path: "image.png", download: .withOriginalName)
+    let url = try bucket.publicURL(path: "image.png", download: .withOriginalName)
     let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
     let downloadItem = components?.queryItems?.first { $0.name == "download" }
     #expect(downloadItem?.value == "")
@@ -36,7 +36,7 @@ struct DownloadBehaviorURLTests {
 
   @Test
   func getPublicURL_namedDownload() throws {
-    let url = try bucket.getPublicURL(path: "image.png", download: .named("photo.jpg"))
+    let url = try bucket.publicURL(path: "image.png", download: .named("photo.jpg"))
     let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
     let downloadItem = components?.queryItems?.first { $0.name == "download" }
     #expect(downloadItem?.value == "photo.jpg")
@@ -44,7 +44,7 @@ struct DownloadBehaviorURLTests {
 
   @Test
   func getPublicURL_nilDownload() throws {
-    let url = try bucket.getPublicURL(path: "image.png", download: Optional<DownloadBehavior>.none)
+    let url = try bucket.publicURL(path: "image.png", download: Optional<DownloadBehavior>.none)
     let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
     let downloadItem = components?.queryItems?.first { $0.name == "download" }
     #expect(downloadItem == nil)

@@ -36,7 +36,7 @@ struct StorageVectorsClientIntegrationTests {
 
     try await vectors.createBucket(bucketName)
 
-    let bucket = try await vectors.getBucket(bucketName)
+    let bucket = try await vectors.bucket(bucketName)
     #expect(bucket.vectorBucketName == bucketName)
 
     page = try await vectors.listBuckets()
@@ -65,7 +65,7 @@ struct StorageVectorsClientIntegrationTests {
   @Test
   func getBucketWithWrongName() async {
     do {
-      _ = try await vectors.getBucket("not-exist-bucket")
+      _ = try await vectors.bucket("not-exist-bucket")
       Issue.record("Unexpected success")
     } catch let error as StorageError {
       #expect(error.kind == .server)

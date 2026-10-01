@@ -47,8 +47,8 @@ final class StorageFileIntegrationTests {
   }
 
   @Test
-  func getPublicURL() throws {
-    let publicURL = try storage.from(bucketName).getPublicURL(path: uploadPath)
+  func publicURL() throws {
+    let publicURL = try storage.from(bucketName).publicURL(path: uploadPath)
     #expect(
       publicURL.absoluteString
         == "\(DotEnv.supabaseURL)/storage/v1/object/public/\(bucketName)/\(uploadPath)"
@@ -57,7 +57,7 @@ final class StorageFileIntegrationTests {
 
   @Test
   func getPublicURLWithDownloadQueryString() throws {
-    let publicURL = try storage.from(bucketName).getPublicURL(
+    let publicURL = try storage.from(bucketName).publicURL(
       path: uploadPath, download: .withOriginalName)
     #expect(
       publicURL.absoluteString
@@ -67,7 +67,7 @@ final class StorageFileIntegrationTests {
 
   @Test
   func getPublicURLWithCustomDownload() throws {
-    let publicURL = try storage.from(bucketName).getPublicURL(
+    let publicURL = try storage.from(bucketName).publicURL(
       path: uploadPath, download: "test.jpg")
     #expect(
       publicURL.absoluteString
@@ -77,7 +77,7 @@ final class StorageFileIntegrationTests {
 
   @Test
   func signURL() async throws {
-    _ = try await storage.from(bucketName).upload(uploadPath, data: file)
+    _ = try await storage.from(bucketName).upload(path: uploadPath, data: file)
 
     let url = try await storage.from(bucketName).createSignedURL(path: uploadPath, expiresIn: 2000)
     #expect(
@@ -88,7 +88,7 @@ final class StorageFileIntegrationTests {
 
   @Test
   func signURL_withDownloadQueryString() async throws {
-    _ = try await storage.from(bucketName).upload(uploadPath, data: file)
+    _ = try await storage.from(bucketName).upload(path: uploadPath, data: file)
 
     let url = try await storage.from(bucketName).createSignedURL(
       path: uploadPath, expiresIn: 2000, download: .withOriginalName)
@@ -101,7 +101,7 @@ final class StorageFileIntegrationTests {
 
   @Test
   func signURL_withCustomFilenameForDownload() async throws {
-    _ = try await storage.from(bucketName).upload(uploadPath, data: file)
+    _ = try await storage.from(bucketName).upload(path: uploadPath, data: file)
 
     let url = try await storage.from(bucketName).createSignedURL(
       path: uploadPath, expiresIn: 2000, download: "test.jpg")
@@ -116,9 +116,9 @@ final class StorageFileIntegrationTests {
   func uploadAndUpdateFile() async throws {
     let file2 = try Data(contentsOf: uploadFileURL("file-2.txt"))
 
-    try await storage.from(bucketName).upload(uploadPath, data: file)
+    try await storage.from(bucketName).upload(path: uploadPath, data: file)
 
-    let res = try await storage.from(bucketName).update(uploadPath, data: file2)
+    let res = try await storage.from(bucketName).update(path: uploadPath, data: file2)
     #expect(res.path == uploadPath)
   }
 
@@ -129,7 +129,7 @@ final class StorageFileIntegrationTests {
       options: BucketOptions(isPublic: true, fileSizeLimit: .megabytes(1))
     )
 
-    try await storage.from(bucketName).upload(uploadPath, data: file)
+    try await storage.from(bucketName).upload(path: uploadPath, data: file)
   }
 
   @Test
@@ -140,11 +140,12 @@ final class StorageFileIntegrationTests {
     )
 
     do {
-      try await storage.from(bucketName).upload(uploadPath, data: file)
+      try await storage.from(bucketName).upload(path: uploadPath, data: file)
       Issue.record("Unexpected success")
     } catch let error as StorageError {
       #expect(error.kind == .server)
       #expect(error.serverError?.error == "Payload too large")
+      #expect(error.serverError?.code == .entityTooLarge)
       #expect(error.message == "The object exceeded the maximum allowed size")
       // Storage answers with HTTP 400 and puts "413" in the body.
       #expect(error.serverError?.statusCode == "413")
@@ -162,7 +163,7 @@ final class StorageFileIntegrationTests {
     )
 
     try await storage.from(bucketName).upload(
-      uploadPath,
+      path: uploadPath,
       data: file,
       options: FileOptions(
         contentType: "image/jpeg"
@@ -179,7 +180,7 @@ final class StorageFileIntegrationTests {
 
     do {
       try await storage.from(bucketName).upload(
-        uploadPath,
+        path: uploadPath,
         data: file,
         options: FileOptions(
           contentType: "image/jpeg"
@@ -189,6 +190,7 @@ final class StorageFileIntegrationTests {
     } catch let error as StorageError {
       #expect(error.kind == .server)
       #expect(error.serverError?.error == "invalid_mime_type")
+      #expect(error.serverError?.code == .invalidMimeType)
       #expect(error.message == "mime type image/jpeg is not supported")
       // Storage answers with HTTP 400 and puts "415" in the body.
       #expect(error.serverError?.statusCode == "415")
@@ -214,18 +216,18 @@ final class StorageFileIntegrationTests {
     let res = try await storage.from(bucketName).createSignedUploadURL(path: uploadPath)
 
     let uploadRes = try await storage.from(bucketName).uploadToSignedURL(
-      res.path, token: res.token, data: file)
+      path: res.path, token: res.token, data: file)
     #expect(uploadRes.path == uploadPath)
   }
 
   @Test
   func canUploadOverwritingFilesWithSignedURL() async throws {
-    try await storage.from(bucketName).upload(uploadPath, data: file)
+    try await storage.from(bucketName).upload(path: uploadPath, data: file)
 
     let res = try await storage.from(bucketName).createSignedUploadURL(
-      path: uploadPath, options: CreateSignedUploadURLOptions(upsert: true))
+      path: uploadPath, options: CreateSignedUploadURLOptions(shouldUpsert: true))
     let uploadRes = try await storage.from(bucketName).uploadToSignedURL(
-      res.path, token: res.token, data: file)
+      path: res.path, token: res.token, data: file)
     #expect(uploadRes.path == uploadPath)
   }
 
@@ -233,14 +235,17 @@ final class StorageFileIntegrationTests {
   func cannotUploadToSignedURLTwice() async throws {
     let res = try await storage.from(bucketName).createSignedUploadURL(path: uploadPath)
 
-    try await storage.from(bucketName).uploadToSignedURL(res.path, token: res.token, data: file)
+    try await storage.from(bucketName).uploadToSignedURL(
+      path: res.path, token: res.token, data: file)
 
     do {
-      try await storage.from(bucketName).uploadToSignedURL(res.path, token: res.token, data: file)
+      try await storage.from(bucketName).uploadToSignedURL(
+        path: res.path, token: res.token, data: file)
       Issue.record("Unexpected success")
     } catch let error as StorageError {
       #expect(error.kind == .server)
       #expect(error.serverError?.error == "Duplicate")
+      #expect(error.serverError?.code == .keyAlreadyExists)
       #expect(error.message == "The resource already exists")
       // Storage answers with HTTP 400 and puts "409" in the body.
       #expect(error.serverError?.statusCode == "409")
@@ -252,7 +257,7 @@ final class StorageFileIntegrationTests {
 
   @Test
   func listObjects() async throws {
-    try await storage.from(bucketName).upload(uploadPath, data: file)
+    try await storage.from(bucketName).upload(path: uploadPath, data: file)
     let res = try await storage.from(bucketName).list(path: "testpath")
 
     #expect(res.count == 1)
@@ -262,7 +267,7 @@ final class StorageFileIntegrationTests {
   @Test
   func moveObjectToDifferentPath() async throws {
     let newPath = "testpath/file-moved-\(UUID().uuidString).txt"
-    try await storage.from(bucketName).upload(uploadPath, data: file)
+    try await storage.from(bucketName).upload(path: uploadPath, data: file)
 
     try await storage.from(bucketName).move(from: uploadPath, to: newPath)
   }
@@ -273,7 +278,7 @@ final class StorageFileIntegrationTests {
     try await findOrCreateBucket(name: newBucketName)
 
     let newPath = "testpath/file-to-move-\(UUID().uuidString).txt"
-    try await storage.from(bucketName).upload(uploadPath, data: file)
+    try await storage.from(bucketName).upload(path: uploadPath, data: file)
 
     try await storage.from(bucketName).move(
       from: uploadPath,
@@ -287,7 +292,7 @@ final class StorageFileIntegrationTests {
   @Test
   func copyObjectToDifferentPath() async throws {
     let newPath = "testpath/file-moved-\(UUID().uuidString).txt"
-    try await storage.from(bucketName).upload(uploadPath, data: file)
+    try await storage.from(bucketName).upload(path: uploadPath, data: file)
 
     try await storage.from(bucketName).copy(from: uploadPath, to: newPath)
   }
@@ -298,7 +303,7 @@ final class StorageFileIntegrationTests {
     try await findOrCreateBucket(name: newBucketName)
 
     let newPath = "testpath/file-to-copy-\(UUID().uuidString).txt"
-    try await storage.from(bucketName).upload(uploadPath, data: file)
+    try await storage.from(bucketName).upload(path: uploadPath, data: file)
 
     try await storage.from(bucketName).copy(
       from: uploadPath,
@@ -311,7 +316,7 @@ final class StorageFileIntegrationTests {
 
   @Test
   func downloadsAnObject() async throws {
-    try await storage.from(bucketName).upload(uploadPath, data: file)
+    try await storage.from(bucketName).upload(path: uploadPath, data: file)
 
     let res = try await storage.from(bucketName).download(path: uploadPath)
     #expect(res.count > 0)
@@ -319,7 +324,7 @@ final class StorageFileIntegrationTests {
 
   @Test
   func removesAnObject() async throws {
-    try await storage.from(bucketName).upload(uploadPath, data: file)
+    try await storage.from(bucketName).upload(path: uploadPath, data: file)
 
     let res = try await storage.from(bucketName).remove(paths: [uploadPath])
     #expect(res.count == 1)
@@ -329,7 +334,7 @@ final class StorageFileIntegrationTests {
 
   @Test
   func getPublishURLWithTransformationOptions() throws {
-    let res = try storage.from(bucketName).getPublicURL(
+    let res = try storage.from(bucketName).publicURL(
       path: uploadPath,
       options: TransformOptions(
         width: 700,
@@ -347,7 +352,7 @@ final class StorageFileIntegrationTests {
   @Test
   func createAndLoadEmptyFolder() async throws {
     let path = "empty-folder/.placeholder"
-    try await storage.from(bucketName).upload(path, data: Data())
+    try await storage.from(bucketName).upload(path: path, data: Data())
 
     let files = try await storage.from(bucketName).list()
     #expect(files.map(\.name) == ["empty-folder"])
@@ -357,7 +362,7 @@ final class StorageFileIntegrationTests {
   @Test
   func info() async throws {
     try await storage.from(bucketName).upload(
-      uploadPath,
+      path: uploadPath,
       data: file,
       options: FileOptions(
         metadata: ["value": 42]
@@ -371,7 +376,7 @@ final class StorageFileIntegrationTests {
 
   @Test
   func exists() async throws {
-    try await storage.from(bucketName).upload(uploadPath, data: file)
+    try await storage.from(bucketName).upload(path: uploadPath, data: file)
 
     var exists = try await storage.from(bucketName).exists(path: uploadPath)
     #expect(exists)
@@ -383,14 +388,14 @@ final class StorageFileIntegrationTests {
   @Test
   func uploadWithCacheControl() async throws {
     try await storage.from(bucketName).upload(
-      uploadPath,
+      path: uploadPath,
       data: file,
       options: FileOptions(
         cacheControl: "14400"
       )
     )
 
-    let publicURL = try storage.from(bucketName).getPublicURL(path: uploadPath)
+    let publicURL = try storage.from(bucketName).publicURL(path: uploadPath)
 
     let (_, response) = try await URLSession.shared.data(from: publicURL)
     let httpResponse = try #require(response as? HTTPURLResponse)
@@ -402,7 +407,7 @@ final class StorageFileIntegrationTests {
   @Test
   func uploadWithFileURL() async throws {
     try await storage.from(bucketName)
-      .upload(uploadPath, fileURL: uploadFileURL("sadcat.jpg"))
+      .upload(path: uploadPath, fileURL: uploadFileURL("sadcat.jpg"))
 
     let uploadedFile = try await storage.from(bucketName).download(path: uploadPath)
 
@@ -423,7 +428,7 @@ final class StorageFileIntegrationTests {
     options: BucketOptions = BucketOptions(isPublic: true)
   ) async throws -> String {
     do {
-      _ = try await storage.getBucket(name)
+      _ = try await storage.bucket(name)
     } catch {
       try await storage.createBucket(name, options: options)
     }

@@ -14,50 +14,27 @@ let defaultSearchOptions = SearchOptions(
   )
 )
 
-private let defaultFileOptions = FileOptions(
-  cacheControl: "3600",
-  contentType: "text/plain;charset=UTF-8",
-  upsert: false
-)
-
 enum FileUpload {
   case data(Data)
   case url(URL)
 
-  func encode(to formData: MultipartFormData, withPath path: String, options: FileOptions) {
-    formData.append(
-      Data(options.cacheControl.utf8),
-      withName: "cacheControl"
-    )
-
-    if let metadata = options.metadata {
-      formData.append(encodeMetadata(metadata), withName: "metadata")
-    }
-
+  /// The raw request body. A `Data` upload is sent from memory; a file URL streams from disk
+  /// through `URLSession`'s upload task, so neither shape is copied by the SDK.
+  func httpBody() throws -> HTTPBody {
     switch self {
-    case .data(let data):
-      formData.append(
-        data,
-        withName: "",
-        fileName: path.fileName,
-        mimeType: options.contentType ?? mimeType(forPathExtension: path.pathExtension)
-      )
+    case .data(let data): HTTPBody(data)
+    case .url(let url): try HTTPBody(fileURL: url)
+    }
+  }
 
-    case .url(let url):
-      formData.append(
-        url,
-        withName: "",
-        fileName: url.lastPathComponent,
-        mimeType: options.contentType ?? mimeType(forPathExtension: url.pathExtension)
-      )
+  func contentType(forPath path: String, options: FileOptions) -> String {
+    if let contentType = options.contentType { return contentType }
+    switch self {
+    case .data: return mimeType(forPathExtension: path.pathExtension)
+    case .url(let url): return mimeType(forPathExtension: url.pathExtension)
     }
   }
 }
-
-#if DEBUG
-  import ConcurrencyExtras
-  let testingBoundary = LockIsolated<String?>(nil)
-#endif
 
 /// Supabase Storage File API for file operations within a specific bucket.
 ///
@@ -68,7 +45,7 @@ enum FileUpload {
 /// let fileApi = storage.from("avatars")
 ///
 /// // Upload a PNG
-/// try await fileApi.upload("user123.png", data: imageData)
+/// try await fileApi.upload(path: "user123.png", data: imageData)
 ///
 /// // Generate a signed URL valid for 60 seconds
 /// let url = try await fileApi.createSignedURL(path: "user123.png", expiresIn: 60)
@@ -78,21 +55,21 @@ enum FileUpload {
 ///
 /// ### Uploading files
 ///
-/// - ``upload(_:data:options:)``
-/// - ``upload(_:fileURL:options:)``
-/// - ``update(_:data:options:)``
-/// - ``update(_:fileURL:options:)``
+/// - ``upload(path:data:options:)``
+/// - ``upload(path:fileURL:options:)``
+/// - ``update(path:data:options:)``
+/// - ``update(path:fileURL:options:)``
 ///
 /// ### Uploading via signed URLs
 ///
 /// - ``createSignedUploadURL(path:options:)``
-/// - ``uploadToSignedURL(_:token:data:options:)``
-/// - ``uploadToSignedURL(_:token:fileURL:options:)``
+/// - ``uploadToSignedURL(path:token:data:options:)``
+/// - ``uploadToSignedURL(path:token:fileURL:options:)``
 ///
 /// ### Downloading files
 ///
 /// - ``download(path:options:query:cacheNonce:)``
-/// - ``getPublicURL(path:download:options:cacheNonce:)-(_,DownloadBehavior?,_,_)``
+/// - ``publicURL(path:download:options:cacheNonce:)-(_,DownloadBehavior?,_,_)``
 ///
 /// ### Managing files
 ///
@@ -102,6 +79,7 @@ enum FileUpload {
 /// - ``list(path:options:)``
 /// - ``info(path:)``
 /// - ``exists(path:)``
+/// - ``purgeCache(path:transformationsOnly:)``
 ///
 /// ### Creating signed URLs
 ///
@@ -167,23 +145,15 @@ public struct StorageFileApi: Sendable {
     method: HTTPRequest.Method,
     path: String,
     file: FileUpload,
-    options: FileOptions?
+    options: FileOptions
   ) async throws -> FileUploadResponse {
-    let options = options ?? defaultFileOptions
     var headers = options.headers.map { HTTPFields($0) } ?? HTTPFields()
 
     if method == .post {
-      headers[.xUpsert] = "\(options.upsert)"
+      headers[.xUpsert] = "\(options.shouldUpsert)"
     }
 
     headers[.duplex] = options.duplex
-
-    #if DEBUG
-      let formData = MultipartFormData(boundary: testingBoundary.value)
-    #else
-      let formData = MultipartFormData()
-    #endif
-    file.encode(to: formData, withPath: path, options: options)
 
     struct UploadResponse: Decodable {
       let key: String
@@ -204,7 +174,8 @@ public struct StorageFileApi: Sendable {
         url: api.configuration.url.appendingPathComponent("object/\(_path)"),
         headerFields: headers
       ),
-      formData: formData,
+      file: file,
+      path: path,
       options: options
     )
     .decoded(as: UploadResponse.self, decoder: api.configuration.decoder)
@@ -219,7 +190,7 @@ public struct StorageFileApi: Sendable {
   /// Uploads a file to an existing bucket.
   ///
   /// ```swift
-  /// let response = try await storage.from("avatars").upload("user123.png", data: imageData)
+  /// let response = try await storage.from("avatars").upload(path: "user123.png", data: imageData)
   /// print(response.fullPath) // "avatars/user123.png"
   /// ```
   ///
@@ -232,7 +203,7 @@ public struct StorageFileApi: Sendable {
   /// - Throws: ``StorageError`` if the upload fails or the caller is not authorized.
   @discardableResult
   public func upload(
-    _ path: String,
+    path: String,
     data: Data,
     options: FileOptions = FileOptions()
   ) async throws -> FileUploadResponse {
@@ -259,7 +230,7 @@ public struct StorageFileApi: Sendable {
   /// - Throws: ``StorageError`` if the upload fails or the caller is not authorized.
   @discardableResult
   public func upload(
-    _ path: String,
+    path: String,
     fileURL: URL,
     options: FileOptions = FileOptions()
   ) async throws -> FileUploadResponse {
@@ -273,7 +244,7 @@ public struct StorageFileApi: Sendable {
 
   /// Replaces an existing file at the specified path with new data.
   ///
-  /// Unlike ``upload(_:data:options:)`` with `upsert: true`, this method always targets an
+  /// Unlike ``upload(path:data:options:)`` with `shouldUpsert: true`, this method always targets an
   /// existing object and will throw if the path does not exist.
   ///
   /// - Parameters:
@@ -285,7 +256,7 @@ public struct StorageFileApi: Sendable {
   /// - Throws: ``StorageError`` if the path does not exist or the caller is not authorized.
   @discardableResult
   public func update(
-    _ path: String,
+    path: String,
     data: Data,
     options: FileOptions = FileOptions()
   ) async throws -> FileUploadResponse {
@@ -311,7 +282,7 @@ public struct StorageFileApi: Sendable {
   /// - Throws: ``StorageError`` if the path does not exist or the caller is not authorized.
   @discardableResult
   public func update(
-    _ path: String,
+    path: String,
     fileURL: URL,
     options: FileOptions = FileOptions()
   ) async throws -> FileUploadResponse {
@@ -688,7 +659,7 @@ public struct StorageFileApi: Sendable {
   /// Downloads a file from a private bucket and returns its raw bytes.
   ///
   /// For public buckets, prefer requesting the URL returned by
-  /// ``getPublicURL(path:download:options:cacheNonce:)-(_,DownloadBehavior?,_,_)`` directly.
+  /// ``publicURL(path:download:options:cacheNonce:)-(_,DownloadBehavior?,_,_)`` directly.
   ///
   /// ```swift
   /// let data = try await storage.from("avatars").download(path: "user123.png")
@@ -774,6 +745,27 @@ public struct StorageFileApi: Sendable {
     }
   }
 
+  /// Purges the CDN cache for a file, so the next request for it is served from Storage again.
+  ///
+  /// > Important: This requires the `secret` key. On self-hosted Storage, the `purgeCache` tenant
+  /// > feature and a CDN purge endpoint must be configured, otherwise the request fails.
+  ///
+  /// - Parameters:
+  ///   - path: The file path including the file name, e.g. `"folder/image.png"`. Only that exact
+  ///     file is purged; there is no wildcard or folder purge.
+  ///   - transformationsOnly: Pass `true` to purge only the resized and reformatted variants,
+  ///     leaving the original file cached.
+  /// - Throws: ``StorageError`` if the caller is not authorized or cache purging is not enabled.
+  public func purgeCache(path: String, transformationsOnly: Bool = false) async throws {
+    try await api.execute(
+      HTTPRequest(
+        method: .delete,
+        url: api.configuration.url.appendingPathComponent("cdn/\(_getFinalPath(path))"),
+        query: transformationsOnly ? [URLQueryItem(name: "transformations", value: "true")] : []
+      )
+    )
+  }
+
   /// Returns the public URL for a file in a public bucket.
   ///
   /// > Note: The bucket must be set to public for this URL to be accessible without authentication.
@@ -788,7 +780,7 @@ public struct StorageFileApi: Sendable {
   /// - Returns: The publicly accessible `URL` for the file.
   /// - Throws: ``StorageError`` with kind ``StorageError/Kind-swift.struct/invalidURL`` if the resulting URL cannot be constructed.
   @_disfavoredOverload
-  public func getPublicURL(
+  public func publicURL(
     path: String,
     download: String? = nil,
     options: TransformOptions? = nil,
@@ -829,10 +821,10 @@ public struct StorageFileApi: Sendable {
   ///
   /// ```swift
   /// // Inline display URL
-  /// let url = try storage.from("avatars").getPublicURL(path: "user123.png")
+  /// let url = try storage.from("avatars").publicURL(path: "user123.png")
   ///
   /// // Force download with original file name
-  /// let dlURL = try storage.from("docs").getPublicURL(path: "report.pdf", download: .withOriginalName)
+  /// let dlURL = try storage.from("docs").publicURL(path: "report.pdf", download: .withOriginalName)
   /// ```
   ///
   /// > Note: The bucket must be set to public for this URL to be accessible without authentication.
@@ -847,13 +839,13 @@ public struct StorageFileApi: Sendable {
   ///     cache-busting purposes.
   /// - Returns: The publicly accessible `URL` for the file.
   /// - Throws: ``StorageError`` with kind ``StorageError/Kind-swift.struct/invalidURL`` if the resulting URL cannot be constructed.
-  public func getPublicURL(
+  public func publicURL(
     path: String,
     download: DownloadBehavior? = nil,
     options: TransformOptions? = nil,
     cacheNonce: String? = nil
   ) throws -> URL {
-    try getPublicURL(
+    try publicURL(
       path: path,
       download: download?.queryValue,
       options: options,
@@ -864,13 +856,13 @@ public struct StorageFileApi: Sendable {
   /// Creates a signed upload URL that allows uploading a file without further authentication.
   ///
   /// Signed upload URLs are valid for 2 hours. Pass the returned ``SignedUploadURL/token`` to
-  /// ``uploadToSignedURL(_:token:data:options:)`` (or the file-URL variant) to perform the upload.
+  /// ``uploadToSignedURL(path:token:data:options:)`` (or the file-URL variant) to perform the upload.
   ///
   /// ```swift
   /// let signedUpload = try await storage.from("avatars").createSignedUploadURL(path: "user123.png")
   /// // Share signedUpload.token with the uploader
   /// try await storage.from("avatars").uploadToSignedURL(
-  ///   "user123.png",
+  ///   path: "user123.png",
   ///   token: signedUpload.token,
   ///   data: imageData
   /// )
@@ -890,7 +882,7 @@ public struct StorageFileApi: Sendable {
     }
 
     var headers = HTTPFields()
-    if let upsert = options?.upsert, upsert {
+    if let shouldUpsert = options?.shouldUpsert, shouldUpsert {
       headers[.xUpsert] = "true"
     }
 
@@ -943,7 +935,7 @@ public struct StorageFileApi: Sendable {
   /// - Throws: ``StorageError`` if the token is invalid, expired, or the upload fails.
   @discardableResult
   public func uploadToSignedURL(
-    _ path: String,
+    path: String,
     token: String,
     data: Data,
     options: FileOptions? = nil
@@ -972,7 +964,7 @@ public struct StorageFileApi: Sendable {
   /// - Throws: ``StorageError`` if the token is invalid, expired, or the upload fails.
   @discardableResult
   public func uploadToSignedURL(
-    _ path: String,
+    path: String,
     token: String,
     fileURL: URL,
     options: FileOptions? = nil
@@ -994,15 +986,8 @@ public struct StorageFileApi: Sendable {
     let options = options ?? FileOptions()
     var headers = options.headers.map { HTTPFields($0) } ?? HTTPFields()
 
-    headers[.xUpsert] = "\(options.upsert)"
+    headers[.xUpsert] = "\(options.shouldUpsert)"
     headers[.duplex] = options.duplex
-
-    #if DEBUG
-      let formData = MultipartFormData(boundary: testingBoundary.value)
-    #else
-      let formData = MultipartFormData()
-    #endif
-    file.encode(to: formData, withPath: path, options: options)
 
     struct UploadResponse: Decodable {
       let key: String
@@ -1022,7 +1007,8 @@ public struct StorageFileApi: Sendable {
         query: [URLQueryItem(name: "token", value: token)],
         headerFields: headers
       ),
-      formData: formData,
+      file: file,
+      path: path,
       options: options
     )
     .decoded(as: UploadResponse.self, decoder: api.configuration.decoder)
@@ -1049,5 +1035,6 @@ public struct StorageFileApi: Sendable {
 
 extension HTTPField.Name {
   static let duplex = Self("duplex")!
+  static let xMetadata = Self("x-metadata")!
   static let xUpsert = Self("x-upsert")!
 }

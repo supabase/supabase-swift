@@ -137,7 +137,9 @@ public struct URLSessionTransport: ClientTransport {
     {
       // ponytail: the chunk stream is unbounded, so a consumer slower than the network holds
       // the backlog; suspend/resume the task on a watermark if that shows up (SDK-1833).
-      let (chunks, continuation) = AsyncThrowingStream<ArraySlice<UInt8>, any Error>.makeStream()
+      let (chunks, continuation) = AsyncThrowingStream<ArraySlice<UInt8>, any Error>.makeStream(
+        bufferingPolicy: .unbounded
+      )
       let delegate = StreamingTaskDelegate(body: continuation, requestBody: requestBody)
       task.delegate = delegate
       continuation.onTermination = { _ in task.cancel() }

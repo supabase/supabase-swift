@@ -31,7 +31,7 @@ import HTTPTypes
 /// ### Managing indexes
 ///
 /// - ``createIndex(_:dimension:distanceMetric:dataType:metadataConfiguration:)``
-/// - ``getIndex(_:)``
+/// - ``indexDetails(_:)``
 /// - ``listIndexes(prefix:maxResults:nextToken:)``
 /// - ``deleteIndex(_:)``
 ///
@@ -102,7 +102,7 @@ public struct VectorBucketClient: Sendable {
   /// Retrieves metadata for an existing vector index in this bucket.
   ///
   /// ```swift
-  /// let index = try await bucket.getIndex("embeddings")
+  /// let index = try await bucket.indexDetails("embeddings")
   /// print(index.dimension)
   /// ```
   ///
@@ -111,7 +111,7 @@ public struct VectorBucketClient: Sendable {
   /// - Parameter indexName: The name of the index to retrieve.
   /// - Returns: The matching ``VectorIndex``.
   /// - Throws: ``StorageError`` when the API rejects the request.
-  public func getIndex(_ indexName: String) async throws -> VectorIndex {
+  public func indexDetails(_ indexName: String) async throws -> VectorIndex {
     let response: GetIndexResponseBody = try await api.execute(
       HTTPRequest(
         method: .post,

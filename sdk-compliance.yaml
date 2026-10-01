@@ -30,6 +30,14 @@ supporting_symbols:
   - JSONValue.description
   - JSONValue.rawValue
 
+  # The injected clock is a testability seam shared across Auth's token auto-refresh and
+  # request-retry backoff and Realtime's heartbeat timer and reconnect backoff, rather than a
+  # capability any one feature implements. `SupabaseClient` forwards `GlobalOptions.clock` to the
+  # per-sub-client properties, so all three spell the same knob at a different layer.
+  - SupabaseClientOptions.GlobalOptions.clock
+  - AuthClient.Configuration.clock
+  - RealtimeClientOptions.clock
+
   # A handful of PostgrestRequestBuilder members are used across many
   # database.* capabilities simultaneously (executing every query/mutate/rpc,
   # or acting as structural phase markers) rather than owned by a single
@@ -314,6 +322,7 @@ supporting_symbols:
   - AuthError.Kind.rawValue
   - AuthError.Kind.api
   - AuthError.Kind.sessionMissing
+  - AuthError.Kind.refreshDiscarded
   - AuthError.Kind.weakPassword
   - AuthError.Kind.pkceGrantCodeExchange
   - AuthError.Kind.implicitGrantRedirect
@@ -332,6 +341,10 @@ supporting_symbols:
   - AuthError.underlyingError
   - AuthError.description
   - AuthError.sessionMissing
+  - AuthError.refreshDiscarded
+  # AuthAdmin.init (SDK-1983) creates the standalone admin client that every
+  # auth.admin.* capability runs on, rather than belonging to one of them.
+  - AuthAdmin.init
   # The admin MFA namespace is shared by auth.admin.list_mfa_factors and
   # auth.admin.delete_mfa_factor rather than owned by one.
   - AuthAdmin.mfa
@@ -375,7 +388,7 @@ features:
     status: implemented
     symbols:
       - AuthClient.signInWithOAuth
-      - AuthClient.getOAuthSignInURL
+      - AuthClient.oauthSignInURL
     supporting_symbols:
       - Provider
       - Provider.init
@@ -511,7 +524,7 @@ features:
   auth.session.get_claims:
     status: implemented
     symbols:
-      - AuthClient.getClaims
+      - AuthClient.claims
   auth.session.refresh_session:
     status: implemented
     symbols:
@@ -551,7 +564,7 @@ features:
     status: implemented
     symbols:
       - AuthClient.linkIdentity
-      - AuthClient.getLinkIdentityURL
+      - AuthClient.linkIdentityURL
       - AuthClient.linkIdentityWithIdToken
   auth.identities.unlink_identity:
     status: implemented
@@ -601,7 +614,7 @@ features:
   auth.mfa.get_authenticator_assurance_level:
     status: implemented
     symbols:
-      - AuthMFA.getAuthenticatorAssuranceLevel
+      - AuthMFA.authenticatorAssuranceLevel
 
   auth.admin.create_user:
     status: implemented
@@ -618,11 +631,18 @@ features:
   auth.admin.get_user:
     status: implemented
     symbols:
-      - AuthAdmin.getUserById
+      - AuthAdmin.user
   auth.admin.list_users:
     status: implemented
     symbols:
       - AuthAdmin.listUsers
+      - AuthAdmin.users
+    supporting_symbols:
+      - AuthAdmin.UserSequence
+      - AuthAdmin.UserSequence.Element
+      - AuthAdmin.UserSequence.makeAsyncIterator
+      - AuthAdmin.UserSequence.AsyncIterator
+      - AuthAdmin.UserSequence.AsyncIterator.next
   auth.admin.invite_user:
     status: implemented
     symbols:
@@ -676,23 +696,24 @@ features:
   auth.admin.get_provider: not_implemented
   auth.admin.list_providers: not_implemented
 
-  # AuthClient+Passkey.swift methods are all @_spi(Experimental), so the public
-  # symbol graph the compliance scanner reads from never contains them.
+  # AuthClient+Passkey.swift and AuthAdmin+Passkey.swift methods are all
+  # @_spi(Experimental), so the public symbol graph the compliance scanner reads
+  # from never contains them.
   auth.passkey.register_passkey: implemented
   auth.passkey.sign_in_with_passkey: implemented
-  auth.passkey.delete_passkey: not_implemented
-  auth.passkey.list_passkeys: not_implemented
-  auth.passkey.update_passkey: not_implemented
+  auth.passkey.delete_passkey: implemented
+  auth.passkey.list_passkeys: implemented
+  auth.passkey.update_passkey: implemented
 
-  auth.passkey_admin.list_passkeys: not_implemented
-  auth.passkey_admin.delete_passkey: not_implemented
+  auth.passkey_admin.list_passkeys: implemented
+  auth.passkey_admin.delete_passkey: implemented
 
   auth.oauth_server.get_authorization_details:
     status: implemented
     symbols:
       - AuthClient.oauthServer
       - AuthOAuthServer
-      - AuthOAuthServer.getAuthorizationDetails
+      - AuthOAuthServer.authorizationDetails
       - OAuthAuthorizationDetailsResponse
       - OAuthAuthorizationDetailsResponse.details
       - OAuthAuthorizationDetailsResponse.redirect
@@ -753,7 +774,7 @@ features:
   auth.oauth_admin.get_client:
     status: implemented
     symbols:
-      - AuthAdminOAuth.getClient
+      - AuthAdminOAuth.client
   auth.oauth_admin.list_clients:
     status: implemented
     symbols:
@@ -1181,6 +1202,7 @@ features:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.range
+      - PostgrestTypedQuery.range
   database.using_modifiers.single_row:
     status: implemented
     symbols:
@@ -1444,7 +1466,7 @@ features:
   realtime.configuration.custom_websocket_transport: not_applicable
   realtime.configuration.reconnect_backoff:
     status: partially_implemented
-    note: "RealtimeClientOptions.reconnectDelay configures a fixed base delay; there is no hook to supply a custom attempt-count-to-delay function — the backoff curve itself (ConnectionManager.reconnectBackoffDelay) is a private, hardcoded exponential."
+    note: "RealtimeClientOptions.reconnectDelay configures a fixed base delay; there is no hook to supply a custom attempt-count-to-delay function — the backoff curve itself (ConnectionManager.reconnectBackoff, built on RetryPolicy's equal-jitter exponential) is hardcoded."
   realtime.configuration.heartbeat_interval:
     status: implemented
     note: "Set via the heartbeatInterval parameter of RealtimeClientOptions.init; the backing stored property is internal, not public."
@@ -1468,7 +1490,7 @@ features:
   realtime.configuration.binary_protocol:
     status: implemented
     symbols:
-      - RealtimeClientOptions.vsn
+      - RealtimeClientOptions.protocolVersion
 
   # ── Storage ────────────────────────────────────────────────────────────────
 
@@ -1487,7 +1509,7 @@ features:
   storage.file_buckets.get_bucket:
     status: implemented
     symbols:
-      - SupabaseStorageClient.getBucket
+      - SupabaseStorageClient.bucket
   storage.file_buckets.list_file_buckets:
     status: implemented
     symbols:
@@ -1540,7 +1562,7 @@ features:
   storage.file_buckets.get_public_url:
     status: implemented
     symbols:
-      - StorageFileApi.getPublicURL
+      - StorageFileApi.publicURL
       - DownloadBehavior
       - DownloadBehavior.withOriginalName
       - DownloadBehavior.named
@@ -1607,13 +1629,19 @@ features:
       - FileOptions.cacheControl
       - FileOptions.contentType
   # Not a separate method: a bare `cacheNonce: String?` parameter repeated on
-  # createSignedURL, createSignedURLs, download, and getPublicURL — no
+  # createSignedURL, createSignedURLs, download, and publicURL — no
   # dedicated named symbol exists distinct from those methods, which are
   # already claimed by their own capabilities above.
   storage.file_buckets.url_cache_nonce: implemented
   storage.file_buckets.download_as_stream: not_implemented
-  storage.file_buckets.purge_bucket_cache: not_implemented
-  storage.file_buckets.purge_cache: not_implemented
+  storage.file_buckets.purge_bucket_cache:
+    status: implemented
+    symbols:
+      - SupabaseStorageClient.purgeCache
+  storage.file_buckets.purge_cache:
+    status: implemented
+    symbols:
+      - StorageFileApi.purgeCache
   storage.file_buckets.request_cancellation: implemented
 
   # ── Storage — Vector Buckets ───────────────────────────────────────────────
@@ -1653,6 +1681,77 @@ features:
   storage.analytics.register_table: not_implemented
   storage.analytics.table_exists: not_implemented
   storage.analytics.update_namespace_properties: not_implemented
+
+  # ── Storage — Errors ───────────────────────────────────────────────────────
+
+  storage.errors.error_codes:
+    status: implemented
+    symbols:
+      - StorageError.ServerError.code
+    supporting_symbols:
+      - StorageError.Code
+      - StorageError.Code.init
+      - StorageError.Code.rawValue
+      - StorageError.Code.noSuchBucket
+      - StorageError.Code.noSuchLifecycleConfiguration
+      - StorageError.Code.noSuchKey
+      - StorageError.Code.noSuchUpload
+      - StorageError.Code.invalidJWT
+      - StorageError.Code.invalidRequest
+      - StorageError.Code.invalidArgument
+      - StorageError.Code.malformedXML
+      - StorageError.Code.tenantNotFound
+      - StorageError.Code.entityTooLarge
+      - StorageError.Code.internalError
+      - StorageError.Code.resourceAlreadyExists
+      - StorageError.Code.resourceNotEmpty
+      - StorageError.Code.invalidBucketName
+      - StorageError.Code.invalidKey
+      - StorageError.Code.invalidRange
+      - StorageError.Code.invalidMimeType
+      - StorageError.Code.invalidUploadId
+      - StorageError.Code.keyAlreadyExists
+      - StorageError.Code.bucketAlreadyExists
+      - StorageError.Code.databaseTimeout
+      - StorageError.Code.databaseReadOnly
+      - StorageError.Code.databaseTransactionAborted
+      - StorageError.Code.databaseInvalidObjectDefinition
+      - StorageError.Code.databaseSchemaMismatch
+      - StorageError.Code.invalidSignature
+      - StorageError.Code.expiredToken
+      - StorageError.Code.signatureDoesNotMatch
+      - StorageError.Code.accessDenied
+      - StorageError.Code.resourceLocked
+      - StorageError.Code.resourceReferenced
+      - StorageError.Code.databaseError
+      - StorageError.Code.transactionError
+      - StorageError.Code.missingContentLength
+      - StorageError.Code.missingParameter
+      - StorageError.Code.invalidParameter
+      - StorageError.Code.invalidUploadSignature
+      - StorageError.Code.lockTimeout
+      - StorageError.Code.s3Error
+      - StorageError.Code.invalidAccessKeyId
+      - StorageError.Code.maximumCredentialsLimit
+      - StorageError.Code.invalidChecksum
+      - StorageError.Code.missingPart
+      - StorageError.Code.slowDown
+      - StorageError.Code.tusError
+      - StorageError.Code.aborted
+      - StorageError.Code.abortedTerminate
+      - StorageError.Code.featureNotEnabled
+      - StorageError.Code.notSupported
+      - StorageError.Code.icebergMaximumResourceLimit
+      - StorageError.Code.icebergResourceNotEmpty
+      - StorageError.Code.noSuchCatalog
+      - StorageError.Code.unknownError
+      - StorageError.Code.conflictException
+      - StorageError.Code.notFoundException
+      - StorageError.Code.vectorBucketNotEmpty
+      - StorageError.Code.s3VectorMaxBucketsExceeded
+      - StorageError.Code.s3VectorMaxIndexesExceeded
+      - StorageError.Code.noAvailableShard
+      - StorageError.Code.shardNotFound
+
   # Newly synced from the canonical spec; no local group yet, place manually.
   storage.configuration.auto_retry: not_implemented
-  storage.errors.error_codes: not_implemented

@@ -23,8 +23,8 @@ This is the official Supabase SDK for Swift, mirroring the design of supabase-js
 
 ### Requirements
 
-- Xcode 16.4+ (supports versions eligible for App Store submission)
-- Swift 6.1+
+- Xcode 26.0+ (supports versions eligible for App Store submission)
+- Swift 6.2+
 - Supported platforms: iOS 16.0+, macOS 13.0+, tvOS 16+, watchOS 9+, visionOS 1+
 - Linux is supported for building but not officially supported for production use
 
@@ -107,6 +107,21 @@ npm ci --prefix tools/node   # one-time setup (re-run only when tools/node/packa
 ```
 
 Legitimate technical terms and project-specific words go in `dictionary.txt` at the repository root.
+
+### Linting
+
+```bash
+# Lint Sources and Tests (fails on any new violation)
+swiftlint lint --strict
+
+# Autocorrect violations that SwiftLint can fix
+swiftlint lint --fix
+```
+
+This uses [SwiftLint](https://github.com/realm/SwiftLint) for code-smell and
+correctness rules; `swift-format` remains the source of truth for formatting,
+so the SwiftLint config (`.swiftlint.yml`) disables the purely stylistic rules
+that overlap with it. Install SwiftLint locally with `brew install swiftlint`.
 
 ### Documentation
 
@@ -210,7 +225,7 @@ The dividing line is *when the value is fixed*, not who supplied it.
   tuning constant. `precondition`/`preconditionFailure` is the right tool: the value cannot change
   afterwards, so a bad one is a programmer error, and trapping reports it at the exact point it
   was introduced. `SupabaseClient.init` traps on a `supabaseURL` with no host; `StorageApi` traps
-  on a URL it cannot decompose; `RetryRequestInterceptor` traps on a backoff base below 2.
+  on a URL it cannot decompose.
   Degrading instead would bury the mistake behind an unrelated failure much later.
 - **Varies at runtime, or comes from the server** — a per-call parameter, a response header, a
   decoded payload, a WebSocket close code. Never trap. Throw if the context already throws;
@@ -411,6 +426,7 @@ supabase stop
 ## Important Notes for AI Coding Agents
 
 - Always run `./scripts/format.sh` before committing Swift code
+- Run `swiftlint lint --strict` before committing; it must not report new violations
 - Ensure new public APIs have DocC documentation comments
 - Add tests for all new functionality
 - Keep changes minimal and focused

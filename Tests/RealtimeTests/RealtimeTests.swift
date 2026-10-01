@@ -7,7 +7,6 @@ import TestHelpers
 import Testing
 
 @testable import Realtime
-@testable import RealtimeV2
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -77,7 +76,7 @@ import Testing
               "custom.access.token"
             }
           ),
-          wsTransport: { url, headers in
+          wsTransport: { url, _ in
             assertInlineSnapshot(of: url, as: .description) {
               """
               ws://localhost:54321/realtime/v1/websocket?apikey=publishable.api.key&vsn=2.0.0&log_level=warn
@@ -631,8 +630,9 @@ import Testing
         await Task.megaYield()
 
         // The heartbeat timer ticks while the reconnect is still sleeping out
-        // its 10s `reconnectDelay` — the still-alive old heartbeat task must
-        // not observe `status != .connected` and publish `.disconnected`.
+        // its 10s `reconnectDelay` (jittered, but never below 5s) — the
+        // still-alive old heartbeat task must not observe `status != .connected`
+        // and publish `.disconnected`.
         await testClock.advance(by: .seconds(1))
 
         #expect(

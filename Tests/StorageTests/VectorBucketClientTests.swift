@@ -87,7 +87,7 @@ extension StorageMockerTests {
         ]
       ).register()
 
-      let index = try await bucket.getIndex("embeddings")
+      let index = try await bucket.indexDetails("embeddings")
       #expect(index.indexName == "embeddings")
       #expect(index.vectorBucketName == "documents")
       #expect(index.dataType == .float32)

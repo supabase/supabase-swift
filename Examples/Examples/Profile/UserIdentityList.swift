@@ -185,7 +185,7 @@ struct UserIdentityList: View {
           CodeExample(
             code: """
               // Get OAuth URL for manual flow
-              let url = try supabase.auth.getLinkIdentityURL(
+              let url = try supabase.auth.linkIdentityURL(
                 provider: .github,
                 redirectTo: URL(string: "your-app://auth-callback")
               )

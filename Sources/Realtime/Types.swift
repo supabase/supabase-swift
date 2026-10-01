@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 13/05/24.
 //
 
+public import Clocks
 public import Foundation
 package import HTTPTypes
 public import Helpers
@@ -40,7 +41,7 @@ public enum RealtimeProtocolVersion: String, Sendable {
 /// ```swift
 /// let options = RealtimeClientOptions(
 ///   heartbeatInterval: 30,
-///   vsn: .v2,
+///   protocolVersion: .v2,
 ///   handleAppLifecycle: true
 /// )
 /// let client = RealtimeClientV2(url: realtimeURL, options: options)
@@ -48,7 +49,7 @@ public enum RealtimeProtocolVersion: String, Sendable {
 ///
 /// ## Topics
 /// ### Protocol and Lifecycle
-/// - ``vsn``
+/// - ``protocolVersion``
 /// - ``handleAppLifecycle``
 /// ### Default Values
 /// - ``defaultHeartbeatInterval``
@@ -60,7 +61,7 @@ public enum RealtimeProtocolVersion: String, Sendable {
 /// - ``defaultDisconnectOnEmptyChannelsAfter``
 /// - ``defaultHandleAppLifecycle``
 /// ### Initialization
-/// - ``init(headers:heartbeatInterval:reconnectDelay:timeoutInterval:disconnectOnSessionLoss:connectOnSubscribe:maxRetryAttempts:disconnectOnEmptyChannelsAfter:vsn:logLevel:http:accessToken:logger:session:handleAppLifecycle:)``
+/// - ``init(headers:heartbeatInterval:reconnectDelay:timeoutInterval:disconnectOnSessionLoss:connectOnSubscribe:maxRetryAttempts:disconnectOnEmptyChannelsAfter:protocolVersion:logLevel:http:accessToken:logger:session:handleAppLifecycle:clock:)``
 public struct RealtimeClientOptions: Sendable {
   package var headers: HTTPFields
   var heartbeatInterval: TimeInterval
@@ -75,7 +76,7 @@ public struct RealtimeClientOptions: Sendable {
   ///
   /// Defaults to ``RealtimeProtocolVersion/v2``. Use ``RealtimeProtocolVersion/v1`` only
   /// when connecting to a Realtime server that does not support protocol 2.0.0.
-  public var vsn: RealtimeProtocolVersion
+  public var protocolVersion: RealtimeProtocolVersion
 
   /// Whether to automatically handle app lifecycle changes (background/foreground).
   ///
@@ -98,6 +99,12 @@ public struct RealtimeClientOptions: Sendable {
   package var accessToken: (@Sendable () async throws -> String?)?
   package var logger: Logging.Logger
 
+  /// The clock the heartbeat timer and reconnect backoff sleep on.
+  ///
+  /// Defaults to `ContinuousClock()`. Pass a `TestClock` (swift-clocks) to drive those
+  /// behaviors deterministically in tests instead of waiting out real seconds.
+  public var clock: any Clock<Duration>
+
   /// A template `URLSession` used to configure the Realtime WebSocket connection.
   ///
   /// Realtime never uses this session object directly — it always creates its own dedicated
@@ -111,9 +118,9 @@ public struct RealtimeClientOptions: Sendable {
   /// Default interval, in seconds, between heartbeat messages sent to keep the connection alive.
   public static let defaultHeartbeatInterval: TimeInterval = 25
 
-  /// Default base delay, in seconds, before attempting to reconnect after a connection drop.
-  /// Later automatic attempts back off exponentially (capped at 30s) from this base until
-  /// the connection is reestablished.
+  /// Default base delay, in seconds, for reconnecting after a connection drop. The first
+  /// attempt waits a random duration between half of this and this; later attempts double the
+  /// range (capped at 30s) until the connection is reestablished.
   public static let defaultReconnectDelay: TimeInterval = 7
 
   /// Default maximum time, in seconds, to wait for a server reply before treating a request as timed out.
@@ -151,19 +158,21 @@ public struct RealtimeClientOptions: Sendable {
   /// - Parameters:
   ///   - headers: Additional HTTP headers sent with each WebSocket upgrade request.
   ///   - heartbeatInterval: Interval in seconds between heartbeat messages. Defaults to ``defaultHeartbeatInterval``.
-  ///   - reconnectDelay: Base delay in seconds before attempting to reconnect after a disconnection; later automatic attempts back off exponentially from this base until reconnected. Defaults to ``defaultReconnectDelay``.
+  ///   - reconnectDelay: Base delay in seconds for reconnecting after a disconnection. The first attempt waits a random duration between half of this and this; later attempts double the range (capped at 30s) until reconnected. Defaults to ``defaultReconnectDelay``.
   ///   - timeoutInterval: Maximum time in seconds to wait for a server reply. Defaults to ``defaultTimeoutInterval``.
   ///   - disconnectOnSessionLoss: Whether to disconnect the channel when the authentication session is lost. Defaults to ``defaultDisconnectOnSessionLoss``.
   ///   - connectOnSubscribe: Whether to automatically call ``RealtimeClientV2/connect()`` when subscribing to a channel. Defaults to ``defaultConnectOnSubscribe``.
   ///   - maxRetryAttempts: Maximum number of subscribe retry attempts. Defaults to ``defaultMaxRetryAttempts``.
   ///   - disconnectOnEmptyChannelsAfter: Seconds to wait before disconnecting when all channels are removed. Defaults to ``defaultDisconnectOnEmptyChannelsAfter``.
-  ///   - vsn: The Phoenix protocol version to use. Defaults to ``RealtimeProtocolVersion/v2``.
+  ///   - protocolVersion: The Phoenix protocol version to use. Defaults to ``RealtimeProtocolVersion/v2``.
   ///   - logLevel: Optional log level for Realtime log output.
   ///   - http: The transport and middleware chain REST broadcast calls go through.
   ///   - accessToken: Optional async closure that returns the current access token.
   ///   - logger: The logger used for Realtime client diagnostics. Defaults to a logger labeled `"io.supabase.realtime"`.
   ///   - session: A template `URLSession` to configure the WebSocket connection from. Defaults to `nil`.
   ///   - handleAppLifecycle: Whether to automatically reconnect on app foreground. Defaults to ``defaultHandleAppLifecycle``.
+  ///   - clock: The clock the heartbeat timer and reconnect backoff sleep on. Defaults to
+  ///     `ContinuousClock()`; pass a `TestClock` to drive them deterministically in tests.
   public init(
     headers: [String: String] = [:],
     heartbeatInterval: TimeInterval = Self.defaultHeartbeatInterval,
@@ -173,13 +182,14 @@ public struct RealtimeClientOptions: Sendable {
     connectOnSubscribe: Bool = Self.defaultConnectOnSubscribe,
     maxRetryAttempts: Int = Self.defaultMaxRetryAttempts,
     disconnectOnEmptyChannelsAfter: TimeInterval = Self.defaultDisconnectOnEmptyChannelsAfter,
-    vsn: RealtimeProtocolVersion = .v2,
+    protocolVersion: RealtimeProtocolVersion = .v2,
     logLevel: LogLevel? = nil,
     http: HTTPClientConfiguration = .init(),
     accessToken: (@Sendable () async throws -> String?)? = nil,
     logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.realtime"),
     session: URLSession? = nil,
-    handleAppLifecycle: Bool = Self.defaultHandleAppLifecycle
+    handleAppLifecycle: Bool = Self.defaultHandleAppLifecycle,
+    clock: any Clock<Duration> = ContinuousClock()
   ) {
     self.headers = HTTPFields(headers)
     self.heartbeatInterval = heartbeatInterval
@@ -189,7 +199,7 @@ public struct RealtimeClientOptions: Sendable {
     self.connectOnSubscribe = connectOnSubscribe
     self.maxRetryAttempts = maxRetryAttempts
     self.disconnectOnEmptyChannelsAfter = disconnectOnEmptyChannelsAfter
-    self.vsn = vsn
+    self.protocolVersion = protocolVersion
     self.handleAppLifecycle = handleAppLifecycle
     self.logLevel = logLevel
     self.http = http
@@ -198,10 +208,11 @@ public struct RealtimeClientOptions: Sendable {
     logger[metadataKey: "system"] = "realtime"
     self.logger = logger
     self.session = session
+    self.clock = clock
   }
 
-  /// Backward-compatible initializer preserving the pre-`vsn` signature.
-  /// Calls the primary initializer with `vsn: .v2`.
+  /// Backward-compatible initializer preserving the pre-`protocolVersion` signature.
+  /// Calls the primary initializer with `protocolVersion: .v2`.
   @_disfavoredOverload
   public init(
     headers: [String: String] = [:],
@@ -226,7 +237,7 @@ public struct RealtimeClientOptions: Sendable {
       connectOnSubscribe: connectOnSubscribe,
       maxRetryAttempts: maxRetryAttempts,
       disconnectOnEmptyChannelsAfter: disconnectOnEmptyChannelsAfter,
-      vsn: .v2,
+      protocolVersion: .v2,
       logLevel: logLevel,
       http: http,
       accessToken: accessToken,
@@ -337,7 +348,7 @@ extension HTTPField.Name {
 
 /// Verbosity of log output emitted by the Realtime client.
 ///
-/// Pass a value to ``RealtimeClientOptions/init(headers:heartbeatInterval:reconnectDelay:timeoutInterval:disconnectOnSessionLoss:connectOnSubscribe:maxRetryAttempts:disconnectOnEmptyChannelsAfter:vsn:logLevel:http:accessToken:logger:session:handleAppLifecycle:)``
+/// Pass a value to ``RealtimeClientOptions/init(headers:heartbeatInterval:reconnectDelay:timeoutInterval:disconnectOnSessionLoss:connectOnSubscribe:maxRetryAttempts:disconnectOnEmptyChannelsAfter:protocolVersion:logLevel:http:accessToken:logger:session:handleAppLifecycle:clock:)``
 /// to control how much detail the Realtime server logs.
 ///
 /// ## Topics

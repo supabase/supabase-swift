@@ -642,6 +642,25 @@ extension PostgrestMockerTests {
     }
 
     @Test
+    func noRetryOn500ForGET() async throws {
+      // PostgREST's retryable set is fixed at 503/520, mirroring postgrest-js; a 500 is a real
+      // server answer (a failing function, a bad query) and must surface at once.
+      let callCount = LockIsolated(0)
+
+      let sut = makeSUTWithCustomFetch { _ in
+        callCount.withValue { $0 += 1 }
+        return (Data(), self.makeHTTPURLResponse(statusCode: 500))
+      }
+
+      do {
+        try await sut.from("users").select().execute()
+        Issue.record("Expected error to be thrown")
+      } catch {
+        #expect(callCount.value == 1)
+      }
+    }
+
+    @Test
     func retryOn503ForGETRequest() async throws {
       let callCount = LockIsolated(0)
 
@@ -791,10 +810,9 @@ extension PostgrestMockerTests {
         return (Data("[]".utf8), self.makeHTTPURLResponse(statusCode: 200))
       }
 
-      let result: PostgrestResponse<[User]> = try await sut.from("users").select().retry(
-        enabled: true
-      )
-      .execute()
+      let result: PostgrestResponse<[User]> = try await sut.from("users").select()
+        .retry(enabled: true)
+        .execute()
       #expect(callCount.value == 2)
       #expect(result.value.isEmpty)
     }

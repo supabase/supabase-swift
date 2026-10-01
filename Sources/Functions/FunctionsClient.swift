@@ -269,7 +269,10 @@ public struct FunctionsClient: Sendable {
     _ functionName: String,
     options invokeOptions: FunctionInvokeOptions = .init()
   ) -> AsyncThrowingStream<Data, any Error> {
-    let (stream, continuation) = AsyncThrowingStream<Data, any Error>.makeStream()
+    // Unbounded: the chunks are the response body. Dropping one corrupts it.
+    let (stream, continuation) = AsyncThrowingStream<Data, any Error>.makeStream(
+      bufferingPolicy: .unbounded
+    )
     let task = Task {
       // Built outside the catch below: an error from the `accessToken` closure is the caller's
       // own and must propagate unchanged, even when it happens to be a `URLError`.

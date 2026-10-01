@@ -27,7 +27,7 @@ extension SupabaseStorageClient {
   /// - Parameter id: The unique identifier of the bucket to retrieve.
   /// - Returns: The ``Bucket`` with the given identifier.
   /// - Throws: ``StorageError`` if the bucket does not exist or the caller is not authorized.
-  public func getBucket(_ id: String) async throws -> Bucket {
+  public func bucket(_ id: String) async throws -> Bucket {
     try await api.execute(
       HTTPRequest(
         method: .get,
@@ -140,6 +140,27 @@ extension SupabaseStorageClient {
       HTTPRequest(
         method: .delete,
         url: api.configuration.url.appendingPathComponent("bucket/\(id)")
+      )
+    )
+  }
+
+  /// Purges the CDN cache for every file in a bucket, so the next request for each one is served
+  /// from Storage again.
+  ///
+  /// > Important: This requires the `secret` key. On self-hosted Storage, the `purgeCache` tenant
+  /// > feature and a CDN purge endpoint must be configured, otherwise the request fails.
+  ///
+  /// - Parameters:
+  ///   - bucket: The unique identifier of the bucket to purge.
+  ///   - transformationsOnly: Pass `true` to purge only the resized and reformatted variants,
+  ///     leaving the original files cached.
+  /// - Throws: ``StorageError`` if the caller is not authorized or cache purging is not enabled.
+  public func purgeCache(bucket: String, transformationsOnly: Bool = false) async throws {
+    try await api.execute(
+      HTTPRequest(
+        method: .delete,
+        url: api.configuration.url.appendingPathComponent("cdn/\(bucket)"),
+        query: transformationsOnly ? [URLQueryItem(name: "transformations", value: "true")] : []
       )
     )
   }

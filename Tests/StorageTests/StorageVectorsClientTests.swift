@@ -79,7 +79,7 @@ extension StorageMockerTests {
         ]
       ).register()
 
-      let bucket = try await vectors.getBucket("documents")
+      let bucket = try await vectors.bucket("documents")
       #expect(bucket.vectorBucketName == "documents")
       #expect(bucket.creationTime == 1_730_000_000)
     }

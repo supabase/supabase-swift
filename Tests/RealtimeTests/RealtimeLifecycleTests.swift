@@ -13,7 +13,6 @@ import TestHelpers
 import Testing
 
 @testable import Realtime
-@testable import RealtimeV2
 
 #if os(Linux)
   // RealtimeLifecycleTests are disabled on Linux due to timing flakiness.

@@ -38,8 +38,6 @@ final class PushV2 {
     channel.socket.push(message)
 
     if !channel.config.broadcast.acknowledgeBroadcasts {
-      // channel was configured with `ack = false`,
-      // don't wait for a response and return `ok`.
       return .ok
     }
 

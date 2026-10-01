@@ -18,7 +18,6 @@
 
   @testable import Helpers
   @testable import Realtime
-  @testable import RealtimeV2
 
   // Serialize this suite so concurrent tests don't open competing realtime connections against
   // the same local Supabase instance — Swift Testing runs `@Test`s in the same suite concurrently
@@ -44,10 +43,10 @@
           global: .init(
             logger: Logging.Logger(label: "client1") {
               OSLogHandler(label: $0, subsystem: "realtime.integration.tests")
-            }
+            },
+            clock: testClock
           )
-        ),
-        clock: testClock
+        )
       )
 
       client2 = SupabaseClient(
@@ -58,10 +57,10 @@
           global: .init(
             logger: Logging.Logger(label: "client2") {
               OSLogHandler(label: $0, subsystem: "realtime.integration.tests")
-            }
+            },
+            clock: testClock
           )
-        ),
-        clock: testClock
+        )
       )
 
       // Clean up any existing data

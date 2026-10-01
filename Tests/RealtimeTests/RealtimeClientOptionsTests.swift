@@ -2,7 +2,7 @@ import Foundation
 import Logging
 import Testing
 
-@testable import RealtimeV2
+@testable import Realtime
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -40,7 +40,7 @@ struct RealtimeClientOptionsTests {
 
   @Test
   func loggerIsTaggedWithSystemMetadata() {
-    // The `@_disfavoredOverload` initializer preserving the pre-`vsn` signature delegates to this
+    // The `@_disfavoredOverload` initializer preserving the pre-`protocolVersion` signature delegates to this
     // primary initializer via `self.init(...)`, so tagging here covers both entry points.
     let options = RealtimeClientOptions(
       headers: ["apikey": "test-key"],

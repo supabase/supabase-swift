@@ -43,7 +43,7 @@ import HTTPTypes
 ///
 /// ### Reading vectors
 ///
-/// - ``getVectors(keys:returnData:returnMetadata:)``
+/// - ``vectors(keys:returnData:returnMetadata:)``
 /// - ``listVectors(maxResults:nextToken:returnData:returnMetadata:segment:)``
 /// - ``queryVectors(_:topK:filter:returnDistance:returnMetadata:)``
 @_spi(Experimental)
@@ -100,7 +100,7 @@ public struct VectorIndexClient: Sendable {
   /// Retrieves vectors by key, in batches of up to 100 keys.
   ///
   /// ```swift
-  /// let vectors = try await index.getVectors(keys: ["doc-1", "doc-2"], returnMetadata: true)
+  /// let vectors = try await index.vectors(keys: ["doc-1", "doc-2"], returnMetadata: true)
   /// ```
   ///
   /// - Warning: Experimental. See ``StorageVectorsClient``.
@@ -111,7 +111,7 @@ public struct VectorIndexClient: Sendable {
   ///   - returnMetadata: Whether to include metadata in the response. Defaults to `false`.
   /// - Returns: The matching vectors, in no particular order.
   /// - Throws: ``StorageError`` when the API rejects the request.
-  public func getVectors(
+  public func vectors(
     keys: [String],
     returnData: Bool = false,
     returnMetadata: Bool = false
@@ -360,7 +360,7 @@ public struct VectorEntry: Encodable, Sendable, Hashable {
   }
 }
 
-/// A vector returned from ``VectorIndexClient/getVectors(keys:returnData:returnMetadata:)``,
+/// A vector returned from ``VectorIndexClient/vectors(keys:returnData:returnMetadata:)``,
 /// ``VectorIndexClient/listVectors(maxResults:nextToken:returnData:returnMetadata:segment:)``, or
 /// ``VectorIndexClient/queryVectors(_:topK:filter:returnDistance:returnMetadata:)``.
 ///

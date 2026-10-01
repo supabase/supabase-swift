@@ -186,4 +186,35 @@ struct PostgrestTypedQueryWhereTests {
     #expect(capture.query?.contains("id=gt.5") == true)
     #expect(capture.query?.contains("is_done") == false)
   }
+
+  @Test
+  func rangeSendsOffsetAndLimit() async throws {
+    let capture = QueryCapture()
+    _ = try await capture.client.from(Todo.self).select().range(10...19).execute()
+    #expect(capture.query?.contains("offset=10") == true)
+    #expect(capture.query?.contains("limit=10") == true)
+  }
+
+  @Test
+  func rangeFromZeroSendsAZeroOffset() async throws {
+    let capture = QueryCapture()
+    _ = try await capture.client.from(Todo.self).select().range(0...0).execute()
+    #expect(capture.query?.contains("offset=0") == true)
+    #expect(capture.query?.contains("limit=1") == true)
+  }
+
+  @Test
+  func rangeChainsAfterWhereAndOrder() async throws {
+    let capture = QueryCapture()
+    _ = try await capture.client.from(Todo.self)
+      .select()
+      .where { $0.isDone.eq(false) }
+      .order { $0.id.asc() }
+      .range(20...29)
+      .execute()
+    #expect(capture.query?.contains("is_done=eq.false") == true)
+    #expect(capture.query?.contains("order=id.asc") == true)
+    #expect(capture.query?.contains("offset=20") == true)
+    #expect(capture.query?.contains("limit=10") == true)
+  }
 }

@@ -30,8 +30,8 @@ extension AuthClient {
   /// the authenticator, submit the result with
   /// ``verifyPasskeyRegistration(challengeId:credentialResponse:)``.
   @_spi(Experimental)
-  public func getPasskeyRegistrationOptions() async throws -> PasskeyRegistrationOptions {
-    try await Dependencies[clientID].api.authorizedExecute(
+  public func passkeyRegistrationOptions() async throws -> PasskeyRegistrationOptions {
+    try await dependencies.sessionAPI.authorizedExecute(
       HTTPRequest(
         method: .post,
         url: configuration.url.appendingPathComponent("passkeys/registration/options")
@@ -43,7 +43,7 @@ extension AuthClient {
   /// Stores a newly created passkey for the current user.
   ///
   /// - Parameters:
-  ///   - challengeId: The challenge ID returned by ``getPasskeyRegistrationOptions()``.
+  ///   - challengeId: The challenge ID returned by ``passkeyRegistrationOptions()``.
   ///   - credentialResponse: The W3C credential produced by the authenticator.
   /// - Returns: The stored passkey.
   @_spi(Experimental)
@@ -52,7 +52,7 @@ extension AuthClient {
     challengeId: String,
     credentialResponse: JSONValue
   ) async throws -> PasskeyListItem {
-    try await Dependencies[clientID].api.authorizedExecute(
+    try await dependencies.sessionAPI.authorizedExecute(
       HTTPRequest(
         method: .post,
         url: configuration.url.appendingPathComponent("passkeys/registration/verify")
@@ -72,8 +72,8 @@ extension AuthClient {
   /// the authenticator, submit the result with
   /// ``verifyPasskeyAuthentication(challengeId:credentialResponse:)``.
   @_spi(Experimental)
-  public func getPasskeyAuthenticationOptions() async throws -> PasskeyAuthenticationOptions {
-    try await Dependencies[clientID].api.execute(
+  public func passkeyAuthenticationOptions() async throws -> PasskeyAuthenticationOptions {
+    try await dependencies.sessionAPI.execute(
       HTTPRequest(
         method: .post,
         url: configuration.url.appendingPathComponent("passkeys/authentication/options")
@@ -85,7 +85,7 @@ extension AuthClient {
   /// Verifies a passkey assertion and establishes a session.
   ///
   /// - Parameters:
-  ///   - challengeId: The challenge ID returned by ``getPasskeyAuthenticationOptions()``.
+  ///   - challengeId: The challenge ID returned by ``passkeyAuthenticationOptions()``.
   ///   - credentialResponse: The W3C assertion produced by the authenticator.
   /// - Returns: The authentication response containing the new session.
   @_spi(Experimental)
@@ -94,7 +94,7 @@ extension AuthClient {
     challengeId: String,
     credentialResponse: JSONValue
   ) async throws -> AuthResponse {
-    let response: AuthResponse = try await Dependencies[clientID].api.execute(
+    let response: AuthResponse = try await dependencies.sessionAPI.execute(
       HTTPRequest(
         method: .post,
         url: configuration.url.appendingPathComponent("passkeys/authentication/verify")
@@ -107,8 +107,8 @@ extension AuthClient {
     .decoded(decoder: configuration.resolvedDecoder)
 
     if let session = response.session {
-      await Dependencies[clientID].sessionManager.update(session)
-      Dependencies[clientID].eventEmitter.emit(.signedIn, session: session)
+      await dependencies.sessionManager.update(session)
+      dependencies.eventEmitter.emit(.signedIn, session: session)
     }
 
     return response
@@ -117,7 +117,7 @@ extension AuthClient {
   /// Lists the passkeys registered for the current user.
   @_spi(Experimental)
   public func listPasskeys() async throws -> [PasskeyListItem] {
-    try await Dependencies[clientID].api.authorizedExecute(
+    try await dependencies.sessionAPI.authorizedExecute(
       HTTPRequest(
         method: .get,
         url: configuration.url.appendingPathComponent("passkeys/")
@@ -135,7 +135,7 @@ extension AuthClient {
   @_spi(Experimental)
   @discardableResult
   public func renamePasskey(id: UUID, friendlyName: String) async throws -> PasskeyListItem {
-    try await Dependencies[clientID].api.authorizedExecute(
+    try await dependencies.sessionAPI.authorizedExecute(
       HTTPRequest(
         method: .patch,
         url: configuration.url.appendingPathComponent("passkeys/\(id)")
@@ -151,7 +151,7 @@ extension AuthClient {
   /// - Parameter id: The ID of the passkey to remove.
   @_spi(Experimental)
   public func deletePasskey(id: UUID) async throws {
-    try await Dependencies[clientID].api.authorizedExecute(
+    try await dependencies.sessionAPI.authorizedExecute(
       HTTPRequest(
         method: .delete,
         url: configuration.url.appendingPathComponent("passkeys/\(id)")
@@ -189,7 +189,7 @@ extension AuthClient {
       presentationAnchor: ASPresentationAnchor,
       authenticator: WebAuthnAuthenticator
     ) async throws -> AuthResponse {
-      let options = try await getPasskeyAuthenticationOptions()
+      let options = try await passkeyAuthenticationOptions()
       let rpId = try options.options.webAuthnAssertionRpId()
       let credentialResponse = try await authenticator.authenticate(
         options.options, rpId, presentationAnchor
@@ -224,7 +224,7 @@ extension AuthClient {
       presentationAnchor: ASPresentationAnchor,
       authenticator: WebAuthnAuthenticator
     ) async throws -> PasskeyListItem {
-      let options = try await getPasskeyRegistrationOptions()
+      let options = try await passkeyRegistrationOptions()
       let rpId = try options.options.webAuthnCreationRpId()
       let credentialResponse = try await authenticator.register(
         options.options, rpId, presentationAnchor

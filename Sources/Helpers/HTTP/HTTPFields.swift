@@ -85,4 +85,5 @@ extension HTTPField.Name {
   package static let xClientInfo = HTTPField.Name("X-Client-Info")!
   package static let xRegion = HTTPField.Name("x-region")!
   package static let xRelayError = HTTPField.Name("x-relay-error")!
+  package static let xRetryCount = HTTPField.Name("X-Retry-Count")!
 }
