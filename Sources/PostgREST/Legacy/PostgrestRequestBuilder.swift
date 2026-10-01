@@ -94,6 +94,9 @@ public struct PostgrestRequestBuilder<Phase>: Sendable {
   /// Whether a `PGRST116` error should be returned as a `nil` value instead of being thrown.
   var isMaybeSingle: Bool = false
 
+  /// Set by ``stripNulls()``; `execute` turns it into the `nulls=stripped` `Accept` media type.
+  var stripsNulls: Bool = false
+
   init(
     configuration: PostgrestClient.Configuration,
     request: HTTPRequest,
@@ -126,6 +129,7 @@ public struct PostgrestRequestBuilder<Phase>: Sendable {
     self.timeout = other.timeout
     self.pendingError = other.pendingError
     self.isMaybeSingle = other.isMaybeSingle
+    self.stripsNulls = other.stripsNulls
   }
 }
 
@@ -487,6 +491,17 @@ extension PostgrestRequestBuilder where Phase: PostgrestExecutablePhase {
 
     if request.headerFields[.accept] == nil {
       request.headerFields[.accept] = "application/json"
+    }
+
+    if stripsNulls {
+      switch request.headerFields[.accept] {
+      case "application/vnd.pgrst.object+json":
+        request.headerFields[.accept] = "application/vnd.pgrst.object+json;nulls=stripped"
+      case "application/json":
+        request.headerFields[.accept] = "application/vnd.pgrst.array+json;nulls=stripped"
+      default:
+        break
+      }
     }
     request.headerFields[.contentType] = "application/json"
 
