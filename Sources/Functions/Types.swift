@@ -35,8 +35,9 @@ public struct FunctionsError: SupabaseError {
     /// The function ran and answered with a non-2xx status. Read
     /// ``FunctionsError/response`` for the status and the body your function sent.
     public static let server: Kind = "server"
-    /// The request never completed, so nothing ran. Retry or check connectivity.
-    /// ``FunctionsError/underlyingError`` is usually a `URLError`.
+    /// No response arrived, so whether the function ran is unknown. Retry only if the function
+    /// is idempotent, or after confirming it did not run. ``FunctionsError/underlyingError`` is
+    /// usually a `URLError`.
     public static let transport: Kind = "transport"
     /// The function answered 2xx but the body could not be decoded as the requested type.
     /// Nothing to retry; fix the type or the function. ``FunctionsError/underlyingError`` is
