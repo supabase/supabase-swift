@@ -31,7 +31,7 @@ let package = Package(
     "OpenTelemetry"
   ],
   dependencies: [
-    .package(url: "https://github.com/apple/swift-crypto.git", "3.0.0"..<"5.0.0"),
+    .package(url: "https://github.com/apple/swift-crypto.git", "3.0.0"..<"6.0.0"),
     .package(url: "https://github.com/apple/swift-http-types.git", from: "1.3.0"),
     .package(url: "https://github.com/swiftlang/swift-syntax", "601.0.0"..<"605.0.0"),
     .package(url: "https://github.com/apple/swift-log.git", "1.5.0"..<"2.0.0"),
@@ -191,7 +191,7 @@ let package = Package(
       ]
     ),
     .target(
-      name: "RealtimeV2",
+      name: "Realtime",
       dependencies: [
         .product(name: "Clocks", package: "swift-clocks"),
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
@@ -199,15 +199,6 @@ let package = Package(
         .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
         .product(name: "Logging", package: "swift-log"),
         "Helpers",
-      ]
-    ),
-    .target(
-      name: "Realtime",
-      dependencies: [
-        .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
-        .product(name: "HTTPTypes", package: "swift-http-types"),
-        "Helpers",
-        "RealtimeV2",
       ]
     ),
     .testTarget(
@@ -218,7 +209,6 @@ let package = Package(
         .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
         .product(name: "XCTestDynamicOverlay", package: "xctest-dynamic-overlay"),
         "Realtime",
-        "RealtimeV2",
         "TestHelpers",
       ]
     ),

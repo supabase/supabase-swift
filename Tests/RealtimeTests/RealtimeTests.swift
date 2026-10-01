@@ -7,7 +7,6 @@ import TestHelpers
 import Testing
 
 @testable import Realtime
-@testable import RealtimeV2
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -77,7 +76,7 @@ import Testing
               "custom.access.token"
             }
           ),
-          wsTransport: { url, headers in
+          wsTransport: { url, _ in
             assertInlineSnapshot(of: url, as: .description) {
               """
               ws://localhost:54321/realtime/v1/websocket?apikey=publishable.api.key&vsn=2.0.0&log_level=warn

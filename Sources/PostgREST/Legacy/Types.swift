@@ -136,8 +136,8 @@ public struct CountOption: RawRepresentable, Hashable, Sendable, ExpressibleBySt
 
 /// Controls which rows PostgREST returns after a write operation.
 ///
-/// Pass a ``PostgrestReturningOptions`` value to ``PostgrestRequestBuilder/insert(_:returning:count:encoder:)``,
-/// ``PostgrestRequestBuilder/update(_:returning:count:encoder:)``, ``PostgrestRequestBuilder/upsert(_:onConflict:returning:count:ignoreDuplicates:encoder:)``,
+/// Pass a ``PostgrestReturningOptions`` value to ``PostgrestRequestBuilder/insert(_:returning:count:defaultToNull:encoder:)``,
+/// ``PostgrestRequestBuilder/update(_:returning:count:encoder:)``, ``PostgrestRequestBuilder/upsert(_:onConflict:returning:count:ignoreDuplicates:defaultToNull:encoder:)``,
 /// or ``PostgrestRequestBuilder/delete(returning:count:)`` to specify what the server sends back.
 ///
 /// See the [PostgREST documentation](https://postgrest.org/en/v9.0/api.html?highlight=PREFER#insertions-updates)

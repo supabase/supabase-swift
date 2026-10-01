@@ -31,12 +31,14 @@ import HTTPTypes
 /// - ``listGrants()``
 /// - ``revokeGrant(id:)``
 public struct AuthOAuthServer: Sendable {
-  let clientID: AuthClientID
+  /// Held strongly: the client vends this value and never stores it, so there is no cycle, and a
+  /// value kept past its call site keeps the client alive instead of dangling.
+  let client: AuthClient
 
-  var configuration: AuthClient.Configuration { Dependencies[clientID].configuration }
-  var api: APIClient { Dependencies[clientID].api }
-  var encoder: JSONEncoder { Dependencies[clientID].resolvedEncoder }
-  var decoder: JSONDecoder { Dependencies[clientID].resolvedDecoder }
+  var configuration: AuthClient.Configuration { client.configuration }
+  var api: SessionAPIClient { client.dependencies.sessionAPI }
+  var encoder: JSONEncoder { configuration.resolvedEncoder }
+  var decoder: JSONDecoder { configuration.resolvedDecoder }
 
   /// Fetches details about a pending OAuth authorization request, to present
   /// a consent screen to the user.

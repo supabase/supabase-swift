@@ -12,6 +12,10 @@ import Helpers
 import TestHelpers
 import Testing
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 @testable import Auth
 
 @Suite
@@ -37,5 +41,56 @@ struct APIClientTests {
 
     #expect(response.status == .tooManyRequests)
     #expect(attempts.value == 1)
+  }
+
+  @Test
+  func nonJSONServerErrorUsesStatusCodeAndDescription() async {
+    let data = Data("<html><body>proxy failure</body></html>".utf8)
+    let error = APIClient.error(
+      response: HTTPTypes.HTTPResponse(status: .init(code: 500)), data: data,
+      decoder: AuthClient.Configuration.jsonDecoder)
+
+    #expect(error.kind == .unexpectedResponse)
+    #expect(error.message == "HTTP 500: \(HTTPURLResponse.localizedString(forStatusCode: 500))")
+    #expect(error.errorCode == .unexpectedFailure)
+    #expect(error.response?.body == data)
+  }
+
+  @Test
+  func nonJSONServerErrorWithEmptyBodyPreservesStatusCode() async {
+    let error = APIClient.error(
+      response: HTTPTypes.HTTPResponse(status: .init(code: 503)), data: Data(),
+      decoder: AuthClient.Configuration.jsonDecoder)
+
+    #expect(error.message == "HTTP 503: \(HTTPURLResponse.localizedString(forStatusCode: 503))")
+  }
+
+  @Test
+  func jsonErrorKeepsServerMessage() async {
+    let error = APIClient.error(
+      response: HTTPTypes.HTTPResponse(status: .init(code: 500)),
+      data: Data(#"{"msg":"Error sending confirmation email"}"#.utf8),
+      decoder: AuthClient.Configuration.jsonDecoder)
+
+    #expect(error.message == "Error sending confirmation email")
+  }
+
+  @Test
+  func nonJSONServerErrorUpperBoundaryPreservesStatusCode() async {
+    let error = APIClient.error(
+      response: HTTPTypes.HTTPResponse(status: .init(code: 599)), data: Data(),
+      decoder: AuthClient.Configuration.jsonDecoder)
+
+    #expect(error.message == "HTTP 599: \(HTTPURLResponse.localizedString(forStatusCode: 599))")
+  }
+
+  @Test(arguments: [400, 499, 600])
+  func nonJSONErrorOutsideServerRangeKeepsExistingFallback(statusCode: Int) async {
+    let error = APIClient.error(
+      response: HTTPTypes.HTTPResponse(status: .init(code: statusCode)),
+      data: Data("<html><body>bad request</body></html>".utf8),
+      decoder: AuthClient.Configuration.jsonDecoder)
+
+    #expect(error.message == "Unexpected response with status code \(statusCode).")
   }
 }
