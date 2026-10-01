@@ -128,13 +128,14 @@ struct AuthClientMultipleInstancesTests {
 
   @Test
   func mfaOutlivesClient() async throws {
+    let factorId = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
     let (mfa, _) = releasedClientSubClient(
-      \.mfa, responding: Data(#"{"id":"factor-id"}"#.utf8))
+      \.mfa, responding: Data(#"{"id":"00000000-0000-0000-0000-000000000001"}"#.utf8))
     mfa.client.dependencies.sessionStorage.store(.valid)
 
-    let response = try await mfa.unenroll(params: MFAUnenrollParams(factorId: "factor-id"))
+    let response = try await mfa.unenroll(params: MFAUnenrollParams(factorId: factorId))
 
-    #expect(response.id == "factor-id")
+    #expect(response.id == factorId)
   }
 
   @Test

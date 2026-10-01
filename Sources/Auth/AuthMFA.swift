@@ -95,7 +95,7 @@ public struct AuthMFA: Sendable {
       // WebAuthn credential responses use W3C camelCase field names (e.g. `clientDataJSON`).
       // Encode without the snake_case strategy so they reach the backend verbatim.
       body = try encodeWebAuthnBody([
-        "factor_id": .string(params.factorId),
+        "factor_id": .string(params.factorId.uuidString),
         "challenge_id": .string(params.challengeId),
         "webauthn": ["credential_response": credentialResponse],
       ])
