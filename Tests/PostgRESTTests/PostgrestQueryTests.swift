@@ -1,5 +1,5 @@
 //
-//  PostgrestTypedQueryTests.swift
+//  PostgrestQueryTests.swift
 //  Supabase
 //
 //  Created by Guilherme Souza on 31/08/26.
@@ -11,7 +11,7 @@ import Testing
 @testable import PostgREST
 
 @Suite
-struct PostgrestTypedQueryTests {
+struct PostgrestQueryTests {
   struct Todo: PostgrestWritableRelation {
     static let relationName = "todos"
     static let selectString = "*"

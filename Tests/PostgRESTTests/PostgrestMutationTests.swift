@@ -1,5 +1,5 @@
 //
-//  PostgrestTypedMutationTests.swift
+//  PostgrestMutationTests.swift
 //  Supabase
 //
 //  Created by Guilherme Souza on 21/08/26.
@@ -11,7 +11,7 @@ import Testing
 @testable import PostgREST
 
 @Suite
-struct PostgrestTypedMutationTests {
+struct PostgrestMutationTests {
   struct Todo: PostgrestWritableRelation, PostgrestKeyedRelation {
     static let relationName = "todos"
     static let selectString = "*"

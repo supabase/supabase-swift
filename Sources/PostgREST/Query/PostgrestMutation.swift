@@ -1,5 +1,5 @@
 //
-//  PostgrestTypedMutation.swift
+//  PostgrestMutation.swift
 //  PostgREST
 //
 //  Created by Guilherme Souza on 21/08/26.
@@ -39,13 +39,13 @@ public struct PostgrestConflictResolution: RawRepresentable, Hashable, Sendable,
 
 /// A write request against a writable relation.
 ///
-/// Obtain one from `insert`, `upsert`, `update` or `delete` on a ``PostgrestTypedSource``. Those
+/// Obtain one from `insert`, `upsert`, `update` or `delete` on a ``PostgrestSource``. Those
 /// methods exist only where the relation conforms to ``PostgrestWritableRelation``, so a read-only
 /// view cannot be written.
 ///
 /// Like the builder it wraps, this is a value type: chaining off the same mutation twice gives
 /// two independent requests.
-public struct PostgrestTypedMutation<R: PostgrestWritableRelation>: PostgrestFilterableRequest,
+public struct PostgrestMutation<R: PostgrestWritableRelation>: PostgrestFilterableRequest,
   Sendable
 {
   public typealias Relation = R
@@ -68,9 +68,9 @@ public struct PostgrestTypedMutation<R: PostgrestWritableRelation>: PostgrestFil
   /// header, and losing it there would silently turn the upsert into a plain insert.
   /// `return=representation` alone returns every column, so no `select` parameter is needed.
   ///
-  /// - Returns: A ``PostgrestTypedQuery`` decoding into `[R]`.
-  public func returning() -> PostgrestTypedQuery<R, [R], PostgrestFilterPhase> {
-    PostgrestTypedQuery(
+  /// - Returns: A ``PostgrestQuery`` decoding into `[R]`.
+  public func returning() -> PostgrestQuery<R, [R], PostgrestFilterPhase> {
+    PostgrestQuery(
       builder: builder.mergingPreferHeader("return=representation")
     )
   }
@@ -103,7 +103,7 @@ public struct PostgrestTypedMutation<R: PostgrestWritableRelation>: PostgrestFil
   }
 }
 
-extension PostgrestTypedSource where R: PostgrestWritableRelation {
+extension PostgrestSource where R: PostgrestWritableRelation {
   /// Inserts a row.
   ///
   /// ```swift
@@ -115,10 +115,10 @@ extension PostgrestTypedSource where R: PostgrestWritableRelation {
   /// - Parameter values: The row to insert, in the relation's
   ///   ``PostgrestWritableRelation/Draft`` shape. Primary keys and defaulted columns are optional
   ///   there, so either can be left out and filled in by the database.
-  /// - Returns: A ``PostgrestTypedMutation`` to execute, or to request rows back from.
+  /// - Returns: A ``PostgrestMutation`` to execute, or to request rows back from.
   /// - Throws: An encoding error if `values` cannot be serialized.
-  public func insert(_ values: R.Draft) throws -> PostgrestTypedMutation<R> {
-    PostgrestTypedMutation(builder: try builder.insert(values, returning: .minimal))
+  public func insert(_ values: R.Draft) throws -> PostgrestMutation<R> {
+    PostgrestMutation(builder: try builder.insert(values, returning: .minimal))
   }
 
   /// Inserts a collection of rows, in a single request.
@@ -135,16 +135,16 @@ extension PostgrestTypedSource where R: PostgrestWritableRelation {
   /// from the first row alone and dropping what the later ones added.
   ///
   /// > Note: An empty collection is not an error. It sends a request that writes nothing, and
-  /// > ``PostgrestTypedMutation/returning()`` on it decodes an empty array. A batch computed from a
+  /// > ``PostgrestMutation/returning()`` on it decodes an empty array. A batch computed from a
   /// > filter or a `map` may legitimately have no rows, and making every caller guard for that is a
   /// > worse trade than one wasted round trip.
   ///
   /// - Parameter values: The rows to insert, in the relation's
   ///   ``PostgrestWritableRelation/Draft`` shape.
-  /// - Returns: A ``PostgrestTypedMutation`` to execute, or to request rows back from.
+  /// - Returns: A ``PostgrestMutation`` to execute, or to request rows back from.
   /// - Throws: An encoding error if `values` cannot be serialized.
-  public func insert(_ values: some Collection<R.Draft>) throws -> PostgrestTypedMutation<R> {
-    PostgrestTypedMutation(builder: try builder.insert(Array(values), returning: .minimal))
+  public func insert(_ values: some Collection<R.Draft>) throws -> PostgrestMutation<R> {
+    PostgrestMutation(builder: try builder.insert(Array(values), returning: .minimal))
   }
 
   /// Inserts a row, updating it instead if it conflicts on a unique constraint of your choosing.
@@ -173,7 +173,7 @@ extension PostgrestTypedSource where R: PostgrestWritableRelation {
   ///   - additional: The remaining columns, for a constraint spanning more than one.
   ///   - resolution: What to do with a conflicting row. Defaults to
   ///     ``PostgrestConflictResolution/mergeDuplicates``.
-  /// - Returns: A ``PostgrestTypedMutation`` to execute, or to request rows back from.
+  /// - Returns: A ``PostgrestMutation`` to execute, or to request rows back from.
   /// - Throws: An encoding error if `values` cannot be serialized.
   public func upsert<
     FirstValue,
@@ -187,10 +187,10 @@ extension PostgrestTypedSource where R: PostgrestWritableRelation {
       R.Columns, PostgrestStoredColumn<R, each RestValue, each RestNullability>
     >,
     resolution: PostgrestConflictResolution = .mergeDuplicates
-  ) throws -> PostgrestTypedMutation<R> {
+  ) throws -> PostgrestMutation<R> {
     var names = [R.columns[keyPath: column].postgrestExpression]
     repeat names.append(R.columns[keyPath: each additional].postgrestExpression)
-    return PostgrestTypedMutation(
+    return PostgrestMutation(
       builder: try builder.upsert(
         values,
         onConflict: names.joined(separator: ","),
@@ -220,7 +220,7 @@ extension PostgrestTypedSource where R: PostgrestWritableRelation {
   ///   - additional: The remaining columns, for a constraint spanning more than one.
   ///   - resolution: What to do with a conflicting row. Defaults to
   ///     ``PostgrestConflictResolution/mergeDuplicates``, and applies to every row in the batch.
-  /// - Returns: A ``PostgrestTypedMutation`` to execute, or to request rows back from.
+  /// - Returns: A ``PostgrestMutation`` to execute, or to request rows back from.
   /// - Throws: An encoding error if `values` cannot be serialized.
   public func upsert<
     FirstValue,
@@ -234,10 +234,10 @@ extension PostgrestTypedSource where R: PostgrestWritableRelation {
       R.Columns, PostgrestStoredColumn<R, each RestValue, each RestNullability>
     >,
     resolution: PostgrestConflictResolution = .mergeDuplicates
-  ) throws -> PostgrestTypedMutation<R> {
+  ) throws -> PostgrestMutation<R> {
     var names = [R.columns[keyPath: column].postgrestExpression]
     repeat names.append(R.columns[keyPath: each additional].postgrestExpression)
-    return PostgrestTypedMutation(
+    return PostgrestMutation(
       builder: try builder.upsert(
         Array(values),
         onConflict: names.joined(separator: ","),
@@ -266,11 +266,11 @@ extension PostgrestTypedSource where R: PostgrestWritableRelation {
   /// ```
   ///
   /// - Parameter build: A closure that assigns to the columns to change.
-  /// - Returns: A ``PostgrestTypedMutation`` to scope, then execute.
+  /// - Returns: A ``PostgrestMutation`` to scope, then execute.
   /// - Throws: An encoding error if the assigned values cannot be serialized.
   public func update(
     _ build: (inout PostgrestUpdate<R>) -> Void
-  ) throws -> PostgrestTypedMutation<R> {
+  ) throws -> PostgrestMutation<R> {
     try update(PostgrestUpdate(build))
   }
 
@@ -282,23 +282,23 @@ extension PostgrestTypedSource where R: PostgrestWritableRelation {
   /// > Important: With no filter this updates every row in the relation.
   ///
   /// - Parameter values: The columns to change.
-  /// - Returns: A ``PostgrestTypedMutation`` to scope, then execute.
+  /// - Returns: A ``PostgrestMutation`` to scope, then execute.
   /// - Throws: An encoding error if the assigned values cannot be serialized.
-  public func update(_ values: PostgrestUpdate<R>) throws -> PostgrestTypedMutation<R> {
-    PostgrestTypedMutation(builder: try builder.update(values, returning: .minimal))
+  public func update(_ values: PostgrestUpdate<R>) throws -> PostgrestMutation<R> {
+    PostgrestMutation(builder: try builder.update(values, returning: .minimal))
   }
 
   /// Deletes the rows matched by the filters applied to the returned value.
   ///
   /// > Important: With no filter this deletes every row in the relation.
   ///
-  /// - Returns: A ``PostgrestTypedMutation`` to scope, then execute.
-  public func delete() -> PostgrestTypedMutation<R> {
-    PostgrestTypedMutation(builder: builder.delete(returning: .minimal))
+  /// - Returns: A ``PostgrestMutation`` to scope, then execute.
+  public func delete() -> PostgrestMutation<R> {
+    PostgrestMutation(builder: builder.delete(returning: .minimal))
   }
 }
 
-extension PostgrestTypedSource where R: PostgrestWritableRelation & PostgrestKeyedRelation {
+extension PostgrestSource where R: PostgrestWritableRelation & PostgrestKeyedRelation {
   /// Inserts a row, updating it instead if it conflicts on the relation's primary key.
   ///
   /// ```swift
@@ -324,13 +324,13 @@ extension PostgrestTypedSource where R: PostgrestWritableRelation & PostgrestKey
   ///   - values: The row to upsert, in the relation's ``PostgrestWritableRelation/Draft`` shape.
   ///   - resolution: What to do with a conflicting row. Defaults to
   ///     ``PostgrestConflictResolution/mergeDuplicates``.
-  /// - Returns: A ``PostgrestTypedMutation`` to execute, or to request rows back from.
+  /// - Returns: A ``PostgrestMutation`` to execute, or to request rows back from.
   /// - Throws: An encoding error if `values` cannot be serialized.
   public func upsert(
     _ values: R.Draft,
     resolution: PostgrestConflictResolution = .mergeDuplicates
-  ) throws -> PostgrestTypedMutation<R> {
-    PostgrestTypedMutation(
+  ) throws -> PostgrestMutation<R> {
+    PostgrestMutation(
       builder: try builder.upsert(
         values,
         onConflict: R.primaryKeyColumns.joined(separator: ","),
@@ -359,13 +359,13 @@ extension PostgrestTypedSource where R: PostgrestWritableRelation & PostgrestKey
   ///   - values: The rows to upsert, in the relation's ``PostgrestWritableRelation/Draft`` shape.
   ///   - resolution: What to do with a conflicting row. Defaults to
   ///     ``PostgrestConflictResolution/mergeDuplicates``, and applies to every row in the batch.
-  /// - Returns: A ``PostgrestTypedMutation`` to execute, or to request rows back from.
+  /// - Returns: A ``PostgrestMutation`` to execute, or to request rows back from.
   /// - Throws: An encoding error if `values` cannot be serialized.
   public func upsert(
     _ values: some Collection<R.Draft>,
     resolution: PostgrestConflictResolution = .mergeDuplicates
-  ) throws -> PostgrestTypedMutation<R> {
-    PostgrestTypedMutation(
+  ) throws -> PostgrestMutation<R> {
+    PostgrestMutation(
       builder: try builder.upsert(
         Array(values),
         onConflict: R.primaryKeyColumns.joined(separator: ","),
