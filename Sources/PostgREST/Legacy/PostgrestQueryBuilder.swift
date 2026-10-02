@@ -138,7 +138,8 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
   /// conflict column(s) match an existing row, the row is merged or ignored depending on
   /// `ignoreDuplicates`.
   ///
-  /// By default, upserted rows are returned. To suppress this, pass `.minimal` as `returning`.
+  /// By default, upserted rows are not returned. To receive the upserted data, chain with
+  /// ``PostgrestRequestBuilder/select(_:)`` after calling this method.
   ///
   /// ```swift
   /// // Upsert a row, merging on the "id" column
@@ -155,7 +156,7 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
   ///   - values: An `Encodable` value representing a single row or an array of rows.
   ///   - onConflict: Comma-separated UNIQUE column(s) that determine whether a row is a duplicate.
   ///     When `nil`, PostgREST uses the table's primary key.
-  ///   - returning: Controls which rows PostgREST returns after the upsert. Defaults to ``PostgrestReturningOptions/representation``.
+  ///   - returning: Controls which rows PostgREST returns after the upsert. Defaults to `nil` (server decides).
   ///   - count: The row-count algorithm to use, or `nil` to skip counting. See ``CountOption``.
   ///   - ignoreDuplicates: When `true`, conflicting rows are silently ignored. When `false` (the
   ///     default), conflicting rows are merged with the supplied values.
@@ -171,7 +172,7 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
   public func upsert(
     _ values: some Encodable,
     onConflict: String? = nil,
-    returning: PostgrestReturningOptions = .representation,
+    returning: PostgrestReturningOptions? = nil,
     count: CountOption? = nil,
     ignoreDuplicates: Bool = false,
     defaultToNull: Bool = true,
@@ -182,9 +183,11 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
     var copy = PostgrestFilterBuilder(carryingFrom: self)
     copy.request.method = .post
     var prefersHeaders = [
-      "resolution=\(ignoreDuplicates ? "ignore" : "merge")-duplicates",
-      "return=\(returning.rawValue)",
+      "resolution=\(ignoreDuplicates ? "ignore" : "merge")-duplicates"
     ]
+    if let returning {
+      prefersHeaders.append("return=\(returning.rawValue)")
+    }
     if let onConflict {
       copy.query.appendOrUpdate(URLQueryItem(name: "on_conflict", value: onConflict))
     }
@@ -211,8 +214,8 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
 
   /// Performs a partial UPDATE on rows that match subsequent filters.
   ///
-  /// By default, updated rows are returned as ``PostgrestReturningOptions/representation``. To
-  /// suppress this, pass `.minimal` as `returning`.
+  /// By default, updated rows are not returned. To receive the updated data, chain with
+  /// ``PostgrestRequestBuilder/select(_:)`` after calling this method.
   ///
   /// > Important: Omitting a filter will update **all rows** in the table. Always chain
   /// > a filter such as ``PostgrestRequestBuilder/eq(_:value:)`` before calling
@@ -228,7 +231,7 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
   ///
   /// - Parameters:
   ///   - values: An `Encodable` value with the columns to update.
-  ///   - returning: Controls which rows PostgREST returns after the update. Defaults to ``PostgrestReturningOptions/representation``.
+  ///   - returning: Controls which rows PostgREST returns after the update. Defaults to `nil` (server decides).
   ///   - count: The row-count algorithm to use, or `nil` to skip counting. See ``CountOption``.
   ///   - encoder: The `JSONEncoder` used to serialize `values`. Overrides
   ///     ``PostgrestClient/Configuration/encoder`` when non-`nil`.
@@ -236,7 +239,7 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
   /// - Throws: An encoding error if `values` cannot be serialized, or ``PostgrestError`` on server error.
   public func update(
     _ values: some Encodable,
-    returning: PostgrestReturningOptions = .representation,
+    returning: PostgrestReturningOptions? = nil,
     count: CountOption? = nil,
     encoder: JSONEncoder? = nil
   ) throws -> PostgrestFilterBuilder {
@@ -244,7 +247,10 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
 
     var copy = PostgrestFilterBuilder(carryingFrom: self)
     copy.request.method = .patch
-    var preferHeaders = ["return=\(returning.rawValue)"]
+    var preferHeaders: [String] = []
+    if let returning {
+      preferHeaders.append("return=\(returning.rawValue)")
+    }
     copy.body = body
     if let count {
       preferHeaders.append("count=\(count.rawValue)")
@@ -261,8 +267,8 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
 
   /// Performs a DELETE on rows that match subsequent filters.
   ///
-  /// By default, deleted rows are returned as ``PostgrestReturningOptions/representation``. To
-  /// suppress this, pass `.minimal` as `returning`.
+  /// By default, deleted rows are not returned. To receive the deleted data, chain with
+  /// ``PostgrestRequestBuilder/select(_:)`` after calling this method.
   ///
   /// > Important: Omitting a filter will delete **all rows** in the table. Always chain
   /// > a filter such as ``PostgrestRequestBuilder/eq(_:value:)`` before calling
@@ -277,16 +283,19 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
   /// ```
   ///
   /// - Parameters:
-  ///   - returning: Controls which rows PostgREST returns after the delete. Defaults to ``PostgrestReturningOptions/representation``.
+  ///   - returning: Controls which rows PostgREST returns after the delete. Defaults to `nil` (server decides).
   ///   - count: The row-count algorithm to use, or `nil` to skip counting. See ``CountOption``.
   /// - Returns: A ``PostgrestFilterBuilder`` for scoping which rows are deleted.
   public func delete(
-    returning: PostgrestReturningOptions = .representation,
+    returning: PostgrestReturningOptions? = nil,
     count: CountOption? = nil
   ) -> PostgrestFilterBuilder {
     var copy = PostgrestFilterBuilder(carryingFrom: self)
     copy.request.method = .delete
-    var preferHeaders = ["return=\(returning.rawValue)"]
+    var preferHeaders: [String] = []
+    if let returning {
+      preferHeaders.append("return=\(returning.rawValue)")
+    }
     if let count {
       preferHeaders.append("count=\(count.rawValue)")
     }
