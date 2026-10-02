@@ -697,7 +697,7 @@ extension AuthMockerTests {
         	--header "X-Client-Info: auth-swift/0.0.0" \
         	--header "X-Supabase-Api-Version: 2024-01-01" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	"http://localhost:54321/auth/v1/admin/users?page=&per_page="
+        	"http://localhost:54321/auth/v1/admin/users"
         """#
       }
       .register()
@@ -730,7 +730,7 @@ extension AuthMockerTests {
         	--header "X-Client-Info: auth-swift/0.0.0" \
         	--header "X-Supabase-Api-Version: 2024-01-01" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	"http://localhost:54321/auth/v1/admin/users?page=&per_page="
+        	"http://localhost:54321/auth/v1/admin/users"
         """#
       }
       .register()

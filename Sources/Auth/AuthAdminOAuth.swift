@@ -50,9 +50,9 @@ public struct AuthAdminOAuth: Sendable {
         method: .get,
         url: url.appendingPathComponent("admin/oauth/clients"),
         query: [
-          URLQueryItem(name: "page", value: params?.page?.description ?? ""),
-          URLQueryItem(name: "per_page", value: params?.perPage?.description ?? ""),
-        ]
+          params?.page.map { URLQueryItem(name: "page", value: $0.description) },
+          params?.perPage.map { URLQueryItem(name: "per_page", value: $0.description) },
+        ].compactMap { $0 }
       )
     )
 
