@@ -91,7 +91,7 @@ struct PostgrestIntegrationTests {
 
     let drinkCoffeeTodo = insertedTodos[1]
     let updatedTodo: Todo = try await client.from("todos")
-      .update(["is_complete": true])
+      .update(["is_complete": true], returning: .representation)
       .eq("id", value: drinkCoffeeTodo.id.uuidString)
       .single()
       .execute()
