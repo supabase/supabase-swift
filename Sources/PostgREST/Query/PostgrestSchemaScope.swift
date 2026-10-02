@@ -46,6 +46,6 @@ public struct PostgrestSchemaScope<Schema: PostgrestSchema>: Sendable {
   /// - Returns: A ``PostgrestSource`` for that relation.
   public func from<R: PostgrestRelation>(_ relation: R.Type) -> PostgrestSource<R>
   where R.Schema == Schema {
-    PostgrestSource(builder: client.from(R.relationName))
+    PostgrestSource(client: client)
   }
 }

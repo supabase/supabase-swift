@@ -108,4 +108,96 @@ struct PostgrestQueryTests {
     #expect(prefer.contains("return=representation"))
     #expect(prefer.contains("return=minimal") == false)
   }
+
+  @Test
+  func whereAfterOrderStillFilters() async throws {
+    // The modifiers are order-free: `order` no longer moves the query into a phase without `where`.
+    let capture = QueryCapture()
+    _ = try await capture.client.from(Todo.self).select()
+      .order { $0.id.asc() }.limit(5).where { $0.isDone.eq(false) }.execute()
+    #expect(capture.query?.contains("order=id.asc") == true)
+    #expect(capture.query?.contains("limit=5") == true)
+    #expect(capture.query?.contains("is_done=eq.false") == true)
+  }
+
+  @Test
+  func rangeSendsOffsetAndInclusiveLimit() async throws {
+    let capture = QueryCapture()
+    _ = try await capture.client.from(Todo.self).select().range(10...19).execute()
+    #expect(capture.query?.contains("offset=10") == true)
+    #expect(capture.query?.contains("limit=10") == true)
+  }
+
+  @Test
+  func singleDecodesOneRow() async throws {
+    let capture = QueryCapture(body: #"{"id":1,"task":"buy milk"}"#)
+    let todo: Todo = try await capture.client.from(Todo.self).select().single().execute().value
+    #expect(todo.task == "buy milk")
+    #expect(capture.header("Accept") == "application/vnd.pgrst.object+json")
+  }
+
+  @Test
+  func maybeSingleDecodesOneRow() async throws {
+    let capture = QueryCapture(body: #"[{"id":1,"task":"buy milk"}]"#)
+    let todo: Todo? = try await capture.client.from(Todo.self).select().maybeSingle().execute()
+      .value
+    #expect(todo?.task == "buy milk")
+    // The capability spec: the default media type, with the row count checked on the client.
+    #expect(capture.header("Accept") == "application/json")
+  }
+
+  @Test
+  func maybeSingleTurnsNoRowsIntoNil() async throws {
+    let capture = QueryCapture(body: "[]")
+    let todo = try await capture.client.from(Todo.self).select().maybeSingle().execute().value
+    #expect(todo == nil)
+  }
+
+  @Test
+  func maybeSingleThrowsForMoreThanOneRow() async throws {
+    let capture = QueryCapture(body: #"[{"id":1,"task":"a"},{"id":2,"task":"b"}]"#)
+    let error = await #expect(throws: PostgrestError.self) {
+      _ = try await capture.client.from(Todo.self).select().maybeSingle().execute()
+    }
+    #expect(error?.kind == .decoding)
+  }
+
+  @Test
+  func singleThrowsForNoRows() async throws {
+    // Only an optional output turns PGRST116 into a value. `single()` keeps it an error.
+    let capture = QueryCapture(
+      body: #"""
+        {"code":"PGRST116","message":"Cannot coerce the result to a single JSON object",\#
+        "details":"The result contains 0 rows","hint":null}
+        """#,
+      status: .notAcceptable
+    )
+    await #expect(throws: PostgrestError.self) {
+      _ = try await capture.client.from(Todo.self).select().single().execute()
+    }
+  }
+
+  @Test
+  func stripNullsAsksForTheStrippedArrayMediaType() async throws {
+    let capture = QueryCapture()
+    _ = try await capture.client.from(Todo.self).select().stripNulls().execute()
+    #expect(capture.header("Accept") == "application/vnd.pgrst.array+json;nulls=stripped")
+  }
+
+  @Test
+  func stripNullsBeforeSingleAsksForTheStrippedObjectMediaType() async throws {
+    let capture = QueryCapture(body: #"{"id":1,"task":"buy milk"}"#)
+    _ = try await capture.client.from(Todo.self).select().stripNulls().single().execute()
+    #expect(capture.header("Accept") == "application/vnd.pgrst.object+json;nulls=stripped")
+  }
+
+  @Test
+  func whereWorksAfterReturning() async throws {
+    let capture = QueryCapture(body: #"{"id":1,"task":"buy milk"}"#)
+    let todo = try await capture.client.from(Todo.self).delete().returning()
+      .where { $0.id.eq(1) }.single().execute().value
+    #expect(todo.id == 1)
+    #expect(capture.httpMethod == "DELETE")
+    #expect(capture.query?.contains("id=eq.1") == true)
+  }
 }
