@@ -1191,7 +1191,7 @@ public final class AuthClient: Sendable {
   /// If using ``SignOutScope/others`` scope, no ``AuthChangeEvent/signedOut`` event is fired.
   /// - Parameter scope: Specifies which sessions should be logged out.
   public func signOut(scope: SignOutScope = .global) async throws {
-    guard let accessToken = currentSession?.accessToken else {
+    guard let session = currentSession else {
       configuration.logger.warning("signOut called without a session")
       return
     }
@@ -1207,11 +1207,13 @@ public final class AuthClient: Sendable {
           method: .post,
           url: configuration.url.appendingPathComponent("logout"),
           query: [URLQueryItem(name: "scope", value: scope.rawValue)],
-          headerFields: [.authorization: "Bearer \(accessToken)"]
-        )
+          headerFields: [.authorization: "Bearer \(session.accessToken)"]
+        ),
+        for: session
       )
     } catch let error as AuthError
-      where error.kind == .server && [404, 403, 401].contains(error.response?.statusCode ?? 0)
+      where error.kind == .sessionMissing
+      || error.kind == .server && [404, 403, 401].contains(error.response?.statusCode ?? 0)
     {
       // ignore 404s since user might not exist anymore
       // ignore 401s, and 403s since an invalid or expired JWT should sign out the current session.

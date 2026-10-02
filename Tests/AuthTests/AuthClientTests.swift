@@ -293,6 +293,70 @@ extension AuthMockerTests {
     }
 
     @Test
+    func signOutShouldSucceedIfSessionIsNotFound() async throws {
+      try await withMainSerialExecutor {
+        sessionNotFoundMock(scope: "global").register()
+
+        let sut = makeSUT()
+        sut.dependencies.sessionStorage.store(.valid)
+
+        try await assertAuthStateChanges(
+          sut: sut,
+          action: { try await sut.signOut() },
+          expectedEvents: [.initialSession, .signedOut]
+        )
+
+        #expect(sut.dependencies.sessionStorage.get() == nil)
+      }
+    }
+
+    @Test
+    func signOutWithOthersScopeShouldRemoveSessionIfSessionIsNotFound() async throws {
+      try await withMainSerialExecutor {
+        sessionNotFoundMock(scope: "others").register()
+
+        let sut = makeSUT()
+        sut.dependencies.sessionStorage.store(.valid)
+
+        try await assertAuthStateChanges(
+          sut: sut,
+          action: { try await sut.signOut(scope: .others) },
+          expectedEvents: [.initialSession, .signedOut]
+        )
+
+        #expect(sut.dependencies.sessionStorage.get() == nil)
+      }
+    }
+
+    @Test
+    func signOutShouldKeepASessionStoredWhileLoggingOut() async throws {
+      try await withMainSerialExecutor {
+        let sut = makeSUT()
+        let sessionStorage = sut.dependencies.sessionStorage
+
+        var nextSession = Session.valid
+        nextSession.accessToken = "next-access-token"
+        nextSession.refreshToken = "next-refresh-token"
+
+        var mock = sessionNotFoundMock(scope: "global")
+        mock.onRequestHandler = OnRequestHandler(requestCallback: { [nextSession] _ in
+          sessionStorage.store(nextSession)
+        })
+        mock.register()
+
+        sessionStorage.store(.valid)
+
+        try await assertAuthStateChanges(
+          sut: sut,
+          action: { try await sut.signOut() },
+          expectedEvents: [.initialSession, .signedOut]
+        )
+
+        expectNoDifference(sessionStorage.get(), nextSession)
+      }
+    }
+
+    @Test
     func signInAnonymously() async throws {
       try await withMainSerialExecutor {
         let session = Session(fromMockNamed: "anonymous-sign-in-response")
@@ -3707,6 +3771,28 @@ extension AuthMockerTests {
       } catch {
         Issue.record("Unexpected error \(error)")
       }
+    }
+
+    private func sessionNotFoundMock(scope: String) -> Mock {
+      Mock(
+        url: clientURL.appendingPathComponent("logout").appendingQueryItems([
+          URLQueryItem(name: "scope", value: scope)
+        ]),
+        statusCode: 403,
+        data: [
+          .post: Data(
+            """
+            {
+              "code": "session_not_found",
+              "message": "Session from session_id claim in JWT does not exist"
+            }
+            """.utf8
+          )
+        ],
+        additionalHeaders: [
+          "X-Supabase-Api-Version": "2024-01-01"
+        ]
+      )
     }
 
     private func makeSUT(
