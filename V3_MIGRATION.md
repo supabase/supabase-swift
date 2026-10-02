@@ -3037,3 +3037,36 @@ ID as a `String`, or builds `MFAVerifyParams` from a string, gets a compile erro
 `challengeAndVerify(params:)` is unchanged. Passkey challenge IDs
 (`PasskeyRegistrationOptions.challengeId`, `PasskeyAuthenticationOptions.challengeId`) stay
 `String`, because the passkey endpoints type `challenge_id` as a string.
+
+## `insert` and `upsert` return `PostgrestTransformBuilder`; filters no longer compile after them
+
+`PostgrestQueryBuilder.insert(_:returning:count:defaultToNull:encoder:)` and
+`upsert(_:onConflict:returning:count:ignoreDuplicates:defaultToNull:encoder:)` return
+`PostgrestTransformBuilder` instead of `PostgrestFilterBuilder`. `update` and `delete` still return
+`PostgrestFilterBuilder`.
+
+An insert has no existing rows to match, and PostgREST ignores filters on a `POST`. A filter
+chained after `insert` or `upsert` compiled and ran, but did nothing. This matches the same fix in
+supabase-flutter.
+
+```swift
+// Before: compiles, and the server ignores the eq
+try await client
+  .from("todos")
+  .insert(["task": "Buy milk"])
+  .eq("id", value: 1)
+  .execute()
+
+// After: remove the filter
+try await client
+  .from("todos")
+  .insert(["task": "Buy milk"])
+  .execute()
+```
+
+This is a compile error at every filter (`eq`, `match`, `or`, `filter`, ...) chained after
+`insert` or `upsert`. Delete the filter: it never had an effect. Every transform still compiles
+after `insert` and `upsert`, so `select`, `order`, `limit`, `range`, `single`, `maybeSingle`, `csv`
+and the others are unchanged. Code that stores the result in a variable or parameter typed
+`PostgrestFilterBuilder` also gets a compile error. Change the type to `PostgrestTransformBuilder`,
+or to `any PostgrestExecutableBuilder` if the same variable also holds an `update` or `delete`.
