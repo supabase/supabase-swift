@@ -10,20 +10,20 @@ struct SessionAPIClient: Sendable {
 
   /// Sends `request` and returns the response body.
   ///
-  /// `session` is the session the request is issued for, when the caller has one. A response
-  /// saying that session is gone then only clears storage if that session is still the stored
-  /// one, so a request that outlived a sign-out cannot sign out whoever signed in after it.
-  /// Callers with no session of their own (sign-in, sign-up, `/logout`) pass `nil` and keep the
-  /// unconditional cleanup they have always had.
+  /// `ownership` names the stored session the request is issued for. A response saying that
+  /// session is gone then only clears storage while ``SessionOwnership`` still covers what is
+  /// stored, so a request that outlived a sign-out cannot sign out whoever signed in after it.
+  /// Callers with no session of their own (sign-in, sign-up, `/logout`) leave the default and
+  /// keep the unconditional cleanup they have always had.
   func execute(
-    _ request: HTTPRequest, body: Data? = nil, for session: Session? = nil
+    _ request: HTTPRequest, body: Data? = nil, for ownership: SessionOwnership = .unscoped
   ) async throws -> Data {
     do {
       return try await api.execute(request, body: body)
     } catch let error as AuthError where error.invalidatesSession {
       // The check and the delete happen together inside the session manager's actor, so a
       // sign-in cannot land between them.
-      if await sessionManager.removeIfUnchanged(session) {
+      if await sessionManager.removeIfUnchanged(ownership) {
         eventEmitter.emit(.signedOut, session: nil)
       }
       throw error
@@ -37,6 +37,6 @@ struct SessionAPIClient: Sendable {
     var request = request
     request.headerFields[.authorization] = "Bearer \(session.accessToken)"
 
-    return try await execute(request, body: body, for: session)
+    return try await execute(request, body: body, for: .snapshot(session))
   }
 }
