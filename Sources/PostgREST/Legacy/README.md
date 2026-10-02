@@ -10,15 +10,14 @@ spec lives on the `docs/postgrest-v3-design` branch, at `docs/design/postgrest-v
 
 ## The typed API still leans on this directory
 
-Frozen does not yet mean unreferenced. `Query/` currently builds on symbols declared here:
+Frozen does not yet mean unreferenced. `Query/` and `Request/` no longer hold a
+`PostgrestRequestBuilder` (SDK-1568), but they still build on these symbols declared here:
 
 | Symbol | Declared in | Replaced by |
 | --- | --- | --- |
-| `PostgrestRequestBuilder` | `PostgrestRequestBuilder.swift` | `PostgrestRequest` (stage 2 task 2) |
-| `PostgrestQueryPhase`, `PostgrestFilterPhase`, `PostgrestTransformPhase` and their protocols | `PostgrestRequestBuilder.swift` | kept — the phase markers are shared, not legacy |
-| `PostgrestResponse` | `Types.swift` | a new `PostgrestResponse` (stage 2 task 4) |
-| `PostgrestClient` | `PostgrestClient.swift` | the wire client (stage 2 task 10) |
+| `PostgrestResponse`, `CountOption`, `ExplainFormat` | `Types.swift` | a new `PostgrestResponse` (stage 2 task 4) |
+| `PostgrestClient`, its `Configuration.retryPolicy` and `HTTPField.Name.prefer` | `PostgrestClient.swift` | the wire client (stage 2 task 10) |
+| `HTTPField.Name.acceptProfile`, `.contentProfile` | `PostgrestRequestBuilder.swift` | the wire client (stage 2 task 10) |
 
-That dependency is temporary and one-way. Stage 2 task 7 rebuilds the typed wrappers on
-`PostgrestRequest`, which is when this directory becomes genuinely standalone. Until then, a change
-here can still break `Query/` — which is another reason not to make one.
+That dependency is temporary and one-way. Until it is gone, a change here can still break `Query/`
+— which is another reason not to make one.
