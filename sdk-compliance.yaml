@@ -74,6 +74,15 @@ supporting_symbols:
   - PostgrestMutation.Relation
   - PostgrestMutation.request
   - PostgrestMutation.execute
+  # The phase decides what a mutation offers: an unscoped update or delete has no execute() until
+  # `where(_:)` or `all()` scopes it, and an insert or upsert cannot be filtered at all.
+  - PostgrestMutation.where
+  - PostgrestMutation.all
+  - PostgrestMutationPhase
+  - PostgrestExecutableMutationPhase
+  - PostgrestUnscopedPhase
+  - PostgrestScopedPhase
+  - PostgrestInsertPhase
   # The request value every typed query and mutation holds and sends. Opaque for now: its members
   # are internal until the inspectable request model is settled.
   - PostgrestRequest
