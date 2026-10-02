@@ -340,7 +340,7 @@ import Testing
           transport: { _, _ in client },
           url: URL(string: "ws://localhost")!,
           headers: [:],
-          reconnectDelay: 0.1,
+          reconnectDelay: .milliseconds(100),
           logger: supabaseDefaultLogger(label: "io.supabase.realtime"),
           clock: testClock
         )

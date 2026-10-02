@@ -55,7 +55,7 @@ actor ChannelStateManager {
     @Sendable (_ joinRef: String, _ clientChanges: [PostgresJoinConfig])
     async -> Void
   typealias LeaveOperation = @Sendable () async -> Void
-  typealias RetryDelay = @Sendable (_ attempt: Int) -> TimeInterval
+  typealias RetryDelay = @Sendable (_ attempt: Int) -> Duration
   /// Synchronous callback invoked every time the state changes. The channel
   /// uses this to push status updates to observers without an async hop, so
   /// reading ``RealtimeChannelV2/status`` right after ``subscribe()`` returns
@@ -104,7 +104,7 @@ actor ChannelStateManager {
   private let logger: Logging.Logger
   private let topic: String
   private let maxRetryAttempts: Int
-  private let timeoutInterval: TimeInterval
+  private let timeout: Duration
   private let clock: any Clock<Duration>
 
   private let makeRef: MakeRef
@@ -124,7 +124,7 @@ actor ChannelStateManager {
     topic: String,
     logger: Logging.Logger,
     maxRetryAttempts: Int,
-    timeoutInterval: TimeInterval,
+    timeout: Duration,
     clock: any Clock<Duration>,
     makeRef: @escaping MakeRef,
     ensureSocketConnected: @escaping EnsureSocketConnected,
@@ -138,7 +138,7 @@ actor ChannelStateManager {
     self.topic = topic
     self.logger = logger
     self.maxRetryAttempts = maxRetryAttempts
-    self.timeoutInterval = timeoutInterval
+    self.timeout = timeout
     self.clock = clock
     self.makeRef = makeRef
     self.ensureSocketConnected = ensureSocketConnected
@@ -374,7 +374,7 @@ actor ChannelStateManager {
           "Subscribe attempt \(attempts)/\(maxRetryAttempts) for channel '\(topic)'"
         )
 
-        try await withTimeout(interval: timeoutInterval, clock: clock) {
+        try await withTimeout(timeout, clock: clock) {
           [self] in try await runOneSubscribeAttempt()
         }
 
@@ -394,13 +394,13 @@ actor ChannelStateManager {
 
         let delay = retryDelay(attempts)
         logger.debug(
-          "Retrying subscribe for '\(topic)' in \(String(format: "%.2f", delay))s"
+          "Retrying subscribe for '\(topic)' in \(delay)"
         )
 
         // A genuine cancellation of this task propagates out of `sleep` as
         // `CancellationError`; the next attempt re-checks the socket itself,
         // so no extra connectivity probe is needed here.
-        try await clock.sleep(for: .seconds(delay))
+        try await clock.sleep(for: delay)
       }
     }
 
@@ -451,7 +451,7 @@ actor ChannelStateManager {
   private func runUnsubscribe(waitForServerClose: Bool, sendLeave: Bool) async {
     // Send `phx_leave` (skipped when the socket is dead — it could never be
     // delivered, only buffered into the next connection as a stale frame).
-    // When `waitForServerClose` is true, wait (bounded by `timeoutInterval`)
+    // When `waitForServerClose` is true, wait (bounded by `timeout`)
     // for the server's `phx_close` to transition us to `.unsubscribed` via
     // `didReceiveClose()`. Otherwise transition immediately — this is the
     // fire-and-forget path used when we abort an in-flight subscribe.
@@ -461,7 +461,7 @@ actor ChannelStateManager {
 
     if waitForServerClose {
       let stream = stateChanges
-      _ = try? await withTimeout(interval: timeoutInterval, clock: clock) {
+      _ = try? await withTimeout(timeout, clock: clock) {
         for await observed in stream {
           if case .unsubscribed = observed { return }
         }
@@ -496,8 +496,8 @@ actor ChannelStateManager {
 
   /// Default exponential-backoff retry delay with ±25% jitter, capped at 30s.
   static let defaultRetryDelay: RetryDelay = { attempt in
-    let baseDelay: TimeInterval = 1.0
-    let maxDelay: TimeInterval = 30.0
+    let baseDelay: Double = 1.0
+    let maxDelay: Double = 30.0
     let backoffMultiplier: Double = 2.0
 
     let exponentialDelay = baseDelay * pow(backoffMultiplier, Double(attempt - 1))
@@ -506,6 +506,6 @@ actor ChannelStateManager {
     let jitterRange = cappedDelay * 0.25
     let jitter = Double.random(in: -jitterRange...jitterRange)
 
-    return max(0.1, cappedDelay + jitter)
+    return .seconds(max(0.1, cappedDelay + jitter))
   }
 }

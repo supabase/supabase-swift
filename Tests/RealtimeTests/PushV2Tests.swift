@@ -322,9 +322,9 @@ private final class MockRealtimeClient: RealtimeClientProtocol, @unchecked Senda
     _status.value
   }
 
-  init(timeoutInterval: TimeInterval = 10.0) {
+  init(timeout: Duration = .seconds(10)) {
     self.options = RealtimeClientOptions(
-      timeoutInterval: timeoutInterval
+      timeout: timeout
     )
   }
 

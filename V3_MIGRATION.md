@@ -2499,7 +2499,7 @@ The SDK-wide request timeout that lands alongside this change (`HTTPClientConfig
 time type. The Functions per-invocation override shares the same resolution path, so it takes the
 same type; keeping it a `TimeInterval` would have left callers converting between `Double` seconds
 and `Duration` inside one request. The remaining `TimeInterval` intervals in the public API
-(Realtime's heartbeat, reconnect and reply timeouts) move in a follow-up.
+(Realtime's heartbeat, reconnect and reply timeouts) move the same way; see the next section.
 
 ```swift
 // Before
@@ -2520,6 +2520,59 @@ let fallback: Duration = FunctionsClient.requestIdleTimeout
 This is a compile error: the `timeoutInterval:` argument label no longer exists, and a
 `TimeInterval` value no longer type-checks where `requestIdleTimeout` is used. Search for
 `timeoutInterval:` at `FunctionInvokeOptions` call sites and for `requestIdleTimeout`.
+
+## Realtime intervals are now `Duration`, and `timeoutInterval` is `timeout`
+
+Every interval on `RealtimeClientOptions` is a `Duration` instead of a `TimeInterval`, and the
+reply timeout is renamed:
+
+| Before | After |
+|---|---|
+| `heartbeatInterval: TimeInterval` | `heartbeatInterval: Duration` |
+| `reconnectDelay: TimeInterval` | `reconnectDelay: Duration` |
+| `timeoutInterval: TimeInterval` | `timeout: Duration` |
+| `disconnectOnEmptyChannelsAfter: TimeInterval` | `disconnectOnEmptyChannelsAfter: Duration` |
+| `defaultHeartbeatInterval: TimeInterval` (`25`) | `defaultHeartbeatInterval: Duration` (`.seconds(25)`) |
+| `defaultReconnectDelay: TimeInterval` (`7`) | `defaultReconnectDelay: Duration` (`.seconds(7)`) |
+| `defaultTimeoutInterval: TimeInterval` (`10`) | `defaultTimeout: Duration` (`.seconds(10)`) |
+| `defaultDisconnectOnEmptyChannelsAfter: TimeInterval` (`50`) | `defaultDisconnectOnEmptyChannelsAfter: Duration` (`.seconds(50)`) |
+
+The per-call `timeout:` parameter on `RealtimeChannelV2.httpSend(event:message:timeout:)` (both
+overloads) and `httpSend(event:data:timeout:)` is a `Duration?` instead of a `TimeInterval?`.
+
+The `@_disfavoredOverload` `RealtimeClientOptions` initializer without `protocolVersion:` is
+removed. The primary initializer defaults every argument it took, so every call that compiled
+against it still compiles against the primary one once the intervals above are updated.
+
+The request timeout (`HTTPClientConfiguration.timeout`, `PostgrestRequestBuilder.timeout(_:)`,
+`FunctionInvokeOptions.timeout`) is already a `Duration`. Realtime was the last module that took
+intervals as `Double` seconds, so one app could configure its HTTP timeout as `.seconds(30)` and
+its Realtime timeout as `30` next to each other. `timeout` matches the name those APIs use.
+
+```swift
+// Before
+let options = RealtimeClientOptions(
+  heartbeatInterval: 30,
+  reconnectDelay: 5,
+  timeoutInterval: 15,
+  disconnectOnEmptyChannelsAfter: 0
+)
+try await channel.httpSend(event: "ping", message: ["n": 1], timeout: 3)
+
+// After
+let options = RealtimeClientOptions(
+  heartbeatInterval: .seconds(30),
+  reconnectDelay: .seconds(5),
+  timeout: .seconds(15),
+  disconnectOnEmptyChannelsAfter: .zero
+)
+try await channel.httpSend(event: "ping", message: ["n": 1], timeout: .seconds(3))
+```
+
+This is a compile error at every call site that passes a literal or a `TimeInterval`, and wherever
+a `default*` constant is used as a `TimeInterval`. Search for `timeoutInterval:`,
+`defaultTimeoutInterval`, and `RealtimeClientOptions(`. If you hold the value as `TimeInterval`
+seconds, convert it with `.seconds(value)` (`Duration.seconds(_:)` accepts a `Double`).
 
 ## `URLSessionTransport` no longer follows a 307/308 redirect for a one-shot request body
 
