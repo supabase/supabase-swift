@@ -1,5 +1,5 @@
 //
-//  PostgrestTypedQuery.swift
+//  PostgrestQuery.swift
 //  PostgREST
 //
 //  Created by Guilherme Souza on 21/08/26.
@@ -15,7 +15,7 @@
 ///
 /// Like the builder it wraps, this is a value type: chaining off the same query twice gives two
 /// independent requests.
-public struct PostgrestTypedQuery<
+public struct PostgrestQuery<
   R: PostgrestRelation,
   Output: Decodable & Sendable,
   Phase
@@ -31,7 +31,7 @@ public struct PostgrestTypedQuery<
   }
 }
 
-extension PostgrestTypedQuery where Phase: PostgrestExecutablePhase {
+extension PostgrestQuery where Phase: PostgrestExecutablePhase {
   /// Sends the request and decodes the response.
   ///
   /// - Returns: A ``PostgrestResponse`` whose `value` is the decoded `Output`.

@@ -72,12 +72,12 @@ supporting_symbols:
   - PostgrestFilterableRequest.builder
   - PostgrestFilterableRequest.init
   - PostgrestFilterableRequest.where
-  - PostgrestTypedMutation
-  - PostgrestTypedMutation.Phase
-  - PostgrestTypedMutation.Relation
-  - PostgrestTypedMutation.builder
-  - PostgrestTypedMutation.init
-  - PostgrestTypedMutation.execute
+  - PostgrestMutation
+  - PostgrestMutation.Phase
+  - PostgrestMutation.Relation
+  - PostgrestMutation.builder
+  - PostgrestMutation.init
+  - PostgrestMutation.execute
   # The update payload is a set of column assignments rather than a row shape, which is what lets
   # a nullable column be cleared: a column is in the body because it was assigned, and `nil` is
   # sent as an explicit null. Shared by the typed update entry point and any caller that builds an
@@ -111,7 +111,7 @@ supporting_symbols:
   - PostgrestSelection.selectString
   - PostgrestTransformPhase
   - PostgrestTransformablePhase
-  - PostgrestTypedQuery.Relation
+  - PostgrestQuery.Relation
   - PostgrestWritableRelation
   - PostgrestWritableRelation.Draft
 
@@ -931,21 +931,21 @@ features:
     supporting_symbols:
       # The value `from(_ type:)` returns once a relation has been chosen but
       # no operation has been picked yet.
-      - PostgrestTypedSource
+      - PostgrestSource
   database.query.select:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.select
-      - PostgrestTypedSource.select
+      - PostgrestSource.select
     supporting_symbols:
-      - PostgrestTypedQuery
-      - PostgrestTypedQuery.builder
-      - PostgrestTypedQuery.init
-      - PostgrestTypedQuery.execute
+      - PostgrestQuery
+      - PostgrestQuery.builder
+      - PostgrestQuery.init
+      - PostgrestQuery.execute
       # Row counting. `capabilities/database.yaml` has no id for it — it is an option on every
       # verb in supabase-js rather than a modifier — so it is registered against `select`, the
       # verb the count-only HEAD form belongs to, instead of claiming a capability of its own.
-      - PostgrestTypedQuery.count
+      - PostgrestQuery.count
       - CountOption
       - CountOption.init
       - CountOption.rawValue
@@ -973,17 +973,17 @@ features:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.insert
-      - PostgrestTypedSource.insert
+      - PostgrestSource.insert
   database.mutate.update:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.update
-      - PostgrestTypedSource.update
+      - PostgrestSource.update
   database.mutate.upsert:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.upsert
-      - PostgrestTypedSource.upsert
+      - PostgrestSource.upsert
     supporting_symbols:
       - PostgrestConflictResolution
       - PostgrestConflictResolution.init
@@ -994,7 +994,7 @@ features:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.delete
-      - PostgrestTypedSource.delete
+      - PostgrestSource.delete
   database.mutate.select_after_mutation:
     status: implemented
     symbols:
@@ -1002,7 +1002,7 @@ features:
       - PostgrestRequestBuilder.update
       - PostgrestRequestBuilder.upsert
       - PostgrestRequestBuilder.delete
-      - PostgrestTypedMutation.returning
+      - PostgrestMutation.returning
     supporting_symbols:
       - PostgrestReturningOptions
       - PostgrestReturningOptions.init
@@ -1227,7 +1227,7 @@ features:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.order
-      - PostgrestTypedQuery.order
+      - PostgrestQuery.order
       - PostgrestOrderableExpression.asc
       - PostgrestOrderableExpression.desc
       - PostgrestOrderableExpression.nulls
@@ -1243,12 +1243,12 @@ features:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.limit
-      - PostgrestTypedQuery.limit
+      - PostgrestQuery.limit
   database.using_modifiers.range:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.range
-      - PostgrestTypedQuery.range
+      - PostgrestQuery.range
   database.using_modifiers.single_row:
     status: implemented
     symbols:

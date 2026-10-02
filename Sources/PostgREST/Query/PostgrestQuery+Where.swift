@@ -1,5 +1,5 @@
 //
-//  PostgrestTypedQuery+Where.swift
+//  PostgrestQuery+Where.swift
 //  PostgREST
 //
 //  Created by Guilherme Souza on 26/08/26.
@@ -42,7 +42,7 @@ extension PostgrestFilterableRequest {
   }
 }
 
-extension PostgrestTypedQuery where Phase: PostgrestTransformablePhase {
+extension PostgrestQuery where Phase: PostgrestTransformablePhase {
   /// Sorts the result.
   ///
   /// The direction is spelled on the column, the same way an operator is:
@@ -58,7 +58,7 @@ extension PostgrestTypedQuery where Phase: PostgrestTransformablePhase {
   /// - Parameter build: Builds the sort key from the relation's columns.
   public func order(
     _ build: (R.Columns) -> PostgrestOrdering<R>
-  ) -> PostgrestTypedQuery<R, Output, PostgrestTransformPhase> {
+  ) -> PostgrestQuery<R, Output, PostgrestTransformPhase> {
     appendingOrder(build(R.columns).rendered)
   }
 
@@ -75,7 +75,7 @@ extension PostgrestTypedQuery where Phase: PostgrestTransformablePhase {
   /// ``PostgrestOrderableExpression/nulls(_:)`` sets a placement without choosing one.
   public func order<E: PostgrestOrderableExpression>(
     _ build: (R.Columns) -> E
-  ) -> PostgrestTypedQuery<R, Output, PostgrestTransformPhase> where E.Root == R {
+  ) -> PostgrestQuery<R, Output, PostgrestTransformPhase> where E.Root == R {
     appendingOrder(
       PostgrestOrdering<R>(column: build(R.columns).postgrestExpression, ascending: nil).rendered
     )
@@ -90,7 +90,7 @@ extension PostgrestTypedQuery where Phase: PostgrestTransformablePhase {
   /// Not `builder.order(_:ascending:nullsFirst:)`, which always appends a placement.
   private func appendingOrder(
     _ value: String
-  ) -> PostgrestTypedQuery<R, Output, PostgrestTransformPhase> {
+  ) -> PostgrestQuery<R, Output, PostgrestTransformPhase> {
     var builder = PostgrestRequestBuilder<PostgrestTransformPhase>(carryingFrom: builder)
     if let index = builder.query.firstIndex(where: { $0.name == "order" }),
       let existing = builder.query[index].value
@@ -99,14 +99,14 @@ extension PostgrestTypedQuery where Phase: PostgrestTransformablePhase {
     } else {
       builder.query.append(URLQueryItem(name: "order", value: value))
     }
-    return PostgrestTypedQuery<R, Output, PostgrestTransformPhase>(builder: builder)
+    return PostgrestQuery<R, Output, PostgrestTransformPhase>(builder: builder)
   }
 
   /// Limits the number of rows returned.
   ///
   /// Like either `order(_:)` overload this moves the request into ``PostgrestTransformPhase``.
-  public func limit(_ count: Int) -> PostgrestTypedQuery<R, Output, PostgrestTransformPhase> {
-    PostgrestTypedQuery<R, Output, PostgrestTransformPhase>(builder: builder.limit(count))
+  public func limit(_ count: Int) -> PostgrestQuery<R, Output, PostgrestTransformPhase> {
+    PostgrestQuery<R, Output, PostgrestTransformPhase>(builder: builder.limit(count))
   }
 
   /// Returns only the rows within the zero-based, inclusive index range.
@@ -115,8 +115,8 @@ extension PostgrestTypedQuery where Phase: PostgrestTransformablePhase {
   /// ``PostgrestTransformPhase``.
   public func range(
     _ bounds: ClosedRange<Int>
-  ) -> PostgrestTypedQuery<R, Output, PostgrestTransformPhase> {
-    PostgrestTypedQuery<R, Output, PostgrestTransformPhase>(
+  ) -> PostgrestQuery<R, Output, PostgrestTransformPhase> {
+    PostgrestQuery<R, Output, PostgrestTransformPhase>(
       builder: builder.range(from: bounds.lowerBound, to: bounds.upperBound)
     )
   }

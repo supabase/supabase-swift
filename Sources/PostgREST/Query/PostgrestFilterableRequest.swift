@@ -7,12 +7,12 @@
 
 /// A request that can be scoped by a filter.
 ///
-/// ``PostgrestTypedQuery`` and ``PostgrestTypedMutation`` conform, so ``where(_:)`` is declared
+/// ``PostgrestQuery`` and ``PostgrestMutation`` conform, so ``where(_:)`` is declared
 /// once here. You do not conform your own types to this.
 ///
 /// Only filtering lives here: `order` and `limit` move the request into
 /// ``PostgrestTransformPhase``, so they cannot return `Self` and are declared on
-/// ``PostgrestTypedQuery`` instead.
+/// ``PostgrestQuery`` instead.
 ///
 /// Not to be confused with ``PostgrestFilterableExpression``, which is a *column* that can sit on
 /// the left of an operator, or ``PostgrestFilterablePhase``, a phase marker on the string builder.
@@ -30,6 +30,6 @@ public protocol PostgrestFilterableRequest {
   init(builder: PostgrestRequestBuilder<Phase>)
 }
 
-extension PostgrestTypedQuery: PostgrestFilterableRequest where Phase: PostgrestFilterablePhase {
+extension PostgrestQuery: PostgrestFilterableRequest where Phase: PostgrestFilterablePhase {
   public typealias Relation = R
 }

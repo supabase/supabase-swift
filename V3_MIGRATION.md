@@ -3104,3 +3104,29 @@ ID as a `String`, or builds `MFAVerifyParams` from a string, gets a compile erro
 `challengeAndVerify(params:)` is unchanged. Passkey challenge IDs
 (`PasskeyRegistrationOptions.challengeId`, `PasskeyAuthenticationOptions.challengeId`) stay
 `String`, because the passkey endpoints type `challenge_id` as a string.
+
+## The typed PostgREST wrappers drop the `Typed` prefix
+
+The types behind `client.from(Todo.self)` are renamed. Nothing else about them changes in this step.
+
+| Before | After |
+| --- | --- |
+| `PostgrestTypedSource` | `PostgrestSource` |
+| `PostgrestTypedQuery` | `PostgrestQuery` |
+| `PostgrestTypedMutation` | `PostgrestMutation` |
+
+The typed API is marked alpha, and these are the names the PostgREST v3 design uses. The prefix
+only existed to keep clear of the string builders, whose names are `PostgrestQueryBuilder`,
+`PostgrestFilterBuilder` and `PostgrestTransformBuilder`, so the shorter names were free. Renaming
+now, before the typed API is stable, costs less than teaching early adopters a name we plan to drop.
+
+```swift
+// Before
+let query: PostgrestTypedQuery<Todo, [Todo], PostgrestFilterPhase> = client.from(Todo.self).select()
+
+// After
+let query: PostgrestQuery<Todo, [Todo], PostgrestFilterPhase> = client.from(Todo.self).select()
+```
+
+This is a compile error only where your code spells a type name. A chain that starts at
+`from(Todo.self)` and never names its type compiles unchanged. Search for `PostgrestTyped`.
