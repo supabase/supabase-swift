@@ -8,11 +8,30 @@
 import Foundation
 import Logging
 
-/// Represents the different status of a push
-public enum PushStatus: String, Sendable {
-  case ok
-  case error
-  case timeout
+/// The server's reply status to a push, or ``timeout`` when no reply arrived in time.
+///
+/// A reply status this SDK has no member for is preserved in ``rawValue``.
+public struct PushStatus: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+  public let rawValue: String
+
+  /// Creates a ``PushStatus`` from a raw string value.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  /// Creates a ``PushStatus`` from a string literal.
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
+  /// The server acknowledged the push.
+  public static let ok: PushStatus = "ok"
+
+  /// The server rejected the push.
+  public static let error: PushStatus = "error"
+
+  /// No reply arrived within the configured timeout interval.
+  public static let timeout: PushStatus = "timeout"
 }
 
 @MainActor
