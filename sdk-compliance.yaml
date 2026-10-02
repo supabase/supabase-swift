@@ -67,17 +67,16 @@ supporting_symbols:
   # and the typed mutation. Shared by every database.using_filters.* capability rather than owned
   # by one — the operator methods themselves are attributed individually below.
   - PostgrestFilterableRequest
-  - PostgrestFilterableRequest.Phase
   - PostgrestFilterableRequest.Relation
-  - PostgrestFilterableRequest.builder
-  - PostgrestFilterableRequest.init
+  - PostgrestFilterableRequest.request
   - PostgrestFilterableRequest.where
   - PostgrestMutation
-  - PostgrestMutation.Phase
   - PostgrestMutation.Relation
-  - PostgrestMutation.builder
-  - PostgrestMutation.init
+  - PostgrestMutation.request
   - PostgrestMutation.execute
+  # The request value every typed query and mutation holds and sends. Opaque for now: its members
+  # are internal until the inspectable request model is settled.
+  - PostgrestRequest
   # The update payload is a set of column assignments rather than a row shape, which is what lets
   # a nullable column be cleared: a column is in the body because it was assigned, and `nil` is
   # sent as an explicit null. Shared by the typed update entry point and any caller that builds an
@@ -939,8 +938,7 @@ features:
       - PostgrestSource.select
     supporting_symbols:
       - PostgrestQuery
-      - PostgrestQuery.builder
-      - PostgrestQuery.init
+      - PostgrestQuery.request
       - PostgrestQuery.execute
       # Row counting. `capabilities/database.yaml` has no id for it — it is an option on every
       # verb in supabase-js rather than a modifier — so it is registered against `select`, the
@@ -1253,26 +1251,37 @@ features:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.single
+      - PostgrestQuery.single
   database.using_modifiers.maybe_single_row:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.maybeSingle
+      - PostgrestQuery.maybeSingle
   database.using_modifiers.strip_nulls:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.stripNulls
+      - PostgrestQuery.stripNulls
   database.using_modifiers.format_csv:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.csv
+      - PostgrestQuery.csv
+    supporting_symbols:
+      # The dead end csv(), geojson() and explain(...) return. It has no stripNulls(), which is
+      # what makes the csv + stripNulls conflict unrepresentable.
+      - PostgrestRawQuery
+      - PostgrestRawQuery.execute
   database.using_modifiers.format_geojson:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.geojson
+      - PostgrestQuery.geojson
   database.using_modifiers.explain:
     status: implemented
     symbols:
       - ExplainFormat
+      - PostgrestQuery.explain
   database.using_modifiers.max_affected_rows:
     status: implemented
     symbols:

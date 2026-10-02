@@ -5,6 +5,8 @@
 //  Created by Guilherme Souza on 21/08/26.
 //
 
+import Foundation
+
 extension PostgrestClient {
   /// Returns a typed source for a relation, so column and relation names are checked by the
   /// compiler instead of being spelled as strings.
@@ -23,7 +25,7 @@ extension PostgrestClient {
       configuration.schema == nil && R.schema != PublicSchema.name
       ? schema(R.schema)
       : self
-    return PostgrestSource(builder: client.from(R.relationName))
+    return PostgrestSource(client: client)
   }
 }
 
@@ -33,16 +35,17 @@ extension PostgrestClient {
 /// because no operation has been chosen. Obtain one by passing a relation type to
 /// `PostgrestClient.from(_:)`.
 ///
-/// Like the builder it wraps, this is a value type: chaining off the same source twice gives two
-/// independent requests.
+/// This is a value type: chaining off the same source twice gives two independent requests.
 public struct PostgrestSource<R: PostgrestRelation>: Sendable {
-  let builder: PostgrestQueryBuilder
+  let client: PostgrestClient
+
+  var request: PostgrestRequest { PostgrestRequest(relation: R.relationName) }
 
   /// Selects every column of the relation.
   ///
   /// - Returns: A ``PostgrestQuery`` decoding into `[R]`.
-  public func select() -> PostgrestQuery<R, [R], PostgrestFilterPhase> {
-    PostgrestQuery(builder: builder.select(R.selectString))
+  public func select() -> PostgrestQuery<R, [R]> {
+    select(columns: R.selectString)
   }
 
   /// Selects the columns declared by a selection type.
@@ -60,7 +63,13 @@ public struct PostgrestSource<R: PostgrestRelation>: Sendable {
   /// - Returns: A ``PostgrestQuery`` decoding into `[S]`.
   public func select<S: PostgrestSelection>(
     _ selection: S.Type
-  ) -> PostgrestQuery<R, [S], PostgrestFilterPhase> where S.Source == R {
-    PostgrestQuery(builder: builder.select(S.selectString))
+  ) -> PostgrestQuery<R, [S]> where S.Source == R {
+    select(columns: S.selectString)
+  }
+
+  private func select<Output>(columns: String) -> PostgrestQuery<R, Output> {
+    var request = request
+    request.query.append(URLQueryItem(name: "select", value: columns))
+    return PostgrestQuery(client: client, request: request)
   }
 }
