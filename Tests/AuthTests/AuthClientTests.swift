@@ -2107,7 +2107,7 @@ extension AuthMockerTests {
           .post: Data(
             """
             {
-              "id": "12345",
+              "id": "e621e1f8-c36c-495a-93fc-0c247a3e6e5f",
               "type": "totp",
               "expires_at": 12345678
             }
@@ -2137,7 +2137,7 @@ extension AuthMockerTests {
       expectNoDifference(
         response,
         AuthMFAChallengeResponse(
-          id: "12345",
+          id: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!,
           type: "totp",
           expiresAt: 12_345_678
         )
@@ -2155,7 +2155,7 @@ extension AuthMockerTests {
           .post: Data(
             """
             {
-              "id": "12345",
+              "id": "e621e1f8-c36c-495a-93fc-0c247a3e6e5f",
               "type": "phone",
               "expires_at": 12345678
             }
@@ -2193,7 +2193,7 @@ extension AuthMockerTests {
       expectNoDifference(
         response,
         AuthMFAChallengeResponse(
-          id: "12345",
+          id: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!,
           type: "phone",
           expiresAt: 12_345_678
         )
@@ -2211,7 +2211,7 @@ extension AuthMockerTests {
           .post: Data(
             """
             {
-              "id": "challenge-1",
+              "id": "e621e1f8-c36c-495a-93fc-0c247a3e6e5f",
               "type": "webauthn",
               "expires_at": 12345678,
               "webauthn": {
@@ -2237,7 +2237,7 @@ extension AuthMockerTests {
         params: .init(factorId: factorId, webAuthn: .init(rpId: "example.com"))
       )
 
-      expectNoDifference(response.id, "challenge-1")
+      expectNoDifference(response.id, UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!)
       expectNoDifference(response.type, "webauthn")
       expectNoDifference(response.webauthn?.type, .create)
 
@@ -2261,12 +2261,12 @@ extension AuthMockerTests {
         curl \
         	--request POST \
         	--header "Authorization: Bearer accesstoken" \
-        	--header "Content-Length: 89" \
+        	--header "Content-Length: 122" \
         	--header "Content-Type: application/json" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
         	--header "X-Supabase-Api-Version: 2024-01-01" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	--data "{\"challenge_id\":\"123\",\"code\":\"123456\",\"factor_id\":\"00000000-0000-0000-0000-000000000123\"}" \
+        	--data "{\"challenge_id\":\"E621E1F8-C36C-495A-93FC-0C247A3E6E5F\",\"code\":\"123456\",\"factor_id\":\"00000000-0000-0000-0000-000000000123\"}" \
         	"http://localhost:54321/auth/v1/factors/00000000-0000-0000-0000-000000000123/verify"
         """#
       }
@@ -2279,7 +2279,7 @@ extension AuthMockerTests {
       try await sut.mfa.verify(
         params: .init(
           factorId: factorId,
-          challengeId: "123",
+          challengeId: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!,
           code: "123456"
         )
       )
@@ -2328,7 +2328,7 @@ extension AuthMockerTests {
           .post: Data(
             """
             {
-              "id": "12345",
+              "id": "e621e1f8-c36c-495a-93fc-0c247a3e6e5f",
               "type": "totp",
               "expires_at": 12345678
             }
@@ -2361,12 +2361,12 @@ extension AuthMockerTests {
         curl \
         	--request POST \
         	--header "Authorization: Bearer accesstoken" \
-        	--header "Content-Length: 88" \
+        	--header "Content-Length: 119" \
         	--header "Content-Type: application/json" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
         	--header "X-Supabase-Api-Version: 2024-01-01" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	--data "{\"challenge_id\":\"12345\",\"code\":\"456\",\"factor_id\":\"00000000-0000-0000-0000-000000000123\"}" \
+        	--data "{\"challenge_id\":\"E621E1F8-C36C-495A-93FC-0C247A3E6E5F\",\"code\":\"456\",\"factor_id\":\"00000000-0000-0000-0000-000000000123\"}" \
         	"http://localhost:54321/auth/v1/factors/00000000-0000-0000-0000-000000000123/verify"
         """#
       }
@@ -2730,7 +2730,7 @@ extension AuthMockerTests {
           statusCode: 200,
           data: [
             .post: Data(
-              #"{"id":"ch-1","type":"webauthn","expires_at":12345678,"webauthn":{"type":"create","credential_options":{"challenge":"Y2hhbGxlbmdl","rp":{"id":"example.com"}}}}"#
+              #"{"id":"e621e1f8-c36c-495a-93fc-0c247a3e6e5f","type":"webauthn","expires_at":12345678,"webauthn":{"type":"create","credential_options":{"challenge":"Y2hhbGxlbmdl","rp":{"id":"example.com"}}}}"#
                 .utf8)
           ]
         )
@@ -2774,7 +2774,7 @@ extension AuthMockerTests {
           statusCode: 200,
           data: [
             .post: Data(
-              #"{"id":"ch-1","type":"webauthn","expires_at":12345678,"webauthn":{"type":"request","credential_options":{"challenge":"Y2hhbGxlbmdl","rpId":"example.com"}}}"#
+              #"{"id":"e621e1f8-c36c-495a-93fc-0c247a3e6e5f","type":"webauthn","expires_at":12345678,"webauthn":{"type":"request","credential_options":{"challenge":"Y2hhbGxlbmdl","rpId":"example.com"}}}"#
                 .utf8)
           ]
         )
