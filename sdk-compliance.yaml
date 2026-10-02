@@ -1283,6 +1283,7 @@ features:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.maxAffected
+      - PostgrestMutation.maxAffected
   # Cancellation is plain Swift structured concurrency (cancel the enclosing
   # Task; the request's retry loop observes it via Task.checkCancellation())
   # — there is no dedicated cancel()-style symbol to register.
@@ -1318,6 +1319,7 @@ features:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.dryRun
+      - PostgrestMutation.dryRun
 
   database.configuration.auto_retry:
     status: implemented
