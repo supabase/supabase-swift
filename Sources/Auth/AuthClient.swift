@@ -1209,7 +1209,7 @@ public final class AuthClient: Sendable {
           query: [URLQueryItem(name: "scope", value: scope.rawValue)],
           headerFields: [.authorization: "Bearer \(session.accessToken)"]
         ),
-        for: session
+        for: .snapshot(session)
       )
     } catch let error as AuthError
       where error.kind == .sessionMissing
