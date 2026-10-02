@@ -68,6 +68,30 @@ extension AuthMockerTests {
     }
 
     @Test
+    func authStateChangesRemovesListenerWhenCancelledBeforeRegistrationRuns() async throws {
+      await withMainSerialExecutor {
+        let sut = makeSUT()
+
+        let stream = sut.authStateChanges
+
+        // The listener (and its `onTermination` cleanup) must be registered synchronously,
+        // before the stream is returned. Previously this happened inside an unstructured
+        // `Task`, so a consumer that cancels before that task's body runs would never get
+        // `onTermination` wired up, leaking the `onAuthStateChange` registration (SDK-2092).
+        expectNoDifference(sut.dependencies.eventEmitter.emitter.listenerCount, 1)
+
+        let consumer = Task {
+          for await _ in stream {}
+        }
+        consumer.cancel()
+
+        await Task.megaYield()
+
+        expectNoDifference(sut.dependencies.eventEmitter.emitter.listenerCount, 0)
+      }
+    }
+
+    @Test
     func signOut() async throws {
       try await withMainSerialExecutor {
         let sut = makeSUT()
