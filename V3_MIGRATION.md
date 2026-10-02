@@ -3037,3 +3037,30 @@ ID as a `String`, or builds `MFAVerifyParams` from a string, gets a compile erro
 `challengeAndVerify(params:)` is unchanged. Passkey challenge IDs
 (`PasskeyRegistrationOptions.challengeId`, `PasskeyAuthenticationOptions.challengeId`) stay
 `String`, because the passkey endpoints type `challenge_id` as a string.
+
+## `PostgrestTransformBuilder.order(_:ascending:nullsFirst:)` no longer defaults to `NULLS LAST`
+
+`nullsFirst` is now `Bool?`, defaulting to `nil` instead of `false`. When it is `nil`, the request
+sends no null placement at all, instead of always appending `.nullslast`.
+
+`nullsFirst: false` always rendered `.nullslast`, even for a descending sort, where Postgres's own
+default is `NULLS FIRST`. So `.order("due_at", ascending: false)` silently reversed the database's
+null placement instead of leaving it alone — and diverged from supabase-js, which only sends a
+placement when the caller asks for one.
+
+```swift
+// Before — sent order=due_at.desc.nullslast, forcing NULLs to the end
+try await client.from("todos").select().order("due_at", ascending: false).execute()
+
+// After — sends order=due_at.desc, so Postgres applies NULLS FIRST on a descending sort
+try await client.from("todos").select().order("due_at", ascending: false).execute()
+```
+
+This does not change compilation — `nullsFirst: Bool? = nil` still accepts a literal `true` or
+`false` at any call site. It is a silent behavior change: a query that relied on the implicit
+`NULLS LAST` on a descending sort over a nullable column now returns rows in a different order.
+Search your codebase for `.order(` calls that omit `nullsFirst` on a descending sort, and pass
+`nullsFirst: false` explicitly to keep the old placement.
+
+The typed `order { }` API added alongside this (SDK-1624) already worked this way and is
+unaffected.

@@ -86,8 +86,6 @@ extension PostgrestTypedQuery where Phase: PostgrestTransformablePhase {
   /// A merge, not a second parameter: PostgREST honours only the first `order` it sees and
   /// silently ignores the rest, so `order=name.asc&order=id.desc` sorts by name alone. Only
   /// `order=name.asc,id.desc` applies both.
-  ///
-  /// Not `builder.order(_:ascending:nullsFirst:)`, which always appends a placement.
   private func appendingOrder(
     _ value: String
   ) -> PostgrestTypedQuery<R, Output, PostgrestTransformPhase> {

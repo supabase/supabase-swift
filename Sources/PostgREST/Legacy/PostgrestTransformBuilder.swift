@@ -60,20 +60,22 @@ extension PostgrestRequestBuilder where Phase: PostgrestTransformablePhase {
   /// - Parameters:
   ///   - column: The column to sort by.
   ///   - ascending: When `true` (the default), results are sorted ascending (`ASC`).
-  ///   - nullsFirst: When `true`, `NULL` values appear before non-null values. Defaults to `false`.
+  ///   - nullsFirst: When `true`, `NULL` values appear before non-null values; when `false`, after.
+  ///     Defaults to `nil`, which sends no placement and lets the database apply its own default
+  ///     (`NULLS LAST` on ascending, `NULLS FIRST` on descending).
   ///   - referencedTable: The name of an embedded table to order by its columns. Defaults to `nil`.
   /// - Returns: A ``PostgrestTransformBuilder`` so calls can be chained.
   public func order(
     _ column: String,
     ascending: Bool = true,
-    nullsFirst: Bool = false,
+    nullsFirst: Bool? = nil,
     referencedTable: String? = nil
   ) -> PostgrestTransformBuilder {
     var copy = PostgrestTransformBuilder(carryingFrom: self)
     let key = referencedTable.map { "\($0).order" } ?? "order"
     let existingOrderIndex = copy.query.firstIndex { $0.name == key }
-    let value =
-      "\(column).\(ascending ? "asc" : "desc").\(nullsFirst ? "nullsfirst" : "nullslast")"
+    let placement = nullsFirst.map { $0 ? ".nullsfirst" : ".nullslast" } ?? ""
+    let value = "\(column).\(ascending ? "asc" : "desc")\(placement)"
 
     if let existingOrderIndex,
       let currentValue = copy.query[existingOrderIndex].value
