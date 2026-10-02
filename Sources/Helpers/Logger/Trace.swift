@@ -10,7 +10,6 @@ public import Logging
 package func trace<R: Sendable>(
   using logger: Logging.Logger,
   _ operation: () async throws -> R,
-  isolation _: isolated (any Actor)? = #isolation,
   fileID: StaticString = #fileID,
   function: StaticString = #function,
   line: UInt = #line

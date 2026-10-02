@@ -55,7 +55,7 @@ package struct MainSerialExecutorSerializedTrait: SuiteTrait, TestScoping {
 
   package func provideScope(
     for test: Test, testCase: Test.Case?,
-    performing function: @Sendable () async throws -> Void
+    performing function: @Sendable @concurrent () async throws -> Void
   ) async throws {
     try await MainSerialExecutorGate.shared.withLock {
       try await function()

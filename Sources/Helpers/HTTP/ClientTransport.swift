@@ -49,7 +49,8 @@ public protocol ClientTransport: Sendable {
 /// struct UserAgentMiddleware: ClientMiddleware {
 ///   func intercept(
 ///     _ request: HTTPRequest, body: HTTPBody?,
-///     next: @Sendable (HTTPRequest, HTTPBody?) async throws -> (HTTPResponse, HTTPBody?)
+///     next: nonisolated(nonsending) @Sendable (HTTPRequest, HTTPBody?) async throws
+///       -> (HTTPResponse, HTTPBody?)
 ///   ) async throws -> (HTTPResponse, HTTPBody?) {
 ///     var request = request
 ///     request.headerFields[.userAgent] = "my-app/1.0"
@@ -67,11 +68,13 @@ public protocol ClientMiddleware: Sendable {
   ///   - request: The outgoing request head.
   ///   - body: The outgoing body, if any.
   ///   - next: The rest of the chain, ending in the transport.
+  ///     It runs on the caller's executor whether or not your module enables
+  ///     `NonisolatedNonsendingByDefault`, so spell the type as written here.
   func intercept(
     _ request: HTTPTypes.HTTPRequest,
     body: HTTPBody?,
     next:
-      @Sendable (HTTPTypes.HTTPRequest, HTTPBody?) async throws -> (
+      nonisolated(nonsending) @Sendable (HTTPTypes.HTTPRequest, HTTPBody?) async throws -> (
         HTTPTypes.HTTPResponse, HTTPBody?
       )
   ) async throws -> (HTTPTypes.HTTPResponse, HTTPBody?)
