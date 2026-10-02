@@ -3115,3 +3115,40 @@ The string builder's `maybeSingle()` instead asks for a single object and maps P
 `explain(…)` return a `PostgrestRawQuery`, whose `execute()` returns the body as a `String`. That
 type has no `stripNulls()`, so `.csv().stripNulls()` does not compile, where the string builder
 throws at `execute()`.
+
+## A typed `update` or `delete` needs a filter, and a typed `insert` or `upsert` takes none
+
+`PostgrestMutation` gains a `Phase` parameter, and what a mutation offers depends on it:
+
+| Started from | Phase | `where` | `all()` | `execute()`, `returning()` |
+| --- | --- | --- | --- | --- |
+| `update`, `delete` | `PostgrestUnscopedPhase` | yes | yes | no |
+| after `where` or `all()` | `PostgrestScopedPhase` | yes | no | yes |
+| `insert`, `upsert` | `PostgrestInsertPhase` | no | no | yes |
+
+An `update` or `delete` without a filter writes every row in the relation. Before, that was one
+forgotten `where` away, and only a doc comment warned about it. Now it does not compile, and
+writing every row takes an explicit `all()`. `all()` adds nothing to the request.
+
+A filter after `insert` or `upsert` compiled before, but PostgREST ignores filters on a `POST`, so
+the filter did nothing. Now it does not compile. The string builder gets the same fix separately.
+
+```swift
+// Before
+try await client.from(Todo.self).delete().execute()
+try await client.from(Todo.self).update { $0.isDone = true }.execute()
+try await client.from(Todo.self).delete().returning().where { $0.id.eq(1) }.execute()
+try await client.from(Todo.self).insert(draft).where { $0.id.eq(1) }.execute()
+
+// After
+try await client.from(Todo.self).delete().all().execute()
+try await client.from(Todo.self).update { $0.isDone = true }.all().execute()
+try await client.from(Todo.self).delete().where { $0.id.eq(1) }.returning().execute()
+try await client.from(Todo.self).insert(draft).execute()
+```
+
+Every case is a compile error. On an unscoped mutation the compiler reports that
+`PostgrestUnscopedPhase` does not conform to `PostgrestExecutableMutationPhase`. Add a `where`, or
+`all()` if every row is what you mean. On an insert it reports that `where` needs
+`PostgrestUnscopedPhase`; delete the filter. Code that spells the type must add the phase:
+`PostgrestMutation<Todo>` becomes, for example, `PostgrestMutation<Todo, PostgrestScopedPhase>`.

@@ -7,7 +7,8 @@
 
 /// A request that can be scoped by a filter.
 ///
-/// ``PostgrestQuery`` and ``PostgrestMutation`` conform, so ``where(_:)`` is declared once here.
+/// ``PostgrestQuery`` conforms, and so does a ``PostgrestMutation`` in ``PostgrestScopedPhase``, so
+/// ``where(_:)`` is declared once here.
 /// You do not conform your own types to this.
 ///
 /// Not to be confused with ``PostgrestFilterableExpression``, which is a *column* that can sit on

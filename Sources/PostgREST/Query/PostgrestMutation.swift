@@ -40,25 +40,103 @@ public struct PostgrestConflictResolution: RawRepresentable, Hashable, Sendable,
   public static let ignoreDuplicates: PostgrestConflictResolution = "ignore-duplicates"
 }
 
+/// The stage a ``PostgrestMutation`` is at, which decides the methods it offers.
+///
+/// You do not conform your own types to this. The phases are ``PostgrestUnscopedPhase``,
+/// ``PostgrestScopedPhase`` and ``PostgrestInsertPhase``.
+///
+/// > Warning: Part of the typed query API, which is alpha. Its shape may change in a minor release.
+public protocol PostgrestMutationPhase {}
+
+/// A ``PostgrestMutationPhase`` in which the mutation can be sent.
+///
+/// > Warning: Part of the typed query API, which is alpha. Its shape may change in a minor release.
+public protocol PostgrestExecutableMutationPhase: PostgrestMutationPhase {}
+
+/// The phase of an `update` or `delete` that no filter has scoped yet.
+///
+/// It has no `execute()`, because an unfiltered `update` or `delete` writes every row in the
+/// relation. Call ``PostgrestMutation/where(_:)`` to scope it, or ``PostgrestMutation/all()`` to
+/// write every row on purpose. Either one moves it to ``PostgrestScopedPhase``.
+public enum PostgrestUnscopedPhase: PostgrestMutationPhase {}
+
+/// The phase of an `update` or `delete` that a filter, or ``PostgrestMutation/all()``, has
+/// scoped. It can be sent, and more filters can still be added.
+public enum PostgrestScopedPhase: PostgrestExecutableMutationPhase {}
+
+/// The phase of an `insert` or `upsert`.
+///
+/// It can be sent, but it cannot be filtered. An insert has no existing rows to filter, and
+/// PostgREST ignores a filter sent with a `POST`.
+public enum PostgrestInsertPhase: PostgrestExecutableMutationPhase {}
+
 /// A write request against a writable relation.
 ///
 /// Obtain one from `insert`, `upsert`, `update` or `delete` on a ``PostgrestSource``. Those
 /// methods exist only where the relation conforms to ``PostgrestWritableRelation``, so a read-only
 /// view cannot be written.
 ///
+/// `Phase` decides what the mutation offers. An `update` or `delete` starts in
+/// ``PostgrestUnscopedPhase`` and cannot be sent until it is scoped, so writing every row takes a
+/// deliberate ``all()``:
+///
+/// ```swift
+/// try await client.from(Todo.self).delete().where { $0.id.eq(1) }.execute()  // one row
+/// try await client.from(Todo.self).delete().all().execute()                  // every row
+/// try await client.from(Todo.self).delete().execute()                        // does not compile
+/// ```
+///
+/// An `insert` or `upsert` is in ``PostgrestInsertPhase``, which can be sent but not filtered.
+///
 /// This is a value type: chaining off the same mutation twice gives two independent requests.
 ///
 /// > Warning: Part of the typed query API, which is alpha. Its shape may change in a minor release.
-public struct PostgrestMutation<R: PostgrestWritableRelation>: PostgrestFilterableRequest,
+public struct PostgrestMutation<R: PostgrestWritableRelation, Phase: PostgrestMutationPhase>:
   Sendable
 {
-  public typealias Relation = R
-
   let client: PostgrestClient
 
   /// The request this mutation sends.
   public var request: PostgrestRequest
+}
 
+extension PostgrestMutation: PostgrestFilterableRequest where Phase == PostgrestScopedPhase {
+  public typealias Relation = R
+}
+
+extension PostgrestMutation where Phase == PostgrestUnscopedPhase {
+  /// Scopes the write by a filter, so it touches only the rows the filter matches.
+  ///
+  /// ```swift
+  /// try await client.from(Todo.self).delete().where { $0.isDone.eq(true) }.execute()
+  /// ```
+  ///
+  /// More `where` calls can follow. They are ANDed with this one.
+  ///
+  /// - Parameter build: Builds the filter from the relation's columns.
+  /// - Returns: A mutation in ``PostgrestScopedPhase``, which can be sent.
+  public func `where`(
+    _ build: (R.Columns) -> PostgrestFilter<R>
+  ) -> PostgrestMutation<R, PostgrestScopedPhase> {
+    all().where(build)
+  }
+
+  /// Writes every row in the relation, on purpose.
+  ///
+  /// ```swift
+  /// try await client.from(Todo.self).delete().all().execute()
+  /// ```
+  ///
+  /// This adds nothing to the request. It only moves the mutation to ``PostgrestScopedPhase``,
+  /// so a write without a filter is something you spell out, not something you forget.
+  ///
+  /// - Returns: A mutation in ``PostgrestScopedPhase``, which can be sent.
+  public func all() -> PostgrestMutation<R, PostgrestScopedPhase> {
+    PostgrestMutation<R, PostgrestScopedPhase>(client: client, request: request)
+  }
+}
+
+extension PostgrestMutation where Phase: PostgrestExecutableMutationPhase {
   /// Requests the affected rows back, decoded as `[R]`.
   ///
   /// This replaces only the `return=` preference in the `Prefer` header, so it composes with
@@ -117,7 +195,7 @@ extension PostgrestSource where R: PostgrestWritableRelation {
   ///   there, so either can be left out and filled in by the database.
   /// - Returns: A ``PostgrestMutation`` to execute, or to request rows back from.
   /// - Throws: An encoding error if `values` cannot be serialized.
-  public func insert(_ values: R.Draft) throws -> PostgrestMutation<R> {
+  public func insert(_ values: R.Draft) throws -> PostgrestMutation<R, PostgrestInsertPhase> {
     try insertion(values)
   }
 
@@ -143,7 +221,9 @@ extension PostgrestSource where R: PostgrestWritableRelation {
   ///   ``PostgrestWritableRelation/Draft`` shape.
   /// - Returns: A ``PostgrestMutation`` to execute, or to request rows back from.
   /// - Throws: An encoding error if `values` cannot be serialized.
-  public func insert(_ values: some Collection<R.Draft>) throws -> PostgrestMutation<R> {
+  public func insert(_ values: some Collection<R.Draft>) throws -> PostgrestMutation<
+    R, PostgrestInsertPhase
+  > {
     try insertion(Array(values))
   }
 
@@ -187,7 +267,7 @@ extension PostgrestSource where R: PostgrestWritableRelation {
       R.Columns, PostgrestStoredColumn<R, each RestValue, each RestNullability>
     >,
     resolution: PostgrestConflictResolution = .mergeDuplicates
-  ) throws -> PostgrestMutation<R> {
+  ) throws -> PostgrestMutation<R, PostgrestInsertPhase> {
     var names = [R.columns[keyPath: column].postgrestExpression]
     repeat names.append(R.columns[keyPath: each additional].postgrestExpression)
     return try insertion(
@@ -228,7 +308,7 @@ extension PostgrestSource where R: PostgrestWritableRelation {
       R.Columns, PostgrestStoredColumn<R, each RestValue, each RestNullability>
     >,
     resolution: PostgrestConflictResolution = .mergeDuplicates
-  ) throws -> PostgrestMutation<R> {
+  ) throws -> PostgrestMutation<R, PostgrestInsertPhase> {
     var names = [R.columns[keyPath: column].postgrestExpression]
     repeat names.append(R.columns[keyPath: each additional].postgrestExpression)
     return try insertion(
@@ -237,7 +317,8 @@ extension PostgrestSource where R: PostgrestWritableRelation {
 
   /// Updates the rows matched by the filters applied to the returned value.
   ///
-  /// > Important: With no filter this updates every row in the relation.
+  /// The returned mutation cannot be sent until it is scoped: call ``PostgrestMutation/where(_:)``,
+  /// or ``PostgrestMutation/all()`` to update every row on purpose.
   ///
   /// The closure assigns to the columns this update changes. A column it never names stays out of
   /// the request body and the database leaves it alone; a column assigned `nil` is sent as an
@@ -258,7 +339,7 @@ extension PostgrestSource where R: PostgrestWritableRelation {
   /// - Throws: An encoding error if the assigned values cannot be serialized.
   public func update(
     _ build: (inout PostgrestUpdate<R>) -> Void
-  ) throws -> PostgrestMutation<R> {
+  ) throws -> PostgrestMutation<R, PostgrestUnscopedPhase> {
     try update(PostgrestUpdate(build))
   }
 
@@ -267,21 +348,25 @@ extension PostgrestSource where R: PostgrestWritableRelation {
   /// Takes an update built elsewhere, so the layer that decides what changes does not have to be
   /// the layer that sends it.
   ///
-  /// > Important: With no filter this updates every row in the relation.
+  /// The returned mutation cannot be sent until it is scoped: call ``PostgrestMutation/where(_:)``,
+  /// or ``PostgrestMutation/all()`` to update every row on purpose.
   ///
   /// - Parameter values: The columns to change.
   /// - Returns: A ``PostgrestMutation`` to scope, then execute.
   /// - Throws: An encoding error if the assigned values cannot be serialized.
-  public func update(_ values: PostgrestUpdate<R>) throws -> PostgrestMutation<R> {
+  public func update(
+    _ values: PostgrestUpdate<R>
+  ) throws -> PostgrestMutation<R, PostgrestUnscopedPhase> {
     mutation(.patch, body: try client.configuration.encoder.encode(values))
   }
 
   /// Deletes the rows matched by the filters applied to the returned value.
   ///
-  /// > Important: With no filter this deletes every row in the relation.
+  /// The returned mutation cannot be sent until it is scoped: call ``PostgrestMutation/where(_:)``,
+  /// or ``PostgrestMutation/all()`` to delete every row on purpose.
   ///
   /// - Returns: A ``PostgrestMutation`` to scope, then execute.
-  public func delete() -> PostgrestMutation<R> {
+  public func delete() -> PostgrestMutation<R, PostgrestUnscopedPhase> {
     mutation(.delete)
   }
 }
@@ -317,7 +402,7 @@ extension PostgrestSource where R: PostgrestWritableRelation & PostgrestKeyedRel
   public func upsert(
     _ values: R.Draft,
     resolution: PostgrestConflictResolution = .mergeDuplicates
-  ) throws -> PostgrestMutation<R> {
+  ) throws -> PostgrestMutation<R, PostgrestInsertPhase> {
     try insertion(
       values, onConflict: R.primaryKeyColumns.joined(separator: ","), resolution: resolution)
   }
@@ -346,7 +431,7 @@ extension PostgrestSource where R: PostgrestWritableRelation & PostgrestKeyedRel
   public func upsert(
     _ values: some Collection<R.Draft>,
     resolution: PostgrestConflictResolution = .mergeDuplicates
-  ) throws -> PostgrestMutation<R> {
+  ) throws -> PostgrestMutation<R, PostgrestInsertPhase> {
     try insertion(
       Array(values), onConflict: R.primaryKeyColumns.joined(separator: ","), resolution: resolution)
   }
@@ -354,11 +439,11 @@ extension PostgrestSource where R: PostgrestWritableRelation & PostgrestKeyedRel
 
 extension PostgrestSource where R: PostgrestWritableRelation {
   /// A write that asks for no rows back. ``PostgrestMutation/returning()`` opts in.
-  fileprivate func mutation(
+  fileprivate func mutation<Phase>(
     _ method: HTTPTypes.HTTPRequest.Method,
     body: Data? = nil,
     preferences: [String] = []
-  ) -> PostgrestMutation<R> {
+  ) -> PostgrestMutation<R, Phase> {
     var request = request
     request.method = method
     request.body = body
@@ -372,9 +457,9 @@ extension PostgrestSource where R: PostgrestWritableRelation {
     _ values: some Encodable,
     onConflict: String? = nil,
     resolution: PostgrestConflictResolution? = nil
-  ) throws -> PostgrestMutation<R> {
+  ) throws -> PostgrestMutation<R, PostgrestInsertPhase> {
     let body = try client.configuration.encoder.encode(values)
-    var mutation = mutation(
+    var mutation: PostgrestMutation<R, PostgrestInsertPhase> = mutation(
       .post, body: body, preferences: resolution.map { ["resolution=\($0.rawValue)"] } ?? [])
     if let onConflict {
       mutation.request.query.append(URLQueryItem(name: "on_conflict", value: onConflict))
