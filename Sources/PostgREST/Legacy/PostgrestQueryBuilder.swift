@@ -95,7 +95,8 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
   ///     the same option.
   ///   - encoder: The `JSONEncoder` used to serialize `values`. Overrides
   ///     ``PostgrestClient/Configuration/encoder`` when non-`nil`.
-  /// - Returns: A ``PostgrestFilterBuilder`` for applying additional constraints or executing the request.
+  /// - Returns: A ``PostgrestTransformBuilder`` for shaping the returned rows or executing the request.
+  ///   Filters are not available: PostgREST ignores them on an insert.
   /// - Throws: An encoding error if `values` cannot be serialized, or ``PostgrestError`` on server error.
   public func insert(
     _ values: some Encodable,
@@ -103,10 +104,10 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
     count: CountOption? = nil,
     defaultToNull: Bool = true,
     encoder: JSONEncoder? = nil
-  ) throws -> PostgrestFilterBuilder {
+  ) throws -> PostgrestTransformBuilder {
     let body = try (encoder ?? configuration.encoder).encode(values)
 
-    var copy = PostgrestFilterBuilder(carryingFrom: self)
+    var copy = PostgrestTransformBuilder(carryingFrom: self)
     copy.request.method = .post
     var prefersHeaders: [String] = []
     if let returning {
@@ -166,7 +167,8 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
   ///     resolves to the database-generated value, which is what the conflict is detected on.
   ///   - encoder: The `JSONEncoder` used to serialize `values`. Overrides
   ///     ``PostgrestClient/Configuration/encoder`` when non-`nil`.
-  /// - Returns: A ``PostgrestFilterBuilder`` for applying additional constraints or executing the request.
+  /// - Returns: A ``PostgrestTransformBuilder`` for shaping the returned rows or executing the request.
+  ///   Filters are not available: PostgREST ignores them on an upsert.
   /// - Throws: An encoding error if `values` cannot be serialized, or ``PostgrestError`` on server error.
   public func upsert(
     _ values: some Encodable,
@@ -176,10 +178,10 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
     ignoreDuplicates: Bool = false,
     defaultToNull: Bool = true,
     encoder: JSONEncoder? = nil
-  ) throws -> PostgrestFilterBuilder {
+  ) throws -> PostgrestTransformBuilder {
     let body = try (encoder ?? configuration.encoder).encode(values)
 
-    var copy = PostgrestFilterBuilder(carryingFrom: self)
+    var copy = PostgrestTransformBuilder(carryingFrom: self)
     copy.request.method = .post
     var prefersHeaders = [
       "resolution=\(ignoreDuplicates ? "ignore" : "merge")-duplicates",
