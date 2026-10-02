@@ -93,6 +93,7 @@ supporting_symbols:
   - PostgrestRelation.columns
   - PostgrestRelation.relationName
   - PostgrestRelation.schema
+  - PostgrestRelation.Schema
   - PostgrestKeyedRelation
   - PostgrestKeyedRelation.primaryKeyColumns
   - PostgrestRequestBuilder
@@ -258,7 +259,7 @@ supporting_symbols:
   - FunctionsError.Kind.init
   - FunctionsError.Kind.rawValue
   - FunctionsError.Kind.relay
-  - FunctionsError.Kind.http
+  - FunctionsError.Kind.server
   - FunctionsError.Kind.transport
   - FunctionsError.Kind.decoding
   - FunctionsError.init
@@ -274,10 +275,9 @@ supporting_symbols:
   - StorageError.Kind.init
   - StorageError.Kind.rawValue
   - StorageError.Kind.server
-  - StorageError.Kind.unexpectedResponse
   - StorageError.Kind.transport
   - StorageError.Kind.decoding
-  - StorageError.Kind.invalidURL
+  - StorageError.Kind.invalidRequest
   - StorageError.ServerError
   - StorageError.ServerError.init
   - StorageError.ServerError.statusCode
@@ -297,7 +297,6 @@ supporting_symbols:
   - PostgrestError.Kind.init
   - PostgrestError.Kind.rawValue
   - PostgrestError.Kind.server
-  - PostgrestError.Kind.unexpectedResponse
   - PostgrestError.Kind.transport
   - PostgrestError.Kind.decoding
   - PostgrestError.Kind.invalidRequest
@@ -320,16 +319,11 @@ supporting_symbols:
   - AuthError.Kind
   - AuthError.Kind.init
   - AuthError.Kind.rawValue
-  - AuthError.Kind.api
+  - AuthError.Kind.server
   - AuthError.Kind.sessionMissing
   - AuthError.Kind.refreshDiscarded
-  - AuthError.Kind.weakPassword
-  - AuthError.Kind.pkceGrantCodeExchange
-  - AuthError.Kind.implicitGrantRedirect
   - AuthError.Kind.oauthFlowFailed
   - AuthError.Kind.jwtVerificationFailed
-  - AuthError.Kind.webAuthn
-  - AuthError.Kind.unexpectedResponse
   - AuthError.Kind.transport
   - AuthError.Kind.decoding
   - AuthError.init
@@ -342,13 +336,30 @@ supporting_symbols:
   - AuthError.description
   - AuthError.sessionMissing
   - AuthError.refreshDiscarded
+  # AuthAdmin.init (SDK-1983) creates the standalone admin client that every
+  # auth.admin.* capability runs on, rather than belonging to one of them.
+  - AuthAdmin.init
+  # The admin MFA namespace is shared by auth.admin.list_mfa_factors and
+  # auth.admin.delete_mfa_factor rather than owned by one.
+  - AuthAdmin.mfa
+  - AuthAdminMFA
+  # The recovery codes namespace is shared by every auth.mfa_recovery_codes.*
+  # capability rather than owned by one, and its generate response is returned
+  # by both generate and regenerate.
+  - AuthMFA.recoveryCodes
+  - AuthMFARecoveryCodes
+  - AuthMFARecoveryCodesGenerateResponse
+  - AuthMFARecoveryCodesGenerateResponse.init
+  - AuthMFARecoveryCodesGenerateResponse.id
+  - AuthMFARecoveryCodesGenerateResponse.friendlyName
+  - AuthMFARecoveryCodesGenerateResponse.total
+  - AuthMFARecoveryCodesGenerateResponse.codes
   # RealtimeError (SDK-1788) is thrown by every realtime.* capability rather
   # than owned by one.
   - RealtimeError
   - RealtimeError.Kind
   - RealtimeError.Kind.init
   - RealtimeError.Kind.rawValue
-  - RealtimeError.Kind.connection
   - RealtimeError.Kind.timeout
   - RealtimeError.Kind.accessTokenMissing
   - RealtimeError.Kind.maxRetryAttemptsReached
@@ -612,6 +623,33 @@ features:
     symbols:
       - AuthMFA.authenticatorAssuranceLevel
 
+  auth.mfa_recovery_codes.generate:
+    status: implemented
+    symbols:
+      - AuthMFARecoveryCodes.generate
+  auth.mfa_recovery_codes.get_status:
+    status: implemented
+    symbols:
+      - AuthMFARecoveryCodes.status
+    supporting_symbols:
+      - AuthMFARecoveryCodesStatusResponse
+      - AuthMFARecoveryCodesStatusResponse.init
+      - AuthMFARecoveryCodesStatusResponse.id
+      - AuthMFARecoveryCodesStatusResponse.total
+      - AuthMFARecoveryCodesStatusResponse.remaining
+  auth.mfa_recovery_codes.regenerate:
+    status: implemented
+    symbols:
+      - AuthMFARecoveryCodes.regenerate
+  auth.mfa_recovery_codes.unenroll:
+    status: implemented
+    symbols:
+      - AuthMFARecoveryCodes.unenroll
+  auth.mfa_recovery_codes.verify:
+    status: implemented
+    symbols:
+      - AuthMFARecoveryCodes.verify
+
   auth.admin.create_user:
     status: implemented
     symbols:
@@ -678,8 +716,14 @@ features:
       - GenerateLinkType.recovery
       - GenerateLinkType.emailChangeCurrent
       - GenerateLinkType.emailChangeNew
-  auth.admin.list_mfa_factors: not_implemented
-  auth.admin.delete_mfa_factor: not_implemented
+  auth.admin.list_mfa_factors:
+    status: implemented
+    symbols:
+      - AuthAdminMFA.listFactors
+  auth.admin.delete_mfa_factor:
+    status: implemented
+    symbols:
+      - AuthAdminMFA.deleteFactor
   auth.admin.create_provider: not_implemented
   auth.admin.delete_provider: not_implemented
   auth.admin.update_provider: not_implemented
@@ -908,6 +952,12 @@ features:
       - PostgrestClient.schema
     supporting_symbols:
       - PostgrestClient.Configuration.schema
+      - PostgrestSchema
+      - PostgrestSchema.name
+      - PublicSchema
+      - PublicSchema.name
+      - PostgrestSchemaScope
+      - PostgrestSchemaScope.from
   database.query.rpc:
     status: implemented
     symbols:

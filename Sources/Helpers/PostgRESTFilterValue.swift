@@ -8,7 +8,7 @@ private let postgrestReservedCharacters: Set<Character> = [",", "(", ")", "\"", 
 /// i.e. it contains a reserved character or has surrounding whitespace.
 package func postgrestFilterValueNeedsQuoting(_ value: String) -> Bool {
   value.contains(where: postgrestReservedCharacters.contains)
-    || value != value.trimmingCharacters(in: .whitespaces)
+    || value != value.trimmingCharacters(in: .whitespacesAndNewlines)
 }
 
 /// Escapes a raw filter value for safe inclusion in a PostgREST filter such as
@@ -34,7 +34,7 @@ package func postgrestArrayLiteralElementNeedsQuoting(_ element: String) -> Bool
   element.isEmpty
     || element.caseInsensitiveCompare("NULL") == .orderedSame
     || element.contains(where: postgrestArrayLiteralReservedCharacters.contains)
-    || element != element.trimmingCharacters(in: .whitespaces)
+    || element != element.trimmingCharacters(in: .whitespacesAndNewlines)
 }
 
 /// Escapes a raw value for safe inclusion as an element of a PostgREST array

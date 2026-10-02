@@ -177,7 +177,7 @@ extension AuthClient {
   ///   - http: The transport and middleware chain every request goes through.
   ///   - automaticallyRefreshesToken: Set to `true` if you want to automatically refresh the token before expiring.
   ///   - clock: The clock the auto-refresh loop sleeps on. Defaults to `ContinuousClock()`.
-  public init(
+  public convenience init(
     url: URL? = nil,
     headers: [String: String] = [:],
     flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,

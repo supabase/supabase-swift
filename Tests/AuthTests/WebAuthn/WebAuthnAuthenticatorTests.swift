@@ -13,27 +13,27 @@ import Testing
 @Suite
 struct WebAuthnAuthenticatorTests {
   @Test
-  func webAuthnCreationRpIdMissingFieldThrowsWebAuthnKind() {
+  func webAuthnCreationRpIdMissingFieldThrowsDecodingKind() {
     let options = JSONValue.object([:])
 
     #expect {
       try options.webAuthnCreationRpId()
     } throws: { error in
       guard let authError = error as? AuthError else { return false }
-      return authError.kind == .webAuthn
+      return authError.kind == .decoding
         && authError.message == "Missing field 'rp.id' in WebAuthn credential options."
     }
   }
 
   @Test
-  func webAuthnChallengeDataInvalidBase64URLThrowsWebAuthnKind() {
+  func webAuthnChallengeDataInvalidBase64URLThrowsDecodingKind() {
     let options = JSONValue.object(["challenge": .string("not valid base64url!!!")])
 
     #expect {
       try options.webAuthnChallengeData()
     } throws: { error in
       guard let authError = error as? AuthError else { return false }
-      return authError.kind == .webAuthn
+      return authError.kind == .decoding
     }
   }
 }

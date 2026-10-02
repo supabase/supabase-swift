@@ -65,7 +65,7 @@ final class URLSessionWebSocket: WebSocket {
   ///             certificate pinning and other server-trust customization. Defaults to `nil`
   ///             (equivalent to `.default` configuration with no delegate to forward).
   /// - Returns: A connected `URLSessionWebSocket` instance.
-  /// - Throws: ``RealtimeError`` with kind `.connection` if the connection fails or times out.
+  /// - Throws: ``RealtimeError`` with kind `.transport` if the connection fails or times out.
   static func connect(
     to url: URL,
     protocols: [String]? = nil,
@@ -73,7 +73,7 @@ final class URLSessionWebSocket: WebSocket {
     session: URLSession? = nil
   ) async throws -> URLSessionWebSocket {
     guard url.scheme == "ws" || url.scheme == "wss" else {
-      throw RealtimeError.connection(
+      throw RealtimeError.transport(
         "only ws: and wss: schemes are supported, got \(url.scheme ?? "no scheme").",
         underlyingError: URLError(.unsupportedURL)
       )
@@ -97,7 +97,7 @@ final class URLSessionWebSocket: WebSocket {
     // a lock-order inversion with cancellation (see the fix for the
     // equivalent bug in `AsyncValueSubject`, supabase/supabase-swift#1154).
     let onComplete: @Sendable (URLSession, URLSessionTask, (any Error)?) -> Void = {
-      session, task, error in
+      session, _, error in
       let afterUnlock: @Sendable () -> Void = mutableState.withValue {
         if let webSocket = $0.webSocket {
           // There are three possibilities here:
@@ -121,7 +121,7 @@ final class URLSessionWebSocket: WebSocket {
           guard let continuation = $0.continuation else { return {} }
           return {
             continuation.resume(
-              throwing: RealtimeError.connection(
+              throwing: RealtimeError.transport(
                 "connection ended unexpectedly \(error.localizedDescription)",
                 underlyingError: error))
           }
@@ -150,7 +150,7 @@ final class URLSessionWebSocket: WebSocket {
     }
     let onWebSocketTaskClosed:
       @Sendable (URLSession, URLSessionWebSocketTask, Int?, Data?) -> Void =
-        { session, task, code, reason in
+        { _, _, code, reason in
           mutableState.withValue {
             assert($0.webSocket != nil, "connection should exist by this time")
             $0.webSocket?._connectionClosed(code: code, reason: reason)
@@ -253,7 +253,7 @@ final class URLSessionWebSocket: WebSocket {
     case .data(let data):
       event = .binary(data)
     @unknown default:
-      _closeConnectionWithError(RealtimeError.connection("Received unsupported message type"))
+      _closeConnectionWithError(RealtimeError.decoding("Received unsupported message type"))
       return
     }
     _trigger(event)

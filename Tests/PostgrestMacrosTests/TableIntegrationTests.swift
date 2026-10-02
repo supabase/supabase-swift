@@ -37,7 +37,7 @@ struct IntegrationUserRole {
 struct IntegrationNote {
   @PrimaryKey @Default var id: Int
   var body: String
-  var tag: Optional<String>
+  var tag: Optional<String>  // swiftlint:disable:this syntactic_sugar
 }
 
 // A writable table with no declared key — an append-only log. It must not conform to
@@ -64,6 +64,19 @@ struct IntegrationActiveTodo {
   var task: String
 }
 
+/// Shadows `PostgREST.PublicSchema` the way the postgres-meta Swift generator's output does, so
+/// every `@Table` in this module compiles against the collision.
+enum PublicSchema {}
+
+enum IntegrationPrivateSchema: PostgrestSchema {
+  static let name = "private"
+}
+
+@Table("secrets", schema: IntegrationPrivateSchema.self)
+struct IntegrationSecret {
+  var id: Int
+}
+
 @Suite
 struct TableIntegrationTests {
   typealias Todo = IntegrationTodo
@@ -73,6 +86,13 @@ struct TableIntegrationTests {
     #expect(Todo.relationName == "todos")
     #expect(Todo.schema == "public")
     #expect(Todo.selectString == "*")
+  }
+
+  @Test
+  func macroSuppliesTheSchemaType() {
+    #expect(Todo.Schema.self == PostgREST.PublicSchema.self)
+    #expect(IntegrationSecret.Schema.self == IntegrationPrivateSchema.self)
+    #expect(IntegrationSecret.schema == "private")
   }
 
   /// `assertMacro` checks the emitted text. This checks the expansion compiles into usable

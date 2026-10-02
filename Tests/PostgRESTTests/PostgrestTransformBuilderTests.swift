@@ -676,9 +676,8 @@ extension PostgrestMockerTests {
       .snapshotRequest {
         #"""
         curl \
-        	--header "Accept: application/json" \
+        	--header "Accept: application/vnd.pgrst.array+json;nulls=stripped" \
         	--header "Content-Type: application/json" \
-        	--header "Prefer: return=stripped-nulls" \
         	--header "X-Client-Info: postgrest-swift/0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	"http://localhost:54321/rest/v1/countries?select=*"
@@ -690,6 +689,70 @@ extension PostgrestMockerTests {
         .from("countries")
         .select()
         .stripNulls()
+        .execute()
+    }
+
+    @Test
+    func stripNullsKeepsReturnRepresentationOnInsert() async throws {
+      Mock(
+        url: url.appendingPathComponent("users"),
+        ignoreQuery: true,
+        statusCode: 201,
+        data: [
+          .post: Data("[]".utf8)
+        ]
+      )
+      .snapshotRequest {
+        #"""
+        curl \
+        	--request POST \
+        	--header "Accept: application/vnd.pgrst.array+json;nulls=stripped" \
+        	--header "Content-Length: 27" \
+        	--header "Content-Type: application/json" \
+        	--header "Prefer: return=representation" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	--data "{\"id\":1,\"username\":\"admin\"}" \
+        	"http://localhost:54321/rest/v1/users?select=*"
+        """#
+      }
+      .register()
+
+      try await sut
+        .from("users")
+        .insert(User(id: 1, username: "admin"))
+        .select()
+        .stripNulls()
+        .execute()
+    }
+
+    @Test
+    func stripNullsBeforeSingleStripsTheObject() async throws {
+      Mock(
+        url: url.appendingPathComponent("countries"),
+        ignoreQuery: true,
+        statusCode: 200,
+        data: [
+          .get: Data("{}".utf8)
+        ]
+      )
+      .snapshotRequest {
+        #"""
+        curl \
+        	--header "Accept: application/vnd.pgrst.object+json;nulls=stripped" \
+        	--header "Content-Type: application/json" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	"http://localhost:54321/rest/v1/countries?select=*"
+        """#
+      }
+      .register()
+
+      try await sut
+        .from("countries")
+        .select()
+        .stripNulls()
+        .single()
         .execute()
     }
 

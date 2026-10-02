@@ -340,7 +340,7 @@ struct FunctionsClientTests {
       try await sut.invoke("hello_world")
       Issue.record("Invoke should fail.")
     } catch let error as FunctionsError {
-      #expect(error.kind == .http)
+      #expect(error.kind == .server)
       #expect(error.response?.statusCode == 300)
       #expect(error.response?.body == Data())
     } catch {
@@ -740,7 +740,7 @@ struct FunctionsClientTests {
         Issue.record("should throw error")
       }
     } catch let error as FunctionsError {
-      #expect(error.kind == .http)
+      #expect(error.kind == .server)
       #expect(error.response?.statusCode == 300)
     }
   }

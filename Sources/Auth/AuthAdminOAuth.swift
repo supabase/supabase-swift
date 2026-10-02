@@ -26,11 +26,12 @@ import HTTPTypes
 /// - ``deleteClient(id:)``
 /// - ``regenerateClientSecret(id:)``
 public struct AuthAdminOAuth: Sendable {
-  let clientID: AuthClientID
+  let admin: AuthAdmin
 
-  var configuration: AuthClient.Configuration { Dependencies[clientID].configuration }
-  var api: APIClient { Dependencies[clientID].api }
-  var encoder: JSONEncoder { Dependencies[clientID].resolvedEncoder }
+  var url: URL { admin.url }
+  var api: APIClient { admin.api }
+  var encoder: JSONEncoder { admin.encoder }
+  var decoder: JSONDecoder { admin.decoder }
 
   /// Lists all OAuth clients with optional pagination.
   /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
@@ -47,7 +48,7 @@ public struct AuthAdminOAuth: Sendable {
     let (httpResponse, data) = try await api.send(
       HTTPRequest(
         method: .get,
-        url: configuration.url.appendingPathComponent("admin/oauth/clients"),
+        url: url.appendingPathComponent("admin/oauth/clients"),
         query: [
           URLQueryItem(name: "page", value: params?.page?.description ?? ""),
           URLQueryItem(name: "per_page", value: params?.perPage?.description ?? ""),
@@ -56,7 +57,7 @@ public struct AuthAdminOAuth: Sendable {
     )
 
     let response = try data.decoded(
-      as: Response.self, decoder: configuration.resolvedDecoder)
+      as: Response.self, decoder: decoder)
 
     var pagination = ListOAuthClientsPaginatedResponse(
       clients: response.clients,
@@ -65,20 +66,12 @@ public struct AuthAdminOAuth: Sendable {
       total: httpResponse.headerFields[.xTotalCount].flatMap(Int.init) ?? 0
     )
 
-    let links = httpResponse.headerFields[.link]?.components(separatedBy: ",") ?? []
-    if !links.isEmpty {
-      for link in links {
-        let page = link.components(separatedBy: ";")[0].components(separatedBy: "=")[1].prefix(
-          while: \.isNumber
-        )
-        let rel = link.components(separatedBy: ";")[1].components(separatedBy: "=")[1]
-
-        if rel == "\"last\"", let lastPage = Int(page) {
-          pagination.lastPage = lastPage
-        } else if rel == "\"next\"", let nextPage = Int(page) {
-          pagination.nextPage = nextPage
-        }
-      }
+    let pages = parsePaginationLinks(httpResponse.headerFields[.link])
+    if let lastPage = pages["last"] {
+      pagination.lastPage = lastPage
+    }
+    if let nextPage = pages["next"] {
+      pagination.nextPage = nextPage
     }
 
     return pagination
@@ -93,10 +86,10 @@ public struct AuthAdminOAuth: Sendable {
     try await api.execute(
       HTTPRequest(
         method: .post,
-        url: configuration.url.appendingPathComponent("admin/oauth/clients")
+        url: url.appendingPathComponent("admin/oauth/clients")
       ), body: encoder.encode(params)
     )
-    .decoded(decoder: configuration.resolvedDecoder)
+    .decoded(decoder: decoder)
   }
 
   /// Gets details of a specific OAuth client.
@@ -108,10 +101,10 @@ public struct AuthAdminOAuth: Sendable {
     try await api.execute(
       HTTPRequest(
         method: .get,
-        url: configuration.url.appendingPathComponent("admin/oauth/clients/\(id)")
+        url: url.appendingPathComponent("admin/oauth/clients/\(id)")
       )
     )
-    .decoded(decoder: configuration.resolvedDecoder)
+    .decoded(decoder: decoder)
   }
 
   /// Updates an existing OAuth client registration. Only the provided fields will be updated.
@@ -127,10 +120,10 @@ public struct AuthAdminOAuth: Sendable {
     try await api.execute(
       HTTPRequest(
         method: .put,
-        url: configuration.url.appendingPathComponent("admin/oauth/clients/\(id)")
-      ), body: configuration.resolvedEncoder.encode(params)
+        url: url.appendingPathComponent("admin/oauth/clients/\(id)")
+      ), body: encoder.encode(params)
     )
-    .decoded(decoder: configuration.resolvedDecoder)
+    .decoded(decoder: decoder)
   }
 
   /// Deletes an OAuth client.
@@ -142,7 +135,7 @@ public struct AuthAdminOAuth: Sendable {
     _ = try await api.execute(
       HTTPRequest(
         method: .delete,
-        url: configuration.url.appendingPathComponent("admin/oauth/clients/\(id)")
+        url: url.appendingPathComponent("admin/oauth/clients/\(id)")
       )
     )
   }
@@ -157,10 +150,11 @@ public struct AuthAdminOAuth: Sendable {
     try await api.execute(
       HTTPRequest(
         method: .post,
-        url: configuration.url
+        url:
+          url
           .appendingPathComponent("admin/oauth/clients/\(id)/regenerate_secret")
       )
     )
-    .decoded(decoder: configuration.resolvedDecoder)
+    .decoded(decoder: decoder)
   }
 }

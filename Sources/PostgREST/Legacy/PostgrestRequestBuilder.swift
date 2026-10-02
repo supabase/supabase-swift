@@ -94,6 +94,9 @@ public struct PostgrestRequestBuilder<Phase>: Sendable {
   /// Whether a `PGRST116` error should be returned as a `nil` value instead of being thrown.
   var isMaybeSingle: Bool = false
 
+  /// Set by ``stripNulls()``; `execute` turns it into the `nulls=stripped` `Accept` media type.
+  var stripsNulls: Bool = false
+
   init(
     configuration: PostgrestClient.Configuration,
     request: HTTPRequest,
@@ -126,6 +129,7 @@ public struct PostgrestRequestBuilder<Phase>: Sendable {
     self.timeout = other.timeout
     self.pendingError = other.pendingError
     self.isMaybeSingle = other.isMaybeSingle
+    self.stripsNulls = other.stripsNulls
   }
 }
 
@@ -406,9 +410,8 @@ extension PostgrestRequestBuilder where Phase: PostgrestExecutablePhase {
   /// - Parameter options: Options controlling whether to include a row count and whether to
   ///   use the HEAD method. Defaults to ``FetchOptions/init(head:count:)``.
   /// - Returns: A ``PostgrestResponse`` whose `value` is `Void`.
-  /// - Throws: ``PostgrestError`` with kind `.server` if PostgREST returns an error response,
-  ///   `.transport` if the request never completes, or `.unexpectedResponse` if the body is not
-  ///   a PostgREST error.
+  /// - Throws: ``PostgrestError`` with kind `.server` if PostgREST returns a non-2xx status, or
+  ///   `.transport` if the request never completes.
   @discardableResult
   public func execute(
     options: FetchOptions = FetchOptions()
@@ -488,6 +491,17 @@ extension PostgrestRequestBuilder where Phase: PostgrestExecutablePhase {
     if request.headerFields[.accept] == nil {
       request.headerFields[.accept] = "application/json"
     }
+
+    if stripsNulls {
+      switch request.headerFields[.accept] {
+      case "application/vnd.pgrst.object+json":
+        request.headerFields[.accept] = "application/vnd.pgrst.object+json;nulls=stripped"
+      case "application/json":
+        request.headerFields[.accept] = "application/vnd.pgrst.array+json;nulls=stripped"
+      default:
+        break
+      }
+    }
     request.headerFields[.contentType] = "application/json"
 
     if let schema = configuration.schema {
@@ -546,7 +560,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestExecutablePhase {
       )
     }
     throw PostgrestError(
-      kind: .unexpectedResponse,
+      kind: .server,
       message: "Unexpected response with status code \(response.status.code).",
       response: HTTPErrorResponse(response, body: data)
     )

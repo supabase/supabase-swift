@@ -17,8 +17,6 @@ extension StorageMockerTests {
     let url = URL(string: "http://localhost:54321/storage/v1")!
 
     init() {
-      testingBoundary.setValue("alamofire.boundary.e56f43407f772505")
-
       JSONEncoder.storageEncoder.outputFormatting = [.sortedKeys]
       JSONEncoder.unconfiguredEncoder.outputFormatting = [.sortedKeys]
     }
@@ -41,25 +39,21 @@ extension StorageMockerTests {
       )
     }
 
-    /// A client whose transport records the request body, for asserting the emitted multipart
+    /// A client whose transport records the request head, for asserting the emitted upload
     /// headers.
-    private func makeBodyCapturingSUT(body: LockIsolated<Data>) -> SupabaseStorageClient {
+    private func makeRequestCapturingSUT(request captured: LockIsolated<HTTPRequest?>)
+      -> SupabaseStorageClient
+    {
       SupabaseStorageClient(
         configuration: StorageClientConfiguration(
           url: url,
           headers: [:],
           http: .init(
-            transport: ClosureTransport { request, requestBody in
+            transport: ClosureTransport { request, _ in
               guard let urlRequest = URLRequest(httpRequest: request) else {
                 throw URLError(.badURL)
               }
-              let data: Data
-              if let requestBody {
-                data = try await Data(collecting: requestBody, upTo: .max)
-              } else {
-                data = Data()
-              }
-              body.setValue(data)
+              captured.setValue(request)
               let response = HTTPURLResponse(
                 url: urlRequest.url!, statusCode: 200, httpVersion: nil, headerFields: nil
               )!
@@ -531,7 +525,7 @@ extension StorageMockerTests {
     }
 
     @Test
-    func createSignedURL_invalidURL() async throws {
+    func createSignedURL_malformedSignedURL() async throws {
       let storage = makeSUT()
 
       Mock(
@@ -556,7 +550,7 @@ extension StorageMockerTests {
         )
         Issue.record("expected createSignedURL to throw")
       } catch let error as StorageError {
-        #expect(error.kind == .invalidURL)
+        #expect(error.kind == .decoding)
         #expect(error.response == nil)
       }
     }
@@ -894,7 +888,7 @@ extension StorageMockerTests {
           .move(from: "source", to: "destination")
         Issue.record()
       } catch let error as StorageError {
-        #expect(error.kind == .unexpectedResponse)
+        #expect(error.kind == .server)
         #expect(error.serverError == nil)
         #expect(error.response?.body == Data("error".utf8))
         #expect(error.response?.statusCode == 412)
@@ -965,25 +959,12 @@ extension StorageMockerTests {
         curl \
         	--request PUT \
         	--header "Cache-Control: max-age=3600" \
-        	--header "Content-Length: 390" \
-        	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.e56f43407f772505" \
+        	--header "Content-Length: 11" \
+        	--header "Content-Type: text/plain" \
         	--header "X-Client-Info: storage-swift/0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	--data "--alamofire.boundary.e56f43407f772505\#r
-        Content-Disposition: form-data; name=\"cacheControl\"\#r
-        \#r
-        3600\#r
-        --alamofire.boundary.e56f43407f772505\#r
-        Content-Disposition: form-data; name=\"metadata\"\#r
-        \#r
-        {\"mode\":\"test\"}\#r
-        --alamofire.boundary.e56f43407f772505\#r
-        Content-Disposition: form-data; name=\"\"; filename=\"file.txt\"\#r
-        Content-Type: text/plain\#r
-        \#r
-        hello world\#r
-        --alamofire.boundary.e56f43407f772505--\#r
-        " \
+        	--header "x-metadata: eyJtb2RlIjoidGVzdCJ9" \
+        	--data "hello world" \
         	"http://localhost:54321/storage/v1/object/bucket/file.txt"
         """#
       }
@@ -1059,22 +1040,12 @@ extension StorageMockerTests {
         curl \
         	--request POST \
         	--header "Cache-Control: max-age=3600" \
-        	--header "Content-Length: 284" \
-        	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.e56f43407f772505" \
+        	--header "Content-Length: 13" \
+        	--header "Content-Type: image/png" \
         	--header "X-Client-Info: storage-swift/0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	--header "x-upsert: false" \
-        	--data "--alamofire.boundary.e56f43407f772505\#r
-        Content-Disposition: form-data; name=\"cacheControl\"\#r
-        \#r
-        3600\#r
-        --alamofire.boundary.e56f43407f772505\#r
-        Content-Disposition: form-data; name=\"\"; filename=\"file.txt\"\#r
-        Content-Type: image/png\#r
-        \#r
-        hello world!
-        \#r
-        --alamofire.boundary.e56f43407f772505--\#r
+        	--data "hello world!
         " \
         	"http://localhost:54321/storage/v1/object/bucket/file.txt"
         """#
@@ -1116,25 +1087,12 @@ extension StorageMockerTests {
         curl \
         	--request PUT \
         	--header "Cache-Control: max-age=3600" \
-        	--header "Content-Length: 392" \
-        	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.e56f43407f772505" \
+        	--header "Content-Length: 13" \
+        	--header "Content-Type: text/plain" \
         	--header "X-Client-Info: storage-swift/0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	--data "--alamofire.boundary.e56f43407f772505\#r
-        Content-Disposition: form-data; name=\"cacheControl\"\#r
-        \#r
-        3600\#r
-        --alamofire.boundary.e56f43407f772505\#r
-        Content-Disposition: form-data; name=\"metadata\"\#r
-        \#r
-        {\"mode\":\"test\"}\#r
-        --alamofire.boundary.e56f43407f772505\#r
-        Content-Disposition: form-data; name=\"\"; filename=\"file.txt\"\#r
-        Content-Type: text/plain\#r
-        \#r
-        hello world!
-        \#r
-        --alamofire.boundary.e56f43407f772505--\#r
+        	--header "x-metadata: eyJtb2RlIjoidGVzdCJ9" \
+        	--data "hello world!
         " \
         	"http://localhost:54321/storage/v1/object/bucket/file.txt"
         """#
@@ -1671,22 +1629,12 @@ extension StorageMockerTests {
         curl \
         	--request PUT \
         	--header "Cache-Control: max-age=3600" \
-        	--header "Content-Length: 283" \
-        	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.e56f43407f772505" \
+        	--header "Content-Length: 11" \
+        	--header "Content-Type: text/plain" \
         	--header "X-Client-Info: storage-swift/0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	--header "x-upsert: false" \
-        	--data "--alamofire.boundary.e56f43407f772505\#r
-        Content-Disposition: form-data; name=\"cacheControl\"\#r
-        \#r
-        3600\#r
-        --alamofire.boundary.e56f43407f772505\#r
-        Content-Disposition: form-data; name=\"\"; filename=\"file.txt\"\#r
-        Content-Type: text/plain\#r
-        \#r
-        hello world\#r
-        --alamofire.boundary.e56f43407f772505--\#r
-        " \
+        	--data "hello world" \
         	"http://localhost:54321/storage/v1/object/upload/sign/bucket/folder/file.txt?token=abc.def.ghi"
         """#
       }
@@ -1722,22 +1670,12 @@ extension StorageMockerTests {
         curl \
         	--request PUT \
         	--header "Cache-Control: max-age=3600" \
-        	--header "Content-Length: 283" \
-        	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.e56f43407f772505" \
+        	--header "Content-Length: 11" \
+        	--header "Content-Type: text/plain" \
         	--header "X-Client-Info: storage-swift/0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	--header "x-upsert: false" \
-        	--data "--alamofire.boundary.e56f43407f772505\#r
-        Content-Disposition: form-data; name=\"cacheControl\"\#r
-        \#r
-        3600\#r
-        --alamofire.boundary.e56f43407f772505\#r
-        Content-Disposition: form-data; name=\"\"; filename=\"file.txt\"\#r
-        Content-Type: text/plain\#r
-        \#r
-        hello world\#r
-        --alamofire.boundary.e56f43407f772505--\#r
-        " \
+        	--data "hello world" \
         	"http://localhost:54321/storage/v1/object/upload/sign/bucket/file.txt?token=abc.def.ghi"
         """#
       }
@@ -1752,8 +1690,8 @@ extension StorageMockerTests {
 
     @Test
     func uploadToSignedURLDerivesContentTypeFromPathExtensionWhenOptionsOmitted() async throws {
-      let body = LockIsolated(Data())
-      let storage = makeBodyCapturingSUT(body: body)
+      let request = LockIsolated(HTTPRequest?.none)
+      let storage = makeRequestCapturingSUT(request: request)
 
       _ = try await storage.from("bucket")
         .uploadToSignedURL(
@@ -1763,17 +1701,16 @@ extension StorageMockerTests {
         )
 
       #if canImport(UniformTypeIdentifiers)
-        #expect(body.value.containsBytes(of: "Content-Type: image/png"))
+        #expect(request.value?.headerFields[.contentType] == "image/png")
       #else
-        #expect(body.value.containsBytes(of: "Content-Type: application/octet-stream"))
+        #expect(request.value?.headerFields[.contentType] == "application/octet-stream")
       #endif
-      #expect(!body.value.containsBytes(of: "text/plain"))
     }
 
     @Test
     func uploadToSignedURLFromFileURLDerivesContentTypeWhenOptionsOmitted() async throws {
-      let body = LockIsolated(Data())
-      let storage = makeBodyCapturingSUT(body: body)
+      let request = LockIsolated(HTTPRequest?.none)
+      let storage = makeRequestCapturingSUT(request: request)
 
       _ = try await storage.from("bucket")
         .uploadToSignedURL(
@@ -1783,11 +1720,10 @@ extension StorageMockerTests {
         )
 
       #if canImport(UniformTypeIdentifiers)
-        #expect(body.value.containsBytes(of: "Content-Type: image/jpeg"))
+        #expect(request.value?.headerFields[.contentType] == "image/jpeg")
       #else
-        #expect(body.value.containsBytes(of: "Content-Type: application/octet-stream"))
+        #expect(request.value?.headerFields[.contentType] == "application/octet-stream")
       #endif
-      #expect(!body.value.containsBytes(of: "text/plain"))
     }
 
     @Test
@@ -1812,23 +1748,13 @@ extension StorageMockerTests {
         curl \
         	--request PUT \
         	--header "Cache-Control: max-age=3600" \
-        	--header "Content-Length: 285" \
-        	--header "Content-Type: multipart/form-data; boundary=alamofire.boundary.e56f43407f772505" \
+        	--header "Content-Length: 13" \
+        	--header "Content-Type: text/plain" \
         	--header "X-Client-Info: storage-swift/0.0.0" \
         	--header "X-Mode: test" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	--header "x-upsert: false" \
-        	--data "--alamofire.boundary.e56f43407f772505\#r
-        Content-Disposition: form-data; name=\"cacheControl\"\#r
-        \#r
-        3600\#r
-        --alamofire.boundary.e56f43407f772505\#r
-        Content-Disposition: form-data; name=\"\"; filename=\"file.txt\"\#r
-        Content-Type: text/plain\#r
-        \#r
-        hello world!
-        \#r
-        --alamofire.boundary.e56f43407f772505--\#r
+        	--data "hello world!
         " \
         	"http://localhost:54321/storage/v1/object/upload/sign/bucket/file.txt?token=abc.def.ghi"
         """#
@@ -1953,12 +1879,5 @@ extension StorageMockerTests {
 
       #expect(data == Data("hello world".utf8))
     }
-  }
-}
-
-extension Data {
-  /// Whether the raw bytes contain `string`, for bodies that are not valid UTF-8 as a whole.
-  fileprivate func containsBytes(of string: String) -> Bool {
-    range(of: Data(string.utf8)) != nil
   }
 }

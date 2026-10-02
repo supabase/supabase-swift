@@ -108,6 +108,21 @@ npm ci --prefix tools/node   # one-time setup (re-run only when tools/node/packa
 
 Legitimate technical terms and project-specific words go in `dictionary.txt` at the repository root.
 
+### Linting
+
+```bash
+# Lint Sources and Tests (fails on any new violation)
+swiftlint lint --strict
+
+# Autocorrect violations that SwiftLint can fix
+swiftlint lint --fix
+```
+
+This uses [SwiftLint](https://github.com/realm/SwiftLint) for code-smell and
+correctness rules; `swift-format` remains the source of truth for formatting,
+so the SwiftLint config (`.swiftlint.yml`) disables the purely stylistic rules
+that overlap with it. Install SwiftLint locally with `brew install swiftlint`.
+
 ### Documentation
 
 ```bash
@@ -200,7 +215,8 @@ Use standard file headers with copyright:
 - Use strongly-typed errors conforming to `Error` protocol
 - Provide `LocalizedError` conformance where appropriate
 - Use `async throws` for async error handling
-- Report issues using `IssueReporting` from xctest-dynamic-overlay
+- Report issues using `IssueReporting` (from swift-issue-reporting on Swift 6.4+, from
+  xctest-dynamic-overlay on earlier toolchains — see the comment atop `Package@swift-6.2.swift`)
 
 #### When trapping is allowed
 
@@ -272,7 +288,8 @@ struct FeatureTests {
 
 - `swift-snapshot-testing`: Snapshot testing
 - `swift-custom-dump`: Better test output
-- `xctest-dynamic-overlay`: Test utilities and issue reporting
+- `swift-issue-reporting` (Swift 6.4+) / `xctest-dynamic-overlay` (earlier toolchains): test
+  utilities and issue reporting
 - `Mocker`: URL mocking
 
 ## Architecture Notes
@@ -411,6 +428,7 @@ supabase stop
 ## Important Notes for AI Coding Agents
 
 - Always run `./scripts/format.sh` before committing Swift code
+- Run `swiftlint lint --strict` before committing; it must not report new violations
 - Ensure new public APIs have DocC documentation comments
 - Add tests for all new functionality
 - Keep changes minimal and focused

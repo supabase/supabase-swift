@@ -184,9 +184,9 @@ message) is now mandatory. This is a compile error everywhere: the old symbols n
 | `MFAEnrollParams` | `MFATotpEnrollParams` or `MFAPhoneEnrollParams` |
 | `AuthAdmin.deleteUser(id: String, shouldSoftDelete:)` | `AuthAdmin.deleteUser(id: UUID, shouldSoftDelete:)` |
 | `AuthError.sessionNotFound` | `AuthError.sessionMissing` |
-| `AuthError.pkce(_:)` / `AuthError.PKCEFailureReason` | `AuthError` with `kind == .pkceGrantCodeExchange` |
-| `AuthError.invalidImplicitGrantFlowURL` | `AuthError` with `kind == .implicitGrantRedirect` |
-| `AuthError.api(_ error: APIError)` / `AuthError.APIError` | `AuthError` with `kind == .api`; `errorCode` and `response` carry the details |
+| `AuthError.pkce(_:)` / `AuthError.PKCEFailureReason` | `AuthError` with `kind == .oauthFlowFailed` |
+| `AuthError.invalidImplicitGrantFlowURL` | `AuthError` with `kind == .oauthFlowFailed` |
+| `AuthError.api(_ error: APIError)` / `AuthError.APIError` | `AuthError` with `kind == .server`; `errorCode` and `response` carry the details |
 | `UserAttributes.emailChangeToken` | *(removed, no replacement — was unused by GoTrue)* |
 
 Also removed, with no replacement, because they no longer represent something GoTrue can throw:
@@ -257,7 +257,7 @@ try await client.from("users").select().ilike("email", pattern: "john%").execute
 | `TransformOptions.init(...resize: String?..., format: String?)` | `TransformOptions.init(...resize: ResizeMode?..., format: ImageFormat?)` |
 | `JSONEncoder.defaultStorageEncoder` / `JSONDecoder.defaultStorageDecoder` | *(removed, no public replacement — was only ever the client's internal default)* |
 | `StorageClientConfiguration.init(...encoder:decoder:session:...)` | `StorageClientConfiguration.init(...logger:...)` |
-| `Storage.File` / `Storage.FormData` | `MultipartFormData` |
+| `Storage.File` / `Storage.FormData` | *(removed — uploads no longer build a multipart form; see "Storage uploads send the raw file body" below)* |
 
 ```swift
 // Before
@@ -422,44 +422,6 @@ out. This is a silent behavior change, not a compile error: search your codebase
 Construct `RealtimeClientV2` directly (not through `SupabaseClient`) if you need a
 Realtime-specific logger distinct from the rest of the client.
 
-## `KeychainLocalStorage`'s default Keychain service is now the host app's bundle identifier
-
-`KeychainLocalStorage()` no longer stores sessions under the fixed service
-`"supabase.gotrue.swift"`. It now defaults to `Bundle.main.bundleIdentifier`, falling back to the
-old constant only when there is no bundle identifier to read (command-line tools, some test
-bundles).
-
-The fixed string put every app that embeds the SDK in the same Keychain namespace. On
-iOS/iPadOS/tvOS/watchOS/visionOS this was not a cross-app collision risk, since items are
-implicitly scoped to the app's own default access group
-(`$(AppIdentifierPrefix)$(CFBundleIdentifier)`), so unrelated apps could not read or overwrite each
-other's session there. On macOS's file-based login Keychain, and for any apps deliberately sharing
-an access group on any platform, the shared service name was a real collision risk: two such apps
-could read and overwrite each other's session under that one service name. Either way, sharing a
-single hardcoded service name is poor namespacing hygiene. Scoping the service to the bundle
-identifier gives each app its own Keychain location by default.
-
-Existing sessions are not lost. On the first `retrieve` after upgrading, `KeychainLocalStorage`
-probes the old `"supabase.gotrue.swift"` location, moves whatever it finds to the new
-per-app location, and returns it — so users stay signed in. This is a behavior change, not a
-compile error: nothing in the type signature changed, but the on-disk Keychain location did. If
-you rely on the exact service name (for example, to inspect the Keychain from another tool, or
-because several of your own apps intentionally shared the old namespace), pass it explicitly to
-keep the pre-v3 location:
-
-```swift
-// Before (implicit, shared "supabase.gotrue.swift" service)
-let storage = KeychainLocalStorage()
-
-// After: keeps the pre-v3 location, no migration performed
-let storage = KeychainLocalStorage(service: "supabase.gotrue.swift")
-```
-
-Note that passing `service:` explicitly — whether the old constant or a new value of your own —
-selects the second, non-migrating initializer: `init(service:accessGroup:useDataProtectionKeychain:)`.
-Only the parameterless-service initializer, `init(accessGroup:useDataProtectionKeychain:)`, probes
-the legacy location.
-
 ## `KeychainLocalStorage.retrieve` returns `nil` for a missing key instead of throwing
 
 `AuthLocalStorage.retrieve(key:)` has always been documented as returning `nil` when the key is
@@ -517,8 +479,8 @@ defaulting to `false`. This is additive — existing call sites keep compiling a
 current behavior — but it's documented here because it's the fix for a common source of
 confusion: on macOS, the legacy file-based Keychain that `KeychainLocalStorage` targets by default
 still shows the user a consent prompt tied to your app's designated requirement, regardless of the
-service name — the service-namespacing change above does not affect it, since the ACL that
-triggers the prompt is governed by code-signing identity, not by `kSecAttrService` (see [Apple TN3137](https://developer.apple.com/documentation/technotes/tn3137-on-mac-keychains)).
+service name — the ACL that triggers the prompt is governed by code-signing identity, not by
+`kSecAttrService` (see [Apple TN3137](https://developer.apple.com/documentation/technotes/tn3137-on-mac-keychains)).
 Passing `useDataProtectionKeychain: true` moves storage to the data-protection Keychain, which
 does not show that prompt.
 
@@ -1640,7 +1602,7 @@ or `dateDecodingStrategy` that didn't match `PostgrestError`'s plain `details`/`
 `message` shape could cause a real PostgREST error response to fail decoding, and was reported as a
 generic `HTTPError` instead of a `PostgrestError`. Now, a recognized PostgREST error body throws
 `PostgrestError` with kind `.server` and the decoded `PostgrestError.ServerError` in `serverError`.
-An unrecognized body throws kind `.unexpectedResponse` with `serverError == nil` and the raw bytes
+An unrecognized body throws the same kind `.server` with `serverError == nil` and the raw bytes
 in `response?.body`. This is a silent behavior change, not a compile error: if you
 `catch`-typed on `PostgrestError` while also customizing `Configuration.decoder`'s key or date
 strategy, error responses that previously fell through as `HTTPError` are now caught as
@@ -1771,8 +1733,9 @@ and the `@Table` macro — not a different spelling of the same builder.
 static let oauthFlowFailed: AuthError.Kind
 ```
 
-It covers OAuth failures that happen entirely on the client, before any request reaches GoTrue.
-Two call sites in `signInWithOAuth(provider:redirectTo:scopes:queryParams:configure:)` (the
+It covers redirect-based sign-in failures that happen entirely on the client: a redirect URL
+that carried an error or no session (what v2 reported as `.pkce(_:)` and
+`.invalidImplicitGrantFlowURL`), and two call sites in `signInWithOAuth(provider:redirectTo:scopes:queryParams:configure:)` (the
 `ASWebAuthenticationSession` overload) used to end the process instead of throwing:
 
 | Condition | Before | After |
@@ -1809,17 +1772,21 @@ do {
 This is not a compile error. `Kind` is an open struct (see "`AuthError` is now a struct, not an
 enum" below), so a new member is additive; a `switch` over `kind` already needs a `default`.
 
-`errorCode` for this kind is `.unknown`, matching the other client-side kinds
-(`.pkceGrantCodeExchange`, `.implicitGrantRedirect`).
+`errorCode` for this kind is `.unknown`, unless the redirect URL carried an `error_code`
+parameter, in which case it is that value.
 
 ## `AuthError` is now a struct, not an enum
 
 `AuthError` is a struct with `kind: AuthError.Kind`, `message`, `errorCode`,
 `weakPasswordReasons`, `response` and `underlyingError`. `Kind` is a `RawRepresentable` struct
-with static members that mirror the old cases (`.api`, `.sessionMissing`, `.weakPassword`,
-`.pkceGrantCodeExchange`, `.implicitGrantRedirect`, `.oauthFlowFailed`, `.jwtVerificationFailed`)
-plus `.webAuthn`, `.unexpectedResponse`, `.transport` and `.decoding`. `AuthError.sessionMissing` still exists as a
+with static members: `.server`, `.sessionMissing`, `.oauthFlowFailed`, `.jwtVerificationFailed`,
+`.refreshDiscarded`, `.transport` and `.decoding`. `AuthError.sessionMissing` still exists as a
 static value, so `throw AuthError.sessionMissing` compiles unchanged.
+
+`Kind` says which party failed, not why. The old `.api` and `.weakPassword` cases are both
+`.server`; GoTrue's reason is in `errorCode`, and `weakPasswordReasons` is filled when
+`errorCode == .weakPassword`. The old `.pkce(_:)` and `.invalidImplicitGrantFlowURL` cases are
+both `.oauthFlowFailed`; the flow type is your own `AuthClient.Configuration.flowType`.
 
 The package builds with library evolution enabled, so adding a case to a public enum was a
 binary-breaking change; every new failure GoTrue learned to report needed a major version. The
@@ -1832,9 +1799,9 @@ This is a compile error for every `case`-based pattern and for the removed `~=` 
 | Before | After |
 | --- | --- |
 | `catch AuthError.sessionMissing` | `catch let error as AuthError where error.kind == .sessionMissing` |
-| `catch let AuthError.api(message, code, data, response)` | `catch let error as AuthError where error.kind == .api` then `error.message`, `error.errorCode`, `error.response?.body`, `error.response?.statusCode` |
-| `catch let AuthError.weakPassword(message, reasons)` | `catch let error as AuthError where error.kind == .weakPassword` then `error.weakPasswordReasons` |
-| `catch let AuthError.pkceGrantCodeExchange(message, error, code)` | `error.kind == .pkceGrantCodeExchange`; `message` is now `"<error>: <description>"` and `code` is in `error.errorCode` |
+| `catch let AuthError.api(message, code, data, response)` | `catch let error as AuthError where error.kind == .server` then `error.message`, `error.errorCode`, `error.response?.body`, `error.response?.statusCode` |
+| `catch let AuthError.weakPassword(message, reasons)` | `catch let error as AuthError where error.errorCode == .weakPassword` then `error.weakPasswordReasons` |
+| `catch let AuthError.pkceGrantCodeExchange(message, error, code)` | `error.kind == .oauthFlowFailed`; `message` is now `"<error>: <description>"` and `code` is in `error.errorCode` |
 | `catch let AuthError.oauthFlowFailed(message)` | `error.kind == .oauthFlowFailed` then `error.message` |
 | `catch let AuthError.jwtVerificationFailed(message)` | `error.kind == .jwtVerificationFailed` then `error.message` |
 | `AuthError.sessionMissing ~= error` | `(error as? AuthError)?.kind == .sessionMissing` |
@@ -1852,7 +1819,7 @@ do {
 // After
 do {
   try await supabase.auth.signIn(email: email, password: password)
-} catch let error as AuthError where error.kind == .api {
+} catch let error as AuthError where error.kind == .server {
   print(error.response?.statusCode ?? 0, error.errorCode, error.message)
 } catch let error as AuthError where error.kind == .sessionMissing {
   showLogin()
@@ -1861,13 +1828,14 @@ do {
 
 `AuthError` is no longer `Equatable`. `error == .sessionMissing` and any `Equatable` state type
 that stores an `AuthError` stop compiling; compare `kind`, `errorCode` and `message`, or store
-those instead. String interpolation prints `AuthError(api): Invalid login credentials [status
+those instead. String interpolation prints `AuthError(server): Invalid login credentials [status
 400, request ...]` instead of the case name.
 
-`signOut` keeps swallowing 401, 403 and 404 responses from the `/logout` endpoint, whether or not the body was a recognizable GoTrue error. In v2 that fallback surfaced as `.api(message: "Unexpected error", ...)`; in v3 it is kind `.unexpectedResponse`, and `signOut` treats both kinds the same way for those statuses. No change in behavior.
+`signOut` keeps swallowing 401, 403 and 404 responses from the `/logout` endpoint, whether or not the body was a recognizable GoTrue error. In v2 that fallback surfaced as `.api(message: "Unexpected error", ...)`; in v3 it is kind `.server` with `errorCode == .unexpectedFailure`. No change in behavior.
 
 The internal `WebAuthnError` type, which could leak from the passkey and WebAuthn MFA flows, is
-folded into `AuthError` with kind `.webAuthn`.
+folded into `AuthError` with kind `.decoding`: every case was a payload the SDK could not
+interpret, either from GoTrue or from the platform authenticator.
 
 ## `fetch:` closures and `StorageHTTPSession` replaced by `ClientTransport` and `ClientMiddleware`
 
@@ -2074,7 +2042,7 @@ Pass it as `http: .init(transport: StubTransport())` to any sub-client, or as
 - **Functions streaming goes through your transport now.** `_invokeWithStreamedResponse` used to
   run on a private `URLSession` that ignored everything you configured. It now sends through the
   client's `http` transport and middlewares, like every other call.
-- **A streamed `FunctionsError` with kind `.http` now carries the response body.** In v2 the
+- **A streamed `FunctionsError` with kind `.server` now carries the response body.** In v2 the
   streamed call threw `.httpError(code, Data())`; the body is now in `response?.body`, so anything
   that read the payload from a non-2xx streamed invoke no longer has to special-case an empty
   `Data`.
@@ -2248,7 +2216,7 @@ re-exports alongside `HTTPTypes`.
 
 `FunctionsError` is a struct with a `kind: FunctionsError.Kind` property instead of an enum with
 `.relayError` and `.httpError(code:data:)` cases. `Kind` is a `RawRepresentable` struct with
-static members: `.relay`, `.http`, `.transport` and `.decoding`.
+static members: `.relay`, `.server`, `.transport` and `.decoding`.
 
 The package builds with library evolution enabled, so adding a case to a public enum was a
 binary-breaking change. Every new failure the SDK learned to report would have needed a major
@@ -2273,14 +2241,14 @@ do {
   try await supabase.functions.invoke("hello")
 } catch let error as FunctionsError where error.kind == .relay {
   retryLater()
-} catch let error as FunctionsError where error.kind == .http {
-  let response = error.response!  // always set for `.http` and `.relay`
+} catch let error as FunctionsError where error.kind == .server {
+  let response = error.response!  // always set for `.server` and `.relay`
   print(response.statusCode, String(decoding: response.body, as: UTF8.self), response.requestID ?? "")
 }
 ```
 
 `FunctionsError` is not `Equatable`. Compare `kind`, `message` and `response` instead. String
-interpolation of the error now prints `FunctionsError(http): Edge Function returned a non-2xx
+interpolation of the error now prints `FunctionsError(server): Edge Function returned a non-2xx
 status code: 500 [status 500]` instead of the case name.
 
 ## Network and decoding failures are wrapped in the module error
@@ -2370,9 +2338,10 @@ This is a compile error: `statusCode` and `error` no longer exist on `StorageErr
 }
 ```
 
-Kinds: `.server` (recognized body, `serverError` set), `.unexpectedResponse` (non-2xx with an
-unrecognized body, raw bytes in `response?.body`), `.transport`, `.decoding`, and `.invalidURL`
-for the URL-building helpers such as `publicURL`, which threw `URLError(.badURL)` before.
+Kinds: `.server` for any non-2xx (`serverError` is set when the body was a recognizable Storage
+payload, `nil` otherwise; the raw bytes are always in `response?.body`), `.transport`, `.decoding`,
+and `.invalidRequest` for the URL-building helpers such as `publicURL`, which threw
+`URLError(.badURL)` before.
 
 ## `PostgrestError` gains `kind` and `response`; server fields move to `serverError`
 
@@ -2402,9 +2371,10 @@ This is a compile error: `code`, `details` and `hint` no longer exist on `Postgr
 }
 ```
 
-Kinds: `.server` (recognized body, `serverError` set), `.unexpectedResponse` (raw body in
-`response?.body`), `.transport`, `.decoding`, and `.invalidRequest` for client-side rejections
-such as `.csv()` combined with `.stripNulls()`.
+Kinds: `.server` for any non-2xx (`serverError` is set when the body was a recognizable PostgREST
+payload, `nil` otherwise; the raw bytes are always in `response?.body`), `.transport`, `.decoding`
+(also for a 2xx the SDK cannot use, such as a `count(_:)` reply with no `Content-Range`), and
+`.invalidRequest` for client-side rejections such as `.csv()` combined with `.stripNulls()`.
 
 If you constructed `PostgrestError(message:)` yourself, pass a kind:
 `PostgrestError(kind: .invalidRequest, message:)`.
@@ -2414,7 +2384,7 @@ If you constructed `PostgrestError(message:)` yourself, pass a kind:
 The generic `HTTPError` type is gone. Storage and PostgREST threw it when a non-2xx body did not
 decode as their own error payload, which meant two catch clauses per module. Each module error
 now carries `response: HTTPErrorResponse?` with the status code, `HTTPFields` headers, raw body
-and `requestID`, and an unrecognized body is reported with kind `.unexpectedResponse`.
+and `requestID`, and an unrecognized body is reported with kind `.server` and `serverError == nil`.
 
 This is a compile error for any `catch let error as HTTPError`.
 
@@ -2437,9 +2407,9 @@ This is a compile error for any `catch let error as HTTPError`.
 ## Realtime throws `RealtimeError` for every failure
 
 `RealtimeError` is now public. It is a struct with `kind: RealtimeError.Kind`, `message`,
-`response` and `underlyingError`, conforming to `SupabaseError`. Kinds: `.connection`,
+`response` and `underlyingError`, conforming to `SupabaseError`. Kinds: `.transport`,
 `.timeout`, `.accessTokenMissing`, `.maxRetryAttemptsReached`, `.channelClosedByServer`,
-`.server`, `.transport` and `.decoding`.
+`.server` and `.decoding`.
 
 Before, `RealtimeError` was `package`-scoped, so `subscribeWithError()` and `httpSend` handed you
 an `any Error` you could only inspect through `localizedDescription`. `httpSend` could also leak
@@ -2468,6 +2438,8 @@ do {
 
 For `httpSend`, a non-202 answer is `.server` with `response?.statusCode` and `response?.body`
 set; a request that never completes is `.transport` with the `URLError` in `underlyingError`.
+A WebSocket that could not be opened, or closed before it was ready, is also `.transport`: the
+recovery is the same (retry, check connectivity), so it does not get a kind of its own.
 
 ## OAuth server fields the API leaves out are now optional
 
@@ -2887,3 +2859,181 @@ try await storage.from("avatars").uploadToSignedURL(path: "user123.png", token: 
 ```
 
 This is a compile error. All six overloads move together (`data:` and `fileURL:` variants of each).
+
+## `@Table`'s `schema:` takes a type, not a string
+
+A relation names its schema with a type, so a relation queried through the wrong schema is a
+compile error rather than a request the database rejects.
+
+```swift
+// Before
+@Table("secrets", schema: "private")
+struct Secret { ... }
+
+// After
+enum PrivateSchema: PostgrestSchema {
+  static let name = "private"
+}
+
+@Table("secrets", schema: PrivateSchema.self)
+struct Secret { ... }
+```
+
+`@Table("todos")` is unchanged: a relation that names no schema belongs to `PublicSchema`.
+
+The type is what the new scope checks against. `SupabaseClient` and `PostgrestClient` both have it:
+
+```swift
+try await supabase.schema(PrivateSchema.self).from(Secret.self).select().execute()  // valid
+try await supabase.schema(PrivateSchema.self).from(Todo.self).select().execute()    // compile error
+```
+
+`schema("private")` still exists and still returns a `PostgrestClient`. Reach for it when the
+schema is not known at compile time.
+
+Three things the compiler will not catch:
+
+- `from(Secret.self)` now sends `Accept-Profile: private`, taken from the relation. It previously
+  ignored the relation's schema. A schema already set on the client wins over the relation, and
+  that includes `"public"`: with `SupabaseClientOptions(db: .init(schema: "public"))`,
+  `supabase.from(Secret.self)` queries `public`.
+- The typed `schema(_:)` traps on a client that already has a schema, so
+  `client.schema("other").schema(PrivateSchema.self)` is a programmer error, as is
+  `supabase.schema(PrivateSchema.self)` when `db.schema` is set.
+- `PostgrestRelation` no longer requires `static var schema: String`; the schema comes from the
+  `Schema` type. A hand-written conformance that declares `static let schema = "private"` still
+  compiles, but the string is no longer read and the relation is queried in `public`. Replace it
+  with `typealias Schema = PrivateSchema`.
+
+## `AuthClient` is now a `final class`, not an `actor`
+
+`AuthClient` is declared `public final class AuthClient: Sendable` instead of
+`public actor AuthClient`.
+
+Almost every member was already `nonisolated`, so the actor protected no state. Its one side effect
+was a process-global registry that those `nonisolated` members used to reach the client's
+dependencies, and that registry trapped with `fatalError` as soon as an `AuthAdmin`, `AuthMFA`, or
+`AuthOAuthServer` value outlived the `AuthClient` it came from. Dependencies now live on the
+instance. `AuthMFA` and `AuthOAuthServer` retain their client, and `AuthAdmin` carries its own
+transport, so those values keep working for as long as you hold them.
+
+Ordinary use is source-compatible. Every member that talks to the server is still `async`, and the
+members that were `nonisolated` keep working without `await`. Two synchronous methods that used to
+need `await` because of actor isolation no longer do: `startAutoRefresh()` and `stopAutoRefresh()`.
+Calling them with `await` still compiles but produces a "no 'async' operations occur within
+'await' expression" warning; drop the `await`.
+
+It is a compile error only where `AuthClient` was used *as an actor*: an `isolated AuthClient`
+parameter, passing it where `any Actor` is expected, or calling `assumeIsolated` on it.
+
+```swift
+// Before
+func inspect(_ auth: isolated AuthClient) {
+  print(auth.currentUser?.email ?? "signed out")
+}
+
+// After
+func inspect(_ auth: AuthClient) {
+  print(auth.currentUser?.email ?? "signed out")
+}
+```
+
+Search your code for `isolated AuthClient`, `assumeIsolated` on an `AuthClient` value, and
+`await` in front of `startAutoRefresh()` / `stopAutoRefresh()`.
+
+## Storage uploads send the raw file body instead of a `multipart/form-data` form
+
+`StorageFileApi.upload`, `update`, and `uploadToSignedURL` put the file bytes directly in the
+request body. The form fields the multipart body used to carry travel as headers instead:
+
+| Multipart form field | Header |
+| --- | --- |
+| `cacheControl` | `Cache-Control: max-age=<seconds>` (already sent before) |
+| file part `Content-Type` | `Content-Type: <contentType, or inferred from the extension>` |
+| `metadata` | `x-metadata: <base64 of the JSON object>` |
+
+This is the shape supabase-js sends for `ArrayBuffer` and stream uploads, and storage-api has
+accepted it for as long as it has accepted the form. The multipart encoder buffered the whole
+file three times over (measured at +610 MB for a 200 MiB upload); the raw body adds nothing on top
+of the caller's data, and `upload(path:fileURL:)` now streams from disk without reading the file
+into memory. The internal `MultipartFormData` type is gone.
+
+```swift
+// Before and after — the call is unchanged
+try await storage.from("avatars").upload(
+  path: "user123.png",
+  data: imageData,
+  options: FileOptions(cacheControl: "7200", metadata: ["source": "camera"])
+)
+```
+
+This compiles unchanged. It is a silent wire change: anything that inspects the outgoing request
+sees a different body and `Content-Type`. Search your code for a `ClientMiddleware`, a
+`ClientTransport`, a proxy rule, or a test fixture that matches on `multipart/form-data`, a
+`boundary=` parameter, or a `Content-Disposition: form-data` part, and read the file from the body
+and the metadata from `x-metadata` instead.
+
+A `Content-Type` passed through `FileOptions.headers` now wins over the inferred one, where before
+it silently replaced the multipart header and broke the request.
+
+## MFA factor IDs are now `UUID`, not `String`
+
+Every place in the Auth module that holds an MFA factor's identifier now uses `UUID` instead of
+`String`: `Factor.id`, `AuthMFAEnrollResponse.id`, `AuthMFAUnenrollResponse.id`,
+`MFAChallengeParams.factorId`, `MFAVerifyParams.factorId`, `MFAUnenrollParams.factorId`,
+`MFAChallengeAndVerifyParams.factorId`, `AuthMFA.verifyWebAuthnFactor(factorId:presentationAnchor:)`,
+and the new `AuthAdminMFA.deleteFactor(id:forUser:)`.
+
+GoTrue always generates factor IDs as UUIDv4 (`internal/models/factor.go`); keeping them as
+`String` on the client meant every one of these APIs accepted values GoTrue could never actually
+return.
+
+```swift
+// Before
+let factors = try await supabase.auth.mfa.listFactors()
+try await supabase.auth.mfa.unenroll(params: MFAUnenrollParams(factorId: factors.totp[0].id))
+
+// After — factor.id is already a UUID, nothing to convert
+let factors = try await supabase.auth.mfa.listFactors()
+try await supabase.auth.mfa.unenroll(params: MFAUnenrollParams(factorId: factors.totp[0].id))
+```
+
+This is a compile error anywhere a factor ID was treated as a `String` directly — stored in a
+`String` property, passed to an API expecting `String`, or interpolated and then passed back
+(`"\(factor.id)"`). The common pattern of reading `.id` off a `Factor`/`AuthMFAEnrollResponse` and
+passing it straight into another MFA call keeps compiling unchanged, since both sides are now
+`UUID`. If you display or log a factor ID, use `.uuidString` to get the string form back.
+
+## MFA challenge IDs are now `UUID` instead of `String`
+
+`AuthMFAChallengeResponse.id` and `MFAVerifyParams.challengeId` are `UUID` instead of `String`.
+Both `MFAVerifyParams` initializers take `challengeId: UUID`.
+
+The Auth server stores a challenge ID in a `uuid` column, returns it as a UUID, and rejects a
+`challenge_id` in `POST /factors/{id}/verify` that does not parse as one. A `String` let callers
+build a request the server could only refuse.
+
+```swift
+// Before
+let challenge = try await supabase.auth.mfa.challenge(params: .init(factorId: factorId))
+let challengeId: String = challenge.id
+try await supabase.auth.mfa.verify(
+  params: .init(factorId: factorId, challengeId: challengeId, code: code)
+)
+
+// After
+let challenge = try await supabase.auth.mfa.challenge(params: .init(factorId: factorId))
+let challengeId: UUID = challenge.id
+try await supabase.auth.mfa.verify(
+  params: .init(factorId: factorId, challengeId: challengeId, code: code)
+)
+```
+
+Code that passes `challenge.id` straight into `verify` compiles unchanged. Code that stores the
+ID as a `String`, or builds `MFAVerifyParams` from a string, gets a compile error. Convert with
+`challenge.id.uuidString` and `UUID(uuidString:)`. A `UUID` prints in uppercase, so
+`"\(challenge.id)"` changes case if you compare it with a lowercase ID.
+
+`challengeAndVerify(params:)` is unchanged. Passkey challenge IDs
+(`PasskeyRegistrationOptions.challengeId`, `PasskeyAuthenticationOptions.challengeId`) stay
+`String`, because the passkey endpoints type `challenge_id` as a string.

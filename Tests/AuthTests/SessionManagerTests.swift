@@ -27,28 +27,27 @@ import Testing
 @Suite(.serialized, .mainSerialExecutorSerialized)
 struct SessionManagerTests {
   let http = RecordingTransport()
-  // Unique negative clientID so this suite's process-global `Dependencies` entry can't be
-  // clobbered by another suite running concurrently (Swift Testing runs suites in parallel;
-  // `AuthClientID` is an `Int` and `AuthClient`'s own generator only ever hands out positive ids,
-  // so negatives are collision-free).
-  let clientID: AuthClientID = -1
+  let dependencies: Dependencies
 
   var sut: SessionManager {
-    Dependencies[clientID].sessionManager
+    dependencies.sessionManager
   }
 
   init() {
-    Dependencies[clientID] = .init(
+    dependencies = Self.makeDependencies(http: http)
+  }
+
+  private static func makeDependencies(
+    http: RecordingTransport, clock: any Clock<Duration> = ContinuousClock()
+  ) -> Dependencies {
+    .live(
       configuration: .init(
         url: clientURL,
         localStorage: InMemoryLocalStorage(),
-        automaticallyRefreshesToken: false
+        automaticallyRefreshesToken: false,
+        clock: clock
       ),
       http: HTTPClient(transport: http),
-      api: APIClient(clientID: clientID),
-      codeVerifierStorage: .mock,
-      sessionStorage: SessionStorage.live(clientID: clientID),
-      sessionManager: SessionManager.live(clientID: clientID),
       logger: supabaseDefaultLogger(label: "io.supabase.auth")
     )
   }
@@ -68,7 +67,7 @@ struct SessionManagerTests {
   @Test
   func cancellationFromTransportIsNotWrapped() async {
     http.respond { _, _ in throw CancellationError() }
-    Dependencies[clientID].sessionStorage.store(.expired)
+    dependencies.sessionStorage.store(.expired)
 
     await #expect(throws: CancellationError.self) {
       _ = try await sut.session()
@@ -79,7 +78,7 @@ struct SessionManagerTests {
   func customFetchErrorIsNotWrapped() async {
     struct FetchError: Error {}
     http.respond { _, _ in throw FetchError() }
-    Dependencies[clientID].sessionStorage.store(.expired)
+    dependencies.sessionStorage.store(.expired)
 
     await #expect(throws: FetchError.self) {
       _ = try await sut.session()
@@ -90,7 +89,7 @@ struct SessionManagerTests {
   func session_shouldReturnValidSession() async throws {
     try await withMainSerialExecutor {
       let session = Session.valid
-      Dependencies[clientID].sessionStorage.store(session)
+      dependencies.sessionStorage.store(session)
 
       let returnedSession = try await sut.session()
       expectNoDifference(returnedSession, session)
@@ -101,7 +100,7 @@ struct SessionManagerTests {
   func session_shouldRefreshSession_whenCurrentSessionExpired() async throws {
     try await withMainSerialExecutor {
       let currentSession = Session.expired
-      Dependencies[clientID].sessionStorage.store(currentSession)
+      dependencies.sessionStorage.store(currentSession)
 
       let validSession = Session.valid
 
@@ -146,24 +145,12 @@ struct SessionManagerTests {
   @Test
   func autoRefreshTicksOnTheInjectedClock() async throws {
     let clock = TestClock()
-    Dependencies[clientID] = .init(
-      configuration: .init(
-        url: clientURL,
-        localStorage: InMemoryLocalStorage(),
-        automaticallyRefreshesToken: false,
-        clock: clock
-      ),
-      http: HTTPClient(transport: http),
-      api: APIClient(clientID: clientID),
-      codeVerifierStorage: .mock,
-      sessionStorage: SessionStorage.live(clientID: clientID),
-      sessionManager: SessionManager.live(clientID: clientID),
-      logger: supabaseDefaultLogger(label: "io.supabase.auth")
-    )
+    let dependencies = Self.makeDependencies(http: http, clock: clock)
+    let sut = dependencies.sessionManager
 
     // `.expired` is close enough to expiry that every tick refreshes, and the
     // response is expired too, so the next tick refreshes again.
-    Dependencies[clientID].sessionStorage.store(.expired)
+    dependencies.sessionStorage.store(.expired)
 
     let refreshCount = LockIsolated(0)
     http.respond(when: { $0.url?.path.contains("/token") == true }) { _, _ in
@@ -188,9 +175,7 @@ struct SessionManagerTests {
     }
     let tickCount = refreshCount.value
 
-    // Awaited, not deferred into a fire-and-forget Task: `LiveSessionManager` resolves
-    // `Dependencies[clientID]` on every access, so a loop still running when this test returns
-    // starts refreshing against the *next* test's transport and storage.
+    // Awaited, not deferred into a fire-and-forget Task, so the loop is gone before the test ends.
     await sut.stopAutoRefresh()
 
     #expect(sawFirstTick)
@@ -235,7 +220,7 @@ struct SessionManagerTests {
 
   private func collectAuthEvents() -> (events: LockIsolated<[AuthChangeEvent]>, stop: () -> Void) {
     let events = LockIsolated<[AuthChangeEvent]>([])
-    let token = Dependencies[clientID].eventEmitter.attach { event, _ in
+    let token = dependencies.eventEmitter.attach { event, _ in
       events.withValue { $0.append(event) }
     }
     return (events, { token.cancel() })
@@ -247,7 +232,7 @@ struct SessionManagerTests {
     let userB = session("B")
     let refreshedA = session("A2")
 
-    Dependencies[clientID].sessionStorage.store(userA)
+    dependencies.sessionStorage.store(userA)
     let (requestSeen, release) = heldTokenResponse {
       (HTTPResponse(status: .ok), try AuthClient.Configuration.jsonEncoder.encode(refreshedA))
     }
@@ -266,7 +251,7 @@ struct SessionManagerTests {
     let result = await refresh.result
 
     expectNoDifference(
-      Dependencies[clientID].sessionStorage.get()?.refreshToken, userB.refreshToken)
+      dependencies.sessionStorage.get()?.refreshToken, userB.refreshToken)
     #expect(!events.value.contains(.tokenRefreshed))
     #expect((result.error as? AuthError)?.kind == .refreshDiscarded)
   }
@@ -276,7 +261,7 @@ struct SessionManagerTests {
     let userA = session("A")
     let userB = session("B")
 
-    Dependencies[clientID].sessionStorage.store(userA)
+    dependencies.sessionStorage.store(userA)
     // `/logout` has already revoked A's refresh token by the time this answer arrives.
     let (requestSeen, release) = heldTokenResponse {
       (
@@ -298,7 +283,7 @@ struct SessionManagerTests {
     let result = await refresh.result
 
     expectNoDifference(
-      Dependencies[clientID].sessionStorage.get()?.refreshToken, userB.refreshToken)
+      dependencies.sessionStorage.get()?.refreshToken, userB.refreshToken)
     #expect(!events.value.contains(.signedOut))
     // A's caller still learns its own session is gone — the server did reject A's refresh token.
     // What must not happen is B being signed out along with it.
@@ -312,7 +297,7 @@ struct SessionManagerTests {
     let refreshedA = session("A2")
     let refreshedB = session("B2")
 
-    Dependencies[clientID].sessionStorage.store(userA)
+    dependencies.sessionStorage.store(userA)
 
     let tokensRequested = LockIsolated<[String]>([])
     let (gate, continuation) = AsyncStream<Void>.makeStream()
@@ -364,7 +349,7 @@ struct SessionManagerTests {
     let userA = session("A")
     let userB = session("B")
 
-    Dependencies[clientID].sessionStorage.store(userA)
+    dependencies.sessionStorage.store(userA)
 
     let tokensRequested = LockIsolated<[String]>([])
     let (gate, continuation) = AsyncStream<Void>.makeStream()
@@ -421,6 +406,106 @@ struct SessionManagerTests {
 
     expectNoDifference(result.refreshToken, hydrated.refreshToken)
     expectNoDifference(
-      Dependencies[clientID].sessionStorage.get()?.refreshToken, hydrated.refreshToken)
+      dependencies.sessionStorage.get()?.refreshToken, hydrated.refreshToken)
+  }
+
+  // MARK: - Ownership (SDK-1894)
+
+  @Test
+  func refreshStartingFromEmptyStorageDoesNotOverwriteASessionStoredMeanwhile() async throws {
+    let hydrated = session("hydrated")
+    let userB = session("B")
+
+    let (requestSeen, release) = heldTokenResponse {
+      (HTTPResponse(status: .ok), try AuthClient.Configuration.jsonEncoder.encode(hydrated))
+    }
+    let (events, stopCollecting) = collectAuthEvents()
+    defer { stopCollecting() }
+
+    // Storage is empty when this refresh starts — the `setSession` hydration path.
+    let refresh = Task { try await sut.refreshSession(hydrated.refreshToken) }
+    let sawRequest = await waitUntil { requestSeen.value }
+    #expect(sawRequest)
+
+    // User B signs in while the refresh is in flight.
+    await sut.update(userB)
+
+    release()
+    let result = await refresh.result
+
+    expectNoDifference(dependencies.sessionStorage.get()?.refreshToken, userB.refreshToken)
+    #expect(!events.value.contains(.tokenRefreshed))
+    #expect((result.error as? AuthError)?.kind == .refreshDiscarded)
+  }
+
+  @Test
+  func refreshStartingFromEmptyStorageDoesNotDeleteASessionStoredMeanwhileOnACleanupError()
+    async throws
+  {
+    let userB = session("B")
+
+    let (requestSeen, release) = heldTokenResponse {
+      (
+        HTTPResponse(status: .badRequest, headerFields: [.apiVersionHeaderName: "2024-01-01"]),
+        Data(#"{"code":"refresh_token_not_found","message":"Refresh Token Not Found"}"#.utf8)
+      )
+    }
+    let (events, stopCollecting) = collectAuthEvents()
+    defer { stopCollecting() }
+
+    let refresh = Task { try await sut.refreshSession("externally-sourced-refresh") }
+    let sawRequest = await waitUntil { requestSeen.value }
+    #expect(sawRequest)
+
+    await sut.update(userB)
+
+    release()
+    let result = await refresh.result
+
+    expectNoDifference(dependencies.sessionStorage.get()?.refreshToken, userB.refreshToken)
+    #expect(!events.value.contains(.signedOut))
+    #expect((result.error as? AuthError)?.kind == .sessionMissing)
+  }
+
+  @Test
+  func foreignRefreshTokenFailureDoesNotSignOutTheStoredSession() async throws {
+    let userB = session("B")
+    dependencies.sessionStorage.store(userB)
+
+    http.respond(when: { $0.url?.path.contains("/token") == true }) { _, _ in
+      (
+        HTTPResponse(status: .badRequest, headerFields: [.apiVersionHeaderName: "2024-01-01"]),
+        Data(#"{"code":"refresh_token_not_found","message":"Refresh Token Not Found"}"#.utf8)
+      )
+    }
+    let (events, stopCollecting) = collectAuthEvents()
+    defer { stopCollecting() }
+
+    // `refreshSession(refreshToken:)` is public and takes any token. A token that is not B's
+    // cannot scope its failure to B just because B happens to be stored.
+    let result = await Task { try await sut.refreshSession("foreign-refresh") }.result
+
+    expectNoDifference(dependencies.sessionStorage.get()?.refreshToken, userB.refreshToken)
+    #expect(!events.value.contains(.signedOut))
+    #expect((result.error as? AuthError)?.kind == .sessionMissing)
+  }
+
+  @Test
+  func foreignRefreshTokenSuccessReplacesTheStoredSession() async throws {
+    // `setSession(accessToken:refreshToken:)` with an expired token while another user is stored
+    // refreshes a token storage does not hold. The caller asked for that replacement; only a
+    // session that changed under the refresh is grounds to discard it.
+    let userB = session("B")
+    let refreshedA = session("A2")
+    dependencies.sessionStorage.store(userB)
+
+    http.respond(when: { $0.url?.path.contains("/token") == true }) { _, _ in
+      (HTTPResponse(status: .ok), try AuthClient.Configuration.jsonEncoder.encode(refreshedA))
+    }
+
+    let result = try await sut.refreshSession("A-refresh")
+
+    expectNoDifference(result.refreshToken, refreshedA.refreshToken)
+    expectNoDifference(dependencies.sessionStorage.get()?.refreshToken, refreshedA.refreshToken)
   }
 }

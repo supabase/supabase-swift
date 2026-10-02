@@ -57,7 +57,7 @@ struct RealtimeReconnectRecoveryTests {
         // Attempt 2 is the first automatic reconnect — the network is still
         // down. Attempt 3, a later automatic retry, succeeds once it recovers.
         if attempt == 2 {
-          throw RealtimeError.connection("network down")
+          throw RealtimeError.transport("network down")
         }
         let socket = AsyncFakeWebSocket()
         socket.serverResponder = AsyncFakeWebSocket.realtimeServerResponder()
