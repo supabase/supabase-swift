@@ -1335,8 +1335,8 @@ features:
       - PostgrestRequestBuilder.dryRun
 
   database.configuration.access_token:
-    status: partially_implemented
-    note: "The token can be a static value via `headers`, or resolved per request from a callback (`PostgrestClient.Configuration.accessToken`), invoked fresh for every `execute()` so an in-flight request's own call already fixed its header before any later mutation to whatever the callback reads from. Not yet implemented: automatic renewal on a 401 — re-invoking the callback and resending the request when the server rejects the token, capped by database.configuration.auto_retry. Today a 401 (or a callback that throws) just fails the request like any other server/transport error."
+    status: implemented
+    note: "The token can be a static value via `headers`, or resolved per request from a callback (`PostgrestClient.Configuration.accessToken`), invoked fresh for every `execute()` so an in-flight request's own call already fixed its header before any later mutation to whatever the callback reads from."
     symbols:
       - PostgrestClient.Configuration.accessToken
   database.configuration.auto_retry:
