@@ -298,7 +298,7 @@ extension AuthMockerTests {
         sessionNotFoundMock(scope: "global").register()
 
         let sut = makeSUT()
-        Dependencies[sut.clientID].sessionStorage.store(.valid)
+        sut.dependencies.sessionStorage.store(.valid)
 
         try await assertAuthStateChanges(
           sut: sut,
@@ -306,7 +306,7 @@ extension AuthMockerTests {
           expectedEvents: [.initialSession, .signedOut]
         )
 
-        #expect(Dependencies[sut.clientID].sessionStorage.get() == nil)
+        #expect(sut.dependencies.sessionStorage.get() == nil)
       }
     }
 
@@ -316,7 +316,7 @@ extension AuthMockerTests {
         sessionNotFoundMock(scope: "others").register()
 
         let sut = makeSUT()
-        Dependencies[sut.clientID].sessionStorage.store(.valid)
+        sut.dependencies.sessionStorage.store(.valid)
 
         try await assertAuthStateChanges(
           sut: sut,
@@ -324,7 +324,7 @@ extension AuthMockerTests {
           expectedEvents: [.initialSession, .signedOut]
         )
 
-        #expect(Dependencies[sut.clientID].sessionStorage.get() == nil)
+        #expect(sut.dependencies.sessionStorage.get() == nil)
       }
     }
 
@@ -332,7 +332,7 @@ extension AuthMockerTests {
     func signOutShouldKeepASessionStoredWhileLoggingOut() async throws {
       try await withMainSerialExecutor {
         let sut = makeSUT()
-        let sessionStorage = Dependencies[sut.clientID].sessionStorage
+        let sessionStorage = sut.dependencies.sessionStorage
 
         var nextSession = Session.valid
         nextSession.accessToken = "next-access-token"
