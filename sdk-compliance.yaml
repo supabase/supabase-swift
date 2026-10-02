@@ -364,6 +364,9 @@ supporting_symbols:
   - RealtimeError.description
   - RealtimeError.maxRetryAttemptsReached
   - RealtimeError.channelClosedByServer
+  # The default server-reply timeout governs subscribe, unsubscribe,
+  # broadcast and broadcast_http alike rather than being owned by one.
+  - RealtimeClientOptions.defaultTimeout
 
 features:
 
