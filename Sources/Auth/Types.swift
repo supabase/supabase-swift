@@ -1198,7 +1198,7 @@ public struct MFAVerifyParams: Encodable, Hashable {
   public let factorId: UUID
 
   /// ID of the challenge being verified. Returned in challenge().
-  public let challengeId: String
+  public let challengeId: UUID
 
   /// Verification code provided by the user. Used for `totp` and `phone` factors; empty for
   /// `webauthn` factors (which use `credentialResponse` instead).
@@ -1214,7 +1214,7 @@ public struct MFAVerifyParams: Encodable, Hashable {
   ///   - factorId: The factor ID being verified.
   ///   - challengeId: The challenge ID being verified.
   ///   - code: The verification code from the authenticator app or SMS.
-  public init(factorId: UUID, challengeId: String, code: String) {
+  public init(factorId: UUID, challengeId: UUID, code: String) {
     self.factorId = factorId
     self.challengeId = challengeId
     self.code = code
@@ -1228,7 +1228,7 @@ public struct MFAVerifyParams: Encodable, Hashable {
   ///   - challengeId: The challenge ID being verified.
   ///   - credentialResponse: The W3C assertion produced by the platform authenticator.
   @_spi(Experimental)
-  public init(factorId: UUID, challengeId: String, credentialResponse: JSONValue) {
+  public init(factorId: UUID, challengeId: UUID, credentialResponse: JSONValue) {
     self.factorId = factorId
     self.challengeId = challengeId
     self.code = ""
@@ -1271,7 +1271,7 @@ public struct MFAChallengeAndVerifyParams: Encodable, Hashable, Sendable {
 /// The response returned after creating an MFA challenge.
 public struct AuthMFAChallengeResponse: Decodable, Hashable, Sendable {
   /// ID of the newly created challenge.
-  public let id: String
+  public let id: UUID
 
   /// Factor type which generated the challenge.
   public let type: FactorType
@@ -1290,6 +1290,36 @@ public typealias AuthMFAVerifyResponse = Session
 public struct AuthMFAUnenrollResponse: Decodable, Hashable, Sendable {
   /// ID of the factor that was successfully unenrolled.
   public let id: UUID
+}
+
+/// The response returned by ``AuthMFARecoveryCodes/status()``.
+public struct AuthMFARecoveryCodesStatusResponse: Decodable, Hashable, Sendable {
+  /// ID of the recovery codes factor, as it appears in ``User/factors``.
+  public let id: UUID
+
+  /// Number of codes in the current set.
+  public let total: Int
+
+  /// Number of codes in the current set that have not been used yet. Zero when every code has been
+  /// consumed.
+  public let remaining: Int
+}
+
+/// The response returned by ``AuthMFARecoveryCodes/generate(friendlyName:)`` and
+/// ``AuthMFARecoveryCodes/regenerate()``.
+public struct AuthMFARecoveryCodesGenerateResponse: Decodable, Hashable, Sendable {
+  /// ID of the recovery codes factor.
+  public let id: UUID
+
+  /// Friendly name of the recovery codes factor.
+  public var friendlyName: String?
+
+  /// Number of codes in the new set.
+  public let total: Int
+
+  /// The codes themselves. Returned only here, so show them to the user and ask them to store
+  /// the codes safely.
+  public let codes: [String]
 }
 
 /// The response returned by ``AuthMFA/listFactors()``.

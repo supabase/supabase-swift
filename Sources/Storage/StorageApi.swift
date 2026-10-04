@@ -144,7 +144,7 @@ struct StorageApi: Sendable {
       }
 
       throw StorageError(
-        kind: .unexpectedResponse,
+        kind: .server,
         message: "Unexpected response with status code \(response.status.code).",
         response: HTTPErrorResponse(response, body: data)
       )

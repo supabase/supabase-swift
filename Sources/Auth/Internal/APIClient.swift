@@ -103,7 +103,7 @@ struct APIClient: Sendable {
       }
 
       return AuthError(
-        kind: .unexpectedResponse,
+        kind: .server,
         message: message,
         errorCode: .unexpectedFailure,
         response: errorResponse
@@ -137,7 +137,7 @@ struct APIClient: Sendable {
       return result
     } else {
       return AuthError(
-        kind: .api,
+        kind: .server,
         message: error._getErrorMessage(),
         errorCode: errorCode ?? .unknown,
         response: errorResponse

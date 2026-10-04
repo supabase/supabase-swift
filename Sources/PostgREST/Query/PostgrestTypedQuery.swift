@@ -89,7 +89,7 @@ extension PostgrestTypedQuery where Phase: PostgrestExecutablePhase {
     let response = try await builder.execute(options: FetchOptions(head: true, count: option))
     guard let count = response.count else {
       throw PostgrestError(
-        kind: .unexpectedResponse,
+        kind: .decoding,
         message: """
           The response carries no row count. Expected a `Content-Range` header for \
           `Prefer: count=\(option.rawValue)`.

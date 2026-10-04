@@ -19,6 +19,9 @@ import HTTPTypes
 /// ### Listing factors
 /// - ``listFactors()``
 /// - ``authenticatorAssuranceLevel()``
+///
+/// ### Recovery codes
+/// - ``recoveryCodes``
 public struct AuthMFA: Sendable {
   /// Held strongly: the client vends this value and never stores it, so there is no cycle, and a
   /// value kept past its call site keeps the client alive instead of dangling.
@@ -30,6 +33,11 @@ public struct AuthMFA: Sendable {
   var decoder: JSONDecoder { configuration.resolvedDecoder }
   var sessionManager: SessionManager { client.dependencies.sessionManager }
   var eventEmitter: AuthStateChangeEventEmitter { client.dependencies.eventEmitter }
+
+  /// Contains all recovery code methods.
+  public var recoveryCodes: AuthMFARecoveryCodes {
+    AuthMFARecoveryCodes(client: client)
+  }
 
   /// Starts the enrollment process for a new Multi-Factor Authentication (MFA) factor. This method
   /// creates a new `unverified` factor.
@@ -88,7 +96,7 @@ public struct AuthMFA: Sendable {
       // Encode without the snake_case strategy so they reach the backend verbatim.
       body = try encodeWebAuthnBody([
         "factor_id": .string(params.factorId.uuidString),
-        "challenge_id": .string(params.challengeId),
+        "challenge_id": .string(params.challengeId.uuidString),
         "webauthn": ["credential_response": credentialResponse],
       ])
     } else {

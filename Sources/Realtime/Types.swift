@@ -40,7 +40,7 @@ public enum RealtimeProtocolVersion: String, Sendable {
 ///
 /// ```swift
 /// let options = RealtimeClientOptions(
-///   heartbeatInterval: 30,
+///   heartbeatInterval: .seconds(30),
 ///   protocolVersion: .v2,
 ///   handleAppLifecycle: true
 /// )
@@ -54,23 +54,23 @@ public enum RealtimeProtocolVersion: String, Sendable {
 /// ### Default Values
 /// - ``defaultHeartbeatInterval``
 /// - ``defaultReconnectDelay``
-/// - ``defaultTimeoutInterval``
+/// - ``defaultTimeout``
 /// - ``defaultDisconnectOnSessionLoss``
 /// - ``defaultConnectOnSubscribe``
 /// - ``defaultMaxRetryAttempts``
 /// - ``defaultDisconnectOnEmptyChannelsAfter``
 /// - ``defaultHandleAppLifecycle``
 /// ### Initialization
-/// - ``init(headers:heartbeatInterval:reconnectDelay:timeoutInterval:disconnectOnSessionLoss:connectOnSubscribe:maxRetryAttempts:disconnectOnEmptyChannelsAfter:protocolVersion:logLevel:http:accessToken:logger:session:handleAppLifecycle:clock:)``
+/// - ``init(headers:heartbeatInterval:reconnectDelay:timeout:disconnectOnSessionLoss:connectOnSubscribe:maxRetryAttempts:disconnectOnEmptyChannelsAfter:protocolVersion:logLevel:http:accessToken:logger:session:handleAppLifecycle:clock:)``
 public struct RealtimeClientOptions: Sendable {
   package var headers: HTTPFields
-  var heartbeatInterval: TimeInterval
-  var reconnectDelay: TimeInterval
-  var timeoutInterval: TimeInterval
+  var heartbeatInterval: Duration
+  var reconnectDelay: Duration
+  var timeout: Duration
   var disconnectOnSessionLoss: Bool
   var connectOnSubscribe: Bool
   var maxRetryAttempts: Int
-  var disconnectOnEmptyChannelsAfter: TimeInterval
+  var disconnectOnEmptyChannelsAfter: Duration
 
   /// The Phoenix serializer protocol version.
   ///
@@ -115,16 +115,16 @@ public struct RealtimeClientOptions: Sendable {
   /// Defaults to `nil` (equivalent to `.default` configuration with no delegate to forward).
   package var session: URLSession?
 
-  /// Default interval, in seconds, between heartbeat messages sent to keep the connection alive.
-  public static let defaultHeartbeatInterval: TimeInterval = 25
+  /// Default interval between heartbeat messages sent to keep the connection alive.
+  public static let defaultHeartbeatInterval: Duration = .seconds(25)
 
-  /// Default base delay, in seconds, for reconnecting after a connection drop. The first
+  /// Default base delay for reconnecting after a connection drop. The first
   /// attempt waits a random duration between half of this and this; later attempts double the
   /// range (capped at 30s) until the connection is reestablished.
-  public static let defaultReconnectDelay: TimeInterval = 7
+  public static let defaultReconnectDelay: Duration = .seconds(7)
 
-  /// Default maximum time, in seconds, to wait for a server reply before treating a request as timed out.
-  public static let defaultTimeoutInterval: TimeInterval = 10
+  /// Default maximum time to wait for a server reply before treating a request as timed out.
+  public static let defaultTimeout: Duration = .seconds(10)
 
   /// Default for whether to disconnect the channel when the session is lost.
   public static let defaultDisconnectOnSessionLoss = true
@@ -137,10 +137,10 @@ public struct RealtimeClientOptions: Sendable {
 
   /// Defers the WebSocket disconnect after the last channel is removed, giving a window to reuse
   /// the existing connection when switching channels without a reconnect penalty. Defaults to
-  /// `2 × defaultHeartbeatInterval`. Set to 0 for immediate disconnect. If a new channel is
+  /// `2 × defaultHeartbeatInterval`. Set to `.zero` for immediate disconnect. If a new channel is
   /// created before the timer fires, the pending disconnect is cancelled.
-  public static let defaultDisconnectOnEmptyChannelsAfter: TimeInterval =
-    2 * defaultHeartbeatInterval
+  public static let defaultDisconnectOnEmptyChannelsAfter: Duration =
+    defaultHeartbeatInterval * 2
 
   /// Default value for ``handleAppLifecycle``.
   ///
@@ -157,13 +157,13 @@ public struct RealtimeClientOptions: Sendable {
   ///
   /// - Parameters:
   ///   - headers: Additional HTTP headers sent with each WebSocket upgrade request.
-  ///   - heartbeatInterval: Interval in seconds between heartbeat messages. Defaults to ``defaultHeartbeatInterval``.
-  ///   - reconnectDelay: Base delay in seconds for reconnecting after a disconnection. The first attempt waits a random duration between half of this and this; later attempts double the range (capped at 30s) until reconnected. Defaults to ``defaultReconnectDelay``.
-  ///   - timeoutInterval: Maximum time in seconds to wait for a server reply. Defaults to ``defaultTimeoutInterval``.
+  ///   - heartbeatInterval: Interval between heartbeat messages. Defaults to ``defaultHeartbeatInterval``.
+  ///   - reconnectDelay: Base delay for reconnecting after a disconnection. The first attempt waits a random duration between half of this and this; later attempts double the range (capped at 30s) until reconnected. Defaults to ``defaultReconnectDelay``.
+  ///   - timeout: Maximum time to wait for a server reply. Defaults to ``defaultTimeout``.
   ///   - disconnectOnSessionLoss: Whether to disconnect the channel when the authentication session is lost. Defaults to ``defaultDisconnectOnSessionLoss``.
   ///   - connectOnSubscribe: Whether to automatically call ``RealtimeClientV2/connect()`` when subscribing to a channel. Defaults to ``defaultConnectOnSubscribe``.
   ///   - maxRetryAttempts: Maximum number of subscribe retry attempts. Defaults to ``defaultMaxRetryAttempts``.
-  ///   - disconnectOnEmptyChannelsAfter: Seconds to wait before disconnecting when all channels are removed. Defaults to ``defaultDisconnectOnEmptyChannelsAfter``.
+  ///   - disconnectOnEmptyChannelsAfter: How long to wait before disconnecting when all channels are removed. Defaults to ``defaultDisconnectOnEmptyChannelsAfter``.
   ///   - protocolVersion: The Phoenix protocol version to use. Defaults to ``RealtimeProtocolVersion/v2``.
   ///   - logLevel: Optional log level for Realtime log output.
   ///   - http: The transport and middleware chain REST broadcast calls go through.
@@ -175,13 +175,13 @@ public struct RealtimeClientOptions: Sendable {
   ///     `ContinuousClock()`; pass a `TestClock` to drive them deterministically in tests.
   public init(
     headers: [String: String] = [:],
-    heartbeatInterval: TimeInterval = Self.defaultHeartbeatInterval,
-    reconnectDelay: TimeInterval = Self.defaultReconnectDelay,
-    timeoutInterval: TimeInterval = Self.defaultTimeoutInterval,
+    heartbeatInterval: Duration = Self.defaultHeartbeatInterval,
+    reconnectDelay: Duration = Self.defaultReconnectDelay,
+    timeout: Duration = Self.defaultTimeout,
     disconnectOnSessionLoss: Bool = Self.defaultDisconnectOnSessionLoss,
     connectOnSubscribe: Bool = Self.defaultConnectOnSubscribe,
     maxRetryAttempts: Int = Self.defaultMaxRetryAttempts,
-    disconnectOnEmptyChannelsAfter: TimeInterval = Self.defaultDisconnectOnEmptyChannelsAfter,
+    disconnectOnEmptyChannelsAfter: Duration = Self.defaultDisconnectOnEmptyChannelsAfter,
     protocolVersion: RealtimeProtocolVersion = .v2,
     logLevel: LogLevel? = nil,
     http: HTTPClientConfiguration = .init(),
@@ -194,7 +194,7 @@ public struct RealtimeClientOptions: Sendable {
     self.headers = HTTPFields(headers)
     self.heartbeatInterval = heartbeatInterval
     self.reconnectDelay = reconnectDelay
-    self.timeoutInterval = timeoutInterval
+    self.timeout = timeout
     self.disconnectOnSessionLoss = disconnectOnSessionLoss
     self.connectOnSubscribe = connectOnSubscribe
     self.maxRetryAttempts = maxRetryAttempts
@@ -209,40 +209,6 @@ public struct RealtimeClientOptions: Sendable {
     self.logger = logger
     self.session = session
     self.clock = clock
-  }
-
-  /// Backward-compatible initializer preserving the pre-`protocolVersion` signature.
-  /// Calls the primary initializer with `protocolVersion: .v2`.
-  @_disfavoredOverload
-  public init(
-    headers: [String: String] = [:],
-    heartbeatInterval: TimeInterval = Self.defaultHeartbeatInterval,
-    reconnectDelay: TimeInterval = Self.defaultReconnectDelay,
-    timeoutInterval: TimeInterval = Self.defaultTimeoutInterval,
-    disconnectOnSessionLoss: Bool = Self.defaultDisconnectOnSessionLoss,
-    connectOnSubscribe: Bool = Self.defaultConnectOnSubscribe,
-    maxRetryAttempts: Int = Self.defaultMaxRetryAttempts,
-    disconnectOnEmptyChannelsAfter: TimeInterval = Self.defaultDisconnectOnEmptyChannelsAfter,
-    logLevel: LogLevel? = nil,
-    http: HTTPClientConfiguration = .init(),
-    accessToken: (@Sendable () async throws -> String?)? = nil,
-    logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.realtime")
-  ) {
-    self.init(
-      headers: headers,
-      heartbeatInterval: heartbeatInterval,
-      reconnectDelay: reconnectDelay,
-      timeoutInterval: timeoutInterval,
-      disconnectOnSessionLoss: disconnectOnSessionLoss,
-      connectOnSubscribe: connectOnSubscribe,
-      maxRetryAttempts: maxRetryAttempts,
-      disconnectOnEmptyChannelsAfter: disconnectOnEmptyChannelsAfter,
-      protocolVersion: .v2,
-      logLevel: logLevel,
-      http: http,
-      accessToken: accessToken,
-      logger: logger
-    )
   }
 
   var apikey: String? {
@@ -382,7 +348,7 @@ extension HTTPField.Name {
 
 /// Verbosity of log output emitted by the Realtime client.
 ///
-/// Pass a value to ``RealtimeClientOptions/init(headers:heartbeatInterval:reconnectDelay:timeoutInterval:disconnectOnSessionLoss:connectOnSubscribe:maxRetryAttempts:disconnectOnEmptyChannelsAfter:protocolVersion:logLevel:http:accessToken:logger:session:handleAppLifecycle:clock:)``
+/// Pass a value to ``RealtimeClientOptions/init(headers:heartbeatInterval:reconnectDelay:timeout:disconnectOnSessionLoss:connectOnSubscribe:maxRetryAttempts:disconnectOnEmptyChannelsAfter:protocolVersion:logLevel:http:accessToken:logger:session:handleAppLifecycle:clock:)``
 /// to control how much detail the Realtime server logs.
 ///
 /// ## Topics

@@ -141,7 +141,7 @@ extension AuthMockerTests {
         try await sut.admin.signOut(jwt: "invalid.access.token")
         Issue.record("Expected signOut to throw")
       } catch let error as AuthError {
-        #expect(error.kind == .api)
+        #expect(error.kind == .server)
       }
     }
   }

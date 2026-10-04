@@ -5,11 +5,9 @@
 //  Created by Guilherme Souza on 19/04/24.
 //
 
-package import Foundation
-
 @discardableResult
 package func withTimeout<R: Sendable>(
-  interval: TimeInterval,
+  _ duration: Duration,
   clock: any Clock<Duration> = ContinuousClock(),
   @_inheritActorContext operation: @escaping @Sendable () async throws -> R
 ) async throws -> R {
@@ -18,16 +16,13 @@ package func withTimeout<R: Sendable>(
       group.cancelAll()
     }
 
-    let deadline = Date(timeIntervalSinceNow: interval)
-
     group.addTask {
       try await operation()
     }
 
     group.addTask {
-      let interval = deadline.timeIntervalSinceNow
-      if interval > 0 {
-        try await clock.sleep(for: .seconds(interval))
+      if duration > .zero {
+        try await clock.sleep(for: duration)
       }
       try Task.checkCancellation()
       throw TimeoutError()

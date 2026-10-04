@@ -410,9 +410,8 @@ extension PostgrestRequestBuilder where Phase: PostgrestExecutablePhase {
   /// - Parameter options: Options controlling whether to include a row count and whether to
   ///   use the HEAD method. Defaults to ``FetchOptions/init(head:count:)``.
   /// - Returns: A ``PostgrestResponse`` whose `value` is `Void`.
-  /// - Throws: ``PostgrestError`` with kind `.server` if PostgREST returns an error response,
-  ///   `.transport` if the request never completes, or `.unexpectedResponse` if the body is not
-  ///   a PostgREST error.
+  /// - Throws: ``PostgrestError`` with kind `.server` if PostgREST returns a non-2xx status, or
+  ///   `.transport` if the request never completes.
   @discardableResult
   public func execute(
     options: FetchOptions = FetchOptions()
@@ -561,7 +560,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestExecutablePhase {
       )
     }
     throw PostgrestError(
-      kind: .unexpectedResponse,
+      kind: .server,
       message: "Unexpected response with status code \(response.status.code).",
       response: HTTPErrorResponse(response, body: data)
     )

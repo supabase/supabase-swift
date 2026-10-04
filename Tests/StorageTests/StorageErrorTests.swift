@@ -56,7 +56,7 @@ struct StorageErrorTests {
 
   @Test
   func errorDescriptionIsTheMessage() {
-    let error = StorageError(kind: .invalidURL, message: "Cannot build a public URL.")
+    let error = StorageError(kind: .invalidRequest, message: "Cannot build a public URL.")
 
     #expect(error.errorDescription == "Cannot build a public URL.")
   }

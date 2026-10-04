@@ -24,14 +24,14 @@ struct FunctionsErrorTests {
   @Test
   func descriptionIncludesKindAndStatus() {
     let error = FunctionsError(
-      kind: .http,
+      kind: .server,
       message: "Edge Function returned a non-2xx status code: 412",
       response: HTTPErrorResponse(statusCode: 412, headers: HTTPFields(), body: Data())
     )
 
     #expect(
       error.description
-        == "FunctionsError(http): Edge Function returned a non-2xx status code: 412 [status 412]")
+        == "FunctionsError(server): Edge Function returned a non-2xx status code: 412 [status 412]")
   }
 
   @Test
@@ -39,7 +39,7 @@ struct FunctionsErrorTests {
     let future = FunctionsError.Kind(rawValue: "somethingNew")
 
     #expect(future.rawValue == "somethingNew")
-    #expect(future != .http)
+    #expect(future != .server)
   }
 
   @Test

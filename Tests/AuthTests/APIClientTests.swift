@@ -50,7 +50,7 @@ struct APIClientTests {
       response: HTTPTypes.HTTPResponse(status: .init(code: 500)), data: data,
       decoder: AuthClient.Configuration.jsonDecoder)
 
-    #expect(error.kind == .unexpectedResponse)
+    #expect(error.kind == .server)
     #expect(error.message == "HTTP 500: \(HTTPURLResponse.localizedString(forStatusCode: 500))")
     #expect(error.errorCode == .unexpectedFailure)
     #expect(error.response?.body == data)

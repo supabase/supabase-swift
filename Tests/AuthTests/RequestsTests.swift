@@ -196,7 +196,7 @@ struct RequestsTests {
       _ = try await sut.session(from: url)
     } catch {
       let authError = error as? AuthError
-      #expect(authError?.kind == .implicitGrantRedirect)
+      #expect(authError?.kind == .oauthFlowFailed)
       #expect(authError?.message == "No session defined in URL")
     }
   }
@@ -543,7 +543,8 @@ struct RequestsTests {
     await assert {
       _ = try await sut.mfa.verify(
         params: .init(
-          factorId: UUID(uuidString: "00000000-0000-0000-0000-000000000123")!, challengeId: "123",
+          factorId: UUID(uuidString: "00000000-0000-0000-0000-000000000123")!,
+          challengeId: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!,
           code: "123456"))
     }
   }
@@ -599,7 +600,7 @@ struct RequestsTests {
       _ = try await sut.mfa.verify(
         params: .init(
           factorId: UUID(uuidString: "00000000-0000-0000-0000-000000000123")!,
-          challengeId: "456",
+          challengeId: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!,
           credentialResponse: [
             "id": "credential-id",
             "rawId": "cmF3LWNyZWRlbnRpYWwtaWQ",

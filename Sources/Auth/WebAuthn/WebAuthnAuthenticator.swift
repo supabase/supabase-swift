@@ -27,7 +27,7 @@ extension JSONValue {
   /// Reads the `user.name` field of W3C creation options.
   func webAuthnUserName() throws -> String {
     guard let name = value(at: ["user", "name"])?.stringValue else {
-      throw AuthError.webAuthn("Missing field 'user.name' in WebAuthn credential options.")
+      throw AuthError.decoding("Missing field 'user.name' in WebAuthn credential options.")
     }
     return name
   }
@@ -35,7 +35,7 @@ extension JSONValue {
   /// Reads the `rpId` field of W3C assertion options (`PublicKeyCredentialRequestOptions`).
   func webAuthnAssertionRpId() throws -> String {
     guard let id = value(at: ["rpId"])?.stringValue else {
-      throw AuthError.webAuthn("Missing field 'rpId' in WebAuthn credential options.")
+      throw AuthError.decoding("Missing field 'rpId' in WebAuthn credential options.")
     }
     return id
   }
@@ -43,7 +43,7 @@ extension JSONValue {
   /// Reads the `rp.id` field of W3C creation options (`PublicKeyCredentialCreationOptions`).
   func webAuthnCreationRpId() throws -> String {
     guard let id = value(at: ["rp", "id"])?.stringValue else {
-      throw AuthError.webAuthn("Missing field 'rp.id' in WebAuthn credential options.")
+      throw AuthError.decoding("Missing field 'rp.id' in WebAuthn credential options.")
     }
     return id
   }
@@ -58,11 +58,11 @@ extension JSONValue {
 
   private func base64URLDecoded(at path: [String]) throws -> Data {
     guard let string = value(at: path)?.stringValue else {
-      throw AuthError.webAuthn(
+      throw AuthError.decoding(
         "Missing field '\(path.joined(separator: "."))' in WebAuthn credential options.")
     }
     guard let data = Base64URL.decode(string) else {
-      throw AuthError.webAuthn("Field '\(path.joined(separator: "."))' is not valid base64url.")
+      throw AuthError.decoding("Field '\(path.joined(separator: "."))' is not valid base64url.")
     }
     return data
   }
@@ -125,7 +125,7 @@ extension JSONValue {
       let credential = authorization.credential
         as? ASAuthorizationPlatformPublicKeyCredentialRegistration
     else {
-      throw AuthError.webAuthn("The authenticator returned an unexpected credential type.")
+      throw AuthError.decoding("The authenticator returned an unexpected credential type.")
     }
     return [
       "id": .string(Base64URL.encode(credential.credentialID)),
@@ -144,7 +144,7 @@ extension JSONValue {
       let credential = authorization.credential
         as? ASAuthorizationPlatformPublicKeyCredentialAssertion
     else {
-      throw AuthError.webAuthn("The authenticator returned an unexpected credential type.")
+      throw AuthError.decoding("The authenticator returned an unexpected credential type.")
     }
     return [
       "id": .string(Base64URL.encode(credential.credentialID)),

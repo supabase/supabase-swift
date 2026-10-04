@@ -1064,13 +1064,13 @@ public final class AuthClient: Sendable {
     switch configuration.flowType {
     case .implicit:
       guard isImplicitGrantFlow(params: params) else {
-        throw AuthError.implicitGrantRedirect("Not a valid implicit grant flow URL: \(url)")
+        throw AuthError.oauthFlowFailed("Not a valid implicit grant flow URL: \(url)")
       }
       return try await handleImplicitGrantFlow(params: params)
 
     case .pkce:
       guard isPKCEFlow(params: params) else {
-        throw AuthError.pkceGrantCodeExchange("Not a valid PKCE flow URL: \(url)")
+        throw AuthError.oauthFlowFailed("Not a valid PKCE flow URL: \(url)")
       }
       return try await handlePKCEFlow(params: params, flowId: flowId)
     }
@@ -1080,7 +1080,7 @@ public final class AuthClient: Sendable {
   /// `configuration.flowType`, which is what guarantees the flow type here.
   private func handleImplicitGrantFlow(params: [String: String]) async throws -> Session {
     if let errorMessage = params["error_description"] ?? params["error"] {
-      throw AuthError.implicitGrantRedirect(errorMessage)
+      throw AuthError.oauthFlowFailed(errorMessage)
     }
 
     guard
@@ -1089,7 +1089,7 @@ public final class AuthClient: Sendable {
       let refreshToken = params["refresh_token"],
       let tokenType = params["token_type"]
     else {
-      throw AuthError.implicitGrantRedirect("No session defined in URL")
+      throw AuthError.oauthFlowFailed("No session defined in URL")
     }
 
     let expiresAt = params["expires_at"].flatMap(TimeInterval.init)
@@ -1132,14 +1132,14 @@ public final class AuthClient: Sendable {
       let oauthError = params["error"] ?? "unspecified_error"
       let description =
         params["error_description"] ?? "Error in URL with unspecified error_description."
-      throw AuthError.pkceGrantCodeExchange(
+      throw AuthError.oauthFlowFailed(
         "\(oauthError): \(description)",
         errorCode: params["error_code"].map { ErrorCode($0) } ?? .unknown
       )
     }
 
     guard let code = params["code"] else {
-      throw AuthError.pkceGrantCodeExchange("No code detected.")
+      throw AuthError.oauthFlowFailed("No code detected.")
     }
 
     return try await exchangeCodeForSession(authCode: code, flowId: flowId)
@@ -1191,7 +1191,7 @@ public final class AuthClient: Sendable {
   /// If using ``SignOutScope/others`` scope, no ``AuthChangeEvent/signedOut`` event is fired.
   /// - Parameter scope: Specifies which sessions should be logged out.
   public func signOut(scope: SignOutScope = .global) async throws {
-    guard let accessToken = currentSession?.accessToken else {
+    guard let session = currentSession else {
       configuration.logger.warning("signOut called without a session")
       return
     }
@@ -1207,17 +1207,16 @@ public final class AuthClient: Sendable {
           method: .post,
           url: configuration.url.appendingPathComponent("logout"),
           query: [URLQueryItem(name: "scope", value: scope.rawValue)],
-          headerFields: [.authorization: "Bearer \(accessToken)"]
-        )
+          headerFields: [.authorization: "Bearer \(session.accessToken)"]
+        ),
+        for: .snapshot(session)
       )
     } catch let error as AuthError
-      where [.api, .unexpectedResponse].contains(error.kind)
-      && [404, 403, 401].contains(error.response?.statusCode ?? 0)
+      where error.kind == .sessionMissing
+      || error.kind == .server && [404, 403, 401].contains(error.response?.statusCode ?? 0)
     {
       // ignore 404s since user might not exist anymore
       // ignore 401s, and 403s since an invalid or expired JWT should sign out the current session.
-      // A body-less error response (e.g. from a proxy) reports as `.unexpectedResponse` rather
-      // than `.api`, but the status code alone is enough to know it's still safe to swallow here.
     }
   }
 

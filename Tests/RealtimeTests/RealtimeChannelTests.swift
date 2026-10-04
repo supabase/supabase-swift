@@ -719,7 +719,7 @@ struct RealtimeChannelTests {
       url: URL(string: "https://localhost:54321/realtime/v1")!,
       options: RealtimeClientOptions(
         headers: ["apikey": "test-key"],
-        timeoutInterval: 5.0,
+        timeout: .seconds(5),
         accessToken: { "test-token" }
       ),
       wsTransport: { _, _ in client },
@@ -730,7 +730,7 @@ struct RealtimeChannelTests {
     let channel = socket.channel("test-topic")
 
     // Test with custom timeout
-    try await channel.httpSend(event: "test", message: ["data": "test"], timeout: 3.0)
+    try await channel.httpSend(event: "test", message: ["data": "test"], timeout: .seconds(3))
 
     let requests = httpClient.requests
     #expect(requests.count == 1)
@@ -748,7 +748,7 @@ struct RealtimeChannelTests {
       url: URL(string: "https://localhost:54321/realtime/v1")!,
       options: RealtimeClientOptions(
         headers: ["apikey": "test-key"],
-        timeoutInterval: 5.0,
+        timeout: .seconds(5),
         accessToken: { "test-token" }
       ),
       wsTransport: { _, _ in client },

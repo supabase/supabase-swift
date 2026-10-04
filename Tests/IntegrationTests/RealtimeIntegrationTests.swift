@@ -134,7 +134,7 @@
         client.realtimeV2.disconnect()
 
         // Wait for potential reconnection delay
-        await testClock.advance(by: .seconds(RealtimeClientOptions.defaultReconnectDelay + 1))
+        await testClock.advance(by: RealtimeClientOptions.defaultReconnectDelay + .seconds(1))
 
         #expect(client.realtimeV2.status == .disconnected)
       }
@@ -294,7 +294,7 @@
           event: "test-event", message: Message(value: 2, text: "second"))
         await channel.broadcast(event: "test-event", message: ["value": 3, "text": "third"])
 
-        let receivedMessages = try await withTimeout(interval: 5) {
+        let receivedMessages = try await withTimeout(.seconds(5)) {
           await receivedMessagesTask.value
         }
 
@@ -336,11 +336,11 @@
         try await channel.broadcast(event: "event-1", message: ["data": "3"])
         try await channel.broadcast(event: "event-2", message: ["data": "4"])
 
-        let event1 = try await withTimeout(interval: 5) {
+        let event1 = try await withTimeout(.seconds(5)) {
           await event1Messages.value
         }
 
-        let event2 = try await withTimeout(interval: 5) {
+        let event2 = try await withTimeout(.seconds(5)) {
           await event2Messages.value
         }
 
@@ -426,7 +426,7 @@
         // Delete
         try await client.from("key_value_storage").delete().eq("key", value: testKey).execute()
 
-        let received = try await withTimeout(interval: 5) {
+        let received = try await withTimeout(.seconds(5)) {
           await allChangesTask.value
         }
 
@@ -499,7 +499,7 @@
         _ = try await client.from("key_value_storage")
           .insert(["key": testKey2, "value": "not-filtered"]).select().single().execute()
 
-        let received = try await withTimeout(interval: 5) {
+        let received = try await withTimeout(.seconds(5)) {
           await filteredTask.value
         }
 
@@ -577,15 +577,15 @@
         // Delete
         try await client.from("key_value_storage").delete().eq("key", value: testKey).execute()
 
-        let inserts = try await withTimeout(interval: 5) {
+        let inserts = try await withTimeout(.seconds(5)) {
           await insertTask.value
         }
 
-        let updates = try await withTimeout(interval: 5) {
+        let updates = try await withTimeout(.seconds(5)) {
           await updateTask.value
         }
 
-        let deletes = try await withTimeout(interval: 5) {
+        let deletes = try await withTimeout(.seconds(5)) {
           await deleteTask.value
         }
 
@@ -649,7 +649,7 @@
     //      )
     //
     //      // Verify the second client received the broadcast
-    //      let receivedMessages = try await withTimeout(interval: 5) {
+    //      let receivedMessages = try await withTimeout(.seconds(5)) {
     //        await receivedMessagesTask.value
     //      }
     //
@@ -812,19 +812,19 @@
         try await Task.sleep(nanoseconds: 500_000_000)
 
         // Collect all events
-        let presenceChanges1 = try await withTimeout(interval: 5) {
+        let presenceChanges1 = try await withTimeout(.seconds(5)) {
           await client1PresenceChanges.value
         }
 
-        let presenceChanges2 = try await withTimeout(interval: 5) {
+        let presenceChanges2 = try await withTimeout(.seconds(5)) {
           await client2PresenceChanges.value
         }
 
-        let messages1 = try await withTimeout(interval: 5) {
+        let messages1 = try await withTimeout(.seconds(5)) {
           await client1Messages.value
         }
 
-        let messages2 = try await withTimeout(interval: 5) {
+        let messages2 = try await withTimeout(.seconds(5)) {
           await client2Messages.value
         }
 

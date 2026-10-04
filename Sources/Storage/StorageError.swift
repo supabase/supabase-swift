@@ -26,19 +26,21 @@ public struct StorageError: SupabaseError {
       self.init(rawValue: value)
     }
 
-    /// Storage rejected the request and sent a recognizable error body. See
-    /// ``StorageError/serverError``.
+    /// Storage answered with a non-2xx status. Branch on ``StorageError/response`` for the
+    /// status code and on ``StorageError/serverError`` for the code and message Storage sent;
+    /// `serverError` is `nil` when the body was not a Storage error payload.
     public static let server: Kind = "server"
-    /// A non-2xx status whose body was not a Storage error payload. ``StorageError/response``
-    /// has the raw body.
-    public static let unexpectedResponse: Kind = "unexpectedResponse"
-    /// The request never completed. ``StorageError/underlyingError`` is usually a `URLError`.
+    /// No response arrived, so whether Storage applied the request is unknown. Retry reads
+    /// freely; before retrying an upload, move or delete, check that it was not applied.
+    /// ``StorageError/underlyingError`` is usually a `URLError`.
     public static let transport: Kind = "transport"
-    /// A success body could not be decoded. ``StorageError/underlyingError`` is usually a
-    /// `DecodingError`.
+    /// Storage answered 2xx but the body could not be used: it did not decode as the expected
+    /// type, or a required field was missing. Nothing to retry; report it.
+    /// ``StorageError/underlyingError`` is the `DecodingError` when there was one.
     public static let decoding: Kind = "decoding"
-    /// A URL could not be built from the configuration and the given path. No request was sent.
-    public static let invalidURL: Kind = "invalidURL"
+    /// The SDK refused to send: a URL could not be built from the configuration and the given
+    /// path. Fix the path or the client configuration. No request was sent.
+    public static let invalidRequest: Kind = "invalidRequest"
   }
 
   /// A machine-readable code Storage sends alongside the error body.
@@ -83,7 +85,8 @@ public struct StorageError: SupabaseError {
 
   public var kind: Kind
   public var message: String
-  /// The decoded error body. Non-nil exactly when ``kind`` is ``Kind-swift.struct/server``.
+  /// The decoded error body. Set when ``kind`` is ``Kind-swift.struct/server`` and the body was
+  /// a Storage error payload; `nil` otherwise.
   public var serverError: ServerError?
   public var response: HTTPErrorResponse?
   public var underlyingError: (any Error)?

@@ -293,6 +293,70 @@ extension AuthMockerTests {
     }
 
     @Test
+    func signOutShouldSucceedIfSessionIsNotFound() async throws {
+      try await withMainSerialExecutor {
+        sessionNotFoundMock(scope: "global").register()
+
+        let sut = makeSUT()
+        sut.dependencies.sessionStorage.store(.valid)
+
+        try await assertAuthStateChanges(
+          sut: sut,
+          action: { try await sut.signOut() },
+          expectedEvents: [.initialSession, .signedOut]
+        )
+
+        #expect(sut.dependencies.sessionStorage.get() == nil)
+      }
+    }
+
+    @Test
+    func signOutWithOthersScopeShouldRemoveSessionIfSessionIsNotFound() async throws {
+      try await withMainSerialExecutor {
+        sessionNotFoundMock(scope: "others").register()
+
+        let sut = makeSUT()
+        sut.dependencies.sessionStorage.store(.valid)
+
+        try await assertAuthStateChanges(
+          sut: sut,
+          action: { try await sut.signOut(scope: .others) },
+          expectedEvents: [.initialSession, .signedOut]
+        )
+
+        #expect(sut.dependencies.sessionStorage.get() == nil)
+      }
+    }
+
+    @Test
+    func signOutShouldKeepASessionStoredWhileLoggingOut() async throws {
+      try await withMainSerialExecutor {
+        let sut = makeSUT()
+        let sessionStorage = sut.dependencies.sessionStorage
+
+        var nextSession = Session.valid
+        nextSession.accessToken = "next-access-token"
+        nextSession.refreshToken = "next-refresh-token"
+
+        var mock = sessionNotFoundMock(scope: "global")
+        mock.onRequestHandler = OnRequestHandler(requestCallback: { [nextSession] _ in
+          sessionStorage.store(nextSession)
+        })
+        mock.register()
+
+        sessionStorage.store(.valid)
+
+        try await assertAuthStateChanges(
+          sut: sut,
+          action: { try await sut.signOut() },
+          expectedEvents: [.initialSession, .signedOut]
+        )
+
+        expectNoDifference(sessionStorage.get(), nextSession)
+      }
+    }
+
+    @Test
     func signInAnonymously() async throws {
       try await withMainSerialExecutor {
         let session = Session(fromMockNamed: "anonymous-sign-in-response")
@@ -695,7 +759,7 @@ extension AuthMockerTests {
         Issue.record("Expect failure")
       } catch {
         let authError = error as? AuthError
-        #expect(authError?.kind == .pkceGrantCodeExchange)
+        #expect(authError?.kind == .oauthFlowFailed)
         #expect(authError?.message == "server_error: Identity is already linked to another user")
         #expect(authError?.errorCode == ErrorCode("422"))
       }
@@ -991,9 +1055,9 @@ extension AuthMockerTests {
             signature: "irrelevant"
           )
         )
-        Issue.record("Expected AuthError.api")
+        Issue.record("Expected AuthError.server")
       } catch let error as AuthError {
-        #expect(error.kind == .api)
+        #expect(error.kind == .server)
         #expect(error.errorCode == .web3UnsupportedChain)
         #expect(error.response?.statusCode == 400)
       }
@@ -1195,9 +1259,9 @@ extension AuthMockerTests {
 
       do {
         try await sut.session(from: url)
-        Issue.record("Expected implicitGrantRedirect error")
+        Issue.record("Expected oauthFlowFailed error")
       } catch let error as AuthError {
-        #expect(error.kind == .implicitGrantRedirect)
+        #expect(error.kind == .oauthFlowFailed)
         expectNoDifference(error.message, "Not a valid implicit grant flow URL: \(url)")
       }
     }
@@ -1213,9 +1277,9 @@ extension AuthMockerTests {
 
       do {
         try await sut.session(from: url)
-        Issue.record("Expected implicitGrantRedirect error")
+        Issue.record("Expected oauthFlowFailed error")
       } catch let error as AuthError {
-        #expect(error.kind == .implicitGrantRedirect)
+        #expect(error.kind == .oauthFlowFailed)
         expectNoDifference(error.message, "Invalid code")
       }
     }
@@ -1231,9 +1295,9 @@ extension AuthMockerTests {
 
       do {
         try await sut.session(from: url)
-        Issue.record("Expected implicitGrantRedirect error")
+        Issue.record("Expected oauthFlowFailed error")
       } catch let error as AuthError {
-        #expect(error.kind == .implicitGrantRedirect)
+        #expect(error.kind == .oauthFlowFailed)
         expectNoDifference(error.message, "User denied access")
       }
     }
@@ -1246,9 +1310,9 @@ extension AuthMockerTests {
 
       do {
         try await sut.session(from: url)
-        Issue.record("Expected implicitGrantRedirect error")
+        Issue.record("Expected oauthFlowFailed error")
       } catch let error as AuthError {
-        #expect(error.kind == .implicitGrantRedirect)
+        #expect(error.kind == .oauthFlowFailed)
         expectNoDifference(error.message, "access_denied")
       }
     }
@@ -1261,9 +1325,9 @@ extension AuthMockerTests {
 
       do {
         try await sut.session(from: url)
-        Issue.record("Expected implicitGrantRedirect error")
+        Issue.record("Expected oauthFlowFailed error")
       } catch let error as AuthError {
-        #expect(error.kind == .implicitGrantRedirect)
+        #expect(error.kind == .oauthFlowFailed)
         expectNoDifference(error.message, "access_denied")
       }
     }
@@ -1319,9 +1383,9 @@ extension AuthMockerTests {
 
       do {
         try await sut.session(from: url)
-        Issue.record("Expected pkceGrantCodeExchange error")
+        Issue.record("Expected oauthFlowFailed error")
       } catch let error as AuthError {
-        #expect(error.kind == .pkceGrantCodeExchange)
+        #expect(error.kind == .oauthFlowFailed)
         expectNoDifference(error.message, "invalid_grant: Invalid code")
         expectNoDifference(error.errorCode, ErrorCode("500"))
       }
@@ -1338,9 +1402,9 @@ extension AuthMockerTests {
 
       do {
         try await sut.session(from: url)
-        Issue.record("Expected pkceGrantCodeExchange error")
+        Issue.record("Expected oauthFlowFailed error")
       } catch let error as AuthError {
-        #expect(error.kind == .pkceGrantCodeExchange)
+        #expect(error.kind == .oauthFlowFailed)
         expectNoDifference(
           error.message, "invalid_grant: Error in URL with unspecified error_description.")
         expectNoDifference(error.errorCode, ErrorCode("500"))
@@ -1360,7 +1424,7 @@ extension AuthMockerTests {
         _ = try await sut.session(from: url)
       } catch {
         let authError = error as? AuthError
-        #expect(authError?.kind == .pkceGrantCodeExchange)
+        #expect(authError?.kind == .oauthFlowFailed)
         #expect(
           authError?.message
             == "Not a valid PKCE flow URL: https://dummy-url.com/callback#access_token=accesstoken&expires_in=60&refresh_token=refreshtoken"
@@ -2107,7 +2171,7 @@ extension AuthMockerTests {
           .post: Data(
             """
             {
-              "id": "12345",
+              "id": "e621e1f8-c36c-495a-93fc-0c247a3e6e5f",
               "type": "totp",
               "expires_at": 12345678
             }
@@ -2137,7 +2201,7 @@ extension AuthMockerTests {
       expectNoDifference(
         response,
         AuthMFAChallengeResponse(
-          id: "12345",
+          id: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!,
           type: "totp",
           expiresAt: 12_345_678
         )
@@ -2155,7 +2219,7 @@ extension AuthMockerTests {
           .post: Data(
             """
             {
-              "id": "12345",
+              "id": "e621e1f8-c36c-495a-93fc-0c247a3e6e5f",
               "type": "phone",
               "expires_at": 12345678
             }
@@ -2193,7 +2257,7 @@ extension AuthMockerTests {
       expectNoDifference(
         response,
         AuthMFAChallengeResponse(
-          id: "12345",
+          id: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!,
           type: "phone",
           expiresAt: 12_345_678
         )
@@ -2211,7 +2275,7 @@ extension AuthMockerTests {
           .post: Data(
             """
             {
-              "id": "challenge-1",
+              "id": "e621e1f8-c36c-495a-93fc-0c247a3e6e5f",
               "type": "webauthn",
               "expires_at": 12345678,
               "webauthn": {
@@ -2237,7 +2301,7 @@ extension AuthMockerTests {
         params: .init(factorId: factorId, webAuthn: .init(rpId: "example.com"))
       )
 
-      expectNoDifference(response.id, "challenge-1")
+      expectNoDifference(response.id, UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!)
       expectNoDifference(response.type, "webauthn")
       expectNoDifference(response.webauthn?.type, .create)
 
@@ -2261,12 +2325,12 @@ extension AuthMockerTests {
         curl \
         	--request POST \
         	--header "Authorization: Bearer accesstoken" \
-        	--header "Content-Length: 89" \
+        	--header "Content-Length: 122" \
         	--header "Content-Type: application/json" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
         	--header "X-Supabase-Api-Version: 2024-01-01" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	--data "{\"challenge_id\":\"123\",\"code\":\"123456\",\"factor_id\":\"00000000-0000-0000-0000-000000000123\"}" \
+        	--data "{\"challenge_id\":\"E621E1F8-C36C-495A-93FC-0C247A3E6E5F\",\"code\":\"123456\",\"factor_id\":\"00000000-0000-0000-0000-000000000123\"}" \
         	"http://localhost:54321/auth/v1/factors/00000000-0000-0000-0000-000000000123/verify"
         """#
       }
@@ -2279,7 +2343,7 @@ extension AuthMockerTests {
       try await sut.mfa.verify(
         params: .init(
           factorId: factorId,
-          challengeId: "123",
+          challengeId: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!,
           code: "123456"
         )
       )
@@ -2328,7 +2392,7 @@ extension AuthMockerTests {
           .post: Data(
             """
             {
-              "id": "12345",
+              "id": "e621e1f8-c36c-495a-93fc-0c247a3e6e5f",
               "type": "totp",
               "expires_at": 12345678
             }
@@ -2361,12 +2425,12 @@ extension AuthMockerTests {
         curl \
         	--request POST \
         	--header "Authorization: Bearer accesstoken" \
-        	--header "Content-Length: 88" \
+        	--header "Content-Length: 119" \
         	--header "Content-Type: application/json" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
         	--header "X-Supabase-Api-Version: 2024-01-01" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	--data "{\"challenge_id\":\"12345\",\"code\":\"456\",\"factor_id\":\"00000000-0000-0000-0000-000000000123\"}" \
+        	--data "{\"challenge_id\":\"E621E1F8-C36C-495A-93FC-0C247A3E6E5F\",\"code\":\"456\",\"factor_id\":\"00000000-0000-0000-0000-000000000123\"}" \
         	"http://localhost:54321/auth/v1/factors/00000000-0000-0000-0000-000000000123/verify"
         """#
       }
@@ -2730,7 +2794,7 @@ extension AuthMockerTests {
           statusCode: 200,
           data: [
             .post: Data(
-              #"{"id":"ch-1","type":"webauthn","expires_at":12345678,"webauthn":{"type":"create","credential_options":{"challenge":"Y2hhbGxlbmdl","rp":{"id":"example.com"}}}}"#
+              #"{"id":"e621e1f8-c36c-495a-93fc-0c247a3e6e5f","type":"webauthn","expires_at":12345678,"webauthn":{"type":"create","credential_options":{"challenge":"Y2hhbGxlbmdl","rp":{"id":"example.com"}}}}"#
                 .utf8)
           ]
         )
@@ -2774,7 +2838,7 @@ extension AuthMockerTests {
           statusCode: 200,
           data: [
             .post: Data(
-              #"{"id":"ch-1","type":"webauthn","expires_at":12345678,"webauthn":{"type":"request","credential_options":{"challenge":"Y2hhbGxlbmdl","rpId":"example.com"}}}"#
+              #"{"id":"e621e1f8-c36c-495a-93fc-0c247a3e6e5f","type":"webauthn","expires_at":12345678,"webauthn":{"type":"request","credential_options":{"challenge":"Y2hhbGxlbmdl","rpId":"example.com"}}}"#
                 .utf8)
           ]
         )
@@ -3677,7 +3741,7 @@ extension AuthMockerTests {
         try await sut.signIn(email: "a@b.c", password: "secret")
         Issue.record("Expected failure")
       } catch let error as AuthError {
-        #expect(error.kind == .unexpectedResponse)
+        #expect(error.kind == .server)
         #expect(error.errorCode == .unexpectedFailure)
         #expect(error.response?.statusCode == 502)
         #expect(error.response?.body == Data("<html>bad gateway</html>".utf8))
@@ -3707,6 +3771,28 @@ extension AuthMockerTests {
       } catch {
         Issue.record("Unexpected error \(error)")
       }
+    }
+
+    private func sessionNotFoundMock(scope: String) -> Mock {
+      Mock(
+        url: clientURL.appendingPathComponent("logout").appendingQueryItems([
+          URLQueryItem(name: "scope", value: scope)
+        ]),
+        statusCode: 403,
+        data: [
+          .post: Data(
+            """
+            {
+              "code": "session_not_found",
+              "message": "Session from session_id claim in JWT does not exist"
+            }
+            """.utf8
+          )
+        ],
+        additionalHeaders: [
+          "X-Supabase-Api-Version": "2024-01-01"
+        ]
+      )
     }
 
     private func makeSUT(
@@ -3755,7 +3841,7 @@ extension AuthMockerTests {
       // concurrently-running suite in the process gets its own task scheduling funneled onto the
       // same queue too. Under CI's loaded simulator that queue can back up well past what a fast
       // local run would ever see — 30s gives real headroom without masking a genuinely stuck test.
-      timeout: TimeInterval = 30,
+      timeout: Duration = .seconds(30),
       fileID: StaticString = #fileID,
       filePath: StaticString = #filePath,
       line: UInt = #line,
@@ -3777,7 +3863,7 @@ extension AuthMockerTests {
 
       let result = try await action()
 
-      try await withTimeout(interval: timeout) {
+      try await withTimeout(timeout) {
         defer { finished.setValue(true) }
         while receivedEvents.count < expectedEvents.count {
           await Task.yield()

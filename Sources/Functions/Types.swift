@@ -4,15 +4,15 @@ public import Helpers
 
 /// An error thrown by ``FunctionsClient``.
 ///
-/// Check ``kind`` to learn what failed. ``response`` carries the status, headers and body for
-/// ``Kind-swift.struct/relay`` and ``Kind-swift.struct/http``. ``underlyingError`` carries the
-/// `URLError` or `DecodingError` for ``Kind-swift.struct/transport`` and
+/// Check ``kind`` to learn which party failed. ``response`` carries the status, headers and body
+/// for ``Kind-swift.struct/relay`` and ``Kind-swift.struct/server``. ``underlyingError`` carries
+/// the `URLError` or `DecodingError` for ``Kind-swift.struct/transport`` and
 /// ``Kind-swift.struct/decoding``.
 ///
 /// ```swift
 /// do {
 ///   try await functions.invoke("hello")
-/// } catch let error as FunctionsError where error.kind == .http {
+/// } catch let error as FunctionsError where error.kind == .server {
 ///   print(error.response?.statusCode ?? 0, error.response?.body ?? Data())
 /// }
 /// ```
@@ -29,14 +29,19 @@ public struct FunctionsError: SupabaseError {
       self.init(rawValue: value)
     }
 
-    /// The Supabase relay could not reach the function (`x-relay-error: true`).
+    /// The Supabase relay could not run the function (`x-relay-error: true`). Your code never
+    /// ran: retry later or check the deployment. ``FunctionsError/response`` has the status.
     public static let relay: Kind = "relay"
-    /// The function answered with a non-2xx status. ``FunctionsError/response`` has the body.
-    public static let http: Kind = "http"
-    /// The request never completed. ``FunctionsError/underlyingError`` is usually a `URLError`.
+    /// The function ran and answered with a non-2xx status. Read
+    /// ``FunctionsError/response`` for the status and the body your function sent.
+    public static let server: Kind = "server"
+    /// No response arrived, so whether the function ran is unknown. Retry only if the function
+    /// is idempotent, or after confirming it did not run. ``FunctionsError/underlyingError`` is
+    /// usually a `URLError`.
     public static let transport: Kind = "transport"
-    /// The response body could not be decoded as the requested type.
-    /// ``FunctionsError/underlyingError`` is usually a `DecodingError`.
+    /// The function answered 2xx but the body could not be decoded as the requested type.
+    /// Nothing to retry; fix the type or the function. ``FunctionsError/underlyingError`` is
+    /// usually a `DecodingError`.
     public static let decoding: Kind = "decoding"
   }
 

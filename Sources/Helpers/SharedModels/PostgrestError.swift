@@ -33,19 +33,21 @@ public struct PostgrestError: SupabaseError {
       self.init(rawValue: value)
     }
 
-    /// PostgREST rejected the request and sent an error body. See ``PostgrestError/serverError``.
+    /// PostgREST answered with a non-2xx status. Branch on ``PostgrestError/response`` for the
+    /// status code and on ``PostgrestError/serverError`` for the PostgreSQL or PostgREST error
+    /// code; `serverError` is `nil` when the body was not a PostgREST error payload.
     public static let server: Kind = "server"
-    /// A non-2xx status whose body was not a PostgREST error payload, or a response the SDK
-    /// could not interpret (for example a `count(_:)` reply with no `Content-Range`).
-    /// ``PostgrestError/response`` has the raw body when there was one.
-    public static let unexpectedResponse: Kind = "unexpectedResponse"
-    /// The request never completed. ``PostgrestError/underlyingError`` is usually a `URLError`.
+    /// No response arrived, so whether the database applied the request is unknown. Retry reads
+    /// freely; before retrying a write, check that it was not applied.
+    /// ``PostgrestError/underlyingError`` is usually a `URLError`.
     public static let transport: Kind = "transport"
-    /// A success body could not be decoded as the requested type.
-    /// ``PostgrestError/underlyingError`` is usually a `DecodingError`.
+    /// PostgREST answered 2xx but the body could not be used: the rows did not decode as the
+    /// requested type, or a `count(_:)` reply had no `Content-Range`. Nothing to retry; fix the
+    /// model or report it. ``PostgrestError/underlyingError`` is the `DecodingError` when there
+    /// was one.
     public static let decoding: Kind = "decoding"
     /// The SDK refused to send the request, e.g. RPC params that are not a JSON object for a
-    /// `GET`, or two incompatible transforms on one query. No request was sent.
+    /// `GET`, or two incompatible transforms on one query. Fix the call. No request was sent.
     public static let invalidRequest: Kind = "invalidRequest"
   }
 
@@ -70,7 +72,8 @@ public struct PostgrestError: SupabaseError {
 
   public var kind: Kind
   public var message: String
-  /// The decoded error body. Non-nil exactly when ``kind`` is ``Kind-swift.struct/server``.
+  /// The decoded error body. Set when ``kind`` is ``Kind-swift.struct/server`` and the body was
+  /// a PostgREST error payload; `nil` otherwise.
   public var serverError: ServerError?
   public var response: HTTPErrorResponse?
   public var underlyingError: (any Error)?

@@ -259,7 +259,7 @@ supporting_symbols:
   - FunctionsError.Kind.init
   - FunctionsError.Kind.rawValue
   - FunctionsError.Kind.relay
-  - FunctionsError.Kind.http
+  - FunctionsError.Kind.server
   - FunctionsError.Kind.transport
   - FunctionsError.Kind.decoding
   - FunctionsError.init
@@ -275,10 +275,9 @@ supporting_symbols:
   - StorageError.Kind.init
   - StorageError.Kind.rawValue
   - StorageError.Kind.server
-  - StorageError.Kind.unexpectedResponse
   - StorageError.Kind.transport
   - StorageError.Kind.decoding
-  - StorageError.Kind.invalidURL
+  - StorageError.Kind.invalidRequest
   - StorageError.ServerError
   - StorageError.ServerError.init
   - StorageError.ServerError.statusCode
@@ -298,7 +297,6 @@ supporting_symbols:
   - PostgrestError.Kind.init
   - PostgrestError.Kind.rawValue
   - PostgrestError.Kind.server
-  - PostgrestError.Kind.unexpectedResponse
   - PostgrestError.Kind.transport
   - PostgrestError.Kind.decoding
   - PostgrestError.Kind.invalidRequest
@@ -321,16 +319,11 @@ supporting_symbols:
   - AuthError.Kind
   - AuthError.Kind.init
   - AuthError.Kind.rawValue
-  - AuthError.Kind.api
+  - AuthError.Kind.server
   - AuthError.Kind.sessionMissing
   - AuthError.Kind.refreshDiscarded
-  - AuthError.Kind.weakPassword
-  - AuthError.Kind.pkceGrantCodeExchange
-  - AuthError.Kind.implicitGrantRedirect
   - AuthError.Kind.oauthFlowFailed
   - AuthError.Kind.jwtVerificationFailed
-  - AuthError.Kind.webAuthn
-  - AuthError.Kind.unexpectedResponse
   - AuthError.Kind.transport
   - AuthError.Kind.decoding
   - AuthError.init
@@ -350,13 +343,23 @@ supporting_symbols:
   # auth.admin.delete_mfa_factor rather than owned by one.
   - AuthAdmin.mfa
   - AuthAdminMFA
+  # The recovery codes namespace is shared by every auth.mfa_recovery_codes.*
+  # capability rather than owned by one, and its generate response is returned
+  # by both generate and regenerate.
+  - AuthMFA.recoveryCodes
+  - AuthMFARecoveryCodes
+  - AuthMFARecoveryCodesGenerateResponse
+  - AuthMFARecoveryCodesGenerateResponse.init
+  - AuthMFARecoveryCodesGenerateResponse.id
+  - AuthMFARecoveryCodesGenerateResponse.friendlyName
+  - AuthMFARecoveryCodesGenerateResponse.total
+  - AuthMFARecoveryCodesGenerateResponse.codes
   # RealtimeError (SDK-1788) is thrown by every realtime.* capability rather
   # than owned by one.
   - RealtimeError
   - RealtimeError.Kind
   - RealtimeError.Kind.init
   - RealtimeError.Kind.rawValue
-  - RealtimeError.Kind.connection
   - RealtimeError.Kind.timeout
   - RealtimeError.Kind.accessTokenMissing
   - RealtimeError.Kind.maxRetryAttemptsReached
@@ -372,6 +375,12 @@ supporting_symbols:
   - RealtimeError.description
   - RealtimeError.maxRetryAttemptsReached
   - RealtimeError.channelClosedByServer
+  # The default server-reply timeout governs subscribe, unsubscribe,
+  # broadcast and broadcast_http alike rather than being owned by one.
+  - RealtimeClientOptions.defaultTimeout
+  # Test-only infrastructure (Trait.requiresMainSerialExecutor skips a test on platforms where
+  # withMainSerialExecutor is a no-op) rather than a capability any feature implements.
+  - Trait.requiresMainSerialExecutor
 
 features:
 
@@ -619,6 +628,33 @@ features:
     status: implemented
     symbols:
       - AuthMFA.authenticatorAssuranceLevel
+
+  auth.mfa_recovery_codes.generate:
+    status: implemented
+    symbols:
+      - AuthMFARecoveryCodes.generate
+  auth.mfa_recovery_codes.get_status:
+    status: implemented
+    symbols:
+      - AuthMFARecoveryCodes.status
+    supporting_symbols:
+      - AuthMFARecoveryCodesStatusResponse
+      - AuthMFARecoveryCodesStatusResponse.init
+      - AuthMFARecoveryCodesStatusResponse.id
+      - AuthMFARecoveryCodesStatusResponse.total
+      - AuthMFARecoveryCodesStatusResponse.remaining
+  auth.mfa_recovery_codes.regenerate:
+    status: implemented
+    symbols:
+      - AuthMFARecoveryCodes.regenerate
+  auth.mfa_recovery_codes.unenroll:
+    status: implemented
+    symbols:
+      - AuthMFARecoveryCodes.unenroll
+  auth.mfa_recovery_codes.verify:
+    status: implemented
+    symbols:
+      - AuthMFARecoveryCodes.verify
 
   auth.admin.create_user:
     status: implemented

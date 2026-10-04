@@ -92,7 +92,7 @@ extension PostgrestMockerTests {
           .execute()
         Issue.record("Expected error to be thrown")
       } catch let error as PostgrestError {
-        #expect(error.kind == .unexpectedResponse)
+        #expect(error.kind == .server)
         #expect(error.serverError == nil)
         #expect(error.response?.body == Data("Bad Request".utf8))
         #expect(error.response?.statusCode == 400)

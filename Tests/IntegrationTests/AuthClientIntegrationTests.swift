@@ -370,7 +370,7 @@ struct AuthClientIntegrationTests {
       try await client.admin.deletePasskey(id: UUID(), forUser: session.user.id)
       Issue.record("Expected deletePasskey to throw for a nonexistent passkey")
     } catch let error as AuthError {
-      #expect(error.kind == .api)
+      #expect(error.kind == .server)
       // Backend returns 404 when the passkey doesn't exist or belongs to another user.
       #expect(error.response?.statusCode == 404)
     }

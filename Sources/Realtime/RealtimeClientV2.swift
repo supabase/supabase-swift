@@ -413,7 +413,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     if shouldDisconnect {
       options.logger.debug("No more subscribed channel in socket")
       let delay = options.disconnectOnEmptyChannelsAfter
-      if delay <= 0 {
+      if delay <= .zero {
         disconnect()
       } else {
         schedulePendingDisconnect()
@@ -427,7 +427,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       state.pendingDisconnectTask?.cancel()
       state.pendingDisconnectTask = Task { [weak self, clock] in
         do {
-          try await clock.sleep(for: .seconds(delay))
+          try await clock.sleep(for: delay)
           self?.disconnect()
         } catch {
           // Cancelled: a new channel was added or disconnect() was called directly.
@@ -537,7 +537,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
           if Task.isCancelled { return }
           options.logger
             .debug(
-              "WebSocket error \(error.localizedDescription). Trying again in up to \(options.reconnectDelay)s"
+              "WebSocket error \(error.localizedDescription). Trying again in up to \(options.reconnectDelay)"
             )
           await connectionManager.handleError(error, from: conn)
         }
@@ -551,7 +551,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
 
       state.heartbeatTask = Task { [weak self, options, clock] in
         while !Task.isCancelled {
-          try? await clock.sleep(for: .seconds(options.heartbeatInterval))
+          try? await clock.sleep(for: options.heartbeatInterval)
           guard let self, !Task.isCancelled else {
             break
           }

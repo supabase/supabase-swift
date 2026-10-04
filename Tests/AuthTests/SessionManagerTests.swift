@@ -408,4 +408,104 @@ struct SessionManagerTests {
     expectNoDifference(
       dependencies.sessionStorage.get()?.refreshToken, hydrated.refreshToken)
   }
+
+  // MARK: - Ownership (SDK-1894)
+
+  @Test
+  func refreshStartingFromEmptyStorageDoesNotOverwriteASessionStoredMeanwhile() async throws {
+    let hydrated = session("hydrated")
+    let userB = session("B")
+
+    let (requestSeen, release) = heldTokenResponse {
+      (HTTPResponse(status: .ok), try AuthClient.Configuration.jsonEncoder.encode(hydrated))
+    }
+    let (events, stopCollecting) = collectAuthEvents()
+    defer { stopCollecting() }
+
+    // Storage is empty when this refresh starts — the `setSession` hydration path.
+    let refresh = Task { try await sut.refreshSession(hydrated.refreshToken) }
+    let sawRequest = await waitUntil { requestSeen.value }
+    #expect(sawRequest)
+
+    // User B signs in while the refresh is in flight.
+    await sut.update(userB)
+
+    release()
+    let result = await refresh.result
+
+    expectNoDifference(dependencies.sessionStorage.get()?.refreshToken, userB.refreshToken)
+    #expect(!events.value.contains(.tokenRefreshed))
+    #expect((result.error as? AuthError)?.kind == .refreshDiscarded)
+  }
+
+  @Test
+  func refreshStartingFromEmptyStorageDoesNotDeleteASessionStoredMeanwhileOnACleanupError()
+    async throws
+  {
+    let userB = session("B")
+
+    let (requestSeen, release) = heldTokenResponse {
+      (
+        HTTPResponse(status: .badRequest, headerFields: [.apiVersionHeaderName: "2024-01-01"]),
+        Data(#"{"code":"refresh_token_not_found","message":"Refresh Token Not Found"}"#.utf8)
+      )
+    }
+    let (events, stopCollecting) = collectAuthEvents()
+    defer { stopCollecting() }
+
+    let refresh = Task { try await sut.refreshSession("externally-sourced-refresh") }
+    let sawRequest = await waitUntil { requestSeen.value }
+    #expect(sawRequest)
+
+    await sut.update(userB)
+
+    release()
+    let result = await refresh.result
+
+    expectNoDifference(dependencies.sessionStorage.get()?.refreshToken, userB.refreshToken)
+    #expect(!events.value.contains(.signedOut))
+    #expect((result.error as? AuthError)?.kind == .sessionMissing)
+  }
+
+  @Test
+  func foreignRefreshTokenFailureDoesNotSignOutTheStoredSession() async throws {
+    let userB = session("B")
+    dependencies.sessionStorage.store(userB)
+
+    http.respond(when: { $0.url?.path.contains("/token") == true }) { _, _ in
+      (
+        HTTPResponse(status: .badRequest, headerFields: [.apiVersionHeaderName: "2024-01-01"]),
+        Data(#"{"code":"refresh_token_not_found","message":"Refresh Token Not Found"}"#.utf8)
+      )
+    }
+    let (events, stopCollecting) = collectAuthEvents()
+    defer { stopCollecting() }
+
+    // `refreshSession(refreshToken:)` is public and takes any token. A token that is not B's
+    // cannot scope its failure to B just because B happens to be stored.
+    let result = await Task { try await sut.refreshSession("foreign-refresh") }.result
+
+    expectNoDifference(dependencies.sessionStorage.get()?.refreshToken, userB.refreshToken)
+    #expect(!events.value.contains(.signedOut))
+    #expect((result.error as? AuthError)?.kind == .sessionMissing)
+  }
+
+  @Test
+  func foreignRefreshTokenSuccessReplacesTheStoredSession() async throws {
+    // `setSession(accessToken:refreshToken:)` with an expired token while another user is stored
+    // refreshes a token storage does not hold. The caller asked for that replacement; only a
+    // session that changed under the refresh is grounds to discard it.
+    let userB = session("B")
+    let refreshedA = session("A2")
+    dependencies.sessionStorage.store(userB)
+
+    http.respond(when: { $0.url?.path.contains("/token") == true }) { _, _ in
+      (HTTPResponse(status: .ok), try AuthClient.Configuration.jsonEncoder.encode(refreshedA))
+    }
+
+    let result = try await sut.refreshSession("A-refresh")
+
+    expectNoDifference(result.refreshToken, refreshedA.refreshToken)
+    expectNoDifference(dependencies.sessionStorage.get()?.refreshToken, refreshedA.refreshToken)
+  }
 }

@@ -103,7 +103,7 @@ struct URLSessionWebSocketCloseValidationTests {
     let error = await #expect(throws: RealtimeError.self) {
       _ = try await URLSessionWebSocket.connect(to: URL(string: "https://example.com")!)
     }
-    #expect(error?.kind == .connection)
+    #expect(error?.kind == .transport)
     #expect(error?.underlyingError is URLError)
   }
 
@@ -117,7 +117,7 @@ struct URLSessionWebSocketCloseValidationTests {
   func reportsNoCloseFrameForASocketThatIsAlreadyDisconnected() {
     let error = NSError(
       domain: NSPOSIXErrorDomain,
-      code: Int(POSIXErrorCode.ENOTCONN.rawValue),
+      code: Int(ENOTCONN),
       userInfo: nil
     )
 
@@ -130,7 +130,7 @@ struct URLSessionWebSocketCloseValidationTests {
   func treatsTheENOTCONNCodeInAnotherDomainAsAnOrdinaryError() throws {
     let error = NSError(
       domain: NSURLErrorDomain,
-      code: Int(POSIXErrorCode.ENOTCONN.rawValue),
+      code: Int(ENOTCONN),
       userInfo: nil
     )
     let frame = try #require(URLSessionWebSocket.closeFrame(for: error))
@@ -144,7 +144,7 @@ struct URLSessionWebSocketCloseValidationTests {
   func mapsAProtocolErrorToProtocolError() throws {
     let error = NSError(
       domain: NSPOSIXErrorDomain,
-      code: Int(POSIXErrorCode.EPROTO.rawValue),
+      code: Int(EPROTO),
       userInfo: nil
     )
     let frame = try #require(URLSessionWebSocket.closeFrame(for: error))
@@ -184,7 +184,7 @@ struct URLSessionWebSocketCloseValidationTests {
   /// is an `NSError` to begin with, so pin that bridging still lands on abnormal closure.
   @Test
   func mapsANativeSwiftErrorToAbnormalClosure() throws {
-    let error = RealtimeError.connection("Received unsupported message type")
+    let error = RealtimeError.decoding("Received unsupported message type")
     let frame = try #require(URLSessionWebSocket.closeFrame(for: error))
 
     #expect(frame.code == 1006)

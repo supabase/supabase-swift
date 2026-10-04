@@ -141,7 +141,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       topic: topic,
       logger: logger,
       maxRetryAttempts: socket.options.maxRetryAttempts,
-      timeoutInterval: socket.options.timeoutInterval,
+      timeout: socket.options.timeout,
       clock: socket.clock,
       makeRef: { [socket] in socket.makeRef() },
       ensureSocketConnected: { [weak socket] in
@@ -266,12 +266,12 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   /// - Parameters:
   ///   - event: The broadcast event name.
   ///   - message: A `Codable` value to send as the message payload.
-  ///   - timeout: An optional timeout in seconds. Defaults to the socket's configured timeout.
+  ///   - timeout: An optional timeout. Defaults to the socket's configured timeout.
   /// - Throws: ``RealtimeError`` with kind `.accessTokenMissing`, `.server`, `.transport` or `.timeout`.
   public func httpSend(
     event: String,
     message: some Codable,
-    timeout: TimeInterval? = nil
+    timeout: Duration? = nil
   ) async throws {
     try await httpSend(event: event, message: JSONObject(message), timeout: timeout)
   }
@@ -288,12 +288,12 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   /// - Parameters:
   ///   - event: The broadcast event name.
   ///   - message: A ``JSONObject`` to send as the message payload.
-  ///   - timeout: An optional timeout in seconds. Defaults to the socket's configured timeout.
+  ///   - timeout: An optional timeout. Defaults to the socket's configured timeout.
   /// - Throws: ``RealtimeError`` with kind `.accessTokenMissing`, `.server`, `.transport` or `.timeout`.
   public func httpSend(
     event: String,
     message: JSONObject,
-    timeout: TimeInterval? = nil
+    timeout: Duration? = nil
   ) async throws {
     guard let accessToken = await socket._getAccessToken() else {
       throw RealtimeError.accessTokenMissing
@@ -319,7 +319,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     let data: Data
     do {
       (response, data) = try await withTimeout(
-        interval: timeout ?? socket.options.timeoutInterval, clock: socket.clock
+        timeout ?? socket.options.timeout, clock: socket.clock
       ) {
         [self] in try await socket.http.send(request, body: body)
       }
@@ -348,12 +348,12 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   /// - Parameters:
   ///   - event: The broadcast event name.
   ///   - data: Raw binary data to send as the request body.
-  ///   - timeout: An optional timeout in seconds. Defaults to the socket's configured timeout.
+  ///   - timeout: An optional timeout. Defaults to the socket's configured timeout.
   /// - Throws: ``RealtimeError`` with kind `.accessTokenMissing`, `.server`, `.transport` or `.timeout`.
   public func httpSend(
     event: String,
     data: Data,
-    timeout: TimeInterval? = nil
+    timeout: Duration? = nil
   ) async throws {
     guard let accessToken = await socket._getAccessToken() else {
       throw RealtimeError.accessTokenMissing
@@ -377,7 +377,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     let responseData: Data
     do {
       (response, responseData) = try await withTimeout(
-        interval: timeout ?? socket.options.timeoutInterval, clock: socket.clock
+        timeout ?? socket.options.timeout, clock: socket.clock
       ) {
         [self] in try await socket.http.send(request, body: data)
       }
@@ -466,7 +466,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       }
 
       if config.broadcast.acknowledgeBroadcasts {
-        try? await withTimeout(interval: socket.options.timeoutInterval, clock: socket.clock) {
+        try? await withTimeout(socket.options.timeout, clock: socket.clock) {
           await task.value
         }
       }

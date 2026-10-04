@@ -16,13 +16,13 @@ struct RealtimeReconnectRecoveryTests {
   let url = URL(string: "http://localhost:54321/realtime/v1")!
   let apiKey = "anon.api.key"
 
-  private func makeOptions(timeoutInterval: TimeInterval = 3) -> RealtimeClientOptions {
+  private func makeOptions(timeout: Duration = .seconds(3)) -> RealtimeClientOptions {
     RealtimeClientOptions(
       headers: ["apikey": apiKey],
       // Long heartbeat so heartbeat machinery can't interfere.
-      heartbeatInterval: 10,
-      reconnectDelay: 0.05,
-      timeoutInterval: timeoutInterval,
+      heartbeatInterval: .seconds(10),
+      reconnectDelay: .milliseconds(50),
+      timeout: timeout,
       accessToken: { "token" }
     )
   }
@@ -57,7 +57,7 @@ struct RealtimeReconnectRecoveryTests {
         // Attempt 2 is the first automatic reconnect — the network is still
         // down. Attempt 3, a later automatic retry, succeeds once it recovers.
         if attempt == 2 {
-          throw RealtimeError.connection("network down")
+          throw RealtimeError.transport("network down")
         }
         let socket = AsyncFakeWebSocket()
         socket.serverResponder = AsyncFakeWebSocket.realtimeServerResponder()
@@ -207,7 +207,7 @@ struct RealtimeReconnectRecoveryTests {
 
     let sut = RealtimeClientV2(
       url: url,
-      options: makeOptions(timeoutInterval: 3),
+      options: makeOptions(timeout: .seconds(3)),
       wsTransport: { _, _ in
         let socket = AsyncFakeWebSocket()
         socket.serverResponder = AsyncFakeWebSocket.realtimeServerResponder()

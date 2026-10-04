@@ -184,9 +184,9 @@ message) is now mandatory. This is a compile error everywhere: the old symbols n
 | `MFAEnrollParams` | `MFATotpEnrollParams` or `MFAPhoneEnrollParams` |
 | `AuthAdmin.deleteUser(id: String, shouldSoftDelete:)` | `AuthAdmin.deleteUser(id: UUID, shouldSoftDelete:)` |
 | `AuthError.sessionNotFound` | `AuthError.sessionMissing` |
-| `AuthError.pkce(_:)` / `AuthError.PKCEFailureReason` | `AuthError` with `kind == .pkceGrantCodeExchange` |
-| `AuthError.invalidImplicitGrantFlowURL` | `AuthError` with `kind == .implicitGrantRedirect` |
-| `AuthError.api(_ error: APIError)` / `AuthError.APIError` | `AuthError` with `kind == .api`; `errorCode` and `response` carry the details |
+| `AuthError.pkce(_:)` / `AuthError.PKCEFailureReason` | `AuthError` with `kind == .oauthFlowFailed` |
+| `AuthError.invalidImplicitGrantFlowURL` | `AuthError` with `kind == .oauthFlowFailed` |
+| `AuthError.api(_ error: APIError)` / `AuthError.APIError` | `AuthError` with `kind == .server`; `errorCode` and `response` carry the details |
 | `UserAttributes.emailChangeToken` | *(removed, no replacement — was unused by GoTrue)* |
 
 Also removed, with no replacement, because they no longer represent something GoTrue can throw:
@@ -1602,7 +1602,7 @@ or `dateDecodingStrategy` that didn't match `PostgrestError`'s plain `details`/`
 `message` shape could cause a real PostgREST error response to fail decoding, and was reported as a
 generic `HTTPError` instead of a `PostgrestError`. Now, a recognized PostgREST error body throws
 `PostgrestError` with kind `.server` and the decoded `PostgrestError.ServerError` in `serverError`.
-An unrecognized body throws kind `.unexpectedResponse` with `serverError == nil` and the raw bytes
+An unrecognized body throws the same kind `.server` with `serverError == nil` and the raw bytes
 in `response?.body`. This is a silent behavior change, not a compile error: if you
 `catch`-typed on `PostgrestError` while also customizing `Configuration.decoder`'s key or date
 strategy, error responses that previously fell through as `HTTPError` are now caught as
@@ -1733,8 +1733,9 @@ and the `@Table` macro — not a different spelling of the same builder.
 static let oauthFlowFailed: AuthError.Kind
 ```
 
-It covers OAuth failures that happen entirely on the client, before any request reaches GoTrue.
-Two call sites in `signInWithOAuth(provider:redirectTo:scopes:queryParams:configure:)` (the
+It covers redirect-based sign-in failures that happen entirely on the client: a redirect URL
+that carried an error or no session (what v2 reported as `.pkce(_:)` and
+`.invalidImplicitGrantFlowURL`), and two call sites in `signInWithOAuth(provider:redirectTo:scopes:queryParams:configure:)` (the
 `ASWebAuthenticationSession` overload) used to end the process instead of throwing:
 
 | Condition | Before | After |
@@ -1771,17 +1772,21 @@ do {
 This is not a compile error. `Kind` is an open struct (see "`AuthError` is now a struct, not an
 enum" below), so a new member is additive; a `switch` over `kind` already needs a `default`.
 
-`errorCode` for this kind is `.unknown`, matching the other client-side kinds
-(`.pkceGrantCodeExchange`, `.implicitGrantRedirect`).
+`errorCode` for this kind is `.unknown`, unless the redirect URL carried an `error_code`
+parameter, in which case it is that value.
 
 ## `AuthError` is now a struct, not an enum
 
 `AuthError` is a struct with `kind: AuthError.Kind`, `message`, `errorCode`,
 `weakPasswordReasons`, `response` and `underlyingError`. `Kind` is a `RawRepresentable` struct
-with static members that mirror the old cases (`.api`, `.sessionMissing`, `.weakPassword`,
-`.pkceGrantCodeExchange`, `.implicitGrantRedirect`, `.oauthFlowFailed`, `.jwtVerificationFailed`)
-plus `.webAuthn`, `.unexpectedResponse`, `.transport` and `.decoding`. `AuthError.sessionMissing` still exists as a
+with static members: `.server`, `.sessionMissing`, `.oauthFlowFailed`, `.jwtVerificationFailed`,
+`.refreshDiscarded`, `.transport` and `.decoding`. `AuthError.sessionMissing` still exists as a
 static value, so `throw AuthError.sessionMissing` compiles unchanged.
+
+`Kind` says which party failed, not why. The old `.api` and `.weakPassword` cases are both
+`.server`; GoTrue's reason is in `errorCode`, and `weakPasswordReasons` is filled when
+`errorCode == .weakPassword`. The old `.pkce(_:)` and `.invalidImplicitGrantFlowURL` cases are
+both `.oauthFlowFailed`; the flow type is your own `AuthClient.Configuration.flowType`.
 
 The package builds with library evolution enabled, so adding a case to a public enum was a
 binary-breaking change; every new failure GoTrue learned to report needed a major version. The
@@ -1794,9 +1799,9 @@ This is a compile error for every `case`-based pattern and for the removed `~=` 
 | Before | After |
 | --- | --- |
 | `catch AuthError.sessionMissing` | `catch let error as AuthError where error.kind == .sessionMissing` |
-| `catch let AuthError.api(message, code, data, response)` | `catch let error as AuthError where error.kind == .api` then `error.message`, `error.errorCode`, `error.response?.body`, `error.response?.statusCode` |
-| `catch let AuthError.weakPassword(message, reasons)` | `catch let error as AuthError where error.kind == .weakPassword` then `error.weakPasswordReasons` |
-| `catch let AuthError.pkceGrantCodeExchange(message, error, code)` | `error.kind == .pkceGrantCodeExchange`; `message` is now `"<error>: <description>"` and `code` is in `error.errorCode` |
+| `catch let AuthError.api(message, code, data, response)` | `catch let error as AuthError where error.kind == .server` then `error.message`, `error.errorCode`, `error.response?.body`, `error.response?.statusCode` |
+| `catch let AuthError.weakPassword(message, reasons)` | `catch let error as AuthError where error.errorCode == .weakPassword` then `error.weakPasswordReasons` |
+| `catch let AuthError.pkceGrantCodeExchange(message, error, code)` | `error.kind == .oauthFlowFailed`; `message` is now `"<error>: <description>"` and `code` is in `error.errorCode` |
 | `catch let AuthError.oauthFlowFailed(message)` | `error.kind == .oauthFlowFailed` then `error.message` |
 | `catch let AuthError.jwtVerificationFailed(message)` | `error.kind == .jwtVerificationFailed` then `error.message` |
 | `AuthError.sessionMissing ~= error` | `(error as? AuthError)?.kind == .sessionMissing` |
@@ -1814,7 +1819,7 @@ do {
 // After
 do {
   try await supabase.auth.signIn(email: email, password: password)
-} catch let error as AuthError where error.kind == .api {
+} catch let error as AuthError where error.kind == .server {
   print(error.response?.statusCode ?? 0, error.errorCode, error.message)
 } catch let error as AuthError where error.kind == .sessionMissing {
   showLogin()
@@ -1823,13 +1828,14 @@ do {
 
 `AuthError` is no longer `Equatable`. `error == .sessionMissing` and any `Equatable` state type
 that stores an `AuthError` stop compiling; compare `kind`, `errorCode` and `message`, or store
-those instead. String interpolation prints `AuthError(api): Invalid login credentials [status
+those instead. String interpolation prints `AuthError(server): Invalid login credentials [status
 400, request ...]` instead of the case name.
 
-`signOut` keeps swallowing 401, 403 and 404 responses from the `/logout` endpoint, whether or not the body was a recognizable GoTrue error. In v2 that fallback surfaced as `.api(message: "Unexpected error", ...)`; in v3 it is kind `.unexpectedResponse`, and `signOut` treats both kinds the same way for those statuses. No change in behavior.
+`signOut` keeps swallowing 401, 403 and 404 responses from the `/logout` endpoint, whether or not the body was a recognizable GoTrue error. In v2 that fallback surfaced as `.api(message: "Unexpected error", ...)`; in v3 it is kind `.server` with `errorCode == .unexpectedFailure`. No change in behavior.
 
 The internal `WebAuthnError` type, which could leak from the passkey and WebAuthn MFA flows, is
-folded into `AuthError` with kind `.webAuthn`.
+folded into `AuthError` with kind `.decoding`: every case was a payload the SDK could not
+interpret, either from GoTrue or from the platform authenticator.
 
 ## `fetch:` closures and `StorageHTTPSession` replaced by `ClientTransport` and `ClientMiddleware`
 
@@ -2036,7 +2042,7 @@ Pass it as `http: .init(transport: StubTransport())` to any sub-client, or as
 - **Functions streaming goes through your transport now.** `_invokeWithStreamedResponse` used to
   run on a private `URLSession` that ignored everything you configured. It now sends through the
   client's `http` transport and middlewares, like every other call.
-- **A streamed `FunctionsError` with kind `.http` now carries the response body.** In v2 the
+- **A streamed `FunctionsError` with kind `.server` now carries the response body.** In v2 the
   streamed call threw `.httpError(code, Data())`; the body is now in `response?.body`, so anything
   that read the payload from a non-2xx streamed invoke no longer has to special-case an empty
   `Data`.
@@ -2210,7 +2216,7 @@ re-exports alongside `HTTPTypes`.
 
 `FunctionsError` is a struct with a `kind: FunctionsError.Kind` property instead of an enum with
 `.relayError` and `.httpError(code:data:)` cases. `Kind` is a `RawRepresentable` struct with
-static members: `.relay`, `.http`, `.transport` and `.decoding`.
+static members: `.relay`, `.server`, `.transport` and `.decoding`.
 
 The package builds with library evolution enabled, so adding a case to a public enum was a
 binary-breaking change. Every new failure the SDK learned to report would have needed a major
@@ -2235,14 +2241,14 @@ do {
   try await supabase.functions.invoke("hello")
 } catch let error as FunctionsError where error.kind == .relay {
   retryLater()
-} catch let error as FunctionsError where error.kind == .http {
-  let response = error.response!  // always set for `.http` and `.relay`
+} catch let error as FunctionsError where error.kind == .server {
+  let response = error.response!  // always set for `.server` and `.relay`
   print(response.statusCode, String(decoding: response.body, as: UTF8.self), response.requestID ?? "")
 }
 ```
 
 `FunctionsError` is not `Equatable`. Compare `kind`, `message` and `response` instead. String
-interpolation of the error now prints `FunctionsError(http): Edge Function returned a non-2xx
+interpolation of the error now prints `FunctionsError(server): Edge Function returned a non-2xx
 status code: 500 [status 500]` instead of the case name.
 
 ## Network and decoding failures are wrapped in the module error
@@ -2332,9 +2338,10 @@ This is a compile error: `statusCode` and `error` no longer exist on `StorageErr
 }
 ```
 
-Kinds: `.server` (recognized body, `serverError` set), `.unexpectedResponse` (non-2xx with an
-unrecognized body, raw bytes in `response?.body`), `.transport`, `.decoding`, and `.invalidURL`
-for the URL-building helpers such as `publicURL`, which threw `URLError(.badURL)` before.
+Kinds: `.server` for any non-2xx (`serverError` is set when the body was a recognizable Storage
+payload, `nil` otherwise; the raw bytes are always in `response?.body`), `.transport`, `.decoding`,
+and `.invalidRequest` for the URL-building helpers such as `publicURL`, which threw
+`URLError(.badURL)` before.
 
 ## `PostgrestError` gains `kind` and `response`; server fields move to `serverError`
 
@@ -2364,9 +2371,10 @@ This is a compile error: `code`, `details` and `hint` no longer exist on `Postgr
 }
 ```
 
-Kinds: `.server` (recognized body, `serverError` set), `.unexpectedResponse` (raw body in
-`response?.body`), `.transport`, `.decoding`, and `.invalidRequest` for client-side rejections
-such as `.csv()` combined with `.stripNulls()`.
+Kinds: `.server` for any non-2xx (`serverError` is set when the body was a recognizable PostgREST
+payload, `nil` otherwise; the raw bytes are always in `response?.body`), `.transport`, `.decoding`
+(also for a 2xx the SDK cannot use, such as a `count(_:)` reply with no `Content-Range`), and
+`.invalidRequest` for client-side rejections such as `.csv()` combined with `.stripNulls()`.
 
 If you constructed `PostgrestError(message:)` yourself, pass a kind:
 `PostgrestError(kind: .invalidRequest, message:)`.
@@ -2376,7 +2384,7 @@ If you constructed `PostgrestError(message:)` yourself, pass a kind:
 The generic `HTTPError` type is gone. Storage and PostgREST threw it when a non-2xx body did not
 decode as their own error payload, which meant two catch clauses per module. Each module error
 now carries `response: HTTPErrorResponse?` with the status code, `HTTPFields` headers, raw body
-and `requestID`, and an unrecognized body is reported with kind `.unexpectedResponse`.
+and `requestID`, and an unrecognized body is reported with kind `.server` and `serverError == nil`.
 
 This is a compile error for any `catch let error as HTTPError`.
 
@@ -2399,9 +2407,9 @@ This is a compile error for any `catch let error as HTTPError`.
 ## Realtime throws `RealtimeError` for every failure
 
 `RealtimeError` is now public. It is a struct with `kind: RealtimeError.Kind`, `message`,
-`response` and `underlyingError`, conforming to `SupabaseError`. Kinds: `.connection`,
+`response` and `underlyingError`, conforming to `SupabaseError`. Kinds: `.transport`,
 `.timeout`, `.accessTokenMissing`, `.maxRetryAttemptsReached`, `.channelClosedByServer`,
-`.server`, `.transport` and `.decoding`.
+`.server` and `.decoding`.
 
 Before, `RealtimeError` was `package`-scoped, so `subscribeWithError()` and `httpSend` handed you
 an `any Error` you could only inspect through `localizedDescription`. `httpSend` could also leak
@@ -2430,6 +2438,8 @@ do {
 
 For `httpSend`, a non-202 answer is `.server` with `response?.statusCode` and `response?.body`
 set; a request that never completes is `.transport` with the `URLError` in `underlyingError`.
+A WebSocket that could not be opened, or closed before it was ready, is also `.transport`: the
+recovery is the same (retry, check connectivity), so it does not get a kind of its own.
 
 ## OAuth server fields the API leaves out are now optional
 
@@ -2489,7 +2499,7 @@ The SDK-wide request timeout that lands alongside this change (`HTTPClientConfig
 time type. The Functions per-invocation override shares the same resolution path, so it takes the
 same type; keeping it a `TimeInterval` would have left callers converting between `Double` seconds
 and `Duration` inside one request. The remaining `TimeInterval` intervals in the public API
-(Realtime's heartbeat, reconnect and reply timeouts) move in a follow-up.
+(Realtime's heartbeat, reconnect and reply timeouts) move the same way; see the next section.
 
 ```swift
 // Before
@@ -2510,6 +2520,59 @@ let fallback: Duration = FunctionsClient.requestIdleTimeout
 This is a compile error: the `timeoutInterval:` argument label no longer exists, and a
 `TimeInterval` value no longer type-checks where `requestIdleTimeout` is used. Search for
 `timeoutInterval:` at `FunctionInvokeOptions` call sites and for `requestIdleTimeout`.
+
+## Realtime intervals are now `Duration`, and `timeoutInterval` is `timeout`
+
+Every interval on `RealtimeClientOptions` is a `Duration` instead of a `TimeInterval`, and the
+reply timeout is renamed:
+
+| Before | After |
+|---|---|
+| `heartbeatInterval: TimeInterval` | `heartbeatInterval: Duration` |
+| `reconnectDelay: TimeInterval` | `reconnectDelay: Duration` |
+| `timeoutInterval: TimeInterval` | `timeout: Duration` |
+| `disconnectOnEmptyChannelsAfter: TimeInterval` | `disconnectOnEmptyChannelsAfter: Duration` |
+| `defaultHeartbeatInterval: TimeInterval` (`25`) | `defaultHeartbeatInterval: Duration` (`.seconds(25)`) |
+| `defaultReconnectDelay: TimeInterval` (`7`) | `defaultReconnectDelay: Duration` (`.seconds(7)`) |
+| `defaultTimeoutInterval: TimeInterval` (`10`) | `defaultTimeout: Duration` (`.seconds(10)`) |
+| `defaultDisconnectOnEmptyChannelsAfter: TimeInterval` (`50`) | `defaultDisconnectOnEmptyChannelsAfter: Duration` (`.seconds(50)`) |
+
+The per-call `timeout:` parameter on `RealtimeChannelV2.httpSend(event:message:timeout:)` (both
+overloads) and `httpSend(event:data:timeout:)` is a `Duration?` instead of a `TimeInterval?`.
+
+The `@_disfavoredOverload` `RealtimeClientOptions` initializer without `protocolVersion:` is
+removed. The primary initializer defaults every argument it took, so every call that compiled
+against it still compiles against the primary one once the intervals above are updated.
+
+The request timeout (`HTTPClientConfiguration.timeout`, `PostgrestRequestBuilder.timeout(_:)`,
+`FunctionInvokeOptions.timeout`) is already a `Duration`. Realtime was the last module that took
+intervals as `Double` seconds, so one app could configure its HTTP timeout as `.seconds(30)` and
+its Realtime timeout as `30` next to each other. `timeout` matches the name those APIs use.
+
+```swift
+// Before
+let options = RealtimeClientOptions(
+  heartbeatInterval: 30,
+  reconnectDelay: 5,
+  timeoutInterval: 15,
+  disconnectOnEmptyChannelsAfter: 0
+)
+try await channel.httpSend(event: "ping", message: ["n": 1], timeout: 3)
+
+// After
+let options = RealtimeClientOptions(
+  heartbeatInterval: .seconds(30),
+  reconnectDelay: .seconds(5),
+  timeout: .seconds(15),
+  disconnectOnEmptyChannelsAfter: .zero
+)
+try await channel.httpSend(event: "ping", message: ["n": 1], timeout: .seconds(3))
+```
+
+This is a compile error at every call site that passes a literal or a `TimeInterval`, and wherever
+a `default*` constant is used as a `TimeInterval`. Search for `timeoutInterval:`,
+`defaultTimeoutInterval`, and `RealtimeClientOptions(`. If you hold the value as `TimeInterval`
+seconds, convert it with `.seconds(value)` (`Duration.seconds(_:)` accepts a `Double`).
 
 ## `URLSessionTransport` no longer follows a 307/308 redirect for a one-shot request body
 
@@ -3007,3 +3070,37 @@ Two smaller behavior changes ride along:
 - `RealtimeMessageV2.eventType` is new and non-optional. The internal event classification used
   to return `nil` for an event name the SDK did not handle; it now returns an `EventType` whose
   `rawValue` is the event name.
+
+## MFA challenge IDs are now `UUID` instead of `String`
+
+`AuthMFAChallengeResponse.id` and `MFAVerifyParams.challengeId` are `UUID` instead of `String`.
+Both `MFAVerifyParams` initializers take `challengeId: UUID`.
+
+The Auth server stores a challenge ID in a `uuid` column, returns it as a UUID, and rejects a
+`challenge_id` in `POST /factors/{id}/verify` that does not parse as one. A `String` let callers
+build a request the server could only refuse.
+
+```swift
+// Before
+let challenge = try await supabase.auth.mfa.challenge(params: .init(factorId: factorId))
+let challengeId: String = challenge.id
+try await supabase.auth.mfa.verify(
+  params: .init(factorId: factorId, challengeId: challengeId, code: code)
+)
+
+// After
+let challenge = try await supabase.auth.mfa.challenge(params: .init(factorId: factorId))
+let challengeId: UUID = challenge.id
+try await supabase.auth.mfa.verify(
+  params: .init(factorId: factorId, challengeId: challengeId, code: code)
+)
+```
+
+Code that passes `challenge.id` straight into `verify` compiles unchanged. Code that stores the
+ID as a `String`, or builds `MFAVerifyParams` from a string, gets a compile error. Convert with
+`challenge.id.uuidString` and `UUID(uuidString:)`. A `UUID` prints in uppercase, so
+`"\(challenge.id)"` changes case if you compare it with a lowercase ID.
+
+`challengeAndVerify(params:)` is unchanged. Passkey challenge IDs
+(`PasskeyRegistrationOptions.challengeId`, `PasskeyAuthenticationOptions.challengeId`) stay
+`String`, because the passkey endpoints type `challenge_id` as a string.

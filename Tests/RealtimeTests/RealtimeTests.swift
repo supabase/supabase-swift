@@ -35,9 +35,9 @@ import Testing
     let sut: RealtimeClientV2
     let testClock: TestClock<Duration>
 
-    let heartbeatInterval: TimeInterval = RealtimeClientOptions.defaultHeartbeatInterval
-    let reconnectDelay: TimeInterval = RealtimeClientOptions.defaultReconnectDelay
-    let timeoutInterval: TimeInterval = RealtimeClientOptions.defaultTimeoutInterval
+    let heartbeatInterval = RealtimeClientOptions.defaultHeartbeatInterval
+    let reconnectDelay = RealtimeClientOptions.defaultReconnectDelay
+    let timeout = RealtimeClientOptions.defaultTimeout
 
     init() {
       let (client, server) = FakeWebSocket.fakes()
@@ -215,7 +215,7 @@ import Testing
       }
     }
 
-    @Test
+    @Test(.requiresMainSerialExecutor)
     func subscribeTimeout() async throws {
       try await withMainSerialExecutor {
         let channel = sut.channel("public:messages")
@@ -246,14 +246,14 @@ import Testing
         defer { serverTask.cancel() }
 
         await sut.connect()
-        await testClock.advance(by: .seconds(heartbeatInterval))
+        await testClock.advance(by: heartbeatInterval)
 
         Task {
           try await channel.subscribeWithError()
         }
 
         // Wait for the timeout for rejoining.
-        await testClock.advance(by: .seconds(timeoutInterval))
+        await testClock.advance(by: timeout)
 
         // Wait for the retry delay (base delay is 1.0s, but we need to account for jitter)
         // The retry delay is calculated as: baseDelay * pow(2, attempt-1) + jitter
@@ -324,7 +324,7 @@ import Testing
     }
 
     // Succeeds after 2 retries (on 3rd attempt)
-    @Test
+    @Test(.requiresMainSerialExecutor)
     func subscribeTimeout_successAfterRetries() async throws {
       try await withMainSerialExecutor {
         let successAttempt = 3
@@ -356,7 +356,7 @@ import Testing
         defer { serverTask.cancel() }
 
         await sut.connect()
-        await testClock.advance(by: .seconds(heartbeatInterval))
+        await testClock.advance(by: heartbeatInterval)
 
         let subscribeTask = Task {
           _ = try? await channel.subscribeWithError()
@@ -364,7 +364,7 @@ import Testing
 
         // Wait for each attempt and retry delay
         for attempt in 1..<successAttempt {
-          await testClock.advance(by: .seconds(timeoutInterval))
+          await testClock.advance(by: timeout)
           let retryDelay = pow(2.0, Double(attempt))
           await testClock.advance(by: .seconds(retryDelay))
         }
@@ -381,7 +381,7 @@ import Testing
     }
 
     // Fails after max retries (should unsubscribe)
-    @Test
+    @Test(.requiresMainSerialExecutor)
     func subscribeTimeout_failsAfterMaxRetries() async throws {
       try await withMainSerialExecutor {
         let channel = sut.channel("public:messages")
@@ -409,14 +409,14 @@ import Testing
         defer { serverTask.cancel() }
 
         await sut.connect()
-        await testClock.advance(by: .seconds(heartbeatInterval))
+        await testClock.advance(by: heartbeatInterval)
 
         let subscribeTask = Task {
           try await channel.subscribeWithError()
         }
 
         for attempt in 1...5 {
-          await testClock.advance(by: .seconds(timeoutInterval))
+          await testClock.advance(by: timeout)
           if attempt < 5 {
             let retryDelay = 2.5 * Double(attempt)
             await testClock.advance(by: .seconds(retryDelay))
@@ -467,13 +467,13 @@ import Testing
         defer { serverTask.cancel() }
 
         await sut.connect()
-        await testClock.advance(by: .seconds(heartbeatInterval))
+        await testClock.advance(by: heartbeatInterval)
 
         let subscribeTask = Task {
           try await channel.subscribeWithError()
         }
 
-        await testClock.advance(by: .seconds(timeoutInterval))
+        await testClock.advance(by: timeout)
         subscribeTask.cancel()
 
         do {
@@ -495,7 +495,7 @@ import Testing
       }
     }
 
-    @Test
+    @Test(.requiresMainSerialExecutor)
     func heartbeat() async throws {
       try await withMainSerialExecutor {
         let heartbeatCount = LockIsolated(0)
@@ -532,7 +532,7 @@ import Testing
 
         await sut.connect()
 
-        await testClock.advance(by: .seconds(heartbeatInterval * 2))
+        await testClock.advance(by: heartbeatInterval * 2)
 
         let sawTwoHeartbeats = await waitUntil(timeout: 30) { heartbeatCount.value >= 2 }
         #expect(sawTwoHeartbeats)
@@ -565,7 +565,7 @@ import Testing
         defer { subscription.cancel() }
 
         await sut.connect()
-        await testClock.advance(by: .seconds(heartbeatInterval))
+        await testClock.advance(by: heartbeatInterval)
 
         let didSendHeartbeat = await waitUntil(timeout: 15) { sentHeartbeat.value }
         #expect(didSendHeartbeat)
@@ -574,10 +574,10 @@ import Testing
         #expect(pendingHeartbeatRef != nil)
 
         // Wait until next heartbeat
-        await testClock.advance(by: .seconds(heartbeatInterval))
+        await testClock.advance(by: heartbeatInterval)
 
         // Wait for reconnect delay
-        await testClock.advance(by: .seconds(reconnectDelay))
+        await testClock.advance(by: reconnectDelay)
 
         #expect(
           statuses.value
@@ -606,8 +606,8 @@ import Testing
           url: url,
           options: RealtimeClientOptions(
             headers: ["apikey": apiKey],
-            heartbeatInterval: 1,
-            reconnectDelay: 10,
+            heartbeatInterval: .seconds(1),
+            reconnectDelay: .seconds(10),
             accessToken: { "custom.access.token" }
           ),
           wsTransport: { _, _ in client },
@@ -655,16 +655,16 @@ import Testing
 
         // Don't respond to any heartbeats — let the timeout fire naturally.
         await sut.connect()
-        await testClock.advance(by: .seconds(heartbeatInterval))
+        await testClock.advance(by: heartbeatInterval)
 
         // First heartbeat sent
         #expect(heartbeatStatuses.value == [.sent])
 
         // Wait for timeout
-        await testClock.advance(by: .seconds(timeoutInterval))
+        await testClock.advance(by: timeout)
 
         // Wait for next heartbeat.
-        await testClock.advance(by: .seconds(heartbeatInterval))
+        await testClock.advance(by: heartbeatInterval)
 
         // Should have timeout status
         #expect(heartbeatStatuses.value == [.sent, .timeout])
@@ -678,7 +678,7 @@ import Testing
     // then race to nil out the live `onEvent`, leaving the socket connected
     // but deaf — heartbeat and `phx_join` replies were silently dropped,
     // stalling subscribe for tens of seconds to minutes.
-    @Test
+    @Test(.requiresMainSerialExecutor)
     func redundantConnect_doesNotDropIncomingFrames() async throws {
       try await withMainSerialExecutor {
         let serverTask = Task { @Sendable [server = server] in
@@ -720,7 +720,7 @@ import Testing
         // listening, the reply acks the heartbeat (.ok). If `onEvent` was
         // niled out by the duplicate setup, the reply is dropped and the
         // heartbeat is never acknowledged.
-        await testClock.advance(by: .seconds(heartbeatInterval))
+        await testClock.advance(by: heartbeatInterval)
         await Task.megaYield()
 
         #expect(heartbeatStatuses.value == [.sent, .ok])
@@ -1030,7 +1030,7 @@ import Testing
     @Test
     func deferredDisconnect_disconnectsAfterDelay() async {
       await withMainSerialExecutor {
-        let deferredSut = makeClientWithDeferredDisconnect(delay: 5)
+        let deferredSut = makeClientWithDeferredDisconnect(delay: .seconds(5))
         defer { deferredSut.disconnect() }
 
         await deferredSut.connect()
@@ -1054,7 +1054,7 @@ import Testing
     @Test
     func deferredDisconnect_cancelledByNewChannel() async {
       await withMainSerialExecutor {
-        let deferredSut = makeClientWithDeferredDisconnect(delay: 5)
+        let deferredSut = makeClientWithDeferredDisconnect(delay: .seconds(5))
         defer { deferredSut.disconnect() }
 
         await deferredSut.connect()
@@ -1081,7 +1081,7 @@ import Testing
     @Test
     func deferredDisconnect_cancelledByDirectDisconnect() async {
       await withMainSerialExecutor {
-        let deferredSut = makeClientWithDeferredDisconnect(delay: 5)
+        let deferredSut = makeClientWithDeferredDisconnect(delay: .seconds(5))
 
         await deferredSut.connect()
 
@@ -1102,7 +1102,7 @@ import Testing
     @Test
     func removeAllChannels_disconnectsImmediately_withDeferredOption() async {
       await withMainSerialExecutor {
-        let deferredSut = makeClientWithDeferredDisconnect(delay: 5)
+        let deferredSut = makeClientWithDeferredDisconnect(delay: .seconds(5))
         defer { deferredSut.disconnect() }
 
         await deferredSut.connect()
@@ -1118,7 +1118,7 @@ import Testing
       }
     }
 
-    private func makeClientWithDeferredDisconnect(delay: TimeInterval) -> RealtimeClientV2 {
+    private func makeClientWithDeferredDisconnect(delay: Duration) -> RealtimeClientV2 {
       RealtimeClientV2(
         url: url,
         options: RealtimeClientOptions(

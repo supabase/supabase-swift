@@ -247,7 +247,7 @@ public struct FunctionsClient: Sendable {
 
     guard response.status.kind == .successful else {
       throw FunctionsError(
-        kind: .http,
+        kind: .server,
         message: "Edge Function returned a non-2xx status code: \(response.status.code)",
         response: HTTPErrorResponse(response, body: data)
       )
@@ -304,7 +304,7 @@ public struct FunctionsClient: Sendable {
           var data = Data()
           if let body { data = try await Data(collecting: body, upTo: .max) }
           throw FunctionsError(
-            kind: .http,
+            kind: .server,
             message: "Edge Function returned a non-2xx status code: \(head.status.code)",
             response: HTTPErrorResponse(head, body: data)
           )

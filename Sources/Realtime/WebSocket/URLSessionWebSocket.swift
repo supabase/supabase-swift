@@ -65,7 +65,7 @@ final class URLSessionWebSocket: WebSocket {
   ///             certificate pinning and other server-trust customization. Defaults to `nil`
   ///             (equivalent to `.default` configuration with no delegate to forward).
   /// - Returns: A connected `URLSessionWebSocket` instance.
-  /// - Throws: ``RealtimeError`` with kind `.connection` if the connection fails or times out.
+  /// - Throws: ``RealtimeError`` with kind `.transport` if the connection fails or times out.
   static func connect(
     to url: URL,
     protocols: [String]? = nil,
@@ -73,7 +73,7 @@ final class URLSessionWebSocket: WebSocket {
     session: URLSession? = nil
   ) async throws -> URLSessionWebSocket {
     guard url.scheme == "ws" || url.scheme == "wss" else {
-      throw RealtimeError.connection(
+      throw RealtimeError.transport(
         "only ws: and wss: schemes are supported, got \(url.scheme ?? "no scheme").",
         underlyingError: URLError(.unsupportedURL)
       )
@@ -121,7 +121,7 @@ final class URLSessionWebSocket: WebSocket {
           guard let continuation = $0.continuation else { return {} }
           return {
             continuation.resume(
-              throwing: RealtimeError.connection(
+              throwing: RealtimeError.transport(
                 "connection ended unexpectedly \(error.localizedDescription)",
                 underlyingError: error))
           }
@@ -253,7 +253,7 @@ final class URLSessionWebSocket: WebSocket {
     case .data(let data):
       event = .binary(data)
     @unknown default:
-      _closeConnectionWithError(RealtimeError.connection("Received unsupported message type"))
+      _closeConnectionWithError(RealtimeError.decoding("Received unsupported message type"))
       return
     }
     _trigger(event)
@@ -296,14 +296,15 @@ final class URLSessionWebSocket: WebSocket {
     let nsError = error as NSError
 
     switch (nsError.domain, nsError.code) {
-    // Matched through `POSIXErrorCode` rather than the raw numbers: errno values are
-    // platform-specific, and Darwin's differ from Linux's (ENOTCONN 57 vs 107, EPROTO 100
-    // vs 71). Hard-coding Darwin's meant a disconnected socket on Linux fell through to
-    // `default` and reported a close the peer never sent.
-    case (NSPOSIXErrorDomain, Int(POSIXErrorCode.ENOTCONN.rawValue)):
+    // Matched through the platform's own errno constants rather than the raw numbers: errno
+    // values are platform-specific, and Darwin's differ from Linux's (ENOTCONN 57 vs 107,
+    // EPROTO 100 vs 71). Hard-coding Darwin's meant a disconnected socket on Linux fell
+    // through to `default` and reported a close the peer never sent. `POSIXErrorCode` would
+    // read better but Android's Foundation does not vend it.
+    case (NSPOSIXErrorDomain, Int(ENOTCONN)):
       // Socket is not connected — the delegate callbacks report the close code.
       return nil
-    case (NSPOSIXErrorDomain, Int(POSIXErrorCode.EPROTO.rawValue)):
+    case (NSPOSIXErrorDomain, Int(EPROTO)):
       return (1002, nsError.localizedDescription)
     case (NSURLErrorDomain, NSURLErrorTimedOut):
       return (1006, "Connection timed out")
