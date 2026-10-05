@@ -77,6 +77,10 @@ package final class EventEmitter<Event: Sendable>: Sendable {
   /// The last event emitted by this Emitter, or the initial event.
   package var lastEvent: Event { mutableState.lastEvent }
 
+  /// The number of listeners currently attached. Exposed for tests that need to assert a
+  /// listener was removed (e.g. on stream termination) rather than leaked.
+  package var listenerCount: Int { mutableState.listeners.count }
+
   package let emitsLastEventWhenAttaching: Bool
 
   package init(

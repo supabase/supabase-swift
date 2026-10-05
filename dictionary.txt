@@ -257,7 +257,7 @@ deinits
 failable
 memberwise
 
-# Term from PostgrestTypedMutation's upsert doc (an empty conflict target cannot be
+# Term from PostgrestMutation's upsert doc (an empty conflict target cannot be
 # written, so it is unrepresentable rather than merely invalid).
 unrepresentable
 
@@ -288,3 +288,6 @@ fixdate
 
 # Term from the privacy manifest resource declared on the Helpers target (Package.swift).
 xcprivacy
+
+# Swift 6.2 isolation keyword (SE-0461): `nonisolated(nonsending)`, `NonisolatedNonsendingByDefault`.
+nonsending

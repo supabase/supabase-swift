@@ -551,7 +551,7 @@ extension PostgrestMockerTests {
         	--header "Accept: application/json" \
         	--header "Content-Length: 20" \
         	--header "Content-Type: application/json" \
-        	--header "Prefer: return=representation,handling=strict,max-affected=1" \
+        	--header "Prefer: handling=strict,max-affected=1" \
         	--header "X-Client-Info: postgrest-swift/0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	--data "{\"username\":\"admin\"}" \
@@ -585,7 +585,7 @@ extension PostgrestMockerTests {
         	--header "Accept: application/json" \
         	--header "Content-Length: 20" \
         	--header "Content-Type: application/json" \
-        	--header "Prefer: return=representation,handling=strict,max-affected=5" \
+        	--header "Prefer: handling=strict,max-affected=5" \
         	--header "X-Client-Info: postgrest-swift/0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	--data "{\"username\":\"admin\"}" \
@@ -619,7 +619,7 @@ extension PostgrestMockerTests {
         	--request DELETE \
         	--header "Accept: application/json" \
         	--header "Content-Type: application/json" \
-        	--header "Prefer: return=representation,handling=strict,max-affected=5" \
+        	--header "Prefer: handling=strict,max-affected=5" \
         	--header "X-Client-Info: postgrest-swift/0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	"http://localhost:54321/rest/v1/users?id=in.(1,2,3,4,5)"
@@ -867,7 +867,7 @@ extension PostgrestMockerTests {
         	--header "Accept: application/json" \
         	--header "Content-Length: 20" \
         	--header "Content-Type: application/json" \
-        	--header "Prefer: return=representation,tx=rollback" \
+        	--header "Prefer: tx=rollback" \
         	--header "X-Client-Info: postgrest-swift/0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	--data "{\"username\":\"admin\"}" \

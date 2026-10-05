@@ -157,7 +157,9 @@ public final class HTTPBody: AsyncSequence, @unchecked Sendable {
 
     /// Advances to the next chunk. Throws ``HTTPBodyAlreadyConsumedError`` when a `.single`
     /// body is iterated a second time.
-    public mutating func next() async throws -> ArraySlice<UInt8>? {
+    // `@concurrent` because `AsyncThrowingStream.Iterator.next(isolation:)` needs macOS 15 /
+    // iOS 18; the plain `next()` it calls is `@concurrent`, so `base` cannot stay on the caller.
+    @concurrent public mutating func next() async throws -> ArraySlice<UInt8>? {
       try await base.next()
     }
   }
