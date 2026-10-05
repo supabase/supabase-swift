@@ -360,14 +360,21 @@ public final class AuthClient: Sendable {
       // A bounded policy could evict exactly that one when events arrive back to back.
     >.makeStream(bufferingPolicy: .unbounded)
 
-    Task {
-      let handle = await onAuthStateChange { event, session in
-        continuation.yield((event, session))
-      }
+    // Attach (and wire up `onTermination`) synchronously, before returning the stream.
+    // `eventEmitter.attach` doesn't need to be async — only the subsequent initial-session
+    // emission below does — so doing this inside a `Task` would let a consumer cancel the
+    // stream before that task's body ran, leaving `onTermination` unset when termination
+    // already happened and leaking this registration (SDK-2092).
+    let token = eventEmitter.attach { event, session in
+      continuation.yield((event, session))
+    }
 
-      continuation.onTermination = { _ in
-        handle.remove()
-      }
+    continuation.onTermination = { _ in
+      token.remove()
+    }
+
+    Task {
+      await emitInitialSession(forToken: token)
     }
 
     return stream

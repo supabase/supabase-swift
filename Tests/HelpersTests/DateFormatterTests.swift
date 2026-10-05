@@ -211,6 +211,34 @@ struct DateFormatterTests {
     }
   }
 
+  // MARK: - Non-UTC Offset Tests (SDK-2090)
+
+  @Test(
+    arguments: [
+      // Postgres `timestamptz` forms: fractional seconds, offset with/without colon, `Z`, short offset.
+      ("2024-01-02T03:04:05.123456+00:00", 1_704_164_645.123456),
+      ("2024-01-02T03:04:05+02:00", 1_704_157_445.0),
+      ("2024-01-02T03:04:05+0200", 1_704_157_445.0),
+      ("2024-01-02T03:04:05+02", 1_704_157_445.0),
+      ("2024-01-02T03:04:05Z", 1_704_164_645.0),
+      // Postgres `timestamp` (no time zone): read as UTC.
+      ("2024-01-02T03:04:05.123456", 1_704_164_645.123456),
+    ]
+  )
+  func parsesOffset(input: String, expectedTimeIntervalSince1970: Double) throws {
+    let date = try #require(input.date, "Failed to parse: \(input)")
+    #expect(
+      abs(date.timeIntervalSince1970 - expectedTimeIntervalSince1970) < 0.000_001,
+      "\(input) parsed as \(date.timeIntervalSince1970), expected \(expectedTimeIntervalSince1970)"
+    )
+  }
+
+  @Test
+  func rejectsSpaceSeparatedTimestampWithOffset() {
+    // Not a Postgres JSON/REST wire format (PostgREST always emits `T`); explicitly unsupported.
+    #expect("2024-01-02 03:04:05.123456+00".date == nil)
+  }
+
   // MARK: - Multiple Date Conversion Tests
 
   @Test
