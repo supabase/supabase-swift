@@ -95,6 +95,48 @@ struct HTTPBodyTests {
   }
 
   @Test
+  func fileBodyReadsTheNextChunkOnlyWhenPulled() async throws {
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try Data(repeating: 1, count: 2 * 64 * 1024).write(to: url)
+    defer { try? FileManager.default.removeItem(at: url) }
+
+    let body = try HTTPBody(fileURL: url)
+    var iterator = body.makeAsyncIterator()
+    _ = try await iterator.next()
+
+    // Rewrite the part not yet pulled. A reader that had run ahead would still yield the old bytes.
+    let writer = try FileHandle(forWritingTo: url)
+    try writer.seek(toOffset: 64 * 1024)
+    try writer.write(contentsOf: Data(repeating: 2, count: 64 * 1024))
+    try writer.close()
+
+    let second = try #require(try await iterator.next())
+    #expect(second.allSatisfy { $0 == 2 })
+  }
+
+  @Test(.timeLimit(.minutes(1)))
+  func cancellingTheConsumerStopsTheReader() async throws {
+    let pulls = LockIsolated(0)
+    let chunks = AsyncStream<ArraySlice<UInt8>> {
+      pulls.withValue { $0 += 1 }
+      try? await Task.sleep(for: .milliseconds(1))
+      return [0]
+    }
+    let body = HTTPBody(chunks, length: .unknown, iterationBehavior: .single)
+    let consumer = Task {
+      for try await _ in body {}
+    }
+    while pulls.value < 3 { await Task.yield() }
+
+    consumer.cancel()
+    _ = await consumer.result
+    let afterCancel = pulls.value
+    try await Task.sleep(for: .milliseconds(50))
+
+    #expect(pulls.value == afterCancel)
+  }
+
+  @Test
   func writeToFileRoundTrips() async throws {
     let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: url) }
