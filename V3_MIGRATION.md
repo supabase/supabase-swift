@@ -3105,6 +3105,83 @@ ID as a `String`, or builds `MFAVerifyParams` from a string, gets a compile erro
 (`PasskeyRegistrationOptions.challengeId`, `PasskeyAuthenticationOptions.challengeId`) stay
 `String`, because the passkey endpoints type `challenge_id` as a string.
 
+## The typed PostgREST wrappers drop the `Typed` prefix
+
+The types behind `client.from(Todo.self)` are renamed. Nothing else about them changes in this step.
+
+| Before | After |
+| --- | --- |
+| `PostgrestTypedSource` | `PostgrestSource` |
+| `PostgrestTypedQuery` | `PostgrestQuery` |
+| `PostgrestTypedMutation` | `PostgrestMutation` |
+
+The typed API is marked alpha, and these are the names the PostgREST v3 design uses. The prefix
+only existed to keep clear of the string builders, whose names are `PostgrestQueryBuilder`,
+`PostgrestFilterBuilder` and `PostgrestTransformBuilder`, so the shorter names were free. Renaming
+now, before the typed API is stable, costs less than teaching early adopters a name we plan to drop.
+
+```swift
+// Before
+let query: PostgrestTypedQuery<Todo, [Todo], PostgrestFilterPhase> = client.from(Todo.self).select()
+
+// After
+let query: PostgrestQuery<Todo, [Todo], PostgrestFilterPhase> = client.from(Todo.self).select()
+```
+
+This is a compile error only where your code spells a type name. A chain that starts at
+`from(Todo.self)` and never names its type compiles unchanged. Search for `PostgrestTyped`.
+
+## `PostgrestQuery`, `PostgrestMutation` and `PostgrestSource` no longer wrap a builder
+
+The typed wrappers now hold a `PostgrestRequest` value instead of a `PostgrestRequestBuilder`.
+Four things change for callers:
+
+| Before | After |
+| --- | --- |
+| `PostgrestQuery<R, Output, Phase>` | `PostgrestQuery<R, Output>` |
+| `query.builder`, `mutation.builder` | removed |
+| `PostgrestQuery(builder:)`, `PostgrestMutation(builder:)` | removed |
+| `PostgrestFilterableRequest.builder` and `.Phase` | `PostgrestFilterableRequest.request` |
+
+The `Phase` parameter is gone because the modifiers no longer depend on order. `where`, `order`,
+`limit` and `range` all return the same type, so `.order { … }.where { … }` now compiles. Before,
+`order` moved the query into a phase without `where`.
+
+`builder` was the escape hatch back to the string API. A query no longer holds a builder, so there
+is nothing to hand back, and keeping a conversion only to delete it later was not worth it. The
+typed API is alpha, which is what allows dropping it outright.
+
+```swift
+// Before
+let query: PostgrestQuery<Todo, [Todo], PostgrestTransformPhase> = client.from(Todo.self)
+  .select()
+  .order { $0.id.asc() }
+let rows: [Todo] = try await query.builder.setHeader(name: "X-Trace", value: id).execute().value
+
+// After
+let query: PostgrestQuery<Todo, [Todo]> = client.from(Todo.self)
+  .select()
+  .order { $0.id.asc() }
+let rows = try await query.execute().value
+```
+
+This is a compile error wherever your code names the `Phase` parameter or touches `builder`. A
+chain that starts at `from(Todo.self)` and never names its type compiles unchanged. Search for
+`.builder` and for `PostgrestFilterPhase` and `PostgrestTransformPhase` next to `PostgrestQuery`.
+
+There is no escape hatch on the typed path for per-request headers, `retry(enabled:)` or
+`timeout(_:)` yet. Set headers and the timeout on `PostgrestClient.Configuration`, or use the
+string API (`client.from("todos")`) for a request that needs them.
+
+The same change adds `single()`, `maybeSingle()`, `stripNulls()`, `csv()`, `geojson()` and
+`explain(…)` to `PostgrestQuery`. `single()` decodes `Element` instead of `[Element]`, and
+`maybeSingle()` decodes `Element?`. It sends the usual array request and checks the count on
+the client: no row is `nil`, and more than one row throws a `PostgrestError` of kind `.decoding`.
+The string builder's `maybeSingle()` instead asks for a single object and maps PostgREST's
+`PGRST116` to `nil`. `csv()`, `geojson()` and
+`explain(…)` return a `PostgrestRawQuery`, whose `execute()` returns the body as a `String`. That
+type has no `stripNulls()`, so `.csv().stripNulls()` does not compile, where the string builder
+throws at `execute()`.
 ## `update`/`upsert`/`delete` no longer default to returning rows
 
 `PostgrestRequestBuilder.update(_:returning:count:encoder:)`,

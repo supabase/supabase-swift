@@ -1,5 +1,5 @@
 //
-//  PostgrestTypedSourceTests.swift
+//  PostgrestSourceTests.swift
 //  Supabase
 //
 //  Created by Guilherme Souza on 21/08/26.
@@ -11,7 +11,7 @@ import Testing
 @testable import PostgREST
 
 @Suite
-struct PostgrestTypedSourceTests {
+struct PostgrestSourceTests {
   struct Todo: PostgrestRelation {
     static let relationName = "todos"
     static let selectString = "*"
