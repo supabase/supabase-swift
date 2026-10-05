@@ -267,5 +267,17 @@ extension PostgrestMockerTests {
 
       #expect(capture.header("Prefer") == "tx=rollback,count=estimated")
     }
+
+    @Test
+    func rpcWithCountReplacesClientCountPreference() async throws {
+      let capture = QueryCapture()
+      var configuration = capture.client.configuration
+      configuration.headers["Prefer"] = "tx=rollback, count=estimated"
+      let client = PostgrestClient(configuration: configuration)
+
+      try await client.rpc("hello", count: .exact).execute()
+
+      #expect(capture.header("Prefer") == "tx=rollback,count=exact")
+    }
   }
 }

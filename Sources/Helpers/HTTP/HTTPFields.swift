@@ -67,7 +67,9 @@ extension HTTPFields {
       var components = currentValue.components(separatedBy: separator)
 
       if let key = value.split(separator: "=").first,
-        let index = components.firstIndex(where: { $0.hasPrefix("\(key)=") })
+        let index = components.firstIndex(where: {
+          $0.trimmingCharacters(in: .whitespaces).hasPrefix("\(key)=")
+        })
       {
         components[index] = value
       } else {
