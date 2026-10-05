@@ -1108,7 +1108,8 @@ public final class AuthClient: Sendable {
         method: .get,
         url: configuration.url.appendingPathComponent("user"),
         headerFields: [.authorization: "\(tokenType) \(accessToken)"]
-      )
+      ),
+      for: sessionOwnership(ofAccessToken: accessToken)
     ).decoded(as: User.self, decoder: configuration.resolvedDecoder)
 
     let session = Session(
@@ -1406,10 +1407,16 @@ public final class AuthClient: Sendable {
 
     if let jwt {
       request.headerFields[.authorization] = "Bearer \(jwt)"
-      return try await api.execute(request).decoded(decoder: configuration.resolvedDecoder)
+      return try await api.execute(request, for: sessionOwnership(ofAccessToken: jwt))
+        .decoded(decoder: configuration.resolvedDecoder)
     }
 
     return try await api.authorizedExecute(request).decoded(decoder: configuration.resolvedDecoder)
+  }
+
+  private func sessionOwnership(ofAccessToken accessToken: String) -> SessionOwnership {
+    let stored = currentSession
+    return .snapshot(stored?.accessToken == accessToken ? stored : nil)
   }
 
   /// Updates user data, if there is a logged in user.

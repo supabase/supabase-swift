@@ -3184,6 +3184,168 @@ extension AuthMockerTests {
     }
 
     @Test
+    func userWithForeignJWTKeepsStoredSessionIfSessionNotFoundErrorReturned() async throws {
+      let sut = makeSUT()
+
+      Mock(
+        url: clientURL.appendingPathComponent("user"),
+        statusCode: 403,
+        data: [
+          .get: Data(
+            """
+            {
+              "error_code": "session_not_found",
+              "message": "Session not found"
+            }
+            """.utf8
+          )
+        ]
+      )
+      .register()
+
+      sut.dependencies.sessionStorage.store(.valid)
+
+      try await assertAuthStateChanges(
+        sut: sut,
+        action: {
+          do {
+            _ = try await sut.user(jwt: "foreign-access-token")
+            Issue.record("Expected failure")
+          } catch {
+            #expect((error as? AuthError)?.kind == .sessionMissing)
+          }
+        },
+        expectedEvents: [.initialSession]
+      )
+
+      #expect(sut.dependencies.sessionStorage.get() == .valid)
+    }
+
+    @Test
+    func userWithStoredJWTRemovesSessionIfSessionNotFoundErrorReturned() async throws {
+      let sut = makeSUT()
+
+      Mock(
+        url: clientURL.appendingPathComponent("user"),
+        statusCode: 403,
+        data: [
+          .get: Data(
+            """
+            {
+              "error_code": "session_not_found",
+              "message": "Session not found"
+            }
+            """.utf8
+          )
+        ]
+      )
+      .register()
+
+      sut.dependencies.sessionStorage.store(.valid)
+
+      try await assertAuthStateChanges(
+        sut: sut,
+        action: {
+          do {
+            _ = try await sut.user(jwt: Session.valid.accessToken)
+            Issue.record("Expected failure")
+          } catch {
+            #expect((error as? AuthError)?.kind == .sessionMissing)
+          }
+        },
+        expectedEvents: [.initialSession, .signedOut]
+      )
+
+      #expect(sut.dependencies.sessionStorage.get() == nil)
+    }
+
+    @Test
+    func setSessionWithForeignTokenKeepsStoredSessionIfSessionNotFoundErrorReturned() async throws {
+      let sut = makeSUT()
+
+      Mock(
+        url: clientURL.appendingPathComponent("user"),
+        statusCode: 403,
+        data: [
+          .get: Data(
+            """
+            {
+              "error_code": "session_not_found",
+              "message": "Session not found"
+            }
+            """.utf8
+          )
+        ]
+      )
+      .register()
+
+      sut.dependencies.sessionStorage.store(.valid)
+
+      let accessToken =
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjo0ODUyMTYzNTkzLCJzdWIiOiJmMzNkM2VjOS1hMmVlLTQ3YzQtODBlMS01YmQ5MTlmM2Q4YjgiLCJlbWFpbCI6ImhpQGJpbmFyeXNjcmFwaW5nLmNvIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJlbWFpbCIsInByb3ZpZGVycyI6WyJlbWFpbCJdfSwidXNlcl9tZXRhZGF0YSI6e30sInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.UiEhoahP9GNrBKw_OHBWyqYudtoIlZGkrjs7Qa8hU7I"
+
+      try await assertAuthStateChanges(
+        sut: sut,
+        action: {
+          do {
+            _ = try await sut.setSession(
+              accessToken: accessToken, refreshToken: "dummy-refresh-token")
+            Issue.record("Expected failure")
+          } catch {
+            #expect((error as? AuthError)?.kind == .sessionMissing)
+          }
+        },
+        expectedEvents: [.initialSession]
+      )
+
+      #expect(sut.dependencies.sessionStorage.get() == .valid)
+    }
+
+    @Test
+    func sessionWithURL_implicitFlow_keepsStoredSessionIfSessionNotFoundErrorReturned() async throws
+    {
+      let sut = makeSUT(flowType: .implicit)
+
+      Mock(
+        url: clientURL.appendingPathComponent("user"),
+        statusCode: 403,
+        data: [
+          .get: Data(
+            """
+            {
+              "error_code": "session_not_found",
+              "message": "Session not found"
+            }
+            """.utf8
+          )
+        ]
+      )
+      .register()
+
+      sut.dependencies.sessionStorage.store(.valid)
+
+      let url = URL(
+        string:
+          "https://dummy-url.com/callback#access_token=foreign-access-token&expires_in=60&refresh_token=refreshtoken&token_type=bearer"
+      )!
+
+      try await assertAuthStateChanges(
+        sut: sut,
+        action: {
+          do {
+            _ = try await sut.session(from: url)
+            Issue.record("Expected failure")
+          } catch {
+            #expect((error as? AuthError)?.kind == .sessionMissing)
+          }
+        },
+        expectedEvents: [.initialSession]
+      )
+
+      #expect(sut.dependencies.sessionStorage.get() == .valid)
+    }
+
+    @Test
     func removeSessionAndSignoutIfRefreshTokenNotFoundErrorReturned() async throws {
       let sut = makeSUT()
 
