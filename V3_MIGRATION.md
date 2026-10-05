@@ -3006,6 +3006,73 @@ This is a compile error anywhere a factor ID was treated as a `String` directly 
 passing it straight into another MFA call keeps compiling unchanged, since both sides are now
 `UUID`. If you display or log a factor ID, use `.uuidString` to get the string form back.
 
+## Seven more enum-like values are now structs, not enums
+
+| Type | Module |
+| --- | --- |
+| `AuthChangeEvent` | Auth |
+| `RealtimeClientStatus` | Realtime |
+| `RealtimeChannelStatus` | Realtime |
+| `HeartbeatStatus` | Realtime |
+| `PushStatus` | Realtime |
+| `LogLevel` | Realtime |
+| `RealtimeMessageV2.EventType` | Realtime |
+
+Each is a `RawRepresentable` struct with `static let` members instead of an `enum`, following the
+same pattern as `FactorStatus` and the other conversions above.
+
+In a source package every `enum` is frozen: adding a case is a compile error in every app with an
+exhaustive `switch` over it. supabase-js has added auth events over time (`MFA_CHALLENGE_VERIFIED`
+was the latest) and each one forced a major bump here. The Realtime server owns the push reply
+statuses and the channel event names, so a value it adds used to come back as `nil` or, for a push
+reply, as `.ok`. The client and channel statuses are client-side,
+but a reconnecting or errored state is a plausible addition that should not need a major release.
+The policy is written up in `Sources/Supabase/Supabase.docc/EnumsAndOpenSets.md`.
+
+```swift
+// Before
+switch status {
+case .disconnected: showOffline()
+case .connecting: showSpinner()
+case .connected: showOnline()
+}
+
+// After
+switch status {
+case .disconnected: showOffline()
+case .connecting: showSpinner()
+case .connected: showOnline()
+default: showOffline()  // a status added in a later SDK release
+}
+```
+
+This is a compile error only if you have an exhaustive `switch` over one of these types — add a
+`default:` case. Equality (`event == .signedIn`), `contains` checks, and construction from a
+literal (`let level: LogLevel = "info"`) work unchanged.
+
+`init(rawValue:)` is no longer failable — it always succeeds, even for an unrecognized value.
+`if let event = AuthChangeEvent(rawValue: someString) { ... }` no longer compiles ("Initializer
+for conditional binding must have Optional type") — replace it with
+`let event = AuthChangeEvent(rawValue: someString)` directly. If your code used
+`X(rawValue:) != nil` to validate a string, that check still compiles but is now always `true` —
+this is a silent behavior change, not a compile error, so search for that pattern and remove or
+replace it.
+
+String interpolation changes silently. `"\(AuthChangeEvent.signedIn)"` used to print the case
+name (`signedIn`); it now prints the struct's default description
+(`AuthChangeEvent(rawValue: "SIGNED_IN")`). Use `.rawValue` explicitly to get the bare string
+back. `RealtimeClientStatus` keeps its `CustomStringConvertible` conformance but now prints the
+raw value (`connected`) instead of the capitalized case name (`Connected`).
+
+Two smaller behavior changes ride along:
+
+- `PushStatus`: a reply status this SDK had no case for used to be reported as `.ok`. It is now
+  reported with its raw value intact, so `status == .ok` is `false` for it. If you treat anything
+  other than `.error` and `.timeout` as success, compare against those two instead.
+- `RealtimeMessageV2.eventType` is new and non-optional. The internal event classification used
+  to return `nil` for an event name the SDK did not handle; it now returns an `EventType` whose
+  `rawValue` is the event name.
+
 ## MFA challenge IDs are now `UUID` instead of `String`
 
 `AuthMFAChallengeResponse.id` and `MFAVerifyParams.challengeId` are `UUID` instead of `String`.
@@ -3039,6 +3106,47 @@ ID as a `String`, or builds `MFAVerifyParams` from a string, gets a compile erro
 `challengeAndVerify(params:)` is unchanged. Passkey challenge IDs
 (`PasskeyRegistrationOptions.challengeId`, `PasskeyAuthenticationOptions.challengeId`) stay
 `String`, because the passkey endpoints type `challenge_id` as a string.
+
+## `update`/`upsert`/`delete` no longer default to returning rows
+
+`PostgrestRequestBuilder.update(_:returning:count:encoder:)`,
+`upsert(_:onConflict:returning:count:ignoreDuplicates:defaultToNull:encoder:)`, and
+`delete(returning:count:)` now default `returning` to `nil` and omit `Prefer: return=` entirely
+when the caller doesn't pass it, matching `insert(_:returning:count:defaultToNull:encoder:)` and
+PostgREST's own default of `return=minimal`.
+
+Previously these three defaulted `returning` to `.representation` and always sent
+`Prefer: return=representation`, so a bare `update`/`upsert`/`delete` call — one that never chained
+`.select()` — silently paid for a response body it discarded. `insert` never had this problem, and
+js and Flutter omit the header by default on all four methods, so Swift's defaults were
+inconsistent with both itself and the rest of the SDK family.
+
+```swift
+// Before — rows came back even without .select()
+let updated: [Todo] = try await client
+  .from("todos")
+  .update(["done": true])
+  .eq("id", value: 1)
+  .execute()
+  .value
+
+// After — chain .select() to get rows back, as insert already required
+let updated: [Todo] = try await client
+  .from("todos")
+  .update(["done": true])
+  .eq("id", value: 1)
+  .select()
+  .execute()
+  .value
+```
+
+This does not break the build — `returning` was already optional-looking at call sites that never
+passed it — but it is a silent behavior change: a bare `update`/`upsert`/`delete` call that decodes
+`.value` without chaining `.select()` now decodes an empty response instead of the modified rows.
+Search your codebase for `.update(`, `.upsert(`, and `.delete(` calls that read `.value` or
+`.execute().value` without a `.select()` in the chain, and either add `.select()` or pass
+`returning: .representation` explicitly to keep the old behavior. The typed query API
+(`from(_:)`) already defaulted to `.minimal` and is unaffected.
 
 ## SDK `async` functions run on the caller's executor (`NonisolatedNonsendingByDefault`)
 

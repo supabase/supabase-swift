@@ -68,6 +68,30 @@ extension AuthMockerTests {
     }
 
     @Test
+    func authStateChangesRemovesListenerWhenCancelledBeforeRegistrationRuns() async throws {
+      await withMainSerialExecutor {
+        let sut = makeSUT()
+
+        let stream = sut.authStateChanges
+
+        // The listener (and its `onTermination` cleanup) must be registered synchronously,
+        // before the stream is returned. Previously this happened inside an unstructured
+        // `Task`, so a consumer that cancels before that task's body runs would never get
+        // `onTermination` wired up, leaking the `onAuthStateChange` registration (SDK-2092).
+        expectNoDifference(sut.dependencies.eventEmitter.emitter.listenerCount, 1)
+
+        let consumer = Task {
+          for await _ in stream {}
+        }
+        consumer.cancel()
+
+        await Task.megaYield()
+
+        expectNoDifference(sut.dependencies.eventEmitter.emitter.listenerCount, 0)
+      }
+    }
+
+    @Test
     func signOut() async throws {
       try await withMainSerialExecutor {
         let sut = makeSUT()
@@ -697,7 +721,7 @@ extension AuthMockerTests {
         	--header "X-Client-Info: auth-swift/0.0.0" \
         	--header "X-Supabase-Api-Version: 2024-01-01" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	"http://localhost:54321/auth/v1/admin/users?page=&per_page="
+        	"http://localhost:54321/auth/v1/admin/users"
         """#
       }
       .register()
@@ -730,7 +754,7 @@ extension AuthMockerTests {
         	--header "X-Client-Info: auth-swift/0.0.0" \
         	--header "X-Supabase-Api-Version: 2024-01-01" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	"http://localhost:54321/auth/v1/admin/users?page=&per_page="
+        	"http://localhost:54321/auth/v1/admin/users"
         """#
       }
       .register()
