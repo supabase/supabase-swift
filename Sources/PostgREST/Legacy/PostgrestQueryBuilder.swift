@@ -313,9 +313,11 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
 /// The `columns` query parameter for an array request body: the union of the keys across every
 /// row, quoted and comma-separated.
 ///
-/// PostgREST otherwise derives the column list from the first object alone and silently drops keys
-/// a later row added. Rows in one batch legitimately differ, because a nil optional is omitted from
-/// the payload rather than encoded as `null`, so the union has to be sent explicitly.
+/// Without it, PostgREST requires every row to carry an identical key set and rejects the whole
+/// request (`PGRST102`, 400) the moment one disagrees — it never derives the column list from the
+/// first object and drops the rest. Rows in one batch legitimately differ, because a nil optional
+/// is omitted from the payload rather than encoded as `null`, so the union has to be sent
+/// explicitly to make a ragged batch representable at all.
 ///
 /// - Parameter body: The encoded request body.
 /// - Returns: The query item, or `nil` when the body is not an array of objects, or is an array
