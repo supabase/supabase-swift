@@ -312,7 +312,7 @@ public struct PostgrestClient: Sendable {
     )
 
     if let count {
-      request.headerFields[.prefer] = "count=\(count.rawValue)"
+      request.headerFields.appendOrUpdate(.prefer, value: "count=\(count.rawValue)")
     }
 
     return PostgrestFilterBuilder(
