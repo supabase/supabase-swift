@@ -21,9 +21,6 @@ public struct PostgrestOrdering<Root: PostgrestRelation>: Sendable {
   let ascending: Bool?
 
   /// `nil` sends no placement, so the database default applies.
-  ///
-  /// Deliberately unlike `PostgrestTransformBuilder.order(_:ascending:nullsFirst:)`, which always
-  /// appends one — see [SDK-1633](https://linear.app/supabase/issue/SDK-1633).
   var nullPlacement: PostgrestNullPlacement?
 
   var rendered: String {

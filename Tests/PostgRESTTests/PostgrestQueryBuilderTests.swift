@@ -407,7 +407,7 @@ extension PostgrestMockerTests {
         	--header "X-Client-Info: postgrest-swift/0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	--data "{\"id\":1,\"username\":\"supabase\"}" \
-        	"http://localhost:54321/rest/v1/users?limit=1&order=id.asc.nullslast&select=id,username"
+        	"http://localhost:54321/rest/v1/users?limit=1&order=id.asc&select=id,username"
         """#
       }
       .register()
