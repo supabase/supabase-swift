@@ -31,7 +31,7 @@ jobs:
       matrix:
         command: [test, ""]
         platform: [IOS, MACOS]
-        xcode: ["26.4"]
+        xcode: ["26.4", "27.0"]
         include:
           - { command: test, skip_release: 1 }
           - { command: "", skip_debug: 1 }
