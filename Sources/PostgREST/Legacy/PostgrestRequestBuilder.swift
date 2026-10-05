@@ -38,13 +38,14 @@ public protocol PostgrestFilterablePhase: PostgrestTransformablePhase {}
 /// headers, or execute until you pick an operation.
 public enum PostgrestQueryPhase {}
 
-/// The phase after a filterable operation has been chosen (or after
+/// The phase after a filterable operation (`select`/`update`/`delete`) has been chosen (or after
 /// ``PostgrestClient/rpc(_:params:head:get:count:)``). Supports filtering, transforming, and
 /// executing.
 public enum PostgrestFilterPhase: PostgrestFilterablePhase {}
 
-/// The phase after any transformation (`order`, `limit`, `single`, ...) has been applied.
-/// Supports further transformations and executing, but no longer filtering.
+/// The phase after `insert`/`upsert`, or after any transformation (`order`, `limit`, `single`,
+/// ...) has been applied. Supports further transformations and executing, but not filtering:
+/// PostgREST ignores filters on an insert, which has no existing rows to match.
 public enum PostgrestTransformPhase: PostgrestTransformablePhase {}
 
 /// Builder for all PostgREST requests, parameterized by the request's current phase.
@@ -114,8 +115,9 @@ public struct PostgrestRequestBuilder<Phase>: Sendable {
 
   /// Recasts an existing builder to a different phase, preserving every field.
   ///
-  /// Every method that changes phase (e.g. `select`/`insert` moving from ``PostgrestQueryPhase``
-  /// to ``PostgrestFilterPhase``, or any transform method moving to ``PostgrestTransformPhase``)
+  /// Every method that changes phase (e.g. `select` moving from ``PostgrestQueryPhase`` to
+  /// ``PostgrestFilterPhase``, or `insert` and any transform method moving to
+  /// ``PostgrestTransformPhase``)
   /// goes through this initializer instead of resetting state, because `pendingError` and
   /// `isMaybeSingle` must survive a phase change — e.g. `.maybeSingle().order(...)` must not lose
   /// the `isMaybeSingle` flag just because `order` also changes the phase.
@@ -139,8 +141,9 @@ public struct PostgrestRequestBuilder<Phase>: Sendable {
 /// starts in before an operation has been chosen.
 ///
 /// Obtain one by calling ``PostgrestClient/from(_:)->PostgrestQueryBuilder`` and then chain one of the operation methods.
-/// Most methods return a ``PostgrestFilterBuilder`` so you can narrow the affected rows with WHERE
-/// clauses before executing.
+/// `select`, `update`, and `delete` return a ``PostgrestFilterBuilder`` so you can narrow the
+/// affected rows with WHERE clauses before executing. `insert` and `upsert` return a
+/// ``PostgrestTransformBuilder``, because an insert has no existing rows to filter.
 ///
 /// ```swift
 /// // INSERT a single row
@@ -187,9 +190,9 @@ public typealias PostgrestQueryBuilder = PostgrestRequestBuilder<PostgrestQueryP
 /// This is ``PostgrestRequestBuilder`` specialized to ``PostgrestFilterPhase``.
 ///
 /// Obtain one from ``PostgrestRequestBuilder/select(_:head:count:)``,
-/// ``PostgrestRequestBuilder/insert(_:returning:count:defaultToNull:encoder:)``,
-/// ``PostgrestRequestBuilder/update(_:returning:count:encoder:)``, or another write method on
-/// ``PostgrestQueryBuilder``, or from ``PostgrestClient/rpc(_:params:head:get:count:)``. Chain one
+/// ``PostgrestRequestBuilder/update(_:returning:count:encoder:)``, or
+/// ``PostgrestRequestBuilder/delete(returning:count:)`` on ``PostgrestQueryBuilder``, or from
+/// ``PostgrestClient/rpc(_:params:head:get:count:)``. Chain one
 /// or more filter methods, then call
 /// ``PostgrestRequestBuilder/execute(options:decoder:)`` to send the request.
 ///
@@ -271,6 +274,10 @@ public typealias PostgrestFilterBuilder = PostgrestRequestBuilder<PostgrestFilte
 /// ``PostgrestRequestBuilder/execute(options:decoder:)`` (sending the request). All
 /// transformation methods narrow the builder to ``PostgrestTransformPhase``, so once you call one
 /// you can no longer filter — only transform further or execute.
+///
+/// ``PostgrestRequestBuilder/insert(_:returning:count:defaultToNull:encoder:)`` and
+/// ``PostgrestRequestBuilder/upsert(_:onConflict:returning:count:ignoreDuplicates:defaultToNull:encoder:)``
+/// return this builder directly, because PostgREST ignores filters on an insert.
 ///
 /// ```swift
 /// let page: [Todo] = try await client
