@@ -106,7 +106,6 @@ let package = Package(
     .target(
       name: "Functions",
       dependencies: [
-        .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
         .product(name: "Logging", package: "swift-log"),
         "Helpers",
