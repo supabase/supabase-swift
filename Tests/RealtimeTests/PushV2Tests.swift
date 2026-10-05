@@ -32,7 +32,7 @@ struct PushV2Tests {
     #expect(PushStatus(rawValue: "ok") == .ok)
     #expect(PushStatus(rawValue: "error") == .error)
     #expect(PushStatus(rawValue: "timeout") == .timeout)
-    #expect(PushStatus(rawValue: "invalid") == nil)
+    #expect(PushStatus(rawValue: "invalid").rawValue == "invalid")
   }
 
   @Test

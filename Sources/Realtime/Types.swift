@@ -238,18 +238,32 @@ public typealias RealtimeSubscription = ObservationToken
 /// - ``subscribing``
 /// - ``subscribed``
 /// - ``unsubscribing``
-public enum RealtimeChannelStatus: Sendable {
+public struct RealtimeChannelStatus: RawRepresentable, Hashable, Sendable,
+  ExpressibleByStringLiteral
+{
+  public let rawValue: String
+
+  /// Creates a ``RealtimeChannelStatus`` from a raw string value.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  /// Creates a ``RealtimeChannelStatus`` from a string literal.
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
   /// The channel has not yet joined or has left the Realtime topic.
-  case unsubscribed
+  public static let unsubscribed: RealtimeChannelStatus = "unsubscribed"
 
   /// The channel is in the process of joining the Realtime topic.
-  case subscribing
+  public static let subscribing: RealtimeChannelStatus = "subscribing"
 
   /// The channel has successfully joined the Realtime topic and is receiving events.
-  case subscribed
+  public static let subscribed: RealtimeChannelStatus = "subscribed"
 
   /// The channel is in the process of leaving the Realtime topic.
-  case unsubscribing
+  public static let unsubscribing: RealtimeChannelStatus = "unsubscribing"
 }
 
 /// Describes the connection state of a ``RealtimeClientV2``.
@@ -259,23 +273,31 @@ public enum RealtimeChannelStatus: Sendable {
 /// - ``disconnected``
 /// - ``connecting``
 /// - ``connected``
-public enum RealtimeClientStatus: Sendable, CustomStringConvertible {
+public struct RealtimeClientStatus: RawRepresentable, Hashable, Sendable,
+  ExpressibleByStringLiteral, CustomStringConvertible
+{
+  public let rawValue: String
+
+  /// Creates a ``RealtimeClientStatus`` from a raw string value.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  /// Creates a ``RealtimeClientStatus`` from a string literal.
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
   /// The WebSocket is not connected.
-  case disconnected
+  public static let disconnected: RealtimeClientStatus = "disconnected"
 
   /// A WebSocket connection attempt is in progress.
-  case connecting
+  public static let connecting: RealtimeClientStatus = "connecting"
 
   /// The WebSocket is connected and ready to exchange messages.
-  case connected
+  public static let connected: RealtimeClientStatus = "connected"
 
-  public var description: String {
-    switch self {
-    case .disconnected: "Disconnected"
-    case .connecting: "Connecting"
-    case .connected: "Connected"
-    }
-  }
+  public var description: String { rawValue }
 }
 
 /// Describes the result of a heartbeat cycle.
@@ -291,21 +313,33 @@ public enum RealtimeClientStatus: Sendable, CustomStringConvertible {
 /// - ``error``
 /// - ``timeout``
 /// - ``disconnected``
-public enum HeartbeatStatus: Sendable {
+public struct HeartbeatStatus: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+  public let rawValue: String
+
+  /// Creates a ``HeartbeatStatus`` from a raw string value.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  /// Creates a ``HeartbeatStatus`` from a string literal.
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
   /// Heartbeat was sent.
-  case sent
+  public static let sent: HeartbeatStatus = "sent"
 
   /// Heartbeat was received and acknowledged by the server.
-  case ok
+  public static let ok: HeartbeatStatus = "ok"
 
   /// Server responded with an error to the heartbeat.
-  case error
+  public static let error: HeartbeatStatus = "error"
 
   /// Heartbeat was not acknowledged within the configured timeout interval.
-  case timeout
+  public static let timeout: HeartbeatStatus = "timeout"
 
   /// Socket is disconnected; no heartbeat can be sent.
-  case disconnected
+  public static let disconnected: HeartbeatStatus = "disconnected"
 }
 
 extension HTTPField.Name {
@@ -322,13 +356,25 @@ extension HTTPField.Name {
 /// - ``info``
 /// - ``warn``
 /// - ``error``
-public enum LogLevel: String, Sendable {
+public struct LogLevel: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+  public let rawValue: String
+
+  /// Creates a ``LogLevel`` from a raw string value.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  /// Creates a ``LogLevel`` from a string literal.
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
   /// Informational messages.
-  case info
+  public static let info: LogLevel = "info"
 
   /// Warning messages.
-  case warn
+  public static let warn: LogLevel = "warn"
 
   /// Error messages only.
-  case error
+  public static let error: LogLevel = "error"
 }

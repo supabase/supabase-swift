@@ -130,6 +130,7 @@ struct AppLifecycleView: View {
     case .disconnected: "Disconnected"
     case .connecting: "Connecting"
     case .connected: "Connected"
+    default: status.rawValue
     }
   }
 
@@ -139,6 +140,7 @@ struct AppLifecycleView: View {
     case .subscribing: "Subscribing"
     case .subscribed: "Subscribed"
     case .unsubscribing: "Unsubscribing"
+    default: status.rawValue
     }
   }
 }

@@ -562,6 +562,9 @@ features:
     symbols:
       - AuthClient.authStateChanges
       - AuthClient.onAuthStateChange
+    supporting_symbols:
+      - AuthChangeEvent.init
+      - AuthChangeEvent.rawValue
   auth.session.auto_refresh:
     status: implemented
     symbols:
@@ -1418,10 +1421,16 @@ features:
     status: implemented
     symbols:
       - RealtimeClientV2.status
+    supporting_symbols:
+      - RealtimeClientStatus.init
+      - RealtimeClientStatus.rawValue
   realtime.client.listen_heartbeats:
     status: implemented
     symbols:
       - RealtimeClientV2.onHeartbeat
+    supporting_symbols:
+      - HeartbeatStatus.init
+      - HeartbeatStatus.rawValue
   realtime.client.set_auth_token:
     status: implemented
     symbols:
@@ -1435,6 +1444,9 @@ features:
     status: implemented
     symbols:
       - RealtimeChannelV2.subscribeWithError
+    supporting_symbols:
+      - RealtimeChannelStatus.init
+      - RealtimeChannelStatus.rawValue
   realtime.channel.unsubscribe:
     status: implemented
     symbols:
@@ -1443,6 +1455,9 @@ features:
     status: implemented
     symbols:
       - RealtimeChannelV2.broadcast
+    supporting_symbols:
+      - PushStatus.init
+      - PushStatus.rawValue
   realtime.channel.broadcast_http:
     status: implemented
     symbols:
@@ -1452,6 +1467,10 @@ features:
     status: implemented
     symbols:
       - BroadcastJoinConfig.replicationReady
+    supporting_symbols:
+      - RealtimeMessageV2.eventType
+      - RealtimeMessageV2.EventType.init
+      - RealtimeMessageV2.EventType.rawValue
   realtime.subscriptions.postgres_changes:
     status: implemented
     symbols:
@@ -1539,6 +1558,9 @@ features:
     note: "Set via the logger/logLevel parameters of RealtimeClientOptions.init; the backing stored properties are internal/package, not public."
     symbols:
       - RealtimeClientOptions.init
+    supporting_symbols:
+      - LogLevel.init
+      - LogLevel.rawValue
   realtime.configuration.binary_protocol:
     status: implemented
     symbols:
