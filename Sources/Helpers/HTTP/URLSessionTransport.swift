@@ -118,6 +118,15 @@ public struct URLSessionTransport: ClientTransport {
       if let body, case .known(let count) = body.length { body.onUploadProgress?(count) }
       return (try Self.makeHead(response), Self.makeBody(data))
     #else
+      return try await streamResponse(
+        from: makeTask(for: urlRequest, body: body), requestBody: body)
+    #endif
+  }
+
+  #if !canImport(FoundationNetworking)
+    /// Creates the task that sends `body`, telling the scheduler how many bytes to expect when
+    /// the length is known.
+    func makeTask(for urlRequest: URLRequest, body: HTTPBody?) -> URLSessionTask {
       let task: URLSessionTask
       switch body?.storage {
       case .file(let fileURL)?:
@@ -127,11 +136,12 @@ public struct URLSessionTransport: ClientTransport {
       case .data?, nil:
         task = session.dataTask(with: urlRequest)
       }
-      return try await streamResponse(from: task, requestBody: body)
-    #endif
-  }
+      if case .known(let count)? = body?.length {
+        task.countOfBytesClientExpectsToSend = count
+      }
+      return task
+    }
 
-  #if !canImport(FoundationNetworking)
     private func streamResponse(from task: URLSessionTask, requestBody: HTTPBody?) async throws
       -> (HTTPTypes.HTTPResponse, HTTPBody?)
     {

@@ -403,4 +403,31 @@ struct URLSessionTransportTests {
       _ = try await transport.send(HTTPRequest(method: .get, url: url), body: nil)
     }
   }
+
+  #if !canImport(FoundationNetworking)
+    @Test
+    func uploadTaskExpectsTheBodyLength() throws {
+      let transport = makeTransport()
+      let request = URLRequest(url: url)
+      let fileURL = FileManager.default.temporaryDirectory.appendingPathComponent(
+        UUID().uuidString)
+      try Data("file".utf8).write(to: fileURL)
+      defer { try? FileManager.default.removeItem(at: fileURL) }
+      let chunks = AsyncStream<ArraySlice<UInt8>> { $0.finish() }
+
+      let file = transport.makeTask(for: request, body: try HTTPBody(fileURL: fileURL))
+      let data = transport.makeTask(for: request, body: HTTPBody(Data("abc".utf8)))
+      let stream = transport.makeTask(
+        for: request, body: HTTPBody(chunks, length: .known(7), iterationBehavior: .single))
+      let unknown = transport.makeTask(
+        for: request, body: HTTPBody(chunks, length: .unknown, iterationBehavior: .single))
+      let none = transport.makeTask(for: request, body: nil)
+
+      #expect(file.countOfBytesClientExpectsToSend == 4)
+      #expect(data.countOfBytesClientExpectsToSend == 3)
+      #expect(stream.countOfBytesClientExpectsToSend == 7)
+      #expect(unknown.countOfBytesClientExpectsToSend == NSURLSessionTransferSizeUnknown)
+      #expect(none.countOfBytesClientExpectsToSend == NSURLSessionTransferSizeUnknown)
+    }
+  #endif
 }
