@@ -304,6 +304,7 @@ for target in package.targets {
     .enableUpcomingFeature("ExistentialAny"),
     .enableUpcomingFeature("ImmutableWeakCaptures"),
     .enableUpcomingFeature("InferIsolatedConformances"),
+    .enableUpcomingFeature("NonisolatedNonsendingByDefault"),
   ]
 
   // The compiler-plugin target must declare its macro types `public` to satisfy SwiftSyntax's

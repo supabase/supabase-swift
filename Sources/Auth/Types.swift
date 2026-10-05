@@ -1,30 +1,45 @@
 public import Foundation
 
 /// An event emitted when the authentication state of the current user changes.
-public enum AuthChangeEvent: String, Sendable {
+///
+/// New events can be added in a minor release, so a `switch` over this value needs a `default:`
+/// case.
+public struct AuthChangeEvent: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+  public let rawValue: String
+
+  /// Creates a ``AuthChangeEvent`` from a raw string value.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  /// Creates a ``AuthChangeEvent`` from a string literal.
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
   /// Emitted when an initial session is loaded from local storage on startup.
-  case initialSession = "INITIAL_SESSION"
+  public static let initialSession: AuthChangeEvent = "INITIAL_SESSION"
 
   /// Emitted when a password-recovery email link is clicked, making the session available.
-  case passwordRecovery = "PASSWORD_RECOVERY"
+  public static let passwordRecovery: AuthChangeEvent = "PASSWORD_RECOVERY"
 
   /// Emitted when a user signs in or a new session is established.
-  case signedIn = "SIGNED_IN"
+  public static let signedIn: AuthChangeEvent = "SIGNED_IN"
 
   /// Emitted when a user signs out.
-  case signedOut = "SIGNED_OUT"
+  public static let signedOut: AuthChangeEvent = "SIGNED_OUT"
 
   /// Emitted when the access token is refreshed.
-  case tokenRefreshed = "TOKEN_REFRESHED"
+  public static let tokenRefreshed: AuthChangeEvent = "TOKEN_REFRESHED"
 
   /// Emitted when the user's data is updated.
-  case userUpdated = "USER_UPDATED"
+  public static let userUpdated: AuthChangeEvent = "USER_UPDATED"
 
   /// Emitted when the user's account is deleted.
-  case userDeleted = "USER_DELETED"
+  public static let userDeleted: AuthChangeEvent = "USER_DELETED"
 
   /// Emitted when an MFA challenge is successfully verified.
-  case mfaChallengeVerified = "MFA_CHALLENGE_VERIFIED"
+  public static let mfaChallengeVerified: AuthChangeEvent = "MFA_CHALLENGE_VERIFIED"
 }
 
 struct UserCredentials: Encodable, Hashable, Sendable {

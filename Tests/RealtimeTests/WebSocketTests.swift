@@ -15,7 +15,7 @@ import Testing
 // Cert-pinning tests generate self-signed identities via `SecPKCS12Import`, which is
 // flaky when invoked concurrently (observed intermittent `errSecInternalComponent`/-26276
 // failures under Swift Testing's default parallel execution). Serialize the suite so these
-// keychain-touching tests never overlap, mirroring the `.serialized` precedent used
+// identity-importing tests never overlap, mirroring the `.serialized` precedent used
 // elsewhere for tests with process-global/shared-resource side effects.
 @Suite(.serialized)
 struct WebSocketTests {
@@ -270,8 +270,31 @@ struct WebSocketTests {
 
     #if os(macOS)
       @Test
+      func selfSignedIdentityDoesNotPersistCertificate() throws {
+        let (_, certificateData, cleanup) = try makeSelfSignedIdentity()
+        defer { cleanup() }
+        var keychain: SecKeychain?
+        try #require(SecKeychainCopyDefault(&keychain) == errSecSuccess)
+        let defaultKeychain = try #require(keychain)
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching(
+          [
+            kSecClass: kSecClassCertificate,
+            kSecMatchSearchList: [defaultKeychain],
+            kSecMatchLimit: kSecMatchLimitAll,
+            kSecReturnData: true,
+          ] as CFDictionary,
+          &result
+        )
+        #expect(status == errSecSuccess || status == errSecItemNotFound)
+        let certificates = result as? [Data] ?? []
+        #expect(!certificates.contains(certificateData))
+      }
+
+      @Test
       func certPinningAcceptsMatchingCertificate() async throws {
-        let (identity, certificateData) = try makeSelfSignedIdentity()
+        let (identity, certificateData, cleanup) = try makeSelfSignedIdentity()
+        defer { cleanup() }
         let server = try LoopbackTLSWebSocketServer(identity: identity)
         let port = try server.start()
         defer { server.stop() }
@@ -288,8 +311,10 @@ struct WebSocketTests {
 
       @Test
       func certPinningRejectsMismatchedCertificate() async throws {
-        let (identity, _) = try makeSelfSignedIdentity()
-        let (_, wrongCertificateData) = try makeSelfSignedIdentity()
+        let (identity, _, cleanup) = try makeSelfSignedIdentity()
+        defer { cleanup() }
+        let (_, wrongCertificateData, wrongCleanup) = try makeSelfSignedIdentity()
+        defer { wrongCleanup() }
         let server = try LoopbackTLSWebSocketServer(identity: identity)
         let port = try server.start()
         defer { server.stop() }
@@ -311,7 +336,8 @@ struct WebSocketTests {
 
       @Test
       func certPinningAcceptsMatchingCertificateWithTaskLevelDelegate() async throws {
-        let (identity, certificateData) = try makeSelfSignedIdentity()
+        let (identity, certificateData, cleanup) = try makeSelfSignedIdentity()
+        defer { cleanup() }
         let server = try LoopbackTLSWebSocketServer(identity: identity)
         let port = try server.start()
         defer { server.stop() }
@@ -333,8 +359,10 @@ struct WebSocketTests {
 
       @Test
       func certPinningRejectsMismatchedCertificateWithTaskLevelDelegate() async throws {
-        let (identity, _) = try makeSelfSignedIdentity()
-        let (_, wrongCertificateData) = try makeSelfSignedIdentity()
+        let (identity, _, cleanup) = try makeSelfSignedIdentity()
+        defer { cleanup() }
+        let (_, wrongCertificateData, wrongCleanup) = try makeSelfSignedIdentity()
+        defer { wrongCleanup() }
         let server = try LoopbackTLSWebSocketServer(identity: identity)
         let port = try server.start()
         defer { server.stop() }
@@ -632,10 +660,18 @@ private struct LoopbackError: Error {
     /// system `openssl` binary, then imports it into a `SecIdentity` for use with
     /// `NWProtocolTLS.Options`. macOS-only: relies on `Process` and `/usr/bin/openssl`,
     /// neither available on iOS/tvOS/watchOS simulator test destinations.
-    private func makeSelfSignedIdentity() throws -> (identity: SecIdentity, certificateData: Data) {
+    private func makeSelfSignedIdentity() throws -> (
+      identity: SecIdentity, certificateData: Data, cleanup: () -> Void
+    ) {
       let tmpDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
       try FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
-      defer { try? FileManager.default.removeItem(at: tmpDir) }
+      var temporaryKeychain: SecKeychain?
+      let cleanup = {
+        if let temporaryKeychain { SecKeychainDelete(temporaryKeychain) }
+        try? FileManager.default.removeItem(at: tmpDir)
+      }
+      var succeeded = false
+      defer { if !succeeded { cleanup() } }
 
       let keyURL = tmpDir.appendingPathComponent("key.pem")
       let certURL = tmpDir.appendingPathComponent("cert.pem")
@@ -663,17 +699,27 @@ private struct LoopbackError: Error {
       ])
 
       let p12Data = try Data(contentsOf: p12URL)
+      var options: [String: Any] = [kSecImportExportPassphrase as String: password]
+      if #available(macOS 15, *) {
+        options[kSecImportToMemoryOnly as String] = true
+      } else {
+        // Older macOS versions need an isolated keychain, deleted after the TLS test.
+        let path = tmpDir.appendingPathComponent("test.keychain").path
+        let status = password.withCString {
+          SecKeychainCreate(path, UInt32(password.utf8.count), $0, false, nil, &temporaryKeychain)
+        }
+        guard status == errSecSuccess, let temporaryKeychain else {
+          throw LoopbackError(message: "SecKeychainCreate failed: \(status)")
+        }
+        options[kSecImportExportKeychain as String] = temporaryKeychain
+      }
       var importResult: CFArray?
-      let status = SecPKCS12Import(
-        p12Data as CFData,
-        [kSecImportExportPassphrase as String: password] as CFDictionary,
-        &importResult
-      )
+      let status = SecPKCS12Import(p12Data as CFData, options as CFDictionary, &importResult)
       guard status == errSecSuccess,
         let items = importResult as? [[String: Any]],
         let identityRef = items.first?[kSecImportItemIdentity as String]
       else {
-        throw LoopbackError(message: "SecPKCS12Import failed")
+        throw LoopbackError(message: "SecPKCS12Import failed: \(status)")
       }
       let identity = identityRef as! SecIdentity
 
@@ -683,7 +729,8 @@ private struct LoopbackError: Error {
         throw LoopbackError(message: "failed to extract certificate from identity")
       }
 
-      return (identity, SecCertificateCopyData(certificate) as Data)
+      succeeded = true
+      return (identity, SecCertificateCopyData(certificate) as Data, cleanup)
     }
 
     private final class LoopbackTLSWebSocketServer: @unchecked Sendable {

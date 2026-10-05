@@ -114,7 +114,7 @@ struct AuthAdminUserSequenceTests {
         .joined(separator: "&") ?? ""
     }
 
-    expectNoDifference(pageParams, ["page=&per_page=1", "page=2&per_page=1", "page=3&per_page=1"])
+    expectNoDifference(pageParams, ["per_page=1", "page=2&per_page=1", "page=3&per_page=1"])
   }
 
   @Test
