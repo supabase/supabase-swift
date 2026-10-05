@@ -10,7 +10,7 @@ import Foundation
 import Supabase
 
 extension SupabaseClient {
-  static let thirdPartyAuthWithClerk = SupabaseClient(
+  nonisolated static let thirdPartyAuthWithClerk = SupabaseClient(
     supabaseURL: URL(string: SupabaseConfig["SUPABASE_URL"]!)!,
     supabaseKey: (SupabaseConfig["SUPABASE_PUBLISHABLE_KEY"] ?? SupabaseConfig["SUPABASE_ANON_KEY"])!,
     options: SupabaseClientOptions(
