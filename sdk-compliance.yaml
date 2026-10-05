@@ -1345,62 +1345,62 @@ features:
     # the platform's `sb-error-code`, and the response header names) all belong to
     # the one invoke capability.
     supporting_symbols:
-      - - FunctionBody
-      - - FunctionBody.contentType
-      - - FunctionBody.data
-      - - FunctionBody.httpBody
-      - - FunctionBody.json
-      - - FunctionBody.stream
-      - - FunctionBody.text
-      - - FunctionInvokeOptions.headers
-      - - FunctionInvokeOptions.query
-      - - FunctionResponse
-      - - FunctionResponse.body
-      - - FunctionResponse.contentType
-      - - FunctionResponse.decode
-      - - FunctionResponse.description
-      - - FunctionResponse.executionID
-      - - FunctionResponse.headers
-      - - FunctionResponse.region
-      - - FunctionResponse.requestID
-      - - FunctionResponse.status
-      - - FunctionResponse.text
-      - - FunctionsClient.Configuration
-      - - FunctionsClient.Configuration.decoder
-      - - FunctionsClient.Configuration.headers
-      - - FunctionsClient.Configuration.http
-      - - FunctionsClient.Configuration.init
-      - - FunctionsClient.Configuration.logger
-      - - FunctionsClient.Configuration.url
-      - - FunctionsClient.configuration
-      - - FunctionsError.Code
-      - - FunctionsError.Code.bootError
-      - - FunctionsError.Code.edgeFunctionError
-      - - FunctionsError.Code.edgeRuntimeError
-      - - FunctionsError.Code.edgeRuntimeServiceDegraded
-      - - FunctionsError.Code.idleTimeout
-      - - FunctionsError.Code.init
-      - - FunctionsError.Code.invalidResponseStatusCode
-      - - FunctionsError.Code.invalidURL
-      - - FunctionsError.Code.notFound
-      - - FunctionsError.Code.notFoundFunctionBlob
-      - - FunctionsError.Code.rateLimitExceeded
-      - - FunctionsError.Code.rawValue
-      - - FunctionsError.Code.unauthorizedAsymmetricJWT
-      - - FunctionsError.Code.unauthorizedInvalidJWTFormat
-      - - FunctionsError.Code.unauthorizedLegacyJWT
-      - - FunctionsError.Code.unauthorizedNoAuthHeader
-      - - FunctionsError.Code.unauthorizedUnsupportedTokenAlgorithm
-      - - FunctionsError.Code.workerError
-      - - FunctionsError.Code.workerResourceLimit
-      - - FunctionsError.Kind.invalidRequest
-      - - FunctionsError.code
-      - - FunctionsError.isPlatformError
-      - - HTTPField.Name.sbErrorCode
-      - - HTTPField.Name.xDenoExecutionID
-      - - HTTPField.Name.xRegion
-      - - HTTPField.Name.xRelayError
-      - - HTTPField.Name.xSbEdgeRegion
+      - FunctionsClient.Configuration
+      - FunctionsClient.Configuration.decoder
+      - FunctionsClient.Configuration.headers
+      - FunctionsClient.Configuration.http
+      - FunctionsClient.Configuration.init
+      - FunctionsClient.Configuration.logger
+      - FunctionsClient.Configuration.url
+      - FunctionsClient.configuration
+      - FunctionInvokeOptions.headers
+      - FunctionInvokeOptions.query
+      - FunctionBody
+      - FunctionBody.contentType
+      - FunctionBody.data
+      - FunctionBody.httpBody
+      - FunctionBody.json
+      - FunctionBody.stream
+      - FunctionBody.text
+      - FunctionResponse
+      - FunctionResponse.body
+      - FunctionResponse.contentType
+      - FunctionResponse.decode
+      - FunctionResponse.description
+      - FunctionResponse.executionID
+      - FunctionResponse.headers
+      - FunctionResponse.region
+      - FunctionResponse.requestID
+      - FunctionResponse.status
+      - FunctionResponse.text
+      - FunctionsError.Code
+      - FunctionsError.Code.bootError
+      - FunctionsError.Code.edgeFunctionError
+      - FunctionsError.Code.edgeRuntimeError
+      - FunctionsError.Code.edgeRuntimeServiceDegraded
+      - FunctionsError.Code.idleTimeout
+      - FunctionsError.Code.init
+      - FunctionsError.Code.invalidResponseStatusCode
+      - FunctionsError.Code.invalidURL
+      - FunctionsError.Code.notFound
+      - FunctionsError.Code.notFoundFunctionBlob
+      - FunctionsError.Code.rateLimitExceeded
+      - FunctionsError.Code.rawValue
+      - FunctionsError.Code.unauthorizedAsymmetricJWT
+      - FunctionsError.Code.unauthorizedInvalidJWTFormat
+      - FunctionsError.Code.unauthorizedLegacyJWT
+      - FunctionsError.Code.unauthorizedNoAuthHeader
+      - FunctionsError.Code.unauthorizedUnsupportedTokenAlgorithm
+      - FunctionsError.Code.workerError
+      - FunctionsError.Code.workerResourceLimit
+      - FunctionsError.Kind.invalidRequest
+      - FunctionsError.code
+      - FunctionsError.isPlatformError
+      - HTTPField.Name.sbErrorCode
+      - HTTPField.Name.xDenoExecutionID
+      - HTTPField.Name.xRegion
+      - HTTPField.Name.xRelayError
+      - HTTPField.Name.xSbEdgeRegion
   # No runtime setter exists; the token is supplied as an `accessToken`
   # closure at construction time and re-invoked on every request, so
   # "updating" the token means having the closure read from a mutable
