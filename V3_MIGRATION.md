@@ -2263,10 +2263,12 @@ error is in `underlyingError`. `CancellationError` is never wrapped and still pr
 itself.
 
 Cancelling a request is the case worth spelling out. `URLSession`'s async APIs do not throw
-`CancellationError` when the enclosing `Task` is cancelled — they throw `URLError(.cancelled)`,
-which is a `URLError` like any other and so is wrapped as `.transport`. A `catch is
-CancellationError` does not match a cancelled request; check the code on `underlyingError`
-instead:
+`CancellationError` when the enclosing `Task` is cancelled — they throw `URLError(.cancelled)`.
+Auth, PostgREST and Storage turn that back into `CancellationError`, so `catch is
+CancellationError` keeps working for them. A `URLError(.cancelled)` that no `Task` cancellation
+caused (a middleware cancelled the request) is still wrapped as `.transport`. Functions and
+Realtime wrap every `URLError(.cancelled)` as `.transport`, so for those check the code on
+`underlyingError` instead:
 
 ```swift
 // Before
@@ -2274,15 +2276,20 @@ instead:
   // the user cancelled — no error banner
 }
 
-// After
+// After (Functions and Realtime)
 } catch let error as any SupabaseError
   where (error.underlyingError as? URLError)?.code == .cancelled {
   // the user cancelled — no error banner
 }
 ```
 
-This also compiles silently — the old `catch` block simply stops being reached. Search for `is
-CancellationError` near Supabase calls. A cancelled request is never retried.
+This also compiles silently — for Functions and Realtime the old `catch` block simply stops
+being reached. Search for `is CancellationError` near those calls. A cancelled request is never
+retried.
+
+In v2, a cancelled Storage request threw `URLError(.cancelled)`. It now throws
+`CancellationError`, so a `catch let error as URLError where error.code == .cancelled` around a
+Storage call stops matching; use `catch is CancellationError` instead.
 
 Without this, one `catch let error as any SupabaseError` missed exactly the failures a user is
 most likely to hit in the field: no network, and a schema drift between the app's model and the

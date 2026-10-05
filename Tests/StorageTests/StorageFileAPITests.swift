@@ -124,12 +124,10 @@ extension StorageMockerTests {
       }
     }
 
-    /// `URLSession`'s async APIs report a cancelled `Task` as `URLError(.cancelled)`, not
-    /// `CancellationError`, so cancelling lands here rather than in `cancellationIsNotWrapped`
-    /// above. It is wrapped like any other `URLError`: callers check the code on
-    /// `underlyingError`, not `error is CancellationError` (SDK-1849).
+    /// A `URLError(.cancelled)` that is not caused by cancelling the caller's `Task` (a
+    /// middleware or a custom transport cancelled the request) is a transport failure.
     @Test
-    func cancelledURLErrorIsWrapped() async {
+    func cancelledURLErrorWithoutTaskCancellationIsWrapped() async {
       let storage = makeFailingSUT { throw URLError(.cancelled) }
 
       do {
@@ -143,13 +141,10 @@ extension StorageMockerTests {
       }
     }
 
-    /// End-to-end cover for what `cancelledURLErrorIsWrapped()` above stubs: cancelling the
-    /// enclosing `Task` mid-flight makes the real ``URLSessionTransport`` fail with
-    /// `URLError(.cancelled)`, which Storage then wraps as `.transport`. Without this, nothing
-    /// checks that cancellation actually reaches a caller the way `V3_MIGRATION.md` says it does
-    /// — `cancelledURLErrorIsWrapped()` assumes the code rather than producing it.
+    /// Cancelling the enclosing `Task` mid-flight makes the real ``URLSessionTransport`` fail
+    /// with `URLError(.cancelled)`; Storage reports it as `CancellationError` (SDK-2008).
     @Test
-    func cancellingTheTaskSurfacesAWrappedCancelledURLError() async {
+    func cancellingTheTaskThrowsCancellationError() async {
       let storage = makeSUT()
       let (requestStarted, onRequestStarted) = AsyncStream<Void>.makeStream()
 
@@ -172,9 +167,7 @@ extension StorageMockerTests {
       do {
         _ = try await task.value
         Issue.record("Expected failure")
-      } catch let error as StorageError {
-        #expect(error.kind == .transport)
-        #expect((error.underlyingError as? URLError)?.code == .cancelled)
+      } catch is CancellationError {
       } catch {
         Issue.record("Unexpected error \(error)")
       }
