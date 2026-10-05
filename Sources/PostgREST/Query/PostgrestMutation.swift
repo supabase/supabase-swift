@@ -131,8 +131,9 @@ extension PostgrestSource where R: PostgrestWritableRelation {
   ///
   /// The rows do not have to encode the same columns. A draft omits a nil optional rather than
   /// sending `null`, so a batch built by `map` routinely has ragged shapes; the request names the
-  /// union of the columns explicitly, which is what stops the database from taking the column list
-  /// from the first row alone and dropping what the later ones added.
+  /// union of the columns explicitly, which is what makes a ragged batch representable at all.
+  /// Without it, PostgREST requires every row to carry an identical key set and rejects the whole
+  /// request (`PGRST102`, 400) rather than writing a partial result.
   ///
   /// > Note: An empty collection is not an error. It sends a request that writes nothing, and
   /// > ``PostgrestMutation/returning()`` on it decodes an empty array. A batch computed from a
@@ -388,8 +389,9 @@ extension PostgrestSource where R: PostgrestWritableRelation {
 
 /// Names the union of the columns across every row of a bulk write.
 ///
-/// Without it PostgREST takes the column list from the first row, and drops a column that only a
-/// later row sets. A single object, or an empty batch, needs no list.
+/// Without it PostgREST requires every row to carry an identical key set and rejects the whole
+/// request (`PGRST102`, 400) rather than silently dropping any columns. A single object, or an
+/// empty batch, needs no list.
 private func columnsQueryItem(forBody body: Data) throws -> URLQueryItem? {
   guard let rows = try JSONSerialization.jsonObject(with: body) as? [[String: Any]] else {
     return nil

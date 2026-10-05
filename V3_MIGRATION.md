@@ -3244,6 +3244,7 @@ The string builder's `maybeSingle()` instead asks for a single object and maps P
 `explain(…)` return a `PostgrestRawQuery`, whose `execute()` returns the body as a `String`. That
 type has no `stripNulls()`, so `.csv().stripNulls()` does not compile, where the string builder
 throws at `execute()`.
+
 ## `update`/`upsert`/`delete` no longer default to returning rows
 
 `PostgrestRequestBuilder.update(_:returning:count:encoder:)`,
