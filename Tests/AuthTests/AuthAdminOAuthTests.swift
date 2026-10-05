@@ -92,7 +92,7 @@ extension AuthMockerTests {
         	--header "X-Client-Info: auth-swift/0.0.0" \
         	--header "X-Supabase-Api-Version: 2024-01-01" \
         	--header "apikey: supabase.publishable.key" \
-        	"http://localhost:54321/auth/v1/admin/oauth/clients?page=&per_page="
+        	"http://localhost:54321/auth/v1/admin/oauth/clients"
         """#
       }
       .register()

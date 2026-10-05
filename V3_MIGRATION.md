@@ -1999,7 +1999,8 @@ struct AppVersionMiddleware: ClientMiddleware {
   func intercept(
     _ request: HTTPRequest,
     body: HTTPBody?,
-    next: @Sendable (HTTPRequest, HTTPBody?) async throws -> (HTTPResponse, HTTPBody?)
+    next: nonisolated(nonsending) @Sendable (HTTPRequest, HTTPBody?) async throws
+      -> (HTTPResponse, HTTPBody?)
   ) async throws -> (HTTPResponse, HTTPBody?) {
     var request = request
     request.headerFields[Self.headerName] = "2.1.0"
@@ -2643,7 +2644,8 @@ struct RequestCounter: ClientMiddleware {
   let count: LockIsolated<Int>
   func intercept(
     _ request: HTTPRequest, body: HTTPBody?,
-    next: @Sendable (HTTPRequest, HTTPBody?) async throws -> (HTTPResponse, HTTPBody?)
+    next: nonisolated(nonsending) @Sendable (HTTPRequest, HTTPBody?) async throws
+      -> (HTTPResponse, HTTPBody?)
   ) async throws -> (HTTPResponse, HTTPBody?) {
     count.withValue { $0 += 1 }
     return try await next(request, body)
@@ -3105,6 +3107,66 @@ ID as a `String`, or builds `MFAVerifyParams` from a string, gets a compile erro
 (`PasskeyRegistrationOptions.challengeId`, `PasskeyAuthenticationOptions.challengeId`) stay
 `String`, because the passkey endpoints type `challenge_id` as a string.
 
+## `PostgrestTransformBuilder.order(_:ascending:nullsFirst:)` no longer defaults to `NULLS LAST`
+
+`nullsFirst` is now `Bool?`, defaulting to `nil` instead of `false`. When it is `nil`, the request
+sends no null placement at all, instead of always appending `.nullslast`.
+
+`nullsFirst: false` always rendered `.nullslast`, even for a descending sort, where Postgres's own
+default is `NULLS FIRST`. So `.order("due_at", ascending: false)` silently reversed the database's
+null placement instead of leaving it alone — and diverged from supabase-js, which only sends a
+placement when the caller asks for one.
+
+```swift
+// Before — sent order=due_at.desc.nullslast, forcing NULLs to the end
+try await client.from("todos").select().order("due_at", ascending: false).execute()
+
+// After — sends order=due_at.desc, so Postgres applies NULLS FIRST on a descending sort
+try await client.from("todos").select().order("due_at", ascending: false).execute()
+```
+
+This does not change compilation — `nullsFirst: Bool? = nil` still accepts a literal `true` or
+`false` at any call site. It is a silent behavior change: a query that relied on the implicit
+`NULLS LAST` on a descending sort over a nullable column now returns rows in a different order.
+Search your codebase for `.order(` calls that omit `nullsFirst` on a descending sort, and pass
+`nullsFirst: false` explicitly to keep the old placement.
+
+The typed `order { }` API added alongside this (SDK-1624) already worked this way and is
+unaffected.
+
+## `insert` and `upsert` return `PostgrestTransformBuilder`; filters no longer compile after them
+
+`PostgrestQueryBuilder.insert(_:returning:count:defaultToNull:encoder:)` and
+`upsert(_:onConflict:returning:count:ignoreDuplicates:defaultToNull:encoder:)` return
+`PostgrestTransformBuilder` instead of `PostgrestFilterBuilder`. `update` and `delete` still return
+`PostgrestFilterBuilder`.
+
+An insert has no existing rows to match, and PostgREST ignores filters on a `POST`. A filter
+chained after `insert` or `upsert` compiled and ran, but did nothing. This matches the same fix in
+supabase-flutter.
+
+```swift
+// Before: compiles, and the server ignores the eq
+try await client
+  .from("todos")
+  .insert(["task": "Buy milk"])
+  .eq("id", value: 1)
+  .execute()
+
+// After: remove the filter
+try await client
+  .from("todos")
+  .insert(["task": "Buy milk"])
+  .execute()
+```
+
+This is a compile error at every filter (`eq`, `match`, `or`, `filter`, ...) chained after
+`insert` or `upsert`. Delete the filter: it never had an effect. Every transform still compiles
+after `insert` and `upsert`, so `select`, `order`, `limit`, `range`, `single`, `maybeSingle`, `csv`
+and the others are unchanged. Code that stores the result in a variable or parameter typed
+`PostgrestFilterBuilder` also gets a compile error. Change the type to `PostgrestTransformBuilder`,
+or to `any PostgrestExecutableBuilder` if the same variable also holds an `update` or `delete`.
+
 ## The typed PostgREST wrappers drop the `Typed` prefix
 
 The types behind `client.from(Todo.self)` are renamed. Nothing else about them changes in this step.
@@ -3182,3 +3244,112 @@ The string builder's `maybeSingle()` instead asks for a single object and maps P
 `explain(…)` return a `PostgrestRawQuery`, whose `execute()` returns the body as a `String`. That
 type has no `stripNulls()`, so `.csv().stripNulls()` does not compile, where the string builder
 throws at `execute()`.
+
+## `update`/`upsert`/`delete` no longer default to returning rows
+
+`PostgrestRequestBuilder.update(_:returning:count:encoder:)`,
+`upsert(_:onConflict:returning:count:ignoreDuplicates:defaultToNull:encoder:)`, and
+`delete(returning:count:)` now default `returning` to `nil` and omit `Prefer: return=` entirely
+when the caller doesn't pass it, matching `insert(_:returning:count:defaultToNull:encoder:)` and
+PostgREST's own default of `return=minimal`.
+
+Previously these three defaulted `returning` to `.representation` and always sent
+`Prefer: return=representation`, so a bare `update`/`upsert`/`delete` call — one that never chained
+`.select()` — silently paid for a response body it discarded. `insert` never had this problem, and
+js and Flutter omit the header by default on all four methods, so Swift's defaults were
+inconsistent with both itself and the rest of the SDK family.
+
+```swift
+// Before — rows came back even without .select()
+let updated: [Todo] = try await client
+  .from("todos")
+  .update(["done": true])
+  .eq("id", value: 1)
+  .execute()
+  .value
+
+// After — chain .select() to get rows back, as insert already required
+let updated: [Todo] = try await client
+  .from("todos")
+  .update(["done": true])
+  .eq("id", value: 1)
+  .select()
+  .execute()
+  .value
+```
+
+This does not break the build — `returning` was already optional-looking at call sites that never
+passed it — but it is a silent behavior change: a bare `update`/`upsert`/`delete` call that decodes
+`.value` without chaining `.select()` now decodes an empty response instead of the modified rows.
+Search your codebase for `.update(`, `.upsert(`, and `.delete(` calls that read `.value` or
+`.execute().value` without a `.select()` in the chain, and either add `.select()` or pass
+`returning: .representation` explicitly to keep the old behavior. The typed query API
+(`from(_:)`) already defaulted to `.minimal` and is unaffected.
+
+## SDK `async` functions run on the caller's executor (`NonisolatedNonsendingByDefault`)
+
+Every SDK target now builds with Swift 6.2's `NonisolatedNonsendingByDefault` (SE-0461). A
+nonisolated `async` method such as `PostgrestTypedQuery.execute()`,
+`FunctionsClient.invoke(_:options:decoder:)` or `AuthClient.session` now runs on the executor of
+its caller instead of hopping to the global concurrent executor. Called from `@MainActor` code,
+it stays on the main actor between suspension points.
+
+The SDK's own build flags decide how its `async` functions run; your app's flags do not reach SDK
+code. Moving a function to caller isolation changes its ABI, so the v3 major is the one moment to
+do it. It also makes decoding into your own `Decodable` types sound when those conformances are
+`@MainActor`-isolated, which is the default in an app that turns on
+`defaultIsolation(MainActor.self)`.
+
+### `ClientMiddleware.intercept(_:body:next:)` spells `next` as `nonisolated(nonsending)`
+
+The `next` parameter is now
+`nonisolated(nonsending) @Sendable (HTTPRequest, HTTPBody?) async throws -> (HTTPResponse, HTTPBody?)`.
+A middleware in a module that does **not** enable `NonisolatedNonsendingByDefault` (the default
+for Swift packages) no longer conforms until it spells the same type:
+
+```swift
+// Before
+func intercept(
+  _ request: HTTPRequest, body: HTTPBody?,
+  next: @Sendable (HTTPRequest, HTTPBody?) async throws -> (HTTPResponse, HTTPBody?)
+) async throws -> (HTTPResponse, HTTPBody?)
+
+// After
+func intercept(
+  _ request: HTTPRequest, body: HTTPBody?,
+  next: nonisolated(nonsending) @Sendable (HTTPRequest, HTTPBody?) async throws
+    -> (HTTPResponse, HTTPBody?)
+) async throws -> (HTTPResponse, HTTPBody?)
+```
+
+This is a compile error (`type '...' does not conform to protocol 'ClientMiddleware'`). In a
+module that already enables the flag (Xcode 26's "Approachable Concurrency" turns it on), the old
+spelling means the same type and keeps compiling. `ClientTransport` conformances need no change.
+
+### Work you `await` from the main actor now stays there
+
+This part is silent: it compiles unchanged. Decoding a large PostgREST, Functions or Storage
+response into your types now happens on the actor that awaited the call. If you fetch large
+result sets from `@MainActor` code and see the UI stall, move the call off the main actor:
+
+```swift
+// Before: decoding ran off the main actor implicitly
+@MainActor func load() async throws {
+  rows = try await client.from("todos").select().execute().value
+}
+
+// After: opt out explicitly where it matters
+@concurrent func fetchTodos() async throws -> [Todo] {
+  try await client.from("todos").select().execute().value
+}
+
+@MainActor func load() async throws {
+  rows = try await fetchTodos()
+}
+```
+
+`@concurrent` needs `Todo`'s `Decodable` conformance to be nonisolated. Search for `await` calls
+into the SDK from `@MainActor` code that return large payloads.
+
+`HTTPBody`'s iterator stays `@concurrent`, so reading a response body chunk by chunk still leaves
+the caller's actor. Realtime decodes WebSocket frames in its own task, as before.
