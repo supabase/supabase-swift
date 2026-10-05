@@ -66,6 +66,27 @@ extension StorageMockerTests {
       )
     }
 
+    private func makeBodyCapturingSUT(body captured: LockIsolated<Data?>, response: String)
+      -> SupabaseStorageClient
+    {
+      SupabaseStorageClient(
+        configuration: StorageClientConfiguration(
+          url: url,
+          headers: [:],
+          http: .init(
+            transport: ClosureTransport { _, body in
+              if let body {
+                let data = try await Data(collecting: body, upTo: .max)
+                captured.setValue(data)
+              }
+              return (
+                HTTPResponse(status: .ok, headerFields: [.contentType: "application/json"]),
+                HTTPBody(Data(response.utf8))
+              )
+            }))
+      )
+    }
+
     private func makeFailingSUT(_ failure: @escaping @Sendable () throws -> Never)
       -> SupabaseStorageClient
     {
@@ -1260,6 +1281,82 @@ extension StorageMockerTests {
         .download(path: "/file.txt")
 
       #expect(data == Data("hello world".utf8))
+    }
+
+    @Test
+    func moveCleansPaths() async throws {
+      struct Sent: Decodable {
+        let sourceKey: String
+        let destinationKey: String
+      }
+      let body = LockIsolated(Data?.none)
+      let storage = makeBodyCapturingSUT(body: body, response: "{}")
+
+      try await storage.from("bucket").move(from: "/folder/a.png", to: "folder//b.png/")
+
+      let sent = try JSONDecoder().decode(Sent.self, from: #require(body.value))
+      #expect(sent.sourceKey == "folder/a.png")
+      #expect(sent.destinationKey == "folder/b.png")
+    }
+
+    @Test
+    func copyCleansPaths() async throws {
+      struct Sent: Decodable {
+        let sourceKey: String
+        let destinationKey: String
+      }
+      let body = LockIsolated(Data?.none)
+      let storage = makeBodyCapturingSUT(
+        body: body, response: #"{"Key":"bucket/folder/b.png"}"#)
+
+      try await storage.from("bucket").copy(from: "/folder/a.png", to: "folder//b.png/")
+
+      let sent = try JSONDecoder().decode(Sent.self, from: #require(body.value))
+      #expect(sent.sourceKey == "folder/a.png")
+      #expect(sent.destinationKey == "folder/b.png")
+    }
+
+    @Test
+    func removeCleansPaths() async throws {
+      struct Sent: Decodable {
+        let prefixes: [String]
+      }
+      let body = LockIsolated(Data?.none)
+      let storage = makeBodyCapturingSUT(body: body, response: "[]")
+
+      try await storage.from("bucket").remove(paths: ["/folder//a.png", "b.png/"])
+
+      let sent = try JSONDecoder().decode(Sent.self, from: #require(body.value))
+      #expect(sent.prefixes == ["folder/a.png", "b.png"])
+    }
+
+    @Test
+    func createSignedURLsCleansPaths() async throws {
+      struct Sent: Decodable {
+        let paths: [String]
+      }
+      let body = LockIsolated(Data?.none)
+      let storage = makeBodyCapturingSUT(body: body, response: "[]")
+
+      _ = try await storage.from("bucket")
+        .createSignedURLs(paths: ["/folder//a.png", "b.png/"], expiresIn: 60)
+
+      let sent = try JSONDecoder().decode(Sent.self, from: #require(body.value))
+      #expect(sent.paths == ["folder/a.png", "b.png"])
+    }
+
+    @Test
+    func listCleansPath() async throws {
+      struct Sent: Decodable {
+        let prefix: String
+      }
+      let body = LockIsolated(Data?.none)
+      let storage = makeBodyCapturingSUT(body: body, response: "[]")
+
+      _ = try await storage.from("bucket").list(path: "/folder//nested/")
+
+      let sent = try JSONDecoder().decode(Sent.self, from: #require(body.value))
+      #expect(sent.prefix == "folder/nested")
     }
 
     @Test
