@@ -5,8 +5,8 @@
 //  Created by Guilherme Souza on 14/09/26.
 //
 
-public import Foundation
-public import HTTPTypes
+package import Foundation
+package import HTTPTypes
 
 /// How a client retries a request that failed transiently.
 ///
@@ -18,31 +18,28 @@ public import HTTPTypes
 /// retry — unless the response carried a `Retry-After` header, which is honoured up to
 /// ``maxDelay``.
 ///
-/// ```swift
-/// var policy = RetryPolicy.default
-/// policy.maxAttempts = 5
-/// let configuration = StorageClientConfiguration(url: url, headers: headers, retry: policy)
-/// ```
-public struct RetryPolicy: Sendable, Hashable {
+/// `package` on purpose: which requests are safe to replay is the SDK's decision, so callers
+/// only switch retries on or off (`retryEnabled`, `db.retry`, `storage.retryEnabled`).
+package struct RetryPolicy: Sendable, Hashable {
   /// Total attempts, including the first. `1` disables retries.
-  public var maxAttempts: Int
+  package var maxAttempts: Int
 
   /// The cap for the first retry's wait; doubles on every further retry.
-  public var baseDelay: Duration
+  package var baseDelay: Duration
 
   /// The longest wait between two attempts, jittered or `Retry-After`.
-  public var maxDelay: Duration
+  package var maxDelay: Duration
 
   /// Response statuses worth retrying. Includes Cloudflare's 520–524 and 530, which front
   /// every Supabase project and report transient edge failures.
-  public var retryableStatuses: Set<Int>
+  package var retryableStatuses: Set<Int>
 
   /// Methods safe to replay. Add a method here only when every request that uses it is
   /// idempotent on the server.
-  public var retryableMethods: Set<HTTPTypes.HTTPRequest.Method>
+  package var retryableMethods: Set<HTTPTypes.HTTPRequest.Method>
 
   /// Creates a policy. Every parameter defaults to the ``default`` policy's value.
-  public init(
+  package init(
     maxAttempts: Int = 3,
     baseDelay: Duration = .milliseconds(500),
     maxDelay: Duration = .seconds(20),
@@ -57,10 +54,10 @@ public struct RetryPolicy: Sendable, Hashable {
   }
 
   /// Three attempts, 500 ms base, 20 s cap, GET/HEAD/OPTIONS only.
-  public static let `default` = RetryPolicy()
+  package static let `default` = RetryPolicy()
 
   /// A single attempt: the first failure is the final answer.
-  public static let disabled = RetryPolicy(maxAttempts: 1)
+  package static let disabled = RetryPolicy(maxAttempts: 1)
 }
 
 extension RetryPolicy {

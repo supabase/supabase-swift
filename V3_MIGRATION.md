@@ -2638,10 +2638,11 @@ Functions is unchanged: it does not retry. Storage now retries its reads; see be
   502, 503, 504 or Cloudflare 520–524/530.
 - **Both** report a cancelled task as `CancellationError`, even when the transport reported it
   as `URLError.cancelled`.
-- **Storage** now retries reads: GET, HEAD and `list()`, with `RetryPolicy.default` (3 attempts,
-  500 ms base, 20 s cap). Uploads, moves, copies, removals and bucket changes are never
-  retried. Pass `retry: nil` to `StorageClientConfiguration`, or `storage: .init(retry: false)`
-  to `SupabaseClientOptions`, to keep the old single-attempt behavior.
+- **Storage** now retries reads: GET, HEAD and `list()`, up to 3 attempts with the same
+  jittered wait as Auth (500 ms base, 20 s cap). Uploads, moves, copies, removals and bucket
+  changes are never retried. Pass `retryEnabled: false` to `StorageClientConfiguration`, or
+  `storage: .init(retryEnabled: false)` to `SupabaseClientOptions`, to keep the old single-attempt
+  behavior.
 - **Realtime** reconnects carry the same equal jitter, capped at 30 s: the first attempt waits
   between half of `reconnectDelay` and `reconnectDelay`, never longer than before.
 

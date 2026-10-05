@@ -33,24 +33,22 @@ struct StorageApiTests {
   #endif
 
   /// Answers every request with a 503 and records the path of each attempt.
-  private func makeSUT(retry: RetryPolicy? = .default) -> (
+  private func makeSUT(retryEnabled: Bool = true) -> (
     SupabaseStorageClient, LockIsolated<[String]>
   ) {
     let attempts = LockIsolated<[String]>([])
-    let storage = SupabaseStorageClient(
-      configuration: StorageClientConfiguration(
-        url: URL(string: "http://localhost:54321/storage/v1")!,
-        headers: [:],
-        http: .init(
-          transport: ClosureTransport { request, _ in
-            attempts.withValue { $0.append(request.path ?? "") }
-            return (HTTPResponse(status: .serviceUnavailable), nil)
-          }),
-        retry: retry,
-        clock: ImmediateClock()
-      )
+    var configuration = StorageClientConfiguration(
+      url: URL(string: "http://localhost:54321/storage/v1")!,
+      headers: [:],
+      http: .init(
+        transport: ClosureTransport { request, _ in
+          attempts.withValue { $0.append(request.path ?? "") }
+          return (HTTPResponse(status: .serviceUnavailable), nil)
+        }),
+      retryEnabled: retryEnabled
     )
-    return (storage, attempts)
+    configuration.clock = ImmediateClock()
+    return (SupabaseStorageClient(configuration: configuration), attempts)
   }
 
   @Test
@@ -77,10 +75,7 @@ struct StorageApiTests {
 
   @Test
   func uploadIsNeverRetried() async {
-    // Even a policy that lists POST and PUT as replayable must not replay an upload.
-    var policy = RetryPolicy.default
-    policy.retryableMethods.formUnion([.post, .put])
-    let (storage, attempts) = makeSUT(retry: policy)
+    let (storage, attempts) = makeSUT()
 
     await #expect(throws: StorageError.self) {
       _ = try await storage.from("bucket").upload(path: "file.txt", data: Data("x".utf8))
@@ -90,8 +85,8 @@ struct StorageApiTests {
   }
 
   @Test
-  func nilRetryDisablesRetries() async {
-    let (storage, attempts) = makeSUT(retry: nil)
+  func retryEnabledFalseDisablesRetries() async {
+    let (storage, attempts) = makeSUT(retryEnabled: false)
 
     await #expect(throws: StorageError.self) {
       _ = try await storage.from("bucket").list()

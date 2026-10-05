@@ -176,12 +176,12 @@ public struct SupabaseClientOptions: Sendable {
     public let usesNewHostname: Bool
 
     /// Whether to automatically retry transient Storage errors on reads (`GET`, `HEAD` and
-    /// listing files) with ``RetryPolicy/default``. Writes are never retried. Defaults to `true`.
-    public let retry: Bool
+    /// listing files). Writes are never retried. Defaults to `true`.
+    public let retryEnabled: Bool
 
-    public init(usesNewHostname: Bool = false, retry: Bool = true) {
+    public init(usesNewHostname: Bool = false, retryEnabled: Bool = true) {
       self.usesNewHostname = usesNewHostname
-      self.retry = retry
+      self.retryEnabled = retryEnabled
     }
   }
 

@@ -102,18 +102,15 @@ struct StorageApi: Sendable {
 
   /// Sends `request` with the client's default headers and returns the response body.
   ///
-  /// Only `GET`, `HEAD` and `replayable` requests are retried, so
-  /// ``StorageClientConfiguration/retry`` can never replay a write.
+  /// Only `GET`, `HEAD` and `replayable` requests are retried, and only when
+  /// ``StorageClientConfiguration/retryEnabled`` is `true`.
   @discardableResult
   func execute(
     _ request: HTTPRequest, body: HTTPBody? = nil, replayable: Bool = false
   ) async throws -> Data {
-    let retry = configuration.retry.map { policy in
-      var policy = policy
-      policy.retryableMethods.formIntersection([.get, .head])
-      if replayable { policy.retryableMethods.insert(request.method) }
-      return RetryRequestInterceptor(policy: policy, clock: configuration.clock)
-    }
+    var policy = configuration.retryEnabled ? RetryPolicy.default : .disabled
+    if replayable { policy.retryableMethods.insert(request.method) }
+    let retry = RetryRequestInterceptor(policy: policy, clock: configuration.clock)
     let http = HTTPClient(
       configuration: configuration.http,
       retrying: retry,
