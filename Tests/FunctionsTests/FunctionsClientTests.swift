@@ -439,6 +439,108 @@ struct FunctionsClientTests {
     }
   }
 
+  /// A `URLError(.cancelled)` that is not caused by cancelling the caller's `Task` (a middleware
+  /// or a custom transport cancelled the request) is a transport failure.
+  @Test
+  func invoke_cancelledURLErrorWithoutTaskCancellation_isWrapped() async {
+    let sut = makeSUT { _, _ in throw URLError(.cancelled) }
+
+    do {
+      try await sut.invoke("hello_world")
+      Issue.record("Invoke should fail.")
+    } catch let error as FunctionsError {
+      #expect(error.kind == .transport)
+      #expect((error.underlyingError as? URLError)?.code == .cancelled)
+    } catch {
+      Issue.record("Unexpected error thrown \(error)")
+    }
+  }
+
+  /// Cancelling the enclosing `Task` mid-flight makes the real ``URLSessionTransport`` fail with
+  /// `URLError(.cancelled)`; Functions reports it as `CancellationError` (SDK-2141).
+  @Test
+  func invoke_cancellingTheTask_throwsCancellationError() async {
+    let sut = makeSUT()
+    let (requestStarted, onRequestStarted) = AsyncStream<Void>.makeStream()
+
+    var mock = Mock(
+      url: url.appendingPathComponent("hello_world"),
+      statusCode: 200,
+      data: [.post: Data()]
+    )
+    // `MockingURLProtocol` runs the request callback before it schedules the delayed response,
+    // so the cancel below always lands while the request is in flight. The delay is never
+    // waited out: cancelling makes `stopLoading()` drop the pending response.
+    mock.delay = .seconds(10)
+    mock.onRequestHandler = OnRequestHandler(requestCallback: { _ in onRequestStarted.yield() })
+    mock.register()
+
+    let task = Task { try await sut.invoke("hello_world") }
+    for await _ in requestStarted { break }
+    task.cancel()
+
+    do {
+      try await task.value
+      Issue.record("Expected failure")
+    } catch is CancellationError {
+    } catch {
+      Issue.record("Unexpected error \(error)")
+    }
+  }
+
+  /// A non-2xx body is collected up to ``FunctionsClient/maxErrorBodyBytes``, keeping the
+  /// prefix, so an unbounded error response cannot hold the call open or exhaust memory
+  /// (SDK-1840).
+  @Test
+  func invoke_serverErrorBody_isCappedKeepingThePrefix() async {
+    let sut = makeSUT()
+    let cap = FunctionsClient.maxErrorBodyBytes
+    let body = Data((0..<(cap + 4096)).map { UInt8(truncatingIfNeeded: $0) })
+
+    Mock(
+      url: url.appendingPathComponent("hello_world"),
+      statusCode: 500,
+      data: [.post: body]
+    )
+    .register()
+
+    do {
+      try await sut.invoke("hello_world")
+      Issue.record("Invoke should fail.")
+    } catch let error as FunctionsError {
+      #expect(error.kind == .server)
+      #expect(error.response?.body == body.prefix(cap))
+    } catch {
+      Issue.record("Unexpected error thrown \(error)")
+    }
+  }
+
+  @Test
+  func invokeWithStreamedResponse_serverErrorBody_isCappedKeepingThePrefix() async {
+    let sut = makeSUT()
+    let cap = FunctionsClient.maxErrorBodyBytes
+    let body = Data((0..<(cap + 4096)).map { UInt8(truncatingIfNeeded: $0) })
+
+    Mock(
+      url: url.appendingPathComponent("stream"),
+      statusCode: 500,
+      data: [.post: body]
+    )
+    .register()
+
+    do {
+      for try await _ in sut._invokeWithStreamedResponse("stream") {
+        Issue.record("should throw error")
+      }
+      Issue.record("Expected failure")
+    } catch let error as FunctionsError {
+      #expect(error.kind == .server)
+      #expect(error.response?.body == body.prefix(cap))
+    } catch {
+      Issue.record("Unexpected error thrown \(error)")
+    }
+  }
+
   @Test
   func invoke_customFetchError_isNotWrapped() async {
     struct FetchError: Error {}

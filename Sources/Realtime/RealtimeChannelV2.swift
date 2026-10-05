@@ -329,6 +329,9 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       // Only the network layer's own failures are relabelled. `CancellationError`
       // and errors thrown by a custom `ClientTransport` or the `accessToken` closure propagate as themselves.
       guard let urlError = error as? URLError else { throw error }
+      // `URLSession` reports a cancelled `Task` as `URLError(.cancelled)`. A `.cancelled` with no
+      // task cancellation behind it (a middleware cancelled the request) stays a transport error.
+      if urlError.code == .cancelled, Task.isCancelled { throw CancellationError() }
       throw RealtimeError(
         kind: .transport, message: urlError.localizedDescription, underlyingError: urlError)
     }
@@ -387,6 +390,9 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       // Only the network layer's own failures are relabelled. `CancellationError`
       // and errors thrown by a custom `ClientTransport` or the `accessToken` closure propagate as themselves.
       guard let urlError = error as? URLError else { throw error }
+      // `URLSession` reports a cancelled `Task` as `URLError(.cancelled)`. A `.cancelled` with no
+      // task cancellation behind it (a middleware cancelled the request) stays a transport error.
+      if urlError.code == .cancelled, Task.isCancelled { throw CancellationError() }
       throw RealtimeError(
         kind: .transport, message: urlError.localizedDescription, underlyingError: urlError)
     }
