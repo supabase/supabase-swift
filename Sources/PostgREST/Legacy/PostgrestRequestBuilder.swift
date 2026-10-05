@@ -578,11 +578,3 @@ extension HTTPField.Name {
   static let acceptProfile = Self("Accept-Profile")!
   static let contentProfile = Self("Content-Profile")!
 }
-
-extension PostgrestTypedMutation {
-  // The typed `insert`/`upsert` still wrap a filterable builder, so `where` still compiles after
-  // them. Their own phase comes with SDK-1569; until then this lifts the legacy insert back.
-  init(builder: PostgrestTransformBuilder) {
-    self.init(builder: PostgrestFilterBuilder(carryingFrom: builder))
-  }
-}

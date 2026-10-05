@@ -1,9 +1,11 @@
 //
-//  PostgrestTypedSource.swift
+//  PostgrestSource.swift
 //  PostgREST
 //
 //  Created by Guilherme Souza on 21/08/26.
 //
+
+import Foundation
 
 extension PostgrestClient {
   /// Returns a typed source for a relation, so column and relation names are checked by the
@@ -17,13 +19,13 @@ extension PostgrestClient {
   /// this client was already scoped to one, in which case the client's schema wins.
   ///
   /// - Parameter relation: The relation type to query.
-  /// - Returns: A ``PostgrestTypedSource`` for that relation.
-  public func from<R: PostgrestRelation>(_ relation: R.Type) -> PostgrestTypedSource<R> {
+  /// - Returns: A ``PostgrestSource`` for that relation.
+  public func from<R: PostgrestRelation>(_ relation: R.Type) -> PostgrestSource<R> {
     let client =
       configuration.schema == nil && R.schema != PublicSchema.name
       ? schema(R.schema)
       : self
-    return PostgrestTypedSource(builder: client.from(R.relationName))
+    return PostgrestSource(client: client)
   }
 }
 
@@ -33,16 +35,17 @@ extension PostgrestClient {
 /// because no operation has been chosen. Obtain one by passing a relation type to
 /// `PostgrestClient.from(_:)`.
 ///
-/// Like the builder it wraps, this is a value type: chaining off the same source twice gives two
-/// independent requests.
-public struct PostgrestTypedSource<R: PostgrestRelation>: Sendable {
-  let builder: PostgrestQueryBuilder
+/// This is a value type: chaining off the same source twice gives two independent requests.
+public struct PostgrestSource<R: PostgrestRelation>: Sendable {
+  let client: PostgrestClient
+
+  var request: PostgrestRequest { PostgrestRequest(relation: R.relationName) }
 
   /// Selects every column of the relation.
   ///
-  /// - Returns: A ``PostgrestTypedQuery`` decoding into `[R]`.
-  public func select() -> PostgrestTypedQuery<R, [R], PostgrestFilterPhase> {
-    PostgrestTypedQuery(builder: builder.select(R.selectString))
+  /// - Returns: A ``PostgrestQuery`` decoding into `[R]`.
+  public func select() -> PostgrestQuery<R, [R]> {
+    select(columns: R.selectString)
   }
 
   /// Selects the columns declared by a selection type.
@@ -57,10 +60,16 @@ public struct PostgrestTypedSource<R: PostgrestRelation>: Sendable {
   ///
   /// - Parameter selection: A type declaring the columns to fetch, normally annotated with
   ///   `@SelectionOf` from the `PostgrestMacros` module.
-  /// - Returns: A ``PostgrestTypedQuery`` decoding into `[S]`.
+  /// - Returns: A ``PostgrestQuery`` decoding into `[S]`.
   public func select<S: PostgrestSelection>(
     _ selection: S.Type
-  ) -> PostgrestTypedQuery<R, [S], PostgrestFilterPhase> where S.Source == R {
-    PostgrestTypedQuery(builder: builder.select(S.selectString))
+  ) -> PostgrestQuery<R, [S]> where S.Source == R {
+    select(columns: S.selectString)
+  }
+
+  private func select<Output>(columns: String) -> PostgrestQuery<R, Output> {
+    var request = request
+    request.query.append(URLQueryItem(name: "select", value: columns))
+    return PostgrestQuery(client: client, request: request)
   }
 }

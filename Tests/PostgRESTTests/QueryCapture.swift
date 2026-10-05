@@ -28,9 +28,14 @@ struct QueryCapture {
 
   /// - Parameters:
   ///   - body: The response body to hand back to every request.
+  ///   - status: The response status to hand back to every request.
   ///   - responseHeaders: Extra response header fields, merged over `Content-Type`. Use this to
   ///     stub the `Content-Range` header a count request reads its total from.
-  init(body: String = "[]", responseHeaders: [String: String] = [:]) {
+  init(
+    body: String = "[]",
+    status: HTTPTypes.HTTPResponse.Status = .ok,
+    responseHeaders: [String: String] = [:]
+  ) {
     let captured = self.captured
     let capturedBody = self.capturedBody
     let headerFields: HTTPFields = responseHeaders.reduce(into: [.contentType: "application/json"])
@@ -51,7 +56,7 @@ struct QueryCapture {
             }
           capturedBody.setValue(data)
           return (
-            HTTPTypes.HTTPResponse(status: .ok, headerFields: headerFields),
+            HTTPTypes.HTTPResponse(status: status, headerFields: headerFields),
             HTTPBody(Data(body.utf8))
           )
         }))

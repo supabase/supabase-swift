@@ -34,7 +34,7 @@ import Logging
 ///
 /// ### Querying the Database
 /// - ``from(_:)->PostgrestQueryBuilder``
-/// - ``from(_:)->PostgrestTypedSource<R>``
+/// - ``from(_:)->PostgrestSource<R>``
 /// - ``rpc(_:params:count:)``
 /// - ``rpc(_:count:)``
 /// - ``schema(_:)->PostgrestClient``
@@ -281,8 +281,8 @@ public final class SupabaseClient: Sendable {
 
   /// Creates a typed source for a relation, queried in the schema the relation declares.
   /// - Parameter relation: The relation type to query.
-  /// - Returns: A ``PostgrestTypedSource`` for that relation.
-  public func from<R: PostgrestRelation>(_ relation: R.Type) -> PostgrestTypedSource<R> {
+  /// - Returns: A ``PostgrestSource`` for that relation.
+  public func from<R: PostgrestRelation>(_ relation: R.Type) -> PostgrestSource<R> {
     rest.from(relation)
   }
 

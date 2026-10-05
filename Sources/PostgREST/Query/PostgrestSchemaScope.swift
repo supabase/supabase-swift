@@ -43,9 +43,9 @@ public struct PostgrestSchemaScope<Schema: PostgrestSchema>: Sendable {
   /// Returns a typed source for a relation that belongs to this schema.
   ///
   /// - Parameter relation: The relation type to query.
-  /// - Returns: A ``PostgrestTypedSource`` for that relation.
-  public func from<R: PostgrestRelation>(_ relation: R.Type) -> PostgrestTypedSource<R>
+  /// - Returns: A ``PostgrestSource`` for that relation.
+  public func from<R: PostgrestRelation>(_ relation: R.Type) -> PostgrestSource<R>
   where R.Schema == Schema {
-    PostgrestTypedSource(builder: client.from(R.relationName))
+    PostgrestSource(client: client)
   }
 }

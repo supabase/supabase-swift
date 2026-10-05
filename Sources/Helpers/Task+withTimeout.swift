@@ -9,7 +9,9 @@
 package func withTimeout<R: Sendable>(
   _ duration: Duration,
   clock: any Clock<Duration> = ContinuousClock(),
-  @_inheritActorContext operation: @escaping @Sendable () async throws -> R
+  // `@concurrent`: as a `nonisolated(nonsending)` type, an actor-inherited closure runs on the
+  // task-group child's executor without hopping, and `PushV2.send()` traps on its MainActor check.
+  @_inheritActorContext operation: @escaping @Sendable @concurrent () async throws -> R
 ) async throws -> R {
   try await withThrowingTaskGroup(of: R.self) { group in
     defer {
