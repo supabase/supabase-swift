@@ -3182,3 +3182,43 @@ The string builder's `maybeSingle()` instead asks for a single object and maps P
 `explain(…)` return a `PostgrestRawQuery`, whose `execute()` returns the body as a `String`. That
 type has no `stripNulls()`, so `.csv().stripNulls()` does not compile, where the string builder
 throws at `execute()`.
+## `update`/`upsert`/`delete` no longer default to returning rows
+
+`PostgrestRequestBuilder.update(_:returning:count:encoder:)`,
+`upsert(_:onConflict:returning:count:ignoreDuplicates:defaultToNull:encoder:)`, and
+`delete(returning:count:)` now default `returning` to `nil` and omit `Prefer: return=` entirely
+when the caller doesn't pass it, matching `insert(_:returning:count:defaultToNull:encoder:)` and
+PostgREST's own default of `return=minimal`.
+
+Previously these three defaulted `returning` to `.representation` and always sent
+`Prefer: return=representation`, so a bare `update`/`upsert`/`delete` call — one that never chained
+`.select()` — silently paid for a response body it discarded. `insert` never had this problem, and
+js and Flutter omit the header by default on all four methods, so Swift's defaults were
+inconsistent with both itself and the rest of the SDK family.
+
+```swift
+// Before — rows came back even without .select()
+let updated: [Todo] = try await client
+  .from("todos")
+  .update(["done": true])
+  .eq("id", value: 1)
+  .execute()
+  .value
+
+// After — chain .select() to get rows back, as insert already required
+let updated: [Todo] = try await client
+  .from("todos")
+  .update(["done": true])
+  .eq("id", value: 1)
+  .select()
+  .execute()
+  .value
+```
+
+This does not break the build — `returning` was already optional-looking at call sites that never
+passed it — but it is a silent behavior change: a bare `update`/`upsert`/`delete` call that decodes
+`.value` without chaining `.select()` now decodes an empty response instead of the modified rows.
+Search your codebase for `.update(`, `.upsert(`, and `.delete(` calls that read `.value` or
+`.execute().value` without a `.select()` in the chain, and either add `.select()` or pass
+`returning: .representation` explicitly to keep the old behavior. The typed query API
+(`from(_:)`) already defaulted to `.minimal` and is unaffected.
