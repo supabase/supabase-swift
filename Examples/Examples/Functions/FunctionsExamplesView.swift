@@ -109,7 +109,7 @@ struct FunctionsExamplesView: View {
 
       let response: HelloWorldResponse = try await supabase.functions.invoke(
         "hello-world",
-        options: FunctionInvokeOptions(body: request)
+        body: .json(request)
       )
 
       result = response.message

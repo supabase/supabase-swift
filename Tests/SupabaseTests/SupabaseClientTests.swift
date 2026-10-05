@@ -132,11 +132,14 @@ struct SupabaseClientTests {
       """
     }
     expectNoDifference(client.headers, client.auth.configuration.headers)
-    expectNoDifference(client.headers, client.functions.headers.dictionary)
+    // Functions never carries a static `Authorization`; the bearer is the provider's job.
+    var functionsHeaders = client.headers
+    functionsHeaders["Authorization"] = nil
+    expectNoDifference(functionsHeaders, client.functions.configuration.headers.dictionary)
     expectNoDifference(client.headers, client.storage.configuration.headers)
     expectNoDifference(client.headers, client.rest.configuration.headers)
 
-    #expect(client.functions.region == "ap-northeast-1")
+    #expect(client.functions.configuration.region == .apNortheast1)
 
     let realtimeURL = client.realtimeV2.url
     #expect(realtimeURL.absoluteString == "https://project-ref.supabase.co/realtime/v1")
@@ -513,20 +516,23 @@ struct SupabaseClientTests {
       options: SupabaseClientOptions(auth: .init(storage: AuthLocalStorageMock()))
     )
 
-    #expect(client.functions.headers.dictionary["Authorization"] == nil)
-    #expect(client.functions.headers.dictionary["Apikey"] == "sb_publishable_abc123")
+    #expect(client.functions.configuration.headers[.authorization] == nil)
+    #expect(client.functions.configuration.headers[.init("Apikey")!] == "sb_publishable_abc123")
   }
 
+  /// The legacy-key bearer is the `accessToken` provider's fallback, not a static header, so a
+  /// per-call `Authorization` and the session token both win over it. The wire behavior is
+  /// covered by `SupabaseClientFunctionsAuthTests`.
   @Test
-  func functionsKeepsAuthorizationBearerForLegacyKey() {
+  func functionsCarriesNoStaticAuthorizationHeaderForLegacyKey() {
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "legacy-jwt-key",
       options: SupabaseClientOptions(auth: .init(storage: AuthLocalStorageMock()))
     )
 
-    #expect(client.functions.headers.dictionary["Authorization"] == "Bearer legacy-jwt-key")
-    #expect(client.functions.headers.dictionary["Apikey"] == "legacy-jwt-key")
+    #expect(client.functions.configuration.headers[.authorization] == nil)
+    #expect(client.functions.configuration.headers[.init("Apikey")!] == "legacy-jwt-key")
   }
 
   @Test

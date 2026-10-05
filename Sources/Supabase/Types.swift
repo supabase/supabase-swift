@@ -156,7 +156,7 @@ public struct SupabaseClientOptions: Sendable {
     @_disfavoredOverload
     public init(
       region: String? = nil,
-      decoder: JSONDecoder = JSONDecoder()
+      decoder: JSONDecoder = .supabase()
     ) {
       self.region = region
       self.decoder = decoder
@@ -164,7 +164,7 @@ public struct SupabaseClientOptions: Sendable {
 
     public init(
       region: FunctionRegion? = nil,
-      decoder: JSONDecoder = JSONDecoder()
+      decoder: JSONDecoder = .supabase()
     ) {
       self.init(region: region?.rawValue, decoder: decoder)
     }

@@ -1,5 +1,6 @@
 import ConcurrencyExtras
 import Foundation
+import HTTPTypes
 import Testing
 
 @testable import Supabase
@@ -69,7 +70,7 @@ struct SupabaseClientFunctionsAuthTests {
 
     _ = try? await client.functions.invoke(
       "hello-world",
-      options: FunctionInvokeOptions(headers: ["Authorization": "Bearer per-call-override"])
+      options: FunctionInvokeOptions(headers: [.authorization: "Bearer per-call-override"])
     )
 
     let request = try #require(FunctionsAuthCapturingProtocol.capturedRequest)
@@ -97,6 +98,31 @@ struct SupabaseClientFunctionsAuthTests {
 
     let request = try #require(FunctionsAuthCapturingProtocol.capturedRequest)
     #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer PUBLISHABLE_KEY")
+  }
+
+  /// A new-format key is never a bearer token: with no session, the header is omitted.
+  @Test
+  func functionsInvokeWithNewFormatKeyAndNoSessionSendsNoBearer() async throws {
+    FunctionsAuthCapturingProtocol.capturedRequest = nil
+    let client = SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "sb_publishable_abc123",
+      options: SupabaseClientOptions(
+        auth: SupabaseClientOptions.AuthOptions(
+          storage: AuthLocalStorageMock(),
+          automaticallyRefreshesToken: false
+        ),
+        global: SupabaseClientOptions.GlobalOptions(
+          http: .init(transport: URLSessionTransport(session: makeFunctionsAuthCapturingSession()))
+        )
+      )
+    )
+
+    try await client.functions.invoke("hello-world")
+
+    let request = try #require(FunctionsAuthCapturingProtocol.capturedRequest)
+    #expect(request.value(forHTTPHeaderField: "Authorization") == nil)
+    #expect(request.value(forHTTPHeaderField: "apikey") == "sb_publishable_abc123")
   }
 
   @Test
