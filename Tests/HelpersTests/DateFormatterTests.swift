@@ -50,6 +50,31 @@ struct DateFormatterTests {
     #expect(iso8601String.contains(":"))  // Should have time separators
   }
 
+  @Test
+  func dateToISO8601StringEndsWithUTCDesignator() {
+    let date = Date(timeIntervalSince1970: 1_704_164_645.5)
+
+    #expect(date.iso8601String == "2024-01-02T03:04:05.500Z")
+  }
+
+  @Test
+  func supabaseEncoderWritesDatesWithUTCDesignator() throws {
+    let date = Date(timeIntervalSince1970: 1_704_164_645.5)
+
+    let data = try JSONEncoder.supabase().encode([date])
+
+    #expect(String(decoding: data, as: UTF8.self) == #"["2024-01-02T03:04:05.500Z"]"#)
+  }
+
+  @Test
+  func roundTripIsExactForWholeMilliseconds() throws {
+    let date = Date(timeIntervalSince1970: 1_704_164_645.5)
+
+    let parsedDate = try #require(date.iso8601String.date)
+
+    #expect(parsedDate == date)
+  }
+
   // MARK: - String to Date Parsing Tests
 
   @Test
