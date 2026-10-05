@@ -615,32 +615,6 @@ struct FunctionsClientTests {
   }
 
   @Test
-  func invokeWithStreamedResponse_serverErrorBody_isCappedKeepingThePrefix() async {
-    let sut = makeSUT()
-    let cap = FunctionsAPI.maxErrorBodyBytes
-    let body = Data((0..<(cap + 4096)).map { UInt8(truncatingIfNeeded: $0) })
-
-    Mock(
-      url: url.appendingPathComponent("stream"),
-      statusCode: 500,
-      data: [.post: body]
-    )
-    .register()
-
-    do {
-      for try await _ in sut._invokeWithStreamedResponse("stream") {
-        Issue.record("should throw error")
-      }
-      Issue.record("Expected failure")
-    } catch let error as FunctionsError {
-      #expect(error.kind == .server)
-      #expect(error.response?.body == body.prefix(cap))
-    } catch {
-      Issue.record("Unexpected error thrown \(error)")
-    }
-  }
-
-  @Test
   func invoke_customFetchError_isNotWrapped() async {
     struct FetchError: Error {}
     let sut = makeSUT { _, _ in throw FetchError() }
@@ -814,28 +788,74 @@ struct FunctionsClientTests {
   }
 
   @Test
-  func invokeWithStreamedResponseDoesNotWrapAccessTokenError() async {
-    let sut = makeClient(
-      http: .init(
-        transport: ClosureTransport { _, _ in
-          Issue.record("transport should not be called when the access token provider throws")
-          return (HTTPTypes.HTTPResponse(status: .ok), nil)
-        }),
-      accessToken: { throw URLError(.userAuthenticationRequired) }
-    )
-
-    do {
-      for try await _ in sut._invokeWithStreamedResponse("stream") {}
-      Issue.record("expected the stream to fail")
-    } catch let error as URLError {
-      #expect(error.code == .userAuthenticationRequired)
-    } catch {
-      Issue.record("Unexpected error \(error)")
+  func streamReturnsTheHeadBeforeTheBodyAndYieldsEachChunk() async throws {
+    let (chunks, continuation) = AsyncStream<ArraySlice<UInt8>>.makeStream()
+    let sut = makeSUT { _, _ in
+      (
+        HTTPTypes.HTTPResponse(
+          status: .ok,
+          headerFields: [.contentType: "text/event-stream", .xSbEdgeRegion: "eu-central-2"]),
+        HTTPBody(chunks, length: .unknown, iterationBehavior: .single)
+      )
     }
+
+    // Nothing has been yielded yet, so the head can only have come back on its own.
+    let response = try await sut.stream("stream")
+    #expect(response.status == .ok)
+    #expect(response.contentType == "text/event-stream")
+    #expect(response.region == .euCentral2)
+
+    continuation.yield(ArraySlice("hello ".utf8))
+    continuation.yield(ArraySlice("world".utf8))
+    continuation.finish()
+    var received: [ArraySlice<UInt8>] = []
+    for try await chunk in response.body { received.append(chunk) }
+    #expect(received.count == 2)
+    #expect(Data(received.joined()) == Data("hello world".utf8))
   }
 
   @Test
-  func invokeWithStreamedResponseUsesAccessTokenProvider() async throws {
+  func streamWithNoBodyYieldsAnEmptyBody() async throws {
+    let sut = makeSUT { _, _ in (HTTPTypes.HTTPResponse(status: .ok), nil) }
+
+    let response = try await sut.stream("stream")
+
+    #expect(try await Data(collecting: response.body, upTo: 1) == Data())
+  }
+
+  /// End to end through `URLSessionTransport`. Mocker hands the whole payload over at once, so
+  /// the chunk count is not asserted.
+  @Test
+  func streamDeliversAMockedEventStreamAsBytes() async throws {
+    let sut = makeSUT()
+
+    Mock(
+      url: url.appendingPathComponent("stream"),
+      statusCode: 200,
+      data: [.post: Data("data: a\n\nevent: delta\ndata: b\n\n".utf8)],
+      additionalHeaders: ["Content-Type": "text/event-stream"]
+    )
+    .snapshotRequest {
+      #"""
+      curl \
+      	--request POST \
+      	--header "X-Client-Info: functions-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:5432/functions/v1/stream"
+      """#
+    }
+    .register()
+
+    let response = try await sut.stream("stream")
+
+    #expect(response.contentType == "text/event-stream")
+    #expect(
+      try await Data(collecting: response.body, upTo: 1024)
+        == Data("data: a\n\nevent: delta\ndata: b\n\n".utf8))
+  }
+
+  @Test
+  func streamUsesAccessTokenProvider() async throws {
     let sut = makeSUT(accessToken: { "stream.token" })
 
     Mock(
@@ -855,146 +875,129 @@ struct FunctionsClientTests {
     }
     .register()
 
-    let stream = sut._invokeWithStreamedResponse("stream")
+    let response = try await sut.stream("stream")
 
-    for try await value in stream {
-      #expect(String(decoding: value, as: UTF8.self) == "hello world")
-    }
+    #expect(try await Data(collecting: response.body, upTo: 1024) == Data("hello world".utf8))
   }
 
   @Test
-  func invokeWithStreamedResponse() async throws {
-    // `_invokeWithStreamedResponse` now streams through the client's `transport`, and `makeSUT`
-    // wires `MockingURLProtocol` into the session backing it.
-    let sut = makeSUT()
-
-    Mock(
-      url: url.appendingPathComponent("stream"),
-      statusCode: 200,
-      data: [.post: Data("hello world".utf8)]
+  func streamDoesNotWrapAccessTokenError() async {
+    let sut = makeClient(
+      http: .init(
+        transport: ClosureTransport { _, _ in
+          Issue.record("transport should not be called when the access token provider throws")
+          return (HTTPTypes.HTTPResponse(status: .ok), nil)
+        }),
+      accessToken: { throw URLError(.userAuthenticationRequired) }
     )
-    .snapshotRequest {
-      #"""
-      curl \
-      	--request POST \
-      	--header "X-Client-Info: functions-swift/0.0.0" \
-      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	"http://localhost:5432/functions/v1/stream"
-      """#
-    }
-    .register()
-
-    let stream = sut._invokeWithStreamedResponse("stream")
-
-    var chunks: [Data] = []
-    for try await value in stream {
-      chunks.append(value)
-    }
-
-    // Assert on the collected chunks, not inside the loop: a stream that yields nothing would
-    // pass an in-loop assertion vacuously. The payload has no newline and is under 16 KiB, so
-    // the transport delivers it as one chunk.
-    #expect(chunks.count == 1)
-    #expect(chunks.reduce(Data(), +) == Data("hello world".utf8))
-  }
-
-  @Test
-  func invokeWithStreamedResponseHTTPError() async throws {
-    let sut = makeSUT()
-
-    Mock(
-      url: url.appendingPathComponent("stream"),
-      statusCode: 300,
-      data: [.post: Data()]
-    )
-    .snapshotRequest {
-      #"""
-      curl \
-      	--request POST \
-      	--header "X-Client-Info: functions-swift/0.0.0" \
-      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	"http://localhost:5432/functions/v1/stream"
-      """#
-    }
-    .register()
-
-    let stream = sut._invokeWithStreamedResponse("stream")
 
     do {
-      for try await _ in stream {
-        Issue.record("should throw error")
-      }
-    } catch let error as FunctionsError {
-      #expect(error.kind == .server)
-      #expect(error.response?.statusCode == 300)
+      _ = try await sut.stream("stream")
+      Issue.record("expected the stream to fail")
+    } catch let error as URLError {
+      #expect(error.code == .userAuthenticationRequired)
+    } catch {
+      Issue.record("Unexpected error \(error)")
     }
   }
 
+  /// A non-2xx head throws from `stream` itself, carrying the first
+  /// `FunctionsAPI.maxErrorBodyBytes` of the body (SDK-1840), so no body is ever exposed.
   @Test
-  func invokeWithStreamedResponseRelayError() async throws {
+  func stream_serverErrorBody_isCappedKeepingThePrefix() async {
     let sut = makeSUT()
-
-    Mock(
-      url: url.appendingPathComponent("stream"),
-      statusCode: 200,
-      data: [.post: Data()],
-      additionalHeaders: [
-        "x-relay-error": "true"
-      ]
-    )
-    .snapshotRequest {
-      #"""
-      curl \
-      	--request POST \
-      	--header "X-Client-Info: functions-swift/0.0.0" \
-      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	"http://localhost:5432/functions/v1/stream"
-      """#
-    }
-    .register()
-
-    let stream = sut._invokeWithStreamedResponse("stream")
-
-    do {
-      for try await _ in stream {
-        Issue.record("should throw error")
-      }
-    } catch let error as FunctionsError {
-      #expect(error.kind == .relay)
-    }
-  }
-
-  @Test
-  func invokeWithStreamedResponseRelayErrorWithNon2xxStatus() async throws {
-    let sut = makeSUT()
+    let cap = FunctionsAPI.maxErrorBodyBytes
+    let body = Data((0..<(cap + 4096)).map { UInt8(truncatingIfNeeded: $0) })
 
     Mock(
       url: url.appendingPathComponent("stream"),
       statusCode: 500,
-      data: [.post: Data()],
-      additionalHeaders: [
-        "x-relay-error": "true"
-      ]
+      data: [.post: body]
     )
-    .snapshotRequest {
-      #"""
-      curl \
-      	--request POST \
-      	--header "X-Client-Info: functions-swift/0.0.0" \
-      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	"http://localhost:5432/functions/v1/stream"
-      """#
-    }
     .register()
 
-    let stream = sut._invokeWithStreamedResponse("stream")
+    do {
+      _ = try await sut.stream("stream")
+      Issue.record("Expected failure")
+    } catch let error as FunctionsError {
+      #expect(error.kind == .server)
+      #expect(error.response?.statusCode == 500)
+      #expect(error.response?.body == body.prefix(cap))
+    } catch {
+      Issue.record("Unexpected error thrown \(error)")
+    }
+  }
+
+  @Test
+  func streamRelayErrorThrowsRelay() async {
+    let sut = makeSUT()
+
+    Mock(
+      url: url.appendingPathComponent("stream"),
+      statusCode: 200,
+      data: [.post: Data("relay failed".utf8)],
+      additionalHeaders: ["x-relay-error": "true"]
+    )
+    .register()
 
     do {
-      for try await _ in stream {
-        Issue.record("should throw error")
-      }
+      _ = try await sut.stream("stream")
+      Issue.record("Expected failure")
     } catch let error as FunctionsError {
       #expect(error.kind == .relay)
+      #expect(error.response?.body == Data("relay failed".utf8))
+    } catch {
+      Issue.record("Unexpected error thrown \(error)")
     }
+  }
+
+  /// The network layer's own failures while the body streams are `.transport`, as on `invoke`.
+  @Test
+  func streamBodyTransportFailureIsWrapped() async throws {
+    let chunks = AsyncThrowingStream<ArraySlice<UInt8>, any Error> {
+      $0.yield(ArraySlice("partial".utf8))
+      $0.finish(throwing: URLError(.networkConnectionLost))
+    }
+    let sut = makeSUT { _, _ in
+      (
+        HTTPTypes.HTTPResponse(status: .ok),
+        HTTPBody(chunks, length: .unknown, iterationBehavior: .single)
+      )
+    }
+
+    let response = try await sut.stream("stream")
+    var received = Data()
+    do {
+      for try await chunk in response.body { received.append(contentsOf: chunk) }
+      Issue.record("Expected failure")
+    } catch let error as FunctionsError {
+      #expect(error.kind == .transport)
+      #expect((error.underlyingError as? URLError)?.code == .networkConnectionLost)
+    } catch {
+      Issue.record("Unexpected error thrown \(error)")
+    }
+    #expect(received == Data("partial".utf8))
+  }
+
+  @Test
+  func streamCancellingTheIteratingTaskThrowsCancellationError() async throws {
+    let (chunks, continuation) = AsyncStream<ArraySlice<UInt8>>.makeStream()
+    let sut = makeSUT { _, _ in
+      (
+        HTTPTypes.HTTPResponse(status: .ok),
+        HTTPBody(chunks, length: .unknown, iterationBehavior: .single)
+      )
+    }
+    let (pulled, onPulled) = AsyncStream<Void>.makeStream()
+
+    let task = Task {
+      let response = try await sut.stream("stream")
+      for try await _ in response.body { onPulled.yield() }
+    }
+    continuation.yield(ArraySlice("first".utf8))
+    for await _ in pulled { break }
+    task.cancel()
+
+    await #expect(throws: CancellationError.self) { try await task.value }
   }
 }
