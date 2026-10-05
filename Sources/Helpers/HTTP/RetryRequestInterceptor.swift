@@ -5,8 +5,8 @@
 //  Created by Guilherme Souza on 23/04/24.
 //
 
-import Foundation
-package import HTTPTypes
+public import Foundation
+public import HTTPTypes
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -26,7 +26,7 @@ package import HTTPTypes
 /// transport failure; a deterministic one (bad URL, untrusted certificate) and any error thrown
 /// by user code propagate untouched. A cancelled task ends the loop at once and always surfaces
 /// as `CancellationError`, even when the transport reported it as `URLError.cancelled`.
-package struct RetryRequestInterceptor: ClientMiddleware {
+public struct RetryRequestInterceptor: ClientMiddleware {
   /// The `URLError` codes that mean "try again", as opposed to a deterministic failure.
   static let retryableURLErrorCodes: Set<URLError.Code> = [
     .backgroundSessionInUseByAnotherProcess, .backgroundSessionWasDisconnected,
@@ -38,15 +38,23 @@ package struct RetryRequestInterceptor: ClientMiddleware {
     .serverCertificateNotYetValid, .timedOut,
   ]
 
-  package let policy: RetryPolicy
-  package let clock: any Clock<Duration>
+  /// The policy that decides which requests are retried and how long to wait.
+  public let policy: RetryPolicy
+  /// The clock the waits between attempts sleep on.
+  public let clock: any Clock<Duration>
 
-  package init(policy: RetryPolicy, clock: any Clock<Duration> = ContinuousClock()) {
+  /// Creates the middleware.
+  ///
+  /// - Parameters:
+  ///   - policy: Which requests are retried and how long to wait between attempts.
+  ///   - clock: The clock the waits sleep on. Pass a test clock to skip real waits.
+  public init(policy: RetryPolicy, clock: any Clock<Duration> = ContinuousClock()) {
     self.policy = policy
     self.clock = clock
   }
 
-  package func intercept(
+  /// Sends `request`, retrying it as ``policy`` allows.
+  public func intercept(
     _ request: HTTPTypes.HTTPRequest,
     body: HTTPBody?,
     next:

@@ -5,12 +5,12 @@
 //  Created by Guilherme Souza on 14/09/26.
 //
 
-package import Foundation
-package import HTTPTypes
+public import Foundation
+public import HTTPTypes
 
 /// How a client retries a request that failed transiently.
 ///
-/// One policy drives every module that retries (Auth, PostgREST, and the delay math of
+/// One policy drives every module that retries (Auth, PostgREST, Storage, and the delay math of
 /// Realtime's reconnect). A request is retried when its method is in ``retryableMethods`` and
 /// the attempt either failed with a transient `URLError` or returned a status in
 /// ``retryableStatuses``. The wait between attempts is capped exponential backoff with equal
@@ -18,28 +18,31 @@ package import HTTPTypes
 /// retry — unless the response carried a `Retry-After` header, which is honoured up to
 /// ``maxDelay``.
 ///
-/// ponytail: `package` on purpose. Storage and Functions do not retry yet; which of their
-/// requests are safe to replay is a separate decision, and this becomes public with it.
-package struct RetryPolicy: Sendable, Hashable {
+/// ```swift
+/// var policy = RetryPolicy.default
+/// policy.maxAttempts = 5
+/// let configuration = StorageClientConfiguration(url: url, headers: headers, retry: policy)
+/// ```
+public struct RetryPolicy: Sendable, Hashable {
   /// Total attempts, including the first. `1` disables retries.
-  package var maxAttempts: Int
+  public var maxAttempts: Int
 
   /// The cap for the first retry's wait; doubles on every further retry.
-  package var baseDelay: Duration
+  public var baseDelay: Duration
 
   /// The longest wait between two attempts, jittered or `Retry-After`.
-  package var maxDelay: Duration
+  public var maxDelay: Duration
 
   /// Response statuses worth retrying. Includes Cloudflare's 520–524 and 530, which front
   /// every Supabase project and report transient edge failures.
-  package var retryableStatuses: Set<Int>
+  public var retryableStatuses: Set<Int>
 
   /// Methods safe to replay. Add a method here only when every request that uses it is
   /// idempotent on the server.
-  package var retryableMethods: Set<HTTPTypes.HTTPRequest.Method>
+  public var retryableMethods: Set<HTTPTypes.HTTPRequest.Method>
 
   /// Creates a policy. Every parameter defaults to the ``default`` policy's value.
-  package init(
+  public init(
     maxAttempts: Int = 3,
     baseDelay: Duration = .milliseconds(500),
     maxDelay: Duration = .seconds(20),
@@ -54,10 +57,10 @@ package struct RetryPolicy: Sendable, Hashable {
   }
 
   /// Three attempts, 500 ms base, 20 s cap, GET/HEAD/OPTIONS only.
-  package static let `default` = RetryPolicy()
+  public static let `default` = RetryPolicy()
 
   /// A single attempt: the first failure is the final answer.
-  package static let disabled = RetryPolicy(maxAttempts: 1)
+  public static let disabled = RetryPolicy(maxAttempts: 1)
 }
 
 extension RetryPolicy {

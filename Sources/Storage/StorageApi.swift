@@ -31,8 +31,6 @@ struct StorageApi: Sendable {
   /// The configuration used to initialize this client instance.
   let configuration: StorageClientConfiguration
 
-  private let http: HTTPClient
-
   /// Creates a ``StorageApi`` with the given configuration.
   ///
   /// - Parameter configuration: The configuration that controls the endpoint URL, authentication
@@ -70,12 +68,6 @@ struct StorageApi: Sendable {
     }
 
     self.configuration = configuration
-
-    let interceptors: [any ClientMiddleware] = [
-      LoggerInterceptor(logger: configuration.logger)
-    ]
-
-    http = HTTPClient(configuration: configuration.http, appending: interceptors)
   }
 
   /// Returns a new ``StorageApi`` with an additional HTTP header merged into
@@ -101,14 +93,32 @@ struct StorageApi: Sendable {
   }
 
   /// Sends `request` with the client's default headers and returns the response body.
+  ///
+  /// `replayable` marks a `POST` that only reads (a list) as safe to retry.
   @discardableResult
-  func execute(_ request: HTTPRequest, body: Data) async throws -> Data {
-    try await execute(request, body: HTTPBody(body))
+  func execute(_ request: HTTPRequest, body: Data, replayable: Bool = false) async throws -> Data {
+    try await execute(request, body: HTTPBody(body), replayable: replayable)
   }
 
   /// Sends `request` with the client's default headers and returns the response body.
+  ///
+  /// Only `GET`, `HEAD` and `replayable` requests are retried, so
+  /// ``StorageClientConfiguration/retry`` can never replay a write.
   @discardableResult
-  func execute(_ request: HTTPRequest, body: HTTPBody? = nil) async throws -> Data {
+  func execute(
+    _ request: HTTPRequest, body: HTTPBody? = nil, replayable: Bool = false
+  ) async throws -> Data {
+    let retry = configuration.retry.map { policy in
+      var policy = policy
+      policy.retryableMethods.formIntersection([.get, .head])
+      if replayable { policy.retryableMethods.insert(request.method) }
+      return RetryRequestInterceptor(policy: policy, clock: configuration.clock)
+    }
+    let http = HTTPClient(
+      configuration: configuration.http,
+      retrying: retry,
+      appending: [LoggerInterceptor(logger: configuration.logger)])
+
     var request = request
     request.headerFields = HTTPFields(configuration.headers).merging(with: request.headerFields)
 

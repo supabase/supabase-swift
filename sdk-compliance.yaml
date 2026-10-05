@@ -1827,5 +1827,9 @@ features:
       - StorageError.Code.noAvailableShard
       - StorageError.Code.shardNotFound
 
-  # Newly synced from the canonical spec; no local group yet, place manually.
-  storage.configuration.auto_retry: not_implemented
+  storage.configuration.auto_retry:
+    status: implemented
+    note: "Reads only: GET, HEAD and list(). Uploads, moves, copies, removals and bucket changes are never replayed."
+    symbols:
+      - StorageClientConfiguration.retry
+      - SupabaseClientOptions.StorageOptions.retry

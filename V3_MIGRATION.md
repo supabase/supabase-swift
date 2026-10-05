@@ -2623,7 +2623,7 @@ timeout (too few bytes) or truncating on the server (too many).
 Auth and PostgREST — the two modules that already retried — now do so through one middleware
 driven by an internal `RetryPolicy`. It runs outermost, so a replayed attempt re-runs your
 `ClientMiddleware`s and resolves a fresh access token instead of reusing the first attempt's.
-Storage and Functions are unchanged: they do not retry.
+Functions is unchanged: it does not retry. Storage now retries its reads; see below.
 
 - **PostgREST** is unchanged in what it retries: GET and HEAD only, on a transient network
   failure or a 503/520, up to three retries. `retryEnabled`, `retry(enabled:)` and `db.retry`
@@ -2638,6 +2638,10 @@ Storage and Functions are unchanged: they do not retry.
   502, 503, 504 or Cloudflare 520–524/530.
 - **Both** report a cancelled task as `CancellationError`, even when the transport reported it
   as `URLError.cancelled`.
+- **Storage** now retries reads: GET, HEAD and `list()`, with `RetryPolicy.default` (3 attempts,
+  500 ms base, 20 s cap). Uploads, moves, copies, removals and bucket changes are never
+  retried. Pass `retry: nil` to `StorageClientConfiguration`, or `storage: .init(retry: false)`
+  to `SupabaseClientOptions`, to keep the old single-attempt behavior.
 - **Realtime** reconnects carry the same equal jitter, capped at 30 s: the first attempt waits
   between half of `reconnectDelay` and `reconnectDelay`, never longer than before.
 

@@ -19,7 +19,7 @@ public import Logging
 ///
 /// ### Creating a configuration
 ///
-/// - ``init(url:headers:http:logger:usesNewHostname:)``
+/// - ``init(url:headers:http:logger:usesNewHostname:retry:clock:)``
 ///
 /// ### Configuration properties
 ///
@@ -28,6 +28,8 @@ public import Logging
 /// - ``http``
 /// - ``logger``
 /// - ``usesNewHostname``
+/// - ``retry``
+/// - ``clock``
 public struct StorageClientConfiguration: Sendable {
   /// The base URL of the Storage API endpoint (e.g. `https://project.supabase.co/storage/v1`).
   public var url: URL
@@ -53,6 +55,17 @@ public struct StorageClientConfiguration: Sendable {
   /// which disables request buffering and enables uploads larger than 50 GB.
   public let usesNewHostname: Bool
 
+  /// How transient failures are retried, or `nil` to never retry. Defaults to
+  /// ``RetryPolicy/default``.
+  ///
+  /// Only reads are replayed: `GET` and `HEAD` requests whose method the policy lists, and
+  /// ``StorageFileApi/list(path:options:)``. Uploads, moves, copies, removals and bucket
+  /// changes are never replayed, whatever ``RetryPolicy/retryableMethods`` says.
+  public let retry: RetryPolicy?
+
+  /// The clock the waits between retries sleep on. Defaults to `ContinuousClock()`.
+  public let clock: any Clock<Duration>
+
   /// Creates a ``StorageClientConfiguration``.
   ///
   /// - Parameters:
@@ -62,12 +75,16 @@ public struct StorageClientConfiguration: Sendable {
   ///   - logger: The logger to use. Defaults to a build-config-aware logger; pass a logger backed by
   ///     `SwiftLogNoOpLogHandler` to disable logging entirely.
   ///   - usesNewHostname: When `true`, the storage-specific hostname is used, enabling uploads over 50 GB.
+  ///   - retry: How transient failures of reads are retried, or `nil` to never retry.
+  ///   - clock: The clock the waits between retries sleep on.
   public init(
     url: URL,
     headers: [String: String],
     http: HTTPClientConfiguration = .init(),
     logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.storage"),
-    usesNewHostname: Bool = false
+    usesNewHostname: Bool = false,
+    retry: RetryPolicy? = .default,
+    clock: any Clock<Duration> = ContinuousClock()
   ) {
     self.url = url
     self.headers = headers
@@ -76,6 +93,8 @@ public struct StorageClientConfiguration: Sendable {
     logger[metadataKey: "system"] = "storage"
     self.logger = logger
     self.usesNewHostname = usesNewHostname
+    self.retry = retry
+    self.clock = clock
   }
 }
 

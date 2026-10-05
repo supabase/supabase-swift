@@ -132,7 +132,9 @@ public final class SupabaseClient: Sendable {
         headers: headers,
         http: authenticatedHTTP,
         logger: options.global.logger,
-        usesNewHostname: options.storage.usesNewHostname
+        usesNewHostname: options.storage.usesNewHostname,
+        retry: options.storage.retry ? .default : nil,
+        clock: clock
       )
     )
   }
