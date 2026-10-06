@@ -283,38 +283,8 @@ final class URLSessionWebSocket: WebSocket {
     _connectionClosed(code: frame.code, reason: Data(frame.reason.utf8))
   }
 
-  /// Maps a transport error onto the close code and reason to report, per RFC 6455.
-  ///
-  /// Returns `nil` when the connection must be left alone: a POSIX `ENOTCONN` means the socket
-  /// is already gone, and `onWebsocketTaskClosed`/`onComplete` will fire with the peer's own
-  /// close code. Synthesizing an abnormal closure here instead would race that callback and
-  /// hand the reconnect path a code the peer never sent.
-  ///
-  /// Pure by design, for the same reason as ``validatedCloseCode(_:)``: it lets the whole
-  /// mapping be tested from a plain `NSError`, with no socket or network involved.
   static func closeFrame(for error: any Error) -> (code: Int, reason: String)? {
-    let nsError = error as NSError
-
-    switch (nsError.domain, nsError.code) {
-    // Matched through the platform's own errno constants rather than the raw numbers: errno
-    // values are platform-specific, and Darwin's differ from Linux's (ENOTCONN 57 vs 107,
-    // EPROTO 100 vs 71). Hard-coding Darwin's meant a disconnected socket on Linux fell
-    // through to `default` and reported a close the peer never sent. `POSIXErrorCode` would
-    // read better but Android's Foundation does not vend it.
-    case (NSPOSIXErrorDomain, Int(ENOTCONN)):
-      // Socket is not connected — the delegate callbacks report the close code.
-      return nil
-    case (NSPOSIXErrorDomain, Int(EPROTO)):
-      return (1002, nsError.localizedDescription)
-    case (NSURLErrorDomain, NSURLErrorTimedOut):
-      return (1006, "Connection timed out")
-    case (NSURLErrorDomain, NSURLErrorNetworkConnectionLost):
-      return (1006, "Network connection lost")
-    case (NSURLErrorDomain, NSURLErrorNotConnectedToInternet):
-      return (1006, "No internet connection")
-    default:
-      return (1006, nsError.localizedDescription)
-    }
+    URLSessionWebSocketTransport.closeFrame(for: error)
   }
 
   /// Handles the connection being closed and triggers the close event.
@@ -449,33 +419,12 @@ final class URLSessionWebSocket: WebSocket {
     }
   }
 
-  /// Returns `code` if RFC 6455 §7.4 allows an endpoint to send it, otherwise `nil`.
-  ///
-  /// Only 1000 and the application-defined range 3000...4999 may be sent. Anything else closes
-  /// without a code (the peer sees 1005) rather than trapping — ``close(code:reason:)`` is called
-  /// from user code and cannot throw.
-  ///
-  /// Pure by design: the caller reports the rejection. Driving `reportIssue` from a `@Test`
-  /// function segfaults under `xcodebuild test` (SDK-435), so keeping it out of here is what lets
-  /// this be tested directly on both runners.
   static func validatedCloseCode(_ code: Int?) -> Int? {
-    guard let code else { return nil }
-    return code == 1000 || (3000...4999).contains(code) ? code : nil
+    URLSessionWebSocketTransport.validatedCloseCode(code)
   }
 
-  /// Returns `reason` truncated to the 123-byte close-frame payload limit of RFC 6455 §5.5.
-  ///
-  /// Truncation happens on whole characters, so the frame never carries a split UTF-8 scalar.
-  /// Pure for the same reason as ``validatedCloseCode(_:)``.
   static func validatedCloseReason(_ reason: String?) -> String? {
-    guard let reason, reason.utf8.count > 123 else { return reason }
-
-    var truncated = ""
-    for character in reason {
-      guard truncated.utf8.count + character.utf8.count <= 123 else { break }
-      truncated.append(character)
-    }
-    return truncated
+    URLSessionWebSocketTransport.validatedCloseReason(reason)
   }
 
   /// The WebSocket subprotocol negotiated with the peer.

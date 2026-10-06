@@ -534,10 +534,6 @@ struct WebSocketTests {
   #endif
 }
 
-private struct LoopbackError: Error {
-  let message: String
-}
-
 #if canImport(Network)
   import Network
   import ObjectiveC
@@ -549,109 +545,6 @@ private struct LoopbackError: Error {
   }
 
   private nonisolated(unsafe) var deinitNotifierKey: UInt8 = 0
-
-  private final class LoopbackWebSocketServer: @unchecked Sendable {
-    private let listener: NWListener
-    private let queue = DispatchQueue(label: "co.supabase.LoopbackWebSocketServer")
-    private var connections: [NWConnection] = []
-    private var isStopped = false
-
-    init() throws {
-      let parameters = NWParameters.tcp
-      let webSocketOptions = NWProtocolWebSocket.Options()
-      webSocketOptions.autoReplyPing = true
-      parameters.defaultProtocolStack.applicationProtocols.insert(webSocketOptions, at: 0)
-      listener = try NWListener(using: parameters, on: .any)
-    }
-
-    func start() throws -> UInt16 {
-      let ready = DispatchSemaphore(value: 0)
-
-      listener.stateUpdateHandler = { state in
-        if case .ready = state { ready.signal() }
-      }
-
-      listener.newConnectionHandler = { [weak self] connection in
-        guard let self else { return }
-        if self.isStopped {
-          connection.cancel()
-          return
-        }
-        self.connections.append(connection)
-        connection.start(queue: self.queue)
-        self.receive(on: connection)
-      }
-
-      listener.start(queue: queue)
-
-      guard ready.wait(timeout: .now() + 5) == .success, let port = listener.port else {
-        throw LoopbackError(message: "loopback server failed to start")
-      }
-
-      return port.rawValue
-    }
-
-    private func receive(on connection: NWConnection) {
-      connection.receiveMessage { [weak self] _, context, _, error in
-        if let metadata = context?.protocolMetadata(definition: NWProtocolWebSocket.definition)
-          as? NWProtocolWebSocket.Metadata, metadata.opcode == .close
-        {
-          let closeMetadata = NWProtocolWebSocket.Metadata(opcode: .close)
-          let closeContext = NWConnection.ContentContext(
-            identifier: "close", metadata: [closeMetadata])
-          connection.send(
-            content: nil,
-            contentContext: closeContext,
-            isComplete: true,
-            completion: .contentProcessed { _ in connection.cancel() }
-          )
-          return
-        }
-
-        guard error == nil else { return }
-        self?.receive(on: connection)
-      }
-    }
-
-    /// Pushes a frame from the server to every connected client.
-    ///
-    /// Every other test here only drives traffic client→server, which is why
-    /// `URLSessionWebSocket._handleMessage` had no coverage: nothing ever arrived for it to
-    /// handle. Dispatched on `queue` so it is ordered after the `newConnectionHandler` that
-    /// appended the connection.
-    func send(text: String) {
-      send(Data(text.utf8), opcode: .text)
-    }
-
-    func send(binary: Data) {
-      send(binary, opcode: .binary)
-    }
-
-    private func send(_ payload: Data, opcode: NWProtocolWebSocket.Opcode) {
-      queue.async { [self] in
-        let metadata = NWProtocolWebSocket.Metadata(opcode: opcode)
-        let context = NWConnection.ContentContext(identifier: "send", metadata: [metadata])
-
-        for connection in connections {
-          connection.send(
-            content: payload,
-            contentContext: context,
-            isComplete: true,
-            completion: .contentProcessed { _ in }
-          )
-        }
-      }
-    }
-
-    func stop() {
-      queue.sync {
-        isStopped = true
-        listener.cancel()
-        for connection in connections { connection.cancel() }
-        connections.removeAll()
-      }
-    }
-  }
 
   #if os(macOS)
     import Security
