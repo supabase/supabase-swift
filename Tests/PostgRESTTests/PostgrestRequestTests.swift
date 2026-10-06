@@ -79,6 +79,42 @@ struct PostgrestRequestTests {
   }
 
   @Test
+  func aClientHeaderRemovedFromTheRequestStaysRemoved() {
+    let client = PostgrestClient(
+      url: URL(string: "https://example.supabase.co")!, headers: ["apikey": "key"])
+    var request = client.makeRequest("todos")
+    request.headerFields[HTTPField.Name("apikey")!] = nil
+    let sent = request.httpRequest(for: client.configuration)
+    #expect(sent.headerFields[HTTPField.Name("apikey")!] == nil)
+  }
+
+  @Test
+  func rpcParamsAreNotReplacedByALaterTransform() async throws {
+    let capture = QueryCapture()
+    try await capture.client.rpc("f", params: ["limit": 5], get: true).limit(10).execute()
+    #expect(capture.query == "limit=5&limit=10")
+  }
+
+  @Test
+  func nullOnNoRowsReportsADecodingError() async throws {
+    let capture = QueryCapture(
+      body: #"""
+        {"code":"PGRST116","message":"Cannot coerce the result to a single JSON object",\#
+        "details":"The result contains 0 rows","hint":null}
+        """#,
+      status: .notAcceptable
+    )
+    var request = capture.client.makeRequest("todos")
+    request.nullOnNoRows = true
+    let error = await #expect(throws: PostgrestError.self) {
+      _ = try await request.execute(on: capture.client) {
+        try JSONDecoder().decode(Int.self, from: $0)
+      }
+    }
+    #expect(error?.kind == .decoding)
+  }
+
+  @Test
   func typedPreferMergesWithTheClientPrefer() async throws {
     let capture = QueryCapture(headers: ["Prefer": "tx=rollback"])
     try await capture.client.from(Todo.self).delete().all().execute(count: .exact)

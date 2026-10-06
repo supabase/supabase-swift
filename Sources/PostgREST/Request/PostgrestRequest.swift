@@ -14,8 +14,8 @@ import Logging
   import FoundationNetworking
 #endif
 
-/// The request a ``PostgrestQuery``, ``PostgrestMutation`` or ``PostgrestRawQuery`` sends, held as
-/// a plain value.
+/// The request every PostgREST call sends, held as a plain value: the typed ``PostgrestQuery``,
+/// ``PostgrestMutation`` and ``PostgrestRawQuery``, and the untyped ``PostgrestRequestBuilder``.
 ///
 /// Every method on those types returns a copy with a changed request, so chaining off the same
 /// value twice gives two independent requests.
@@ -28,6 +28,11 @@ public struct PostgrestRequest: Sendable {
   var method: HTTPTypes.HTTPRequest.Method
   var relation: String
   var query: [URLQueryItem] = []
+
+  /// Query items sent ahead of ``query`` that a later item with the same name never replaces: the
+  /// arguments of a GET or HEAD `rpc` call.
+  var leadingQuery: [URLQueryItem] = []
+
   var headerFields: HTTPFields
   var body: Data?
 
@@ -96,9 +101,9 @@ public struct PostgrestRequest: Sendable {
         kind: .transport, message: urlError.localizedDescription, underlyingError: urlError)
     }
 
-    if 200..<300 ~= response.status.code {
+    func decoded(_ body: Data) throws -> PostgrestResponse<T> {
       do {
-        return PostgrestResponse(data: data, response: response, value: try decode(data))
+        return PostgrestResponse(data: data, response: response, value: try decode(body))
       } catch let error as PostgrestError {
         throw error
       } catch {
@@ -109,6 +114,10 @@ public struct PostgrestRequest: Sendable {
           underlyingError: error
         )
       }
+    }
+
+    if 200..<300 ~= response.status.code {
+      return try decoded(data)
     }
 
     // A fixed decoder: the configured one carries key and date strategies for row types, and
@@ -122,8 +131,7 @@ public struct PostgrestRequest: Sendable {
       )
     }
     if nullOnNoRows, serverError.code == "PGRST116", serverError.matchedZeroRows {
-      return PostgrestResponse(
-        data: data, response: response, value: try decode(Data("null".utf8)))
+      return try decoded(Data("null".utf8))
     }
     throw PostgrestError(
       kind: .server,
@@ -134,10 +142,9 @@ public struct PostgrestRequest: Sendable {
   }
 
   func httpRequest(for configuration: PostgrestClient.Configuration) -> HTTPTypes.HTTPRequest {
-    var fields = HTTPFields(configuration.headers)
-    for field in headerFields {
-      fields[field.name] = field.value
-    }
+    // The client's headers were seeded by `PostgrestClient.makeRequest`, so a header the request
+    // replaced or removed stays that way.
+    var fields = headerFields
     if fields[.accept] == nil {
       fields[.accept] = "application/json"
     }
@@ -157,7 +164,8 @@ public struct PostgrestRequest: Sendable {
     }
     return HTTPTypes.HTTPRequest(
       method: method,
-      url: configuration.url.appendingPathComponent(relation).appendingQueryItems(query),
+      url: configuration.url.appendingPathComponent(relation).appendingQueryItems(
+        leadingQuery + query),
       headerFields: fields
     )
   }

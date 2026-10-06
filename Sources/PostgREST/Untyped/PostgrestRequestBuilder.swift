@@ -9,10 +9,6 @@ public import Foundation
 import HTTPTypes
 import Logging
 
-#if canImport(FoundationNetworking)
-  import FoundationNetworking
-#endif
-
 /// A marker protocol conformed to by every phase whose builder can execute a request and set
 /// per-request headers/retry behavior.
 ///

@@ -284,10 +284,8 @@ public struct PostgrestClient: Sendable {
         )
       }
 
-      // The params lead the query, ahead of any filter added later, as they did when they were
-      // written into the URL here.
       for (key, value) in json {
-        request.query.append(URLQueryItem(name: key, value: queryValue(for: value)))
+        request.leadingQuery.append(URLQueryItem(name: key, value: queryValue(for: value)))
       }
     } else if !(params is NoParams) {
       request.body = bodyData
