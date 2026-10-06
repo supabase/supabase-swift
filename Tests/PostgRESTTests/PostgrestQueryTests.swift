@@ -194,7 +194,7 @@ struct PostgrestQueryTests {
   @Test
   func whereWorksAfterReturning() async throws {
     let capture = QueryCapture(body: #"{"id":1,"task":"buy milk"}"#)
-    let todo = try await capture.client.from(Todo.self).delete().returning()
+    let todo = try await capture.client.from(Todo.self).delete().all().returning()
       .where { $0.id.eq(1) }.single().execute().value
     #expect(todo.id == 1)
     #expect(capture.httpMethod == "DELETE")

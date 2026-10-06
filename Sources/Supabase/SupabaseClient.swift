@@ -151,24 +151,28 @@ public final class SupabaseClient: Sendable {
 
   /// The Functions client for invoking Supabase Edge Functions.
   public var functions: FunctionsClient {
+    // The bearer token is the provider's job, not a static header's: the session token when
+    // signed in, else the legacy JWT key, and nothing for a new-format key.
     var functionsHeaders = _headers
-    if APIKeyFormat.isNew(supabaseKey) {
-      functionsHeaders[.authorization] = nil
-    }
+    functionsHeaders[.authorization] = nil
     return FunctionsClient(
-      url: functionsURL,
-      headers: functionsHeaders.dictionary,
-      region: options.functions.region,
-      logger: options.global.logger,
-      http: HTTPClientConfiguration(
-        transport: transport,
-        middlewares: options.global.http.middlewares + [TraceContextMiddleware()],
-        timeout: options.global.http.timeout
-      ),
-      decoder: options.functions.decoder,
-      accessToken: { [weak self] in
-        try await self?._getAccessToken()
-      }
+      configuration: .init(
+        url: functionsURL,
+        headers: functionsHeaders,
+        region: options.functions.region.map(FunctionRegion.init(rawValue:)),
+        http: HTTPClientConfiguration(
+          transport: transport,
+          middlewares: options.global.http.middlewares + [TraceContextMiddleware()],
+          timeout: options.global.http.timeout
+        ),
+        logger: options.global.logger,
+        decoder: options.functions.decoder,
+        accessToken: { [weak self, supabaseKey] in
+          guard let self else { return nil }
+          let token = try await self._getAccessToken() ?? supabaseKey
+          return APIKeyFormat.functionsBearerToken(accessToken: token, supabaseKey: supabaseKey)
+        }
+      )
     )
   }
 

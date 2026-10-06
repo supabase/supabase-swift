@@ -112,8 +112,8 @@ let package = Package(
     .target(
       name: "Functions",
       dependencies: [
-        .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
+        .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
         .product(name: "Logging", package: "swift-log"),
         "Helpers",
       ]
@@ -122,13 +122,12 @@ let package = Package(
       name: "FunctionsTests",
       dependencies: [
         .product(name: "HTTPTypes", package: "swift-http-types"),
-        .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
+        .product(name: "HTTPTypesFoundation", package: "swift-http-types"),
+        .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
+        .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
         "Functions",
         "Mocker",
         "TestHelpers",
-      ],
-      exclude: [
-        "__Snapshots__"
       ]
     ),
     .testTarget(

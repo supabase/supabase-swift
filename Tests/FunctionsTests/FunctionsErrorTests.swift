@@ -35,6 +35,37 @@ struct FunctionsErrorTests {
   }
 
   @Test
+  func descriptionAppendsThePlatformCode() {
+    let error = FunctionsError(
+      kind: .server,
+      message: "Edge Function returned a non-2xx status code: 503",
+      code: .bootError,
+      response: HTTPErrorResponse(statusCode: 503, headers: HTTPFields(), body: Data())
+    )
+
+    #expect(
+      error.description
+        == "FunctionsError(server): Edge Function returned a non-2xx status code: 503 [status 503] [code BOOT_ERROR]"
+    )
+  }
+
+  @Test
+  func isPlatformError() {
+    #expect(FunctionsError(kind: .server, message: "", code: .bootError).isPlatformError)
+    #expect(FunctionsError(kind: .server, message: "", code: "FUTURE_CODE").isPlatformError)
+    #expect(!FunctionsError(kind: .server, message: "", code: .edgeFunctionError).isPlatformError)
+    #expect(!FunctionsError(kind: .server, message: "").isPlatformError)
+  }
+
+  @Test
+  func codeIsOpen() {
+    let future = FunctionsError.Code(rawValue: "SOMETHING_NEW")
+
+    #expect(future.rawValue == "SOMETHING_NEW")
+    #expect(future != .notFound)
+  }
+
+  @Test
   func kindIsOpen() {
     let future = FunctionsError.Kind(rawValue: "somethingNew")
 
