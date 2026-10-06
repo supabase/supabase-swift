@@ -1468,7 +1468,9 @@ features:
   # Cancellation is plain Swift structured concurrency: cancel the enclosing
   # Task for invoke(), or stop iterating / cancel the Task for the body of
   # stream(). No dedicated cancel()-style symbol exists.
-  functions.invocation.request_cancellation: implemented
+  functions.invocation.request_cancellation:
+    status: implemented
+    note: "Cancel the enclosing Task. invoke() and stream() throw CancellationError, never a FunctionsError wrapping URLError(.cancelled); cancelling the task that iterates FunctionStreamResponse.body throws CancellationError from the loop and closes the connection."
   functions.invocation.timeout:
     status: implemented
     symbols:

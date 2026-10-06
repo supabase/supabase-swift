@@ -105,6 +105,28 @@ let client = SupabaseClient(
 )
 ```
 
+### Invoke an Edge Function
+
+```swift
+struct Answer: Decodable { let text: String }
+
+// JSON in, typed JSON out
+let answer: Answer = try await client.functions.invoke("ask", body: .json(["prompt": "hi"]))
+
+// Raw response: status, headers, bytes
+let response = try await client.functions.invoke("report", options: .init(method: .get))
+print(response.status, response.body.count)
+```
+
+### Stream a response
+
+```swift
+let response = try await client.functions.stream("chat", body: .json(["prompt": "hi"]))
+for try await chunk in response.body {
+  // chunk boundaries follow the network; frame server-sent events yourself
+}
+```
+
 Additional examples are available in the [Examples](https://github.com/supabase/supabase-swift/tree/main/Examples) directory.
 
 ## Support Policy
