@@ -208,6 +208,7 @@ public struct FunctionRegion: RawRepresentable, Hashable, Sendable {
   public static let apSoutheast2 = FunctionRegion(rawValue: "ap-southeast-2")
   public static let caCentral1 = FunctionRegion(rawValue: "ca-central-1")
   public static let euCentral1 = FunctionRegion(rawValue: "eu-central-1")
+  public static let euCentral2 = FunctionRegion(rawValue: "eu-central-2")
   public static let euWest1 = FunctionRegion(rawValue: "eu-west-1")
   public static let euWest2 = FunctionRegion(rawValue: "eu-west-2")
   public static let euWest3 = FunctionRegion(rawValue: "eu-west-3")

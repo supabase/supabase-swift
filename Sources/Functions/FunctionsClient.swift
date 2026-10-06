@@ -223,37 +223,59 @@ public struct FunctionsClient: Sendable {
   ) async throws -> (HTTPResponse, Data) {
     let (request, body) = try await buildRequest(functionName: functionName, options: invokeOptions)
 
-    let response: HTTPResponse
-    let data: Data
     do {
-      (response, data) = try await http.send(
-        request, body: body, timeout: invokeOptions.timeout)
+      let (response, responseBody) = try await http.stream(
+        request, body: body.map { HTTPBody($0) }, timeout: invokeOptions.timeout)
+      try await Self.throwIfFailed(response, body: responseBody)
+      var data = Data()
+      if let responseBody { data = try await Data(collecting: responseBody, upTo: .max) }
+      return (response, data)
     } catch {
-      // Only the network layer's own failures are relabelled. `CancellationError`, and anything
-      // thrown by user code that runs inside `send` (a custom `ClientTransport` or middleware, an `accessToken` closure),
-      // propagate as themselves.
-      guard let urlError = error as? URLError else { throw error }
-      throw FunctionsError(
-        kind: .transport, message: urlError.localizedDescription, underlyingError: urlError)
+      throw Self.mapTransportError(error)
     }
+  }
 
+  /// The most bytes of a non-2xx body kept on ``FunctionsError/response``. The rest is dropped
+  /// so an unbounded error response cannot hold the call open or exhaust memory (SDK-1840).
+  static let maxErrorBodyBytes = 1 << 20
+
+  /// Throws ``FunctionsError`` with kind `.relay` or `.server` when `response` is a failure,
+  /// carrying the first ``maxErrorBodyBytes`` of `body`. The relay check runs first: relay
+  /// failures are non-2xx too.
+  private static func throwIfFailed(_ response: HTTPResponse, body: HTTPBody?) async throws {
+    let kind: FunctionsError.Kind
+    let message: String
     if response.headerFields[.xRelayError] == "true" {
-      throw FunctionsError(
-        kind: .relay,
-        message: "Relay Error invoking the Edge Function",
-        response: HTTPErrorResponse(response, body: data)
-      )
+      kind = .relay
+      message = "Relay Error invoking the Edge Function"
+    } else if response.status.kind != .successful {
+      kind = .server
+      message = "Edge Function returned a non-2xx status code: \(response.status.code)"
+    } else {
+      return
     }
 
-    guard response.status.kind == .successful else {
-      throw FunctionsError(
-        kind: .server,
-        message: "Edge Function returned a non-2xx status code: \(response.status.code)",
-        response: HTTPErrorResponse(response, body: data)
-      )
+    var data = Data()
+    if let body {
+      for try await chunk in body {
+        data.append(contentsOf: chunk.prefix(maxErrorBodyBytes - data.count))
+        if data.count >= maxErrorBodyBytes { break }
+      }
     }
+    throw FunctionsError(
+      kind: kind, message: message, response: HTTPErrorResponse(response, body: data))
+  }
 
-    return (response, data)
+  /// Relabels the network layer's own failures as `.transport`. `CancellationError`, a
+  /// `FunctionsError` and anything thrown by user code that runs inside the exchange (a custom
+  /// `ClientTransport` or middleware) propagate as themselves.
+  private static func mapTransportError(_ error: any Error) -> any Error {
+    guard let urlError = error as? URLError else { return error }
+    // `URLSession` reports a cancelled `Task` as `URLError(.cancelled)`. A `.cancelled` with no
+    // task cancellation behind it (a middleware cancelled the request) stays a transport error.
+    if urlError.code == .cancelled, Task.isCancelled { return CancellationError() }
+    return FunctionsError(
+      kind: .transport, message: urlError.localizedDescription, underlyingError: urlError)
   }
 
   /// Invokes a function and returns its response as a stream of raw `Data` chunks.
@@ -290,40 +312,15 @@ public struct FunctionsClient: Sendable {
         let (head, body) = try await http.stream(
           request, body: requestBody.map { HTTPBody($0) }, timeout: invokeOptions.timeout
         )
-
-        if head.headerFields[.xRelayError] == "true" {
-          var data = Data()
-          if let body { data = try await Data(collecting: body, upTo: .max) }
-          throw FunctionsError(
-            kind: .relay,
-            message: "Relay Error invoking the Edge Function",
-            response: HTTPErrorResponse(head, body: data)
-          )
-        }
-        guard head.status.kind == .successful else {
-          var data = Data()
-          if let body { data = try await Data(collecting: body, upTo: .max) }
-          throw FunctionsError(
-            kind: .server,
-            message: "Edge Function returned a non-2xx status code: \(head.status.code)",
-            response: HTTPErrorResponse(head, body: data)
-          )
-        }
+        try await Self.throwIfFailed(head, body: body)
         if let body {
           for try await chunk in body {
             continuation.yield(Data(chunk))
           }
         }
         continuation.finish()
-      } catch let urlError as URLError {
-        // Only the network layer's own failures are relabelled. `CancellationError`, a
-        // `FunctionsError` thrown above and errors from a user's `accessToken` closure propagate
-        // as themselves.
-        continuation.finish(
-          throwing: FunctionsError(
-            kind: .transport, message: urlError.localizedDescription, underlyingError: urlError))
       } catch {
-        continuation.finish(throwing: error)
+        continuation.finish(throwing: Self.mapTransportError(error))
       }
     }
     continuation.onTermination = { _ in task.cancel() }

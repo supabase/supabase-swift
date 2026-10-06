@@ -1386,6 +1386,7 @@ features:
       - FunctionRegion.apSoutheast2
       - FunctionRegion.caCentral1
       - FunctionRegion.euCentral1
+      - FunctionRegion.euCentral2
       - FunctionRegion.euWest1
       - FunctionRegion.euWest2
       - FunctionRegion.euWest3
