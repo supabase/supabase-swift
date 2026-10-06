@@ -138,9 +138,12 @@ public struct FunctionsClient: Sendable {
 
     var logger = configuration.logger
     logger[metadataKey: "system"] = "functions"
+    // After the caller's middlewares, so none of them sees the token; before the logger, so
+    // the logged request is the one on the wire.
+    let accessToken = configuration.accessToken.map { AccessTokenMiddleware(getAccessToken: $0) }
     http = HTTPClient(
       configuration: configuration.http,
-      appending: [LoggerInterceptor(logger: logger)],
+      appending: (accessToken.map { [$0] } ?? []) + [LoggerInterceptor(logger: logger)],
       defaultTimeout: Self.requestIdleTimeout
     )
   }

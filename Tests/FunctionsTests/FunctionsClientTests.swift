@@ -769,6 +769,44 @@ struct FunctionsClientTests {
     #expect(capturedRequest?.headerFields[.authorization] == "Bearer override.token")
   }
 
+  /// The token middleware runs after the caller's middlewares (the SDK-1786 order), so none of
+  /// them sees the bearer.
+  @Test
+  func callerMiddlewareDoesNotSeeTheAccessToken() async throws {
+    struct Capture: ClientMiddleware {
+      let box: CapturedRequestBox
+      func intercept(
+        _ request: HTTPTypes.HTTPRequest, body: HTTPBody?,
+        next:
+          @Sendable (HTTPTypes.HTTPRequest, HTTPBody?) async throws -> (
+            HTTPTypes.HTTPResponse, HTTPBody?
+          )
+      ) async throws -> (HTTPTypes.HTTPResponse, HTTPBody?) {
+        await box.set(request, timeout: nil)
+        return try await next(request, body)
+      }
+    }
+
+    let seenByMiddleware = CapturedRequestBox()
+    let seenByTransport = CapturedRequestBox()
+    let sut = makeClient(
+      http: .init(
+        transport: ClosureTransport { request, _ in
+          await seenByTransport.set(request, timeout: nil)
+          return (HTTPTypes.HTTPResponse(status: .ok), nil)
+        },
+        middlewares: [Capture(box: seenByMiddleware)]),
+      accessToken: { "access.token" }
+    )
+
+    try await sut.invoke("hello-world")
+
+    let middlewareRequest = await seenByMiddleware.request
+    #expect(middlewareRequest?.headerFields[.authorization] == nil)
+    let transportRequest = await seenByTransport.request
+    #expect(transportRequest?.headerFields[.authorization] == "Bearer access.token")
+  }
+
   @Test
   func accessTokenProviderErrorPropagatesToInvoke() async throws {
     struct TokenError: Error {}
@@ -882,22 +920,18 @@ struct FunctionsClientTests {
 
   @Test
   func streamDoesNotWrapAccessTokenError() async {
+    struct TokenError: Error {}
     let sut = makeClient(
       http: .init(
         transport: ClosureTransport { _, _ in
           Issue.record("transport should not be called when the access token provider throws")
           return (HTTPTypes.HTTPResponse(status: .ok), nil)
         }),
-      accessToken: { throw URLError(.userAuthenticationRequired) }
+      accessToken: { throw TokenError() }
     )
 
-    do {
-      _ = try await sut.stream("stream")
-      Issue.record("expected the stream to fail")
-    } catch let error as URLError {
-      #expect(error.code == .userAuthenticationRequired)
-    } catch {
-      Issue.record("Unexpected error \(error)")
+    await #expect(throws: TokenError.self) {
+      try await sut.stream("stream")
     }
   }
 

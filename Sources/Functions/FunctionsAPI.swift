@@ -55,8 +55,8 @@ enum FunctionsAPI {
     return (request, body?.httpBody)
   }
 
-  /// Builds, authorizes and sends one invocation, returning the head and the unread body once
-  /// the head passes ``throwIfFailed(_:body:)``.
+  /// Builds and sends one invocation, returning the head and the unread body once the head
+  /// passes ``throwIfFailed(_:body:)``. The bearer token is `AccessTokenMiddleware`'s job.
   static func exchange(
     name: String,
     body: FunctionBody?,
@@ -64,17 +64,8 @@ enum FunctionsAPI {
     configuration: FunctionsClient.Configuration,
     http: HTTPClient
   ) async throws -> (HTTPResponse, HTTPBody?) {
-    var (request, requestBody) = makeRequest(
+    let (request, requestBody) = makeRequest(
       name: name, body: body, options: options, configuration: configuration)
-
-    // Resolved outside the catch below: an error from the `accessToken` closure is the caller's
-    // own and must propagate unchanged, even when it happens to be a `URLError`.
-    if request.headerFields[.authorization] == nil,
-      let token = try await configuration.accessToken?()
-    {
-      request.headerFields[.authorization] = "Bearer \(token)"
-    }
-
     do {
       let (head, responseBody) = try await http.stream(
         request, body: requestBody, timeout: options.timeout)
@@ -119,7 +110,8 @@ enum FunctionsAPI {
 
   /// Relabels the network layer's own failures as `.transport`. `CancellationError`, a
   /// `FunctionsError` and anything thrown by user code that runs inside the exchange (a custom
-  /// `ClientTransport` or middleware) propagate as themselves.
+  /// `ClientTransport` or middleware, the `accessToken` closure) propagate as themselves, unless
+  /// it is a `URLError`: the chain cannot tell one of those from the transport's own.
   static func mapTransportError(_ error: any Error) -> any Error {
     guard let urlError = error as? URLError else { return error }
     // `URLSession` reports a cancelled `Task` as `URLError(.cancelled)`. A `.cancelled` with no

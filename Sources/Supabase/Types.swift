@@ -147,26 +147,31 @@ public struct SupabaseClientOptions: Sendable {
 
   /// Options for the Edge Functions sub-client.
   public struct FunctionsOptions: Sendable {
-    /// The Region to invoke the functions in.
-    public let region: String?
+    /// The region to invoke functions in. `nil` lets the platform choose.
+    public var region: FunctionRegion?
 
     /// The JSON decoder to use for decoding function response bodies.
-    public let decoder: JSONDecoder
+    public var decoder: JSONDecoder
 
-    @_disfavoredOverload
-    public init(
-      region: String? = nil,
-      decoder: JSONDecoder = .supabase()
-    ) {
-      self.region = region
-      self.decoder = decoder
-    }
+    /// Overrides ``SupabaseClientOptions/GlobalOptions/http`` for Functions, field by field: a
+    /// `nil` transport or timeout falls back to the global one, and its middlewares run after the
+    /// global ones. `nil` uses the global configuration as is.
+    public var http: HTTPClientConfiguration?
+
+    /// Overrides ``SupabaseClientOptions/GlobalOptions/logger`` for Functions. `nil` uses the
+    /// global logger.
+    public var logger: Logger?
 
     public init(
       region: FunctionRegion? = nil,
-      decoder: JSONDecoder = .supabase()
+      decoder: JSONDecoder = .supabase(),
+      http: HTTPClientConfiguration? = nil,
+      logger: Logger? = nil
     ) {
-      self.init(region: region?.rawValue, decoder: decoder)
+      self.region = region
+      self.decoder = decoder
+      self.http = http
+      self.logger = logger
     }
   }
 

@@ -37,6 +37,9 @@ supporting_symbols:
   - SupabaseClientOptions.GlobalOptions.clock
   - AuthClient.Configuration.clock
   - RealtimeClientOptions.clock
+  # A per-module logger override on the facade, mirroring `GlobalOptions.logger`; a logging
+  # knob, not a capability.
+  - SupabaseClientOptions.FunctionsOptions.logger
 
   # A handful of PostgrestRequestBuilder members are used across many
   # database.* capabilities simultaneously (executing every query/mutate/rpc,
@@ -883,6 +886,7 @@ features:
       - AuthClient.Configuration.http
       - PostgrestClient.Configuration.http
       - StorageClientConfiguration.http
+      - SupabaseClientOptions.FunctionsOptions.http
     supporting_symbols:
       - HTTPClientConfiguration
       - HTTPClientConfiguration.init

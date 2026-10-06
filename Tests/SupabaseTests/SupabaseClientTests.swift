@@ -132,12 +132,12 @@ struct SupabaseClientTests {
       """
     }
     expectNoDifference(client.headers, client.auth.configuration.headers)
-    // Functions never carries a static `Authorization`; the bearer is the provider's job.
-    var functionsHeaders = client.headers
-    functionsHeaders["Authorization"] = nil
-    expectNoDifference(functionsHeaders, client.functions.configuration.headers.dictionary)
-    expectNoDifference(client.headers, client.storage.configuration.headers)
-    expectNoDifference(client.headers, client.rest.configuration.headers)
+    // The data clients carry no static `Authorization`; the bearer is `AccessTokenMiddleware`'s job.
+    var dataHeaders = client.headers
+    dataHeaders["Authorization"] = nil
+    expectNoDifference(dataHeaders, client.functions.configuration.headers.dictionary)
+    expectNoDifference(dataHeaders, client.storage.configuration.headers)
+    expectNoDifference(dataHeaders, client.rest.configuration.headers)
 
     #expect(client.functions.configuration.region == .apNortheast1)
 
@@ -570,29 +570,102 @@ struct SupabaseClientTests {
     }
     #expect(seenByTransport.value.allSatisfy { $0.headerFields[.tag] == "yes" })
 
-    // Caller middlewares run *before* `AccessTokenMiddleware`: REST and Storage still carry the
-    // anon key when the caller's middleware sees them, and the live token by the time they reach
-    // the transport.
-    for prefix in ["/rest/v1/todos", "/storage/v1/bucket"] {
-      #expect(
-        authorization(in: seenByMiddleware.value, forPathPrefix: prefix) == "Bearer PUBLISHABLE_KEY"
-      )
+    // Caller middlewares run *before* `AccessTokenMiddleware`: no data client carries
+    // `Authorization` when the caller's middleware sees it, and every one carries the live token
+    // by the time it reaches the transport.
+    for prefix in ["/rest/v1/todos", "/storage/v1/bucket", "/functions/v1/hello"] {
+      #expect(authorization(in: seenByMiddleware.value, forPathPrefix: prefix) == nil, "\(prefix)")
       #expect(
         authorization(in: seenByTransport.value, forPathPrefix: prefix)
-          == "Bearer live-session-token"
+          == "Bearer live-session-token", "\(prefix)"
       )
     }
+  }
 
-    // Functions deliberately gets no `AccessTokenMiddleware`: it resolves the token itself while
-    // building the request, so the live token is already on the header before any middleware runs.
-    #expect(
-      authorization(in: seenByMiddleware.value, forPathPrefix: "/functions/v1/hello")
-        == "Bearer live-session-token"
+  @Test
+  func functionsIsBuiltOnceAndCached() {
+    let client = SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      options: SupabaseClientOptions(auth: .init(storage: AuthLocalStorageMock()))
     )
-    #expect(
-      authorization(in: seenByTransport.value, forPathPrefix: "/functions/v1/hello")
-        == "Bearer live-session-token"
+
+    #expect(client.mutableState.functions == nil)
+    _ = client.functions
+    #expect(client.mutableState.functions != nil)
+  }
+
+  @Test
+  func functionsRegionReachesTheWire() async throws {
+    let seen = LockIsolated<[HTTPTypes.HTTPRequest]>([])
+    let transport = ClosureTransport { request, _ in
+      seen.withValue { $0.append(request) }
+      return (HTTPTypes.HTTPResponse(status: .ok), nil)
+    }
+    let client = SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      options: SupabaseClientOptions(
+        auth: .init(storage: AuthLocalStorageMock(), automaticallyRefreshesToken: false),
+        global: .init(http: .init(transport: transport)),
+        functions: .init(region: .usEast1)
+      )
     )
+
+    try await client.functions.invoke("hello")
+
+    let request = try #require(seen.value.first)
+    #expect(request.headerFields[.init("x-region")!] == "us-east-1")
+    #expect(request.url?.query?.contains("forceFunctionRegion=us-east-1") == true)
+  }
+
+  /// `functions.http` overrides the global configuration field by field: its transport wins,
+  /// and the caller's global middlewares still run.
+  @Test
+  func functionsHTTPOverridesTheGlobalTransport() async throws {
+    let globalSeen = LockIsolated<[HTTPTypes.HTTPRequest]>([])
+    let functionsSeen = LockIsolated<[HTTPTypes.HTTPRequest]>([])
+    let client = SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      options: SupabaseClientOptions(
+        auth: .init(storage: AuthLocalStorageMock(), automaticallyRefreshesToken: false),
+        global: .init(
+          http: .init(
+            transport: ClosureTransport { request, _ in
+              globalSeen.withValue { $0.append(request) }
+              return (HTTPTypes.HTTPResponse(status: .ok), nil)
+            },
+            middlewares: [TagMiddleware()])),
+        functions: .init(
+          http: .init(
+            transport: ClosureTransport { request, _ in
+              functionsSeen.withValue { $0.append(request) }
+              return (HTTPTypes.HTTPResponse(status: .ok), nil)
+            }))
+      )
+    )
+
+    try await client.functions.invoke("hello")
+
+    #expect(globalSeen.value.isEmpty)
+    let request = try #require(functionsSeen.value.first)
+    #expect(request.headerFields[.tag] == "yes")
+  }
+
+  @Test
+  func functionsLoggerIsNotOverwrittenByTheGlobalLogger() {
+    let client = SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      options: SupabaseClientOptions(
+        auth: .init(storage: AuthLocalStorageMock()),
+        global: .init(logger: Logging.Logger(label: "global")),
+        functions: .init(logger: Logging.Logger(label: "functions"))
+      )
+    )
+
+    #expect(client.functions.configuration.logger.label == "functions")
   }
 
   @Test
