@@ -50,8 +50,8 @@ try await export.body.write(to: fileURL)
 
 ### Cancelling
 
-Cancelling the task that iterates the body closes the connection and throws `CancellationError`
-from the loop. To stop reading without an error, `break` instead.
+Cancelling the task that iterates the body cancels the underlying `URLSessionTask` and throws
+`CancellationError` from the loop. To stop reading without an error, `break` instead.
 
 ```swift
 let task = Task {
@@ -69,3 +69,5 @@ In SwiftUI, `.task` cancels when the view disappears, so a chat screen needs no 
 
 On Linux `URLSessionTransport` buffers the whole response, so the body arrives as one chunk when
 the server closes the connection. The code above still works; it just sees everything at once.
+Cancelling during iteration still throws `CancellationError`, but the transfer has already
+finished by then, so it cannot be cut short.

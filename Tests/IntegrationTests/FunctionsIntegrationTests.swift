@@ -156,7 +156,7 @@ struct FunctionsIntegrationTests {
   }
 
   @Test
-  func cancellingMidStreamClosesTheConnection() async throws {
+  func cancellingMidStreamCancelsTheRequest() async throws {
     let clock = ContinuousClock()
     let task = Task {
       // 40 events, 50 ms apart: two seconds if the loop runs to the end.
