@@ -1471,6 +1471,10 @@ features:
   functions.invocation.request_cancellation:
     status: implemented
     note: "Cancel the enclosing Task. invoke() and stream() throw CancellationError, never a FunctionsError wrapping URLError(.cancelled); cancelling the task that iterates FunctionStreamResponse.body throws CancellationError from the loop and closes the connection."
+    symbols:
+      - FunctionsClient.invoke
+      - FunctionsClient.stream
+      - FunctionStreamResponse.body
   functions.invocation.timeout:
     status: implemented
     symbols:
