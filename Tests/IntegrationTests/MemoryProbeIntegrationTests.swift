@@ -11,7 +11,9 @@
 //    INTEGRATION_TESTS=1 MEMORY_PROBE=1 MEMORY_PROBE_SCENARIO=<name> \
 //      swift test --no-parallel --filter MemoryProbe
 //
-//  Results are printed, not asserted.
+//  Results are printed, not asserted. Set `MEMORY_PROBE_CHUNK_DELAY_MS` to make the download
+//  scenarios that stream (`download-transport-file`, `download-transport-iterate`) sleep that
+//  long per chunk, to see how much a consumer slower than the network holds.
 //
 
 #if canImport(Darwin)
@@ -90,6 +92,18 @@
       Int(ProcessInfo.processInfo.environment["MEMORY_PROBE_MB"] ?? "") ?? 200
     static let fileSize = fileSizeMB * megabyte
     static let scenario = ProcessInfo.processInfo.environment["MEMORY_PROBE_SCENARIO"]
+    static let chunkDelay = Int(
+      ProcessInfo.processInfo.environment["MEMORY_PROBE_CHUNK_DELAY_MS"] ?? "")
+
+    /// `body`, sleeping ``chunkDelay`` before handing over each chunk.
+    func paced(_ body: HTTPBody) -> HTTPBody {
+      guard let delay = Self.chunkDelay else { return body }
+      let chunks = body.map { @Sendable chunk in
+        try? await Task.sleep(for: .milliseconds(delay))
+        return chunk
+      }
+      return HTTPBody(chunks, length: body.length, iterationBehavior: .single)
+    }
 
     let storage = SupabaseStorageClient(
       configuration: StorageClientConfiguration(
@@ -233,7 +247,7 @@
         defer { try? FileManager.default.removeItem(at: downloadURL) }
         try await measure("transport GET → HTTPBody.write(to:)") {
           let (_, body) = try await rawSend(.get, objectURL("seed.bin"), body: nil)
-          try await body!.write(to: downloadURL)
+          try await paced(body!).write(to: downloadURL)
         }
         let attrs = try FileManager.default.attributesOfItem(atPath: downloadURL.path)
         #expect((attrs[.size] as? Int) == Self.fileSize)
@@ -249,7 +263,7 @@
         let counted = try await measure("transport GET → iterate chunks, discard") {
           let (_, body) = try await rawSend(.get, objectURL("seed.bin"), body: nil)
           var total = 0
-          for try await chunk in body! { total += chunk.count }
+          for try await chunk in paced(body!) { total += chunk.count }
           return total
         }
         #expect(counted == Self.fileSize)

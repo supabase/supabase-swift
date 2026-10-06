@@ -136,7 +136,10 @@ public struct URLSessionTransport: ClientTransport {
       -> (HTTPTypes.HTTPResponse, HTTPBody?)
     {
       // ponytail: the chunk stream is unbounded, so a consumer slower than the network holds
-      // the backlog; suspend/resume the task on a watermark if that shows up (SDK-1833).
+      // the backlog — the memory probe with `MEMORY_PROBE_CHUNK_DELAY_MS=2` grows by the whole
+      // 200 MB response. A suspend/resume watermark does not fix it: `suspend()` from
+      // `didReceive(data:)` leaves the task `.suspended` while tens of MB keep arriving
+      // (SDK-1833). Bounding it needs a transport that can stop reading the socket.
       let (chunks, continuation) = AsyncThrowingStream<ArraySlice<UInt8>, any Error>.makeStream(
         bufferingPolicy: .unbounded
       )
