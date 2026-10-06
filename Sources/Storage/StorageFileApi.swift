@@ -313,8 +313,8 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
         body: configuration.encoder.encode(
           [
             "bucketId": bucketId,
-            "sourceKey": source,
-            "destinationKey": destination,
+            "sourceKey": _removeEmptyFolders(source),
+            "destinationKey": _removeEmptyFolders(destination),
             "destinationBucket": options?.destinationBucket,
           ]
         )
@@ -352,8 +352,8 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
         body: configuration.encoder.encode(
           [
             "bucketId": bucketId,
-            "sourceKey": source,
-            "destinationKey": destination,
+            "sourceKey": _removeEmptyFolders(source),
+            "destinationKey": _removeEmptyFolders(destination),
             "destinationBucket": options?.destinationBucket,
           ]
         )
@@ -480,7 +480,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
         url: configuration.url.appendingPathComponent("object/sign/\(bucketId)"),
         method: .post,
         body: encoder.encode(
-          Params(expiresIn: expiresIn, paths: paths)
+          Params(expiresIn: expiresIn, paths: paths.map(_removeEmptyFolders))
         )
       )
     )
@@ -597,7 +597,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
       HTTPRequest(
         url: configuration.url.appendingPathComponent("object/\(bucketId)"),
         method: .delete,
-        body: configuration.encoder.encode(["prefixes": paths])
+        body: configuration.encoder.encode(["prefixes": paths.map(_removeEmptyFolders)])
       )
     )
     .decoded(decoder: configuration.decoder)
@@ -624,7 +624,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     var options = options ?? defaultSearchOptions
     options.limit = options.limit ?? defaultSearchOptions.limit
     options.offset = options.offset ?? defaultSearchOptions.offset
-    options.prefix = path ?? ""
+    options.prefix = _removeEmptyFolders(path ?? "")
 
     var sortBy = options.sortBy ?? SortBy()
     sortBy.column = sortBy.column ?? defaultSearchOptions.sortBy?.column
