@@ -15,41 +15,21 @@ public import Logging
   public import FoundationNetworking
 #endif
 
-/// Phoenix protocol version used for WebSocket communication.
-///
-/// The version controls how messages are serialized on the wire between the client
-/// and the Realtime server.
-///
-/// ## Topics
-/// ### Protocol Versions
-/// - ``v1``
-/// - ``v2``
-public enum RealtimeProtocolVersion: String, Sendable {
-  /// Protocol 1.0.0 — JSON object text frames for all messages.
-  case v1 = "1.0.0"
-
-  /// Protocol 2.0.0 — JSON array text frames for non-broadcast messages,
-  /// binary frames for broadcast messages.
-  case v2 = "2.0.0"
-}
-
 /// Options for initializing ``RealtimeClientV2``.
 ///
 /// Use this struct to customize the behavior of the Realtime client, including connection
-/// timing, authentication, protocol version, and app lifecycle handling.
+/// timing, authentication, and app lifecycle handling.
 ///
 /// ```swift
 /// let options = RealtimeClientOptions(
 ///   heartbeatInterval: .seconds(30),
-///   protocolVersion: .v2,
 ///   handleAppLifecycle: true
 /// )
 /// let client = RealtimeClientV2(url: realtimeURL, options: options)
 /// ```
 ///
 /// ## Topics
-/// ### Protocol and Lifecycle
-/// - ``protocolVersion``
+/// ### Lifecycle
 /// - ``handleAppLifecycle``
 /// ### Default Values
 /// - ``defaultHeartbeatInterval``
@@ -61,7 +41,7 @@ public enum RealtimeProtocolVersion: String, Sendable {
 /// - ``defaultDisconnectOnEmptyChannelsAfter``
 /// - ``defaultHandleAppLifecycle``
 /// ### Initialization
-/// - ``init(headers:heartbeatInterval:reconnectDelay:timeout:disconnectOnSessionLoss:connectOnSubscribe:maxRetryAttempts:disconnectOnEmptyChannelsAfter:protocolVersion:logLevel:http:accessToken:logger:session:handleAppLifecycle:clock:)``
+/// - ``init(headers:heartbeatInterval:reconnectDelay:timeout:disconnectOnSessionLoss:connectOnSubscribe:maxRetryAttempts:disconnectOnEmptyChannelsAfter:logLevel:http:accessToken:logger:session:handleAppLifecycle:clock:)``
 public struct RealtimeClientOptions: Sendable {
   package var headers: HTTPFields
   var heartbeatInterval: Duration
@@ -71,12 +51,6 @@ public struct RealtimeClientOptions: Sendable {
   var connectOnSubscribe: Bool
   var maxRetryAttempts: Int
   var disconnectOnEmptyChannelsAfter: Duration
-
-  /// The Phoenix serializer protocol version.
-  ///
-  /// Defaults to ``RealtimeProtocolVersion/v2``. Use ``RealtimeProtocolVersion/v1`` only
-  /// when connecting to a Realtime server that does not support protocol 2.0.0.
-  public var protocolVersion: RealtimeProtocolVersion
 
   /// Whether to automatically handle app lifecycle changes (background/foreground).
   ///
@@ -164,7 +138,6 @@ public struct RealtimeClientOptions: Sendable {
   ///   - connectOnSubscribe: Whether to automatically call ``RealtimeClientV2/connect()`` when subscribing to a channel. Defaults to ``defaultConnectOnSubscribe``.
   ///   - maxRetryAttempts: Maximum number of subscribe retry attempts. Defaults to ``defaultMaxRetryAttempts``.
   ///   - disconnectOnEmptyChannelsAfter: How long to wait before disconnecting when all channels are removed. Defaults to ``defaultDisconnectOnEmptyChannelsAfter``.
-  ///   - protocolVersion: The Phoenix protocol version to use. Defaults to ``RealtimeProtocolVersion/v2``.
   ///   - logLevel: Optional log level for Realtime log output.
   ///   - http: The transport and middleware chain REST broadcast calls go through.
   ///   - accessToken: Optional async closure that returns the current access token.
@@ -182,7 +155,6 @@ public struct RealtimeClientOptions: Sendable {
     connectOnSubscribe: Bool = Self.defaultConnectOnSubscribe,
     maxRetryAttempts: Int = Self.defaultMaxRetryAttempts,
     disconnectOnEmptyChannelsAfter: Duration = Self.defaultDisconnectOnEmptyChannelsAfter,
-    protocolVersion: RealtimeProtocolVersion = .v2,
     logLevel: LogLevel? = nil,
     http: HTTPClientConfiguration = .init(),
     accessToken: (@Sendable () async throws -> String?)? = nil,
@@ -199,7 +171,6 @@ public struct RealtimeClientOptions: Sendable {
     self.connectOnSubscribe = connectOnSubscribe
     self.maxRetryAttempts = maxRetryAttempts
     self.disconnectOnEmptyChannelsAfter = disconnectOnEmptyChannelsAfter
-    self.protocolVersion = protocolVersion
     self.handleAppLifecycle = handleAppLifecycle
     self.logLevel = logLevel
     self.http = http
@@ -348,7 +319,7 @@ extension HTTPField.Name {
 
 /// Verbosity of log output emitted by the Realtime client.
 ///
-/// Pass a value to ``RealtimeClientOptions/init(headers:heartbeatInterval:reconnectDelay:timeout:disconnectOnSessionLoss:connectOnSubscribe:maxRetryAttempts:disconnectOnEmptyChannelsAfter:protocolVersion:logLevel:http:accessToken:logger:session:handleAppLifecycle:clock:)``
+/// Pass a value to ``RealtimeClientOptions/init(headers:heartbeatInterval:reconnectDelay:timeout:disconnectOnSessionLoss:connectOnSubscribe:maxRetryAttempts:disconnectOnEmptyChannelsAfter:logLevel:http:accessToken:logger:session:handleAppLifecycle:clock:)``
 /// to control how much detail the Realtime server logs.
 ///
 /// ## Topics

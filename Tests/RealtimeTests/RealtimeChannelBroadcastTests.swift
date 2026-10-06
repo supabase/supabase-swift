@@ -243,6 +243,30 @@ import Testing
       #expect(payload?["type"]?.stringValue == "broadcast")
       #expect(payload?["event"]?.stringValue == "evt")
       #expect(payload?["payload"]?.objectValue?["key"]?.stringValue == "value")
+      #expect(payload?["meta"] == nil)
+    }
+
+    @Test
+    func receive_jsonBroadcastForwardsFrameMetadataAsMeta() async throws {
+      let channel = sut.channel("test")
+
+      let receivedPayload = LockIsolated<JSONObject?>(nil)
+      let subscription = channel.onBroadcast(event: "INSERT") { json in
+        receivedPayload.setValue(json)
+      }
+      defer { subscription.cancel() }
+
+      let broadcast = DecodedBroadcast(
+        topic: "realtime:test",
+        event: "INSERT",
+        meta: ["id": "0b8a1e2c-77c4-4f1b-9d2a-3f5e6a7b8c9d", "replayed": true],
+        payload: .json(["key": .string("value")])
+      )
+      await channel.handleBinaryBroadcast(broadcast)
+
+      let meta = receivedPayload.value?["meta"]?.objectValue
+      #expect(meta?["id"]?.stringValue == "0b8a1e2c-77c4-4f1b-9d2a-3f5e6a7b8c9d")
+      #expect(meta?["replayed"]?.boolValue == true)
     }
 
     // MARK: - Per-call encoder override

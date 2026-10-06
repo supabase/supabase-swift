@@ -261,9 +261,17 @@ import Testing
         // So we need to wait at least 2.5s to ensure the retry happens
         await testClock.advance(by: .seconds(2.5))
 
-        let events = client.sentEvents.compactMap { $0.realtimeMessage }.filter {
-          $0.event == "phx_join"
-        }
+        let events: [JSONObject] = client.sentEvents.compactMap { $0.realtimeMessage }
+          .filter { $0.event == "phx_join" }
+          .map {
+            [
+              "event": .string($0.event),
+              "join_ref": $0.joinRef.map(JSONValue.string) ?? .null,
+              "payload": .object($0.payload),
+              "ref": $0.ref.map(JSONValue.string) ?? .null,
+              "topic": .string($0.topic),
+            ]
+          }
         assertInlineSnapshot(of: events, as: .json) {
           #"""
           [

@@ -12,6 +12,8 @@ struct DecodedBroadcast: Sendable {
   let topic: String
   /// The user event name extracted from the binary frame.
   let event: String
+  /// The frame's metadata object, e.g. `id` and `replayed` on database-originated broadcasts.
+  var meta: JSONObject? = nil
   let payload: Payload
 
   enum Payload: Sendable {
@@ -53,10 +55,7 @@ struct RealtimeSerializer: Sendable {
     ]
 
     let data = try JSONEncoder().encode(array)
-    guard let text = String(data: data, encoding: .utf8) else {
-      throw RealtimeError.decoding("Failed to encode message as UTF-8 string.")
-    }
-    return text
+    return String(decoding: data, as: UTF8.self)
   }
 
   // MARK: - Text decoding (JSON array format)
@@ -66,7 +65,7 @@ struct RealtimeSerializer: Sendable {
     let data = Data(text.utf8)
     let array = try JSONDecoder().decode([JSONValue].self, from: data)
 
-    guard array.count >= 5 else {
+    guard array.count == 5 else {
       throw RealtimeError.decoding(
         "Expected JSON array with 5 elements, got \(array.count)."
       )
@@ -158,7 +157,7 @@ struct RealtimeSerializer: Sendable {
       eventBytes.count <= 255,
       metaBytes.count <= 255
     else {
-      throw RealtimeError.decoding(
+      throw RealtimeError.encoding(
         "Binary frame header fields must not exceed 255 bytes each."
       )
     }
@@ -227,7 +226,7 @@ struct RealtimeSerializer: Sendable {
     let eventData = data[offset..<(offset + eventLen)]
     offset += eventLen
 
-    // Skip metadata for now.
+    let metaData = data[offset..<(offset + metaLen)]
     offset += metaLen
 
     let payloadData = data[offset...]
@@ -238,6 +237,8 @@ struct RealtimeSerializer: Sendable {
     guard let event = String(data: eventData, encoding: .utf8) else {
       throw RealtimeError.decoding("Failed to decode event as UTF-8.")
     }
+
+    let meta = metaLen > 0 ? try JSONDecoder().decode(JSONObject.self, from: Data(metaData)) : nil
 
     let payload: DecodedBroadcast.Payload
     switch encoding {
@@ -251,6 +252,7 @@ struct RealtimeSerializer: Sendable {
     return DecodedBroadcast(
       topic: topic,
       event: event,
+      meta: meta,
       payload: payload
     )
   }

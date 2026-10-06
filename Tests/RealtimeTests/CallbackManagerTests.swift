@@ -204,15 +204,11 @@ struct CallbackManagerTests {
       weakCallbackManager = callbackManager
 
       let event = "new_user"
-      let message = RealtimeMessageV2(
-        joinRef: nil,
-        ref: nil,
-        topic: "realtime:users",
-        event: event,
-        payload: ["email": "mail@example.com"]
-      )
-
-      let jsonObject = try JSONObject(message)
+      let jsonObject: JSONObject = [
+        "event": .string(event),
+        "payload": ["email": "mail@example.com"],
+        "type": "broadcast",
+      ]
 
       // Match exact event
       let receivedMessage = LockIsolated<JSONObject?>(nil)

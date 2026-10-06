@@ -171,7 +171,6 @@ extension RealtimeChannelV2 {
   /// Returns an async stream of raw binary `Data` broadcast payloads for the given event.
   ///
   /// Use this when the sender is transmitting binary data via ``RealtimeChannelV2/broadcast(event:data:)``.
-  /// Requires protocol ``RealtimeProtocolVersion/v2``.
   ///
   /// - Parameter event: The broadcast event name to listen for.
   /// - Returns: An `AsyncStream<Data>`.
