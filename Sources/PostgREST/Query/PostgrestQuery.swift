@@ -122,7 +122,11 @@ extension PostgrestQuery {
   }
 
   private func send(_ request: PostgrestRequest) async throws -> PostgrestResponse<Output> {
-    try await request.execute(on: client) { try decode($0, client.configuration.decoder) }
+    // ADR 0002: the typed API never uses a configured coder, so column names derived from
+    // `CodingKeys` cannot be bent by a key strategy.
+    try await request.execute(on: client) {
+      try decode($0, PostgrestClient.Configuration.jsonDecoder)
+    }
   }
 
   private static var objectMediaType: String { "application/vnd.pgrst.object+json" }

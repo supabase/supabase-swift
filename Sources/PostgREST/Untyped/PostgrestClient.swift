@@ -98,6 +98,10 @@ public struct PostgrestClient: Sendable {
     /// ``PostgrestRequestBuilder/update(_:returning:count:encoder:)``, and
     /// ``PostgrestRequestBuilder/upsert(_:onConflict:returning:count:ignoreDuplicates:defaultToNull:encoder:)``
     /// can override this per call.
+    ///
+    /// Applies to the untyped builders only. The typed API (`from(_:)` with a relation type)
+    /// always uses ``jsonEncoder``, so a key strategy here cannot change the column names it
+    /// derives from `CodingKeys`.
     public let encoder: JSONEncoder
 
     /// The `JSONDecoder` used to deserialize response bodies.
@@ -106,6 +110,10 @@ public struct PostgrestClient: Sendable {
     /// Individual calls to ``PostgrestRequestBuilder/execute(options:decoder:)``
     /// can override this per call. Never used to decode ``PostgrestError/ServerError`` — that
     /// always uses a fixed internal decoder, decoupled from this setting.
+    ///
+    /// Applies to the untyped builders only. The typed API (`from(_:)` with a relation type)
+    /// always uses ``jsonDecoder``, so a key strategy here cannot change the column names it
+    /// derives from `CodingKeys`.
     public let decoder: JSONDecoder
 
     /// Whether the client should automatically retry transient errors.
