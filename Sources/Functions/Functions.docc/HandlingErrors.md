@@ -1,4 +1,4 @@
-# Errors
+# Handling Errors
 
 Tell a function's failure from the platform's, a lost connection from a cancelled task.
 

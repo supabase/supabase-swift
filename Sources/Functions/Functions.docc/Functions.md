@@ -20,7 +20,7 @@ struct Answer: Decodable { var text: String }
 let answer: Answer = try await supabase.functions.invoke("ask", body: .json(Prompt(text: "hi")))
 ```
 
-Every failure is a ``FunctionsError`` or a `CancellationError`. See <doc:Errors>.
+Every failure is a ``FunctionsError`` or a `CancellationError`. See <doc:HandlingErrors>.
 
 ## Topics
 
@@ -28,7 +28,7 @@ Every failure is a ``FunctionsError`` or a `CancellationError`. See <doc:Errors>
 
 - <doc:InvokingFunctions>
 - <doc:StreamingResponses>
-- <doc:Errors>
+- <doc:HandlingErrors>
 - <doc:Standalone>
 
 ### Client
