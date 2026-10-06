@@ -376,6 +376,55 @@ extension PostgrestMockerTests {
     }
 
     @Test
+    func insertAndUpsertCannotBeFiltered() throws {
+      let row = User(id: 1, username: "supabase")
+      let users = sut.from("users")
+
+      #expect(type(of: try users.insert(row)) == PostgrestTransformBuilder.self)
+      #expect(type(of: try users.upsert(row)) == PostgrestTransformBuilder.self)
+      #expect(type(of: try users.update(row)) == PostgrestFilterBuilder.self)
+      #expect(type(of: users.delete()) == PostgrestFilterBuilder.self)
+    }
+
+    @Test
+    func insertWithTransforms() async throws {
+      Mock(
+        url: url.appendingPathComponent("users"),
+        ignoreQuery: true,
+        statusCode: 201,
+        data: [
+          .post: Data(#"{"id":1,"username":"supabase"}"#.utf8)
+        ]
+      )
+      .snapshotRequest {
+        #"""
+        curl \
+        	--request POST \
+        	--header "Accept: application/vnd.pgrst.object+json" \
+        	--header "Content-Length: 30" \
+        	--header "Content-Type: application/json" \
+        	--header "Prefer: count=exact,return=representation" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	--data "{\"id\":1,\"username\":\"supabase\"}" \
+        	"http://localhost:54321/rest/v1/users?limit=1&order=id.asc&select=id,username"
+        """#
+      }
+      .register()
+
+      let _: User =
+        try await sut
+        .from("users")
+        .insert(User(id: 1, username: "supabase"), count: .exact)
+        .select("id,username")
+        .order("id")
+        .limit(1)
+        .single()
+        .execute()
+        .value
+    }
+
+    @Test
     func upsertIgnoreDuplicates() async throws {
       Mock(
         url: url.appendingPathComponent("users"),

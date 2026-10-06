@@ -106,8 +106,8 @@ let package = Package(
     .target(
       name: "Functions",
       dependencies: [
-        .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
+        .product(name: "IssueReporting", package: "swift-issue-reporting"),
         .product(name: "Logging", package: "swift-log"),
         "Helpers",
       ]
@@ -116,13 +116,12 @@ let package = Package(
       name: "FunctionsTests",
       dependencies: [
         .product(name: "HTTPTypes", package: "swift-http-types"),
-        .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
+        .product(name: "HTTPTypesFoundation", package: "swift-http-types"),
+        .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
+        .product(name: "IssueReporting", package: "swift-issue-reporting"),
         "Functions",
         "Mocker",
         "TestHelpers",
-      ],
-      exclude: [
-        "__Snapshots__"
       ]
     ),
     .testTarget(
@@ -138,6 +137,9 @@ let package = Package(
         "Supabase",
         "TestHelpers",
       ],
+      // The edge functions are served by `supabase start`, not bundled; `.process` flattens
+      // the tree, so their `index.ts` files would collide.
+      exclude: ["supabase/functions"],
       resources: [
         .process("Fixtures"),
         .process("supabase"),
@@ -298,6 +300,7 @@ for target in package.targets {
     .enableUpcomingFeature("ExistentialAny"),
     .enableUpcomingFeature("ImmutableWeakCaptures"),
     .enableUpcomingFeature("InferIsolatedConformances"),
+    .enableUpcomingFeature("NonisolatedNonsendingByDefault"),
   ]
 
   // The compiler-plugin target must declare its macro types `public` to satisfy SwiftSyntax's

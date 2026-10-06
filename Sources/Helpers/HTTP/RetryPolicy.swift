@@ -10,7 +10,7 @@ package import HTTPTypes
 
 /// How a client retries a request that failed transiently.
 ///
-/// One policy drives every module that retries (Auth, PostgREST, and the delay math of
+/// One policy drives every module that retries (Auth, PostgREST, Storage, and the delay math of
 /// Realtime's reconnect). A request is retried when its method is in ``retryableMethods`` and
 /// the attempt either failed with a transient `URLError` or returned a status in
 /// ``retryableStatuses``. The wait between attempts is capped exponential backoff with equal
@@ -18,8 +18,8 @@ package import HTTPTypes
 /// retry — unless the response carried a `Retry-After` header, which is honoured up to
 /// ``maxDelay``.
 ///
-/// ponytail: `package` on purpose. Storage and Functions do not retry yet; which of their
-/// requests are safe to replay is a separate decision, and this becomes public with it.
+/// `package` on purpose: which requests are safe to replay is the SDK's decision, so callers
+/// only switch retries on or off (`retryEnabled`, `db.retry`, `storage.retryEnabled`).
 package struct RetryPolicy: Sendable, Hashable {
   /// Total attempts, including the first. `1` disables retries.
   package var maxAttempts: Int

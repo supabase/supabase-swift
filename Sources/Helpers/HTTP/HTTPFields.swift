@@ -67,7 +67,9 @@ extension HTTPFields {
       var components = currentValue.components(separatedBy: separator)
 
       if let key = value.split(separator: "=").first,
-        let index = components.firstIndex(where: { $0.hasPrefix("\(key)=") })
+        let index = components.firstIndex(where: {
+          $0.trimmingCharacters(in: .whitespaces).hasPrefix("\(key)=")
+        })
       {
         components[index] = value
       } else {
@@ -83,7 +85,5 @@ extension HTTPFields {
 
 extension HTTPField.Name {
   package static let xClientInfo = HTTPField.Name("X-Client-Info")!
-  package static let xRegion = HTTPField.Name("x-region")!
-  package static let xRelayError = HTTPField.Name("x-relay-error")!
   package static let xRetryCount = HTTPField.Name("X-Retry-Count")!
 }

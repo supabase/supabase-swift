@@ -156,9 +156,17 @@ public final class HTTPBody: AsyncSequence, @unchecked Sendable {
     var base: AsyncThrowingStream<ArraySlice<UInt8>, any Error>.Iterator
 
     /// Advances to the next chunk. Throws ``HTTPBodyAlreadyConsumedError`` when a `.single`
-    /// body is iterated a second time.
-    public mutating func next() async throws -> ArraySlice<UInt8>? {
-      try await base.next()
+    /// body is iterated a second time, and `CancellationError` when the iterating task is
+    /// cancelled, so a body cut short never looks complete.
+    // `@concurrent` because `AsyncThrowingStream.Iterator.next(isolation:)` needs macOS 15 /
+    // iOS 18; the plain `next()` it calls is `@concurrent`, so `base` cannot stay on the caller.
+    @concurrent public mutating func next() async throws -> ArraySlice<UInt8>? {
+      guard let chunk = try await base.next() else {
+        // `AsyncThrowingStream` ends cleanly when its consumer is cancelled.
+        try Task.checkCancellation()
+        return nil
+      }
+      return chunk
     }
   }
 }
@@ -271,6 +279,27 @@ extension HTTPBody {
           onProgress(total.value)
         }
         return chunk
+      }
+    }
+  }
+}
+
+extension HTTPBody {
+  /// Returns a body that passes every error its chunks throw through `transform`. ``length``
+  /// and ``iterationBehavior`` are preserved.
+  package func mapError(_ transform: @escaping @Sendable (any Error) -> any Error) -> HTTPBody {
+    let base = self
+    return HTTPBody(
+      storage: storage, length: length, iterationBehavior: iterationBehavior,
+      onUploadProgress: onUploadProgress
+    ) {
+      let iterator = Box(base.makeAsyncIterator())
+      return AsyncThrowingStream {
+        do {
+          return try await iterator.value.next()
+        } catch {
+          throw transform(error)
+        }
       }
     }
   }

@@ -131,9 +131,7 @@ struct PostgrestQueryWhereTests {
     #expect(capture.query?.contains("order=priority.desc,id") == true)
   }
 
-  /// An unspecified placement is not sent, so the database default applies. The string builder
-  /// always appends `.nullslast` — see
-  /// [SDK-1633](https://linear.app/supabase/issue/SDK-1633).
+  /// An unspecified placement is not sent, so the database default applies.
   @Test
   func nullPlacementIsOmittedUnlessAskedFor() async throws {
     let capture = QueryCapture()

@@ -66,6 +66,27 @@ extension StorageMockerTests {
       )
     }
 
+    private func makeBodyCapturingSUT(body captured: LockIsolated<Data?>, response: String)
+      -> SupabaseStorageClient
+    {
+      SupabaseStorageClient(
+        configuration: StorageClientConfiguration(
+          url: url,
+          headers: [:],
+          http: .init(
+            transport: ClosureTransport { _, body in
+              if let body {
+                let data = try await Data(collecting: body, upTo: .max)
+                captured.setValue(data)
+              }
+              return (
+                HTTPResponse(status: .ok, headerFields: [.contentType: "application/json"]),
+                HTTPBody(Data(response.utf8))
+              )
+            }))
+      )
+    }
+
     private func makeFailingSUT(_ failure: @escaping @Sendable () throws -> Never)
       -> SupabaseStorageClient
     {
@@ -103,12 +124,10 @@ extension StorageMockerTests {
       }
     }
 
-    /// `URLSession`'s async APIs report a cancelled `Task` as `URLError(.cancelled)`, not
-    /// `CancellationError`, so cancelling lands here rather than in `cancellationIsNotWrapped`
-    /// above. It is wrapped like any other `URLError`: callers check the code on
-    /// `underlyingError`, not `error is CancellationError` (SDK-1849).
+    /// A `URLError(.cancelled)` that is not caused by cancelling the caller's `Task` (a
+    /// middleware or a custom transport cancelled the request) is a transport failure.
     @Test
-    func cancelledURLErrorIsWrapped() async {
+    func cancelledURLErrorWithoutTaskCancellationIsWrapped() async {
       let storage = makeFailingSUT { throw URLError(.cancelled) }
 
       do {
@@ -122,13 +141,10 @@ extension StorageMockerTests {
       }
     }
 
-    /// End-to-end cover for what `cancelledURLErrorIsWrapped()` above stubs: cancelling the
-    /// enclosing `Task` mid-flight makes the real ``URLSessionTransport`` fail with
-    /// `URLError(.cancelled)`, which Storage then wraps as `.transport`. Without this, nothing
-    /// checks that cancellation actually reaches a caller the way `V3_MIGRATION.md` says it does
-    /// — `cancelledURLErrorIsWrapped()` assumes the code rather than producing it.
+    /// Cancelling the enclosing `Task` mid-flight makes the real ``URLSessionTransport`` fail
+    /// with `URLError(.cancelled)`; Storage reports it as `CancellationError` (SDK-2008).
     @Test
-    func cancellingTheTaskSurfacesAWrappedCancelledURLError() async {
+    func cancellingTheTaskThrowsCancellationError() async {
       let storage = makeSUT()
       let (requestStarted, onRequestStarted) = AsyncStream<Void>.makeStream()
 
@@ -151,9 +167,7 @@ extension StorageMockerTests {
       do {
         _ = try await task.value
         Issue.record("Expected failure")
-      } catch let error as StorageError {
-        #expect(error.kind == .transport)
-        #expect((error.underlyingError as? URLError)?.code == .cancelled)
+      } catch is CancellationError {
       } catch {
         Issue.record("Unexpected error \(error)")
       }
@@ -1260,6 +1274,82 @@ extension StorageMockerTests {
         .download(path: "/file.txt")
 
       #expect(data == Data("hello world".utf8))
+    }
+
+    @Test
+    func moveCleansPaths() async throws {
+      struct Sent: Decodable {
+        let sourceKey: String
+        let destinationKey: String
+      }
+      let body = LockIsolated(Data?.none)
+      let storage = makeBodyCapturingSUT(body: body, response: "{}")
+
+      try await storage.from("bucket").move(from: "/folder/a.png", to: "folder//b.png/")
+
+      let sent = try JSONDecoder().decode(Sent.self, from: #require(body.value))
+      #expect(sent.sourceKey == "folder/a.png")
+      #expect(sent.destinationKey == "folder/b.png")
+    }
+
+    @Test
+    func copyCleansPaths() async throws {
+      struct Sent: Decodable {
+        let sourceKey: String
+        let destinationKey: String
+      }
+      let body = LockIsolated(Data?.none)
+      let storage = makeBodyCapturingSUT(
+        body: body, response: #"{"Key":"bucket/folder/b.png"}"#)
+
+      try await storage.from("bucket").copy(from: "/folder/a.png", to: "folder//b.png/")
+
+      let sent = try JSONDecoder().decode(Sent.self, from: #require(body.value))
+      #expect(sent.sourceKey == "folder/a.png")
+      #expect(sent.destinationKey == "folder/b.png")
+    }
+
+    @Test
+    func removeCleansPaths() async throws {
+      struct Sent: Decodable {
+        let prefixes: [String]
+      }
+      let body = LockIsolated(Data?.none)
+      let storage = makeBodyCapturingSUT(body: body, response: "[]")
+
+      try await storage.from("bucket").remove(paths: ["/folder//a.png", "b.png/"])
+
+      let sent = try JSONDecoder().decode(Sent.self, from: #require(body.value))
+      #expect(sent.prefixes == ["folder/a.png", "b.png"])
+    }
+
+    @Test
+    func createSignedURLsCleansPaths() async throws {
+      struct Sent: Decodable {
+        let paths: [String]
+      }
+      let body = LockIsolated(Data?.none)
+      let storage = makeBodyCapturingSUT(body: body, response: "[]")
+
+      _ = try await storage.from("bucket")
+        .createSignedURLs(paths: ["/folder//a.png", "b.png/"], expiresIn: 60)
+
+      let sent = try JSONDecoder().decode(Sent.self, from: #require(body.value))
+      #expect(sent.paths == ["folder/a.png", "b.png"])
+    }
+
+    @Test
+    func listCleansPath() async throws {
+      struct Sent: Decodable {
+        let prefix: String
+      }
+      let body = LockIsolated(Data?.none)
+      let storage = makeBodyCapturingSUT(body: body, response: "[]")
+
+      _ = try await storage.from("bucket").list(path: "/folder//nested/")
+
+      let sent = try JSONDecoder().decode(Sent.self, from: #require(body.value))
+      #expect(sent.prefix == "folder/nested")
     }
 
     @Test

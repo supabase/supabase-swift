@@ -24,7 +24,7 @@ extension Date.ISO8601FormatStyle {
 
 extension Date {
   package var iso8601String: String {
-    formatted(.iso8601.currentTimestamp(includingFractionalSeconds: true))
+    formatted(.iso8601.currentTimestampWithOffset(includingFractionalSeconds: true))
   }
 }
 
