@@ -52,7 +52,7 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
     }
     .joined(separator: "")
 
-    copy.query.appendOrUpdate(URLQueryItem(name: "select", value: cleanedColumns))
+    copy.request.query.appendOrUpdate(URLQueryItem(name: "select", value: cleanedColumns))
 
     if let count {
       copy.request.headerFields.appendOrUpdate(.prefer, value: "count=\(count.rawValue)")
@@ -113,7 +113,7 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
     if let returning {
       prefersHeaders.append("return=\(returning.rawValue)")
     }
-    copy.body = body
+    copy.request.body = body
     if let count {
       prefersHeaders.append("count=\(count.rawValue)")
     }
@@ -126,8 +126,8 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
     if !prefersHeaders.isEmpty {
       copy.request.headerFields[.prefer] = prefersHeaders.joined(separator: ",")
     }
-    if let body = copy.body, let columns = try columnsQueryItem(forBody: body) {
-      copy.query.appendOrUpdate(columns)
+    if let body = copy.request.body, let columns = try columnsQueryItem(forBody: body) {
+      copy.request.query.appendOrUpdate(columns)
     }
 
     return copy
@@ -191,9 +191,9 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
       prefersHeaders.append("return=\(returning.rawValue)")
     }
     if let onConflict {
-      copy.query.appendOrUpdate(URLQueryItem(name: "on_conflict", value: onConflict))
+      copy.request.query.appendOrUpdate(URLQueryItem(name: "on_conflict", value: onConflict))
     }
-    copy.body = body
+    copy.request.body = body
     if let count {
       prefersHeaders.append("count=\(count.rawValue)")
     }
@@ -207,8 +207,8 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
       copy.request.headerFields[.prefer] = prefersHeaders.joined(separator: ",")
     }
 
-    if let body = copy.body, let columns = try columnsQueryItem(forBody: body) {
-      copy.query.appendOrUpdate(columns)
+    if let body = copy.request.body, let columns = try columnsQueryItem(forBody: body) {
+      copy.request.query.appendOrUpdate(columns)
     }
 
     return copy
@@ -253,7 +253,7 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
     if let returning {
       preferHeaders.append("return=\(returning.rawValue)")
     }
-    copy.body = body
+    copy.request.body = body
     if let count {
       preferHeaders.append("count=\(count.rawValue)")
     }
