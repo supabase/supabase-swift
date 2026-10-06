@@ -104,13 +104,8 @@ private actor LiveSessionManager {
       do {
         return try await refreshSession(currentSession.refreshToken)
       } catch let error as AuthError {
-        // Another client sharing this storage (an app extension, a second client in the same
-        // process) may have rotated the same token first and stored its session, so this refresh
-        // was discarded by the commit guard or rejected by the server as already used. Storage is
-        // the source of truth then. Empty storage (a concurrent sign-out) or an expired stored
-        // session means the session is gone and the error stands.
         if let stored = sessionStorage.get(), !stored.isExpired {
-          logger.debug("Refresh failed, returning the session stored meanwhile")
+          logger.debug("Refresh failed, returning the session another client stored meanwhile")
           return stored
         }
         throw error

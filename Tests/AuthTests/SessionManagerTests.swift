@@ -428,7 +428,6 @@ struct SessionManagerTests {
     let sawRequest = await waitUntil { requestSeen.value }
     #expect(sawRequest)
 
-    // Another client sharing this storage rotated A first.
     await sut.update(refreshedByOtherClient)
 
     release()
@@ -448,7 +447,6 @@ struct SessionManagerTests {
     let refreshedByOtherClient = session("A2")
 
     dependencies.sessionStorage.store(userA)
-    // The other client's rotation landed outside the reuse interval, so A's token is dead.
     let (requestSeen, release) = heldTokenResponse {
       (
         HTTPResponse(status: .badRequest, headerFields: [.apiVersionHeaderName: "2024-01-01"]),
@@ -489,7 +487,6 @@ struct SessionManagerTests {
     let sawRequest = await waitUntil { requestSeen.value }
     #expect(sawRequest)
 
-    // A concurrent sign-out, not another client's refresh: there is no session to hand back.
     await sut.remove()
 
     release()
