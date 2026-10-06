@@ -3638,3 +3638,66 @@ try await body.write(to: fileURL)   // throws CancellationError
 This compiles silently. Code that cancelled a task to stop a stream and relied on the loop
 ending cleanly now sees `CancellationError`; catch it, or `break` out of the loop instead of
 cancelling. No escape hatch: a truncated body reported as complete is a data-loss bug.
+
+## `SupabaseClient` sets `Authorization` only when a request does not already carry it
+
+Under `SupabaseClient`, the PostgREST, Storage and Functions sub-clients no longer carry a static
+`Authorization: Bearer <supabaseKey>` header. One `AccessTokenMiddleware`, shared by the three,
+sets `Authorization` after your middlewares run and only when the request does not already have
+the header: the session token when a user is signed in, else the key. For Functions the fallback
+is the legacy JWT key only; a new-format `sb_publishable_` / `sb_secret_` key is never sent as a
+bearer. Standalone `FunctionsClient` uses the same middleware for its `accessToken` closure.
+
+The rule was split three ways. PostgREST and Storage overwrote `Authorization` on every request,
+so an explicit `.setHeader("Authorization", …)` was silently replaced by the session token
+(SDK-1524). Functions set the token before the middleware chain, so a `ClientMiddleware` saw the
+bearer on Functions requests and not on the others. supabase-js's `fetchWithAuth` applies the
+rule used here: set the header only if absent.
+
+```swift
+// Before: the session token replaced the per-request header
+try await supabase.from("todos").select()
+  .setHeader(name: "Authorization", value: "Bearer \(serviceToken)").execute()
+// sent: Authorization: Bearer <session token>
+
+// After: the per-request header wins
+try await supabase.from("todos").select()
+  .setHeader(name: "Authorization", value: "Bearer \(serviceToken)").execute()
+// sent: Authorization: Bearer <serviceToken>
+```
+
+This compiles silently. Search for `Authorization` set on a PostgREST builder, a Storage
+`setHeader`, or `FunctionInvokeOptions.headers`: those headers now reach the wire. A
+`ClientMiddleware` in `GlobalOptions.http.middlewares` now sees every data request without
+`Authorization`; read the token in a `ClientTransport` instead if you need it. `supabase.headers`,
+Auth and Realtime still carry the static bearer, as before. There is no escape hatch: a
+`SupabaseClient` with no signed-in user sends the key as before, so only code that set its own
+`Authorization` changes behavior.
+
+## `supabase.functions` is cached; `FunctionsOptions` gains `http` and `logger` and loses the `String?` region initializer
+
+`SupabaseClient.functions` is built on first access and cached, like `realtimeV2`. Two accesses
+return a client over the same transport and middleware chain instead of a fresh `HTTPClient` each
+time. `SupabaseClientOptions.FunctionsOptions` gains `http: HTTPClientConfiguration?` and
+`logger: Logger?`, both `nil` by default meaning the global value, and its properties are `var`.
+`FunctionsOptions.init(region: String?, decoder:)` is removed; `region` is `FunctionRegion?`.
+
+The `String?` initializer sat under `@_disfavoredOverload` and duplicated the `FunctionRegion?`
+one, the same pair Storage deleted (SDK-2019). `FunctionRegion` is `ExpressibleByStringLiteral`,
+so a literal still compiles; only a `String` variable needs a conversion.
+
+```swift
+// Before
+let region: String = settings.functionsRegion
+let options = SupabaseClientOptions(functions: .init(region: region))
+
+// After
+let options = SupabaseClientOptions(functions: .init(region: FunctionRegion(rawValue: region)))
+
+// Unchanged: a literal
+let options = SupabaseClientOptions(functions: .init(region: "us-east-1"))
+```
+
+Compile error at a call site that passes a `String` value; a literal and `FunctionRegion` statics
+compile unchanged. The caching is silent and has no observable effect beyond the retained
+`HTTPClient`.

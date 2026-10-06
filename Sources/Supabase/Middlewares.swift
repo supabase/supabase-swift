@@ -26,26 +26,6 @@ struct TraceContextMiddleware: ClientMiddleware {
   }
 }
 
-/// Resolves the current access token and sends it as `Authorization: Bearer`.
-struct AccessTokenMiddleware: ClientMiddleware {
-  let getAccessToken: @Sendable () async throws -> String?
-
-  func intercept(
-    _ request: HTTPTypes.HTTPRequest,
-    body: HTTPBody?,
-    next:
-      @Sendable (HTTPTypes.HTTPRequest, HTTPBody?) async throws -> (
-        HTTPTypes.HTTPResponse, HTTPBody?
-      )
-  ) async throws -> (HTTPTypes.HTTPResponse, HTTPBody?) {
-    var request = request
-    if let token = try await getAccessToken() {
-      request.headerFields[.authorization] = "Bearer \(token)"
-    }
-    return try await next(request, body)
-  }
-}
-
 extension HTTPField.Name {
   fileprivate static let traceparent = HTTPField.Name("traceparent")!
 }

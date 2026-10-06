@@ -49,8 +49,8 @@ private func makePostgrestAuthCapturingSession() -> URLSession {
 /// These pin the design decision in ``SupabaseClient/rest``: it deliberately does *not* pass an
 /// `accessToken` closure into `PostgrestClient.Configuration`, and relies on `AccessTokenMiddleware`
 /// to resolve and inject the live session token on every request instead. Without a test, dropping that
-/// transport-level injection (or adding a stale `Authorization` header to `Configuration.headers`)
-/// would silently send requests as the anon/publishable key.
+/// transport-level injection (or adding a stale `Authorization` header to `Configuration.headers`,
+/// which the middleware would now leave alone) would silently send requests as the anon/publishable key.
 @Suite(.serialized)
 struct SupabaseClientPostgrestAuthTests {
   @Test
@@ -76,6 +76,32 @@ struct SupabaseClientPostgrestAuthTests {
 
     let request = try #require(PostgrestAuthCapturingProtocol.capturedRequest)
     #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer live-session-token")
+  }
+
+  /// `AccessTokenMiddleware` sets `Authorization` only when the request does not already carry
+  /// it, so an explicit per-request header is not clobbered by the session token (SDK-1524).
+  @Test
+  func restRequestPerCallAuthorizationWinsOverLiveAccessToken() async throws {
+    PostgrestAuthCapturingProtocol.capturedRequest = nil
+    let client = SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      options: SupabaseClientOptions(
+        auth: SupabaseClientOptions.AuthOptions(
+          storage: AuthLocalStorageMock(),
+          accessToken: { "live-session-token" }
+        ),
+        global: SupabaseClientOptions.GlobalOptions(
+          http: .init(transport: URLSessionTransport(session: makePostgrestAuthCapturingSession()))
+        )
+      )
+    )
+
+    _ = try await client.from("todos").select()
+      .setHeader(name: "Authorization", value: "Bearer per-call-override").execute()
+
+    let request = try #require(PostgrestAuthCapturingProtocol.capturedRequest)
+    #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer per-call-override")
   }
 
   @Test
