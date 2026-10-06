@@ -95,6 +95,48 @@ struct HTTPBodyTests {
   }
 
   @Test
+  func fileBodyReadsTheNextChunkOnlyWhenPulled() async throws {
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try Data(repeating: 1, count: 2 * 64 * 1024).write(to: url)
+    defer { try? FileManager.default.removeItem(at: url) }
+
+    let body = try HTTPBody(fileURL: url)
+    var iterator = body.makeAsyncIterator()
+    _ = try await iterator.next()
+
+    // Rewrite the part not yet pulled. A reader that had run ahead would still yield the old bytes.
+    let writer = try FileHandle(forWritingTo: url)
+    try writer.seek(toOffset: 64 * 1024)
+    try writer.write(contentsOf: Data(repeating: 2, count: 64 * 1024))
+    try writer.close()
+
+    let second = try #require(try await iterator.next())
+    #expect(second.allSatisfy { $0 == 2 })
+  }
+
+  @Test(.timeLimit(.minutes(1)))
+  func cancellingTheConsumerStopsTheReader() async throws {
+    let pulls = LockIsolated(0)
+    let chunks = AsyncStream<ArraySlice<UInt8>> {
+      pulls.withValue { $0 += 1 }
+      try? await Task.sleep(for: .milliseconds(1))
+      return [0]
+    }
+    let body = HTTPBody(chunks, length: .unknown, iterationBehavior: .single)
+    let consumer = Task {
+      for try await _ in body {}
+    }
+    while pulls.value < 3 { await Task.yield() }
+
+    consumer.cancel()
+    _ = await consumer.result
+    let afterCancel = pulls.value
+    try await Task.sleep(for: .milliseconds(50))
+
+    #expect(pulls.value == afterCancel)
+  }
+
+  @Test
   func writeToFileRoundTrips() async throws {
     let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: url) }
@@ -160,5 +202,48 @@ struct HTTPBodyTests {
 
     // The transport hook stays unset, so `didSendBodyData` cannot double up on the pull counter.
     #expect(body.onUploadProgress == nil)
+  }
+
+  @Test
+  func mapErrorPassesChunksThroughAndTransformsTheFailure() async throws {
+    struct Upstream: Error {}
+    struct Mapped: Error {}
+    let chunks = AsyncThrowingStream<ArraySlice<UInt8>, any Error> {
+      $0.yield(ArraySlice([1, 2]))
+      $0.finish(throwing: Upstream())
+    }
+    let body = HTTPBody(chunks, length: .known(2), iterationBehavior: .single)
+      .mapError { error in error is Upstream ? Mapped() : error }
+
+    #expect(body.length == .known(2))
+    #expect(body.iterationBehavior == .single)
+    var received: [ArraySlice<UInt8>] = []
+    await #expect(throws: Mapped.self) {
+      for try await chunk in body { received.append(chunk) }
+    }
+    #expect(received == [[1, 2]])
+  }
+
+  /// `AsyncThrowingStream` ends cleanly when its consumer is cancelled, which would make a body
+  /// cut short look complete.
+  @Test
+  func iteratingFromACancelledTaskThrowsCancellationError() async {
+    let (chunks, continuation) = AsyncStream<ArraySlice<UInt8>>.makeStream()
+    let body = HTTPBody(chunks, length: .unknown, iterationBehavior: .single)
+    let (pulled, onPulled) = AsyncStream<Void>.makeStream()
+
+    let task = Task {
+      var count = 0
+      for try await _ in body {
+        count += 1
+        onPulled.yield()
+      }
+      return count
+    }
+    continuation.yield(ArraySlice([1]))
+    for await _ in pulled { break }
+    task.cancel()
+
+    await #expect(throws: CancellationError.self) { try await task.value }
   }
 }

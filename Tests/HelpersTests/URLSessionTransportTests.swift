@@ -214,23 +214,18 @@ struct URLSessionTransportTests {
     }
 
     @Test
-    func fileBodyProgressReportsOnceOnCompletionOnLinux() async throws {
-      let transport = makeTransport()
-      let fileURL = FileManager.default.temporaryDirectory.appendingPathComponent(
-        UUID().uuidString)
-      try Data("file".utf8).write(to: fileURL)
-      defer { try? FileManager.default.removeItem(at: fileURL) }
-      Mock(url: url, statusCode: 200, data: [.put: Data()]).register()
+    func uploadProgressComesFromDidSendBodyDataOnLinux() {
       let seen = LockIsolated<[Int64]>([])
+      let delegate = UploadProgressDelegate { bytes in seen.withValue { $0.append(bytes) } }
+      let session = URLSession.shared
+      let task = session.dataTask(with: url)
 
-      _ = try await transport.send(
-        HTTPRequest(method: .put, url: url),
-        body: try HTTPBody(fileURL: fileURL).reportingProgress { bytes in
-          seen.withValue { $0.append(bytes) }
-        })
+      delegate.urlSession(
+        session, task: task, didSendBodyData: 2, totalBytesSent: 2, totalBytesExpectedToSend: 4)
+      delegate.urlSession(
+        session, task: task, didSendBodyData: 2, totalBytesSent: 4, totalBytesExpectedToSend: 4)
 
-      // No per-task delegate here, so the only honest report is the total, after the fact.
-      #expect(seen.value == [4])
+      #expect(seen.value == [2, 4])
     }
   #endif
 
@@ -403,4 +398,31 @@ struct URLSessionTransportTests {
       _ = try await transport.send(HTTPRequest(method: .get, url: url), body: nil)
     }
   }
+
+  #if !canImport(FoundationNetworking)
+    @Test
+    func uploadTaskExpectsTheBodyLength() throws {
+      let transport = makeTransport()
+      let request = URLRequest(url: url)
+      let fileURL = FileManager.default.temporaryDirectory.appendingPathComponent(
+        UUID().uuidString)
+      try Data("file".utf8).write(to: fileURL)
+      defer { try? FileManager.default.removeItem(at: fileURL) }
+      let chunks = AsyncStream<ArraySlice<UInt8>> { $0.finish() }
+
+      let file = transport.makeTask(for: request, body: try HTTPBody(fileURL: fileURL))
+      let data = transport.makeTask(for: request, body: HTTPBody(Data("abc".utf8)))
+      let stream = transport.makeTask(
+        for: request, body: HTTPBody(chunks, length: .known(7), iterationBehavior: .single))
+      let unknown = transport.makeTask(
+        for: request, body: HTTPBody(chunks, length: .unknown, iterationBehavior: .single))
+      let none = transport.makeTask(for: request, body: nil)
+
+      #expect(file.countOfBytesClientExpectsToSend == 4)
+      #expect(data.countOfBytesClientExpectsToSend == 3)
+      #expect(stream.countOfBytesClientExpectsToSend == 7)
+      #expect(unknown.countOfBytesClientExpectsToSend == NSURLSessionTransferSizeUnknown)
+      #expect(none.countOfBytesClientExpectsToSend == NSURLSessionTransferSizeUnknown)
+    }
+  #endif
 }

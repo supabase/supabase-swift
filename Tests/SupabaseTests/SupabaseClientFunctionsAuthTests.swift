@@ -1,5 +1,6 @@
 import ConcurrencyExtras
 import Foundation
+import HTTPTypes
 import Testing
 
 @testable import Supabase
@@ -40,7 +41,7 @@ private func makeFunctionsAuthCapturingSession() -> URLSession {
   return URLSession(configuration: config)
 }
 
-/// `.serialized`: the three tests below share `FunctionsAuthCapturingProtocol`'s static request
+/// `.serialized`: the tests below share `FunctionsAuthCapturingProtocol`'s static request
 /// log, which would otherwise race against itself under Swift Testing's default parallel
 /// execution. That storage is private to this file, so — unlike the shared `RequestCapturingProtocol`
 /// — no other suite can race against it.
@@ -69,7 +70,7 @@ struct SupabaseClientFunctionsAuthTests {
 
     _ = try? await client.functions.invoke(
       "hello-world",
-      options: FunctionInvokeOptions(headers: ["Authorization": "Bearer per-call-override"])
+      options: FunctionInvokeOptions(headers: [.authorization: "Bearer per-call-override"])
     )
 
     let request = try #require(FunctionsAuthCapturingProtocol.capturedRequest)
@@ -97,6 +98,55 @@ struct SupabaseClientFunctionsAuthTests {
 
     let request = try #require(FunctionsAuthCapturingProtocol.capturedRequest)
     #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer PUBLISHABLE_KEY")
+  }
+
+  /// A new-format key is never a bearer token: with no session, the header is omitted.
+  @Test
+  func functionsInvokeWithNewFormatKeyAndNoSessionSendsNoBearer() async throws {
+    FunctionsAuthCapturingProtocol.capturedRequest = nil
+    let client = SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "sb_publishable_abc123",
+      options: SupabaseClientOptions(
+        auth: SupabaseClientOptions.AuthOptions(
+          storage: AuthLocalStorageMock(),
+          automaticallyRefreshesToken: false
+        ),
+        global: SupabaseClientOptions.GlobalOptions(
+          http: .init(transport: URLSessionTransport(session: makeFunctionsAuthCapturingSession()))
+        )
+      )
+    )
+
+    try await client.functions.invoke("hello-world")
+
+    let request = try #require(FunctionsAuthCapturingProtocol.capturedRequest)
+    #expect(request.value(forHTTPHeaderField: "Authorization") == nil)
+    #expect(request.value(forHTTPHeaderField: "apikey") == "sb_publishable_abc123")
+  }
+
+  /// An error from the configured `accessToken` provider is the caller's own and reaches
+  /// `invoke` as itself, not wrapped in a `FunctionsError`.
+  @Test
+  func functionsInvokeThrowsTheProviderErrorUnwrapped() async throws {
+    struct TokenError: Error {}
+    let client = SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      options: SupabaseClientOptions(
+        auth: SupabaseClientOptions.AuthOptions(
+          storage: AuthLocalStorageMock(),
+          accessToken: { throw TokenError() }
+        ),
+        global: SupabaseClientOptions.GlobalOptions(
+          http: .init(transport: URLSessionTransport(session: makeFunctionsAuthCapturingSession()))
+        )
+      )
+    )
+
+    await #expect(throws: TokenError.self) {
+      try await client.functions.invoke("hello-world")
+    }
   }
 
   @Test

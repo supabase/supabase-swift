@@ -37,6 +37,9 @@ supporting_symbols:
   - SupabaseClientOptions.GlobalOptions.clock
   - AuthClient.Configuration.clock
   - RealtimeClientOptions.clock
+  # A per-module logger override on the facade, mirroring `GlobalOptions.logger`; a logging
+  # knob, not a capability.
+  - SupabaseClientOptions.FunctionsOptions.logger
 
   # A handful of PostgrestRequestBuilder members are used across many
   # database.* capabilities simultaneously (executing every query/mutate/rpc,
@@ -74,6 +77,15 @@ supporting_symbols:
   - PostgrestMutation.Relation
   - PostgrestMutation.request
   - PostgrestMutation.execute
+  # The phase decides what a mutation offers: an unscoped update or delete has no execute() until
+  # `where(_:)` or `all()` scopes it, and an insert or upsert cannot be filtered at all.
+  - PostgrestMutation.where
+  - PostgrestMutation.all
+  - PostgrestMutationPhase
+  - PostgrestExecutableMutationPhase
+  - PostgrestUnscopedPhase
+  - PostgrestScopedPhase
+  - PostgrestInsertPhase
   # The request value every typed query and mutation holds and sends. Opaque for now: its members
   # are internal until the inspectable request model is settled.
   - PostgrestRequest
@@ -874,6 +886,7 @@ features:
       - AuthClient.Configuration.http
       - PostgrestClient.Configuration.http
       - StorageClientConfiguration.http
+      - SupabaseClientOptions.FunctionsOptions.http
     supporting_symbols:
       - HTTPClientConfiguration
       - HTTPClientConfiguration.init
@@ -1340,6 +1353,67 @@ features:
     status: implemented
     symbols:
       - FunctionsClient.invoke
+    # The request side (Configuration, FunctionBody, FunctionInvokeOptions), the
+    # response side (FunctionResponse) and the error vocabulary (FunctionsError.Code,
+    # the platform's `sb-error-code`, and the response header names) all belong to
+    # the one invoke capability.
+    supporting_symbols:
+      - FunctionsClient.Configuration
+      - FunctionsClient.Configuration.decoder
+      - FunctionsClient.Configuration.headers
+      - FunctionsClient.Configuration.http
+      - FunctionsClient.Configuration.init
+      - FunctionsClient.Configuration.logger
+      - FunctionsClient.Configuration.url
+      - FunctionsClient.configuration
+      - FunctionInvokeOptions.headers
+      - FunctionInvokeOptions.query
+      - FunctionBody
+      - FunctionBody.contentType
+      - FunctionBody.data
+      - FunctionBody.httpBody
+      - FunctionBody.json
+      - FunctionBody.stream
+      - FunctionBody.text
+      - FunctionResponse
+      - FunctionResponse.body
+      - FunctionResponse.contentType
+      - FunctionResponse.decode
+      - FunctionResponse.description
+      - FunctionResponse.executionID
+      - FunctionResponse.headers
+      - FunctionResponse.region
+      - FunctionResponse.requestID
+      - FunctionResponse.status
+      - FunctionResponse.text
+      - FunctionsError.Code
+      - FunctionsError.Code.bootError
+      - FunctionsError.Code.edgeFunctionError
+      - FunctionsError.Code.edgeRuntimeError
+      - FunctionsError.Code.edgeRuntimeServiceDegraded
+      - FunctionsError.Code.idleTimeout
+      - FunctionsError.Code.init
+      - FunctionsError.Code.invalidResponseStatusCode
+      - FunctionsError.Code.invalidURL
+      - FunctionsError.Code.notFound
+      - FunctionsError.Code.notFoundFunctionBlob
+      - FunctionsError.Code.rateLimitExceeded
+      - FunctionsError.Code.rawValue
+      - FunctionsError.Code.unauthorizedAsymmetricJWT
+      - FunctionsError.Code.unauthorizedInvalidJWTFormat
+      - FunctionsError.Code.unauthorizedLegacyJWT
+      - FunctionsError.Code.unauthorizedNoAuthHeader
+      - FunctionsError.Code.unauthorizedUnsupportedTokenAlgorithm
+      - FunctionsError.Code.workerError
+      - FunctionsError.Code.workerResourceLimit
+      - FunctionsError.Kind.invalidRequest
+      - FunctionsError.code
+      - FunctionsError.isPlatformError
+      - HTTPField.Name.sbErrorCode
+      - HTTPField.Name.xDenoExecutionID
+      - HTTPField.Name.xRegion
+      - HTTPField.Name.xRelayError
+      - HTTPField.Name.xSbEdgeRegion
   # No runtime setter exists; the token is supplied as an `accessToken`
   # closure at construction time and re-invoked on every request, so
   # "updating" the token means having the closure read from a mutable
@@ -1347,23 +1421,27 @@ features:
   functions.invocation.set_auth_token:
     status: implemented
     symbols:
-      - FunctionsClient.init
+      - FunctionsClient.Configuration.accessToken
+  # The method is `HTTPRequest.Method` from swift-http-types (re-exported); no SDK-owned type.
   functions.invocation.method_override:
     status: implemented
     symbols:
-      - FunctionInvokeOptions.Method
-      - FunctionInvokeOptions.Method.init
-      - FunctionInvokeOptions.Method.rawValue
-      - FunctionInvokeOptions.Method.get
-      - FunctionInvokeOptions.Method.post
-      - FunctionInvokeOptions.Method.put
-      - FunctionInvokeOptions.Method.patch
-      - FunctionInvokeOptions.Method.delete
+      - FunctionInvokeOptions.method
   functions.invocation.streaming_response:
     status: implemented
-    note: "Yields Data chunks via an AsyncThrowingStream rather than passing through a raw Response object; _invokeWithStreamedResponse is marked experimental (leading underscore) but is a genuine public symbol."
+    note: "stream() returns the head as soon as it arrives; the body is an HTTPBody of byte chunks whose boundaries follow the network. No SSE framing: callers bring their own parser. On Linux the body arrives whole when the server closes (SDK-1839)."
     symbols:
-      - FunctionsClient._invokeWithStreamedResponse
+      - FunctionsClient.stream
+      - FunctionStreamResponse.body
+    supporting_symbols:
+      - FunctionStreamResponse
+      - FunctionStreamResponse.status
+      - FunctionStreamResponse.headers
+      - FunctionStreamResponse.contentType
+      - FunctionStreamResponse.region
+      - FunctionStreamResponse.executionID
+      - FunctionStreamResponse.requestID
+      - FunctionStreamResponse.description
   functions.invocation.region_selection:
     status: implemented
     symbols:
@@ -1377,6 +1455,7 @@ features:
       - FunctionRegion.apSoutheast2
       - FunctionRegion.caCentral1
       - FunctionRegion.euCentral1
+      - FunctionRegion.euCentral2
       - FunctionRegion.euWest1
       - FunctionRegion.euWest2
       - FunctionRegion.euWest3
@@ -1384,16 +1463,18 @@ features:
       - FunctionRegion.usEast1
       - FunctionRegion.usWest1
       - FunctionRegion.usWest2
+      - FunctionsClient.Configuration.region
+      - FunctionInvokeOptions.region
   # Cancellation is plain Swift structured concurrency: cancel the enclosing
-  # Task for invoke(), or stop iterating / cancel the Task for the
-  # AsyncThrowingStream returned by _invokeWithStreamedResponse. No dedicated
-  # cancel()-style symbol exists.
+  # Task for invoke(), or stop iterating / cancel the Task for the body of
+  # stream(). No dedicated cancel()-style symbol exists.
   functions.invocation.request_cancellation: implemented
   functions.invocation.timeout:
     status: implemented
     symbols:
       - FunctionsClient.requestIdleTimeout
       - HTTPClientConfiguration.timeout
+      - FunctionInvokeOptions.timeout
 
   # ── Realtime ───────────────────────────────────────────────────────────────
 

@@ -24,10 +24,9 @@ import HTTPTypesFoundation
 ///   fails with ``HTTPBodyLengthMismatchError``, an ``HTTPBody/Length/unknown`` one uses chunked
 ///   transfer. Because the body is pulled while the request is in flight, a gap between chunks
 ///   longer than the request timeout fails the request with `URLError.timedOut`. On Linux,
-///   swift-corelibs-foundation has no per-task delegates to feed a stream from, so such bodies
-///   are first spooled to a temporary file (checked against a known length the same way) and
-///   uploaded from there, and a progress wrapper on an in-memory or file body reports once, when
-///   the upload completes.
+///   swift-corelibs-foundation never calls a per-task delegate to feed a stream from, so such
+///   bodies are first spooled to a temporary file (checked against a known length the same way)
+///   and uploaded from there.
 /// - On Apple platforms a ``HTTPBody/IterationBehavior/single`` body cannot be sent twice. A 307
 ///   or 308 redirect, which would resend it, is not followed: the redirect response is returned
 ///   to the caller as-is. If `URLSession` asks for the body again for any other reason (an
@@ -35,8 +34,8 @@ import HTTPTypesFoundation
 ///   spooled copy can be resent, so redirects are followed for every body kind.
 /// - Response bodies stream on Apple platforms: the head is returned as soon as it arrives and
 ///   each chunk is one `didReceive(data:)` delivery from `URLSession`, so chunk boundaries follow
-///   the network, not the payload. swift-corelibs-foundation has no per-task delegates, so on
-///   Linux the response is buffered and delivered as one chunk.
+///   the network, not the payload. swift-corelibs-foundation never calls a per-task delegate, so
+///   on Linux the response is buffered and delivered as one chunk.
 /// - The SDK sets `URLRequest.timeoutInterval` on every request it sends
 ///   (``HTTPClientConfiguration/timeout``, or 60 seconds — 150 for Functions — when unset), so
 ///   it wins over the session's `timeoutIntervalForRequest`.
@@ -86,14 +85,21 @@ public struct URLSessionTransport: ClientTransport {
     }
 
     #if canImport(FoundationNetworking)
+      // swift-corelibs-foundation declares `URLSessionTask.delegate` (Swift 6.0, #4970) but never
+      // calls it: on swift:6.2.4-noble and swift:6.3.3 a delegate set before `resume()` gets no
+      // callback at all, not even `didCompleteWithError` (SDK-2009). A delegate passed to the
+      // async `data(for:delegate:)` / `upload(for:fromFile:delegate:)` does hear
+      // `didSendBodyData` and `didReceive(data:)`, which gives real upload progress. It cannot
+      // stream a response: those methods still return the whole body, so a streamed copy would
+      // only double the memory. Hence the buffered response and the spooled stream body below.
       var fileURL: URL?
       var spool: URL?
       defer { if let spool { try? FileManager.default.removeItem(at: spool) } }
       if case .file(let url)? = body?.storage {
         fileURL = url
       } else if let body, case .stream = body.storage {
-        // swift-corelibs-foundation has no per-task delegates to feed a body stream from, so the
-        // body is spooled to disk first and uploaded from there; memory stays flat either way.
+        // With no per-task delegate to feed a body stream from, the body is spooled to disk first
+        // and uploaded from there; memory stays flat either way.
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         spool = url
         try await body.write(to: url)
@@ -107,17 +113,24 @@ public struct URLSessionTransport: ClientTransport {
         }
         fileURL = url
       }
+      let progress = body?.onUploadProgress.map(UploadProgressDelegate.init)
       let (data, response) =
         if let fileURL {
-          try await session.upload(for: urlRequest, fromFile: fileURL)
+          try await session.upload(for: urlRequest, fromFile: fileURL, delegate: progress)
         } else {
-          try await session.data(for: urlRequest)
+          try await session.data(for: urlRequest, delegate: progress)
         }
-      // Nothing reports sent bytes on this platform, so a progress wrapper on an in-memory or
-      // file body hears once, when the upload has completed.
-      if let body, case .known(let count) = body.length { body.onUploadProgress?(count) }
       return (try Self.makeHead(response), Self.makeBody(data))
     #else
+      return try await streamResponse(
+        from: makeTask(for: urlRequest, body: body), requestBody: body)
+    #endif
+  }
+
+  #if !canImport(FoundationNetworking)
+    /// Creates the task that sends `body`, telling the scheduler how many bytes to expect when
+    /// the length is known.
+    func makeTask(for urlRequest: URLRequest, body: HTTPBody?) -> URLSessionTask {
       let task: URLSessionTask
       switch body?.storage {
       case .file(let fileURL)?:
@@ -127,16 +140,20 @@ public struct URLSessionTransport: ClientTransport {
       case .data?, nil:
         task = session.dataTask(with: urlRequest)
       }
-      return try await streamResponse(from: task, requestBody: body)
-    #endif
-  }
+      if case .known(let count)? = body?.length {
+        task.countOfBytesClientExpectsToSend = count
+      }
+      return task
+    }
 
-  #if !canImport(FoundationNetworking)
     private func streamResponse(from task: URLSessionTask, requestBody: HTTPBody?) async throws
       -> (HTTPTypes.HTTPResponse, HTTPBody?)
     {
       // ponytail: the chunk stream is unbounded, so a consumer slower than the network holds
-      // the backlog; suspend/resume the task on a watermark if that shows up (SDK-1833).
+      // the backlog — the memory probe with `MEMORY_PROBE_CHUNK_DELAY_MS=2` grows by the whole
+      // 200 MB response. A suspend/resume watermark does not fix it: `suspend()` from
+      // `didReceive(data:)` leaves the task `.suspended` while tens of MB keep arriving
+      // (SDK-1833). Bounding it needs a transport that can stop reading the socket.
       let (chunks, continuation) = AsyncThrowingStream<ArraySlice<UInt8>, any Error>.makeStream(
         bufferingPolicy: .unbounded
       )
@@ -176,7 +193,23 @@ public struct URLSessionTransport: ClientTransport {
   }
 }
 
-#if !canImport(FoundationNetworking)
+#if canImport(FoundationNetworking)
+  /// Forwards `URLSession`'s sent-byte counts to ``HTTPBody/onUploadProgress``.
+  final class UploadProgressDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+    private let onProgress: @Sendable (_ bytesSoFar: Int64) -> Void
+
+    init(_ onProgress: @escaping @Sendable (_ bytesSoFar: Int64) -> Void) {
+      self.onProgress = onProgress
+    }
+
+    func urlSession(
+      _ session: URLSession, task: URLSessionTask, didSendBodyData bytesSent: Int64,
+      totalBytesSent: Int64, totalBytesExpectedToSend: Int64
+    ) {
+      onProgress(totalBytesSent)
+    }
+  }
+#else
   /// Per-task delegate that hands the response head to `head(starting:)`, forwards every
   /// `didReceive(data:)` delivery to the body stream as one chunk, and feeds a streamed request
   /// body to `URLSession` through ``HTTPBodyOutputStreamBridge`` whenever it asks for one.

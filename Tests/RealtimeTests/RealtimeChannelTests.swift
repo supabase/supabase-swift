@@ -473,6 +473,74 @@ struct RealtimeChannelTests {
     }
   }
 
+  /// `URLSession` reports a cancelled `Task` as `URLError(.cancelled)`; `httpSend` reports it as
+  /// `CancellationError` (SDK-2141). The stub mimics the session: it waits until the request is
+  /// cancelled, then fails the way `URLSessionTransport` does.
+  @Test
+  func httpSendThrowsCancellationErrorWhenTheTaskIsCancelled() async {
+    let (requestStarted, onRequestStarted) = AsyncStream<Void>.makeStream()
+    let httpClient = RecordingTransport { _, _ in
+      onRequestStarted.yield()
+      try? await Task.sleep(for: .seconds(10))
+      throw URLError(.cancelled)
+    }
+    let (client, _) = FakeWebSocket.fakes()
+
+    let socket = RealtimeClientV2(
+      url: URL(string: "https://localhost:54321/realtime/v1")!,
+      options: RealtimeClientOptions(
+        headers: ["apikey": "test-key"],
+        accessToken: { "test-token" }
+      ),
+      wsTransport: { _, _ in client },
+      http: HTTPClient(transport: httpClient),
+      clock: ContinuousClock()
+    )
+    let channel = socket.channel("test-topic")
+
+    let task = Task { try await channel.httpSend(event: "test", message: ["data": "test"]) }
+    for await _ in requestStarted { break }
+    task.cancel()
+
+    do {
+      try await task.value
+      Issue.record("Expected failure")
+    } catch is CancellationError {
+    } catch {
+      Issue.record("Unexpected error \(error)")
+    }
+  }
+
+  /// A `URLError(.cancelled)` that no `Task` cancellation caused (a middleware cancelled the
+  /// request) stays a transport failure.
+  @Test
+  func httpSendWrapsCancelledURLErrorWithoutTaskCancellation() async {
+    let httpClient = RecordingTransport { _, _ in throw URLError(.cancelled) }
+    let (client, _) = FakeWebSocket.fakes()
+
+    let socket = RealtimeClientV2(
+      url: URL(string: "https://localhost:54321/realtime/v1")!,
+      options: RealtimeClientOptions(
+        headers: ["apikey": "test-key"],
+        accessToken: { "test-token" }
+      ),
+      wsTransport: { _, _ in client },
+      http: HTTPClient(transport: httpClient),
+      clock: ContinuousClock()
+    )
+    let channel = socket.channel("test-topic")
+
+    do {
+      try await channel.httpSend(event: "test", data: Data())
+      Issue.record("Expected failure")
+    } catch let error as RealtimeError {
+      #expect(error.kind == .transport)
+      #expect((error.underlyingError as? URLError)?.code == .cancelled)
+    } catch {
+      Issue.record("Unexpected error \(error)")
+    }
+  }
+
   @Test
   func httpSendSucceedsOn202Status() async throws {
     let httpClient = RecordingTransport()
