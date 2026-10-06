@@ -137,6 +137,9 @@ let package = Package(
         "Supabase",
         "TestHelpers",
       ],
+      // The edge functions are served by `supabase start`, not bundled; `.process` flattens
+      // the tree, so their `index.ts` files would collide.
+      exclude: ["supabase/functions"],
       resources: [
         .process("Fixtures"),
         .process("supabase"),

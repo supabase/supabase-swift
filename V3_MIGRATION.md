@@ -3690,3 +3690,24 @@ let options = SupabaseClientOptions(functions: .init(region: "us-east-1"))
 Compile error at a call site that passes a `String` value; a literal and `FunctionRegion` statics
 compile unchanged. The caching is silent and has no observable effect beyond the retained
 `HTTPClient`.
+
+## Functions v3 at a glance
+
+Every Functions change above, as one name map. Each row links to the section that explains it.
+
+| Before | After | Section |
+| --- | --- | --- |
+| `FunctionsClient(url:headers:region:logger:http:decoder:accessToken:)` | `FunctionsClient(configuration: .init(url:…))` | [Configuration](#functionsclient-is-created-with-a-configuration) |
+| `FunctionsClient.decoder` | `FunctionsClient.configuration.decoder` | [Configuration](#functionsclient-is-created-with-a-configuration) |
+| `headers: ["apikey": key]` | `headers: [HTTPField.Name("apikey")!: key]` | [`HTTPFields`](#functions-headers-are-httpfields) |
+| `FunctionInvokeOptions(body: value)` | `invoke("f", body: .json(value))`, `.text`, `.data`, `.stream` | [`FunctionBody`](#function-bodies-are-a-functionbody-passed-to-invoke) |
+| `invoke("f") { data, response in … }` | `let r = try await invoke("f")`, then `r.status`, `r.headers`, `r.body`, `r.decode(as:)` | [`FunctionResponse`](#invoke-returns-functionresponse-the-decode-closure-overload-is-removed-invoket-gains-as) |
+| `invoke("f", options: o, decoder: d)` | `invoke("f", options: o, as: T.self, decoder: d)` | [`FunctionResponse`](#invoke-returns-functionresponse-the-decode-closure-overload-is-removed-invoket-gains-as) |
+| `FunctionInvokeOptions.Method` | `HTTPRequest.Method` (same `.get`, `.post`, … spelling) | [`HTTPRequest.Method`](#functioninvokeoptionsmethod-is-replaced-by-httprequestmethod) |
+| `_invokeWithStreamedResponse("f")` | `try await stream("f").body` | [`stream`](#_invokewithstreamedresponse-is-replaced-by-stream_bodyoptions-which-returns-functionstreamresponse) |
+| `FunctionsOptions(region: someString)` | `FunctionsOptions(region: FunctionRegion(rawValue: someString))` | [`FunctionsOptions`](#supabasefunctions-is-cached-functionsoptions-gains-http-and-logger-and-loses-the-string-region-initializer) |
+| `catch let e as FunctionsError where (e.underlyingError as? URLError)?.code == .cancelled` | `catch is CancellationError` | [Cancellation](#network-and-decoding-failures-are-wrapped-in-the-module-error) |
+
+Additive, no change needed: `FunctionsError.code`, `FunctionsError.isPlatformError`,
+`FunctionsError.Kind.invalidRequest`, `FunctionRegion.euCentral2`, `FunctionResponse.region`,
+`.executionID` and `.requestID`. Keep a fallback branch when switching on `FunctionsError.kind`.

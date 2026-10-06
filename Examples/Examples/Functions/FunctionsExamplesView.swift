@@ -53,6 +53,15 @@ struct FunctionsExamplesView: View {
         }
       }
 
+      Section("More Examples") {
+        NavigationLink("Streaming Chat") {
+          StreamingChatView()
+        }
+        NavigationLink("Upload a File") {
+          FunctionUploadView()
+        }
+      }
+
       Section("About Edge Functions") {
         VStack(alignment: .leading, spacing: 12) {
           FeaturePoint(
