@@ -32,9 +32,15 @@ public struct SupabaseClientOptions: Sendable {
     public let schema: String?
 
     /// The JSONEncoder to use when encoding database request objects.
+    ///
+    /// Applies to the untyped API (`from(_:)` with a table name, `rpc(_:)`) only. The typed API
+    /// always uses a fixed encoder.
     public let encoder: JSONEncoder
 
     /// The JSONDecoder to use when decoding database response objects.
+    ///
+    /// Applies to the untyped API (`from(_:)` with a table name, `rpc(_:)`) only. The typed API
+    /// always uses a fixed decoder.
     public let decoder: JSONDecoder
 
     /// Whether to automatically retry transient (network, 503 or 520) PostgREST errors on GET

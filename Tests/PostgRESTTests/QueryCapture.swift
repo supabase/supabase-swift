@@ -32,11 +32,15 @@ struct QueryCapture {
   ///   - responseHeaders: Extra response header fields, merged over `Content-Type`. Use this to
   ///     stub the `Content-Range` header a count request reads its total from.
   ///   - headers: The client-level headers, as a caller would pass to `PostgrestClient`.
+  ///   - encoder: The client's configured encoder, as a caller would pass to `PostgrestClient`.
+  ///   - decoder: The client's configured decoder, as a caller would pass to `PostgrestClient`.
   init(
     body: String = "[]",
     status: HTTPTypes.HTTPResponse.Status = .ok,
     responseHeaders: [String: String] = [:],
-    headers: [String: String] = ["X-Client-Info": "postgrest-swift/test"]
+    headers: [String: String] = ["X-Client-Info": "postgrest-swift/test"],
+    encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
+    decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder
   ) {
     let captured = self.captured
     let capturedBody = self.capturedBody
@@ -61,7 +65,10 @@ struct QueryCapture {
             HTTPTypes.HTTPResponse(status: status, headerFields: headerFields),
             HTTPBody(Data(body.utf8))
           )
-        }))
+        }),
+      encoder: encoder,
+      decoder: decoder
+    )
   }
 
   /// The query string of the captured request, percent-decoded so assertions can be written in
