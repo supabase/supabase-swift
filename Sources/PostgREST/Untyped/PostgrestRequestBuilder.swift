@@ -573,8 +573,3 @@ extension PostgrestRequestBuilder where Phase: PostgrestExecutablePhase {
     )
   }
 }
-
-extension HTTPField.Name {
-  static let acceptProfile = Self("Accept-Profile")!
-  static let contentProfile = Self("Content-Profile")!
-}

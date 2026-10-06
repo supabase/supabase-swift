@@ -23,6 +23,6 @@ public struct PostgrestRawQuery: Sendable {
   /// - Returns: A ``PostgrestResponse`` whose `value` is the body decoded as UTF-8.
   @discardableResult
   public func execute() async throws -> PostgrestResponse<String> {
-    try await request.execute(on: client) { data, _ in String(decoding: data, as: UTF8.self) }
+    try await request.execute(on: client) { String(decoding: $0, as: UTF8.self) }
   }
 }

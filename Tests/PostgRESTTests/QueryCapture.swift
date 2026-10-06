@@ -31,10 +31,12 @@ struct QueryCapture {
   ///   - status: The response status to hand back to every request.
   ///   - responseHeaders: Extra response header fields, merged over `Content-Type`. Use this to
   ///     stub the `Content-Range` header a count request reads its total from.
+  ///   - headers: The client-level headers, as a caller would pass to `PostgrestClient`.
   init(
     body: String = "[]",
     status: HTTPTypes.HTTPResponse.Status = .ok,
-    responseHeaders: [String: String] = [:]
+    responseHeaders: [String: String] = [:],
+    headers: [String: String] = ["X-Client-Info": "postgrest-swift/test"]
   ) {
     let captured = self.captured
     let capturedBody = self.capturedBody
@@ -44,7 +46,7 @@ struct QueryCapture {
     }
     client = PostgrestClient(
       url: URL(string: "https://example.supabase.co")!,
-      headers: ["X-Client-Info": "postgrest-swift/test"],
+      headers: headers,
       http: .init(
         transport: ClosureTransport { request, requestBody in
           captured.setValue(request)
