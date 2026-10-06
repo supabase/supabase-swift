@@ -116,8 +116,8 @@ public struct SupabaseClientOptions: Sendable {
     /// for the defaults (60 seconds; 150 for Edge Functions).
     public let http: HTTPClientConfiguration
 
-    /// The clock the time-based sub-client behaviors sleep on: Auth's token auto-refresh and
-    /// request-retry backoff, and Realtime's heartbeat timer and reconnect backoff.
+    /// The clock the time-based sub-client behaviors sleep on: Auth's token auto-refresh, Auth's
+    /// and Storage's request-retry backoff, and Realtime's heartbeat timer and reconnect backoff.
     ///
     /// Defaults to `ContinuousClock()`. Pass a `TestClock` (swift-clocks) to drive those
     /// behaviors deterministically in tests instead of waiting out real seconds.
@@ -180,8 +180,13 @@ public struct SupabaseClientOptions: Sendable {
     /// Whether storage client should be initialized with the new hostname format, i.e. `project-ref.storage.supabase.co`
     public let usesNewHostname: Bool
 
-    public init(usesNewHostname: Bool = false) {
+    /// Whether to automatically retry transient Storage errors on reads (`GET`, `HEAD` and
+    /// listing files). Writes are never retried. Defaults to `true`.
+    public let retryEnabled: Bool
+
+    public init(usesNewHostname: Bool = false, retryEnabled: Bool = true) {
       self.usesNewHostname = usesNewHostname
+      self.retryEnabled = retryEnabled
     }
   }
 

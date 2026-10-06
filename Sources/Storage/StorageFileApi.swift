@@ -651,7 +651,7 @@ public struct StorageFileApi: Sendable {
       HTTPRequest(
         method: .post,
         url: api.configuration.url.appendingPathComponent("object/list/\(bucketId)")
-      ), body: encoder.encode(options)
+      ), body: encoder.encode(options), replayable: true
     )
     .decoded(decoder: api.configuration.decoder)
   }
