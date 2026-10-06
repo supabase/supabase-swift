@@ -10,8 +10,8 @@ import Testing
 
 @testable import PostgREST
 
-/// ADR 0002: the typed API derives column names from `CodingKeys`, so a key strategy on a
-/// configured coder must never reach it.
+/// The typed API derives column names from `CodingKeys`, so a key strategy on a configured coder
+/// must never reach it.
 @Suite
 struct PostgrestTypedCodersTests {
   struct Todo: PostgrestWritableRelation {
@@ -29,6 +29,9 @@ struct PostgrestTypedCodersTests {
     struct Columns: Sendable {
       let id = PostgrestColumn<Todo, Int>("id")
       let isDone = PostgrestColumn<Todo, Bool>("is_done")
+      /// Spelled in camelCase on purpose: a configured `.convertToSnakeCase` encoder would send
+      /// it as `due_at`, so the body shows which encoder ran.
+      let dueAt = PostgrestColumn<Todo, Int>("dueAt")
     }
 
     static let columns = Columns()
@@ -61,5 +64,12 @@ struct PostgrestTypedCodersTests {
     let capture = Self.snakeCaseCapture()
     try await capture.client.from(Todo.self).insert(.init(isDone: true)).execute()
     #expect(capture.bodyString == #"{"isDone":true}"#)
+  }
+
+  @Test
+  func updateIgnoresTheConfiguredEncoder() async throws {
+    let capture = Self.snakeCaseCapture()
+    try await capture.client.from(Todo.self).update { $0.dueAt = 3 }.all().execute()
+    #expect(capture.bodyString == #"{"dueAt":3}"#)
   }
 }

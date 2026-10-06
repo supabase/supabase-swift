@@ -29,13 +29,13 @@ public struct PostgrestQuery<R: PostgrestRelation, Output: Decodable & Sendable>
 
   /// Turns a 2xx body into `Output`. Chosen by the method that produced this query, so
   /// ``maybeSingle()`` can decode an array and enforce at most one row.
-  let decode: @Sendable (Data, JSONDecoder) throws -> Output
+  let decode: @Sendable (Data) throws -> Output
 
   init(
     client: PostgrestClient,
     request: PostgrestRequest,
-    decode: @escaping @Sendable (Data, JSONDecoder) throws -> Output = { data, decoder in
-      try decoder.decode(Output.self, from: data)
+    decode: @escaping @Sendable (Data) throws -> Output = {
+      try Self.decoder.decode(Output.self, from: $0)
     }
   ) {
     self.client = client
@@ -122,12 +122,12 @@ extension PostgrestQuery {
   }
 
   private func send(_ request: PostgrestRequest) async throws -> PostgrestResponse<Output> {
-    // ADR 0002: the typed API never uses a configured coder, so column names derived from
-    // `CodingKeys` cannot be bent by a key strategy.
-    try await request.execute(on: client) {
-      try decode($0, PostgrestClient.Configuration.jsonDecoder)
-    }
+    try await request.execute(on: client, decode: decode)
   }
+
+  /// The typed API never uses the client's configured decoder. Column names come from each row
+  /// type's `CodingKeys`, and a key strategy on a shared decoder would silently make them wrong.
+  static var decoder: JSONDecoder { PostgrestClient.Configuration.jsonDecoder }
 
   private static var objectMediaType: String { "application/vnd.pgrst.object+json" }
 }
@@ -175,8 +175,8 @@ extension PostgrestQuery {
   ///
   /// - Returns: A ``PostgrestQuery`` decoding into `Element?`.
   public func maybeSingle<Element>() -> PostgrestQuery<R, Element?> where Output == [Element] {
-    let query = PostgrestQuery<R, Element?>(client: client, request: request) { data, decoder in
-      let rows = try decoder.decode([Element].self, from: data)
+    let query = PostgrestQuery<R, Element?>(client: client, request: request) {
+      let rows = try Self.decoder.decode([Element].self, from: $0)
       guard rows.count <= 1 else {
         throw PostgrestError(
           kind: .decoding,
