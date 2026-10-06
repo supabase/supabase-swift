@@ -238,15 +238,15 @@ final class URLSessionWebSocket: WebSocket {
     mutableState.value.isClosed
   }
 
-  let events: AsyncStream<WebSocketEvent>
-  let eventsContinuation: AsyncStream<WebSocketEvent>.Continuation
+  let events: AsyncStream<LegacyWebSocketEvent>
+  let eventsContinuation: AsyncStream<LegacyWebSocketEvent>.Continuation
 
   /// Handles incoming WebSocket messages and converts them to events.
   /// - Parameter value: The message received from the WebSocket.
   private func _handleMessage(_ value: URLSessionWebSocketTask.Message) {
     guard !isClosed else { return }
 
-    let event: WebSocketEvent
+    let event: LegacyWebSocketEvent
     switch value {
     case .string(let text):
       event = .text(text)
@@ -350,7 +350,7 @@ final class URLSessionWebSocket: WebSocket {
 
   /// Triggers a WebSocket event and updates internal state if needed.
   /// - Parameter event: The event to trigger.
-  private func _trigger(_ event: WebSocketEvent) {
+  private func _trigger(_ event: LegacyWebSocketEvent) {
     // Update state under the lock, but yield the continuation only after
     // releasing it — see the comment on `onComplete` above for why.
     let shouldInvalidate = mutableState.withValue {

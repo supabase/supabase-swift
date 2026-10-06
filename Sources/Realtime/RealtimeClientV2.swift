@@ -16,7 +16,7 @@ import Logging
 #endif
 
 /// Factory function for returning a new WebSocket connection.
-typealias WebSocketTransport =
+typealias LegacyWebSocketTransport =
   @Sendable (_ url: URL, _ headers: [String: String]) async throws ->
   any WebSocket
 
@@ -121,7 +121,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
 
   let url: URL
   let options: RealtimeClientOptions
-  let wsTransport: WebSocketTransport
+  let wsTransport: LegacyWebSocketTransport
   let mutableState = LockIsolated(MutableState())
   let http: HTTPClient
   let serializer = RealtimeSerializer()
@@ -171,7 +171,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   init(
     url: URL,
     options: RealtimeClientOptions,
-    wsTransport: @escaping WebSocketTransport,
+    wsTransport: @escaping LegacyWebSocketTransport,
     http: HTTPClient,
     clock: any Clock<Duration>
   ) {

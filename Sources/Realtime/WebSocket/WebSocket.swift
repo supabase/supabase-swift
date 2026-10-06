@@ -1,7 +1,7 @@
 import Foundation
 
 /// Represents events that can occur on a WebSocket connection.
-enum WebSocketEvent: Sendable, Hashable {
+enum LegacyWebSocketEvent: Sendable, Hashable {
   case text(String)
   case binary(Data)
   case close(code: Int?, reason: String)
@@ -28,8 +28,8 @@ protocol WebSocket: Sendable, AnyObject {
   ///   - reason: The reason for closing the connection.
   func close(code: Int?, reason: String?)
 
-  /// An `AsyncStream` of ``WebSocketEvent`` received from the peer.
-  var events: AsyncStream<WebSocketEvent> { get }
+  /// An `AsyncStream` of ``LegacyWebSocketEvent`` received from the peer.
+  var events: AsyncStream<LegacyWebSocketEvent> { get }
 
   /// The WebSocket subprotocol negotiated with the peer.
   ///

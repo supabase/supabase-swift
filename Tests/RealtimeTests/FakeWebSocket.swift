@@ -8,15 +8,15 @@ final class FakeWebSocket: WebSocket {
     var isClosed: Bool = false
     weak var other: FakeWebSocket?
 
-    var sentEvents: [WebSocketEvent] = []
-    var receivedEvents: [WebSocketEvent] = []
+    var sentEvents: [LegacyWebSocketEvent] = []
+    var receivedEvents: [LegacyWebSocketEvent] = []
     var closeCode: Int?
     var closeReason: String?
   }
 
   private let mutableState = LockIsolated(MutableState())
-  let events: AsyncStream<WebSocketEvent>
-  private let eventsContinuation: AsyncStream<WebSocketEvent>.Continuation
+  let events: AsyncStream<LegacyWebSocketEvent>
+  private let eventsContinuation: AsyncStream<LegacyWebSocketEvent>.Continuation
 
   private init(`protocol`: String) {
     self.`protocol` = `protocol`
@@ -24,12 +24,12 @@ final class FakeWebSocket: WebSocket {
   }
 
   /// Events send by this connection.
-  var sentEvents: [WebSocketEvent] {
+  var sentEvents: [LegacyWebSocketEvent] {
     mutableState.value.sentEvents
   }
 
   /// Events received by this connection.
-  var receivedEvents: [WebSocketEvent] {
+  var receivedEvents: [LegacyWebSocketEvent] {
     mutableState.value.receivedEvents
   }
 
@@ -86,7 +86,7 @@ final class FakeWebSocket: WebSocket {
     mutableState.value.isClosed
   }
 
-  func _trigger(_ event: WebSocketEvent) {
+  func _trigger(_ event: LegacyWebSocketEvent) {
     mutableState.withValue {
       $0.receivedEvents.append(event)
 

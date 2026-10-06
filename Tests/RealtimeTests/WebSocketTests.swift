@@ -20,28 +20,28 @@ import Testing
 @Suite(.serialized)
 struct WebSocketTests {
 
-  // MARK: - WebSocketEvent Tests
+  // MARK: - LegacyWebSocketEvent Tests
 
   @Test
   func webSocketEventEquality() {
-    let textEvent1 = WebSocketEvent.text("hello")
-    let textEvent2 = WebSocketEvent.text("hello")
-    let textEvent3 = WebSocketEvent.text("world")
+    let textEvent1 = LegacyWebSocketEvent.text("hello")
+    let textEvent2 = LegacyWebSocketEvent.text("hello")
+    let textEvent3 = LegacyWebSocketEvent.text("world")
 
     #expect(textEvent1 == textEvent2)
     #expect(textEvent1 != textEvent3)
 
     let binaryData = Data([1, 2, 3])
-    let binaryEvent1 = WebSocketEvent.binary(binaryData)
-    let binaryEvent2 = WebSocketEvent.binary(binaryData)
-    let binaryEvent3 = WebSocketEvent.binary(Data([4, 5, 6]))
+    let binaryEvent1 = LegacyWebSocketEvent.binary(binaryData)
+    let binaryEvent2 = LegacyWebSocketEvent.binary(binaryData)
+    let binaryEvent3 = LegacyWebSocketEvent.binary(Data([4, 5, 6]))
 
     #expect(binaryEvent1 == binaryEvent2)
     #expect(binaryEvent1 != binaryEvent3)
 
-    let closeEvent1 = WebSocketEvent.close(code: 1000, reason: "normal")
-    let closeEvent2 = WebSocketEvent.close(code: 1000, reason: "normal")
-    let closeEvent3 = WebSocketEvent.close(code: 1001, reason: "going away")
+    let closeEvent1 = LegacyWebSocketEvent.close(code: 1000, reason: "normal")
+    let closeEvent2 = LegacyWebSocketEvent.close(code: 1000, reason: "normal")
+    let closeEvent3 = LegacyWebSocketEvent.close(code: 1001, reason: "going away")
 
     #expect(closeEvent1 == closeEvent2)
     #expect(closeEvent1 != closeEvent3)
@@ -49,19 +49,19 @@ struct WebSocketTests {
 
   @Test
   func webSocketEventHashable() {
-    let textEvent = WebSocketEvent.text("hello")
-    let binaryEvent = WebSocketEvent.binary(Data([1, 2, 3]))
-    let closeEvent = WebSocketEvent.close(code: 1000, reason: "normal")
+    let textEvent = LegacyWebSocketEvent.text("hello")
+    let binaryEvent = LegacyWebSocketEvent.binary(Data([1, 2, 3]))
+    let closeEvent = LegacyWebSocketEvent.close(code: 1000, reason: "normal")
 
-    let events: Set<WebSocketEvent> = [textEvent, binaryEvent, closeEvent]
+    let events: Set<LegacyWebSocketEvent> = [textEvent, binaryEvent, closeEvent]
     #expect(events.count == 3)
   }
 
   @Test
   func webSocketEventPatternMatching() {
-    let textEvent = WebSocketEvent.text("hello world")
-    let binaryEvent = WebSocketEvent.binary(Data([1, 2, 3]))
-    let closeEvent = WebSocketEvent.close(code: 1000, reason: "normal")
+    let textEvent = LegacyWebSocketEvent.text("hello world")
+    let binaryEvent = LegacyWebSocketEvent.binary(Data([1, 2, 3]))
+    let closeEvent = LegacyWebSocketEvent.close(code: 1000, reason: "normal")
 
     switch textEvent {
     case .text(let message):
@@ -218,7 +218,7 @@ struct WebSocketTests {
       let socket = try await URLSessionWebSocket.connect(to: url)
       defer { socket.close(code: 1000, reason: nil) }
 
-      let received = LockIsolated([WebSocketEvent]())
+      let received = LockIsolated([LegacyWebSocketEvent]())
       let pump = Task { [socket] in
         for await event in socket.events {
           received.withValue { $0.append(event) }
@@ -250,7 +250,7 @@ struct WebSocketTests {
       let url = URL(string: "ws://127.0.0.1:\(port)")!
       let socket = try await URLSessionWebSocket.connect(to: url)
 
-      let received = LockIsolated([WebSocketEvent]())
+      let received = LockIsolated([LegacyWebSocketEvent]())
       let pump = Task { [socket] in
         for await event in socket.events {
           received.withValue { $0.append(event) }
