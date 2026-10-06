@@ -89,3 +89,41 @@ struct RelationshipIntegrationTests {
     #expect(row.comments.map(\.id) == [7])
   }
 }
+
+/// The scope over macro-generated `Embeds`, end to end. The rendering rules themselves are pinned
+/// in `PostgrestEmbeddedScopeTests`; this checks that what `@SelectionOf` emits feeds them.
+@Suite
+struct RelationshipScopeIntegrationTests {
+  @Test
+  func requiringMarksTheGeneratedEmbedAndPrefixesTheScope() async throws {
+    let capture = RequestCapture()
+    _ = try await capture.client
+      .from(RelationshipTodo.self)
+      .select(RelationshipTodoWithComments.self)
+      .requiring(\.comments) { $0.where { $0.authorID.eq(7) }.limit(5) }
+      .execute()
+
+    #expect(
+      capture.query
+        == "select=id:id,task:task,comments:comments!todo_id!inner(id:id,body:body)"
+        + "&comments.written_by=eq.7&comments.limit=5"
+    )
+  }
+
+  /// The alias, not the relation name, prefixes the scope: PostgREST accepts either, and the alias
+  /// is the one the selection declares.
+  @Test
+  func aToOneScopeIsPrefixedByItsAlias() async throws {
+    let capture = RequestCapture()
+    _ = try await capture.client
+      .from(RelationshipComment.self)
+      .select(RelationshipCommentWithAuthor.self)
+      .embedded(\.author) { $0.where { $0.name.eq("Ada") } }
+      .execute()
+
+    #expect(
+      capture.query
+        == "select=body:body,author:users!written_by(name:name)&author.name=eq.Ada"
+    )
+  }
+}

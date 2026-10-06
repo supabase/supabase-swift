@@ -93,8 +93,9 @@ public struct PostgrestToManyRelation<
 ///
 /// Selectable and orderable, not filterable: an embedded column renders `parent(title)` in a
 /// `select` list but `parent.title` on the left of a filter, and the filter form also needs an
-/// `!inner` decision. Filtering inside an embed is scoped separately (SDK-1575), and reads
-/// ``embeddedFilterName``.
+/// `!inner` decision. Filtering inside an embed is a scope on the query instead —
+/// ``PostgrestQuery/embedded(_:_:)`` and ``PostgrestQuery/requiring(_:_:)`` — which makes that
+/// decision explicit at the call site.
 public struct PostgrestToOneColumn<
   Root: PostgrestRelation,
   Target: PostgrestRelation,
@@ -126,7 +127,7 @@ public struct PostgrestToOneColumn<
 /// A column of a to-**many** embedded relation, seen from the parent.
 ///
 /// Select position only — `order=children(amount).desc` is `PGRST118` — and an embedded filter is
-/// scoped rather than written inline (SDK-1575).
+/// scoped on the query (``PostgrestQuery/embedded(_:_:)``) rather than written inline.
 public struct PostgrestToManyColumn<
   Root: PostgrestRelation,
   Target: PostgrestRelation,

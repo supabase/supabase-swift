@@ -166,7 +166,10 @@ public macro Relationship(_ foreignKey: AnyKeyPath) =
 /// property that names no column on it fails to compile.
 ///
 /// A property that holds another selection rather than a column is an embed, declared with
-/// ``Relationship(_:)``.
+/// ``Relationship(_:)``. A selection with at least one embed also gets an `Embeds` namespace and
+/// conforms to ``PostgREST/PostgrestEmbeddingSelection``, which is what makes
+/// ``PostgREST/PostgrestQuery/embedded(_:_:)`` and ``PostgREST/PostgrestQuery/requiring(_:_:)``
+/// available on a query selecting it.
 ///
 /// The annotated type must be declared at file scope. The macro attaches an extension, and Swift
 /// does not allow an extension of a type nested inside another type.
@@ -174,8 +177,9 @@ public macro Relationship(_ foreignKey: AnyKeyPath) =
 /// - Parameter relation: The relation this selects from, for example `Todo.self`.
 @attached(
   extension,
-  conformances: Decodable, Sendable, PostgrestSelection,
-  names: named(Source), named(selectString), named(CodingKeys), named(_columnCheck)
+  conformances: Decodable, Sendable, PostgrestSelection, PostgrestEmbeddingSelection,
+  names: named(Source), named(selectString), named(CodingKeys), named(_columnCheck),
+  named(Embeds), named(embeds)
 )
 public macro SelectionOf(_ relation: Any.Type) =
   #externalMacro(
