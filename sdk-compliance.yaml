@@ -1303,11 +1303,13 @@ features:
   # — there is no dedicated cancel()-style symbol to register.
   database.using_modifiers.request_cancellation: implemented
   database.using_modifiers.relationship_embed:
-    status: partially_implemented
-    note: "Two spellings. The string builder takes query-string syntax in select() (e.g. 'user(*)'). The typed surface has a dedicated relationship API: `PostgrestToOneRelation`/`PostgrestToManyRelation`, declared on a relation's `Columns` namespace (emitted by the postgres-meta-backed generator, or hand-written; `@Table` does not synthesize them, since a macro cannot see foreign-key metadata), and projecting a column through one is compiler-checked in select position, and in order position for the to-one direction only (a to-many order key is PGRST118 on the server). Still partial: filtering *inside* an embed needs the `parent.title` rendering and an `!inner` decision, which is scoped separately (SDK-1575) — `embeddedFilterName` is what it will read."
+    status: implemented
+    note: "Two spellings. The string builder takes query-string syntax in select() (e.g. 'user!inner(*)') and scopes or/order/limit/range with `referencedTable:`. The typed surface has a dedicated relationship API: `PostgrestToOneRelation`/`PostgrestToManyRelation`, declared on a relation's `Columns` namespace (emitted by the postgres-meta-backed generator, or hand-written; `@Table` does not synthesize them, since a macro cannot see foreign-key metadata), and projecting a column through one is compiler-checked in select position, and in order position for the to-one direction only (a to-many order key is PGRST118 on the server). A `@SelectionOf` type declares embeds with `@Relationship(\\Comment.todoID)`; the foreign key is required, so the generated select always carries the `!todo_id` hint and PostgREST's HTTP 300 `PGRST201` cannot be produced. Filtering, ordering and limiting *inside* an embed is a scope on the query: `embedded(_:_:)` narrows the nested rows only, and `requiring(_:_:)` emits `!inner` and drops unmatched parents. Two methods rather than a flag, because PostgREST's default keeps every parent row and a flag's default would be silently wrong half the time. Scopes nest (`comments.replies.limit=3`) and filter the embedded relation, not the nested selection, so an unselected column is still filterable."
     symbols:
       - PostgrestToOneRelation.subscript
       - PostgrestToManyRelation.subscript
+      - PostgrestQuery.embedded
+      - PostgrestQuery.requiring
     supporting_symbols:
       - PostgrestToOneRelation
       - PostgrestToOneRelation.init
@@ -1329,6 +1331,25 @@ features:
       - PostgrestToManyColumn.postgrestExpression
       - PostgrestToManyColumn.embeddedFilterName
       - PostgrestToManyColumn.Position
+      # The scope (SDK-1575). `PostgrestEmbed` is what `@SelectionOf` records per
+      # `@Relationship` property; a selection with at least one conforms to
+      # `PostgrestEmbeddingSelection`, and a relation never does, which is what keeps
+      # `embedded`/`requiring` off a whole-row `select()`.
+      - PostgrestEmbed
+      - PostgrestEmbed.init
+      - PostgrestEmbed.alias
+      - PostgrestEmbed.foreignKey
+      - PostgrestEmbed.postgrestExpression
+      - PostgrestEmbeddingSelection
+      - PostgrestEmbeddingSelection.Embeds
+      - PostgrestEmbeddingSelection.embeds
+      - PostgrestEmbeddedScope
+      - PostgrestEmbeddedScope.where
+      - PostgrestEmbeddedScope.order
+      - PostgrestEmbeddedScope.limit
+      - PostgrestEmbeddedScope.range
+      - PostgrestEmbeddedScope.embedded
+      - PostgrestEmbeddedScope.requiring
   database.using_modifiers.dry_run:
     status: implemented
     symbols:
