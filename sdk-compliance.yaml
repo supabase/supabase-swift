@@ -1429,6 +1429,15 @@ features:
     symbols:
       - FunctionsClient.stream
       - FunctionStreamResponse.body
+    supporting_symbols:
+      - FunctionStreamResponse
+      - FunctionStreamResponse.status
+      - FunctionStreamResponse.headers
+      - FunctionStreamResponse.contentType
+      - FunctionStreamResponse.region
+      - FunctionStreamResponse.executionID
+      - FunctionStreamResponse.requestID
+      - FunctionStreamResponse.description
   functions.invocation.region_selection:
     status: implemented
     symbols:
