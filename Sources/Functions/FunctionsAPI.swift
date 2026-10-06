@@ -15,7 +15,7 @@ import Helpers
 
 /// The one place a request is built, sent and its head classified.
 ///
-/// Both `invoke` and the streamed invoke go through ``exchange(name:body:options:configuration:http:)``;
+/// Both `invoke` and `stream` go through ``exchange(name:body:options:configuration:http:)``;
 /// nothing else inspects a response head or relabels a transport failure.
 enum FunctionsAPI {
   /// The most bytes of a non-2xx body kept on ``FunctionsError/response``. The rest is dropped

@@ -203,4 +203,47 @@ struct HTTPBodyTests {
     // The transport hook stays unset, so `didSendBodyData` cannot double up on the pull counter.
     #expect(body.onUploadProgress == nil)
   }
+
+  @Test
+  func mapErrorPassesChunksThroughAndTransformsTheFailure() async throws {
+    struct Upstream: Error {}
+    struct Mapped: Error {}
+    let chunks = AsyncThrowingStream<ArraySlice<UInt8>, any Error> {
+      $0.yield(ArraySlice([1, 2]))
+      $0.finish(throwing: Upstream())
+    }
+    let body = HTTPBody(chunks, length: .known(2), iterationBehavior: .single)
+      .mapError { error in error is Upstream ? Mapped() : error }
+
+    #expect(body.length == .known(2))
+    #expect(body.iterationBehavior == .single)
+    var received: [ArraySlice<UInt8>] = []
+    await #expect(throws: Mapped.self) {
+      for try await chunk in body { received.append(chunk) }
+    }
+    #expect(received == [[1, 2]])
+  }
+
+  /// `AsyncThrowingStream` ends cleanly when its consumer is cancelled, which would make a body
+  /// cut short look complete.
+  @Test
+  func iteratingFromACancelledTaskThrowsCancellationError() async {
+    let (chunks, continuation) = AsyncStream<ArraySlice<UInt8>>.makeStream()
+    let body = HTTPBody(chunks, length: .unknown, iterationBehavior: .single)
+    let (pulled, onPulled) = AsyncStream<Void>.makeStream()
+
+    let task = Task {
+      var count = 0
+      for try await _ in body {
+        count += 1
+        onPulled.yield()
+      }
+      return count
+    }
+    continuation.yield(ArraySlice([1]))
+    for await _ in pulled { break }
+    task.cancel()
+
+    await #expect(throws: CancellationError.self) { try await task.value }
+  }
 }

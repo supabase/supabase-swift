@@ -41,6 +41,9 @@ let version = Helpers.version
 /// - ``invoke(_:body:options:)``
 /// - ``invoke(_:body:options:as:decoder:)``
 ///
+/// ### Streaming Responses
+/// - ``stream(_:body:options:)``
+///
 /// ### Timeouts
 /// - ``requestIdleTimeout``
 public struct FunctionsClient: Sendable {
@@ -204,44 +207,42 @@ public struct FunctionsClient: Sendable {
     try await invoke(name, body: body, options: options).decode(as: type, decoder: decoder)
   }
 
-  /// Invokes a function and returns its response as a stream of raw `Data` chunks.
+  /// Invokes a function and returns as soon as the response head arrives. The body streams.
   ///
-  /// The function must return a `text/event-stream` content type for this to work correctly.
+  /// Use it for `text/event-stream` and large responses. Iterate
+  /// ``FunctionStreamResponse/body`` once; cancelling the iterating task closes the connection.
+  /// Chunk boundaries follow the network, not the payload: a server-sent event or a JSON line
+  /// may arrive split across chunks, so frame them with a parser of your own.
   ///
-  /// > Warning: Experimental — the API may change without a major version bump.
+  /// ```swift
+  /// let response = try await functions.stream("chat", body: .json(prompt))
+  /// for try await chunk in response.body {
+  ///   parser.feed(chunk)
+  /// }
+  /// ```
+  ///
+  /// > Note: On Linux the body is delivered whole when the server closes the connection
+  /// > (`URLSessionTransport` buffers it there).
+  ///
   /// - Parameters:
-  ///   - name: The function's slug.
+  ///   - name: The function's slug. May contain a sub-path, like `"api/users/1"`.
   ///   - body: What to send. `nil` sends no body.
   ///   - options: Method, headers, query, region and timeout for this call.
-  /// - Returns: An `AsyncThrowingStream` that yields response data chunks as they arrive.
-  public func _invokeWithStreamedResponse(
+  /// - Returns: The status and headers, and the body still to be read.
+  /// - Throws: ``FunctionsError`` for a relay failure, a non-2xx status or a transport failure
+  ///   before the head arrives; `CancellationError` if the task is cancelled; whatever a custom
+  ///   transport, middleware or ``Configuration/accessToken`` closure throws.
+  public func stream(
     _ name: String,
     body: FunctionBody? = nil,
     options: FunctionInvokeOptions = .init()
-  ) -> AsyncThrowingStream<Data, any Error> {
-    // Unbounded: the chunks are the response body. Dropping one corrupts it.
-    let (stream, continuation) = AsyncThrowingStream<Data, any Error>.makeStream(
-      bufferingPolicy: .unbounded
+  ) async throws -> FunctionStreamResponse {
+    let (head, responseBody) = try await FunctionsAPI.exchange(
+      name: name, body: body, options: options, configuration: configuration, http: http)
+    return FunctionStreamResponse(
+      status: head.status,
+      headers: head.headerFields,
+      body: responseBody?.mapError { FunctionsAPI.mapTransportError($0) } ?? HTTPBody(Data())
     )
-    let task = Task {
-      do {
-        let (_, responseBody) = try await FunctionsAPI.exchange(
-          name: name, body: body, options: options, configuration: configuration, http: http)
-        do {
-          if let responseBody {
-            for try await chunk in responseBody {
-              continuation.yield(Data(chunk))
-            }
-          }
-        } catch {
-          throw FunctionsAPI.mapTransportError(error)
-        }
-        continuation.finish()
-      } catch {
-        continuation.finish(throwing: error)
-      }
-    }
-    continuation.onTermination = { _ in task.cancel() }
-    return stream
   }
 }

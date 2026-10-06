@@ -1425,9 +1425,19 @@ features:
       - FunctionInvokeOptions.method
   functions.invocation.streaming_response:
     status: implemented
-    note: "Yields Data chunks via an AsyncThrowingStream rather than passing through a raw Response object; _invokeWithStreamedResponse is marked experimental (leading underscore) but is a genuine public symbol."
+    note: "stream() returns the head as soon as it arrives; the body is an HTTPBody of byte chunks whose boundaries follow the network. No SSE framing: callers bring their own parser. On Linux the body arrives whole when the server closes (SDK-1839)."
     symbols:
-      - FunctionsClient._invokeWithStreamedResponse
+      - FunctionsClient.stream
+      - FunctionStreamResponse.body
+    supporting_symbols:
+      - FunctionStreamResponse
+      - FunctionStreamResponse.status
+      - FunctionStreamResponse.headers
+      - FunctionStreamResponse.contentType
+      - FunctionStreamResponse.region
+      - FunctionStreamResponse.executionID
+      - FunctionStreamResponse.requestID
+      - FunctionStreamResponse.description
   functions.invocation.region_selection:
     status: implemented
     symbols:
@@ -1452,9 +1462,8 @@ features:
       - FunctionsClient.Configuration.region
       - FunctionInvokeOptions.region
   # Cancellation is plain Swift structured concurrency: cancel the enclosing
-  # Task for invoke(), or stop iterating / cancel the Task for the
-  # AsyncThrowingStream returned by _invokeWithStreamedResponse. No dedicated
-  # cancel()-style symbol exists.
+  # Task for invoke(), or stop iterating / cancel the Task for the body of
+  # stream(). No dedicated cancel()-style symbol exists.
   functions.invocation.request_cancellation: implemented
   functions.invocation.timeout:
     status: implemented

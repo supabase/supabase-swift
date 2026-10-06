@@ -3580,3 +3580,61 @@ This compiles silently. A function that returned dates as a number of seconds si
 `.deferredToDate` format) stops decoding; pass `decoder: JSONDecoder()` to that call, or set
 `FunctionsOptions(decoder: JSONDecoder())` client-wide, to keep the old behavior. Every other
 `JSONDecoder` setting is unchanged.
+
+## `_invokeWithStreamedResponse` is replaced by `stream(_:body:options:)`, which returns `FunctionStreamResponse`
+
+`FunctionsClient.stream(_:body:options:)` sends the request and returns a `FunctionStreamResponse`
+as soon as the response head arrives: `status`, `headers`, `contentType`, `region`,
+`executionID`, `requestID`, and the `body` as an `HTTPBody` of `ArraySlice<UInt8>` chunks.
+`_invokeWithStreamedResponse`, which returned an `AsyncThrowingStream<Data, any Error>`, is
+removed.
+
+The old method dropped the response head, so a caller could not read the status or the edge
+region of a streamed call, and its leading underscore hid it from the compliance checker.
+
+```swift
+// Before
+for try await chunk in supabase.functions._invokeWithStreamedResponse("chat", body: .json(prompt)) {
+  parser.feed(chunk)
+}
+
+// After
+let response = try await supabase.functions.stream("chat", body: .json(prompt))
+print(response.status, response.region ?? "unknown region")
+for try await chunk in response.body {
+  parser.feed(chunk)  // ArraySlice<UInt8>, not Data
+}
+```
+
+Compile error at every `_invokeWithStreamedResponse` call site. Chunk boundaries still follow
+the network, so a server-sent event or a JSON line can arrive split across chunks; the SDK does
+not frame them, so keep (or bring) your own parser. Two behavior notes: a non-2xx status or a
+relay failure now throws from `stream` itself, before any body exists, instead of from the first
+iteration; and cancelling the task that iterates `body` throws `CancellationError` and closes the
+connection, where the old stream ended as if the body were complete. `body` is one-pass.
+
+On Linux the body is delivered whole when the server closes the connection, because
+`URLSessionTransport` buffers responses there (SDK-1839).
+
+## Iterating an `HTTPBody` from a cancelled task throws `CancellationError`
+
+`HTTPBody.Iterator.next()` throws `CancellationError` when the iterating task is cancelled.
+That reaches every API that hands out or drains an `HTTPBody`: `FunctionStreamResponse.body`,
+Storage's `bytes(path:)`, `Data(collecting:upTo:)`, `HTTPBody.write(to:)` and a custom
+`ClientMiddleware` reading a response body.
+
+The chunks come from an `AsyncThrowingStream`, whose iterator returns `nil` when its consumer is
+cancelled. A body cut short therefore ended as if it were complete: a download written to disk
+with `write(to:)` looked whole, and a `for try await` loop fell through without an error.
+
+```swift
+// Before: a cancelled download looked complete
+try await body.write(to: fileURL)   // returns normally, file is truncated
+
+// After
+try await body.write(to: fileURL)   // throws CancellationError
+```
+
+This compiles silently. Code that cancelled a task to stop a stream and relied on the loop
+ending cleanly now sees `CancellationError`; catch it, or `break` out of the loop instead of
+cancelling. No escape hatch: a truncated body reported as complete is a data-loss bug.
