@@ -1201,10 +1201,8 @@ now prints the struct's default description (`FunctionInvokeOptions.Method(rawVa
 you log, build a URL, or send analytics using direct interpolation of a
 `FunctionInvokeOptions.Method` value, use `.rawValue` explicitly to get the bare string back.
 
-Constructing a `Method` from an arbitrary string is not validated at construction time — invalid
-HTTP method tokens are caught later, in `httpMethod(_:)`, which returns `nil` for a raw value that
-isn't a legal HTTP token (per RFC 9110). `FunctionsClient` falls back to `.post` when `httpMethod`
-returns `nil`, so an invalid custom `Method` silently becomes a POST request rather than throwing.
+`FunctionInvokeOptions.Method` was later removed altogether in favour of `HTTPRequest.Method`; see
+"`FunctionInvokeOptions.Method` is replaced by `HTTPRequest.Method`" below.
 
 ## `FunctionsClient.setAuth(token:)` removed; pass an `accessToken` closure instead
 
@@ -2251,6 +2249,11 @@ do {
 `FunctionsError` is not `Equatable`. Compare `kind`, `message` and `response` instead. String
 interpolation of the error now prints `FunctionsError(server): Edge Function returned a non-2xx
 status code: 500 [status 500]` instead of the case name.
+
+v3 also adds `FunctionsError.Kind.invalidRequest` (a body that could not be encoded, see
+"Function bodies are a `FunctionBody`" below) and `FunctionsError.code`, a `FunctionsError.Code`
+read from the platform's `sb-error-code` response header. Both are additive; `Code` is another open
+set, so keep a fallback branch when you switch on it.
 
 ## Network and decoding failures are wrapped in the module error
 
@@ -3396,3 +3399,184 @@ into the SDK from `@MainActor` code that return large payloads.
 
 `HTTPBody`'s iterator stays `@concurrent`, so reading a response body chunk by chunk still leaves
 the caller's actor. Realtime decodes WebSocket frames in its own task, as before.
+
+## `FunctionsClient` is created with a `Configuration`
+
+`FunctionsClient` has one initializer, `init(configuration:)`, taking a
+`FunctionsClient.Configuration` with `url` (required), `headers`, `region`, `http`, `logger`,
+`decoder` and `accessToken`, every one but `url` defaulted. The two flat seven-parameter
+initializers are removed, and `FunctionsClient.decoder` is now `configuration.decoder`.
+
+The two initializers differed only in the type of `region` (`String?` under
+`@_disfavoredOverload` versus `FunctionRegion?`), and Functions was the one module without the
+`Configuration` struct Auth, PostgREST and Storage take. A struct of defaulted `var`s also lets a
+later option land without changing the initializer's mangled name, which matters under library
+evolution.
+
+```swift
+// Before
+let functions = FunctionsClient(
+  url: url,
+  headers: ["apikey": apiKey],
+  region: .usEast1,
+  accessToken: { await tokenStore.current }
+)
+
+// After
+let functions = FunctionsClient(
+  configuration: .init(
+    url: url,
+    headers: [HTTPField.Name("apikey")!: apiKey],
+    region: .usEast1,
+    accessToken: { await tokenStore.current }
+  )
+)
+```
+
+Compile error at every standalone construction site; `supabase.functions` is unaffected.
+
+`init(configuration:)` traps when `url` has no host, as `SupabaseClient.init` does: the URL is
+fixed at construction, so a bad one is a programmer error. `Configuration.headers` must not carry
+`Authorization` — a static bearer would win over every token — and debug builds report an issue
+when it does. Pass the token through `accessToken` instead.
+
+## Functions headers are `HTTPFields`
+
+`FunctionsClient.Configuration.headers` and `FunctionInvokeOptions.headers` are `HTTPFields`
+(from `swift-http-types`, re-exported by the SDK) instead of `[String: String]`.
+
+`HTTPFields` is case-insensitive by construction, so a per-call `content-type` now replaces a
+`Content-Type` instead of sending both, and a header name that is not a legal HTTP field name
+cannot be spelled at all. Auth v3 and Storage v3 make the same change.
+
+```swift
+// Before
+FunctionInvokeOptions(headers: ["X-Custom-Key": "value"])
+
+// After
+FunctionInvokeOptions(headers: [HTTPField.Name("X-Custom-Key")!: "value"])
+// or, for a name HTTPTypes already defines
+FunctionInvokeOptions(headers: [.authorization: "Bearer override"])
+```
+
+Compile error at every site that passes a dictionary literal with `String` keys.
+
+## Function bodies are a `FunctionBody` passed to `invoke`
+
+The body is an argument of the call, not a setting. `invoke`, `invoke<T>` and the streamed
+invoke take `body: FunctionBody? = nil`, and `FunctionInvokeOptions` loses `body` and the four
+`init(... body:)` overloads. `FunctionBody` has four factories, each fixing the `Content-Type`:
+
+| Before | After | `Content-Type` |
+| --- | --- | --- |
+| `options: .init(body: order)` | `body: .json(order)` | `application/json` |
+| `options: .init(body: "hello")` | `body: .text("hello")` | `text/plain; charset=utf-8` |
+| `options: .init(body: data)` | `body: .data(data)` | `application/octet-stream` |
+| `options: .init(headers: ["Content-Type": "image/jpeg"], body: jpeg)` | `body: .data(jpeg, contentType: "image/jpeg")` | as given |
+| — | `body: .stream(try HTTPBody(fileURL: url), contentType: "audio/m4a")` | as given |
+
+`init(body: some Encodable)` picked the content type by casting the value to `String` or `Data`,
+so a `[UInt8]` went out JSON-encoded as an array and there was no way to send a stream. Naming
+the encoding at the call site removes the guesswork; a per-call
+`options.headers[.contentType]` still overrides the factory's type.
+
+```swift
+// Before
+let order: Order = try await supabase.functions.invoke(
+  "get-order",
+  options: FunctionInvokeOptions(body: ["id": 42])
+)
+
+// After
+let order: Order = try await supabase.functions.invoke("get-order", body: .json(["id": 42]))
+```
+
+Compile error at every site that passed `body:` to `FunctionInvokeOptions`.
+
+One change is silent: a value whose `encode(to:)` throws used to be dropped (`try?`), so the
+request went out with no body and `Content-Type: application/json`. `.json(_:)` now throws
+`FunctionsError` with kind `.invalidRequest`, wrapping the `EncodingError`, before anything is
+sent. If a function of yours received an empty body and answered 200, it now receives nothing
+and the call throws. `.json(_:encoder:)` takes a per-body `JSONEncoder`; the default writes
+`Date` as ISO 8601.
+
+## `invoke` returns `FunctionResponse`; the `decode:` closure overload is removed; `invoke<T>` gains `as:`
+
+`invoke(_:body:options:)` returns a `FunctionResponse` — `status`, `headers`, `body`, plus
+`contentType`, `region` (`x-sb-edge-region`), `executionID` (`x-deno-execution-id`),
+`requestID`, `text` and `decode(as:decoder:)` — instead of `Void`. It is `@discardableResult`,
+so a fire-and-forget call still compiles unchanged. `invoke(_:options:decode:)`, whose closure
+was the only way to reach the response head, is removed. `invoke<T>` takes an optional
+`as type: T.Type = T.self` before `decoder:`, so the type can be spelled at the call site
+instead of only on the binding.
+
+Support asks for the region and execution id of a failing call; neither was reachable. Kotlin,
+C# and Dart all expose the head on success.
+
+```swift
+// Before
+let (status, data) = try await supabase.functions.invoke("render") { data, response in
+  (response.status, data)
+}
+let order: Order = try await supabase.functions.invoke("get-order", options: o, decoder: d)
+
+// After
+let response = try await supabase.functions.invoke("render")
+let (status, data) = (response.status, response.body)
+print(response.region ?? "unknown region", response.executionID ?? "")
+let order: Order = try await supabase.functions.invoke("get-order", options: o, decoder: d)
+let same = try await supabase.functions.invoke("get-order", as: Order.self)
+```
+
+Compile error at every `decode:` closure site. `let x: Foo = try await invoke("f")` and
+`try await invoke("f")` with the result ignored keep compiling; a site that spelled every label
+of `invoke<T>` compiles unchanged too, since `as:` is defaulted.
+
+## `FunctionInvokeOptions.Method` is replaced by `HTTPRequest.Method`
+
+`FunctionInvokeOptions.method` is an `HTTPRequest.Method` (from `swift-http-types`, re-exported
+by the SDK) defaulting to `.post`. `FunctionInvokeOptions.Method` is deleted.
+
+The two types were the same open struct with the same five statics, and the private conversion
+between them returned `nil` for a token that was not a legal HTTP method, silently turning the
+request into a POST. An `HTTPRequest.Method` cannot be invalid.
+
+```swift
+// Before
+FunctionInvokeOptions(method: .get)
+FunctionInvokeOptions(method: "PURGE")
+
+// After
+FunctionInvokeOptions(method: .get)                       // unchanged
+FunctionInvokeOptions(method: HTTPRequest.Method("PURGE")!) // no string literal
+```
+
+Compile error only where the type was named (`FunctionInvokeOptions.Method`) or a string
+literal was passed: `HTTPRequest.Method` is not `ExpressibleByStringLiteral`. `.get`, `.post`,
+`.put`, `.patch` and `.delete` are spelled the same.
+
+## Functions decodes with `JSONDecoder.supabase()` by default
+
+`FunctionsClient.Configuration.decoder` and `SupabaseClientOptions.FunctionsOptions.decoder`
+default to the SDK decoder, the one PostgREST and Storage already use, instead of
+`JSONDecoder()`.
+
+The SDK decoder reads ISO 8601 strings, with or without fractional seconds, into `Date`.
+`JSONDecoder()` uses `.deferredToDate` and fails on the string a TypeScript function writes with
+`JSON.stringify(new Date())`, so a `Date` field in a function's response could not be decoded
+without a custom decoder.
+
+```swift
+// Before: a Date field needed a custom decoder
+let decoder = JSONDecoder()
+decoder.dateDecodingStrategy = .iso8601
+let report: Report = try await supabase.functions.invoke("report", decoder: decoder)
+
+// After
+let report: Report = try await supabase.functions.invoke("report")
+```
+
+This compiles silently. A function that returned dates as a number of seconds since 1970 (the
+`.deferredToDate` format) stops decoding; pass `decoder: JSONDecoder()` to that call, or set
+`FunctionsOptions(decoder: JSONDecoder())` client-wide, to keep the old behavior. Every other
+`JSONDecoder` setting is unchanged.

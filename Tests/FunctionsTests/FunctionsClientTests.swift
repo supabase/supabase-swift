@@ -35,8 +35,10 @@ struct FunctionsClientTests {
   let apiKey =
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
 
+  private var headers: HTTPFields { [HTTPField.Name("apikey")!: apiKey] }
+
   private func makeSUT(
-    region: String? = nil,
+    region: FunctionRegion? = nil,
     accessToken: (@Sendable () async throws -> String?)? = nil
   ) -> FunctionsClient {
     Mocker.removeAll()
@@ -44,9 +46,7 @@ struct FunctionsClientTests {
     let sessionConfiguration = URLSessionConfiguration.ephemeral
     sessionConfiguration.protocolClasses = [MockingURLProtocol.self]
     let session = URLSession(configuration: sessionConfiguration)
-    return FunctionsClient(
-      url: url,
-      headers: ["apikey": apiKey],
+    return makeClient(
       region: region,
       http: .init(transport: URLSessionTransport(session: session)),
       accessToken: accessToken
@@ -59,26 +59,29 @@ struct FunctionsClientTests {
         HTTPTypes.HTTPResponse, HTTPBody?
       )
   ) -> FunctionsClient {
+    makeClient(http: .init(transport: ClosureTransport(handler: transport)))
+  }
+
+  private func makeClient(
+    region: FunctionRegion? = nil,
+    http: HTTPClientConfiguration,
+    decoder: JSONDecoder = .supabase(),
+    accessToken: (@Sendable () async throws -> String?)? = nil
+  ) -> FunctionsClient {
     FunctionsClient(
-      url: url,
-      headers: ["apikey": apiKey],
-      region: nil,
-      http: .init(transport: ClosureTransport(handler: transport)),
-      accessToken: nil
-    )
+      configuration: .init(
+        url: url, headers: headers, region: region, http: http, decoder: decoder,
+        accessToken: accessToken))
   }
 
   @Test
   func `init`() async {
     let client = FunctionsClient(
-      url: url,
-      headers: ["apikey": apiKey],
-      region: .saEast1
-    )
-    #expect(client.region == "sa-east-1")
+      configuration: .init(url: url, headers: headers, region: .saEast1))
 
-    #expect(client.headers[.init("apikey")!] == apiKey)
-    #expect(client.headers[.init("X-Client-Info")!] != nil)
+    #expect(client.configuration.region == .saEast1)
+    #expect(client.configuration.headers[.init("apikey")!] == apiKey)
+    #expect(client.configuration.url == url)
   }
 
   @Test
@@ -87,12 +90,104 @@ struct FunctionsClientTests {
     decoder.keyDecodingStrategy = .convertFromSnakeCase
 
     let client = FunctionsClient(
-      url: url,
-      headers: ["apikey": apiKey],
-      decoder: decoder
-    )
+      configuration: .init(url: url, headers: headers, decoder: decoder))
 
-    #expect(client.decoder === decoder)
+    #expect(client.configuration.decoder === decoder)
+  }
+
+  // Not asserting that `init(configuration:)` reports an issue for an `Authorization` header in
+  // `Configuration.headers`: `reportIssue` (swift-issue-reporting) called from a `@Test`
+  // function segfaults the test process on some toolchains (the nightly Linux job, and Xcode's
+  // XCTest hosting), regardless of the expected-issue wrapper used. Tracked in SDK-435; the
+  // same note applies in `SupabaseClientTests`.
+
+  @Test
+  func invokeReturnsTheResponseHead() async throws {
+    let sut = makeSUT()
+
+    Mock(
+      url: url.appendingPathComponent("hello"),
+      statusCode: 200,
+      data: [.post: Data("hi".utf8)],
+      additionalHeaders: [
+        "Content-Type": "text/plain",
+        "x-sb-edge-region": "eu-central-2",
+        "x-deno-execution-id": "exec-1",
+      ]
+    )
+    .register()
+
+    let response = try await sut.invoke("hello")
+
+    #expect(response.status == .ok)
+    #expect(response.contentType == "text/plain")
+    #expect(response.region == .euCentral2)
+    #expect(response.executionID == "exec-1")
+    #expect(response.text == "hi")
+  }
+
+  /// The default decoder reads the ISO 8601 date a TypeScript function writes with
+  /// `JSON.stringify`; `JSONDecoder()` would not.
+  @Test
+  func invokeDecodesISO8601DatesByDefault() async throws {
+    let sut = makeSUT()
+
+    Mock(
+      url: url.appendingPathComponent("hello"),
+      statusCode: 200,
+      data: [.post: Data(#"{"at":"2026-10-05T12:34:56.789Z"}"#.utf8)]
+    )
+    .register()
+
+    struct Payload: Decodable {
+      var at: Date
+    }
+
+    let payload: Payload = try await sut.invoke("hello")
+    #expect(payload.at == Date(timeIntervalSince1970: 1_791_203_696.789))
+  }
+
+  @Test
+  func perCallDecoderWinsOverTheClientDecoder() async throws {
+    let sut = makeSUT()
+
+    Mock(
+      url: url.appendingPathComponent("hello"),
+      statusCode: 200,
+      data: [.post: Data(#"{"user_name":"a"}"#.utf8)]
+    )
+    .register()
+
+    struct Payload: Decodable {
+      var userName: String
+    }
+    let decoder = JSONDecoder()
+    decoder.keyDecodingStrategy = .convertFromSnakeCase
+
+    let payload = try await sut.invoke("hello", as: Payload.self, decoder: decoder)
+    #expect(payload.userName == "a")
+  }
+
+  /// A body that fails to encode is rejected before anything is sent.
+  @Test
+  func invokeWithABodyThatFailsToEncodeSendsNothing() async {
+    struct Failing: Encodable {
+      struct Reason: Error {}
+      func encode(to encoder: any Encoder) throws { throw Reason() }
+    }
+    let sut = makeSUT { _, _ in
+      Issue.record("transport should not be called")
+      return (HTTPTypes.HTTPResponse(status: .ok), nil)
+    }
+
+    do {
+      try await sut.invoke("hello", body: .json(Failing()))
+      Issue.record("Expected failure")
+    } catch let error as FunctionsError {
+      #expect(error.kind == .invalidRequest)
+    } catch {
+      Issue.record("Unexpected error \(error)")
+    }
   }
 
   @Test
@@ -121,7 +216,8 @@ struct FunctionsClientTests {
 
     try await sut.invoke(
       "hello_world",
-      options: .init(headers: ["X-Custom-Key": "value"], body: ["name": "Supabase"])
+      body: .json(["name": "Supabase"]),
+      options: .init(headers: [.init("X-Custom-Key")!: "value"])
     )
   }
 
@@ -155,6 +251,9 @@ struct FunctionsClientTests {
     let response = try await sut.invoke("hello") as Payload
     #expect(response.message == "Hello, world!")
     #expect(response.status == "ok")
+
+    let explicit = try await sut.invoke("hello", as: Payload.self)
+    #expect(explicit.message == "Hello, world!")
   }
 
   @Test
@@ -213,7 +312,7 @@ struct FunctionsClientTests {
 
   @Test
   func invokeWithRegionDefinedInClient() async throws {
-    let sut = makeSUT(region: FunctionRegion.caCentral1.rawValue)
+    let sut = makeSUT(region: .caCentral1)
 
     Mock(
       url: url.appendingPathComponent("hello-world"),
@@ -488,13 +587,13 @@ struct FunctionsClientTests {
     }
   }
 
-  /// A non-2xx body is collected up to ``FunctionsClient/maxErrorBodyBytes``, keeping the
+  /// A non-2xx body is collected up to `FunctionsAPI.maxErrorBodyBytes`, keeping the
   /// prefix, so an unbounded error response cannot hold the call open or exhaust memory
   /// (SDK-1840).
   @Test
   func invoke_serverErrorBody_isCappedKeepingThePrefix() async {
     let sut = makeSUT()
-    let cap = FunctionsClient.maxErrorBodyBytes
+    let cap = FunctionsAPI.maxErrorBodyBytes
     let body = Data((0..<(cap + 4096)).map { UInt8(truncatingIfNeeded: $0) })
 
     Mock(
@@ -518,7 +617,7 @@ struct FunctionsClientTests {
   @Test
   func invokeWithStreamedResponse_serverErrorBody_isCappedKeepingThePrefix() async {
     let sut = makeSUT()
-    let cap = FunctionsClient.maxErrorBodyBytes
+    let cap = FunctionsAPI.maxErrorBodyBytes
     let body = Data((0..<(cap + 4096)).map { UInt8(truncatingIfNeeded: $0) })
 
     Mock(
@@ -577,9 +676,7 @@ struct FunctionsClientTests {
   @Test
   func invokeWithTimeoutOverride() async throws {
     let box = CapturedRequestBox()
-    let sut = FunctionsClient(
-      url: url,
-      headers: ["apikey": apiKey],
+    let sut = makeClient(
       http: .init(
         transport: ClosureTransport { request, _ in
           await box.set(request, timeout: RequestTimeout.current)
@@ -595,9 +692,7 @@ struct FunctionsClientTests {
   @Test
   func invokeWithDefaultTimeout() async throws {
     let box = CapturedRequestBox()
-    let sut = FunctionsClient(
-      url: url,
-      headers: ["apikey": apiKey],
+    let sut = makeClient(
       http: .init(
         transport: ClosureTransport { request, _ in
           await box.set(request, timeout: RequestTimeout.current)
@@ -613,9 +708,7 @@ struct FunctionsClientTests {
   @Test
   func configuredTimeoutIntervalReplacesTheFunctionsDefault() async throws {
     let box = CapturedRequestBox()
-    let sut = FunctionsClient(
-      url: url,
-      headers: ["apikey": apiKey],
+    let sut = makeClient(
       http: .init(
         transport: ClosureTransport { request, _ in
           await box.set(request, timeout: RequestTimeout.current)
@@ -635,9 +728,7 @@ struct FunctionsClientTests {
   @Test
   func accessTokenProviderSetsAuthorizationHeader() async throws {
     let box = CapturedRequestBox()
-    let sut = FunctionsClient(
-      url: url,
-      headers: ["apikey": apiKey],
+    let sut = makeClient(
       http: .init(
         transport: ClosureTransport { request, _ in
           await box.set(request, timeout: nil)
@@ -666,9 +757,7 @@ struct FunctionsClientTests {
     let tokenBox = TokenBox()
     let capture = Capture()
 
-    let sut = FunctionsClient(
-      url: url,
-      headers: ["apikey": apiKey],
+    let sut = makeClient(
       http: .init(
         transport: ClosureTransport { request, _ in
           await capture.record(request.headerFields[.authorization])
@@ -688,9 +777,7 @@ struct FunctionsClientTests {
   @Test
   func invokeOptionsHeaderOverridesAccessTokenProvider() async throws {
     let box = CapturedRequestBox()
-    let sut = FunctionsClient(
-      url: url,
-      headers: ["apikey": apiKey],
+    let sut = makeClient(
       http: .init(
         transport: ClosureTransport { request, _ in
           await box.set(request, timeout: nil)
@@ -701,7 +788,7 @@ struct FunctionsClientTests {
 
     try await sut.invoke(
       "hello-world",
-      options: .init(headers: ["Authorization": "Bearer override.token"])
+      options: .init(headers: [.authorization: "Bearer override.token"])
     )
 
     let capturedRequest = await box.request
@@ -712,9 +799,7 @@ struct FunctionsClientTests {
   func accessTokenProviderErrorPropagatesToInvoke() async throws {
     struct TokenError: Error {}
 
-    let sut = FunctionsClient(
-      url: url,
-      headers: ["apikey": apiKey],
+    let sut = makeClient(
       http: .init(
         transport: ClosureTransport { _, _ in
           Issue.record("transport should not be called when the access token provider throws")
@@ -730,9 +815,7 @@ struct FunctionsClientTests {
 
   @Test
   func invokeWithStreamedResponseDoesNotWrapAccessTokenError() async {
-    let sut = FunctionsClient(
-      url: url,
-      headers: ["apikey": apiKey],
+    let sut = makeClient(
       http: .init(
         transport: ClosureTransport { _, _ in
           Issue.record("transport should not be called when the access token provider throws")
