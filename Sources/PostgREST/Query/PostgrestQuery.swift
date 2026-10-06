@@ -27,10 +27,6 @@ public struct PostgrestQuery<R: PostgrestRelation, Output: Decodable & Sendable>
   /// The request this query sends.
   public var request: PostgrestRequest
 
-  /// Set by ``stripNulls()``. Applied when the request is sent, because ``single()`` may still
-  /// change the media type it has to be added to.
-  var stripsNulls = false
-
   /// Turns a 2xx body into `Output`. Chosen by the method that produced this query, so
   /// ``maybeSingle()`` can decode an array and enforce at most one row.
   let decode: @Sendable (Data, JSONDecoder) throws -> Output
@@ -58,7 +54,7 @@ extension PostgrestQuery {
   /// - Returns: A ``PostgrestResponse`` whose `value` is the decoded `Output`.
   @discardableResult
   public func execute() async throws -> PostgrestResponse<Output> {
-    try await send(sentRequest)
+    try await send(request)
   }
 
   /// Sends the request and decodes the response, asking the server for a total row count as well.
@@ -84,7 +80,7 @@ extension PostgrestQuery {
   ///   ``PostgrestResponse/count`` is the total.
   @discardableResult
   public func execute(count: CountOption) async throws -> PostgrestResponse<Output> {
-    var request = sentRequest
+    var request = request
     request.setPreference("count=\(count.rawValue)")
     return try await send(request)
   }
@@ -109,10 +105,10 @@ extension PostgrestQuery {
   /// - Throws: ``PostgrestError`` if the response carries no count, or any error thrown by the
   ///   request itself.
   public func count(_ option: CountOption) async throws -> Int {
-    var request = sentRequest
+    var request = request
     request.method = .head
     request.setPreference("count=\(option.rawValue)")
-    let response = try await request.execute(on: client) { _, _ in () }
+    let response = try await request.execute(on: client) { _ in () }
     guard let count = response.count else {
       throw PostgrestError(
         kind: .decoding,
@@ -125,18 +121,8 @@ extension PostgrestQuery {
     return count
   }
 
-  private var sentRequest: PostgrestRequest {
-    guard stripsNulls else { return request }
-    var request = request
-    request.headerFields[.accept] =
-      request.headerFields[.accept] == Self.objectMediaType
-      ? "\(Self.objectMediaType);nulls=stripped"
-      : "application/vnd.pgrst.array+json;nulls=stripped"
-    return request
-  }
-
   private func send(_ request: PostgrestRequest) async throws -> PostgrestResponse<Output> {
-    try await request.execute(on: client, decode: decode)
+    try await request.execute(on: client) { try decode($0, client.configuration.decoder) }
   }
 
   private static var objectMediaType: String { "application/vnd.pgrst.object+json" }
@@ -160,7 +146,6 @@ extension PostgrestQuery {
   public func single<Element>() -> PostgrestQuery<R, Element> where Output == [Element] {
     var query = PostgrestQuery<R, Element>(client: client, request: request)
     query.request.headerFields[.accept] = Self.objectMediaType
-    query.stripsNulls = stripsNulls
     return query
   }
 
@@ -186,7 +171,7 @@ extension PostgrestQuery {
   ///
   /// - Returns: A ``PostgrestQuery`` decoding into `Element?`.
   public func maybeSingle<Element>() -> PostgrestQuery<R, Element?> where Output == [Element] {
-    var query = PostgrestQuery<R, Element?>(client: client, request: request) { data, decoder in
+    let query = PostgrestQuery<R, Element?>(client: client, request: request) { data, decoder in
       let rows = try decoder.decode([Element].self, from: data)
       guard rows.count <= 1 else {
         throw PostgrestError(
@@ -196,7 +181,6 @@ extension PostgrestQuery {
       }
       return rows.first
     }
-    query.stripsNulls = stripsNulls
     return query
   }
 
@@ -208,7 +192,7 @@ extension PostgrestQuery {
   /// - Returns: A new query that asks PostgREST for `nulls=stripped`.
   public func stripNulls() -> Self {
     var query = self
-    query.stripsNulls = true
+    query.request.stripsNulls = true
     return query
   }
 

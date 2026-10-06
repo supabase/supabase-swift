@@ -154,7 +154,7 @@ extension PostgrestMutation where Phase: PostgrestExecutableMutationPhase {
   /// Sends the request, discarding the response body.
   @discardableResult
   public func execute() async throws -> PostgrestResponse<Void> {
-    try await request.execute(on: client) { _, _ in () }
+    try await request.execute(on: client) { _ in () }
   }
 
   /// Sends the request, discarding the response body but asking how many rows it affected.
@@ -177,7 +177,7 @@ extension PostgrestMutation where Phase: PostgrestExecutableMutationPhase {
   public func execute(count: CountOption) async throws -> PostgrestResponse<Void> {
     var request = request
     request.setPreference("count=\(count.rawValue)")
-    return try await request.execute(on: client) { _, _ in () }
+    return try await request.execute(on: client) { _ in () }
   }
 }
 

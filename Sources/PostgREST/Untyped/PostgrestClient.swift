@@ -244,15 +244,7 @@ public struct PostgrestClient: Sendable {
   /// - Parameter table: The name of the table or view to query.
   /// - Returns: A ``PostgrestQueryBuilder`` for the specified table or view.
   public func from(_ table: String) -> PostgrestQueryBuilder {
-    PostgrestQueryBuilder(
-      configuration: configuration,
-      request: .init(
-        method: .get,
-        url: configuration.url.appendingPathComponent(table),
-        headerFields: HTTPFields(configuration.headers)
-      ),
-      clock: clock
-    )
+    PostgrestQueryBuilder(client: self, request: makeRequest(table))
   }
 
   /// Calls a PostgreSQL stored function (RPC) with parameters.
@@ -280,14 +272,10 @@ public struct PostgrestClient: Sendable {
     get: Bool = false,
     count: CountOption? = nil
   ) throws -> PostgrestFilterBuilder {
-    let method: HTTPRequest.Method
-    var url = configuration.url.appendingPathComponent("rpc/\(fn)")
     let bodyData = try configuration.encoder.encode(params)
-    var body: Data?
+    var request = makeRequest("rpc/\(fn)", method: head ? .head : get ? .get : .post)
 
     if head || get {
-      method = head ? .head : .get
-
       guard case .object(let json) = try JSONValue.decoder.decode(JSONValue.self, from: bodyData)
       else {
         throw PostgrestError(
@@ -297,30 +285,17 @@ public struct PostgrestClient: Sendable {
       }
 
       for (key, value) in json {
-        url.appendQueryItems([URLQueryItem(name: key, value: queryValue(for: value))])
+        request.leadingQuery.append(URLQueryItem(name: key, value: queryValue(for: value)))
       }
-
-    } else {
-      method = .post
-      body = bodyData
+    } else if !(params is NoParams) {
+      request.body = bodyData
     }
-
-    var request = HTTPRequest(
-      method: method,
-      url: url,
-      headerFields: HTTPFields(configuration.headers)
-    )
 
     if let count {
-      request.headerFields.appendOrUpdate(.prefer, value: "count=\(count.rawValue)")
+      request.setPreference("count=\(count.rawValue)")
     }
 
-    return PostgrestFilterBuilder(
-      configuration: configuration,
-      request: request,
-      body: params is NoParams ? nil : body,
-      clock: clock
-    )
+    return PostgrestFilterBuilder(client: self, request: request)
   }
 
   /// Calls a PostgreSQL stored function (RPC) with no parameters.

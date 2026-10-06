@@ -39,7 +39,7 @@ extension PostgrestClient {
 public struct PostgrestSource<R: PostgrestRelation>: Sendable {
   let client: PostgrestClient
 
-  var request: PostgrestRequest { PostgrestRequest(relation: R.relationName) }
+  var request: PostgrestRequest { client.makeRequest(R.relationName) }
 
   /// Selects every column of the relation.
   ///
