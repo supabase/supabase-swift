@@ -154,7 +154,7 @@ extension PostgrestMutation where Phase: PostgrestExecutableMutationPhase {
   /// Sends the request, discarding the response body.
   @discardableResult
   public func execute() async throws -> PostgrestResponse<Void> {
-    try await request.execute(on: client) { _, _ in () }
+    try await request.execute(on: client) { _ in () }
   }
 
   /// Sends the request, discarding the response body but asking how many rows it affected.
@@ -177,7 +177,7 @@ extension PostgrestMutation where Phase: PostgrestExecutableMutationPhase {
   public func execute(count: CountOption) async throws -> PostgrestResponse<Void> {
     var request = request
     request.setPreference("count=\(count.rawValue)")
-    return try await request.execute(on: client) { _, _ in () }
+    return try await request.execute(on: client) { _ in () }
   }
 }
 
@@ -358,7 +358,7 @@ extension PostgrestSource where R: PostgrestWritableRelation {
   public func update(
     _ values: PostgrestUpdate<R>
   ) throws -> PostgrestMutation<R, PostgrestUnscopedPhase> {
-    mutation(.patch, body: try client.configuration.encoder.encode(values))
+    mutation(.patch, body: try PostgrestClient.Configuration.jsonEncoder.encode(values))
   }
 
   /// Deletes the rows matched by the filters applied to the returned value.
@@ -459,7 +459,7 @@ extension PostgrestSource where R: PostgrestWritableRelation {
     onConflict: String? = nil,
     resolution: PostgrestConflictResolution? = nil
   ) throws -> PostgrestMutation<R, PostgrestInsertPhase> {
-    let body = try client.configuration.encoder.encode(values)
+    let body = try PostgrestClient.Configuration.jsonEncoder.encode(values)
     var mutation: PostgrestMutation<R, PostgrestInsertPhase> = mutation(
       .post, body: body, preferences: resolution.map { ["resolution=\($0.rawValue)"] } ?? [])
     if let onConflict {

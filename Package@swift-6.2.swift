@@ -160,7 +160,7 @@ let package = Package(
         "Helpers",
       ],
       exclude: [
-        "Legacy/README.md"
+        "Untyped/README.md"
       ]
     ),
     .testTarget(

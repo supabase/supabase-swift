@@ -98,6 +98,10 @@ public struct PostgrestClient: Sendable {
     /// ``PostgrestRequestBuilder/update(_:returning:count:encoder:)``, and
     /// ``PostgrestRequestBuilder/upsert(_:onConflict:returning:count:ignoreDuplicates:defaultToNull:encoder:)``
     /// can override this per call.
+    ///
+    /// Applies to the untyped builders only. The typed API (`from(_:)` with a relation type)
+    /// always uses ``jsonEncoder``, so a key strategy here cannot change the column names it
+    /// derives from `CodingKeys`.
     public let encoder: JSONEncoder
 
     /// The `JSONDecoder` used to deserialize response bodies.
@@ -106,6 +110,10 @@ public struct PostgrestClient: Sendable {
     /// Individual calls to ``PostgrestRequestBuilder/execute(options:decoder:)``
     /// can override this per call. Never used to decode ``PostgrestError/ServerError`` — that
     /// always uses a fixed internal decoder, decoupled from this setting.
+    ///
+    /// Applies to the untyped builders only. The typed API (`from(_:)` with a relation type)
+    /// always uses ``jsonDecoder``, so a key strategy here cannot change the column names it
+    /// derives from `CodingKeys`.
     public let decoder: JSONDecoder
 
     /// Whether the client should automatically retry transient errors.
@@ -244,15 +252,7 @@ public struct PostgrestClient: Sendable {
   /// - Parameter table: The name of the table or view to query.
   /// - Returns: A ``PostgrestQueryBuilder`` for the specified table or view.
   public func from(_ table: String) -> PostgrestQueryBuilder {
-    PostgrestQueryBuilder(
-      configuration: configuration,
-      request: .init(
-        method: .get,
-        url: configuration.url.appendingPathComponent(table),
-        headerFields: HTTPFields(configuration.headers)
-      ),
-      clock: clock
-    )
+    PostgrestQueryBuilder(client: self, request: makeRequest(table))
   }
 
   /// Calls a PostgreSQL stored function (RPC) with parameters.
@@ -280,14 +280,10 @@ public struct PostgrestClient: Sendable {
     get: Bool = false,
     count: CountOption? = nil
   ) throws -> PostgrestFilterBuilder {
-    let method: HTTPRequest.Method
-    var url = configuration.url.appendingPathComponent("rpc/\(fn)")
     let bodyData = try configuration.encoder.encode(params)
-    var body: Data?
+    var request = makeRequest("rpc/\(fn)", method: head ? .head : get ? .get : .post)
 
     if head || get {
-      method = head ? .head : .get
-
       guard case .object(let json) = try JSONValue.decoder.decode(JSONValue.self, from: bodyData)
       else {
         throw PostgrestError(
@@ -297,30 +293,17 @@ public struct PostgrestClient: Sendable {
       }
 
       for (key, value) in json {
-        url.appendQueryItems([URLQueryItem(name: key, value: queryValue(for: value))])
+        request.leadingQuery.append(URLQueryItem(name: key, value: queryValue(for: value)))
       }
-
-    } else {
-      method = .post
-      body = bodyData
+    } else if !(params is NoParams) {
+      request.body = bodyData
     }
-
-    var request = HTTPRequest(
-      method: method,
-      url: url,
-      headerFields: HTTPFields(configuration.headers)
-    )
 
     if let count {
-      request.headerFields.appendOrUpdate(.prefer, value: "count=\(count.rawValue)")
+      request.setPreference("count=\(count.rawValue)")
     }
 
-    return PostgrestFilterBuilder(
-      configuration: configuration,
-      request: request,
-      body: params is NoParams ? nil : body,
-      clock: clock
-    )
+    return PostgrestFilterBuilder(client: self, request: request)
   }
 
   /// Calls a PostgreSQL stored function (RPC) with no parameters.
