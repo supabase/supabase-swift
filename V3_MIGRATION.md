@@ -2267,31 +2267,15 @@ itself.
 
 Cancelling a request is the case worth spelling out. `URLSession`'s async APIs do not throw
 `CancellationError` when the enclosing `Task` is cancelled — they throw `URLError(.cancelled)`.
-Auth, PostgREST, Functions and Realtime turn that back into `CancellationError`, so `catch is
-CancellationError` keeps working for them. A `URLError(.cancelled)` that no `Task` cancellation
-caused (a middleware cancelled the request) is still wrapped as `.transport`. Storage wraps every
-`URLError(.cancelled)` as `.transport`, so for Storage check the code on `underlyingError`
-instead:
+Every module (Auth, PostgREST, Storage, Functions and Realtime) turns that back into
+`CancellationError`, so `catch is CancellationError` keeps working. A `URLError(.cancelled)` that
+no `Task` cancellation caused (a middleware cancelled the request) is still wrapped as
+`.transport`. A cancelled request is never retried.
 
-```swift
-// Before
-} catch is CancellationError {
-  // the user cancelled — no error banner
-}
-
-// After (Storage)
-} catch let error as any SupabaseError
-  where (error.underlyingError as? URLError)?.code == .cancelled {
-  // the user cancelled — no error banner
-}
-```
-
-This also compiles silently — for Storage the old `catch` block simply stops being reached.
-Search for `is CancellationError` near those calls. A cancelled request is never retried.
-
-In v2, a cancelled Functions `invoke` or Realtime `httpSend` threw `URLError(.cancelled)`. They
-now throw `CancellationError`, so a `catch let error as URLError where error.code == .cancelled`
-around those calls stops matching; use `catch is CancellationError` instead.
+In v2, a cancelled Storage call, Functions `invoke` or Realtime `httpSend` threw
+`URLError(.cancelled)`. It now throws `CancellationError`, so a `catch let error as URLError where
+error.code == .cancelled` around those calls stops matching; use `catch is CancellationError`
+instead. This compiles silently; search for `URLError` near those calls.
 
 Without this, one `catch let error as any SupabaseError` missed exactly the failures a user is
 most likely to hit in the field: no network, and a schema drift between the app's model and the

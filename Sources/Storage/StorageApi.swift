@@ -127,6 +127,9 @@ struct StorageApi: Sendable {
       // thrown by user code that runs inside `stream` (a custom `ClientTransport` or middleware, an `accessToken` closure),
       // propagate as themselves.
       guard let urlError = error as? URLError else { throw error }
+      // `URLSession` reports a cancelled `Task` as `URLError(.cancelled)`. A `.cancelled` with no
+      // task cancellation behind it (a middleware cancelled the request) stays a transport error.
+      if urlError.code == .cancelled, Task.isCancelled { throw CancellationError() }
       throw StorageError(
         kind: .transport, message: urlError.localizedDescription, underlyingError: urlError)
     }
