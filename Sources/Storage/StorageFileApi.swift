@@ -992,10 +992,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   }
 
   private func _getFinalPath(_ path: String) -> String {
-    let strippedPath = path.replacingOccurrences(
-      of: "^/+", with: "", options: .regularExpression
-    )
-    return "\(bucketId)/\(strippedPath)"
+    "\(bucketId)/\(_removeEmptyFolders(path))"
   }
 
   private func _removeEmptyFolders(_ path: String) -> String {
