@@ -95,6 +95,21 @@ extension PostgrestRequestBuilder {
 // in `PostgrestRequestBuilder.swift` — DocC discards doc comments written on `extension` blocks,
 // so a `///` comment here would never be rendered.
 extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
+  /// Renders `node` through the same code the typed `where` uses and appends the result.
+  func appending(_ node: PostgrestFilterNode) -> Self {
+    var copy = self
+    copy.request.query.append(contentsOf: node.queryItems())
+    return copy
+  }
+
+  func filtering(
+    _ column: String,
+    _ operator: PostgrestFilterOperator,
+    _ value: any PostgrestFilterValue
+  ) -> Self {
+    appending(.comparison(column: column, operator: `operator`, operand: .value(value.rawValue)))
+  }
+
   // MARK: - Filters
 
   /// Negates the specified filter using the PostgREST `not.<operator>` syntax.
@@ -116,12 +131,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
     operator op: Operator,
     value: any PostgrestFilterValue
   ) -> Self {
-    let queryValue = value.rawValue
-    var copy = self
-    copy.request.query.append(
-      URLQueryItem(name: column, value: "not.\(op.rawValue).\(queryValue)")
-    )
-    return copy
+    appending(.not(.raw(column: column, operand: "\(op.rawValue).\(value.rawValue)")))
   }
 
   /// Combines multiple filters with an OR condition.
@@ -144,10 +154,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
     referencedTable: String? = nil
   ) -> Self {
     let key = referencedTable.map { "\($0).or" } ?? "or"
-    let queryValue = filters.rawValue
-    var copy = self
-    copy.request.query.append(URLQueryItem(name: key, value: "(\(queryValue))"))
-    return copy
+    return appending(.raw(column: key, operand: "(\(filters.rawValue))"))
   }
 
   /// Matches only rows where `column` equals `value`.
@@ -167,10 +174,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
     _ column: String,
     value: any PostgrestFilterValue
   ) -> Self {
-    let queryValue = value.rawValue
-    var copy = self
-    copy.request.query.append(URLQueryItem(name: column, value: "eq.\(queryValue)"))
-    return copy
+    filtering(column, .eq, value)
   }
 
   /// Matches only rows where `column` is not equal to `value`.
@@ -188,10 +192,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
     _ column: String,
     value: any PostgrestFilterValue
   ) -> Self {
-    let queryValue = value.rawValue
-    var copy = self
-    copy.request.query.append(URLQueryItem(name: column, value: "neq.\(queryValue)"))
-    return copy
+    filtering(column, .neq, value)
   }
 
   /// Matches only rows where `column` is greater than `value`.
@@ -209,10 +210,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
     _ column: String,
     value: any PostgrestFilterValue
   ) -> Self {
-    let queryValue = value.rawValue
-    var copy = self
-    copy.request.query.append(URLQueryItem(name: column, value: "gt.\(queryValue)"))
-    return copy
+    filtering(column, .gt, value)
   }
 
   /// Matches only rows where `column` is greater than or equal to `value`.
@@ -230,10 +228,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
     _ column: String,
     value: any PostgrestFilterValue
   ) -> Self {
-    let queryValue = value.rawValue
-    var copy = self
-    copy.request.query.append(URLQueryItem(name: column, value: "gte.\(queryValue)"))
-    return copy
+    filtering(column, .gte, value)
   }
 
   /// Matches only rows where `column` is less than `value`.
@@ -251,10 +246,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
     _ column: String,
     value: any PostgrestFilterValue
   ) -> Self {
-    let queryValue = value.rawValue
-    var copy = self
-    copy.request.query.append(URLQueryItem(name: column, value: "lt.\(queryValue)"))
-    return copy
+    filtering(column, .lt, value)
   }
 
   /// Matches only rows where `column` is less than or equal to `value`.
@@ -272,10 +264,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
     _ column: String,
     value: any PostgrestFilterValue
   ) -> Self {
-    let queryValue = value.rawValue
-    var copy = self
-    copy.request.query.append(URLQueryItem(name: column, value: "lte.\(queryValue)"))
-    return copy
+    filtering(column, .lte, value)
   }
 
   /// Matches only rows where `column` matches `pattern` case-sensitively using SQL LIKE.
@@ -295,10 +284,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
     _ column: String,
     pattern: any PostgrestFilterValue
   ) -> Self {
-    let queryValue = pattern.rawValue
-    var copy = self
-    copy.request.query.append(URLQueryItem(name: column, value: "like.\(queryValue)"))
-    return copy
+    filtering(column, .like, pattern)
   }
 
   /// Matches only rows where `column` matches **all** of the supplied LIKE `patterns` case-sensitively.
@@ -316,10 +302,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
     _ column: String,
     patterns: [some PostgrestFilterValue]
   ) -> Self {
-    let queryValue = patterns.rawValue
-    var copy = self
-    copy.request.query.append(URLQueryItem(name: column, value: "like(all).\(queryValue)"))
-    return copy
+    filtering(column, .likeAllOf, patterns)
   }
 
   /// Matches only rows where `column` matches **any** of the supplied LIKE `patterns` case-sensitively.
@@ -337,10 +320,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
     _ column: String,
     patterns: [some PostgrestFilterValue]
   ) -> Self {
-    let queryValue = patterns.rawValue
-    var copy = self
-    copy.request.query.append(URLQueryItem(name: column, value: "like(any).\(queryValue)"))
-    return copy
+    filtering(column, .likeAnyOf, patterns)
   }
 
   /// Matches only rows where `column` matches `pattern` case-insensitively using SQL ILIKE.
@@ -360,10 +340,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
     _ column: String,
     pattern: any PostgrestFilterValue
   ) -> Self {
-    let queryValue = pattern.rawValue
-    var copy = self
-    copy.request.query.append(URLQueryItem(name: column, value: "ilike.\(queryValue)"))
-    return copy
+    filtering(column, .ilike, pattern)
   }
 
   /// Matches only rows where `column` matches **all** of the supplied ILIKE `patterns` case-insensitively.
@@ -381,10 +358,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
     _ column: String,
     patterns: [some PostgrestFilterValue]
   ) -> Self {
-    let queryValue = patterns.rawValue
-    var copy = self
-    copy.request.query.append(URLQueryItem(name: column, value: "ilike(all).\(queryValue)"))
-    return copy
+    filtering(column, .ilikeAllOf, patterns)
   }
 
   /// Matches only rows where `column` matches **any** of the supplied ILIKE `patterns` case-insensitively.
@@ -402,10 +376,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
     _ column: String,
     patterns: [some PostgrestFilterValue]
   ) -> Self {
-    let queryValue = patterns.rawValue
-    var copy = self
-    copy.request.query.append(URLQueryItem(name: column, value: "ilike(any).\(queryValue)"))
-    return copy
+    filtering(column, .ilikeAnyOf, patterns)
   }
 
   /// Matches only rows where `column` matches the regular expression `pattern` case-sensitively.
@@ -425,10 +396,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
     _ column: String,
     pattern: any PostgrestFilterValue
   ) -> Self {
-    let queryValue = pattern.rawValue
-    var copy = self
-    copy.request.query.append(URLQueryItem(name: column, value: "match.\(queryValue)"))
-    return copy
+    filtering(column, .regexMatch, pattern)
   }
 
   /// Matches only rows where `column` matches the regular expression `pattern` case-insensitively.
@@ -448,10 +416,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
     _ column: String,
     pattern: any PostgrestFilterValue
   ) -> Self {
-    let queryValue = pattern.rawValue
-    var copy = self
-    copy.request.query.append(URLQueryItem(name: column, value: "imatch.\(queryValue)"))
-    return copy
+    filtering(column, .regexIMatch, pattern)
   }
 
   /// Matches only rows where `column` IS `value`.
@@ -475,11 +440,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
     _ column: String,
     value: Bool?
   ) -> Self {
-    // `Optional` is not a `PostgrestFilterValue`, so spell the NULL case out here.
-    let queryValue = value.map(\.rawValue) ?? "NULL"
-    var copy = self
-    copy.request.query.append(URLQueryItem(name: column, value: "is.\(queryValue)"))
-    return copy
+    appending(.comparison(column: column, operator: .is, operand: .is(value)))
   }
 
   /// Matches only rows where `column` IS DISTINCT FROM `value`.
@@ -500,10 +461,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
     _ column: String,
     value: any PostgrestFilterValue
   ) -> Self {
-    let queryValue = value.rawValue
-    var copy = self
-    copy.request.query.append(URLQueryItem(name: column, value: "isdistinct.\(queryValue)"))
-    return copy
+    filtering(column, .isDistinct, value)
   }
 
   /// Matches only rows where `column` is one of the values in `values`.
@@ -523,15 +481,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
     _ column: String,
     values: [any PostgrestFilterValue]
   ) -> Self {
-    let queryValues = values.map { escapePostgRESTFilterValue($0.rawValue) }
-    var copy = self
-    copy.request.query.append(
-      URLQueryItem(
-        name: column,
-        value: "in.(\(queryValues.joined(separator: ",")))"
-      )
-    )
-    return copy
+    appending(.comparison(column: column, operator: .in, operand: .list(values.map(\.rawValue))))
   }
 
   /// Matches only rows where `column` is not one of the values in `values`.
@@ -551,15 +501,8 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
     _ column: String,
     values: [any PostgrestFilterValue]
   ) -> Self {
-    let queryValues = values.map { escapePostgRESTFilterValue($0.rawValue) }
-    var copy = self
-    copy.request.query.append(
-      URLQueryItem(
-        name: column,
-        value: "not.in.(\(queryValues.joined(separator: ",")))"
-      )
-    )
-    return copy
+    appending(
+      .not(.comparison(column: column, operator: .in, operand: .list(values.map(\.rawValue)))))
   }
 
   /// Matches only rows where `column` contains every element in `value`.
@@ -579,10 +522,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
     _ column: String,
     value: any PostgrestFilterValue
   ) -> Self {
-    let queryValue = value.rawValue
-    var copy = self
-    copy.request.query.append(URLQueryItem(name: column, value: "cs.\(queryValue)"))
-    return copy
+    filtering(column, .contains, value)
   }
 
   /// Matches only rows where `column` is contained by `value`.
@@ -602,10 +542,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
     _ column: String,
     value: some PostgrestFilterValue
   ) -> Self {
-    let queryValue = value.rawValue
-    var copy = self
-    copy.request.query.append(URLQueryItem(name: column, value: "cd.\(queryValue)"))
-    return copy
+    filtering(column, .containedBy, value)
   }
 
   /// Matches only rows where every element in `column` is strictly less than every element in `range`.
@@ -625,10 +562,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
     _ column: String,
     range: any PostgrestFilterValue
   ) -> Self {
-    let queryValue = range.rawValue
-    var copy = self
-    copy.request.query.append(URLQueryItem(name: column, value: "sl.\(queryValue)"))
-    return copy
+    filtering(column, .rangeLt, range)
   }
 
   /// Matches only rows where every element in `column` is strictly greater than every element in `range`.
@@ -648,10 +582,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
     _ column: String,
     range: any PostgrestFilterValue
   ) -> Self {
-    let queryValue = range.rawValue
-    var copy = self
-    copy.request.query.append(URLQueryItem(name: column, value: "sr.\(queryValue)"))
-    return copy
+    filtering(column, .rangeGt, range)
   }
 
   /// Matches only rows where `column` does not extend to the left of `range`.
@@ -671,10 +602,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
     _ column: String,
     range: any PostgrestFilterValue
   ) -> Self {
-    let queryValue = range.rawValue
-    var copy = self
-    copy.request.query.append(URLQueryItem(name: column, value: "nxl.\(queryValue)"))
-    return copy
+    filtering(column, .rangeGte, range)
   }
 
   /// Matches only rows where `column` does not extend to the right of `range`.
@@ -694,10 +622,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
     _ column: String,
     range: any PostgrestFilterValue
   ) -> Self {
-    let queryValue = range.rawValue
-    var copy = self
-    copy.request.query.append(URLQueryItem(name: column, value: "nxr.\(queryValue)"))
-    return copy
+    filtering(column, .rangeLte, range)
   }
 
   /// Matches only rows where `column` and `range` are adjacent (no gap between them).
@@ -718,10 +643,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
     _ column: String,
     range: any PostgrestFilterValue
   ) -> Self {
-    let queryValue = range.rawValue
-    var copy = self
-    copy.request.query.append(URLQueryItem(name: column, value: "adj.\(queryValue)"))
-    return copy
+    filtering(column, .rangeAdjacent, range)
   }
 
   /// Matches only rows where `column` and `value` share at least one element.
@@ -741,10 +663,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
     _ column: String,
     value: any PostgrestFilterValue
   ) -> Self {
-    let queryValue = value.rawValue
-    var copy = self
-    copy.request.query.append(URLQueryItem(name: column, value: "ov.\(queryValue)"))
-    return copy
+    filtering(column, .overlaps, value)
   }
 
   /// Matches only rows where `column` matches the full-text search `query`.
@@ -773,16 +692,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
     config: String? = nil,
     type: TextSearchType? = nil
   ) -> Self {
-    let queryValue = query.rawValue
-    let configPart = config.map { "(\($0))" }
-
-    var copy = self
-    copy.request.query.append(
-      URLQueryItem(
-        name: column, value: "\(type?.rawValue ?? "")fts\(configPart ?? "").\(queryValue)"
-      )
-    )
-    return copy
+    filtering(column, .textSearch(config: config, type: type), query)
   }
 
   /// Matches only rows where `column` matches the full-text search `query` using `to_tsquery`.
@@ -829,13 +739,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
     operator: String,
     value: String
   ) -> Self {
-    var copy = self
-    copy.request.query.append(
-      URLQueryItem(
-        name: column,
-        value: "\(`operator`).\(value)"
-      ))
-    return copy
+    appending(.raw(column: column, operand: "\(`operator`).\(value)"))
   }
 
   /// Matches only rows where each key in `query` equals its associated value.
@@ -852,16 +756,10 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
   public func match(
     _ query: [String: any PostgrestFilterValue]
   ) -> Self {
-    let query = query.mapValues(\.rawValue)
-    var copy = self
-    for (key, value) in query {
-      copy.request.query.append(
-        URLQueryItem(
-          name: key,
-          value: "eq.\(value.rawValue)"
-        ))
-    }
-    return copy
+    appending(
+      .and(
+        query.map { .comparison(column: $0.key, operator: .eq, operand: .value($0.value.rawValue)) }
+      ))
   }
 
   // MARK: - Filter Semantic Improvements
