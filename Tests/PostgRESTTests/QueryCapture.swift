@@ -89,6 +89,13 @@ struct QueryCapture {
     capturedBody.value.map { String(decoding: $0, as: UTF8.self) }
   }
 
+  /// Every header field of the captured request, keyed by canonical name.
+  var headers: [String: String] {
+    guard let fields = captured.value?.headerFields else { return [:] }
+    return Dictionary(
+      fields.map { ($0.name.canonicalName, $0.value) }, uniquingKeysWith: { "\($0),\($1)" })
+  }
+
   /// A header field of the captured request.
   func header(_ name: String) -> String? {
     guard let fieldName = HTTPField.Name(name) else { return nil }
