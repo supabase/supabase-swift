@@ -1298,10 +1298,12 @@ features:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.maxAffected
-  # Cancellation is plain Swift structured concurrency (cancel the enclosing
-  # Task; the request's retry loop observes it via Task.checkCancellation())
-  # — there is no dedicated cancel()-style symbol to register.
-  database.using_modifiers.request_cancellation: implemented
+  # Cancellation is plain Swift structured concurrency — there is no dedicated
+  # cancel()-style symbol to register. PostgrestCancellationTests pins the
+  # behavior end to end (SDK-1640).
+  database.using_modifiers.request_cancellation:
+    status: implemented
+    note: "Cancel the Task that awaits execute(). The transport exchange is torn down (URLSessionTransport cancels its URLSessionTask), a cancellation during a retry back-off stops the retry loop instead of starting the next attempt, and the caller gets CancellationError, never a PostgrestError wrapping URLError(.cancelled). Same on the typed and the untyped path, since both send through PostgrestRequest."
   database.using_modifiers.relationship_embed:
     status: implemented
     note: "Two spellings. The string builder takes query-string syntax in select() (e.g. 'user!inner(*)') and scopes or/order/limit/range with `referencedTable:`. The typed surface has a dedicated relationship API: `PostgrestToOneRelation`/`PostgrestToManyRelation`, declared on a relation's `Columns` namespace (emitted by the postgres-meta-backed generator, or hand-written; `@Table` does not synthesize them, since a macro cannot see foreign-key metadata), and projecting a column through one is compiler-checked in select position, and in order position for the to-one direction only (a to-many order key is PGRST118 on the server). A `@SelectionOf` type declares embeds with `@Relationship(\\Comment.todoID)`; the foreign key is required, so the generated select always carries the `!todo_id` hint and PostgREST's HTTP 300 `PGRST201` cannot be produced. Filtering, ordering and limiting *inside* an embed is a scope on the query: `embedded(_:_:)` narrows the nested rows only, and `requiring(_:_:)` emits `!inner` and drops unmatched parents. Two methods rather than a flag, because PostgREST's default keeps every parent row and a flag's default would be silently wrong half the time. Scopes nest (`comments.replies.limit=3`) and filter the embedded relation, not the nested selection, so an unselected column is still filterable."
