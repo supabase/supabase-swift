@@ -68,6 +68,29 @@ public struct PostgrestError: SupabaseError {
       self.details = details
       self.hint = hint
     }
+
+    private enum CodingKeys: String, CodingKey {
+      case code, message, details, hint
+    }
+
+    public init(from decoder: any Decoder) throws {
+      let container = try decoder.container(keyedBy: CodingKeys.self)
+      code = try container.decodeIfPresent(String.self, forKey: .code)
+      message = try container.decode(String.self, forKey: .message)
+      hint = try container.decodeIfPresent(String.self, forKey: .hint)
+      switch try container.decodeIfPresent(JSONValue.self, forKey: .details) {
+      case nil, .null:
+        details = nil
+      case .string(let text):
+        details = text
+      case let structured?:
+        // Not always a string: an ambiguous embed (`PGRST201`) sends an array of candidate
+        // relationships. Kept as JSON text so the field stays a `String` and nothing is dropped.
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        details = String(decoding: try encoder.encode(structured), as: UTF8.self)
+      }
+    }
   }
 
   public var kind: Kind

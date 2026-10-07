@@ -81,21 +81,9 @@ extension PostgrestQuery {
     )
   }
 
-  /// Merges one rendered sort key into the single `order` parameter PostgREST expects.
-  ///
-  /// A merge, not a second parameter: PostgREST honours only the first `order` it sees and
-  /// silently ignores the rest, so `order=name.asc&order=id.desc` sorts by name alone. Only
-  /// `order=name.asc,id.desc` applies both.
-  ///
   private func appendingOrder(_ value: String) -> Self {
     var query = self
-    if let index = query.request.query.firstIndex(where: { $0.name == "order" }),
-      let existing = query.request.query[index].value
-    {
-      query.request.query[index] = URLQueryItem(name: "order", value: "\(existing),\(value)")
-    } else {
-      query.request.query.append(URLQueryItem(name: "order", value: value))
-    }
+    query.request.query.mergeOrder(value)
     return query
   }
 
@@ -115,5 +103,21 @@ extension PostgrestQuery {
       URLQueryItem(name: "offset", value: "\(bounds.lowerBound)"))
     query.request.query.appendOrUpdate(URLQueryItem(name: "limit", value: "\(bounds.count)"))
     return query
+  }
+}
+
+extension [URLQueryItem] {
+  /// Merges one rendered sort key into the single `order` parameter PostgREST expects.
+  ///
+  /// A merge, not a second parameter: PostgREST honours only the first `order` it sees and
+  /// silently ignores the rest, so `order=name.asc&order=id.desc` sorts by name alone. Only
+  /// `order=name.asc,id.desc` applies both. The same rule holds inside an embedded scope, where
+  /// the alias prefix is added afterwards.
+  mutating func mergeOrder(_ value: String) {
+    if let index = firstIndex(where: { $0.name == "order" }), let existing = self[index].value {
+      self[index] = URLQueryItem(name: "order", value: "\(existing),\(value)")
+    } else {
+      append(URLQueryItem(name: "order", value: value))
+    }
   }
 }

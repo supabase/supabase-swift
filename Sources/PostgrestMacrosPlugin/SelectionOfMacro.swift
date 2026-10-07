@@ -57,9 +57,15 @@ public struct SelectionOfMacro: ExtensionMacro {
       body.append(codingKeys)
     }
     body.append(columnCheck(relation: relation, properties: properties))
+    let embeds = properties.filter { $0.foreignKey != nil }
+    if !embeds.isEmpty {
+      body.append(embedsNamespace(access: access, embeds: embeds))
+    }
 
     let clause = inheritanceClause(
-      wanted: ["Decodable", "Sendable", "PostgrestSelection"], missing: protocols
+      wanted: ["Decodable", "Sendable", "PostgrestSelection"]
+        + (embeds.isEmpty ? [] : ["PostgrestEmbeddingSelection"]),
+      missing: protocols
     )
     return [
       try ExtensionDeclSyntax(
@@ -102,17 +108,25 @@ public struct SelectionOfMacro: ExtensionMacro {
     var lines = ["  \(access)static let selectString = ["]
     for property in properties {
       let value =
-        property.foreignKey.map { embed(property, foreignKey: $0) }
-        ?? "\\(\(relation).columns.\(property.name).postgrestExpression)"
+        property.foreignKey != nil
+        ? embed(property)
+        : "\\(\(relation).columns.\(property.name).postgrestExpression)"
       lines.append("    \"\(property.columnName):\(value)\",")
     }
     lines.append("  ].joined(separator: \",\")")
     return lines.joined(separator: "\n")
   }
 
-  /// The right-hand side of one embed entry, `comments!todo_id(id:id,body:body)`.
+  /// The right-hand side of one embed entry, `comments!todo_id(id:id,body:body)`, read off the
+  /// ``PostgrestEmbed`` in the `Embeds` namespace so the select list and a `requiring` scope's
+  /// `!inner` rewrite cannot disagree about how the entry is spelled.
+  static func embed(_ property: StoredProperty) -> String {
+    "\\(embeds.\(property.name).postgrestExpression)"
+  }
+
+  /// The embed namespace: one ``PostgrestEmbed`` per `@Relationship` property.
   ///
-  /// Three interpolations, none of them a literal the macro could write:
+  /// Three interpolations feed each one, none of them a literal the macro could write:
   ///
   /// - The embedded relation is `Selection.Source.relationName`, taken from the property's own
   ///   type. That is what lets one attribute serve both directions: `\Comment.todoID` is rooted on
@@ -124,11 +138,24 @@ public struct SelectionOfMacro: ExtensionMacro {
   ///   produce that response.
   /// - The parenthesised list is the embedded selection's own `selectString`, so an embed nests to
   ///   any depth with no further work here.
-  static func embed(_ property: StoredProperty, foreignKey: String) -> String {
-    let selection = property.embeddedSelection
-    return "\\(\(selection).Source.relationName)"
-      + "!\\(\(foreignKey).postgrestExpression)"
-      + "(\\(\(selection).selectString))"
+  ///
+  /// The explicit `init()` is required for the same reason as on `Columns`: a `public` struct's
+  /// memberwise initializer is internal.
+  static func embedsNamespace(access: String, embeds: [StoredProperty]) -> String {
+    var lines = ["  \(access)struct Embeds: Sendable {"]
+    for property in embeds {
+      lines.append(
+        "    \(access)let \(property.name) = PostgrestEmbed<\(property.embeddedSelection)>("
+          + "alias: \"\(property.columnName)\", "
+          + "foreignKey: \(property.foreignKey ?? "").postgrestExpression)"
+      )
+    }
+    lines.append("")
+    lines.append("    \(access)init() {}")
+    lines.append("  }")
+    lines.append("")
+    lines.append("  \(access)static let embeds = Embeds()")
+    return lines.joined(separator: "\n")
   }
 
   /// The cross-type check.

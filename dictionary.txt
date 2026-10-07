@@ -294,3 +294,4 @@ xcprivacy
 # Swift 6.2 isolation keyword (SE-0461): `nonisolated(nonsending)`, `NonisolatedNonsendingByDefault`.
 nonsending
 Subrange
+fkey
