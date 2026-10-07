@@ -301,7 +301,7 @@ struct ChannelMachineTests {
     .init(reason: "InitializingProjectConnection: x", expected: .retry),
     .init(reason: "IncreaseConnectionPool: x", expected: .retry),
     .init(reason: "DatabaseLackOfConnections: x", expected: .retry),
-    .init(reason: "DatabaseConnectionRateLimitReached: x", expected: .retry),
+    .init(reason: "DatabaseConnectionRateLimitReached: x", expected: .rateLimit),
     .init(reason: "UnableToConnectToProject: x", expected: .retry),
     .init(reason: "QueryCanceled: x", expected: .retry),
     .init(reason: "MissingPartition: x", expected: .retry),
