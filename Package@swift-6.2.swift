@@ -140,6 +140,7 @@ let package = Package(
         .product(name: "P256K", package: "swift-secp256k1"),
         .product(name: "CryptoSwift", package: "CryptoSwift"),
         "Helpers",
+        "PostgrestMacros",
         "Supabase",
         "TestHelpers",
       ],
