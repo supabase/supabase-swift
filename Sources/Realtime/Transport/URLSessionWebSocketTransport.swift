@@ -179,6 +179,9 @@ final class URLSessionWebSocketConnection: WebSocketConnection {
   private let task: URLSessionWebSocketTask
   private let session: URLSession
   private let isClosed = LockIsolated(false)
+  /// Owns the connection until the final `.closed` event: it holds `self` so a caller that
+  /// drops its reference without closing still gets the socket drained and torn down.
+  private let receiveTask = LockIsolated<Task<Void, Never>?>(nil)
 
   init(task: URLSessionWebSocketTask, session: URLSession) {
     self.task = task
@@ -186,7 +189,7 @@ final class URLSessionWebSocketConnection: WebSocketConnection {
     // Unbounded on purpose: this stream carries protocol frames, and dropping a `phx_reply`
     // leaves the push waiting on it hanging until it times out.
     (events, continuation) = AsyncStream.makeStream(bufferingPolicy: .unbounded)
-    Task { await receiveLoop() }
+    receiveTask.setValue(Task { await receiveLoop() })
   }
 
   private func receiveLoop() async {
@@ -275,5 +278,6 @@ final class URLSessionWebSocketConnection: WebSocketConnection {
     }
     continuation.finish()
     session.finishTasksAndInvalidate()
+    receiveTask.value?.cancel()
   }
 }
