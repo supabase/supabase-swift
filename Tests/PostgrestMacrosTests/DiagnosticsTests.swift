@@ -60,6 +60,54 @@ struct DiagnosticsTests {
   }
 
   @Test
+  func tableRejectsAColumnOnAMultiBindingDeclaration() {
+    // One name cannot serve two properties; the other markers are fine on a multi-binding
+    // declaration and stay covered in `TableMacroTests`.
+    assertMacro {
+      """
+      @Table("todos")
+      struct Todo {
+        @PrimaryKey var id: Int
+        @Column("a") var x: Int, y: Int
+      }
+      """
+    } diagnostics: {
+      """
+      @Table("todos")
+      struct Todo {
+        @PrimaryKey var id: Int
+        @Column("a") var x: Int, y: Int
+        ┬───────────
+        ╰─ 🛑 @Column names one column, but this declaration binds 2 properties — split it into one declaration per property
+      }
+      """
+    }
+  }
+
+  @Test
+  func tableRejectsAPrimaryKeyOnAnOptionalProperty() {
+    assertMacro {
+      """
+      @Table("todos")
+      struct Todo {
+        @PrimaryKey var id: Int?
+        var task: String
+      }
+      """
+    } diagnostics: {
+      """
+      @Table("todos")
+      struct Todo {
+        @PrimaryKey var id: Int?
+                        ┬─
+                        ╰─ 🛑 @PrimaryKey on 'id' has an Optional type, but a primary key is never null — make 'id' non-optional, or move @PrimaryKey to the key column
+        var task: String
+      }
+      """
+    }
+  }
+
+  @Test
   func tableRejectsASchemaThatIsNotATypeLiteral() {
     assertMacro {
       """

@@ -78,6 +78,9 @@ public struct TableMacro: ExtensionMacro {
     if declaration.postgrestDiagnoseUnannotatedProperties(macro: "@Table", in: context) {
       return []
     }
+    if declaration.postgrestDiagnoseMarkerPlacement(in: context) {
+      return []
+    }
     let arguments = arguments(from: node)
     var schema = "PostgREST.PublicSchema"
     if let expression = arguments.schema {

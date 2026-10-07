@@ -375,6 +375,78 @@ struct TableMacroTests {
     }
   }
 
+  /// A marker sits on the declaration, so it applies to every binding: `@PrimaryKey` on two
+  /// bindings is a compound key, `@Default` on two makes both optional in `Draft`.
+  @Test
+  func markersApplyToEveryBindingOfADeclaration() {
+    assertMacro {
+      """
+      @Table("memberships")
+      struct Membership {
+        @PrimaryKey var userID: Int, teamID: Int
+        @Default var isAdmin, isOwner: Bool
+      }
+      """
+    } expansion: {
+      """
+      struct Membership {
+        @PrimaryKey var userID: Int, teamID: Int
+        @Default var isAdmin, isOwner: Bool
+      }
+
+      extension Membership {
+        static let relationName = "memberships"
+
+        typealias Schema = PostgREST.PublicSchema
+
+        static let selectString = "*"
+
+        struct Columns: Sendable {
+          let userID = PostgrestColumn<Membership, Int>("user_id")
+          let teamID = PostgrestColumn<Membership, Int>("team_id")
+          let isAdmin = PostgrestColumn<Membership, Bool>("is_admin")
+          let isOwner = PostgrestColumn<Membership, Bool>("is_owner")
+
+          init() {
+          }
+        }
+
+        static let columns = Columns()
+
+        static let primaryKeyColumns: [String] = ["user_id", "team_id"]
+
+        enum CodingKeys: String, CodingKey {
+          case userID = "user_id"
+          case teamID = "team_id"
+          case isAdmin = "is_admin"
+          case isOwner = "is_owner"
+        }
+
+        struct Draft: Encodable, Sendable {
+          var userID: Int
+          var teamID: Int
+          var isAdmin: Bool?
+          var isOwner: Bool?
+
+          enum CodingKeys: String, CodingKey {
+            case userID = "user_id"
+            case teamID = "team_id"
+            case isAdmin = "is_admin"
+            case isOwner = "is_owner"
+          }
+
+          init(userID: Int, teamID: Int, isAdmin: Bool? = nil, isOwner: Bool? = nil) {
+            self.userID = userID
+            self.teamID = teamID
+            self.isAdmin = isAdmin
+            self.isOwner = isOwner
+          }
+        }
+      }
+      """
+    }
+  }
+
   @Test
   func includesAStoredPropertyWithObservers() {
     assertMacro {
