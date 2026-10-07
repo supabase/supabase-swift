@@ -799,6 +799,11 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
   ///   - query: The search query text.
   ///   - config: The text search configuration name. Defaults to `nil`.
   /// - Returns: The same builder value so calls can be chained.
+  @available(
+    *, deprecated,
+    message:
+      "Use textSearch(_:query:config:type:) instead. See migration guide: https://github.com/supabase/supabase-swift/blob/main/V3_MIGRATION.md"
+  )
   public func fts(
     _ column: String,
     query: any PostgrestFilterValue,
@@ -864,7 +869,10 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
     return copy
   }
 
-  // MARK: - Filter Semantic Improvements
+  // MARK: - Deprecated aliases
+  //
+  // Forwarders to the methods above, deleted in v4 (SDK-2183). `match(_:)` with a dictionary is
+  // not one of them: it is supabase-js parity, not a second spelling.
 
   /// Matches only rows where `column` equals `value`.
   ///
@@ -874,6 +882,11 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
   ///   - column: The column to filter on.
   ///   - value: The value to compare against.
   /// - Returns: The same builder value so calls can be chained.
+  @available(
+    *, deprecated,
+    message:
+      "Use eq(_:value:) instead. See migration guide: https://github.com/supabase/supabase-swift/blob/main/V3_MIGRATION.md"
+  )
   public func equals(
     _ column: String,
     value: String
@@ -889,6 +902,11 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
   ///   - column: The column to filter on.
   ///   - value: The value to compare against.
   /// - Returns: The same builder value so calls can be chained.
+  @available(
+    *, deprecated,
+    message:
+      "Use neq(_:value:) instead. See migration guide: https://github.com/supabase/supabase-swift/blob/main/V3_MIGRATION.md"
+  )
   public func notEquals(
     _ column: String,
     value: String
@@ -904,6 +922,11 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
   ///   - column: The column to filter on.
   ///   - value: The value to compare against.
   /// - Returns: The same builder value so calls can be chained.
+  @available(
+    *, deprecated,
+    message:
+      "Use gt(_:value:) instead. See migration guide: https://github.com/supabase/supabase-swift/blob/main/V3_MIGRATION.md"
+  )
   public func greaterThan(
     _ column: String,
     value: String
@@ -919,6 +942,11 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
   ///   - column: The column to filter on.
   ///   - value: The value to compare against.
   /// - Returns: The same builder value so calls can be chained.
+  @available(
+    *, deprecated,
+    message:
+      "Use gte(_:value:) instead. See migration guide: https://github.com/supabase/supabase-swift/blob/main/V3_MIGRATION.md"
+  )
   public func greaterThanOrEquals(
     _ column: String,
     value: String
@@ -934,6 +962,11 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
   ///   - column: The column to filter on.
   ///   - value: The value to compare against.
   /// - Returns: The same builder value so calls can be chained.
+  @available(
+    *, deprecated,
+    message:
+      "Use lt(_:value:) instead. See migration guide: https://github.com/supabase/supabase-swift/blob/main/V3_MIGRATION.md"
+  )
   public func lowerThan(
     _ column: String,
     value: String
@@ -949,6 +982,11 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
   ///   - column: The column to filter on.
   ///   - value: The value to compare against.
   /// - Returns: The same builder value so calls can be chained.
+  @available(
+    *, deprecated,
+    message:
+      "Use lte(_:value:) instead. See migration guide: https://github.com/supabase/supabase-swift/blob/main/V3_MIGRATION.md"
+  )
   public func lowerThanOrEquals(
     _ column: String,
     value: String
@@ -964,6 +1002,11 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
   ///   - column: The range column to filter on.
   ///   - range: The range value to compare against.
   /// - Returns: The same builder value so calls can be chained.
+  @available(
+    *, deprecated,
+    message:
+      "Use rangeLt(_:range:) instead. See migration guide: https://github.com/supabase/supabase-swift/blob/main/V3_MIGRATION.md"
+  )
   public func rangeLowerThan(
     _ column: String,
     range: String
@@ -979,6 +1022,11 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
   ///   - column: The range column to filter on.
   ///   - value: The range value to compare against.
   /// - Returns: The same builder value so calls can be chained.
+  @available(
+    *, deprecated,
+    message:
+      "Use rangeGt(_:range:) instead. See migration guide: https://github.com/supabase/supabase-swift/blob/main/V3_MIGRATION.md"
+  )
   public func rangeGreaterThan(
     _ column: String,
     value: String
@@ -994,6 +1042,11 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
   ///   - column: The range column to filter on.
   ///   - value: The range value to compare against.
   /// - Returns: The same builder value so calls can be chained.
+  @available(
+    *, deprecated,
+    message:
+      "Use rangeGte(_:range:) instead. See migration guide: https://github.com/supabase/supabase-swift/blob/main/V3_MIGRATION.md"
+  )
   public func rangeGreaterThanOrEquals(
     _ column: String,
     value: String
@@ -1009,6 +1062,11 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
   ///   - column: The range column to filter on.
   ///   - value: The range value to compare against.
   /// - Returns: The same builder value so calls can be chained.
+  @available(
+    *, deprecated,
+    message:
+      "Use rangeLte(_:range:) instead. See migration guide: https://github.com/supabase/supabase-swift/blob/main/V3_MIGRATION.md"
+  )
   public func rangeLowerThanOrEquals(
     _ column: String,
     value: String
@@ -1025,6 +1083,11 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
   ///   - query: The search query text.
   ///   - config: The text search configuration name. Defaults to `nil`.
   /// - Returns: The same builder value so calls can be chained.
+  @available(
+    *, deprecated,
+    message:
+      "Use textSearch(_:query:config:type:) instead. See migration guide: https://github.com/supabase/supabase-swift/blob/main/V3_MIGRATION.md"
+  )
   public func fullTextSearch(
     _ column: String,
     query: String,
@@ -1042,6 +1105,11 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
   ///   - query: The search query text.
   ///   - config: The text search configuration name. Defaults to `nil`.
   /// - Returns: The same builder value so calls can be chained.
+  @available(
+    *, deprecated,
+    message:
+      "Use textSearch(_:query:config:type:) with type: .plain instead. See migration guide: https://github.com/supabase/supabase-swift/blob/main/V3_MIGRATION.md"
+  )
   public func plainToFullTextSearch(
     _ column: String,
     query: String,
@@ -1059,6 +1127,11 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
   ///   - query: The search query text.
   ///   - config: The text search configuration name. Defaults to `nil`.
   /// - Returns: The same builder value so calls can be chained.
+  @available(
+    *, deprecated,
+    message:
+      "Use textSearch(_:query:config:type:) with type: .phrase instead. See migration guide: https://github.com/supabase/supabase-swift/blob/main/V3_MIGRATION.md"
+  )
   public func phraseToFullTextSearch(
     _ column: String,
     query: String,
@@ -1076,6 +1149,11 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
   ///   - query: The search query text.
   ///   - config: The text search configuration name. Defaults to `nil`.
   /// - Returns: The same builder value so calls can be chained.
+  @available(
+    *, deprecated,
+    message:
+      "Use textSearch(_:query:config:type:) with type: .websearch instead. See migration guide: https://github.com/supabase/supabase-swift/blob/main/V3_MIGRATION.md"
+  )
   public func webFullTextSearch(
     _ column: String,
     query: String,

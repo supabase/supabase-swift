@@ -3711,3 +3711,53 @@ Every Functions change above, as one name map. Each row links to the section tha
 Additive, no change needed: `FunctionsError.code`, `FunctionsError.isPlatformError`,
 `FunctionsError.Kind.invalidRequest`, `FunctionRegion.euCentral2`, `FunctionResponse.region`,
 `.executionID` and `.requestID`. Keep a fallback branch when switching on `FunctionsError.kind`.
+
+## The `PostgrestFilterBuilder` filter aliases are deprecated
+
+Fifteen methods on the untyped builder were second spellings of an operator that already had its
+own method. They now carry `@available(*, deprecated, message:)` naming the replacement, and are
+deleted in v4 (SDK-2183). The builder itself stays supported; only the aliases go.
+
+Why: every other Supabase SDK spells these operators one way (`eq`, `gt`, `textSearch`, …), and
+the typed query API added in v3 follows that spelling. Keeping a second name for each one on the
+untyped builder doubled the surface a reader has to recognize for no behavior the first name
+lacks.
+
+| Before | After |
+| --- | --- |
+| `.equals(_:value:)` | `.eq(_:value:)` |
+| `.notEquals(_:value:)` | `.neq(_:value:)` |
+| `.greaterThan(_:value:)` | `.gt(_:value:)` |
+| `.greaterThanOrEquals(_:value:)` | `.gte(_:value:)` |
+| `.lowerThan(_:value:)` | `.lt(_:value:)` |
+| `.lowerThanOrEquals(_:value:)` | `.lte(_:value:)` |
+| `.rangeLowerThan(_:range:)` | `.rangeLt(_:range:)` |
+| `.rangeGreaterThan(_:value:)` | `.rangeGt(_:range:)` |
+| `.rangeGreaterThanOrEquals(_:value:)` | `.rangeGte(_:range:)` |
+| `.rangeLowerThanOrEquals(_:value:)` | `.rangeLte(_:range:)` |
+| `.fullTextSearch(_:query:config:)` | `.textSearch(_:query:config:type:)` |
+| `.plainToFullTextSearch(_:query:config:)` | `.textSearch(_:query:config:type: .plain)` |
+| `.phraseToFullTextSearch(_:query:config:)` | `.textSearch(_:query:config:type: .phrase)` |
+| `.webFullTextSearch(_:query:config:)` | `.textSearch(_:query:config:type: .websearch)` |
+| `.fts(_:query:config:)` | `.textSearch(_:query:config:type:)` |
+
+```swift
+// Before
+try await client.from("users").select()
+  .greaterThanOrEquals("age", value: "18")
+  .fullTextSearch("bio", query: "swift", config: "english")
+  .execute()
+
+// After
+try await client.from("users").select()
+  .gte("age", value: "18")
+  .textSearch("bio", query: "swift", config: "english")
+  .execute()
+```
+
+**This is a warning, not a compile error, and not a behavior change.** Every alias still forwards
+to its replacement and sends the same request. Search your code for the names in the left column
+and switch to the right column before v4, where the aliases are removed.
+
+`match(_:)` with a dictionary is not deprecated: it is the multi-column equality shorthand every
+Supabase SDK has, not an alias of another method here.
