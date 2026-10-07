@@ -250,6 +250,55 @@ jobs:
         if: always()
         run: supabase stop
 
+  # Spike: the CLI's experimental stack backend runs every service as a native process on macOS
+  # arm64, so the integration suite can run on a macOS runner with no Docker. Non-blocking until
+  # the backend leaves experimental. `swift test` cannot build swift-snapshot-testing on macOS
+  # (Swift Testing image attachments), so this goes through xcodebuild and the IntegrationTests
+  # scheme; xcodebuild forwards TEST_RUNNER_-prefixed variables to the test process.
+  integration-tests-macos:
+    name: Integration Tests (macOS, experimental stack)
+    runs-on: blacksmith-6vcpu-macos-latest
+    timeout-minutes: 45
+    continue-on-error: true
+    env:
+      SUPABASE_EXPERIMENTAL_STACK: 1
+      TEST_RUNNER_INTEGRATION_TESTS: 1
+      XCODEBUILD_FLAGS: >-
+        -workspace Supabase.xcworkspace -scheme IntegrationTests
+        -destination platform=macOS,arch=arm64 -derivedDataPath .derivedData
+        -skipMacroValidation -skipPackagePluginValidation -parallel-testing-enabled NO
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Select Xcode 26.4
+        run: sudo xcode-select -s /Applications/Xcode_26.4.app
+      - name: "Setup Supabase CLI"
+        uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
+        with:
+          version: latest
+      # start applies migrations and seed itself, so no `db reset` is needed.
+      - name: "Start Supabase"
+        working-directory: Tests/IntegrationTests
+        run: supabase start --runtime native --eager
+      - name: "Run Integration Tests"
+        run: |
+          xcodebuild test $XCODEBUILD_FLAGS \
+            "-skip-testing:IntegrationTests/AuthClientIntegrationTests/verifyOTPForSecureEmailChange()"
+      - name: "Stop Supabase"
+        working-directory: Tests/IntegrationTests
+        if: always()
+        run: supabase stop
+      - name: "Start Supabase (secure email change)"
+        working-directory: Tests/IntegrationTests/supabase-secure-email-change
+        run: supabase start --runtime native --eager
+      - name: "Run Secure Email Change Integration Test"
+        run: |
+          xcodebuild test $XCODEBUILD_FLAGS \
+            "-only-testing:IntegrationTests/AuthClientIntegrationTests/verifyOTPForSecureEmailChange()"
+      - name: "Stop Supabase (secure email change)"
+        working-directory: Tests/IntegrationTests/supabase-secure-email-change
+        if: always()
+        run: supabase stop
+
   # android:
   #   name: Android
   #   runs-on: ubuntu-latest
