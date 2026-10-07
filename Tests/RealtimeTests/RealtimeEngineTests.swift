@@ -71,7 +71,7 @@ struct RealtimeEngineTests {
 
   @Test
   func connectOpensTheSocketAndReportsConnected() async throws {
-    let states = engine.connectionStates()
+    let states = await engine.connectionStates()
     let seen = LockIsolated([ConnectionMachine.State]())
     let pump = Task { for await state in states { seen.withValue { $0.append(state) } } }
     defer { pump.cancel() }
@@ -243,7 +243,7 @@ struct RealtimeEngineTests {
   func transientJoinErrorRejoinsOnTheClockAndEmitsResubscribed() async throws {
     server.joinReply = .error(reason: "RealtimeRestarting: standby")
     await engine.addChannel(topic)
-    let inbound = engine.inbound(topic)
+    let inbound = await engine.inbound(topic)
     let events = LockIsolated([ChannelInbound]())
     let pump = Task { for await event in inbound { events.withValue { $0.append(event) } } }
     defer { pump.cancel() }
@@ -362,9 +362,9 @@ struct RealtimeEngineTests {
     try await engine.subscribe(topic)
     let events = LockIsolated([ChannelInbound]())
     let pump = Task {
-      for await event in engine.inbound(topic) { events.withValue { $0.append(event) } }
+      for await event in await engine.inbound(topic) { events.withValue { $0.append(event) } }
     }
-    await eventually { [engine] in engine.listenerCount(topic) == 1 }
+    await eventually { [engine] in await engine.listenerCount(topic) == 1 }
 
     server.pushFastlane(
       topic: topic, event: "broadcast", payload: ["type": "broadcast", "event": "ping"])
@@ -381,7 +381,7 @@ struct RealtimeEngineTests {
     #expect(second.event == "pong")
 
     pump.cancel()
-    await eventually { [engine] in engine.listenerCount(topic) == 0 }
+    await eventually { [engine] in await engine.listenerCount(topic) == 0 }
   }
 
   // MARK: - Outbound

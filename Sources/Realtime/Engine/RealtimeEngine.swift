@@ -5,7 +5,6 @@
 //  Created by Guilherme Souza on 06/10/26.
 //
 
-import ConcurrencyExtras
 package import Foundation
 package import HTTPTypes
 package import Helpers
@@ -47,9 +46,6 @@ package struct RealtimeEngineConfiguration: Sendable {
 
 /// The one mutable core of Realtime: one socket, one supervisor task, pure machines for the
 /// connection and every channel, and fan-out to listeners.
-///
-/// Stream registration lives outside the actor, in a lock, so a listener can be registered
-/// synchronously before the first frame can arrive.
 package actor RealtimeEngine {
   private enum ReplySlot {
     case expected
@@ -80,7 +76,7 @@ package actor RealtimeEngine {
   private let clock: any Clock<Duration>
   private let serializer = RealtimeSerializer()
   private let logger: Logger
-  private nonisolated let registry = LockIsolated(ListenerRegistry())
+  private var registry = ListenerRegistry()
 
   private var connection: ConnectionMachine.State = .disconnected(nil)
   private var channels: [String: ChannelRecord] = [:]
@@ -151,14 +147,14 @@ package actor RealtimeEngine {
     applyConnection(.wakeSignal)
   }
 
-  package nonisolated func connectionStates() -> AsyncStream<ConnectionMachine.State> {
+  package func connectionStates() -> AsyncStream<ConnectionMachine.State> {
     let (stream, continuation) = AsyncStream<ConnectionMachine.State>.makeStream(
       bufferingPolicy: .bufferingNewest(1))
     let id = UUID()
-    continuation.onTermination = { [registry] _ in
-      registry.withValue { $0.connectionStates[id] = nil }
+    continuation.onTermination = { [weak self] _ in
+      Task { await self?.forgetListener { $0.connectionStates[id] = nil } }
     }
-    registry.withValue { $0.connectionStates[id] = continuation }
+    registry.connectionStates[id] = continuation
     return stream
   }
 
@@ -179,12 +175,10 @@ package actor RealtimeEngine {
     rejectSubscribe(
       topic, with: RealtimeError(kind: .notSubscribed, message: "channel \(topic) was removed"))
     channels[topic] = nil
-    registry.withValue { registry in
-      registry.inbound[topic]?.values.forEach { $0.finish() }
-      registry.inbound[topic] = nil
-      registry.channelStates[topic]?.values.forEach { $0.finish() }
-      registry.channelStates[topic] = nil
-    }
+    registry.inbound[topic]?.values.forEach { $0.finish() }
+    registry.inbound[topic] = nil
+    registry.channelStates[topic]?.values.forEach { $0.finish() }
+    registry.channelStates[topic] = nil
     if channels.isEmpty { applyConnection(.lastChannelRemoved) }
   }
 
@@ -222,31 +216,35 @@ package actor RealtimeEngine {
     applyChannel(topic, .leaveCompleted)
   }
 
-  package nonisolated func channelStates(_ topic: String) -> AsyncStream<ChannelMachine.State> {
+  package func channelStates(_ topic: String) -> AsyncStream<ChannelMachine.State> {
     let (stream, continuation) = AsyncStream<ChannelMachine.State>.makeStream(
       bufferingPolicy: .bufferingNewest(1))
     let id = UUID()
-    continuation.onTermination = { [registry] _ in
-      registry.withValue { $0.channelStates[topic]?[id] = nil }
+    continuation.onTermination = { [weak self] _ in
+      Task { await self?.forgetListener { $0.channelStates[topic]?[id] = nil } }
     }
-    registry.withValue { $0.channelStates[topic, default: [:]][id] = continuation }
+    registry.channelStates[topic, default: [:]][id] = continuation
     return stream
   }
 
   /// Every message on the topic, unbounded. Ending the iteration removes the listener.
-  package nonisolated func inbound(_ topic: String) -> AsyncStream<ChannelInbound> {
+  package func inbound(_ topic: String) -> AsyncStream<ChannelInbound> {
     let (stream, continuation) = AsyncStream<ChannelInbound>.makeStream(
       bufferingPolicy: .unbounded)
     let id = UUID()
-    continuation.onTermination = { [registry] _ in
-      registry.withValue { $0.inbound[topic]?[id] = nil }
+    continuation.onTermination = { [weak self] _ in
+      Task { await self?.forgetListener { $0.inbound[topic]?[id] = nil } }
     }
-    registry.withValue { $0.inbound[topic, default: [:]][id] = continuation }
+    registry.inbound[topic, default: [:]][id] = continuation
     return stream
   }
 
-  package nonisolated func listenerCount(_ topic: String) -> Int {
-    registry.value.inbound[topic]?.count ?? 0
+  package func listenerCount(_ topic: String) -> Int {
+    registry.inbound[topic]?.count ?? 0
+  }
+
+  private func forgetListener(_ remove: @Sendable (inout ListenerRegistry) -> Void) {
+    remove(&registry)
   }
 
   /// Sends a push on a subscribed channel. With `awaitReply` it returns the reply payload, or
@@ -301,7 +299,7 @@ package actor RealtimeEngine {
     for effect in effects { perform(effect) }
     if connection.key != before {
       let state = connection
-      registry.value.connectionStates.values.forEach { $0.yield(state) }
+      registry.connectionStates.values.forEach { $0.yield(state) }
     }
     resolveConnectWaiters()
   }
@@ -381,7 +379,7 @@ package actor RealtimeEngine {
     channels[topic] = record
     for effect in effects { perform(effect, on: topic) }
     if let state = channels[topic]?.state, state.key != before {
-      registry.value.channelStates[topic]?.values.forEach { $0.yield(state) }
+      registry.channelStates[topic]?.values.forEach { $0.yield(state) }
     }
   }
 
@@ -407,7 +405,7 @@ package actor RealtimeEngine {
         applyChannel(topic, .tokenRefreshed)
       }
     case .emitResubscribed:
-      registry.value.inbound[topic]?.values.forEach { $0.yield(.resubscribed) }
+      registry.inbound[topic]?.values.forEach { $0.yield(.resubscribed) }
     case .resolveSubscribe:
       let waiters = channels[topic]?.subscribeWaiters ?? []
       channels[topic]?.subscribeWaiters = []
@@ -420,10 +418,8 @@ package actor RealtimeEngine {
     case .resendPresenceTrack:
       break
     case .finishDataStreams:
-      registry.withValue { registry in
-        registry.inbound[topic]?.values.forEach { $0.finish() }
-        registry.inbound[topic] = nil
-      }
+      registry.inbound[topic]?.values.forEach { $0.finish() }
+      registry.inbound[topic] = nil
     case .scheduleLinger(let delay):
       channels[topic]?.lingerTask?.cancel()
       channels[topic]?.lingerTask = Task {
@@ -783,14 +779,14 @@ package actor RealtimeEngine {
         let text = message.payload["message"]?.stringValue ?? "system error"
         applyChannel(message.topic, .systemError(message: text))
       }
-      registry.value.inbound[message.topic]?.values.forEach { $0.yield(.message(message)) }
+      registry.inbound[message.topic]?.values.forEach { $0.yield(.message(message)) }
     }
   }
 
   private func handleBinary(_ data: Data) {
     do {
       let broadcast = try serializer.decodeBinary(data)
-      registry.value.inbound[broadcast.topic]?.values.forEach { $0.yield(.broadcast(broadcast)) }
+      registry.inbound[broadcast.topic]?.values.forEach { $0.yield(.broadcast(broadcast)) }
     } catch {
       logger.warning("dropping undecodable binary frame: \(error)")
     }
