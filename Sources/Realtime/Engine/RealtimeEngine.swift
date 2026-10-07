@@ -51,6 +51,12 @@ package struct RealtimeEngineConfiguration: Sendable {
 /// Stream registration lives outside the actor, in a lock, so a listener can be registered
 /// synchronously before the first frame can arrive.
 package actor RealtimeEngine {
+  private enum ReplySlot {
+    case expected
+    case waiting(CheckedContinuation<RealtimeMessageV2, any Error>)
+    case arrived(RealtimeMessageV2)
+  }
+
   private struct ChannelRecord {
     var config: RealtimeJoinConfig
     var state: ChannelMachine.State = .unsubscribed
@@ -86,10 +92,13 @@ package actor RealtimeEngine {
   private var outbound: AsyncStream<WebSocketFrame>.Continuation?
   private var wakeSignal: AsyncStream<Void>.Continuation?
   private var idleTask: Task<Void, Never>?
-  private var pendingReplies: [String: CheckedContinuation<RealtimeMessageV2, any Error>] = [:]
-  /// Replies that arrived before their waiter registered, keyed by ref.
-  private var earlyReplies: [String: RealtimeMessageV2] = [:]
+  /// One slot per ref a caller will wait on. A reply for a ref with no slot is dropped: either it
+  /// is late (the waiter timed out) or nobody awaits it (a push sent without a reply, a leave the
+  /// machine sent on its own).
+  private var pendingReplies: [String: ReplySlot] = [:]
   private var connectWaiters: [CheckedContinuation<Void, any Error>] = []
+
+  var pendingReplyCount: Int { pendingReplies.count }
   private var refCounter = 0
   private var accessToken: String?
 
@@ -167,6 +176,8 @@ package actor RealtimeEngine {
     channels[topic]?.rejoinTask?.cancel()
     channels[topic]?.joinTask?.cancel()
     channels[topic]?.lingerTask?.cancel()
+    rejectSubscribe(
+      topic, with: RealtimeError(kind: .notSubscribed, message: "channel \(topic) was removed"))
     channels[topic] = nil
     registry.withValue { registry in
       registry.inbound[topic]?.values.forEach { $0.finish() }
@@ -203,6 +214,7 @@ package actor RealtimeEngine {
     applyChannel(topic, .unsubscribeRequested)
     guard case .unsubscribing = channels[topic]?.state else { return }
     if let ref = channels[topic]?.pendingLeaveRef {
+      expectReply(ref)
       _ = try? await withTimeout(configuration.timeout, clock: clock) {
         try await self.waitForReply(ref)
       }
@@ -250,6 +262,7 @@ package actor RealtimeEngine {
       joinRef: joinRef, ref: ref, topic: topic, event: event, payload: payload)
     try enqueue(.text(try serializer.encodeText(message)))
     guard awaitReply else { return nil }
+    expectReply(ref)
     return try await awaitAcknowledgement(ref: ref)
   }
 
@@ -262,7 +275,9 @@ package actor RealtimeEngine {
     let frame = try serializer.encodeBroadcastPush(
       joinRef: joinRef, ref: ref, topic: topic, event: event, binaryPayload: data)
     try enqueue(.binary(frame))
-    if awaitReply { _ = try await awaitAcknowledgement(ref: ref) }
+    guard awaitReply else { return }
+    expectReply(ref)
+    _ = try await awaitAcknowledgement(ref: ref)
   }
 
   /// Stores the token for the next join and pushes it to every joined channel.
@@ -456,6 +471,7 @@ package actor RealtimeEngine {
       logger.error("failed to send phx_join for \(topic): \(error)")
       return
     }
+    expectReply(ref)
     channels[topic]?.joinTask = Task { await self.awaitJoinReply(topic, ref: ref) }
   }
 
@@ -552,13 +568,16 @@ package actor RealtimeEngine {
   /// first, or with `CancellationError` when the waiting task is cancelled (which is how
   /// `withTimeout` unwinds it).
   private func waitForReply(_ ref: String) async throws -> RealtimeMessageV2 {
-    if let early = earlyReplies.removeValue(forKey: ref) { return early }
+    if case .arrived(let message)? = pendingReplies[ref] {
+      pendingReplies[ref] = nil
+      return message
+    }
     return try await withTaskCancellationHandler {
       try await withCheckedThrowingContinuation { continuation in
         if Task.isCancelled {
           continuation.resume(throwing: CancellationError())
         } else {
-          pendingReplies[ref] = continuation
+          pendingReplies[ref] = .waiting(continuation)
         }
       }
     } onCancel: {
@@ -566,24 +585,34 @@ package actor RealtimeEngine {
     }
   }
 
+  /// Call in the same synchronous stretch as the `enqueue` so the reply cannot land before it.
+  private func expectReply(_ ref: String) {
+    pendingReplies[ref] = .expected
+  }
+
   private func cancelReply(_ ref: String) {
-    pendingReplies.removeValue(forKey: ref)?.resume(throwing: CancellationError())
+    if case .waiting(let waiter)? = pendingReplies.removeValue(forKey: ref) {
+      waiter.resume(throwing: CancellationError())
+    }
   }
 
   private func deliverReply(_ message: RealtimeMessageV2, ref: String) {
-    if let waiter = pendingReplies.removeValue(forKey: ref) {
+    switch pendingReplies[ref] {
+    case .waiting(let waiter)?:
+      pendingReplies[ref] = nil
       waiter.resume(returning: message)
-    } else {
-      earlyReplies[ref] = message
+    case .expected?:
+      pendingReplies[ref] = .arrived(message)
+    case .arrived?, nil:
+      break
     }
   }
 
   private func failPendingReplies() {
-    let waiters = pendingReplies.values
+    let slots = pendingReplies.values
     pendingReplies = [:]
-    earlyReplies = [:]
     let error = RealtimeError(kind: .notConnected, message: "socket closed before the reply")
-    waiters.forEach { $0.resume(throwing: error) }
+    for case .waiting(let waiter) in slots { waiter.resume(throwing: error) }
   }
 
   private func refreshAccessToken() async {
@@ -710,6 +739,7 @@ package actor RealtimeEngine {
       let heartbeat = RealtimeMessageV2(
         joinRef: nil, ref: ref, topic: "phoenix", event: "heartbeat", payload: [:])
       guard (try? enqueue(.text(try serializer.encodeText(heartbeat)))) != nil else { return }
+      expectReply(ref)
       do {
         _ = try await withTimeout(configuration.heartbeatTimeout, clock: clock) {
           try await self.waitForReply(ref)

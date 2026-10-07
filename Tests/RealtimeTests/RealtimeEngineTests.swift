@@ -432,6 +432,38 @@ struct RealtimeEngineTests {
   }
 
   @Test
+  func removeChannelRejectsASubscribeMadeDuringTheLeave() async throws {
+    await engine.addChannel(topic)
+    try await engine.subscribe(topic)
+
+    server.dropsClientFrames = true
+    let removal = Task { await engine.removeChannel(topic) }
+    await Task.megaYield()
+    let resubscribe = Task { try await engine.subscribe(topic) }
+    await Task.megaYield()
+    await clock.advance(by: .seconds(15))
+    await removal.value
+
+    let error = await #expect(throws: RealtimeError.self) { try await resubscribe.value }
+    #expect(error?.kind == .notSubscribed)
+  }
+
+  @Test
+  func repliesNobodyWaitsForAreNotRetained() async throws {
+    await engine.addChannel(topic)
+    try await engine.subscribe(topic)
+    server.acknowledgesBroadcasts = true
+
+    for _ in 0..<3 {
+      try await engine.send(topic, event: "broadcast", payload: [:], awaitReply: false)
+    }
+    try await engine.send(topic, event: "broadcast", payload: [:], awaitReply: true)
+
+    let retained = await engine.pendingReplyCount
+    #expect(retained == 0)
+  }
+
+  @Test
   func binaryBroadcastGoesOutAsKind3() async throws {
     await engine.addChannel(topic)
     try await engine.subscribe(topic)
