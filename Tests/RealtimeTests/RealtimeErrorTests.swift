@@ -125,7 +125,7 @@ struct RealtimeErrorTests {
       code: .databaseLackOfConnections, kind: .server, isRetryable: true),
     .init(
       reason: "DatabaseConnectionRateLimitReached: Too many database connections attempts",
-      code: .databaseConnectionRateLimitReached, kind: .server, isRetryable: true),
+      code: .databaseConnectionRateLimitReached, kind: .rateLimited, isRetryable: true),
     .init(
       reason: "UnableToConnectToProject: Realtime was unable to connect to the project database",
       code: .unableToConnectToProject, kind: .server, isRetryable: true),

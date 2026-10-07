@@ -128,6 +128,10 @@ public struct RealtimeError: SupabaseError {
 
     /// Codes the server emits for conditions the caller must fix: a bad token, a denied
     /// policy, a disabled tenant, invalid replay parameters. Retrying as-is cannot succeed.
+    ///
+    /// The server's catalog at https://github.com/supabase/realtime/blob/main/ERROR_CODES.md
+    /// lists codes without saying which are permanent, so these sets are this SDK's policy: a
+    /// code is fatal when the server would give the same answer on retry; the rest retries.
     static let fatal: Set<ServerCode> = [
       .topicNameRequired, .malformedJWT, .jwtSignatureError, .jwtSignerError, .invalidJWTToken,
       .unauthorized, .privateOnly, .tenantNotFound, .realtimeDisabledForTenant,
@@ -140,6 +144,7 @@ public struct RealtimeError: SupabaseError {
 
     static let rateLimit: Set<ServerCode> = [
       .channelRateLimitReached, .connectionRateLimitReached, .clientJoinRateLimitReached,
+      .databaseConnectionRateLimitReached,
     ]
 
     /// The code in front of the first `": "`, or `nil` for the server's bare-string reasons.
