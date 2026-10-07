@@ -1357,7 +1357,7 @@ features:
 
   database.configuration.access_token:
     status: implemented
-    note: "The token can be a static value via `headers`, or resolved per request from a callback (`PostgrestClient.Configuration.accessToken`), invoked fresh for every `execute()` so an in-flight request's own call already fixed its header before any later mutation to whatever the callback reads from."
+    note: "The token can be a static value via `headers`, or resolved per request from a callback (`PostgrestClient.Configuration.accessToken`), invoked fresh for every `execute()` so an in-flight request's own call already fixed its header before any later mutation to whatever the callback reads from. A throwing callback fails the request before it is sent, as a `PostgrestError` of kind `accessToken` with the callback's error in `underlyingError`."
     symbols:
       - PostgrestClient.Configuration.accessToken
   database.configuration.auto_retry:
