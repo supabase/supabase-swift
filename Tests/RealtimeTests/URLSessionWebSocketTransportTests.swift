@@ -182,25 +182,5 @@ struct URLSessionWebSocketTransportTests {
         _ = try await task.value
       }
     }
-
-    @Test
-    func aFrameOverMaximumMessageSizeClosesTheConnection() async throws {
-      let server = try LoopbackWebSocketServer()
-      let port = try server.start()
-      defer { server.stop() }
-
-      let transport = URLSessionWebSocketTransport(maximumMessageSize: 8)
-      let connection = try await transport.connect(
-        to: URL(string: "ws://127.0.0.1:\(port)")!, headerFields: [:])
-      let (events, finished) = record(connection)
-
-      server.send(binary: Data(repeating: 0, count: 64))
-      #expect(await waitUntil { finished.value })
-      #expect(events.value.count == 1)
-      if case .closed = events.value.first {
-      } else {
-        Issue.record("expected a close, got \(events.value)")
-      }
-    }
   #endif
 }

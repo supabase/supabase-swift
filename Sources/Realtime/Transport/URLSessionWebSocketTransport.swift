@@ -22,17 +22,13 @@ import IssueReporting
 package struct URLSessionWebSocketTransport: WebSocketTransport, @unchecked Sendable {
   let configuration: URLSessionConfiguration
   let delegate: (any URLSessionDelegate)?
-  /// The largest frame the task accepts. The server caps frames at 5,000,000 bytes.
-  let maximumMessageSize: Int
 
   package init(
     configuration: URLSessionConfiguration = .default,
-    delegate: (any URLSessionDelegate)? = nil,
-    maximumMessageSize: Int = 5_000_000
+    delegate: (any URLSessionDelegate)? = nil
   ) {
     self.configuration = configuration
     self.delegate = delegate
-    self.maximumMessageSize = maximumMessageSize
   }
 
   package func connect(to url: URL, headerFields: HTTPFields) async throws
@@ -97,7 +93,9 @@ package struct URLSessionWebSocketTransport: WebSocketTransport, @unchecked Send
       request.setValue(field.value, forHTTPHeaderField: field.name.rawName)
     }
     let task = session.webSocketTask(with: request)
-    task.maximumMessageSize = maximumMessageSize
+    // The receive limit. URLSession's 1 MiB default would drop the socket on a large row; the
+    // server never sends a frame over its own 5,000,000-byte cap.
+    task.maximumMessageSize = 5_000_000
     (session.delegate as? _Delegate)?.associatedTask.setValue(task)
 
     let connection = try await withTaskCancellationHandler {
