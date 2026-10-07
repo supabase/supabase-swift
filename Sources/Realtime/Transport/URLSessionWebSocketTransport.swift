@@ -11,7 +11,7 @@ package import HTTPTypes
 import IssueReporting
 
 #if canImport(FoundationNetworking)
-  import FoundationNetworking
+  package import FoundationNetworking
 #endif
 
 /// The default ``WebSocketTransport``, built on `URLSessionWebSocketTask`.
