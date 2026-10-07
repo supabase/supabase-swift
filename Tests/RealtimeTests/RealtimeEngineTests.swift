@@ -42,6 +42,18 @@ struct RealtimeEngineTests {
     #expect(satisfied, comment, sourceLocation: sourceLocation)
   }
 
+  /// A sleeper reaches the clock only once its task has run, and an advance made before that
+  /// strands it. `Task.megaYield()` spawns 20 background-priority tasks, which both falls short
+  /// and starves under CI load; plain yields at the test's own priority do not.
+  private func settle() async {
+    for _ in 0..<1_000 { await Task.yield() }
+  }
+
+  private func advance(by duration: Duration) async {
+    await settle()
+    await clock.advance(by: duration)
+  }
+
   private func connectionState() async -> ConnectionMachine.State { await engine.connectionState }
   private func channelState() async -> ChannelMachine.State? { await engine.channelState(topic) }
 
@@ -81,8 +93,7 @@ struct RealtimeEngineTests {
     #expect(error?.isRetryable == false)
     let state = await engine.connectionState
     #expect(state.error?.message.contains("401") == true)
-    await Task.megaYield()
-    await clock.advance(by: .seconds(5))
+    await advance(by: .seconds(5))
     #expect(server.connectCount == 0)
   }
 
@@ -95,8 +106,7 @@ struct RealtimeEngineTests {
       if case .reconnecting(1, .seconds(1), _) = await engine.connectionState { return true }
       return false
     }
-    await Task.megaYield()
-    await clock.advance(by: .seconds(1))
+    await advance(by: .seconds(1))
     try await connecting.value
 
     await expectConnected()
@@ -164,11 +174,7 @@ struct RealtimeEngineTests {
 
     await engine.removeChannel(topic)
     await expectConnected()
-    await Task.megaYield()
-
-    await Task.megaYield()
-
-    await clock.advance(by: .seconds(50))
+    await advance(by: .seconds(50))
     await eventually { [engine] in await !engine.connectionState.isConnected }
     #expect(!server.isConnected)
   }
@@ -248,8 +254,7 @@ struct RealtimeEngineTests {
       return false
     }
     server.joinReply = .ok
-    await Task.megaYield()
-    await clock.advance(by: .seconds(1))
+    await advance(by: .seconds(1))
     try await subscribing.value
 
     #expect(joins.count == 2)
@@ -265,12 +270,10 @@ struct RealtimeEngineTests {
 
     let subscribing = Task { try await engine.subscribe(topic) }
     await eventually { [self] in joins.count == 1 }
-    await Task.megaYield()
-    await clock.advance(by: .seconds(15))
+    await advance(by: .seconds(15))
     await eventually { [server] in server.sentMessages.contains { $0.event == "phx_leave" } }
     server.joinReply = .ok
-    await Task.megaYield()
-    await clock.advance(by: .seconds(1))
+    await advance(by: .seconds(1))
     try await subscribing.value
 
     #expect(joins.count == 2)
@@ -316,7 +319,7 @@ struct RealtimeEngineTests {
 
     server.deliver(.text("not a frame"))
     server.deliver(.binary(Data([0xFF, 0x00])))
-    await Task.megaYield()
+    await settle()
 
     await expectConnected()
     await expectSubscribed()
@@ -332,7 +335,7 @@ struct RealtimeEngineTests {
       RealtimeMessageV2(joinRef: "stale", ref: nil, topic: topic, event: "phx_close", payload: [:]))
     server.push(
       RealtimeMessageV2(joinRef: "stale", ref: nil, topic: topic, event: "phx_error", payload: [:]))
-    await Task.megaYield()
+    await settle()
 
     await expectSubscribed()
   }
@@ -347,8 +350,7 @@ struct RealtimeEngineTests {
       if case .resubscribing(1, .seconds(1), _) = await engine.channelState(topic) { return true }
       return false
     }
-    await Task.megaYield()
-    await clock.advance(by: .seconds(1))
+    await advance(by: .seconds(1))
 
     await eventually { await self.engine.channelState(self.topic)?.isSubscribed == true }
     #expect(joins.count == 2)
@@ -414,8 +416,7 @@ struct RealtimeEngineTests {
     let pending = Task {
       try await engine.send(topic, event: "broadcast", payload: [:], awaitReply: true)
     }
-    await Task.megaYield()
-    await clock.advance(by: .seconds(15))
+    await advance(by: .seconds(15))
     let error = await #expect(throws: RealtimeError.self) { try await pending.value }
     #expect(error?.kind == .timeout)
   }
@@ -438,10 +439,9 @@ struct RealtimeEngineTests {
 
     server.dropsClientFrames = true
     let removal = Task { await engine.removeChannel(topic) }
-    await Task.megaYield()
+    await settle()
     let resubscribe = Task { try await engine.subscribe(topic) }
-    await Task.megaYield()
-    await clock.advance(by: .seconds(15))
+    await advance(by: .seconds(15))
     await removal.value
 
     let error = await #expect(throws: RealtimeError.self) { try await resubscribe.value }
@@ -482,19 +482,13 @@ struct RealtimeEngineTests {
   @Test
   func heartbeatIsSentOnTheIntervalAndATimeoutReconnectsWithoutLeaking() async throws {
     try await engine.connect()
-    await Task.megaYield()
-
-    await Task.megaYield()
-
-    await clock.advance(by: .seconds(25))
+    await advance(by: .seconds(25))
     await eventually { [server] in server.sentMessages.contains { $0.event == "heartbeat" } }
     await expectConnected()
 
     server.repliesToHeartbeats = false
-    await Task.megaYield()
-    await clock.advance(by: .seconds(25))
-    await Task.megaYield()
-    await clock.advance(by: .seconds(10))
+    await advance(by: .seconds(25))
+    await advance(by: .seconds(10))
     await eventually { [engine] in
       if case .reconnecting = await engine.connectionState { return true }
       return false
@@ -503,17 +497,12 @@ struct RealtimeEngineTests {
     #expect(timedOut?.kind == .timeout)
 
     server.repliesToHeartbeats = true
-    await Task.megaYield()
-    await clock.advance(by: .seconds(1))
+    await advance(by: .seconds(1))
     await eventually { [server] in server.connectCount == 2 }
     await eventually { [engine] in await engine.connectionState.isConnected }
-
-    await Task.megaYield()
-
-    await clock.advance(by: .seconds(25))
-    await Task.megaYield()
-    await clock.advance(by: .seconds(10))
-    await Task.megaYield()
+    await advance(by: .seconds(25))
+    await advance(by: .seconds(10))
+    await settle()
     #expect(server.connectCount == 2)
     await expectConnected()
   }
@@ -530,8 +519,7 @@ struct RealtimeEngineTests {
     }
     let lost = await connectionState().error
     #expect(lost?.closeCode == .abnormalClosure)
-    await Task.megaYield()
-    await clock.advance(by: .seconds(1))
+    await advance(by: .seconds(1))
 
     await eventually { await self.engine.channelState(self.topic)?.isSubscribed == true }
     #expect(server.connectCount == 2)
@@ -547,7 +535,7 @@ struct RealtimeEngineTests {
     let pending = Task {
       try await engine.send(topic, event: "broadcast", payload: [:], awaitReply: true)
     }
-    await Task.megaYield()
+    await settle()
     server.closeConnection(code: .abnormalClosure, reason: nil)
 
     let error = await #expect(throws: RealtimeError.self) { try await pending.value }
