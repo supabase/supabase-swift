@@ -310,6 +310,7 @@ supporting_symbols:
   - PostgrestError.Kind.transport
   - PostgrestError.Kind.decoding
   - PostgrestError.Kind.invalidRequest
+  - PostgrestError.Kind.accessToken
   - PostgrestError.ServerError
   - PostgrestError.ServerError.init
   - PostgrestError.ServerError.code
