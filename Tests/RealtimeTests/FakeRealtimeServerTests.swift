@@ -373,6 +373,6 @@ struct FakeRealtimeServerTests {
 
     #expect(await waitUntil { secondEvents.value.count == 1 })
     #expect(server.connectCount == 2)
-    #expect(firstEvents.value == [.closed(code: .abnormalClosure, reason: nil)])
+    #expect(await waitUntil { firstEvents.value == [.closed(code: .abnormalClosure, reason: nil)] })
   }
 }
