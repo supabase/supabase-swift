@@ -203,9 +203,6 @@ extension PostgrestRequestBuilder where Phase: PostgrestTransformablePhase {
   /// - Returns: A ``PostgrestTransformBuilder`` so calls can be chained.
   public func csv() -> PostgrestTransformBuilder {
     var copy = PostgrestTransformBuilder(carryingFrom: self)
-    if copy.request.stripsNulls {
-      copy.pendingError = "`.csv()` cannot be combined with `.stripNulls()`"
-    }
     copy.request.headerFields[.accept] = "text/csv"
     return copy
   }
@@ -219,9 +216,6 @@ extension PostgrestRequestBuilder where Phase: PostgrestTransformablePhase {
   /// - Returns: A ``PostgrestTransformBuilder`` so calls can be chained.
   public func stripNulls() -> PostgrestTransformBuilder {
     var copy = PostgrestTransformBuilder(carryingFrom: self)
-    if copy.request.headerFields[.accept] == "text/csv" {
-      copy.pendingError = "`.stripNulls()` cannot be combined with `.csv()`"
-    }
     // The media type is only final once the chain runs (`single()` may come later), so the core
     // applies the flag when it builds the request (`PostgrestRequest.httpRequest(for:)`).
     copy.request.stripsNulls = true

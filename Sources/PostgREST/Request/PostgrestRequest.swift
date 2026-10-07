@@ -75,6 +75,13 @@ public struct PostgrestRequest: Sendable {
     on client: PostgrestClient,
     decode: (Data) throws -> T
   ) async throws -> PostgrestResponse<T> {
+    // CSV has no `nulls=stripped` variant. The typed `csv()` drops the flag; the untyped builder
+    // can still carry both, so the core refuses it before anything is sent.
+    if stripsNulls, headerFields[.accept] == "text/csv" {
+      throw PostgrestError(
+        kind: .invalidRequest, message: "`.csv()` cannot be combined with `.stripNulls()`")
+    }
+
     let configuration = client.configuration
     var request = httpRequest(for: configuration)
 
