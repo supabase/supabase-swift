@@ -70,7 +70,7 @@ public struct RealtimeError: SupabaseError {
     public static let server: Kind = "server"
     /// The network path failed: a REST broadcast never completed, the WebSocket upgrade was
     /// refused, or the socket closed. ``RealtimeError/underlyingError`` is the `URLError` when
-    /// there was one; ``RealtimeError/closeCode`` the close status when the socket closed.
+    /// there was one; `closeCode` the close status when the socket closed.
     public static let transport: Kind = "transport"
     /// A frame from the server could not be decoded, or a message had an unexpected shape.
     /// Nothing to retry; report it.
