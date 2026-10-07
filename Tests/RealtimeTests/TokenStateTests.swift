@@ -25,7 +25,7 @@ struct TokenStateTests {
   func applyingAResultForTheCurrentGenerationStoresTheTokenAndItsExpiry() {
     var state = TokenState()
     let generation = state.beginRefresh()
-    let exp = Date().addingTimeInterval(300).timeIntervalSince1970
+    let exp = Date().addingTimeInterval(300).timeIntervalSince1970.rounded()
 
     let changed = state.apply(makeJWT(exp: exp), generation: generation)
 
