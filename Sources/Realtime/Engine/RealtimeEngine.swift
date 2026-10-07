@@ -722,6 +722,7 @@ package actor RealtimeEngine {
         try await connected.send(frame)
       } catch {
         logger.warning("send failed: \(error)")
+        await connected.close(code: .goingAway, reason: nil)
         return
       }
     }

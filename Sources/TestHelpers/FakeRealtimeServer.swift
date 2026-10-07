@@ -50,6 +50,7 @@ package final class FakeRealtimeServer: Sendable {
     var repliesToHeartbeats = true
     var acknowledgesBroadcasts = false
     var dropsClientFrames = false
+    var failsNextSend = false
     var pendingUpgradeRefusal: Int?
     var connectCount = 0
     var current: StubWebSocketConnection?
@@ -100,6 +101,19 @@ package final class FakeRealtimeServer: Sendable {
   package var dropsClientFrames: Bool {
     get { state.value.dropsClientFrames }
     set { state.withValue { $0.dropsClientFrames = newValue } }
+  }
+
+  /// The client's next `send` throws, as a dead socket would.
+  package var failsNextSend: Bool {
+    get { state.value.failsNextSend }
+    set { state.withValue { $0.failsNextSend = newValue } }
+  }
+
+  func takeSendFailure() -> Bool {
+    state.withValue { state in
+      defer { state.failsNextSend = false }
+      return state.failsNextSend
+    }
   }
 
   /// Makes the next `connect` throw `RealtimeError.upgradeFailed(status:)`.
@@ -368,6 +382,9 @@ final class StubWebSocketConnection: WebSocketConnection {
   func send(_ frame: WebSocketFrame) async throws {
     guard !isClosed.value else {
       throw RealtimeError(kind: .notConnected, message: "WebSocket is closed.")
+    }
+    if server.takeSendFailure() {
+      throw RealtimeError(kind: .transport, message: "simulated send failure")
     }
     server.receive(frame, from: self)
   }

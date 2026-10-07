@@ -528,6 +528,20 @@ struct RealtimeEngineTests {
   }
 
   @Test
+  func failedSendClosesTheSocketAndReconnects() async throws {
+    await engine.addChannel(topic)
+    try await engine.subscribe(topic)
+
+    server.failsNextSend = true
+    try await engine.send(topic, event: "broadcast", payload: [:], awaitReply: false)
+
+    await eventually { [server] in server.clientCloseCode != nil }
+    await advance(by: .seconds(1))
+    await eventually { [server] in server.connectCount == 2 }
+    await eventually { await self.engine.channelState(self.topic)?.isSubscribed == true }
+  }
+
+  @Test
   func pendingReplyFailsWithNotConnectedWhenTheSocketIsLost() async throws {
     await engine.addChannel(topic)
     try await engine.subscribe(topic)
