@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 06/10/26.
 //
 
+import ConcurrencyExtras
 package import Foundation
 package import HTTPTypes
 package import Helpers
@@ -100,13 +101,25 @@ package actor RealtimeEngine {
   package nonisolated let mirror = EngineMirror()
   private var registry = ListenerRegistry()
 
+  /// What ``shutdown()`` reaches without awaiting the actor.
+  private struct Handles {
+    var supervisor: Task<Void, Never>?
+    var socket: (any WebSocketConnection)?
+    var isShutDown = false
+  }
+
+  private nonisolated let handles = LockIsolated(Handles())
+
   private var connection: ConnectionMachine.State = .disconnected(nil)
   private var channels: [String: ChannelRecord] = [:]
-  private var supervisor: Task<Void, Never>?
+  private var supervisor: Task<Void, Never>? {
+    get { handles.supervisor }
+    set { handles.withValue { $0.supervisor = newValue } }
+  }
   /// Bumped on every supervisor start and every forced teardown, so callbacks from an older
   /// socket are ignored.
   private var generation = 0
-  private var socket: (any WebSocketConnection)?
+  private var socket: (any WebSocketConnection)? { handles.socket }
   private var outbound: AsyncStream<WebSocketFrame>.Continuation?
   private var wakeSignal: AsyncStream<Void>.Continuation?
   private var idleTask: Task<Void, Never>?
@@ -169,6 +182,23 @@ package actor RealtimeEngine {
   package func wake() {
     applyConnection(.wakeSignal)
   }
+
+  /// Stops the engine for good without waiting: cancels the supervisor and closes the socket.
+  /// The supervisor then moves the engine to `.disconnected`, and a later connect ends there
+  /// at once. For a `deinit`, which cannot await.
+  package nonisolated func shutdown() {
+    let (supervisor, socket) = handles.withValue {
+      $0.isShutDown = true
+      return ($0.supervisor, $0.socket)
+    }
+    supervisor?.cancel()
+    if let socket {
+      Task { await socket.close(code: .normalClosure, reason: nil) }
+    }
+  }
+
+  /// The token joins carry: the last one `setAuth(_:)` or the provider gave.
+  package var accessToken: String? { tokens.token }
 
   package func connectionStates() -> AsyncStream<ConnectionMachine.State> {
     let (stream, continuation) = AsyncStream<ConnectionMachine.State>.makeStream(
@@ -796,8 +826,14 @@ package actor RealtimeEngine {
   // MARK: - Supervisor
 
   private func run(generation: Int) async {
-    defer { if self.generation == generation { supervisor = nil } }
-    while !Task.isCancelled, generation == self.generation {
+    defer {
+      if generation == self.generation, Task.isCancelled || handles.isShutDown {
+        tokenRefreshTask?.cancel()
+        applyConnection(.disconnectRequested)
+      }
+      if generation == self.generation { supervisor = nil }
+    }
+    while !Task.isCancelled, !handles.isShutDown, generation == self.generation {
       guard case .connecting = connection else { return }
       await attemptConnection(generation: generation)
       guard generation == self.generation, case .reconnecting(_, let retryIn, _) = connection
@@ -815,13 +851,21 @@ package actor RealtimeEngine {
         [transport, configuration] in
         try await transport.connect(to: configuration.url, headerFields: configuration.headers)
       }
-      guard generation == self.generation else {
+      // Checked and stored under one lock, so `shutdown()` either sees the socket or makes this
+      // close it.
+      let isCurrent =
+        generation == self.generation
+        && handles.withValue {
+          guard !$0.isShutDown else { return false }
+          $0.socket = connected
+          return true
+        }
+      guard isCurrent else {
         await connected.close(code: .normalClosure, reason: nil)
         return
       }
       let (frames, continuation) = AsyncStream<WebSocketFrame>.makeStream(
         bufferingPolicy: .unbounded)
-      socket = connected
       outbound = continuation
       applyConnection(.upgradeSucceeded)
       await withTaskGroup(of: Void.self) { group in
@@ -886,7 +930,7 @@ package actor RealtimeEngine {
   }
 
   private func socketWentAway() {
-    socket = nil
+    handles.withValue { $0.socket = nil }
     outbound?.finish()
     outbound = nil
   }

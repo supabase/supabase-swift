@@ -6,11 +6,11 @@
 //
 
 import ConcurrencyExtras
-package import Foundation
-package import HTTPTypes
+public import Foundation
+public import HTTPTypes
 
 #if canImport(FoundationNetworking)
-  package import FoundationNetworking
+  public import FoundationNetworking
 #endif
 
 /// The default ``WebSocketTransport``, built on `URLSessionWebSocketTask`.
@@ -18,11 +18,19 @@ package import HTTPTypes
 /// Every connection gets its own `URLSession` copied from `configuration`, so process-wide
 /// `URLSession` state never reaches the socket and the session can be invalidated on close.
 /// `delegate` is consulted for TLS challenges only, which is how an app pins certificates.
-package struct URLSessionWebSocketTransport: WebSocketTransport, @unchecked Sendable {
+public struct URLSessionWebSocketTransport: WebSocketTransport, @unchecked Sendable {
   let configuration: URLSessionConfiguration
   let delegate: (any URLSessionDelegate)?
+  /// The largest frame the socket receives. URLSession's 1 MiB default would drop the socket on
+  /// a large row.
+  package var maximumMessageSize = 5_000_000
 
-  package init(
+  /// Creates the transport.
+  ///
+  /// - Parameters:
+  ///   - configuration: The configuration each connection's `URLSession` copies.
+  ///   - delegate: Answers TLS and authentication challenges, for certificate pinning.
+  public init(
     configuration: URLSessionConfiguration = .default,
     delegate: (any URLSessionDelegate)? = nil
   ) {
@@ -30,7 +38,12 @@ package struct URLSessionWebSocketTransport: WebSocketTransport, @unchecked Send
     self.delegate = delegate
   }
 
-  package func connect(to url: URL, headerFields: HTTPFields) async throws
+  /// Opens a `URLSessionWebSocketTask` to `url` and returns once the upgrade succeeded.
+  ///
+  /// - Throws: ``RealtimeError`` of kind ``RealtimeError/Kind/unauthorized`` or
+  ///   ``RealtimeError/Kind/transport`` when the upgrade fails, and `CancellationError` when the
+  ///   calling task is cancelled.
+  public func connect(to url: URL, headerFields: HTTPFields) async throws
     -> any WebSocketConnection
   {
     guard url.scheme == "ws" || url.scheme == "wss" else {
@@ -92,9 +105,7 @@ package struct URLSessionWebSocketTransport: WebSocketTransport, @unchecked Send
       request.setValue(field.value, forHTTPHeaderField: field.name.rawName)
     }
     let task = session.webSocketTask(with: request)
-    // The receive limit. URLSession's 1 MiB default would drop the socket on a large row; the
-    // server never sends a frame over its own 5,000,000-byte cap.
-    task.maximumMessageSize = 5_000_000
+    task.maximumMessageSize = maximumMessageSize
     (session.delegate as? _Delegate)?.associatedTask.setValue(task)
 
     let connection = try await withTaskCancellationHandler {

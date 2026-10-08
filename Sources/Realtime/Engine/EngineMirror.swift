@@ -14,6 +14,7 @@ import Foundation
 package final class EngineMirror: Sendable {
   private struct State {
     var connection: RealtimeConnectionStatus = .disconnected(nil)
+    var connectionStatuses: [UUID: AsyncStream<RealtimeConnectionStatus>.Continuation] = [:]
     var channels: [String: RealtimeChannelStatus] = [:]
     var channelStatuses: [String: [UUID: AsyncStream<RealtimeChannelStatus>.Continuation]] = [:]
     var postgresChangeIDs: [String: [Int]] = [:]
@@ -47,7 +48,28 @@ package final class EngineMirror: Sendable {
   }
 
   func setConnection(_ status: RealtimeConnectionStatus) {
-    state.withValue { $0.connection = status }
+    let continuations = state.withValue {
+      $0.connection = status
+      return $0.connectionStatuses
+    }
+    for continuation in continuations.values { continuation.yield(status) }
+  }
+
+  /// The socket's status, starting with the current one, keeping only the newest. Registers
+  /// before it returns.
+  package func connectionStatuses() -> AsyncStream<RealtimeConnectionStatus> {
+    let (stream, continuation) = AsyncStream<RealtimeConnectionStatus>.makeStream(
+      bufferingPolicy: .bufferingNewest(1))
+    let id = UUID()
+    continuation.onTermination = { [weak self] _ in
+      self?.state.withValue { $0.connectionStatuses[id] = nil }
+    }
+    state.withValue {
+      // Same single critical section as `channelStatuses(_:)`, for the same reason.
+      continuation.yield($0.connection)
+      $0.connectionStatuses[id] = continuation
+    }
+    return stream
   }
 
   func setChannel(_ topic: String, _ status: RealtimeChannelStatus) {

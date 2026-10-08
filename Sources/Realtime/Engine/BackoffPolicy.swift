@@ -6,7 +6,9 @@
 //
 
 /// How long to wait before the n-th retry of a connect or a rejoin.
-package struct BackoffPolicy: Sendable, Hashable {
+///
+/// Set it through ``RealtimeClientOptions/reconnect`` and ``RealtimeClientOptions/rejoin``.
+public struct BackoffPolicy: Sendable, Hashable {
   private enum Strategy: Hashable {
     case fullJitter(base: Duration, cap: Duration)
     case steps([Duration])
@@ -16,12 +18,18 @@ package struct BackoffPolicy: Sendable, Hashable {
 
   /// A random wait in `0...min(cap, base · 2^(attempt-1))`. Spreads reconnecting clients out
   /// after an outage better than equal jitter does.
-  package static func fullJitter(base: Duration, cap: Duration) -> BackoffPolicy {
+  ///
+  /// - Parameters:
+  ///   - base: The upper bound of the first wait.
+  ///   - cap: The largest upper bound any wait can have.
+  public static func fullJitter(base: Duration, cap: Duration) -> BackoffPolicy {
     BackoffPolicy(strategy: .fullJitter(base: base, cap: cap))
   }
 
   /// Fixed waits, one per attempt; later attempts reuse the last one. Empty means no wait.
-  package static func steps(_ steps: [Duration]) -> BackoffPolicy {
+  ///
+  /// - Parameter steps: The wait before each attempt, starting with the first retry.
+  public static func steps(_ steps: [Duration]) -> BackoffPolicy {
     BackoffPolicy(strategy: .steps(steps))
   }
 

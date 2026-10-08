@@ -49,17 +49,17 @@ struct RealtimeChannelIntegrationTests {
   private func uniqueList() -> Int { Int.random(in: 1_000_000...2_000_000_000) }
 
   /// Runs `body` with a fresh socket and closes it afterwards, also when `body` throws.
-  private func withEngine(
-    _ body: (RealtimeEngine) async throws -> Void
+  private func withClient(
+    _ body: (RealtimeClient) async throws -> Void
   ) async throws {
-    let engine = LiveRealtime.engine()
+    let client = LiveRealtime.client()
     do {
-      try await body(engine)
+      try await body(client)
     } catch {
-      await engine.disconnect()
+      await client.disconnect()
       throw error
     }
-    await engine.disconnect()
+    await client.disconnect()
   }
 
   /// The first element that passes `predicate`, within 10 seconds.
@@ -96,8 +96,8 @@ struct RealtimeChannelIntegrationTests {
 
   @Test
   func channelStatusChanges() async throws {
-    try await withEngine { engine in
-      let channel = LiveRealtime.channel(uniqueTopic(), engine: engine)
+    try await withClient { client in
+      let channel = client.channel(uniqueTopic())
       let statuses = channel.statusChanges
 
       try await channel.subscribe()
@@ -115,8 +115,8 @@ struct RealtimeChannelIntegrationTests {
 
   @Test
   func privateChannelWithTheAnonKeyIsRefused() async throws {
-    try await withEngine { engine in
-      let channel = LiveRealtime.channel("private-\(UUID())", engine: engine) {
+    try await withClient { client in
+      let channel = client.channel("private-\(UUID())") {
         $0.isPrivate = true
       }
 
@@ -136,8 +136,8 @@ struct RealtimeChannelIntegrationTests {
 
   @Test
   func broadcastSendAndReceive() async throws {
-    try await withEngine { engine in
-      let channel = LiveRealtime.channel(uniqueTopic(), engine: engine) {
+    try await withClient { client in
+      let channel = client.channel(uniqueTopic()) {
         $0.broadcast.receiveOwnMessages = true
       }
       let messages = channel.broadcasts(event: "greeting")
@@ -152,11 +152,11 @@ struct RealtimeChannelIntegrationTests {
 
   @Test
   func broadcastWithoutOwnBroadcasts() async throws {
-    try await withEngine { sender in
-      try await withEngine { listener in
+    try await withClient { sender in
+      try await withClient { listener in
         let topic = uniqueTopic()
-        let sending = LiveRealtime.channel(topic, engine: sender)
-        let listening = LiveRealtime.channel(topic, engine: listener)
+        let sending = sender.channel(topic)
+        let listening = listener.channel(topic)
         let echoes = sending.broadcasts(event: "ping")
         let received = listening.broadcasts(event: "ping")
         try await sending.subscribe()
@@ -176,8 +176,8 @@ struct RealtimeChannelIntegrationTests {
 
   @Test
   func broadcastMultipleEvents() async throws {
-    try await withEngine { engine in
-      let channel = LiveRealtime.channel(uniqueTopic(), engine: engine) {
+    try await withClient { client in
+      let channel = client.channel(uniqueTopic()) {
         $0.broadcast.receiveOwnMessages = true
       }
       let first = channel.broadcasts(event: "first")
@@ -198,8 +198,8 @@ struct RealtimeChannelIntegrationTests {
 
   @Test
   func acknowledgedBroadcastResolves() async throws {
-    try await withEngine { engine in
-      let channel = LiveRealtime.channel(uniqueTopic(), engine: engine) {
+    try await withClient { client in
+      let channel = client.channel(uniqueTopic()) {
         $0.broadcast.acknowledge = true
       }
       try await channel.subscribe()
@@ -210,8 +210,8 @@ struct RealtimeChannelIntegrationTests {
 
   @Test
   func binaryBroadcastRoundTrip() async throws {
-    try await withEngine { engine in
-      let channel = LiveRealtime.channel(uniqueTopic(), engine: engine) {
+    try await withClient { client in
+      let channel = client.channel(uniqueTopic()) {
         $0.broadcast.receiveOwnMessages = true
       }
       let messages = channel.broadcasts(event: "bytes")
@@ -227,8 +227,8 @@ struct RealtimeChannelIntegrationTests {
 
   @Test
   func httpSendReachesASubscribedListener() async throws {
-    try await withEngine { engine in
-      let channel = LiveRealtime.channel(uniqueTopic(), engine: engine)
+    try await withClient { client in
+      let channel = client.channel(uniqueTopic())
       let messages = channel.broadcasts(event: "rest")
       try await channel.subscribe()
 
@@ -245,9 +245,9 @@ struct RealtimeChannelIntegrationTests {
   /// already deleted by then is never sent. Each statement waits for its change before the next.
   @Test
   func postgresAllChanges() async throws {
-    try await withEngine { engine in
+    try await withClient { client in
       let list = uniqueList()
-      let channel = LiveRealtime.channel(uniqueTopic(), engine: engine)
+      let channel = client.channel(uniqueTopic())
       let changes = channel.postgresChanges(of: Item.self, table: "realtime_items")
       try await channel.subscribe()
 
@@ -273,10 +273,10 @@ struct RealtimeChannelIntegrationTests {
 
   @Test
   func postgresChangesWithFilter() async throws {
-    try await withEngine { engine in
+    try await withClient { client in
       let wanted = uniqueList()
       let other = uniqueList()
-      let channel = LiveRealtime.channel(uniqueTopic(), engine: engine)
+      let channel = client.channel(uniqueTopic())
       let changes = channel.postgresChanges(
         event: .insert, table: "realtime_items", filter: .eq("list_id", value: wanted))
       try await channel.subscribe()
@@ -292,9 +292,9 @@ struct RealtimeChannelIntegrationTests {
 
   @Test
   func postgresChangesMultipleSubscriptions() async throws {
-    try await withEngine { engine in
+    try await withClient { client in
       let list = uniqueList()
-      let channel = LiveRealtime.channel(uniqueTopic(), engine: engine)
+      let channel = client.channel(uniqueTopic())
       let inserts = channel.postgresChanges(event: .insert, table: "realtime_items")
       let deletes = channel.postgresChanges(event: .delete, table: "realtime_items")
       try await channel.subscribe()
@@ -321,9 +321,9 @@ struct RealtimeChannelIntegrationTests {
 
   @Test
   func bindingAddedAfterSubscribeRejoinsAndReceives() async throws {
-    try await withEngine { engine in
+    try await withClient { client in
       let list = uniqueList()
-      let channel = LiveRealtime.channel(uniqueTopic(), engine: engine)
+      let channel = client.channel(uniqueTopic())
       let events = channel.events
       try await channel.subscribe()
 

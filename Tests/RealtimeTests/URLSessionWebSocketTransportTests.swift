@@ -129,7 +129,7 @@ struct URLSessionWebSocketTransportTests {
     }
 
     @Test
-    func refusedUpgradeThrowsANonRetryableTransportErrorWithTheStatus() async throws {
+    func refusedUpgradeThrowsANonRetryableUnauthorizedErrorWithTheStatus() async throws {
       let (server, _) = try LoopbackTCPServer.refusing(status: 401, reason: "Unauthorized")
       let port = try server.start()
       defer { server.stop() }
@@ -137,7 +137,7 @@ struct URLSessionWebSocketTransportTests {
       let error = await #expect(throws: RealtimeError.self) {
         _ = try await connect(port: port)
       }
-      #expect(error?.kind == .transport)
+      #expect(error?.kind == .unauthorized)
       #expect(error?.isRetryable == false)
       #expect(error?.message.contains("401") == true)
     }
