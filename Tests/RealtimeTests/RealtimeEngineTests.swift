@@ -243,6 +243,21 @@ struct RealtimeEngineTests {
   }
 
   @Test
+  func updateBindingsRejoinsOnlyForALongerList() async throws {
+    let todos = PostgresJoinConfig(event: .insert, schema: "public", table: "todos")
+    let users = PostgresJoinConfig(event: .all, schema: "public", table: "users")
+    await engine.addChannel(topic)
+    try await engine.subscribe(topic)
+
+    await engine.updateBindings(topic, [todos, users])
+    await engine.updateBindings(topic, [todos])
+    await engine.updateBindings(topic, [todos, users])
+
+    await eventually { [engine, topic] in await engine.postgresChangeIDs(topic).count == 2 }
+    #expect(joins.count == 2)
+  }
+
+  @Test
   func joinErrorSurfacesTheServerReason() async throws {
     server.joinReply = .error(reason: "Unauthorized: You do not have permissions")
     await engine.addChannel(topic)

@@ -138,3 +138,23 @@ public struct TypedPostgresChange<Row: Decodable>: Sendable {
     return try record.decode(as: Row.self, decoder: decoder.value)
   }
 }
+
+/// A stream element made from a ``PostgresChange`` and a decoder.
+///
+/// The typed stream builds its elements through this protocol so the closure captures only the
+/// `Sendable` element type, not the row type, whose `Decodable` conformance may be isolated to the
+/// caller's actor.
+package protocol PostgresChangeElement: Sendable {
+  init(raw: PostgresChange, decoder: JSONDecoder)
+}
+
+extension PostgresChangeElement {
+  /// Wraps each change with `decoder`.
+  package static func wrapping(decoder: JSONDecoder) -> @Sendable (PostgresChange) -> Self {
+    // `JSONDecoder` is `Sendable` only from iOS 17 and macOS 14. Nothing mutates it after the call.
+    let decoder = UncheckedSendable(decoder)
+    return { Self(raw: $0, decoder: decoder.value) }
+  }
+}
+
+extension TypedPostgresChange: PostgresChangeElement {}

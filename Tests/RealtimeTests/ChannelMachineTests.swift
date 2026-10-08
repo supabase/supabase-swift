@@ -192,6 +192,10 @@ struct ChannelMachineTests {
       from: .subscribed, event: .bindingsChanged,
       to: .subscribing(attempt: 1), effects: [.sendLeave, .sendJoin]),
     Row(
+      name: "bindings changed while joining resends the join with them",
+      from: .subscribing(attempt: 1, isRejoin: false), event: .bindingsChanged,
+      to: .subscribing(attempt: 1), effects: [.sendLeave, .sendJoin]),
+    Row(
       name: "bindings changed while unsubscribed waits for the next join",
       from: .unsubscribed, event: .bindingsChanged, to: .unsubscribed, effects: []),
     // unsubscribe
