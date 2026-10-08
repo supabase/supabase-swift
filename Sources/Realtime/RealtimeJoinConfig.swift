@@ -56,19 +56,19 @@ package struct RealtimeJoinConfig: Encodable, Hashable {
 /// - ``limit``
 /// ### Initialization
 /// - ``init(since:limit:)``
-public struct ReplayOption: Encodable, Hashable, Sendable {
+package struct ReplayOption: Encodable, Hashable, Sendable {
   /// Unix timestamp in milliseconds. Messages broadcast after this point will be replayed.
-  public var since: Int
+  package var since: Int
 
   /// Optional maximum number of messages to replay. When `nil`, the server default limit applies.
-  public var limit: Int?
+  package var limit: Int?
 
   /// Creates a ``ReplayOption``.
   ///
   /// - Parameters:
   ///   - since: Unix timestamp in milliseconds from which to start replaying messages.
   ///   - limit: Maximum number of messages to replay, or `nil` for no limit.
-  public init(since: Int, limit: Int? = nil) {
+  package init(since: Int, limit: Int? = nil) {
     self.since = since
     self.limit = limit
   }
@@ -85,28 +85,20 @@ public struct ReplayOption: Encodable, Hashable, Sendable {
 /// - ``replay``
 /// ### Initialization
 /// - ``init(acknowledgeBroadcasts:receiveOwnBroadcasts:replay:replicationReady:)``
-public struct BroadcastJoinConfig: Encodable, Hashable, Sendable {
-  /// When `true`, the server acknowledges each broadcast message before delivering it.
-  ///
-  /// Useful in combination with ``RealtimeChannelV2/broadcast(event:message:)-(_,JSONObject)``
-  /// to ensure delivery before continuing.
-  public var acknowledgeBroadcasts: Bool = false
+package struct BroadcastJoinConfig: Encodable, Hashable, Sendable {
+  /// Sent as `broadcast.ack`: the server acknowledges each broadcast it receives.
+  package var acknowledgeBroadcasts: Bool = false
 
   /// When `true`, broadcast messages are echoed back to the sender in addition to all other subscribers.
   ///
   /// By default, broadcast messages are only sent to other clients.
-  public var receiveOwnBroadcasts: Bool = false
+  package var receiveOwnBroadcasts: Bool = false
 
   /// When set, the server replays broadcast messages starting from the given timestamp on join.
-  public var replay: ReplayOption?
-  /// Instructs the server to emit a `system` event once the Postgres replication
-  /// connection backing this channel is established and ready to stream changes.
-  ///
-  /// Listen for it with ``RealtimeChannelV2/onSystem(callback:)-((RealtimeMessageV2)->Void)`` (or the
-  /// ``RealtimeChannelV2/system()`` async stream): the message's `status` is
-  /// `.ok` (message `"Replication connection established"`) on success, or
-  /// `.error` if the connection is not ready in time.
-  public var replicationReady: Bool = false
+  package var replay: ReplayOption?
+  /// Sent as `broadcast.replication_ready`: the server emits a `system` event once the Postgres
+  /// replication connection is ready.
+  package var replicationReady: Bool = false
 
   /// Creates a ``BroadcastJoinConfig``.
   ///
@@ -114,7 +106,7 @@ public struct BroadcastJoinConfig: Encodable, Hashable, Sendable {
   ///   - acknowledgeBroadcasts: Whether the server should acknowledge each broadcast. Defaults to `false`.
   ///   - receiveOwnBroadcasts: Whether to echo broadcasts back to the sender. Defaults to `false`.
   ///   - replay: Optional replay configuration for receiving past broadcasts on join.
-  public init(
+  package init(
     acknowledgeBroadcasts: Bool = false,
     receiveOwnBroadcasts: Bool = false,
     replay: ReplayOption? = nil,
@@ -143,13 +135,13 @@ public struct BroadcastJoinConfig: Encodable, Hashable, Sendable {
 /// - ``key``
 /// ### Initialization
 /// - ``init(key:)``
-public struct PresenceJoinConfig: Encodable, Hashable, Sendable {
+package struct PresenceJoinConfig: Encodable, Hashable, Sendable {
   /// The client-defined key used to identify this client's presence entry in the presence map.
   ///
   /// All clients sharing the same key are grouped together in ``PresenceAction/joins``
   /// and ``PresenceAction/leaves``. Defaults to an empty string, which lets the server
   /// assign a random unique key.
-  public var key: String = ""
+  package var key: String = ""
   var enabled: Bool = false
 }
 
@@ -157,7 +149,7 @@ extension PresenceJoinConfig {
   /// Creates a ``PresenceJoinConfig`` with the specified key.
   ///
   /// - Parameter key: The presence key for this client. Defaults to `""`.
-  public init(key: String = "") {
+  package init(key: String = "") {
     self.key = key
   }
 }

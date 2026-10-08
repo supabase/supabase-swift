@@ -46,8 +46,3 @@ struct NewMessage: Codable {
   var userId: UUID
   let channelId: Int
 }
-
-struct UserPresence: Codable, Hashable {
-  var userId: UUID
-  var onlineAt: Date
-}

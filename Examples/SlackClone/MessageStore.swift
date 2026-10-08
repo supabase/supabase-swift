@@ -98,79 +98,12 @@ final class MessageStore {
     var messages: [Message]
   }
 
-  var users: UserStore { Dependencies.shared.users }
-  var channel: ChannelStore { Dependencies.shared.channel }
-
-  private init() {
-    Task {
-      let channel = supabase.channel("public:messages")
-
-      let insertions = channel.postgresChange(InsertAction.self, table: "messages")
-      let updates = channel.postgresChange(UpdateAction.self, table: "messages")
-      let deletions = channel.postgresChange(DeleteAction.self, table: "messages")
-
-      try await channel.subscribeWithError()
-
-      Task {
-        for await insertion in insertions {
-          await handleInsertedOrUpdatedMessage(insertion)
-        }
-      }
-
-      Task {
-        for await update in updates {
-          await handleInsertedOrUpdatedMessage(update)
-        }
-      }
-
-      Task {
-        for await delete in deletions {
-          handleDeletedMessage(delete)
-        }
-      }
-    }
-  }
-
   func loadInitialMessages(_ channelId: Channel.ID) async {
     do {
       let allMessages = try await fetchMessages(channelId)
       messages[channelId] = Messages(allMessages)
     } catch {
       dump(error)
-    }
-  }
-
-  func removeMessages(for channel: Channel.ID) {
-    messages[channel] = nil
-  }
-
-  private func handleInsertedOrUpdatedMessage(_ action: HasRecord) async {
-    do {
-      let decodedMessage = try action.decodeRecord(decoder: decoder) as MessagePayload
-      let message = try await Message(
-        id: decodedMessage.id,
-        insertedAt: decodedMessage.insertedAt,
-        message: decodedMessage.message,
-        user: users.fetchUser(id: decodedMessage.userId),
-        channel: channel.fetchChannel(id: decodedMessage.channelId)
-      )
-
-      var channelMessages = messages[decodedMessage.channelId] ?? Messages(sections: [])
-      channelMessages.appendOrUpdate(message)
-      messages[decodedMessage.channelId] = channelMessages
-    } catch {
-      dump(error)
-    }
-  }
-
-  private func handleDeletedMessage(_ action: DeleteAction) {
-    guard let id = action.oldRecord["id"]?.intValue else {
-      return
-    }
-
-    for (channel, var messages) in messages {
-      messages.remove(id: id)
-      self.messages[channel] = messages
     }
   }
 
@@ -184,12 +117,4 @@ final class MessageStore {
       .execute()
       .value
   }
-}
-
-private struct MessagePayload: Decodable {
-  let id: Int
-  let message: String
-  let insertedAt: Date
-  let userId: UUID
-  let channelId: Int
 }

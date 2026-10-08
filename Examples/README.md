@@ -54,21 +54,6 @@ Features:
 - Filter builder with multiple conditions
 - Relationship demonstrations with profiles
 
-### ⚡️ Realtime
-
-Live data synchronization across multiple channels:
-
-- **Postgres Changes**: Listen to database INSERT, UPDATE, DELETE events
-- **Broadcast**: Send and receive real-time messages between clients
-- **Presence**: Track online users with metadata
-- **Live Todo Updates**: See changes from other users instantly
-
-Features:
-- Connection status indicators
-- Message history
-- Online user count
-- Automatic reconnection
-
 ### 📦 Storage
 
 Complete file and bucket management system:
@@ -249,12 +234,6 @@ This is the default publishable key for local Supabase development.
    - Test RPC functions
    - View aggregations
 
-   **Realtime Tab**:
-   - Watch database changes live
-   - Send broadcast messages
-   - Join presence channels
-   - See other users online (open app in multiple simulators!)
-
    **Storage Tab**:
    - Create a bucket
    - Upload images from Photos
@@ -274,14 +253,6 @@ This is the default publishable key for local Supabase development.
    - Link social accounts
    - Enable MFA for extra security
    - Manage linked identities
-
-#### Testing Real-time Features
-
-For the best real-time experience:
-1. Open the app on multiple devices/simulators
-2. Sign in with different accounts
-3. Navigate to the Realtime tab
-4. Watch updates appear instantly across all devices
 
 #### Testing Email Features
 
@@ -352,13 +323,6 @@ Examples/
 │   │   ├── RPCExamplesView.swift            # RPC functions
 │   │   ├── AggregationsView.swift           # Aggregations
 │   │   └── RelationshipsView.swift          # Joins and relations
-│   │
-│   ├── Realtime/          # Realtime subscriptions
-│   │   ├── RealtimeExamplesView.swift       # Main realtime navigation
-│   │   ├── PostgresChangesView.swift        # Database changes
-│   │   ├── TodoRealtimeView.swift           # Live todo updates
-│   │   ├── BroadcastView.swift              # Broadcast messages
-│   │   └── PresenceView.swift               # Online presence
 │   │
 │   ├── Storage/           # File storage examples
 │   │   ├── StorageExamplesView.swift        # Main storage navigation

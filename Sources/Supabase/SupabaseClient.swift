@@ -30,7 +30,6 @@ import Logging
 /// - ``auth``
 /// - ``storage``
 /// - ``functions``
-/// - ``realtimeV2``
 ///
 /// ### Querying the Database
 /// - ``from(_:)->PostgrestQueryBuilder``
@@ -39,12 +38,6 @@ import Logging
 /// - ``rpc(_:count:)``
 /// - ``schema(_:)->PostgrestClient``
 /// - ``schema(_:)->PostgrestSchemaScope<S>``
-///
-/// ### Realtime Channels
-/// - ``channels``
-/// - ``channel(_:options:)``
-/// - ``removeChannel(_:)``
-/// - ``removeAllChannels()``
 ///
 /// ### Deep Links
 /// - ``handle(_:)``
@@ -138,18 +131,6 @@ public final class SupabaseClient: Sendable {
     return SupabaseStorageClient(configuration: configuration)
   }
 
-  /// The Realtime client for subscribing to database changes and broadcasting presence events.
-  public var realtimeV2: RealtimeClientV2 {
-    mutableState.withValue {
-      if let realtime = $0.realtime {
-        return realtime
-      }
-      let realtime = _initRealtimeClient()
-      $0.realtime = realtime
-      return realtime
-    }
-  }
-
   /// The Functions client for invoking Supabase Edge Functions.
   ///
   /// Built on first access from ``SupabaseClientOptions/FunctionsOptions`` and the global HTTP
@@ -184,11 +165,7 @@ public final class SupabaseClient: Sendable {
   }
 
   struct MutableState {
-    var listenForAuthEventsTask: Task<Void, Never>?
-    var realtime: RealtimeClientV2?
     var functions: FunctionsClient?
-
-    var changedAccessToken: String?
   }
 
   let mutableState = LockIsolated(MutableState())
@@ -269,10 +246,6 @@ public final class SupabaseClient: Sendable {
       automaticallyRefreshesToken: options.auth.automaticallyRefreshesToken,
       clock: clock
     )
-
-    if options.auth.accessToken == nil {
-      listenForAuthEvents()
-    }
   }
 
   /// Creates a query builder targeting a table or view.
@@ -335,34 +308,6 @@ public final class SupabaseClient: Sendable {
     rest.schema(schema)
   }
 
-  /// All active Realtime channels.
-  public var channels: [RealtimeChannelV2] {
-    Array(realtimeV2.channels.values)
-  }
-
-  /// Creates a Realtime channel with support for Broadcast, Presence, and Postgres Changes.
-  /// - Parameters:
-  ///   - name: A unique name for the channel.
-  ///   - options: A closure to configure broadcast, presence, and Postgres change options.
-  /// - Returns: A configured ``RealtimeChannelV2`` ready to subscribe.
-  public func channel(
-    _ name: String,
-    options: @Sendable (inout RealtimeChannelConfig) -> Void = { _ in }
-  ) -> RealtimeChannelV2 {
-    realtimeV2.channel(name, options: options)
-  }
-
-  /// Unsubscribes from and removes a Realtime channel.
-  /// - Parameter channel: The channel to remove.
-  public func removeChannel(_ channel: RealtimeChannelV2) async {
-    await realtimeV2.removeChannel(channel)
-  }
-
-  /// Unsubscribes from and removes all active Realtime channels.
-  public func removeAllChannels() async {
-    await realtimeV2.removeAllChannels()
-  }
-
   /// Passes an incoming URL to the Auth client for processing deep links and OAuth callbacks.
   ///
   /// Call this from your app's URL-handling entry points so Auth can complete OAuth and
@@ -421,10 +366,6 @@ public final class SupabaseClient: Sendable {
     auth.handle(url)
   }
 
-  deinit {
-    mutableState.listenForAuthEventsTask?.cancel()
-  }
-
   /// The resolved transport shared by every sub-client.
   private var transport: any ClientTransport {
     options.global.http.transport ?? URLSessionTransport()
@@ -434,10 +375,10 @@ public final class SupabaseClient: Sendable {
   /// Storage. The bearer is the session token, else the key.
   ///
   /// ``AccessTokenMiddleware`` captures only the dependencies it needs — never `self` — because
-  /// each sub-client stores its middlewares for its whole lifetime: the cached ``realtimeV2`` and
-  /// ``functions`` sub-clients are held in ``mutableState`` for the lifetime of the client, and a
+  /// each sub-client stores its middlewares for its whole lifetime: the cached
+  /// ``functions`` sub-client is held in ``mutableState`` for the lifetime of the client, and a
   /// caller may hold any sub-client for that long too. Capturing `self` here would form a
-  /// `self -> sub-client -> middleware -> self` retain cycle that keeps ``deinit`` from ever
+  /// `self -> sub-client -> middleware -> self` retain cycle that keeps `deinit` from ever
   /// running.
   private var authenticatedHTTP: HTTPClientConfiguration {
     HTTPClientConfiguration(
@@ -472,51 +413,6 @@ public final class SupabaseClient: Sendable {
     }
   }
 
-  private func _getAccessToken() async throws -> String? {
-    try await accessTokenProvider()
-  }
-
-  /// Mirrors Auth state onto the Realtime V2 sub-client for the client's lifetime.
-  ///
-  /// `authStateChanges` never finishes on its own, so the observing task must not capture `self`
-  /// strongly: it would keep the client alive forever, and ``deinit`` — the only place that
-  /// cancels this task — could never run. The stream is therefore resolved up front (so the task
-  /// doesn't need `self` to reach `auth`) and `self` is captured weakly.
-  private func listenForAuthEvents() {
-    let task = Task { [weak self, authStateChanges = _auth.authStateChanges] in
-      for await (event, session) in authStateChanges {
-        // `handleTokenChanged` needs a live client; once it's gone there is nothing to update.
-        guard let self else { return }
-        await self.handleTokenChanged(event: event, session: session)
-      }
-    }
-    mutableState.withValue {
-      $0.listenForAuthEventsTask = task
-    }
-  }
-
-  private func handleTokenChanged(event: AuthChangeEvent, session: Session?) async {
-    let accessToken: String? = mutableState.withValue {
-      if [.initialSession, .signedIn, .tokenRefreshed].contains(event),
-        $0.changedAccessToken != session?.accessToken
-      {
-        $0.changedAccessToken = session?.accessToken
-        return session?.accessToken ?? supabaseKey
-      }
-
-      if event == .signedOut {
-        $0.changedAccessToken = nil
-        return supabaseKey
-      }
-
-      return nil
-    }
-
-    if let accessToken {
-      await realtimeV2.setAuth(accessToken)
-    }
-  }
-
   private func _initFunctionsClient() -> FunctionsClient {
     let http = options.functions.http ?? options.global.http
     return FunctionsClient(
@@ -542,45 +438,6 @@ public final class SupabaseClient: Sendable {
         logger: options.functions.logger ?? options.global.logger,
         decoder: options.functions.decoder
       )
-    )
-  }
-
-  private func _initRealtimeClient() -> RealtimeClientV2 {
-    var realtimeOptions = options.realtime
-    realtimeOptions.headers.merge(with: _headers)
-
-    realtimeOptions.logger = options.global.logger
-    realtimeOptions.logger[metadataKey: "system"] = "realtime"
-
-    if realtimeOptions.http.transport == nil {
-      realtimeOptions.http = HTTPClientConfiguration(
-        transport: transport,
-        middlewares: options.global.http.middlewares + realtimeOptions.http.middlewares
-          + [TraceContextMiddleware()],
-        timeout: realtimeOptions.http.timeout ?? options.global.http.timeout
-      )
-    }
-
-    if realtimeOptions.accessToken == nil {
-      realtimeOptions.accessToken = { [weak self] in
-        try await self?._getAccessToken()
-      }
-    } else {
-      reportIssue(
-        """
-        You assigned a custom `accessToken` closure to the RealtimeClientV2. This might not work as you expect
-        as SupabaseClient uses Auth for pulling an access token to send on the realtime channels.
-
-        Please make sure you know what you're doing.
-        """
-      )
-    }
-
-    realtimeOptions.clock = clock
-
-    return RealtimeClientV2(
-      url: supabaseURL.appendingPathComponent("/realtime/v1"),
-      options: realtimeOptions
     )
   }
 }
