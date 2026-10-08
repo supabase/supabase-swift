@@ -69,7 +69,7 @@ public struct RealtimePresence: Sendable {
     guard let object = value.objectValue else {
       throw RealtimeError(kind: .encoding, message: "presence payload must be a JSON object")
     }
-    try await channel.engine.trackPresence(channel.wireTopic, payload: object)
+    try await channel.engine.trackPresence(channel.wireTopic, owner: channel.owner, payload: object)
   }
 
   /// Removes this client's presence entry, and stops sending it after a rejoin.
@@ -78,6 +78,6 @@ public struct RealtimePresence: Sendable {
   ///
   /// - Throws: The same errors as ``track(_:encoder:)``, except the encoding error.
   public func untrack() async throws {
-    try await channel.engine.untrackPresence(channel.wireTopic)
+    try await channel.engine.untrackPresence(channel.wireTopic, owner: channel.owner)
   }
 }

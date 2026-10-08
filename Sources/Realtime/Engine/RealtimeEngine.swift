@@ -379,9 +379,9 @@ package actor RealtimeEngine {
   /// error.
   @discardableResult
   package func send(
-    _ topic: String, event: String, payload: JSONObject, awaitReply: Bool
+    _ topic: String, owner: ChannelOwner, event: String, payload: JSONObject, awaitReply: Bool
   ) async throws -> JSONObject? {
-    let joinRef = try joinRefForPush(topic)
+    let joinRef = try joinRefForPush(topic, owner: owner)
     let ref = makeRef()
     let message = RealtimeMessageV2(
       joinRef: joinRef, ref: ref, topic: topic, event: event, payload: payload)
@@ -393,9 +393,9 @@ package actor RealtimeEngine {
 
   /// Sends a kind-3 binary broadcast on a subscribed channel.
   package func sendBroadcast(
-    _ topic: String, event: String, data: Data, awaitReply: Bool = false
+    _ topic: String, owner: ChannelOwner, event: String, data: Data, awaitReply: Bool = false
   ) async throws {
-    let joinRef = try joinRefForPush(topic)
+    let joinRef = try joinRefForPush(topic, owner: owner)
     let ref = makeRef()
     let frame = try serializer.encodeBroadcastPush(
       joinRef: joinRef, ref: ref, topic: topic, event: event, binaryPayload: data)
@@ -429,15 +429,17 @@ package actor RealtimeEngine {
   ///
   /// Returns once the server acknowledged the push, or at once when the push was coalesced or
   /// dropped as unchanged.
-  package func trackPresence(_ topic: String, payload: JSONObject) async throws {
-    _ = try joinRefForPush(topic)
+  package func trackPresence(_ topic: String, owner: ChannelOwner, payload: JSONObject)
+    async throws
+  {
+    _ = try joinRefForPush(topic, owner: owner)
     channels[topic]?.presence.trackedPayload = payload
     try await sendPresence(
       topic, payload: ["type": "presence", "event": "track", "payload": .object(payload)])
   }
 
-  package func untrackPresence(_ topic: String) async throws {
-    _ = try joinRefForPush(topic)
+  package func untrackPresence(_ topic: String, owner: ChannelOwner) async throws {
+    _ = try joinRefForPush(topic, owner: owner)
     channels[topic]?.presence.trackedPayload = nil
     try await sendPresence(topic, payload: ["type": "presence", "event": "untrack"])
   }
@@ -763,8 +765,10 @@ package actor RealtimeEngine {
     try? enqueue(.text(try serializer.encodeText(message)))
   }
 
-  private func joinRefForPush(_ topic: String) throws -> String {
-    guard let record = channels[topic], record.state.isSubscribed, let joinRef = record.joinRef
+  /// Throws `.notSubscribed` unless `owner` holds the topic's record and it is joined.
+  private func joinRefForPush(_ topic: String, owner: ChannelOwner) throws -> String {
+    guard let record = channels[topic], record.owner === owner, record.state.isSubscribed,
+      let joinRef = record.joinRef
     else {
       throw RealtimeError(
         kind: .notSubscribed, message: "channel \(topic) is not subscribed", isRetryable: false)

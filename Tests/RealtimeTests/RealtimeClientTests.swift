@@ -367,6 +367,39 @@ struct RealtimeClientTests {
   }
 
   @Test
+  func aRemovedHandleCannotSendOnTheLiveChannel() async throws {
+    let client = makeClient()
+    let old = client.channel("room")
+    try await old.subscribe()
+    await client.removeChannel(old)
+    try await client.channel("room").subscribe()
+    let sentCount = server.sentFrames.count
+
+    await #expect {
+      try await old.broadcast(event: "ping", payload: ["n": 1])
+    } throws: { error in
+      (error as? RealtimeError)?.kind == .notSubscribed
+    }
+    await #expect {
+      try await old.broadcast(event: "blob", data: Data([1]))
+    } throws: { error in
+      (error as? RealtimeError)?.kind == .notSubscribed
+    }
+    await #expect {
+      try await old.presence.track(["name": "ana"])
+    } throws: { error in
+      (error as? RealtimeError)?.kind == .notSubscribed
+    }
+    await #expect {
+      try await old.presence.untrack()
+    } throws: { error in
+      (error as? RealtimeError)?.kind == .notSubscribed
+    }
+
+    #expect(server.sentFrames.count == sentCount)
+  }
+
+  @Test
   func presenceStartsEmptyForAChannelThatReplacesARemovedOne() async throws {
     let client = makeClient()
     let old = client.channel("room")

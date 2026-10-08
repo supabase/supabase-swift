@@ -213,7 +213,7 @@ public final class RealtimeChannel: Sendable {
         underlyingError: error)
     }
     try await engine.send(
-      wireTopic, event: "broadcast",
+      wireTopic, owner: owner, event: "broadcast",
       payload: ["type": "broadcast", "event": .string(event), "payload": value],
       awaitReply: configuration.broadcast.acknowledge)
   }
@@ -223,7 +223,8 @@ public final class RealtimeChannel: Sendable {
   /// - Throws: The same errors as ``broadcast(event:payload:encoder:)``.
   public func broadcast(event: String, data: Data) async throws {
     try await engine.sendBroadcast(
-      wireTopic, event: event, data: data, awaitReply: configuration.broadcast.acknowledge)
+      wireTopic, owner: owner, event: event, data: data,
+      awaitReply: configuration.broadcast.acknowledge)
   }
 
   /// Sends `payload` as JSON through the REST broadcast endpoint. The channel does not need to be
