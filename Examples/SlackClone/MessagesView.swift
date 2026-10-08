@@ -10,6 +10,7 @@ import SwiftUI
 
 struct MessagesView: View {
   let store = Dependencies.shared.messages
+  let userStore = Dependencies.shared.users
 
   let channel: Channel
   @State private var newMessage = ""
@@ -37,6 +38,11 @@ struct MessagesView: View {
             Text(section.author.username)
               .font(.caption)
               .foregroundStyle(.secondary)
+
+            Image(systemName: "circle.fill")
+              .foregroundStyle(
+                userStore.presences[section.author.id] != nil ? Color.green : Color.red
+              )
           }
         }
       }
@@ -66,7 +72,6 @@ struct MessagesView: View {
       )
 
       try await supabase.from("messages").insert(message).execute()
-      await store.loadInitialMessages(channel.id)
       newMessage = ""
     } catch {
       dump(error)
