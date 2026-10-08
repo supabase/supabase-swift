@@ -14,8 +14,12 @@ because generated code has no reason to pay swift-syntax build cost and because 
 `PostgREST`, not in `PostgrestMacros`. This is the same contract the macro satisfies, reached the
 other way.
 
-**Tech Stack:** TypeScript, in the **postgres-meta** repository. This is the only stage that does not
-touch supabase-swift.
+**Tech Stack:** Swift, in **this repository**. The generator is a Swift executable that reads
+postgrest-typegen's `GeneratorMetadata` JSON document on standard input and writes the generated file
+to standard output, the same pattern Dart's `supabase_typegen` follows in supabase-flutter.
+
+**Linear:** SDK-2190, part of SDK-1641 (moving every bundled generator out of postgrest-typegen into
+its own SDK repository). It replaces SDK-1584 to SDK-1587.
 
 **Spec:** [`postgrest-v3.md`](./postgrest-v3.md) — §4.2 (the relation contract), §8.2 (what the
 generator must agree with). **Read §8.2 first**; it carries the type mapping and two requirements
@@ -27,23 +31,26 @@ contract is stable from stage 1 onward, and nothing generated uses `where`, embe
 
 ---
 
-## Cross-repository, and what that costs
+## Where it lives, and what that changes
 
-Implementation happens in [postgres-meta](https://github.com/supabase/postgres-meta), in
-`src/server/templates/swift.ts`. This plan and its Linear issue live here for visibility only.
+This plan originally targeted postgres-meta's `src/server/templates/swift.ts`. That template moved to
+`packages/postgrest-typegen/src/generation/swift.ts` in [supabase/sdk](https://github.com/supabase/sdk)
+when postgres-meta started consuming `@supabase/postgrest-typegen` (postgres-meta#1084), and
+postgrest-typegen no longer takes changes to its bundled generators: each one is moving into its own
+SDK repository (SDK-1641). So the rewrite happens here, in Swift, next to the protocols it targets.
 
-Three consequences worth planning around rather than discovering:
+What that changes compared to the original plan:
 
-- **CI cannot catch drift between the two repos.** supabase-swift's test suite never compiles
-  generator output, and postgres-meta's never links against `PostgREST`. Task 5 exists to bridge
-  that, and it is the most valuable task in the stage.
-- **The release cadences are independent.** A protocol change in `PostgREST` silently breaks the
-  generator until someone notices. Task 5's fixture is what turns "silently" into "at the next test
-  run".
-- **The user-facing command is `supabase gen types swift`**, in the Supabase CLI — a third
-  repository. §8.2 is explicit that it should use the same schema introspection as
-  `--lang typescript`. Confirm the CLI already routes `--lang swift` to postgres-meta before writing
-  the template, or the work lands unreachable.
+- **Drift between the generator and `PostgREST` becomes catchable in this repository's CI.** The
+  generator and the protocols change in the same pull request, and Task 5 compiles the generator's
+  output against `PostgREST` on every run.
+- **Introspection stays in postgrest-typegen.** The generator only consumes the `GeneratorMetadata`
+  document, which carries a `version` field and is described by a published JSON Schema
+  (`generatorMetadataJsonSchema`). Shape changes there are the remaining cross-repository risk.
+- **The user-facing command is still `supabase gen types swift`**, in the Supabase CLI. The CLI
+  resolves languages through the `@supabase/typegen` registry in supabase/sdk, so reaching this
+  generator is a registry entry plus a CLI dependency bump, with no CLI code change (Task 7). It uses
+  the same introspection as `--lang typescript`, as §8.2 requires.
 
 ## Global Constraints
 
@@ -54,7 +61,7 @@ Three consequences worth planning around rather than discovering:
 - Generated types are `public` when the consuming app expects them to cross a module boundary. That
   means the generator must emit `public` on the protocol witnesses too — a witness must be at least
   as accessible as its conformance. SDK-1516 hit exactly this with the macro.
-- Follow postgres-meta's own conventions for the template, not supabase-swift's.
+- Follow this repository's conventions (`AGENTS.md`) for the generator's own code.
 
 ---
 
@@ -64,14 +71,17 @@ Three consequences worth planning around rather than discovering:
 
 - [ ] **Step 1: Capture the current output**
 
-Run the existing Swift template against the `Tests/IntegrationTests/supabase` schema in this repo —
-it has tables, a view and enums, so it exercises most of the mapping — and commit the output as a
-fixture in postgres-meta. Whatever else changes, the diff against this baseline is the review.
+Run the existing Swift generator (`supabase gen types swift`, which today runs postgrest-typegen's
+bundled `swift.ts`) against the `Tests/IntegrationTests/supabase` schema in this repo — it has tables,
+a view and enums, so it exercises most of the mapping — and commit the output as a fixture here, next
+to the `GeneratorMetadata` document it was generated from. Whatever else changes, the diff against
+this baseline is the review.
 
 - [ ] **Step 2: Record what it gets right**
 
-The current template already emits `Codable` structs with `CodingKeys`. That part is reusable; the
-new work is the protocol conformances, `Insert`/`Update`, and the enum conformance in Task 3.
+The current generator already emits `Codable` structs with `CodingKeys`. That shape is reusable as a
+reference; the new work is the protocol conformances, `Insert`/`Update`, and the enum conformance in
+Task 3.
 
 - [ ] **Step 3: Note every place the output would not compile against v3**
 
@@ -84,7 +94,7 @@ guess here.
 ## Task 2: Emit the relation conformance
 
 **Files:**
-- Modify: `src/server/templates/swift.ts`
+- Create: a generator executable target in this package, reading `GeneratorMetadata` on standard input
 
 **Interfaces:**
 - Produces, per table or view:
@@ -114,7 +124,14 @@ public struct Todo: PostgrestWritableRelation, Decodable, Sendable, Hashable, Id
 }
 ```
 
-- [ ] **Step 1: Map the write capability from postgres-meta's metadata**
+- [ ] **Step 0: Read and validate the metadata**
+
+Decode the `GeneratorMetadata` JSON document from standard input and reject a `version` the
+generator does not support with a clear message. Generate the `Decodable` model from
+`generatorMetadataJsonSchema` or write it by hand; either way, test it against a document produced by
+the current postgrest-typegen release.
+
+- [ ] **Step 1: Map the write capability from the metadata**
 
 §4.2's table is the whole rule, and it is deliberately coarse:
 
@@ -125,9 +142,17 @@ public struct Todo: PostgrestWritableRelation, Decodable, Sendable, Hashable, Id
 | View with `is_updatable: false` | `PostgrestRelation` |
 | Materialized view | `PostgrestRelation` |
 
-`PostgresView` exposes only a single `is_updatable` boolean and no trigger flags, and
-`PostgresMaterializedView` exposes no write metadata at all. That is exactly why the design has one
+When this was written, `PostgresView` exposed only a single `is_updatable` boolean and no trigger
+flags, and `PostgresMaterializedView` exposed no write metadata at all. That is why the design has one
 write capability rather than three — do not try to infer insert-only or delete-only views.
+
+> **Changed since:** `GeneratorMetadata` views now also carry optional `is_insert_enabled` and
+> `is_update_enabled`, which account for `INSTEAD OF` triggers and unconditional `INSTEAD` rules
+> (`is_updatable` mirrors `information_schema.views` and ignores triggers). Materialized views still
+> carry no write metadata, and there is still no delete flag. The single write capability does not
+> have to change, but decide whether a view writable only through triggers should be a
+> `PostgrestWritableRelation`, and whether an insert-only or update-only view still maps to
+> `PostgrestRelation`.
 
 - [ ] **Step 2: Derive `Insert` and `Update` from column metadata**
 
@@ -161,7 +186,7 @@ becomes an opaque PostgREST 400 that never names the key path.
 ## Task 3: Postgres enums become `RawRepresentable` structs
 
 **Files:**
-- Modify: `src/server/templates/swift.ts`
+- Modify: the generator target from Task 2
 
 **Decided:** a Postgres enum generates a `RawRepresentable` **struct**, not a Swift `enum`.
 
@@ -232,15 +257,14 @@ degrading, failing — until its owner regenerates and ships an update. A non-fa
 
 - [ ] **Step 5: Put the migration note where Swift users will see it**
 
-The generated code lives in users' apps, so the primary note belongs in postgres-meta's release notes
-and the CLI changelog. Add an entry to supabase-swift's `V3_MIGRATION.md` as well — a Swift developer
-hitting a non-exhaustive `switch` after regenerating will look there first, not in another
-repository's release notes.
+The generated code lives in users' apps, so the primary note belongs in this repository's release
+notes, with a pointer in the CLI changelog. Add an entry to `V3_MIGRATION.md` as well — a Swift
+developer hitting a non-exhaustive `switch` after regenerating will look there first.
 
 ## Task 4: The type mapping
 
 **Files:**
-- Modify: `src/server/templates/swift.ts`
+- Modify: the generator target from Task 2
 
 §8.2's table is the contract:
 
@@ -255,7 +279,7 @@ repository's release notes.
 | `timestamptz`, `timestamp`, `date` | `Date` |
 | `json`, `jsonb` | `JSONValue` |
 | `_type` (array) | `[SwiftType]` |
-| custom enum | generated `enum` |
+| custom enum | generated `RawRepresentable` struct (Task 3) |
 
 - [ ] **Step 1: Implement the mapping and assert every row in a test**
 - [ ] **Step 2: Decide what an unmapped type does**
@@ -274,39 +298,44 @@ and §9 sets the precedent that server behavior gets checked rather than reasone
 
 ---
 
-## Task 5: A compile check that spans both repositories
+## Task 5: A compile check against `PostgREST`
 
 **Files:**
-- Create: a fixture schema and generated output committed to supabase-swift
-- Create: a test target or CI step that compiles it against `PostgREST`
+- Create: a fixture `GeneratorMetadata` document and its generated output, committed here
+- Create: a test target that compiles the generated output against `PostgREST`
 
 **This is the most valuable task in the stage.** Without it, nothing notices when a protocol change in
-`PostgREST` breaks the generator.
+`PostgREST` breaks the generator. With the generator in this repository, the check runs on every pull
+request that touches either side.
 
-- [ ] **Step 1: Commit generated output for a representative schema into supabase-swift**
+- [ ] **Step 1: Commit a representative `GeneratorMetadata` document**
 
-Tables, an updatable view, a materialized view, enums, arrays, nullable columns, a composite primary
-key. Generated by the real template, not hand-written to look like it.
+Tables, an updatable view, a view writable only through triggers, a materialized view, enums, arrays,
+nullable columns, a composite primary key. Produced by postgrest-typegen's introspection against a real
+database, not hand-written to look like it.
 
-- [ ] **Step 2: Compile it as part of `swift test`**
+- [ ] **Step 2: Regenerate and compile it as part of `swift test`**
 
-A target that only has to build is enough. The assertion is that it compiles at all — the same shape
-as SDK-1515's dependency-boundary test, where the file compiling *is* the assertion.
+Generate from the committed document in the test run, or check that the committed output matches the
+generator, then build it. A target that only has to build is enough. The assertion is that it compiles
+at all — the same shape as SDK-1515's dependency-boundary test, where the file compiling *is* the
+assertion.
 
 - [ ] **Step 3: Add a few behavioral assertions on top**
 
 `relationName`, a snake-case `columnName(for:)`, an `Insert` that omits the identity column, and a
 generated enum used as a filter operand. Those four cover the contract's load-bearing parts.
 
-- [ ] **Step 4: Decide how the fixture gets refreshed**
+- [ ] **Step 4: Decide how the metadata fixture gets refreshed**
 
-A committed fixture goes stale. Either a documented manual step in `AGENTS.md`, or a CI job that
-regenerates and diffs. Manual is acceptable if it is written down; undocumented is not.
+The committed document goes stale when the database schema or postgrest-typegen changes. Either a
+documented manual step in `AGENTS.md`, or a CI job that regenerates and diffs. Manual is acceptable if
+it is written down; undocumented is not.
 
 - [ ] **Step 5: Record the version pairing**
 
-The fixture is only meaningful against a known postgres-meta template version. Record it next to the
-fixture so a mismatch is diagnosable.
+Record the `GeneratorMetadata` `version` and the postgrest-typegen release the fixture came from next
+to it, so a mismatch is diagnosable.
 
 ---
 
@@ -349,17 +378,40 @@ Strike "Generated selection types" from the open-questions list and point it at 
 same way §5 now points at the stage plans. An open question that has been answered but left open
 gets re-litigated.
 
+## Task 7: Reach the generator from `supabase gen types swift`
+
+**Files (in supabase/sdk):**
+- Modify: `packages/typegen/src/languages/` (the `swift` registry entry)
+- Delete: `packages/postgrest-typegen/src/generation/swift.ts` and its tests
+
+- [ ] **Step 1: Decide how the CLI runs the generator in the user's project**
+
+The registry runs an external generator as a command in the user's project and pipes the metadata on
+standard input, like `dart run supabase_typegen`. Pick the Swift equivalent (for example a SwiftPM
+command plugin, or an executable product run with `swift run`) and the install hint shown when it is
+missing.
+
+- [ ] **Step 2: Switch the `swift` registry entry to the external command**
+
+postgres-meta only serves in-process languages, so this drops its hosted `/generators/swift` route.
+Check that nothing still calls it before switching.
+
+- [ ] **Step 3: Release `@supabase/typegen` and bump it in the CLI and in postgres-meta**
+
+- [ ] **Step 4: Delete the Swift generator from postgrest-typegen**
+
+A breaking release of that package.
+
 ## Out of scope for this plan
 
-- Anything in supabase-swift beyond Task 5's fixture and check.
-- The Supabase CLI's `--lang swift` routing, unless Task 1 finds it missing.
+- Introspection. It stays in postgrest-typegen; this plan only consumes its `GeneratorMetadata`.
 - `@Function` descriptors for database functions — stage 3 defines the shape; whether the generator
   emits them is a follow-up.
 - **Selections and embeds — decided out**, see Task 6. Revisit after the stage 1 alpha feedback.
 
 ## Verification checklist for the whole slice
 
-- [ ] postgres-meta's own test suite passes
+- [ ] The generator's tests pass in `swift test`
 - [ ] Generated output for the fixture schema compiles against `PostgREST` under Swift 6 language
       mode and `-enable-library-evolution`
 - [ ] Every row of §8.2's type mapping has a test
@@ -367,7 +419,8 @@ gets re-litigated.
 - [ ] A generated enum type is a `RawRepresentable` struct, works as a filter operand, and decodes a
       value absent from the schema it was generated from without throwing
 - [ ] The `switch`-exhaustiveness, failable-init and interpolation consequences are documented in both
-      postgres-meta's notes and `V3_MIGRATION.md`
+      this repository's release notes and `V3_MIGRATION.md`
 - [ ] A generated `Insert` omits identity columns and sends snake_case keys
 - [ ] Writing to a materialized view or a non-updatable view fails to compile
-- [ ] The fixture's refresh procedure and template version pairing are documented
+- [ ] The fixture's refresh procedure and `GeneratorMetadata` version pairing are documented
+- [ ] `supabase gen types swift` runs this generator, and postgrest-typegen no longer ships one
