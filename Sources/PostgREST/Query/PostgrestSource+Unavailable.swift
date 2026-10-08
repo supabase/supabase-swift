@@ -1,11 +1,11 @@
 //
-//  PostgrestTypedSource+Unavailable.swift
+//  PostgrestSource+Unavailable.swift
 //  PostgREST
 //
 //  Created by Guilherme Souza on 02/10/26.
 //
 
-// Unconstrained, unavailable twins of every constrained member of `PostgrestTypedSource`, so a
+// Unconstrained, unavailable twins of every constrained member of `PostgrestSource`, so a
 // misuse such as `client.from(ReadOnly.self).delete()` names the real problem (SDK-1621).
 //
 // Without them the solver blames `from`: "cannot convert value of type 'ReadOnly.Type' to
@@ -19,7 +19,7 @@
 // one. The typed mutation and selection tests would stop compiling if it did not. The diagnostic
 // itself is a compile failure, which a Swift Testing test cannot assert.
 
-extension PostgrestTypedSource {
+extension PostgrestSource {
   @available(
     *, unavailable,
     message: "delete() needs a PostgrestWritableRelation; this relation is read-only"
