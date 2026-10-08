@@ -15,11 +15,11 @@ public enum RealtimeChannelEvent: Sendable {
   /// server may retry. The associated value is the server's message.
   case postgresChangesFailed(String)
   /// Any other `system` message.
-  case serverMessage(SystemMessage)
+  case serverMessage(RealtimeSystemMessage)
 }
 
 /// A `system` message the SDK does not turn into a status or a typed event.
-public struct SystemMessage: Sendable, Hashable {
+public struct RealtimeSystemMessage: Sendable, Hashable {
   /// The status as the server sent it, such as `"ok"` or `"error"`. The server may add values.
   public var status: String
   /// The server's message text.

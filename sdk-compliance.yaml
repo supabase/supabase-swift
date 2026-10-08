@@ -454,11 +454,53 @@ supporting_symbols:
   - RealtimeChannelEvent.postgresChangesReady
   - RealtimeChannelEvent.postgresChangesFailed
   - RealtimeChannelEvent.serverMessage
-  - SystemMessage
-  - SystemMessage.status
-  - SystemMessage.message
-  - SystemMessage.extension
-  - SystemMessage.channel
+  - RealtimeSystemMessage
+  - RealtimeSystemMessage.status
+  - RealtimeSystemMessage.message
+  - RealtimeSystemMessage.extension
+  - RealtimeSystemMessage.channel
+  # Stream and payload types the v3 channel streams carry (SDK-2105). They support
+  # realtime.subscriptions.broadcast and realtime.subscriptions.postgres_changes, which stay
+  # not_implemented until the channel exposes the streams (SDK-2104).
+  - RealtimeStream
+  - RealtimeStream.Failure
+  - RealtimeStream.makeAsyncIterator
+  - RealtimeStream.Iterator
+  - RealtimeStream.Iterator.next
+  - BroadcastPayload
+  - BroadcastPayload.json
+  - BroadcastPayload.binary
+  - BroadcastMessage
+  - BroadcastMessage.event
+  - BroadcastMessage.payload
+  - BroadcastMessage.id
+  - BroadcastMessage.isReplayed
+  - BroadcastMessage.decode
+  - PostgresChange
+  - PostgresChange.Kind
+  - PostgresChange.Kind.insert
+  - PostgresChange.Kind.update
+  - PostgresChange.Kind.delete
+  - PostgresChange.kind
+  - PostgresChange.schema
+  - PostgresChange.table
+  - PostgresChange.commitTimestamp
+  - PostgresChange.columns
+  - PostgresChange.record
+  - PostgresChange.oldRecord
+  - PostgresChange.errors
+  - PostgresColumn
+  - PostgresColumn.name
+  - PostgresColumn.type
+  - PostgresRow
+  - PostgresRow.values
+  - PostgresRow.subscript
+  - PostgresRow.decode
+  - TypedPostgresChange
+  - TypedPostgresChange.raw
+  - TypedPostgresChange.kind
+  - TypedPostgresChange.oldRecord
+  - TypedPostgresChange.row
   - RealtimeError.ServerCode.timeoutOnRpcCall
   - RealtimeError.ServerCode.errorOnRpcCall
   - RealtimeError.ServerCode.postgresChangesSubscribeTimeout
