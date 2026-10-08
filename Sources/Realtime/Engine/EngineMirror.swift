@@ -17,6 +17,8 @@ package final class EngineMirror: Sendable {
     var channels: [String: RealtimeChannelStatus] = [:]
     var postgresChangeIDs: [String: [Int]] = [:]
     var heartbeats: [UUID: AsyncStream<HeartbeatEvent>.Continuation] = [:]
+    var inbound: [String: [UUID: AsyncStream<ChannelInbound>.Continuation]] = [:]
+    var inboundRemovalHandler: (@Sendable (String) -> Void)?
   }
 
   private let state = LockIsolated(State())
@@ -66,5 +68,47 @@ package final class EngineMirror: Sendable {
 
   func yieldHeartbeat(_ event: HeartbeatEvent) {
     for continuation in state.heartbeats.values { continuation.yield(event) }
+  }
+
+  /// Every message on the topic, unbounded. Registers before it returns; ending the iteration
+  /// removes the listener.
+  package func inbound(_ topic: String) -> AsyncStream<ChannelInbound> {
+    let (stream, continuation) = AsyncStream<ChannelInbound>.makeStream(
+      bufferingPolicy: .unbounded)
+    let id = UUID()
+    continuation.onTermination = { [weak self] _ in
+      self?.removeInbound(id, from: topic)
+    }
+    state.withValue { $0.inbound[topic, default: [:]][id] = continuation }
+    return stream
+  }
+
+  package func listenerCount(_ topic: String) -> Int {
+    state.inbound[topic]?.count ?? 0
+  }
+
+  package func yield(_ value: ChannelInbound, to topic: String) {
+    let continuations = state.inbound[topic] ?? [:]
+    for continuation in continuations.values { continuation.yield(value) }
+  }
+
+  package func finishInbound(_ topic: String) {
+    let continuations = state.withValue { $0.inbound.removeValue(forKey: topic) } ?? [:]
+    for continuation in continuations.values { continuation.finish() }
+  }
+
+  /// Called with the topic each time a consumer ends its iteration, so the engine can react to
+  /// a topic losing listeners. `finishInbound(_:)` does not call it.
+  package func setInboundRemovalHandler(_ handler: @escaping @Sendable (String) -> Void) {
+    state.withValue { $0.inboundRemovalHandler = handler }
+  }
+
+  private func removeInbound(_ id: UUID, from topic: String) {
+    let handler = state.withValue { state -> (@Sendable (String) -> Void)? in
+      guard state.inbound[topic]?.removeValue(forKey: id) != nil else { return nil }
+      if state.inbound[topic]?.isEmpty == true { state.inbound[topic] = nil }
+      return state.inboundRemovalHandler
+    }
+    handler?(topic)
   }
 }

@@ -261,7 +261,7 @@ struct RealtimeEngineTests {
   func transientJoinErrorRejoinsOnTheClockAndEmitsResubscribed() async throws {
     server.joinReply = .error(reason: "RealtimeRestarting: standby")
     await engine.addChannel(topic)
-    let inbound = await engine.inbound(topic)
+    let inbound = engine.inbound(topic)
     let events = LockIsolated([ChannelInbound]())
     let pump = Task { for await event in inbound { events.withValue { $0.append(event) } } }
     defer { pump.cancel() }
@@ -380,9 +380,9 @@ struct RealtimeEngineTests {
     try await engine.subscribe(topic)
     let events = LockIsolated([ChannelInbound]())
     let pump = Task {
-      for await event in await engine.inbound(topic) { events.withValue { $0.append(event) } }
+      for await event in engine.inbound(topic) { events.withValue { $0.append(event) } }
     }
-    await eventually { [engine] in await engine.listenerCount(topic) == 1 }
+    await eventually { [engine] in engine.listenerCount(topic) == 1 }
 
     server.pushFastlane(
       topic: topic, event: "broadcast", payload: ["type": "broadcast", "event": "ping"])
@@ -399,7 +399,7 @@ struct RealtimeEngineTests {
     #expect(second.event == "pong")
 
     pump.cancel()
-    await eventually { [engine] in await engine.listenerCount(topic) == 0 }
+    await eventually { [engine] in engine.listenerCount(topic) == 0 }
   }
 
   // MARK: - Outbound
@@ -527,7 +527,8 @@ struct RealtimeEngineTests {
 
   @Test
   func heartbeatsReportSentThenAcknowledgedWithTheLatency() async throws {
-    let events = collect(engine.heartbeats())
+    let (events, pump) = collect(engine.heartbeats())
+    defer { pump.cancel() }
     try await engine.connect()
 
     await advance(by: .seconds(25))
@@ -539,7 +540,8 @@ struct RealtimeEngineTests {
   @Test
   func heartbeatsReportSentThenTimedOutAfterTheHeartbeatTimeout() async throws {
     server.repliesToHeartbeats = false
-    let events = collect(engine.heartbeats())
+    let (events, pump) = collect(engine.heartbeats())
+    defer { pump.cancel() }
     try await engine.connect()
 
     await advance(by: .seconds(25))
@@ -550,10 +552,12 @@ struct RealtimeEngineTests {
     #expect(events.value == [.sent, .timedOut])
   }
 
-  private func collect(_ stream: AsyncStream<HeartbeatEvent>) -> LockIsolated<[HeartbeatEvent]> {
+  private func collect(
+    _ stream: AsyncStream<HeartbeatEvent>
+  ) -> (LockIsolated<[HeartbeatEvent]>, Task<Void, Never>) {
     let events = LockIsolated([HeartbeatEvent]())
-    Task { for await event in stream { events.withValue { $0.append(event) } } }
-    return events
+    let pump = Task { for await event in stream { events.withValue { $0.append(event) } } }
+    return (events, pump)
   }
 
   @Test
@@ -765,10 +769,10 @@ struct RealtimeEngineTests {
     try await engine.subscribe(topic)
     let events = LockIsolated([ChannelInbound]())
     let pump = Task {
-      for await event in await engine.inbound(topic) { events.withValue { $0.append(event) } }
+      for await event in engine.inbound(topic) { events.withValue { $0.append(event) } }
     }
     defer { pump.cancel() }
-    await eventually { [engine] in await engine.listenerCount(topic) == 1 }
+    await eventually { [engine] in engine.listenerCount(topic) == 1 }
 
     server.pushPresenceDiff(topic: topic, joins: ["u2": metas(["r2"])], leaves: [:])
     server.pushPresenceState(topic: topic, state: ["u1": metas(["r1"])])
