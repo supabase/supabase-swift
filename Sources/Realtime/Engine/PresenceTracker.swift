@@ -5,35 +5,81 @@
 //  Created by Guilherme Souza on 06/10/26.
 //
 
+public import Foundation
 package import Helpers
 
 /// One tracked client under a presence key. A key holds one entry per device or tab.
-package struct PresenceEntry: Sendable, Hashable {
+public struct PresenceEntry: Sendable, Hashable {
   /// The server's `phx_ref`.
-  package var ref: String
+  public var ref: String
   /// The `phx_ref` this entry replaced, on an update.
-  package var previousRef: String?
+  public var previousRef: String?
   /// The tracked payload, without the `phx_ref` fields.
-  package var payload: JSONObject
+  public var payload: JSONObject
 
   package init(ref: String, previousRef: String? = nil, payload: JSONObject) {
     self.ref = ref
     self.previousRef = previousRef
     self.payload = payload
   }
+
+  /// Decodes the tracked payload as `T`.
+  ///
+  /// - Throws: ``RealtimeError`` of kind ``RealtimeError/Kind/decoding`` when the payload does not
+  ///   decode.
+  public func decode<T: Decodable>(
+    as _: T.Type = T.self, decoder: JSONDecoder = .supabase()
+  ) throws -> T {
+    do {
+      return try JSONValue.object(payload).decode(as: T.self, decoder: decoder)
+    } catch {
+      throw RealtimeError(
+        kind: .decoding, message: "presence entry \(ref) did not decode as \(T.self)",
+        underlyingError: error)
+    }
+  }
 }
 
-package struct PresenceState: Sendable, Hashable {
-  package var entries: [String: [PresenceEntry]]
+/// Everyone present on a channel, by presence key.
+public struct PresenceState: Sendable, Hashable {
+  /// Every entry under each key. A key has one entry per device or tab that tracks with it.
+  public var entries: [String: [PresenceEntry]]
 
   package init(entries: [String: [PresenceEntry]] = [:]) {
     self.entries = entries
   }
+
+  /// Decodes the payload of every entry as `T`, keeping the keys.
+  ///
+  /// - Parameters:
+  ///   - decoder: The decoder for each payload.
+  ///   - ignoringUndecodable: When `true`, an entry that does not decode is skipped, and a key
+  ///     whose entries all fail is left out. When `false`, the first failure throws.
+  /// - Throws: ``RealtimeError`` of kind ``RealtimeError/Kind/decoding`` when
+  ///   `ignoringUndecodable` is `false` and an entry does not decode.
+  public func decode<T: Decodable>(
+    as _: T.Type, decoder: JSONDecoder = .supabase(), ignoringUndecodable: Bool = true
+  ) throws -> [String: [T]] {
+    var decoded: [String: [T]] = [:]
+    for (key, entries) in self.entries {
+      let values: [T] =
+        if ignoringUndecodable {
+          entries.compactMap { try? $0.decode(as: T.self, decoder: decoder) }
+        } else {
+          try entries.map { try $0.decode(as: T.self, decoder: decoder) }
+        }
+      if !values.isEmpty { decoded[key] = values }
+    }
+    return decoded
+  }
 }
 
-package struct PresenceChange: Sendable, Hashable {
-  package var joins: [String: [PresenceEntry]]
-  package var leaves: [String: [PresenceEntry]]
+/// The entries that joined and left in one presence update.
+public struct PresenceChange: Sendable, Hashable {
+  /// The entries that joined, by presence key. An updated entry joins with its new payload.
+  public var joins: [String: [PresenceEntry]]
+  /// The entries that left, by presence key.
+  public var leaves: [String: [PresenceEntry]]
 
   package init(joins: [String: [PresenceEntry]] = [:], leaves: [String: [PresenceEntry]] = [:]) {
     self.joins = joins

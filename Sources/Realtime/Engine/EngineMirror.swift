@@ -17,6 +17,7 @@ package final class EngineMirror: Sendable {
     var channels: [String: RealtimeChannelStatus] = [:]
     var channelStatuses: [String: [UUID: AsyncStream<RealtimeChannelStatus>.Continuation]] = [:]
     var postgresChangeIDs: [String: [Int]] = [:]
+    var presence: [String: PresenceState] = [:]
     var heartbeats: [UUID: AsyncStream<HeartbeatEvent>.Continuation] = [:]
     var inbound: [String: [UUID: AsyncStream<ChannelInbound>.Continuation]] = [:]
   }
@@ -34,6 +35,15 @@ package final class EngineMirror: Sendable {
 
   package func postgresChangeIDs(_ topic: String) -> [Int] {
     state.postgresChangeIDs[topic] ?? []
+  }
+
+  /// Empty for a topic the engine does not know.
+  package func presence(_ topic: String) -> PresenceState {
+    state.presence[topic] ?? PresenceState()
+  }
+
+  func setPresence(_ topic: String, _ presence: PresenceState) {
+    state.withValue { $0.presence[topic] = presence }
   }
 
   func setConnection(_ status: RealtimeConnectionStatus) {
@@ -75,6 +85,7 @@ package final class EngineMirror: Sendable {
     let statuses = state.withValue {
       $0.channels[topic] = nil
       $0.postgresChangeIDs[topic] = nil
+      $0.presence[topic] = nil
       return $0.channelStatuses.removeValue(forKey: topic) ?? [:]
     }
     for continuation in statuses.values { continuation.finish() }

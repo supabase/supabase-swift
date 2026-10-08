@@ -46,13 +46,15 @@ public final class RealtimeChannel: Sendable {
   /// The options the channel joins with.
   public let configuration: RealtimeChannelConfiguration
 
-  private let wireTopic: String
-  private let engine: RealtimeEngine
+  let wireTopic: String
+  let engine: RealtimeEngine
   private let rest: RealtimeREST
   private let http: HTTPClient
   /// The postgres bindings, in the order the streams asked for them. The server's ids for them
   /// come back in the same order.
   private let bindings = LockIsolated<[PostgresJoinConfig]>([])
+  /// Set once a presence stream exists, so every join asks the server for presence.
+  private let wantsPresence = LockIsolated(false)
 
   package init(
     topic: String, configuration: RealtimeChannelConfiguration, engine: RealtimeEngine,
@@ -108,12 +110,14 @@ public final class RealtimeChannel: Sendable {
   public func subscribe() async throws {
     if status.isSubscribed { return }
     let inbound = engine.inbound(wireTopic)
-    await engine.addChannel(
-      wireTopic, config: RealtimeJoinConfig(configuration, bindings: bindings.value))
+    var config = RealtimeJoinConfig(configuration, bindings: bindings.value)
+    config.presence.enabled = wantsPresence.value
+    await engine.addChannel(wireTopic, config: config)
     try await engine.subscribe(wireTopic)
     // A stream made while the join was in flight may have missed both the join and its own
     // update, since the status still read as unsubscribed.
     await engine.updateBindings(wireTopic, bindings.value)
+    if wantsPresence.value { await engine.enablePresence(wireTopic) }
     guard !bindings.value.isEmpty, !configuration.postgresChanges.waitForSubscription else {
       return
     }
@@ -150,6 +154,29 @@ public final class RealtimeChannel: Sendable {
     }
     if let failure {
       throw RealtimeError(kind: .server, message: failure)
+    }
+  }
+
+  // MARK: - Presence
+
+  /// Who is on the channel, and this client's own presence entry.
+  public var presence: RealtimePresence {
+    RealtimePresence(channel: self)
+  }
+
+  /// Makes every later join enable presence. On a channel that is joined or joining without it,
+  /// the channel joins again.
+  func enablePresence() {
+    let alreadyWanted = wantsPresence.withValue { wanted in
+      defer { wanted = true }
+      return wanted
+    }
+    guard !alreadyWanted else { return }
+    switch status {
+    case .unsubscribed:
+      break
+    case .subscribing, .subscribed, .resubscribing, .unsubscribing, .failed:
+      Task { [engine, wireTopic] in await engine.enablePresence(wireTopic) }
     }
   }
 
