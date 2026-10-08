@@ -18,7 +18,6 @@ package final class EngineMirror: Sendable {
     var postgresChangeIDs: [String: [Int]] = [:]
     var heartbeats: [UUID: AsyncStream<HeartbeatEvent>.Continuation] = [:]
     var inbound: [String: [UUID: AsyncStream<ChannelInbound>.Continuation]] = [:]
-    var inboundRemovalHandler: (@Sendable (String) -> Void)?
   }
 
   private let state = LockIsolated(State())
@@ -97,18 +96,10 @@ package final class EngineMirror: Sendable {
     for continuation in continuations.values { continuation.finish() }
   }
 
-  /// Called with the topic each time a consumer ends its iteration, so the engine can react to
-  /// a topic losing listeners. `finishInbound(_:)` does not call it.
-  package func setInboundRemovalHandler(_ handler: @escaping @Sendable (String) -> Void) {
-    state.withValue { $0.inboundRemovalHandler = handler }
-  }
-
   private func removeInbound(_ id: UUID, from topic: String) {
-    let handler = state.withValue { state -> (@Sendable (String) -> Void)? in
-      guard state.inbound[topic]?.removeValue(forKey: id) != nil else { return nil }
+    state.withValue { state in
+      state.inbound[topic]?[id] = nil
       if state.inbound[topic]?.isEmpty == true { state.inbound[topic] = nil }
-      return state.inboundRemovalHandler
     }
-    handler?(topic)
   }
 }

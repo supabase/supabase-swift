@@ -11,6 +11,8 @@
 /// before the call returns. Ending the iteration, by leaving the loop or cancelling the task,
 /// removes the underlying listener.
 ///
+/// Iterate a stream value once: two iterators made from one value split its elements.
+///
 /// Elements are buffered without a limit, so a consumer that stops iterating without ending the
 /// loop holds every later element in memory.
 public struct RealtimeStream<Element: Sendable>: AsyncSequence, Sendable {

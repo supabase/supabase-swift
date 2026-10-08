@@ -76,27 +76,13 @@ struct RealtimeStreamTests {
   }
 
   @Test
-  func listenerRemovalIsReportedToTheRemovalHandler() async {
-    let removed = LockIsolated([String]())
-    mirror.setInboundRemovalHandler { topic in removed.withValue { $0.append(topic) } }
-    let (_, task) = events(RealtimeStream(mirror.inbound(topic), transform: Self.eventName))
-
-    task.cancel()
-
-    #expect(await waitUntil { removed.value == [topic] })
-  }
-
-  @Test
-  func finishingTheTopicDoesNotReportARemoval() async {
-    let removed = LockIsolated([String]())
-    mirror.setInboundRemovalHandler { topic in removed.withValue { $0.append(topic) } }
+  func finishingTheTopicEndsTheStreamAndRemovesItsListeners() async {
     let stream = mirror.inbound(topic)
 
     mirror.finishInbound(topic)
     for await _ in stream {}
 
     #expect(mirror.listenerCount(topic) == 0)
-    #expect(removed.value.isEmpty)
   }
 
   @Test
