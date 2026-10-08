@@ -181,20 +181,17 @@ extension PostgrestMutation where Phase: PostgrestExecutableMutationPhase {
   }
 }
 
-// Kept in its own extension, rather than inside the `PostgrestMutation` body above, so SDK-1569
-// (#1425) can re-scope each modifier onto its phase without touching `returning()`/`execute()`.
-// `maxAffected(_:)` only makes sense once a mutation is scoped to the rows it will touch, so it
-// belongs on `PostgrestScopedPhase` (`update`/`delete` after a filter), alongside `execute()`
-// itself. `dryRun()` has no such restriction — PostgREST accepts `tx=rollback` on every write,
-// insert included — so it can stay available on every phase, including `PostgrestInsertPhase`.
-extension PostgrestMutation {
+// `maxAffected(_:)` bounds the rows a filter selected, so only a scoped mutation offers it.
+// `dryRun()` has no such limit: PostgREST accepts `tx=rollback` on every write.
+extension PostgrestMutation where Phase == PostgrestScopedPhase {
   /// Limits the number of rows the write may affect.
   ///
   /// When the number of affected rows would exceed `value`, PostgREST rejects the request and
   /// rolls back the transaction instead of applying a partial write. A safety net against an
   /// unintentionally broad update or delete.
   ///
-  /// Requires PostgREST v13 or later, and only applies to `update`, `delete`, and RPC calls.
+  /// Requires PostgREST v13 or later. Only a scoped `update` or `delete` offers it: PostgREST
+  /// rejects it on an insert.
   ///
   /// This replaces only the `handling=` and `max-affected=` preferences in the `Prefer` header,
   /// so it composes with whatever else the mutation already set there — ``returning()``,
@@ -208,7 +205,9 @@ extension PostgrestMutation {
     mutation.request.setPreference("max-affected=\(value)")
     return mutation
   }
+}
 
+extension PostgrestMutation {
   /// Runs the write, then rolls back its transaction instead of committing it.
   ///
   /// The write executes — including any trigger side effects — and the response reflects what
