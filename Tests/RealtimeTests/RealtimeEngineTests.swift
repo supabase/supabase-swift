@@ -711,7 +711,7 @@ struct RealtimeEngineTests {
   }
 
   @Test
-  func presenceStateAndDiffsUpdateTheTrackerAndFanOut() async throws {
+  func presenceStateAndDiffsUpdateTheTrackerAndFanOutWithTheRawMessages() async throws {
     await engine.addChannel(topic)
     try await engine.subscribe(topic)
     let events = LockIsolated([ChannelInbound]())
@@ -725,17 +725,24 @@ struct RealtimeEngineTests {
     server.pushPresenceState(topic: topic, state: ["u1": metas(["r1"])])
     server.pushPresenceDiff(topic: topic, joins: [:], leaves: ["u1": metas(["r1"])])
 
-    await eventually { events.value.count == 2 }
+    await eventually { events.value.count == 5 }
     let state = await engine.presenceState(topic)
     #expect(Set(state.entries.keys) == ["u2"])
-    guard case .presenceChanged(let first) = events.value[0],
-      case .presenceChanged(let second) = events.value[1]
-    else {
+    let raw = events.value.compactMap { event -> String? in
+      guard case .message(let message) = event else { return nil }
+      return message.event
+    }
+    #expect(raw == ["presence_diff", "presence_state", "presence_diff"])
+    let changes = events.value.compactMap { event -> PresenceChange? in
+      guard case .presenceChanged(let change) = event else { return nil }
+      return change
+    }
+    guard changes.count == 2 else {
       Issue.record("unexpected events \(events.value)")
       return
     }
-    #expect(Set(first.joins.keys) == ["u1", "u2"])
-    #expect(second.leaves["u1"]?.map(\.ref) == ["r1"])
+    #expect(Set(changes[0].joins.keys) == ["u1", "u2"])
+    #expect(changes[1].leaves["u1"]?.map(\.ref) == ["r1"])
   }
 
   @Test

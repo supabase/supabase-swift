@@ -912,9 +912,11 @@ package actor RealtimeEngine {
       applyChannel(message.topic, .serverErrored)
     case "presence_state":
       let change = channels[message.topic]?.presence.applyState(message.payload)
+      registry.inbound[message.topic]?.values.forEach { $0.yield(.message(message)) }
       change.map { yieldPresence($0, to: message.topic) }
     case "presence_diff":
       let change = channels[message.topic]?.presence.applyDiff(message.payload)
+      registry.inbound[message.topic]?.values.forEach { $0.yield(.message(message)) }
       if let change = change ?? nil { yieldPresence(change, to: message.topic) }
     default:
       if message.event == "system", message.payload["status"] == "error" {
