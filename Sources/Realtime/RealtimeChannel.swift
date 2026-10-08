@@ -48,6 +48,8 @@ public final class RealtimeChannel: Sendable {
 
   let wireTopic: String
   let engine: RealtimeEngine
+  /// This handle's identity on the engine. The client retires it on removal.
+  package let owner = ChannelOwner()
   private let rest: RealtimeREST
   private let http: HTTPClient
   /// The postgres bindings, in the order the streams asked for them. The server's ids for them
@@ -72,17 +74,17 @@ public final class RealtimeChannel: Sendable {
 
   /// The subscription status, read without waiting.
   public var status: RealtimeChannelStatus {
-    engine.mirror.channel(wireTopic)
+    engine.mirror.channel(wireTopic, owner: owner.id)
   }
 
   /// The subscription status, starting with the current one. Only the newest status is buffered.
   public var statusChanges: RealtimeStream<RealtimeChannelStatus> {
-    RealtimeStream(engine.mirror.channelStatuses(wireTopic))
+    RealtimeStream(engine.mirror.channelStatuses(wireTopic, owner: owner.id))
   }
 
   /// Rejoins and `system` messages from the server.
   public var events: RealtimeStream<RealtimeChannelEvent> {
-    RealtimeStream(engine.inbound(wireTopic), transform: RealtimeChannelEvent.init)
+    RealtimeStream(engine.inbound(wireTopic, owner: owner), transform: RealtimeChannelEvent.init)
   }
 
   // MARK: - Lifecycle
@@ -97,7 +99,8 @@ public final class RealtimeChannel: Sendable {
   /// "Subscribed to PostgreSQL" message.
   ///
   /// - Throws: ``RealtimeError`` with the server's reason when it refuses the join for good,
-  ///   ``RealtimeError/Kind/notSubscribed`` when ``unsubscribe()`` runs first, and
+  ///   ``RealtimeError/Kind/notSubscribed`` when ``unsubscribe()`` runs first or the channel was
+  ///   removed from its client (get a new one from ``RealtimeClient/channel(_:configure:)``), and
   ///   ``RealtimeError/Kind/server`` or ``RealtimeError/Kind/timeout`` when the postgres changes
   ///   bindings fail to attach. In the last two cases the channel stays joined, and the server may
   ///   still attach them later.
@@ -109,15 +112,15 @@ public final class RealtimeChannel: Sendable {
   /// ``RealtimeChannelEvent/resubscribed`` on ``events`` marks when that binding is live.
   public func subscribe() async throws {
     if status.isSubscribed { return }
-    let inbound = engine.inbound(wireTopic)
+    let inbound = engine.inbound(wireTopic, owner: owner)
     var config = RealtimeJoinConfig(configuration, bindings: bindings.value)
     config.presence.enabled = wantsPresence.value
-    await engine.addChannel(wireTopic, config: config)
-    try await engine.subscribe(wireTopic)
+    await engine.addChannel(wireTopic, owner: owner, config: config)
+    try await engine.subscribe(wireTopic, owner: owner)
     // A stream made while the join was in flight may have missed both the join and its own
     // update, since the status still read as unsubscribed.
-    await engine.updateBindings(wireTopic, bindings.value)
-    if wantsPresence.value { await engine.enablePresence(wireTopic) }
+    await engine.updateBindings(wireTopic, owner: owner, bindings.value)
+    if wantsPresence.value { await engine.enablePresence(wireTopic, owner: owner) }
     guard !bindings.value.isEmpty, !configuration.postgresChanges.waitForSubscription else {
       return
     }
@@ -127,7 +130,7 @@ public final class RealtimeChannel: Sendable {
   /// Leaves the channel. Returns once the server confirmed, the leave timed out, or the socket
   /// was already gone.
   public func unsubscribe() async {
-    await engine.unsubscribe(wireTopic)
+    await engine.unsubscribe(wireTopic, owner: owner)
   }
 
   private func awaitPostgresChanges(_ inbound: AsyncStream<ChannelInbound>) async throws {
@@ -176,7 +179,7 @@ public final class RealtimeChannel: Sendable {
     case .unsubscribed:
       break
     case .subscribing, .subscribed, .resubscribing, .unsubscribing, .failed:
-      Task { [engine, wireTopic] in await engine.enablePresence(wireTopic) }
+      Task { [engine, wireTopic, owner] in await engine.enablePresence(wireTopic, owner: owner) }
     }
   }
 
@@ -184,7 +187,7 @@ public final class RealtimeChannel: Sendable {
 
   /// Broadcast messages whose event is exactly `event`.
   public func broadcasts(event: String) -> RealtimeStream<BroadcastMessage> {
-    RealtimeStream(engine.inbound(wireTopic)) { inbound in
+    RealtimeStream(engine.inbound(wireTopic, owner: owner)) { inbound in
       BroadcastMessage(inbound).flatMap { $0.event == event ? $0 : nil }
     }
   }
@@ -367,7 +370,7 @@ public final class RealtimeChannel: Sendable {
     _ binding: PostgresJoinConfig,
     transform: @escaping @Sendable (PostgresChange) -> Element
   ) -> RealtimeStream<Element> {
-    let inbound = engine.inbound(wireTopic)
+    let inbound = engine.inbound(wireTopic, owner: owner)
     let (index, all) = bindings.withValue {
       $0.append(binding)
       return ($0.count - 1, $0)
@@ -376,7 +379,9 @@ public final class RealtimeChannel: Sendable {
     case .unsubscribed:
       break
     case .subscribing, .subscribed, .resubscribing, .unsubscribing, .failed:
-      Task { [engine, wireTopic] in await engine.updateBindings(wireTopic, all) }
+      Task { [engine, wireTopic, owner] in
+        await engine.updateBindings(wireTopic, owner: owner, all)
+      }
     }
     return RealtimeStream(inbound) { [engine, wireTopic, logger = engine.logger] inbound in
       guard case .message(let message) = inbound, message.event == "postgres_changes",

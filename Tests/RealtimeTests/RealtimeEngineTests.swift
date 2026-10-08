@@ -901,3 +901,46 @@ struct RealtimeEngineTests {
     #expect(error?.kind == .notSubscribed)
   }
 }
+
+/// The one handle the engine-level tests act as.
+let testOwner = ChannelOwner()
+
+extension RealtimeEngine {
+  func addChannel(_ topic: String, config: RealtimeJoinConfig = RealtimeJoinConfig()) async {
+    await addChannel(topic, owner: testOwner, config: config)
+  }
+
+  func subscribe(_ topic: String) async throws {
+    try await subscribe(topic, owner: testOwner)
+  }
+
+  func unsubscribe(_ topic: String) async {
+    await unsubscribe(topic, owner: testOwner)
+  }
+
+  func updateBindings(_ topic: String, _ bindings: [PostgresJoinConfig]) {
+    updateBindings(topic, owner: testOwner, bindings)
+  }
+
+  func enablePresence(_ topic: String) {
+    enablePresence(topic, owner: testOwner)
+  }
+
+  func removeChannel(_ topic: String) async {
+    await removeChannel(topic, owner: testOwner)
+  }
+
+  nonisolated func inbound(_ topic: String) -> AsyncStream<ChannelInbound> {
+    inbound(topic, owner: testOwner)
+  }
+}
+
+extension EngineMirror {
+  func channel(_ topic: String) -> RealtimeChannelStatus {
+    channel(topic, owner: testOwner.id)
+  }
+
+  func inbound(_ topic: String) -> AsyncStream<ChannelInbound> {
+    inbound(topic, owner: testOwner.id)
+  }
+}

@@ -313,6 +313,8 @@ struct RealtimeClientTests {
   func aChannelMadeWhileTheOldOneIsLeavingKeepsItsSubscription() async throws {
     let client = makeClient()
     let old = client.channel("room")
+    let oldEvents = old.events
+    let oldStatuses = old.statusChanges
     try await old.subscribe()
     server.dropsClientFrames = true
     let removal = Task { await client.removeChannel(old) }
@@ -328,6 +330,59 @@ struct RealtimeClientTests {
     try await subscription.value
     #expect(new.status.isSubscribed)
     #expect(client.channels.contains { $0 === new })
+    #expect(await hasFinished(oldEvents))
+    #expect(await hasFinished(oldStatuses))
+  }
+
+  @Test
+  func aRemovedHandleCannotSubscribeOrTouchTheLiveChannel() async throws {
+    let client = makeClient { $0.reconnect = .steps([.seconds(1)]) }
+    let old = client.channel("room")
+    try await old.subscribe()
+    await client.removeChannel(old)
+    let live = client.channel("room") { $0.broadcast.acknowledge = true }
+    try await live.subscribe()
+    let joinCount = joins.count
+
+    await #expect {
+      try await old.subscribe()
+    } throws: { error in
+      (error as? RealtimeError)?.kind == .notSubscribed
+    }
+    await old.unsubscribe()
+
+    #expect(joins.count == joinCount)
+    #expect(live.status.isSubscribed)
+    guard case .unsubscribed = old.status else {
+      Issue.record("expected the removed handle to read .unsubscribed, got \(old.status)")
+      return
+    }
+    // The next join still carries the live channel's config, not the removed handle's.
+    server.closeConnection(code: .goingAway, reason: nil)
+    await settle()
+    await clock.advance(by: .seconds(1))
+    #expect(await waitUntil { joins.count == joinCount + 1 })
+    let config = joins.last?.payload["config"]?.objectValue
+    #expect(config?["broadcast"]?.objectValue?["ack"] == true)
+  }
+
+  @Test
+  func presenceStartsEmptyForAChannelThatReplacesARemovedOne() async throws {
+    let client = makeClient()
+    let old = client.channel("room")
+    try await old.subscribe()
+    server.pushPresenceState(topic: "realtime:room", state: ["u1": ["metas": [["phx_ref": "r1"]]]])
+    #expect(await waitUntil { !old.presence.state.entries.isEmpty })
+
+    await client.removeChannel(old)
+    let new = client.channel("room")
+    try await new.subscribe()
+
+    #expect(new.presence.state.entries.isEmpty)
+    #expect(old.presence.state.entries.isEmpty)
+    server.pushPresenceState(topic: "realtime:room", state: ["u2": ["metas": [["phx_ref": "r2"]]]])
+    #expect(await waitUntil { new.presence.state.entries.keys.sorted() == ["u2"] })
+    #expect(old.presence.state.entries.isEmpty)
   }
 
   // MARK: - Auth
@@ -441,4 +496,15 @@ struct RealtimeClientTests {
     await #expect(throws: RealtimeError.self) { try await channel.subscribe() }
     #expect(!server.isConnected)
   }
+}
+
+/// Whether `stream` ends within two seconds.
+func hasFinished<Element>(_ stream: RealtimeStream<Element>) async -> Bool {
+  let finished = LockIsolated(false)
+  let drain = Task {
+    for await _ in stream {}
+    if !Task.isCancelled { finished.setValue(true) }
+  }
+  defer { drain.cancel() }
+  return await waitUntil(timeout: 2) { finished.value }
 }

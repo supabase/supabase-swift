@@ -24,6 +24,23 @@ package enum ChannelInbound: Sendable {
   case presenceChanged(PresenceChange, state: PresenceState)
 }
 
+/// The identity of one channel handle. Engine calls that create, join or remove channel state
+/// only act for the owner of the topic's record, and a retired owner can never create one, so a
+/// removed handle cannot touch the channel that replaced it.
+package final class ChannelOwner: Sendable {
+  package let id = UUID()
+  private let retired = LockIsolated(false)
+
+  package init() {}
+
+  /// Whether the handle was removed from its client.
+  package var isRetired: Bool { retired.value }
+
+  package func retire() {
+    retired.setValue(true)
+  }
+}
+
 package struct RealtimeEngineConfiguration: Sendable {
   package var url: URL
   package var headers: HTTPFields = [:]
@@ -69,6 +86,7 @@ package actor RealtimeEngine {
   }
 
   private struct ChannelRecord {
+    let owner: ChannelOwner
     var config: RealtimeJoinConfig
     var state: ChannelMachine.State = .unsubscribed
     var joinRef: String?
@@ -78,9 +96,6 @@ package actor RealtimeEngine {
     var rejoinTask: Task<Void, Never>?
     var lingerTask: Task<Void, Never>?
     var presence = PresenceTracker()
-    /// Set while `removeChannel` waits for the leave. `addChannel` clears it, which tells the
-    /// removal that a new handle took the topic over.
-    var isBeingRemoved = false
     var tokenPush = Throttle()
     var presencePush = Throttle()
   }
@@ -133,6 +148,8 @@ package actor RealtimeEngine {
   /// machine sent on its own).
   private var pendingReplies: [String: ReplySlot] = [:]
   private var connectWaiters: [CheckedContinuation<Void, any Error>] = []
+  /// `addChannel` calls waiting for a retired owner's record to go, by topic.
+  private var removalWaiters: [String: [CheckedContinuation<Void, Never>]] = [:]
 
   var pendingReplyCount: Int { pendingReplies.count }
   private var refCounter = 0
@@ -225,44 +242,55 @@ package actor RealtimeEngine {
 
   // MARK: - Channel API
 
-  /// Adds the channel, or replaces the config of a channel the engine already has. The new config
-  /// goes out with the next join.
-  package func addChannel(_ topic: String, config: RealtimeJoinConfig = RealtimeJoinConfig()) {
+  /// Adds the channel, or replaces the config of the owner's channel. The new config goes out
+  /// with the next join.
+  ///
+  /// When a retired owner still holds the topic, this waits until its removal finishes, then
+  /// installs a fresh record. A retired `owner`, or a topic another live owner holds, is a no-op.
+  package func addChannel(
+    _ topic: String, owner: ChannelOwner, config: RealtimeJoinConfig = RealtimeJoinConfig()
+  ) async {
+    while let record = channels[topic], record.owner !== owner, record.owner.isRetired,
+      !owner.isRetired
+    {
+      await withCheckedContinuation { removalWaiters[topic, default: []].append($0) }
+    }
+    guard !owner.isRetired else { return }
     if let record = channels[topic] {
-      channels[topic]?.config = config
-      if record.isBeingRemoved {
-        channels[topic]?.isBeingRemoved = false
-        channels[topic]?.presence = PresenceTracker()
-      }
+      if record.owner === owner { channels[topic]?.config = config }
       return
     }
-    channels[topic] = ChannelRecord(config: config)
+    channels[topic] = ChannelRecord(owner: owner, config: config)
+    mirror.install(topic, owner: owner.id)
     applyConnection(.channelAdded)
+  }
+
+  private func isOwner(_ owner: ChannelOwner, of topic: String) -> Bool {
+    channels[topic]?.owner === owner
   }
 
   /// Replaces the channel's postgres bindings. A joined or joining channel joins again with them.
   ///
   /// A channel only adds bindings, and each addition sends its snapshot from its own task, so a
   /// list no longer than the current one is unchanged or stale and is ignored.
-  package func updateBindings(_ topic: String, _ bindings: [PostgresJoinConfig]) {
-    guard let record = channels[topic], bindings.count > record.config.postgresChanges.count
+  package func updateBindings(
+    _ topic: String, owner: ChannelOwner, _ bindings: [PostgresJoinConfig]
+  ) {
+    guard let record = channels[topic], record.owner === owner,
+      bindings.count > record.config.postgresChanges.count
     else { return }
     channels[topic]?.config.postgresChanges = bindings
     applyChannel(topic, .bindingsChanged)
   }
 
-  package func removeChannel(_ topic: String) async {
-    guard channels[topic] != nil else { return }
-    channels[topic]?.isBeingRemoved = true
-    await unsubscribe(topic)
-    guard let record = channels[topic], record.isBeingRemoved else {
-      // Re-added during the leave: the new handle keeps the topic. A subscribe it made while the
-      // leave was in flight was ignored by the machine, so start it now.
-      if channels[topic]?.subscribeWaiters.isEmpty == false {
-        applyChannel(topic, .subscribeRequested)
-      }
+  /// Leaves and forgets the owner's channel, and finishes every stream of `owner`.
+  package func removeChannel(_ topic: String, owner: ChannelOwner) async {
+    guard isOwner(owner, of: topic) else {
+      mirror.removeChannel(topic, owner: owner.id)
       return
     }
+    await leave(topic)
+    guard isOwner(owner, of: topic) else { return }
     channels[topic]?.rejoinTask?.cancel()
     channels[topic]?.joinTask?.cancel()
     channels[topic]?.lingerTask?.cancel()
@@ -270,11 +298,11 @@ package actor RealtimeEngine {
     rejectSubscribe(
       topic, with: RealtimeError(kind: .notSubscribed, message: "channel \(topic) was removed"))
     channels[topic] = nil
-    mirror.removeChannel(topic)
-    mirror.finishInbound(topic)
+    mirror.removeChannel(topic, owner: owner.id)
     registry.channelStates[topic]?.values.forEach { $0.finish() }
     registry.channelStates[topic] = nil
     if channels.isEmpty { applyConnection(.lastChannelRemoved) }
+    removalWaiters.removeValue(forKey: topic)?.forEach { $0.resume() }
   }
 
   package func channelState(_ topic: String) -> ChannelMachine.State? {
@@ -288,9 +316,12 @@ package actor RealtimeEngine {
 
   /// Returns once the join is acknowledged. Throws the server's reason for a fatal join error,
   /// or `.notSubscribed` when the channel is unsubscribed before the join completes.
-  package func subscribe(_ topic: String) async throws {
-    guard channels[topic] != nil else {
-      throw RealtimeError(kind: .notSubscribed, message: "unknown channel \(topic)")
+  package func subscribe(_ topic: String, owner: ChannelOwner) async throws {
+    guard isOwner(owner, of: topic) else {
+      throw RealtimeError(
+        kind: .notSubscribed,
+        message: owner.isRetired
+          ? "channel \(topic) was removed" : "unknown channel \(topic)")
     }
     applyChannel(topic, .subscribeRequested)
     if channels[topic]?.state.isSubscribed == true { return }
@@ -299,7 +330,12 @@ package actor RealtimeEngine {
 
   /// Sends the leave and returns once the server replied, the reply timed out, or the socket
   /// was already gone.
-  package func unsubscribe(_ topic: String) async {
+  package func unsubscribe(_ topic: String, owner: ChannelOwner) async {
+    guard isOwner(owner, of: topic) else { return }
+    await leave(topic)
+  }
+
+  private func leave(_ topic: String) async {
     applyChannel(topic, .unsubscribeRequested)
     guard case .unsubscribing = channels[topic]?.state else { return }
     if let ref = channels[topic]?.pendingLeaveRef {
@@ -322,10 +358,12 @@ package actor RealtimeEngine {
     return stream
   }
 
-  /// Every message on the topic, unbounded. Registers before it returns; ending the iteration
-  /// removes the listener.
-  package nonisolated func inbound(_ topic: String) -> AsyncStream<ChannelInbound> {
-    mirror.inbound(topic)
+  /// Every message `owner` receives on the topic, unbounded. Registers before it returns; ending
+  /// the iteration removes the listener.
+  package nonisolated func inbound(_ topic: String, owner: ChannelOwner) -> AsyncStream<
+    ChannelInbound
+  > {
+    mirror.inbound(topic, owner: owner.id)
   }
 
   package nonisolated func listenerCount(_ topic: String) -> Int {
@@ -416,8 +454,9 @@ package actor RealtimeEngine {
 
   /// Joins again with presence enabled, unless the channel already joins with it. The server only
   /// sends `presence_state` to a join that enabled presence.
-  package func enablePresence(_ topic: String) {
-    guard let record = channels[topic], !record.config.presence.enabled else { return }
+  package func enablePresence(_ topic: String, owner: ChannelOwner) {
+    guard let record = channels[topic], record.owner === owner, !record.config.presence.enabled
+    else { return }
     channels[topic]?.config.presence.enabled = true
     applyChannel(topic, .bindingsChanged)
   }

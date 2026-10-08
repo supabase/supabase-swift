@@ -198,7 +198,7 @@ struct RealtimePresenceTests {
     server.pushPresenceState(topic: wireTopic, state: ["u1": metas([["phx_ref": "r1"]])])
     _ = await states.next()
 
-    await engine.removeChannel(wireTopic)
+    await engine.removeChannel(wireTopic, owner: channel.owner)
 
     #expect(channel.presence.state.entries.isEmpty)
   }

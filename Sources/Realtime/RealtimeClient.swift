@@ -174,7 +174,8 @@ public final class RealtimeClient: Sendable {
   /// Leaves `channel` and removes it from the client. Its streams finish.
   ///
   /// Does nothing for a channel that is not this client's current one for its topic: one already
-  /// removed, or one from another client.
+  /// removed, or one from another client. A removed channel cannot subscribe again; get a new one
+  /// from ``channel(_:configure:)``.
   ///
   /// The socket closes ``RealtimeClientOptions/disconnectOnEmptyChannelsAfter`` after the last
   /// channel is removed.
@@ -182,21 +183,26 @@ public final class RealtimeClient: Sendable {
     let isCurrent = channelsByTopic.withValue { channels in
       guard channels[channel.topic] === channel else { return false }
       channels[channel.topic] = nil
+      // Under the lock, so a new handle for the topic always finds this one retired.
+      channel.owner.retire()
       return true
     }
     guard isCurrent else { return }
-    await engine.removeChannel(channel.wireTopic)
+    await engine.removeChannel(channel.wireTopic, owner: channel.owner)
   }
 
   /// Leaves and removes every channel.
   public func removeAllChannels() async {
     let channels = channelsByTopic.withValue { channels in
       defer { channels = [:] }
+      for channel in channels.values { channel.owner.retire() }
       return Array(channels.values)
     }
     await withTaskGroup(of: Void.self) { group in
       for channel in channels {
-        group.addTask { [engine] in await engine.removeChannel(channel.wireTopic) }
+        group.addTask { [engine] in
+          await engine.removeChannel(channel.wireTopic, owner: channel.owner)
+        }
       }
     }
   }

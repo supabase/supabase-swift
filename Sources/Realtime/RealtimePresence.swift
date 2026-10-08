@@ -22,13 +22,14 @@ public struct RealtimePresence: Sendable {
   /// The presence set, read without waiting. It is empty until the server sends the set for the
   /// current join.
   public var state: PresenceState {
-    channel.engine.mirror.presence(channel.wireTopic)
+    channel.engine.mirror.presence(channel.wireTopic, owner: channel.owner.id)
   }
 
   /// The whole presence set after every update from the server.
   public var states: RealtimeStream<PresenceState> {
     channel.enablePresence()
-    return RealtimeStream(channel.engine.inbound(channel.wireTopic)) { inbound in
+    return RealtimeStream(channel.engine.inbound(channel.wireTopic, owner: channel.owner)) {
+      inbound in
       guard case .presenceChanged(_, let state) = inbound else { return nil }
       return state
     }
@@ -37,7 +38,8 @@ public struct RealtimePresence: Sendable {
   /// The entries that joined and left in every update from the server.
   public var changes: RealtimeStream<PresenceChange> {
     channel.enablePresence()
-    return RealtimeStream(channel.engine.inbound(channel.wireTopic)) { inbound in
+    return RealtimeStream(channel.engine.inbound(channel.wireTopic, owner: channel.owner)) {
+      inbound in
       guard case .presenceChanged(let change, _) = inbound else { return nil }
       return change
     }
