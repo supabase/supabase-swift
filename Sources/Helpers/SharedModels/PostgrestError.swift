@@ -49,6 +49,10 @@ public struct PostgrestError: SupabaseError {
     /// The SDK refused to send the request, e.g. RPC params that are not a JSON object for a
     /// `GET`, or two incompatible transforms on one query. Fix the call. No request was sent.
     public static let invalidRequest: Kind = "invalidRequest"
+    /// The access-token provider (`PostgrestClient.Configuration.accessToken`) threw, so the
+    /// request could not be authenticated and was not sent. ``PostgrestError/underlyingError`` is
+    /// the provider's error, for example an Auth refresh failure.
+    public static let accessToken: Kind = "accessToken"
   }
 
   /// The error body PostgREST returns for a rejected request, with its wire field names.

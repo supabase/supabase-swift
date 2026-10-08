@@ -85,10 +85,20 @@ public struct PostgrestRequest: Sendable {
     let configuration = client.configuration
     var request = httpRequest(for: configuration)
 
-    if let accessToken = configuration.accessToken, request.headerFields[.authorization] == nil,
-      let token = try await accessToken()
-    {
-      request.headerFields[.authorization] = "Bearer \(token)"
+    if let accessToken = configuration.accessToken, request.headerFields[.authorization] == nil {
+      let token: String?
+      do {
+        token = try await accessToken()
+      } catch {
+        throw PostgrestError(
+          kind: .accessToken,
+          message: "The access token provider failed, so the request was not sent.",
+          underlyingError: error
+        )
+      }
+      if let token {
+        request.headerFields[.authorization] = "Bearer \(token)"
+      }
     }
 
     let retries = retryEnabled ?? configuration.retryEnabled

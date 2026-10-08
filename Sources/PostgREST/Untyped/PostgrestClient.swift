@@ -141,6 +141,10 @@ public struct PostgrestClient: Sendable {
     /// closure. An `Authorization` header already present on the request — from `headers` above, or
     /// from an explicit `PostgrestRequestBuilder.setHeader("Authorization", ...)` call — always
     /// takes precedence over this closure's result.
+    ///
+    /// If the closure throws, the request is not sent and fails with a ``PostgrestError`` of kind
+    /// ``PostgrestError/Kind/accessToken``, carrying the thrown error in
+    /// ``PostgrestError/underlyingError``.
     public var accessToken: (@Sendable () async throws -> String?)?
 
     let logger: Logging.Logger
