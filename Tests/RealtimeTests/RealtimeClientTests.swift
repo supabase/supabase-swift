@@ -335,6 +335,56 @@ struct RealtimeClientTests {
   }
 
   @Test
+  func concurrentUnsubscribesBothReturnWhenTheLeaveTimesOut() async throws {
+    let client = makeClient()
+    let channel = client.channel("room")
+    try await channel.subscribe()
+    server.dropsClientFrames = true
+    let returned = LockIsolated(0)
+
+    for _ in 0..<2 {
+      Task {
+        await channel.unsubscribe()
+        returned.withValue { $0 += 1 }
+      }
+    }
+    await settle()
+    await clock.advance(by: .seconds(15))
+
+    #expect(await waitUntil(timeout: 2) { returned.value == 2 })
+  }
+
+  @Test(arguments: [false, true])
+  func unsubscribeRacingRemoveChannelBothReturnAndTheTopicCanBeReused(removeFirst: Bool)
+    async throws
+  {
+    let client = makeClient()
+    let channel = client.channel("room")
+    try await channel.subscribe()
+    server.dropsClientFrames = true
+    let returned = LockIsolated(0)
+    let calls: [@Sendable () async -> Void] = [
+      { await channel.unsubscribe() }, { await client.removeChannel(channel) },
+    ]
+
+    for call in removeFirst ? calls.reversed() : calls {
+      Task {
+        await call()
+        returned.withValue { $0 += 1 }
+      }
+      await settle()
+    }
+    server.dropsClientFrames = false
+    await clock.advance(by: .seconds(15))
+
+    #expect(await waitUntil(timeout: 2) { returned.value == 2 })
+    // A detached wait: a hung `addChannel` ignores cancellation, so `withTimeout` would hang too.
+    let next = client.channel("room")
+    Task { try await next.subscribe() }
+    #expect(await waitUntil(timeout: 2) { next.status.isSubscribed })
+  }
+
+  @Test
   func aRemovedHandleCannotSubscribeOrTouchTheLiveChannel() async throws {
     let client = makeClient { $0.reconnect = .steps([.seconds(1)]) }
     let old = client.channel("room")

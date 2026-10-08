@@ -92,6 +92,8 @@ package actor RealtimeEngine {
     var joinRef: String?
     var subscribeWaiters: [CheckedContinuation<Void, any Error>] = []
     var pendingLeaveRef: String?
+    /// Leaves that found another leave in flight, resumed once the channel stops unsubscribing.
+    var leaveWaiters: [CheckedContinuation<Void, Never>] = []
     var joinTask: Task<Void, Never>?
     var rejoinTask: Task<Void, Never>?
     var lingerTask: Task<Void, Never>?
@@ -290,6 +292,7 @@ package actor RealtimeEngine {
       return
     }
     await leave(topic)
+    defer { removalWaiters.removeValue(forKey: topic)?.forEach { $0.resume() } }
     guard isOwner(owner, of: topic) else { return }
     channels[topic]?.rejoinTask?.cancel()
     channels[topic]?.joinTask?.cancel()
@@ -297,12 +300,12 @@ package actor RealtimeEngine {
     resetThrottles(topic)
     rejectSubscribe(
       topic, with: RealtimeError(kind: .notSubscribed, message: "channel \(topic) was removed"))
+    channels[topic]?.leaveWaiters.forEach { $0.resume() }
     channels[topic] = nil
     mirror.removeChannel(topic, owner: owner.id)
     registry.channelStates[topic]?.values.forEach { $0.finish() }
     registry.channelStates[topic] = nil
     if channels.isEmpty { applyConnection(.lastChannelRemoved) }
-    removalWaiters.removeValue(forKey: topic)?.forEach { $0.resume() }
   }
 
   package func channelState(_ topic: String) -> ChannelMachine.State? {
@@ -336,6 +339,10 @@ package actor RealtimeEngine {
   }
 
   private func leave(_ topic: String) async {
+    if case .unsubscribing = channels[topic]?.state {
+      await withCheckedContinuation { channels[topic]?.leaveWaiters.append($0) }
+      return
+    }
     applyChannel(topic, .unsubscribeRequested)
     guard case .unsubscribing = channels[topic]?.state else { return }
     if let ref = channels[topic]?.pendingLeaveRef {
@@ -617,6 +624,11 @@ package actor RealtimeEngine {
     if let state = channels[topic]?.state, state.key != before {
       mirror.setChannel(topic, state.publicStatus)
       registry.channelStates[topic]?.values.forEach { $0.yield(state) }
+      if before == "unsubscribing" {
+        let waiters = channels[topic]?.leaveWaiters ?? []
+        channels[topic]?.leaveWaiters = []
+        waiters.forEach { $0.resume() }
+      }
     }
   }
 
@@ -833,6 +845,7 @@ package actor RealtimeEngine {
 
   /// Call in the same synchronous stretch as the `enqueue` so the reply cannot land before it.
   private func expectReply(_ ref: String) {
+    if case .waiting? = pendingReplies[ref] { return }
     pendingReplies[ref] = .expected
   }
 
