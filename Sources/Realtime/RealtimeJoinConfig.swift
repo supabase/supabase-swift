@@ -86,10 +86,7 @@ package struct ReplayOption: Encodable, Hashable, Sendable {
 /// ### Initialization
 /// - ``init(acknowledgeBroadcasts:receiveOwnBroadcasts:replay:replicationReady:)``
 package struct BroadcastJoinConfig: Encodable, Hashable, Sendable {
-  /// When `true`, the server acknowledges each broadcast message before delivering it.
-  ///
-  /// Useful in combination with a channel broadcast
-  /// to ensure delivery before continuing.
+  /// Sent as `broadcast.ack`: the server acknowledges each broadcast it receives.
   package var acknowledgeBroadcasts: Bool = false
 
   /// When `true`, broadcast messages are echoed back to the sender in addition to all other subscribers.
@@ -99,13 +96,8 @@ package struct BroadcastJoinConfig: Encodable, Hashable, Sendable {
 
   /// When set, the server replays broadcast messages starting from the given timestamp on join.
   package var replay: ReplayOption?
-  /// Instructs the server to emit a `system` event once the Postgres replication
-  /// connection backing this channel is established and ready to stream changes.
-  ///
-  /// Listen for it with a channel system callback (or the
-  /// channel system stream): the message's `status` is
-  /// `.ok` (message `"Replication connection established"`) on success, or
-  /// `.error` if the connection is not ready in time.
+  /// Sent as `broadcast.replication_ready`: the server emits a `system` event once the Postgres
+  /// replication connection is ready.
   package var replicationReady: Bool = false
 
   /// Creates a ``BroadcastJoinConfig``.

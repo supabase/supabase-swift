@@ -891,10 +891,8 @@ features:
     symbols:
       - SupabaseClientOptions.AuthOptions.accessToken
   client.authentication_integration.cross_client_token_sync:
-    status: implemented
-    note: "Automatic and always-on whenever AuthOptions.accessToken (third_party_auth) is nil: SupabaseClient listens to AuthClient.authStateChanges and pushes the current token to realtime/database/storage/functions. There is no separate opt-in symbol."
-    symbols:
-      - AuthClient.authStateChanges
+    status: not_implemented
+    note: "Returns with the v3 Realtime client in the Phase 2 stack (SDK-2108); the v2 listener that pushed Auth tokens to realtime was removed."
   client.authentication_integration.oauth_flow_type:
     status: implemented
     symbols:

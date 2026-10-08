@@ -378,7 +378,7 @@ public final class SupabaseClient: Sendable {
   /// each sub-client stores its middlewares for its whole lifetime: the cached
   /// ``functions`` sub-client is held in ``mutableState`` for the lifetime of the client, and a
   /// caller may hold any sub-client for that long too. Capturing `self` here would form a
-  /// `self -> sub-client -> middleware -> self` retain cycle that keeps ``deinit`` from ever
+  /// `self -> sub-client -> middleware -> self` retain cycle that keeps `deinit` from ever
   /// running.
   private var authenticatedHTTP: HTTPClientConfiguration {
     HTTPClientConfiguration(
