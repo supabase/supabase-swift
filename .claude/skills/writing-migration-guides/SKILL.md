@@ -40,8 +40,7 @@ upcoming major release), append a new `##` section to it. Only create the file w
 yet for that version. Once v`<N>` ships, the file stays as the historical record for that release;
 the next breaking change starts a new `V<N+1>_MIGRATION.md`.
 
-This is unrelated to one-off feature-migration guides like `docs/migrations/RealtimeV2 Migration
-Guide.md`, which document moving from an old API to a new parallel one, not a version bump —
+This is unrelated to one-off feature-migration guides under `docs/migrations/`, which document moving from an old API to a new parallel one, not a version bump —
 leave those as they are.
 
 Completion criterion: you know the exact file path, and whether you are creating it or appending
@@ -130,4 +129,4 @@ description.
 | Pseudocode in Before/After | Use real, compiling Swift from an actual call site |
 | Not saying whether it's a compile error | Always call it out — readers need to know whether their build will catch it or not |
 | Prose listing many renames | Use a `\| Before \| After \|` table |
-| Renaming an unrelated one-off guide (e.g. `docs/migrations/RealtimeV2 Migration Guide.md`) to fit the `V<N>_MIGRATION.md` pattern | Leave feature-migration guides alone; the versioned pattern is only for major-version breaking changes |
+| Renaming an unrelated one-off guide (under `docs/migrations/`) to fit the `V<N>_MIGRATION.md` pattern | Leave feature-migration guides alone; the versioned pattern is only for major-version breaking changes |
