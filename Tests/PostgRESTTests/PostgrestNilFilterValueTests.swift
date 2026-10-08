@@ -37,7 +37,7 @@ struct PostgrestNilFilterValueTests {
   func isNullSendsIsNull() async throws {
     let capture = QueryCapture()
     _ = try await capture.client.from("users").select().is("email", value: nil).execute()
-    #expect(capture.query?.contains("email=is.NULL") == true)
+    #expect(capture.query?.contains("email=is.null") == true)
   }
 
   /// The counterpart, via `not`.

@@ -8,21 +8,10 @@
 import Foundation
 import Helpers
 
-/// A filter on a relation.
-///
-/// Built inside a `where` closure by calling an operator method on a column, then composing the
-/// results with `&&`, `||` and `!`:
-///
-/// ```swift
-/// try await client.from(Todo.self)
-///   .select()
-///   .where { ($0.isDone.eq(false) && $0.priority.gt(3)) || $0.id.eq(7) }
-///   .execute()
-/// ```
-///
-/// A top-level `&&` renders as separate query parameters, `||` as one `or=(…)`, and an `&&`
-/// nested inside an `||` as `and(…)`.
-public struct PostgrestFilter<R: PostgrestRelation>: Sendable {
+/// One node of a filter tree, without the relation type: the typed ``PostgrestFilter`` wraps
+/// one, and the untyped ``PostgrestRequestBuilder`` builds one from a string column, so both
+/// render through the same code.
+indirect enum PostgrestFilterNode: Sendable {
   /// The right-hand side of a comparison, in the shape the operator method received it.
   ///
   /// Each shape has its own quoting rule inside `or=(…)`, so the shape is kept and the rule is
@@ -41,16 +30,34 @@ public struct PostgrestFilter<R: PostgrestRelation>: Sendable {
     case `is`(Bool?)
   }
 
-  indirect enum Node: Sendable {
-    case comparison(column: String, operator: PostgrestFilterOperator, operand: Operand)
+  case comparison(column: String, operator: PostgrestFilterOperator, operand: Operand)
 
-    /// Everything after the `=` as one string the caller wrote, sent as is in every position.
-    case raw(column: String, operand: String)
+  /// Everything after the `=` as one string the caller wrote, sent as is in every position.
+  case raw(column: String, operand: String)
 
-    case and([Node])
-    case or([Node])
-    case not(Node)
-  }
+  case and([PostgrestFilterNode])
+  case or([PostgrestFilterNode])
+  case not(PostgrestFilterNode)
+
+}
+
+/// A filter on a relation.
+///
+/// Built inside a `where` closure by calling an operator method on a column, then composing the
+/// results with `&&`, `||` and `!`:
+///
+/// ```swift
+/// try await client.from(Todo.self)
+///   .select()
+///   .where { ($0.isDone.eq(false) && $0.priority.gt(3)) || $0.id.eq(7) }
+///   .execute()
+/// ```
+///
+/// A top-level `&&` renders as separate query parameters, `||` as one `or=(…)`, and an `&&`
+/// nested inside an `||` as `and(…)`.
+public struct PostgrestFilter<R: PostgrestRelation>: Sendable {
+  typealias Node = PostgrestFilterNode
+  typealias Operand = PostgrestFilterNode.Operand
 
   var node: Node
 
@@ -131,7 +138,7 @@ prefix public func ! <R>(operand: PostgrestFilter<R>) -> PostgrestFilter<R> {
 
 // MARK: - Rendering
 
-extension PostgrestFilter.Operand {
+extension PostgrestFilterNode.Operand {
   /// The operand as sent at top level, where a value runs to the end of the parameter and needs
   /// no quoting.
   var topLevel: String {
@@ -161,10 +168,17 @@ extension PostgrestFilter.Operand {
 extension PostgrestFilter {
   /// The query items this filter contributes to a request.
   func queryItems() -> [URLQueryItem] {
-    Self.queryItems(for: node)
+    node.queryItems()
+  }
+}
+
+extension PostgrestFilterNode {
+  /// The query items this node contributes to a request.
+  func queryItems() -> [URLQueryItem] {
+    Self.queryItems(for: self)
   }
 
-  private static func queryItems(for node: Node) -> [URLQueryItem] {
+  private static func queryItems(for node: Self) -> [URLQueryItem] {
     switch node {
     case .comparison(let column, let `operator`, let operand):
       return [URLQueryItem(name: column, value: "\(`operator`.token).\(operand.topLevel)")]
@@ -209,7 +223,7 @@ extension PostgrestFilter {
   /// - A negated leaf puts `not.` after the column (`id.not.eq.2`); `not.` may only precede
   ///   `and`/`or` here. Negating a whole group is unaffected.
   /// - Double negation must collapse, or `!!a || b` renders `not.not.` and 400s.
-  private static func group(_ node: Node) -> String {
+  private static func group(_ node: Self) -> String {
     switch node {
     case .comparison(let column, let `operator`, let operand):
       return "\(column).\(`operator`.token).\(operand.grouped)"
