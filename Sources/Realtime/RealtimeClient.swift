@@ -82,8 +82,10 @@ public final class RealtimeClient: Sendable {
     configuration.connection.idleDisconnectAfter = options.disconnectOnEmptyChannelsAfter
     configuration.channel.rejoin = options.rejoin
     configuration.accessToken = options.accessToken
-    if let authorization = options.headers[.authorization], authorization.hasPrefix("Bearer ") {
-      configuration.initialAccessToken = String(authorization.dropFirst("Bearer ".count))
+    if let authorization = options.headers[.authorization],
+      authorization.lowercased().hasPrefix("bearer ")
+    {
+      configuration.initialAccessToken = String(authorization.dropFirst("bearer ".count))
     }
     configuration.logger = options.logger
     return configuration

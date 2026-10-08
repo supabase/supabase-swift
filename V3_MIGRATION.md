@@ -3953,8 +3953,9 @@ public. The old initializers with parameters are removed.
 | `timeout` (default 10 s) | `timeout` (default 15 s) |
 | *(none)* | `heartbeatTimeout`, `maximumMessageSize` |
 
-The authorization token is no longer read from `headers[.authorization]`. Use `accessToken` or
-`setAuth(_:)`. `setAuth(_:)` takes a non-defaulted `String?`; `nil` keeps the current token, and
+A `Bearer` token in `headers[.authorization]` (the scheme matches in any case) is the first
+token channels join with. The `accessToken` provider's result, or a `setAuth(_:)` call, replaces
+it. `setAuth(_:)` takes a non-defaulted `String?`; `nil` keeps the current token, and
 with an `accessToken` provider it asks the provider again.
 
 ```swift

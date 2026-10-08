@@ -612,6 +612,15 @@ struct RealtimeClientTests {
   }
 
   @Test
+  func theAuthorizationSchemeMatchesInAnyCase() async throws {
+    let client = makeClient { $0.headers[.authorization] = "bearer seeded" }
+
+    try await client.channel("room").subscribe()
+
+    #expect(joins.last?.payload["access_token"] == "seeded")
+  }
+
+  @Test
   func theProviderOverridesTheAuthorizationHeader() async throws {
     let client = makeClient {
       $0.headers[.authorization] = "Bearer seeded"
