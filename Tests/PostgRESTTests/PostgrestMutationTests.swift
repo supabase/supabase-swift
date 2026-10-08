@@ -322,4 +322,71 @@ struct PostgrestMutationTests {
     #expect(capture.bodyString == "[]")
     #expect(capture.query?.contains("columns") != true)
   }
+
+  @Test
+  func maxAffectedComposesWithReturning() async throws {
+    // The acceptance criterion from SDK-1638: neither preference may clobber the other.
+    let capture = QueryCapture(body: #"[{"id":1,"task":"done","is_done":true}]"#)
+    _ = try await capture.client.from(Todo.self)
+      .update { $0.isDone = true }.where { $0.id.eq(1) }
+      .maxAffected(5)
+      .returning()
+      .execute()
+    let prefer = capture.header("Prefer") ?? ""
+    #expect(prefer.contains("handling=strict"))
+    #expect(prefer.contains("max-affected=5"))
+    #expect(prefer.contains("return=representation"))
+  }
+
+  @Test
+  func maxAffectedCalledTwiceReplacesItsOwnValueOnly() async throws {
+    let capture = QueryCapture()
+    _ = try await capture.client.from(Todo.self)
+      .update { $0.isDone = true }.where { $0.id.eq(1) }
+      .maxAffected(1)
+      .maxAffected(5)
+      .execute()
+    let prefer = capture.header("Prefer") ?? ""
+    #expect(prefer.contains("max-affected=5"))
+    #expect(prefer.contains("max-affected=1") == false)
+    #expect(prefer.contains("handling=strict"))
+  }
+
+  @Test
+  func maxAffectedOnDelete() async throws {
+    let capture = QueryCapture()
+    _ = try await capture.client.from(Todo.self)
+      .delete().where { $0.id.eq(1) }
+      .maxAffected(1)
+      .execute()
+    let prefer = capture.header("Prefer") ?? ""
+    #expect(prefer.contains("handling=strict"))
+    #expect(prefer.contains("max-affected=1"))
+  }
+
+  @Test
+  func dryRunSendsTxRollback() async throws {
+    let capture = QueryCapture()
+    _ = try await capture.client.from(Todo.self)
+      .delete().where { $0.id.eq(1) }
+      .dryRun()
+      .execute()
+    #expect(capture.header("Prefer") == "return=minimal,tx=rollback")
+  }
+
+  @Test
+  func dryRunComposesWithReturningAndMaxAffected() async throws {
+    let capture = QueryCapture(body: #"[{"id":1,"task":"done","is_done":true}]"#)
+    _ = try await capture.client.from(Todo.self)
+      .update { $0.isDone = true }.where { $0.id.eq(1) }
+      .maxAffected(5)
+      .dryRun()
+      .returning()
+      .execute()
+    let prefer = capture.header("Prefer") ?? ""
+    #expect(prefer.contains("handling=strict"))
+    #expect(prefer.contains("max-affected=5"))
+    #expect(prefer.contains("tx=rollback"))
+    #expect(prefer.contains("return=representation"))
+  }
 }

@@ -181,6 +181,53 @@ extension PostgrestMutation where Phase: PostgrestExecutableMutationPhase {
   }
 }
 
+// `maxAffected(_:)` bounds the rows a filter selected, so only a scoped mutation offers it.
+// `dryRun()` has no such limit: PostgREST accepts `tx=rollback` on every write.
+extension PostgrestMutation where Phase == PostgrestScopedPhase {
+  /// Limits the number of rows the write may affect.
+  ///
+  /// When the number of affected rows would exceed `value`, PostgREST rejects the request and
+  /// rolls back the transaction instead of applying a partial write. A safety net against an
+  /// unintentionally broad update or delete.
+  ///
+  /// Requires PostgREST v13 or later. Only a scoped `update` or `delete` offers it: PostgREST
+  /// rejects it on an insert.
+  ///
+  /// This replaces only the `handling=` and `max-affected=` preferences in the `Prefer` header,
+  /// so it composes with whatever else the mutation already set there — ``returning()``,
+  /// ``dryRun()``, an upsert's `resolution=`, or a count.
+  ///
+  /// - Parameter value: The maximum number of rows this write may affect.
+  /// - Returns: A ``PostgrestMutation`` so calls can be chained.
+  public func maxAffected(_ value: Int) -> Self {
+    var mutation = self
+    mutation.request.setPreference("handling=strict")
+    mutation.request.setPreference("max-affected=\(value)")
+    return mutation
+  }
+}
+
+extension PostgrestMutation {
+  /// Runs the write, then rolls back its transaction instead of committing it.
+  ///
+  /// The write executes — including any trigger side effects — and the response reflects what
+  /// would have happened, but nothing is persisted. Useful for testing a mutation without
+  /// touching real data.
+  ///
+  /// Requires PostgREST's `db-tx-end` setting to allow a client-controlled rollback.
+  ///
+  /// This replaces only the `tx=` preference in the `Prefer` header, so it composes with
+  /// whatever else the mutation already set there — ``returning()``, ``maxAffected(_:)``, or a
+  /// count.
+  ///
+  /// - Returns: A ``PostgrestMutation`` so calls can be chained.
+  public func dryRun() -> Self {
+    var mutation = self
+    mutation.request.setPreference("tx=rollback")
+    return mutation
+  }
+}
+
 extension PostgrestSource where R: PostgrestWritableRelation {
   /// Inserts a row.
   ///

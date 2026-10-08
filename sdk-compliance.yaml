@@ -1304,6 +1304,7 @@ features:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.maxAffected
+      - PostgrestMutation.maxAffected
   # Cancellation is plain Swift structured concurrency — there is no dedicated
   # cancel()-style symbol to register. PostgrestCancellationTests pins the
   # behavior end to end (SDK-1640).
@@ -1362,6 +1363,7 @@ features:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.dryRun
+      - PostgrestMutation.dryRun
 
   database.configuration.access_token:
     status: implemented
