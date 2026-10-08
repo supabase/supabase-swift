@@ -37,7 +37,7 @@ struct DraftTable {
 
 @Table("hostile")
 struct Hostile {
-  var id: Int
+  @PrimaryKey var id: Int
   @Column("class") var `class`: Int
   @Column("default") var `default`: String?
   @Column("self") var selfColumn: Bool

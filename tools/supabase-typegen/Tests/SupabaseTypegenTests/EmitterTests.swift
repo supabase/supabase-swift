@@ -136,4 +136,89 @@ struct EmitterTests {
       result.standardError
         == "supabase-typegen: public.todos and schema todos both become the Swift type Todos\n")
   }
+
+  private func column(
+    hasDefault: Bool = false,
+    identity: IdentityGeneration? = nil,
+    isGenerated: Bool = false
+  ) -> DatabaseModel.Column {
+    DatabaseModel.Column(
+      name: "c", format: "int4", typeSchema: "pg_catalog", enumID: nil, hasDefault: hasDefault,
+      identityGeneration: identity, isGenerated: isGenerated, isNullable: false)
+  }
+
+  @Test
+  func markersFollowTheColumnMetadata() {
+    func markers(_ column: DatabaseModel.Column, key: Bool = false) -> [String] {
+      FilePlan.markers(of: column, isPrimaryKey: key)
+    }
+    #expect(markers(column()).isEmpty)
+    #expect(markers(column(), key: true) == ["PrimaryKey"])
+    #expect(markers(column(hasDefault: true)) == ["Default"])
+    #expect(markers(column(identity: .byDefault)) == ["Default"])
+    #expect(markers(column(identity: .always)) == ["Generated"])
+    #expect(markers(column(isGenerated: true)) == ["Generated"])
+    // A generated column's expression is its `default_value`; `@Generated` alone is enough.
+    #expect(markers(column(hasDefault: true, isGenerated: true)) == ["Generated"])
+    #expect(
+      markers(column(hasDefault: true, identity: .always), key: true) == [
+        "PrimaryKey", "Generated",
+      ]
+    )
+    #expect(markers(column(hasDefault: true), key: true) == ["PrimaryKey", "Default"])
+  }
+
+  /// The integration fixture's `updatable_view` with the given flags; `nil` removes the key.
+  private func tableAttribute(
+    isUpdatable: Bool, isInsertEnabled: Bool?, isUpdateEnabled: Bool?
+  ) -> String? {
+    let input = Fixture.integration { object in
+      var views = object["views"] as! [[String: Any]]
+      views[0]["is_updatable"] = isUpdatable
+      views[0]["is_insert_enabled"] = isInsertEnabled
+      views[0]["is_update_enabled"] = isUpdateEnabled
+      object["views"] = views
+    }
+    return run(arguments: []) { input }.standardOutput
+      .split(separator: "\n").first { $0.hasPrefix("@Table(\"updatable_view\"") }.map(String.init)
+  }
+
+  @Test(
+    arguments: [
+      (true, nil, nil, false), (false, nil, nil, true),
+      (false, true, nil, false), (false, nil, true, false),
+      (true, false, false, true), (false, true, true, false),
+    ] as [(Bool, Bool?, Bool?, Bool)]
+  )
+  func viewIsReadOnlyUnlessItAcceptsWrites(
+    isUpdatable: Bool, insert: Bool?, update: Bool?, readOnly: Bool
+  ) {
+    #expect(
+      tableAttribute(isUpdatable: isUpdatable, isInsertEnabled: insert, isUpdateEnabled: update)
+        == (readOnly ? #"@Table("updatable_view", readOnly: true)"# : #"@Table("updatable_view")"#)
+    )
+  }
+
+  @Test
+  func nullablePrimaryKeyIsADataErrorNamingTheColumn() {
+    let input = Fixture.integration { object in
+      var columns = object["columns"] as! [[String: Any]]
+      for index in columns.indices
+      where columns[index]["table"] as? String == "channels"
+        && columns[index]["name"] as? String == "id"
+      {
+        columns[index]["is_nullable"] = true
+      }
+      object["columns"] = columns
+    }
+    let result = run(arguments: []) { input }
+    #expect(
+      result
+        == RunResult(
+          exitCode: 65,
+          standardError: "supabase-typegen: public.channels.id is a primary key column but is "
+            + "nullable; @PrimaryKey cannot mark an Optional property\n"
+        )
+    )
+  }
 }

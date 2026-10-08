@@ -35,6 +35,8 @@ struct FilePlan {
     /// The ``SchemaPlan/typeName`` of the relation's schema, or `nil` for `public`.
     var schemaTypeName: String?
     var properties: [PropertyPlan]
+    /// Whether `@Table` gets `readOnly: true`: a relation that cannot be written to.
+    var readOnly: Bool
   }
 
   struct PropertyPlan {
@@ -44,12 +46,10 @@ struct FilePlan {
     /// The argument of `@Column`, or `nil` when `@Table` derives the column name from ``name``.
     var columnAttribute: String?
     var type: SwiftType
+    /// `@PrimaryKey`, `@Generated` and `@Default`, without the `@`, in that order.
+    var markers: [String]
   }
 
-  /// Two declarations that would get the same Swift type name because of schema prefixing.
-  struct TypeNameClash: Error, CustomStringConvertible {
-    var description: String
-  }
 }
 
 /// A Swift type the generator writes for a column.
@@ -76,7 +76,7 @@ indirect enum SwiftType: Equatable {
 }
 
 extension FilePlan {
-  init(_ model: DatabaseModel) throws(TypeNameClash) {
+  init(_ model: DatabaseModel) throws(DataError) {
     schemas = model.schemas.filter { $0 != "public" }
       .map { SchemaPlan(name: $0, typeName: Naming.typeName($0)) }
     relations = []
@@ -109,7 +109,7 @@ extension FilePlan {
         && (owners.contains { $0.namespace == nil } || Set(owners.map(\.namespace)).count > 1)
     }
     if !clashes.isEmpty {
-      throw TypeNameClash(
+      throw DataError(
         description: clashes.sorted { $0.key < $1.key }.map { name, owners in
           "\(owners.map(\.label).sorted().joined(separator: " and ")) both become the Swift type "
             + name
@@ -133,7 +133,8 @@ extension FilePlan {
           relation: relation,
           typeName: typeName,
           schemaTypeName: schemaTypeNames[relation.name.schema],
-          properties: properties(of: relation, qualified: qualified, model: model)
+          properties: try properties(of: relation, qualified: qualified, model: model),
+          readOnly: Self.isReadOnly(relation.kind)
         )
       )
     }
@@ -143,7 +144,19 @@ extension FilePlan {
     of relation: DatabaseModel.Relation,
     qualified: String,
     model: DatabaseModel
-  ) -> [PropertyPlan] {
+  ) throws(DataError) -> [PropertyPlan] {
+    // `@PrimaryKey` on an Optional property is a macro error, so stop here and name the column.
+    let nullableKeys = relation.columns.filter {
+      $0.isNullable && relation.primaryKey.contains($0.name)
+    }
+    if !nullableKeys.isEmpty {
+      throw DataError(
+        description: nullableKeys.map {
+          "\(qualified).\($0.name) is a primary key column but is nullable; "
+            + "@PrimaryKey cannot mark an Optional property"
+        }.joined(separator: "\n")
+      )
+    }
     let bases = relation.columns.map { column in
       let base = Naming.propertyName(column.name)
       let bare = Naming.unescaped(base)
@@ -166,9 +179,32 @@ extension FilePlan {
         column: column,
         name: name,
         columnAttribute: camelToSnakeCase(name) == column.name ? nil : column.name,
-        type: swiftType(of: column, qualified: "\(qualified).\(column.name)", model: model)
+        type: swiftType(of: column, qualified: "\(qualified).\(column.name)", model: model),
+        markers: Self.markers(of: column, isPrimaryKey: relation.primaryKey.contains(column.name))
       )
     }
+  }
+
+  /// A view is writable when PostgREST can insert or update through it (the model has already
+  /// applied the `is_updatable` fallback). A materialized view and a foreign table are not.
+  private static func isReadOnly(_ kind: DatabaseModel.Relation.Kind) -> Bool {
+    switch kind {
+    case .table: false
+    case .view(let isInsertEnabled, let isUpdateEnabled): !(isInsertEnabled || isUpdateEnabled)
+    case .materializedView, .foreignTable: true
+    }
+  }
+
+  /// `@Generated` wins over `@Default`: a generated column is absent from `Draft`, so a default
+  /// would add nothing, and `is_generated` columns carry their expression as `default_value`.
+  static func markers(of column: DatabaseModel.Column, isPrimaryKey: Bool) -> [String] {
+    var markers = isPrimaryKey ? ["PrimaryKey"] : []
+    if column.isGenerated || column.identityGeneration == .always {
+      markers.append("Generated")
+    } else if column.hasDefault || column.identityGeneration == .byDefault {
+      markers.append("Default")
+    }
+    return markers
   }
 
   /// `name2`, `name3`, … — the first one not in `taken`.
@@ -252,12 +288,7 @@ extension FilePlan {
           """
         ) {
           for property in relation.properties {
-            let attributes: AttributeListSyntax =
-              if let column = property.columnAttribute {
-                [.attribute("@Column(\(StringLiteralExprSyntax(content: column)))")]
-              } else {
-                []
-              }
+            let attributes = attributes(of: property)
             let name = TokenSyntax.identifier(property.name)
             DeclSyntax("\(attributes) \(access) var \(name): \(property.type.syntax)")
           }
@@ -276,12 +307,21 @@ extension FilePlan {
     return output
   }
 
+  private func attributes(of property: PropertyPlan) -> AttributeListSyntax {
+    var attributes = AttributeListSyntax(property.markers.map { .attribute("@\(raw: $0)") })
+    if let column = property.columnAttribute {
+      attributes.append(.attribute("@Column(\(StringLiteralExprSyntax(content: column)))"))
+    }
+    return attributes
+  }
+
   private func tableAttribute(_ relation: RelationPlan) -> AttributeSyntax {
     let name = StringLiteralExprSyntax(content: relation.relation.name.name)
+    let readOnly = relation.readOnly ? ", readOnly: true" : ""
     guard let schema = relation.schemaTypeName else {
-      return "@Table(\(name))"
+      return "@Table(\(name)\(raw: readOnly))"
     }
-    return "@Table(\(name), schema: \(TokenSyntax.identifier(schema)).self)"
+    return "@Table(\(name), schema: \(TokenSyntax.identifier(schema)).self\(raw: readOnly))"
   }
 
   /// Built in rather than read from a `.swift-format` file, so every machine prints the same file.

@@ -127,7 +127,7 @@ func run(arguments: [String], standardInput: () -> Data) -> RunResult {
   do {
     plan = try FilePlan(DatabaseModel(metadata, schemas: options.schemas))
     file = try plan.render(accessControl: options.accessControl)
-  } catch let error as FilePlan.TypeNameClash {
+  } catch let error as DataError {
     return RunResult(
       exitCode: ExitCode.dataError,
       standardError: error.description.split(separator: "\n").map { "supabase-typegen: \($0)\n" }
