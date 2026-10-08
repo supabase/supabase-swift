@@ -747,7 +747,7 @@ extension PostgrestMockerTests {
         try await sut
         .from("users")
         .select()
-        .fts("description", query: "programmer")
+        .textSearch("description", query: "programmer")
         .execute()
     }
 
