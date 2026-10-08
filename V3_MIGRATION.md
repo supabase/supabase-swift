@@ -1823,7 +1823,7 @@ Every sub-client now sends through one protocol, `ClientTransport`, behind an or
 `ClientMiddleware`. The two travel together in one value, `HTTPClientConfiguration`, which every
 client takes as a single `http:` parameter. `AuthClient`, `PostgrestClient` and `FunctionsClient`
 take `http:` directly, where they used to take a `fetch:` closure; `SupabaseStorageClient` and
-`RealtimeClientV2` receive the same value through `StorageClientConfiguration` and
+`RealtimeClient` receive the same value through `StorageClientConfiguration` and
 `RealtimeClientOptions`, which replace `StorageHTTPSession` and Realtime's `fetch:` closure.
 `SupabaseClient` gains `SupabaseClientOptions.GlobalOptions.http`, which it hands to every
 sub-client at once. All five types — `HTTPClientConfiguration`, `ClientTransport`,
@@ -2799,8 +2799,7 @@ the section above). Nothing replaces it for callers: use `channel.broadcasts(eve
 `channel.postgresChanges(...)`, `channel.presence` and `channel.events` for the data, and
 `WebSocketFrame` if you write a `WebSocketTransport`.
 
-This is a compile error wherever you name `RealtimeMessageV2`, `RealtimeMessageV2.EventType` or
-`RealtimeClientV2.onMessage`-style hooks.
+This is a compile error wherever you name `RealtimeMessageV2` or `RealtimeMessageV2.EventType`.
 
 ## `User.aud` is now `User.audience`
 
@@ -3875,7 +3874,7 @@ and yields `PostgresChange`, or by a typed overload that yields `TypedPostgresCh
 | `postgresChange(AnyAction.self, table:)` | `postgresChanges(table:)` (`event` defaults to `.all`) |
 | `action.record` (`JSONObject`) | `change.record` (`PostgresRow?`) |
 | `action.oldRecord` (`JSONObject`) | `change.oldRecord` (`PostgresRow?`) |
-| `action.decodeRecord(decoder:)` | `change.record?.decode(as: Row.self)` or `TypedPostgresChange.row()` |
+| `action.decodeRecord(as:decoder:)` | `change.record?.decode(as: Row.self)` or `TypedPostgresChange.row()` |
 | `AnyAction.insert(_)` / `.update(_)` / `.delete(_)` | `change.kind` is `.insert`, `.update` or `.delete` |
 
 ```swift
@@ -3951,9 +3950,8 @@ public. The old initializers with parameters are removed.
 | `reconnectDelay: Duration` | `reconnect: BackoffPolicy` |
 | `maxRetryAttempts: Int` | `rejoin: BackoffPolicy` |
 | `disconnectOnSessionLoss` | *(removed)* |
-| `apikey: String?` | `headers["apikey"]` |
 | `timeout` (default 10 s) | `timeout` (default 15 s) |
-| *(none)* | `heartbeatTimeout`, `connectOnSubscribe`, `handleAppLifecycle`, `maximumMessageSize` |
+| *(none)* | `heartbeatTimeout`, `maximumMessageSize` |
 
 The authorization token is no longer read from `headers[.authorization]`. Use `accessToken` or
 `setAuth(_:)`. `setAuth(_:)` takes a non-defaulted `String?`; `nil` keeps the current token, and
@@ -3976,14 +3974,15 @@ options.webSocketTransport = URLSessionWebSocketTransport(
 let client = RealtimeClient(url: realtimeURL, options: options)
 ```
 
-Initializer calls with arguments, `session:`, `logLevel:`, `reconnectDelay:`, `maxRetryAttempts:`
-and `apikey:` are compile errors. A removed `session:` also drops its delegate unless you pass it
+Initializer calls with arguments, `session:`, `logLevel:`, `reconnectDelay:`, and `maxRetryAttempts:`
+are compile errors. A removed `session:` also drops its delegate unless you pass it
 to `URLSessionWebSocketTransport`.
 
 `SupabaseClientOptions.realtime` keeps its name and now has this v3 `RealtimeClientOptions`
 type. Realtime-specific headers win over the headers `SupabaseClient` shares with every module.
-`options.realtime.logger` follows the rule in the logging section: setting it, even to
-`.logLevel`, counts as a custom logger, so the global logger is not used. `options.realtime.clock`
+`options.realtime.logger` follows the rule in the logging section: setting it counts as a
+custom logger even when it equals the default, and so does changing `.logLevel` on it, so the
+global logger is not used. `options.realtime.clock`
 is still replaced by `global.clock`.
 
 ### `RealtimeServerLogLevel` is a struct with a non-failable `init(rawValue:)`
@@ -4144,7 +4143,7 @@ let channel = supabase.channel("room") { $0.broadcast.receiveOwnMessages = true 
 try await supabase.realtime.connect()
 ```
 
-These are compile errors. Four behavior changes compile without change:
+These are compile errors. Five behavior changes compile without change:
 
 - The realtime client is created on first access to `supabase.realtime`, not when `SupabaseClient`
   is created.
@@ -4152,6 +4151,9 @@ These are compile errors. Four behavior changes compile without change:
   fails with `.unauthorized`.
 - Realtime-specific headers win over the umbrella headers.
 - `options.realtime.logger` is no longer replaced by the global logger once you set it.
+- Setting `options.realtime.accessToken` on `SupabaseClientOptions` now calls `reportIssue` when
+  `supabase.realtime` is first created, because `SupabaseClient` gives Realtime the Auth token
+  itself. The custom provider is still used.
 
 ### Removed error kinds and smaller changes
 
