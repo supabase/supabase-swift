@@ -966,6 +966,6 @@ extension EngineMirror {
   }
 
   func inbound(_ topic: String) -> AsyncStream<ChannelInbound> {
-    inbound(topic, owner: testOwner.id)
+    inbound(topic, owner: testOwner)
   }
 }

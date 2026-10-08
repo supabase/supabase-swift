@@ -16,8 +16,9 @@ import IssueReporting
 /// One client owns one WebSocket. Channels share it, and the client reconnects and rejoins them
 /// after a drop.
 ///
-/// Keep the client for as long as you use its channels. Releasing it closes the socket, and a
-/// channel handle that outlives it stays unsubscribed.
+/// Keep the client for as long as you use its channels. Releasing it closes the socket and
+/// finishes every stream of the client and its channels, and a channel handle that outlives it
+/// stays unsubscribed.
 public final class RealtimeClient: Sendable {
   let engine: RealtimeEngine
   private let rest: RealtimeREST

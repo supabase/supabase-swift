@@ -80,7 +80,7 @@ public final class RealtimeChannel: Sendable {
 
   /// The subscription status, starting with the current one. Only the newest status is buffered.
   public var statusChanges: RealtimeStream<RealtimeChannelStatus> {
-    RealtimeStream(engine.mirror.channelStatuses(wireTopic, owner: owner.id))
+    RealtimeStream(engine.mirror.channelStatuses(wireTopic, owner: owner))
   }
 
   /// Rejoins and `system` messages from the server.

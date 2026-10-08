@@ -483,6 +483,39 @@ struct RealtimeClientTests {
   }
 
   @Test
+  func streamsMadeOnARemovedHandleFinish() async throws {
+    let client = makeClient()
+    let channel = client.channel("room")
+    try await channel.subscribe()
+    await client.removeChannel(channel)
+
+    #expect(await hasFinished(channel.broadcasts(event: "ping")))
+    #expect(await hasFinished(channel.events))
+    #expect(await hasFinished(channel.statusChanges))
+    #expect(await hasFinished(channel.presence.states))
+  }
+
+  @Test
+  func aRemovedHandleStatusStreamEndsOnUnsubscribed() async throws {
+    let client = makeClient()
+    let channel = client.channel("room")
+    try await channel.subscribe()
+    await client.removeChannel(channel)
+
+    let stream = channel.statusChanges
+    let statuses = try await withTimeout(.seconds(2)) {
+      var statuses: [RealtimeChannelStatus] = []
+      for await status in stream { statuses.append(status) }
+      return statuses
+    }
+
+    guard statuses.count == 1, case .unsubscribed = statuses[0] else {
+      Issue.record("expected only .unsubscribed, got \(statuses)")
+      return
+    }
+  }
+
+  @Test
   func aRemovedHandleCannotSendOnTheLiveChannel() async throws {
     let client = makeClient()
     let old = client.channel("room")
@@ -644,6 +677,31 @@ struct RealtimeClientTests {
     #expect(await waitUntil { !channel.status.isSubscribed })
     await #expect(throws: RealtimeError.self) { try await channel.subscribe() }
     #expect(!server.isConnected)
+  }
+
+  @Test
+  func droppingTheClientFinishesEveryStream() async throws {
+    let channel: RealtimeChannel
+    let heartbeats: RealtimeStream<HeartbeatEvent>
+    let statuses: RealtimeStream<RealtimeConnectionStatus>
+    let channelStatuses: RealtimeStream<RealtimeChannelStatus>
+    let events: RealtimeStream<RealtimeChannelEvent>
+    do {
+      let client = makeClient()
+      heartbeats = client.heartbeats
+      statuses = client.statusChanges
+      channel = client.channel("room")
+      channelStatuses = channel.statusChanges
+      events = channel.events
+      try await channel.subscribe()
+    }
+
+    #expect(await hasFinished(heartbeats))
+    #expect(await hasFinished(statuses))
+    #expect(await hasFinished(channelStatuses))
+    #expect(await hasFinished(events))
+    #expect(await hasFinished(channel.broadcasts(event: "ping")))
+    #expect(await hasFinished(channel.statusChanges))
   }
 }
 

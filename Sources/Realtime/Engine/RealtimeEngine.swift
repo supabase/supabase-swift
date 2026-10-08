@@ -225,7 +225,8 @@ package actor RealtimeEngine {
     applyConnection(.wakeSignal)
   }
 
-  /// Stops the engine for good without waiting: cancels the supervisor and closes the socket.
+  /// Stops the engine for good without waiting: finishes every stream, cancels the supervisor and
+  /// closes the socket.
   /// The supervisor then moves the engine to `.disconnected`, and a later connect ends there
   /// at once. For a `deinit`, which cannot await.
   package nonisolated func shutdown() {
@@ -233,6 +234,7 @@ package actor RealtimeEngine {
       $0.isShutDown = true
       return ($0.supervisor, $0.socket)
     }
+    mirror.shutDown()
     supervisor?.cancel()
     if let socket {
       Task { await socket.close(code: .normalClosure, reason: nil) }
@@ -413,7 +415,7 @@ package actor RealtimeEngine {
   package nonisolated func inbound(_ topic: String, owner: ChannelOwner) -> AsyncStream<
     ChannelInbound
   > {
-    mirror.inbound(topic, owner: owner.id)
+    mirror.inbound(topic, owner: owner)
   }
 
   package nonisolated func listenerCount(_ topic: String) -> Int {
