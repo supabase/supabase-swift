@@ -134,6 +134,17 @@ struct RealtimeChannelTests {
   }
 
   @Test
+  func replayOnAPublicChannelThrowsBeforeAnyJoin() async {
+    let channel = makeChannel { $0.broadcast.replay = .init(since: Date(), limit: 10) }
+
+    let error = await #expect(throws: RealtimeError.self) { try await channel.subscribe() }
+
+    #expect(error?.isRetryable == false)
+    #expect(server.connectCount == 0)
+    #expect(joins.isEmpty)
+  }
+
+  @Test
   func broadcastBeforeSubscribeThrowsNotSubscribed() async {
     let channel = makeChannel()
 

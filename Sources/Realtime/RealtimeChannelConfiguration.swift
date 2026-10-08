@@ -35,7 +35,8 @@ public struct RealtimeChannelConfiguration: Sendable, Hashable {
     /// On a private channel the server does not reply when row level security denies the write,
     /// so a denied broadcast fails with a timeout.
     public var acknowledge = false
-    /// Messages to replay from history on join. Private channels only.
+    /// Messages to replay from history on join. Private channels only: on a public channel
+    /// ``RealtimeChannel/subscribe()`` throws before it joins.
     public var replay: Replay? = nil
     /// Whether the server sends a `system` message once its replication connection is ready.
     public var waitForReplication = false

@@ -99,7 +99,9 @@ public final class RealtimeChannel: Sendable {
   /// ``RealtimeChannelConfiguration/PostgresChanges/subscriptionTimeout`` for the server's
   /// "Subscribed to PostgreSQL" message.
   ///
-  /// - Throws: ``RealtimeError`` with the server's reason when it refuses the join for good,
+  /// - Throws: ``RealtimeError`` with the server's reason when it refuses the join for good, of
+  ///   kind ``RealtimeError/Kind/server`` before any join when
+  ///   ``RealtimeChannelConfiguration/Broadcast/replay`` is set on a public channel,
   ///   ``RealtimeError/Kind/notSubscribed`` when ``unsubscribe()`` runs first or the channel was
   ///   removed from its client (get a new one from ``RealtimeClient/channel(_:configure:)``), and
   ///   ``RealtimeError/Kind/server`` or ``RealtimeError/Kind/timeout`` when the postgres changes
@@ -113,6 +115,11 @@ public final class RealtimeChannel: Sendable {
   /// binding is live too. A stream made after it returned also makes the channel join again;
   /// ``RealtimeChannelEvent/resubscribed`` on ``events`` marks when that binding is live.
   public func subscribe() async throws {
+    if configuration.broadcast.replay != nil, !configuration.isPrivate {
+      throw RealtimeError(
+        kind: .server, message: "broadcast replay is only available on private channels",
+        serverCode: .unableToReplayMessages, isRetryable: false)
+    }
     if status.isSubscribed { return }
     let inbound = engine.inbound(wireTopic, owner: owner)
     var config = RealtimeJoinConfig(configuration, bindings: bindings.value)
