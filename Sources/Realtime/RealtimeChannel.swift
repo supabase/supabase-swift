@@ -349,13 +349,14 @@ public final class RealtimeChannel: Sendable {
   /// decode its record; a row that does not decode throws there and the stream goes on.
   ///
   /// - Parameters:
+  ///   - rowType: The type ``TypedPostgresChange/row()`` decodes the record as.
   ///   - event: The statements to receive.
   ///   - schema: The schema of the table.
   ///   - table: The table.
   ///   - filter: A filter the server applies to each row.
   ///   - decoder: The decoder ``TypedPostgresChange/row()`` uses.
   public func postgresChanges<Row: Decodable>(
-    of _: Row.Type,
+    of rowType: Row.Type,
     event: PostgresChangeEvent = .all,
     schema: String = "public",
     table: String,
