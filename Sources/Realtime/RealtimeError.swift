@@ -37,7 +37,7 @@ public struct RealtimeError: SupabaseError {
     }
 
     /// A subscribe, push, heartbeat or REST broadcast did not complete within the configured
-    /// timeout. Retry, or raise `RealtimeClientOptions.timeoutInterval` if it happens often.
+    /// timeout. Retry, or raise the timeout setting if it happens often.
     public static let timeout: Kind = "timeout"
     /// A send was attempted on a channel that is not subscribed. Call `subscribe()` first.
     public static let notSubscribed: Kind = "notSubscribed"
@@ -59,7 +59,7 @@ public struct RealtimeError: SupabaseError {
     /// A broadcast with `ack` was rejected because the payload is over the project's limit.
     public static let payloadTooLarge: Kind = "payloadTooLarge"
     /// Every subscribe attempt failed and the SDK gave up. Schedule a retry later, or raise
-    /// `RealtimeClientOptions.maxRetryAttempts`. Goes away with the v2 module (SDK-2109).
+    /// the maximum retry attempts setting. Goes away with the v2 module (SDK-2109).
     public static let maxRetryAttemptsReached: Kind = "maxRetryAttemptsReached"
     /// The server closed the channel while a subscribe was in flight. Goes away with the v2
     /// module (SDK-2109); v3 reports this as ``channelClosed``.

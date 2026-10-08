@@ -45,8 +45,6 @@ struct DefaultIsolationTests {
       let session = try await client.auth.signIn(email: "user@example.com", password: "password")
       _ = session.accessToken
       rows = try await client.from("table").select().execute().value
-      let channel = client.channel("room")
-      for await status in channel.statusChange { _ = status }
       try await client.storage.from("bucket").upload(path: "key", data: Data())
       _ = try await client.functions.invoke("function")
       let answer: Answer = try await client.functions.invoke(

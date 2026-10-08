@@ -12,7 +12,6 @@ import Testing
 
 @testable import Auth
 @testable import Functions
-@testable import Realtime
 @testable import Supabase
 
 #if canImport(FoundationNetworking)
@@ -66,7 +65,7 @@ final class AuthLocalStorageMock: AuthLocalStorage {
 @Suite
 struct SupabaseClientTests {
   @Test
-  func globalClockReachesAuthAndRealtime() {
+  func globalClockReachesAuth() {
     let clock = TestClock()
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
@@ -80,7 +79,6 @@ struct SupabaseClientTests {
     // Identity, not equality: `any Clock<Duration>` is not `Equatable`, and what matters is that
     // the very instance the caller passed is the one the sub-clients sleep on.
     #expect(client.auth.configuration.clock as AnyObject === clock)
-    #expect(client.realtimeV2.options.clock as AnyObject === clock)
   }
 
   @Test
@@ -105,9 +103,6 @@ struct SupabaseClientTests {
         ),
         functions: SupabaseClientOptions.FunctionsOptions(
           region: .apNortheast1
-        ),
-        realtime: RealtimeClientOptions(
-          headers: ["custom_realtime_header_key": "custom_realtime_header_value"]
         )
       )
     )
@@ -141,46 +136,8 @@ struct SupabaseClientTests {
 
     #expect(client.functions.configuration.region == .apNortheast1)
 
-    let realtimeURL = client.realtimeV2.url
-    #expect(realtimeURL.absoluteString == "https://project-ref.supabase.co/realtime/v1")
-
-    let realtimeOptions = client.realtimeV2.options
-    let expectedRealtimeHeader = client._headers.merging(with: [
-      .init("custom_realtime_header_key")!: "custom_realtime_header_value"
-    ]
-    )
-    expectNoDifference(realtimeOptions.headers, expectedRealtimeHeader)
-    #expect(realtimeOptions.logger.label == logger.label)
-
     #expect(!client.auth.configuration.automaticallyRefreshesToken)
     #expect(client.auth.configuration.storageKey == "sb-project-ref-auth-token")
-
-    #expect(
-      client.mutableState.listenForAuthEventsTask != nil,
-      "should listen for internal auth events"
-    )
-  }
-
-  @Test
-  func realtimeLoggerIsTaggedWithSystemMetadataEvenThoughGlobalLoggerOverridesIt() {
-    // Uses a plain Logger (not SwiftLogNoOpLogHandler) because a no-op handler's metadata
-    // subscript always reads back nil, which would make this assertion untestable.
-    let logger = Logging.Logger(label: "test")
-
-    let client = SupabaseClient(
-      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
-      supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
-        auth: SupabaseClientOptions.AuthOptions(
-          storage: AuthLocalStorageMock(),
-          automaticallyRefreshesToken: false
-        ),
-        global: SupabaseClientOptions.GlobalOptions(logger: logger)
-      )
-    )
-
-    let realtimeOptions = client.realtimeV2.options
-    #expect(realtimeOptions.logger[metadataKey: "system"] == "realtime")
   }
 
   @Test
@@ -216,101 +173,6 @@ struct SupabaseClientTests {
   #endif
 
   @Test
-  func defaultTransportPropagatedToRealtimeClient() {
-    let localStorage = AuthLocalStorageMock()
-    let client = SupabaseClient(
-      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
-      supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
-        auth: SupabaseClientOptions.AuthOptions(
-          storage: localStorage,
-          automaticallyRefreshesToken: false
-        )
-      )
-    )
-
-    #expect(
-      client.realtimeV2.options.http.transport is URLSessionTransport,
-      "the default URLSessionTransport should be propagated to Realtime client"
-    )
-    #expect(
-      client.realtimeV2.options.http.middlewares.contains { $0 is TraceContextMiddleware },
-      "SDK middlewares should be installed when the caller sets no transport"
-    )
-  }
-
-  @Test
-  func userProvidedRealtimeTransportIsNotOverridden() {
-    let localStorage = AuthLocalStorageMock()
-    let client = SupabaseClient(
-      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
-      supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
-        auth: SupabaseClientOptions.AuthOptions(
-          storage: localStorage,
-          automaticallyRefreshesToken: false
-        ),
-        realtime: RealtimeClientOptions(
-          http: .init(transport: ClosureTransport { _, _ in throw URLError(.cancelled) }))
-      )
-    )
-
-    #expect(
-      client.realtimeV2.options.http.transport is ClosureTransport,
-      "user-provided realtime transport should be preserved"
-    )
-    #expect(
-      client.realtimeV2.options.http.middlewares.isEmpty,
-      "middlewares should stay as the caller passed them when they set a transport"
-    )
-  }
-
-  @Test
-  func realtimeWebSocketSessionComesOnlyFromRealtimeOptions() {
-    let localStorage = AuthLocalStorageMock()
-    let httpSession = URLSession(configuration: .ephemeral)
-    let realtimeSpecificSession = URLSession(configuration: .default)
-    let client = SupabaseClient(
-      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
-      supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
-        auth: SupabaseClientOptions.AuthOptions(
-          storage: localStorage,
-          automaticallyRefreshesToken: false
-        ),
-        global: SupabaseClientOptions.GlobalOptions(
-          http: .init(transport: URLSessionTransport(session: httpSession))
-        ),
-        realtime: RealtimeClientOptions(session: realtimeSpecificSession)
-      )
-    )
-
-    #expect(
-      client.realtimeV2.options.session === realtimeSpecificSession,
-      "user-provided realtime session should be preserved"
-    )
-
-    let clientWithoutRealtimeSession = SupabaseClient(
-      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
-      supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
-        auth: SupabaseClientOptions.AuthOptions(
-          storage: localStorage,
-          automaticallyRefreshesToken: false
-        ),
-        global: SupabaseClientOptions.GlobalOptions(
-          http: .init(transport: URLSessionTransport(session: httpSession))
-        )
-      )
-    )
-
-    #expect(
-      clientWithoutRealtimeSession.realtimeV2.options.session == nil,
-      "the HTTP transport's URLSession must not leak into Realtime's WebSocket"
-    )
-  }
-
-  @Test
   func clientInitWithCustomAccessToken() async {
     let localStorage = AuthLocalStorageMock()
 
@@ -323,11 +185,6 @@ struct SupabaseClientTests {
           accessToken: { "jwt" }
         )
       )
-    )
-
-    #expect(
-      client.mutableState.listenForAuthEventsTask == nil,
-      "should not listen for internal auth events when using 3p authentication"
     )
 
     // Not asserting that `client.auth` reports an issue here (as the XCTest version of this
@@ -428,43 +285,6 @@ struct SupabaseClientTests {
   }
 
   @Test
-  func listenForAuthEventsTaskDoesNotRetainClient() async {
-    final class WeakBox: @unchecked Sendable {
-      weak var client: SupabaseClient?
-    }
-    let box = WeakBox()
-
-    // Narrow scope so ARC drops the last strong reference when it returns.
-    func scope() {
-      let client = SupabaseClient(
-        supabaseURL: URL(string: "https://project-ref.supabase.co")!,
-        supabaseKey: "PUBLISHABLE_KEY",
-        options: SupabaseClientOptions(
-          auth: SupabaseClientOptions.AuthOptions(
-            storage: AuthLocalStorageMock(),
-            automaticallyRefreshesToken: false
-          )
-        )
-      )
-      box.client = client
-
-      #expect(
-        client.mutableState.listenForAuthEventsTask != nil,
-        "test precondition: client should be listening for internal auth events"
-      )
-    }
-    scope()
-
-    // Let the auth-state-change plumbing drain before asserting.
-    await Task.megaYield()
-
-    #expect(
-      box.client == nil,
-      "SupabaseClient leaked: the listenForAuthEvents task retained self, preventing deinit."
-    )
-  }
-
-  @Test
   func subClientsDoNotRetainClient() async {
     final class WeakBox: @unchecked Sendable {
       weak var client: SupabaseClient?
@@ -490,7 +310,6 @@ struct SupabaseClientTests {
       // form a retain cycle (client -> mutableState -> cached sub-client -> closure -> client).
       _ = client.rest
       _ = client.functions
-      _ = client.realtimeV2
 
       // `storage` builds a fresh, uncached `SupabaseStorageClient` on every access (see
       // `SupabaseClient.storage`), so discarding the result here can't exercise the same
@@ -702,7 +521,6 @@ struct SupabaseClientTests {
       let entry = try #require(seen.value.first { $0.path.hasPrefix(prefix) }, "\(prefix)")
       #expect(entry.timeout == .seconds(7), "\(prefix)")
     }
-    #expect(client.realtimeV2.options.http.timeout == .seconds(7))
   }
 
   @Test
@@ -736,24 +554,6 @@ struct SupabaseClientTests {
     #expect(request.headerFields[.tag] == "yes")
   }
 
-  @Test
-  func realtimeKeepsCallerMiddlewaresWhenSDKInstallsItsOwn() {
-    let client = SupabaseClient(
-      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
-      supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
-        auth: SupabaseClientOptions.AuthOptions(
-          storage: AuthLocalStorageMock(),
-          automaticallyRefreshesToken: false
-        ),
-        realtime: RealtimeClientOptions(http: .init(middlewares: [TagMiddleware()]))
-      )
-    )
-
-    let middlewares = client.realtimeV2.options.http.middlewares
-    #expect(middlewares.contains { $0 is TagMiddleware })
-    #expect(middlewares.contains { $0 is TraceContextMiddleware })
-  }
 }
 
 /// Stamps `X-Tag` on every request and records what it saw, so tests can assert both that a
