@@ -815,14 +815,13 @@ struct RealtimeEngineTests {
 
   @Test
   func trackSendsThePayloadAndRejoinResendsIt() async throws {
-    await engine.addChannel(topic)
+    await engine.addChannel(topic, config: presenceEnabled)
     try await engine.subscribe(topic)
 
     try await engine.trackPresence(topic, payload: ["name": "ana"])
     await eventually { [self] in presencePushes.count == 1 }
     #expect(presencePushes[0].payload["event"] == "track")
     #expect(presencePushes[0].payload["payload"] == ["name": "ana"])
-    #expect(joins[0].payload["config"]?.objectValue?["presence"]?.objectValue?["enabled"] == false)
 
     server.errorChannel(topic: topic)
     await advance(by: .seconds(1))
@@ -835,7 +834,7 @@ struct RealtimeEngineTests {
 
   @Test
   func rejoinCancelsTheOldPresenceWindow() async throws {
-    await engine.addChannel(topic)
+    await engine.addChannel(topic, config: presenceEnabled)
     try await engine.subscribe(topic)
     try await engine.trackPresence(topic, payload: ["n": 1])
     await eventually { [self] in presencePushes.count == 1 }
@@ -855,7 +854,7 @@ struct RealtimeEngineTests {
 
   @Test
   func trackCallsAreCoalescedToTheNewestPayloadInsideTheWindow() async throws {
-    await engine.addChannel(topic)
+    await engine.addChannel(topic, config: presenceEnabled)
     try await engine.subscribe(topic)
 
     try await engine.trackPresence(topic, payload: ["n": 1])
@@ -875,7 +874,7 @@ struct RealtimeEngineTests {
 
   @Test
   func untrackSendsUntrackAndStopsTheRejoinResend() async throws {
-    await engine.addChannel(topic)
+    await engine.addChannel(topic, config: presenceEnabled)
     try await engine.subscribe(topic)
     try await engine.trackPresence(topic, payload: ["n": 1])
     await eventually { [self] in presencePushes.count == 1 }
@@ -904,6 +903,13 @@ struct RealtimeEngineTests {
 
 /// The one handle the engine-level tests act as.
 let testOwner = ChannelOwner()
+
+/// A join config with presence on, so a track goes out at once instead of rejoining first.
+let presenceEnabled: RealtimeJoinConfig = {
+  var config = RealtimeJoinConfig()
+  config.presence.enabled = true
+  return config
+}()
 
 extension RealtimeEngine {
   func addChannel(_ topic: String, config: RealtimeJoinConfig = RealtimeJoinConfig()) async {

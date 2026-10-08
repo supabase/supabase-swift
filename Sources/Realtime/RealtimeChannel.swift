@@ -55,8 +55,9 @@ public final class RealtimeChannel: Sendable {
   /// The postgres bindings, in the order the streams asked for them. The server's ids for them
   /// come back in the same order.
   private let bindings = LockIsolated<[PostgresJoinConfig]>([])
-  /// Set once a presence stream exists, so every join asks the server for presence.
-  private let wantsPresence = LockIsolated(false)
+  /// Set once a presence stream exists or `track` was called, so every join asks the server for
+  /// presence.
+  let wantsPresence = LockIsolated(false)
 
   package init(
     topic: String, configuration: RealtimeChannelConfiguration, engine: RealtimeEngine,

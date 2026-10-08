@@ -76,6 +76,7 @@ struct RealtimePresenceTests {
   @Test
   func trackSendsTheTrackPushAndResolvesOnTheReply() async throws {
     let channel = makeChannel()
+    _ = channel.presence.states
     try await channel.subscribe()
 
     try await channel.presence.track(User(name: "ana"))
@@ -99,6 +100,7 @@ struct RealtimePresenceTests {
   @Test
   func trackInsideTheWindowReturnsOnceQueued() async throws {
     let channel = makeChannel()
+    _ = channel.presence.states
     try await channel.subscribe()
     try await channel.presence.track(User(name: "a"))
 
@@ -109,6 +111,69 @@ struct RealtimePresenceTests {
     await clock.advance(by: .seconds(6))
     await settle()
     #expect(presencePushes.last?.payload["payload"] == ["name": "b"])
+  }
+
+  @Test
+  func trackOnAChannelJoinedWithoutPresenceRejoinsWithItThenSendsTheTrack() async throws {
+    let channel = makeChannel()
+    let events = channel.events
+    try await channel.subscribe()
+
+    try await channel.presence.track(User(name: "ana"))
+
+    #expect(joins.map(presenceEnabled) == [false, true])
+    let pushed = await waitUntil { [self] in presencePushes.count == 1 }
+    #expect(pushed)
+    await settle()
+    let order = server.sentMessages.map(\.event).filter { $0 == "phx_join" || $0 == "presence" }
+    #expect(order == ["phx_join", "phx_join", "presence"])
+    #expect(presencePushes.first?.payload["payload"] == ["name": "ana"])
+    let resubscribed = try await withTimeout(.seconds(2)) {
+      for await event in events { if case .resubscribed = event { return true } }
+      return false
+    }
+    #expect(resubscribed)
+  }
+
+  @Test
+  func aTrackBeforeSubscribeStillEnablesPresenceOnTheJoin() async throws {
+    let channel = makeChannel()
+    await #expect(throws: RealtimeError.self) {
+      try await channel.presence.track(User(name: "ana"))
+    }
+
+    try await channel.subscribe()
+
+    #expect(joins.map(presenceEnabled) == [true])
+  }
+
+  @Test
+  func aRefusedTrackIsNotResentAfterARejoin() async throws {
+    let channel = makeChannel()
+    _ = channel.presence.states
+    try await channel.subscribe()
+    server.dropsClientFrames = true
+    let track = Task { try await channel.presence.track(User(name: "ana")) }
+    let pushed = await waitUntil { [self] in presencePushes.count == 1 }
+    #expect(pushed)
+    let push = try #require(presencePushes.first)
+
+    server.push(
+      RealtimeMessageV2(
+        joinRef: push.joinRef, ref: push.ref, topic: wireTopic, event: "phx_reply",
+        payload: ["status": "error", "response": ["reason": "presence refused"]]))
+
+    await #expect(throws: RealtimeError.self) { try await track.value }
+    server.dropsClientFrames = false
+    server.errorChannel(topic: wireTopic)
+    await settle()
+    await clock.advance(by: .seconds(1))
+    let rejoined = await waitUntil { [engine, wireTopic] in
+      await engine.channelState(wireTopic)?.isSubscribed == true
+    }
+    #expect(rejoined)
+    await settle()
+    #expect(presencePushes.count == 1)
   }
 
   @Test

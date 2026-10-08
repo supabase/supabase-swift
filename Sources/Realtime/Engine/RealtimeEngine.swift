@@ -478,14 +478,32 @@ package actor RealtimeEngine {
   /// rate window are coalesced to the newest payload; an unchanged payload is not resent.
   ///
   /// Returns once the server acknowledged the push, or at once when the push was coalesced or
-  /// dropped as unchanged.
+  /// dropped as unchanged. On a channel joined without presence, it joins again with presence
+  /// enabled and returns once that join succeeds; the rejoin sends the payload, so other clients
+  /// see one join.
   package func trackPresence(_ topic: String, owner: ChannelOwner, payload: JSONObject)
     async throws
   {
     _ = try joinRefForPush(topic, owner: owner)
     channels[topic]?.presence.trackedPayload = payload
-    try await sendPresence(
-      topic, payload: ["type": "presence", "event": "track", "payload": .object(payload)])
+    if channels[topic]?.config.presence.enabled == false {
+      applyChannel(topic, .bindingsChanged)
+      try await waitForSubscription(topic)
+      return
+    }
+    do {
+      try await sendPresence(
+        topic, payload: ["type": "presence", "event": "track", "payload": .object(payload)])
+    } catch let error as RealtimeError
+      where error.kind == .server || error.kind == .payloadTooLarge
+    {
+      // The server refused this payload; re-sending it on every rejoin would be refused too.
+      if channels[topic]?.presence.trackedPayload == payload {
+        channels[topic]?.presence.trackedPayload = nil
+        channels[topic]?.presencePush.lastSent = nil
+      }
+      throw error
+    }
   }
 
   package func untrackPresence(_ topic: String, owner: ChannelOwner) async throws {

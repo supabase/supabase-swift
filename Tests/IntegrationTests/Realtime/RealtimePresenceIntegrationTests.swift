@@ -8,6 +8,7 @@
 import Foundation
 import Helpers
 import Realtime
+import TestHelpers
 import Testing
 
 @Suite(
@@ -122,6 +123,19 @@ struct RealtimePresenceIntegrationTests {
 
       _ = try await first(states) { names($0) == ["ana"] }
     }
+  }
+
+  @Test
+  func trackWithoutAPresenceStreamEnablesPresence() async throws {
+    let client = LiveRealtime.client()
+    let channel = client.channel(uniqueTopic())
+    try await channel.subscribe()
+
+    try await channel.presence.track(User(name: "ana"))
+
+    let seen = await waitUntil { names(channel.presence.state) == ["ana"] }
+    #expect(seen)
+    await client.disconnect()
   }
 
   /// realApplicationScenario_BroadcastAndPresence
