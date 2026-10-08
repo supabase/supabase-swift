@@ -16,9 +16,25 @@ final class ChannelStore {
   private(set) var channels: [Channel] = []
   var toast: ToastState?
 
+  var messages: MessageStore { Dependencies.shared.messages }
+
   private init() {
     Task {
       channels = await fetchChannels()
+
+      let channel = supabase.channel("public:channels")
+      let changes = channel.postgresChanges(of: Channel.self, table: "channels", decoder: decoder)
+
+      do {
+        try await channel.subscribe()
+      } catch {
+        dump(error)
+        return
+      }
+
+      for await change in changes {
+        handleChange(change)
+      }
     }
   }
 
@@ -30,7 +46,6 @@ final class ChannelStore {
         .from("channels")
         .insert(channel)
         .execute()
-      channels = await fetchChannels()
     } catch {
       dump(error)
       toast = .init(status: .error, title: "Error", description: error.localizedDescription)
@@ -51,6 +66,24 @@ final class ChannelStore {
       .value
     channels.append(channel)
     return channel
+  }
+
+  private func handleChange(_ change: TypedPostgresChange<Channel>) {
+    switch change.kind {
+    case .insert:
+      do {
+        channels.append(try change.row())
+      } catch {
+        dump(error)
+        toast = .init(status: .error, title: "Error", description: error.localizedDescription)
+      }
+    case .update:
+      break
+    case .delete:
+      guard let id = change.oldRecord?["id"]?.intValue else { return }
+      channels.removeAll { $0.id == id }
+      messages.removeMessages(for: id)
+    }
   }
 
   private func fetchChannels() async -> [Channel] {

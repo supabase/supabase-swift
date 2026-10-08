@@ -962,8 +962,13 @@ features:
     symbols:
       - SupabaseClientOptions.AuthOptions.accessToken
   client.authentication_integration.cross_client_token_sync:
-    status: not_implemented
-    note: "Returns with the v3 Realtime client in the Phase 2 stack (SDK-2108); the v2 listener that pushed Auth tokens to realtime was removed."
+    status: implemented
+    note: "Automatic whenever AuthOptions.accessToken (third_party_auth) is nil: SupabaseClient listens to AuthClient.authStateChanges and pushes the session token, or the anon key after sign-out, to SupabaseClient.realtime once it exists. Database, Storage and Functions read the token per request. There is no separate opt-in symbol."
+    symbols:
+      - AuthClient.authStateChanges
+      - SupabaseClient.realtime
+    supporting_symbols:
+      - SupabaseClientOptions.realtime
   client.authentication_integration.oauth_flow_type:
     status: implemented
     symbols:
@@ -1655,14 +1660,17 @@ features:
     status: implemented
     symbols:
       - RealtimeClient.channels
+      - SupabaseClient.channels
   realtime.client.remove_channel:
     status: implemented
     symbols:
       - RealtimeClient.removeChannel
+      - SupabaseClient.removeChannel
   realtime.client.remove_all_channels:
     status: implemented
     symbols:
       - RealtimeClient.removeAllChannels
+      - SupabaseClient.removeAllChannels
   realtime.client.connection_state:
     status: implemented
     symbols:
@@ -1680,6 +1688,7 @@ features:
     status: implemented
     symbols:
       - RealtimeClient.channel
+      - SupabaseClient.channel
 
   realtime.channel.subscribe:
     status: implemented
