@@ -354,7 +354,7 @@ public struct PostgrestClient: Sendable {
     return PostgrestClient(configuration: configuration, clock: clock)
   }
 
-  private func queryValue(for value: JSONValue) -> String {
+  func queryValue(for value: JSONValue) -> String {
     switch value {
     case .null:
       return "null"
