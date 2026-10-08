@@ -41,6 +41,9 @@ package struct RealtimeEngineConfiguration: Sendable {
   package var accessToken: (@Sendable () async throws -> String?)?
   /// How long before the token's `exp` the engine asks the provider for a fresh one.
   package var accessTokenRefreshLeeway: Duration = .seconds(60)
+  /// The shortest wait between two provider calls, so a token already inside the leeway, or a
+  /// failed refresh, is retried at this pace instead of in a tight loop.
+  package var accessTokenRetryInterval: Duration = .seconds(5)
   /// The server applies at most one `access_token` per channel in this window.
   package var accessTokenPushInterval: Duration = .seconds(10)
   /// The server allows 5 presence calls per 30 s per channel; one call per window stays under.
@@ -720,25 +723,27 @@ package actor RealtimeEngine {
   }
 
   /// Asks the provider for a token and keeps it if it is newer than any refresh that started
-  /// later. Returns whether the stored token changed.
+  /// later. Returns whether the stored token changed. Either way the next refresh is scheduled,
+  /// so a provider that fails or returns the old token is asked again.
   @discardableResult
   private func refreshAccessToken() async -> Bool {
     guard let provider = configuration.accessToken else { return false }
     let generation = tokens.beginRefresh()
     let result = try? await provider()
-    guard tokens.apply(result, generation: generation) else { return false }
-    scheduleTokenRefresh()
-    return true
+    let changed = tokens.apply(result, generation: generation)
+    scheduleTokenRefresh(atLeast: configuration.accessTokenRetryInterval)
+    return changed
   }
 
   /// Refreshes `accessTokenRefreshLeeway` before the token's `exp`, since the server closes
   /// every channel the moment it expires.
-  private func scheduleTokenRefresh() {
+  private func scheduleTokenRefresh(atLeast minimum: Duration = .zero) {
     tokenRefreshTask?.cancel()
     tokenRefreshTask = nil
     guard
-      let delay = tokens.refreshDelay(now: Date(), leeway: configuration.accessTokenRefreshLeeway)
+      let due = tokens.refreshDelay(now: Date(), leeway: configuration.accessTokenRefreshLeeway)
     else { return }
+    let delay = max(due, minimum)
     tokenRefreshTask = Task {
       try? await clock.sleep(for: delay)
       guard !Task.isCancelled else { return }

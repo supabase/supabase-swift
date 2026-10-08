@@ -603,6 +603,45 @@ struct RealtimeEngineTests {
   }
 
   @Test
+  func aTokenAlreadyInsideTheLeewayIsRefreshedAtTheRetryPaceNotInALoop() async throws {
+    let calls = LockIsolated(0)
+    let engine = makeTokenEngine {
+      let call = calls.withValue {
+        $0 += 1; return $0
+      }
+      return makeJWT(exp: Date().addingTimeInterval(30).timeIntervalSince1970 + Double(call))
+    }
+    await engine.addChannel(topic)
+    try await engine.subscribe(topic)
+    await settle()
+    #expect(calls.value == 1)
+
+    await advance(by: .seconds(5))
+    await eventually { calls.value == 2 }
+    await settle()
+    #expect(calls.value == 2)
+  }
+
+  @Test
+  func aFailedScheduledRefreshIsRetried() async throws {
+    let calls = LockIsolated(0)
+    let engine = makeTokenEngine {
+      let call = calls.withValue {
+        $0 += 1; return $0
+      }
+      guard call == 1 else { return nil }
+      return makeJWT(exp: Date().addingTimeInterval(30).timeIntervalSince1970.rounded())
+    }
+    await engine.addChannel(topic)
+    try await engine.subscribe(topic)
+    await advance(by: .seconds(5))
+    await eventually { calls.value == 2 }
+
+    await advance(by: .seconds(5))
+    await eventually { calls.value == 3 }
+  }
+
+  @Test
   func pushesAtMostOneTokenPerWindowPerChannelAndKeepsTheNewest() async throws {
     await engine.addChannel(topic)
     try await engine.subscribe(topic)

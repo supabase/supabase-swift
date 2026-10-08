@@ -15,7 +15,8 @@ func makeJWT(exp: TimeInterval?) -> String {
   var claims: [String: Any] = ["role": "authenticated"]
   if let exp { claims["exp"] = exp }
   let header = Base64URL.encode(Data("{\"alg\":\"HS256\"}".utf8))
-  let payload = Base64URL.encode(try! JSONSerialization.data(withJSONObject: claims, options: .sortedKeys))
+  let payload = Base64URL.encode(
+    try! JSONSerialization.data(withJSONObject: claims, options: .sortedKeys))
   return "\(header).\(payload).sig"
 }
 
