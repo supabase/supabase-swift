@@ -375,6 +375,69 @@ struct TableMacroTests {
     }
   }
 
+  /// `@Generated` keeps the column everywhere a read needs it and drops it from `Draft`; its
+  /// column type is the one `PostgrestUpdate` has no subscript for.
+  @Test
+  func aGeneratedColumnIsReadOnly() {
+    assertMacro {
+      """
+      @Table("counters")
+      struct Counter {
+        @PrimaryKey @Generated var id: Int
+        var count: Int
+        @Generated @Column("updated_at") var updatedAt: Date?
+      }
+      """
+    } expansion: {
+      """
+      struct Counter {
+        @PrimaryKey @Generated var id: Int
+        var count: Int
+        @Generated @Column("updated_at") var updatedAt: Date?
+      }
+
+      extension Counter {
+        static let relationName = "counters"
+
+        typealias Schema = PostgREST.PublicSchema
+
+        static let selectString = "*"
+
+        struct Columns: Sendable {
+          let id = PostgrestGeneratedColumn<Counter, Int, PostgrestNotNull>("id")
+          let count = PostgrestColumn<Counter, Int>("count")
+          let updatedAt = PostgrestGeneratedColumn<Counter, Date, PostgrestNullable>("updated_at")
+
+          init() {
+          }
+        }
+
+        static let columns = Columns()
+
+        static let primaryKeyColumns: [String] = ["id"]
+
+        enum CodingKeys: String, CodingKey {
+          case id = "id"
+          case count = "count"
+          case updatedAt = "updated_at"
+        }
+
+        struct Draft: Encodable, Sendable {
+          var count: Int
+
+          enum CodingKeys: String, CodingKey {
+            case count = "count"
+          }
+
+          init(count: Int) {
+            self.count = count
+          }
+        }
+      }
+      """
+    }
+  }
+
   @Test
   func includesAStoredPropertyWithObservers() {
     assertMacro {

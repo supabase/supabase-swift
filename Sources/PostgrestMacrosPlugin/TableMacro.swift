@@ -118,11 +118,14 @@ public struct TableMacro: ExtensionMacro {
       // There is no matching `Update` shape: one optional field would have to mean both "not
       // assigned" and "assigned null", so a nullable column could never be cleared.
       // `PostgrestUpdate` builds the assignments from key paths into `Columns` instead.
+      //
+      // A `@Generated` column has no field at all: Postgres refuses a written value for it, so
+      // the shape cannot carry one. The update side is handled by its column type instead.
       body.append(
         writeShape(
           named: "Draft",
           access: access,
-          fields: properties.map {
+          fields: properties.filter { !$0.isGenerated }.map {
             ($0, $0.isOptional || $0.hasDefault ? $0.optionalType : $0.type)
           }
         )
@@ -168,7 +171,9 @@ public struct TableMacro: ExtensionMacro {
   /// land on here — it is simply not one of `properties`.
   ///
   /// An optional property gets a `PostgrestNullableColumn` carrying its **wrapped** type, so
-  /// `var dueDate: Date?` emits `PostgrestNullableColumn<Todo, Date>`.
+  /// `var dueDate: Date?` emits `PostgrestNullableColumn<Todo, Date>`. A `@Generated` property
+  /// gets a `PostgrestGeneratedColumn` with the nullability spelled out, which is what keeps it
+  /// out of `PostgrestUpdate`.
   ///
   /// The explicit `init()` is required: a `public` struct's memberwise initializer is internal,
   /// so `Columns()` would not resolve from another module.
@@ -179,11 +184,15 @@ public struct TableMacro: ExtensionMacro {
   ) -> String {
     var lines = ["  \(access)struct Columns: Sendable {"]
     for property in properties {
-      let column = property.isOptional ? "PostgrestNullableColumn" : "PostgrestColumn"
-      lines.append(
-        "    \(access)let \(property.name) = \(column)<\(type), \(property.unwrappedType)>"
-          + "(\"\(property.columnName)\")"
-      )
+      let column: String
+      if property.isGenerated {
+        let nullability = property.isOptional ? "PostgrestNullable" : "PostgrestNotNull"
+        column = "PostgrestGeneratedColumn<\(type), \(property.unwrappedType), \(nullability)>"
+      } else {
+        let kind = property.isOptional ? "PostgrestNullableColumn" : "PostgrestColumn"
+        column = "\(kind)<\(type), \(property.unwrappedType)>"
+      }
+      lines.append("    \(access)let \(property.name) = \(column)(\"\(property.columnName)\")")
     }
     lines.append("")
     lines.append("    \(access)init() {}")
