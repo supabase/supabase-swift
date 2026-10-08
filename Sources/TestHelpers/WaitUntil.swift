@@ -26,3 +26,18 @@ package func waitUntil(
   }
   return condition()
 }
+
+/// The async form: for conditions that read actor state.
+@discardableResult
+package func waitUntil(
+  timeout: TimeInterval = 10.0,
+  pollInterval: UInt64 = 10_000_000,
+  condition: @escaping @Sendable () async -> Bool
+) async -> Bool {
+  let deadline = Date().addingTimeInterval(timeout)
+  while Date() < deadline {
+    if await condition() { return true }
+    try? await Task.sleep(nanoseconds: pollInterval)
+  }
+  return await condition()
+}

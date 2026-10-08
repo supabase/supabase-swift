@@ -5,7 +5,7 @@
 //  Created by Guilherme Souza on 24/12/23.
 //
 
-import Foundation
+package import Foundation
 
 struct RealtimeJoinPayload: Encodable {
   var config: RealtimeJoinConfig
@@ -19,11 +19,23 @@ struct RealtimeJoinPayload: Encodable {
   }
 }
 
-struct RealtimeJoinConfig: Encodable, Hashable {
-  var broadcast: BroadcastJoinConfig = .init()
-  var presence: PresenceJoinConfig = .init()
-  var postgresChanges: [PostgresJoinConfig] = []
-  var isPrivate: Bool = false
+package struct RealtimeJoinConfig: Encodable, Hashable {
+  package var broadcast: BroadcastJoinConfig = .init()
+  package var presence: PresenceJoinConfig = .init()
+  package var postgresChanges: [PostgresJoinConfig] = []
+  package var isPrivate: Bool = false
+
+  package init(
+    broadcast: BroadcastJoinConfig = .init(),
+    presence: PresenceJoinConfig = .init(),
+    postgresChanges: [PostgresJoinConfig] = [],
+    isPrivate: Bool = false
+  ) {
+    self.broadcast = broadcast
+    self.presence = presence
+    self.postgresChanges = postgresChanges
+    self.isPrivate = isPrivate
+  }
 
   enum CodingKeys: String, CodingKey {
     case broadcast
@@ -172,32 +184,44 @@ public enum PostgresChangeEvent: String, Codable, Sendable {
   case all = "*"
 }
 
-struct PostgresJoinConfig: Codable, Hashable, Sendable {
-  var event: PostgresChangeEvent?
-  var schema: String
-  var table: String?
-  var filter: String?
+package struct PostgresJoinConfig: Codable, Hashable, Sendable {
+  package var event: PostgresChangeEvent?
+  package var schema: String
+  package var table: String?
+  package var filter: String?
   /// Restricts the change payload to a subset of columns instead of the full row.
-  var select: [String]?
-  var id: Int = 0
+  package var select: [String]?
+  package var id: Int = 0
+
+  package init(
+    event: PostgresChangeEvent? = nil, schema: String, table: String? = nil,
+    filter: String? = nil, select: [String]? = nil, id: Int = 0
+  ) {
+    self.event = event
+    self.schema = schema
+    self.table = table
+    self.filter = filter
+    self.select = select
+    self.id = id
+  }
 
   // `select` is excluded from `==`/`hash`: the server-echoed config used for
   // callback-id matching does not carry it.
-  static func == (lhs: Self, rhs: Self) -> Bool {
+  package static func == (lhs: Self, rhs: Self) -> Bool {
     lhs.schema == rhs.schema
       && lhs.table == rhs.table
       && lhs.filter == rhs.filter
       && (lhs.event == rhs.event || rhs.event == .all)
   }
 
-  func hash(into hasher: inout Hasher) {
+  package func hash(into hasher: inout Hasher) {
     hasher.combine(schema)
     hasher.combine(table)
     hasher.combine(filter)
     hasher.combine(event)
   }
 
-  func encode(to encoder: any Encoder) throws {
+  package func encode(to encoder: any Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
     try container.encode(event, forKey: .event)
     try container.encode(schema, forKey: .schema)
