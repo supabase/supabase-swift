@@ -165,7 +165,7 @@ extension FilePlan {
       return PropertyPlan(
         column: column,
         name: name,
-        columnAttribute: Naming.camelToSnakeCase(name) == column.name ? nil : column.name,
+        columnAttribute: camelToSnakeCase(name) == column.name ? nil : column.name,
         type: swiftType(of: column, qualified: "\(qualified).\(column.name)", model: model)
       )
     }

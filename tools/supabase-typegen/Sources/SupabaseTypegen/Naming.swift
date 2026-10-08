@@ -53,29 +53,6 @@ enum Naming {
     } ?? "unnamed"
   }
 
-  /// The column name `@Table` derives from a property spelled `name`.
-  ///
-  /// A copy of `camelToSnakeCase` in `PostgrestMacrosPlugin`, which an executable cannot link.
-  /// `SupabaseTypegenTests` checks the two agree on every fixture column.
-  static func camelToSnakeCase(_ name: String) -> String {
-    var out = ""
-    var previousWasUpper = false
-    for (index, character) in name.enumerated() {
-      if character.isUppercase {
-        let nextIsLower = name.dropFirst(index + 1).first?.isLowercase ?? false
-        if index > 0, !previousWasUpper || nextIsLower {
-          out.append("_")
-        }
-        out.append(Character(character.lowercased()))
-        previousWasUpper = true
-      } else {
-        out.append(character)
-        previousWasUpper = false
-      }
-    }
-    return out
-  }
-
   /// The words of a Postgres name: runs of letters and digits. Everything else separates them, so
   /// `user_id`, `user-id` and `user id` all give `user`, `id`.
   private static func words(of name: String) -> [String] {

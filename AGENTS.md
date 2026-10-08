@@ -87,7 +87,7 @@ cover how the `@Table` macro handles that spelling.
 Check the rules with:
 
 ```bash
-swift-format lint --recursive --strict Sources Tests
+swift-format lint --recursive --strict Sources Tests tools/supabase-typegen/Sources tools/supabase-typegen/Tests
 ```
 
 Do not pass `--configuration` — swift-format finds the nearest `.swift-format` per file, and
@@ -460,9 +460,26 @@ cd Tests/IntegrationTests/supabase-secure-email-change
 supabase stop
 ```
 
-### Refreshing the typegen fixtures
+### The typegen tool
 
-`Tests/SupabaseTypegenTests/Fixtures` holds `GeneratorMetadata` documents produced by
+`tools/supabase-typegen` is a separate SwiftPM package holding the `supabase-typegen` executable,
+which turns a `GeneratorMetadata` document into `@Table` structs. It is not part of the root
+package on purpose: SwiftPM fetches the dependencies of every product a package vends, so its
+swift-format dependency would reach every app that depends on `Supabase` and pin their
+swift-syntax to one major. Its `CamelToSnake.swift` is a symlink to the `@Table` macro's source, so
+the generator decides `@Column` with the macro's own function.
+
+```bash
+swift build --package-path tools/supabase-typegen
+swift test --package-path tools/supabase-typegen
+
+# Rewrite the golden files in Tests/SupabaseTypegenTests/__Goldens__ after an intended change
+SUPABASE_TYPEGEN_RECORD=1 swift test --package-path tools/supabase-typegen --filter EmitterTests
+```
+
+#### Refreshing the typegen fixtures
+
+`tools/supabase-typegen/Tests/SupabaseTypegenTests/Fixtures` holds `GeneratorMetadata` documents produced by
 postgrest-typegen's `introspect` (in [supabase/sdk](https://github.com/supabase/sdk)), the input of
 the `supabase-typegen` executable. Regenerate them after a migration in
 `Tests/IntegrationTests/supabase` changes or after updating postgrest-typegen:

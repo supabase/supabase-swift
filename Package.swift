@@ -27,7 +27,6 @@ let package = Package(
     .library(name: "Realtime", targets: ["Realtime"]),
     .library(name: "Storage", targets: ["Storage"]),
     .library(name: "Supabase", targets: ["Supabase"]),
-    .executable(name: "supabase-typegen", targets: ["SupabaseTypegen"]),
   ],
   traits: [
     // Enables W3C traceparent header propagation using opentelemetry-swift's active span.
@@ -37,8 +36,6 @@ let package = Package(
     .package(url: "https://github.com/apple/swift-crypto.git", "3.0.0"..<"6.0.0"),
     .package(url: "https://github.com/apple/swift-http-types.git", from: "1.3.0"),
     .package(url: "https://github.com/swiftlang/swift-syntax", "601.0.0"..<"605.0.0"),
-    // Only `SupabaseTypegen` uses it. Its 604 release pins swift-syntax 604, inside the range above.
-    .package(url: "https://github.com/swiftlang/swift-format", "604.0.0"..<"605.0.0"),
     .package(url: "https://github.com/apple/swift-log.git", "1.5.0"..<"2.0.0"),
     .package(url: "https://github.com/open-telemetry/opentelemetry-swift-core.git", from: "2.5.0"),
     .package(url: "https://github.com/pointfreeco/swift-clocks", from: "1.0.0"),
@@ -280,25 +277,6 @@ let package = Package(
         "Supabase",
         "TestHelpers",
       ]
-    ),
-    .executableTarget(
-      name: "SupabaseTypegen",
-      dependencies: [
-        .product(name: "SwiftBasicFormat", package: "swift-syntax"),
-        .product(name: "SwiftFormat", package: "swift-format"),
-        .product(name: "SwiftParser", package: "swift-syntax"),
-        .product(name: "SwiftSyntax", package: "swift-syntax"),
-        .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
-      ]
-    ),
-    .testTarget(
-      name: "SupabaseTypegenTests",
-      dependencies: [
-        "PostgrestMacrosPlugin",
-        "SupabaseTypegen",
-      ],
-      exclude: ["__Goldens__"],
-      resources: [.copy("Fixtures")]
     ),
     .testTarget(
       name: "DefaultIsolationTests",

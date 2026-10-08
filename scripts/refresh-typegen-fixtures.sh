@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Regenerates the GeneratorMetadata fixtures in Tests/SupabaseTypegenTests/Fixtures with
+# Regenerates the GeneratorMetadata fixtures in
+# tools/supabase-typegen/Tests/SupabaseTypegenTests/Fixtures with
 # postgrest-typegen's introspection, from a checkout of supabase/sdk.
 #
 #   SDK_DIR=~/work/sdk ./scripts/refresh-typegen-fixtures.sh
@@ -14,7 +15,7 @@ set -euo pipefail
 SDK_DIR="$(cd "$SDK_DIR" && pwd)"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PACKAGE="$SDK_DIR/packages/postgrest-typegen"
-FIXTURES="$ROOT/Tests/SupabaseTypegenTests/Fixtures"
+FIXTURES="$ROOT/tools/supabase-typegen/Tests/SupabaseTypegenTests/Fixtures"
 # The image `supabase start` runs for Tests/IntegrationTests/supabase (major_version 15). It
 # carries the auth schema and the roles the migrations grant to.
 SUPABASE_IMAGE="${SUPABASE_IMAGE:-public.ecr.aws/supabase/postgres:15.19.0.004}"

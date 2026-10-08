@@ -9,7 +9,6 @@ import Foundation
 
 import Testing
 
-@testable import PostgrestMacrosPlugin
 @testable import SupabaseTypegen
 
 /// One generator run whose output is compared with a committed golden file.
@@ -67,7 +66,8 @@ struct EmitterTests {
   }
 
   /// `@Column` is emitted exactly when `@Table`'s own conversion of the Swift name, backticks
-  /// included, does not give back the column name.
+  /// included, does not give back the column name. `camelToSnakeCase` is the macro's source,
+  /// compiled in through the `CamelToSnake.swift` symlink.
   @Test(arguments: GoldenCase.all)
   func columnAttributeFollowsTheMacroConversion(_ golden: GoldenCase) throws {
     let model = DatabaseModel(
@@ -75,7 +75,7 @@ struct EmitterTests {
     let properties = try FilePlan(model).relations.flatMap(\.properties)
     #expect(!properties.isEmpty)
     for property in properties {
-      let derived = camelToSnakeCase(property.name)  // PostgrestMacrosPlugin's
+      let derived = camelToSnakeCase(property.name)
       #expect(
         property.columnAttribute == (derived == property.column.name ? nil : property.column.name),
         "\(property.column.name) as \(property.name)"

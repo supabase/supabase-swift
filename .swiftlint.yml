@@ -11,9 +11,12 @@
 included:
   - Sources
   - Tests
+  - tools/supabase-typegen/Sources
+  - tools/supabase-typegen/Tests
 
 excluded:
   - .build
+  - tools/supabase-typegen/.build
   - Tests/IntegrationTests/supabase
   - "**/__Snapshots__"
 
