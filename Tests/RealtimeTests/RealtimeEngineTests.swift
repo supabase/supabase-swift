@@ -555,4 +555,281 @@ struct RealtimeEngineTests {
     let error = await #expect(throws: RealtimeError.self) { try await pending.value }
     #expect(error?.kind == .notConnected)
   }
+
+  // MARK: - Token state (SDK-2100)
+
+  private func makeTokenEngine(provider: @escaping @Sendable () async throws -> String?)
+    -> RealtimeEngine
+  {
+    var configuration = RealtimeEngineConfiguration(url: URL(string: "ws://fake")!)
+    configuration.connection = .init(
+      reconnect: .steps([.seconds(1)]), idleDisconnectAfter: .seconds(50))
+    configuration.channel = .init(
+      rejoin: .steps([.seconds(1)]), rateLimitBackoff: .seconds(30),
+      lingerAfterLastListener: .seconds(2))
+    configuration.accessToken = provider
+    // The refresh test advances past the heartbeat interval. `TestClock.advance` resumes sleepers
+    // with only 20 background yields between them, so the heartbeat reply can lose that race and
+    // tear the socket down mid-test.
+    configuration.heartbeatInterval = .seconds(1_000)
+    return RealtimeEngine(configuration: configuration, transport: server.transport, clock: clock)
+  }
+
+  private var accessTokenPushes: [RealtimeMessageV2] {
+    server.sentMessages.filter { $0.event == "access_token" }
+  }
+
+  @Test
+  func refreshesBeforeExpiryAndPushesTheNewTokenToJoinedChannels() async throws {
+    let calls = LockIsolated(0)
+    let engine = makeTokenEngine {
+      let call = calls.withValue {
+        $0 += 1; return $0
+      }
+      return makeJWT(exp: Date().addingTimeInterval(120).timeIntervalSince1970 + Double(call))
+    }
+    await engine.addChannel(topic)
+    try await engine.subscribe(topic)
+    #expect(calls.value == 1)
+    #expect(joins.first?.payload["access_token"] != nil)
+    await advance(by: .seconds(61))
+
+    await eventually { calls.value == 2 }
+    await eventually { [self] in accessTokenPushes.count == 1 }
+    #expect(server.connectCount == 1)
+    #expect(
+      accessTokenPushes.first?.payload["access_token"] != joins.first?.payload["access_token"])
+    #expect(accessTokenPushes.first?.joinRef == joins.first?.ref)
+  }
+
+  @Test
+  func aTokenAlreadyInsideTheLeewayIsRefreshedAtTheRetryPaceNotInALoop() async throws {
+    let calls = LockIsolated(0)
+    let engine = makeTokenEngine {
+      let call = calls.withValue {
+        $0 += 1; return $0
+      }
+      return makeJWT(exp: Date().addingTimeInterval(30).timeIntervalSince1970 + Double(call))
+    }
+    await engine.addChannel(topic)
+    try await engine.subscribe(topic)
+    await settle()
+    #expect(calls.value == 1)
+
+    await advance(by: .seconds(5))
+    await eventually { calls.value == 2 }
+    await settle()
+    #expect(calls.value == 2)
+  }
+
+  @Test
+  func aFailedScheduledRefreshIsRetried() async throws {
+    let calls = LockIsolated(0)
+    let engine = makeTokenEngine {
+      let call = calls.withValue {
+        $0 += 1; return $0
+      }
+      guard call == 1 else { return nil }
+      return makeJWT(exp: Date().addingTimeInterval(30).timeIntervalSince1970.rounded())
+    }
+    await engine.addChannel(topic)
+    try await engine.subscribe(topic)
+    await advance(by: .seconds(5))
+    await eventually { calls.value == 2 }
+
+    await advance(by: .seconds(5))
+    await eventually { calls.value == 3 }
+  }
+
+  @Test
+  func pushesAtMostOneTokenPerWindowPerChannelAndKeepsTheNewest() async throws {
+    await engine.addChannel(topic)
+    try await engine.subscribe(topic)
+
+    await engine.setAuth("t1")
+    await engine.setAuth("t2")
+    await engine.setAuth("t3")
+    await eventually { [self] in accessTokenPushes.count == 1 }
+    #expect(accessTokenPushes[0].payload["access_token"] == "t1")
+    await advance(by: .seconds(10))
+    await eventually { [self] in accessTokenPushes.count == 2 }
+    #expect(accessTokenPushes[1].payload["access_token"] == "t3")
+    await advance(by: .seconds(10))
+    await settle()
+    #expect(accessTokenPushes.count == 2)
+  }
+
+  @Test
+  func nilAndUnchangedTokensNeverReachTheWire() async throws {
+    let engine = makeTokenEngine { nil }
+    await engine.addChannel(topic)
+    try await engine.subscribe(topic)
+    #expect(joins.first?.payload["access_token"] == nil)
+
+    await engine.setAuth(nil)
+    await engine.setAuth("same")
+    await eventually { [self] in accessTokenPushes.count == 1 }
+    await engine.setAuth("same")
+    await advance(by: .seconds(10))
+    await settle()
+
+    #expect(accessTokenPushes.count == 1)
+    #expect(!server.sentMessages.contains { $0.payload["access_token"] == .null })
+  }
+
+  @Test
+  func expiredTokenJoinErrorRefreshesOnceThenFails() async throws {
+    let calls = LockIsolated(0)
+    let engine = makeTokenEngine {
+      let call = calls.withValue {
+        $0 += 1; return $0
+      }
+      return "token-\(call)"
+    }
+    server.joinReply = .error(reason: "InvalidJWTToken: Token has expired 5 seconds ago")
+    await engine.addChannel(topic)
+
+    let error = await #expect(throws: RealtimeError.self) {
+      try await engine.subscribe(topic)
+    }
+
+    #expect(error?.serverCode == RealtimeError.ServerCode.invalidJWTToken)
+    #expect(calls.value == 2)
+    #expect(joins.count == 2)
+    #expect(joins[0].payload["access_token"] == "token-1")
+    #expect(joins[1].payload["access_token"] == "token-2")
+  }
+
+  // MARK: - Presence (SDK-2101)
+
+  private func metas(_ refs: [String]) -> JSONValue {
+    .object(["metas": .array(refs.map { .object(["phx_ref": .string($0)]) })])
+  }
+
+  private var presencePushes: [RealtimeMessageV2] {
+    server.sentMessages.filter { $0.event == "presence" }
+  }
+
+  @Test
+  func presenceStateAndDiffsUpdateTheTrackerAndFanOutWithTheRawMessages() async throws {
+    await engine.addChannel(topic)
+    try await engine.subscribe(topic)
+    let events = LockIsolated([ChannelInbound]())
+    let pump = Task {
+      for await event in await engine.inbound(topic) { events.withValue { $0.append(event) } }
+    }
+    defer { pump.cancel() }
+    await eventually { [engine] in await engine.listenerCount(topic) == 1 }
+
+    server.pushPresenceDiff(topic: topic, joins: ["u2": metas(["r2"])], leaves: [:])
+    server.pushPresenceState(topic: topic, state: ["u1": metas(["r1"])])
+    server.pushPresenceDiff(topic: topic, joins: [:], leaves: ["u1": metas(["r1"])])
+
+    await eventually { events.value.count == 5 }
+    let state = await engine.presenceState(topic)
+    #expect(Set(state.entries.keys) == ["u2"])
+    let raw = events.value.compactMap { event -> String? in
+      guard case .message(let message) = event else { return nil }
+      return message.event
+    }
+    #expect(raw == ["presence_diff", "presence_state", "presence_diff"])
+    let changes = events.value.compactMap { event -> PresenceChange? in
+      guard case .presenceChanged(let change) = event else { return nil }
+      return change
+    }
+    guard changes.count == 2 else {
+      Issue.record("unexpected events \(events.value)")
+      return
+    }
+    #expect(Set(changes[0].joins.keys) == ["u1", "u2"])
+    #expect(changes[1].leaves["u1"]?.map(\.ref) == ["r1"])
+  }
+
+  @Test
+  func trackSendsThePayloadAndRejoinResendsIt() async throws {
+    await engine.addChannel(topic)
+    try await engine.subscribe(topic)
+
+    try await engine.trackPresence(topic, payload: ["name": "ana"])
+    await eventually { [self] in presencePushes.count == 1 }
+    #expect(presencePushes[0].payload["event"] == "track")
+    #expect(presencePushes[0].payload["payload"] == ["name": "ana"])
+    #expect(joins[0].payload["config"]?.objectValue?["presence"]?.objectValue?["enabled"] == false)
+
+    server.errorChannel(topic: topic)
+    await advance(by: .seconds(1))
+    await eventually { [self] in joins.count == 2 && presencePushes.count == 2 }
+
+    #expect(joins[1].payload["config"]?.objectValue?["presence"]?.objectValue?["enabled"] == true)
+    #expect(presencePushes[1].payload["payload"] == ["name": "ana"])
+    #expect(presencePushes[1].joinRef == joins[1].ref)
+  }
+
+  @Test
+  func rejoinCancelsTheOldPresenceWindow() async throws {
+    await engine.addChannel(topic)
+    try await engine.subscribe(topic)
+    try await engine.trackPresence(topic, payload: ["n": 1])
+    await eventually { [self] in presencePushes.count == 1 }
+
+    server.errorChannel(topic: topic)
+    await advance(by: .seconds(1))
+    await eventually { [self] in joins.count == 2 && presencePushes.count == 2 }
+
+    try await engine.trackPresence(topic, payload: ["n": 2])
+    await advance(by: .seconds(5))
+    await settle()
+    #expect(presencePushes.count == 2)
+    await advance(by: .seconds(1))
+    await eventually { [self] in presencePushes.count == 3 }
+    #expect(presencePushes[2].payload["payload"] == ["n": 2])
+  }
+
+  @Test
+  func trackCallsAreCoalescedToTheNewestPayloadInsideTheWindow() async throws {
+    await engine.addChannel(topic)
+    try await engine.subscribe(topic)
+
+    try await engine.trackPresence(topic, payload: ["n": 1])
+    try await engine.trackPresence(topic, payload: ["n": 2])
+    try await engine.trackPresence(topic, payload: ["n": 3])
+    await eventually { [self] in presencePushes.count == 1 }
+    #expect(presencePushes[0].payload["payload"] == ["n": 1])
+    await advance(by: .seconds(6))
+    await eventually { [self] in presencePushes.count == 2 }
+    #expect(presencePushes[1].payload["payload"] == ["n": 3])
+
+    try await engine.trackPresence(topic, payload: ["n": 3])
+    await advance(by: .seconds(6))
+    await settle()
+    #expect(presencePushes.count == 2)
+  }
+
+  @Test
+  func untrackSendsUntrackAndStopsTheRejoinResend() async throws {
+    await engine.addChannel(topic)
+    try await engine.subscribe(topic)
+    try await engine.trackPresence(topic, payload: ["n": 1])
+    await eventually { [self] in presencePushes.count == 1 }
+    await advance(by: .seconds(6))
+    try await engine.untrackPresence(topic)
+    await eventually { [self] in presencePushes.count == 2 }
+    #expect(presencePushes[1].payload["event"] == "untrack")
+
+    server.errorChannel(topic: topic)
+    await advance(by: .seconds(1))
+    await eventually { [self] in joins.count == 2 }
+    await settle()
+    #expect(presencePushes.count == 2)
+  }
+
+  @Test
+  func trackOnAnUnsubscribedChannelThrowsNotSubscribed() async throws {
+    await engine.addChannel(topic)
+
+    let error = await #expect(throws: RealtimeError.self) {
+      try await engine.trackPresence(topic, payload: [:])
+    }
+    #expect(error?.kind == .notSubscribed)
+  }
 }

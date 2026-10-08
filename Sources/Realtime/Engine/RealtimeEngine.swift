@@ -18,6 +18,8 @@ package enum ChannelInbound: Sendable {
   case broadcast(DecodedBroadcast)
   /// The channel rejoined; events may have been missed in between.
   case resubscribed
+  /// The presence set changed, after a `presence_state` or `presence_diff`.
+  case presenceChanged(PresenceChange)
 }
 
 package struct RealtimeEngineConfiguration: Sendable {
@@ -37,6 +39,15 @@ package struct RealtimeEngineConfiguration: Sendable {
     rateLimitBackoff: .seconds(30),
     lingerAfterLastListener: .seconds(2))
   package var accessToken: (@Sendable () async throws -> String?)?
+  /// How long before the token's `exp` the engine asks the provider for a fresh one.
+  package var accessTokenRefreshLeeway: Duration = .seconds(60)
+  /// The shortest wait between two provider calls, so a token already inside the leeway, or a
+  /// failed refresh, is retried at this pace instead of in a tight loop.
+  package var accessTokenRetryInterval: Duration = .seconds(5)
+  /// The server applies at most one `access_token` per channel in this window.
+  package var accessTokenPushInterval: Duration = .seconds(10)
+  /// The server allows 5 presence calls per 30 s per channel; one call per window stays under.
+  package var presenceTrackInterval: Duration = .seconds(6)
   package var logger = supabaseDefaultLogger(label: "io.supabase.realtime")
 
   package init(url: URL) {
@@ -63,6 +74,16 @@ package actor RealtimeEngine {
     var joinTask: Task<Void, Never>?
     var rejoinTask: Task<Void, Never>?
     var lingerTask: Task<Void, Never>?
+    var presence = PresenceTracker()
+    var tokenPush = Throttle()
+    var presencePush = Throttle()
+  }
+
+  /// One send per window per channel; a newer value inside the window replaces the pending one.
+  private struct Throttle {
+    var window: Task<Void, Never>?
+    var pending: JSONObject?
+    var lastSent: JSONObject?
   }
 
   private struct ListenerRegistry {
@@ -96,7 +117,8 @@ package actor RealtimeEngine {
 
   var pendingReplyCount: Int { pendingReplies.count }
   private var refCounter = 0
-  private var accessToken: String?
+  private var tokens = TokenState()
+  private var tokenRefreshTask: Task<Void, Never>?
 
   package init(
     configuration: RealtimeEngineConfiguration,
@@ -172,6 +194,7 @@ package actor RealtimeEngine {
     channels[topic]?.rejoinTask?.cancel()
     channels[topic]?.joinTask?.cancel()
     channels[topic]?.lingerTask?.cancel()
+    resetThrottles(topic)
     rejectSubscribe(
       topic, with: RealtimeError(kind: .notSubscribed, message: "channel \(topic) was removed"))
     channels[topic] = nil
@@ -278,16 +301,96 @@ package actor RealtimeEngine {
     _ = try await awaitAcknowledgement(ref: ref)
   }
 
-  /// Stores the token for the next join and pushes it to every joined channel.
+  /// Stores the token for the next join and pushes it to every joined channel. `nil` is
+  /// ignored: the server never receives a null token.
   package func setAuth(_ token: String?) {
-    accessToken = token
-    guard let token, connection.isConnected else { return }
+    guard tokens.apply(token, generation: tokens.beginRefresh()) else { return }
+    scheduleTokenRefresh()
+    pushAccessTokenToJoinedChannels()
+  }
+
+  // MARK: - Presence API
+
+  package func presenceState(_ topic: String) -> PresenceState {
+    channels[topic]?.presence.state ?? PresenceState()
+  }
+
+  /// Tracks `payload` on a subscribed channel, re-sent after every rejoin. Calls inside the
+  /// rate window are coalesced to the newest payload; an unchanged payload is not resent.
+  package func trackPresence(_ topic: String, payload: JSONObject) throws {
+    _ = try joinRefForPush(topic)
+    channels[topic]?.presence.trackedPayload = payload
+    sendPresence(
+      topic, payload: ["type": "presence", "event": "track", "payload": .object(payload)])
+  }
+
+  package func untrackPresence(_ topic: String) throws {
+    _ = try joinRefForPush(topic)
+    channels[topic]?.presence.trackedPayload = nil
+    sendPresence(topic, payload: ["type": "presence", "event": "untrack"])
+  }
+
+  private func sendPresence(_ topic: String, payload: JSONObject) {
+    throttledSend(
+      topic, event: "presence", payload: payload, keyPath: \.presencePush,
+      window: configuration.presenceTrackInterval)
+  }
+
+  private func pushAccessTokenToJoinedChannels() {
+    guard let token = tokens.token, connection.isConnected else { return }
     for (topic, record) in channels where record.state.isSubscribed {
-      let message = RealtimeMessageV2(
-        joinRef: record.joinRef, ref: makeRef(), topic: topic, event: "access_token",
-        payload: ["access_token": .string(token)])
-      try? enqueue(.text(try serializer.encodeText(message)))
+      throttledSend(
+        topic, event: "access_token", payload: ["access_token": .string(token)],
+        keyPath: \.tokenPush, window: configuration.accessTokenPushInterval)
     }
+  }
+
+  /// Sends now if the channel's window is open, otherwise keeps `payload` as the one to send
+  /// when the window closes. An unchanged payload is dropped, as the server would drop it.
+  private func throttledSend(
+    _ topic: String, event: String, payload: JSONObject,
+    keyPath: WritableKeyPath<ChannelRecord, Throttle>, window: Duration
+  ) {
+    guard var record = channels[topic], record.state.isSubscribed, let joinRef = record.joinRef
+    else { return }
+    if record[keyPath: keyPath].window != nil {
+      record[keyPath: keyPath].pending = payload
+      channels[topic] = record
+      return
+    }
+    guard record[keyPath: keyPath].lastSent != payload else { return }
+    let message = RealtimeMessageV2(
+      joinRef: joinRef, ref: makeRef(), topic: topic, event: event, payload: payload)
+    guard (try? enqueue(.text(try serializer.encodeText(message)))) != nil else { return }
+    record[keyPath: keyPath].lastSent = payload
+    record[keyPath: keyPath].pending = nil
+    record[keyPath: keyPath].window = Task {
+      try? await clock.sleep(for: window)
+      guard !Task.isCancelled else { return }
+      closeThrottleWindow(topic, event: event, keyPath: keyPath, window: window)
+    }
+    channels[topic] = record
+  }
+
+  private func closeThrottleWindow(
+    _ topic: String, event: String, keyPath: WritableKeyPath<ChannelRecord, Throttle>,
+    window: Duration
+  ) {
+    guard var record = channels[topic] else { return }
+    record[keyPath: keyPath].window = nil
+    let pending = record[keyPath: keyPath].pending
+    record[keyPath: keyPath].pending = nil
+    channels[topic] = record
+    if let pending {
+      throttledSend(topic, event: event, payload: pending, keyPath: keyPath, window: window)
+    }
+  }
+
+  private func resetThrottles(_ topic: String) {
+    channels[topic]?.tokenPush.window?.cancel()
+    channels[topic]?.presencePush.window?.cancel()
+    channels[topic]?.tokenPush = Throttle()
+    channels[topic]?.presencePush = Throttle()
   }
 
   // MARK: - Machines
@@ -416,7 +519,10 @@ package actor RealtimeEngine {
         ?? RealtimeError(kind: .notSubscribed, message: "channel \(topic) was unsubscribed")
       rejectSubscribe(topic, with: error)
     case .resendPresenceTrack:
-      break
+      if let payload = channels[topic]?.presence.trackedPayload {
+        sendPresence(
+          topic, payload: ["type": "presence", "event": "track", "payload": .object(payload)])
+      }
     case .finishDataStreams:
       registry.inbound[topic]?.values.forEach { $0.finish() }
       registry.inbound[topic] = nil
@@ -448,10 +554,15 @@ package actor RealtimeEngine {
       }
       return
     }
-    guard let record = channels[topic] else { return }
+    resetThrottles(topic)
+    guard var record = channels[topic] else { return }
     let ref = makeRef()
+    record.config.presence.enabled =
+      record.config.presence.enabled || record.presence.trackedPayload != nil
+    record.presence.reset()
+    channels[topic] = record
     let payload = RealtimeJoinPayload(
-      config: record.config, accessToken: accessToken,
+      config: record.config, accessToken: tokens.token,
       version: configuration.headers[.xClientInfo])
     guard let encoded = try? JSONObject(payload) else {
       logger.error("failed to encode the phx_join payload for \(topic)")
@@ -611,9 +722,33 @@ package actor RealtimeEngine {
     for case .waiting(let waiter) in slots { waiter.resume(throwing: error) }
   }
 
-  private func refreshAccessToken() async {
-    guard let provider = configuration.accessToken else { return }
-    if let token = try? await provider() { accessToken = token }
+  /// Asks the provider for a token and keeps it if it is newer than any refresh that started
+  /// later. Returns whether the stored token changed. Either way the next refresh is scheduled,
+  /// so a provider that fails or returns the old token is asked again.
+  @discardableResult
+  private func refreshAccessToken() async -> Bool {
+    guard let provider = configuration.accessToken else { return false }
+    let generation = tokens.beginRefresh()
+    let result = try? await provider()
+    let changed = tokens.apply(result, generation: generation)
+    scheduleTokenRefresh(atLeast: configuration.accessTokenRetryInterval)
+    return changed
+  }
+
+  /// Refreshes `accessTokenRefreshLeeway` before the token's `exp`, since the server closes
+  /// every channel the moment it expires.
+  private func scheduleTokenRefresh(atLeast minimum: Duration = .zero) {
+    tokenRefreshTask?.cancel()
+    tokenRefreshTask = nil
+    guard
+      let due = tokens.refreshDelay(now: Date(), leeway: configuration.accessTokenRefreshLeeway)
+    else { return }
+    let delay = max(due, minimum)
+    tokenRefreshTask = Task {
+      try? await clock.sleep(for: delay)
+      guard !Task.isCancelled else { return }
+      if await refreshAccessToken() { pushAccessTokenToJoinedChannels() }
+    }
   }
 
   // MARK: - Supervisor
@@ -775,6 +910,14 @@ package actor RealtimeEngine {
       applyChannel(message.topic, .serverClosed)
     case "phx_error":
       applyChannel(message.topic, .serverErrored)
+    case "presence_state":
+      let change = channels[message.topic]?.presence.applyState(message.payload)
+      registry.inbound[message.topic]?.values.forEach { $0.yield(.message(message)) }
+      change.map { yieldPresence($0, to: message.topic) }
+    case "presence_diff":
+      let change = channels[message.topic]?.presence.applyDiff(message.payload)
+      registry.inbound[message.topic]?.values.forEach { $0.yield(.message(message)) }
+      if let change = change ?? nil { yieldPresence(change, to: message.topic) }
     default:
       if message.event == "system", message.payload["status"] == "error" {
         let text = message.payload["message"]?.stringValue ?? "system error"
@@ -782,6 +925,10 @@ package actor RealtimeEngine {
       }
       registry.inbound[message.topic]?.values.forEach { $0.yield(.message(message)) }
     }
+  }
+
+  private func yieldPresence(_ change: PresenceChange, to topic: String) {
+    registry.inbound[topic]?.values.forEach { $0.yield(.presenceChanged(change)) }
   }
 
   private func handleBinary(_ data: Data) {
