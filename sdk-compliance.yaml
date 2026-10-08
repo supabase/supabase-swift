@@ -1658,8 +1658,8 @@ features:
     status: implemented
     symbols:
       - RealtimeChannel.subscribe
-    # The channel handle and its join options belong to subscribe. Presence.key is sent with
-    # every join; the presence capabilities land with SDK-2113.
+    # The channel handle and its join options belong to subscribe. Presence.key belongs to
+    # realtime.presence.presence_key.
     supporting_symbols:
       - RealtimeChannel
       - RealtimeChannel.topic
@@ -1675,7 +1675,6 @@ features:
       - RealtimeChannelConfiguration.Broadcast
       - RealtimeChannelConfiguration.Broadcast.waitForReplication
       - RealtimeChannelConfiguration.Presence
-      - RealtimeChannelConfiguration.Presence.key
       - RealtimeChannelConfiguration.PostgresChanges
       - RealtimeChannelConfiguration.PostgresChanges.waitForSubscription
       - RealtimeChannelConfiguration.PostgresChanges.subscriptionTimeout
@@ -1708,8 +1707,14 @@ features:
       - PostgresChangeEvent.delete
       - PostgresChangeEvent.all
   realtime.subscriptions.subscribe_presence:
-    status: not_implemented
-    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
+    status: implemented
+    symbols:
+      - RealtimePresence.states
+      - RealtimePresence.changes
+    supporting_symbols:
+      - PresenceChange
+      - PresenceChange.joins
+      - PresenceChange.leaves
   realtime.subscriptions.postgres_changes_filter:
     status: implemented
     symbols:
@@ -1770,17 +1775,33 @@ features:
       - RealtimeChannel.postgresChanges
 
   realtime.presence.track:
-    status: not_implemented
-    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
+    status: implemented
+    symbols:
+      - RealtimePresence.track
+    supporting_symbols:
+      - RealtimeChannel.presence
+      - RealtimePresence
   realtime.presence.untrack:
-    status: not_implemented
-    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
+    status: implemented
+    symbols:
+      - RealtimePresence.untrack
   realtime.presence.presence_state:
-    status: not_implemented
-    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
+    status: implemented
+    symbols:
+      - RealtimePresence.state
+    supporting_symbols:
+      - PresenceState
+      - PresenceState.entries
+      - PresenceState.decode
+      - PresenceEntry
+      - PresenceEntry.ref
+      - PresenceEntry.previousRef
+      - PresenceEntry.payload
+      - PresenceEntry.decode
   realtime.presence.presence_key:
-    status: not_implemented
-    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
+    status: implemented
+    symbols:
+      - RealtimeChannelConfiguration.Presence.key
 
   # Swift always has a native WebSocket (URLSessionWebSocketTask); unlike
   # supabase-js, there's no runtime (Node <22, Cloudflare Workers, Deno) that
