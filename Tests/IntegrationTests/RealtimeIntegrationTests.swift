@@ -5,6 +5,9 @@
 //  Created by AI Assistant on 09/01/25.
 //
 
+// Linux: the official Swift images' libcurl is built without WebSocket support, so
+// `URLSessionWebSocketTask` fails with "WebSockets not supported by libcurl" and the client never
+// connects.
 #if !os(Android) && !os(Linux)
   import Clocks
   import ConcurrencyExtras
@@ -26,6 +29,9 @@
   @Suite(
     .serialized,
     .mainSerialExecutorSerialized,
+    // `subscribeWithError()` times out on `testClock`, which never advances, so a stack that is
+    // down would otherwise hang the run.
+    .timeLimit(.minutes(1)),
     .enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil)
   )
   final class RealtimeIntegrationTests: Sendable {
@@ -283,9 +289,7 @@
           let text: String
         }
 
-        let receivedMessagesTask = Task {
-          await channel.broadcastStream(event: "test-event").prefix(3).collect()
-        }
+        let receivedMessagesStream = channel.broadcastStream(event: "test-event")
 
         try await channel.subscribeWithError()
 
@@ -295,7 +299,7 @@
         await channel.broadcast(event: "test-event", message: ["value": 3, "text": "third"])
 
         let receivedMessages = try await withTimeout(.seconds(5)) {
-          await receivedMessagesTask.value
+          await receivedMessagesStream.prefix(3).collect()
         }
 
         #expect(receivedMessages.count == 3)
@@ -321,13 +325,8 @@
           $0.broadcast.receiveOwnBroadcasts = true
         }
 
-        let event1Messages = Task {
-          await channel.broadcastStream(event: "event-1").prefix(2).collect()
-        }
-
-        let event2Messages = Task {
-          await channel.broadcastStream(event: "event-2").prefix(2).collect()
-        }
+        let event1Messages = channel.broadcastStream(event: "event-1")
+        let event2Messages = channel.broadcastStream(event: "event-2")
 
         try await channel.subscribeWithError()
 
@@ -337,11 +336,11 @@
         try await channel.broadcast(event: "event-2", message: ["data": "4"])
 
         let event1 = try await withTimeout(.seconds(5)) {
-          await event1Messages.value
+          await event1Messages.prefix(2).collect()
         }
 
         let event2 = try await withTimeout(.seconds(5)) {
-          await event2Messages.value
+          await event2Messages.prefix(2).collect()
         }
 
         #expect(event1.count == 2)
@@ -396,15 +395,15 @@
           let value: JSONValue
         }
 
-        let allChangesTask = Task {
-          await channel.postgresChange(AnyAction.self, schema: "public", table: "key_value_storage")
-            .prefix(3).collect()
-        }
+        let allChanges = channel.postgresChange(
+          AnyAction.self, schema: "public", table: "key_value_storage")
+        let system = channel.system()
 
         try await channel.subscribeWithError()
 
-        // Wait for subscription
-        _ = await channel.system().first(where: { _ in true })
+        _ = try await withTimeout(.seconds(10)) {
+          await system.first(where: { _ in true })
+        }
 
         let testKey = UUID().uuidString
 
@@ -427,7 +426,7 @@
         try await client.from("key_value_storage").delete().eq("key", value: testKey).execute()
 
         let received = try await withTimeout(.seconds(5)) {
-          await allChangesTask.value
+          await allChanges.prefix(3).collect()
         }
 
         #expect(received.count == 3)
@@ -475,19 +474,19 @@
         let testKey2 = UUID().uuidString
 
         // Set up filter for specific key
-        let filteredTask = Task {
-          await channel.postgresChange(
-            InsertAction.self,
-            schema: "public",
-            table: "key_value_storage",
-            filter: .eq("key", value: testKey1)
-          ).prefix(1).collect()
-        }
+        let filtered = channel.postgresChange(
+          InsertAction.self,
+          schema: "public",
+          table: "key_value_storage",
+          filter: .eq("key", value: testKey1)
+        )
+        let system = channel.system()
 
         try await channel.subscribeWithError()
 
-        // Wait for subscription
-        _ = await channel.system().first(where: { _ in true })
+        _ = try await withTimeout(.seconds(10)) {
+          await system.first(where: { _ in true })
+        }
 
         // Insert with key1 - should be received
         _ = try await client.from("key_value_storage")
@@ -500,7 +499,7 @@
           .insert(["key": testKey2, "value": "not-filtered"]).select().single().execute()
 
         let received = try await withTimeout(.seconds(5)) {
-          await filteredTask.value
+          await filtered.prefix(1).collect()
         }
 
         #expect(received.count == 1)
@@ -525,37 +524,19 @@
           let value: JSONValue
         }
 
-        let insertTask = Task {
-          await channel.postgresChange(
-            InsertAction.self,
-            schema: "public",
-            table: "key_value_storage"
-          )
-          .prefix(1).collect()
-        }
-
-        let updateTask = Task {
-          await channel.postgresChange(
-            UpdateAction.self,
-            schema: "public",
-            table: "key_value_storage"
-          )
-          .prefix(1).collect()
-        }
-
-        let deleteTask = Task {
-          await channel.postgresChange(
-            DeleteAction.self,
-            schema: "public",
-            table: "key_value_storage"
-          )
-          .prefix(1).collect()
-        }
+        let insertions = channel.postgresChange(
+          InsertAction.self, schema: "public", table: "key_value_storage")
+        let updates = channel.postgresChange(
+          UpdateAction.self, schema: "public", table: "key_value_storage")
+        let deletions = channel.postgresChange(
+          DeleteAction.self, schema: "public", table: "key_value_storage")
+        let system = channel.system()
 
         try await channel.subscribeWithError()
 
-        // Wait for subscription
-        _ = await channel.system().first(where: { _ in true })
+        _ = try await withTimeout(.seconds(10)) {
+          await system.first(where: { _ in true })
+        }
 
         let testKey = UUID().uuidString
 
@@ -577,21 +558,21 @@
         // Delete
         try await client.from("key_value_storage").delete().eq("key", value: testKey).execute()
 
-        let inserts = try await withTimeout(.seconds(5)) {
-          await insertTask.value
+        let inserted = try await withTimeout(.seconds(5)) {
+          await insertions.prefix(1).collect()
         }
 
-        let updates = try await withTimeout(.seconds(5)) {
-          await updateTask.value
+        let updated = try await withTimeout(.seconds(5)) {
+          await updates.prefix(1).collect()
         }
 
-        let deletes = try await withTimeout(.seconds(5)) {
-          await deleteTask.value
+        let deleted = try await withTimeout(.seconds(5)) {
+          await deletions.prefix(1).collect()
         }
 
-        #expect(inserts.count == 1)
-        #expect(updates.count == 1)
-        #expect(deletes.count == 1)
+        #expect(inserted.count == 1)
+        #expect(updated.count == 1)
+        #expect(deleted.count == 1)
 
         await channel.unsubscribe()
       }
@@ -722,22 +703,12 @@
         )
 
         // Set up listeners for presence changes
-        let client1PresenceChanges = Task {
-          await channel1.presenceChange().prefix(5).collect()
-        }
-
-        let client2PresenceChanges = Task {
-          await channel2.presenceChange().prefix(5).collect()
-        }
+        let client1PresenceChanges = channel1.presenceChange()
+        let client2PresenceChanges = channel2.presenceChange()
 
         // Set up listeners for chat messages
-        let client1Messages = Task {
-          await channel1.broadcastStream(event: "chat-message").prefix(3).collect()
-        }
-
-        let client2Messages = Task {
-          await channel2.broadcastStream(event: "chat-message").prefix(3).collect()
-        }
+        let client1Messages = channel1.broadcastStream(event: "chat-message")
+        let client2Messages = channel2.broadcastStream(event: "chat-message")
 
         // Subscribe both clients
         try await channel1.subscribeWithError()
@@ -813,19 +784,19 @@
 
         // Collect all events
         let presenceChanges1 = try await withTimeout(.seconds(5)) {
-          await client1PresenceChanges.value
+          await client1PresenceChanges.prefix(5).collect()
         }
 
         let presenceChanges2 = try await withTimeout(.seconds(5)) {
-          await client2PresenceChanges.value
+          await client2PresenceChanges.prefix(5).collect()
         }
 
         let messages1 = try await withTimeout(.seconds(5)) {
-          await client1Messages.value
+          await client1Messages.prefix(3).collect()
         }
 
         let messages2 = try await withTimeout(.seconds(5)) {
-          await client2Messages.value
+          await client2Messages.prefix(3).collect()
         }
 
         // Verify presence changes
