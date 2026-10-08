@@ -156,7 +156,8 @@ package struct URLSessionWebSocketTransport: WebSocketTransport, @unchecked Send
   /// `reportIssue` from a `@Test` segfaults under `xcodebuild test` (SDK-435).
   static func validatedCloseCode(_ code: Int?) -> Int? {
     guard let code else { return nil }
-    return code == 1000 || (3000...4999).contains(code) ? code : nil
+    let sendable = [1000...1003, 1007...1011, 3000...4999]
+    return sendable.contains { $0.contains(code) } ? code : nil
   }
 
   /// Returns `reason` truncated on whole characters to the 123-byte limit of RFC 6455 §5.5.
