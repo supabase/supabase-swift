@@ -901,3 +901,65 @@ struct RealtimeEngineTests {
     #expect(error?.kind == .notSubscribed)
   }
 }
+
+/// The one handle the engine-level tests act as.
+let testOwner = ChannelOwner()
+
+extension RealtimeEngine {
+  func addChannel(_ topic: String, config: RealtimeJoinConfig = RealtimeJoinConfig()) async {
+    await addChannel(topic, owner: testOwner, config: config)
+  }
+
+  func subscribe(_ topic: String) async throws {
+    try await subscribe(topic, owner: testOwner)
+  }
+
+  func unsubscribe(_ topic: String) async {
+    await unsubscribe(topic, owner: testOwner)
+  }
+
+  func updateBindings(_ topic: String, _ bindings: [PostgresJoinConfig]) {
+    updateBindings(topic, owner: testOwner, bindings)
+  }
+
+  func enablePresence(_ topic: String) {
+    enablePresence(topic, owner: testOwner)
+  }
+
+  func removeChannel(_ topic: String) async {
+    await removeChannel(topic, owner: testOwner)
+  }
+
+  nonisolated func inbound(_ topic: String) -> AsyncStream<ChannelInbound> {
+    inbound(topic, owner: testOwner)
+  }
+
+  @discardableResult
+  func send(
+    _ topic: String, event: String, payload: JSONObject, awaitReply: Bool
+  ) async throws -> JSONObject? {
+    try await send(topic, owner: testOwner, event: event, payload: payload, awaitReply: awaitReply)
+  }
+
+  func sendBroadcast(_ topic: String, event: String, data: Data) async throws {
+    try await sendBroadcast(topic, owner: testOwner, event: event, data: data)
+  }
+
+  func trackPresence(_ topic: String, payload: JSONObject) async throws {
+    try await trackPresence(topic, owner: testOwner, payload: payload)
+  }
+
+  func untrackPresence(_ topic: String) async throws {
+    try await untrackPresence(topic, owner: testOwner)
+  }
+}
+
+extension EngineMirror {
+  func channel(_ topic: String) -> RealtimeChannelStatus {
+    channel(topic, owner: testOwner.id)
+  }
+
+  func inbound(_ topic: String) -> AsyncStream<ChannelInbound> {
+    inbound(topic, owner: testOwner.id)
+  }
+}

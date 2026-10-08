@@ -25,11 +25,11 @@ struct RealtimePresenceIntegrationTests {
   private func uniqueTopic() -> String { "it-\(UUID())" }
 
   /// Runs `body` with two sockets and closes both afterwards, also when `body` throws.
-  private func withEngines(
-    _ body: (RealtimeEngine, RealtimeEngine) async throws -> Void
+  private func withClients(
+    _ body: (RealtimeClient, RealtimeClient) async throws -> Void
   ) async throws {
-    let a = LiveRealtime.engine()
-    let b = LiveRealtime.engine()
+    let a = LiveRealtime.client()
+    let b = LiveRealtime.client()
     do {
       try await body(a, b)
     } catch {
@@ -60,10 +60,10 @@ struct RealtimePresenceIntegrationTests {
 
   @Test
   func trackUpdateAndUntrackReachTheOtherClient() async throws {
-    try await withEngines { a, b in
+    try await withClients { a, b in
       let topic = uniqueTopic()
-      let channelA = LiveRealtime.channel(topic, engine: a)
-      let channelB = LiveRealtime.channel(topic, engine: b)
+      let channelA = a.channel(topic)
+      let channelB = b.channel(topic)
       let states = channelB.presence.states
       let changes = channelB.presence.changes
       try await channelB.subscribe()
@@ -91,10 +91,10 @@ struct RealtimePresenceIntegrationTests {
 
   @Test
   func presenceKeyGroupsEntries() async throws {
-    try await withEngines { a, b in
+    try await withClients { a, b in
       let topic = uniqueTopic()
-      let channelA = LiveRealtime.channel(topic, engine: a) { $0.presence.key = "user-a" }
-      let channelB = LiveRealtime.channel(topic, engine: b) { $0.presence.key = "user-b" }
+      let channelA = a.channel(topic) { $0.presence.key = "user-a" }
+      let channelB = b.channel(topic) { $0.presence.key = "user-b" }
       let states = channelB.presence.states
       try await channelB.subscribe()
       try await channelA.subscribe()
@@ -110,10 +110,10 @@ struct RealtimePresenceIntegrationTests {
 
   @Test
   func firstStreamOnAJoinedChannelReceivesTheSet() async throws {
-    try await withEngines { a, b in
+    try await withClients { a, b in
       let topic = uniqueTopic()
-      let channelA = LiveRealtime.channel(topic, engine: a)
-      let channelB = LiveRealtime.channel(topic, engine: b)
+      let channelA = a.channel(topic)
+      let channelB = b.channel(topic)
       try await channelA.subscribe()
       try await channelA.presence.track(User(name: "ana"))
       try await channelB.subscribe()
@@ -127,10 +127,10 @@ struct RealtimePresenceIntegrationTests {
   /// realApplicationScenario_BroadcastAndPresence
   @Test
   func socketDropRetracksAfterTheRejoin() async throws {
-    try await withEngines { a, b in
+    try await withClients { a, b in
       let topic = uniqueTopic()
-      let channelA = LiveRealtime.channel(topic, engine: a)
-      let channelB = LiveRealtime.channel(topic, engine: b)
+      let channelA = a.channel(topic)
+      let channelB = b.channel(topic)
       let changes = channelB.presence.changes
       try await channelB.subscribe()
       try await channelA.subscribe()

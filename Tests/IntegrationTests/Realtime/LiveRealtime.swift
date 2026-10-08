@@ -6,32 +6,20 @@
 //
 
 import Foundation
+import HTTPTypes
 import Realtime
 
-/// Builds Realtime objects against the local Supabase stack.
-///
-/// There is no public Realtime client yet, so this goes through the `package` initializers.
+/// Builds Realtime clients against the local Supabase stack.
 enum LiveRealtime {
-  static let baseURL = URL(string: "\(DotEnv.supabaseURL)/realtime/v1")!
+  static let url = URL(string: "\(DotEnv.supabaseURL)/realtime/v1")!
 
-  static func engine(apikey: String = DotEnv.supabasePublishableKey) -> RealtimeEngine {
-    let url = RealtimeURL.webSocket(baseURL: baseURL, apikey: apikey, logLevel: nil)
-    return RealtimeEngine(
-      configuration: RealtimeEngineConfiguration(url: url),
-      transport: URLSessionWebSocketTransport())
-  }
-
-  static func channel(
-    _ topic: String,
-    engine: RealtimeEngine,
+  static func client(
     apikey: String = DotEnv.supabasePublishableKey,
-    configure: (inout RealtimeChannelConfiguration) -> Void = { _ in }
-  ) -> RealtimeChannel {
-    var configuration = RealtimeChannelConfiguration()
-    configure(&configuration)
-    let rest = RealtimeREST(
-      baseURL: baseURL, apikey: apikey, http: HTTPClientConfiguration(), timeout: .seconds(10),
-      clock: ContinuousClock(), accessToken: { apikey })
-    return RealtimeChannel(topic: topic, configuration: configuration, engine: engine, rest: rest)
+    configure: (inout RealtimeClientOptions) -> Void = { _ in }
+  ) -> RealtimeClient {
+    var options = RealtimeClientOptions()
+    options.headers[HTTPField.Name("apikey")!] = apikey
+    configure(&options)
+    return RealtimeClient(url: url, options: options)
   }
 }

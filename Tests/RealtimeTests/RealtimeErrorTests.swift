@@ -208,13 +208,21 @@ struct RealtimeErrorTests {
     #expect(!error.message.isEmpty)
   }
 
-  @Test(arguments: [401, 403, 404])
-  func upgradeFailedIsFatalForAuthAndNotFoundStatuses(status: Int) {
+  @Test(arguments: [401, 403])
+  func upgradeFailedIsUnauthorizedForAuthStatuses(status: Int) {
     let error = RealtimeError.upgradeFailed(status: status)
+
+    #expect(error.kind == .unauthorized)
+    #expect(!error.isRetryable)
+    #expect(error.message.contains("\(status)"))
+  }
+
+  @Test
+  func upgradeFailedIsFatalForNotFound() {
+    let error = RealtimeError.upgradeFailed(status: 404)
 
     #expect(error.kind == .transport)
     #expect(!error.isRetryable)
-    #expect(error.message.contains("\(status)"))
   }
 
   @Test(arguments: [429, 500, 502, 503])

@@ -70,8 +70,9 @@ public struct RealtimeError: SupabaseError {
     /// Nothing to retry; report it.
     public static let decoding: Kind = "decoding"
 
-    /// A frame could not be encoded for sending. Never thrown to callers; it only appears in logs.
-    static let encoding: Kind = "encoding"
+    /// A payload could not be encoded for sending: a broadcast, REST broadcast or presence
+    /// payload that does not encode to JSON. Nothing to retry; fix the payload.
+    public static let encoding: Kind = "encoding"
   }
 
   /// The code the server prefixes to a join or channel error reason, as in
@@ -248,13 +249,13 @@ extension RealtimeError {
 
   /// The error for an HTTP upgrade the server refused.
   ///
-  /// 401, 403 and 404 mean the key, tenant or project is wrong and a retry cannot help. Every
-  /// other status (429 and 5xx in practice) is transient.
+  /// 401, 403 and 404 mean the key, tenant or project is wrong and a retry cannot help; 401 and
+  /// 403 are ``Kind/unauthorized``. Every other status (429 and 5xx in practice) is transient.
   package static func upgradeFailed(status: Int, underlyingError: (any Error)? = nil)
     -> RealtimeError
   {
     RealtimeError(
-      kind: .transport,
+      kind: [401, 403].contains(status) ? .unauthorized : .transport,
       message: "WebSocket upgrade failed with HTTP status \(status).",
       isRetryable: ![401, 403, 404].contains(status),
       underlyingError: underlyingError
