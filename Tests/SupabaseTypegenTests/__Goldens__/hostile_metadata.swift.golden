@@ -1,0 +1,80 @@
+import Foundation
+import PostgrestMacros
+
+enum MySchema: PostgrestSchema {
+  static let name = #"my"schema"#
+}
+
+@Table("class", schema: MySchema.self)
+struct MySchemaClass {
+  var id: Int
+}
+
+@Table("UserProfiles")
+struct UserProfiles {
+  var id: Int
+}
+
+@Table("date")
+struct DateTable {
+  var id: Int
+}
+
+@Table("hostile")
+struct Hostile {
+  var id: Int
+  @Column("class") var `class`: Int
+  @Column("default") var `default`: String?
+  @Column("self") var selfColumn: Bool
+  @Column("Type") var type: Int
+  @Column("init") var `init`: Int
+  @Column("columns") var columnsColumn: Int
+  @Column("select_string") var selectStringColumn: String
+  @Column("relation_name") var relationNameColumn: String
+  @Column("primary_key_columns") var primaryKeyColumnsColumn: String
+  @Column("Draft") var draft: String
+  var userId: Int
+  @Column("userId") var userId2: Int
+  @Column("user-id") var userId3: Int
+  @Column(#"say "hi""#) var sayHi: String
+  @Column(#"back\slash"#) var backSlash: String
+  @Column("1st_place") var _1stPlace: Int
+  @Column("__") var unnamed: String
+  var rawValue: String
+  var stringValue: String
+  var intValue: Int
+  var hashValue: Int
+  var mood: JSONValue
+  var moods: [JSONValue]?
+  var span: JSONValue?
+  var nick: String
+  var ids: [UUID]?
+  var price: Decimal
+  var ratio: Double
+  var tiny: Int
+  var born: Date
+  var at: Date
+  var code: String
+  var label: String
+  var doc: JSONValue?
+}
+
+@Table("inventory_books")
+struct InventoryBooks {
+  var id: Int
+}
+
+@Table("type")
+struct TypeTable {
+  var id: Int
+}
+
+@Table("user_profiles")
+struct UserProfiles2 {
+  var id: Int
+}
+
+@Table(#"we"ird\name"#)
+struct WeIrdName {
+  var id: Int
+}

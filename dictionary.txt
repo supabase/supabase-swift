@@ -299,3 +299,7 @@ xcprivacy
 nonsending
 Subrange
 fkey
+bpchar
+caseless
+goldens
+uppercased

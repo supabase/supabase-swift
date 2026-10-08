@@ -19,6 +19,7 @@ enum ExitCode {
   static let success: Int32 = 0
   static let usage: Int32 = 64
   static let dataError: Int32 = 65
+  static let software: Int32 = 70
   static let cannotCreate: Int32 = 73
 }
 
@@ -121,12 +122,25 @@ func run(arguments: [String], standardInput: () -> Data) -> RunResult {
     )
   }
 
-  // A placeholder until the emitter lands.
-  _ = DatabaseModel(metadata, schemas: options.schemas)
-  let file = "import PostgrestMacros\n"
+  let plan: FilePlan
+  let file: String
+  do {
+    plan = try FilePlan(DatabaseModel(metadata, schemas: options.schemas))
+    file = try plan.render(accessControl: options.accessControl)
+  } catch let error as FilePlan.TypeNameClash {
+    return RunResult(
+      exitCode: ExitCode.dataError,
+      standardError: error.description.split(separator: "\n").map { "supabase-typegen: \($0)\n" }
+        .joined()
+    )
+  } catch {
+    return RunResult(
+      exitCode: ExitCode.software, standardError: "supabase-typegen: internal error: \(error)\n")
+  }
+  let notes = plan.notes.map { "supabase-typegen: note: \($0)\n" }.joined()
 
   if options.output == "-" {
-    return RunResult(exitCode: ExitCode.success, standardOutput: file)
+    return RunResult(exitCode: ExitCode.success, standardOutput: file, standardError: notes)
   }
   do {
     try Data(file.utf8).write(to: URL(fileURLWithPath: options.output), options: .atomic)
@@ -137,7 +151,7 @@ func run(arguments: [String], standardInput: () -> Data) -> RunResult {
         "supabase-typegen: cannot write '\(options.output)': \(error.localizedDescription)\n"
     )
   }
-  return RunResult(exitCode: ExitCode.success)
+  return RunResult(exitCode: ExitCode.success, standardError: notes)
 }
 
 private func quoted(_ names: [String]) -> String {

@@ -1,0 +1,80 @@
+import Foundation
+import PostgrestMacros
+
+@Table("channels")
+struct Channels {
+  var id: Int
+  var slug: String
+}
+
+@Table("counters")
+struct Counters {
+  var id: Int
+  var count: Int
+  var doubled: Int?
+}
+
+@Table("discussions")
+struct Discussions {
+  var id: Int
+  var title: String
+  var pinnedPostId: Int?
+}
+
+@Table("key_value_storage")
+struct KeyValueStorage {
+  var key: String
+  var value: JSONValue?
+}
+
+@Table("messages")
+struct Messages {
+  var id: Int
+  var channelId: Int?
+  var data: JSONValue?
+  var message: String?
+  var username: String?
+}
+
+@Table("posts")
+struct Posts {
+  var id: Int
+  var discussionId: Int
+  var author: String
+  var approved: Bool
+  var createdAt: Date
+}
+
+@Table("replies")
+struct Replies {
+  var id: Int
+  var postId: Int
+  var body: String
+  var approved: Bool
+}
+
+@Table("todos")
+struct Todos {
+  var id: UUID
+  var description: String
+  var isComplete: Bool
+  var tags: [String]?
+  var createdAt: Date?
+}
+
+@Table("updatable_view")
+struct UpdatableView {
+  var username: String?
+  var nonUpdatableColumn: Int?
+}
+
+@Table("users")
+struct Users {
+  var id: UUID
+  var email: String?
+  var username: String?
+  var ageRange: JSONValue?
+  var catchphrase: String?
+  var data: JSONValue?
+  var status: JSONValue?
+}

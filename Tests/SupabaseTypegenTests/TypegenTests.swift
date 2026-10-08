@@ -35,9 +35,10 @@ struct TypegenTests {
 
   @Test(arguments: [Fixture.integration, Fixture.postgrestTypegen])
   func validDocumentWritesTheFileToStandardOutput(document: Data) {
-    #expect(
-      run(input: document)
-        == RunResult(exitCode: 0, standardOutput: "import PostgrestMacros\n"))
+    let result = run(input: document)
+    #expect(result.exitCode == 0)
+    #expect(result.standardOutput.hasSuffix("}\n"))
+    #expect(!result.standardOutput.hasSuffix("\n\n"))
   }
 
   @Test
@@ -139,8 +140,10 @@ struct TypegenTests {
       .appendingPathComponent("\(UUID().uuidString).swift")
     defer { try? FileManager.default.removeItem(at: url) }
 
-    #expect(run("--output", url.path) == RunResult(exitCode: 0))
-    #expect(try String(contentsOf: url, encoding: .utf8) == "import PostgrestMacros\n")
+    let result = run("--output", url.path)
+    #expect(result.exitCode == 0)
+    #expect(result.standardOutput.isEmpty)
+    #expect(try String(contentsOf: url, encoding: .utf8) == run().standardOutput)
   }
 
   @Test

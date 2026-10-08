@@ -1,0 +1,174 @@
+public import Foundation
+public import PostgrestMacros
+
+public enum Inventory: PostgrestSchema {
+  public static let name = "inventory"
+}
+
+@Table("items", schema: Inventory.self)
+public struct InventoryItems {
+  public var id: Int
+  public var ownerId: Int
+  public var status: JSONValue
+}
+
+@Table("users", schema: Inventory.self)
+public struct InventoryUsers {
+  public var id: Int
+  public var status: JSONValue?
+  public var publicUserId: Int?
+}
+
+@Table("a_view")
+public struct AView {
+  public var id: Int?
+}
+
+@Table("category")
+public struct Category {
+  public var id: Int
+  public var name: String
+}
+
+@Table("empty")
+public struct Empty {
+}
+
+@Table("events")
+public struct Events {
+  public var id: Int
+  public var createdAt: Date
+  public var eventType: String?
+  public var data: JSONValue?
+}
+
+@Table("events_2024")
+public struct Events2024 {
+  public var id: Int
+  public var createdAt: Date
+  public var eventType: String?
+  public var data: JSONValue?
+}
+
+@Table("events_2025")
+public struct Events2025 {
+  public var id: Int
+  public var createdAt: Date
+  public var eventType: String?
+  public var data: JSONValue?
+}
+
+@Table("foreign_table")
+public struct ForeignTable {
+  public var id: Int
+  public var name: String?
+  public var status: JSONValue?
+}
+
+@Table("interval_test")
+public struct IntervalTest {
+  public var id: Int
+  public var durationRequired: JSONValue
+  public var durationOptional: JSONValue?
+}
+
+@Table("memes")
+public struct Memes {
+  public var id: Int
+  public var name: String
+  public var category: Int?
+  public var metadata: JSONValue?
+  public var createdAt: Date
+  public var status: JSONValue?
+}
+
+@Table("scalar_type_test")
+public struct ScalarTypeTest {
+  public var id: Int
+  public var flag: Bool
+  public var smallInt: Int?
+  public var singlePrecision: Double?
+  public var doublePrecision: Double?
+}
+
+@Table("table_with_other_tables_row_type")
+public struct TableWithOtherTablesRowType {
+  public var col1: JSONValue?
+  public var col2: JSONValue?
+}
+
+@Table("table_with_primary_key_other_than_id")
+public struct TableWithPrimaryKeyOtherThanId {
+  public var otherId: Int
+  public var name: String?
+}
+
+@Table("todos")
+public struct Todos {
+  public var id: Int
+  public var details: String?
+  @Column("user-id") public var userId: Int
+}
+
+@Table("todos_matview")
+public struct TodosMatview {
+  public var id: Int?
+  public var details: String?
+  @Column("user-id") public var userId: Int?
+}
+
+@Table("todos_view")
+public struct TodosView {
+  public var id: Int?
+  public var details: String?
+  @Column("user-id") public var userId: Int?
+}
+
+@Table("user_details")
+public struct UserDetails {
+  public var userId: Int
+  public var details: String?
+}
+
+@Table("user_todos_summary_view")
+public struct UserTodosSummaryView {
+  public var userId: Int?
+  public var userName: String?
+  public var userStatus: JSONValue?
+  public var todoCount: Int?
+  public var todoDetails: [String]?
+}
+
+@Table("users")
+public struct Users {
+  public var id: Int
+  public var name: String?
+  public var status: JSONValue?
+  public var decimal: Decimal?
+  public var userUuid: UUID?
+}
+
+@Table("users_audit")
+public struct UsersAudit {
+  public var id: Int
+  public var createdAt: Date?
+  public var userId: Int?
+  public var previousValue: JSONValue?
+}
+
+@Table("users_view")
+public struct UsersView {
+  public var id: Int?
+  public var name: String?
+  public var status: JSONValue?
+  public var decimal: Decimal?
+  public var userUuid: UUID?
+}
+
+@Table("users_view_with_multiple_refs_to_users")
+public struct UsersViewWithMultipleRefsToUsers {
+  public var initialId: Int?
+  public var initialName: String?
+  public var secondId: Int?
+  public var secondName: String?
+}
