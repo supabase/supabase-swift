@@ -95,6 +95,8 @@ public macro Column(_ name: String) =
 /// That conformance is what makes `upsert(_:)` available: it derives the conflict target from the
 /// key, so no caller repeats it as a string. Leave the marker off and the relation does not conform,
 /// which turns an upsert with no target into a compile error rather than a silent plain insert.
+/// With `@Default` as well, the key is optional in `Draft`, and an upsert that omits it inserts by
+/// design: omit the key to insert, supply it to merge.
 @attached(peer)
 public macro PrimaryKey() =
   #externalMacro(

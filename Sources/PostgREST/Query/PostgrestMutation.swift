@@ -438,8 +438,23 @@ extension PostgrestSource where R: PostgrestWritableRelation & PostgrestKeyedRel
   /// database has not stored yet, whether this call ends up inserting it or merging it into an
   /// existing one.
   ///
-  /// > Note: The target only takes effect if the columns it names are in the body. A key the
-  /// > database generates is optional in `Draft`, so omitting it still inserts.
+  /// ### Omitting a generated key inserts
+  ///
+  /// A key the database generates (`@PrimaryKey @Default`) is optional in `Draft`. The conflict
+  /// target only matches a row whose body carries the key, so the contract is: omit the key to
+  /// insert, supply it to merge. Calling this in a loop with a key-less draft inserts a new row
+  /// every time.
+  ///
+  /// ```swift
+  /// // one form for both "new" and "edit": `id` is nil until the row has been saved
+  /// try await client.from(Todo.self)
+  ///   .upsert(Todo.Draft(id: editing?.id, task: text))
+  ///   .execute()
+  /// ```
+  ///
+  /// This is deliberate. It lets one draft back a form that both creates and edits rows. Requiring
+  /// the key here would remove that pattern. If a write must never insert, use ``update(_:)-(PostgrestUpdate<R>)`` scoped to
+  /// the key.
   ///
   /// - Parameters:
   ///   - values: The row to upsert, in the relation's ``PostgrestWritableRelation/Draft`` shape.
@@ -468,7 +483,8 @@ extension PostgrestSource where R: PostgrestWritableRelation & PostgrestKeyedRel
   /// rows may encode different columns and an empty collection writes nothing rather than throwing.
   ///
   /// > Note: The target only takes effect for a row that carries the key columns in its body. A
-  /// > row that omits a database-generated key is inserted, so a batch can mix the two.
+  /// > row that omits a database-generated key is inserted, so a batch can mix the two. See
+  /// > ``upsert(_:resolution:)-(R.Draft,_)`` for why this is the contract.
   ///
   /// - Parameters:
   ///   - values: The rows to upsert, in the relation's ``PostgrestWritableRelation/Draft`` shape.
