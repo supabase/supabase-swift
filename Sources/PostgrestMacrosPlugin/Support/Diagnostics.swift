@@ -120,6 +120,68 @@ extension DeclGroupSyntax {
 }
 
 extension DeclGroupSyntax {
+  /// Reports a marker attribute whose placement cannot mean what it says.
+  ///
+  /// Marker attributes sit on the declaration, so every binding of `@Default var a, b: Bool`
+  /// carries them, and `@PrimaryKey var a: Int, b: Int` is a compound key. Two placements have no
+  /// such reading:
+  ///
+  /// - `@Column("a") var x: Int, y: Int` names one column for two properties. Left alone, both
+  ///   `CodingKeys` cases get the raw value `"a"` and the compiler rejects generated code the
+  ///   author never wrote.
+  /// - `@PrimaryKey var id: Int?` marks a nullable property as the key, which Postgres never
+  ///   allows. Left alone it expands without complaint and nothing downstream notices.
+  ///
+  /// Returns `true` if anything was reported.
+  func postgrestDiagnoseMarkerPlacement(in context: some MacroExpansionContext) -> Bool {
+    var reported = false
+    for member in memberBlock.members {
+      guard
+        let variable = member.decl.as(VariableDeclSyntax.self),
+        !variable.modifiers.contains(where: { $0.name.text == "static" })
+      else { continue }
+      let attributes = variable.attributes.compactMap { $0.as(AttributeSyntax.self) }
+      func attribute(_ name: String) -> AttributeSyntax? {
+        attributes.first { $0.attributeName.trimmedDescription == name }
+      }
+
+      if let column = attribute("Column"), variable.bindings.count > 1 {
+        context.error(
+          """
+          @Column names one column, but this declaration binds \(variable.bindings.count) \
+          properties — split it into one declaration per property
+          """,
+          at: column
+        )
+        reported = true
+      }
+
+      guard attribute("PrimaryKey") != nil else { continue }
+      let bindings = Array(variable.bindings)
+      for index in bindings.indices {
+        let binding = bindings[index]
+        guard
+          let identifier = binding.pattern.as(IdentifierPatternSyntax.self),
+          binding.isPostgrestStored,
+          let type = bindings.postgrestType(at: index),
+          postgrestIsOptionalType(type.trimmedDescription)
+        else { continue }
+        let name = identifier.identifier.text
+        context.error(
+          """
+          @PrimaryKey on '\(name)' has an Optional type, but a primary key is never null — \
+          make '\(name)' non-optional, or move @PrimaryKey to the key column
+          """,
+          at: binding.pattern
+        )
+        reported = true
+      }
+    }
+    return reported
+  }
+}
+
+extension DeclGroupSyntax {
   /// Reports every `@Relationship` whose argument is not a usable foreign key key path.
   ///
   /// Left alone, the property falls through to the plain-column path and the reader gets
