@@ -120,16 +120,16 @@ deleted along with it.
 `OAuthClient`, `OAuthClientType`, `OAuthClientRegistrationType`, `OAuthAuthorizationClient`,
 `OAuthAuthorizationUser`, `OAuthAuthorizationDetails`, `OAuthRedirect`, `OAuthGrant`, `JWK`, `JWKS`,
 `JWTHeader`, `JWTClaims`, `AudienceClaim`, `PasskeyListItem` (Auth); `FileObject`, `Bucket`,
-`VectorBucket`, `VectorIndex`, `VectorIndexSummary`, `VectorMatch` (Storage); `Column`, `PresenceV2`
-(Realtime); `PostgrestError` (shared).
+`VectorBucket`, `VectorIndex`, `VectorIndexSummary`, `VectorMatch` (Storage); `PostgrestError`
+(shared). Realtime's types are all new in v3; see
+[Realtime rewritten](#realtime-rewritten-as-streams-over-one-engine-realtimeclientv2--realtimeclient).
 
 **No longer conform to `Codable` at all** (never encoded or decoded through Codable machinery in
 the first place): `OAuthResponse`, `Provider` (Auth).
 
 **Narrowed to `Encodable`-only** (no longer `Decodable`): `OpenIDConnectCredentials`,
 `OpenIDConnectCredentials.Provider`, `AuthMetaSecurity`, `Web3Credentials`, `Web3Chain`,
-`UserAttributes`, `MessagingChannel` (Auth); `ReplayOption`, `BroadcastJoinConfig`,
-`PresenceJoinConfig` (Realtime); `VectorEntry`, `ResizeMode`, `ImageFormat`, `SortOrder` (Storage).
+`UserAttributes`, `MessagingChannel` (Auth); `VectorEntry`, `ResizeMode`, `ImageFormat`, `SortOrder` (Storage).
 
 If you were relying on encoding one of the `Decodable`-only types (or decoding one of the
 `Encodable`-only types) yourself — e.g. to persist it to disk or pass it through your own
@@ -273,7 +273,8 @@ let url = try await storage.from("avatars").createSignedURL(
 
 ### Supabase
 
-`SupabaseClient.database` and `SupabaseClient.realtime` have been removed.
+`SupabaseClient.database` and the v1 `SupabaseClient.realtime` have been removed. `realtime` is
+now the v3 `RealtimeClient` (it replaces `realtimeV2`).
 
 ```swift
 // Before
@@ -282,35 +283,19 @@ supabase.realtime.connect()
 
 // After
 try await supabase.from("users").select().execute()
-supabase.realtimeV2.connect()
+try await supabase.realtime.connect()
 ```
 
 ### Realtime
 
-The entire legacy v1 API has been removed: `RealtimeClient`, `RealtimeChannel`, `Presence`, and
-their supporting types (`PhoenixTransport`, `Push`, `Delegated`, `HeartbeatTimer`, `TimeoutTimer`,
-and the `Message` typealias). Use `RealtimeClientV2`, `RealtimeChannelV2`, and `PresenceV2` — see
-[the RealtimeV2 migration guide](docs/migrations/RealtimeV2%20Migration%20Guide.md) for the full
-v1-to-v2 walkthrough.
-
-`RealtimeClientV2` and `RealtimeChannelV2` also had their own deprecated compatibility members
-removed:
-
-| Before | After |
-| --- | --- |
-| `RealtimeClientV2.subscriptions` | `RealtimeClientV2.channels` |
-| `RealtimeClientV2.Configuration` | `RealtimeClientOptions` |
-| `RealtimeClientV2.Status` | `RealtimeClientStatus` |
-| `RealtimeClientV2.init(config:)` | `RealtimeClientV2.init(url:options:)` |
-| `RealtimeClientV2.addChannel(_:)` | *(removed — the client tracks channels automatically)* |
-| `RealtimeChannelV2.Subscription` | `RealtimeSubscription` |
-| `RealtimeChannelV2.Status` | `RealtimeChannelStatus` |
-| `RealtimeChannelV2.subscribe()` | `RealtimeChannelV2.subscribeWithError()` |
-| `RealtimeChannelV2.updateAuth(jwt:)` | `RealtimeClientV2.setAuth(_:)` |
-| `postgresChange(_:schema:table:filter: String?:select:)` | `postgresChange(_:schema:table:filter: RealtimePostgresFilter?:select:)` |
-| `broadcast(event:) -> AsyncStream<JSONObject>` | `broadcastStream(event:)` |
-| `RealtimeMessageV2.eventType` | inspect the raw event value in `RealtimeMessageV2.event` instead |
-| `RealtimeMessageV2.EventType.tokenExpired` | now returned as `.system`; check the payload instead |
+The entire legacy v1 API has been removed (`RealtimeClient`, `RealtimeChannel` and `Presence` as
+they were in v1, plus `PhoenixTransport`, `Push`, `Delegated`, `HeartbeatTimer`, `TimeoutTimer`
+and the `Message` typealias), and so has the v2 API that replaced it. The names `RealtimeClient`
+and `RealtimeChannel` now belong to the v3 types. See
+[Realtime rewritten](#realtime-rewritten-as-streams-over-one-engine-realtimeclientv2--realtimeclient)
+for the v2-to-v3 move, which also covers the v2 compatibility members that earlier previews
+removed (`RealtimeClientV2.subscriptions`, `Configuration`, `init(config:)`, `addChannel(_:)`,
+`RealtimeChannelV2.updateAuth(jwt:)`, `RealtimeMessageV2.eventType`, and the rest).
 
 ### Helpers
 
@@ -412,15 +397,12 @@ let supabaseLogger = Logging.Logger(label: "myapp") { MyOSLogHandler(label: $0) 
 
 or keep the two imports in separate files so the ambiguity never arises.
 
-**`SupabaseClient` + `RealtimeClientOptions.logger`.** If you construct a `RealtimeClientOptions`
-with an explicit `logger:` and pass it to `SupabaseClientOptions(realtime:)`, `SupabaseClient` now
-always overrides it with `SupabaseClientOptions.GlobalOptions.logger` — matching how the
-Auth/PostgREST/Storage/Functions sub-clients already behaved, so Realtime is no longer the odd one
-out. This is a silent behavior change, not a compile error: search your codebase for
-`RealtimeClientOptions(` call sites that also set `logger:` and are passed through
-`SupabaseClientOptions(realtime:)` — that logger is now ignored in favor of the global one.
-Construct `RealtimeClientV2` directly (not through `SupabaseClient`) if you need a
-Realtime-specific logger distinct from the rest of the client.
+**`SupabaseClient` + `RealtimeClientOptions.logger`.** `SupabaseClient` gives Realtime the global
+`SupabaseClientOptions.GlobalOptions.logger` only when you did not set `options.realtime.logger`.
+Setting it at all counts as a custom logger, even to a value equal to the default, so the global
+logger is not used. This is a silent behavior change, not a compile error. Search for
+`realtime.logger` and `RealtimeClientOptions` call sites that set `logger`, and leave it unset to
+follow the global logger.
 
 ## `KeychainLocalStorage.retrieve` returns `nil` for a missing key instead of throwing
 
@@ -1627,14 +1609,14 @@ This is a compile error, not a silent behavior change, and only affects code tha
 generic `execute(options:)` through `any`/`some PostgrestExecutableBuilder` rather than through a
 concrete builder type such as `PostgrestFilterBuilder`.
 
-## `RealtimeChannelV2.broadcast(event:message:)` gains a per-call `encoder:` override
+## `RealtimeChannel.broadcast(event:payload:encoder:)` takes a per-call `encoder:`
 
-`broadcast(event:message:)` now accepts a trailing `encoder: JSONEncoder? = nil`, overriding the
-fixed internal encoder (`JSONValue.encoder`) previously always used to serialize `message`. Calling
-`broadcast` without the new argument compiles unchanged and behaves the same as before.
+`broadcast(event:payload:encoder:)` accepts `encoder: JSONEncoder = .supabase()`, replacing the
+fixed internal encoder (`JSONValue.encoder`) v2's `broadcast(event:message:)` always used. The
+`message:` label is now `payload:`; see the Realtime section for the rest of the rename.
 
 ```swift
-try await channel.broadcast(event: "cursor", message: cursorPosition, encoder: mySnakeCaseEncoder)
+try await channel.broadcast(event: "cursor", payload: cursorPosition, encoder: mySnakeCaseEncoder)
 ```
 
 ## `Optional` no longer conforms to `PostgrestFilterValue`; `nil` cannot be a comparison operand
@@ -1935,14 +1917,15 @@ let storage = SupabaseStorageClient(
 )
 ```
 
-Realtime's `fetch:` — used for REST broadcast calls — became `http:`:
+Realtime's `fetch:` — used for REST broadcast calls — became the `http` property:
 
 ```swift
 // Before
 let options = RealtimeClientOptions(fetch: { try await session.data(for: $0) })
 
 // After
-let options = RealtimeClientOptions(http: .init(transport: URLSessionTransport(session: session)))
+var options = RealtimeClientOptions()
+options.http = .init(transport: URLSessionTransport(session: session))
 ```
 
 And on `SupabaseClient`, one transport and one middleware chain now cover every sub-client:
@@ -1975,7 +1958,7 @@ compiler points at every call site.
 | `PostgrestClient(… fetch:)`, `PostgrestClient.Configuration(… fetch:)` | `http:` |
 | `FunctionsClient(… fetch:)` | `http:` |
 | `StorageClientConfiguration(… session:)` | `StorageClientConfiguration(… http:)` |
-| `RealtimeClientOptions(… fetch:)` | `RealtimeClientOptions(… http:)` |
+| `RealtimeClientOptions(… fetch:)` | `RealtimeClientOptions.http` |
 
 ### The escape hatch
 
@@ -2071,7 +2054,7 @@ that HTTP requests go through is configured on the transport instead: pass
 With `http` in place, `session` had two overlapping jobs. It backed the default transport only
 while `http.transport` was `nil`, so a caller who set both a custom `session` and a custom
 `transport` silently lost the session for HTTP. It was also copied into
-`RealtimeClientOptions.session` for the WebSocket, which is not an HTTP request and never goes
+`RealtimeClientOptions.session` (v2) for the WebSocket, which is not an HTTP request and never goes
 through `ClientTransport`. One knob now configures HTTP, and Realtime's WebSocket session is
 configured only where it lives.
 
@@ -2099,9 +2082,13 @@ from `GlobalOptions`. If you relied on the global session reaching Realtime's We
 example for certificate pinning), pass it on the Realtime options instead:
 
 ```swift
+var realtime = RealtimeClientOptions()
+realtime.webSocketTransport = URLSessionWebSocketTransport(
+  configuration: mySession.configuration, delegate: mySession.delegate)
+
 options: .init(
   global: .init(http: .init(transport: URLSessionTransport(session: mySession))),
-  realtime: .init(session: mySession)
+  realtime: realtime
 )
 ```
 
@@ -2401,18 +2388,24 @@ This is a compile error for any `catch let error as HTTPError`.
 ## Realtime throws `RealtimeError` for every failure
 
 `RealtimeError` is now public. It is a struct with `kind: RealtimeError.Kind`, `message`,
-`response` and `underlyingError`, conforming to `SupabaseError`. Kinds: `.transport`,
-`.timeout`, `.accessTokenMissing`, `.maxRetryAttemptsReached`, `.channelClosedByServer`,
-`.server` and `.decoding`.
+`response` and `underlyingError`, conforming to `SupabaseError`. Kinds: `.timeout`,
+`.notSubscribed`, `.notConnected`, `.accessTokenMissing`, `.unauthorized`, `.rateLimited`,
+`.channelClosed`, `.payloadTooLarge`, `.server`, `.transport`, `.decoding` and `.encoding`.
+`Kind` is a `RawRepresentable` struct, so the server's failures can grow without a major release.
 
-Before, `RealtimeError` was `package`-scoped, so `subscribeWithError()` and `httpSend` handed you
-an `any Error` you could only inspect through `localizedDescription`. `httpSend` could also leak
-an internal `TimeoutError`, and connection failures surfaced as an internal `WebSocketError`
+Before, `RealtimeError` was `package`-scoped, so `subscribe()` and `httpSend` handed you an
+`any Error` you could only inspect through `localizedDescription`. `httpSend` could also leak an
+internal `TimeoutError`, and connection failures surfaced as an internal `WebSocketError`
 wrapping a placeholder `NSError(domain: "ConnectionManager", code: -1)`. All of those are now
 `RealtimeError`.
 
-This compiles silently. Search your codebase for `localizedDescription` comparisons and
-`NSError` domain checks around `subscribeWithError()` and `httpSend`, and switch them to `kind`:
+Two v2 kinds are gone. `.maxRetryAttemptsReached` no longer exists: the SDK retries a rejoin by
+the `rejoin` policy, shows each try as `.resubscribing` on `statusChanges`, and ends in
+`.failed(error)` with the last error. `.channelClosedByServer` is `.channelClosed`.
+
+This compiles silently apart from the two removed kinds, which are compile errors. Search your
+codebase for `localizedDescription` comparisons and `NSError` domain checks around `subscribe()`
+and `httpSend`, and switch them to `kind`:
 
 ```swift
 // Before
@@ -2424,8 +2417,8 @@ do {
 
 // After
 do {
-  try await channel.subscribeWithError()
-} catch let error as RealtimeError where error.kind == .maxRetryAttemptsReached {
+  try await channel.subscribe()
+} catch let error as RealtimeError where error.kind == .timeout {
   scheduleRetry()
 }
 ```
@@ -2518,25 +2511,19 @@ This is a compile error: the `timeoutInterval:` argument label no longer exists,
 ## Realtime intervals are now `Duration`, and `timeoutInterval` is `timeout`
 
 Every interval on `RealtimeClientOptions` is a `Duration` instead of a `TimeInterval`, and the
-reply timeout is renamed:
+reply timeout is renamed. The `default*` constants are gone; the defaults are the property
+initial values.
 
 | Before | After |
 |---|---|
-| `heartbeatInterval: TimeInterval` | `heartbeatInterval: Duration` |
-| `reconnectDelay: TimeInterval` | `reconnectDelay: Duration` |
-| `timeoutInterval: TimeInterval` | `timeout: Duration` |
-| `disconnectOnEmptyChannelsAfter: TimeInterval` | `disconnectOnEmptyChannelsAfter: Duration` |
-| `defaultHeartbeatInterval: TimeInterval` (`25`) | `defaultHeartbeatInterval: Duration` (`.seconds(25)`) |
-| `defaultReconnectDelay: TimeInterval` (`7`) | `defaultReconnectDelay: Duration` (`.seconds(7)`) |
-| `defaultTimeoutInterval: TimeInterval` (`10`) | `defaultTimeout: Duration` (`.seconds(10)`) |
-| `defaultDisconnectOnEmptyChannelsAfter: TimeInterval` (`50`) | `defaultDisconnectOnEmptyChannelsAfter: Duration` (`.seconds(50)`) |
+| `heartbeatInterval: TimeInterval` | `heartbeatInterval: Duration` (`.seconds(25)`) |
+| `reconnectDelay: TimeInterval` | `reconnect: BackoffPolicy` (see the Realtime section) |
+| `timeoutInterval: TimeInterval` (`10`) | `timeout: Duration` (`.seconds(15)`) |
+| `disconnectOnEmptyChannelsAfter: TimeInterval` | `disconnectOnEmptyChannelsAfter: Duration` (`.seconds(50)`) |
+| `defaultHeartbeatInterval`, `defaultReconnectDelay`, `defaultTimeoutInterval`, `defaultDisconnectOnEmptyChannelsAfter` | *(removed)* |
 
-The per-call `timeout:` parameter on `RealtimeChannelV2.httpSend(event:message:timeout:)` (both
-overloads) and `httpSend(event:data:timeout:)` is a `Duration?` instead of a `TimeInterval?`.
-
-The `@_disfavoredOverload` `RealtimeClientOptions` initializer without `vsn:` is
-removed. The primary initializer defaults every argument it took, so every call that compiled
-against it still compiles against the primary one once the intervals above are updated.
+The per-call `timeout:` parameter on `RealtimeChannel.httpSend(event:payload:timeout:)` and
+`httpSend(event:data:timeout:)` is a `Duration?` instead of a `TimeInterval?`.
 
 The request timeout (`HTTPClientConfiguration.timeout`, `PostgrestRequestBuilder.timeout(_:)`,
 `FunctionInvokeOptions.timeout`) is already a `Duration`. Realtime was the last module that took
@@ -2547,26 +2534,23 @@ its Realtime timeout as `30` next to each other. `timeout` matches the name thos
 // Before
 let options = RealtimeClientOptions(
   heartbeatInterval: 30,
-  reconnectDelay: 5,
   timeoutInterval: 15,
   disconnectOnEmptyChannelsAfter: 0
 )
 try await channel.httpSend(event: "ping", message: ["n": 1], timeout: 3)
 
 // After
-let options = RealtimeClientOptions(
-  heartbeatInterval: .seconds(30),
-  reconnectDelay: .seconds(5),
-  timeout: .seconds(15),
-  disconnectOnEmptyChannelsAfter: .zero
-)
-try await channel.httpSend(event: "ping", message: ["n": 1], timeout: .seconds(3))
+var options = RealtimeClientOptions()
+options.heartbeatInterval = .seconds(30)
+options.timeout = .seconds(15)
+options.disconnectOnEmptyChannelsAfter = .zero
+try await channel.httpSend(event: "ping", payload: ["n": 1], timeout: .seconds(3))
 ```
 
 This is a compile error at every call site that passes a literal or a `TimeInterval`, and wherever
-a `default*` constant is used as a `TimeInterval`. Search for `timeoutInterval:`,
-`defaultTimeoutInterval`, and `RealtimeClientOptions(`. If you hold the value as `TimeInterval`
-seconds, convert it with `.seconds(value)` (`Duration.seconds(_:)` accepts a `Double`).
+a `default*` constant is used. Search for `timeoutInterval:`, `defaultTimeoutInterval`, and
+`RealtimeClientOptions(`. If you hold the value as `TimeInterval` seconds, convert it with
+`.seconds(value)` (`Duration.seconds(_:)` accepts a `Double`).
 
 ## `URLSessionTransport` no longer follows a 307/308 redirect for a one-shot request body
 
@@ -2629,8 +2613,9 @@ Functions is unchanged: it does not retry. Storage now retries its reads; see be
   changes are never retried. Pass `retryEnabled: false` to `StorageClientConfiguration`, or
   `storage: .init(retryEnabled: false)` to `SupabaseClientOptions`, to keep the old single-attempt
   behavior.
-- **Realtime** reconnects carry the same equal jitter, capped at 30 s: the first attempt waits
-  between half of `reconnectDelay` and `reconnectDelay`, never longer than before.
+- **Realtime** reconnects use full jitter (`BackoffPolicy.fullJitter(base: .seconds(1), cap: .seconds(30))`):
+  each wait is random between zero and the doubling bound, capped at 30 s. Rejoins use fixed
+  steps. See the Realtime section.
 
 Without jitter every client that lost the same connection retried at the same instant, and the
 two modules had their own idea of a transient failure. This follows the AWS/Smithy retry
@@ -2806,34 +2791,16 @@ Your Realtime server must support protocol 2.0.0. That is Realtime v2.63.0 or la
 release with the 2.0.0 serializer. If you
 self-host an older Realtime, upgrade it before you upgrade the SDK.
 
-## `RealtimeMessageV2` is no longer `Codable`
+## `RealtimeMessageV2` is no longer public
 
-`RealtimeMessageV2` conforms to `Hashable` and `Sendable` only. The `join_ref`/`ref`/`topic`/
-`event`/`payload` JSON object it encoded to was the protocol 1.0.0 wire format, which the SDK no
-longer sends or reads (see the section above).
+`RealtimeMessageV2` is `package`-scoped and is not `Codable`. It was the protocol 1.0.0 wire
+object (`join_ref`/`ref`/`topic`/`event`/`payload`), which the SDK no longer sends or reads (see
+the section above). Nothing replaces it for callers: use `channel.broadcasts(event:)`,
+`channel.postgresChanges(...)`, `channel.presence` and `channel.events` for the data, and
+`WebSocketFrame` if you write a `WebSocketTransport`.
 
-If you encoded messages yourself, for logging or for a test fixture, build the JSON from the
-fields:
-
-```swift
-// Before
-let data = try JSONEncoder().encode(message)
-
-// After
-let json: JSONObject = [
-  "event": .string(message.event),
-  "join_ref": message.joinRef.map(JSONValue.string) ?? .null,
-  "payload": .object(message.payload),
-  "ref": message.ref.map(JSONValue.string) ?? .null,
-  "topic": .string(message.topic),
-]
-let data = try JSONEncoder().encode(json)
-```
-
-This is a compile error in most code. One case still compiles: an API that takes `Any` and
-serializes it at run time, such as `JSONSerialization` or SnapshotTesting's `.json` strategy on
-`Any`. That code now throws or traps at run time. Search for places that pass a
-`RealtimeMessageV2` to one of them.
+This is a compile error wherever you name `RealtimeMessageV2`, `RealtimeMessageV2.EventType` or
+`RealtimeClientV2.onMessage`-style hooks.
 
 ## `User.aud` is now `User.audience`
 
@@ -3043,49 +3010,36 @@ This is a compile error anywhere a factor ID was treated as a `String` directly 
 passing it straight into another MFA call keeps compiling unchanged, since both sides are now
 `UUID`. If you display or log a factor ID, use `.uuidString` to get the string form back.
 
-## Seven more enum-like values are now structs, not enums
+## `AuthChangeEvent` is now a struct, not an enum
 
-| Type | Module |
-| --- | --- |
-| `AuthChangeEvent` | Auth |
-| `RealtimeClientStatus` | Realtime |
-| `RealtimeChannelStatus` | Realtime |
-| `HeartbeatStatus` | Realtime |
-| `PushStatus` | Realtime |
-| `LogLevel` | Realtime |
-| `RealtimeMessageV2.EventType` | Realtime |
-
-Each is a `RawRepresentable` struct with `static let` members instead of an `enum`, following the
-same pattern as `FactorStatus` and the other conversions above.
+`AuthChangeEvent` (Auth) is a `RawRepresentable` struct with `static let` members instead of an `enum`, following the
+same pattern as `FactorStatus` and the other conversions above. Realtime's former enum-likes
+(`RealtimeClientStatus`, `RealtimeChannelStatus`, `HeartbeatStatus`, `PushStatus`, `LogLevel`,
+`RealtimeMessageV2.EventType`) were replaced by the v3 types described in the Realtime section.
 
 In a source package every `enum` is frozen: adding a case is a compile error in every app with an
 exhaustive `switch` over it. supabase-js has added auth events over time (`MFA_CHALLENGE_VERIFIED`
-was the latest) and each one forced a major bump here. The Realtime server owns the push reply
-statuses and the channel event names, so a value it adds used to come back as `nil` or, for a push
-reply, as `.ok`. The client and channel statuses are client-side,
-but a reconnecting or errored state is a plausible addition that should not need a major release.
-The policy is written up in `Sources/Supabase/Supabase.docc/EnumsAndOpenSets.md`.
+was the latest) and each one forced a major bump here. The policy is written up in `Sources/Supabase/Supabase.docc/EnumsAndOpenSets.md`.
 
 ```swift
 // Before
-switch status {
-case .disconnected: showOffline()
-case .connecting: showSpinner()
-case .connected: showOnline()
+switch event {
+case .signedIn: showHome()
+case .signedOut: showLogin()
+default: break
 }
 
-// After
-switch status {
-case .disconnected: showOffline()
-case .connecting: showSpinner()
-case .connected: showOnline()
-default: showOffline()  // a status added in a later SDK release
+// After: unchanged, but an exhaustive switch needs a default
+switch event {
+case .signedIn: showHome()
+case .signedOut: showLogin()
+default: break  // an event added in a later SDK release
 }
 ```
 
 This is a compile error only if you have an exhaustive `switch` over one of these types — add a
 `default:` case. Equality (`event == .signedIn`), `contains` checks, and construction from a
-literal (`let level: LogLevel = "info"`) work unchanged.
+literal work unchanged.
 
 `init(rawValue:)` is no longer failable — it always succeeds, even for an unrecognized value.
 `if let event = AuthChangeEvent(rawValue: someString) { ... }` no longer compiles ("Initializer
@@ -3098,17 +3052,7 @@ replace it.
 String interpolation changes silently. `"\(AuthChangeEvent.signedIn)"` used to print the case
 name (`signedIn`); it now prints the struct's default description
 (`AuthChangeEvent(rawValue: "SIGNED_IN")`). Use `.rawValue` explicitly to get the bare string
-back. `RealtimeClientStatus` keeps its `CustomStringConvertible` conformance but now prints the
-raw value (`connected`) instead of the capitalized case name (`Connected`).
-
-Two smaller behavior changes ride along:
-
-- `PushStatus`: a reply status this SDK had no case for used to be reported as `.ok`. It is now
-  reported with its raw value intact, so `status == .ok` is `false` for it. If you treat anything
-  other than `.error` and `.timeout` as success, compare against those two instead.
-- `RealtimeMessageV2.eventType` is new and non-optional. The internal event classification used
-  to return `nil` for an event name the SDK did not handle; it now returns an `EventType` whose
-  `rawValue` is the event name.
+back.
 
 ## MFA challenge IDs are now `UUID` instead of `String`
 
@@ -3704,7 +3648,7 @@ Auth and Realtime still carry the static bearer, as before. There is no escape h
 
 ## `supabase.functions` is cached; `FunctionsOptions` gains `http` and `logger` and loses the `String?` region initializer
 
-`SupabaseClient.functions` is built on first access and cached, like `realtimeV2`. Two accesses
+`SupabaseClient.functions` is built on first access and cached, like `realtime`. Two accesses
 return a client over the same transport and middleware chain instead of a fresh `HTTPClient` each
 time. `SupabaseClientOptions.FunctionsOptions` gains `http: HTTPClientConfiguration?` and
 `logger: Logger?`, both `nil` by default meaning the global value, and its properties are `var`.
@@ -3800,3 +3744,420 @@ and switch to the right column before v4, where the aliases are removed.
 
 `match(_:)` with a dictionary is not deprecated: it is the multi-column equality shorthand every
 Supabase SDK has, not an alias of another method here.
+
+## Realtime rewritten as streams over one engine: `RealtimeClientV2` → `RealtimeClient`
+
+The Realtime module is a new public API. The v2 callback and `AsyncStream` overloads are gone;
+every subscription is one `RealtimeStream`, an `AsyncSequence` that never throws. A new
+`RealtimeEngine` owns the socket, the reconnects and the joins, and the public types are thin
+handles on it. This section covers the whole v2 → v3 move. Almost every Realtime call site stops
+compiling.
+
+Why: v2 had twelve `postgresChange` overloads, a callback twin for each stream, and state that two
+tasks could change at once, which led to lost messages and double joins. v3 has one way to
+subscribe, `status` values you can read at any time, and the same rules as supabase-js (exact
+event matching, no REST fallback inside `broadcast`).
+
+### Renames
+
+| Before | After |
+| --- | --- |
+| `RealtimeClientV2` | `RealtimeClient` |
+| `RealtimeChannelV2` | `RealtimeChannel` |
+| `SupabaseClient.realtimeV2` | `SupabaseClient.realtime` |
+| `RealtimeChannelConfig` | `RealtimeChannelConfiguration` |
+| `RealtimeChannelConfig.broadcast.receiveOwnBroadcasts` | `RealtimeChannelConfiguration.broadcast.receiveOwnMessages` |
+| `RealtimeChannelConfig.broadcast.acknowledgeBroadcasts` | `RealtimeChannelConfiguration.broadcast.acknowledge` |
+| `RealtimeClientStatus` | `RealtimeConnectionStatus` |
+| `RealtimeChannelStatus` (`Equatable` enum) | `RealtimeChannelStatus` (new enum, not `Equatable`; see below) |
+| `RealtimeClientV2.status` / `statusChange` | `RealtimeClient.status` / `statusChanges` |
+| `RealtimeChannelV2.statusChange` | `RealtimeChannel.statusChanges` |
+| `RealtimeClientV2.heartbeat` | `RealtimeClient.heartbeats` (`RealtimeStream<HeartbeatEvent>`) |
+| `LogLevel` (Realtime) | `RealtimeServerLogLevel` |
+| `RealtimeChannelV2.httpSend(event:message:)` | `RealtimeChannel.httpSend(event:payload:)` |
+| `RealtimeChannelV2.broadcast(event:message:)` | `RealtimeChannel.broadcast(event:payload:)` |
+| `RealtimeChannelV2.broadcastStream(event:)`, `broadcastDataStream(event:)` | `RealtimeChannel.broadcasts(event:)` (`BroadcastMessage.payload` is JSON or binary) |
+| `RealtimeChannelV2.system()` / `onSystem` | `RealtimeChannel.events` |
+| `RealtimeClientV2.disconnect(code:reason:)` | `RealtimeClient.disconnect()` |
+| `RealtimeChannelV2.subscribeWithError()` | `RealtimeChannel.subscribe()` |
+| `RealtimeChannelV2.unsubscribe()` | `RealtimeChannel.unsubscribe()` (still `async`, never throws) |
+| `RealtimeClientV2.setAuth(_:)` | `RealtimeClient.setAuth(_:)` (see below) |
+
+All of these are compile errors. Search for `V2`, `realtimeV2` and `receiveOwnBroadcasts`.
+
+### Callbacks and `AsyncStream`s become one stream; `RealtimeSubscription` is gone
+
+`onPostgresChange`, `onBroadcast`, `onBroadcastData`, `onSystem`, `onPresenceChange`,
+`onStatusChange`, `onHeartbeat`, the `AsyncStream` twins (`postgresChange`, `broadcastStream`,
+`system()`, `presenceChange()`) and the
+`RealtimeSubscription` token they returned are removed. Stream-returning methods are synchronous
+and register before they return, so create the stream first and `subscribe()` after. To stop
+listening, end the iteration (cancel the task or `break` out of the loop). There is no token to
+cancel.
+
+```swift
+// Before
+let subscription = channel.onBroadcast(event: "cursor") { message in
+  handle(message)
+}
+try await channel.subscribeWithError()
+// later
+subscription.cancel()
+
+// After
+let cursors = channel.broadcasts(event: "cursor")
+try await channel.subscribe()
+let task = Task {
+  for await message in cursors { handle(message) }
+}
+// later
+task.cancel()
+```
+
+Streams that carry data are unbounded. Status streams keep only the newest value and
+yield the current one first. A stream ends when the channel is removed or the client fails for
+good. The SDK never ends a stream because one payload failed to decode: decode helpers are
+synchronous and throw `RealtimeError(kind: .decoding)` to you.
+
+### `subscribeWithError()` → `subscribe()`
+
+`subscribe()` replaces `subscribeWithError()`, and v2's non-throwing `subscribe()` is gone with
+it. It throws a `RealtimeError` when the join fails (`.unauthorized`, `.timeout`, `.server`, ...).
+When the channel has postgres change streams, it waits until the server confirms the bindings, so
+a bad filter or a missing table throws instead of failing in silence. It does not call
+`connect()` for you when `connectOnSubscribe` is `false`.
+
+```swift
+// Before
+try await channel.subscribeWithError()
+
+// After
+try await channel.subscribe()
+```
+
+This compiles only if you renamed the call: `subscribeWithError()` is a compile error. A v2
+`channel.subscribe()` that ignored failures now needs a `try`; that is a compile error too.
+
+### `connect()` throws and `disconnect()` is async
+
+`RealtimeClient.connect()` is `async throws`. It throws on a failure that retrying cannot fix: a
+401 or 403 answer is `.unauthorized`, a 404 is `.transport`, and `.notConnected` means
+`disconnect()` ran first. Transient failures do not throw; they show as `.reconnecting` on
+`statusChanges`. `disconnect()` is `async` and returns once the socket is closed. It leaves every
+channel. New `pause()` and `resume()` let you stop and restart the connection yourself.
+
+```swift
+// Before
+await client.connect()
+client.disconnect()
+
+// After
+try await client.connect()
+await client.disconnect()
+```
+
+`await client.connect()` without `try` is a compile error. `client.disconnect()` without `await`
+is a compile error in an async context. `disconnect(code:reason:)` lost its arguments. With
+`handleAppLifecycle` (on by default) the client wakes on foreground; it never disconnects on its
+own when the app goes to the background.
+
+### Twelve `postgresChange` overloads → one `postgresChanges(event:…)`
+
+All `postgresChange(_:schema:table:filter:select:)` overloads and the `InsertAction`, `UpdateAction`,
+`DeleteAction`, `AnyAction` types are replaced by one method that takes the event as an argument
+and yields `PostgresChange`, or by a typed overload that yields `TypedPostgresChange<Row>`.
+
+| Before | After |
+| --- | --- |
+| `postgresChange(InsertAction.self, table:)` | `postgresChanges(event: .insert, table:)` |
+| `postgresChange(UpdateAction.self, table:)` | `postgresChanges(event: .update, table:)` |
+| `postgresChange(DeleteAction.self, table:)` | `postgresChanges(event: .delete, table:)` |
+| `postgresChange(AnyAction.self, table:)` | `postgresChanges(table:)` (`event` defaults to `.all`) |
+| `action.record` (`JSONObject`) | `change.record` (`PostgresRow?`) |
+| `action.oldRecord` (`JSONObject`) | `change.oldRecord` (`PostgresRow?`) |
+| `action.decodeRecord(decoder:)` | `change.record?.decode(as: Row.self)` or `TypedPostgresChange.row()` |
+| `AnyAction.insert(_)` / `.update(_)` / `.delete(_)` | `change.kind` is `.insert`, `.update` or `.delete` |
+
+```swift
+// Before
+let changes = channel.postgresChange(InsertAction.self, schema: "public", table: "messages")
+try await channel.subscribeWithError()
+for await insert in changes {
+  let message = try insert.decodeRecord(as: Message.self, decoder: decoder)
+}
+
+// After
+let changes = channel.postgresChanges(of: Message.self, event: .insert, table: "messages")
+try await channel.subscribe()
+for await change in changes {
+  let message = try change.row()
+}
+
+// Untyped
+for await change in channel.postgresChanges(event: .all, table: "messages") {
+  switch change.kind {
+  case .insert, .update: _ = try change.record?.decode(as: Message.self)
+  case .delete: _ = change.oldRecord
+  }
+}
+```
+
+A row that does not decode throws from `row()` or `decode(as:)`, and the stream goes on. Each
+`postgresChanges` call adds a binding. On a joined channel it makes the channel join again and
+reports `.resubscribed` on `channel.events`. These are compile errors.
+
+### `channel.topic` no longer has the `realtime:` prefix
+
+`RealtimeChannel.topic` is the name you passed to `channel(_:)`. v2 returned `realtime:room`.
+The SDK adds the prefix on the wire. This compiles; the value changes. Search for `.topic` and for
+`"realtime:` in code that compares or builds channel names. `channels` is now an array sorted by
+topic, not a dictionary.
+
+```swift
+// Before
+client.channel("room").topic == "realtime:room"
+
+// After
+client.channel("room").topic == "room"
+```
+
+Calling `channel(_:)` again for a topic with a different configuration now reports an issue and
+returns the existing channel. v2 returned it without a word.
+
+### Broadcast event matching is exact
+
+`broadcasts(event:)` matches the event name exactly, with case, as supabase-js does. v2 matched
+the name case-insensitively and accepted `*`. There is no wildcard now: to receive everything,
+subscribe to each name you use. This compiles and silently stops delivering messages whose event
+differs in case. Search for `broadcast(event:` and `broadcastStream(event:` calls that used `*`
+or a different case than the sender.
+
+### Protocol 1.0.0 is removed; the minimum server is v2.63.0
+
+The SDK speaks Phoenix protocol 2.0.0 only; see
+[`RealtimeClientOptions.vsn`](#realtimeclientoptionsvsn-and-realtimeprotocolversion-are-removed).
+Your Realtime server must be v2.63.0 or later.
+
+### `RealtimeClientOptions` is `init()` plus `var` fields
+
+`RealtimeClientOptions` has one `init()`. Set the fields you need after it. Every field is
+public. The old initializers with parameters are removed.
+
+| Before | After |
+| --- | --- |
+| `protocolVersion` / `vsn` | *(removed; protocol 2.0.0 only)* |
+| `logLevel: LogLevel?` | `serverLogLevel: RealtimeServerLogLevel?` (`.warning`, not `warn`) |
+| `session: URLSession` | `webSocketTransport = URLSessionWebSocketTransport(configuration:delegate:)` |
+| `reconnectDelay: Duration` | `reconnect: BackoffPolicy` |
+| `maxRetryAttempts: Int` | `rejoin: BackoffPolicy` |
+| `disconnectOnSessionLoss` | *(removed)* |
+| `apikey: String?` | `headers["apikey"]` |
+| `timeout` (default 10 s) | `timeout` (default 15 s) |
+| *(none)* | `heartbeatTimeout`, `connectOnSubscribe`, `handleAppLifecycle`, `maximumMessageSize` |
+
+The authorization token is no longer read from `headers[.authorization]`. Use `accessToken` or
+`setAuth(_:)`. `setAuth(_:)` takes a non-defaulted `String?`; `nil` keeps the current token, and
+with an `accessToken` provider it asks the provider again.
+
+```swift
+// Before
+let options = RealtimeClientOptions(
+  headers: ["apikey": key],
+  logLevel: .warn,
+  session: mySession
+)
+
+// After
+var options = RealtimeClientOptions()
+options.headers[HTTPField.Name("apikey")!] = key
+options.serverLogLevel = .warning
+options.webSocketTransport = URLSessionWebSocketTransport(
+  configuration: mySession.configuration, delegate: mySession.delegate)
+let client = RealtimeClient(url: realtimeURL, options: options)
+```
+
+Initializer calls with arguments, `session:`, `logLevel:`, `reconnectDelay:`, `maxRetryAttempts:`
+and `apikey:` are compile errors. A removed `session:` also drops its delegate unless you pass it
+to `URLSessionWebSocketTransport`.
+
+`SupabaseClientOptions.realtime` keeps its name and now has this v3 `RealtimeClientOptions`
+type. Realtime-specific headers win over the headers `SupabaseClient` shares with every module.
+`options.realtime.logger` follows the rule in the logging section: setting it, even to
+`.logLevel`, counts as a custom logger, so the global logger is not used. `options.realtime.clock`
+is still replaced by `global.clock`.
+
+### `RealtimeServerLogLevel` is a struct with a non-failable `init(rawValue:)`
+
+`RealtimeServerLogLevel` is a `RawRepresentable` struct (`.info`, `.warning`, `.error`), like the
+other open sets, so a level the server adds later does not need an SDK release. `init(rawValue:)`
+always succeeds: `if let level = RealtimeServerLogLevel(rawValue: text)` no longer compiles
+("Initializer for conditional binding must have Optional type"); write
+`let level = RealtimeServerLogLevel(rawValue: text)`. A check such as
+`RealtimeServerLogLevel(rawValue: text) != nil` still compiles and is now always `true`; search
+for it. Interpolating the value, `"\(level)"`, prints the struct description, not the case name;
+use `.rawValue`.
+
+### Status enums are not `Equatable`; use the predicates
+
+`RealtimeConnectionStatus` and `RealtimeChannelStatus` are enums with associated values
+(attempt number, retry delay, last error), so they are not `Equatable`. Read them with the
+predicates, or pattern match.
+
+```swift
+// Before
+if client.status == .connected { ... }
+if channel.status == .subscribed { ... }
+
+// After
+if client.status.isConnected { ... }
+if channel.status.isSubscribed { ... }
+if let error = channel.status.error { show(error) }
+```
+
+`==` against a case is a compile error. `RealtimeConnectionStatus.error` and
+`RealtimeChannelStatus.error` are the last error while the state is `.disconnected`,
+`.reconnecting`, `.resubscribing` or `.failed`, and `nil` otherwise.
+
+### `broadcast` no longer falls back to REST; use `httpSend`
+
+v2's `broadcast` sent over HTTP when the channel was not subscribed. v3's does not: it throws
+`RealtimeError(kind: .notSubscribed)`. To send without joining, call `httpSend`.
+`httpSend(event:payload:)` also changed label, and with no token it uses the `apikey` header
+instead of throwing `.accessTokenMissing`. An encoding failure in either is
+`RealtimeError(kind: .encoding)`.
+
+```swift
+// Before: worked while unsubscribed, over REST
+try await channel.broadcast(event: "ping", message: ["n": 1])
+
+// After
+try await channel.httpSend(event: "ping", payload: ["n": 1])
+// or, after subscribing
+try await channel.broadcast(event: "ping", payload: ["n": 1])
+```
+
+This compiles after the rename, so the change in behavior is silent. Search for `broadcast(` calls
+that ran on a channel you never subscribed.
+
+### `ReplayOption(since: Int)` → `Replay(since: Date)`
+
+`RealtimeChannelConfiguration.broadcast.replay` is `Replay(since: Date, limit: Int?)`. v2 took a
+`ReplayOption` with milliseconds since 1970 as an `Int`. `presence.key` is `String?` (v2: `""`
+for no key). New: `broadcast.waitForReplication`.
+
+```swift
+// Before
+let channel = client.channel("room") {
+  $0.broadcast.replay = ReplayOption(since: 1_700_000_000_000, limit: 10)
+}
+
+// After
+let channel = client.channel("room") {
+  $0.broadcast.replay = .init(since: Date(timeIntervalSince1970: 1_700_000_000), limit: 10)
+}
+```
+
+This is a compile error.
+
+### Presence: `PresenceV2`, `PresenceAction` and `track(state:)` are replaced
+
+`PresenceV2`, `PresenceAction` (with its `joins` and `leaves` decode helpers) and the
+`presenceChange()` and `onPresenceChange` APIs are removed. Presence lives on
+`channel.presence`:
+
+| Before | After |
+| --- | --- |
+| `channel.track(state:)` / `channel.track(_:)` | `try await channel.presence.track(_:)` |
+| `channel.untrack()` | `try await channel.presence.untrack()` |
+| `channel.presenceChange()` | `channel.presence.changes` (`PresenceChange`: `joins`, `leaves`) |
+| the full presence state | `channel.presence.states` (stream) or `channel.presence.state` (current value) |
+| `PresenceV2.decodeState(as:)`, `decodeJoins`, `decodeLeaves` | `PresenceEntry.decode(as:)`, `PresenceState.decode(as:)` |
+
+`track` and `untrack` throw (`.notSubscribed`, `.notConnected`, `.timeout`, a server error,
+`.encoding`). A call inside the 6 s rate window returns once the SDK queues it. The join enables
+presence only if you called `track` or hold a presence stream.
+
+```swift
+// Before
+let changes = channel.presenceChange()
+try await channel.subscribeWithError()
+try await channel.track(state: ["name": "Ann"])
+for await action in changes {
+  let joins = try action.decodeJoins(as: User.self)
+}
+
+// After
+let changes = channel.presence.changes
+try await channel.subscribe()
+try await channel.presence.track(["name": "Ann"])
+for await change in changes {
+  for (key, entries) in change.joins {
+    let users = try entries.map { try $0.decode(as: User.self) }
+  }
+}
+```
+
+These are compile errors.
+
+### `RealtimePostgresFilterValue` requires `realtimeFilterValue`; standard library `rawValue` is gone
+
+`RealtimePostgresFilterValue` now has one requirement, `var realtimeFilterValue: String { get }`,
+and refines `Sendable`. `String`, `Int`, `Double`, `Bool`, `UUID` and `Date` conform with the
+same text as before. v2 declared `rawValue` on those six types, so `someInt.rawValue` and
+`someUUID.rawValue` compiled anywhere in your app. They no longer do. A custom conforming type
+must now be `Sendable` and implement `realtimeFilterValue`.
+
+```swift
+// Before
+struct UserID: RealtimePostgresFilterValue {
+  var rawValue: String
+}
+let text = 42.rawValue
+
+// After
+struct UserID: RealtimePostgresFilterValue {
+  var value: String
+  var realtimeFilterValue: String { value }
+}
+let text = 42.realtimeFilterValue
+```
+
+This is a compile error for every custom conformer and every use of those `rawValue` properties.
+
+### `SupabaseClient` facade
+
+| Before | After |
+| --- | --- |
+| `realtimeV2: RealtimeClientV2` | `realtime: RealtimeClient` |
+| `channel(_:options: @Sendable (inout RealtimeChannelConfig) -> Void)` | `channel(_:configure: (inout RealtimeChannelConfiguration) -> Void = { _ in })` |
+| `channels: [RealtimeChannelV2]` (unordered) | `channels: [RealtimeChannel]` sorted by topic |
+| `removeChannel(_: RealtimeChannelV2)` | `removeChannel(_: RealtimeChannel)`; a stale handle, or one from another client, does nothing |
+| `SupabaseClientOptions.realtime: RealtimeClientOptions` (v2 shape) | the same property, with the v3 `RealtimeClientOptions` |
+
+```swift
+// Before
+let channel = supabase.channel("room") { $0.broadcast.receiveOwnBroadcasts = true }
+supabase.realtimeV2.connect()
+
+// After
+let channel = supabase.channel("room") { $0.broadcast.receiveOwnMessages = true }
+try await supabase.realtime.connect()
+```
+
+These are compile errors. Four behavior changes compile without change:
+
+- The realtime client is created on first access to `supabase.realtime`, not when `SupabaseClient`
+  is created.
+- On sign-out, `SupabaseClient` sends the anon key to joined channels. A private channel then
+  fails with `.unauthorized`.
+- Realtime-specific headers win over the umbrella headers.
+- `options.realtime.logger` is no longer replaced by the global logger once you set it.
+
+### Removed error kinds and smaller changes
+
+`RealtimeError.Kind.maxRetryAttemptsReached` and `.channelClosedByServer` are removed; see
+[the `RealtimeError` section](#realtime-throws-realtimeerror-for-every-failure). A failed WebSocket
+upgrade with 401 or 403 has kind `.unauthorized` (v2: `.transport`). `push(_:)` is removed, as is
+`RealtimeLifecycleManager`. Implement `WebSocketTransport` and `WebSocketConnection` (now public)
+if you need your own socket. Under `.defaultIsolation(MainActor.self)`, mark that conformance
+`nonisolated`, because both protocols refine `Sendable`.
