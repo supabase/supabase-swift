@@ -383,8 +383,6 @@ supporting_symbols:
   - RealtimeError.Kind.rawValue
   - RealtimeError.Kind.timeout
   - RealtimeError.Kind.accessTokenMissing
-  - RealtimeError.Kind.maxRetryAttemptsReached
-  - RealtimeError.Kind.channelClosedByServer
   - RealtimeError.Kind.server
   - RealtimeError.Kind.transport
   - RealtimeError.Kind.decoding
@@ -394,8 +392,6 @@ supporting_symbols:
   - RealtimeError.response
   - RealtimeError.underlyingError
   - RealtimeError.description
-  - RealtimeError.maxRetryAttemptsReached
-  - RealtimeError.channelClosedByServer
   - RealtimeError.Kind.notSubscribed
   - RealtimeError.Kind.notConnected
   - RealtimeError.Kind.unauthorized
@@ -430,6 +426,39 @@ supporting_symbols:
   - RealtimeError.ServerCode.unableToConnectToProject
   - RealtimeError.ServerCode.queryCanceled
   - RealtimeError.ServerCode.missingPartition
+  # Status and event types the v3 client and channel streams carry (SDK-2107). They support
+  # realtime.client.connection_state, realtime.client.listen_heartbeats and the channel status
+  # streams, which stay not_implemented until the client exposes them (SDK-2108).
+  - RealtimeConnectionStatus
+  - RealtimeConnectionStatus.disconnected
+  - RealtimeConnectionStatus.connecting
+  - RealtimeConnectionStatus.connected
+  - RealtimeConnectionStatus.reconnecting
+  - RealtimeConnectionStatus.isConnected
+  - RealtimeConnectionStatus.error
+  - RealtimeChannelStatus
+  - RealtimeChannelStatus.unsubscribed
+  - RealtimeChannelStatus.subscribing
+  - RealtimeChannelStatus.subscribed
+  - RealtimeChannelStatus.resubscribing
+  - RealtimeChannelStatus.unsubscribing
+  - RealtimeChannelStatus.failed
+  - RealtimeChannelStatus.isSubscribed
+  - RealtimeChannelStatus.error
+  - HeartbeatEvent
+  - HeartbeatEvent.sent
+  - HeartbeatEvent.acknowledged
+  - HeartbeatEvent.timedOut
+  - RealtimeChannelEvent
+  - RealtimeChannelEvent.resubscribed
+  - RealtimeChannelEvent.postgresChangesReady
+  - RealtimeChannelEvent.postgresChangesFailed
+  - RealtimeChannelEvent.serverMessage
+  - SystemMessage
+  - SystemMessage.status
+  - SystemMessage.message
+  - SystemMessage.extension
+  - SystemMessage.channel
   - RealtimeError.ServerCode.timeoutOnRpcCall
   - RealtimeError.ServerCode.errorOnRpcCall
   - RealtimeError.ServerCode.postgresChangesSubscribeTimeout
