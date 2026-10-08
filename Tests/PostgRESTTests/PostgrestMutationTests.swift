@@ -130,6 +130,83 @@ struct PostgrestMutationTests {
   }
 
   @Test
+  func eachWriteStartsInThePhaseThatDecidesWhatItOffers() throws {
+    // Swift cannot assert that code fails to compile, so these lines are documentation, not
+    // enforcement. Each one is a compile error:
+    //
+    //   source.delete().execute()                    // unscoped: no execute()
+    //   source.update { $0.task = "x" }.returning()  // unscoped: no returning()
+    //   source.insert(draft).where { $0.id.eq(1) }   // PostgREST ignores filters on a POST
+    //   source.upsert(draft).where { $0.id.eq(1) }
+    //
+    // What can be checked at run time is the phase each write returns, and that the conditional
+    // `PostgrestFilterableRequest` conformance is missing where `where(_:)` must not be offered.
+    let source = QueryCapture().client.from(Todo.self)
+    let draft = Todo.Draft(task: "buy milk")
+
+    let insert = try source.insert(draft)
+    let upsert = try source.upsert(draft)
+    let update = try source.update { $0.task = "done" }
+    let delete = source.delete()
+
+    #expect(type(of: insert) == PostgrestMutation<Todo, PostgrestInsertPhase>.self)
+    #expect(
+      type(of: try source.insert([draft])) == PostgrestMutation<Todo, PostgrestInsertPhase>.self)
+    #expect(type(of: upsert) == PostgrestMutation<Todo, PostgrestInsertPhase>.self)
+    #expect(type(of: update) == PostgrestMutation<Todo, PostgrestUnscopedPhase>.self)
+    #expect(type(of: delete) == PostgrestMutation<Todo, PostgrestUnscopedPhase>.self)
+
+    #expect(!(insert as Any is any PostgrestFilterableRequest))
+    #expect(!(upsert as Any is any PostgrestFilterableRequest))
+    #expect(!(delete as Any is any PostgrestFilterableRequest))
+
+    let scoped = delete.where { $0.id.eq(1) }
+    #expect(type(of: scoped) == PostgrestMutation<Todo, PostgrestScopedPhase>.self)
+    #expect(type(of: delete.all()) == PostgrestMutation<Todo, PostgrestScopedPhase>.self)
+    #expect(scoped as Any is any PostgrestFilterableRequest)
+  }
+
+  @Test
+  func deleteAllRendersNoFilter() async throws {
+    // `.all()` is a marker for the type checker, not a query change: nothing is added to the URL.
+    let capture = QueryCapture()
+    _ = try await capture.client.from(Todo.self).delete().all().execute()
+    #expect(capture.httpMethod == "DELETE")
+    #expect(capture.query == nil)
+  }
+
+  @Test
+  func updateAllRendersNoFilter() async throws {
+    let capture = QueryCapture()
+    _ = try await capture.client.from(Todo.self).update { $0.isDone = true }.all().execute()
+    #expect(capture.httpMethod == "PATCH")
+    #expect(capture.query == nil)
+    #expect(capture.bodyString == #"{"is_done":true}"#)
+  }
+
+  @Test
+  func aScopedMutationAcceptsMoreFilters() async throws {
+    // The first filter leaves the unscoped phase, later ones go through `PostgrestFilterableRequest`.
+    // Both have to reach the wire, ANDed like any other `where`.
+    let capture = QueryCapture()
+    _ = try await capture.client.from(Todo.self).delete()
+      .where { $0.id.eq(1) }
+      .where { $0.isDone.eq(true) }
+      .execute()
+    #expect(capture.query?.contains("id=eq.1") == true)
+    #expect(capture.query?.contains("is_done=eq.true") == true)
+  }
+
+  @Test
+  func aScopedMutationCanReturnTheRows() async throws {
+    let capture = QueryCapture(body: #"[{"id":1,"task":"done","is_done":false}]"#)
+    let rows = try await capture.client.from(Todo.self)
+      .update { $0.task = "done" }.where { $0.id.eq(1) }.returning().execute().value
+    #expect(rows.map(\.task) == ["done"])
+    #expect(capture.query?.contains("id=eq.1") == true)
+  }
+
+  @Test
   func returningDecodesRows() async throws {
     let capture = QueryCapture(body: #"[{"id":1,"task":"buy milk","is_done":false}]"#)
     let rows = try await capture.client.from(Todo.self)

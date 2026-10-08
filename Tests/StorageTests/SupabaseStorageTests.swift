@@ -105,6 +105,9 @@ struct SupabaseStorageTests {
         == "http://localhost:54321/storage/v1/sign/file2.txt?token=abc.def.ghi")
   }
 
+  // These snapshot the Content-Type inferred from the file extension. Linux has no `UTType`,
+  // so `mimeType(forPathExtension:)` falls back to `application/octet-stream` there and the
+  // snapshots would differ. The transport is a `ClosureTransport`, so `URLSession` plays no part.
   #if !os(Linux) && !os(Android)
     @Test
     func uploadData() async throws {

@@ -106,6 +106,7 @@ struct TableMacroSupportTests {
     func unwrapped(_ type: String) -> String {
       StoredProperty(
         name: "x", type: type, isOptional: true, isPrimaryKey: false, hasDefault: false,
+        isGenerated: false,
         explicitColumn: nil
       ).unwrappedType
     }

@@ -1201,10 +1201,8 @@ now prints the struct's default description (`FunctionInvokeOptions.Method(rawVa
 you log, build a URL, or send analytics using direct interpolation of a
 `FunctionInvokeOptions.Method` value, use `.rawValue` explicitly to get the bare string back.
 
-Constructing a `Method` from an arbitrary string is not validated at construction time — invalid
-HTTP method tokens are caught later, in `httpMethod(_:)`, which returns `nil` for a raw value that
-isn't a legal HTTP token (per RFC 9110). `FunctionsClient` falls back to `.post` when `httpMethod`
-returns `nil`, so an invalid custom `Method` silently becomes a POST request rather than throwing.
+`FunctionInvokeOptions.Method` was later removed altogether in favour of `HTTPRequest.Method`; see
+"`FunctionInvokeOptions.Method` is replaced by `HTTPRequest.Method`" below.
 
 ## `FunctionsClient.setAuth(token:)` removed; pass an `accessToken` closure instead
 
@@ -1999,7 +1997,8 @@ struct AppVersionMiddleware: ClientMiddleware {
   func intercept(
     _ request: HTTPRequest,
     body: HTTPBody?,
-    next: @Sendable (HTTPRequest, HTTPBody?) async throws -> (HTTPResponse, HTTPBody?)
+    next: nonisolated(nonsending) @Sendable (HTTPRequest, HTTPBody?) async throws
+      -> (HTTPResponse, HTTPBody?)
   ) async throws -> (HTTPResponse, HTTPBody?) {
     var request = request
     request.headerFields[Self.headerName] = "2.1.0"
@@ -2251,6 +2250,11 @@ do {
 interpolation of the error now prints `FunctionsError(server): Edge Function returned a non-2xx
 status code: 500 [status 500]` instead of the case name.
 
+v3 also adds `FunctionsError.Kind.invalidRequest` (a body that could not be encoded, see
+"Function bodies are a `FunctionBody`" below) and `FunctionsError.code`, a `FunctionsError.Code`
+read from the platform's `sb-error-code` response header. Both are additive; `Code` is another open
+set, so keep a fallback branch when you switch on it.
+
 ## Network and decoding failures are wrapped in the module error
 
 Auth, PostgREST, Storage, Functions and Realtime no longer let `URLError` and `DecodingError`
@@ -2262,26 +2266,16 @@ error is in `underlyingError`. `CancellationError` is never wrapped and still pr
 itself.
 
 Cancelling a request is the case worth spelling out. `URLSession`'s async APIs do not throw
-`CancellationError` when the enclosing `Task` is cancelled — they throw `URLError(.cancelled)`,
-which is a `URLError` like any other and so is wrapped as `.transport`. A `catch is
-CancellationError` does not match a cancelled request; check the code on `underlyingError`
-instead:
+`CancellationError` when the enclosing `Task` is cancelled — they throw `URLError(.cancelled)`.
+Every module (Auth, PostgREST, Storage, Functions and Realtime) turns that back into
+`CancellationError`, so `catch is CancellationError` keeps working. A `URLError(.cancelled)` that
+no `Task` cancellation caused (a middleware cancelled the request) is still wrapped as
+`.transport`. A cancelled request is never retried.
 
-```swift
-// Before
-} catch is CancellationError {
-  // the user cancelled — no error banner
-}
-
-// After
-} catch let error as any SupabaseError
-  where (error.underlyingError as? URLError)?.code == .cancelled {
-  // the user cancelled — no error banner
-}
-```
-
-This also compiles silently — the old `catch` block simply stops being reached. Search for `is
-CancellationError` near Supabase calls. A cancelled request is never retried.
+In v2, a cancelled Storage call, Functions `invoke` or Realtime `httpSend` threw
+`URLError(.cancelled)`. It now throws `CancellationError`, so a `catch let error as URLError where
+error.code == .cancelled` around those calls stops matching; use `catch is CancellationError`
+instead. This compiles silently; search for `URLError` near those calls.
 
 Without this, one `catch let error as any SupabaseError` missed exactly the failures a user is
 most likely to hit in the field: no network, and a schema drift between the app's model and the
@@ -2615,7 +2609,7 @@ timeout (too few bytes) or truncating on the server (too many).
 Auth and PostgREST — the two modules that already retried — now do so through one middleware
 driven by an internal `RetryPolicy`. It runs outermost, so a replayed attempt re-runs your
 `ClientMiddleware`s and resolves a fresh access token instead of reusing the first attempt's.
-Storage and Functions are unchanged: they do not retry.
+Functions is unchanged: it does not retry. Storage now retries its reads; see below.
 
 - **PostgREST** is unchanged in what it retries: GET and HEAD only, on a transient network
   failure or a 503/520, up to three retries. `retryEnabled`, `retry(enabled:)` and `db.retry`
@@ -2630,6 +2624,11 @@ Storage and Functions are unchanged: they do not retry.
   502, 503, 504 or Cloudflare 520–524/530.
 - **Both** report a cancelled task as `CancellationError`, even when the transport reported it
   as `URLError.cancelled`.
+- **Storage** now retries reads: GET, HEAD and `list()`, up to 3 attempts with the same
+  jittered wait as Auth (500 ms base, 20 s cap). Uploads, moves, copies, removals and bucket
+  changes are never retried. Pass `retryEnabled: false` to `StorageClientConfiguration`, or
+  `storage: .init(retryEnabled: false)` to `SupabaseClientOptions`, to keep the old single-attempt
+  behavior.
 - **Realtime** reconnects carry the same equal jitter, capped at 30 s: the first attempt waits
   between half of `reconnectDelay` and `reconnectDelay`, never longer than before.
 
@@ -2643,7 +2642,8 @@ struct RequestCounter: ClientMiddleware {
   let count: LockIsolated<Int>
   func intercept(
     _ request: HTTPRequest, body: HTTPBody?,
-    next: @Sendable (HTTPRequest, HTTPBody?) async throws -> (HTTPResponse, HTTPBody?)
+    next: nonisolated(nonsending) @Sendable (HTTPRequest, HTTPBody?) async throws
+      -> (HTTPResponse, HTTPBody?)
   ) async throws -> (HTTPResponse, HTTPBody?) {
     count.withValue { $0 += 1 }
     return try await next(request, body)
@@ -3004,6 +3004,73 @@ This is a compile error anywhere a factor ID was treated as a `String` directly 
 passing it straight into another MFA call keeps compiling unchanged, since both sides are now
 `UUID`. If you display or log a factor ID, use `.uuidString` to get the string form back.
 
+## Seven more enum-like values are now structs, not enums
+
+| Type | Module |
+| --- | --- |
+| `AuthChangeEvent` | Auth |
+| `RealtimeClientStatus` | Realtime |
+| `RealtimeChannelStatus` | Realtime |
+| `HeartbeatStatus` | Realtime |
+| `PushStatus` | Realtime |
+| `LogLevel` | Realtime |
+| `RealtimeMessageV2.EventType` | Realtime |
+
+Each is a `RawRepresentable` struct with `static let` members instead of an `enum`, following the
+same pattern as `FactorStatus` and the other conversions above.
+
+In a source package every `enum` is frozen: adding a case is a compile error in every app with an
+exhaustive `switch` over it. supabase-js has added auth events over time (`MFA_CHALLENGE_VERIFIED`
+was the latest) and each one forced a major bump here. The Realtime server owns the push reply
+statuses and the channel event names, so a value it adds used to come back as `nil` or, for a push
+reply, as `.ok`. The client and channel statuses are client-side,
+but a reconnecting or errored state is a plausible addition that should not need a major release.
+The policy is written up in `Sources/Supabase/Supabase.docc/EnumsAndOpenSets.md`.
+
+```swift
+// Before
+switch status {
+case .disconnected: showOffline()
+case .connecting: showSpinner()
+case .connected: showOnline()
+}
+
+// After
+switch status {
+case .disconnected: showOffline()
+case .connecting: showSpinner()
+case .connected: showOnline()
+default: showOffline()  // a status added in a later SDK release
+}
+```
+
+This is a compile error only if you have an exhaustive `switch` over one of these types — add a
+`default:` case. Equality (`event == .signedIn`), `contains` checks, and construction from a
+literal (`let level: LogLevel = "info"`) work unchanged.
+
+`init(rawValue:)` is no longer failable — it always succeeds, even for an unrecognized value.
+`if let event = AuthChangeEvent(rawValue: someString) { ... }` no longer compiles ("Initializer
+for conditional binding must have Optional type") — replace it with
+`let event = AuthChangeEvent(rawValue: someString)` directly. If your code used
+`X(rawValue:) != nil` to validate a string, that check still compiles but is now always `true` —
+this is a silent behavior change, not a compile error, so search for that pattern and remove or
+replace it.
+
+String interpolation changes silently. `"\(AuthChangeEvent.signedIn)"` used to print the case
+name (`signedIn`); it now prints the struct's default description
+(`AuthChangeEvent(rawValue: "SIGNED_IN")`). Use `.rawValue` explicitly to get the bare string
+back. `RealtimeClientStatus` keeps its `CustomStringConvertible` conformance but now prints the
+raw value (`connected`) instead of the capitalized case name (`Connected`).
+
+Two smaller behavior changes ride along:
+
+- `PushStatus`: a reply status this SDK had no case for used to be reported as `.ok`. It is now
+  reported with its raw value intact, so `status == .ok` is `false` for it. If you treat anything
+  other than `.error` and `.timeout` as success, compare against those two instead.
+- `RealtimeMessageV2.eventType` is new and non-optional. The internal event classification used
+  to return `nil` for an event name the SDK did not handle; it now returns an `EventType` whose
+  `rawValue` is the event name.
+
 ## MFA challenge IDs are now `UUID` instead of `String`
 
 `AuthMFAChallengeResponse.id` and `MFAVerifyParams.challengeId` are `UUID` instead of `String`.
@@ -3037,6 +3104,66 @@ ID as a `String`, or builds `MFAVerifyParams` from a string, gets a compile erro
 `challengeAndVerify(params:)` is unchanged. Passkey challenge IDs
 (`PasskeyRegistrationOptions.challengeId`, `PasskeyAuthenticationOptions.challengeId`) stay
 `String`, because the passkey endpoints type `challenge_id` as a string.
+
+## `PostgrestTransformBuilder.order(_:ascending:nullsFirst:)` no longer defaults to `NULLS LAST`
+
+`nullsFirst` is now `Bool?`, defaulting to `nil` instead of `false`. When it is `nil`, the request
+sends no null placement at all, instead of always appending `.nullslast`.
+
+`nullsFirst: false` always rendered `.nullslast`, even for a descending sort, where Postgres's own
+default is `NULLS FIRST`. So `.order("due_at", ascending: false)` silently reversed the database's
+null placement instead of leaving it alone — and diverged from supabase-js, which only sends a
+placement when the caller asks for one.
+
+```swift
+// Before — sent order=due_at.desc.nullslast, forcing NULLs to the end
+try await client.from("todos").select().order("due_at", ascending: false).execute()
+
+// After — sends order=due_at.desc, so Postgres applies NULLS FIRST on a descending sort
+try await client.from("todos").select().order("due_at", ascending: false).execute()
+```
+
+This does not change compilation — `nullsFirst: Bool? = nil` still accepts a literal `true` or
+`false` at any call site. It is a silent behavior change: a query that relied on the implicit
+`NULLS LAST` on a descending sort over a nullable column now returns rows in a different order.
+Search your codebase for `.order(` calls that omit `nullsFirst` on a descending sort, and pass
+`nullsFirst: false` explicitly to keep the old placement.
+
+The typed `order { }` API added alongside this (SDK-1624) already worked this way and is
+unaffected.
+
+## `insert` and `upsert` return `PostgrestTransformBuilder`; filters no longer compile after them
+
+`PostgrestQueryBuilder.insert(_:returning:count:defaultToNull:encoder:)` and
+`upsert(_:onConflict:returning:count:ignoreDuplicates:defaultToNull:encoder:)` return
+`PostgrestTransformBuilder` instead of `PostgrestFilterBuilder`. `update` and `delete` still return
+`PostgrestFilterBuilder`.
+
+An insert has no existing rows to match, and PostgREST ignores filters on a `POST`. A filter
+chained after `insert` or `upsert` compiled and ran, but did nothing. This matches the same fix in
+supabase-flutter.
+
+```swift
+// Before: compiles, and the server ignores the eq
+try await client
+  .from("todos")
+  .insert(["task": "Buy milk"])
+  .eq("id", value: 1)
+  .execute()
+
+// After: remove the filter
+try await client
+  .from("todos")
+  .insert(["task": "Buy milk"])
+  .execute()
+```
+
+This is a compile error at every filter (`eq`, `match`, `or`, `filter`, ...) chained after
+`insert` or `upsert`. Delete the filter: it never had an effect. Every transform still compiles
+after `insert` and `upsert`, so `select`, `order`, `limit`, `range`, `single`, `maybeSingle`, `csv`
+and the others are unchanged. Code that stores the result in a variable or parameter typed
+`PostgrestFilterBuilder` also gets a compile error. Change the type to `PostgrestTransformBuilder`,
+or to `any PostgrestExecutableBuilder` if the same variable also holds an `update` or `delete`.
 
 ## The typed PostgREST wrappers drop the `Typed` prefix
 
@@ -3115,3 +3242,522 @@ The string builder's `maybeSingle()` instead asks for a single object and maps P
 `explain(…)` return a `PostgrestRawQuery`, whose `execute()` returns the body as a `String`. That
 type has no `stripNulls()`, so `.csv().stripNulls()` does not compile, where the string builder
 throws at `execute()`.
+
+## A typed `update` or `delete` needs a filter, and a typed `insert` or `upsert` takes none
+
+`PostgrestMutation` gains a `Phase` parameter, and what a mutation offers depends on it:
+
+| Started from | Phase | `where` | `all()` | `execute()`, `returning()` |
+| --- | --- | --- | --- | --- |
+| `update`, `delete` | `PostgrestUnscopedPhase` | yes | yes | no |
+| after `where` or `all()` | `PostgrestScopedPhase` | yes | no | yes |
+| `insert`, `upsert` | `PostgrestInsertPhase` | no | no | yes |
+
+An `update` or `delete` without a filter writes every row in the relation. Before, that was one
+forgotten `where` away, and only a doc comment warned about it. Now it does not compile, and
+writing every row takes an explicit `all()`. `all()` adds nothing to the request.
+
+A filter after `insert` or `upsert` compiled before, but PostgREST ignores filters on a `POST`, so
+the filter did nothing. Now it does not compile. The string builder gets the same fix separately.
+
+```swift
+// Before
+try await client.from(Todo.self).delete().execute()
+try await client.from(Todo.self).update { $0.isDone = true }.execute()
+try await client.from(Todo.self).delete().returning().where { $0.id.eq(1) }.execute()
+try await client.from(Todo.self).insert(draft).where { $0.id.eq(1) }.execute()
+
+// After
+try await client.from(Todo.self).delete().all().execute()
+try await client.from(Todo.self).update { $0.isDone = true }.all().execute()
+try await client.from(Todo.self).delete().where { $0.id.eq(1) }.returning().execute()
+try await client.from(Todo.self).insert(draft).execute()
+```
+
+Every case is a compile error. On an unscoped mutation the compiler reports that
+`PostgrestUnscopedPhase` does not conform to `PostgrestExecutableMutationPhase`. Add a `where`, or
+`all()` if every row is what you mean. On an insert it reports that `where` needs
+`PostgrestUnscopedPhase`; delete the filter. Code that spells the type must add the phase:
+`PostgrestMutation<Todo>` becomes, for example, `PostgrestMutation<Todo, PostgrestScopedPhase>`.
+
+## `update`/`upsert`/`delete` no longer default to returning rows
+
+`PostgrestRequestBuilder.update(_:returning:count:encoder:)`,
+`upsert(_:onConflict:returning:count:ignoreDuplicates:defaultToNull:encoder:)`, and
+`delete(returning:count:)` now default `returning` to `nil` and omit `Prefer: return=` entirely
+when the caller doesn't pass it, matching `insert(_:returning:count:defaultToNull:encoder:)` and
+PostgREST's own default of `return=minimal`.
+
+Previously these three defaulted `returning` to `.representation` and always sent
+`Prefer: return=representation`, so a bare `update`/`upsert`/`delete` call — one that never chained
+`.select()` — silently paid for a response body it discarded. `insert` never had this problem, and
+js and Flutter omit the header by default on all four methods, so Swift's defaults were
+inconsistent with both itself and the rest of the SDK family.
+
+```swift
+// Before — rows came back even without .select()
+let updated: [Todo] = try await client
+  .from("todos")
+  .update(["done": true])
+  .eq("id", value: 1)
+  .execute()
+  .value
+
+// After — chain .select() to get rows back, as insert already required
+let updated: [Todo] = try await client
+  .from("todos")
+  .update(["done": true])
+  .eq("id", value: 1)
+  .select()
+  .execute()
+  .value
+```
+
+This does not break the build — `returning` was already optional-looking at call sites that never
+passed it — but it is a silent behavior change: a bare `update`/`upsert`/`delete` call that decodes
+`.value` without chaining `.select()` now decodes an empty response instead of the modified rows.
+Search your codebase for `.update(`, `.upsert(`, and `.delete(` calls that read `.value` or
+`.execute().value` without a `.select()` in the chain, and either add `.select()` or pass
+`returning: .representation` explicitly to keep the old behavior. The typed query API
+(`from(_:)`) already defaulted to `.minimal` and is unaffected.
+
+## SDK `async` functions run on the caller's executor (`NonisolatedNonsendingByDefault`)
+
+Every SDK target now builds with Swift 6.2's `NonisolatedNonsendingByDefault` (SE-0461). A
+nonisolated `async` method such as `PostgrestTypedQuery.execute()`,
+`FunctionsClient.invoke(_:options:decoder:)` or `AuthClient.session` now runs on the executor of
+its caller instead of hopping to the global concurrent executor. Called from `@MainActor` code,
+it stays on the main actor between suspension points.
+
+The SDK's own build flags decide how its `async` functions run; your app's flags do not reach SDK
+code. Moving a function to caller isolation changes its ABI, so the v3 major is the one moment to
+do it. It also makes decoding into your own `Decodable` types sound when those conformances are
+`@MainActor`-isolated, which is the default in an app that turns on
+`defaultIsolation(MainActor.self)`.
+
+### `ClientMiddleware.intercept(_:body:next:)` spells `next` as `nonisolated(nonsending)`
+
+The `next` parameter is now
+`nonisolated(nonsending) @Sendable (HTTPRequest, HTTPBody?) async throws -> (HTTPResponse, HTTPBody?)`.
+A middleware in a module that does **not** enable `NonisolatedNonsendingByDefault` (the default
+for Swift packages) no longer conforms until it spells the same type:
+
+```swift
+// Before
+func intercept(
+  _ request: HTTPRequest, body: HTTPBody?,
+  next: @Sendable (HTTPRequest, HTTPBody?) async throws -> (HTTPResponse, HTTPBody?)
+) async throws -> (HTTPResponse, HTTPBody?)
+
+// After
+func intercept(
+  _ request: HTTPRequest, body: HTTPBody?,
+  next: nonisolated(nonsending) @Sendable (HTTPRequest, HTTPBody?) async throws
+    -> (HTTPResponse, HTTPBody?)
+) async throws -> (HTTPResponse, HTTPBody?)
+```
+
+This is a compile error (`type '...' does not conform to protocol 'ClientMiddleware'`). In a
+module that already enables the flag (Xcode 26's "Approachable Concurrency" turns it on), the old
+spelling means the same type and keeps compiling. `ClientTransport` conformances need no change.
+
+### Work you `await` from the main actor now stays there
+
+This part is silent: it compiles unchanged. Decoding a large PostgREST, Functions or Storage
+response into your types now happens on the actor that awaited the call. If you fetch large
+result sets from `@MainActor` code and see the UI stall, move the call off the main actor:
+
+```swift
+// Before: decoding ran off the main actor implicitly
+@MainActor func load() async throws {
+  rows = try await client.from("todos").select().execute().value
+}
+
+// After: opt out explicitly where it matters
+@concurrent func fetchTodos() async throws -> [Todo] {
+  try await client.from("todos").select().execute().value
+}
+
+@MainActor func load() async throws {
+  rows = try await fetchTodos()
+}
+```
+
+`@concurrent` needs `Todo`'s `Decodable` conformance to be nonisolated. Search for `await` calls
+into the SDK from `@MainActor` code that return large payloads.
+
+`HTTPBody`'s iterator stays `@concurrent`, so reading a response body chunk by chunk still leaves
+the caller's actor. Realtime decodes WebSocket frames in its own task, as before.
+
+## `FunctionsClient` is created with a `Configuration`
+
+`FunctionsClient` has one initializer, `init(configuration:)`, taking a
+`FunctionsClient.Configuration` with `url` (required), `headers`, `region`, `http`, `logger`,
+`decoder` and `accessToken`, every one but `url` defaulted. The two flat seven-parameter
+initializers are removed, and `FunctionsClient.decoder` is now `configuration.decoder`.
+
+The two initializers differed only in the type of `region` (`String?` under
+`@_disfavoredOverload` versus `FunctionRegion?`), and Functions was the one module without the
+`Configuration` struct Auth, PostgREST and Storage take. A struct of defaulted `var`s also lets a
+later option land without changing the initializer's mangled name, which matters under library
+evolution.
+
+```swift
+// Before
+let functions = FunctionsClient(
+  url: url,
+  headers: ["apikey": apiKey],
+  region: .usEast1,
+  accessToken: { await tokenStore.current }
+)
+
+// After
+let functions = FunctionsClient(
+  configuration: .init(
+    url: url,
+    headers: [HTTPField.Name("apikey")!: apiKey],
+    region: .usEast1,
+    accessToken: { await tokenStore.current }
+  )
+)
+```
+
+Compile error at every standalone construction site; `supabase.functions` is unaffected.
+
+`init(configuration:)` traps when `url` has no host, as `SupabaseClient.init` does: the URL is
+fixed at construction, so a bad one is a programmer error. `Configuration.headers` must not carry
+`Authorization` — a static bearer would win over every token — and debug builds report an issue
+when it does. Pass the token through `accessToken` instead.
+
+## Functions headers are `HTTPFields`
+
+`FunctionsClient.Configuration.headers` and `FunctionInvokeOptions.headers` are `HTTPFields`
+(from `swift-http-types`, re-exported by the SDK) instead of `[String: String]`.
+
+`HTTPFields` is case-insensitive by construction, so a per-call `content-type` now replaces a
+`Content-Type` instead of sending both, and a header name that is not a legal HTTP field name
+cannot be spelled at all. Auth v3 and Storage v3 make the same change.
+
+```swift
+// Before
+FunctionInvokeOptions(headers: ["X-Custom-Key": "value"])
+
+// After
+FunctionInvokeOptions(headers: [HTTPField.Name("X-Custom-Key")!: "value"])
+// or, for a name HTTPTypes already defines
+FunctionInvokeOptions(headers: [.authorization: "Bearer override"])
+```
+
+Compile error at every site that passes a dictionary literal with `String` keys.
+
+## Function bodies are a `FunctionBody` passed to `invoke`
+
+The body is an argument of the call, not a setting. `invoke`, `invoke<T>` and the streamed
+invoke take `body: FunctionBody? = nil`, and `FunctionInvokeOptions` loses `body` and the four
+`init(... body:)` overloads. `FunctionBody` has four factories, each fixing the `Content-Type`:
+
+| Before | After | `Content-Type` |
+| --- | --- | --- |
+| `options: .init(body: order)` | `body: .json(order)` | `application/json` |
+| `options: .init(body: "hello")` | `body: .text("hello")` | `text/plain; charset=utf-8` |
+| `options: .init(body: data)` | `body: .data(data)` | `application/octet-stream` |
+| `options: .init(headers: ["Content-Type": "image/jpeg"], body: jpeg)` | `body: .data(jpeg, contentType: "image/jpeg")` | as given |
+| — | `body: .stream(try HTTPBody(fileURL: url), contentType: "audio/m4a")` | as given |
+
+`init(body: some Encodable)` picked the content type by casting the value to `String` or `Data`,
+so a `[UInt8]` went out JSON-encoded as an array and there was no way to send a stream. Naming
+the encoding at the call site removes the guesswork; a per-call
+`options.headers[.contentType]` still overrides the factory's type.
+
+```swift
+// Before
+let order: Order = try await supabase.functions.invoke(
+  "get-order",
+  options: FunctionInvokeOptions(body: ["id": 42])
+)
+
+// After
+let order: Order = try await supabase.functions.invoke("get-order", body: .json(["id": 42]))
+```
+
+Compile error at every site that passed `body:` to `FunctionInvokeOptions`.
+
+One change is silent: a value whose `encode(to:)` throws used to be dropped (`try?`), so the
+request went out with no body and `Content-Type: application/json`. `.json(_:)` now throws
+`FunctionsError` with kind `.invalidRequest`, wrapping the `EncodingError`, before anything is
+sent. If a function of yours received an empty body and answered 200, it now receives nothing
+and the call throws. `.json(_:encoder:)` takes a per-body `JSONEncoder`; the default writes
+`Date` as ISO 8601.
+
+## `invoke` returns `FunctionResponse`; the `decode:` closure overload is removed; `invoke<T>` gains `as:`
+
+`invoke(_:body:options:)` returns a `FunctionResponse` — `status`, `headers`, `body`, plus
+`contentType`, `region` (`x-sb-edge-region`), `executionID` (`x-deno-execution-id`),
+`requestID`, `text` and `decode(as:decoder:)` — instead of `Void`. It is `@discardableResult`,
+so a fire-and-forget call still compiles unchanged. `invoke(_:options:decode:)`, whose closure
+was the only way to reach the response head, is removed. `invoke<T>` takes an optional
+`as type: T.Type = T.self` before `decoder:`, so the type can be spelled at the call site
+instead of only on the binding.
+
+Support asks for the region and execution id of a failing call; neither was reachable. Kotlin,
+C# and Dart all expose the head on success.
+
+```swift
+// Before
+let (status, data) = try await supabase.functions.invoke("render") { data, response in
+  (response.status, data)
+}
+let order: Order = try await supabase.functions.invoke("get-order", options: o, decoder: d)
+
+// After
+let response = try await supabase.functions.invoke("render")
+let (status, data) = (response.status, response.body)
+print(response.region ?? "unknown region", response.executionID ?? "")
+let order: Order = try await supabase.functions.invoke("get-order", options: o, decoder: d)
+let same = try await supabase.functions.invoke("get-order", as: Order.self)
+```
+
+Compile error at every `decode:` closure site. `let x: Foo = try await invoke("f")` and
+`try await invoke("f")` with the result ignored keep compiling; a site that spelled every label
+of `invoke<T>` compiles unchanged too, since `as:` is defaulted.
+
+## `FunctionInvokeOptions.Method` is replaced by `HTTPRequest.Method`
+
+`FunctionInvokeOptions.method` is an `HTTPRequest.Method` (from `swift-http-types`, re-exported
+by the SDK) defaulting to `.post`. `FunctionInvokeOptions.Method` is deleted.
+
+The two types were the same open struct with the same five statics, and the private conversion
+between them returned `nil` for a token that was not a legal HTTP method, silently turning the
+request into a POST. An `HTTPRequest.Method` cannot be invalid.
+
+```swift
+// Before
+FunctionInvokeOptions(method: .get)
+FunctionInvokeOptions(method: "PURGE")
+
+// After
+FunctionInvokeOptions(method: .get)                       // unchanged
+FunctionInvokeOptions(method: HTTPRequest.Method("PURGE")!) // no string literal
+```
+
+Compile error only where the type was named (`FunctionInvokeOptions.Method`) or a string
+literal was passed: `HTTPRequest.Method` is not `ExpressibleByStringLiteral`. `.get`, `.post`,
+`.put`, `.patch` and `.delete` are spelled the same.
+
+## Functions decodes with `JSONDecoder.supabase()` by default
+
+`FunctionsClient.Configuration.decoder` and `SupabaseClientOptions.FunctionsOptions.decoder`
+default to the SDK decoder, the one PostgREST and Storage already use, instead of
+`JSONDecoder()`.
+
+The SDK decoder reads ISO 8601 strings, with or without fractional seconds, into `Date`.
+`JSONDecoder()` uses `.deferredToDate` and fails on the string a TypeScript function writes with
+`JSON.stringify(new Date())`, so a `Date` field in a function's response could not be decoded
+without a custom decoder.
+
+```swift
+// Before: a Date field needed a custom decoder
+let decoder = JSONDecoder()
+decoder.dateDecodingStrategy = .iso8601
+let report: Report = try await supabase.functions.invoke("report", decoder: decoder)
+
+// After
+let report: Report = try await supabase.functions.invoke("report")
+```
+
+This compiles silently. A function that returned dates as a number of seconds since 1970 (the
+`.deferredToDate` format) stops decoding; pass `decoder: JSONDecoder()` to that call, or set
+`FunctionsOptions(decoder: JSONDecoder())` client-wide, to keep the old behavior. Every other
+`JSONDecoder` setting is unchanged.
+
+## `_invokeWithStreamedResponse` is replaced by `stream(_:body:options:)`, which returns `FunctionStreamResponse`
+
+`FunctionsClient.stream(_:body:options:)` sends the request and returns a `FunctionStreamResponse`
+as soon as the response head arrives: `status`, `headers`, `contentType`, `region`,
+`executionID`, `requestID`, and the `body` as an `HTTPBody` of `ArraySlice<UInt8>` chunks.
+`_invokeWithStreamedResponse`, which returned an `AsyncThrowingStream<Data, any Error>`, is
+removed.
+
+The old method dropped the response head, so a caller could not read the status or the edge
+region of a streamed call, and its leading underscore hid it from the compliance checker.
+
+```swift
+// Before
+for try await chunk in supabase.functions._invokeWithStreamedResponse("chat", body: .json(prompt)) {
+  parser.feed(chunk)
+}
+
+// After
+let response = try await supabase.functions.stream("chat", body: .json(prompt))
+print(response.status, response.region ?? "unknown region")
+for try await chunk in response.body {
+  parser.feed(chunk)  // ArraySlice<UInt8>, not Data
+}
+```
+
+Compile error at every `_invokeWithStreamedResponse` call site. Chunk boundaries still follow
+the network, so a server-sent event or a JSON line can arrive split across chunks; the SDK does
+not frame them, so keep (or bring) your own parser. Two behavior notes: a non-2xx status or a
+relay failure now throws from `stream` itself, before any body exists, instead of from the first
+iteration; and cancelling the task that iterates `body` throws `CancellationError` and closes the
+connection, where the old stream ended as if the body were complete. `body` is one-pass.
+
+On Linux the body is delivered whole when the server closes the connection, because
+`URLSessionTransport` buffers responses there (SDK-1839).
+
+## Iterating an `HTTPBody` from a cancelled task throws `CancellationError`
+
+`HTTPBody.Iterator.next()` throws `CancellationError` when the iterating task is cancelled.
+That reaches every API that hands out or drains an `HTTPBody`: `FunctionStreamResponse.body`,
+Storage's `bytes(path:)`, `Data(collecting:upTo:)`, `HTTPBody.write(to:)` and a custom
+`ClientMiddleware` reading a response body.
+
+The chunks come from an `AsyncThrowingStream`, whose iterator returns `nil` when its consumer is
+cancelled. A body cut short therefore ended as if it were complete: a download written to disk
+with `write(to:)` looked whole, and a `for try await` loop fell through without an error.
+
+```swift
+// Before: a cancelled download looked complete
+try await body.write(to: fileURL)   // returns normally, file is truncated
+
+// After
+try await body.write(to: fileURL)   // throws CancellationError
+```
+
+This compiles silently. Code that cancelled a task to stop a stream and relied on the loop
+ending cleanly now sees `CancellationError`; catch it, or `break` out of the loop instead of
+cancelling. No escape hatch: a truncated body reported as complete is a data-loss bug.
+
+## `SupabaseClient` sets `Authorization` only when a request does not already carry it
+
+Under `SupabaseClient`, the PostgREST, Storage and Functions sub-clients no longer carry a static
+`Authorization: Bearer <supabaseKey>` header. One `AccessTokenMiddleware`, shared by the three,
+sets `Authorization` after your middlewares run and only when the request does not already have
+the header: the session token when a user is signed in, else the key. For Functions the fallback
+is the legacy JWT key only; a new-format `sb_publishable_` / `sb_secret_` key is never sent as a
+bearer. Standalone `FunctionsClient` uses the same middleware for its `accessToken` closure.
+
+The rule was split three ways. PostgREST and Storage overwrote `Authorization` on every request,
+so an explicit `.setHeader("Authorization", …)` was silently replaced by the session token
+(SDK-1524). Functions set the token before the middleware chain, so a `ClientMiddleware` saw the
+bearer on Functions requests and not on the others. supabase-js's `fetchWithAuth` applies the
+rule used here: set the header only if absent.
+
+```swift
+// Before: the session token replaced the per-request header
+try await supabase.from("todos").select()
+  .setHeader(name: "Authorization", value: "Bearer \(serviceToken)").execute()
+// sent: Authorization: Bearer <session token>
+
+// After: the per-request header wins
+try await supabase.from("todos").select()
+  .setHeader(name: "Authorization", value: "Bearer \(serviceToken)").execute()
+// sent: Authorization: Bearer <serviceToken>
+```
+
+This compiles silently. Search for `Authorization` set on a PostgREST builder, a Storage
+`setHeader`, or `FunctionInvokeOptions.headers`: those headers now reach the wire. A
+`ClientMiddleware` in `GlobalOptions.http.middlewares` now sees every data request without
+`Authorization`; read the token in a `ClientTransport` instead if you need it. `supabase.headers`,
+Auth and Realtime still carry the static bearer, as before. There is no escape hatch: a
+`SupabaseClient` with no signed-in user sends the key as before, so only code that set its own
+`Authorization` changes behavior.
+
+## `supabase.functions` is cached; `FunctionsOptions` gains `http` and `logger` and loses the `String?` region initializer
+
+`SupabaseClient.functions` is built on first access and cached, like `realtimeV2`. Two accesses
+return a client over the same transport and middleware chain instead of a fresh `HTTPClient` each
+time. `SupabaseClientOptions.FunctionsOptions` gains `http: HTTPClientConfiguration?` and
+`logger: Logger?`, both `nil` by default meaning the global value, and its properties are `var`.
+`FunctionsOptions.init(region: String?, decoder:)` is removed; `region` is `FunctionRegion?`.
+
+The `String?` initializer sat under `@_disfavoredOverload` and duplicated the `FunctionRegion?`
+one, the same pair Storage deleted (SDK-2019). `FunctionRegion` is `ExpressibleByStringLiteral`,
+so a literal still compiles; only a `String` variable needs a conversion.
+
+```swift
+// Before
+let region: String = settings.functionsRegion
+let options = SupabaseClientOptions(functions: .init(region: region))
+
+// After
+let options = SupabaseClientOptions(functions: .init(region: FunctionRegion(rawValue: region)))
+
+// Unchanged: a literal
+let options = SupabaseClientOptions(functions: .init(region: "us-east-1"))
+```
+
+Compile error at a call site that passes a `String` value; a literal and `FunctionRegion` statics
+compile unchanged. The caching is silent and has no observable effect beyond the retained
+`HTTPClient`.
+
+## Functions v3 at a glance
+
+Every Functions change above, as one name map. Each row links to the section that explains it.
+
+| Before | After | Section |
+| --- | --- | --- |
+| `FunctionsClient(url:headers:region:logger:http:decoder:accessToken:)` | `FunctionsClient(configuration: .init(url:…))` | [Configuration](#functionsclient-is-created-with-a-configuration) |
+| `FunctionsClient.decoder` | `FunctionsClient.configuration.decoder` | [Configuration](#functionsclient-is-created-with-a-configuration) |
+| `headers: ["apikey": key]` | `headers: [HTTPField.Name("apikey")!: key]` | [`HTTPFields`](#functions-headers-are-httpfields) |
+| `FunctionInvokeOptions(body: value)` | `invoke("f", body: .json(value))`, `.text`, `.data`, `.stream` | [`FunctionBody`](#function-bodies-are-a-functionbody-passed-to-invoke) |
+| `invoke("f") { data, response in … }` | `let r = try await invoke("f")`, then `r.status`, `r.headers`, `r.body`, `r.decode(as:)` | [`FunctionResponse`](#invoke-returns-functionresponse-the-decode-closure-overload-is-removed-invoket-gains-as) |
+| `invoke("f", options: o, decoder: d)` | `invoke("f", options: o, as: T.self, decoder: d)` | [`FunctionResponse`](#invoke-returns-functionresponse-the-decode-closure-overload-is-removed-invoket-gains-as) |
+| `FunctionInvokeOptions.Method` | `HTTPRequest.Method` (same `.get`, `.post`, … spelling) | [`HTTPRequest.Method`](#functioninvokeoptionsmethod-is-replaced-by-httprequestmethod) |
+| `_invokeWithStreamedResponse("f")` | `try await stream("f").body` | [`stream`](#_invokewithstreamedresponse-is-replaced-by-stream_bodyoptions-which-returns-functionstreamresponse) |
+| `FunctionsOptions(region: someString)` | `FunctionsOptions(region: FunctionRegion(rawValue: someString))` | [`FunctionsOptions`](#supabasefunctions-is-cached-functionsoptions-gains-http-and-logger-and-loses-the-string-region-initializer) |
+| `catch let e as FunctionsError where (e.underlyingError as? URLError)?.code == .cancelled` | `catch is CancellationError` | [Cancellation](#network-and-decoding-failures-are-wrapped-in-the-module-error) |
+
+Additive, no change needed: `FunctionsError.code`, `FunctionsError.isPlatformError`,
+`FunctionsError.Kind.invalidRequest`, `FunctionRegion.euCentral2`, `FunctionResponse.region`,
+`.executionID` and `.requestID`. Keep a fallback branch when switching on `FunctionsError.kind`.
+
+## The `PostgrestFilterBuilder` filter aliases are deprecated
+
+Fifteen methods on the untyped builder were second spellings of an operator that already had its
+own method. They now carry `@available(*, deprecated, message:)` naming the replacement, and are
+deleted in v4 (SDK-2183). The builder itself stays supported; only the aliases go.
+
+Why: every other Supabase SDK spells these operators one way (`eq`, `gt`, `textSearch`, …), and
+the typed query API added in v3 follows that spelling. Keeping a second name for each one on the
+untyped builder doubled the surface a reader has to recognize for no behavior the first name
+lacks.
+
+| Before | After |
+| --- | --- |
+| `.equals(_:value:)` | `.eq(_:value:)` |
+| `.notEquals(_:value:)` | `.neq(_:value:)` |
+| `.greaterThan(_:value:)` | `.gt(_:value:)` |
+| `.greaterThanOrEquals(_:value:)` | `.gte(_:value:)` |
+| `.lowerThan(_:value:)` | `.lt(_:value:)` |
+| `.lowerThanOrEquals(_:value:)` | `.lte(_:value:)` |
+| `.rangeLowerThan(_:range:)` | `.rangeLt(_:range:)` |
+| `.rangeGreaterThan(_:value:)` | `.rangeGt(_:range:)` |
+| `.rangeGreaterThanOrEquals(_:value:)` | `.rangeGte(_:range:)` |
+| `.rangeLowerThanOrEquals(_:value:)` | `.rangeLte(_:range:)` |
+| `.fullTextSearch(_:query:config:)` | `.textSearch(_:query:config:type:)` |
+| `.plainToFullTextSearch(_:query:config:)` | `.textSearch(_:query:config:type: .plain)` |
+| `.phraseToFullTextSearch(_:query:config:)` | `.textSearch(_:query:config:type: .phrase)` |
+| `.webFullTextSearch(_:query:config:)` | `.textSearch(_:query:config:type: .websearch)` |
+| `.fts(_:query:config:)` | `.textSearch(_:query:config:type:)` |
+
+```swift
+// Before
+try await client.from("users").select()
+  .greaterThanOrEquals("age", value: "18")
+  .fullTextSearch("bio", query: "swift", config: "english")
+  .execute()
+
+// After
+try await client.from("users").select()
+  .gte("age", value: "18")
+  .textSearch("bio", query: "swift", config: "english")
+  .execute()
+```
+
+**This is a warning, not a compile error, and not a behavior change.** Every alias still forwards
+to its replacement and sends the same request. Search your code for the names in the left column
+and switch to the right column before v4, where the aliases are removed.
+
+`match(_:)` with a dictionary is not deprecated: it is the multi-column equality shorthand every
+Supabase SDK has, not an alias of another method here.

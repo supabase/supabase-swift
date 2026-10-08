@@ -1,6 +1,6 @@
 import Foundation
 
-enum SupabaseConfig {
+nonisolated enum SupabaseConfig {
   static subscript(key: String) -> String? {
     guard let plistFileURL = Bundle.main.url(forResource: "Supabase", withExtension: "plist"),
       let plistData = try? Data(contentsOf: plistFileURL),

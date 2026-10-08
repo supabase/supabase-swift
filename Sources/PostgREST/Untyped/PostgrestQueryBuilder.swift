@@ -52,7 +52,7 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
     }
     .joined(separator: "")
 
-    copy.query.appendOrUpdate(URLQueryItem(name: "select", value: cleanedColumns))
+    copy.request.query.appendOrUpdate(URLQueryItem(name: "select", value: cleanedColumns))
 
     if let count {
       copy.request.headerFields.appendOrUpdate(.prefer, value: "count=\(count.rawValue)")
@@ -95,7 +95,8 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
   ///     the same option.
   ///   - encoder: The `JSONEncoder` used to serialize `values`. Overrides
   ///     ``PostgrestClient/Configuration/encoder`` when non-`nil`.
-  /// - Returns: A ``PostgrestFilterBuilder`` for applying additional constraints or executing the request.
+  /// - Returns: A ``PostgrestTransformBuilder`` for shaping the returned rows or executing the request.
+  ///   Filters are not available: PostgREST ignores them on an insert.
   /// - Throws: An encoding error if `values` cannot be serialized, or ``PostgrestError`` on server error.
   public func insert(
     _ values: some Encodable,
@@ -103,16 +104,16 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
     count: CountOption? = nil,
     defaultToNull: Bool = true,
     encoder: JSONEncoder? = nil
-  ) throws -> PostgrestFilterBuilder {
+  ) throws -> PostgrestTransformBuilder {
     let body = try (encoder ?? configuration.encoder).encode(values)
 
-    var copy = PostgrestFilterBuilder(carryingFrom: self)
+    var copy = PostgrestTransformBuilder(carryingFrom: self)
     copy.request.method = .post
     var prefersHeaders: [String] = []
     if let returning {
       prefersHeaders.append("return=\(returning.rawValue)")
     }
-    copy.body = body
+    copy.request.body = body
     if let count {
       prefersHeaders.append("count=\(count.rawValue)")
     }
@@ -125,8 +126,8 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
     if !prefersHeaders.isEmpty {
       copy.request.headerFields[.prefer] = prefersHeaders.joined(separator: ",")
     }
-    if let body = copy.body, let columns = try columnsQueryItem(forBody: body) {
-      copy.query.appendOrUpdate(columns)
+    if let body = copy.request.body, let columns = try columnsQueryItem(forBody: body) {
+      copy.request.query.appendOrUpdate(columns)
     }
 
     return copy
@@ -138,7 +139,8 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
   /// conflict column(s) match an existing row, the row is merged or ignored depending on
   /// `ignoreDuplicates`.
   ///
-  /// By default, upserted rows are returned. To suppress this, pass `.minimal` as `returning`.
+  /// By default, upserted rows are not returned. To receive the upserted data, chain with
+  /// ``PostgrestRequestBuilder/select(_:)`` after calling this method.
   ///
   /// ```swift
   /// // Upsert a row, merging on the "id" column
@@ -155,7 +157,7 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
   ///   - values: An `Encodable` value representing a single row or an array of rows.
   ///   - onConflict: Comma-separated UNIQUE column(s) that determine whether a row is a duplicate.
   ///     When `nil`, PostgREST uses the table's primary key.
-  ///   - returning: Controls which rows PostgREST returns after the upsert. Defaults to ``PostgrestReturningOptions/representation``.
+  ///   - returning: Controls which rows PostgREST returns after the upsert. Defaults to `nil` (server decides).
   ///   - count: The row-count algorithm to use, or `nil` to skip counting. See ``CountOption``.
   ///   - ignoreDuplicates: When `true`, conflicting rows are silently ignored. When `false` (the
   ///     default), conflicting rows are merged with the supplied values.
@@ -166,29 +168,32 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
   ///     resolves to the database-generated value, which is what the conflict is detected on.
   ///   - encoder: The `JSONEncoder` used to serialize `values`. Overrides
   ///     ``PostgrestClient/Configuration/encoder`` when non-`nil`.
-  /// - Returns: A ``PostgrestFilterBuilder`` for applying additional constraints or executing the request.
+  /// - Returns: A ``PostgrestTransformBuilder`` for shaping the returned rows or executing the request.
+  ///   Filters are not available: PostgREST ignores them on an upsert.
   /// - Throws: An encoding error if `values` cannot be serialized, or ``PostgrestError`` on server error.
   public func upsert(
     _ values: some Encodable,
     onConflict: String? = nil,
-    returning: PostgrestReturningOptions = .representation,
+    returning: PostgrestReturningOptions? = nil,
     count: CountOption? = nil,
     ignoreDuplicates: Bool = false,
     defaultToNull: Bool = true,
     encoder: JSONEncoder? = nil
-  ) throws -> PostgrestFilterBuilder {
+  ) throws -> PostgrestTransformBuilder {
     let body = try (encoder ?? configuration.encoder).encode(values)
 
-    var copy = PostgrestFilterBuilder(carryingFrom: self)
+    var copy = PostgrestTransformBuilder(carryingFrom: self)
     copy.request.method = .post
     var prefersHeaders = [
-      "resolution=\(ignoreDuplicates ? "ignore" : "merge")-duplicates",
-      "return=\(returning.rawValue)",
+      "resolution=\(ignoreDuplicates ? "ignore" : "merge")-duplicates"
     ]
-    if let onConflict {
-      copy.query.appendOrUpdate(URLQueryItem(name: "on_conflict", value: onConflict))
+    if let returning {
+      prefersHeaders.append("return=\(returning.rawValue)")
     }
-    copy.body = body
+    if let onConflict {
+      copy.request.query.appendOrUpdate(URLQueryItem(name: "on_conflict", value: onConflict))
+    }
+    copy.request.body = body
     if let count {
       prefersHeaders.append("count=\(count.rawValue)")
     }
@@ -202,8 +207,8 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
       copy.request.headerFields[.prefer] = prefersHeaders.joined(separator: ",")
     }
 
-    if let body = copy.body, let columns = try columnsQueryItem(forBody: body) {
-      copy.query.appendOrUpdate(columns)
+    if let body = copy.request.body, let columns = try columnsQueryItem(forBody: body) {
+      copy.request.query.appendOrUpdate(columns)
     }
 
     return copy
@@ -211,8 +216,8 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
 
   /// Performs a partial UPDATE on rows that match subsequent filters.
   ///
-  /// By default, updated rows are returned as ``PostgrestReturningOptions/representation``. To
-  /// suppress this, pass `.minimal` as `returning`.
+  /// By default, updated rows are not returned. To receive the updated data, chain with
+  /// ``PostgrestRequestBuilder/select(_:)`` after calling this method.
   ///
   /// > Important: Omitting a filter will update **all rows** in the table. Always chain
   /// > a filter such as ``PostgrestRequestBuilder/eq(_:value:)`` before calling
@@ -228,7 +233,7 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
   ///
   /// - Parameters:
   ///   - values: An `Encodable` value with the columns to update.
-  ///   - returning: Controls which rows PostgREST returns after the update. Defaults to ``PostgrestReturningOptions/representation``.
+  ///   - returning: Controls which rows PostgREST returns after the update. Defaults to `nil` (server decides).
   ///   - count: The row-count algorithm to use, or `nil` to skip counting. See ``CountOption``.
   ///   - encoder: The `JSONEncoder` used to serialize `values`. Overrides
   ///     ``PostgrestClient/Configuration/encoder`` when non-`nil`.
@@ -236,7 +241,7 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
   /// - Throws: An encoding error if `values` cannot be serialized, or ``PostgrestError`` on server error.
   public func update(
     _ values: some Encodable,
-    returning: PostgrestReturningOptions = .representation,
+    returning: PostgrestReturningOptions? = nil,
     count: CountOption? = nil,
     encoder: JSONEncoder? = nil
   ) throws -> PostgrestFilterBuilder {
@@ -244,8 +249,11 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
 
     var copy = PostgrestFilterBuilder(carryingFrom: self)
     copy.request.method = .patch
-    var preferHeaders = ["return=\(returning.rawValue)"]
-    copy.body = body
+    var preferHeaders: [String] = []
+    if let returning {
+      preferHeaders.append("return=\(returning.rawValue)")
+    }
+    copy.request.body = body
     if let count {
       preferHeaders.append("count=\(count.rawValue)")
     }
@@ -261,8 +269,8 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
 
   /// Performs a DELETE on rows that match subsequent filters.
   ///
-  /// By default, deleted rows are returned as ``PostgrestReturningOptions/representation``. To
-  /// suppress this, pass `.minimal` as `returning`.
+  /// By default, deleted rows are not returned. To receive the deleted data, chain with
+  /// ``PostgrestRequestBuilder/select(_:)`` after calling this method.
   ///
   /// > Important: Omitting a filter will delete **all rows** in the table. Always chain
   /// > a filter such as ``PostgrestRequestBuilder/eq(_:value:)`` before calling
@@ -277,16 +285,19 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
   /// ```
   ///
   /// - Parameters:
-  ///   - returning: Controls which rows PostgREST returns after the delete. Defaults to ``PostgrestReturningOptions/representation``.
+  ///   - returning: Controls which rows PostgREST returns after the delete. Defaults to `nil` (server decides).
   ///   - count: The row-count algorithm to use, or `nil` to skip counting. See ``CountOption``.
   /// - Returns: A ``PostgrestFilterBuilder`` for scoping which rows are deleted.
   public func delete(
-    returning: PostgrestReturningOptions = .representation,
+    returning: PostgrestReturningOptions? = nil,
     count: CountOption? = nil
   ) -> PostgrestFilterBuilder {
     var copy = PostgrestFilterBuilder(carryingFrom: self)
     copy.request.method = .delete
-    var preferHeaders = ["return=\(returning.rawValue)"]
+    var preferHeaders: [String] = []
+    if let returning {
+      preferHeaders.append("return=\(returning.rawValue)")
+    }
     if let count {
       preferHeaders.append("count=\(count.rawValue)")
     }
@@ -304,9 +315,11 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
 /// The `columns` query parameter for an array request body: the union of the keys across every
 /// row, quoted and comma-separated.
 ///
-/// PostgREST otherwise derives the column list from the first object alone and silently drops keys
-/// a later row added. Rows in one batch legitimately differ, because a nil optional is omitted from
-/// the payload rather than encoded as `null`, so the union has to be sent explicitly.
+/// Without it, PostgREST requires every row to carry an identical key set and rejects the whole
+/// request (`PGRST102`, 400) the moment one disagrees — it never derives the column list from the
+/// first object and drops the rest. Rows in one batch legitimately differ, because a nil optional
+/// is omitted from the payload rather than encoded as `null`, so the union has to be sent
+/// explicitly to make a ragged batch representable at all.
 ///
 /// - Parameter body: The encoded request body.
 /// - Returns: The query item, or `nil` when the body is not an array of objects, or is an array

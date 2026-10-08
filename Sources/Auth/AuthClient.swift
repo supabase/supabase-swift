@@ -360,14 +360,21 @@ public final class AuthClient: Sendable {
       // A bounded policy could evict exactly that one when events arrive back to back.
     >.makeStream(bufferingPolicy: .unbounded)
 
-    Task {
-      let handle = await onAuthStateChange { event, session in
-        continuation.yield((event, session))
-      }
+    // Attach (and wire up `onTermination`) synchronously, before returning the stream.
+    // `eventEmitter.attach` doesn't need to be async — only the subsequent initial-session
+    // emission below does — so doing this inside a `Task` would let a consumer cancel the
+    // stream before that task's body ran, leaving `onTermination` unset when termination
+    // already happened and leaking this registration (SDK-2092).
+    let token = eventEmitter.attach { event, session in
+      continuation.yield((event, session))
+    }
 
-      continuation.onTermination = { _ in
-        handle.remove()
-      }
+    continuation.onTermination = { _ in
+      token.remove()
+    }
+
+    Task {
+      await emitInitialSession(forToken: token)
     }
 
     return stream
@@ -1101,7 +1108,8 @@ public final class AuthClient: Sendable {
         method: .get,
         url: configuration.url.appendingPathComponent("user"),
         headerFields: [.authorization: "\(tokenType) \(accessToken)"]
-      )
+      ),
+      for: sessionOwnership(ofAccessToken: accessToken)
     ).decoded(as: User.self, decoder: configuration.resolvedDecoder)
 
     let session = Session(
@@ -1399,10 +1407,16 @@ public final class AuthClient: Sendable {
 
     if let jwt {
       request.headerFields[.authorization] = "Bearer \(jwt)"
-      return try await api.execute(request).decoded(decoder: configuration.resolvedDecoder)
+      return try await api.execute(request, for: sessionOwnership(ofAccessToken: jwt))
+        .decoded(decoder: configuration.resolvedDecoder)
     }
 
     return try await api.authorizedExecute(request).decoded(decoder: configuration.resolvedDecoder)
+  }
+
+  private func sessionOwnership(ofAccessToken accessToken: String) -> SessionOwnership {
+    let stored = currentSession
+    return .snapshot(stored?.accessToken == accessToken ? stored : nil)
   }
 
   /// Updates user data, if there is a logged in user.

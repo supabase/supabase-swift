@@ -14,6 +14,10 @@ struct StoredProperty {
   var isOptional: Bool
   var isPrimaryKey: Bool
   var hasDefault: Bool
+
+  /// `@Generated`: the database fills the column in and refuses a written value, so it has no
+  /// field in `Draft` and its column type is one `PostgrestUpdate` cannot assign.
+  var isGenerated: Bool
   var explicitColumn: String?
 
   /// The `@Relationship` foreign key, rendered as a reference into the owning relation's column
@@ -158,6 +162,7 @@ extension DeclGroupSyntax {
           isOptional: postgrestIsOptionalType(typeText),
           isPrimaryKey: attribute("PrimaryKey") != nil,
           hasDefault: attribute("Default") != nil,
+          isGenerated: attribute("Generated") != nil,
           explicitColumn: column,
           foreignKey: foreignKey
         )

@@ -319,8 +319,8 @@ public struct StorageFileApi: Sendable {
       body: api.configuration.encoder.encode(
         [
           "bucketId": bucketId,
-          "sourceKey": source,
-          "destinationKey": destination,
+          "sourceKey": _removeEmptyFolders(source),
+          "destinationKey": _removeEmptyFolders(destination),
           "destinationBucket": options?.destinationBucket,
         ]
       )
@@ -362,8 +362,8 @@ public struct StorageFileApi: Sendable {
       body: api.configuration.encoder.encode(
         [
           "bucketId": bucketId,
-          "sourceKey": source,
-          "destinationKey": destination,
+          "sourceKey": _removeEmptyFolders(source),
+          "destinationKey": _removeEmptyFolders(destination),
           "destinationBucket": options?.destinationBucket,
         ]
       )
@@ -490,7 +490,7 @@ public struct StorageFileApi: Sendable {
         url: api.configuration.url.appendingPathComponent("object/sign/\(bucketId)")
       ),
       body: encoder.encode(
-        Params(expiresIn: expiresIn, paths: paths)
+        Params(expiresIn: expiresIn, paths: paths.map(_removeEmptyFolders))
       )
     )
     .decoded(as: [SignedURLsAPIResponse].self, decoder: api.configuration.decoder)
@@ -614,7 +614,7 @@ public struct StorageFileApi: Sendable {
       HTTPRequest(
         method: .delete,
         url: api.configuration.url.appendingPathComponent("object/\(bucketId)")
-      ), body: api.configuration.encoder.encode(["prefixes": paths])
+      ), body: api.configuration.encoder.encode(["prefixes": paths.map(_removeEmptyFolders)])
     )
     .decoded(decoder: api.configuration.decoder)
   }
@@ -640,7 +640,7 @@ public struct StorageFileApi: Sendable {
     var options = options ?? defaultSearchOptions
     options.limit = options.limit ?? defaultSearchOptions.limit
     options.offset = options.offset ?? defaultSearchOptions.offset
-    options.prefix = path ?? ""
+    options.prefix = _removeEmptyFolders(path ?? "")
 
     var sortBy = options.sortBy ?? SortBy()
     sortBy.column = sortBy.column ?? defaultSearchOptions.sortBy?.column
@@ -651,7 +651,7 @@ public struct StorageFileApi: Sendable {
       HTTPRequest(
         method: .post,
         url: api.configuration.url.appendingPathComponent("object/list/\(bucketId)")
-      ), body: encoder.encode(options)
+      ), body: encoder.encode(options), replayable: true
     )
     .decoded(decoder: api.configuration.decoder)
   }
@@ -1018,10 +1018,7 @@ public struct StorageFileApi: Sendable {
   }
 
   private func _getFinalPath(_ path: String) -> String {
-    let strippedPath = path.replacingOccurrences(
-      of: "^/+", with: "", options: .regularExpression
-    )
-    return "\(bucketId)/\(strippedPath)"
+    "\(bucketId)/\(_removeEmptyFolders(path))"
   }
 
   private func _removeEmptyFolders(_ path: String) -> String {

@@ -31,10 +31,16 @@ struct QueryCapture {
   ///   - status: The response status to hand back to every request.
   ///   - responseHeaders: Extra response header fields, merged over `Content-Type`. Use this to
   ///     stub the `Content-Range` header a count request reads its total from.
+  ///   - headers: The client-level headers, as a caller would pass to `PostgrestClient`.
+  ///   - encoder: The client's configured encoder, as a caller would pass to `PostgrestClient`.
+  ///   - decoder: The client's configured decoder, as a caller would pass to `PostgrestClient`.
   init(
     body: String = "[]",
     status: HTTPTypes.HTTPResponse.Status = .ok,
-    responseHeaders: [String: String] = [:]
+    responseHeaders: [String: String] = [:],
+    headers: [String: String] = ["X-Client-Info": "postgrest-swift/test"],
+    encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
+    decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder
   ) {
     let captured = self.captured
     let capturedBody = self.capturedBody
@@ -44,7 +50,7 @@ struct QueryCapture {
     }
     client = PostgrestClient(
       url: URL(string: "https://example.supabase.co")!,
-      headers: ["X-Client-Info": "postgrest-swift/test"],
+      headers: headers,
       http: .init(
         transport: ClosureTransport { request, requestBody in
           captured.setValue(request)
@@ -59,7 +65,10 @@ struct QueryCapture {
             HTTPTypes.HTTPResponse(status: status, headerFields: headerFields),
             HTTPBody(Data(body.utf8))
           )
-        }))
+        }),
+      encoder: encoder,
+      decoder: decoder
+    )
   }
 
   /// The query string of the captured request, percent-decoded so assertions can be written in
@@ -78,6 +87,13 @@ struct QueryCapture {
   /// The captured request body decoded as UTF-8.
   var bodyString: String? {
     capturedBody.value.map { String(decoding: $0, as: UTF8.self) }
+  }
+
+  /// Every header field of the captured request, keyed by canonical name.
+  var headers: [String: String] {
+    guard let fields = captured.value?.headerFields else { return [:] }
+    return Dictionary(
+      fields.map { ($0.name.canonicalName, $0.value) }, uniquingKeysWith: { "\($0),\($1)" })
   }
 
   /// A header field of the captured request.

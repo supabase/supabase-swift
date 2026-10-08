@@ -31,7 +31,7 @@ jobs:
       matrix:
         command: [test, ""]
         platform: [IOS, MACOS]
-        xcode: ["26.4"]
+        xcode: ["26.4", "27.0"]
         include:
           - { command: test, skip_release: 1 }
           - { command: "", skip_debug: 1 }
@@ -61,11 +61,13 @@ jobs:
         if: matrix.skip_release != '1'
         run: CONFIG=Release PLATFORM="${{ matrix.platform }}" XCODEBUILD_ARGUMENT="${{ matrix.command }}" ./scripts/xcodebuild.sh
       - name: Install lcov
-        if: matrix.command == 'test' && matrix.platform == 'IOS'
+        if: matrix.command == 'test' && matrix.platform == 'IOS' && matrix.xcode == '26.4'
         run: brew install lcov
       - name: Export code coverage
         id: coverage
-        if: matrix.command == 'test' && matrix.platform == 'IOS'
+        # Coveralls isn't configured for parallel/matrix uploads (no `parallel: true` or unique
+        # `flag-name`), so only one Xcode leg should upload coverage per run.
+        if: matrix.command == 'test' && matrix.platform == 'IOS' && matrix.xcode == '26.4'
         run: DERIVED_DATA_PATH=~/.derivedData/Debug ./scripts/generate-coverage.sh
       - name: Trust Coveralls Homebrew tap (Homebrew 6 requirement)
         if: steps.coverage.outcome == 'success'

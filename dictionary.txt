@@ -37,6 +37,7 @@ dedup
 dedupe
 decoratee
 deeplinking
+deno
 discardable
 docc
 dollarsign
@@ -159,6 +160,7 @@ Reauthentication
 Reconnections
 refreshable
 refreshtoken
+replayable
 resends
 Resends
 Rlbn
@@ -288,3 +290,8 @@ fixdate
 
 # Term from the privacy manifest resource declared on the Helpers target (Package.swift).
 xcprivacy
+
+# Swift 6.2 isolation keyword (SE-0461): `nonisolated(nonsending)`, `NonisolatedNonsendingByDefault`.
+nonsending
+Subrange
+fkey

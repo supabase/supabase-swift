@@ -28,7 +28,7 @@ struct RealtimeMessageV2Tests {
 
     message = RealtimeMessageV2(
       joinRef: nil, ref: nil, topic: "heartbeat", event: "event", payload: ["status": "invalid"])
-    #expect(message.status == nil)
+    #expect(message.status?.rawValue == "invalid")
   }
 
   @Test
@@ -43,42 +43,42 @@ struct RealtimeMessageV2Tests {
       joinRef: nil, ref: nil, topic: "topic", event: ChannelEvent.postgresChanges,
       payload: payloadWithNoStatus)
 
-    #expect(systemEventMessage._eventType == .system)
-    #expect(postgresChangesEventMessage._eventType == .postgresChanges)
+    #expect(systemEventMessage.eventType == .system)
+    #expect(postgresChangesEventMessage.eventType == .postgresChanges)
 
     let broadcastEventMessage = RealtimeMessageV2(
       joinRef: nil, ref: nil, topic: "topic", event: ChannelEvent.broadcast,
       payload: payloadWithNoStatus)
-    #expect(broadcastEventMessage._eventType == .broadcast)
+    #expect(broadcastEventMessage.eventType == .broadcast)
 
     let closeEventMessage = RealtimeMessageV2(
       joinRef: nil, ref: nil, topic: "topic", event: ChannelEvent.close,
       payload: payloadWithNoStatus)
-    #expect(closeEventMessage._eventType == .close)
+    #expect(closeEventMessage.eventType == .close)
 
     let errorEventMessage = RealtimeMessageV2(
       joinRef: nil, ref: nil, topic: "topic", event: ChannelEvent.error,
       payload: payloadWithNoStatus)
-    #expect(errorEventMessage._eventType == .error)
+    #expect(errorEventMessage.eventType == .error)
 
     let presenceDiffEventMessage = RealtimeMessageV2(
       joinRef: nil, ref: nil, topic: "topic", event: ChannelEvent.presenceDiff,
       payload: payloadWithNoStatus)
-    #expect(presenceDiffEventMessage._eventType == .presenceDiff)
+    #expect(presenceDiffEventMessage.eventType == .presenceDiff)
 
     let presenceStateEventMessage = RealtimeMessageV2(
       joinRef: nil, ref: nil, topic: "topic", event: ChannelEvent.presenceState,
       payload: payloadWithNoStatus)
-    #expect(presenceStateEventMessage._eventType == .presenceState)
+    #expect(presenceStateEventMessage.eventType == .presenceState)
 
     let replyEventMessage = RealtimeMessageV2(
       joinRef: nil, ref: nil, topic: "topic", event: ChannelEvent.reply,
       payload: payloadWithNoStatus)
-    #expect(replyEventMessage._eventType == .reply)
+    #expect(replyEventMessage.eventType == .reply)
 
     let unknownEventMessage = RealtimeMessageV2(
       joinRef: nil, ref: nil, topic: "topic", event: "unknown_event", payload: payloadWithNoStatus)
-    #expect(unknownEventMessage._eventType == nil)
+    #expect(unknownEventMessage.eventType.rawValue == "unknown_event")
   }
 
   @Test

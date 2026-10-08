@@ -115,7 +115,7 @@ public final class SupabaseClient: Sendable {
     PostgrestClient(
       url: databaseURL,
       schema: options.db.schema,
-      headers: headers,
+      headers: dataHeaders.dictionary,
       logger: options.global.logger,
       http: authenticatedHTTP,
       encoder: options.db.encoder,
@@ -126,15 +126,16 @@ public final class SupabaseClient: Sendable {
 
   /// The Storage client for uploading, downloading, and managing files.
   public var storage: SupabaseStorageClient {
-    SupabaseStorageClient(
-      configuration: StorageClientConfiguration(
-        url: storageURL,
-        headers: headers,
-        http: authenticatedHTTP,
-        logger: options.global.logger,
-        usesNewHostname: options.storage.usesNewHostname
-      )
+    var configuration = StorageClientConfiguration(
+      url: storageURL,
+      headers: dataHeaders.dictionary,
+      http: authenticatedHTTP,
+      logger: options.global.logger,
+      usesNewHostname: options.storage.usesNewHostname,
+      retryEnabled: options.storage.retryEnabled
     )
+    configuration.clock = clock
+    return SupabaseStorageClient(configuration: configuration)
   }
 
   /// The Realtime client for subscribing to database changes and broadcasting presence events.
@@ -150,26 +151,27 @@ public final class SupabaseClient: Sendable {
   }
 
   /// The Functions client for invoking Supabase Edge Functions.
+  ///
+  /// Built on first access from ``SupabaseClientOptions/FunctionsOptions`` and the global HTTP
+  /// configuration, then cached.
   public var functions: FunctionsClient {
-    var functionsHeaders = _headers
-    if APIKeyFormat.isNew(supabaseKey) {
-      functionsHeaders[.authorization] = nil
-    }
-    return FunctionsClient(
-      url: functionsURL,
-      headers: functionsHeaders.dictionary,
-      region: options.functions.region,
-      logger: options.global.logger,
-      http: HTTPClientConfiguration(
-        transport: transport,
-        middlewares: options.global.http.middlewares + [TraceContextMiddleware()],
-        timeout: options.global.http.timeout
-      ),
-      decoder: options.functions.decoder,
-      accessToken: { [weak self] in
-        try await self?._getAccessToken()
+    mutableState.withValue {
+      if let functions = $0.functions {
+        return functions
       }
-    )
+      let functions = _initFunctionsClient()
+      $0.functions = functions
+      return functions
+    }
+  }
+
+  /// ``_headers`` without the static `Authorization`, for PostgREST, Storage and Functions: their
+  /// bearer is ``AccessTokenMiddleware``'s job, so a per-call header and the session token both
+  /// win over the key.
+  var dataHeaders: HTTPFields {
+    var headers = _headers
+    headers[.authorization] = nil
+    return headers
   }
 
   let _headers: HTTPFields
@@ -184,6 +186,7 @@ public final class SupabaseClient: Sendable {
   struct MutableState {
     var listenForAuthEventsTask: Task<Void, Never>?
     var realtime: RealtimeClientV2?
+    var functions: FunctionsClient?
 
     var changedAccessToken: String?
   }
@@ -427,20 +430,23 @@ public final class SupabaseClient: Sendable {
     options.global.http.transport ?? URLSessionTransport()
   }
 
-  /// The shared transport plus the user's middlewares followed by the SDK's, for sub-clients that
-  /// send the user's token.
+  /// The shared transport plus the user's middlewares followed by the SDK's, for PostgREST and
+  /// Storage. The bearer is the session token, else the key.
   ///
   /// ``AccessTokenMiddleware`` captures only the dependencies it needs — never `self` — because
-  /// each sub-client stores its middlewares for its whole lifetime: the cached ``realtimeV2``
-  /// sub-client is held in ``mutableState`` for the lifetime of the client, and a caller may hold
-  /// any sub-client for that long too. Capturing `self` here would form a
+  /// each sub-client stores its middlewares for its whole lifetime: the cached ``realtimeV2`` and
+  /// ``functions`` sub-clients are held in ``mutableState`` for the lifetime of the client, and a
+  /// caller may hold any sub-client for that long too. Capturing `self` here would form a
   /// `self -> sub-client -> middleware -> self` retain cycle that keeps ``deinit`` from ever
   /// running.
   private var authenticatedHTTP: HTTPClientConfiguration {
     HTTPClientConfiguration(
       transport: transport,
       middlewares: options.global.http.middlewares + [
-        TraceContextMiddleware(), AccessTokenMiddleware(getAccessToken: accessTokenProvider),
+        TraceContextMiddleware(),
+        AccessTokenMiddleware(getAccessToken: { [provider = accessTokenProvider, supabaseKey] in
+          try await provider() ?? supabaseKey
+        }),
       ],
       timeout: options.global.http.timeout
     )
@@ -509,6 +515,34 @@ public final class SupabaseClient: Sendable {
     if let accessToken {
       await realtimeV2.setAuth(accessToken)
     }
+  }
+
+  private func _initFunctionsClient() -> FunctionsClient {
+    let http = options.functions.http ?? options.global.http
+    return FunctionsClient(
+      configuration: .init(
+        url: functionsURL,
+        headers: dataHeaders,
+        region: options.functions.region,
+        http: HTTPClientConfiguration(
+          transport: http.transport ?? transport,
+          middlewares: options.global.http.middlewares
+            + (options.functions.http?.middlewares ?? [])
+            + [
+              TraceContextMiddleware(),
+              // The session token, else the legacy JWT key; a new-format key is never a bearer.
+              AccessTokenMiddleware(getAccessToken: {
+                [provider = accessTokenProvider, supabaseKey] in
+                APIKeyFormat.functionsBearerToken(
+                  accessToken: try await provider() ?? supabaseKey, supabaseKey: supabaseKey)
+              }),
+            ],
+          timeout: http.timeout ?? options.global.http.timeout
+        ),
+        logger: options.functions.logger ?? options.global.logger,
+        decoder: options.functions.decoder
+      )
+    )
   }
 
   private func _initRealtimeClient() -> RealtimeClientV2 {

@@ -31,8 +31,6 @@ struct StorageApi: Sendable {
   /// The configuration used to initialize this client instance.
   let configuration: StorageClientConfiguration
 
-  private let http: HTTPClient
-
   /// Creates a ``StorageApi`` with the given configuration.
   ///
   /// - Parameter configuration: The configuration that controls the endpoint URL, authentication
@@ -70,12 +68,6 @@ struct StorageApi: Sendable {
     }
 
     self.configuration = configuration
-
-    let interceptors: [any ClientMiddleware] = [
-      LoggerInterceptor(logger: configuration.logger)
-    ]
-
-    http = HTTPClient(configuration: configuration.http, appending: interceptors)
   }
 
   /// Returns a new ``StorageApi`` with an additional HTTP header merged into
@@ -101,14 +93,29 @@ struct StorageApi: Sendable {
   }
 
   /// Sends `request` with the client's default headers and returns the response body.
+  ///
+  /// `replayable` marks a `POST` that only reads (a list) as safe to retry.
   @discardableResult
-  func execute(_ request: HTTPRequest, body: Data) async throws -> Data {
-    try await execute(request, body: HTTPBody(body))
+  func execute(_ request: HTTPRequest, body: Data, replayable: Bool = false) async throws -> Data {
+    try await execute(request, body: HTTPBody(body), replayable: replayable)
   }
 
   /// Sends `request` with the client's default headers and returns the response body.
+  ///
+  /// Only `GET`, `HEAD` and `replayable` requests are retried, and only when
+  /// ``StorageClientConfiguration/retryEnabled`` is `true`.
   @discardableResult
-  func execute(_ request: HTTPRequest, body: HTTPBody? = nil) async throws -> Data {
+  func execute(
+    _ request: HTTPRequest, body: HTTPBody? = nil, replayable: Bool = false
+  ) async throws -> Data {
+    var policy = configuration.retryEnabled ? RetryPolicy.default : .disabled
+    if replayable { policy.retryableMethods.insert(request.method) }
+    let retry = RetryRequestInterceptor(policy: policy, clock: configuration.clock)
+    let http = HTTPClient(
+      configuration: configuration.http,
+      retrying: retry,
+      appending: [LoggerInterceptor(logger: configuration.logger)])
+
     var request = request
     request.headerFields = HTTPFields(configuration.headers).merging(with: request.headerFields)
 
@@ -127,6 +134,9 @@ struct StorageApi: Sendable {
       // thrown by user code that runs inside `stream` (a custom `ClientTransport` or middleware, an `accessToken` closure),
       // propagate as themselves.
       guard let urlError = error as? URLError else { throw error }
+      // `URLSession` reports a cancelled `Task` as `URLError(.cancelled)`. A `.cancelled` with no
+      // task cancellation behind it (a middleware cancelled the request) stays a transport error.
+      if urlError.code == .cancelled, Task.isCancelled { throw CancellationError() }
       throw StorageError(
         kind: .transport, message: urlError.localizedDescription, underlyingError: urlError)
     }

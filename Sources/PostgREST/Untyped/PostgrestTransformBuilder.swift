@@ -39,7 +39,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestTransformablePhase {
     .joined(separator: "")
 
     var copy = PostgrestTransformBuilder(carryingFrom: self)
-    copy.query.appendOrUpdate(URLQueryItem(name: "select", value: cleanedColumns))
+    copy.request.query.appendOrUpdate(URLQueryItem(name: "select", value: cleanedColumns))
     copy.request.headerFields.appendOrUpdate(.prefer, value: "return=representation")
 
     return copy
@@ -60,30 +60,32 @@ extension PostgrestRequestBuilder where Phase: PostgrestTransformablePhase {
   /// - Parameters:
   ///   - column: The column to sort by.
   ///   - ascending: When `true` (the default), results are sorted ascending (`ASC`).
-  ///   - nullsFirst: When `true`, `NULL` values appear before non-null values. Defaults to `false`.
+  ///   - nullsFirst: When `true`, `NULL` values appear before non-null values; when `false`, after.
+  ///     Defaults to `nil`, which sends no placement and lets the database apply its own default
+  ///     (`NULLS LAST` on ascending, `NULLS FIRST` on descending).
   ///   - referencedTable: The name of an embedded table to order by its columns. Defaults to `nil`.
   /// - Returns: A ``PostgrestTransformBuilder`` so calls can be chained.
   public func order(
     _ column: String,
     ascending: Bool = true,
-    nullsFirst: Bool = false,
+    nullsFirst: Bool? = nil,
     referencedTable: String? = nil
   ) -> PostgrestTransformBuilder {
     var copy = PostgrestTransformBuilder(carryingFrom: self)
     let key = referencedTable.map { "\($0).order" } ?? "order"
-    let existingOrderIndex = copy.query.firstIndex { $0.name == key }
-    let value =
-      "\(column).\(ascending ? "asc" : "desc").\(nullsFirst ? "nullsfirst" : "nullslast")"
+    let existingOrderIndex = copy.request.query.firstIndex { $0.name == key }
+    let placement = nullsFirst.map { $0 ? ".nullsfirst" : ".nullslast" } ?? ""
+    let value = "\(column).\(ascending ? "asc" : "desc")\(placement)"
 
     if let existingOrderIndex,
-      let currentValue = copy.query[existingOrderIndex].value
+      let currentValue = copy.request.query[existingOrderIndex].value
     {
-      copy.query[existingOrderIndex] = URLQueryItem(
+      copy.request.query[existingOrderIndex] = URLQueryItem(
         name: key,
         value: "\(currentValue),\(value)"
       )
     } else {
-      copy.query.append(URLQueryItem(name: key, value: value))
+      copy.request.query.append(URLQueryItem(name: key, value: value))
     }
 
     return copy
@@ -98,7 +100,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestTransformablePhase {
   public func limit(_ count: Int, referencedTable: String? = nil) -> PostgrestTransformBuilder {
     var copy = PostgrestTransformBuilder(carryingFrom: self)
     let key = referencedTable.map { "\($0).limit" } ?? "limit"
-    copy.query.appendOrUpdate(URLQueryItem(name: key, value: "\(count)"))
+    copy.request.query.appendOrUpdate(URLQueryItem(name: key, value: "\(count)"))
     return copy
   }
 
@@ -131,9 +133,9 @@ extension PostgrestRequestBuilder where Phase: PostgrestTransformablePhase {
     let keyLimit = referencedTable.map { "\($0).limit" } ?? "limit"
 
     var copy = PostgrestTransformBuilder(carryingFrom: self)
-    copy.query.appendOrUpdate(URLQueryItem(name: keyOffset, value: "\(from)"))
+    copy.request.query.appendOrUpdate(URLQueryItem(name: keyOffset, value: "\(from)"))
     // Range is inclusive, so add 1
-    copy.query.appendOrUpdate(URLQueryItem(name: keyLimit, value: "\(to - from + 1)"))
+    copy.request.query.appendOrUpdate(URLQueryItem(name: keyLimit, value: "\(to - from + 1)"))
 
     return copy
   }
@@ -187,7 +189,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestTransformablePhase {
   public func maybeSingle() -> PostgrestTransformBuilder {
     var copy = PostgrestTransformBuilder(carryingFrom: self)
     copy.request.headerFields[.accept] = "application/vnd.pgrst.object+json"
-    copy.isMaybeSingle = true
+    copy.request.nullOnNoRows = true
     return copy
   }
 
@@ -201,9 +203,6 @@ extension PostgrestRequestBuilder where Phase: PostgrestTransformablePhase {
   /// - Returns: A ``PostgrestTransformBuilder`` so calls can be chained.
   public func csv() -> PostgrestTransformBuilder {
     var copy = PostgrestTransformBuilder(carryingFrom: self)
-    if copy.stripsNulls {
-      copy.pendingError = "`.csv()` cannot be combined with `.stripNulls()`"
-    }
     copy.request.headerFields[.accept] = "text/csv"
     return copy
   }
@@ -217,13 +216,9 @@ extension PostgrestRequestBuilder where Phase: PostgrestTransformablePhase {
   /// - Returns: A ``PostgrestTransformBuilder`` so calls can be chained.
   public func stripNulls() -> PostgrestTransformBuilder {
     var copy = PostgrestTransformBuilder(carryingFrom: self)
-    if copy.request.headerFields[.accept] == "text/csv" {
-      copy.pendingError = "`.stripNulls()` cannot be combined with `.csv()`"
-    }
-    // PostgREST strips nulls through a `nulls=stripped` parameter on the vendor media type in
-    // `Accept`; there is no `Prefer` for it. The media type is only final once the chain runs
-    // (`single()` may come later), so `execute` applies it.
-    copy.stripsNulls = true
+    // The media type is only final once the chain runs (`single()` may come later), so the core
+    // applies the flag when it builds the request (`PostgrestRequest.httpRequest(for:)`).
+    copy.request.stripsNulls = true
     return copy
   }
 

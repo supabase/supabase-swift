@@ -40,6 +40,16 @@ struct IntegrationNote {
   var tag: Optional<String>  // swiftlint:disable:this syntactic_sugar
 }
 
+// A `GENERATED ALWAYS` identity key and a generated nullable column. Both read like any other
+// column and neither can be written: `Draft` has no field for them, and `PostgrestUpdate` has no
+// subscript for their column type.
+@Table("counters")
+struct IntegrationCounter {
+  @PrimaryKey @Generated var id: Int
+  var count: Int
+  @Generated var updatedAt: Date?
+}
+
 // A writable table with no declared key — an append-only log. It must not conform to
 // `PostgrestKeyedRelation`, so the derived-target `upsert` is simply not available on it: there is
 // no key for PostgREST to merge on, and the call would quietly insert another row every time.
@@ -148,6 +158,45 @@ struct TableIntegrationTests {
     let json = String(decoding: data, as: UTF8.self)
     #expect(json.contains("\"user_id\":1") == true)
     #expect(json.contains("\"role_id\":2") == true)
+  }
+
+  @Test
+  func aGeneratedColumnNeverReachesAWriteBody() async throws {
+    // `IntegrationCounter.Draft(id:count:)` does not compile: the key has no field. Swift cannot
+    // assert that, so the body below is the observable half — the only column in it is `count`.
+    let capture = RequestCapture()
+    _ = try await capture.client.from(IntegrationCounter.self)
+      .insert(IntegrationCounter.Draft(count: 1)).execute()
+    #expect(capture.bodyString == #"{"count":1}"#)
+
+    // Likewise `$0.id = 2` and `$0.updatedAt = nil` do not compile inside the update closure:
+    // `PostgrestUpdate` subscripts `PostgrestColumn`/`PostgrestNullableColumn` only, and a
+    // generated column is neither.
+    let update = RequestCapture()
+    _ = try await update.client.from(IntegrationCounter.self)
+      .update { $0.count = 2 }.where { $0.id.eq(1) }.execute()
+    #expect(update.bodyString == #"{"count":2}"#)
+    #expect(update.query?.contains("id=eq.1") == true)
+  }
+
+  @Test
+  func aGeneratedColumnStillReadsFiltersAndOrders() async throws {
+    // The marker takes the column out of writes only. It is still the key, still in the row's
+    // `CodingKeys`, and a nullable one still gets `isNull()`.
+    #expect(IntegrationCounter.primaryKeyColumns == ["id"])
+    #expect(IntegrationCounter.columns.id.postgrestExpression == "id")
+    #expect(IntegrationCounter.columns.updatedAt.postgrestExpression == "updated_at")
+
+    let capture = RequestCapture(body: #"[{"id":1,"count":3,"updated_at":null}]"#)
+    let rows = try await capture.client.from(IntegrationCounter.self).select()
+      .where { $0.updatedAt.isNull() && $0.id.gt(0) }
+      .order { $0.id.desc() }
+      .execute().value
+    #expect(capture.query?.contains("updated_at=is.null") == true)
+    #expect(capture.query?.contains("id=gt.0") == true)
+    #expect(capture.query?.contains("order=id.desc") == true)
+    #expect(rows.first?.id == 1)
+    #expect(rows.first?.count == 3)
   }
 
   @Test

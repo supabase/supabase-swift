@@ -97,9 +97,10 @@ struct SelectionOfMacroTests {
     }
   }
 
-  /// The embed the whole attribute exists for. Every part of the rendered form is an
-  /// interpolation: the embedded relation and its select list come from the property's type, and
-  /// the `!todo_id` hint from the foreign key's own relation.
+  /// The embed the whole attribute exists for. The select entry reads off the `Embeds` namespace,
+  /// where every part of the rendered form is an interpolation: the embedded relation and its
+  /// select list come from the property's type, and the `!todo_id` hint from the foreign key's
+  /// own relation.
   @Test
   func expandsAToManyEmbed() {
     assertMacro {
@@ -125,7 +126,7 @@ struct SelectionOfMacroTests {
         static let selectString = [
           "id:\(Todo.columns.id.postgrestExpression)",
           "task:\(Todo.columns.task.postgrestExpression)",
-          "comments:\(CommentBody.Source.relationName)!\(Comment.columns.todoID.postgrestExpression)(\(CommentBody.selectString))",
+          "comments:\(embeds.comments.postgrestExpression)",
         ].joined(separator: ",")
 
         enum CodingKeys: String, CodingKey {
@@ -141,6 +142,15 @@ struct SelectionOfMacroTests {
           Todo.columns.task.postgrestExpression,
           Comment.columns.todoID.postgrestExpression,
         ]
+
+        struct Embeds: Sendable {
+          let comments = PostgrestEmbed<CommentBody>(alias: "comments", foreignKey: Comment.columns.todoID.postgrestExpression)
+
+          init() {
+          }
+        }
+
+        static let embeds = Embeds()
       }
       """#
     }
@@ -171,7 +181,7 @@ struct SelectionOfMacroTests {
 
         static let selectString = [
           "body:\(Comment.columns.body.postgrestExpression)",
-          "author:\(UserName.Source.relationName)!\(Comment.columns.authorID.postgrestExpression)(\(UserName.selectString))",
+          "author:\(embeds.author.postgrestExpression)",
         ].joined(separator: ",")
 
         enum CodingKeys: String, CodingKey {
@@ -185,6 +195,15 @@ struct SelectionOfMacroTests {
           Comment.columns.body.postgrestExpression,
           Comment.columns.authorID.postgrestExpression,
         ]
+
+        struct Embeds: Sendable {
+          let author = PostgrestEmbed<UserName>(alias: "author", foreignKey: Comment.columns.authorID.postgrestExpression)
+
+          init() {
+          }
+        }
+
+        static let embeds = Embeds()
       }
       """#
     }
