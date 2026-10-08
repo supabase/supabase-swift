@@ -5,18 +5,19 @@
 //  Created by Guilherme Souza on 12/02/26.
 //
 
-import Foundation
+package import Foundation
+package import Helpers
 
 /// Represents a decoded binary broadcast message from the server.
-struct DecodedBroadcast: Sendable {
-  let topic: String
+package struct DecodedBroadcast: Sendable {
+  package let topic: String
   /// The user event name extracted from the binary frame.
-  let event: String
+  package let event: String
   /// The frame's metadata object, e.g. `id` and `replayed` on database-originated broadcasts.
-  var meta: JSONObject? = nil
-  let payload: Payload
+  package var meta: JSONObject? = nil
+  package let payload: Payload
 
-  enum Payload: Sendable {
+  package enum Payload: Sendable {
     case json(JSONObject)
     case binary(Data)
   }
@@ -29,15 +30,17 @@ struct DecodedBroadcast: Sendable {
 /// - Binary frames (type 0x03 client->server, type 0x04 server->client) for broadcast messages.
 ///   Note: broadcast messages can also arrive as JSON array text frames — the server may deliver
 ///   broadcasts on either transport, so the client must be able to handle both.
-struct RealtimeSerializer: Sendable {
-  enum BinaryKind: UInt8 {
+package struct RealtimeSerializer: Sendable {
+  package init() {}
+
+  package enum BinaryKind: UInt8 {
     /// Client -> server broadcast push.
     case userBroadcastPush = 3
     /// Server -> client broadcast.
     case userBroadcast = 4
   }
 
-  enum PayloadEncoding: UInt8 {
+  package enum PayloadEncoding: UInt8 {
     case binary = 0
     case json = 1
   }
@@ -45,7 +48,7 @@ struct RealtimeSerializer: Sendable {
   // MARK: - Text encoding (JSON array format)
 
   /// Encodes a ``RealtimeMessageV2`` as a JSON array string: `[joinRef, ref, topic, event, payload]`.
-  func encodeText(_ message: RealtimeMessageV2) throws -> String {
+  package func encodeText(_ message: RealtimeMessageV2) throws -> String {
     let array: [JSONValue] = [
       message.joinRef.map { .string($0) } ?? .null,
       message.ref.map { .string($0) } ?? .null,
@@ -61,7 +64,7 @@ struct RealtimeSerializer: Sendable {
   // MARK: - Text decoding (JSON array format)
 
   /// Decodes a JSON array string `[joinRef, ref, topic, event, payload]` into a ``RealtimeMessageV2``.
-  func decodeText(_ text: String) throws -> RealtimeMessageV2 {
+  package func decodeText(_ text: String) throws -> RealtimeMessageV2 {
     let data = Data(text.utf8)
     let array = try JSONDecoder().decode([JSONValue].self, from: data)
 
@@ -101,7 +104,7 @@ struct RealtimeSerializer: Sendable {
   /// [kind:1][joinRef_len:1][ref_len:1][topic_len:1][event_len:1][meta_len:1][encoding:1]
   /// [joinRef][ref][topic][event][metadata][payload]
   /// ```
-  func encodeBroadcastPush(
+  package func encodeBroadcastPush(
     joinRef: String?,
     ref: String?,
     topic: String,
@@ -120,7 +123,7 @@ struct RealtimeSerializer: Sendable {
   }
 
   /// Encodes a broadcast push as a binary frame (type 0x03) with a binary payload.
-  func encodeBroadcastPush(
+  package func encodeBroadcastPush(
     joinRef: String?,
     ref: String?,
     topic: String,
@@ -189,7 +192,7 @@ struct RealtimeSerializer: Sendable {
   /// [kind:1][topic_len:1][event_len:1][meta_len:1][encoding:1]
   /// [topic][event][metadata][payload]
   /// ```
-  func decodeBinary(_ data: Data) throws -> DecodedBroadcast {
+  package func decodeBinary(_ data: Data) throws -> DecodedBroadcast {
     guard data.count >= 5 else {
       throw RealtimeError.decoding("Binary frame too short: \(data.count) bytes.")
     }

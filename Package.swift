@@ -291,6 +291,7 @@ let package = Package(
         "Auth",
         "Helpers",
         "Mocker",
+        "Realtime",
       ]
     ),
   ]
