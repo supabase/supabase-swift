@@ -19,14 +19,29 @@ import SwiftSyntaxBuilder
 struct FilePlan {
   /// The caseless enums standing for the selected schemas other than `public`, sorted by name.
   var schemas: [SchemaPlan]
+  /// The enum types, by schema, then name.
+  var enums: [EnumPlan]
   /// In the model's order: schema, then name.
   var relations: [RelationPlan]
-  /// One line each, for standard error: renames and types not mapped yet.
+  /// One line each, for standard error: renames and types not mapped.
   var notes: [String] = []
 
   struct SchemaPlan {
     var name: String
     var typeName: String
+  }
+
+  struct EnumPlan {
+    var type: DatabaseModel.EnumType
+    var typeName: String
+    var members: [Member]
+
+    struct Member {
+      /// As spelled in source, backticks included.
+      var name: String
+      /// The Postgres label.
+      var value: String
+    }
   }
 
   struct RelationPlan {
@@ -80,29 +95,41 @@ extension FilePlan {
     schemas = model.schemas.filter { $0 != "public" }
       .map { SchemaPlan(name: $0, typeName: Naming.typeName($0)) }
     relations = []
+    enums = []
 
-    // Every top-level declaration, keyed by its Swift name. Same-schema relations that convert to
-    // the same name are told apart with a number; a clash that crosses schemas is an error,
+    // The enums of the selected schemas, and any other enum a generated column uses.
+    let usedEnums = Set(model.relations.flatMap { $0.columns.compactMap(\.enumID) })
+    let enumTypes = model.enums.values
+      .filter { model.schemas.contains($0.name.schema) || usedEnums.contains($0.id) }
+      .sorted { $0.name < $1.name }
+
+    // Relations first, so an enum never renames a relation.
+    let declarations: [(name: QualifiedName, label: String, suffix: String)] =
+      model.relations.map { ($0.name, "\($0.name.schema).\($0.name.name)", "Table") }
+      + enumTypes.map { ($0.name, "enum \($0.name.schema).\($0.name.name)", "Enum") }
+
+    // Every top-level declaration, keyed by its Swift name. Same-schema declarations that convert
+    // to the same name are told apart with a number; a clash that crosses schemas is an error,
     // because no suffix would tell the reader which schema each type belongs to.
-    // `namespace` is the relation's schema, or `nil` for a schema's own enum.
+    // `namespace` is the declaration's schema, or `nil` for a schema's own enum.
     var owners: [String: [(namespace: String?, label: String)]] = [:]
     for schema in schemas {
       owners[schema.typeName, default: []].append((nil, "schema \(schema.name)"))
     }
-    var relationBases: [String] = []
-    for relation in model.relations {
-      let qualified = "\(relation.name.schema).\(relation.name.name)"
-      let prefix = relation.name.schema == "public" ? "" : relation.name.schema + "_"
-      var base = Naming.typeName(prefix + relation.name.name)
+    var bases: [String] = []
+    for declaration in declarations {
+      let schema = declaration.name.schema
+      let prefix = schema == "public" ? "" : schema + "_"
+      var base = Naming.typeName(prefix + declaration.name.name)
       if Naming.referencedTypes.contains(Naming.unescaped(base)) {
-        let renamed = Naming.identifier(Naming.unescaped(base) + "Table")
+        let renamed = Naming.identifier(Naming.unescaped(base) + declaration.suffix)
         notes.append(
-          "\(qualified) is named \(renamed): \(Naming.unescaped(base)) would shadow a type the "
-            + "generated code uses")
+          "\(declaration.label) is named \(renamed): \(Naming.unescaped(base)) would shadow a type "
+            + "the generated code uses")
         base = renamed
       }
-      relationBases.append(base)
-      owners[base, default: []].append((relation.name.schema, qualified))
+      bases.append(base)
+      owners[base, default: []].append((schema, declaration.label))
     }
     let clashes = owners.filter { _, owners in
       owners.count > 1
@@ -117,34 +144,67 @@ extension FilePlan {
       )
     }
 
-    var typeNames = Set(owners.keys)
-    var seen: Set<String> = []
+    let typeNames = numberingRepeats(
+      of: bases, taken: Set(owners.keys), kind: "type", labels: declarations.map(\.label))
+    let enumTypeNames = Dictionary(
+      uniqueKeysWithValues: zip(enumTypes.map(\.id), typeNames.dropFirst(model.relations.count)))
+    for (type, typeName) in zip(enumTypes, typeNames.dropFirst(model.relations.count)) {
+      enums.append(EnumPlan(type: type, typeName: typeName, members: members(of: type)))
+    }
     let schemaTypeNames = Dictionary(uniqueKeysWithValues: schemas.map { ($0.name, $0.typeName) })
-    for (relation, base) in zip(model.relations, relationBases) {
-      let qualified = "\(relation.name.schema).\(relation.name.name)"
-      var typeName = base
-      if !seen.insert(base).inserted {
-        typeName = Self.numbered(base, avoiding: typeNames)
-        typeNames.insert(typeName)
-        notes.append("\(qualified) is named \(typeName): another relation is also named \(base)")
-      }
+    for (relation, typeName) in zip(model.relations, typeNames) {
       relations.append(
         RelationPlan(
           relation: relation,
           typeName: typeName,
           schemaTypeName: schemaTypeNames[relation.name.schema],
-          properties: try properties(of: relation, qualified: qualified, model: model),
+          properties: try properties(of: relation, enumTypeNames: enumTypeNames),
           readOnly: Self.isReadOnly(relation.kind)
         )
       )
     }
   }
 
+  /// `bases`, with every repeat after the first numbered and noted. `labels` names each one in the
+  /// note.
+  private mutating func numberingRepeats(
+    of bases: [String],
+    taken: Set<String>,
+    kind: String,
+    labels: [String]
+  ) -> [String] {
+    var taken = taken.union(bases)
+    var seen: Set<String> = []
+    return zip(bases, labels).map { base, label in
+      if seen.insert(base).inserted { return base }
+      let name = Self.numbered(base, avoiding: taken)
+      taken.insert(name)
+      notes.append("\(label) is named \(name): another \(kind) is also named \(base)")
+      return name
+    }
+  }
+
+  /// One static member per value, in declaration order. The literal keeps the exact label.
+  private mutating func members(of type: DatabaseModel.EnumType) -> [EnumPlan.Member] {
+    let label = "enum \(type.name.schema).\(type.name.name) value"
+    let bases = type.values.map { value in
+      let base = Naming.propertyName(value)
+      let bare = Naming.unescaped(base)
+      guard Naming.enumMembers.contains(bare) else { return base }
+      let renamed = Naming.identifier(bare + "Case")
+      notes.append("\(label) \(value) is named \(renamed): the struct reserves \(bare)")
+      return renamed
+    }
+    let names = numberingRepeats(
+      of: bases, taken: [], kind: "value", labels: type.values.map { "\(label) \($0)" })
+    return zip(names, type.values).map { EnumPlan.Member(name: $0, value: $1) }
+  }
+
   private mutating func properties(
     of relation: DatabaseModel.Relation,
-    qualified: String,
-    model: DatabaseModel
+    enumTypeNames: [Int: String]
   ) throws(DataError) -> [PropertyPlan] {
+    let qualified = "\(relation.name.schema).\(relation.name.name)"
     // `@PrimaryKey` on an Optional property is a macro error, so stop here and name the column.
     let nullableKeys = relation.columns.filter {
       $0.isNullable && relation.primaryKey.contains($0.name)
@@ -165,21 +225,16 @@ extension FilePlan {
       notes.append("\(qualified).\(column.name) is named \(renamed): @Table reserves \(bare)")
       return renamed
     }
-    var names = Set(bases)
-    var seen: Set<String> = []
-    return zip(relation.columns, bases).map { column, base in
-      var name = base
-      if !seen.insert(base).inserted {
-        name = Self.numbered(base, avoiding: names)
-        names.insert(name)
-        notes.append(
-          "\(qualified).\(column.name) is named \(name): another column is also named \(base)")
-      }
+    let names = numberingRepeats(
+      of: bases, taken: [], kind: "column",
+      labels: relation.columns.map { "\(qualified).\($0.name)" })
+    return zip(relation.columns, names).map { column, name in
       return PropertyPlan(
         column: column,
         name: name,
         columnAttribute: camelToSnakeCase(name) == column.name ? nil : column.name,
-        type: swiftType(of: column, qualified: "\(qualified).\(column.name)", model: model),
+        type: swiftType(
+          of: column, qualified: "\(qualified).\(column.name)", enumTypeNames: enumTypeNames),
         markers: Self.markers(of: column, isPrimaryKey: relation.primaryKey.contains(column.name))
       )
     }
@@ -216,7 +271,7 @@ extension FilePlan {
 
   private static let scalarTypes: [String: String] = [
     "uuid": "UUID",
-    "text": "String", "varchar": "String", "bpchar": "String",
+    "text": "String", "varchar": "String", "bpchar": "String", "char": "String",
     "bool": "Bool",
     "int2": "Int", "int4": "Int", "int8": "Int",
     "float4": "Double", "float8": "Double",
@@ -225,27 +280,25 @@ extension FilePlan {
     "json": "JSONValue", "jsonb": "JSONValue",
   ]
 
+  /// A type with no mapping, such as a composite, a range, `bytea`, `interval` or `time`, is
+  /// `JSONValue`, with a note: it decodes whatever PostgREST sends for the column and writes it
+  /// back unchanged, so generation never stops at one column.
   private mutating func swiftType(
     of column: DatabaseModel.Column,
     qualified: String,
-    model: DatabaseModel
+    enumTypeNames: [Int: String]
   ) -> SwiftType {
     let isArray = column.format.hasPrefix("_")
     let element = isArray ? String(column.format.dropFirst()) : column.format
-    var scalar: String
-    if let id = column.enumID, let type = model.enums[id] {
-      // ponytail: JSONValue until Task 4 generates the enum types.
-      scalar = "JSONValue"
-      notes.append(
-        "\(qualified) has the enum type \(type.name.schema).\(type.name.name), which is not "
-          + "generated yet; it is decoded as JSONValue")
+    let scalar: String
+    if let enumTypeName = column.enumID.flatMap({ enumTypeNames[$0] }) {
+      scalar = enumTypeName
     } else if let mapped = column.typeSchema == "pg_catalog" ? Self.scalarTypes[element] : nil {
       scalar = mapped
     } else if element == "citext" {
       // An extension type, so its schema is wherever the extension was installed.
       scalar = "String"
     } else {
-      // ponytail: JSONValue until Task 4 settles the policy for unmapped types.
       scalar = "JSONValue"
       notes.append(
         "\(qualified) has the type \(column.typeSchema).\(element), which is not mapped; it is "
@@ -257,7 +310,8 @@ extension FilePlan {
 }
 
 extension FilePlan {
-  /// The generated file: one `@Table` struct per relation, formatted, ending in one newline.
+  /// The generated file: one struct per enum type and one `@Table` struct per relation,
+  /// formatted, ending in one newline.
   func render(accessControl: Options.AccessControl) throws -> String {
     let access: DeclModifierListSyntax =
       accessControl == .public ? [DeclModifierSyntax(name: .keyword(.public))] : []
@@ -276,6 +330,30 @@ extension FilePlan {
           "\(access) enum \(TokenSyntax.identifier(schema.typeName)): PostgrestSchema"
         ) {
           DeclSyntax("\(access) static let name = \(StringLiteralExprSyntax(content: schema.name))")
+        }
+        .with(\.leadingTrivia, .newlines(2))
+      }
+
+      for type in enums {
+        let name = TokenSyntax.identifier(type.typeName)
+        try StructDeclSyntax(
+          """
+          \(access) struct \(name): RawRepresentable, Codable, Hashable, Sendable,
+            ExpressibleByStringLiteral, PostgrestFilterValue
+          """
+        ) {
+          DeclSyntax("\(access) let rawValue: String")
+          DeclSyntax("\(access) init(rawValue: String) { self.rawValue = rawValue }")
+          DeclSyntax("\(access) init(stringLiteral value: String) { self.init(rawValue: value) }")
+          for (index, member) in type.members.enumerated() {
+            DeclSyntax(
+              """
+              \(access) static let \(TokenSyntax.identifier(member.name)): \(name) = \
+              \(StringLiteralExprSyntax(content: member.value))
+              """
+            )
+            .with(\.leadingTrivia, index == 0 ? .newlines(2) : .newline)
+          }
         }
         .with(\.leadingTrivia, .newlines(2))
       }

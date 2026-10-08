@@ -5,17 +5,63 @@ public enum Inventory: PostgrestSchema {
   public static let name = "inventory"
 }
 
+public struct InventoryUserStatus: RawRepresentable, Codable, Hashable, Sendable,
+  ExpressibleByStringLiteral, PostgrestFilterValue
+{
+  public let rawValue: String
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
+  public static let stocked: InventoryUserStatus = "STOCKED"
+  public static let discontinued: InventoryUserStatus = "DISCONTINUED"
+}
+
+public struct MemeStatus: RawRepresentable, Codable, Hashable, Sendable,
+  ExpressibleByStringLiteral, PostgrestFilterValue
+{
+  public let rawValue: String
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
+  public static let new: MemeStatus = "new"
+  public static let old: MemeStatus = "old"
+  public static let retired: MemeStatus = "retired"
+}
+
+public struct UserStatus: RawRepresentable, Codable, Hashable, Sendable,
+  ExpressibleByStringLiteral, PostgrestFilterValue
+{
+  public let rawValue: String
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
+  public static let active: UserStatus = "ACTIVE"
+  public static let inactive: UserStatus = "INACTIVE"
+}
+
 @Table("items", schema: Inventory.self)
 public struct InventoryItems {
   @PrimaryKey @Default public var id: Int
   public var ownerId: Int
-  @Default public var status: JSONValue
+  @Default public var status: InventoryUserStatus
 }
 
 @Table("users", schema: Inventory.self)
 public struct InventoryUsers {
   @PrimaryKey @Default public var id: Int
-  @Default public var status: JSONValue?
+  @Default public var status: InventoryUserStatus?
   public var publicUserId: Int?
 }
 
@@ -62,7 +108,7 @@ public struct Events2025 {
 public struct ForeignTable {
   public var id: Int
   public var name: String?
-  public var status: JSONValue?
+  public var status: UserStatus?
 }
 
 @Table("interval_test")
@@ -79,7 +125,7 @@ public struct Memes {
   public var category: Int?
   public var metadata: JSONValue?
   public var createdAt: Date
-  @Default public var status: JSONValue?
+  @Default public var status: MemeStatus?
 }
 
 @Table("scalar_type_test")
@@ -134,7 +180,7 @@ public struct UserDetails {
 public struct UserTodosSummaryView {
   public var userId: Int?
   public var userName: String?
-  public var userStatus: JSONValue?
+  public var userStatus: UserStatus?
   public var todoCount: Int?
   public var todoDetails: [String]?
 }
@@ -143,7 +189,7 @@ public struct UserTodosSummaryView {
 public struct Users {
   @PrimaryKey @Default public var id: Int
   public var name: String?
-  @Default public var status: JSONValue?
+  @Default public var status: UserStatus?
   public var decimal: Decimal?
   @Default public var userUuid: UUID?
 }
@@ -160,7 +206,7 @@ public struct UsersAudit {
 public struct UsersView {
   public var id: Int?
   public var name: String?
-  public var status: JSONValue?
+  public var status: UserStatus?
   public var decimal: Decimal?
   public var userUuid: UUID?
 }

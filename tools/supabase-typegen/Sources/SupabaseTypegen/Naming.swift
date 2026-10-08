@@ -17,6 +17,10 @@ enum Naming {
     "Draft", "Columns", "CodingKeys", "Schema", "self",
   ]
 
+  /// Static member names an enum struct cannot take: its own members, which `Status.rawValue`,
+  /// `Status.init` and `Status.self` would name instead.
+  static let enumMembers: Set = ["rawValue", "init", "self"]
+
   /// The type names the generated file or `@Table`'s expansion refer to unqualified. A generated
   /// type with one of these names would shadow it — including the types `@Table` nests inside the
   /// struct: in `struct Draft`, the expansion's `PostgrestColumn<Draft, …>` inside `Columns` finds
@@ -24,6 +28,7 @@ enum Naming {
   static let referencedTypes: Set = [
     "Bool", "Date", "Decimal", "Double", "Int", "JSONValue", "String", "UUID",
     "Decodable", "Encodable", "Sendable", "CodingKey", "Optional", "Array",
+    "Codable", "Hashable", "RawRepresentable", "ExpressibleByStringLiteral", "PostgrestFilterValue",
     "PostgREST", "PostgrestMacros", "PostgrestSchema", "PublicSchema", "Foundation", "Swift",
     "Type", "Self", "Any", "Protocol",
     "Draft", "Columns", "CodingKeys", "Schema",

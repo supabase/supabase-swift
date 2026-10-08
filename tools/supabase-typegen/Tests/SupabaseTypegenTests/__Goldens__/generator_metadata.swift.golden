@@ -1,6 +1,21 @@
 import Foundation
 import PostgrestMacros
 
+struct UserStatus: RawRepresentable, Codable, Hashable, Sendable,
+  ExpressibleByStringLiteral, PostgrestFilterValue
+{
+  let rawValue: String
+  init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+  init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
+  static let online: UserStatus = "ONLINE"
+  static let offline: UserStatus = "OFFLINE"
+}
+
 @Table("channels")
 struct Channels {
   @PrimaryKey @Default var id: Int
@@ -76,5 +91,5 @@ struct Users {
   var ageRange: JSONValue?
   var catchphrase: String?
   var data: JSONValue?
-  @Default var status: JSONValue?
+  @Default var status: UserStatus?
 }

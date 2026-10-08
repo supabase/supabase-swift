@@ -582,6 +582,17 @@
       "identity_generation": null,
       "is_generated": false,
       "is_nullable": false
+    },
+    {
+      "table_id": 1,
+      "ordinal_position": 36,
+      "name": "stock",
+      "format": "state",
+      "type_schema": "inventory",
+      "default_value": null,
+      "identity_generation": null,
+      "is_generated": false,
+      "is_nullable": true
     }
   ],
   "primaryKeys": [
@@ -599,7 +610,65 @@
       "name": "mood",
       "enums": [
         "happy",
-        "sad"
+        "sad",
+        "self",
+        "Self",
+        "rawValue",
+        "init",
+        "in progress",
+        "in-progress",
+        "IN_PROGRESS",
+        "1st",
+        "default",
+        "say \"hi\"",
+        "back\\slash",
+        "__"
+      ],
+      "type_relation_id": null
+    },
+    {
+      "id": 101,
+      "schema": "public",
+      "name": "codable",
+      "enums": [
+        "a"
+      ],
+      "type_relation_id": null
+    },
+    {
+      "id": 102,
+      "schema": "public",
+      "name": "user profiles",
+      "enums": [
+        "a"
+      ],
+      "type_relation_id": null
+    },
+    {
+      "id": 103,
+      "schema": "my\"schema",
+      "name": "status",
+      "enums": [
+        "on",
+        "off"
+      ],
+      "type_relation_id": null
+    },
+    {
+      "id": 104,
+      "schema": "inventory",
+      "name": "state",
+      "enums": [
+        "in stock"
+      ],
+      "type_relation_id": null
+    },
+    {
+      "id": 105,
+      "schema": "inventory",
+      "name": "unused",
+      "enums": [
+        "x"
       ],
       "type_relation_id": null
     }

@@ -93,6 +93,17 @@ struct EmitterTests {
       "public.date is named DateTable: Date would shadow a type the generated code uses",
       "public.draft is named DraftTable: Draft would shadow a type the generated code uses",
       "public.type is named TypeTable: Type would shadow a type the generated code uses",
+      "enum public.codable is named CodableEnum: "
+        + "Codable would shadow a type the generated code uses",
+      "public.user_profiles is named UserProfiles2: another type is also named UserProfiles",
+      "enum public.user profiles is named UserProfiles3: another type is also named UserProfiles",
+      "enum public.mood value self is named selfCase: the struct reserves self",
+      "enum public.mood value Self is named selfCase: the struct reserves self",
+      "enum public.mood value rawValue is named rawValueCase: the struct reserves rawValue",
+      "enum public.mood value init is named initCase: the struct reserves init",
+      "enum public.mood value Self is named selfCase2: another value is also named selfCase",
+      "enum public.mood value in-progress is named inProgress2: "
+        + "another value is also named inProgress",
       "public.hostile.self is named selfColumn: @Table reserves self",
       "public.hostile.columns is named columnsColumn: @Table reserves columns",
       "public.hostile.select_string is named selectStringColumn: @Table reserves selectString",
@@ -101,15 +112,114 @@ struct EmitterTests {
         + "@Table reserves primaryKeyColumns",
       "public.hostile.userId is named userId2: another column is also named userId",
       "public.hostile.user-id is named userId3: another column is also named userId",
-      "public.hostile.mood has the enum type public.mood, which is not generated yet; "
-        + "it is decoded as JSONValue",
-      "public.hostile.moods has the enum type public.mood, which is not generated yet; "
-        + "it is decoded as JSONValue",
       "public.hostile.span has the type pg_catalog.int4range, which is not mapped; "
         + "it is decoded as JSONValue",
-      "public.user_profiles is named UserProfiles2: another relation is also named UserProfiles",
     ]
     #expect(result.standardError == notes.map { "supabase-typegen: note: \($0)\n" }.joined())
+  }
+
+  /// A document with one table, `public.t`, whose only column `c` has the given type, and the
+  /// enum `public.status`.
+  private func generated(format: String, typeSchema: String) -> RunResult {
+    let input = Fixture.integration { object in
+      object["tables"] = [["id": 1, "schema": "public", "name": "t"]]
+      for key in ["views", "materializedViews", "foreignTables", "primaryKeys", "functions"] {
+        object[key] = [Any]()
+      }
+      object["columns"] = [
+        [
+          "table_id": 1, "ordinal_position": 1, "name": "c", "format": format,
+          "type_schema": typeSchema, "default_value": NSNull(), "identity_generation": NSNull(),
+          "is_generated": false, "is_nullable": false,
+        ]
+      ]
+      object["types"] = [
+        [
+          "id": 1, "schema": "public", "name": "status", "enums": ["pending", "done"],
+          "type_relation_id": NSNull(),
+        ]
+      ]
+    }
+    return run(arguments: []) { input }
+  }
+
+  @Test(
+    arguments: [
+      ("uuid", "pg_catalog", "UUID"),
+      ("text", "pg_catalog", "String"),
+      ("varchar", "pg_catalog", "String"),
+      ("bpchar", "pg_catalog", "String"),
+      ("char", "pg_catalog", "String"),
+      ("citext", "extensions", "String"),
+      ("bool", "pg_catalog", "Bool"),
+      ("int2", "pg_catalog", "Int"),
+      ("int4", "pg_catalog", "Int"),
+      ("int8", "pg_catalog", "Int"),
+      ("float4", "pg_catalog", "Double"),
+      ("float8", "pg_catalog", "Double"),
+      ("numeric", "pg_catalog", "Decimal"),
+      ("timestamptz", "pg_catalog", "Date"),
+      ("timestamp", "pg_catalog", "Date"),
+      ("date", "pg_catalog", "Date"),
+      ("json", "pg_catalog", "JSONValue"),
+      ("jsonb", "pg_catalog", "JSONValue"),
+      ("_int4", "pg_catalog", "[Int]"),
+      ("_text", "pg_catalog", "[String]"),
+      ("status", "public", "Status"),
+      ("_status", "public", "[Status]"),
+    ]
+  )
+  func postgresTypeMapsToSwiftType(format: String, typeSchema: String, swiftType: String) {
+    let result = generated(format: format, typeSchema: typeSchema)
+    #expect(result.exitCode == 0)
+    #expect(result.standardError.isEmpty)
+    #expect(result.standardOutput.contains("\n  var c: \(swiftType)\n"))
+  }
+
+  @Test(
+    arguments: [
+      ("bytea", "pg_catalog"), ("interval", "pg_catalog"), ("time", "pg_catalog"),
+      ("int4range", "pg_catalog"), ("address", "public"), ("geometry", "extensions"),
+      ("_bytea", "pg_catalog"),
+    ]
+  )
+  func unmappedTypeIsJSONValueWithANote(format: String, typeSchema: String) {
+    let result = generated(format: format, typeSchema: typeSchema)
+    let element = format.hasPrefix("_") ? String(format.dropFirst()) : format
+    #expect(result.exitCode == 0)
+    #expect(
+      result.standardError
+        == "supabase-typegen: note: public.t.c has the type \(typeSchema).\(element), which is "
+        + "not mapped; it is decoded as JSONValue\n"
+    )
+    #expect(
+      result.standardOutput.contains(
+        format.hasPrefix("_") ? "\n  var c: [JSONValue]\n" : "\n  var c: JSONValue\n"))
+  }
+
+  @Test
+  func enumBecomesARawRepresentableStruct() {
+    let result = generated(format: "status", typeSchema: "public")
+    #expect(
+      result.standardOutput.contains(
+        """
+        struct Status: RawRepresentable, Codable, Hashable, Sendable,
+          ExpressibleByStringLiteral, PostgrestFilterValue
+        {
+          let rawValue: String
+          init(rawValue: String) {
+            self.rawValue = rawValue
+          }
+          init(stringLiteral value: String) {
+            self.init(rawValue: value)
+          }
+
+          static let pending: Status = "pending"
+          static let done: Status = "done"
+        }
+        """
+      )
+    )
   }
 
   @Test

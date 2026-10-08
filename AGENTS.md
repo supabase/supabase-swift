@@ -477,6 +477,13 @@ swift test --package-path tools/supabase-typegen
 SUPABASE_TYPEGEN_RECORD=1 swift test --package-path tools/supabase-typegen --filter EmitterTests
 ```
 
+A Postgres enum becomes a `RawRepresentable` struct (see "Enum-like Values"), generated for every
+enum in a selected schema and for any other enum a generated column uses. A column type with no
+Swift mapping (a composite, a range, `bytea`, `interval`, `time`, an extension type other than
+`citext`) becomes `JSONValue`, and the generator writes a note naming the column on standard error.
+`JSONValue` decodes whatever PostgREST sends for the column and writes it back unchanged, so one
+such column never stops generation; a typed filter on it takes a `JSONValue` operand.
+
 #### Refreshing the typegen fixtures
 
 `tools/supabase-typegen/Tests/SupabaseTypegenTests/Fixtures` holds `GeneratorMetadata` documents produced by

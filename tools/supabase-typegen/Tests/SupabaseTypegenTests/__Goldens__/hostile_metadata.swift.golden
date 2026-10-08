@@ -5,6 +5,90 @@ enum MySchema: PostgrestSchema {
   static let name = #"my"schema"#
 }
 
+struct InventoryState: RawRepresentable, Codable, Hashable, Sendable,
+  ExpressibleByStringLiteral, PostgrestFilterValue
+{
+  let rawValue: String
+  init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+  init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
+  static let inStock: InventoryState = "in stock"
+}
+
+struct MySchemaStatus: RawRepresentable, Codable, Hashable, Sendable,
+  ExpressibleByStringLiteral, PostgrestFilterValue
+{
+  let rawValue: String
+  init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+  init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
+  static let on: MySchemaStatus = "on"
+  static let off: MySchemaStatus = "off"
+}
+
+struct CodableEnum: RawRepresentable, Codable, Hashable, Sendable,
+  ExpressibleByStringLiteral, PostgrestFilterValue
+{
+  let rawValue: String
+  init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+  init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
+  static let a: CodableEnum = "a"
+}
+
+struct Mood: RawRepresentable, Codable, Hashable, Sendable,
+  ExpressibleByStringLiteral, PostgrestFilterValue
+{
+  let rawValue: String
+  init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+  init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
+  static let happy: Mood = "happy"
+  static let sad: Mood = "sad"
+  static let selfCase: Mood = "self"
+  static let selfCase2: Mood = "Self"
+  static let rawValueCase: Mood = "rawValue"
+  static let initCase: Mood = "init"
+  static let inProgress: Mood = "in progress"
+  static let inProgress2: Mood = "in-progress"
+  static let inPROGRESS: Mood = "IN_PROGRESS"
+  static let _1st: Mood = "1st"
+  static let `default`: Mood = "default"
+  static let sayHi: Mood = #"say "hi""#
+  static let backSlash: Mood = #"back\slash"#
+  static let unnamed: Mood = "__"
+}
+
+struct UserProfiles3: RawRepresentable, Codable, Hashable, Sendable,
+  ExpressibleByStringLiteral, PostgrestFilterValue
+{
+  let rawValue: String
+  init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+  init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
+  static let a: UserProfiles3 = "a"
+}
+
 @Table("class", schema: MySchema.self)
 struct MySchemaClass {
   var id: Int
@@ -59,8 +143,8 @@ struct Hostile {
   var stringValue: String
   var intValue: Int
   var hashValue: Int
-  var mood: JSONValue
-  var moods: [JSONValue]?
+  var mood: Mood
+  var moods: [Mood]?
   var span: JSONValue?
   var nick: String
   var ids: [UUID]?
@@ -72,6 +156,7 @@ struct Hostile {
   var code: String
   var label: String
   var doc: JSONValue?
+  var stock: InventoryState?
 }
 
 @Table("inventory_books")
