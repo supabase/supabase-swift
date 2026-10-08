@@ -20,28 +20,28 @@ import Testing
 @Suite(.serialized)
 struct WebSocketTests {
 
-  // MARK: - WebSocketEvent Tests
+  // MARK: - LegacyWebSocketEvent Tests
 
   @Test
   func webSocketEventEquality() {
-    let textEvent1 = WebSocketEvent.text("hello")
-    let textEvent2 = WebSocketEvent.text("hello")
-    let textEvent3 = WebSocketEvent.text("world")
+    let textEvent1 = LegacyWebSocketEvent.text("hello")
+    let textEvent2 = LegacyWebSocketEvent.text("hello")
+    let textEvent3 = LegacyWebSocketEvent.text("world")
 
     #expect(textEvent1 == textEvent2)
     #expect(textEvent1 != textEvent3)
 
     let binaryData = Data([1, 2, 3])
-    let binaryEvent1 = WebSocketEvent.binary(binaryData)
-    let binaryEvent2 = WebSocketEvent.binary(binaryData)
-    let binaryEvent3 = WebSocketEvent.binary(Data([4, 5, 6]))
+    let binaryEvent1 = LegacyWebSocketEvent.binary(binaryData)
+    let binaryEvent2 = LegacyWebSocketEvent.binary(binaryData)
+    let binaryEvent3 = LegacyWebSocketEvent.binary(Data([4, 5, 6]))
 
     #expect(binaryEvent1 == binaryEvent2)
     #expect(binaryEvent1 != binaryEvent3)
 
-    let closeEvent1 = WebSocketEvent.close(code: 1000, reason: "normal")
-    let closeEvent2 = WebSocketEvent.close(code: 1000, reason: "normal")
-    let closeEvent3 = WebSocketEvent.close(code: 1001, reason: "going away")
+    let closeEvent1 = LegacyWebSocketEvent.close(code: 1000, reason: "normal")
+    let closeEvent2 = LegacyWebSocketEvent.close(code: 1000, reason: "normal")
+    let closeEvent3 = LegacyWebSocketEvent.close(code: 1001, reason: "going away")
 
     #expect(closeEvent1 == closeEvent2)
     #expect(closeEvent1 != closeEvent3)
@@ -49,19 +49,19 @@ struct WebSocketTests {
 
   @Test
   func webSocketEventHashable() {
-    let textEvent = WebSocketEvent.text("hello")
-    let binaryEvent = WebSocketEvent.binary(Data([1, 2, 3]))
-    let closeEvent = WebSocketEvent.close(code: 1000, reason: "normal")
+    let textEvent = LegacyWebSocketEvent.text("hello")
+    let binaryEvent = LegacyWebSocketEvent.binary(Data([1, 2, 3]))
+    let closeEvent = LegacyWebSocketEvent.close(code: 1000, reason: "normal")
 
-    let events: Set<WebSocketEvent> = [textEvent, binaryEvent, closeEvent]
+    let events: Set<LegacyWebSocketEvent> = [textEvent, binaryEvent, closeEvent]
     #expect(events.count == 3)
   }
 
   @Test
   func webSocketEventPatternMatching() {
-    let textEvent = WebSocketEvent.text("hello world")
-    let binaryEvent = WebSocketEvent.binary(Data([1, 2, 3]))
-    let closeEvent = WebSocketEvent.close(code: 1000, reason: "normal")
+    let textEvent = LegacyWebSocketEvent.text("hello world")
+    let binaryEvent = LegacyWebSocketEvent.binary(Data([1, 2, 3]))
+    let closeEvent = LegacyWebSocketEvent.close(code: 1000, reason: "normal")
 
     switch textEvent {
     case .text(let message):
@@ -218,7 +218,7 @@ struct WebSocketTests {
       let socket = try await URLSessionWebSocket.connect(to: url)
       defer { socket.close(code: 1000, reason: nil) }
 
-      let received = LockIsolated([WebSocketEvent]())
+      let received = LockIsolated([LegacyWebSocketEvent]())
       let pump = Task { [socket] in
         for await event in socket.events {
           received.withValue { $0.append(event) }
@@ -250,7 +250,7 @@ struct WebSocketTests {
       let url = URL(string: "ws://127.0.0.1:\(port)")!
       let socket = try await URLSessionWebSocket.connect(to: url)
 
-      let received = LockIsolated([WebSocketEvent]())
+      let received = LockIsolated([LegacyWebSocketEvent]())
       let pump = Task { [socket] in
         for await event in socket.events {
           received.withValue { $0.append(event) }
@@ -534,10 +534,6 @@ struct WebSocketTests {
   #endif
 }
 
-private struct LoopbackError: Error {
-  let message: String
-}
-
 #if canImport(Network)
   import Network
   import ObjectiveC
@@ -549,109 +545,6 @@ private struct LoopbackError: Error {
   }
 
   private nonisolated(unsafe) var deinitNotifierKey: UInt8 = 0
-
-  private final class LoopbackWebSocketServer: @unchecked Sendable {
-    private let listener: NWListener
-    private let queue = DispatchQueue(label: "co.supabase.LoopbackWebSocketServer")
-    private var connections: [NWConnection] = []
-    private var isStopped = false
-
-    init() throws {
-      let parameters = NWParameters.tcp
-      let webSocketOptions = NWProtocolWebSocket.Options()
-      webSocketOptions.autoReplyPing = true
-      parameters.defaultProtocolStack.applicationProtocols.insert(webSocketOptions, at: 0)
-      listener = try NWListener(using: parameters, on: .any)
-    }
-
-    func start() throws -> UInt16 {
-      let ready = DispatchSemaphore(value: 0)
-
-      listener.stateUpdateHandler = { state in
-        if case .ready = state { ready.signal() }
-      }
-
-      listener.newConnectionHandler = { [weak self] connection in
-        guard let self else { return }
-        if self.isStopped {
-          connection.cancel()
-          return
-        }
-        self.connections.append(connection)
-        connection.start(queue: self.queue)
-        self.receive(on: connection)
-      }
-
-      listener.start(queue: queue)
-
-      guard ready.wait(timeout: .now() + 5) == .success, let port = listener.port else {
-        throw LoopbackError(message: "loopback server failed to start")
-      }
-
-      return port.rawValue
-    }
-
-    private func receive(on connection: NWConnection) {
-      connection.receiveMessage { [weak self] _, context, _, error in
-        if let metadata = context?.protocolMetadata(definition: NWProtocolWebSocket.definition)
-          as? NWProtocolWebSocket.Metadata, metadata.opcode == .close
-        {
-          let closeMetadata = NWProtocolWebSocket.Metadata(opcode: .close)
-          let closeContext = NWConnection.ContentContext(
-            identifier: "close", metadata: [closeMetadata])
-          connection.send(
-            content: nil,
-            contentContext: closeContext,
-            isComplete: true,
-            completion: .contentProcessed { _ in connection.cancel() }
-          )
-          return
-        }
-
-        guard error == nil else { return }
-        self?.receive(on: connection)
-      }
-    }
-
-    /// Pushes a frame from the server to every connected client.
-    ///
-    /// Every other test here only drives traffic client→server, which is why
-    /// `URLSessionWebSocket._handleMessage` had no coverage: nothing ever arrived for it to
-    /// handle. Dispatched on `queue` so it is ordered after the `newConnectionHandler` that
-    /// appended the connection.
-    func send(text: String) {
-      send(Data(text.utf8), opcode: .text)
-    }
-
-    func send(binary: Data) {
-      send(binary, opcode: .binary)
-    }
-
-    private func send(_ payload: Data, opcode: NWProtocolWebSocket.Opcode) {
-      queue.async { [self] in
-        let metadata = NWProtocolWebSocket.Metadata(opcode: opcode)
-        let context = NWConnection.ContentContext(identifier: "send", metadata: [metadata])
-
-        for connection in connections {
-          connection.send(
-            content: payload,
-            contentContext: context,
-            isComplete: true,
-            completion: .contentProcessed { _ in }
-          )
-        }
-      }
-    }
-
-    func stop() {
-      queue.sync {
-        isStopped = true
-        listener.cancel()
-        for connection in connections { connection.cancel() }
-        connections.removeAll()
-      }
-    }
-  }
 
   #if os(macOS)
     import Security

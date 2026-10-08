@@ -26,7 +26,7 @@ import Testing
 /// tests never drive `reportIssue`, which segfaults under `xcodebuild test` (SDK-435).
 @Suite
 struct URLSessionWebSocketCloseValidationTests {
-  @Test(arguments: [1000, 3000, 4000, 4999])
+  @Test(arguments: [1000, 1001, 1002, 1003, 1007, 1011, 3000, 4000, 4999])
   func acceptsCloseCodesRFC6455Allows(code: Int) {
     #expect(URLSessionWebSocket.validatedCloseCode(code) == code)
   }
@@ -36,7 +36,7 @@ struct URLSessionWebSocketCloseValidationTests {
     #expect(URLSessionWebSocket.validatedCloseCode(nil) == nil)
   }
 
-  @Test(arguments: [1001, 1005, 1006, 2999, 5000, 0, -1])
+  @Test(arguments: [1004, 1005, 1006, 1015, 2999, 5000, 0, -1])
   func dropsCloseCodesRFC6455Forbids(code: Int) {
     // Dropping the code closes without one (the peer sees 1005) rather than trapping.
     #expect(URLSessionWebSocket.validatedCloseCode(code) == nil)

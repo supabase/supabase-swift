@@ -36,7 +36,7 @@ struct ConnectionManagerTests {
     url: URL = URL(string: "ws://localhost")!,
     headers: [String: String] = [:],
     reconnectDelay: Duration = .milliseconds(100),
-    transport: WebSocketTransport? = nil
+    transport: LegacyWebSocketTransport? = nil
   ) -> ConnectionManager {
     let transportCallCount = self.transportCallCount
     let lastConnectURL = self.lastConnectURL

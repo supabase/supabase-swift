@@ -268,8 +268,8 @@ final class AsyncFakeWebSocket: WebSocket, @unchecked Sendable {
 
   let mutableState = LockIsolated(MutableState())
   let deliveryQueue = DispatchQueue(label: "AsyncFakeWebSocket.delivery")
-  let events: AsyncStream<WebSocketEvent>
-  private let eventsContinuation: AsyncStream<WebSocketEvent>.Continuation
+  let events: AsyncStream<LegacyWebSocketEvent>
+  private let eventsContinuation: AsyncStream<LegacyWebSocketEvent>.Continuation
 
   init() {
     (events, eventsContinuation) = AsyncStream.makeStream()
@@ -355,7 +355,7 @@ final class AsyncFakeWebSocket: WebSocket, @unchecked Sendable {
   /// Server pushes an event to the client; delivered through the `events`
   /// stream. Frames received before the consumer starts iterating are buffered
   /// by `AsyncStream` itself.
-  func receiveFromServer(_ event: WebSocketEvent) {
+  func receiveFromServer(_ event: LegacyWebSocketEvent) {
     mutableState.withValue {
       if case .close(let code, let reason) = event {
         $0.isClosed = true

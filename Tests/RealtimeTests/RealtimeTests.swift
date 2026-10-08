@@ -1168,7 +1168,7 @@ extension FakeWebSocket {
   }
 }
 
-extension WebSocketEvent {
+extension LegacyWebSocketEvent {
   var json: Any {
     switch self {
     case .binary(let data):

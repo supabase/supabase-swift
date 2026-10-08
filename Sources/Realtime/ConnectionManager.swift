@@ -18,7 +18,7 @@ actor ConnectionManager {
   )
   private(set) var state: State = .disconnected
 
-  private let transport: WebSocketTransport
+  private let transport: LegacyWebSocketTransport
   private let url: URL
   private let headers: [String: String]
   private let reconnectDelay: Duration
@@ -36,7 +36,7 @@ actor ConnectionManager {
   nonisolated var stateChanges: AsyncStream<State> { stateStream }
 
   init(
-    transport: @escaping WebSocketTransport,
+    transport: @escaping LegacyWebSocketTransport,
     url: URL,
     headers: [String: String],
     reconnectDelay: Duration,

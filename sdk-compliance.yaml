@@ -391,6 +391,44 @@ supporting_symbols:
   - RealtimeError.description
   - RealtimeError.maxRetryAttemptsReached
   - RealtimeError.channelClosedByServer
+  - RealtimeError.Kind.notSubscribed
+  - RealtimeError.Kind.notConnected
+  - RealtimeError.Kind.unauthorized
+  - RealtimeError.Kind.rateLimited
+  - RealtimeError.Kind.channelClosed
+  - RealtimeError.Kind.payloadTooLarge
+  - RealtimeError.serverCode
+  - RealtimeError.isRetryable
+  # The code the server prefixes to a join or channel error reason (SDK-2098).
+  - RealtimeError.ServerCode
+  - RealtimeError.ServerCode.init
+  - RealtimeError.ServerCode.rawValue
+  - RealtimeError.ServerCode.topicNameRequired
+  - RealtimeError.ServerCode.invalidJWTToken
+  - RealtimeError.ServerCode.malformedJWT
+  - RealtimeError.ServerCode.jwtSignatureError
+  - RealtimeError.ServerCode.jwtSignerError
+  - RealtimeError.ServerCode.unauthorized
+  - RealtimeError.ServerCode.privateOnly
+  - RealtimeError.ServerCode.tenantNotFound
+  - RealtimeError.ServerCode.realtimeDisabledForTenant
+  - RealtimeError.ServerCode.realtimeDisabledForConfiguration
+  - RealtimeError.ServerCode.unableToReplayMessages
+  - RealtimeError.ServerCode.channelRateLimitReached
+  - RealtimeError.ServerCode.connectionRateLimitReached
+  - RealtimeError.ServerCode.clientJoinRateLimitReached
+  - RealtimeError.ServerCode.realtimeRestarting
+  - RealtimeError.ServerCode.initializingProjectConnection
+  - RealtimeError.ServerCode.increaseConnectionPool
+  - RealtimeError.ServerCode.databaseLackOfConnections
+  - RealtimeError.ServerCode.databaseConnectionRateLimitReached
+  - RealtimeError.ServerCode.unableToConnectToProject
+  - RealtimeError.ServerCode.queryCanceled
+  - RealtimeError.ServerCode.missingPartition
+  - RealtimeError.ServerCode.timeoutOnRpcCall
+  - RealtimeError.ServerCode.errorOnRpcCall
+  - RealtimeError.ServerCode.postgresChangesSubscribeTimeout
+  - RealtimeError.ServerCode.unknownErrorOnChannel
   # The default server-reply timeout governs subscribe, unsubscribe,
   # broadcast and broadcast_http alike rather than being owned by one.
   - RealtimeClientOptions.defaultTimeout
