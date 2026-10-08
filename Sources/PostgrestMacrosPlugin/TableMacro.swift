@@ -94,7 +94,7 @@ public struct TableMacro: ExtensionMacro {
     let properties = declaration.postgrestStoredProperties()
 
     var body: [String] = [
-      "  \(access)static let relationName = \"\(arguments.name)\"",
+      "  \(access)static let relationName = \"\(postgrestEscaped(arguments.name))\"",
       "  \(access)typealias Schema = \(schema)",
       "  \(access)static let selectString = \"*\"",
       columnsNamespace(access: access, type: type.trimmedDescription, properties: properties),
@@ -105,7 +105,7 @@ public struct TableMacro: ExtensionMacro {
     // derived-conflict-target `upsert` is withheld from it at compile time.
     let keyColumns = properties.filter(\.isPrimaryKey).map(\.columnName)
     if !keyColumns.isEmpty {
-      let list = keyColumns.map { "\"\($0)\"" }.joined(separator: ", ")
+      let list = keyColumns.map { "\"\(postgrestEscaped($0))\"" }.joined(separator: ", ")
       body.append("  \(access)static let primaryKeyColumns: [String] = [\(list)]")
     }
     if let codingKeys = codingKeys(for: properties) {
@@ -195,7 +195,8 @@ public struct TableMacro: ExtensionMacro {
         let kind = property.isOptional ? "PostgrestNullableColumn" : "PostgrestColumn"
         column = "\(kind)<\(type), \(property.unwrappedType)>"
       }
-      lines.append("    \(access)let \(property.name) = \(column)(\"\(property.columnName)\")")
+      let name = postgrestEscaped(property.columnName)
+      lines.append("    \(access)let \(property.name) = \(column)(\"\(name)\")")
     }
     lines.append("")
     lines.append("    \(access)init() {}")

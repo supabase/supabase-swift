@@ -111,7 +111,7 @@ public struct SelectionOfMacro: ExtensionMacro {
         property.embed != nil
         ? embed(property)
         : "\\(\(relation).columns.\(property.name).postgrestExpression)"
-      lines.append("    \"\(property.columnName):\(value)\",")
+      lines.append("    \"\(postgrestEscaped(property.columnName)):\(value)\",")
     }
     lines.append("  ].joined(separator: \",\")")
     return lines.joined(separator: "\n")
@@ -158,7 +158,7 @@ public struct SelectionOfMacro: ExtensionMacro {
       }
       lines.append(
         "    \(access)let \(property.name) = PostgrestEmbed<\(property.embeddedSelection)>("
-          + "alias: \"\(property.columnName)\", \(target))"
+          + "alias: \"\(postgrestEscaped(property.columnName))\", \(target))"
       )
     }
     lines.append("")
