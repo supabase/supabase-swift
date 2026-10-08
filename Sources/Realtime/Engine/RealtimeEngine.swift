@@ -68,7 +68,6 @@ package actor RealtimeEngine {
     var config: RealtimeJoinConfig
     var state: ChannelMachine.State = .unsubscribed
     var joinRef: String?
-    var postgresChangeIDs: [Int] = []
     var subscribeWaiters: [CheckedContinuation<Void, any Error>] = []
     var pendingLeaveRef: String?
     var joinTask: Task<Void, Never>?
@@ -97,6 +96,8 @@ package actor RealtimeEngine {
   private let clock: any Clock<Duration>
   private let serializer = RealtimeSerializer()
   private let logger: Logger
+  /// What public handles read without awaiting the actor.
+  package nonisolated let mirror = EngineMirror()
   private var registry = ListenerRegistry()
 
   private var connection: ConnectionMachine.State = .disconnected(nil)
@@ -180,6 +181,12 @@ package actor RealtimeEngine {
     return stream
   }
 
+  /// Every heartbeat step, unbounded so a latency display misses none. Registers before it
+  /// returns.
+  package nonisolated func heartbeats() -> AsyncStream<HeartbeatEvent> {
+    mirror.heartbeats()
+  }
+
   // MARK: - Channel API
 
   package func addChannel(_ topic: String, config: RealtimeJoinConfig = RealtimeJoinConfig()) {
@@ -198,6 +205,7 @@ package actor RealtimeEngine {
     rejectSubscribe(
       topic, with: RealtimeError(kind: .notSubscribed, message: "channel \(topic) was removed"))
     channels[topic] = nil
+    mirror.removeChannel(topic)
     registry.inbound[topic]?.values.forEach { $0.finish() }
     registry.inbound[topic] = nil
     registry.channelStates[topic]?.values.forEach { $0.finish() }
@@ -211,7 +219,7 @@ package actor RealtimeEngine {
 
   /// The server ids of the channel's postgres bindings, by position, from the last join.
   package func postgresChangeIDs(_ topic: String) -> [Int] {
-    channels[topic]?.postgresChangeIDs ?? []
+    mirror.postgresChangeIDs(topic)
   }
 
   /// Returns once the join is acknowledged. Throws the server's reason for a fatal join error,
@@ -402,6 +410,7 @@ package actor RealtimeEngine {
     for effect in effects { perform(effect) }
     if connection.key != before {
       let state = connection
+      mirror.setConnection(state.publicStatus)
       registry.connectionStates.values.forEach { $0.yield(state) }
     }
     resolveConnectWaiters()
@@ -482,6 +491,7 @@ package actor RealtimeEngine {
     channels[topic] = record
     for effect in effects { perform(effect, on: topic) }
     if let state = channels[topic]?.state, state.key != before {
+      mirror.setChannel(topic, state.publicStatus)
       registry.channelStates[topic]?.values.forEach { $0.yield(state) }
     }
   }
@@ -611,7 +621,7 @@ package actor RealtimeEngine {
         [PostgresJoinConfig].self,
         from: JSONEncoder().encode(response["postgres_changes"] ?? .array([])))) ?? []
     return ChannelMachine.verify(declared: declared, replied: replied).map { ids in
-      channels[topic]?.postgresChangeIDs = ids
+      mirror.setPostgresChangeIDs(topic, ids)
       return ChannelMachine.JoinReply(postgresChangeIDs: ids)
     }
   }
@@ -872,12 +882,17 @@ package actor RealtimeEngine {
         joinRef: nil, ref: ref, topic: "phoenix", event: "heartbeat", payload: [:])
       guard (try? enqueue(.text(try serializer.encodeText(heartbeat)))) != nil else { return }
       expectReply(ref)
+      mirror.yieldHeartbeat(.sent)
       do {
-        _ = try await withTimeout(configuration.heartbeatTimeout, clock: clock) {
-          try await self.waitForReply(ref)
+        let latency = try await clock.measure {
+          _ = try await withTimeout(configuration.heartbeatTimeout, clock: clock) {
+            try await self.waitForReply(ref)
+          }
         }
+        mirror.yieldHeartbeat(.acknowledged(latency: latency))
       } catch is TimeoutError {
         guard generation == self.generation else { return }
+        mirror.yieldHeartbeat(.timedOut)
         applyConnection(.heartbeatTimedOut)
         return
       } catch {

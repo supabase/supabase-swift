@@ -23,9 +23,6 @@ struct RealtimeErrorTests {
 
   @Test
   func statics() {
-    #expect(RealtimeError.maxRetryAttemptsReached.kind == .maxRetryAttemptsReached)
-    #expect(RealtimeError.maxRetryAttemptsReached.message == "Maximum retry attempts reached.")
-    #expect(RealtimeError.channelClosedByServer.kind == .channelClosedByServer)
     #expect(RealtimeError.accessTokenMissing.kind == .accessTokenMissing)
     #expect(RealtimeError.heartbeatTimeout.kind == .timeout)
   }

@@ -58,12 +58,6 @@ public struct RealtimeError: SupabaseError {
     public static let channelClosed: Kind = "channelClosed"
     /// A broadcast with `ack` was rejected because the payload is over the project's limit.
     public static let payloadTooLarge: Kind = "payloadTooLarge"
-    /// Every subscribe attempt failed and the SDK gave up. Schedule a retry later, or raise
-    /// the maximum retry attempts setting. Goes away with the v2 module (SDK-2109).
-    public static let maxRetryAttemptsReached: Kind = "maxRetryAttemptsReached"
-    /// The server closed the channel while a subscribe was in flight. Goes away with the v2
-    /// module (SDK-2109); v3 reports this as ``channelClosed``.
-    public static let channelClosedByServer: Kind = "channelClosedByServer"
     /// The server answered a join or REST broadcast with an error this SDK has no narrower kind
     /// for. Read ``RealtimeError/serverCode`` and ``RealtimeError/message``, or
     /// ``RealtimeError/response`` on the REST path.
@@ -193,14 +187,6 @@ public struct RealtimeError: SupabaseError {
 }
 
 extension RealtimeError {
-  /// Every subscribe attempt failed.
-  public static let maxRetryAttemptsReached = RealtimeError(
-    kind: .maxRetryAttemptsReached, message: "Maximum retry attempts reached.")
-
-  /// The server closed the channel while a subscribe was in flight.
-  public static let channelClosedByServer = RealtimeError(
-    kind: .channelClosedByServer, message: "Channel was closed by the server while subscribing.")
-
   static let accessTokenMissing = RealtimeError(
     kind: .accessTokenMissing, message: "Access token is required for httpSend()",
     isRetryable: false)

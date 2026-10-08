@@ -84,6 +84,24 @@ struct RealtimeEngineTests {
   }
 
   @Test
+  func mirrorReflectsConnectionAndChannelStatusSynchronously() async throws {
+    #expect(engine.mirror.channel(topic).isSubscribed == false)
+
+    try await engine.connect()
+    #expect(engine.mirror.connection.isConnected)
+
+    await engine.addChannel(topic)
+    try await engine.subscribe(topic)
+    #expect(engine.mirror.channel(topic).isSubscribed)
+
+    await engine.removeChannel(topic)
+    guard case .unsubscribed = engine.mirror.channel(topic) else {
+      Issue.record("expected .unsubscribed after removal, got \(engine.mirror.channel(topic))")
+      return
+    }
+  }
+
+  @Test
   func connectThrowsOnARefusedUpgradeAndStopsRetrying() async throws {
     server.refuseNextUpgrade(status: 401)
 
@@ -505,6 +523,37 @@ struct RealtimeEngineTests {
     await settle()
     #expect(server.connectCount == 2)
     await expectConnected()
+  }
+
+  @Test
+  func heartbeatsReportSentThenAcknowledgedWithTheLatency() async throws {
+    let events = collect(engine.heartbeats())
+    try await engine.connect()
+
+    await advance(by: .seconds(25))
+
+    await eventually { events.value.count == 2 }
+    #expect(events.value == [.sent, .acknowledged(latency: .zero)])
+  }
+
+  @Test
+  func heartbeatsReportSentThenTimedOutAfterTheHeartbeatTimeout() async throws {
+    server.repliesToHeartbeats = false
+    let events = collect(engine.heartbeats())
+    try await engine.connect()
+
+    await advance(by: .seconds(25))
+    await eventually { events.value == [.sent] }
+    await advance(by: .seconds(10))
+
+    await eventually { events.value.count == 2 }
+    #expect(events.value == [.sent, .timedOut])
+  }
+
+  private func collect(_ stream: AsyncStream<HeartbeatEvent>) -> LockIsolated<[HeartbeatEvent]> {
+    let events = LockIsolated([HeartbeatEvent]())
+    Task { for await event in stream { events.withValue { $0.append(event) } } }
+    return events
   }
 
   @Test
