@@ -174,7 +174,7 @@ since it isn't a required check, nothing stops a merge if you don't.
 
 ### Enum-like Values
 
-- Use a Swift `enum` only when the value is genuinely closed: the cases carry associated values (`AuthResponse`, `SignedURLResult`), every case is fixed by the language or protocol itself (HTTP methods, a `CodingKeys` set), or the SDK has to implement each case so a value it has no code for is meaningless (`AuthFlowType`, `RealtimeProtocolVersion`). Adding a case to one of these is a major bump.
+- Use a Swift `enum` only when the value is genuinely closed: the cases carry associated values (`AuthResponse`, `SignedURLResult`), every case is fixed by the language or protocol itself (HTTP methods, a `CodingKeys` set), or the SDK has to implement each case so a value it has no code for is meaningless (`AuthFlowType`, `RealtimePostgresIsValue`). Adding a case to one of these is a major bump.
 - Any enum-like value sent to or received from the backend, and any status or event value a consumer will `switch` over (`AuthChangeEvent`, `RealtimeClientStatus`, `PushStatus`), must be a `RawRepresentable` struct instead, so a value the backend adds later (or that this SDK just doesn't have a case for yet) round-trips through `.rawValue` instead of failing to decode or blocking construction until an SDK upgrade. The consumer-facing policy lives in `Sources/Supabase/Supabase.docc/EnumsAndOpenSets.md`; keep it in sync when a type changes shape:
 
   ```swift

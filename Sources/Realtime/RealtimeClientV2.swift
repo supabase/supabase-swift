@@ -197,7 +197,6 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       url: Self.realtimeWebSocketURL(
         baseURL: Self.realtimeBaseURL(url: url),
         apikey: options.apikey,
-        protocolVersion: options.protocolVersion,
         logLevel: options.logLevel
       ),
       headers: options.headers.dictionary,
@@ -499,29 +498,15 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
 
             switch event {
             case .binary(let data):
-              switch self.options.protocolVersion {
-              case .v1:
-                options.logger.warning(
-                  "Received binary frame but protocolVersion is 1.0.0; binary frames are only supported in 2.0.0"
-                )
-              case .v2:
-                do {
-                  let broadcast = try serializer.decodeBinary(data)
-                  await onBroadcast(broadcast)
-                } catch {
-                  options.logger.error("Failed to decode binary frame: \(error)")
-                }
+              do {
+                let broadcast = try serializer.decodeBinary(data)
+                await onBroadcast(broadcast)
+              } catch {
+                options.logger.error("Failed to decode binary frame: \(error)")
               }
 
             case .text(let text):
-              let message: RealtimeMessageV2
-              switch self.options.protocolVersion {
-              case .v1:
-                message = try JSONDecoder().decode(RealtimeMessageV2.self, from: Data(text.utf8))
-              case .v2:
-                message = try serializer.decodeText(text)
-              }
-              await onMessage(message)
+              await onMessage(try serializer.decodeText(text))
 
             case .close(let code, let reason):
               options.logger.debug(
@@ -768,19 +753,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   public func push(_ message: RealtimeMessageV2) {
     let callback = { @Sendable (_ client: RealtimeClientV2) in
       do {
-        let text: String
-        switch client.options.protocolVersion {
-        case .v1:
-          let data = try JSONEncoder().encode(message)
-          guard let encoded = String(data: data, encoding: .utf8) else {
-            client.options.logger.error("Failed to encode message as UTF-8.")
-            return
-          }
-          text = encoded
-        case .v2:
-          text = try client.serializer.encodeText(message)
-        }
-
+        let text = try client.serializer.encodeText(message)
         let conn = client.mutableState.withValue { $0.connection }
         conn?.send(text)
       } catch {
@@ -920,7 +893,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   }
 
   static func realtimeWebSocketURL(
-    baseURL: URL, apikey: String?, protocolVersion: RealtimeProtocolVersion, logLevel: LogLevel?
+    baseURL: URL, apikey: String?, logLevel: LogLevel?
   ) -> URL {
     guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)
     else {
@@ -933,7 +906,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       queryItems.append(URLQueryItem(name: "apikey", value: apikey))
     }
 
-    queryItems.append(URLQueryItem(name: "vsn", value: protocolVersion.rawValue))
+    queryItems.append(URLQueryItem(name: "vsn", value: "2.0.0"))
 
     if let logLevel {
       queryItems.append(URLQueryItem(name: "log_level", value: logLevel.rawValue))

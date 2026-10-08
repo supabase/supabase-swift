@@ -372,4 +372,161 @@ struct RealtimeSerializerTests {
       Issue.record("Expected binary payload")
     }
   }
+
+  // MARK: - Strict array length
+
+  @Test
+  func decodeTextRejectsArraysWithMoreThanFiveElements() {
+    do {
+      _ = try serializer.decodeText(#"[null, null, "t", "e", {}, "extra"]"#)
+      Issue.record("Expected failure")
+    } catch let error as RealtimeError {
+      #expect(error.kind == .decoding)
+      #expect(error.message == "Expected JSON array with 5 elements, got 6.")
+    } catch {
+      Issue.record("Unexpected error \(error)")
+    }
+  }
+
+  // MARK: - Kind 3 header length limits
+
+  enum HeaderField: CaseIterable {
+    case joinRef, ref, topic, event
+  }
+
+  private func encodePush(_ field: HeaderField, value: String) throws -> Data {
+    try serializer.encodeBroadcastPush(
+      joinRef: field == .joinRef ? value : "1",
+      ref: field == .ref ? value : "2",
+      topic: field == .topic ? value : "realtime:test",
+      event: field == .event ? value : "evt",
+      jsonPayload: [:]
+    )
+  }
+
+  @Test(arguments: HeaderField.allCases)
+  func encodeBroadcastPushAcceptsHeaderFieldsOf255Bytes(_ field: HeaderField) throws {
+    let data = try encodePush(field, value: String(repeating: "a", count: 255))
+    #expect(data.contains(255))
+  }
+
+  @Test(arguments: HeaderField.allCases)
+  func encodeBroadcastPushRejectsHeaderFieldsOver255BytesWithEncodingKind(_ field: HeaderField) {
+    do {
+      _ = try encodePush(field, value: String(repeating: "a", count: 256))
+      Issue.record("Expected failure")
+    } catch let error as RealtimeError {
+      #expect(error.kind == .encoding)
+    } catch {
+      Issue.record("Unexpected error \(error)")
+    }
+  }
+
+  @Test
+  func encodeBroadcastPushCountsBytesNotCharacters() {
+    // "é" is two bytes in UTF-8, so 128 of them is 256 bytes.
+    #expect(throws: RealtimeError.self) {
+      try encodePush(.topic, value: String(repeating: "é", count: 128))
+    }
+  }
+
+  // MARK: - Kind 4 frames
+
+  private func userBroadcastFrame(
+    topic: String = "realtime:test",
+    event: String = "evt",
+    metadata: Data = Data(),
+    encoding: RealtimeSerializer.PayloadEncoding,
+    payload: Data
+  ) -> Data {
+    var frame = Data()
+    frame.append(RealtimeSerializer.BinaryKind.userBroadcast.rawValue)
+    frame.append(UInt8(topic.utf8.count))
+    frame.append(UInt8(event.utf8.count))
+    frame.append(UInt8(metadata.count))
+    frame.append(encoding.rawValue)
+    frame.append(Data(topic.utf8))
+    frame.append(Data(event.utf8))
+    frame.append(metadata)
+    frame.append(payload)
+    return frame
+  }
+
+  @Test
+  func decodeBinaryJSONEncodingWithDatabaseMetadata() throws {
+    // Shape of a `realtime.send` / `broadcast_changes` broadcast delivered as kind 4.
+    let frame = userBroadcastFrame(
+      event: "INSERT",
+      metadata: Data(#"{"id":"0b8a1e2c-77c4-4f1b-9d2a-3f5e6a7b8c9d","replayed":true}"#.utf8),
+      encoding: .json,
+      payload: Data(#"{"record":{"id":1}}"#.utf8)
+    )
+
+    let broadcast = try serializer.decodeBinary(frame)
+
+    #expect(broadcast.event == "INSERT")
+    #expect(broadcast.meta?["id"]?.stringValue == "0b8a1e2c-77c4-4f1b-9d2a-3f5e6a7b8c9d")
+    #expect(broadcast.meta?["replayed"]?.boolValue == true)
+    guard case .json(let json) = broadcast.payload else {
+      Issue.record("Expected JSON payload")
+      return
+    }
+    #expect(json["record"]?.objectValue?["id"]?.intValue == 1)
+  }
+
+  @Test
+  func decodeBinaryRawEncodingWithDatabaseMetadata() throws {
+    // Shape of a `send_binary` broadcast: raw bytes, metadata still JSON.
+    let bytes = Data([0x00, 0xFF, 0x10, 0x80])
+    let frame = userBroadcastFrame(
+      metadata: Data(#"{"id":"abc","replayed":false}"#.utf8),
+      encoding: .binary,
+      payload: bytes
+    )
+
+    let broadcast = try serializer.decodeBinary(frame)
+
+    #expect(broadcast.meta?["id"]?.stringValue == "abc")
+    #expect(broadcast.meta?["replayed"]?.boolValue == false)
+    guard case .binary(let data) = broadcast.payload else {
+      Issue.record("Expected binary payload")
+      return
+    }
+    #expect(data == bytes)
+  }
+
+  @Test
+  func decodeBinaryWithoutMetadataHasNilMeta() throws {
+    let frame = userBroadcastFrame(encoding: .json, payload: Data("{}".utf8))
+    #expect(try serializer.decodeBinary(frame).meta == nil)
+  }
+
+  @Test
+  func decodeBinaryAccepts255ByteMetadata() throws {
+    let prefix = #"{"id":""#
+    let suffix = #""}"#
+    let id = String(repeating: "x", count: 255 - prefix.utf8.count - suffix.utf8.count)
+    let metadata = Data((prefix + id + suffix).utf8)
+    #expect(metadata.count == 255)
+
+    let frame = userBroadcastFrame(
+      metadata: metadata, encoding: .binary, payload: Data([0x2A]))
+    let broadcast = try serializer.decodeBinary(frame)
+
+    #expect(broadcast.meta?["id"]?.stringValue == id)
+    guard case .binary(let data) = broadcast.payload else {
+      Issue.record("Expected binary payload")
+      return
+    }
+    #expect(data == Data([0x2A]))
+  }
+
+  @Test
+  func decodeBinaryRejectsMetadataLongerThanTheFrame() {
+    var frame = userBroadcastFrame(encoding: .binary, payload: Data())
+    frame[3] = 255
+    #expect(throws: RealtimeError.self) {
+      try serializer.decodeBinary(frame)
+    }
+  }
 }

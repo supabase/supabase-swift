@@ -1685,8 +1685,8 @@ features:
       - LogLevel.rawValue
   realtime.configuration.binary_protocol:
     status: implemented
-    symbols:
-      - RealtimeClientOptions.protocolVersion
+    no_public_symbols: true
+    note: "Always on: the client only speaks protocol 2.0.0 (vsn=2.0.0), so there is no option to select it. Protocol 1.0.0 was removed in v3."
 
   # ── Storage ────────────────────────────────────────────────────────────────
 

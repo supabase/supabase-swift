@@ -2534,7 +2534,7 @@ reply timeout is renamed:
 The per-call `timeout:` parameter on `RealtimeChannelV2.httpSend(event:message:timeout:)` (both
 overloads) and `httpSend(event:data:timeout:)` is a `Duration?` instead of a `TimeInterval?`.
 
-The `@_disfavoredOverload` `RealtimeClientOptions` initializer without `protocolVersion:` is
+The `@_disfavoredOverload` `RealtimeClientOptions` initializer without `vsn:` is
 removed. The primary initializer defaults every argument it took, so every call that compiled
 against it still compiles against the primary one once the intervals above are updated.
 
@@ -2775,10 +2775,15 @@ sends the `x-upsert` header, and `AdminUserAttributes.confirmsEmail` still encod
 `head:` on `select` and `rpc` deliberately keeps its name — it names the HTTP method the request
 switches to, rather than asserting a state.
 
-## `RealtimeClientOptions.vsn` is now `protocolVersion`
+## `RealtimeClientOptions.vsn` and `RealtimeProtocolVersion` are removed
 
-`vsn` is the query parameter Realtime's server reads; it was never a good name for the Swift
-property.
+Realtime always speaks Phoenix protocol 2.0.0. The `vsn:` option, the `RealtimeProtocolVersion`
+enum, and the protocol 1.0.0 code paths are gone. The socket URL always carries `vsn=2.0.0`.
+
+Protocol 1.0.0 sends every message as a JSON object, so it cannot carry binary broadcast frames.
+Broadcasts that come from the database (`realtime.send`, `broadcast_changes`, `send_binary`) and
+broadcasts that realtime-js sends as binary frames reach the client only as binary frames. A
+client on 1.0.0 never receives them. Protocol 2.0.0 was already the default.
 
 ```swift
 // Before
@@ -2790,11 +2795,45 @@ let client = SupabaseClient(
 // After
 let client = SupabaseClient(
   supabaseURL: url, supabaseKey: key,
-  options: .init(realtime: RealtimeClientOptions(protocolVersion: .v2))
+  options: .init(realtime: RealtimeClientOptions())
 )
 ```
 
-This is a compile error. The socket URL still carries `vsn=2.0.0` — only the Swift spelling moved.
+This is a compile error wherever you pass `vsn:` or name `RealtimeProtocolVersion`. Remove the
+argument. There is no way to select protocol 1.0.0.
+
+Your Realtime server must support protocol 2.0.0. That is Realtime v2.63.0 or later, the first
+release with the 2.0.0 serializer. If you
+self-host an older Realtime, upgrade it before you upgrade the SDK.
+
+## `RealtimeMessageV2` is no longer `Codable`
+
+`RealtimeMessageV2` conforms to `Hashable` and `Sendable` only. The `join_ref`/`ref`/`topic`/
+`event`/`payload` JSON object it encoded to was the protocol 1.0.0 wire format, which the SDK no
+longer sends or reads (see the section above).
+
+If you encoded messages yourself, for logging or for a test fixture, build the JSON from the
+fields:
+
+```swift
+// Before
+let data = try JSONEncoder().encode(message)
+
+// After
+let json: JSONObject = [
+  "event": .string(message.event),
+  "join_ref": message.joinRef.map(JSONValue.string) ?? .null,
+  "payload": .object(message.payload),
+  "ref": message.ref.map(JSONValue.string) ?? .null,
+  "topic": .string(message.topic),
+]
+let data = try JSONEncoder().encode(json)
+```
+
+This is a compile error in most code. One case still compiles: an API that takes `Any` and
+serializes it at run time, such as `JSONSerialization` or SnapshotTesting's `.json` strategy on
+`Any`. That code now throws or traps at run time. Search for places that pass a
+`RealtimeMessageV2` to one of them.
 
 ## `User.aud` is now `User.audience`
 

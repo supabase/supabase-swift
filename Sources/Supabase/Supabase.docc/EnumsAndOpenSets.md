@@ -18,8 +18,8 @@ A value stays an `enum` when the set of cases is fixed by design:
   `VerifyOTPResponse`, `OAuthAuthorizationDetailsResponse`, `AudienceClaim`, `SignedURLResult`,
   `DownloadBehavior`, `AnyAction`, `RealtimePostgresFilter`, `JSONValue`.
 - The SDK has to implement each case, so a value it has no code for is meaningless:
-  `AuthFlowType`, `RealtimeProtocolVersion`, `RealtimePostgresIsValue`, `PostgrestFilterOperator`,
-  `PostgresChangeEvent` (each event maps to its own `PostgresAction` type).
+  `AuthFlowType`, `RealtimePostgresIsValue`, `PostgrestFilterOperator`, `PostgresChangeEvent`
+  (each event maps to its own `PostgresAction` type).
 
 Switch over these exhaustively. Adding a case to one of them is a breaking change and only ships
 in a major release, so the compiler tells you exactly where to look when you upgrade.

@@ -477,34 +477,21 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
         }
       }
     } else {
-      switch socket.options.protocolVersion {
-      case .v1:
-        await push(
-          ChannelEvent.broadcast,
-          payload: [
-            "type": "broadcast",
-            "event": .string(event),
-            "payload": .object(message),
-          ]
-        )
-      case .v2:
-        let joinRef = await stateManager.joinRef
-        socket.pushBroadcast(
-          joinRef: joinRef,
-          ref: socket.makeRef(),
-          topic: topic,
-          event: event,
-          jsonPayload: message
-        )
-      }
+      let joinRef = await stateManager.joinRef
+      socket.pushBroadcast(
+        joinRef: joinRef,
+        ref: socket.makeRef(),
+        topic: topic,
+        event: event,
+        jsonPayload: message
+      )
     }
   }
 
   /// Sends a binary broadcast message over WebSocket.
   ///
-  /// Binary broadcasts require protocol version ``RealtimeProtocolVersion/v2`` and an active
-  /// subscription. An issue is reported (via `reportIssue`) if the channel is not subscribed or
-  /// if the client is running protocol 1.0.0.
+  /// Binary broadcasts require an active subscription. An issue is reported (via `reportIssue`)
+  /// if the channel is not subscribed.
   ///
   /// - Parameters:
   ///   - event: The broadcast event name.
@@ -515,15 +502,6 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       if !isTesting {
         reportIssue(
           "You can only send binary broadcasts after subscribing to the channel. Did you forget to call `channel.subscribeWithError()`?"
-        )
-      }
-      return
-    }
-
-    if socket.options.protocolVersion == .v1 {
-      if !isTesting {
-        reportIssue(
-          "Binary broadcast requires protocol version 2.0.0. Set `protocolVersion: .v2` in RealtimeClientOptions."
         )
       }
       return
@@ -743,14 +721,13 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
 
     switch broadcast.payload {
     case .json(let json):
-      callbackManager.triggerBroadcast(
-        event: event,
-        json: [
-          "event": .string(event),
-          "payload": .object(json),
-          "type": "broadcast",
-        ]
-      )
+      var message: JSONObject = [
+        "event": .string(event),
+        "payload": .object(json),
+        "type": "broadcast",
+      ]
+      message["meta"] = broadcast.meta.map(JSONValue.object)
+      callbackManager.triggerBroadcast(event: event, json: message)
 
     case .binary(let data):
       if callbackManager.hasBroadcastDataCallbacks(for: event) {
@@ -1121,7 +1098,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   /// Registers a closure that is called when a binary broadcast message arrives for the given event.
   ///
   /// Use this when you expect binary (non-JSON) broadcast payloads sent via
-  /// ``broadcast(event:data:)``. Requires protocol ``RealtimeProtocolVersion/v2``.
+  /// ``broadcast(event:data:)``.
   ///
   /// ```swift
   /// let subscription = channel.onBroadcastData(event: "frame") { data in

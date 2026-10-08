@@ -19,7 +19,7 @@ import Foundation
 /// - ``EventType``
 /// ### Initialization
 /// - ``init(joinRef:ref:topic:event:payload:)``
-public struct RealtimeMessageV2: Hashable, Codable, Sendable {
+public struct RealtimeMessageV2: Hashable, Sendable {
   /// The join reference that associates this message with the `phx_join` that opened the channel.
   ///
   /// `nil` for messages that are not scoped to a channel (e.g. heartbeats).
@@ -120,14 +120,6 @@ public struct RealtimeMessageV2: Hashable, Codable, Sendable {
 
     /// A reply to a client-originated push.
     public static let reply = EventType(rawValue: ChannelEvent.reply)
-  }
-
-  private enum CodingKeys: String, CodingKey {
-    case joinRef = "join_ref"
-    case ref
-    case topic
-    case event
-    case payload
   }
 }
 

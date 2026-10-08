@@ -243,6 +243,30 @@ import Testing
       #expect(payload?["type"]?.stringValue == "broadcast")
       #expect(payload?["event"]?.stringValue == "evt")
       #expect(payload?["payload"]?.objectValue?["key"]?.stringValue == "value")
+      #expect(payload?["meta"] == nil)
+    }
+
+    @Test
+    func receive_jsonBroadcastForwardsFrameMetadataAsMeta() async throws {
+      let channel = sut.channel("test")
+
+      let receivedPayload = LockIsolated<JSONObject?>(nil)
+      let subscription = channel.onBroadcast(event: "INSERT") { json in
+        receivedPayload.setValue(json)
+      }
+      defer { subscription.cancel() }
+
+      let broadcast = DecodedBroadcast(
+        topic: "realtime:test",
+        event: "INSERT",
+        meta: ["id": "0b8a1e2c-77c4-4f1b-9d2a-3f5e6a7b8c9d", "replayed": true],
+        payload: .json(["key": .string("value")])
+      )
+      await channel.handleBinaryBroadcast(broadcast)
+
+      let meta = receivedPayload.value?["meta"]?.objectValue
+      #expect(meta?["id"]?.stringValue == "0b8a1e2c-77c4-4f1b-9d2a-3f5e6a7b8c9d")
+      #expect(meta?["replayed"]?.boolValue == true)
     }
 
     // MARK: - Per-call encoder override
@@ -354,6 +378,49 @@ import Testing
         #expect(payload["event"]?.stringValue == "my_event")
         #expect(payload["payload"]?.objectValue?["count"]?.intValue == 99)
       }
+    }
+
+    @Test
+    func endToEnd_binaryFrameForwardsDatabaseMetadataAsMeta() async throws {
+      setupServerAutoResponder()
+      await sut.connect()
+
+      let channel = sut.channel("test")
+
+      let receivedPayload = LockIsolated<JSONObject?>(nil)
+      let subscription = channel.onBroadcast(event: "INSERT") { json in
+        receivedPayload.setValue(json)
+      }
+      defer { subscription.cancel() }
+
+      try await channel.subscribeWithError()
+
+      let topic = Data("realtime:test".utf8)
+      let event = Data("INSERT".utf8)
+      let metadata = Data(#"{"id":"0b8a1e2c-77c4-4f1b-9d2a-3f5e6a7b8c9d","replayed":true}"#.utf8)
+      let payload = Data(#"{"record":{"id":1}}"#.utf8)
+
+      var frame = Data()
+      frame.append(RealtimeSerializer.BinaryKind.userBroadcast.rawValue)
+      frame.append(UInt8(topic.count))
+      frame.append(UInt8(event.count))
+      frame.append(UInt8(metadata.count))
+      frame.append(RealtimeSerializer.PayloadEncoding.json.rawValue)
+      frame.append(topic)
+      frame.append(event)
+      frame.append(metadata)
+      frame.append(payload)
+
+      server.send(frame)
+
+      let received = await waitUntil(timeout: 2) { receivedPayload.value != nil }
+      #expect(received, "Expected onBroadcast to receive the kind-4 frame")
+
+      let json = try #require(receivedPayload.value)
+      #expect(json["payload"]?.objectValue?["record"]?.objectValue?["id"]?.intValue == 1)
+      let meta = try #require(json["meta"]?.objectValue)
+      #expect(meta["id"]?.stringValue == "0b8a1e2c-77c4-4f1b-9d2a-3f5e6a7b8c9d")
+      #expect(meta["replayed"]?.boolValue == true)
     }
   }
 

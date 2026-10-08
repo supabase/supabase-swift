@@ -40,8 +40,6 @@ struct RealtimeClientOptionsTests {
 
   @Test
   func loggerIsTaggedWithSystemMetadata() {
-    // The `@_disfavoredOverload` initializer preserving the pre-`protocolVersion` signature delegates to this
-    // primary initializer via `self.init(...)`, so tagging here covers both entry points.
     let options = RealtimeClientOptions(
       headers: ["apikey": "test-key"],
       logger: Logging.Logger(label: "test")

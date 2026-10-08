@@ -57,6 +57,9 @@ public struct RealtimeError: SupabaseError {
     /// A frame from the server could not be decoded, or a message had an unexpected shape.
     /// Nothing to retry; report it.
     public static let decoding: Kind = "decoding"
+
+    /// A frame could not be encoded for sending. Never thrown to callers; it only appears in logs.
+    static let encoding: Kind = "encoding"
   }
 
   public var kind: Kind
@@ -97,6 +100,10 @@ extension RealtimeError {
 
   static func decoding(_ message: String) -> RealtimeError {
     RealtimeError(kind: .decoding, message: message)
+  }
+
+  static func encoding(_ message: String) -> RealtimeError {
+    RealtimeError(kind: .encoding, message: message)
   }
 
   static func transport(_ message: String, underlyingError: (any Error)? = nil) -> RealtimeError {
