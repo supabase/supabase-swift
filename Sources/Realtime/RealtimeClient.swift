@@ -113,8 +113,9 @@ public final class RealtimeClient: Sendable {
   /// ``RealtimeClientOptions/reconnect`` and reports it on ``statusChanges``.
   ///
   /// - Throws: ``RealtimeError`` when the server refuses the upgrade for good (a 401 or 403 is
-  ///   ``RealtimeError/Kind/unauthorized``), or of kind ``RealtimeError/Kind/notConnected`` when
-  ///   ``disconnect()`` runs first.
+  ///   ``RealtimeError/Kind/unauthorized``), of kind ``RealtimeError/Kind/notConnected`` when
+  ///   ``disconnect()`` runs first, or `CancellationError` when the calling task is cancelled.
+  ///   Cancelling does not stop the client from connecting.
   public func connect() async throws {
     try await engine.connect()
   }

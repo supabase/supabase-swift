@@ -103,7 +103,8 @@ public final class RealtimeChannel: Sendable {
   ///   removed from its client (get a new one from ``RealtimeClient/channel(_:configure:)``), and
   ///   ``RealtimeError/Kind/server`` or ``RealtimeError/Kind/timeout`` when the postgres changes
   ///   bindings fail to attach. In the last two cases the channel stays joined, and the server may
-  ///   still attach them later.
+  ///   still attach them later. Throws `CancellationError` when the calling task is cancelled; the
+  ///   channel keeps joining, so call ``unsubscribe()`` to stop it.
   ///
   /// Calling it on a channel that is already subscribed returns at once, without waiting for the
   /// postgres changes bindings. A ``postgresChanges(event:schema:table:filter:select:)`` stream

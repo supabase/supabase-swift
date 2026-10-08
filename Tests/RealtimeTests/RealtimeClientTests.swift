@@ -136,6 +136,39 @@ struct RealtimeClientTests {
   }
 
   @Test
+  func cancellingConnectThrowsCancellationAndLeavesOtherCallersWaiting() async throws {
+    struct HangingTransport: WebSocketTransport {
+      func connect(to url: URL, headerFields: HTTPFields) async throws -> any WebSocketConnection {
+        try await Task.sleep(for: .seconds(3_600))
+        throw CancellationError()
+      }
+    }
+    let client = makeClient { $0.webSocketTransport = HangingTransport() }
+    let cancelledError = LockIsolated<(any Error)?>(nil)
+    let otherReturned = LockIsolated(false)
+    let cancelled = Task {
+      do { try await client.connect() } catch { cancelledError.setValue(error) }
+    }
+    let other = Task {
+      try? await client.connect()
+      otherReturned.setValue(true)
+    }
+    defer { other.cancel() }
+    #expect(await waitUntil { if case .connecting = client.status { true } else { false } })
+    await settle()
+
+    cancelled.cancel()
+
+    #expect(await waitUntil(timeout: 2) { cancelledError.value is CancellationError })
+    await settle()
+    #expect(!otherReturned.value)
+    guard case .connecting = client.status else {
+      Issue.record("expected the client to keep connecting, got \(client.status)")
+      return
+    }
+  }
+
+  @Test
   func heartbeatsForwardsTheEngineEvents() async throws {
     let client = makeClient { $0.heartbeatInterval = .seconds(1) }
     let heartbeats = client.heartbeats
@@ -332,6 +365,39 @@ struct RealtimeClientTests {
     #expect(client.channels.contains { $0 === new })
     #expect(await hasFinished(oldEvents))
     #expect(await hasFinished(oldStatuses))
+  }
+
+  @Test
+  func cancellingSubscribeThrowsCancellationAndLeavesOtherCallersWaiting() async throws {
+    let client = makeClient { $0.rejoin = .steps([.seconds(1)]) }
+    let channel = client.channel("room")
+    server.joinReply = .silent
+    let cancelledError = LockIsolated<(any Error)?>(nil)
+    let otherReturned = LockIsolated(false)
+    let cancelled = Task {
+      do { try await channel.subscribe() } catch { cancelledError.setValue(error) }
+    }
+    let other = Task {
+      try await channel.subscribe()
+      otherReturned.setValue(true)
+    }
+    defer { other.cancel() }
+    #expect(await waitUntil { joins.count == 1 })
+    await settle()
+
+    cancelled.cancel()
+
+    #expect(await waitUntil(timeout: 2) { cancelledError.value is CancellationError })
+    guard case .subscribing = channel.status else {
+      Issue.record("expected the channel to keep wanting its subscription, got \(channel.status)")
+      return
+    }
+    #expect(!otherReturned.value)
+    server.joinReply = .ok
+    await clock.advance(by: .seconds(15))
+    await settle()
+    await clock.advance(by: .seconds(1))
+    #expect(await waitUntil(timeout: 2) { otherReturned.value })
   }
 
   @Test
