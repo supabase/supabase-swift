@@ -3814,8 +3814,9 @@ task.cancel()
 ```
 
 Streams that carry data are unbounded. Status streams keep only the newest value and
-yield the current one first. A stream ends when the channel is removed or the client fails for
-good. The SDK never ends a stream because one payload failed to decode: decode helpers are
+yield the current one first. A channel's data streams end when the channel is removed, when it
+fails for good (`.failed`), or when the client is released. Status streams end only when the
+channel is removed or the client is released. The SDK never ends a stream because one payload failed to decode: decode helpers are
 synchronous and throw `RealtimeError(kind: .decoding)` to you.
 
 ### `subscribeWithError()` → `subscribe()`
