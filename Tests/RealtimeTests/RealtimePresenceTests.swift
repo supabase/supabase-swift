@@ -136,6 +136,29 @@ struct RealtimePresenceTests {
   }
 
   @Test
+  func tracksDuringThePresenceRejoinCoalesceToTheNewestPayload() async throws {
+    let channel = makeChannel()
+    try await channel.subscribe()
+    server.joinReplyDelay = .seconds(1)
+
+    let first = Task { try await channel.presence.track(User(name: "a")) }
+    let rejoining = await waitUntil { [self] in joins.count == 2 }
+    #expect(rejoining)
+    let second = Task { try await channel.presence.track(User(name: "b")) }
+    await settle()
+    await clock.advance(by: .seconds(1))
+    try await first.value
+    try await second.value
+
+    #expect(joins.map(presenceEnabled) == [false, true])
+    let pushed = await waitUntil { [self] in presencePushes.count == 1 }
+    #expect(pushed)
+    await settle()
+    #expect(presencePushes.count == 1)
+    #expect(presencePushes.first?.payload["payload"] == ["name": "b"])
+  }
+
+  @Test
   func aTrackBeforeSubscribeStillEnablesPresenceOnTheJoin() async throws {
     let channel = makeChannel()
     await #expect(throws: RealtimeError.self) {

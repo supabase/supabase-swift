@@ -482,10 +482,19 @@ package actor RealtimeEngine {
   /// Returns once the server acknowledged the push, or at once when the push was coalesced or
   /// dropped as unchanged. On a channel joined without presence, it joins again with presence
   /// enabled and returns once that join succeeds; the rejoin sends the payload, so other clients
-  /// see one join.
+  /// see one join. A call while a rejoin of a tracking channel is in flight replaces the payload
+  /// that join sends, and returns once it succeeds.
   package func trackPresence(_ topic: String, owner: ChannelOwner, payload: JSONObject)
     async throws
   {
+    // A join already in flight sends `trackedPayload` once it succeeds: replace it and wait.
+    if let record = channels[topic], record.owner === owner, case .subscribing = record.state,
+      record.presence.trackedPayload != nil
+    {
+      channels[topic]?.presence.trackedPayload = payload
+      try await waitForSubscription(topic)
+      return
+    }
     _ = try joinRefForPush(topic, owner: owner)
     channels[topic]?.presence.trackedPayload = payload
     if channels[topic]?.config.presence.enabled == false {
