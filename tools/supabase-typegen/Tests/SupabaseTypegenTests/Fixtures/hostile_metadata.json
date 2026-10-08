@@ -56,6 +56,21 @@
       "id": 9,
       "schema": "my\"schema",
       "name": "class"
+    },
+    {
+      "id": 10,
+      "schema": "public",
+      "name": "draft"
+    },
+    {
+      "id": 11,
+      "schema": "public",
+      "name": "columns"
+    },
+    {
+      "id": 12,
+      "schema": "public",
+      "name": "coding_keys"
     }
   ],
   "views": [],
@@ -526,6 +541,39 @@
     },
     {
       "table_id": 9,
+      "ordinal_position": 1,
+      "name": "id",
+      "format": "int8",
+      "type_schema": "pg_catalog",
+      "default_value": null,
+      "identity_generation": null,
+      "is_generated": false,
+      "is_nullable": false
+    },
+    {
+      "table_id": 10,
+      "ordinal_position": 1,
+      "name": "id",
+      "format": "int8",
+      "type_schema": "pg_catalog",
+      "default_value": null,
+      "identity_generation": null,
+      "is_generated": false,
+      "is_nullable": false
+    },
+    {
+      "table_id": 11,
+      "ordinal_position": 1,
+      "name": "id",
+      "format": "int8",
+      "type_schema": "pg_catalog",
+      "default_value": null,
+      "identity_generation": null,
+      "is_generated": false,
+      "is_nullable": false
+    },
+    {
+      "table_id": 12,
       "ordinal_position": 1,
       "name": "id",
       "format": "int8",

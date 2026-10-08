@@ -87,7 +87,11 @@ struct EmitterTests {
   func hostileFixtureReportsEveryRenameAndFallback() {
     let result = run(arguments: GoldenCase.all[2].arguments) { Fixture.data("hostile_metadata") }
     let notes = [
+      "public.coding_keys is named CodingKeysTable: "
+        + "CodingKeys would shadow a type the generated code uses",
+      "public.columns is named ColumnsTable: Columns would shadow a type the generated code uses",
       "public.date is named DateTable: Date would shadow a type the generated code uses",
+      "public.draft is named DraftTable: Draft would shadow a type the generated code uses",
       "public.type is named TypeTable: Type would shadow a type the generated code uses",
       "public.hostile.self is named selfColumn: @Table reserves self",
       "public.hostile.columns is named columnsColumn: @Table reserves columns",

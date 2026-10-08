@@ -15,8 +15,23 @@ struct UserProfiles {
   var id: Int
 }
 
+@Table("coding_keys")
+struct CodingKeysTable {
+  var id: Int
+}
+
+@Table("columns")
+struct ColumnsTable {
+  var id: Int
+}
+
 @Table("date")
 struct DateTable {
+  var id: Int
+}
+
+@Table("draft")
+struct DraftTable {
   var id: Int
 }
 
