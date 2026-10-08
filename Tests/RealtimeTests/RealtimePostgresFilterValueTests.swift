@@ -15,31 +15,31 @@ struct RealtimePostgresFilterValueTests {
   @Test
   func uuid() {
     #expect(
-      RealtimePostgresFilter.format(UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!)
+      UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!.realtimeFilterValue
         == "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")
   }
 
   @Test
   func date() {
     #expect(
-      RealtimePostgresFilter.format(Date(timeIntervalSince1970: 1_737_465_985))
+      Date(timeIntervalSince1970: 1_737_465_985).realtimeFilterValue
         == "2025-01-21T13:26:25.000Z"
     )
   }
 
   @Test
   func scalars() {
-    #expect(RealtimePostgresFilter.format("a b") == "a b")
-    #expect(RealtimePostgresFilter.format(42) == "42")
-    #expect(RealtimePostgresFilter.format(1.5) == "1.5")
-    #expect(RealtimePostgresFilter.format(true) == "true")
+    #expect("a b".realtimeFilterValue == "a b")
+    #expect(42.realtimeFilterValue == "42")
+    #expect(1.5.realtimeFilterValue == "1.5")
+    #expect(true.realtimeFilterValue == "true")
   }
 
   @Test
-  func rawRepresentableUsesItsRawValue() {
-    enum Status: String, RealtimePostgresFilterValue {
-      case draft
+  func customValueUsesItsRequirement() {
+    struct Status: RealtimePostgresFilterValue {
+      var realtimeFilterValue: String { "draft" }
     }
-    #expect(RealtimePostgresFilter.format(Status.draft) == "draft")
+    #expect(RealtimePostgresFilter.eq("status", value: Status()).value == "status=eq.draft")
   }
 }

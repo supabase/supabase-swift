@@ -295,6 +295,53 @@ struct RealtimeChannelTests {
   }
 
   @Test
+  func cancellingSubscribeWhileWaitingForPostgresChangesThrowsCancellation() async throws {
+    let channel = makeChannel()
+    _ = channel.postgresChanges(table: "todos")
+
+    let subscribing = Task { try await channel.subscribe() }
+    await waitUntil { channel.status.isSubscribed }
+    await settle()
+    subscribing.cancel()
+
+    do {
+      try await subscribing.value
+      Issue.record("expected a cancellation")
+    } catch {
+      #expect(error is CancellationError, "got \(error)")
+    }
+  }
+
+  @Test
+  func bindingAddedDuringTheJoinIsSentAndRouted() async throws {
+    server.joinReplyDelay = .seconds(1)
+    let channel = makeChannel()
+    var inserts = channel.postgresChanges(event: .insert, table: "todos").makeAsyncIterator()
+
+    let subscribing = Task { try await channel.subscribe() }
+    await waitUntil { joins.count == 1 }
+    var deletes = channel.postgresChanges(event: .delete, table: "todos").makeAsyncIterator()
+    await waitUntil { joins.count == 2 }
+    await settle()
+    await clock.advance(by: .seconds(1))
+    await waitUntil { channel.status.isSubscribed }
+    pushPostgresReady()
+    try await subscribing.value
+
+    let bindings = joins.last?.payload["config"]?.objectValue?["postgres_changes"]?.arrayValue
+    #expect(bindings?.count == 2)
+    let ids = engine.mirror.postgresChangeIDs(wireTopic)
+    try #require(ids.count == 2)
+    server.pushPostgresChanges(topic: wireTopic, ids: [ids[1]], data: postgresData("DELETE", id: 5))
+    server.pushPostgresChanges(topic: wireTopic, ids: [ids[0]], data: postgresData("INSERT", id: 6))
+
+    let insert = await inserts.next()
+    let delete = await deletes.next()
+    #expect(insert?.record?["id"] == 6)
+    #expect(delete?.oldRecord?["id"] == 5)
+  }
+
+  @Test
   func twoBindingsRouteByServerID() async throws {
     let channel = makeChannel()
     var inserts = channel.postgresChanges(event: .insert, table: "todos").makeAsyncIterator()

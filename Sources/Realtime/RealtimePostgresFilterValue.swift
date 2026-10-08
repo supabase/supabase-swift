@@ -9,35 +9,44 @@ public import Foundation
 
 /// A value that can be used as a comparison operand in a ``RealtimePostgresFilter``.
 ///
-/// `String`, `Int`, `Double`, `Bool`, `UUID`, and `Date` conform out of the box. A `Date` is sent
-/// as an ISO 8601 string with fractional seconds, a `UUID` as its canonical string. Any other
-/// conforming type is sent as its `rawValue` when it is `RawRepresentable`, and as
-/// `String(describing:)` otherwise.
-public protocol RealtimePostgresFilterValue: Sendable {}
+/// `String`, `Int`, `Double`, `Bool`, `UUID`, and `Date` conform out of the box. Conform your own
+/// type by returning its filter text from ``realtimeFilterValue``.
+public protocol RealtimePostgresFilterValue: Sendable {
+  /// The value as it appears in the filter, before the SDK quotes and escapes it.
+  var realtimeFilterValue: String { get }
+}
 
-extension String: RealtimePostgresFilterValue {}
-extension Int: RealtimePostgresFilterValue {}
-extension Double: RealtimePostgresFilterValue {}
-extension Bool: RealtimePostgresFilterValue {}
-extension UUID: RealtimePostgresFilterValue {}
-extension Date: RealtimePostgresFilterValue {}
+extension String: RealtimePostgresFilterValue {
+  /// The string itself.
+  public var realtimeFilterValue: String { self }
+}
 
-extension RealtimePostgresFilter {
-  /// The text of `value` as it appears in a filter, before escaping.
-  package static func format(_ value: any RealtimePostgresFilterValue) -> String {
-    switch value {
-    case let string as String:
-      return string
-    case let uuid as UUID:
-      return uuid.uuidString
-    case let date as Date:
-      let formatter = ISO8601DateFormatter()
-      formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-      return formatter.string(from: date)
-    case let rawRepresentable as any RawRepresentable:
-      return "\(rawRepresentable.rawValue)"
-    default:
-      return "\(value)"
-    }
+extension Int: RealtimePostgresFilterValue {
+  /// The decimal representation.
+  public var realtimeFilterValue: String { "\(self)" }
+}
+
+extension Double: RealtimePostgresFilterValue {
+  /// The decimal representation.
+  public var realtimeFilterValue: String { "\(self)" }
+}
+
+extension Bool: RealtimePostgresFilterValue {
+  /// `"true"` or `"false"`.
+  public var realtimeFilterValue: String { "\(self)" }
+}
+
+extension UUID: RealtimePostgresFilterValue {
+  /// The canonical uppercase UUID string.
+  public var realtimeFilterValue: String { uuidString }
+}
+
+extension Date: RealtimePostgresFilterValue {
+  /// An ISO 8601 string with fractional seconds, such as `"2024-01-15T12:00:00.000Z"`, for
+  /// comparing against `timestamptz` columns.
+  public var realtimeFilterValue: String {
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    return formatter.string(from: self)
   }
 }

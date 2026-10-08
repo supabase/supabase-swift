@@ -99,6 +99,12 @@ public final class RealtimeChannel: Sendable {
   ///   ``RealtimeError/Kind/server`` or ``RealtimeError/Kind/timeout`` when the postgres changes
   ///   bindings fail to attach. In the last two cases the channel stays joined, and the server may
   ///   still attach them later.
+  ///
+  /// Calling it on a channel that is already subscribed returns at once, without waiting for the
+  /// postgres changes bindings. A ``postgresChanges(event:schema:table:filter:select:)`` stream
+  /// made while this call is joining makes the channel join again, and this call returns once that
+  /// binding is live too. A stream made after it returned also makes the channel join again;
+  /// ``RealtimeChannelEvent/resubscribed`` on ``events`` marks when that binding is live.
   public func subscribe() async throws {
     if status.isSubscribed { return }
     let inbound = engine.inbound(wireTopic)
@@ -132,6 +138,8 @@ public final class RealtimeChannel: Sendable {
           default: continue
           }
         }
+        // Cancelling `subscribe()` also ends this loop; report that as cancellation.
+        try Task.checkCancellation()
         throw RealtimeError(
           kind: .notSubscribed, message: "channel \(topic) ended before postgres changes were ready"
         )
@@ -336,8 +344,10 @@ public final class RealtimeChannel: Sendable {
       $0.append(binding)
       return ($0.count - 1, $0)
     }
-    if case .unsubscribed = status {
-    } else {
+    switch status {
+    case .unsubscribed:
+      break
+    case .subscribing, .subscribed, .resubscribing, .unsubscribing, .failed:
       Task { [engine, wireTopic] in await engine.updateBindings(wireTopic, all) }
     }
     return RealtimeStream(inbound) { [engine, wireTopic, logger = engine.logger] inbound in

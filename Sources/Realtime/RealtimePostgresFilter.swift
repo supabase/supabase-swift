@@ -164,13 +164,13 @@ public enum RealtimePostgresFilter: Sendable {
   }
 
   private static func serialize(_ value: any RealtimePostgresFilterValue) -> String {
-    escapePostgRESTFilterValue(format(value))
+    escapePostgRESTFilterValue(value.realtimeFilterValue)
   }
 
   private static func dedupe(_ values: [any RealtimePostgresFilterValue])
     -> [any RealtimePostgresFilterValue]
   {
     var seen = Set<String>()
-    return values.filter { seen.insert(format($0)).inserted }
+    return values.filter { seen.insert($0.realtimeFilterValue).inserted }
   }
 }

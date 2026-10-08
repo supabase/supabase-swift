@@ -1731,6 +1731,13 @@ features:
       - RealtimePostgresFilter.not
       - RealtimePostgresFilter.and
       - RealtimePostgresFilterValue
+      - RealtimePostgresFilterValue.realtimeFilterValue
+      - String.realtimeFilterValue
+      - Int.realtimeFilterValue
+      - Double.realtimeFilterValue
+      - Bool.realtimeFilterValue
+      - UUID.realtimeFilterValue
+      - Date.realtimeFilterValue
       - RealtimePostgresIsValue
       - RealtimePostgresIsValue.null
       - RealtimePostgresIsValue.true

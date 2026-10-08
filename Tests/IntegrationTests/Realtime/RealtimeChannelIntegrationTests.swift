@@ -301,12 +301,21 @@ struct RealtimeChannelIntegrationTests {
 
       try await db.from("realtime_items").insert(NewItem(listID: list, title: "a")).execute()
       let insert = try await first(inserts) { $0.record?["list_id"]?.intValue == list }
-      let id = insert.record?["id"]?.intValue
+      let id = try #require(insert.record?["id"]?.intValue)
+      #expect(insert.kind == .insert)
 
       try await db.from("realtime_items").delete().eq("list_id", value: list).execute()
-      let delete = try await first(deletes) { $0.oldRecord?["id"]?.intValue == id }
-      #expect(insert.kind == .insert)
+      // Matches this row's insert and its delete, so an insert routed to the wrong stream would come first.
+      let mine: @Sendable (PostgresChange) -> Bool = {
+        $0.record?["id"]?.intValue == id || $0.oldRecord?["id"]?.intValue == id
+      }
+      let delete = try await first(deletes, where: mine)
       #expect(delete.kind == .delete)
+      await #expect(throws: TimeoutError.self, "the delete must not reach the inserts stream") {
+        try await withTimeout(.seconds(2)) {
+          for await change in inserts where mine(change) { return }
+        }
+      }
     }
   }
 
