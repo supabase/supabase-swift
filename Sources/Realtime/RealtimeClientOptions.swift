@@ -57,6 +57,8 @@ public struct RealtimeClientOptions: Sendable {
   /// its global logger only when this is `nil`.
   package var customLogger: Logger?
   /// The clock for heartbeats, timeouts and retries.
+  ///
+  /// `SupabaseClient` replaces it with `SupabaseClientOptions.GlobalOptions.clock`.
   public var clock: any Clock<Duration> = ContinuousClock()
 
   /// Creates the default options.
