@@ -49,7 +49,7 @@ echo "Dumping public symbol graph..." >&2
 # Delete graphs from earlier runs first, so a failed extraction can never
 # fall back to stale output: a module that didn't emit a graph this run
 # shows all its manifest entries as stale below, which fails the check.
-find .build -maxdepth 4 -name "*.symbols.json" -delete 2>/dev/null || true
+find .build -name "*.symbols.json" -delete 2>/dev/null || true
 # A failing exit here isn't necessarily fatal: test targets can fail to
 # extract while library targets already landed first (same rationale as
 # supabase/sdk's own extraction step).
@@ -58,7 +58,7 @@ if ! swift package dump-symbol-graph --minimum-access-level public --skip-synthe
 fi
 
 SGFILES_LIST="$(mktemp)"
-find .build -maxdepth 4 -name "*.symbols.json" > "$SGFILES_LIST"
+find .build -name "*.symbols.json" > "$SGFILES_LIST"
 if [ ! -s "$SGFILES_LIST" ]; then
   echo "error: no symbol graphs emitted" >&2
   exit 1
