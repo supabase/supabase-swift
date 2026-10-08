@@ -398,9 +398,10 @@ public final class SupabaseClient: Sendable {
     auth.handle(url)
   }
 
-  /// Every channel on ``realtime``, sorted by topic.
+  /// Every channel on ``realtime``, sorted by topic. Empty, without making the Realtime client,
+  /// until ``realtime`` is first used.
   public var channels: [RealtimeChannel] {
-    realtime.channels
+    mutableState.realtime?.channels ?? []
   }
 
   /// The Realtime channel for `topic`, made on the first call. Later calls return the same
@@ -421,9 +422,10 @@ public final class SupabaseClient: Sendable {
     await realtime.removeChannel(channel)
   }
 
-  /// Leaves and removes every Realtime channel.
+  /// Leaves and removes every Realtime channel. Does nothing, without making the Realtime client,
+  /// until ``realtime`` is first used.
   public func removeAllChannels() async {
-    await realtime.removeAllChannels()
+    await mutableState.realtime?.removeAllChannels()
   }
 
   /// The resolved transport shared by every sub-client.

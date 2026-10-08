@@ -155,6 +155,16 @@ struct SupabaseClientRealtimeTests {
   }
 
   @Test
+  func channelsAndRemoveAllChannelsDoNotCreateTheRealtimeClient() async {
+    let client = makeClient()
+
+    #expect(client.channels.isEmpty)
+    await client.removeAllChannels()
+
+    #expect(client.mutableState.realtime == nil)
+  }
+
+  @Test
   func aCustomLoggerSurvives() async {
     let client = makeClient { $0.logger = Logger(label: "custom") }
 
