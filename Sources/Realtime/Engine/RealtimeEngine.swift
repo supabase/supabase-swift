@@ -92,9 +92,9 @@ package actor RealtimeEngine {
 
   private let configuration: RealtimeEngineConfiguration
   private let transport: any WebSocketTransport
-  private let clock: any Clock<Duration>
+  let clock: any Clock<Duration>
   private let serializer = RealtimeSerializer()
-  private let logger: Logger
+  let logger: Logger
   /// What public handles read without awaiting the actor.
   package nonisolated let mirror = EngineMirror()
   private var registry = ListenerRegistry()
@@ -188,10 +188,26 @@ package actor RealtimeEngine {
 
   // MARK: - Channel API
 
+  /// Adds the channel, or replaces the config of a channel the engine already has. The new config
+  /// goes out with the next join.
   package func addChannel(_ topic: String, config: RealtimeJoinConfig = RealtimeJoinConfig()) {
-    guard channels[topic] == nil else { return }
+    guard channels[topic] == nil else {
+      channels[topic]?.config = config
+      return
+    }
     channels[topic] = ChannelRecord(config: config)
     applyConnection(.channelAdded)
+  }
+
+  /// Replaces the channel's postgres bindings. A joined or joining channel joins again with them.
+  ///
+  /// A channel only adds bindings, and each addition sends its snapshot from its own task, so a
+  /// list no longer than the current one is unchanged or stale and is ignored.
+  package func updateBindings(_ topic: String, _ bindings: [PostgresJoinConfig]) {
+    guard let record = channels[topic], bindings.count > record.config.postgresChanges.count
+    else { return }
+    channels[topic]?.config.postgresChanges = bindings
+    applyChannel(topic, .bindingsChanged)
   }
 
   package func removeChannel(_ topic: String) async {
@@ -585,7 +601,8 @@ package actor RealtimeEngine {
 
   private func awaitJoinReply(_ topic: String, ref: String) async {
     do {
-      let reply = try await withTimeout(configuration.timeout, clock: clock) {
+      let timeout = configuration.timeout + (channels[topic]?.config.extraJoinTimeout ?? .zero)
+      let reply = try await withTimeout(timeout, clock: clock) {
         try await self.waitForReply(ref)
       }
       guard channels[topic]?.joinRef == ref else { return }
@@ -925,7 +942,10 @@ package actor RealtimeEngine {
       mirror.yield(.message(message), to: message.topic)
       if let change = change ?? nil { yieldPresence(change, to: message.topic) }
     default:
-      if message.event == "system", message.payload["status"] == "error" {
+      // A postgres_changes error leaves the channel open while the server retries the binding.
+      if message.event == "system", message.payload["status"] == "error",
+        message.payload["extension"] != "postgres_changes"
+      {
         let text = message.payload["message"]?.stringValue ?? "system error"
         applyChannel(message.topic, .systemError(message: text))
       }

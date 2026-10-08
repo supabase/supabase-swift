@@ -15,6 +15,7 @@ package final class EngineMirror: Sendable {
   private struct State {
     var connection: RealtimeConnectionStatus = .disconnected(nil)
     var channels: [String: RealtimeChannelStatus] = [:]
+    var channelStatuses: [String: [UUID: AsyncStream<RealtimeChannelStatus>.Continuation]] = [:]
     var postgresChangeIDs: [String: [Int]] = [:]
     var heartbeats: [UUID: AsyncStream<HeartbeatEvent>.Continuation] = [:]
     var inbound: [String: [UUID: AsyncStream<ChannelInbound>.Continuation]] = [:]
@@ -40,7 +41,30 @@ package final class EngineMirror: Sendable {
   }
 
   func setChannel(_ topic: String, _ status: RealtimeChannelStatus) {
-    state.withValue { $0.channels[topic] = status }
+    let continuations = state.withValue {
+      $0.channels[topic] = status
+      return $0.channelStatuses[topic] ?? [:]
+    }
+    for continuation in continuations.values { continuation.yield(status) }
+  }
+
+  /// The channel's status, starting with the current one, keeping only the newest. Registers
+  /// before it returns.
+  package func channelStatuses(_ topic: String) -> AsyncStream<RealtimeChannelStatus> {
+    let (stream, continuation) = AsyncStream<RealtimeChannelStatus>.makeStream(
+      bufferingPolicy: .bufferingNewest(1))
+    let id = UUID()
+    continuation.onTermination = { [weak self] _ in
+      self?.state.withValue { $0.channelStatuses[topic]?[id] = nil }
+    }
+    state.withValue {
+      // Reading the status and registering in one critical section keeps a concurrent
+      // `setChannel` from being lost or reordered. Nothing iterates the stream yet, so this yield
+      // runs no consumer code under the lock.
+      continuation.yield($0.channels[topic] ?? .unsubscribed)
+      $0.channelStatuses[topic, default: [:]][id] = continuation
+    }
+    return stream
   }
 
   func setPostgresChangeIDs(_ topic: String, _ ids: [Int]) {
@@ -48,10 +72,12 @@ package final class EngineMirror: Sendable {
   }
 
   func removeChannel(_ topic: String) {
-    state.withValue {
+    let statuses = state.withValue {
       $0.channels[topic] = nil
       $0.postgresChangeIDs[topic] = nil
+      return $0.channelStatuses.removeValue(forKey: topic) ?? [:]
     }
+    for continuation in statuses.values { continuation.finish() }
   }
 
   func heartbeats() -> AsyncStream<HeartbeatEvent> {

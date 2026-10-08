@@ -228,6 +228,8 @@ package enum ChannelMachine {
     case (.subscribed, .bindingsChanged):
       state = .subscribing(attempt: 1, isRejoin: true)
       return [.sendLeave, .sendJoin]
+    case (.subscribing, .bindingsChanged):
+      return [.sendLeave, .sendJoin]
 
     // Unsubscribe.
     case (.subscribed, .unsubscribeRequested):
