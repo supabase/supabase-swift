@@ -250,16 +250,16 @@ jobs:
         if: always()
         run: supabase stop
 
-  # Spike: the CLI's experimental stack backend runs every service as a native process on macOS
-  # arm64, so the integration suite can run on a macOS runner with no Docker. Non-blocking until
-  # the backend leaves experimental. `swift test` cannot build swift-snapshot-testing on macOS
-  # (Swift Testing image attachments), so this goes through xcodebuild and the IntegrationTests
-  # scheme; xcodebuild forwards TEST_RUNNER_-prefixed variables to the test process.
+  # The CLI's experimental stack backend runs every service as a native process on macOS arm64,
+  # so the integration suite can run on a macOS runner with no Docker. This is the only job that
+  # runs RealtimeIntegrationTests and MemoryProbeIntegrationTests, which Linux compiles out.
+  # `swift test` cannot build swift-snapshot-testing on macOS (Swift Testing image attachments),
+  # so this goes through xcodebuild and the IntegrationTests scheme; xcodebuild forwards
+  # TEST_RUNNER_-prefixed variables to the test process.
   integration-tests-macos:
-    name: Integration Tests (macOS, experimental stack)
+    name: Integration Tests (macOS)
     runs-on: blacksmith-6vcpu-macos-latest
     timeout-minutes: 45
-    continue-on-error: true
     env:
       SUPABASE_EXPERIMENTAL_STACK: 1
       TEST_RUNNER_INTEGRATION_TESTS: 1
