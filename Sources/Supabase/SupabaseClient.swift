@@ -30,6 +30,13 @@ import Logging
 /// - ``auth``
 /// - ``storage``
 /// - ``functions``
+/// - ``realtime``
+///
+/// ### Realtime Channels
+/// - ``channel(_:configure:)``
+/// - ``channels``
+/// - ``removeChannel(_:)``
+/// - ``removeAllChannels()``
 ///
 /// ### Querying the Database
 /// - ``from(_:)->PostgrestQueryBuilder``
@@ -164,8 +171,25 @@ public final class SupabaseClient: Sendable {
     _headers.dictionary
   }
 
+  /// The Realtime client, made on first access and then cached.
+  ///
+  /// It joins channels with the signed-in user's token, or the anon key when no one is signed
+  /// in, and gets each new token when Auth signs in, refreshes or signs out.
+  public var realtime: RealtimeClient {
+    mutableState.withValue {
+      if let realtime = $0.realtime {
+        return realtime
+      }
+      let realtime = _initRealtimeClient()
+      $0.realtime = realtime
+      return realtime
+    }
+  }
+
   struct MutableState {
     var functions: FunctionsClient?
+    var realtime: RealtimeClient?
+    var authEventsTask: Task<Void, Never>?
   }
 
   let mutableState = LockIsolated(MutableState())
@@ -246,6 +270,14 @@ public final class SupabaseClient: Sendable {
       automaticallyRefreshesToken: options.auth.automaticallyRefreshesToken,
       clock: clock
     )
+
+    if options.auth.accessToken == nil {
+      listenForAuthEvents()
+    }
+  }
+
+  deinit {
+    mutableState.authEventsTask?.cancel()
   }
 
   /// Creates a query builder targeting a table or view.
@@ -366,6 +398,34 @@ public final class SupabaseClient: Sendable {
     auth.handle(url)
   }
 
+  /// Every channel on ``realtime``, sorted by topic.
+  public var channels: [RealtimeChannel] {
+    realtime.channels
+  }
+
+  /// The Realtime channel for `topic`, made on the first call. Later calls return the same
+  /// instance.
+  ///
+  /// - Parameters:
+  ///   - topic: The channel name, without the `realtime:` prefix.
+  ///   - configure: Sets the channel's options on a new channel.
+  public func channel(
+    _ topic: String,
+    configure: (inout RealtimeChannelConfiguration) -> Void = { _ in }
+  ) -> RealtimeChannel {
+    realtime.channel(topic, configure: configure)
+  }
+
+  /// Leaves `channel` and removes it from ``realtime``. Its streams finish.
+  public func removeChannel(_ channel: RealtimeChannel) async {
+    await realtime.removeChannel(channel)
+  }
+
+  /// Leaves and removes every Realtime channel.
+  public func removeAllChannels() async {
+    await realtime.removeAllChannels()
+  }
+
   /// The resolved transport shared by every sub-client.
   private var transport: any ClientTransport {
     options.global.http.transport ?? URLSessionTransport()
@@ -411,6 +471,74 @@ public final class SupabaseClient: Sendable {
         return nil
       }
     }
+  }
+
+  /// Sends Auth's token to ``realtime`` for the client's lifetime.
+  ///
+  /// `authStateChanges` never finishes, so the task holds `self` weakly: a strong capture would
+  /// keep the client alive and ``deinit``, which cancels the task, would never run.
+  private func listenForAuthEvents() {
+    let task = Task { [weak self, authStateChanges = _auth.authStateChanges] in
+      for await (event, session) in authStateChanges {
+        guard let self else { return }
+        await self.handleAuthEvent(event, session: session)
+      }
+    }
+    mutableState.withValue { $0.authEventsTask = task }
+  }
+
+  /// Sends the session token, or the anon key after sign-out, to ``realtime``. Does nothing
+  /// until ``realtime`` exists: a new client asks the provider for the token when it connects.
+  private func handleAuthEvent(_ event: AuthChangeEvent, session: Session?) async {
+    guard let realtime = mutableState.realtime else { return }
+    switch event {
+    case .initialSession, .signedIn, .tokenRefreshed, .userUpdated:
+      await realtime.setAuth(session?.accessToken ?? supabaseKey)
+    case .signedOut:
+      await realtime.setAuth(supabaseKey)
+    default:
+      break
+    }
+  }
+
+  private func _initRealtimeClient() -> RealtimeClient {
+    var realtimeOptions = options.realtime
+    realtimeOptions.headers = _headers.merging(with: options.realtime.headers)
+
+    if realtimeOptions.customLogger == nil {
+      realtimeOptions.logger = options.global.logger
+      realtimeOptions.logger[metadataKey: "system"] = "realtime"
+    }
+
+    if realtimeOptions.http.transport == nil {
+      realtimeOptions.http = HTTPClientConfiguration(
+        transport: transport,
+        middlewares: options.global.http.middlewares + realtimeOptions.http.middlewares
+          + [TraceContextMiddleware()],
+        timeout: realtimeOptions.http.timeout ?? options.global.http.timeout
+      )
+    }
+
+    if realtimeOptions.accessToken == nil {
+      realtimeOptions.accessToken = { [provider = accessTokenProvider, supabaseKey] in
+        try await provider() ?? supabaseKey
+      }
+    } else {
+      reportIssue(
+        """
+        options.realtime.accessToken is set. SupabaseClient gives Realtime the Auth session \
+        token itself; a custom provider can join channels with a different token than the \
+        one the rest of the client uses.
+        """
+      )
+    }
+
+    realtimeOptions.clock = clock
+
+    return RealtimeClient(
+      url: supabaseURL.appendingPathComponent("/realtime/v1"),
+      options: realtimeOptions
+    )
   }
 
   private func _initFunctionsClient() -> FunctionsClient {
