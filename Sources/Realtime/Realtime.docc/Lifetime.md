@@ -40,7 +40,8 @@ struct RoomView: View {
 ```
 
 The loop ends when the task is cancelled, so the code after it runs. There is no `onDisappear`
-and no stored task to cancel.
+and no stored task to cancel. ``RealtimeClient/removeChannel(_:)`` does not check for
+cancellation, so it still leaves the channel after the task is cancelled.
 
 Make the streams before ``RealtimeChannel/subscribe()``. A stream registers its listener when
 the call returns, so it sees everything from the join on.

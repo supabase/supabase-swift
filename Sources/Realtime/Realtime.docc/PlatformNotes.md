@@ -17,8 +17,7 @@ those cases the system refuses the connection.
 The client does not check for this today. Each connect fails with a transport error, and the
 client keeps retrying on ``RealtimeClientOptions/reconnect``, so the status cycles between
 ``RealtimeConnectionStatus/connecting(attempt:)`` and
-``RealtimeConnectionStatus/reconnecting(attempt:retryIn:lastError:)``. A later release fails
-fast with a ``RealtimeError/Kind-swift.struct/transport`` error instead.
+``RealtimeConnectionStatus/reconnecting(attempt:retryIn:lastError:)``.
 
 For a watch app, get live data through the paired iPhone app, for example with
 WatchConnectivity, or poll over HTTP.
@@ -32,7 +31,8 @@ builds on Linux, but production use there is not supported. Android is not teste
 If the default transport does not work on your platform, implement ``WebSocketTransport`` over
 another WebSocket stack, such as one built on SwiftNIO. See <doc:CustomTransports>.
 
-``RealtimeClientOptions/handleAppLifecycle`` does nothing outside Apple platforms.
+``RealtimeClientOptions/handleAppLifecycle`` works only on iOS, tvOS, visionOS and macOS. On
+watchOS, Linux and Android it does nothing.
 
 ### Message size
 

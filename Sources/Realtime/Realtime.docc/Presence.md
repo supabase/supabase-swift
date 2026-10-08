@@ -56,8 +56,8 @@ empty until the server sends the set for the new join.
 
 ### Enabling presence on a channel
 
-The server sends presence only to a join that asks for it. The first
-``RealtimePresence/states`` or ``RealtimePresence/changes`` stream on a channel turns it on. On
-a channel that is already joined, that makes the channel join again, with a
-``RealtimeChannelEvent/resubscribed`` event. Make the presence stream before
-``RealtimeChannel/subscribe()`` to join once.
+The server sends presence only to a join that asks for it. Presence turns on when you call
+``RealtimePresence/track(_:encoder:)``, or when you make the first ``RealtimePresence/states``
+or ``RealtimePresence/changes`` stream on a channel. On a channel that is already joined, that
+makes the channel join again, with a ``RealtimeChannelEvent/resubscribed`` event. Make the
+presence stream before ``RealtimeChannel/subscribe()`` to join once.
