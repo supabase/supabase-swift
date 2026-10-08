@@ -18,7 +18,7 @@ public import Helpers
 ///
 /// ```swift
 /// do {
-///   try await channel.subscribeWithError()
+///   try await channel.subscribe()
 /// } catch let error as RealtimeError where error.kind == .unauthorized {
 ///   signInAgain()
 /// }
@@ -26,12 +26,15 @@ public import Helpers
 public struct RealtimeError: SupabaseError {
   /// What failed. Compare against the static members and keep a fallback branch.
   public struct Kind: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+    /// The kind as a string.
     public let rawValue: String
 
+    /// Creates a kind from its string. Any value is accepted.
     public init(rawValue: String) {
       self.rawValue = rawValue
     }
 
+    /// Creates a kind from a string literal.
     public init(stringLiteral value: String) {
       self.init(rawValue: value)
     }
@@ -81,44 +84,73 @@ public struct RealtimeError: SupabaseError {
   /// The server owns this set and adds to it without notice, so compare against the static
   /// members and keep a fallback branch.
   public struct ServerCode: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+    /// The server code as a string.
     public let rawValue: String
 
+    /// Creates a server code from its string. Any value is accepted.
     public init(rawValue: String) {
       self.rawValue = rawValue
     }
 
+    /// Creates a server code from a string literal.
     public init(stringLiteral value: String) {
       self.init(rawValue: value)
     }
 
+    /// The join had no topic name.
     public static let topicNameRequired: ServerCode = "TopicNameRequired"
+    /// The token is not valid, or it expired.
     public static let invalidJWTToken: ServerCode = "InvalidJWTToken"
+    /// The token is not a well-formed JWT.
     public static let malformedJWT: ServerCode = "MalformedJWT"
+    /// The token's signature did not verify.
     public static let jwtSignatureError: ServerCode = "JwtSignatureError"
+    /// The server could not build a signer for the project's JWT secret.
     public static let jwtSignerError: ServerCode = "JwtSignerError"
+    /// A row level security policy denied access to the topic.
     public static let unauthorized: ServerCode = "Unauthorized"
+    /// The project allows only private channels.
     public static let privateOnly: ServerCode = "PrivateOnly"
+    /// The server does not know the project.
     public static let tenantNotFound: ServerCode = "TenantNotFound"
+    /// Realtime is disabled for the project.
     public static let realtimeDisabledForTenant: ServerCode = "RealtimeDisabledForTenant"
+    /// The server cannot serve the join's configuration.
     public static let realtimeDisabledForConfiguration: ServerCode =
       "RealtimeDisabledForConfiguration"
+    /// The broadcast replay parameters are not valid.
     public static let unableToReplayMessages: ServerCode = "UnableToReplayMessages"
+    /// The connection has too many channels.
     public static let channelRateLimitReached: ServerCode = "ChannelRateLimitReached"
+    /// The project has too many connections.
     public static let connectionRateLimitReached: ServerCode = "ConnectionRateLimitReached"
+    /// The client joined too many channels in a short time.
     public static let clientJoinRateLimitReached: ServerCode = "ClientJoinRateLimitReached"
+    /// The Realtime server is restarting.
     public static let realtimeRestarting: ServerCode = "RealtimeRestarting"
+    /// The server is still connecting to the project's database.
     public static let initializingProjectConnection: ServerCode = "InitializingProjectConnection"
+    /// The database connection pool is too small for Realtime.
     public static let increaseConnectionPool: ServerCode = "IncreaseConnectionPool"
+    /// The database has no free connections.
     public static let databaseLackOfConnections: ServerCode = "DatabaseLackOfConnections"
+    /// The server made too many database connection attempts.
     public static let databaseConnectionRateLimitReached: ServerCode =
       "DatabaseConnectionRateLimitReached"
+    /// The server could not connect to the project's database.
     public static let unableToConnectToProject: ServerCode = "UnableToConnectToProject"
+    /// The database canceled the server's query.
     public static let queryCanceled: ServerCode = "QueryCanceled"
+    /// The `realtime.messages` table has no partition for the current date.
     public static let missingPartition: ServerCode = "MissingPartition"
+    /// A call between Realtime server nodes timed out.
     public static let timeoutOnRpcCall: ServerCode = "TimeoutOnRpcCall"
+    /// A call between Realtime server nodes failed.
     public static let errorOnRpcCall: ServerCode = "ErrorOnRpcCall"
+    /// The server timed out attaching postgres changes.
     public static let postgresChangesSubscribeTimeout: ServerCode =
       "PostgresChangesSubscribeTimeout"
+    /// The server hit an error it does not classify.
     public static let unknownErrorOnChannel: ServerCode = "UnknownErrorOnChannel"
 
     /// Codes the server emits for conditions the caller must fix: a bad token, a denied
@@ -152,7 +184,9 @@ public struct RealtimeError: SupabaseError {
     }
   }
 
+  /// What failed.
   public var kind: Kind
+  /// A description of the failure, with the server's reason when there is one.
   public var message: String
   /// The code parsed from a server error reason, when the reason carried one.
   public var serverCode: ServerCode?
@@ -163,9 +197,13 @@ public struct RealtimeError: SupabaseError {
   /// `false` for errors the user must act on: a rejected token, a denied policy, a refused
   /// upgrade with 401/403/404. The engine never retries those on its own.
   public var isRetryable: Bool
+  /// The HTTP response of a REST broadcast the server refused.
   public var response: HTTPErrorResponse?
+  /// The error that caused this one, such as a `URLError` or a `DecodingError`.
   public var underlyingError: (any Error)?
 
+  /// Creates an error. A custom ``WebSocketTransport`` throws one to tell the client whether to
+  /// retry.
   public init(
     kind: Kind,
     message: String,
@@ -182,6 +220,7 @@ public struct RealtimeError: SupabaseError {
     self.underlyingError = underlyingError
   }
 
+  /// The kind and the message, for logs.
   public var description: String {
     formattedDescription(kind: kind.rawValue)
   }

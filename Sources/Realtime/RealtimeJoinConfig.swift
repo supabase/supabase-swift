@@ -5,7 +5,7 @@
 //  Created by Guilherme Souza on 24/12/23.
 //
 
-package import Foundation
+import Foundation
 
 struct RealtimeJoinPayload: Encodable {
   var config: RealtimeJoinConfig

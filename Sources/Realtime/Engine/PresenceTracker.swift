@@ -52,13 +52,14 @@ public struct PresenceState: Sendable, Hashable {
   /// Decodes the payload of every entry as `T`, keeping the keys.
   ///
   /// - Parameters:
+  ///   - type: The type to decode each payload as.
   ///   - decoder: The decoder for each payload.
   ///   - ignoringUndecodable: When `true`, an entry that does not decode is skipped, and a key
   ///     whose entries all fail is left out. When `false`, the first failure throws.
   /// - Throws: ``RealtimeError`` of kind ``RealtimeError/Kind/decoding`` when
   ///   `ignoringUndecodable` is `false` and an entry does not decode.
   public func decode<T: Decodable>(
-    as _: T.Type, decoder: JSONDecoder = .supabase(), ignoringUndecodable: Bool = true
+    as type: T.Type, decoder: JSONDecoder = .supabase(), ignoringUndecodable: Bool = true
   ) throws -> [String: [T]] {
     var decoded: [String: [T]] = [:]
     for (key, entries) in self.entries {
