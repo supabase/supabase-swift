@@ -419,12 +419,26 @@ final class URLSessionWebSocket: WebSocket {
     }
   }
 
+  /// Returns `code` if RFC 6455 §7.4 allows an endpoint to send it, otherwise `nil`.
+  ///
+  /// Pure so it can be tested directly: the caller reports the rejection, and driving
+  /// `reportIssue` from a `@Test` segfaults under `xcodebuild test` (SDK-435).
   static func validatedCloseCode(_ code: Int?) -> Int? {
-    URLSessionWebSocketTransport.validatedCloseCode(code)
+    guard let code else { return nil }
+    let sendable = [1000...1003, 1007...1011, 3000...4999]
+    return sendable.contains { $0.contains(code) } ? code : nil
   }
 
+  /// Returns `reason` truncated on whole characters to the 123-byte limit of RFC 6455 §5.5.
   static func validatedCloseReason(_ reason: String?) -> String? {
-    URLSessionWebSocketTransport.validatedCloseReason(reason)
+    guard let reason, reason.utf8.count > 123 else { return reason }
+
+    var truncated = ""
+    for character in reason {
+      guard truncated.utf8.count + character.utf8.count <= 123 else { break }
+      truncated.append(character)
+    }
+    return truncated
   }
 
   /// The WebSocket subprotocol negotiated with the peer.

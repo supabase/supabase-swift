@@ -8,7 +8,6 @@
 import ConcurrencyExtras
 package import Foundation
 package import HTTPTypes
-import IssueReporting
 
 #if canImport(FoundationNetworking)
   package import FoundationNetworking
@@ -149,28 +148,6 @@ package struct URLSessionWebSocketTransport: WebSocketTransport, @unchecked Send
       return (1006, nsError.localizedDescription)
     }
   }
-
-  /// Returns `code` if RFC 6455 §7.4 allows an endpoint to send it, otherwise `nil`.
-  ///
-  /// Pure so it can be tested directly: the caller reports the rejection, and driving
-  /// `reportIssue` from a `@Test` segfaults under `xcodebuild test` (SDK-435).
-  static func validatedCloseCode(_ code: Int?) -> Int? {
-    guard let code else { return nil }
-    let sendable = [1000...1003, 1007...1011, 3000...4999]
-    return sendable.contains { $0.contains(code) } ? code : nil
-  }
-
-  /// Returns `reason` truncated on whole characters to the 123-byte limit of RFC 6455 §5.5.
-  static func validatedCloseReason(_ reason: String?) -> String? {
-    guard let reason, reason.utf8.count > 123 else { return reason }
-
-    var truncated = ""
-    for character in reason {
-      guard truncated.utf8.count + character.utf8.count <= 123 else { break }
-      truncated.append(character)
-    }
-    return truncated
-  }
 }
 
 /// One `URLSessionWebSocketTask`, read by a single receive loop and written by awaited sends.
@@ -227,30 +204,11 @@ final class URLSessionWebSocketConnection: WebSocketConnection {
 
   func close(code: WebSocketCloseCode, reason: String?) async {
     guard !isClosed.value else { return }
-
-    let validatedCode = URLSessionWebSocketTransport.validatedCloseCode(code.rawValue)
-    if validatedCode == nil {
-      reportIssue(
-        "Invalid close code \(code.rawValue). Must be 1000 or in 3000...4999. Closing without a code."
-      )
-    }
-    let validatedReason = URLSessionWebSocketTransport.validatedCloseReason(reason)
-    if let reason, validatedReason != reason {
-      reportIssue(
-        "Close reason is \(reason.utf8.count) bytes, over the 123-byte limit. Truncating it.")
-    }
-
     // Darwin imports `CloseCode` as a non-exhaustive `NS_ENUM`, so 4001 goes out as 4001.
     // swift-corelibs-foundation makes it a closed Swift enum, so 3000...4999 convert to `nil`
     // there and the frame goes out with no status rather than a wrong one.
-    let closeCode = validatedCode.flatMap(URLSessionWebSocketTask.CloseCode.init(rawValue:))
-    if validatedCode != nil, closeCode == nil {
-      reportIssue(
-        "Close code \(code.rawValue) is not representable on this platform. Closing without a code."
-      )
-    }
-    if let closeCode {
-      task.cancel(with: closeCode, reason: Data((validatedReason ?? "").utf8))
+    if let closeCode = URLSessionWebSocketTask.CloseCode(rawValue: code.rawValue) {
+      task.cancel(with: closeCode, reason: reason.map { Data($0.utf8) })
     } else {
       task.cancel()
     }
