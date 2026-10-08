@@ -173,6 +173,41 @@ public macro Relationship(_ foreignKey: AnyKeyPath) =
     module: "PostgrestMacrosPlugin", type: "MarkerMacro"
   )
 
+/// Declares a property as an embed through a computed relationship: a function whose only
+/// argument is the selection's relation row type, returning a row or a set of rows of another
+/// relation.
+///
+/// ```swift
+/// extension Channel.Columns {
+///   var getMessages: PostgrestToManyRelation<Channel, Message> { .init("get_messages") }
+/// }
+///
+/// @SelectionOf(Channel.self)
+/// struct ChannelFeed {
+///   var slug: String
+///   @Relationship(computed: \Channel.Columns.getMessages) var messages: [Message]
+/// }
+///
+/// // "slug:slug,messages:get_messages(*)"
+/// ```
+///
+/// The key path names the relationship on the selection's relation's `Columns` namespace, where a
+/// ``PostgREST/PostgrestToManyRelation`` or ``PostgREST/PostgrestToOneRelation`` declares it. The
+/// relationship's target has to be the property's selection's relation, or the expansion does not
+/// compile. PostgREST addresses the embed by the function name, with no foreign-key hint: a
+/// function name is never ambiguous.
+///
+/// Scopes work as for a foreign-key embed: ``PostgREST/PostgrestQuery/embedded(_:_:)`` and
+/// ``PostgREST/PostgrestQuery/requiring(_:_:)``.
+///
+/// - Parameter computed: A key path to the relationship on the relation's `Columns`, for example
+///   `\Channel.Columns.getMessages`.
+@attached(peer)
+public macro Relationship(computed: AnyKeyPath) =
+  #externalMacro(
+    module: "PostgrestMacrosPlugin", type: "MarkerMacro"
+  )
+
 /// Declares a named subset of a relation's columns.
 ///
 /// ```swift

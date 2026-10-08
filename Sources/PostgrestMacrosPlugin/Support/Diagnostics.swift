@@ -26,23 +26,40 @@ extension MacroExpansionContext {
   }
 }
 
-/// The `@Relationship` foreign key rendered as a namespace reference, `Comment.columns.todoID`,
-/// or `nil` if the argument is not a single-component key path with a written root.
+/// What a `@Relationship` attribute embeds.
+enum PostgrestEmbedReference {
+  /// `@Relationship(\Comment.todoID)`: the foreign key, rendered as a namespace reference,
+  /// `Comment.columns.todoID`.
+  case foreignKey(String)
+
+  /// `@Relationship(computed: \Channel.Columns.getMessages)`: the relationship's member name,
+  /// `getMessages`. Only the name is kept. The expansion reads it off the selection's own relation,
+  /// so a key path rooted on another relation's namespace does not compile.
+  case computed(String)
+}
+
+/// The `@Relationship` argument, or `nil` if it is not a single-component key path with a written
+/// root.
 ///
 /// The root is what makes the reference resolvable from the expansion, and it is why the key path
 /// has to be written in full: `\.todoID` infers its root from context the macro cannot see.
 ///
-/// One component, because a foreign key is one column. A longer path would name something inside a
-/// column's value, which is not a relationship.
-func postgrestForeignKeyReference(_ attribute: AttributeSyntax) -> String? {
+/// A foreign key is one component, because it is one column; a longer path would name something
+/// inside a column's value, which is not a relationship. A computed relationship is parsed as
+/// `Channel` followed by `.Columns.getMessages`, so only its last component is read.
+func postgrestEmbedReference(_ attribute: AttributeSyntax) -> PostgrestEmbedReference? {
   guard
-    let keyPath = attribute.arguments?.as(LabeledExprListSyntax.self)?.first?
-      .expression.as(KeyPathExprSyntax.self),
+    let argument = attribute.arguments?.as(LabeledExprListSyntax.self)?.first,
+    let keyPath = argument.expression.as(KeyPathExprSyntax.self),
     let root = keyPath.root?.trimmedDescription,
-    keyPath.components.count == 1,
-    let property = keyPath.components.first?.component.as(KeyPathPropertyComponentSyntax.self)
+    let property = keyPath.components.last?.component.as(KeyPathPropertyComponentSyntax.self)
   else { return nil }
-  return "\(root).columns.\(property.declName.baseName.trimmedDescription)"
+  let name = property.declName.baseName.trimmedDescription
+  switch argument.label?.text {
+  case nil where keyPath.components.count == 1: return .foreignKey("\(root).columns.\(name)")
+  case "computed": return .computed(name)
+  default: return nil
+  }
 }
 
 extension DeclGroupSyntax {
@@ -195,12 +212,13 @@ extension DeclGroupSyntax {
       guard let variable = member.decl.as(VariableDeclSyntax.self) else { continue }
       for attribute in variable.attributes.compactMap({ $0.as(AttributeSyntax.self) })
       where attribute.attributeName.trimmedDescription == "Relationship"
-        && postgrestForeignKeyReference(attribute) == nil
+        && postgrestEmbedReference(attribute) == nil
       {
         context.error(
           """
           @Relationship requires a key path to one foreign key column, written with its root, \
-          as in '@Relationship(\\Comment.todoID)'
+          as in '@Relationship(\\Comment.todoID)', or to a computed relationship, as in \
+          '@Relationship(computed: \\Channel.Columns.getMessages)'
           """,
           at: attribute
         )

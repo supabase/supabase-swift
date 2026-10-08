@@ -57,9 +57,9 @@ public struct SelectionOfMacro: ExtensionMacro {
       body.append(codingKeys)
     }
     body.append(columnCheck(relation: relation, properties: properties))
-    let embeds = properties.filter { $0.foreignKey != nil }
+    let embeds = properties.filter { $0.embed != nil }
     if !embeds.isEmpty {
-      body.append(embedsNamespace(access: access, embeds: embeds))
+      body.append(embedsNamespace(access: access, relation: relation, embeds: embeds))
     }
 
     let clause = inheritanceClause(
@@ -108,7 +108,7 @@ public struct SelectionOfMacro: ExtensionMacro {
     var lines = ["  \(access)static let selectString = ["]
     for property in properties {
       let value =
-        property.foreignKey != nil
+        property.embed != nil
         ? embed(property)
         : "\\(\(relation).columns.\(property.name).postgrestExpression)"
       lines.append("    \"\(property.columnName):\(value)\",")
@@ -139,15 +139,26 @@ public struct SelectionOfMacro: ExtensionMacro {
   /// - The parenthesised list is the embedded selection's own `selectString`, so an embed nests to
   ///   any depth with no further work here.
   ///
+  /// A computed relationship replaces the first two with the relationship declared on `relation`'s
+  /// namespace, which carries the function name. Its target has to match the property's selection,
+  /// or the emitted initializer does not compile.
+  ///
   /// The explicit `init()` is required for the same reason as on `Columns`: a `public` struct's
   /// memberwise initializer is internal.
-  static func embedsNamespace(access: String, embeds: [StoredProperty]) -> String {
+  static func embedsNamespace(
+    access: String, relation: String, embeds: [StoredProperty]
+  ) -> String {
     var lines = ["  \(access)struct Embeds: Sendable {"]
     for property in embeds {
+      let target: String
+      switch property.embed {
+      case .foreignKey(let reference): target = "foreignKey: \(reference).postgrestExpression"
+      case .computed(let member): target = "relation: \(relation).columns.\(member)"
+      case nil: continue
+      }
       lines.append(
         "    \(access)let \(property.name) = PostgrestEmbed<\(property.embeddedSelection)>("
-          + "alias: \"\(property.columnName)\", "
-          + "foreignKey: \(property.foreignKey ?? "").postgrestExpression)"
+          + "alias: \"\(property.columnName)\", \(target))"
       )
     }
     lines.append("")
@@ -173,7 +184,8 @@ public struct SelectionOfMacro: ExtensionMacro {
   /// An embed contributes its foreign key rather than a column of this relation. It has no column
   /// here by construction — `Todo.columns.comments` does not exist — and the foreign key is the
   /// part that can be wrong, since the compiler already checks the key path at the attribute but
-  /// nothing yet says the column it names belongs to a relation this expansion can reach.
+  /// nothing yet says the column it names belongs to a relation this expansion can reach. A
+  /// computed relationship contributes its declaration on this relation's namespace.
   static func columnCheck(relation: String, properties: [StoredProperty]) -> String {
     var lines = [
       "  /// Fails to compile if a property does not name a column on \(relation), or an embed's",
@@ -181,8 +193,13 @@ public struct SelectionOfMacro: ExtensionMacro {
       "  private static let _columnCheck: [String] = [",
     ]
     for property in properties {
-      let reference = property.foreignKey ?? "\(relation).columns.\(property.name)"
-      lines.append("    \(reference).postgrestExpression,")
+      let reference =
+        switch property.embed {
+        case .foreignKey(let reference): "\(reference).postgrestExpression"
+        case .computed(let member): "\(relation).columns.\(member).postgrestEmbedName"
+        case nil: "\(relation).columns.\(property.name).postgrestExpression"
+        }
+      lines.append("    \(reference),")
     }
     lines.append("  ]")
     return lines.joined(separator: "\n")

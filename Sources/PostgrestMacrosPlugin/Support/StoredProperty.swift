@@ -20,9 +20,8 @@ struct StoredProperty {
   var isGenerated: Bool
   var explicitColumn: String?
 
-  /// The `@Relationship` foreign key, rendered as a reference into the owning relation's column
-  /// namespace — `Comment.columns.todoID` — or `nil` for a plain column.
-  var foreignKey: String?
+  /// What `@Relationship` embeds, or `nil` for a plain column.
+  var embed: PostgrestEmbedReference?
 
   /// The database column name: an explicit `@Column`, otherwise the snake_case form.
   ///
@@ -39,7 +38,7 @@ struct StoredProperty {
   /// The selection an embed decodes into: the property's type with every `Array` and `Optional`
   /// layer removed, so `[CommentBody]` and `UserName?` both give the selection itself.
   ///
-  /// Only meaningful for a property carrying ``foreignKey``. To-many and to-one differ in the
+  /// Only meaningful for a property carrying ``embed``. To-many and to-one differ in the
   /// Swift type and in nothing PostgREST is told — the embed renders the same either way, and the
   /// server decides how many rows come back.
   var embeddedSelection: String { postgrestUnwrapElementType(type) ?? type }
@@ -144,7 +143,7 @@ extension DeclGroupSyntax {
         .expression.as(StringLiteralExprSyntax.self)?
         .representedLiteralValue
 
-      let foreignKey = attribute("Relationship").flatMap(postgrestForeignKeyReference)
+      let embed = attribute("Relationship").flatMap(postgrestEmbedReference)
 
       let bindings = Array(variable.bindings)
       return bindings.indices.compactMap { index -> StoredProperty? in
@@ -164,7 +163,7 @@ extension DeclGroupSyntax {
           hasDefault: attribute("Default") != nil,
           isGenerated: attribute("Generated") != nil,
           explicitColumn: column,
-          foreignKey: foreignKey
+          embed: embed
         )
       }
     }

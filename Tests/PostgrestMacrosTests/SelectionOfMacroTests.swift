@@ -209,6 +209,58 @@ struct SelectionOfMacroTests {
     }
   }
 
+  /// A computed relationship is read off the selection's own relation, not the key path's root, so
+  /// a key path into another relation's namespace does not compile.
+  @Test
+  func expandsAComputedRelationshipEmbed() {
+    assertMacro {
+      #"""
+      @SelectionOf(Channel.self)
+      struct ChannelFeed {
+        var slug: String
+        @Relationship(computed: \Channel.Columns.getMessages) var messages: [Message]
+      }
+      """#
+    } expansion: {
+      #"""
+      struct ChannelFeed {
+        var slug: String
+        @Relationship(computed: \Channel.Columns.getMessages) var messages: [Message]
+      }
+
+      extension ChannelFeed {
+        typealias Source = Channel
+
+        static let selectString = [
+          "slug:\(Channel.columns.slug.postgrestExpression)",
+          "messages:\(embeds.messages.postgrestExpression)",
+        ].joined(separator: ",")
+
+        enum CodingKeys: String, CodingKey {
+          case slug = "slug"
+          case messages = "messages"
+        }
+
+        /// Fails to compile if a property does not name a column on Channel, or an embed's
+        /// foreign key does not name one on its own relation.
+        private static let _columnCheck: [String] = [
+          Channel.columns.slug.postgrestExpression,
+          Channel.columns.getMessages.postgrestEmbedName,
+        ]
+
+        struct Embeds: Sendable {
+          let messages = PostgrestEmbed<Message>(alias: "messages", relation: Channel.columns.getMessages)
+
+          init() {
+          }
+        }
+
+        static let embeds = Embeds()
+      }
+      """#
+    }
+  }
+
   @Test
   func propagatesTheAccessLevel() {
     assertMacro {

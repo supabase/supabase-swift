@@ -176,3 +176,36 @@ public struct PostgrestGeneratedColumn<
 /// can be `NULL`, so it gets `isNull()` like any other nullable column.
 extension PostgrestGeneratedColumn: PostgrestNullableExpression
 where Nullability == PostgrestNullable {}
+
+/// A computed field: a scalar function whose only argument is `Root`'s row type, which PostgREST
+/// exposes as though it were a column.
+///
+/// ```sql
+/// create function full_name(users) returns text as $$ select $1.first_name || ' ' || $1.last_name $$
+///   language sql stable;
+/// ```
+///
+/// ```swift
+/// extension User.Columns {
+///   var fullName: PostgrestComputedField<User, String> { .init("full_name") }
+/// }
+/// ```
+///
+/// It selects, filters and orders like a column, but `select=*` does not return it, so it is
+/// declared on the `Columns` namespace rather than as a stored property of `Root`: a whole-row
+/// `select()` decodes exactly what PostgREST sends. Name it in a `@SelectionOf` type to fetch it.
+/// It is never writable, and always nullable, since nothing stops the function returning `NULL`.
+///
+/// > Warning: Part of the typed query API, which is alpha. Its shape may change in a minor release.
+public struct PostgrestComputedField<Root: PostgrestRelation, Value>: PostgrestNullableExpression,
+  PostgrestOrderableExpression
+{
+  public typealias Position = PostgrestEveryPosition
+
+  public let postgrestExpression: String
+
+  /// - Parameter name: The function name.
+  public init(_ name: String) {
+    self.postgrestExpression = name
+  }
+}
