@@ -202,11 +202,39 @@ jobs:
         run: swift test --traits OpenTelemetry --filter SupabaseTests
 
   integration-tests:
-    name: Integration Tests (Linux)
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+    name: Integration Tests (${{ matrix.name }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux
+            runner: ubuntu-latest
+          # The CLI's experimental stack backend runs every service as a native process on macOS
+          # arm64, so no Docker is needed. Only macOS runs RealtimeIntegrationTests (the Swift
+          # Linux images' libcurl has no WebSocket support) and MemoryProbeIntegrationTests
+          # (Darwin-only).
+          #
+          # swift-snapshot-testing records attachments through Swift Testing's cross-import
+          # overlays (`_Testing_Foundation`, `_Testing_AppKit`). Xcode enables them; SwiftPM does
+          # not, so pass the frontend flag. The overlays require macOS 14, so raise the target.
+          - name: macOS
+            runner: blacksmith-6vcpu-macos-latest
+            xcode: "26.4"
+            start-flags: --runtime native --eager
+            swift-flags: >-
+              --triple arm64-apple-macosx14.0
+              -Xswiftc -Xfrontend -Xswiftc -enable-cross-import-overlays
+    env:
+      INTEGRATION_TESTS: 1
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Select Xcode ${{ matrix.xcode }}
+        if: matrix.xcode
+        run: |
+          sudo xcode-select -s /Applications/Xcode_${{ matrix.xcode }}.app
+          echo "SUPABASE_EXPERIMENTAL_STACK=1" >> "$GITHUB_ENV"
       - name: "Cache Swift Package"
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -218,16 +246,14 @@ jobs:
         uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
         with:
           version: latest
+      # start applies migrations and seed itself, so no `db reset` is needed.
       - name: "Start Supabase"
         working-directory: Tests/IntegrationTests
-        run: supabase start
-      - name: "Reset Database"
-        working-directory: Tests/IntegrationTests
-        run: supabase db reset
+        run: supabase start ${{ matrix.start-flags }}
       - name: "Run Integration Tests"
-        env:
-          INTEGRATION_TESTS: 1
-        run: swift test --filter IntegrationTests --skip verifyOTPForSecureEmailChange --no-parallel
+        run: >-
+          swift test ${{ matrix.swift-flags }}
+          --filter IntegrationTests --skip verifyOTPForSecureEmailChange --no-parallel
       - name: "Stop Supabase"
         working-directory: Tests/IntegrationTests
         if: always()
@@ -240,11 +266,9 @@ jobs:
       # Tests/IntegrationTests/supabase-secure-email-change/supabase/config.toml.
       - name: "Start Supabase (secure email change)"
         working-directory: Tests/IntegrationTests/supabase-secure-email-change
-        run: supabase start
+        run: supabase start ${{ matrix.start-flags }}
       - name: "Run Secure Email Change Integration Test"
-        env:
-          INTEGRATION_TESTS: 1
-        run: swift test --filter verifyOTPForSecureEmailChange --no-parallel
+        run: swift test ${{ matrix.swift-flags }} --filter verifyOTPForSecureEmailChange --no-parallel
       - name: "Stop Supabase (secure email change)"
         working-directory: Tests/IntegrationTests/supabase-secure-email-change
         if: always()
