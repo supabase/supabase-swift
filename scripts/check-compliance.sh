@@ -46,12 +46,13 @@ if [ -f "$RESOLVED_FILE" ]; then
 fi
 
 echo "Dumping public symbol graph..." >&2
+# Delete graphs from earlier runs first, so a failed extraction can never
+# fall back to stale output: a module that didn't emit a graph this run
+# shows all its manifest entries as stale below, which fails the check.
+find .build -maxdepth 4 -name "*.symbols.json" -delete 2>/dev/null || true
 # A failing exit here isn't necessarily fatal: test targets can fail to
 # extract while library targets already landed first (same rationale as
-# supabase/sdk's own extraction step). But it can also mean extraction
-# aborted partway through a library target, silently dropping real public
-# symbols and producing bogus stale-entry reports below — so warn instead
-# of swallowing it outright.
+# supabase/sdk's own extraction step).
 if ! swift package dump-symbol-graph --minimum-access-level public --skip-synthesized-members >/dev/null; then
   echo "⚠️  dump-symbol-graph exited non-zero; results below may be incomplete." >&2
 fi

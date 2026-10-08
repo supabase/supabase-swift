@@ -104,8 +104,7 @@ compliance workflow on every PR, and it does check for both newly added
 public API not listed in the manifest and registered symbols the code no
 longer has. But that workflow is not a required status check on `main` —
 only `CI Success` (this repo's own `ci.yml`) and the WIP/draft gate are —
-so a failing compliance check does not, by itself, block a merge. That is
-how a 15-symbol manifest drift shipped unnoticed.
+so a failing compliance check does not, by itself, block a merge.
 
 **Any change to public API — adding, removing, renaming, or moving a
 symbol — updates `sdk-compliance.yaml` in the same commit.** This includes
