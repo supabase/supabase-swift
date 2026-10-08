@@ -386,6 +386,7 @@ supporting_symbols:
   - RealtimeError.Kind.server
   - RealtimeError.Kind.transport
   - RealtimeError.Kind.decoding
+  - RealtimeError.Kind.encoding
   - RealtimeError.init
   - RealtimeError.kind
   - RealtimeError.message

@@ -16,6 +16,9 @@
 
   /// Wakes the engine when the app comes to the foreground, so a socket waiting out a reconnect
   /// backoff tries again at once. It never disconnects on background.
+  ///
+  /// On macOS `willBecomeActive` fires on every focus change; that is fine, `wake()` only acts
+  /// while the socket waits to reconnect.
   final class RealtimeLifecycleObserver: @unchecked Sendable {
     // Written once in `init`, then only read.
     private let observers: [any NSObjectProtocol]

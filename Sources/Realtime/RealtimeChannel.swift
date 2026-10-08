@@ -20,11 +20,11 @@ package struct RealtimeREST: Sendable {
   /// How long a REST broadcast waits when the call does not pass its own timeout.
   package var timeout: Duration
   package var clock: any Clock<Duration>
-  package var accessToken: @Sendable () async -> String?
+  package var accessToken: @Sendable () async throws -> String?
 
   package init(
     baseURL: URL, apikey: String?, http: HTTPClientConfiguration, timeout: Duration,
-    clock: any Clock<Duration>, accessToken: @escaping @Sendable () async -> String?
+    clock: any Clock<Duration>, accessToken: @escaping @Sendable () async throws -> String?
   ) {
     self.baseURL = baseURL
     self.apikey = apikey
@@ -234,7 +234,8 @@ public final class RealtimeChannel: Sendable {
   ///   - timeout: How long to wait for the response, or `nil` for the client's timeout.
   /// - Throws: ``RealtimeError`` of kind ``RealtimeError/Kind/accessTokenMissing``,
   ///   ``RealtimeError/Kind/server``, ``RealtimeError/Kind/transport`` or
-  ///   ``RealtimeError/Kind/timeout``.
+  ///   ``RealtimeError/Kind/timeout``, and the error of ``RealtimeClientOptions/accessToken``
+  ///   when it throws.
   public func httpSend(event: String, payload: some Encodable, timeout: Duration? = nil)
     async throws
   {
@@ -267,7 +268,7 @@ public final class RealtimeChannel: Sendable {
   private func httpSend(event: String, body: Data, contentType: String, timeout: Duration?)
     async throws
   {
-    guard let accessToken = await rest.accessToken() else {
+    guard let accessToken = try await rest.accessToken() else {
       throw RealtimeError.accessTokenMissing
     }
     var headers: HTTPFields = [.contentType: contentType]

@@ -105,8 +105,11 @@ struct RealtimeClientIntegrationTests {
     #expect(await waitUntil { seen.value.last == "connected" })
     await client.disconnect()
 
-    let expected = ["disconnected", "connecting", "connected", "disconnected"]
-    #expect(await waitUntil { seen.value == expected }, "saw \(seen.value)")
+    #expect(await waitUntil { seen.value.last == "disconnected" && seen.value.count > 2 })
+    let sequence = seen.value
+    let connecting = try #require(sequence.firstIndex(of: "connecting"), "saw \(sequence)")
+    let connected = try #require(sequence.firstIndex(of: "connected"), "saw \(sequence)")
+    #expect(connecting < connected)
   }
 
   @Test

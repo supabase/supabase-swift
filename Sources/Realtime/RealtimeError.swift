@@ -70,8 +70,9 @@ public struct RealtimeError: SupabaseError {
     /// Nothing to retry; report it.
     public static let decoding: Kind = "decoding"
 
-    /// A frame could not be encoded for sending. Never thrown to callers; it only appears in logs.
-    static let encoding: Kind = "encoding"
+    /// A payload could not be encoded for sending: a broadcast, REST broadcast or presence
+    /// payload that does not encode to JSON. Nothing to retry; fix the payload.
+    public static let encoding: Kind = "encoding"
   }
 
   /// The code the server prefixes to a join or channel error reason, as in

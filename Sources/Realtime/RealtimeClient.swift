@@ -34,11 +34,13 @@ public final class RealtimeClient: Sendable {
   ///   - options: How the client connects, retries and authenticates.
   public init(url: URL, options: RealtimeClientOptions = .init()) {
     let configuration = Self.engineConfiguration(url: url, options: options)
-    var transport = URLSessionWebSocketTransport()
-    transport.maximumMessageSize = options.maximumMessageSize
+    var transport = options.webSocketTransport ?? URLSessionWebSocketTransport()
+    if var urlSession = transport as? URLSessionWebSocketTransport {
+      urlSession.maximumMessageSize = options.maximumMessageSize
+      transport = urlSession
+    }
     let engine = RealtimeEngine(
-      configuration: configuration, transport: options.webSocketTransport ?? transport,
-      clock: options.clock)
+      configuration: configuration, transport: transport, clock: options.clock)
     self.engine = engine
     let apikey = options.headers[.apikey]
     let accessToken = options.accessToken
@@ -46,8 +48,9 @@ public final class RealtimeClient: Sendable {
       baseURL: url, apikey: apikey, http: options.http, timeout: options.timeout,
       clock: options.clock,
       accessToken: {
-        if let token = try? await accessToken?() { return token }
-        return await engine.accessToken ?? apikey
+        guard let accessToken else { return await engine.accessToken ?? apikey }
+        if let token = try await accessToken() { return token }
+        return await engine.accessToken
       })
     #if os(iOS) || os(tvOS) || os(visionOS) || os(macOS)
       lifecycleObserver =
@@ -78,6 +81,9 @@ public final class RealtimeClient: Sendable {
     configuration.connection.idleDisconnectAfter = options.disconnectOnEmptyChannelsAfter
     configuration.channel.rejoin = options.rejoin
     configuration.accessToken = options.accessToken
+    if let authorization = options.headers[.authorization], authorization.hasPrefix("Bearer ") {
+      configuration.initialAccessToken = String(authorization.dropFirst("Bearer ".count))
+    }
     configuration.logger = options.logger
     return configuration
   }
@@ -167,12 +173,18 @@ public final class RealtimeClient: Sendable {
 
   /// Leaves `channel` and removes it from the client. Its streams finish.
   ///
+  /// Does nothing for a channel that is not this client's current one for its topic: one already
+  /// removed, or one from another client.
+  ///
   /// The socket closes ``RealtimeClientOptions/disconnectOnEmptyChannelsAfter`` after the last
   /// channel is removed.
   public func removeChannel(_ channel: RealtimeChannel) async {
-    channelsByTopic.withValue { channels in
-      if channels[channel.topic] === channel { channels[channel.topic] = nil }
+    let isCurrent = channelsByTopic.withValue { channels in
+      guard channels[channel.topic] === channel else { return false }
+      channels[channel.topic] = nil
+      return true
     }
+    guard isCurrent else { return }
     await engine.removeChannel(channel.wireTopic)
   }
 
@@ -194,7 +206,8 @@ public final class RealtimeClient: Sendable {
   /// Sets the token channels join with and sends it to every joined channel.
   ///
   /// The token stays until the next call or the next result of
-  /// ``RealtimeClientOptions/accessToken``. `nil` keeps the current token.
+  /// ``RealtimeClientOptions/accessToken``. `nil` asks that provider again; without a provider,
+  /// `nil` keeps the current token.
   public func setAuth(_ accessToken: String?) async {
     await engine.setAuth(accessToken)
   }

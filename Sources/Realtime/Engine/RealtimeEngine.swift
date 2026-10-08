@@ -41,6 +41,8 @@ package struct RealtimeEngineConfiguration: Sendable {
     rateLimitBackoff: .seconds(30),
     lingerAfterLastListener: .seconds(2))
   package var accessToken: (@Sendable () async throws -> String?)?
+  /// The token joins carry until the provider or `setAuth(_:)` gives another.
+  package var initialAccessToken: String?
   /// How long before the token's `exp` the engine asks the provider for a fresh one.
   package var accessTokenRefreshLeeway: Duration = .seconds(60)
   /// The shortest wait between two provider calls, so a token already inside the leeway, or a
@@ -76,6 +78,9 @@ package actor RealtimeEngine {
     var rejoinTask: Task<Void, Never>?
     var lingerTask: Task<Void, Never>?
     var presence = PresenceTracker()
+    /// Set while `removeChannel` waits for the leave. `addChannel` clears it, which tells the
+    /// removal that a new handle took the topic over.
+    var isBeingRemoved = false
     var tokenPush = Throttle()
     var presencePush = Throttle()
   }
@@ -143,6 +148,7 @@ package actor RealtimeEngine {
     self.transport = transport
     self.clock = clock
     self.logger = configuration.logger
+    _ = tokens.apply(configuration.initialAccessToken, generation: tokens.beginRefresh())
   }
 
   // MARK: - Connection API
@@ -222,8 +228,12 @@ package actor RealtimeEngine {
   /// Adds the channel, or replaces the config of a channel the engine already has. The new config
   /// goes out with the next join.
   package func addChannel(_ topic: String, config: RealtimeJoinConfig = RealtimeJoinConfig()) {
-    guard channels[topic] == nil else {
+    if let record = channels[topic] {
       channels[topic]?.config = config
+      if record.isBeingRemoved {
+        channels[topic]?.isBeingRemoved = false
+        channels[topic]?.presence = PresenceTracker()
+      }
       return
     }
     channels[topic] = ChannelRecord(config: config)
@@ -243,7 +253,16 @@ package actor RealtimeEngine {
 
   package func removeChannel(_ topic: String) async {
     guard channels[topic] != nil else { return }
+    channels[topic]?.isBeingRemoved = true
     await unsubscribe(topic)
+    guard let record = channels[topic], record.isBeingRemoved else {
+      // Re-added during the leave: the new handle keeps the topic. A subscribe it made while the
+      // leave was in flight was ignored by the machine, so start it now.
+      if channels[topic]?.subscribeWaiters.isEmpty == false {
+        applyChannel(topic, .subscribeRequested)
+      }
+      return
+    }
     channels[topic]?.rejoinTask?.cancel()
     channels[topic]?.joinTask?.cancel()
     channels[topic]?.lingerTask?.cancel()
@@ -348,9 +367,14 @@ package actor RealtimeEngine {
     _ = try await awaitAcknowledgement(ref: ref)
   }
 
-  /// Stores the token for the next join and pushes it to every joined channel. `nil` is
-  /// ignored: the server never receives a null token.
-  package func setAuth(_ token: String?) {
+  /// Stores the token for the next join and pushes it to every joined channel. `nil` asks the
+  /// provider again, and keeps the current token when there is none: the server never receives
+  /// a null token.
+  package func setAuth(_ token: String?) async {
+    guard let token else {
+      if await refreshAccessToken() { pushAccessTokenToJoinedChannels() }
+      return
+    }
     guard tokens.apply(token, generation: tokens.beginRefresh()) else { return }
     scheduleTokenRefresh()
     pushAccessTokenToJoinedChannels()

@@ -8,6 +8,7 @@
 import Clocks
 import ConcurrencyExtras
 import Foundation
+import HTTPTypes
 import Helpers
 import IssueReporting
 import TestHelpers
@@ -108,6 +109,30 @@ struct RealtimeClientTests {
 
     #expect(await waitUntil { channel.status.isSubscribed })
     #expect(joins.count == 2)
+  }
+
+  @Test
+  func pauseWhileConnectingKeepsTheChannelWantingItsSubscription() async throws {
+    struct HangingTransport: WebSocketTransport {
+      func connect(to url: URL, headerFields: HTTPFields) async throws -> any WebSocketConnection {
+        try await Task.sleep(for: .seconds(3_600))
+        throw CancellationError()
+      }
+    }
+    let client = makeClient { $0.webSocketTransport = HangingTransport() }
+    let channel = client.channel("room")
+    let subscription = Task { try await channel.subscribe() }
+    defer { subscription.cancel() }
+    #expect(await waitUntil { if case .connecting = client.status { true } else { false } })
+
+    // Cancels the supervisor mid-connect; its exit must not unsubscribe the channel.
+    await client.pause()
+    await settle()
+
+    guard case .subscribing = channel.status else {
+      Issue.record("expected the channel to still want its subscription, got \(channel.status)")
+      return
+    }
   }
 
   @Test
@@ -267,6 +292,126 @@ struct RealtimeClientTests {
       #expect(server.connectCount == 2)
     }
   #endif
+
+  @Test
+  func removingAStaleHandleKeepsTheNewChannel() async throws {
+    let client = makeClient()
+    let stale = client.channel("room")
+    try await stale.subscribe()
+    await client.removeChannel(stale)
+    let current = client.channel("room")
+    try await current.subscribe()
+
+    await client.removeChannel(stale)
+
+    #expect(current.status.isSubscribed)
+    #expect(client.channels.contains { $0 === current })
+    #expect(server.sentMessages.filter { $0.event == "phx_leave" }.count == 1)
+  }
+
+  @Test
+  func aChannelMadeWhileTheOldOneIsLeavingKeepsItsSubscription() async throws {
+    let client = makeClient()
+    let old = client.channel("room")
+    try await old.subscribe()
+    server.dropsClientFrames = true
+    let removal = Task { await client.removeChannel(old) }
+    #expect(await waitUntil { if case .unsubscribing = old.status { true } else { false } })
+
+    let new = client.channel("room")
+    let subscription = Task { try await new.subscribe() }
+    await settle()
+    server.dropsClientFrames = false
+    await clock.advance(by: .seconds(15))
+    await removal.value
+
+    try await subscription.value
+    #expect(new.status.isSubscribed)
+    #expect(client.channels.contains { $0 === new })
+  }
+
+  // MARK: - Auth
+
+  @Test
+  func setAuthWithNilAsksTheProviderAgain() async throws {
+    let calls = LockIsolated(0)
+    let client = makeClient {
+      $0.accessToken = {
+        calls.withValue { $0 += 1 }
+        return "token-\(calls.value)"
+      }
+    }
+    try await client.channel("room").subscribe()
+    #expect(joins.last?.payload["access_token"] == "token-1")
+
+    await client.setAuth(nil)
+
+    #expect(
+      await waitUntil {
+        server.sentMessages.contains {
+          $0.event == "access_token" && $0.payload["access_token"] == "token-2"
+        }
+      })
+  }
+
+  @Test
+  func setAuthWithNilAndNoProviderKeepsTheToken() async throws {
+    let client = makeClient()
+    await client.setAuth("manual")
+    await client.setAuth(nil)
+
+    try await client.channel("room").subscribe()
+
+    #expect(joins.last?.payload["access_token"] == "manual")
+  }
+
+  @Test
+  func theAuthorizationHeaderGivesTheFirstToken() async throws {
+    let client = makeClient { $0.headers[.authorization] = "Bearer seeded" }
+
+    try await client.channel("room").subscribe()
+
+    #expect(joins.last?.payload["access_token"] == "seeded")
+  }
+
+  @Test
+  func theProviderOverridesTheAuthorizationHeader() async throws {
+    let client = makeClient {
+      $0.headers[.authorization] = "Bearer seeded"
+      $0.accessToken = { "provided" }
+    }
+
+    try await client.channel("room").subscribe()
+
+    #expect(joins.last?.payload["access_token"] == "provided")
+  }
+
+  @Test
+  func httpSendThrowsTheProviderError() async throws {
+    struct ProviderFailed: Error {}
+    let http = RecordingTransport()
+    http.respond { _, _ in (HTTPResponse(status: .init(code: 202)), Data()) }
+    let client = makeClient {
+      $0.http = HTTPClientConfiguration(transport: http)
+      $0.accessToken = { throw ProviderFailed() }
+    }
+
+    await #expect(throws: ProviderFailed.self) {
+      try await client.channel("room").httpSend(event: "ping", payload: ["n": 1])
+    }
+    #expect(http.requests.isEmpty)
+  }
+
+  @Test
+  func httpSendFallsBackToTheAPIKeyWithoutAProviderOrToken() async throws {
+    let http = RecordingTransport()
+    http.respond { _, _ in (HTTPResponse(status: .init(code: 202)), Data()) }
+    let client = makeClient { $0.http = HTTPClientConfiguration(transport: http) }
+
+    try await client.channel("room").httpSend(event: "ping", payload: ["n": 1])
+
+    #expect(http.requests.first?.head.headerFields[.authorization] == "Bearer test-key")
+  }
 
   // MARK: - Lifetime
 

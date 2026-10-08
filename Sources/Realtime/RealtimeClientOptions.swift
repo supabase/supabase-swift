@@ -12,13 +12,16 @@ public import Logging
 /// How a ``RealtimeClient`` connects, retries and authenticates.
 public struct RealtimeClientOptions: Sendable {
   /// Header fields for the WebSocket upgrade. The `apikey` field also goes into the WebSocket URL
-  /// and onto the REST broadcast requests. The client adds `X-Client-Info` when it is missing.
+  /// and onto the REST broadcast requests. An `Authorization: Bearer <token>` field gives the first
+  /// token channels join with, until ``accessToken`` or ``RealtimeClient/setAuth(_:)`` gives
+  /// another. The client adds `X-Client-Info` when it is missing.
   public var headers: HTTPFields = [:]
   /// How often the client sends a heartbeat.
   public var heartbeatInterval: Duration = .seconds(25)
   /// How long the client waits for a heartbeat reply before it drops the socket and reconnects.
   public var heartbeatTimeout: Duration = .seconds(10)
-  /// How long a join, a leave, an acknowledged push or a REST broadcast waits for its reply.
+  /// How long a join, a leave, an acknowledged push or a REST broadcast waits for its reply. It
+  /// does not bound the WebSocket connect, which has its own 15-second limit.
   public var timeout: Duration = .seconds(15)
   /// The wait before each reconnect after the socket drops.
   public var reconnect: BackoffPolicy = .fullJitter(base: .seconds(1), cap: .seconds(30))
@@ -32,7 +35,8 @@ public struct RealtimeClientOptions: Sendable {
   /// platforms only. The client never disconnects when the app goes to the background.
   public var handleAppLifecycle = true
   /// The largest frame, in bytes, the default transport receives. The server never sends a frame
-  /// over 5,000,000 bytes. A custom ``webSocketTransport`` ignores it.
+  /// over 5,000,000 bytes. It also applies when ``webSocketTransport`` is a
+  /// ``URLSessionWebSocketTransport``; any other transport ignores it.
   public var maximumMessageSize = 5_000_000
   /// How much the server logs about this socket, or `nil` for the server's default.
   public var serverLogLevel: RealtimeServerLogLevel?
