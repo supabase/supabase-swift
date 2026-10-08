@@ -303,3 +303,4 @@ bpchar
 caseless
 goldens
 uppercased
+setof

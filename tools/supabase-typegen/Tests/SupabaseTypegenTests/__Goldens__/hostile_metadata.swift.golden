@@ -159,6 +159,51 @@ struct Hostile {
   var stock: InventoryState?
 }
 
+extension Hostile.Columns {
+  var selfComputed: PostgrestComputedField<Hostile, String> {
+    .init("Self")
+  }
+  var userIdComputed: PostgrestComputedField<Hostile, String> {
+    .init("UserId")
+  }
+  var atTime: PostgrestComputedField<Hostile, Date> {
+    .init("at_time")
+  }
+  var classes: PostgrestToManyRelation<Hostile, MySchemaClass> {
+    .init("classes")
+  }
+  var duration: PostgrestComputedField<Hostile, JSONValue> {
+    .init("duration")
+  }
+  var getThings: PostgrestComputedField<Hostile, Int> {
+    .init("getThings")
+  }
+  var getThings2: PostgrestComputedField<Hostile, Int> {
+    .init("get_things")
+  }
+  var moodsOf: PostgrestComputedField<Hostile, [Mood]> {
+    .init("moods_of")
+  }
+  var sayHiBackSlash: PostgrestComputedField<Hostile, String> {
+    .init(#"say "hi" back\slash"#)
+  }
+  var shouted: PostgrestComputedField<Hostile, String> {
+    .init("shouted")
+  }
+  var tags: PostgrestComputedField<Hostile, [String]> {
+    .init("tags")
+  }
+  var weirdMany: PostgrestToManyRelation<Hostile, WeIrdName> {
+    .init("weird_many")
+  }
+  var weirdOne: PostgrestToOneRelation<Hostile, WeIrdName> {
+    .init("weird_one")
+  }
+  var weirdSingle: PostgrestToOneRelation<Hostile, WeIrdName> {
+    .init("weird_single")
+  }
+}
+
 @Table("inventory_books")
 struct InventoryBooks {
   var id: Int

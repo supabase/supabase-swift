@@ -17,6 +17,10 @@ enum Naming {
     "Draft", "Columns", "CodingKeys", "Schema", "self",
   ]
 
+  /// Names a computed member cannot take in `Columns`, which is a struct of one `let` per column
+  /// plus `init()`.
+  static let columnsMembers: Set = ["init", "self"]
+
   /// Static member names an enum struct cannot take: its own members, which `Status.rawValue`,
   /// `Status.init` and `Status.self` would name instead.
   static let enumMembers: Set = ["rawValue", "init", "self"]
@@ -34,7 +38,7 @@ enum Naming {
     "Draft", "Columns", "CodingKeys", "Schema",
     "PostgrestColumn", "PostgrestNullableColumn", "PostgrestGeneratedColumn", "PostgrestNotNull",
     "PostgrestNullable", "PostgrestRelation", "PostgrestKeyedRelation", "PostgrestWritableRelation",
-    "PostgrestEmbed",
+    "PostgrestEmbed", "PostgrestComputedField", "PostgrestToOneRelation", "PostgrestToManyRelation",
   ]
 
   /// `snake_case` (or any other spelling) to `lowerCamelCase`, escaped. `1st_place` becomes

@@ -88,6 +88,12 @@ public struct Events {
   public var data: JSONValue?
 }
 
+extension Events.Columns {
+  public var daysSinceEvent: PostgrestComputedField<Events, Decimal> {
+    .init("days_since_event")
+  }
+}
+
 @Table("events_2024")
 public struct Events2024 {
   @PrimaryKey public var id: Int
@@ -111,11 +117,23 @@ public struct ForeignTable {
   public var status: UserStatus?
 }
 
+extension ForeignTable.Columns {
+  public var foreignTableLabel: PostgrestComputedField<ForeignTable, String> {
+    .init("foreign_table_label")
+  }
+}
+
 @Table("interval_test")
 public struct IntervalTest {
   @PrimaryKey @Default public var id: Int
   public var durationRequired: JSONValue
   public var durationOptional: JSONValue?
+}
+
+extension IntervalTest.Columns {
+  public var doubleDuration: PostgrestComputedField<IntervalTest, JSONValue> {
+    .init("double_duration")
+  }
 }
 
 @Table("memes")
@@ -156,6 +174,36 @@ public struct Todos {
   @Column("user-id") public var userId: Int
 }
 
+extension Todos.Columns {
+  public var blurb: PostgrestComputedField<Todos, String> {
+    .init("blurb")
+  }
+  public var blurbVarchar: PostgrestComputedField<Todos, String> {
+    .init("blurb_varchar")
+  }
+  public var detailsIsLong: PostgrestComputedField<Todos, Bool> {
+    .init("details_is_long")
+  }
+  public var detailsLength: PostgrestComputedField<Todos, Int> {
+    .init("details_length")
+  }
+  public var detailsWords: PostgrestComputedField<Todos, [String]> {
+    .init("details_words")
+  }
+  public var functionReturningSingleRow: PostgrestToOneRelation<Todos, Users> {
+    .init("function_returning_single_row")
+  }
+  public var getTodosSetofRows: PostgrestToManyRelation<Todos, Todos> {
+    .init("get_todos_setof_rows")
+  }
+  public var testUnnamedRowScalar: PostgrestComputedField<Todos, Int> {
+    .init("test_unnamed_row_scalar")
+  }
+  public var testUnnamedRowSetof: PostgrestToManyRelation<Todos, Todos> {
+    .init("test_unnamed_row_setof")
+  }
+}
+
 @Table("todos_matview", readOnly: true)
 public struct TodosMatview {
   public var id: Int?
@@ -163,11 +211,29 @@ public struct TodosMatview {
   @Column("user-id") public var userId: Int?
 }
 
+extension TodosMatview.Columns {
+  public var getTodosByMatview: PostgrestToOneRelation<TodosMatview, Todos> {
+    .init("get_todos_by_matview")
+  }
+  public var todosMatviewLabel: PostgrestComputedField<TodosMatview, String> {
+    .init("todos_matview_label")
+  }
+}
+
 @Table("todos_view")
 public struct TodosView {
   public var id: Int?
   public var details: String?
   @Column("user-id") public var userId: Int?
+}
+
+extension TodosView.Columns {
+  public var blurbVarchar: PostgrestComputedField<TodosView, String> {
+    .init("blurb_varchar")
+  }
+  public var testUnnamedViewRow: PostgrestToManyRelation<TodosView, Todos> {
+    .init("test_unnamed_view_row")
+  }
 }
 
 @Table("user_details")
@@ -194,12 +260,45 @@ public struct Users {
   @Default public var userUuid: UUID?
 }
 
+extension Users.Columns {
+  public var functionUsingSetofRowsOne: PostgrestToOneRelation<Users, Todos> {
+    .init("function_using_setof_rows_one")
+  }
+  public var functionUsingTableReturns: PostgrestToOneRelation<Users, Todos> {
+    .init("function_using_table_returns")
+  }
+  public var getSingleUserSummaryFromView: PostgrestToOneRelation<Users, UserTodosSummaryView> {
+    .init("get_single_user_summary_from_view")
+  }
+  public var getTodosFromUser: PostgrestToManyRelation<Users, Todos> {
+    .init("get_todos_from_user")
+  }
+  public var getTodosSetofRows: PostgrestToManyRelation<Users, Todos> {
+    .init("get_todos_setof_rows")
+  }
+  public var getUserAuditSetofSingleRow: PostgrestToOneRelation<Users, UsersAudit> {
+    .init("get_user_audit_setof_single_row")
+  }
+  public var postgrestResolvableWithOverrideFunction: PostgrestToManyRelation<Users, Todos> {
+    .init("postgrest_resolvable_with_override_function")
+  }
+  public var testUnnamedRowSetof: PostgrestToManyRelation<Users, Todos> {
+    .init("test_unnamed_row_setof")
+  }
+}
+
 @Table("users_audit")
 public struct UsersAudit {
   @Default public var id: Int
   @Default public var createdAt: Date?
   public var userId: Int?
   public var previousValue: JSONValue?
+}
+
+extension UsersAudit.Columns {
+  public var createdAgo: PostgrestComputedField<UsersAudit, Decimal> {
+    .init("created_ago")
+  }
 }
 
 @Table("users_view")
@@ -209,6 +308,15 @@ public struct UsersView {
   public var status: UserStatus?
   public var decimal: Decimal?
   public var userUuid: UUID?
+}
+
+extension UsersView.Columns {
+  public var getSingleUserSummaryFromView: PostgrestToOneRelation<UsersView, UserTodosSummaryView> {
+    .init("get_single_user_summary_from_view")
+  }
+  public var getTodosFromUser: PostgrestToManyRelation<UsersView, Todos> {
+    .init("get_todos_from_user")
+  }
 }
 
 @Table("users_view_with_multiple_refs_to_users", readOnly: true)

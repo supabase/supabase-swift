@@ -52,6 +52,22 @@ struct FilePlan {
     var properties: [PropertyPlan]
     /// Whether `@Table` gets `readOnly: true`: a relation that cannot be written to.
     var readOnly: Bool
+    /// The members of the relation's `Columns` extension: its computed fields and relationships.
+    var computed: [ComputedPlan] = []
+  }
+
+  struct ComputedPlan {
+    /// As spelled in source, backticks included.
+    var name: String
+    /// The function name, which PostgREST addresses the member by.
+    var function: String
+    var kind: Kind
+
+    enum Kind {
+      case field(SwiftType)
+      case toOne(target: String)
+      case toMany(target: String)
+    }
   }
 
   struct PropertyPlan {
@@ -162,6 +178,85 @@ extension FilePlan {
           readOnly: Self.isReadOnly(relation.kind)
         )
       )
+    }
+
+    let relationTypeNames = Dictionary(
+      uniqueKeysWithValues: zip(model.relations.map(\.name), typeNames))
+    for index in relations.indices {
+      relations[index].computed = computedMembers(
+        of: relations[index], relationTypeNames: relationTypeNames, enumTypeNames: enumTypeNames)
+    }
+  }
+
+  /// The computed fields and relationships of `plan`, from the functions whose only argument is
+  /// its row type.
+  ///
+  /// A function belongs to the typed API only when PostgREST would resolve it from the relation's
+  /// own schema, which is the schema `@Table` queries: so one in another schema is skipped. One
+  /// named like a column is skipped too, because PostgREST resolves the column first; that compares
+  /// Postgres names, not Swift ones. Every skip leaves a note.
+  private mutating func computedMembers(
+    of plan: RelationPlan,
+    relationTypeNames: [QualifiedName: String],
+    enumTypeNames: [Int: String]
+  ) -> [ComputedPlan] {
+    let columnNames = Set(plan.relation.columns.map(\.name))
+    var members: [(function: DatabaseModel.Function, kind: ComputedPlan.Kind)] = []
+    for function in plan.relation.functions {
+      let label = "function \(function.name.schema).\(function.name.name)(\(function.signature))"
+      func skip(_ reason: String) { notes.append("\(label) is not generated: \(reason)") }
+
+      if function.name.schema != plan.relation.name.schema {
+        skip("it is not in the schema of \(plan.relation.name.schema).\(plan.relation.name.name)")
+      } else if columnNames.contains(function.name.name) {
+        skip("\(plan.relation.name.name) has a column of the same name, which PostgREST resolves")
+      } else if function.returnsRow {
+        guard let target = function.returnRelation.flatMap({ relationTypeNames[$0] }) else {
+          let target = function.returnRelation.map { "\($0.schema).\($0.name)" } ?? "unknown"
+          skip("it returns \(target), which is not generated")
+          continue
+        }
+        // `ROWS 1` is how PostgREST tells a set-returning function that returns one row.
+        let isToOne = !function.isSetReturning || function.rows == 1
+        members.append((function, isToOne ? .toOne(target: target) : .toMany(target: target)))
+      } else if function.isSetReturning {
+        skip("it returns a set of a scalar type, which PostgREST cannot select as a field")
+      } else if let type = function.returnType,
+        !(type.schema == "pg_catalog" && ["void", "record"].contains(type.name))
+      {
+        members.append(
+          (
+            function,
+            .field(
+              scalarType(
+                schema: type.schema, name: type.name, enumID: function.returnEnumID,
+                subject: "\(label) returns the type", enumTypeNames: enumTypeNames))
+          )
+        )
+      } else {
+        skip("it returns \(function.returnType?.name ?? "an unknown type"), not a value")
+      }
+    }
+
+    // A computed member lives in `Columns` next to one `let` per column.
+    let taken = Set(plan.properties.map(\.name))
+    let bases = members.map { member in
+      let base = Naming.propertyName(member.function.name.name)
+      let bare = Naming.unescaped(base)
+      guard taken.contains(base) || Naming.columnsMembers.contains(bare) else { return base }
+      var renamed = Naming.identifier(bare + "Computed")
+      if taken.contains(renamed) { renamed = Self.numbered(renamed, avoiding: taken) }
+      notes.append(
+        "function \(member.function.name.schema).\(member.function.name.name) is named "
+          + "\(renamed): Columns of \(plan.relation.name.schema).\(plan.relation.name.name) "
+          + "already has \(bare)")
+      return renamed
+    }
+    let names = numberingRepeats(
+      of: bases, taken: taken, kind: "member",
+      labels: members.map { "function \($0.function.name.schema).\($0.function.name.name)" })
+    return zip(members, names).map {
+      ComputedPlan(name: $1, function: $0.function.name.name, kind: $0.kind)
     }
   }
 
@@ -282,18 +377,34 @@ extension FilePlan {
 
   /// A type with no mapping, such as a composite, a range, `bytea`, `interval` or `time`, is
   /// `JSONValue`, with a note: it decodes whatever PostgREST sends for the column and writes it
-  /// back unchanged, so generation never stops at one column.
+  /// back unchanged, so generation never stops at one column. A computed field's return type
+  /// follows the same rule.
   private mutating func swiftType(
     of column: DatabaseModel.Column,
     qualified: String,
     enumTypeNames: [Int: String]
   ) -> SwiftType {
-    let isArray = column.format.hasPrefix("_")
-    let element = isArray ? String(column.format.dropFirst()) : column.format
+    let type = scalarType(
+      schema: column.typeSchema, name: column.format, enumID: column.enumID,
+      subject: "\(qualified) has the type", enumTypeNames: enumTypeNames)
+    return column.isNullable ? .optional(type) : type
+  }
+
+  /// The Swift type of a Postgres type, `name` being `_text` for an array of `text`. `subject`
+  /// starts the note when the type is not mapped.
+  private mutating func scalarType(
+    schema: String,
+    name: String,
+    enumID: Int?,
+    subject: String,
+    enumTypeNames: [Int: String]
+  ) -> SwiftType {
+    let isArray = name.hasPrefix("_")
+    let element = isArray ? String(name.dropFirst()) : name
     let scalar: String
-    if let enumTypeName = column.enumID.flatMap({ enumTypeNames[$0] }) {
+    if let enumTypeName = enumID.flatMap({ enumTypeNames[$0] }) {
       scalar = enumTypeName
-    } else if let mapped = column.typeSchema == "pg_catalog" ? Self.scalarTypes[element] : nil {
+    } else if let mapped = schema == "pg_catalog" ? Self.scalarTypes[element] : nil {
       scalar = mapped
     } else if element == "citext" {
       // An extension type, so its schema is wherever the extension was installed.
@@ -301,11 +412,9 @@ extension FilePlan {
     } else {
       scalar = "JSONValue"
       notes.append(
-        "\(qualified) has the type \(column.typeSchema).\(element), which is not mapped; it is "
-          + "decoded as JSONValue")
+        "\(subject) \(schema).\(element), which is not mapped; it is decoded as JSONValue")
     }
-    let type = isArray ? SwiftType.array(.named(scalar)) : .named(scalar)
-    return column.isNullable ? .optional(type) : type
+    return isArray ? .array(.named(scalar)) : .named(scalar)
   }
 }
 
@@ -315,7 +424,12 @@ extension FilePlan {
   func render(accessControl: Options.AccessControl) throws -> String {
     let access: DeclModifierListSyntax =
       accessControl == .public ? [DeclModifierSyntax(name: .keyword(.public))] : []
-    let usesFoundation = relations.contains { $0.properties.contains { $0.type.usesFoundation } }
+    let usesFoundation = relations.contains { relation in
+      relation.properties.contains { $0.type.usesFoundation }
+        || relation.computed.contains {
+          if case .field(let type) = $0.kind { type.usesFoundation } else { false }
+        }
+    }
 
     let file = try SourceFileSyntax {
       // A public declaration needs its types' modules imported publicly under
@@ -372,6 +486,31 @@ extension FilePlan {
           }
         }
         .with(\.leadingTrivia, .newlines(2))
+
+        if !relation.computed.isEmpty {
+          let type = TokenSyntax.identifier(relation.typeName)
+          try ExtensionDeclSyntax("extension \(type).Columns") {
+            for member in relation.computed {
+              let name = TokenSyntax.identifier(member.name)
+              let literal = StringLiteralExprSyntax(content: member.function)
+              switch member.kind {
+              case .field(let valueType):
+                DeclSyntax(
+                  "\(access) var \(name): PostgrestComputedField<\(type), \(valueType.syntax)> { .init(\(literal)) }"
+                )
+              case .toOne(let target):
+                DeclSyntax(
+                  "\(access) var \(name): PostgrestToOneRelation<\(type), \(TokenSyntax.identifier(target))> { .init(\(literal)) }"
+                )
+              case .toMany(let target):
+                DeclSyntax(
+                  "\(access) var \(name): PostgrestToManyRelation<\(type), \(TokenSyntax.identifier(target))> { .init(\(literal)) }"
+                )
+              }
+            }
+          }
+          .with(\.leadingTrivia, .newlines(2))
+        }
       }
     }
 

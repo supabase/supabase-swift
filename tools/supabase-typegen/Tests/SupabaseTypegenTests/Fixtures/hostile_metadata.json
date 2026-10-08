@@ -602,7 +602,323 @@
     }
   ],
   "relationships": [],
-  "functions": [],
+  "functions": [
+    {
+      "schema": "public",
+      "name": "shouted",
+      "args": [
+        {
+          "mode": "in",
+          "type_id": 201
+        }
+      ],
+      "identity_argument_types": "hostile",
+      "return_type_id": 25,
+      "return_type_relation_id": null,
+      "is_set_returning_function": false,
+      "prorows": null
+    },
+    {
+      "schema": "public",
+      "name": "id",
+      "args": [
+        {
+          "mode": "in",
+          "type_id": 201
+        }
+      ],
+      "identity_argument_types": "hostile",
+      "return_type_id": 25,
+      "return_type_relation_id": null,
+      "is_set_returning_function": false,
+      "prorows": null
+    },
+    {
+      "schema": "public",
+      "name": "UserId",
+      "args": [
+        {
+          "mode": "in",
+          "type_id": 201
+        }
+      ],
+      "identity_argument_types": "hostile",
+      "return_type_id": 25,
+      "return_type_relation_id": null,
+      "is_set_returning_function": false,
+      "prorows": null
+    },
+    {
+      "schema": "public",
+      "name": "Self",
+      "args": [
+        {
+          "mode": "in",
+          "type_id": 201
+        }
+      ],
+      "identity_argument_types": "hostile",
+      "return_type_id": 25,
+      "return_type_relation_id": null,
+      "is_set_returning_function": false,
+      "prorows": null
+    },
+    {
+      "schema": "public",
+      "name": "get_things",
+      "args": [
+        {
+          "mode": "in",
+          "type_id": 201
+        }
+      ],
+      "identity_argument_types": "hostile",
+      "return_type_id": 23,
+      "return_type_relation_id": null,
+      "is_set_returning_function": false,
+      "prorows": null
+    },
+    {
+      "schema": "public",
+      "name": "getThings",
+      "args": [
+        {
+          "mode": "in",
+          "type_id": 201
+        }
+      ],
+      "identity_argument_types": "hostile",
+      "return_type_id": 23,
+      "return_type_relation_id": null,
+      "is_set_returning_function": false,
+      "prorows": null
+    },
+    {
+      "schema": "public",
+      "name": "say \"hi\" back\\slash",
+      "args": [
+        {
+          "mode": "in",
+          "type_id": 201
+        }
+      ],
+      "identity_argument_types": "hostile",
+      "return_type_id": 25,
+      "return_type_relation_id": null,
+      "is_set_returning_function": false,
+      "prorows": null
+    },
+    {
+      "schema": "public",
+      "name": "tags",
+      "args": [
+        {
+          "mode": "in",
+          "type_id": 201
+        }
+      ],
+      "identity_argument_types": "hostile",
+      "return_type_id": 1009,
+      "return_type_relation_id": null,
+      "is_set_returning_function": false,
+      "prorows": null
+    },
+    {
+      "schema": "public",
+      "name": "moods_of",
+      "args": [
+        {
+          "mode": "in",
+          "type_id": 201
+        }
+      ],
+      "identity_argument_types": "hostile",
+      "return_type_id": 110,
+      "return_type_relation_id": null,
+      "is_set_returning_function": false,
+      "prorows": null
+    },
+    {
+      "schema": "public",
+      "name": "at_time",
+      "args": [
+        {
+          "mode": "in",
+          "type_id": 201
+        }
+      ],
+      "identity_argument_types": "hostile",
+      "return_type_id": 1184,
+      "return_type_relation_id": null,
+      "is_set_returning_function": false,
+      "prorows": null
+    },
+    {
+      "schema": "public",
+      "name": "duration",
+      "args": [
+        {
+          "mode": "in",
+          "type_id": 201
+        }
+      ],
+      "identity_argument_types": "hostile",
+      "return_type_id": 1186,
+      "return_type_relation_id": null,
+      "is_set_returning_function": false,
+      "prorows": null
+    },
+    {
+      "schema": "public",
+      "name": "nothing",
+      "args": [
+        {
+          "mode": "in",
+          "type_id": 201
+        }
+      ],
+      "identity_argument_types": "hostile",
+      "return_type_id": 2278,
+      "return_type_relation_id": null,
+      "is_set_returning_function": false,
+      "prorows": null
+    },
+    {
+      "schema": "public",
+      "name": "anything",
+      "args": [
+        {
+          "mode": "in",
+          "type_id": 201
+        }
+      ],
+      "identity_argument_types": "hostile",
+      "return_type_id": 2249,
+      "return_type_relation_id": null,
+      "is_set_returning_function": false,
+      "prorows": null
+    },
+    {
+      "schema": "public",
+      "name": "many_ints",
+      "args": [
+        {
+          "mode": "in",
+          "type_id": 201
+        }
+      ],
+      "identity_argument_types": "hostile",
+      "return_type_id": 23,
+      "return_type_relation_id": null,
+      "is_set_returning_function": true,
+      "prorows": 1000
+    },
+    {
+      "schema": "my\"schema",
+      "name": "elsewhere",
+      "args": [
+        {
+          "mode": "in",
+          "type_id": 201
+        }
+      ],
+      "identity_argument_types": "hostile",
+      "return_type_id": 25,
+      "return_type_relation_id": null,
+      "is_set_returning_function": false,
+      "prorows": null
+    },
+    {
+      "schema": "public",
+      "name": "weird_many",
+      "args": [
+        {
+          "mode": "in",
+          "type_id": 201
+        }
+      ],
+      "identity_argument_types": "hostile",
+      "return_type_id": 202,
+      "return_type_relation_id": 2,
+      "is_set_returning_function": true,
+      "prorows": 1000
+    },
+    {
+      "schema": "public",
+      "name": "weird_one",
+      "args": [
+        {
+          "mode": "in",
+          "type_id": 201
+        }
+      ],
+      "identity_argument_types": "hostile",
+      "return_type_id": 202,
+      "return_type_relation_id": 2,
+      "is_set_returning_function": false,
+      "prorows": null
+    },
+    {
+      "schema": "public",
+      "name": "weird_single",
+      "args": [
+        {
+          "mode": "in",
+          "type_id": 201
+        }
+      ],
+      "identity_argument_types": "hostile",
+      "return_type_id": 202,
+      "return_type_relation_id": 2,
+      "is_set_returning_function": true,
+      "prorows": 1
+    },
+    {
+      "schema": "public",
+      "name": "books_of",
+      "args": [
+        {
+          "mode": "in",
+          "type_id": 201
+        }
+      ],
+      "identity_argument_types": "hostile",
+      "return_type_id": 207,
+      "return_type_relation_id": 7,
+      "is_set_returning_function": true,
+      "prorows": 1000
+    },
+    {
+      "schema": "public",
+      "name": "classes",
+      "args": [
+        {
+          "mode": "in",
+          "type_id": 201
+        }
+      ],
+      "identity_argument_types": "hostile",
+      "return_type_id": 209,
+      "return_type_relation_id": 9,
+      "is_set_returning_function": true,
+      "prorows": 1000
+    },
+    {
+      "schema": "public",
+      "name": "nowhere",
+      "args": [
+        {
+          "mode": "in",
+          "type_id": 201
+        }
+      ],
+      "identity_argument_types": "hostile",
+      "return_type_id": 299,
+      "return_type_relation_id": 99,
+      "is_set_returning_function": false,
+      "prorows": null
+    }
+  ],
   "types": [
     {
       "id": 100,
@@ -670,6 +986,90 @@
       "enums": [
         "x"
       ],
+      "type_relation_id": null
+    },
+    {
+      "id": 201,
+      "schema": "public",
+      "name": "row1",
+      "enums": [],
+      "type_relation_id": 1
+    },
+    {
+      "id": 202,
+      "schema": "public",
+      "name": "row2",
+      "enums": [],
+      "type_relation_id": 2
+    },
+    {
+      "id": 207,
+      "schema": "inventory",
+      "name": "row7",
+      "enums": [],
+      "type_relation_id": 7
+    },
+    {
+      "id": 209,
+      "schema": "my\"schema",
+      "name": "row9",
+      "enums": [],
+      "type_relation_id": 9
+    },
+    {
+      "id": 25,
+      "schema": "pg_catalog",
+      "name": "text",
+      "enums": [],
+      "type_relation_id": null
+    },
+    {
+      "id": 1009,
+      "schema": "pg_catalog",
+      "name": "_text",
+      "enums": [],
+      "type_relation_id": null
+    },
+    {
+      "id": 1186,
+      "schema": "pg_catalog",
+      "name": "interval",
+      "enums": [],
+      "type_relation_id": null
+    },
+    {
+      "id": 2278,
+      "schema": "pg_catalog",
+      "name": "void",
+      "enums": [],
+      "type_relation_id": null
+    },
+    {
+      "id": 2249,
+      "schema": "pg_catalog",
+      "name": "record",
+      "enums": [],
+      "type_relation_id": null
+    },
+    {
+      "id": 23,
+      "schema": "pg_catalog",
+      "name": "int4",
+      "enums": [],
+      "type_relation_id": null
+    },
+    {
+      "id": 1184,
+      "schema": "pg_catalog",
+      "name": "timestamptz",
+      "enums": [],
+      "type_relation_id": null
+    },
+    {
+      "id": 110,
+      "schema": "public",
+      "name": "_mood",
+      "enums": [],
       "type_relation_id": null
     }
   ]

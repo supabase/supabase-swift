@@ -63,6 +63,9 @@ struct DatabaseModel: Equatable {
     var returnTypeID: Int
     /// The schema and name of the return type, or `nil` when the document does not list it.
     var returnType: QualifiedName?
+    /// The id of the enum type returned, or of its elements for an array, or `nil` when it is not
+    /// an enum.
+    var returnEnumID: Int?
     /// Whether the function returns the row type of a relation.
     var returnsRow: Bool
     /// The relation whose row type is returned, or `nil` when the document does not list it.
@@ -144,6 +147,10 @@ extension DatabaseModel {
           signature: function.identityArgumentTypes,
           returnTypeID: function.returnTypeId,
           returnType: returnType.map { QualifiedName(schema: $0.schema, name: $0.name) },
+          returnEnumID: returnType.flatMap { type in
+            let element = type.name.hasPrefix("_") ? String(type.name.dropFirst()) : type.name
+            return enumIDs[QualifiedName(schema: type.schema, name: element)]
+          },
           returnsRow: function.returnTypeRelationId != nil,
           returnRelation: function.returnTypeRelationId.flatMap { relationNames[$0] },
           isSetReturning: function.isSetReturningFunction,

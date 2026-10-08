@@ -484,6 +484,14 @@ Swift mapping (a composite, a range, `bytea`, `interval`, `time`, an extension t
 `JSONValue` decodes whatever PostgREST sends for the column and writes it back unchanged, so one
 such column never stops generation; a typed filter on it takes a `JSONValue` operand.
 
+Computed fields and relationships come from `functions`: one `extension <Type>.Columns` per
+relation, for each function with one input argument of the relation's row type, in the relation's
+own schema, and not named like a column (compared as Postgres names). A scalar return type gives
+`PostgrestComputedField` (the mapping above applies); a row type gives `PostgrestToOneRelation`, or
+`PostgrestToManyRelation` when the function returns a `SETOF` with more than one `ROWS`. A function
+that returns `void`, `record`, a set of scalars, or a row type the generator does not emit is
+skipped. Each skip, and each rename that a name clash needs, is a note on standard error.
+
 #### Refreshing the typegen fixtures
 
 `tools/supabase-typegen/Tests/SupabaseTypegenTests/Fixtures` holds `GeneratorMetadata` documents produced by

@@ -114,8 +114,114 @@ struct EmitterTests {
       "public.hostile.user-id is named userId3: another column is also named userId",
       "public.hostile.span has the type pg_catalog.int4range, which is not mapped; "
         + "it is decoded as JSONValue",
+      #"function my"schema.elsewhere(hostile) is not generated: "#
+        + "it is not in the schema of public.hostile",
+      "function public.anything(hostile) is not generated: it returns record, not a value",
+      "function public.books_of(hostile) is not generated: "
+        + "it returns inventory.books, which is not generated",
+      "function public.duration(hostile) returns the type pg_catalog.interval, "
+        + "which is not mapped; it is decoded as JSONValue",
+      "function public.id(hostile) is not generated: "
+        + "hostile has a column of the same name, which PostgREST resolves",
+      "function public.many_ints(hostile) is not generated: "
+        + "it returns a set of a scalar type, which PostgREST cannot select as a field",
+      "function public.nothing(hostile) is not generated: it returns void, not a value",
+      "function public.nowhere(hostile) is not generated: "
+        + "it returns unknown, which is not generated",
+      "function public.Self is named selfComputed: Columns of public.hostile already has self",
+      "function public.UserId is named userIdComputed: "
+        + "Columns of public.hostile already has userId",
+      "function public.get_things is named getThings2: another member is also named getThings",
     ]
     #expect(result.standardError == notes.map { "supabase-typegen: note: \($0)\n" }.joined())
+  }
+
+  /// The integration fixture's computed members, one per rule: a scalar function is a computed
+  /// field, a row function a to-one relationship, a `SETOF` row function a to-many one.
+  @Test
+  func computedMembersFollowTheReturnType() {
+    let result = run(arguments: []) { Fixture.integration }
+    #expect(result.exitCode == 0)
+    #expect(!result.standardError.contains("function"), "\(result.standardError)")
+    #expect(
+      result.standardOutput.contains(
+        """
+        extension Channels.Columns {
+          var channelMessages: PostgrestToManyRelation<Channels, Messages> {
+            .init("channel_messages")
+          }
+          var firstMessage: PostgrestToOneRelation<Channels, Messages> {
+            .init("first_message")
+          }
+          var shoutedSlug: PostgrestComputedField<Channels, String> {
+            .init("shouted_slug")
+          }
+        }
+
+        """))
+    // Only `channels` has any: `get_status(text)` and the rest do not take a row.
+    #expect(result.standardOutput.components(separatedBy: ".Columns {").count == 2)
+  }
+
+  /// `ROWS 1` marks a set-returning function that returns one row; `todos_matview` is a
+  /// materialized view, `users_view` a view and `foreign_table` a foreign table.
+  @Test
+  func computedMembersBelongToEveryKindOfRelation() {
+    let result = run(arguments: []) { Fixture.postgrestTypegen }
+    for expected in [
+      "extension TodosMatview.Columns {\n  var getTodosByMatview: "
+        + "PostgrestToOneRelation<TodosMatview, Todos> {",
+      "extension UsersView.Columns {",
+      "extension ForeignTable.Columns {",
+      "var getUserAuditSetofSingleRow: PostgrestToOneRelation<Users, UsersAudit>",
+      "var getTodosFromUser: PostgrestToManyRelation<Users, Todos>",
+    ] {
+      #expect(result.standardOutput.contains(expected), "\(expected)")
+    }
+    // One function name on several relations: `blurb_varchar` is on `todos` and `todos_view`.
+    #expect(result.standardOutput.components(separatedBy: "var blurbVarchar:").count == 3)
+    // Takes two arguments, returns a composite that is no relation, or returns a set of scalars.
+    for absent in ["testUnnamedMultipleRows", "testUnnamedRowComposite", "getUserIds", "add"] {
+      #expect(!result.standardOutput.contains("var \(absent):"), "\(absent)")
+    }
+  }
+
+  /// Under `--access-control public` every member of the extension is `public`.
+  @Test
+  func computedMembersFollowTheAccessControl() {
+    let result = run(arguments: ["--access-control", "public"]) { Fixture.integration }
+    #expect(result.standardOutput.contains("extension Channels.Columns {\n  public var channel"))
+    #expect(!result.standardOutput.contains("\n  var shoutedSlug"))
+  }
+
+  /// A computed field alone needs `Foundation` when its type is `Date`.
+  @Test
+  func computedFieldTypeImportsFoundation() {
+    let input = Fixture.integration { object in
+      object["tables"] = [["id": 1, "schema": "public", "name": "t"]]
+      for key in ["views", "materializedViews", "foreignTables", "primaryKeys", "columns"] {
+        object[key] = [Any]()
+      }
+      object["types"] = [
+        ["id": 10, "schema": "public", "name": "t", "enums": [Any](), "type_relation_id": 1],
+        [
+          "id": 1184, "schema": "pg_catalog", "name": "timestamptz", "enums": [Any](),
+          "type_relation_id": NSNull(),
+        ],
+      ]
+      object["functions"] = [
+        [
+          "schema": "public", "name": "seen_at", "args": [["mode": "in", "type_id": 10]],
+          "identity_argument_types": "t", "return_type_id": 1184,
+          "return_type_relation_id": NSNull(), "is_set_returning_function": false,
+          "prorows": NSNull(),
+        ]
+      ]
+    }
+    let result = run(arguments: []) { input }
+    #expect(result.exitCode == 0, "\(result.standardError)")
+    #expect(result.standardOutput.contains("import Foundation"))
+    #expect(result.standardOutput.contains("PostgrestComputedField<T, Date>"))
   }
 
   /// A document with one table, `public.t`, whose only column `c` has the given type, and the

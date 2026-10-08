@@ -22,6 +22,18 @@ struct Channels {
   var slug: String
 }
 
+extension Channels.Columns {
+  var channelMessages: PostgrestToManyRelation<Channels, Messages> {
+    .init("channel_messages")
+  }
+  var firstMessage: PostgrestToOneRelation<Channels, Messages> {
+    .init("first_message")
+  }
+  var shoutedSlug: PostgrestComputedField<Channels, String> {
+    .init("shouted_slug")
+  }
+}
+
 @Table("counters")
 struct Counters {
   @PrimaryKey @Generated var id: Int
