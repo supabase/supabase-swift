@@ -13,8 +13,8 @@ import IssueReporting
 /// An embed a selection declares, as `@SelectionOf` records a `@Relationship` property.
 ///
 /// Three facts make an embed addressable, and a scope needs all three: the alias the response
-/// comes back under, the foreign key that disambiguates the join, and the embedded selection,
-/// which names the relation and the nested select list.
+/// comes back under, the name PostgREST addresses the embed by, and the embedded selection, which
+/// gives the nested select list.
 ///
 /// > Warning: Part of the typed query API, which is alpha. Its shape may change in a minor release.
 public struct PostgrestEmbed<Selection: PostgrestSelection>: Sendable {
@@ -24,28 +24,55 @@ public struct PostgrestEmbed<Selection: PostgrestSelection>: Sendable {
   /// name serves both.
   public let alias: String
 
-  /// The foreign-key column the join follows, sent as the `!todo_id` hint.
-  ///
-  /// Always present: omitting it on an ambiguous relationship is HTTP 300 `PGRST201`.
-  public let foreignKey: String
+  /// What PostgREST addresses the embed by: `comments!todo_id` for a foreign-key relationship,
+  /// `get_messages` for a computed one.
+  let embedName: String
 
+  /// An embed that follows a foreign key.
+  ///
+  /// The key is always sent as the `!todo_id` hint: omitting it on an ambiguous relationship is
+  /// HTTP 300 `PGRST201`.
+  ///
   /// - Parameters:
   ///   - alias: The name the response carries the embed under.
   ///   - foreignKey: The foreign-key column the join follows.
   public init(alias: String, foreignKey: String) {
     self.alias = alias
-    self.foreignKey = foreignKey
+    self.embedName = "\(Selection.Source.relationName)!\(foreignKey)"
+  }
+
+  /// An embed through a to-many computed relationship: a set-returning function whose only
+  /// argument is the parent's row type. PostgREST addresses it by the function name, with no
+  /// foreign-key hint.
+  ///
+  /// - Parameters:
+  ///   - alias: The name the response carries the embed under.
+  ///   - relation: The relationship, as declared on the parent's `Columns` namespace.
+  public init<Root>(alias: String, relation: PostgrestToManyRelation<Root, Selection.Source>) {
+    self.alias = alias
+    self.embedName = relation.postgrestEmbedName
+  }
+
+  /// An embed through a to-one computed relationship: a function returning one row of
+  /// `Selection.Source`, whose only argument is the parent's row type.
+  ///
+  /// - Parameters:
+  ///   - alias: The name the response carries the embed under.
+  ///   - relation: The relationship, as declared on the parent's `Columns` namespace.
+  public init<Root>(alias: String, relation: PostgrestToOneRelation<Root, Selection.Source>) {
+    self.alias = alias
+    self.embedName = relation.postgrestEmbedName
   }
 
   /// The embed's `select` entry after its alias, `comments!todo_id(id:id,body:body)`.
   public var postgrestExpression: String {
-    "\(Selection.Source.relationName)!\(foreignKey)(\(Selection.selectString))"
+    "\(embedName)(\(Selection.selectString))"
   }
 
   /// Everything up to the opening parenthesis, `comments:comments!todo_id`. A `requiring` scope
   /// finds the entry in the rendered `select` by this, then adds `!inner` before the `(`.
   var selectEntryHead: String {
-    "\(alias):\(Selection.Source.relationName)!\(foreignKey)"
+    "\(alias):\(embedName)"
   }
 }
 

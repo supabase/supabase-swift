@@ -149,7 +149,28 @@ struct DiagnosticsTests {
         var id: Int
         @Relationship(\.todoID) var comments: [CommentBody]
         ┬──────────────────────
-        ╰─ 🛑 @Relationship requires a key path to one foreign key column, written with its root, as in '@Relationship(\Comment.todoID)'
+        ╰─ 🛑 @Relationship requires a key path to one foreign key column, written with its root, as in '@Relationship(\Comment.todoID)', or to a computed relationship, as in '@Relationship(computed: \Channel.Columns.getMessages)'
+      }
+      """#
+    }
+  }
+
+  @Test
+  func selectionOfRejectsAComputedRelationshipWithNoRoot() {
+    assertMacro {
+      #"""
+      @SelectionOf(Channel.self)
+      struct ChannelFeed {
+        @Relationship(computed: \.getMessages) var messages: [Message]
+      }
+      """#
+    } diagnostics: {
+      #"""
+      @SelectionOf(Channel.self)
+      struct ChannelFeed {
+        @Relationship(computed: \.getMessages) var messages: [Message]
+        ┬─────────────────────────────────────
+        ╰─ 🛑 @Relationship requires a key path to one foreign key column, written with its root, as in '@Relationship(\Comment.todoID)', or to a computed relationship, as in '@Relationship(computed: \Channel.Columns.getMessages)'
       }
       """#
     }
