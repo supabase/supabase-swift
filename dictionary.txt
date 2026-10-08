@@ -103,6 +103,7 @@ lnbm
 Lukas
 magiclink
 magnifyingglass
+matview
 metamask
 metas
 Metas
@@ -152,6 +153,7 @@ postgrest
 Postgrest
 PostgREST
 preconcurrency
+prorows
 questionmark
 radiowaves
 Ranbir
@@ -191,6 +193,7 @@ SUPABASE
 supabaseswiftintegrationtest
 supabot
 swiftlint
+sysexits
 testpath
 testuser
 timestamptz
@@ -203,6 +206,7 @@ tsvector
 Twilio
 typealias
 Typealiases
+typegen
 unconfigured
 unenroll
 Unenroll

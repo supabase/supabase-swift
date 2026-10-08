@@ -460,6 +460,21 @@ cd Tests/IntegrationTests/supabase-secure-email-change
 supabase stop
 ```
 
+### Refreshing the typegen fixtures
+
+`Tests/SupabaseTypegenTests/Fixtures` holds `GeneratorMetadata` documents produced by
+postgrest-typegen's `introspect` (in [supabase/sdk](https://github.com/supabase/sdk)), the input of
+the `supabase-typegen` executable. Regenerate them after a migration in
+`Tests/IntegrationTests/supabase` changes or after updating postgrest-typegen:
+
+```bash
+SDK_DIR=~/work/sdk ./scripts/refresh-typegen-fixtures.sh
+```
+
+It needs Docker and bun, and starts and removes its own Postgres containers. `provenance.json` next
+to the fixtures records the postgrest-typegen version, the supabase/sdk commit and the
+`GeneratorMetadata` version they came from.
+
 ## Important Notes for AI Coding Agents
 
 - Always run `./scripts/format.sh` before committing Swift code

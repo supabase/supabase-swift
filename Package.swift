@@ -27,6 +27,7 @@ let package = Package(
     .library(name: "Realtime", targets: ["Realtime"]),
     .library(name: "Storage", targets: ["Storage"]),
     .library(name: "Supabase", targets: ["Supabase"]),
+    .executable(name: "supabase-typegen", targets: ["SupabaseTypegen"]),
   ],
   traits: [
     // Enables W3C traceparent header propagation using opentelemetry-swift's active span.
@@ -277,6 +278,12 @@ let package = Package(
         "Supabase",
         "TestHelpers",
       ]
+    ),
+    .executableTarget(name: "SupabaseTypegen"),
+    .testTarget(
+      name: "SupabaseTypegenTests",
+      dependencies: ["SupabaseTypegen"],
+      resources: [.copy("Fixtures")]
     ),
     .testTarget(
       name: "DefaultIsolationTests",
