@@ -55,8 +55,9 @@ public final class RealtimeChannel: Sendable {
   /// The postgres bindings, in the order the streams asked for them. The server's ids for them
   /// come back in the same order.
   private let bindings = LockIsolated<[PostgresJoinConfig]>([])
-  /// Set once a presence stream exists, so every join asks the server for presence.
-  private let wantsPresence = LockIsolated(false)
+  /// Set once a presence stream exists or `track` was called, so every join asks the server for
+  /// presence.
+  let wantsPresence = LockIsolated(false)
 
   package init(
     topic: String, configuration: RealtimeChannelConfiguration, engine: RealtimeEngine,
@@ -79,7 +80,7 @@ public final class RealtimeChannel: Sendable {
 
   /// The subscription status, starting with the current one. Only the newest status is buffered.
   public var statusChanges: RealtimeStream<RealtimeChannelStatus> {
-    RealtimeStream(engine.mirror.channelStatuses(wireTopic, owner: owner.id))
+    RealtimeStream(engine.mirror.channelStatuses(wireTopic, owner: owner))
   }
 
   /// Rejoins and `system` messages from the server.
@@ -98,12 +99,15 @@ public final class RealtimeChannel: Sendable {
   /// ``RealtimeChannelConfiguration/PostgresChanges/subscriptionTimeout`` for the server's
   /// "Subscribed to PostgreSQL" message.
   ///
-  /// - Throws: ``RealtimeError`` with the server's reason when it refuses the join for good,
+  /// - Throws: ``RealtimeError`` with the server's reason when it refuses the join for good, of
+  ///   kind ``RealtimeError/Kind/server`` before any join when
+  ///   ``RealtimeChannelConfiguration/Broadcast/replay`` is set on a public channel,
   ///   ``RealtimeError/Kind/notSubscribed`` when ``unsubscribe()`` runs first or the channel was
   ///   removed from its client (get a new one from ``RealtimeClient/channel(_:configure:)``), and
   ///   ``RealtimeError/Kind/server`` or ``RealtimeError/Kind/timeout`` when the postgres changes
   ///   bindings fail to attach. In the last two cases the channel stays joined, and the server may
-  ///   still attach them later.
+  ///   still attach them later. Throws `CancellationError` when the calling task is cancelled; the
+  ///   channel keeps joining, so call ``unsubscribe()`` to stop it.
   ///
   /// Calling it on a channel that is already subscribed returns at once, without waiting for the
   /// postgres changes bindings. A ``postgresChanges(event:schema:table:filter:select:)`` stream
@@ -111,6 +115,11 @@ public final class RealtimeChannel: Sendable {
   /// binding is live too. A stream made after it returned also makes the channel join again;
   /// ``RealtimeChannelEvent/resubscribed`` on ``events`` marks when that binding is live.
   public func subscribe() async throws {
+    if configuration.broadcast.replay != nil, !configuration.isPrivate {
+      throw RealtimeError(
+        kind: .server, message: "broadcast replay is only available on private channels",
+        serverCode: .unableToReplayMessages, isRetryable: false)
+    }
     if status.isSubscribed { return }
     let inbound = engine.inbound(wireTopic, owner: owner)
     var config = RealtimeJoinConfig(configuration, bindings: bindings.value)

@@ -3814,8 +3814,9 @@ task.cancel()
 ```
 
 Streams that carry data are unbounded. Status streams keep only the newest value and
-yield the current one first. A stream ends when the channel is removed or the client fails for
-good. The SDK never ends a stream because one payload failed to decode: decode helpers are
+yield the current one first. A channel's data streams end when the channel is removed, when it
+fails for good (`.failed`), or when the client is released. Status streams end only when the
+channel is removed or the client is released. The SDK never ends a stream because one payload failed to decode: decode helpers are
 synchronous and throw `RealtimeError(kind: .decoding)` to you.
 
 ### `subscribeWithError()` → `subscribe()`
@@ -3953,8 +3954,9 @@ public. The old initializers with parameters are removed.
 | `timeout` (default 10 s) | `timeout` (default 15 s) |
 | *(none)* | `heartbeatTimeout`, `maximumMessageSize` |
 
-The authorization token is no longer read from `headers[.authorization]`. Use `accessToken` or
-`setAuth(_:)`. `setAuth(_:)` takes a non-defaulted `String?`; `nil` keeps the current token, and
+A `Bearer` token in `headers[.authorization]` (the scheme matches in any case) is the first
+token channels join with. The `accessToken` provider's result, or a `setAuth(_:)` call, replaces
+it. `setAuth(_:)` takes a non-defaulted `String?`; `nil` keeps the current token, and
 with an `accessToken` provider it asks the provider again.
 
 ```swift

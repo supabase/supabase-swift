@@ -90,8 +90,10 @@ package actor RealtimeEngine {
     var config: RealtimeJoinConfig
     var state: ChannelMachine.State = .unsubscribed
     var joinRef: String?
-    var subscribeWaiters: [CheckedContinuation<Void, any Error>] = []
+    var subscribeWaiters: [UUID: CheckedContinuation<Void, any Error>] = [:]
     var pendingLeaveRef: String?
+    /// Leaves that found another leave in flight, resumed once the channel stops unsubscribing.
+    var leaveWaiters: [CheckedContinuation<Void, Never>] = []
     var joinTask: Task<Void, Never>?
     var rejoinTask: Task<Void, Never>?
     var lingerTask: Task<Void, Never>?
@@ -147,7 +149,7 @@ package actor RealtimeEngine {
   /// is late (the waiter timed out) or nobody awaits it (a push sent without a reply, a leave the
   /// machine sent on its own).
   private var pendingReplies: [String: ReplySlot] = [:]
-  private var connectWaiters: [CheckedContinuation<Void, any Error>] = []
+  private var connectWaiters: [UUID: CheckedContinuation<Void, any Error>] = [:]
   /// `addChannel` calls waiting for a retired owner's record to go, by topic.
   private var removalWaiters: [String: [CheckedContinuation<Void, Never>]] = [:]
 
@@ -173,14 +175,31 @@ package actor RealtimeEngine {
   package var connectionState: ConnectionMachine.State { connection }
 
   /// Returns once the socket is connected. Throws the fatal error when the upgrade is refused
-  /// for good (401, 403, 404), and `.notConnected` when `disconnect()` wins the race.
+  /// for good (401, 403, 404), `.notConnected` when `disconnect()` wins the race, and
+  /// `CancellationError` when the calling task is cancelled; the socket keeps connecting.
   package func connect() async throws {
     switch connection {
     case .connected: return
     case .disconnected, .reconnecting: applyConnection(.connectRequested)
     case .connecting: break
     }
-    try await withCheckedThrowingContinuation { connectWaiters.append($0) }
+    let id = UUID()
+    try await withTaskCancellationHandler {
+      try await withCheckedThrowingContinuation {
+        (continuation: CheckedContinuation<Void, any Error>) in
+        if Task.isCancelled {
+          continuation.resume(throwing: CancellationError())
+        } else {
+          connectWaiters[id] = continuation
+        }
+      }
+    } onCancel: {
+      Task { await self.cancelConnectWaiter(id) }
+    }
+  }
+
+  private func cancelConnectWaiter(_ id: UUID) {
+    connectWaiters.removeValue(forKey: id)?.resume(throwing: CancellationError())
   }
 
   /// Leaves every channel, closes the socket, and returns once it is closed.
@@ -206,7 +225,8 @@ package actor RealtimeEngine {
     applyConnection(.wakeSignal)
   }
 
-  /// Stops the engine for good without waiting: cancels the supervisor and closes the socket.
+  /// Stops the engine for good without waiting: finishes every stream, cancels the supervisor and
+  /// closes the socket.
   /// The supervisor then moves the engine to `.disconnected`, and a later connect ends there
   /// at once. For a `deinit`, which cannot await.
   package nonisolated func shutdown() {
@@ -214,6 +234,7 @@ package actor RealtimeEngine {
       $0.isShutDown = true
       return ($0.supervisor, $0.socket)
     }
+    mirror.shutDown()
     supervisor?.cancel()
     if let socket {
       Task { await socket.close(code: .normalClosure, reason: nil) }
@@ -290,6 +311,7 @@ package actor RealtimeEngine {
       return
     }
     await leave(topic)
+    defer { removalWaiters.removeValue(forKey: topic)?.forEach { $0.resume() } }
     guard isOwner(owner, of: topic) else { return }
     channels[topic]?.rejoinTask?.cancel()
     channels[topic]?.joinTask?.cancel()
@@ -297,12 +319,12 @@ package actor RealtimeEngine {
     resetThrottles(topic)
     rejectSubscribe(
       topic, with: RealtimeError(kind: .notSubscribed, message: "channel \(topic) was removed"))
+    channels[topic]?.leaveWaiters.forEach { $0.resume() }
     channels[topic] = nil
     mirror.removeChannel(topic, owner: owner.id)
     registry.channelStates[topic]?.values.forEach { $0.finish() }
     registry.channelStates[topic] = nil
     if channels.isEmpty { applyConnection(.lastChannelRemoved) }
-    removalWaiters.removeValue(forKey: topic)?.forEach { $0.resume() }
   }
 
   package func channelState(_ topic: String) -> ChannelMachine.State? {
@@ -315,7 +337,8 @@ package actor RealtimeEngine {
   }
 
   /// Returns once the join is acknowledged. Throws the server's reason for a fatal join error,
-  /// or `.notSubscribed` when the channel is unsubscribed before the join completes.
+  /// `.notSubscribed` when the channel is unsubscribed before the join completes, and
+  /// `CancellationError` when the calling task is cancelled; the channel keeps joining.
   package func subscribe(_ topic: String, owner: ChannelOwner) async throws {
     guard isOwner(owner, of: topic) else {
       throw RealtimeError(
@@ -325,7 +348,32 @@ package actor RealtimeEngine {
     }
     applyChannel(topic, .subscribeRequested)
     if channels[topic]?.state.isSubscribed == true { return }
-    try await withCheckedThrowingContinuation { channels[topic]?.subscribeWaiters.append($0) }
+    try await waitForSubscription(topic)
+  }
+
+  /// Resumes on the channel's next `resolveSubscribe` or `rejectSubscribe`.
+  private func waitForSubscription(_ topic: String) async throws {
+    let id = UUID()
+    try await withTaskCancellationHandler {
+      try await withCheckedThrowingContinuation {
+        (continuation: CheckedContinuation<Void, any Error>) in
+        if Task.isCancelled {
+          continuation.resume(throwing: CancellationError())
+        } else if channels[topic] == nil {
+          continuation.resume(
+            throwing: RealtimeError(kind: .notSubscribed, message: "channel \(topic) was removed"))
+        } else {
+          channels[topic]?.subscribeWaiters[id] = continuation
+        }
+      }
+    } onCancel: {
+      Task { await self.cancelSubscribeWaiter(topic, id: id) }
+    }
+  }
+
+  private func cancelSubscribeWaiter(_ topic: String, id: UUID) {
+    channels[topic]?.subscribeWaiters.removeValue(forKey: id)?.resume(
+      throwing: CancellationError())
   }
 
   /// Sends the leave and returns once the server replied, the reply timed out, or the socket
@@ -336,6 +384,10 @@ package actor RealtimeEngine {
   }
 
   private func leave(_ topic: String) async {
+    if case .unsubscribing = channels[topic]?.state {
+      await withCheckedContinuation { channels[topic]?.leaveWaiters.append($0) }
+      return
+    }
     applyChannel(topic, .unsubscribeRequested)
     guard case .unsubscribing = channels[topic]?.state else { return }
     if let ref = channels[topic]?.pendingLeaveRef {
@@ -363,7 +415,7 @@ package actor RealtimeEngine {
   package nonisolated func inbound(_ topic: String, owner: ChannelOwner) -> AsyncStream<
     ChannelInbound
   > {
-    mirror.inbound(topic, owner: owner.id)
+    mirror.inbound(topic, owner: owner)
   }
 
   package nonisolated func listenerCount(_ topic: String) -> Int {
@@ -428,14 +480,41 @@ package actor RealtimeEngine {
   /// rate window are coalesced to the newest payload; an unchanged payload is not resent.
   ///
   /// Returns once the server acknowledged the push, or at once when the push was coalesced or
-  /// dropped as unchanged.
+  /// dropped as unchanged. On a channel joined without presence, it joins again with presence
+  /// enabled and returns once that join succeeds; the rejoin sends the payload, so other clients
+  /// see one join. A call while a rejoin of a tracking channel is in flight replaces the payload
+  /// that join sends, and returns once it succeeds.
   package func trackPresence(_ topic: String, owner: ChannelOwner, payload: JSONObject)
     async throws
   {
+    // A join already in flight sends `trackedPayload` once it succeeds: replace it and wait.
+    if let record = channels[topic], record.owner === owner, case .subscribing = record.state,
+      record.presence.trackedPayload != nil
+    {
+      channels[topic]?.presence.trackedPayload = payload
+      try await waitForSubscription(topic)
+      return
+    }
     _ = try joinRefForPush(topic, owner: owner)
     channels[topic]?.presence.trackedPayload = payload
-    try await sendPresence(
-      topic, payload: ["type": "presence", "event": "track", "payload": .object(payload)])
+    if channels[topic]?.config.presence.enabled == false {
+      applyChannel(topic, .bindingsChanged)
+      try await waitForSubscription(topic)
+      return
+    }
+    do {
+      try await sendPresence(
+        topic, payload: ["type": "presence", "event": "track", "payload": .object(payload)])
+    } catch let error as RealtimeError
+      where error.kind == .server || error.kind == .payloadTooLarge
+    {
+      // The server refused this payload; re-sending it on every rejoin would be refused too.
+      if channels[topic]?.presence.trackedPayload == payload {
+        channels[topic]?.presence.trackedPayload = nil
+        channels[topic]?.presencePush.lastSent = nil
+      }
+      throw error
+    }
   }
 
   package func untrackPresence(_ topic: String, owner: ChannelOwner) async throws {
@@ -544,12 +623,12 @@ package actor RealtimeEngine {
     guard !connectWaiters.isEmpty else { return }
     switch connection {
     case .connected:
-      let waiters = connectWaiters
-      connectWaiters = []
+      let waiters = connectWaiters.values
+      connectWaiters = [:]
       waiters.forEach { $0.resume() }
     case .disconnected(let error):
-      let waiters = connectWaiters
-      connectWaiters = []
+      let waiters = connectWaiters.values
+      connectWaiters = [:]
       let failure = error ?? RealtimeError(kind: .notConnected, message: "disconnected")
       waiters.forEach { $0.resume(throwing: failure) }
     case .connecting, .reconnecting:
@@ -617,6 +696,11 @@ package actor RealtimeEngine {
     if let state = channels[topic]?.state, state.key != before {
       mirror.setChannel(topic, state.publicStatus)
       registry.channelStates[topic]?.values.forEach { $0.yield(state) }
+      if before == "unsubscribing" {
+        let waiters = channels[topic]?.leaveWaiters ?? []
+        channels[topic]?.leaveWaiters = []
+        waiters.forEach { $0.resume() }
+      }
     }
   }
 
@@ -644,8 +728,8 @@ package actor RealtimeEngine {
     case .emitResubscribed:
       mirror.yield(.resubscribed, to: topic)
     case .resolveSubscribe:
-      let waiters = channels[topic]?.subscribeWaiters ?? []
-      channels[topic]?.subscribeWaiters = []
+      let waiters = channels[topic]?.subscribeWaiters.values.map { $0 } ?? []
+      channels[topic]?.subscribeWaiters = [:]
       waiters.forEach { $0.resume() }
     case .rejectSubscribe:
       let error =
@@ -675,8 +759,8 @@ package actor RealtimeEngine {
   }
 
   private func rejectSubscribe(_ topic: String, with error: RealtimeError) {
-    let waiters = channels[topic]?.subscribeWaiters ?? []
-    channels[topic]?.subscribeWaiters = []
+    let waiters = channels[topic]?.subscribeWaiters.values.map { $0 } ?? []
+    channels[topic]?.subscribeWaiters = [:]
     waiters.forEach { $0.resume(throwing: error) }
   }
 
@@ -833,6 +917,7 @@ package actor RealtimeEngine {
 
   /// Call in the same synchronous stretch as the `enqueue` so the reply cannot land before it.
   private func expectReply(_ ref: String) {
+    if case .waiting? = pendingReplies[ref] { return }
     pendingReplies[ref] = .expected
   }
 

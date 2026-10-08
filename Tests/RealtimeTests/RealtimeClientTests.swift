@@ -136,6 +136,39 @@ struct RealtimeClientTests {
   }
 
   @Test
+  func cancellingConnectThrowsCancellationAndLeavesOtherCallersWaiting() async throws {
+    struct HangingTransport: WebSocketTransport {
+      func connect(to url: URL, headerFields: HTTPFields) async throws -> any WebSocketConnection {
+        try await Task.sleep(for: .seconds(3_600))
+        throw CancellationError()
+      }
+    }
+    let client = makeClient { $0.webSocketTransport = HangingTransport() }
+    let cancelledError = LockIsolated<(any Error)?>(nil)
+    let otherReturned = LockIsolated(false)
+    let cancelled = Task {
+      do { try await client.connect() } catch { cancelledError.setValue(error) }
+    }
+    let other = Task {
+      try? await client.connect()
+      otherReturned.setValue(true)
+    }
+    defer { other.cancel() }
+    #expect(await waitUntil { if case .connecting = client.status { true } else { false } })
+    await settle()
+
+    cancelled.cancel()
+
+    #expect(await waitUntil(timeout: 2) { cancelledError.value is CancellationError })
+    await settle()
+    #expect(!otherReturned.value)
+    guard case .connecting = client.status else {
+      Issue.record("expected the client to keep connecting, got \(client.status)")
+      return
+    }
+  }
+
+  @Test
   func heartbeatsForwardsTheEngineEvents() async throws {
     let client = makeClient { $0.heartbeatInterval = .seconds(1) }
     let heartbeats = client.heartbeats
@@ -335,6 +368,89 @@ struct RealtimeClientTests {
   }
 
   @Test
+  func cancellingSubscribeThrowsCancellationAndLeavesOtherCallersWaiting() async throws {
+    let client = makeClient { $0.rejoin = .steps([.seconds(1)]) }
+    let channel = client.channel("room")
+    server.joinReply = .silent
+    let cancelledError = LockIsolated<(any Error)?>(nil)
+    let otherReturned = LockIsolated(false)
+    let cancelled = Task {
+      do { try await channel.subscribe() } catch { cancelledError.setValue(error) }
+    }
+    let other = Task {
+      try await channel.subscribe()
+      otherReturned.setValue(true)
+    }
+    defer { other.cancel() }
+    #expect(await waitUntil { joins.count == 1 })
+    await settle()
+
+    cancelled.cancel()
+
+    #expect(await waitUntil(timeout: 2) { cancelledError.value is CancellationError })
+    guard case .subscribing = channel.status else {
+      Issue.record("expected the channel to keep wanting its subscription, got \(channel.status)")
+      return
+    }
+    #expect(!otherReturned.value)
+    server.joinReply = .ok
+    await clock.advance(by: .seconds(15))
+    await settle()
+    await clock.advance(by: .seconds(1))
+    #expect(await waitUntil(timeout: 2) { otherReturned.value })
+  }
+
+  @Test
+  func concurrentUnsubscribesBothReturnWhenTheLeaveTimesOut() async throws {
+    let client = makeClient()
+    let channel = client.channel("room")
+    try await channel.subscribe()
+    server.dropsClientFrames = true
+    let returned = LockIsolated(0)
+
+    for _ in 0..<2 {
+      Task {
+        await channel.unsubscribe()
+        returned.withValue { $0 += 1 }
+      }
+    }
+    await settle()
+    await clock.advance(by: .seconds(15))
+
+    #expect(await waitUntil(timeout: 2) { returned.value == 2 })
+  }
+
+  @Test(arguments: [false, true])
+  func unsubscribeRacingRemoveChannelBothReturnAndTheTopicCanBeReused(removeFirst: Bool)
+    async throws
+  {
+    let client = makeClient()
+    let channel = client.channel("room")
+    try await channel.subscribe()
+    server.dropsClientFrames = true
+    let returned = LockIsolated(0)
+    let calls: [@Sendable () async -> Void] = [
+      { await channel.unsubscribe() }, { await client.removeChannel(channel) },
+    ]
+
+    for call in removeFirst ? calls.reversed() : calls {
+      Task {
+        await call()
+        returned.withValue { $0 += 1 }
+      }
+      await settle()
+    }
+    server.dropsClientFrames = false
+    await clock.advance(by: .seconds(15))
+
+    #expect(await waitUntil(timeout: 2) { returned.value == 2 })
+    // A detached wait: a hung `addChannel` ignores cancellation, so `withTimeout` would hang too.
+    let next = client.channel("room")
+    Task { try await next.subscribe() }
+    #expect(await waitUntil(timeout: 2) { next.status.isSubscribed })
+  }
+
+  @Test
   func aRemovedHandleCannotSubscribeOrTouchTheLiveChannel() async throws {
     let client = makeClient { $0.reconnect = .steps([.seconds(1)]) }
     let old = client.channel("room")
@@ -364,6 +480,39 @@ struct RealtimeClientTests {
     #expect(await waitUntil { joins.count == joinCount + 1 })
     let config = joins.last?.payload["config"]?.objectValue
     #expect(config?["broadcast"]?.objectValue?["ack"] == true)
+  }
+
+  @Test
+  func streamsMadeOnARemovedHandleFinish() async throws {
+    let client = makeClient()
+    let channel = client.channel("room")
+    try await channel.subscribe()
+    await client.removeChannel(channel)
+
+    #expect(await hasFinished(channel.broadcasts(event: "ping")))
+    #expect(await hasFinished(channel.events))
+    #expect(await hasFinished(channel.statusChanges))
+    #expect(await hasFinished(channel.presence.states))
+  }
+
+  @Test
+  func aRemovedHandleStatusStreamEndsOnUnsubscribed() async throws {
+    let client = makeClient()
+    let channel = client.channel("room")
+    try await channel.subscribe()
+    await client.removeChannel(channel)
+
+    let stream = channel.statusChanges
+    let statuses = try await withTimeout(.seconds(2)) {
+      var statuses: [RealtimeChannelStatus] = []
+      for await status in stream { statuses.append(status) }
+      return statuses
+    }
+
+    guard statuses.count == 1, case .unsubscribed = statuses[0] else {
+      Issue.record("expected only .unsubscribed, got \(statuses)")
+      return
+    }
   }
 
   @Test
@@ -463,6 +612,15 @@ struct RealtimeClientTests {
   }
 
   @Test
+  func theAuthorizationSchemeMatchesInAnyCase() async throws {
+    let client = makeClient { $0.headers[.authorization] = "bearer seeded" }
+
+    try await client.channel("room").subscribe()
+
+    #expect(joins.last?.payload["access_token"] == "seeded")
+  }
+
+  @Test
   func theProviderOverridesTheAuthorizationHeader() async throws {
     let client = makeClient {
       $0.headers[.authorization] = "Bearer seeded"
@@ -528,6 +686,31 @@ struct RealtimeClientTests {
     #expect(await waitUntil { !channel.status.isSubscribed })
     await #expect(throws: RealtimeError.self) { try await channel.subscribe() }
     #expect(!server.isConnected)
+  }
+
+  @Test
+  func droppingTheClientFinishesEveryStream() async throws {
+    let channel: RealtimeChannel
+    let heartbeats: RealtimeStream<HeartbeatEvent>
+    let statuses: RealtimeStream<RealtimeConnectionStatus>
+    let channelStatuses: RealtimeStream<RealtimeChannelStatus>
+    let events: RealtimeStream<RealtimeChannelEvent>
+    do {
+      let client = makeClient()
+      heartbeats = client.heartbeats
+      statuses = client.statusChanges
+      channel = client.channel("room")
+      channelStatuses = channel.statusChanges
+      events = channel.events
+      try await channel.subscribe()
+    }
+
+    #expect(await hasFinished(heartbeats))
+    #expect(await hasFinished(statuses))
+    #expect(await hasFinished(channelStatuses))
+    #expect(await hasFinished(events))
+    #expect(await hasFinished(channel.broadcasts(event: "ping")))
+    #expect(await hasFinished(channel.statusChanges))
   }
 }
 

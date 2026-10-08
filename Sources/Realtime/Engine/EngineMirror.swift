@@ -32,6 +32,8 @@ package final class EngineMirror: Sendable {
     var presence: [String: PresenceState] = [:]
     var heartbeats: [UUID: AsyncStream<HeartbeatEvent>.Continuation] = [:]
     var inbound: [Key: [UUID: AsyncStream<ChannelInbound>.Continuation]] = [:]
+    /// Set by ``EngineMirror/shutDown()``: every stream is finished, and a new one finishes at once.
+    var isShutDown = false
 
     func isLive(_ topic: String, _ owner: UUID) -> Bool { owners[topic] == owner }
 
@@ -91,6 +93,11 @@ package final class EngineMirror: Sendable {
     }
     state.withValue {
       // Same single critical section as `channelStatuses(_:)`, for the same reason.
+      guard !$0.isShutDown else {
+        continuation.yield(.disconnected(nil))
+        continuation.finish()
+        return
+      }
       continuation.yield($0.connection)
       $0.connectionStatuses[id] = continuation
     }
@@ -106,21 +113,29 @@ package final class EngineMirror: Sendable {
   }
 
   /// The channel's status, starting with the current one, keeping only the newest. Registers
-  /// before it returns.
-  package func channelStatuses(_ topic: String, owner: UUID) -> AsyncStream<RealtimeChannelStatus> {
+  /// before it returns. For a retired owner, or after shutdown, it yields `.unsubscribed` and
+  /// ends.
+  package func channelStatuses(_ topic: String, owner: ChannelOwner)
+    -> AsyncStream<RealtimeChannelStatus>
+  {
     let (stream, continuation) = AsyncStream<RealtimeChannelStatus>.makeStream(
       bufferingPolicy: .bufferingNewest(1))
-    let key = Key(topic: topic, owner: owner)
+    let key = Key(topic: topic, owner: owner.id)
     let id = UUID()
     continuation.onTermination = { [weak self] _ in
       self?.state.withValue { $0.channelStatuses[key]?[id] = nil }
     }
     state.withValue {
       // Reading the status and registering in one critical section keeps a concurrent
-      // `setChannel` from being lost or reordered. Nothing iterates the stream yet, so this yield
-      // runs no consumer code under the lock.
+      // `setChannel` or `removeChannel` from being lost or reordered. Nothing iterates the stream
+      // yet, so this yield runs no consumer code under the lock.
+      guard !$0.isShutDown, !owner.isRetired else {
+        continuation.yield(.unsubscribed)
+        continuation.finish()
+        return
+      }
       continuation.yield(
-        $0.isLive(topic, owner) ? $0.channels[topic] ?? .unsubscribed : .unsubscribed)
+        $0.isLive(topic, owner.id) ? $0.channels[topic] ?? .unsubscribed : .unsubscribed)
       $0.channelStatuses[key, default: [:]][id] = continuation
     }
     return stream
@@ -156,7 +171,9 @@ package final class EngineMirror: Sendable {
     continuation.onTermination = { [weak self] _ in
       self?.state.withValue { $0.heartbeats[id] = nil }
     }
-    state.withValue { $0.heartbeats[id] = continuation }
+    state.withValue {
+      if $0.isShutDown { continuation.finish() } else { $0.heartbeats[id] = continuation }
+    }
     return stream
   }
 
@@ -165,16 +182,23 @@ package final class EngineMirror: Sendable {
   }
 
   /// Every message `owner` receives on the topic, unbounded. Registers before it returns; ending
-  /// the iteration removes the listener.
-  package func inbound(_ topic: String, owner: UUID) -> AsyncStream<ChannelInbound> {
+  /// the iteration removes the listener. For a retired owner, or after shutdown, it ends at once.
+  package func inbound(_ topic: String, owner: ChannelOwner) -> AsyncStream<ChannelInbound> {
     let (stream, continuation) = AsyncStream<ChannelInbound>.makeStream(
       bufferingPolicy: .unbounded)
-    let key = Key(topic: topic, owner: owner)
+    let key = Key(topic: topic, owner: owner.id)
     let id = UUID()
     continuation.onTermination = { [weak self] _ in
       self?.removeInbound(id, from: key)
     }
-    state.withValue { $0.inbound[key, default: [:]][id] = continuation }
+    state.withValue {
+      // Checked under the lock, so it orders with `removeChannel`, which runs after `retire()`.
+      if $0.isShutDown || owner.isRetired {
+        continuation.finish()
+      } else {
+        $0.inbound[key, default: [:]][id] = continuation
+      }
+    }
     return stream
   }
 
@@ -196,6 +220,34 @@ package final class EngineMirror: Sendable {
       state.liveKey(topic).flatMap { state.inbound.removeValue(forKey: $0) } ?? [:]
     }
     for continuation in continuations.values { continuation.finish() }
+  }
+
+  /// Finishes every stream, after a last `.disconnected` or `.unsubscribed` on status streams,
+  /// and makes every later stream end at once.
+  func shutDown() {
+    let (connections, channels, heartbeats, inbound) = state.withValue { state in
+      state.isShutDown = true
+      defer {
+        state.connectionStatuses = [:]
+        state.channelStatuses = [:]
+        state.heartbeats = [:]
+        state.inbound = [:]
+      }
+      return (
+        state.connectionStatuses.values, state.channelStatuses.values.flatMap(\.values),
+        state.heartbeats.values, state.inbound.values.flatMap(\.values)
+      )
+    }
+    for continuation in connections {
+      continuation.yield(.disconnected(nil))
+      continuation.finish()
+    }
+    for continuation in channels {
+      continuation.yield(.unsubscribed)
+      continuation.finish()
+    }
+    heartbeats.forEach { $0.finish() }
+    inbound.forEach { $0.finish() }
   }
 
   private func removeInbound(_ id: UUID, from key: Key) {

@@ -16,8 +16,9 @@ import IssueReporting
 /// One client owns one WebSocket. Channels share it, and the client reconnects and rejoins them
 /// after a drop.
 ///
-/// Keep the client for as long as you use its channels. Releasing it closes the socket, and a
-/// channel handle that outlives it stays unsubscribed.
+/// Keep the client for as long as you use its channels. Releasing it closes the socket and
+/// finishes every stream of the client and its channels, and a channel handle that outlives it
+/// stays unsubscribed.
 public final class RealtimeClient: Sendable {
   let engine: RealtimeEngine
   private let rest: RealtimeREST
@@ -81,8 +82,10 @@ public final class RealtimeClient: Sendable {
     configuration.connection.idleDisconnectAfter = options.disconnectOnEmptyChannelsAfter
     configuration.channel.rejoin = options.rejoin
     configuration.accessToken = options.accessToken
-    if let authorization = options.headers[.authorization], authorization.hasPrefix("Bearer ") {
-      configuration.initialAccessToken = String(authorization.dropFirst("Bearer ".count))
+    if let authorization = options.headers[.authorization],
+      authorization.lowercased().hasPrefix("bearer ")
+    {
+      configuration.initialAccessToken = String(authorization.dropFirst("bearer ".count))
     }
     configuration.logger = options.logger
     return configuration
@@ -113,8 +116,9 @@ public final class RealtimeClient: Sendable {
   /// ``RealtimeClientOptions/reconnect`` and reports it on ``statusChanges``.
   ///
   /// - Throws: ``RealtimeError`` when the server refuses the upgrade for good (a 401 or 403 is
-  ///   ``RealtimeError/Kind/unauthorized``), or of kind ``RealtimeError/Kind/notConnected`` when
-  ///   ``disconnect()`` runs first.
+  ///   ``RealtimeError/Kind/unauthorized``), of kind ``RealtimeError/Kind/notConnected`` when
+  ///   ``disconnect()`` runs first, or `CancellationError` when the calling task is cancelled.
+  ///   Cancelling does not stop the client from connecting.
   public func connect() async throws {
     try await engine.connect()
   }

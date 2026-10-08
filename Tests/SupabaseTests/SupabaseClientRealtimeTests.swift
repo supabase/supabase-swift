@@ -143,6 +143,28 @@ struct SupabaseClientRealtimeTests {
   }
 
   @Test
+  func mfaChallengeVerifiedPushesTheNewTokenToAJoinedChannel() async throws {
+    let client = makeClient()
+    try await client.auth.signIn(email: "user@example.com", password: "secret")
+    try await client.channel("room").subscribe()
+
+    _ = try await client.auth.mfa.verify(
+      params: MFAVerifyParams(factorId: UUID(), challengeId: UUID(), code: "123456"))
+
+    #expect(await waitUntil { sentAccessToken("user-token-2") })
+  }
+
+  @Test
+  func channelsAndRemoveAllChannelsDoNotCreateTheRealtimeClient() async {
+    let client = makeClient()
+
+    #expect(client.channels.isEmpty)
+    await client.removeAllChannels()
+
+    #expect(client.mutableState.realtime == nil)
+  }
+
+  @Test
   func aCustomLoggerSurvives() async {
     let client = makeClient { $0.logger = Logger(label: "custom") }
 

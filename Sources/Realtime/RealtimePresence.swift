@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 08/10/26.
 //
 
+import ConcurrencyExtras
 public import Foundation
 
 /// Presence on one channel: who is there, and this client's own entry.
@@ -51,7 +52,13 @@ public struct RealtimePresence: Sendable {
   /// a few presence calls per window, so the SDK sends at most one call every few seconds. A call
   /// inside that window returns once the payload is queued, without waiting for the server; the
   /// newest queued payload goes out when the window ends. A payload equal to the last one sent
-  /// is not sent again.
+  /// is not sent again. A payload the server refuses is not sent after a rejoin.
+  ///
+  /// On a channel joined without presence, the first call makes the channel join again with
+  /// presence enabled, with a ``RealtimeChannelEvent/resubscribed`` event, and sends the payload
+  /// after that join. It returns once the channel rejoined. A call made while that rejoin, or any
+  /// rejoin of a channel that already tracks, is in flight replaces the payload the rejoin sends
+  /// and returns once the channel rejoined; the newest payload wins.
   ///
   /// - Throws: ``RealtimeError`` of kind ``RealtimeError/Kind/encoding`` when `payload` does not
   ///   encode, ``RealtimeError/Kind/notSubscribed`` when the channel is not joined,
@@ -69,6 +76,7 @@ public struct RealtimePresence: Sendable {
     guard let object = value.objectValue else {
       throw RealtimeError(kind: .encoding, message: "presence payload must be a JSON object")
     }
+    channel.wantsPresence.setValue(true)
     try await channel.engine.trackPresence(channel.wireTopic, owner: channel.owner, payload: object)
   }
 

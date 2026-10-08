@@ -58,8 +58,13 @@ them, so each one sees only part of the feed.
 
 ``RealtimeClient/channel(_:configure:)`` returns the same ``RealtimeChannel`` for the same topic
 until you remove it. Dropping your reference does not leave the channel. After
-``RealtimeClient/removeChannel(_:)`` the handle is dead: its streams finish, and its
-``RealtimeChannel/subscribe()`` throws. Ask the client for a new one.
+``RealtimeClient/removeChannel(_:)`` the handle is dead: its streams finish, a stream made on it
+later finishes at once, and its ``RealtimeChannel/subscribe()`` throws. Ask the client for a
+new one.
+
+Releasing the ``RealtimeClient`` closes the socket and finishes every stream of the client and of
+its channels. A status stream yields a last ``RealtimeConnectionStatus/disconnected(_:)`` or
+``RealtimeChannelStatus/unsubscribed`` first.
 
 A ``RealtimeChannel/postgresChanges(event:schema:table:filter:select:)`` call adds a binding to
 the channel. The binding stays until the channel is removed, even after its stream ends.

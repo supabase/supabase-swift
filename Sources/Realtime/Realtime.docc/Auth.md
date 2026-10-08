@@ -27,8 +27,8 @@ The client calls it before each connect. When the token is a JWT, the client als
 channel never reaches the server's expiry check.
 
 `SupabaseClient` sets this closure for you. It returns the Auth session's token, or the
-publishable key when nobody is signed in, and it sends the new token after every sign-in,
-refresh and sign-out. Do not set `accessToken` in `SupabaseClientOptions.realtime`; the client
+publishable key when nobody is signed in, and it sends the new token after every Auth event
+that changes it: sign-in, refresh, MFA verification, password recovery and sign-out. Do not set `accessToken` in `SupabaseClientOptions.realtime`; the client
 reports an issue when you do.
 
 ### When a token expires

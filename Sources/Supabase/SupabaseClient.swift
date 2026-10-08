@@ -398,9 +398,10 @@ public final class SupabaseClient: Sendable {
     auth.handle(url)
   }
 
-  /// Every channel on ``realtime``, sorted by topic.
+  /// Every channel on ``realtime``, sorted by topic. Empty, without making the Realtime client,
+  /// until ``realtime`` is first used.
   public var channels: [RealtimeChannel] {
-    realtime.channels
+    mutableState.realtime?.channels ?? []
   }
 
   /// The Realtime channel for `topic`, made on the first call. Later calls return the same
@@ -421,9 +422,10 @@ public final class SupabaseClient: Sendable {
     await realtime.removeChannel(channel)
   }
 
-  /// Leaves and removes every Realtime channel.
+  /// Leaves and removes every Realtime channel. Does nothing, without making the Realtime client,
+  /// until ``realtime`` is first used.
   public func removeAllChannels() async {
-    await realtime.removeAllChannels()
+    await mutableState.realtime?.removeAllChannels()
   }
 
   /// The resolved transport shared by every sub-client.
@@ -487,18 +489,12 @@ public final class SupabaseClient: Sendable {
     mutableState.withValue { $0.authEventsTask = task }
   }
 
-  /// Sends the session token, or the anon key after sign-out, to ``realtime``. Does nothing
-  /// until ``realtime`` exists: a new client asks the provider for the token when it connects.
+  /// Sends the session token, or the anon key without a session, to ``realtime`` on every
+  /// event; an unchanged token is not sent again. Does nothing until ``realtime`` exists: a new
+  /// client asks the provider for the token when it connects.
   private func handleAuthEvent(_ event: AuthChangeEvent, session: Session?) async {
     guard let realtime = mutableState.realtime else { return }
-    switch event {
-    case .initialSession, .signedIn, .tokenRefreshed, .userUpdated:
-      await realtime.setAuth(session?.accessToken ?? supabaseKey)
-    case .signedOut:
-      await realtime.setAuth(supabaseKey)
-    default:
-      break
-    }
+    await realtime.setAuth(session?.accessToken ?? supabaseKey)
   }
 
   private func _initRealtimeClient() -> RealtimeClient {
