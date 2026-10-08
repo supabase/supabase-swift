@@ -147,3 +147,32 @@ public typealias PostgrestColumn<Root: PostgrestRelation, Value> =
 /// A stored column the database allows to be `NULL`.
 public typealias PostgrestNullableColumn<Root: PostgrestRelation, Value> =
   PostgrestStoredColumn<Root, Value, PostgrestNullable>
+
+/// A stored column the database fills in and refuses to be written: `GENERATED ALWAYS AS
+/// IDENTITY`, or `GENERATED ALWAYS AS (…) STORED`.
+///
+/// `@Table` emits one for a property marked `@Generated`. It selects, filters and orders like
+/// ``PostgrestStoredColumn``, and the single difference is the type: it is not a
+/// ``PostgrestColumn``, so ``PostgrestUpdate`` has no subscript for it and the generated `Draft`
+/// has no field for it. A write that named it would be answered `428C9` by Postgres; here it does
+/// not compile. The same column is `?: never` in the shapes `postgres-meta` generates for
+/// supabase-js.
+public struct PostgrestGeneratedColumn<
+  Root: PostgrestRelation,
+  Value,
+  Nullability: PostgrestNullability
+>: PostgrestFilterableExpression, PostgrestOrderableExpression {
+  public typealias Position = PostgrestEveryPosition
+
+  public let postgrestExpression: String
+
+  /// - Parameter name: The database column name.
+  public init(_ name: String) {
+    self.postgrestExpression = name
+  }
+}
+
+/// A generated column declared nullable (`GENERATED ALWAYS AS (…) STORED` over nullable inputs)
+/// can be `NULL`, so it gets `isNull()` like any other nullable column.
+extension PostgrestGeneratedColumn: PostgrestNullableExpression
+where Nullability == PostgrestNullable {}

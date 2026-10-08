@@ -75,13 +75,30 @@ public struct PostgrestRequest: Sendable {
     on client: PostgrestClient,
     decode: (Data) throws -> T
   ) async throws -> PostgrestResponse<T> {
+    // CSV has no `nulls=stripped` variant. The typed `csv()` drops the flag; the untyped builder
+    // can still carry both, so the core refuses it before anything is sent.
+    if stripsNulls, headerFields[.accept] == "text/csv" {
+      throw PostgrestError(
+        kind: .invalidRequest, message: "`.csv()` cannot be combined with `.stripNulls()`")
+    }
+
     let configuration = client.configuration
     var request = httpRequest(for: configuration)
 
-    if let accessToken = configuration.accessToken, request.headerFields[.authorization] == nil,
-      let token = try await accessToken()
-    {
-      request.headerFields[.authorization] = "Bearer \(token)"
+    if let accessToken = configuration.accessToken, request.headerFields[.authorization] == nil {
+      let token: String?
+      do {
+        token = try await accessToken()
+      } catch {
+        throw PostgrestError(
+          kind: .accessToken,
+          message: "The access token provider failed, so the request was not sent.",
+          underlyingError: error
+        )
+      }
+      if let token {
+        request.headerFields[.authorization] = "Bearer \(token)"
+      }
     }
 
     let retries = retryEnabled ?? configuration.retryEnabled

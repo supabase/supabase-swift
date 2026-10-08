@@ -262,6 +262,7 @@ extension PostgrestQuery {
   private func rawQuery(accept: String) -> PostgrestRawQuery {
     var request = request
     request.headerFields[.accept] = accept
+    request.stripsNulls = false
     return PostgrestRawQuery(client: client, request: request)
   }
 }

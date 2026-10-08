@@ -1277,6 +1277,38 @@ extension StorageMockerTests {
     }
 
     @Test
+    func getPublicURLCollapsesRepeatedAndTrailingSlashes() throws {
+      let storage = makeSUT()
+
+      let publicURL = try storage.from("bucket")
+        .publicURL(path: "folder//image.png/")
+
+      #expect(
+        publicURL.absoluteString
+          == "http://localhost:54321/storage/v1/object/public/bucket/folder/image.png"
+      )
+    }
+
+    @Test
+    func downloadCollapsesRepeatedAndTrailingSlashes() async throws {
+      let storage = makeSUT()
+
+      Mock(
+        url: url.appendingPathComponent("object/bucket/folder/file.txt"),
+        statusCode: 200,
+        data: [
+          .get: Data("hello world".utf8)
+        ]
+      )
+      .register()
+
+      let data = try await storage.from("bucket")
+        .download(path: "folder//file.txt/")
+
+      #expect(data == Data("hello world".utf8))
+    }
+
+    @Test
     func moveCleansPaths() async throws {
       struct Sent: Decodable {
         let sourceKey: String

@@ -76,10 +76,6 @@ public struct PostgrestRequestBuilder<Phase>: Sendable {
   /// The request this builder sends. Every method returns a copy with a changed request.
   var request: PostgrestRequest
 
-  /// An error to throw when execute() is called, set when an invalid method combination is
-  /// detected.
-  var pendingError: String?
-
   var configuration: PostgrestClient.Configuration { client.configuration }
 
   init(client: PostgrestClient, request: PostgrestRequest) {
@@ -92,11 +88,10 @@ public struct PostgrestRequestBuilder<Phase>: Sendable {
   /// Every method that changes phase (e.g. `select` moving from ``PostgrestQueryPhase`` to
   /// ``PostgrestFilterPhase``, or `insert` and any transform method moving to
   /// ``PostgrestTransformPhase``) goes through this initializer instead of resetting state,
-  /// because `pendingError` and the request's `maybeSingle()` flag must survive a phase change.
+  /// because the request's `maybeSingle()` flag must survive a phase change.
   init<From>(carryingFrom other: PostgrestRequestBuilder<From>) {
     self.client = other.client
     self.request = other.request
-    self.pendingError = other.pendingError
   }
 }
 
@@ -434,10 +429,6 @@ extension PostgrestRequestBuilder where Phase: PostgrestExecutablePhase {
     options: FetchOptions,
     decode: (Data) throws -> T
   ) async throws -> PostgrestResponse<T> {
-    if let message = pendingError {
-      throw PostgrestError(kind: .invalidRequest, message: message)
-    }
-
     var request = request
     if options.head {
       request.method = .head

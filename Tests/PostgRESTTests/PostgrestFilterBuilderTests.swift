@@ -258,7 +258,7 @@ extension PostgrestMockerTests {
         	--header "Content-Type: application/json" \
         	--header "X-Client-Info: postgrest-swift/0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	"http://localhost:54321/rest/v1/users?deleted_at=is.NULL&select=*"
+        	"http://localhost:54321/rest/v1/users?deleted_at=is.null&select=*"
         """#
       }
       .register()
@@ -747,7 +747,7 @@ extension PostgrestMockerTests {
         try await sut
         .from("users")
         .select()
-        .fts("description", query: "programmer")
+        .textSearch("description", query: "programmer")
         .execute()
     }
 

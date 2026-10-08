@@ -135,7 +135,7 @@ struct PostgrestClientAccessTokenTests {
   }
 
   @Test
-  func accessTokenErrorPropagatesToExecute() async throws {
+  func accessTokenErrorFailsTheRequestAsAPostgrestError() async throws {
     struct TokenError: Error, Equatable {}
 
     let sut = PostgrestClient(
@@ -148,9 +148,42 @@ struct PostgrestClientAccessTokenTests {
       accessToken: { throw TokenError() }
     )
 
-    await #expect(throws: TokenError.self) {
+    let error = await #expect(throws: PostgrestError.self) {
       try await sut.from("todos").select().execute()
     }
+    #expect(error?.kind == .accessToken)
+    #expect(error?.underlyingError is TokenError)
+  }
+
+  /// The typed query runs the same provider through the same core.
+  @Test
+  func accessTokenErrorFailsTheTypedQueryTheSameWay() async throws {
+    struct TokenError: Error, Equatable {}
+    struct Todo: PostgrestRelation {
+      static let relationName = "todos"
+      static let selectString = "*"
+      var id: Int
+      struct Columns: Sendable {
+        let id = PostgrestColumn<Todo, Int>("id")
+      }
+      static let columns = Columns()
+    }
+
+    let sut = PostgrestClient(
+      url: url,
+      http: .init(
+        transport: ClosureTransport { _, _ in
+          Issue.record("transport should not be called when the access token provider throws")
+          return self.okResponse()
+        }),
+      accessToken: { throw TokenError() }
+    )
+
+    let error = await #expect(throws: PostgrestError.self) {
+      try await sut.from(Todo.self).select().execute()
+    }
+    #expect(error?.kind == .accessToken)
+    #expect(error?.underlyingError is TokenError)
   }
 
   @Test
