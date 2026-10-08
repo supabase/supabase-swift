@@ -336,6 +336,11 @@ public final class SupabaseClient: Sendable {
   /// The schema must be on the list of exposed schemas in your Supabase project dashboard.
   /// - Parameter schema: The schema to query.
   /// - Returns: A ``PostgrestClient`` configured for the given schema.
+  /// Calls a database function with typed arguments. See ``PostgrestClient/rpc(_:)``.
+  public func rpc<F: PostgrestFunction>(_ function: F) throws -> PostgrestFunctionQuery<F> {
+    try rest.rpc(function)
+  }
+
   public func schema(_ schema: String) -> PostgrestClient {
     rest.schema(schema)
   }
