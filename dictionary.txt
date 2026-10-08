@@ -37,6 +37,7 @@ dedup
 dedupe
 decoratee
 deeplinking
+deno
 discardable
 docc
 dollarsign
@@ -47,7 +48,10 @@ dummysignature
 ecdsa
 halfvec
 emaillink
+enotconn
 entrancy
+eproto
+errno
 etag
 ethereum
 Ethereum
@@ -88,6 +92,7 @@ keccak
 Keccak
 keyout
 kiwicopple
+Klingsbo
 letterboxing
 libro
 libros
@@ -95,6 +100,7 @@ lifecycles
 linkedin
 LinkedIn
 lnbm
+Lukas
 magiclink
 magnifyingglass
 metamask
@@ -137,6 +143,7 @@ pkcs
 pkey
 plainto
 plfts
+pointfreeco
 postalcode
 Postg
 postgres
@@ -147,11 +154,13 @@ PostgREST
 preconcurrency
 questionmark
 radiowaves
+Ranbir
 reauthentication
 Reauthentication
 Reconnections
 refreshable
 refreshtoken
+replayable
 resends
 Resends
 Rlbn
@@ -181,6 +190,7 @@ supabase
 SUPABASE
 supabaseswiftintegrationtest
 supabot
+swiftlint
 testpath
 testuser
 timestamptz
@@ -202,6 +212,7 @@ uniquing
 unsubscription
 untracks
 upserted
+upserts
 URLAPI
 uuid
 UUID
@@ -223,17 +234,10 @@ xcodeproj
 xctest
 XVCJ
 
-# Terms from HTTPRuntime (Sources/HTTPRuntime) and its tests.
-CFURL
+# Term from Sources/Helpers/HTTP and Sources/RealtimeV2 (Linux corelibs-Foundation).
 corelibs
-reencoded
-schemeless
-subdata
-Subrange
-TESTBOUNDARY
-unmodeled
 
-# Terms from HTTPRuntimeTestHelpers planning and scheme configuration.
+# Terms from Xcode scheme configuration, shared across module test targets.
 fileprivate
 parallelizable
 Testables
@@ -255,6 +259,39 @@ deinits
 failable
 memberwise
 
-# Term from PostgrestTypedMutation's upsert doc (an empty conflict target cannot be
+# Term from PostgrestMutation's upsert doc (an empty conflict target cannot be
 # written, so it is unrepresentable rather than merely invalid).
 unrepresentable
+
+# Terms from the typed column-expression surface (Sources/PostgREST/Columns).
+associatedtype
+uncast
+
+# Term from the comparison operators' documentation (PostgrestFilter+Comparison.swift).
+someop
+
+# Term from the cast target list (PostgrestDerivedColumn.swift).
+citext
+
+# Terms from the embedded-relations column namespace (PostgrestRelatedColumns.swift).
+unshadowed
+orderability
+
+# Term from the logging middleware's body-buffering helper (LoggerInterceptor.swift).
+loggable
+
+# Terms from the live memory probe (MemoryProbeIntegrationTests.swift).
+memprobe
+attoseconds
+
+# Retry-After / Duration terms from RetryPolicy.swift.
+asctime
+fixdate
+
+# Term from the privacy manifest resource declared on the Helpers target (Package.swift).
+xcprivacy
+
+# Swift 6.2 isolation keyword (SE-0461): `nonisolated(nonsending)`, `NonisolatedNonsendingByDefault`.
+nonsending
+Subrange
+fkey

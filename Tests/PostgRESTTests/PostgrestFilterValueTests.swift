@@ -33,6 +33,12 @@ struct PostgrestFilterValueTests {
   }
 
   @Test
+  func arrayQuotesElementsWithSurroundingNewlines() {
+    #expect(["a\n"].rawValue == "{\"a\n\"}")
+    #expect(["\rb"].rawValue == "{\"\rb\"}")
+  }
+
+  @Test
   func arrayLeavesSafeAndNumericElementsUnquoted() {
     #expect([1, 2, 3].rawValue == "{1,2,3}")
     #expect(["admin", "user"].rawValue == "{admin,user}")

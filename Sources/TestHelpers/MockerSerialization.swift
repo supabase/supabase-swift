@@ -55,7 +55,7 @@ package struct MockerSerializedTrait: SuiteTrait, TestScoping {
 
   package func provideScope(
     for test: Test, testCase: Test.Case?,
-    performing function: @Sendable () async throws -> Void
+    performing function: @Sendable @concurrent () async throws -> Void
   ) async throws {
     try await MockerGate.shared.withLock {
       // Discard anything left over from a suite that does not use this trait, so a stale

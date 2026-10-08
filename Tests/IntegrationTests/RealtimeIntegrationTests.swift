@@ -18,7 +18,6 @@
 
   @testable import Helpers
   @testable import Realtime
-  @testable import RealtimeV2
 
   // Serialize this suite so concurrent tests don't open competing realtime connections against
   // the same local Supabase instance — Swift Testing runs `@Test`s in the same suite concurrently
@@ -37,31 +36,31 @@
 
     init() async throws {
       client = SupabaseClient(
-        supabaseURL: URL(string: DotEnv.SUPABASE_URL) ?? URL(string: "http://127.0.0.1:54321")!,
-        supabaseKey: DotEnv.SUPABASE_PUBLISHABLE_KEY,
+        supabaseURL: URL(string: DotEnv.supabaseURL) ?? URL(string: "http://127.0.0.1:54321")!,
+        supabaseKey: DotEnv.supabasePublishableKey,
         options: SupabaseClientOptions(
           auth: .init(storage: InMemoryLocalStorage()),
           global: .init(
             logger: Logging.Logger(label: "client1") {
               OSLogHandler(label: $0, subsystem: "realtime.integration.tests")
-            }
+            },
+            clock: testClock
           )
-        ),
-        clock: testClock
+        )
       )
 
       client2 = SupabaseClient(
-        supabaseURL: URL(string: DotEnv.SUPABASE_URL) ?? URL(string: "http://127.0.0.1:54321")!,
-        supabaseKey: DotEnv.SUPABASE_PUBLISHABLE_KEY,
+        supabaseURL: URL(string: DotEnv.supabaseURL) ?? URL(string: "http://127.0.0.1:54321")!,
+        supabaseKey: DotEnv.supabasePublishableKey,
         options: SupabaseClientOptions(
           auth: .init(storage: InMemoryLocalStorage()),
           global: .init(
             logger: Logging.Logger(label: "client2") {
               OSLogHandler(label: $0, subsystem: "realtime.integration.tests")
-            }
+            },
+            clock: testClock
           )
-        ),
-        clock: testClock
+        )
       )
 
       // Clean up any existing data
@@ -135,7 +134,7 @@
         client.realtimeV2.disconnect()
 
         // Wait for potential reconnection delay
-        await testClock.advance(by: .seconds(RealtimeClientOptions.defaultReconnectDelay + 1))
+        await testClock.advance(by: RealtimeClientOptions.defaultReconnectDelay + .seconds(1))
 
         #expect(client.realtimeV2.status == .disconnected)
       }
@@ -295,7 +294,7 @@
           event: "test-event", message: Message(value: 2, text: "second"))
         await channel.broadcast(event: "test-event", message: ["value": 3, "text": "third"])
 
-        let receivedMessages = try await withTimeout(interval: 5) {
+        let receivedMessages = try await withTimeout(.seconds(5)) {
           await receivedMessagesTask.value
         }
 
@@ -337,11 +336,11 @@
         try await channel.broadcast(event: "event-1", message: ["data": "3"])
         try await channel.broadcast(event: "event-2", message: ["data": "4"])
 
-        let event1 = try await withTimeout(interval: 5) {
+        let event1 = try await withTimeout(.seconds(5)) {
           await event1Messages.value
         }
 
-        let event2 = try await withTimeout(interval: 5) {
+        let event2 = try await withTimeout(.seconds(5)) {
           await event2Messages.value
         }
 
@@ -427,7 +426,7 @@
         // Delete
         try await client.from("key_value_storage").delete().eq("key", value: testKey).execute()
 
-        let received = try await withTimeout(interval: 5) {
+        let received = try await withTimeout(.seconds(5)) {
           await allChangesTask.value
         }
 
@@ -500,7 +499,7 @@
         _ = try await client.from("key_value_storage")
           .insert(["key": testKey2, "value": "not-filtered"]).select().single().execute()
 
-        let received = try await withTimeout(interval: 5) {
+        let received = try await withTimeout(.seconds(5)) {
           await filteredTask.value
         }
 
@@ -578,15 +577,15 @@
         // Delete
         try await client.from("key_value_storage").delete().eq("key", value: testKey).execute()
 
-        let inserts = try await withTimeout(interval: 5) {
+        let inserts = try await withTimeout(.seconds(5)) {
           await insertTask.value
         }
 
-        let updates = try await withTimeout(interval: 5) {
+        let updates = try await withTimeout(.seconds(5)) {
           await updateTask.value
         }
 
-        let deletes = try await withTimeout(interval: 5) {
+        let deletes = try await withTimeout(.seconds(5)) {
           await deleteTask.value
         }
 
@@ -650,7 +649,7 @@
     //      )
     //
     //      // Verify the second client received the broadcast
-    //      let receivedMessages = try await withTimeout(interval: 5) {
+    //      let receivedMessages = try await withTimeout(.seconds(5)) {
     //        await receivedMessagesTask.value
     //      }
     //
@@ -813,19 +812,19 @@
         try await Task.sleep(nanoseconds: 500_000_000)
 
         // Collect all events
-        let presenceChanges1 = try await withTimeout(interval: 5) {
+        let presenceChanges1 = try await withTimeout(.seconds(5)) {
           await client1PresenceChanges.value
         }
 
-        let presenceChanges2 = try await withTimeout(interval: 5) {
+        let presenceChanges2 = try await withTimeout(.seconds(5)) {
           await client2PresenceChanges.value
         }
 
-        let messages1 = try await withTimeout(interval: 5) {
+        let messages1 = try await withTimeout(.seconds(5)) {
           await client1Messages.value
         }
 
-        let messages2 = try await withTimeout(interval: 5) {
+        let messages2 = try await withTimeout(.seconds(5)) {
           await client2Messages.value
         }
 

@@ -12,15 +12,29 @@ import HTTPTypes
 /// requests. Each of the types above holds a ``StorageApi`` value and delegates to it rather than
 /// inheriting from it.
 struct StorageApi: Sendable {
+  /// The apex domains the storage hostname rewrite applies to, each carrying a leading dot so the
+  /// match has to land on a hostname-label boundary.
+  ///
+  /// Without the dot, any host merely *ending* in the apex matches: a caller-owned domain like
+  /// `not-supabase.co` would be rewritten to `not-storage.supabase.co`, pointing requests at a
+  /// domain the caller does not control. The bare apex `supabase.co` is excluded for the same
+  /// reason — it is not a project host.
+  private static let legacySupabaseHostSuffixes = [".supabase.co", ".supabase.in", ".supabase.red"]
+
+  /// Reports whether `host` is a Supabase project host that has not already been pointed at
+  /// storage.
+  private static func isLegacySupabaseHost(_ host: String) -> Bool {
+    !host.contains("storage.supabase.")
+      && legacySupabaseHostSuffixes.contains(where: host.hasSuffix)
+  }
+
   /// The configuration used to initialize this client instance.
   let configuration: StorageClientConfiguration
-
-  private let http: any HTTPClientType
 
   /// Creates a ``StorageApi`` with the given configuration.
   ///
   /// - Parameter configuration: The configuration that controls the endpoint URL, authentication
-  ///   headers, JSON codecs, and HTTP session.
+  ///   headers, JSON codecs, and transport.
   init(configuration: StorageClientConfiguration) {
     var configuration = configuration
     if configuration.headers["X-Client-Info"] == nil {
@@ -29,36 +43,31 @@ struct StorageApi: Sendable {
 
     // if legacy uri is used, replace with new storage host (disables request buffering to allow > 50GB uploads)
     // "project-ref.supabase.co" becomes "project-ref.storage.supabase.co"
-    if configuration.useNewHostname == true {
+    if configuration.usesNewHostname == true {
+      // `configuration.url` is supplied once, at construction, so a URL that cannot be decomposed
+      // into host components is a programmer error, not a runtime condition. Trap here, where the
+      // offending value is, rather than letting it fail later as an opaque `URLError`.
       guard
         var components = URLComponents(url: configuration.url, resolvingAgainstBaseURL: false),
         let host = components.host
       else {
-        fatalError("Client initialized with invalid URL: \(configuration.url)")
+        preconditionFailure("Storage client initialized with an invalid URL: \(configuration.url)")
       }
 
-      let regex = try! NSRegularExpression(pattern: "supabase.(co|in|red)$")
+      if Self.isLegacySupabaseHost(host) {
+        // Substitute on the same label boundary the check used, so a host that happens to start
+        // with `supabase.` is not rewritten at that leading position too.
+        components.host = host.replacingOccurrences(of: ".supabase.", with: ".storage.supabase.")
 
-      let isSupabaseHost =
-        regex.firstMatch(in: host, range: NSRange(location: 0, length: host.utf16.count)) != nil
+        guard let rewritten = components.url else {
+          preconditionFailure("Rewriting the storage host produced an invalid URL: \(components)")
+        }
 
-      if isSupabaseHost, !host.contains("storage.supabase.") {
-        components.host = host.replacingOccurrences(of: "supabase.", with: "storage.supabase.")
+        configuration.url = rewritten
       }
-
-      configuration.url = components.url!
     }
 
     self.configuration = configuration
-
-    let interceptors: [any HTTPClientInterceptor] = [
-      LoggerInterceptor(logger: configuration.logger)
-    ]
-
-    http = HTTPClient(
-      fetch: configuration.session.fetch,
-      interceptors: interceptors
-    )
   }
 
   /// Returns a new ``StorageApi`` with an additional HTTP header merged into
@@ -83,50 +92,115 @@ struct StorageApi: Sendable {
     return StorageApi(configuration: configuration)
   }
 
+  /// Sends `request` with the client's default headers and returns the response body.
+  ///
+  /// `replayable` marks a `POST` that only reads (a list) as safe to retry.
   @discardableResult
-  func execute(_ request: Helpers.HTTPRequest) async throws -> Helpers.HTTPResponse {
+  func execute(_ request: HTTPRequest, body: Data, replayable: Bool = false) async throws -> Data {
+    try await execute(request, body: HTTPBody(body), replayable: replayable)
+  }
+
+  /// Sends `request` with the client's default headers and returns the response body.
+  ///
+  /// Only `GET`, `HEAD` and `replayable` requests are retried, and only when
+  /// ``StorageClientConfiguration/retryEnabled`` is `true`.
+  @discardableResult
+  func execute(
+    _ request: HTTPRequest, body: HTTPBody? = nil, replayable: Bool = false
+  ) async throws -> Data {
+    var policy = configuration.retryEnabled ? RetryPolicy.default : .disabled
+    if replayable { policy.retryableMethods.insert(request.method) }
+    let retry = RetryRequestInterceptor(policy: policy, clock: configuration.clock)
+    let http = HTTPClient(
+      configuration: configuration.http,
+      retrying: retry,
+      appending: [LoggerInterceptor(logger: configuration.logger)])
+
     var request = request
-    request.headers = HTTPFields(configuration.headers).merging(with: request.headers)
+    request.headerFields = HTTPFields(configuration.headers).merging(with: request.headerFields)
 
-    let response = try await http.send(request)
-
-    guard (200..<300).contains(response.statusCode) else {
-      if let error = try? configuration.decoder.decode(
-        StorageError.self,
-        from: response.data
-      ) {
-        throw error
+    let response: HTTPResponse
+    let data: Data
+    do {
+      let (head, responseBody) = try await http.stream(request, body: body)
+      response = head
+      if let responseBody {
+        data = try await Data(collecting: responseBody, upTo: .max)
+      } else {
+        data = Data()
       }
-
-      throw HTTPError(data: response.data, response: response.underlyingResponse)
+    } catch {
+      // Only the network layer's own failures are relabelled. `CancellationError`, and anything
+      // thrown by user code that runs inside `stream` (a custom `ClientTransport` or middleware, an `accessToken` closure),
+      // propagate as themselves.
+      guard let urlError = error as? URLError else { throw error }
+      // `URLSession` reports a cancelled `Task` as `URLError(.cancelled)`. A `.cancelled` with no
+      // task cancellation behind it (a middleware cancelled the request) stays a transport error.
+      if urlError.code == .cancelled, Task.isCancelled { throw CancellationError() }
+      throw StorageError(
+        kind: .transport, message: urlError.localizedDescription, underlyingError: urlError)
     }
 
-    return response
+    guard (200..<300).contains(response.status.code) else {
+      if let serverError = try? configuration.decoder.decode(
+        StorageError.ServerError.self, from: data)
+      {
+        throw StorageError(
+          kind: .server,
+          message: serverError.message,
+          serverError: serverError,
+          response: HTTPErrorResponse(response, body: data)
+        )
+      }
+
+      throw StorageError(
+        kind: .server,
+        message: "Unexpected response with status code \(response.status.code).",
+        response: HTTPErrorResponse(response, body: data)
+      )
+    }
+
+    return data
+  }
+
+  /// Sends `file` as the raw request body, the same shape supabase-js uses for `ArrayBuffer`
+  /// uploads. What a multipart form would carry as fields travels in headers instead:
+  /// `Content-Type`, `Cache-Control`, and base64 JSON in `x-metadata`.
+  func upload(
+    _ request: HTTPRequest,
+    file: FileUpload,
+    path: String,
+    options: FileOptions
+  ) async throws -> Data {
+    var request = request
+    if request.headerFields[.contentType] == nil {
+      request.headerFields[.contentType] = file.contentType(forPath: path, options: options)
+    }
+    if request.headerFields[.cacheControl] == nil {
+      request.headerFields[.cacheControl] = "max-age=\(options.cacheControl)"
+    }
+    if let metadata = options.metadata {
+      request.headerFields[.xMetadata] = encodeMetadata(metadata).base64EncodedString()
+    }
+    return try await execute(request, body: try file.httpBody())
   }
 }
 
-extension Helpers.HTTPRequest {
-  init(
-    url: URL,
-    method: HTTPTypes.HTTPRequest.Method,
-    query: [URLQueryItem],
-    formData: MultipartFormData,
-    options: FileOptions,
-    headers: HTTPFields = [:]
-  ) throws {
-    var headers = headers
-    if headers[.contentType] == nil {
-      headers[.contentType] = formData.contentType
+extension Data {
+  /// Shadows `Data.decoded(as:decoder:)` from Helpers inside the Storage module so every
+  /// existing decode call site throws ``StorageError`` with kind `.decoding` instead of a bare
+  /// `DecodingError`. Same-module declarations win over imported ones with the same signature.
+  func decoded<T: Decodable>(as _: T.Type = T.self, decoder: JSONDecoder = JSONDecoder()) throws
+    -> T
+  {
+    do {
+      return try decoder.decode(T.self, from: self)
+    } catch {
+      throw StorageError(
+        kind: .decoding,
+        message: "Failed to decode the Storage response as \(T.self).",
+        underlyingError: error
+      )
     }
-    if headers[.cacheControl] == nil {
-      headers[.cacheControl] = "max-age=\(options.cacheControl)"
-    }
-    try self.init(
-      url: url,
-      method: method,
-      query: query,
-      headers: headers,
-      body: formData.encode()
-    )
   }
 }

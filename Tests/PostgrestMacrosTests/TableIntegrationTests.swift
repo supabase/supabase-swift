@@ -37,7 +37,7 @@ struct IntegrationUserRole {
 struct IntegrationNote {
   @PrimaryKey @Default var id: Int
   var body: String
-  var tag: Optional<String>
+  var tag: Optional<String>  // swiftlint:disable:this syntactic_sugar
 }
 
 // A writable table with no declared key — an append-only log. It must not conform to
@@ -49,10 +49,32 @@ struct IntegrationAuditEvent {
   var recordedBy: String
 }
 
+// An implicitly unwrapped optional. The spelling means the same nullable column as `T?`, and it
+// only ever reached a property type before `Columns` existed — a generic argument rejects `!`, so
+// the compile error landed on expanded code the author never wrote.
+@Table("drafts")
+struct IntegrationDraftNote {
+  @PrimaryKey @Default var id: Int
+  var title: String!
+}
+
 @Table("active_todos", readOnly: true)
 struct IntegrationActiveTodo {
   var id: Int
   var task: String
+}
+
+/// Shadows `PostgREST.PublicSchema` the way the postgres-meta Swift generator's output does, so
+/// every `@Table` in this module compiles against the collision.
+enum PublicSchema {}
+
+enum IntegrationPrivateSchema: PostgrestSchema {
+  static let name = "private"
+}
+
+@Table("secrets", schema: IntegrationPrivateSchema.self)
+struct IntegrationSecret {
+  var id: Int
 }
 
 @Suite
@@ -67,10 +89,32 @@ struct TableIntegrationTests {
   }
 
   @Test
-  func macroMapsKeyPathsToColumns() {
-    #expect(Todo.columnName(for: \.id) == "id")
-    #expect(Todo.columnName(for: \.isDone) == "is_done")
-    #expect(Todo.columnName(for: \.dueDate) == "due_at")
+  func macroSuppliesTheSchemaType() {
+    #expect(Todo.Schema.self == PostgREST.PublicSchema.self)
+    #expect(IntegrationSecret.Schema.self == IntegrationPrivateSchema.self)
+    #expect(IntegrationSecret.schema == "private")
+  }
+
+  /// `assertMacro` checks the emitted text. This checks the expansion compiles into usable
+  /// values on a real type, which the text alone does not prove.
+  @Test
+  func theGeneratedNamespaceCarriesNamesAndTypes() {
+    #expect(Todo.columns.task.postgrestExpression == "task")
+    #expect(Todo.columns.isDone.postgrestExpression == "is_done")
+    #expect(Todo.columns.dueDate.postgrestExpression == "due_at")
+    #expect(type(of: Todo.columns.isDone).Value.self == Bool.self)
+    // The nullable column carries the wrapped type.
+    #expect(type(of: Todo.columns.dueDate).Value.self == Date.self)
+  }
+
+  /// An implicitly unwrapped optional is a nullable column: the wrapped type reaches `Value`, so
+  /// the operators are there, and `isNull()` is too.
+  @Test
+  func anImplicitlyUnwrappedOptionalIsANullableColumn() {
+    #expect(IntegrationDraftNote.columns.title.postgrestExpression == "title")
+    #expect(type(of: IntegrationDraftNote.columns.title).Value.self == String.self)
+    _ = IntegrationDraftNote.columns.title.isNull()
+    _ = IntegrationDraftNote.Draft(title: nil)
   }
 
   @Test
@@ -174,7 +218,7 @@ struct TableIntegrationTests {
     _ = try await capture.client
       .from(Todo.self)
       .update { $0.dueDate = nil }
-      .eq(\.id, 1)
+      .where { $0.id.eq(1) }
       .execute()
 
     #expect(capture.bodyString == #"{"due_at":null}"#)
@@ -188,8 +232,8 @@ struct TableIntegrationTests {
     let todos = try await capture.client
       .from(Todo.self)
       .select()
-      .eq(\.isDone, false)
-      .order(\.id, ascending: false)
+      .where { $0.isDone.eq(false) }
+      .order { $0.id.desc() }
       .execute()
       .value
 
@@ -218,7 +262,7 @@ struct TableIntegrationTests {
     let rows = try await capture.client
       .from(IntegrationActiveTodo.self)
       .select()
-      .eq(\.task, "buy milk")
+      .where { $0.task.eq("buy milk") }
       .execute()
       .value
 
@@ -240,6 +284,114 @@ struct TableIntegrationTests {
 
     #expect(capture.path?.hasSuffix("/todos") == true)
     #expect(capture.bodyString?.contains(#""id":1"#) == true)
+  }
+
+  @Test
+  func aTypedUpsertReturningKeepsTheConflictResolutionPreference() async throws {
+    // SDK-1626. `returning()` used to replace the whole `Prefer` header, so it silently dropped
+    // the `resolution=merge-duplicates` that `upsert()` had already set — turning the upsert into
+    // a plain insert the moment a caller asked for the row back.
+    let capture = RequestCapture()
+    _ = try await capture.client
+      .from(Todo.self)
+      .upsert(Todo.Draft(id: 1, task: "buy milk"))
+      .returning()
+      .execute()
+
+    #expect(capture.prefer == "resolution=merge-duplicates,return=representation")
+  }
+
+  @Test
+  func aTypedUpsertExecuteAloneKeepsAMinimalReturnPreference() async throws {
+    let capture = RequestCapture()
+    _ = try await capture.client
+      .from(Todo.self)
+      .upsert(Todo.Draft(id: 1, task: "buy milk"))
+      .execute()
+
+    #expect(capture.prefer == "resolution=merge-duplicates,return=minimal")
+  }
+
+  @Test
+  func aTypedInsertReturningSendsExactlyOneReturnPreference() async throws {
+    let capture = RequestCapture()
+    _ = try await capture.client
+      .from(Todo.self)
+      .insert(Todo.Draft(task: "buy milk"))
+      .returning()
+      .execute()
+
+    #expect(capture.prefer == "return=representation")
+  }
+
+  @Test
+  func aTypedUpsertCanIgnoreDuplicatesInsteadOfMergingThem() async throws {
+    // SDK-1627. `resolution=ignore-duplicates` is `ON CONFLICT DO NOTHING` — insert if absent,
+    // leave an existing row exactly as it is. A distinct operation, not a tuning knob.
+    let capture = RequestCapture()
+    _ = try await capture.client
+      .from(Todo.self)
+      .upsert(Todo.Draft(id: 1, task: "buy milk"), resolution: .ignoreDuplicates)
+      .execute()
+
+    #expect(capture.prefer == "resolution=ignore-duplicates,return=minimal")
+    #expect(capture.query?.contains("on_conflict=id") == true)
+  }
+
+  @Test
+  func anIgnoreDuplicatesResolutionSurvivesReturning() async throws {
+    // The pairing that SDK-1626 broke for `merge`: whichever resolution the caller picked has to
+    // still be on the header once they ask for the row back.
+    let capture = RequestCapture()
+    _ = try await capture.client
+      .from(Todo.self)
+      .upsert(Todo.Draft(id: 1, task: "buy milk"), resolution: .ignoreDuplicates)
+      .returning()
+      .execute()
+
+    #expect(capture.prefer == "resolution=ignore-duplicates,return=representation")
+  }
+
+  @Test
+  func anExplicitConflictTargetTakesAResolution() async throws {
+    let capture = RequestCapture()
+    _ = try await capture.client
+      .from(IntegrationNote.self)
+      .upsert(
+        IntegrationNote.Draft(body: "remember the milk", tag: "home"),
+        onConflict: \.tag,
+        resolution: .ignoreDuplicates
+      )
+      .execute()
+
+    #expect(capture.prefer == "resolution=ignore-duplicates,return=minimal")
+    #expect(capture.query?.contains("on_conflict=tag") == true)
+  }
+
+  @Test
+  func aBulkUpsertTakesAResolutionOnEitherConflictTarget() async throws {
+    let derived = RequestCapture()
+    _ = try await derived.client
+      .from(Todo.self)
+      .upsert(
+        [Todo.Draft(id: 1, task: "buy milk"), Todo.Draft(id: 2, task: "buy bread")],
+        resolution: .ignoreDuplicates
+      )
+      .execute()
+
+    #expect(derived.prefer == "resolution=ignore-duplicates,return=minimal")
+
+    let explicit = RequestCapture()
+    _ = try await explicit.client
+      .from(IntegrationNote.self)
+      .upsert(
+        [IntegrationNote.Draft(body: "remember the milk", tag: "home")],
+        onConflict: \.tag,
+        resolution: .ignoreDuplicates
+      )
+      .execute()
+
+    #expect(explicit.prefer == "resolution=ignore-duplicates,return=minimal")
   }
 
   @Test
@@ -284,8 +436,8 @@ struct TableIntegrationTests {
 
   @Test
   func anExplicitConflictTargetMapsEveryColumnName() async throws {
-    // `isDone` has to reach the wire as `is_done`, so the override goes through the same
-    // `columnName(for:)` mapping every filter uses rather than interpolating property names.
+    // `isDone` has to reach the wire as `is_done`, so the override reads the name off `Columns`
+    // rather than interpolating the property name.
     let capture = RequestCapture()
     _ = try await capture.client
       .from(Todo.self)
@@ -304,7 +456,7 @@ struct TableIntegrationTests {
     _ = try await capture.client
       .from(IntegrationUserRole.self)
       .update { $0.roleID = 3 }
-      .eq(\.userID, 1)
+      .where { $0.userID.eq(1) }
       .execute()
 
     #expect(capture.bodyString == #"{"role_id":3}"#)
@@ -317,7 +469,7 @@ struct TableIntegrationTests {
     _ = try await capture.client
       .from(Todo.self)
       .update { $0.task = "buy oat milk" }
-      .eq(\.id, 1)
+      .where { $0.id.eq(1) }
       .execute()
 
     #expect(capture.bodyString == #"{"task":"buy oat milk"}"#)

@@ -25,7 +25,7 @@ struct TableMacroSupportTests {
   ) -> String {
     inheritanceClause(
       wanted: TableMacro.wantedConformances(
-        TableMacro.Arguments(name: "todos", schema: "public", readOnly: readOnly),
+        TableMacro.Arguments(name: "todos", schema: nil, readOnly: readOnly),
         hasPrimaryKey: hasPrimaryKey
       ),
       missing: missing.map { TypeSyntax(stringLiteral: $0) }
@@ -99,5 +99,40 @@ struct TableMacroSupportTests {
     #expect(camelToSnakeCase("htmlURL") == "html_url")
     #expect(camelToSnakeCase("urlSession") == "url_session")
     #expect(camelToSnakeCase("id") == "id")
+  }
+
+  @Test
+  func unwrapsEveryOptionalSpelling() {
+    func unwrapped(_ type: String) -> String {
+      StoredProperty(
+        name: "x", type: type, isOptional: true, isPrimaryKey: false, hasDefault: false,
+        explicitColumn: nil
+      ).unwrappedType
+    }
+    #expect(unwrapped("Date?") == "Date")
+    #expect(unwrapped("Optional<Date>") == "Date")
+    #expect(unwrapped("[String]?") == "[String]")
+    #expect(unwrapped("Optional<[Int]>") == "[Int]")
+    #expect(unwrapped("String") == "String")
+    // An implicitly unwrapped optional is a nullable column too, and `String!` in a generic
+    // argument does not compile at all.
+    #expect(unwrapped("String!") == "String")
+    // Every layer comes off. One left on gives a column whose `Value` is optional, which loses
+    // every operator, because `Optional` does not conform to `PostgrestFilterValue`.
+    #expect(unwrapped("Optional<Int>!") == "Int")
+    #expect(unwrapped("Int??") == "Int")
+  }
+
+  /// The two used to test separate sets of spellings, and disagreed on `Optional<Int>!`.
+  @Test
+  func optionalityAgreesWithUnwrapping() {
+    for type in ["Date?", "Optional<Date>", "String!", "Optional<Int>!", "Int??"] {
+      #expect(postgrestIsOptionalType(type), "\(type) should be optional")
+      #expect(postgrestUnwrapOptionalType(type) != nil)
+    }
+    for type in ["String", "[Int]", "Dictionary<String, Int>"] {
+      #expect(!postgrestIsOptionalType(type), "\(type) should not be optional")
+      #expect(postgrestUnwrapOptionalType(type) == nil)
+    }
   }
 }

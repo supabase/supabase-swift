@@ -13,32 +13,24 @@ import Testing
 struct PostgrestRelationTests {
   struct Todo: PostgrestWritableRelation {
     static let relationName = "todos"
-    static let schema = "public"
     static let selectString = "*"
 
     var id: Int
     var task: String
     var isDone: Bool
 
-    static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
-      switch keyPath {
-      case \Self.id: "id"
-      case \Self.task: "task"
-      case \Self.isDone: "is_done"
-      default: fatalError("unmapped key path")
-      }
+    struct Columns: Sendable {
+      let id = PostgrestColumn<Todo, Int>("id")
+      let task = PostgrestColumn<Todo, String>("task")
+      let isDone = PostgrestColumn<Todo, Bool>("is_done")
     }
+
+    static let columns = Columns()
 
     struct Draft: Encodable, Sendable {
       var task: String
       var isDone: Bool?
     }
-  }
-
-  @Test
-  func columnNameMapsKeyPathToDatabaseColumn() {
-    #expect(Todo.columnName(for: \.id) == "id")
-    #expect(Todo.columnName(for: \.isDone) == "is_done")
   }
 
   @Test

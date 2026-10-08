@@ -79,7 +79,7 @@ struct SelectionIntegrationTests {
     let rows = try await capture.client
       .from(SelectionTodo.self)
       .select(TodoSummary.self)
-      .eq(\.isDone, false)
+      .where { $0.isDone.eq(false) }
       .execute()
       .value
 

@@ -8,10 +8,10 @@
 import ConcurrencyExtras
 import Foundation
 import Logging
+import TestHelpers
 import Testing
 
 @testable import Realtime
-@testable import RealtimeV2
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -32,7 +32,7 @@ struct PushV2Tests {
     #expect(PushStatus(rawValue: "ok") == .ok)
     #expect(PushStatus(rawValue: "error") == .error)
     #expect(PushStatus(rawValue: "timeout") == .timeout)
-    #expect(PushStatus(rawValue: "invalid") == nil)
+    #expect(PushStatus(rawValue: "invalid").rawValue == "invalid")
   }
 
   @Test
@@ -310,7 +310,8 @@ private final class MockRealtimeClient: RealtimeClientProtocol, @unchecked Senda
   private let _pushedMessages = LockIsolated<[RealtimeMessageV2]>([])
   private let _status = LockIsolated<RealtimeClientStatus>(.connected)
   let options: RealtimeClientOptions
-  let http: any HTTPClientType = MockHTTPClient()
+  let http = HTTPClient(
+    transport: RecordingTransport { _, _ in (HTTPResponse(status: .ok), Data()) })
   let clock: any Clock<Duration> = ContinuousClock()
 
   func broadcastURL(topic: String, event: String, isPrivate: Bool) -> URL {
@@ -321,9 +322,9 @@ private final class MockRealtimeClient: RealtimeClientProtocol, @unchecked Senda
     _status.value
   }
 
-  init(timeoutInterval: TimeInterval = 10.0) {
+  init(timeout: Duration = .seconds(10)) {
     self.options = RealtimeClientOptions(
-      timeoutInterval: timeoutInterval
+      timeout: timeout
     )
   }
 
@@ -363,17 +364,5 @@ private final class MockRealtimeClient: RealtimeClientProtocol, @unchecked Senda
 
   func _remove(_ channel: any RealtimeChannelProtocol) {
     // No-op for mock
-  }
-}
-
-private struct MockHTTPClient: HTTPClientType {
-  func send(_ request: HTTPRequest) async throws -> HTTPResponse {
-    let urlResponse = HTTPURLResponse(
-      url: URL(string: "https://example.com")!,
-      statusCode: 200,
-      httpVersion: nil,
-      headerFields: nil
-    )!
-    return HTTPResponse(data: Data(), response: urlResponse)
   }
 }

@@ -10,7 +10,7 @@ struct FileOptionsTests {
 
     #expect(options.cacheControl == "3600")
     #expect(options.contentType == nil)
-    #expect(!options.upsert)
+    #expect(!options.shouldUpsert)
     #expect(options.metadata == nil)
   }
 
@@ -20,13 +20,13 @@ struct FileOptionsTests {
     let options = FileOptions(
       cacheControl: "7200",
       contentType: "image/jpeg",
-      upsert: true,
+      shouldUpsert: true,
       metadata: metadata
     )
 
     #expect(options.cacheControl == "7200")
     #expect(options.contentType == "image/jpeg")
-    #expect(options.upsert)
+    #expect(options.shouldUpsert)
     #expect(options.metadata?["key"] == .string("value"))
   }
 }

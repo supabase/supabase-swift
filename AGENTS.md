@@ -23,8 +23,8 @@ This is the official Supabase SDK for Swift, mirroring the design of supabase-js
 
 ### Requirements
 
-- Xcode 16.4+ (supports versions eligible for App Store submission)
-- Swift 6.1+
+- Xcode 26.0+ (supports versions eligible for App Store submission)
+- Swift 6.2+
 - Supported platforms: iOS 16.0+, macOS 13.0+, tvOS 16+, watchOS 9+, visionOS 1+
 - Linux is supported for building but not officially supported for production use
 
@@ -75,6 +75,28 @@ DERIVED_DATA_PATH=~/.derivedData/Debug ./scripts/generate-coverage.sh
 
 This uses `swift-format` to automatically format code. All code should be formatted before committing.
 
+Lint rules live in `.swift-format` at the repo root, which enables `NeverUseForceTry` and
+`NeverUseImplicitlyUnwrappedOptionals` on top of the defaults. Library code must not trap on a
+value a caller supplied — see SDK-1793.
+
+`Tests/.swift-format` turns both back off. Test code has no users to crash: `try!` on a bundled
+fixture is the right tool (a missing fixture should fail the run loudly, and a `static let` cannot
+be `throws`), and `PostgrestMacrosTests` declares an implicitly unwrapped property on purpose, to
+cover how the `@Table` macro handles that spelling.
+
+Check the rules with:
+
+```bash
+swift-format lint --recursive --strict Sources Tests
+```
+
+Do not pass `--configuration` — swift-format finds the nearest `.swift-format` per file, and
+naming one explicitly applies it everywhere, re-flagging the test code the nested config exempts.
+
+`NeverForceUnwrap` is deliberately **not** enabled. It has no exemption for literals, so it flags
+provably-safe constants like `HTTPField.Name("Prefer")!` the same as `dictionary["key"]!` — about
+twenty such sites, all of which would need suppressing for no safety gain.
+
 ### Spell Checking
 
 Spell-checking uses [cSpell](https://cspell.org), via Node/npm:
@@ -85,6 +107,21 @@ npm ci --prefix tools/node   # one-time setup (re-run only when tools/node/packa
 ```
 
 Legitimate technical terms and project-specific words go in `dictionary.txt` at the repository root.
+
+### Linting
+
+```bash
+# Lint Sources and Tests (fails on any new violation)
+swiftlint lint --strict
+
+# Autocorrect violations that SwiftLint can fix
+swiftlint lint --fix
+```
+
+This uses [SwiftLint](https://github.com/realm/SwiftLint) for code-smell and
+correctness rules; `swift-format` remains the source of truth for formatting,
+so the SwiftLint config (`.swiftlint.yml`) disables the purely stylistic rules
+that overlap with it. Install SwiftLint locally with `brew install swiftlint`.
 
 ### Documentation
 
@@ -137,8 +174,8 @@ since it isn't a required check, nothing stops a merge if you don't.
 
 ### Enum-like Values
 
-- Use a Swift `enum` only when the value is genuinely closed: every case is fixed by the language or protocol itself (HTTP methods, a `CodingKeys` set) or the value is entirely client-side and never crosses the wire (e.g. `AuthChangeEvent`, `LogLevel`).
-- Any enum-like value sent to or received from the backend must be a `RawRepresentable` struct instead, so a value the backend adds later (or that this SDK just doesn't have a case for yet) round-trips through `.rawValue` instead of failing to decode or blocking construction until an SDK upgrade:
+- Use a Swift `enum` only when the value is genuinely closed: the cases carry associated values (`AuthResponse`, `SignedURLResult`), every case is fixed by the language or protocol itself (HTTP methods, a `CodingKeys` set), or the SDK has to implement each case so a value it has no code for is meaningless (`AuthFlowType`, `RealtimeProtocolVersion`). Adding a case to one of these is a major bump.
+- Any enum-like value sent to or received from the backend, and any status or event value a consumer will `switch` over (`AuthChangeEvent`, `RealtimeClientStatus`, `PushStatus`), must be a `RawRepresentable` struct instead, so a value the backend adds later (or that this SDK just doesn't have a case for yet) round-trips through `.rawValue` instead of failing to decode or blocking construction until an SDK upgrade. The consumer-facing policy lives in `Sources/Supabase/Supabase.docc/EnumsAndOpenSets.md`; keep it in sync when a type changes shape:
 
   ```swift
   public struct Provider: RawRepresentable, Codable, Hashable, Sendable, ExpressibleByStringLiteral {
@@ -207,7 +244,27 @@ Use standard file headers with copyright:
 - Use strongly-typed errors conforming to `Error` protocol
 - Provide `LocalizedError` conformance where appropriate
 - Use `async throws` for async error handling
-- Report issues using `IssueReporting` from xctest-dynamic-overlay
+- Report issues using `IssueReporting` (from swift-issue-reporting on Swift 6.4+, from
+  xctest-dynamic-overlay on earlier toolchains — see the comment atop `Package@swift-6.2.swift`)
+
+#### When trapping is allowed
+
+The dividing line is *when the value is fixed*, not who supplied it.
+
+- **Fixed once, at construction** — an initializer argument, a configuration field, a `package`
+  tuning constant. `precondition`/`preconditionFailure` is the right tool: the value cannot change
+  afterwards, so a bad one is a programmer error, and trapping reports it at the exact point it
+  was introduced. `SupabaseClient.init` traps on a `supabaseURL` with no host; `StorageApi` traps
+  on a URL it cannot decompose.
+  Degrading instead would bury the mistake behind an unrelated failure much later.
+- **Varies at runtime, or comes from the server** — a per-call parameter, a response header, a
+  decoded payload, a WebSocket close code. Never trap. Throw if the context already throws;
+  otherwise `reportIssue` and fall back. `HTTPFields.init(_:)` drops invalid field names rather
+  than trapping precisely because `HTTPResponse.init` builds it from `response.allHeaderFields`,
+  which a proxy or a hostile server controls.
+
+A value being "user input" is not on its own a reason to avoid trapping — `supabaseURL` is user
+input and traps. A value being *dynamic* is. See SDK-1793.
 
 ### Testing Conventions
 
@@ -260,7 +317,8 @@ struct FeatureTests {
 
 - `swift-snapshot-testing`: Snapshot testing
 - `swift-custom-dump`: Better test output
-- `xctest-dynamic-overlay`: Test utilities and issue reporting
+- `swift-issue-reporting` (Swift 6.4+) / `xctest-dynamic-overlay` (earlier toolchains): test
+  utilities and issue reporting
 - `Mocker`: URL mocking
 
 ## Architecture Notes
@@ -279,7 +337,7 @@ All public types should conform to `Sendable` where appropriate for Swift 6 comp
 
 ### HTTP Layer
 
-Uses modern `HTTPTypes` for request/response handling. Custom `StorageHTTPSession` abstraction allows for testing and custom implementations.
+Uses modern `HTTPTypes` for request/response handling. Every module shares one public seam: a `ClientTransport` performs the exchange and an ordered `ClientMiddleware` chain runs in front of it, grouped into one `HTTPClientConfiguration` that every client takes as a single `http:` parameter, so a custom networking stack, extra headers, or a test stub can be injected once for the whole SDK.
 
 ### Configuration
 
@@ -405,6 +463,7 @@ supabase stop
 ## Important Notes for AI Coding Agents
 
 - Always run `./scripts/format.sh` before committing Swift code
+- Run `swiftlint lint --strict` before committing; it must not report new violations
 - Any change to public API (add, remove, rename, or move a symbol) updates
   `sdk-compliance.yaml` in the same commit — run `./scripts/check-compliance.sh`
   to check for stale entries before committing (see "Capability Compliance")

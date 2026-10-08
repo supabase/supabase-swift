@@ -8,96 +8,58 @@
   @Suite
   struct KeychainLocalStorageTests {
     @Test
-    func primaryConfigurationUsesBundleIdentifier() {
-      let configuration = KeychainLocalStorage.primaryConfiguration(
-        bundleIdentifier: "com.example.app",
-        accessGroup: nil,
-        useDataProtectionKeychain: false
-      )
-      #expect(configuration.service == "com.example.app")
+    func defaultServiceIsFixedWithoutAccessGroup() throws {
+      let storage = KeychainLocalStorage()
+      let keychain = try #require(storage.keychain as? Keychain)
+
+      #expect(keychain.service == "supabase.gotrue.swift")
+      #expect(keychain.accessGroup == nil)
+      #expect(storage.legacyKeychains.isEmpty)
     }
 
     @Test
-    func primaryConfigurationFallsBackToLegacyService() {
-      let configuration = KeychainLocalStorage.primaryConfiguration(
-        bundleIdentifier: nil,
-        accessGroup: nil,
-        useDataProtectionKeychain: false
-      )
-      #expect(configuration.service == "supabase.gotrue.swift")
+    func defaultServiceIsFixedAndSharedAcrossTargets() throws {
+      let storage = KeychainLocalStorage(accessGroup: "group")
+      let keychain = try #require(storage.keychain as? Keychain)
+
+      #expect(keychain.service == "supabase.gotrue.swift")
+      #expect(keychain.accessGroup == "group")
+      #expect(!keychain.useDataProtectionKeychain)
+      #expect(storage.legacyKeychains.isEmpty)
     }
 
     @Test
-    func legacyConfigurationsContainsLegacyService() {
-      let primary = KeychainLocalStorage.primaryConfiguration(
-        bundleIdentifier: "com.example.app",
-        accessGroup: nil,
-        useDataProtectionKeychain: false
-      )
-      let legacy = KeychainLocalStorage.legacyConfigurations(primary: primary)
+    func dataProtectionProbesFileBasedLocationWithSameServiceAndGroup() throws {
+      let storage = KeychainLocalStorage(accessGroup: "group", useDataProtectionKeychain: true)
+      let primary = try #require(storage.keychain as? Keychain)
+      let legacy = try #require(storage.legacyKeychains.first as? Keychain)
 
-      #expect(
-        legacy == [
-          KeychainConfiguration(
-            service: "supabase.gotrue.swift",
-            accessGroup: nil,
-            useDataProtectionKeychain: false
-          )
-        ]
-      )
-    }
-
-    @Test
-    func legacyConfigurationsWithDataProtectionAlsoProbesFileBasedPrimary() {
-      let primary = KeychainLocalStorage.primaryConfiguration(
-        bundleIdentifier: "com.example.app",
-        accessGroup: "group",
-        useDataProtectionKeychain: true
-      )
-      let legacy = KeychainLocalStorage.legacyConfigurations(primary: primary)
-
-      #expect(
-        legacy == [
-          KeychainConfiguration(
-            service: "supabase.gotrue.swift",
-            accessGroup: "group",
-            useDataProtectionKeychain: false
-          ),
-          KeychainConfiguration(
-            service: "com.example.app",
-            accessGroup: "group",
-            useDataProtectionKeychain: false
-          ),
-        ]
-      )
-    }
-
-    @Test
-    func legacyConfigurationsExcludesPrimary() {
-      // No bundle identifier means the primary already is the legacy location.
-      let primary = KeychainLocalStorage.primaryConfiguration(
-        bundleIdentifier: nil,
-        accessGroup: nil,
-        useDataProtectionKeychain: false
-      )
-      #expect(KeychainLocalStorage.legacyConfigurations(primary: primary).isEmpty)
-    }
-
-    @Test
-    func legacyConfigurationsDeduplicates() {
-      // No bundle identifier plus data protection would otherwise yield the same entry twice.
-      let primary = KeychainLocalStorage.primaryConfiguration(
-        bundleIdentifier: nil,
-        accessGroup: nil,
-        useDataProtectionKeychain: true
-      )
-      #expect(KeychainLocalStorage.legacyConfigurations(primary: primary).count == 1)
+      #expect(primary.useDataProtectionKeychain)
+      #expect(storage.legacyKeychains.count == 1)
+      #expect(legacy.service == "supabase.gotrue.swift")
+      #expect(legacy.accessGroup == "group")
+      #expect(!legacy.useDataProtectionKeychain)
     }
 
     @Test
     func explicitServiceDoesNotMigrate() {
-      let storage = KeychainLocalStorage(service: "custom")
+      let storage = KeychainLocalStorage(service: "custom", useDataProtectionKeychain: true)
       #expect(storage.legacyKeychains.isEmpty)
+    }
+
+    @Test
+    func sharedTargetsMigrateOnceIntoOneLocation() throws {
+      // An app and its widget resolve to the same primary and the same legacy location, so the
+      // first reader's migration serves both and neither can delete an item the other still needs.
+      let session = Data("session".utf8)
+      let primary = FakeKeychain()
+      let legacy = FakeKeychain(items: ["key": session])
+      let widget = KeychainLocalStorage(keychain: primary, legacyKeychains: [legacy])
+      let app = KeychainLocalStorage(keychain: primary, legacyKeychains: [legacy])
+
+      #expect(try widget.retrieve(key: "key") == session)
+      #expect(legacy.items.value["key"] == nil)
+      #expect(try app.retrieve(key: "key") == session)
     }
 
     @Test

@@ -40,8 +40,8 @@
 ### Requirements
 
 - iOS 16.0+ / macOS 13.0+ / tvOS 16+ / watchOS 9+ / visionOS 1+
-- Xcode 16.4+
-- Swift 6.1+
+- Xcode 26.0+
+- Swift 6.2+
 
 > [!IMPORTANT]
 > Check the [Support Policy](#support-policy) to learn when dropping Xcode, Swift, and platform versions will not be considered a **breaking change**.
@@ -99,10 +99,32 @@ let client = SupabaseClient(
         ),
         global: .init(
             headers: ["x-my-custom-header": "my-app-name"],
-            session: URLSession.myCustomSession
+            http: .init(transport: URLSessionTransport(session: URLSession.myCustomSession))
         )
     )
 )
+```
+
+### Invoke an Edge Function
+
+```swift
+struct Answer: Decodable { let text: String }
+
+// JSON in, typed JSON out
+let answer: Answer = try await client.functions.invoke("ask", body: .json(["prompt": "hi"]))
+
+// Raw response: status, headers, bytes
+let response = try await client.functions.invoke("report", options: .init(method: .get))
+print(response.status, response.body.count)
+```
+
+### Stream a response
+
+```swift
+let response = try await client.functions.stream("chat", body: .json(["prompt": "hi"]))
+for try await chunk in response.body {
+  // chunk boundaries follow the network; frame server-sent events yourself
+}
 ```
 
 Additional examples are available in the [Examples](https://github.com/supabase/supabase-swift/tree/main/Examples) directory.

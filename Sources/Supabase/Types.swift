@@ -1,4 +1,6 @@
+public import Clocks
 public import Foundation
+public import Helpers
 public import Logging
 
 #if canImport(FoundationNetworking)
@@ -30,13 +32,19 @@ public struct SupabaseClientOptions: Sendable {
     public let schema: String?
 
     /// The JSONEncoder to use when encoding database request objects.
+    ///
+    /// Applies to the untyped API (`from(_:)` with a table name, `rpc(_:)`) only. The typed API
+    /// always uses a fixed encoder.
     public let encoder: JSONEncoder
 
     /// The JSONDecoder to use when decoding database response objects.
+    ///
+    /// Applies to the untyped API (`from(_:)` with a table name, `rpc(_:)`) only. The typed API
+    /// always uses a fixed decoder.
     public let decoder: JSONDecoder
 
-    /// Whether to automatically retry transient (network or 5xx) PostgREST errors.
-    /// Defaults to `true`.
+    /// Whether to automatically retry transient (network, 503 or 520) PostgREST errors on GET
+    /// and HEAD requests. Defaults to `true`.
     public let retry: Bool
 
     public init(
@@ -68,7 +76,7 @@ public struct SupabaseClientOptions: Sendable {
     public let flowType: AuthFlowType
 
     /// Set to `true` if you want to automatically refresh the token before expiring.
-    public let autoRefreshToken: Bool
+    public let automaticallyRefreshesToken: Bool
 
     /// Optional function for using a third-party authentication system with Supabase. The function should return an access token or ID token (JWT) by obtaining it from the third-party auth client library.
     /// Note that this function may be called concurrently and many times. Use memoization and locking techniques if this is not supported by the client libraries.
@@ -81,14 +89,15 @@ public struct SupabaseClientOptions: Sendable {
       redirectToURL: URL? = nil,
       storageKey: String? = nil,
       flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
-      autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken,
+      automaticallyRefreshesToken: Bool = AuthClient.Configuration
+        .defaultAutomaticallyRefreshesToken,
       accessToken: (@Sendable () async throws -> String?)? = nil
     ) {
       self.storage = storage
       self.redirectToURL = redirectToURL
       self.storageKey = storageKey
       self.flowType = flowType
-      self.autoRefreshToken = autoRefreshToken
+      self.automaticallyRefreshesToken = automaticallyRefreshesToken
       self.accessToken = accessToken
     }
   }
@@ -98,56 +107,92 @@ public struct SupabaseClientOptions: Sendable {
     /// Optional headers for initializing the client, it will be passed down to all sub-clients.
     public let headers: [String: String]
 
-    /// A session to use for making requests, defaults to `URLSession.shared`.
-    public let session: URLSession
-
     /// The logger to use across all Supabase sub-packages. Defaults to a build-config-aware
     /// logger: visible (warning+) in debug builds, silent in release builds.
     public let logger: Logging.Logger
 
+    /// The transport, middleware chain and request timeout every sub-client sends through.
+    ///
+    /// A `nil` ``HTTPClientConfiguration/transport`` (the default) uses ``URLSessionTransport``
+    /// over `URLSession.shared`. To send through your own `URLSession`, pass
+    /// `URLSessionTransport(session:)` as the transport. The middlewares run before the SDK's own
+    /// (trace context, access-token injection) and before the request reaches the transport; in
+    /// a module that retries (Auth, PostgREST) they run once per attempt.
+    /// ``HTTPClientConfiguration/timeout`` is the idle timeout for every request; leave it `nil`
+    /// for the defaults (60 seconds; 150 for Edge Functions).
+    public let http: HTTPClientConfiguration
+
+    /// The clock the time-based sub-client behaviors sleep on: Auth's token auto-refresh, Auth's
+    /// and Storage's request-retry backoff, and Realtime's heartbeat timer and reconnect backoff.
+    ///
+    /// Defaults to `ContinuousClock()`. Pass a `TestClock` (swift-clocks) to drive those
+    /// behaviors deterministically in tests instead of waiting out real seconds.
+    public let clock: any Clock<Duration>
+
+    /// Creates the shared options.
+    /// - Parameters:
+    ///   - headers: Extra headers sent on every request made by every sub-client.
+    ///   - http: The transport, middleware chain and request timeout every sub-client sends
+    ///     through. A `nil` transport (the default) uses ``URLSessionTransport`` over
+    ///     `URLSession.shared`.
+    ///   - logger: The logger used across all Supabase sub-packages.
+    ///   - clock: The clock every time-based sub-client behavior sleeps on. Defaults to
+    ///     `ContinuousClock()`.
     public init(
       headers: [String: String] = [:],
-      session: URLSession = .shared,
-      logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase")
+      http: HTTPClientConfiguration = .init(),
+      logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase"),
+      clock: any Clock<Duration> = ContinuousClock()
     ) {
       self.headers = headers
-      self.session = session
+      self.http = http
       self.logger = logger
+      self.clock = clock
     }
   }
 
   /// Options for the Edge Functions sub-client.
   public struct FunctionsOptions: Sendable {
-    /// The Region to invoke the functions in.
-    public let region: String?
+    /// The region to invoke functions in. `nil` lets the platform choose.
+    public var region: FunctionRegion?
 
     /// The JSON decoder to use for decoding function response bodies.
-    public let decoder: JSONDecoder
+    public var decoder: JSONDecoder
 
-    @_disfavoredOverload
-    public init(
-      region: String? = nil,
-      decoder: JSONDecoder = JSONDecoder()
-    ) {
-      self.region = region
-      self.decoder = decoder
-    }
+    /// Overrides ``SupabaseClientOptions/GlobalOptions/http`` for Functions, field by field: a
+    /// `nil` transport or timeout falls back to the global one, and its middlewares run after the
+    /// global ones. `nil` uses the global configuration as is.
+    public var http: HTTPClientConfiguration?
+
+    /// Overrides ``SupabaseClientOptions/GlobalOptions/logger`` for Functions. `nil` uses the
+    /// global logger.
+    public var logger: Logger?
 
     public init(
       region: FunctionRegion? = nil,
-      decoder: JSONDecoder = JSONDecoder()
+      decoder: JSONDecoder = .supabase(),
+      http: HTTPClientConfiguration? = nil,
+      logger: Logger? = nil
     ) {
-      self.init(region: region?.rawValue, decoder: decoder)
+      self.region = region
+      self.decoder = decoder
+      self.http = http
+      self.logger = logger
     }
   }
 
   /// Options for the Storage sub-client.
   public struct StorageOptions: Sendable {
     /// Whether storage client should be initialized with the new hostname format, i.e. `project-ref.storage.supabase.co`
-    public let useNewHostname: Bool
+    public let usesNewHostname: Bool
 
-    public init(useNewHostname: Bool = false) {
-      self.useNewHostname = useNewHostname
+    /// Whether to automatically retry transient Storage errors on reads (`GET`, `HEAD` and
+    /// listing files). Writes are never retried. Defaults to `true`.
+    public let retryEnabled: Bool
+
+    public init(usesNewHostname: Bool = false, retryEnabled: Bool = true) {
+      self.usesNewHostname = usesNewHostname
+      self.retryEnabled = retryEnabled
     }
   }
 
@@ -201,7 +246,8 @@ extension SupabaseClientOptions.AuthOptions {
       redirectToURL: URL? = nil,
       storageKey: String? = nil,
       flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
-      autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken,
+      automaticallyRefreshesToken: Bool = AuthClient.Configuration
+        .defaultAutomaticallyRefreshesToken,
       accessToken: (@Sendable () async throws -> String?)? = nil
     ) {
       self.init(
@@ -209,7 +255,7 @@ extension SupabaseClientOptions.AuthOptions {
         redirectToURL: redirectToURL,
         storageKey: storageKey,
         flowType: flowType,
-        autoRefreshToken: autoRefreshToken,
+        automaticallyRefreshesToken: automaticallyRefreshesToken,
         accessToken: accessToken
       )
     }

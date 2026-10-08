@@ -258,7 +258,7 @@ struct SignedURLsView: View {
 
       publicURL = try supabase.storage
         .from(selectedBucket)
-        .getPublicURL(path: filePath)
+        .publicURL(path: filePath)
     } catch {
       self.error = error
     }

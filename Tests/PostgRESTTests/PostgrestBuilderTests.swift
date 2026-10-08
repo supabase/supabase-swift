@@ -8,6 +8,7 @@
 import ConcurrencyExtras
 import Foundation
 import HTTPTypes
+import HTTPTypesFoundation
 import Helpers
 import Mocker
 import TestHelpers
@@ -35,9 +36,9 @@ extension PostgrestMockerTests {
 
       // Original client object isn't affected
       #expect(
-        postgrest1.from("users").select().request.headers[.init("apikey")!] == "foo")
+        postgrest1.from("users").select().request.headerFields[.init("apikey")!] == "foo")
       // Derived client object uses new header value
-      #expect(postgrest2.request.headers[.init("apikey")!] == "bar")
+      #expect(postgrest2.request.headerFields[.init("apikey")!] == "bar")
     }
 
     @Test
@@ -65,7 +66,10 @@ extension PostgrestMockerTests {
           .execute()
         Issue.record("Expected error to be thrown")
       } catch let error as PostgrestError {
+        #expect(error.kind == .server)
         #expect(error.message == "Bad Request")
+        #expect(error.serverError?.message == "Bad Request")
+        #expect(error.response?.statusCode == 400)
       }
     }
 
@@ -87,9 +91,11 @@ extension PostgrestMockerTests {
           .select()
           .execute()
         Issue.record("Expected error to be thrown")
-      } catch let error as HTTPError {
-        #expect(error.data == Data("Bad Request".utf8))
-        #expect(error.response.statusCode == 400)
+      } catch let error as PostgrestError {
+        #expect(error.kind == .server)
+        #expect(error.serverError == nil)
+        #expect(error.response?.body == Data("Bad Request".utf8))
+        #expect(error.response?.statusCode == 400)
       }
     }
 
@@ -185,7 +191,7 @@ extension PostgrestMockerTests {
           .value
         Issue.record("Expected error to be thrown")
       } catch let error as PostgrestError {
-        #expect(error.code == "PGRST116")
+        #expect(error.serverError?.code == "PGRST116")
       }
     }
 
@@ -376,7 +382,7 @@ extension PostgrestMockerTests {
         .select()
         .setHeader(name: "key", value: "value")
 
-      #expect(query.request.headers[.init("key")!] == "value")
+      #expect(query.request.headerFields[.init("key")!] == "value")
     }
 
     // MARK: - Encoder/decoder override tests
@@ -459,7 +465,10 @@ extension PostgrestMockerTests {
       do {
         let _: SnakeCasePayload = try await sut.from("users").select().execute().value
         Issue.record("Expected a decoding error without a matching key strategy")
-      } catch is DecodingError {}
+      } catch let error as PostgrestError {
+        #expect(error.kind == .decoding)
+        #expect(error.underlyingError is DecodingError)
+      }
 
       let snakeCaseDecoder = JSONDecoder()
       snakeCaseDecoder.keyDecodingStrategy = .convertFromSnakeCase
@@ -489,7 +498,7 @@ extension PostgrestMockerTests {
         Issue.record("Expected PostgrestError to be thrown")
       } catch let error as PostgrestError {
         #expect(error.message == "Bad Request")
-        #expect(error.code == "PGRST000")
+        #expect(error.serverError?.code == "PGRST000")
       }
     }
 
@@ -510,7 +519,7 @@ extension PostgrestMockerTests {
         Issue.record("Expected PostgrestError to be thrown")
       } catch let error as PostgrestError {
         #expect(error.message == "Bad Request")
-        #expect(error.code == "PGRST000")
+        #expect(error.serverError?.code == "PGRST000")
       }
     }
 
@@ -633,6 +642,25 @@ extension PostgrestMockerTests {
     }
 
     @Test
+    func noRetryOn500ForGET() async throws {
+      // PostgREST's retryable set is fixed at 503/520, mirroring postgrest-js; a 500 is a real
+      // server answer (a failing function, a bad query) and must surface at once.
+      let callCount = LockIsolated(0)
+
+      let sut = makeSUTWithCustomFetch { _ in
+        callCount.withValue { $0 += 1 }
+        return (Data(), self.makeHTTPURLResponse(statusCode: 500))
+      }
+
+      do {
+        try await sut.from("users").select().execute()
+        Issue.record("Expected error to be thrown")
+      } catch {
+        #expect(callCount.value == 1)
+      }
+    }
+
+    @Test
     func retryOn503ForGETRequest() async throws {
       let callCount = LockIsolated(0)
 
@@ -734,6 +762,26 @@ extension PostgrestMockerTests {
     }
 
     @Test
+    func perCallTimeoutOverridesTheConfiguredTimeout() async throws {
+      let seen = LockIsolated<[Duration?]>([])
+      let sut = PostgrestClient(
+        url: url,
+        http: .init(
+          transport: ClosureTransport { _, _ in
+            seen.withValue { $0.append(RequestTimeout.current) }
+            return (HTTPTypes.HTTPResponse(status: .ok), HTTPBody(Data("[]".utf8)))
+          },
+          timeout: .seconds(7)))
+
+      try await sut.from("users").select().execute()
+      try await sut.from("users").select().timeout(.seconds(3)).execute()
+      // The override must survive a phase change (filter -> transform).
+      try await sut.from("users").select().timeout(.seconds(3)).order("id").execute()
+
+      #expect(seen.value == [.seconds(7), .seconds(3), .seconds(3)])
+    }
+
+    @Test
     func clientLevelRetryDisabled() async throws {
       let callCount = LockIsolated(0)
 
@@ -762,12 +810,64 @@ extension PostgrestMockerTests {
         return (Data("[]".utf8), self.makeHTTPURLResponse(statusCode: 200))
       }
 
-      let result: PostgrestResponse<[User]> = try await sut.from("users").select().retry(
-        enabled: true
-      )
-      .execute()
+      let result: PostgrestResponse<[User]> = try await sut.from("users").select()
+        .retry(enabled: true)
+        .execute()
       #expect(callCount.value == 2)
       #expect(result.value.isEmpty)
+    }
+
+    @Test
+    func transportFailureIsWrapped() async {
+      let sut = makeSUTWithCustomFetch(retryEnabled: false) { _ in
+        throw URLError(.notConnectedToInternet)
+      }
+
+      do {
+        try await sut.from("users").select().execute()
+        Issue.record("Expected error to be thrown")
+      } catch let error as PostgrestError {
+        #expect(error.kind == .transport)
+        #expect((error.underlyingError as? URLError)?.code == .notConnectedToInternet)
+      } catch {
+        Issue.record("Unexpected error \(error)")
+      }
+    }
+
+    @Test
+    func cancellationIsNotWrapped() async {
+      let sut = makeSUTWithCustomFetch(retryEnabled: false) { _ in throw CancellationError() }
+
+      await #expect(throws: CancellationError.self) {
+        try await sut.from("users").select().execute()
+      }
+    }
+
+    @Test
+    func customFetchErrorIsNotWrapped() async {
+      struct FetchError: Error {}
+      let sut = makeSUTWithCustomFetch(retryEnabled: false) { _ in throw FetchError() }
+
+      await #expect(throws: FetchError.self) {
+        try await sut.from("users").select().execute()
+      }
+    }
+
+    @Test
+    func undecodableSuccessBodyIsWrapped() async {
+      let sut = makeSUTWithCustomFetch { _ in
+        (Data("not json".utf8), self.makeHTTPURLResponse(statusCode: 200))
+      }
+
+      do {
+        let _: [User] = try await sut.from("users").select().execute().value
+        Issue.record("Expected error to be thrown")
+      } catch let error as PostgrestError {
+        #expect(error.kind == .decoding)
+        #expect(error.underlyingError is DecodingError)
+      } catch {
+        Issue.record("Unexpected error \(error)")
+      }
     }
 
     // MARK: - Helpers
@@ -775,10 +875,22 @@ extension PostgrestMockerTests {
     private func makeSUTWithCustomFetch(
       retryEnabled: Bool = true,
       decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder,
-      fetch: @escaping PostgrestClient.FetchHandler
+      fetch: @escaping @Sendable (URLRequest) async throws -> (Data, URLResponse)
     ) -> PostgrestClient {
-      PostgrestClient(
-        configuration: .init(url: url, fetch: fetch, decoder: decoder, retryEnabled: retryEnabled),
+      let transport = ClosureTransport { request, body in
+        guard var urlRequest = URLRequest(httpRequest: request) else {
+          throw URLError(.badURL)
+        }
+        if let body { urlRequest.httpBody = try await Data(collecting: body, upTo: .max) }
+        let (data, response) = try await fetch(urlRequest)
+        guard let head = (response as? HTTPURLResponse)?.httpResponse else {
+          throw URLError(.badServerResponse)
+        }
+        return (head, data.isEmpty ? nil : HTTPBody(data))
+      }
+      return PostgrestClient(
+        configuration: .init(
+          url: url, http: .init(transport: transport), decoder: decoder, retryEnabled: retryEnabled),
         clock: ImmediateRetryTestClock()
       )
     }

@@ -15,12 +15,6 @@ import Testing
 
 @Suite
 struct StoredSessionTests {
-  // Unique negative clientID per usage so this suite's process-global `Dependencies` entries can't
-  // be clobbered by another suite running concurrently, nor by this suite's own two tests (which
-  // Swift Testing runs in parallel). `AuthClient`'s generator only hands out positive ids, so
-  // negatives are collision-free.
-  let clientID: AuthClientID = -2
-
   @Test
   func get_withCorruptedJSON_returnsNil() throws {
     let localStorage = InMemoryLocalStorage()
@@ -29,22 +23,13 @@ struct StoredSessionTests {
       value: Data("not-valid-json".utf8)
     )
 
-    let testClientID: AuthClientID = -3
-    Dependencies[testClientID] = Dependencies(
+    let sut = SessionStorage.live(
       configuration: AuthClient.Configuration(
         url: URL(string: "http://localhost")!,
         storageKey: "supabase.auth.token",
         localStorage: localStorage
-      ),
-      http: HTTPClientMock(),
-      api: .init(clientID: testClientID),
-      codeVerifierStorage: .mock,
-      sessionStorage: .live(clientID: testClientID),
-      sessionManager: .live(clientID: testClientID),
-      logger: supabaseDefaultLogger(label: "io.supabase.auth")
+      )
     )
-
-    let sut = Dependencies[testClientID].sessionStorage
     #expect(sut.get() == nil)
   }
 
@@ -54,21 +39,13 @@ struct StoredSessionTests {
     )
   )
   func storedSession() throws {
-    Dependencies[clientID] = Dependencies(
+    let sut = SessionStorage.live(
       configuration: AuthClient.Configuration(
         url: URL(string: "http://localhost")!,
         storageKey: "supabase.auth.token",
         localStorage: try! DiskTestStorage()
-      ),
-      http: HTTPClientMock(),
-      api: .init(clientID: clientID),
-      codeVerifierStorage: .mock,
-      sessionStorage: .live(clientID: clientID),
-      sessionManager: .live(clientID: clientID),
-      logger: supabaseDefaultLogger(label: "io.supabase.auth")
+      )
     )
-
-    let sut = Dependencies[clientID].sessionStorage
 
     #expect(sut.get() != nil)
 
@@ -89,7 +66,7 @@ struct StoredSessionTests {
         userMetadata: [
           "referrer_id": nil
         ],
-        aud: "authenticated",
+        audience: "authenticated",
         confirmationSentAt: ISO8601DateFormatter().date(from: "2022-04-09T11:57:01Z")!,
         recoverySentAt: nil,
         emailChangeSentAt: nil,

@@ -1,9 +1,26 @@
 import Foundation
 package import HTTPTypes
+import IssueReporting
 
 extension HTTPFields {
+  /// Builds fields from a `[String: String]`, dropping any entry whose key is not a valid HTTP
+  /// field name.
+  ///
+  /// Some of these keys are dynamic, so a name RFC 9110 rejects (an empty string, one holding a
+  /// space or a colon) must not trap. `HTTPResponse.init` builds fields straight from
+  /// `response.allHeaderFields`, which the server and any proxy in front of it control, and
+  /// `FunctionsClient.invoke` and `StorageFileApi` pass per-call headers. Dropping the bad entry
+  /// and reporting keeps the remaining headers — and the response — usable.
   package init(_ dictionary: [String: String]) {
-    self.init(dictionary.map { .init(name: .init($0.key)!, value: $0.value) })
+    self.init(
+      dictionary.compactMap { key, value in
+        guard let name = HTTPField.Name(key) else {
+          reportIssue("Dropping header with invalid field name: \(key.debugDescription)")
+          return nil
+        }
+        return HTTPField(name: name, value: value)
+      }
+    )
   }
 
   package var dictionary: [String: String] {
@@ -50,7 +67,9 @@ extension HTTPFields {
       var components = currentValue.components(separatedBy: separator)
 
       if let key = value.split(separator: "=").first,
-        let index = components.firstIndex(where: { $0.hasPrefix("\(key)=") })
+        let index = components.firstIndex(where: {
+          $0.trimmingCharacters(in: .whitespaces).hasPrefix("\(key)=")
+        })
       {
         components[index] = value
       } else {
@@ -66,6 +85,5 @@ extension HTTPFields {
 
 extension HTTPField.Name {
   package static let xClientInfo = HTTPField.Name("X-Client-Info")!
-  package static let xRegion = HTTPField.Name("x-region")!
-  package static let xRelayError = HTTPField.Name("x-relay-error")!
+  package static let xRetryCount = HTTPField.Name("X-Retry-Count")!
 }

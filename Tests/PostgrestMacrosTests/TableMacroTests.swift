@@ -30,7 +30,7 @@ struct TableMacroTests {
       }
       """
     } expansion: {
-      #"""
+      """
       struct Todo {
         @PrimaryKey @Default var id: Int
         var task: String
@@ -41,24 +41,21 @@ struct TableMacroTests {
       extension Todo {
         static let relationName = "todos"
 
-        static let schema = "public"
+        typealias Schema = PostgREST.PublicSchema
 
         static let selectString = "*"
 
-        static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
-          switch keyPath {
-          case \Self.id:
-            return "id"
-          case \Self.task:
-            return "task"
-          case \Self.isDone:
-            return "is_done"
-          case \Self.dueDate:
-            return "due_at"
-          default:
-            fatalError("Todo: no column is mapped for that key path")
+        struct Columns: Sendable {
+          let id = PostgrestColumn<Todo, Int>("id")
+          let task = PostgrestColumn<Todo, String>("task")
+          let isDone = PostgrestColumn<Todo, Bool>("is_done")
+          let dueDate = PostgrestNullableColumn<Todo, Date>("due_at")
+
+          init() {
           }
         }
+
+        static let columns = Columns()
 
         static let primaryKeyColumns: [String] = ["id"]
 
@@ -90,7 +87,7 @@ struct TableMacroTests {
           }
         }
       }
-      """#
+      """
     }
   }
 
@@ -104,7 +101,7 @@ struct TableMacroTests {
       }
       """
     } expansion: {
-      #"""
+      """
       struct ActiveTodo {
         var id: Int
       }
@@ -112,24 +109,24 @@ struct TableMacroTests {
       extension ActiveTodo {
         static let relationName = "active_todos"
 
-        static let schema = "public"
+        typealias Schema = PostgREST.PublicSchema
 
         static let selectString = "*"
 
-        static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
-          switch keyPath {
-          case \Self.id:
-            return "id"
-          default:
-            fatalError("ActiveTodo: no column is mapped for that key path")
+        struct Columns: Sendable {
+          let id = PostgrestColumn<ActiveTodo, Int>("id")
+
+          init() {
           }
         }
+
+        static let columns = Columns()
 
         enum CodingKeys: String, CodingKey {
           case id = "id"
         }
       }
-      """#
+      """
     }
   }
 
@@ -154,18 +151,18 @@ struct TableMacroTests {
       extension AuditEvent {
         static let relationName = "audit_events"
 
-        static let schema = "public"
+        typealias Schema = PostgREST.PublicSchema
 
         static let selectString = "*"
 
-        static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
-          switch keyPath {
-          case \Self.action:
-            return "action"
-          default:
-            fatalError("AuditEvent: no column is mapped for that key path")
+        struct Columns: Sendable {
+          let action = PostgrestColumn<AuditEvent, String>("action")
+
+          init() {
           }
         }
+
+        static let columns = Columns()
 
         enum CodingKeys: String, CodingKey {
           case action = "action"
@@ -191,14 +188,14 @@ struct TableMacroTests {
   func propagatesTheAccessLevel() {
     assertMacro {
       """
-      @Table("todos", schema: "app")
+      @Table("todos", schema: AppSchema.self)
       public struct Todo {
         @PrimaryKey var id: Int
         var task: String
       }
       """
     } expansion: {
-      #"""
+      """
       public struct Todo {
         @PrimaryKey var id: Int
         var task: String
@@ -207,20 +204,19 @@ struct TableMacroTests {
       extension Todo {
         public static let relationName = "todos"
 
-        public static let schema = "app"
+        public typealias Schema = AppSchema
 
         public static let selectString = "*"
 
-        public static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
-          switch keyPath {
-          case \Self.id:
-            return "id"
-          case \Self.task:
-            return "task"
-          default:
-            fatalError("Todo: no column is mapped for that key path")
+        public struct Columns: Sendable {
+          public let id = PostgrestColumn<Todo, Int>("id")
+          public let task = PostgrestColumn<Todo, String>("task")
+
+          public init() {
           }
         }
+
+        public static let columns = Columns()
 
         public static let primaryKeyColumns: [String] = ["id"]
 
@@ -244,7 +240,7 @@ struct TableMacroTests {
           }
         }
       }
-      """#
+      """
     }
   }
 
@@ -260,7 +256,7 @@ struct TableMacroTests {
       }
       """
     } expansion: {
-      #"""
+      """
       struct Todo {
         static let table = "todos"
         var htmlURL: String
@@ -270,18 +266,18 @@ struct TableMacroTests {
       extension Todo {
         static let relationName = "todos"
 
-        static let schema = "public"
+        typealias Schema = PostgREST.PublicSchema
 
         static let selectString = "*"
 
-        static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
-          switch keyPath {
-          case \Self.htmlURL:
-            return "html_url"
-          default:
-            fatalError("Todo: no column is mapped for that key path")
+        struct Columns: Sendable {
+          let htmlURL = PostgrestColumn<Todo, String>("html_url")
+
+          init() {
           }
         }
+
+        static let columns = Columns()
 
         enum CodingKeys: String, CodingKey {
           case htmlURL = "html_url"
@@ -299,7 +295,7 @@ struct TableMacroTests {
           }
         }
       }
-      """#
+      """
     }
   }
   @Test
@@ -314,7 +310,7 @@ struct TableMacroTests {
       }
       """
     } expansion: {
-      #"""
+      """
       struct Todo {
         @PrimaryKey var id: Int
         var task: String, note: String
@@ -324,26 +320,22 @@ struct TableMacroTests {
       extension Todo {
         static let relationName = "todos"
 
-        static let schema = "public"
+        typealias Schema = PostgREST.PublicSchema
 
         static let selectString = "*"
 
-        static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
-          switch keyPath {
-          case \Self.id:
-            return "id"
-          case \Self.task:
-            return "task"
-          case \Self.note:
-            return "note"
-          case \Self.draft:
-            return "draft"
-          case \Self.review:
-            return "review"
-          default:
-            fatalError("Todo: no column is mapped for that key path")
+        struct Columns: Sendable {
+          let id = PostgrestColumn<Todo, Int>("id")
+          let task = PostgrestColumn<Todo, String>("task")
+          let note = PostgrestColumn<Todo, String>("note")
+          let draft = PostgrestColumn<Todo, String>("draft")
+          let review = PostgrestColumn<Todo, String>("review")
+
+          init() {
           }
         }
+
+        static let columns = Columns()
 
         static let primaryKeyColumns: [String] = ["id"]
 
@@ -379,7 +371,7 @@ struct TableMacroTests {
           }
         }
       }
-      """#
+      """
     }
   }
 
@@ -399,7 +391,7 @@ struct TableMacroTests {
       }
       """
     } expansion: {
-      #"""
+      """
       struct Todo {
         @PrimaryKey var id: Int
         var task: String = "" {
@@ -413,20 +405,19 @@ struct TableMacroTests {
       extension Todo {
         static let relationName = "todos"
 
-        static let schema = "public"
+        typealias Schema = PostgREST.PublicSchema
 
         static let selectString = "*"
 
-        static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
-          switch keyPath {
-          case \Self.id:
-            return "id"
-          case \Self.task:
-            return "task"
-          default:
-            fatalError("Todo: no column is mapped for that key path")
+        struct Columns: Sendable {
+          let id = PostgrestColumn<Todo, Int>("id")
+          let task = PostgrestColumn<Todo, String>("task")
+
+          init() {
           }
         }
+
+        static let columns = Columns()
 
         static let primaryKeyColumns: [String] = ["id"]
 
@@ -450,7 +441,7 @@ struct TableMacroTests {
           }
         }
       }
-      """#
+      """
     }
   }
 
@@ -468,7 +459,7 @@ struct TableMacroTests {
       }
       """
     } expansion: {
-      #"""
+      """
       struct UserRole {
         @PrimaryKey var userID: UUID
         @PrimaryKey var roleID: UUID
@@ -478,22 +469,20 @@ struct TableMacroTests {
       extension UserRole {
         static let relationName = "user_roles"
 
-        static let schema = "public"
+        typealias Schema = PostgREST.PublicSchema
 
         static let selectString = "*"
 
-        static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
-          switch keyPath {
-          case \Self.userID:
-            return "user_id"
-          case \Self.roleID:
-            return "role_id"
-          case \Self.grantedAt:
-            return "granted_at"
-          default:
-            fatalError("UserRole: no column is mapped for that key path")
+        struct Columns: Sendable {
+          let userID = PostgrestColumn<UserRole, UUID>("user_id")
+          let roleID = PostgrestColumn<UserRole, UUID>("role_id")
+          let grantedAt = PostgrestColumn<UserRole, Date>("granted_at")
+
+          init() {
           }
         }
+
+        static let columns = Columns()
 
         static let primaryKeyColumns: [String] = ["user_id", "role_id"]
 
@@ -521,7 +510,7 @@ struct TableMacroTests {
           }
         }
       }
-      """#
+      """
     }
   }
 
@@ -539,7 +528,7 @@ struct TableMacroTests {
       }
       """
     } expansion: {
-      #"""
+      """
       struct UserRole {
         @PrimaryKey var userID: UUID
         @PrimaryKey var roleID: UUID
@@ -548,20 +537,19 @@ struct TableMacroTests {
       extension UserRole {
         static let relationName = "user_roles"
 
-        static let schema = "public"
+        typealias Schema = PostgREST.PublicSchema
 
         static let selectString = "*"
 
-        static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
-          switch keyPath {
-          case \Self.userID:
-            return "user_id"
-          case \Self.roleID:
-            return "role_id"
-          default:
-            fatalError("UserRole: no column is mapped for that key path")
+        struct Columns: Sendable {
+          let userID = PostgrestColumn<UserRole, UUID>("user_id")
+          let roleID = PostgrestColumn<UserRole, UUID>("role_id")
+
+          init() {
           }
         }
+
+        static let columns = Columns()
 
         static let primaryKeyColumns: [String] = ["user_id", "role_id"]
 
@@ -585,7 +573,7 @@ struct TableMacroTests {
           }
         }
       }
-      """#
+      """
     }
   }
   /// `Int?` and `Optional<Int>` are the same type, and optionality has to be recognized in both
@@ -605,7 +593,7 @@ struct TableMacroTests {
       }
       """
     } expansion: {
-      #"""
+      """
       struct Todo {
         @PrimaryKey @Default var id: Int
         var task: String
@@ -616,24 +604,21 @@ struct TableMacroTests {
       extension Todo {
         static let relationName = "todos"
 
-        static let schema = "public"
+        typealias Schema = PostgREST.PublicSchema
 
         static let selectString = "*"
 
-        static func columnName(for keyPath: PartialKeyPath<Self>) -> String {
-          switch keyPath {
-          case \Self.id:
-            return "id"
-          case \Self.task:
-            return "task"
-          case \Self.note:
-            return "note"
-          case \Self.tag:
-            return "tag"
-          default:
-            fatalError("Todo: no column is mapped for that key path")
+        struct Columns: Sendable {
+          let id = PostgrestColumn<Todo, Int>("id")
+          let task = PostgrestColumn<Todo, String>("task")
+          let note = PostgrestNullableColumn<Todo, String>("note")
+          let tag = PostgrestNullableColumn<Todo, String>("tag")
+
+          init() {
           }
         }
+
+        static let columns = Columns()
 
         static let primaryKeyColumns: [String] = ["id"]
 
@@ -665,8 +650,65 @@ struct TableMacroTests {
           }
         }
       }
-      """#
+      """
     }
   }
 
+  @Test
+  func expandsAColumnsNamespace() {
+    assertMacro {
+      """
+      @Table("todos")
+      struct Todo {
+        var id: Int
+        @Column("due_at") var dueDate: Date?
+      }
+      """
+    } expansion: {
+      """
+      struct Todo {
+        var id: Int
+        @Column("due_at") var dueDate: Date?
+      }
+
+      extension Todo {
+        static let relationName = "todos"
+
+        typealias Schema = PostgREST.PublicSchema
+
+        static let selectString = "*"
+
+        struct Columns: Sendable {
+          let id = PostgrestColumn<Todo, Int>("id")
+          let dueDate = PostgrestNullableColumn<Todo, Date>("due_at")
+
+          init() {
+          }
+        }
+
+        static let columns = Columns()
+
+        enum CodingKeys: String, CodingKey {
+          case id = "id"
+          case dueDate = "due_at"
+        }
+
+        struct Draft: Encodable, Sendable {
+          var id: Int
+          var dueDate: Date?
+
+          enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case dueDate = "due_at"
+          }
+
+          init(id: Int, dueDate: Date? = nil) {
+            self.id = id
+            self.dueDate = dueDate
+          }
+        }
+      }
+      """
+    }
+  }
 }

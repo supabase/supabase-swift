@@ -7,53 +7,72 @@
 
 public import Foundation
 import HTTPTypes
+public import Helpers
+public import Logging
 
 /// Admin-only Auth operations that require the secret key.
 ///
-/// Access this namespace via ``AuthClient/admin``.
+/// Get one from ``AuthClient/admin``, or create one directly with
+/// ``init(url:headers:redirectToURL:http:logger:)`` on a server that has no user session. It
+/// carries its own transport and never reads or writes a session.
 ///
 /// > Warning: These methods require the secret key. Never expose this key
 /// > in a browser or mobile app — call these methods from a secure server-side environment only.
 ///
 /// ## Topics
 ///
+/// ### Creating an admin client
+/// - ``init(url:headers:redirectToURL:http:logger:)``
+///
 /// ### User management
-/// - ``getUserById(_:)``
+/// - ``user(id:)``
 /// - ``updateUserById(_:attributes:)``
 /// - ``createUser(attributes:)``
 /// - ``inviteUserByEmail(_:data:redirectTo:)``
 /// - ``deleteUser(id:shouldSoftDelete:)``
 /// - ``listUsers(params:)``
+/// - ``users(perPage:)``
 /// - ``generateLink(params:)``
 /// - ``signOut(jwt:scope:)``
 ///
 /// ### OAuth 2.1 clients
 /// - ``oauth``
+///
+/// ### Multi-factor authentication
+/// - ``mfa``
 public struct AuthAdmin: Sendable {
-  let clientID: AuthClientID
-
-  var configuration: AuthClient.Configuration { Dependencies[clientID].configuration }
-  var api: APIClient { Dependencies[clientID].api }
-  var encoder: JSONEncoder { Dependencies[clientID].resolvedEncoder }
+  let url: URL
+  /// Default redirect for the flows that take one, when the caller passes none.
+  let redirectToURL: URL?
+  let api: APIClient
+  let encoder: JSONEncoder
+  let decoder: JSONDecoder
 
   /// Contains all OAuth client administration methods.
   /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
   ///
   /// - Warning: This property requires `secret` key. Be careful to never expose your `secret` key in the browser.
   public var oauth: AuthAdminOAuth {
-    AuthAdminOAuth(clientID: clientID)
+    AuthAdminOAuth(admin: self)
+  }
+
+  /// Contains all multi-factor authentication administration methods.
+  ///
+  /// - Warning: This property requires `secret` key. Be careful to never expose your `secret` key in the browser.
+  public var mfa: AuthAdminMFA {
+    AuthAdminMFA(admin: self)
   }
 
   /// Get user by id.
-  /// - Parameter uid: The user's unique identifier.
+  /// - Parameter id: The user's unique identifier.
   /// - Note: This function should only be called on a server. Never expose your `secret` key in the browser.
-  public func getUserById(_ uid: UUID) async throws -> User {
+  public func user(id: UUID) async throws -> User {
     try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("admin/users/\(uid)"),
-        method: .get
+        method: .get,
+        url: url.appendingPathComponent("admin/users/\(id)")
       )
-    ).decoded(decoder: configuration.resolvedDecoder)
+    ).decoded(decoder: decoder)
   }
 
   /// Updates the user data.
@@ -64,29 +83,27 @@ public struct AuthAdmin: Sendable {
   public func updateUserById(_ uid: UUID, attributes: AdminUserAttributes) async throws -> User {
     try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("admin/users/\(uid)"),
         method: .put,
-        body: configuration.resolvedEncoder.encode(attributes)
-      )
-    ).decoded(decoder: configuration.resolvedDecoder)
+        url: url.appendingPathComponent("admin/users/\(uid)")
+      ), body: encoder.encode(attributes)
+    ).decoded(decoder: decoder)
   }
 
   /// Creates a new user.
   ///
-  /// - To confirm the user's email address or phone number, set ``AdminUserAttributes/emailConfirm`` or ``AdminUserAttributes/phoneConfirm`` to `true`. Both arguments default to `false`.
+  /// - To confirm the user's email address or phone number, set ``AdminUserAttributes/confirmsEmail`` or ``AdminUserAttributes/confirmsPhone`` to `true`. Both arguments default to `false`.
   /// - ``createUser(attributes:)`` will not send a confirmation email to the user. You can use ``inviteUserByEmail(_:data:redirectTo:)`` if you want to send them an email invite instead.
-  /// - If you are sure that the created user's email or phone number is legitimate and verified, you can set the ``AdminUserAttributes/emailConfirm`` or ``AdminUserAttributes/phoneConfirm`` param to true.
+  /// - If you are sure that the created user's email or phone number is legitimate and verified, you can set the ``AdminUserAttributes/confirmsEmail`` or ``AdminUserAttributes/confirmsPhone`` param to true.
   /// - Warning: Never expose your `secret` key on the client.
   @discardableResult
   public func createUser(attributes: AdminUserAttributes) async throws -> User {
     try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("admin/users"),
         method: .post,
-        body: encoder.encode(attributes)
-      )
+        url: url.appendingPathComponent("admin/users")
+      ), body: encoder.encode(attributes)
     )
-    .decoded(decoder: configuration.resolvedDecoder)
+    .decoded(decoder: decoder)
   }
 
   /// Sends an invite link to an email address.
@@ -106,25 +123,25 @@ public struct AuthAdmin: Sendable {
   ) async throws -> User {
     try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("admin/invite"),
         method: .post,
+        url: url.appendingPathComponent("admin/invite"),
         query: [
-          (redirectTo ?? configuration.redirectToURL).map {
+          (redirectTo ?? redirectToURL).map {
             URLQueryItem(
               name: "redirect_to",
               value: $0.absoluteString
             )
           }
-        ].compactMap { $0 },
-        body: encoder.encode(
-          [
-            "email": .string(email),
-            "data": data.map({ JSONValue.object($0) }) ?? .null,
-          ]
-        )
+        ].compactMap { $0 }
+      ),
+      body: encoder.encode(
+        [
+          "email": .string(email),
+          "data": data.map({ JSONValue.object($0) }) ?? .null,
+        ]
       )
     )
-    .decoded(decoder: configuration.resolvedDecoder)
+    .decoded(decoder: decoder)
   }
 
   /// Delete a user. Requires `secret` key.
@@ -137,11 +154,11 @@ public struct AuthAdmin: Sendable {
   public func deleteUser(id: UUID, shouldSoftDelete: Bool = false) async throws {
     _ = try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("admin/users/\(id)"),
         method: .delete,
-        body: encoder.encode(
-          DeleteUserRequest(shouldSoftDelete: shouldSoftDelete)
-        )
+        url: url.appendingPathComponent("admin/users/\(id)")
+      ),
+      body: encoder.encode(
+        DeleteUserRequest(shouldSoftDelete: shouldSoftDelete)
       )
     )
   }
@@ -159,10 +176,10 @@ public struct AuthAdmin: Sendable {
   public func signOut(jwt: String, scope: SignOutScope = .global) async throws {
     _ = try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("logout"),
         method: .post,
+        url: url.appendingPathComponent("logout"),
         query: [URLQueryItem(name: "scope", value: scope.rawValue)],
-        headers: [.authorization: "Bearer \(jwt)"]
+        headerFields: [.authorization: "Bearer \(jwt)"]
       )
     )
   }
@@ -178,41 +195,33 @@ public struct AuthAdmin: Sendable {
       let aud: String
     }
 
-    let httpResponse = try await api.execute(
+    let (httpResponse, data) = try await api.send(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("admin/users"),
         method: .get,
+        url: url.appendingPathComponent("admin/users"),
         query: [
-          URLQueryItem(name: "page", value: params?.page?.description ?? ""),
-          URLQueryItem(name: "per_page", value: params?.perPage?.description ?? ""),
-        ]
+          params?.page.map { URLQueryItem(name: "page", value: $0.description) },
+          params?.perPage.map { URLQueryItem(name: "per_page", value: $0.description) },
+        ].compactMap { $0 }
       )
     )
 
-    let response = try httpResponse.decoded(
-      as: Response.self, decoder: configuration.resolvedDecoder)
+    let response = try data.decoded(
+      as: Response.self, decoder: decoder)
 
     var pagination = ListUsersPaginatedResponse(
       users: response.users,
-      aud: response.aud,
+      audience: response.aud,
       lastPage: 0,
-      total: httpResponse.headers[.xTotalCount].flatMap(Int.init) ?? 0
+      total: httpResponse.headerFields[.xTotalCount].flatMap(Int.init) ?? 0
     )
 
-    let links = httpResponse.headers[.link]?.components(separatedBy: ",") ?? []
-    if !links.isEmpty {
-      for link in links {
-        let page = link.components(separatedBy: ";")[0].components(separatedBy: "=")[1].prefix(
-          while: \.isNumber
-        )
-        let rel = link.components(separatedBy: ";")[1].components(separatedBy: "=")[1]
-
-        if rel == "\"last\"", let lastPage = Int(page) {
-          pagination.lastPage = lastPage
-        } else if rel == "\"next\"", let nextPage = Int(page) {
-          pagination.nextPage = nextPage
-        }
-      }
+    let pages = parsePaginationLinks(httpResponse.headerFields[.link])
+    if let lastPage = pages["last"] {
+      pagination.lastPage = lastPage
+    }
+    if let nextPage = pages["next"] {
+      pagination.nextPage = nextPage
     }
 
     return pagination
@@ -226,23 +235,72 @@ public struct AuthAdmin: Sendable {
   public func generateLink(params: GenerateLinkParams) async throws -> GenerateLinkResponse {
     try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("admin/generate_link"),
         method: .post,
+        url: url.appendingPathComponent("admin/generate_link"),
         query: [
-          (params.redirectTo ?? configuration.redirectToURL).map {
+          (params.redirectTo ?? redirectToURL).map {
             URLQueryItem(
               name: "redirect_to",
               value: $0.absoluteString
             )
           }
-        ].compactMap { $0 },
-        body: encoder.encode(params.body)
-      )
-    ).decoded(decoder: configuration.resolvedDecoder)
+        ].compactMap { $0 }
+      ), body: encoder.encode(params.body)
+    ).decoded(decoder: decoder)
   }
 }
 
 extension HTTPField.Name {
   static let xTotalCount = Self("x-total-count")!
   static let link = Self("link")!
+}
+
+extension AuthAdmin {
+  /// Creates an admin client that talks to the Auth server on its own, with no user session.
+  ///
+  /// Use this on a server where nobody is signed in, the same way supabase-js exposes
+  /// `GoTrueAdminApi`. When you already have an ``AuthClient``, ``AuthClient/admin`` builds one
+  /// from its configuration instead.
+  ///
+  /// ```swift
+  /// let admin = AuthAdmin(
+  ///   url: URL(string: "https://<project>.supabase.co/auth/v1")!,
+  ///   headers: [
+  ///     "apikey": secretKey,
+  ///     "Authorization": "Bearer \(secretKey)",
+  ///   ]
+  /// )
+  /// let users = try await admin.listUsers()
+  /// ```
+  ///
+  /// > Warning: The secret key grants full access to your project's users. Never ship it in a
+  /// > client app.
+  ///
+  /// - Parameters:
+  ///   - url: The base URL of the Auth server, such as `https://<project>.supabase.co/auth/v1`.
+  ///   - headers: Headers sent with every request. Include `apikey` and an
+  ///     `Authorization: Bearer <secret key>` header.
+  ///   - redirectToURL: Default redirect for ``inviteUserByEmail(_:data:redirectTo:)`` and
+  ///     ``generateLink(params:)`` when the call passes none.
+  ///   - http: The transport and middleware chain every request goes through.
+  ///   - logger: The logger to use. Defaults to a build-config-aware logger.
+  public init(
+    url: URL,
+    headers: [String: String] = [:],
+    redirectToURL: URL? = nil,
+    http: HTTPClientConfiguration = .init(),
+    logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.auth")
+  ) {
+    self.init(
+      url: url,
+      redirectToURL: redirectToURL,
+      api: APIClient(
+        headers: headers,
+        http: HTTPClient(http: http, clock: ContinuousClock(), logger: logger),
+        decoder: AuthClient.Configuration.jsonDecoder
+      ),
+      encoder: AuthClient.Configuration.jsonEncoder,
+      decoder: AuthClient.Configuration.jsonDecoder
+    )
+  }
 }

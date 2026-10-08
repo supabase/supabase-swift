@@ -15,8 +15,8 @@ extension SupabaseStorageClient {
   public func listBuckets() async throws -> [Bucket] {
     try await api.execute(
       HTTPRequest(
-        url: api.configuration.url.appendingPathComponent("bucket"),
-        method: .get
+        method: .get,
+        url: api.configuration.url.appendingPathComponent("bucket")
       )
     )
     .decoded(decoder: api.configuration.decoder)
@@ -27,11 +27,11 @@ extension SupabaseStorageClient {
   /// - Parameter id: The unique identifier of the bucket to retrieve.
   /// - Returns: The ``Bucket`` with the given identifier.
   /// - Throws: ``StorageError`` if the bucket does not exist or the caller is not authorized.
-  public func getBucket(_ id: String) async throws -> Bucket {
+  public func bucket(_ id: String) async throws -> Bucket {
     try await api.execute(
       HTTPRequest(
-        url: api.configuration.url.appendingPathComponent("bucket/\(id)"),
-        method: .get
+        method: .get,
+        url: api.configuration.url.appendingPathComponent("bucket/\(id)")
       )
     )
     .decoded(decoder: api.configuration.decoder)
@@ -65,16 +65,16 @@ extension SupabaseStorageClient {
   {
     try await api.execute(
       HTTPRequest(
-        url: api.configuration.url.appendingPathComponent("bucket"),
         method: .post,
-        body: api.configuration.encoder.encode(
-          BucketParameters(
-            id: id,
-            name: id,
-            public: options.isPublic,
-            fileSizeLimit: options.fileSizeLimit.map { StorageByteCount(stringLiteral: $0) },
-            allowedMimeTypes: options.allowedMimeTypes
-          )
+        url: api.configuration.url.appendingPathComponent("bucket")
+      ),
+      body: api.configuration.encoder.encode(
+        BucketParameters(
+          id: id,
+          name: id,
+          public: options.isPublic,
+          fileSizeLimit: options.fileSizeLimit.map { StorageByteCount(stringLiteral: $0) },
+          allowedMimeTypes: options.allowedMimeTypes
         )
       )
     )
@@ -96,16 +96,16 @@ extension SupabaseStorageClient {
   public func updateBucket(_ id: String, options: BucketOptions) async throws {
     try await api.execute(
       HTTPRequest(
-        url: api.configuration.url.appendingPathComponent("bucket/\(id)"),
         method: .put,
-        body: api.configuration.encoder.encode(
-          BucketParameters(
-            id: id,
-            name: id,
-            public: options.isPublic,
-            fileSizeLimit: options.fileSizeLimit.map { StorageByteCount(stringLiteral: $0) },
-            allowedMimeTypes: options.allowedMimeTypes
-          )
+        url: api.configuration.url.appendingPathComponent("bucket/\(id)")
+      ),
+      body: api.configuration.encoder.encode(
+        BucketParameters(
+          id: id,
+          name: id,
+          public: options.isPublic,
+          fileSizeLimit: options.fileSizeLimit.map { StorageByteCount(stringLiteral: $0) },
+          allowedMimeTypes: options.allowedMimeTypes
         )
       )
     )
@@ -121,8 +121,8 @@ extension SupabaseStorageClient {
   public func emptyBucket(_ id: String) async throws {
     try await api.execute(
       HTTPRequest(
-        url: api.configuration.url.appendingPathComponent("bucket/\(id)/empty"),
-        method: .post
+        method: .post,
+        url: api.configuration.url.appendingPathComponent("bucket/\(id)/empty")
       )
     )
   }
@@ -138,8 +138,29 @@ extension SupabaseStorageClient {
   public func deleteBucket(_ id: String) async throws {
     try await api.execute(
       HTTPRequest(
-        url: api.configuration.url.appendingPathComponent("bucket/\(id)"),
-        method: .delete
+        method: .delete,
+        url: api.configuration.url.appendingPathComponent("bucket/\(id)")
+      )
+    )
+  }
+
+  /// Purges the CDN cache for every file in a bucket, so the next request for each one is served
+  /// from Storage again.
+  ///
+  /// > Important: This requires the `secret` key. On self-hosted Storage, the `purgeCache` tenant
+  /// > feature and a CDN purge endpoint must be configured, otherwise the request fails.
+  ///
+  /// - Parameters:
+  ///   - bucket: The unique identifier of the bucket to purge.
+  ///   - transformationsOnly: Pass `true` to purge only the resized and reformatted variants,
+  ///     leaving the original files cached.
+  /// - Throws: ``StorageError`` if the caller is not authorized or cache purging is not enabled.
+  public func purgeCache(bucket: String, transformationsOnly: Bool = false) async throws {
+    try await api.execute(
+      HTTPRequest(
+        method: .delete,
+        url: api.configuration.url.appendingPathComponent("cdn/\(bucket)"),
+        query: transformationsOnly ? [URLQueryItem(name: "transformations", value: "true")] : []
       )
     )
   }

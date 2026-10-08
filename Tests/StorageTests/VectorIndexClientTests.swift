@@ -32,11 +32,7 @@ extension StorageMockerTests {
           configuration: StorageClientConfiguration(
             url: url,
             headers: [:],
-            session: StorageHTTPSession(
-              fetch: { try await session.data(for: $0) },
-              upload: { try await session.upload(for: $0, from: $1) }
-            )
-          )
+            http: .init(transport: URLSessionTransport(session: session)))
         )
       ).from("documents").index("embeddings")
     }
@@ -89,7 +85,7 @@ extension StorageMockerTests {
         ]
       ).register()
 
-      let vectors = try await index.getVectors(
+      let vectors = try await index.vectors(
         keys: ["doc-1"], returnData: true, returnMetadata: true)
       #expect(vectors.count == 1)
       #expect(vectors[0].key == "doc-1")
@@ -170,7 +166,9 @@ extension StorageMockerTests {
         ])
       }
       #expect(error?.message == "new row violates row-level security")
-      #expect(error?.error == "Unauthorized")
+      #expect(error?.kind == .server)
+      #expect(error?.serverError?.error == "Unauthorized")
+      #expect(error?.response?.statusCode == 403)
     }
   }
 }

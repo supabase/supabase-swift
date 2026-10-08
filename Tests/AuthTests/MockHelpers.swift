@@ -1,6 +1,4 @@
-import ConcurrencyExtras
 import Foundation
-import Logging
 import TestHelpers
 
 @testable import Auth
@@ -13,51 +11,5 @@ func json(named name: String) -> Data {
 extension Decodable {
   init(fromMockNamed name: String) {
     self = try! AuthClient.Configuration.jsonDecoder.decode(Self.self, from: json(named: name))
-  }
-}
-
-extension Dependencies {
-  static let mock = Dependencies(
-    configuration: AuthClient.Configuration(
-      url: URL(string: "https://project-id.supabase.com")!,
-      localStorage: InMemoryLocalStorage()
-    ),
-    http: HTTPClientMock(),
-    api: APIClient(clientID: AuthClientID()),
-    codeVerifierStorage: CodeVerifierStorage.mock,
-    sessionStorage: SessionStorage.live(clientID: AuthClientID()),
-    sessionManager: SessionManager.live(clientID: AuthClientID()),
-    logger: supabaseDefaultLogger(label: "io.supabase.auth")
-  )
-}
-
-extension CodeVerifierStorage {
-  static var mock: CodeVerifierStorage {
-    let slots = LockIsolated<[String: String]>([:])
-    let legacy = LockIsolated<String?>(nil)
-
-    return Self(
-      get: { flowId in
-        if let flowId {
-          return slots.value[flowId]
-        }
-        return legacy.value
-      },
-      set: { code, flowId in
-        slots.withValue { $0[flowId] = code }
-        legacy.setValue(code)
-      },
-      remove: { flowId in
-        if let flowId {
-          slots.withValue { _ = $0.removeValue(forKey: flowId) }
-        } else {
-          legacy.setValue(nil)
-        }
-      },
-      removeAll: {
-        slots.setValue([:])
-        legacy.setValue(nil)
-      }
-    )
   }
 }

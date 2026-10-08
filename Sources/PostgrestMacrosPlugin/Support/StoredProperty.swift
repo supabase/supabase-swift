@@ -16,31 +16,93 @@ struct StoredProperty {
   var hasDefault: Bool
   var explicitColumn: String?
 
+  /// The `@Relationship` foreign key, rendered as a reference into the owning relation's column
+  /// namespace — `Comment.columns.todoID` — or `nil` for a plain column.
+  var foreignKey: String?
+
   /// The database column name: an explicit `@Column`, otherwise the snake_case form.
+  ///
+  /// For an embed this is the PostgREST alias rather than a column: the response comes back keyed
+  /// by it, and `CodingKeys` decodes it, exactly as for a column.
   var columnName: String { explicitColumn ?? camelToSnakeCase(name) }
 
   /// The property's type made optional, or left alone if it already is.
   var optionalType: String { isOptional ? type : "\(type)?" }
+
+  /// The property's type with every layer of `Optional` removed, or left alone if it has none.
+  var unwrappedType: String { postgrestUnwrapOptionalType(type) ?? type }
+
+  /// The selection an embed decodes into: the property's type with every `Array` and `Optional`
+  /// layer removed, so `[CommentBody]` and `UserName?` both give the selection itself.
+  ///
+  /// Only meaningful for a property carrying ``foreignKey``. To-many and to-one differ in the
+  /// Swift type and in nothing PostgREST is told — the embed renders the same either way, and the
+  /// server decides how many rows come back.
+  var embeddedSelection: String { postgrestUnwrapElementType(type) ?? type }
+}
+
+/// A written type with every layer of `Optional` stripped, or `nil` if it is not spelled as one.
+///
+/// Three spellings count, because all three mean a nullable column: `Int?`, `Optional<Int>` and
+/// `Int!`. A generated schema can emit either of the first two, and the `!` spelling reaches a
+/// generic argument where it is illegal — `PostgrestColumn<Todo, String!>` does not compile, and
+/// the error lands on macro-expanded code the author never wrote.
+///
+/// Stripping *every* layer is what keeps `Value` non-optional, which the whole wrapped-type design
+/// rests on: a column is nullable or it is not, so `Optional<Int>!` and `Int??` both describe a
+/// nullable `Int`. Leaving one layer on gives `PostgrestNullableColumn<Todo, Int?>`, and because
+/// `Optional` deliberately does not conform to `PostgrestFilterValue` that column silently loses
+/// every operator — "no member `eq`" rather than anything naming the real problem.
+///
+/// A `Swift.Optional<Int>` spelling is not matched. It is legal but vanishingly rare, and a macro
+/// cannot resolve module qualification from syntax alone.
+func postgrestUnwrapOptionalType(_ type: String) -> String? {
+  let inner: String
+  if type.hasSuffix("?") || type.hasSuffix("!") {
+    inner = String(type.dropLast())
+  } else if type.hasPrefix("Optional<"), type.hasSuffix(">") {
+    inner = String(type.dropFirst("Optional<".count).dropLast())
+  } else {
+    return nil
+  }
+  return postgrestUnwrapOptionalType(inner) ?? inner
+}
+
+/// A written type with every `Optional` and `Array` layer stripped, or `nil` if it has neither.
+///
+/// An embed is written `[CommentBody]` for a to-many and `UserName?` for a nullable to-one, and
+/// both name the same thing to PostgREST — the selection that goes inside the parentheses. Both
+/// array spellings count, since a generated schema emits `[X]` and hand-written code may say
+/// `Array<X>`.
+func postgrestUnwrapElementType(_ type: String) -> String? {
+  if let inner = postgrestUnwrapOptionalType(type) {
+    return postgrestUnwrapElementType(inner) ?? inner
+  }
+  let inner: String
+  if type.hasPrefix("["), type.hasSuffix("]") {
+    inner = String(type.dropFirst().dropLast())
+  } else if type.hasPrefix("Array<"), type.hasSuffix(">") {
+    inner = String(type.dropFirst("Array<".count).dropLast())
+  } else {
+    return nil
+  }
+  return postgrestUnwrapElementType(inner) ?? inner
 }
 
 /// Whether a written type is spelled as an `Optional`.
 ///
-/// Both spellings have to be recognized everywhere optionality is decided: `Int?` and
-/// `Optional<Int>` are the same type, and a generated schema can emit either. Recognizing one and
-/// not the other is what let an `Optional<T>` field lose the `= nil` default in a generated
-/// initializer while a `?`-spelled one kept it.
-///
-/// A `Swift.Optional<Int>` spelling is not matched. It is legal but vanishingly rare, and a macro
-/// cannot resolve module qualification from syntax alone.
+/// Derived from ``postgrestUnwrapOptionalType(_:)`` rather than testing its own set of spellings,
+/// so the two cannot disagree: a spelling that satisfied one and not the other would produce a
+/// column whose `Value` was itself optional.
 func postgrestIsOptionalType(_ type: String) -> Bool {
-  type.hasSuffix("?") || type.hasPrefix("Optional<")
+  postgrestUnwrapOptionalType(type) != nil
 }
 
 extension DeclGroupSyntax {
   /// Reads the stored properties, skipping computed properties and static members.
   ///
-  /// A key path to a skipped property therefore maps to no column, which is what the generated
-  /// `columnName(for:)` traps on.
+  /// A skipped property therefore has no entry in `Columns`, so a filter or a selection naming it
+  /// is a compile error rather than a runtime one.
   ///
   /// Three shapes are easy to get wrong, so each is spelled out:
   ///
@@ -78,6 +140,8 @@ extension DeclGroupSyntax {
         .expression.as(StringLiteralExprSyntax.self)?
         .representedLiteralValue
 
+      let foreignKey = attribute("Relationship").flatMap(postgrestForeignKeyReference)
+
       let bindings = Array(variable.bindings)
       return bindings.indices.compactMap { index -> StoredProperty? in
         let binding = bindings[index]
@@ -94,7 +158,8 @@ extension DeclGroupSyntax {
           isOptional: postgrestIsOptionalType(typeText),
           isPrimaryKey: attribute("PrimaryKey") != nil,
           hasDefault: attribute("Default") != nil,
-          explicitColumn: column
+          explicitColumn: column,
+          foreignKey: foreignKey
         )
       }
     }

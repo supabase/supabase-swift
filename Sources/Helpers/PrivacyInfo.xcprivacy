@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- The SDK does not track users across apps or websites owned by other companies. -->
+	<key>NSPrivacyTracking</key>
+	<false/>
+	<key>NSPrivacyTrackingDomains</key>
+	<array/>
+	<!--
+		The SDK collects nothing on its own behalf. It transmits whatever the host app passes to
+		it, to the host app's own Supabase project — data the host app collects and must declare
+		itself, under its own privacy manifest.
+	-->
+	<key>NSPrivacyCollectedDataTypes</key>
+	<array/>
+	<key>NSPrivacyAccessedAPITypes</key>
+	<array>
+		<!--
+			Uploads read a file's size, to set `Content-Length` before streaming it. The size
+			comes from `FileManager.attributesOfItem(atPath:)`, which also returns
+			`NSFileCreationDate` / `NSFileModificationDate` and stats the file, so it needs
+			declaring whichever key the caller reads. Grep for `attributesOfItem`.
+		-->
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>C617.1</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

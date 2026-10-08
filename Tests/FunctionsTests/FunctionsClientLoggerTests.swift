@@ -1,5 +1,7 @@
 import Foundation
+import HTTPTypes
 import Logging
+import TestHelpers
 import Testing
 
 @testable import Functions
@@ -8,8 +10,7 @@ import Testing
   import FoundationNetworking
 #endif
 
-/// `FunctionsClient` has no stored `logger` property (unlike Auth/PostgREST/Storage) — the
-/// `logger:` parameter is tagged and consumed directly when building the `LoggerInterceptor` at
+/// `Configuration.logger` is tagged and consumed when building the `LoggerInterceptor` at
 /// construction time. Verify the tag by capturing the metadata the interceptor actually emits.
 @Suite
 struct FunctionsClientLoggerTests {
@@ -53,16 +54,14 @@ struct FunctionsClientLoggerTests {
     let logger = Logging.Logger(label: "test") { _ in CapturingLogHandler(capture: capture) }
 
     let sut = FunctionsClient(
-      url: url,
-      headers: ["apikey": apiKey],
-      logger: logger,
-      fetch: { request in
-        (
-          Data(),
-          HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
-        )
-      }
-    )
+      configuration: .init(
+        url: url,
+        headers: [HTTPField.Name("apikey")!: apiKey],
+        http: .init(
+          transport: ClosureTransport { _, _ in
+            (HTTPTypes.HTTPResponse(status: .ok), nil)
+          }),
+        logger: logger))
 
     try await sut.invoke("hello-world")
 

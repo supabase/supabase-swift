@@ -1,94 +1,112 @@
 import Foundation
 import HTTPTypes
+import Logging
+
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
 
 extension HTTPClient {
   init(configuration: AuthClient.Configuration) {
-    var interceptors: [any HTTPClientInterceptor] = [
-      LoggerInterceptor(logger: configuration.logger)
-    ]
+    self.init(http: configuration.http, clock: configuration.clock, logger: configuration.logger)
+  }
 
-    interceptors.append(
-      RetryRequestInterceptor(
-        retryableHTTPMethods: RetryRequestInterceptor.defaultRetryableHTTPMethods.union(
-          [.post]  // Add POST method so refresh token are also retried.
-        )
-      )
-    )
+  init(http: HTTPClientConfiguration, clock: any Clock<Duration>, logger: Logging.Logger) {
+    // GoTrue's writes are all safe to replay — `/token` within its refresh reuse interval — so
+    // POST, PUT and DELETE are retried too. A 429 is not: GoTrue's limiters count every attempt
+    // and their windows are minutes long, so replaying within seconds only burns the quota.
+    var policy = RetryPolicy.default
+    policy.retryableMethods.formUnion([.post, .put, .delete])
+    policy.retryableStatuses.remove(429)
 
-    self.init(fetch: configuration.fetch, interceptors: interceptors)
+    self.init(
+      configuration: http,
+      retrying: RetryRequestInterceptor(policy: policy, clock: clock),
+      appending: [LoggerInterceptor(logger: logger)])
   }
 }
 
+/// Sends requests to the Auth server with the client's default headers and maps failures to
+/// ``AuthError``.
+///
+/// Knows nothing about sessions. `AuthAdmin` uses it standalone; ``SessionAPIClient`` layers the
+/// session bookkeeping on top for the user-facing client.
 struct APIClient: Sendable {
-  let clientID: AuthClientID
+  let headers: [String: String]
+  let http: HTTPClient
+  let decoder: JSONDecoder
 
-  var configuration: AuthClient.Configuration {
-    Dependencies[clientID].configuration
+  /// Sends `request` and returns the response body.
+  func execute(_ request: HTTPRequest, body: Data? = nil) async throws -> Data {
+    try await send(request, body: body).data
   }
 
-  var sessionManager: SessionManager {
-    Dependencies[clientID].sessionManager
+  /// Like ``execute(_:body:)`` but also returns the response head, for callers that read headers.
+  func send(
+    _ request: HTTPRequest, body: Data? = nil
+  ) async throws -> (response: HTTPResponse, data: Data) {
+    var request = request
+    request.headerFields = HTTPFields(headers).merging(with: request.headerFields)
+
+    if request.headerFields[.apiVersionHeaderName] == nil {
+      request.headerFields[.apiVersionHeaderName] = apiVersions[._20240101]!.name.rawValue
+    }
+
+    let response: HTTPResponse
+    let data: Data
+    do {
+      (response, data) = try await http.send(request, body: body)
+    } catch {
+      // Only the network layer's own failures are relabelled. `CancellationError`, and anything
+      // thrown by user code that runs inside `send` (a custom `ClientTransport` or middleware, an `accessToken` closure),
+      // propagate as themselves.
+      guard let urlError = error as? URLError else { throw error }
+      throw AuthError(
+        kind: .transport, message: urlError.localizedDescription, underlyingError: urlError)
+    }
+
+    guard 200..<300 ~= response.status.code else {
+      throw Self.error(response: response, data: data, decoder: decoder)
+    }
+
+    return (response, data)
   }
 
-  var eventEmitter: AuthStateChangeEventEmitter {
-    Dependencies[clientID].eventEmitter
-  }
-
-  var http: any HTTPClientType {
-    Dependencies[clientID].http
-  }
-
-  /// Error codes that should clean up local session.
-  private let sessionCleanupErrorCodes: [ErrorCode] = [
+  /// Error codes GoTrue returns when the session a request was issued for no longer exists: the
+  /// user signed out, was deleted, or the session was otherwise terminated.
+  static let sessionCleanupErrorCodes: [ErrorCode] = [
     .sessionNotFound,
     .sessionExpired,
     .refreshTokenNotFound,
     .refreshTokenAlreadyUsed,
   ]
 
-  func execute(_ request: Helpers.HTTPRequest) async throws -> Helpers.HTTPResponse {
-    var request = request
-    request.headers = HTTPFields(configuration.headers).merging(with: request.headers)
+  /// Maps a non-2xx response to the error the caller sees.
+  ///
+  /// Pure: no storage or session access. A response carrying one of ``sessionCleanupErrorCodes``
+  /// maps to ``AuthError/sessionMissing`` with the response attached, which is what
+  /// ``AuthError/invalidatesSession`` keys off. Acting on it is the session layer's job.
+  static func error(response: HTTPResponse, data: Data, decoder: JSONDecoder) -> AuthError {
+    let errorResponse = HTTPErrorResponse(response, body: data)
 
-    if request.headers[.apiVersionHeaderName] == nil {
-      request.headers[.apiVersionHeaderName] = apiVersions[._20240101]!.name.rawValue
-    }
+    guard let error = try? decoder.decode(_RawAPIErrorResponse.self, from: data) else {
+      let statusCode = response.status.code
+      // `HTTPURLResponse` does not expose the reason phrase, so the status description is the
+      // closest analog. The status code is always included because the description is localized
+      // on Darwin and differs from the Linux one; the empty check is defensive only.
+      let message: String
+      if 500..<600 ~= statusCode {
+        let description = HTTPURLResponse.localizedString(forStatusCode: statusCode)
+        message = description.isEmpty ? "HTTP \(statusCode)" : "HTTP \(statusCode): \(description)"
+      } else {
+        message = "Unexpected response with status code \(statusCode)."
+      }
 
-    let response = try await http.send(request)
-
-    guard 200..<300 ~= response.statusCode else {
-      throw await handleError(response: response)
-    }
-
-    return response
-  }
-
-  @discardableResult
-  func authorizedExecute(_ request: Helpers.HTTPRequest) async throws -> Helpers.HTTPResponse {
-    var sessionManager: SessionManager {
-      Dependencies[clientID].sessionManager
-    }
-
-    let session = try await sessionManager.session()
-
-    var request = request
-    request.headers[.authorization] = "Bearer \(session.accessToken)"
-
-    return try await execute(request)
-  }
-
-  func handleError(response: Helpers.HTTPResponse) async -> AuthError {
-    guard
-      let error = try? response.decoded(
-        as: _RawAPIErrorResponse.self,
-        decoder: configuration.resolvedDecoder
-      )
-    else {
-      return .api(
-        message: "Unexpected error",
+      return AuthError(
+        kind: .server,
+        message: message,
         errorCode: .unexpectedFailure,
-        underlyingData: response.data,
-        underlyingResponse: response.underlyingResponse
+        response: errorResponse
       )
     }
 
@@ -104,34 +122,31 @@ struct APIClient: Sendable {
       }
 
     if errorCode == nil, let weakPassword = error.weakPassword {
-      return .weakPassword(
-        message: error._getErrorMessage(),
-        reasons: weakPassword.reasons ?? []
-      )
+      var result = AuthError.weakPassword(
+        message: error._getErrorMessage(), reasons: weakPassword.reasons ?? [])
+      result.response = errorResponse
+      return result
     } else if errorCode == .weakPassword {
-      return .weakPassword(
-        message: error._getErrorMessage(),
-        reasons: error.weakPassword?.reasons ?? []
-      )
+      var result = AuthError.weakPassword(
+        message: error._getErrorMessage(), reasons: error.weakPassword?.reasons ?? [])
+      result.response = errorResponse
+      return result
     } else if let errorCode, sessionCleanupErrorCodes.contains(errorCode) {
-      // The `session_id` inside the JWT does not correspond to a row in the
-      // `sessions` table. This usually means the user has signed out, has been
-      // deleted, or their session has somehow been terminated.
-      await sessionManager.remove()
-      eventEmitter.emit(.signedOut, session: nil)
-      return .sessionMissing
+      var result = AuthError.sessionMissing
+      result.response = errorResponse
+      return result
     } else {
-      return .api(
+      return AuthError(
+        kind: .server,
         message: error._getErrorMessage(),
         errorCode: errorCode ?? .unknown,
-        underlyingData: response.data,
-        underlyingResponse: response.underlyingResponse
+        response: errorResponse
       )
     }
   }
 
-  private func parseResponseAPIVersion(_ response: Helpers.HTTPResponse) -> Date? {
-    guard let apiVersion = response.headers[.apiVersionHeaderName] else { return nil }
+  private static func parseResponseAPIVersion(_ response: HTTPResponse) -> Date? {
+    guard let apiVersion = response.headerFields[.apiVersionHeaderName] else { return nil }
 
     let formatter = ISO8601DateFormatter()
     formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -139,7 +154,16 @@ struct APIClient: Sendable {
   }
 }
 
-// Struct for mapping all fields possibly returned by API.
+extension AuthError {
+  /// Whether the server reported that the session the request was issued for is gone.
+  ///
+  /// Only ``APIClient/error(response:data:decoder:)`` produces a `sessionMissing` error with a
+  /// response attached; a locally raised one (nothing in storage) has none.
+  var invalidatesSession: Bool {
+    kind == .sessionMissing && response != nil
+  }
+}
+
 struct _RawAPIErrorResponse: Decodable {
   let msg: String?
   let message: String?
@@ -155,5 +179,24 @@ struct _RawAPIErrorResponse: Decodable {
 
   func _getErrorMessage() -> String {
     msg ?? message ?? errorDescription ?? error ?? "Unknown"
+  }
+}
+
+extension Data {
+  /// Shadows `Data.decoded(as:decoder:)` from Helpers inside the Auth module so every existing
+  /// decode call site throws ``AuthError`` with kind `.decoding` instead of a bare
+  /// `DecodingError`. Same-module declarations win over imported ones with the same signature.
+  func decoded<T: Decodable>(as _: T.Type = T.self, decoder: JSONDecoder = JSONDecoder()) throws
+    -> T
+  {
+    do {
+      return try decoder.decode(T.self, from: self)
+    } catch {
+      throw AuthError(
+        kind: .decoding,
+        message: "Failed to decode the Auth response as \(T.self).",
+        underlyingError: error
+      )
+    }
   }
 }

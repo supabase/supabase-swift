@@ -35,10 +35,7 @@ extension AuthMockerTests {
           "Authorization": "Bearer supabase.secret.key",
         ],
         localStorage: storage,
-        fetch: { request in
-          try await session.data(for: request)
-        }
-      )
+        http: .init(transport: URLSessionTransport(session: session)))
 
       return AuthClient(configuration: configuration)
     }
@@ -144,10 +141,7 @@ extension AuthMockerTests {
         try await sut.admin.signOut(jwt: "invalid.access.token")
         Issue.record("Expected signOut to throw")
       } catch let error as AuthError {
-        guard case .api = error else {
-          Issue.record("Expected AuthError.api, got \(error)")
-          return
-        }
+        #expect(error.kind == .server)
       }
     }
   }

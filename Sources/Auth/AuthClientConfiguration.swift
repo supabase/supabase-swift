@@ -5,7 +5,9 @@
 //  Created by Guilherme Souza on 29/04/24.
 //
 
+public import Clocks
 public import Foundation
+public import Helpers
 public import Logging
 
 #if canImport(FoundationNetworking)
@@ -13,12 +15,6 @@ public import Logging
 #endif
 
 extension AuthClient {
-  /// FetchHandler is a type alias for asynchronous network request handling.
-  public typealias FetchHandler =
-    @Sendable (
-      _ request: URLRequest
-    ) async throws -> (Data, URLResponse)
-
   /// Configuration options for ``AuthClient``.
   ///
   /// ## Topics
@@ -28,7 +24,7 @@ extension AuthClient {
   /// - ``headers``
   /// - ``flowType``
   /// - ``redirectToURL``
-  /// - ``fetch``
+  /// - ``http``
   ///
   /// ### Storage
   /// - ``localStorage``
@@ -39,8 +35,9 @@ extension AuthClient {
   /// - ``jsonDecoder``
   ///
   /// ### Token refresh
-  /// - ``autoRefreshToken``
-  /// - ``defaultAutoRefreshToken``
+  /// - ``automaticallyRefreshesToken``
+  /// - ``defaultAutomaticallyRefreshesToken``
+  /// - ``clock``
   ///
   /// ### Defaults
   /// - ``defaultFlowType``
@@ -75,11 +72,17 @@ extension AuthClient {
     /// The JSON decoder used to deserialize responses received from the Auth server.
     let resolvedDecoder: JSONDecoder
 
-    /// A custom fetch implementation.
-    public let fetch: FetchHandler
+    /// The transport and middleware chain every request goes through.
+    public let http: HTTPClientConfiguration
 
     /// Set to `true` if you want to automatically refresh the token before expiring.
-    public let autoRefreshToken: Bool
+    public let automaticallyRefreshesToken: Bool
+
+    /// The clock the auto-refresh loop sleeps on between ticks.
+    ///
+    /// Defaults to `ContinuousClock()`. Pass a `TestClock` to drive token refresh
+    /// deterministically in tests instead of waiting out real seconds.
+    public let clock: any Clock<Duration>
 
     /// Initializes a AuthClient Configuration with optional parameters.
     ///
@@ -91,8 +94,9 @@ extension AuthClient {
     ///   - storageKey: Optional key name used for storing tokens in local storage.
     ///   - localStorage: The storage mechanism for local data.
     ///   - logger: The logger to use. Defaults to a build-config-aware logger — see `Configuration.logger`.
-    ///   - fetch: The asynchronous fetch handler for network requests.
-    ///   - autoRefreshToken: Set to `true` if you want to automatically refresh the token before expiring.
+    ///   - http: The transport and middleware chain every request goes through.
+    ///   - automaticallyRefreshesToken: Set to `true` if you want to automatically refresh the token before expiring.
+    ///   - clock: The clock the auto-refresh loop sleeps on. Defaults to `ContinuousClock()`.
     public init(
       url: URL? = nil,
       headers: [String: String] = [:],
@@ -101,8 +105,10 @@ extension AuthClient {
       storageKey: String? = nil,
       localStorage: any AuthLocalStorage,
       logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.auth"),
-      fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
-      autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken
+      http: HTTPClientConfiguration = .init(),
+      automaticallyRefreshesToken: Bool = AuthClient.Configuration
+        .defaultAutomaticallyRefreshesToken,
+      clock: any Clock<Duration> = ContinuousClock()
     ) {
       self.init(
         url: url,
@@ -114,8 +120,9 @@ extension AuthClient {
         logger: logger,
         resolvedEncoder: AuthClient.Configuration.jsonEncoder,
         resolvedDecoder: AuthClient.Configuration.jsonDecoder,
-        fetch: fetch,
-        autoRefreshToken: autoRefreshToken
+        http: http,
+        automaticallyRefreshesToken: automaticallyRefreshesToken,
+        clock: clock
       )
     }
 
@@ -133,8 +140,10 @@ extension AuthClient {
       logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.auth"),
       resolvedEncoder: JSONEncoder,
       resolvedDecoder: JSONDecoder,
-      fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
-      autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken
+      http: HTTPClientConfiguration = .init(),
+      automaticallyRefreshesToken: Bool = AuthClient.Configuration
+        .defaultAutomaticallyRefreshesToken,
+      clock: any Clock<Duration> = ContinuousClock()
     ) {
       let headers = headers.merging(Configuration.defaultHeaders) { l, _ in l }
 
@@ -149,8 +158,9 @@ extension AuthClient {
       self.logger = logger
       self.resolvedEncoder = resolvedEncoder
       self.resolvedDecoder = resolvedDecoder
-      self.fetch = fetch
-      self.autoRefreshToken = autoRefreshToken
+      self.http = http
+      self.automaticallyRefreshesToken = automaticallyRefreshesToken
+      self.clock = clock
     }
   }
 
@@ -164,9 +174,10 @@ extension AuthClient {
   ///   - storageKey: Optional key name used for storing tokens in local storage.
   ///   - localStorage: The storage mechanism for local data..
   ///   - logger: The logger to use. Defaults to a build-config-aware logger — see `Configuration.logger`.
-  ///   - fetch: The asynchronous fetch handler for network requests.
-  ///   - autoRefreshToken: Set to `true` if you want to automatically refresh the token before expiring.
-  public init(
+  ///   - http: The transport and middleware chain every request goes through.
+  ///   - automaticallyRefreshesToken: Set to `true` if you want to automatically refresh the token before expiring.
+  ///   - clock: The clock the auto-refresh loop sleeps on. Defaults to `ContinuousClock()`.
+  public convenience init(
     url: URL? = nil,
     headers: [String: String] = [:],
     flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
@@ -174,8 +185,9 @@ extension AuthClient {
     storageKey: String? = nil,
     localStorage: any AuthLocalStorage,
     logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.auth"),
-    fetch: @escaping FetchHandler = { try await URLSession.shared.data(for: $0) },
-    autoRefreshToken: Bool = AuthClient.Configuration.defaultAutoRefreshToken
+    http: HTTPClientConfiguration = .init(),
+    automaticallyRefreshesToken: Bool = AuthClient.Configuration.defaultAutomaticallyRefreshesToken,
+    clock: any Clock<Duration> = ContinuousClock()
   ) {
     self.init(
       configuration: Configuration(
@@ -186,8 +198,9 @@ extension AuthClient {
         storageKey: storageKey,
         localStorage: localStorage,
         logger: logger,
-        fetch: fetch,
-        autoRefreshToken: autoRefreshToken
+        http: http,
+        automaticallyRefreshesToken: automaticallyRefreshesToken,
+        clock: clock
       )
     )
   }

@@ -36,9 +36,9 @@ extension AuthMockerTests {
     @Test
     func onAuthStateChanges() async throws {
       await withMainSerialExecutor {
-        let session = Session.validSession
+        let session = Session.valid
         let sut = makeSUT()
-        Dependencies[sut.clientID].sessionStorage.store(session)
+        sut.dependencies.sessionStorage.store(session)
 
         let events = LockIsolated([AuthChangeEvent]())
 
@@ -57,13 +57,37 @@ extension AuthMockerTests {
     @Test
     func authStateChanges() async throws {
       await withMainSerialExecutor {
-        let session = Session.validSession
+        let session = Session.valid
         let sut = makeSUT()
-        Dependencies[sut.clientID].sessionStorage.store(session)
+        sut.dependencies.sessionStorage.store(session)
 
         let stateChange = await sut.authStateChanges.first { _ in true }
         expectNoDifference(stateChange?.event, .initialSession)
         expectNoDifference(stateChange?.session, session)
+      }
+    }
+
+    @Test
+    func authStateChangesRemovesListenerWhenCancelledBeforeRegistrationRuns() async throws {
+      await withMainSerialExecutor {
+        let sut = makeSUT()
+
+        let stream = sut.authStateChanges
+
+        // The listener (and its `onTermination` cleanup) must be registered synchronously,
+        // before the stream is returned. Previously this happened inside an unstructured
+        // `Task`, so a consumer that cancels before that task's body runs would never get
+        // `onTermination` wired up, leaking the `onAuthStateChange` registration (SDK-2092).
+        expectNoDifference(sut.dependencies.eventEmitter.emitter.listenerCount, 1)
+
+        let consumer = Task {
+          for await _ in stream {}
+        }
+        consumer.cancel()
+
+        await Task.megaYield()
+
+        expectNoDifference(sut.dependencies.eventEmitter.emitter.listenerCount, 0)
       }
     }
 
@@ -93,7 +117,7 @@ extension AuthMockerTests {
         }
         .register()
 
-        Dependencies[sut.clientID].sessionStorage.store(.validSession)
+        sut.dependencies.sessionStorage.store(.valid)
 
         try await assertAuthStateChanges(
           sut: sut,
@@ -104,12 +128,7 @@ extension AuthMockerTests {
         do {
           _ = try await sut.session
         } catch {
-          assertInlineSnapshot(of: error, as: .dump) {
-            """
-            - AuthError.sessionMissing
-
-            """
-          }
+          #expect((error as? AuthError)?.kind == .sessionMissing)
         }
       }
     }
@@ -141,11 +160,11 @@ extension AuthMockerTests {
 
         let sut = makeSUT()
 
-        Dependencies[sut.clientID].sessionStorage.store(.validSession)
+        sut.dependencies.sessionStorage.store(.valid)
 
         try await sut.signOut(scope: .others)
 
-        let sessionRemoved = Dependencies[sut.clientID].sessionStorage.get() == nil
+        let sessionRemoved = sut.dependencies.sessionStorage.get() == nil
         #expect(!(sessionRemoved))
       }
     }
@@ -177,8 +196,8 @@ extension AuthMockerTests {
 
         let sut = makeSUT()
 
-        let validSession = Session.validSession
-        Dependencies[sut.clientID].sessionStorage.store(validSession)
+        let validSession = Session.valid
+        sut.dependencies.sessionStorage.store(validSession)
 
         let eventsTask = Task {
           await sut.authStateChanges.prefix(2).collect()
@@ -192,9 +211,9 @@ extension AuthMockerTests {
         let sessions = await eventsTask.value.map(\.session)
 
         expectNoDifference(events, [.initialSession, .signedOut])
-        expectNoDifference(sessions, [.validSession, nil])
+        expectNoDifference(sessions, [.valid, nil])
 
-        let sessionRemoved = Dependencies[sut.clientID].sessionStorage.get() == nil
+        let sessionRemoved = sut.dependencies.sessionStorage.get() == nil
         #expect(sessionRemoved)
       }
     }
@@ -226,8 +245,8 @@ extension AuthMockerTests {
 
         let sut = makeSUT()
 
-        let validSession = Session.validSession
-        Dependencies[sut.clientID].sessionStorage.store(validSession)
+        let validSession = Session.valid
+        sut.dependencies.sessionStorage.store(validSession)
 
         let eventsTask = Task {
           await sut.authStateChanges.prefix(2).collect()
@@ -243,7 +262,7 @@ extension AuthMockerTests {
         expectNoDifference(events, [.initialSession, .signedOut])
         expectNoDifference(sessions, [validSession, nil])
 
-        let sessionRemoved = Dependencies[sut.clientID].sessionStorage.get() == nil
+        let sessionRemoved = sut.dependencies.sessionStorage.get() == nil
         #expect(sessionRemoved)
       }
     }
@@ -275,8 +294,8 @@ extension AuthMockerTests {
 
         let sut = makeSUT()
 
-        let validSession = Session.validSession
-        Dependencies[sut.clientID].sessionStorage.store(validSession)
+        let validSession = Session.valid
+        sut.dependencies.sessionStorage.store(validSession)
 
         let eventsTask = Task {
           await sut.authStateChanges.prefix(2).collect()
@@ -292,8 +311,72 @@ extension AuthMockerTests {
         expectNoDifference(events, [.initialSession, .signedOut])
         expectNoDifference(sessions, [validSession, nil])
 
-        let sessionRemoved = Dependencies[sut.clientID].sessionStorage.get() == nil
+        let sessionRemoved = sut.dependencies.sessionStorage.get() == nil
         #expect(sessionRemoved)
+      }
+    }
+
+    @Test
+    func signOutShouldSucceedIfSessionIsNotFound() async throws {
+      try await withMainSerialExecutor {
+        sessionNotFoundMock(scope: "global").register()
+
+        let sut = makeSUT()
+        sut.dependencies.sessionStorage.store(.valid)
+
+        try await assertAuthStateChanges(
+          sut: sut,
+          action: { try await sut.signOut() },
+          expectedEvents: [.initialSession, .signedOut]
+        )
+
+        #expect(sut.dependencies.sessionStorage.get() == nil)
+      }
+    }
+
+    @Test
+    func signOutWithOthersScopeShouldRemoveSessionIfSessionIsNotFound() async throws {
+      try await withMainSerialExecutor {
+        sessionNotFoundMock(scope: "others").register()
+
+        let sut = makeSUT()
+        sut.dependencies.sessionStorage.store(.valid)
+
+        try await assertAuthStateChanges(
+          sut: sut,
+          action: { try await sut.signOut(scope: .others) },
+          expectedEvents: [.initialSession, .signedOut]
+        )
+
+        #expect(sut.dependencies.sessionStorage.get() == nil)
+      }
+    }
+
+    @Test
+    func signOutShouldKeepASessionStoredWhileLoggingOut() async throws {
+      try await withMainSerialExecutor {
+        let sut = makeSUT()
+        let sessionStorage = sut.dependencies.sessionStorage
+
+        var nextSession = Session.valid
+        nextSession.accessToken = "next-access-token"
+        nextSession.refreshToken = "next-refresh-token"
+
+        var mock = sessionNotFoundMock(scope: "global")
+        mock.onRequestHandler = OnRequestHandler(requestCallback: { [nextSession] _ in
+          sessionStorage.store(nextSession)
+        })
+        mock.register()
+
+        sessionStorage.store(.valid)
+
+        try await assertAuthStateChanges(
+          sut: sut,
+          action: { try await sut.signOut() },
+          expectedEvents: [.initialSession, .signedOut]
+        )
+
+        expectNoDifference(sessionStorage.get(), nextSession)
       }
     }
 
@@ -417,16 +500,16 @@ extension AuthMockerTests {
         let sut = makeSUT()
 
         // Two PKCE flows are pending concurrently, each with its own verifier.
-        Dependencies[sut.clientID].codeVerifierStorage.set("verifier-a", "flow-a")
-        Dependencies[sut.clientID].codeVerifierStorage.set("verifier-b", "flow-b")
+        sut.dependencies.codeVerifierStorage.set("verifier-a", "flow-a")
+        sut.dependencies.codeVerifierStorage.set("verifier-b", "flow-b")
 
         _ = try await sut.exchangeCodeForSession(authCode: "12345", flowId: "flow-a")
 
         expectNoDifference(capturedVerifier.value, "verifier-a")
 
         // Exchanging "flow-a" must not disturb "flow-b"'s still-pending verifier.
-        #expect(Dependencies[sut.clientID].codeVerifierStorage.get("flow-a") == nil)
-        #expect(Dependencies[sut.clientID].codeVerifierStorage.get("flow-b") == "verifier-b")
+        #expect(sut.dependencies.codeVerifierStorage.get("flow-a") == nil)
+        #expect(sut.dependencies.codeVerifierStorage.get("flow-b") == "verifier-b")
       }
     }
 
@@ -434,7 +517,7 @@ extension AuthMockerTests {
     func concurrentPKCEFlowsKeepIndependentVerifiers() async throws {
       try await withMainSerialExecutor {
         let sut = makeSUT()
-        Dependencies[sut.clientID].sessionStorage.store(.validSession)
+        sut.dependencies.sessionStorage.store(.valid)
 
         Mock(
           url: clientURL.appendingPathComponent("user/identities/authorize"),
@@ -447,12 +530,12 @@ extension AuthMockerTests {
         .register()
 
         // Flow A starts (e.g. linking a GitHub identity)...
-        let flowA = try await sut.getLinkIdentityURL(provider: .github)
+        let flowA = try await sut.linkIdentityURL(provider: .github)
 
         // ...then flow B starts before flow A's callback arrives (e.g. the user also kicks off
         // a Google sign-in in another window). Before flow ids, flow B's verifier would have
         // silently overwritten flow A's in the single shared slot.
-        let flowB = try await sut.getLinkIdentityURL(provider: .google)
+        let flowB = try await sut.linkIdentityURL(provider: .google)
 
         #expect(flowA.flowId != nil)
         #expect(flowB.flowId != nil)
@@ -473,12 +556,12 @@ extension AuthMockerTests {
         _ = try await sut.exchangeCodeForSession(authCode: "code-a", flowId: flowA.flowId)
 
         // Flow B is still pending, untouched by flow A's exchange.
-        #expect(Dependencies[sut.clientID].codeVerifierStorage.get(flowB.flowId) != nil)
+        #expect(sut.dependencies.codeVerifierStorage.get(flowB.flowId) != nil)
       }
     }
 
     @Test
-    func getLinkIdentityURL() async throws {
+    func linkIdentityURL() async throws {
       try await withMainSerialExecutor {
         let url =
           "https://github.com/login/oauth/authorize?client_id=1234&redirect_to=com.supabase.swift-examples://&redirect_uri=http://127.0.0.1:54321/auth/v1/callback&response_type=code&scope=user:email&skip_http_redirect=true&state=jwt"
@@ -510,9 +593,9 @@ extension AuthMockerTests {
         }
         .register()
 
-        Dependencies[sut.clientID].sessionStorage.store(.validSession)
+        sut.dependencies.sessionStorage.store(.valid)
 
-        let response = try await sut.getLinkIdentityURL(provider: .github)
+        let response = try await sut.linkIdentityURL(provider: .github)
 
         expectNoDifference(response.provider, .github)
         expectNoDifference(response.url, URL(string: url)!)
@@ -552,14 +635,13 @@ extension AuthMockerTests {
         }
         .register()
 
-        let sut = makeSUT()
-
-        Dependencies[sut.clientID].sessionStorage.store(.validSession)
-
         let receivedURL = LockIsolated<URL?>(nil)
-        Dependencies[sut.clientID].urlOpener.open = { url in
-          receivedURL.setValue(url)
-        }
+        var urlOpener = URLOpener.live
+        urlOpener.open = { url in receivedURL.setValue(url) }
+
+        let sut = makeSUT(urlOpener: urlOpener)
+
+        sut.dependencies.sessionStorage.store(.valid)
 
         try await sut.linkIdentity(provider: .github)
 
@@ -594,7 +676,7 @@ extension AuthMockerTests {
 
         let sut = makeSUT()
 
-        Dependencies[sut.clientID].sessionStorage.store(.validSession)
+        sut.dependencies.sessionStorage.store(.valid)
 
         let updatedSession = try await assertAuthStateChanges(
           sut: sut,
@@ -639,7 +721,7 @@ extension AuthMockerTests {
         	--header "X-Client-Info: auth-swift/0.0.0" \
         	--header "X-Supabase-Api-Version: 2024-01-01" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	"http://localhost:54321/auth/v1/admin/users?page=&per_page="
+        	"http://localhost:54321/auth/v1/admin/users"
         """#
       }
       .register()
@@ -672,7 +754,7 @@ extension AuthMockerTests {
         	--header "X-Client-Info: auth-swift/0.0.0" \
         	--header "X-Supabase-Api-Version: 2024-01-01" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	"http://localhost:54321/auth/v1/admin/users?page=&per_page="
+        	"http://localhost:54321/auth/v1/admin/users"
         """#
       }
       .register()
@@ -689,7 +771,7 @@ extension AuthMockerTests {
     func sessionFromURL_withError() async throws {
       let sut = makeSUT()
 
-      Dependencies[sut.clientID].codeVerifierStorage.set("code-verifier", "test-flow")
+      sut.dependencies.codeVerifierStorage.set("code-verifier", "test-flow")
 
       let url = URL(
         string:
@@ -700,14 +782,10 @@ extension AuthMockerTests {
         try await sut.session(from: url)
         Issue.record("Expect failure")
       } catch {
-        expectNoDifference(
-          error as? AuthError,
-          AuthError.pkceGrantCodeExchange(
-            message: "Identity is already linked to another user",
-            error: "server_error",
-            code: "422"
-          )
-        )
+        let authError = error as? AuthError
+        #expect(authError?.kind == .oauthFlowFailed)
+        #expect(authError?.message == "server_error: Identity is already linked to another user")
+        #expect(authError?.errorCode == ErrorCode("422"))
       }
     }
 
@@ -1001,9 +1079,11 @@ extension AuthMockerTests {
             signature: "irrelevant"
           )
         )
-        Issue.record("Expected AuthError.api")
-      } catch let AuthError.api(_, errorCode, _, _) {
-        #expect(errorCode == .web3UnsupportedChain)
+        Issue.record("Expected AuthError.server")
+      } catch let error as AuthError {
+        #expect(error.kind == .server)
+        #expect(error.errorCode == .web3UnsupportedChain)
+        #expect(error.response?.statusCode == 400)
       }
     }
 
@@ -1075,9 +1155,9 @@ extension AuthMockerTests {
     }
 
     @Test
-    func getOAuthSignInURL() async throws {
+    func oauthSignInURL() async throws {
       let sut = makeSUT(flowType: .implicit)
-      let url = try sut.getOAuthSignInURL(
+      let url = try sut.oauthSignInURL(
         provider: .github,
         scopes: "read,write",
         redirectTo: URL(string: "https://dummy-url.com/redirect")!,
@@ -1140,11 +1220,9 @@ extension AuthMockerTests {
         }
         .register()
 
-        let sut = makeSUT(flowType: .implicit)
-
         let currentDate = Date()
 
-        Dependencies[sut.clientID].date = { currentDate }
+        let sut = makeSUT(flowType: .implicit, date: { currentDate })
 
         let url = URL(
           string:
@@ -1205,9 +1283,10 @@ extension AuthMockerTests {
 
       do {
         try await sut.session(from: url)
-        Issue.record("Expected implicitGrantRedirect error")
-      } catch let AuthError.implicitGrantRedirect(message) {
-        expectNoDifference(message, "Not a valid implicit grant flow URL: \(url)")
+        Issue.record("Expected oauthFlowFailed error")
+      } catch let error as AuthError {
+        #expect(error.kind == .oauthFlowFailed)
+        expectNoDifference(error.message, "Not a valid implicit grant flow URL: \(url)")
       }
     }
 
@@ -1222,9 +1301,10 @@ extension AuthMockerTests {
 
       do {
         try await sut.session(from: url)
-        Issue.record("Expected implicitGrantRedirect error")
-      } catch let AuthError.implicitGrantRedirect(message) {
-        expectNoDifference(message, "Invalid code")
+        Issue.record("Expected oauthFlowFailed error")
+      } catch let error as AuthError {
+        #expect(error.kind == .oauthFlowFailed)
+        expectNoDifference(error.message, "Invalid code")
       }
     }
 
@@ -1239,9 +1319,10 @@ extension AuthMockerTests {
 
       do {
         try await sut.session(from: url)
-        Issue.record("Expected implicitGrantRedirect error")
-      } catch let AuthError.implicitGrantRedirect(message) {
-        expectNoDifference(message, "User denied access")
+        Issue.record("Expected oauthFlowFailed error")
+      } catch let error as AuthError {
+        #expect(error.kind == .oauthFlowFailed)
+        expectNoDifference(error.message, "User denied access")
       }
     }
 
@@ -1253,9 +1334,10 @@ extension AuthMockerTests {
 
       do {
         try await sut.session(from: url)
-        Issue.record("Expected implicitGrantRedirect error")
-      } catch let AuthError.implicitGrantRedirect(message) {
-        expectNoDifference(message, "access_denied")
+        Issue.record("Expected oauthFlowFailed error")
+      } catch let error as AuthError {
+        #expect(error.kind == .oauthFlowFailed)
+        expectNoDifference(error.message, "access_denied")
       }
     }
 
@@ -1267,9 +1349,10 @@ extension AuthMockerTests {
 
       do {
         try await sut.session(from: url)
-        Issue.record("Expected implicitGrantRedirect error")
-      } catch let AuthError.implicitGrantRedirect(message) {
-        expectNoDifference(message, "access_denied")
+        Issue.record("Expected oauthFlowFailed error")
+      } catch let error as AuthError {
+        #expect(error.kind == .oauthFlowFailed)
+        expectNoDifference(error.message, "access_denied")
       }
     }
 
@@ -1324,11 +1407,11 @@ extension AuthMockerTests {
 
       do {
         try await sut.session(from: url)
-        Issue.record("Expected pkceGrantCodeExchange error")
-      } catch let AuthError.pkceGrantCodeExchange(message, error, code) {
-        expectNoDifference(message, "Invalid code")
-        expectNoDifference(error, "invalid_grant")
-        expectNoDifference(code, "500")
+        Issue.record("Expected oauthFlowFailed error")
+      } catch let error as AuthError {
+        #expect(error.kind == .oauthFlowFailed)
+        expectNoDifference(error.message, "invalid_grant: Invalid code")
+        expectNoDifference(error.errorCode, ErrorCode("500"))
       }
     }
 
@@ -1343,11 +1426,12 @@ extension AuthMockerTests {
 
       do {
         try await sut.session(from: url)
-        Issue.record("Expected pkceGrantCodeExchange error")
-      } catch let AuthError.pkceGrantCodeExchange(message, error, code) {
-        expectNoDifference(message, "Error in URL with unspecified error_description.")
-        expectNoDifference(error, "invalid_grant")
-        expectNoDifference(code, "500")
+        Issue.record("Expected oauthFlowFailed error")
+      } catch let error as AuthError {
+        #expect(error.kind == .oauthFlowFailed)
+        expectNoDifference(
+          error.message, "invalid_grant: Error in URL with unspecified error_description.")
+        expectNoDifference(error.errorCode, ErrorCode("500"))
       }
     }
 
@@ -1363,16 +1447,12 @@ extension AuthMockerTests {
       do {
         _ = try await sut.session(from: url)
       } catch {
-        assertInlineSnapshot(of: error, as: .dump) {
-          """
-          ▿ AuthError
-            ▿ pkceGrantCodeExchange: (3 elements)
-              - message: "Not a valid PKCE flow URL: https://dummy-url.com/callback#access_token=accesstoken&expires_in=60&refresh_token=refreshtoken"
-              - error: Optional<String>.none
-              - code: Optional<String>.none
-
-          """
-        }
+        let authError = error as? AuthError
+        #expect(authError?.kind == .oauthFlowFailed)
+        #expect(
+          authError?.message
+            == "Not a valid PKCE flow URL: https://dummy-url.com/callback#access_token=accesstoken&expires_in=60&refresh_token=refreshtoken"
+        )
       }
     }
 
@@ -1396,7 +1476,7 @@ extension AuthMockerTests {
       .register()
 
       let sut = makeSUT()
-      Dependencies[sut.clientID].sessionStorage.store(.validSession)
+      sut.dependencies.sessionStorage.store(.valid)
 
       let accessToken =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjo0ODUyMTYzNTkzLCJzdWIiOiJmMzNkM2VjOS1hMmVlLTQ3YzQtODBlMS01YmQ5MTlmM2Q4YjgiLCJlbWFpbCI6ImhpQGJpbmFyeXNjcmFwaW5nLmNvIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJlbWFpbCIsInByb3ZpZGVycyI6WyJlbWFpbCJdfSwidXNlcl9tZXRhZGF0YSI6e30sInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.UiEhoahP9GNrBKw_OHBWyqYudtoIlZGkrjs7Qa8hU7I"
@@ -1586,7 +1666,7 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      Dependencies[sut.clientID].sessionStorage.store(.validSession)
+      sut.dependencies.sessionStorage.store(.valid)
 
       try await sut.update(
         user: UserAttributes(
@@ -1790,7 +1870,7 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      let passkeys = try await sut.admin.listPasskeys(userId: userId)
+      let passkeys = try await sut.admin.listPasskeys(forUser: userId)
 
       expectNoDifference(
         passkeys.map(\.id),
@@ -1827,7 +1907,7 @@ extension AuthMockerTests {
       .register()
 
       let sut = makeSUT()
-      try await sut.admin.deletePasskey(userId: userId, passkeyId: passkeyId)
+      try await sut.admin.deletePasskey(id: passkeyId, forUser: userId)
     }
 
     @Test
@@ -1851,7 +1931,7 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      Dependencies[sut.clientID].sessionStorage.store(.validSession)
+      sut.dependencies.sessionStorage.store(.valid)
 
       try await sut.reauthenticate()
     }
@@ -1879,7 +1959,7 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      Dependencies[sut.clientID].sessionStorage.store(.validSession)
+      sut.dependencies.sessionStorage.store(.valid)
 
       try await sut.unlinkIdentity(
         UserIdentity(
@@ -1907,12 +1987,12 @@ extension AuthMockerTests {
         #"""
         curl \
         	--request POST \
-        	--header "Content-Length: 215" \
+        	--header "Content-Length: 241" \
         	--header "Content-Type: application/json" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
         	--header "X-Supabase-Api-Version: 2024-01-01" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	--data "{\"code_challenge\":\"hgJeigklONUI1pKSS98MIAbtJGaNu0zJU1iSiFOn2lY\",\"code_challenge_method\":\"s256\",\"domain\":\"supabase.com\",\"gotrue_meta_security\":{\"captcha_token\":\"captcha-token\"},\"redirect_to\":\"https:\/\/supabase.com\"}" \
+        	--data "{\"code_challenge\":\"hgJeigklONUI1pKSS98MIAbtJGaNu0zJU1iSiFOn2lY\",\"code_challenge_method\":\"s256\",\"domain\":\"supabase.com\",\"gotrue_meta_security\":{\"captcha_token\":\"captcha-token\"},\"redirect_to\":\"https:\/\/supabase.com\",\"skip_http_redirect\":true}" \
         	"http://localhost:54321/auth/v1/sso"
         """#
       }
@@ -1941,12 +2021,12 @@ extension AuthMockerTests {
         #"""
         curl \
         	--request POST \
-        	--header "Content-Length: 244" \
+        	--header "Content-Length: 270" \
         	--header "Content-Type: application/json" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
         	--header "X-Supabase-Api-Version: 2024-01-01" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	--data "{\"code_challenge\":\"hgJeigklONUI1pKSS98MIAbtJGaNu0zJU1iSiFOn2lY\",\"code_challenge_method\":\"s256\",\"gotrue_meta_security\":{\"captcha_token\":\"captcha-token\"},\"provider_id\":\"E621E1F8-C36C-495A-93FC-0C247A3E6E5F\",\"redirect_to\":\"https:\/\/supabase.com\"}" \
+        	--data "{\"code_challenge\":\"hgJeigklONUI1pKSS98MIAbtJGaNu0zJU1iSiFOn2lY\",\"code_challenge_method\":\"s256\",\"gotrue_meta_security\":{\"captcha_token\":\"captcha-token\"},\"provider_id\":\"E621E1F8-C36C-495A-93FC-0C247A3E6E5F\",\"redirect_to\":\"https:\/\/supabase.com\",\"skip_http_redirect\":true}" \
         	"http://localhost:54321/auth/v1/sso"
         """#
       }
@@ -1972,7 +2052,7 @@ extension AuthMockerTests {
           .post: Data(
             """
             {
-              "id": "12345",
+              "id": "00000000-0000-0000-0000-000000012345",
               "type": "totp"
             }
             """.utf8
@@ -1997,7 +2077,7 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      Dependencies[sut.clientID].sessionStorage.store(.validSession)
+      sut.dependencies.sessionStorage.store(.valid)
 
       let response = try await sut.mfa.enroll(
         params: MFATotpEnrollParams(
@@ -2006,7 +2086,7 @@ extension AuthMockerTests {
         )
       )
 
-      expectNoDifference(response.id, "12345")
+      expectNoDifference(response.id, UUID(uuidString: "00000000-0000-0000-0000-000000012345")!)
       expectNoDifference(response.type, "totp")
     }
 
@@ -2019,7 +2099,7 @@ extension AuthMockerTests {
           .post: Data(
             """
             {
-              "id": "12345",
+              "id": "00000000-0000-0000-0000-000000012345",
               "type": "totp"
             }
             """.utf8
@@ -2044,7 +2124,7 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      Dependencies[sut.clientID].sessionStorage.store(.validSession)
+      sut.dependencies.sessionStorage.store(.valid)
 
       let response = try await sut.mfa.enroll(
         params: .totp(
@@ -2053,7 +2133,7 @@ extension AuthMockerTests {
         )
       )
 
-      expectNoDifference(response.id, "12345")
+      expectNoDifference(response.id, UUID(uuidString: "00000000-0000-0000-0000-000000012345")!)
       expectNoDifference(response.type, "totp")
     }
 
@@ -2066,7 +2146,7 @@ extension AuthMockerTests {
           .post: Data(
             """
             {
-              "id": "12345",
+              "id": "00000000-0000-0000-0000-000000012345",
               "type": "phone"
             }
             """.utf8
@@ -2091,7 +2171,7 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      Dependencies[sut.clientID].sessionStorage.store(.validSession)
+      sut.dependencies.sessionStorage.store(.valid)
 
       let response = try await sut.mfa.enroll(
         params: .phone(
@@ -2100,13 +2180,13 @@ extension AuthMockerTests {
         )
       )
 
-      expectNoDifference(response.id, "12345")
+      expectNoDifference(response.id, UUID(uuidString: "00000000-0000-0000-0000-000000012345")!)
       expectNoDifference(response.type, "phone")
     }
 
     @Test
     func mfaChallenge() async throws {
-      let factorId = "123"
+      let factorId = UUID(uuidString: "00000000-0000-0000-0000-000000000123")!
 
       Mock(
         url: clientURL.appendingPathComponent("factors/\(factorId)/challenge"),
@@ -2115,7 +2195,7 @@ extension AuthMockerTests {
           .post: Data(
             """
             {
-              "id": "12345",
+              "id": "e621e1f8-c36c-495a-93fc-0c247a3e6e5f",
               "type": "totp",
               "expires_at": 12345678
             }
@@ -2131,21 +2211,21 @@ extension AuthMockerTests {
         	--header "X-Client-Info: auth-swift/0.0.0" \
         	--header "X-Supabase-Api-Version: 2024-01-01" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	"http://localhost:54321/auth/v1/factors/123/challenge"
+        	"http://localhost:54321/auth/v1/factors/00000000-0000-0000-0000-000000000123/challenge"
         """#
       }
       .register()
 
       let sut = makeSUT()
 
-      Dependencies[sut.clientID].sessionStorage.store(.validSession)
+      sut.dependencies.sessionStorage.store(.valid)
 
       let response = try await sut.mfa.challenge(params: .init(factorId: factorId))
 
       expectNoDifference(
         response,
         AuthMFAChallengeResponse(
-          id: "12345",
+          id: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!,
           type: "totp",
           expiresAt: 12_345_678
         )
@@ -2154,7 +2234,7 @@ extension AuthMockerTests {
 
     @Test
     func mfaChallengeWithPhoneType() async throws {
-      let factorId = "123"
+      let factorId = UUID(uuidString: "00000000-0000-0000-0000-000000000123")!
 
       Mock(
         url: clientURL.appendingPathComponent("factors/\(factorId)/challenge"),
@@ -2163,7 +2243,7 @@ extension AuthMockerTests {
           .post: Data(
             """
             {
-              "id": "12345",
+              "id": "e621e1f8-c36c-495a-93fc-0c247a3e6e5f",
               "type": "phone",
               "expires_at": 12345678
             }
@@ -2182,14 +2262,14 @@ extension AuthMockerTests {
         	--header "X-Supabase-Api-Version: 2024-01-01" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	--data "{\"channel\":\"sms\"}" \
-        	"http://localhost:54321/auth/v1/factors/123/challenge"
+        	"http://localhost:54321/auth/v1/factors/00000000-0000-0000-0000-000000000123/challenge"
         """#
       }
       .register()
 
       let sut = makeSUT()
 
-      Dependencies[sut.clientID].sessionStorage.store(.validSession)
+      sut.dependencies.sessionStorage.store(.valid)
 
       let response = try await sut.mfa.challenge(
         params: .init(
@@ -2201,7 +2281,7 @@ extension AuthMockerTests {
       expectNoDifference(
         response,
         AuthMFAChallengeResponse(
-          id: "12345",
+          id: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!,
           type: "phone",
           expiresAt: 12_345_678
         )
@@ -2210,7 +2290,7 @@ extension AuthMockerTests {
 
     @Test
     func mfaChallengeWebAuthnReturnsCredentialOptions() async throws {
-      let factorId = "123"
+      let factorId = UUID(uuidString: "00000000-0000-0000-0000-000000000123")!
 
       Mock(
         url: clientURL.appendingPathComponent("factors/\(factorId)/challenge"),
@@ -2219,7 +2299,7 @@ extension AuthMockerTests {
           .post: Data(
             """
             {
-              "id": "challenge-1",
+              "id": "e621e1f8-c36c-495a-93fc-0c247a3e6e5f",
               "type": "webauthn",
               "expires_at": 12345678,
               "webauthn": {
@@ -2239,13 +2319,13 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      Dependencies[sut.clientID].sessionStorage.store(.validSession)
+      sut.dependencies.sessionStorage.store(.valid)
 
       let response = try await sut.mfa.challenge(
         params: .init(factorId: factorId, webAuthn: .init(rpId: "example.com"))
       )
 
-      expectNoDifference(response.id, "challenge-1")
+      expectNoDifference(response.id, UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!)
       expectNoDifference(response.type, "webauthn")
       expectNoDifference(response.webauthn?.type, .create)
 
@@ -2257,7 +2337,7 @@ extension AuthMockerTests {
 
     @Test
     func mfaVerify() async throws {
-      let factorId = "123"
+      let factorId = UUID(uuidString: "00000000-0000-0000-0000-000000000123")!
 
       Mock(
         url: clientURL.appendingPathComponent("factors/\(factorId)/verify"),
@@ -2269,25 +2349,25 @@ extension AuthMockerTests {
         curl \
         	--request POST \
         	--header "Authorization: Bearer accesstoken" \
-        	--header "Content-Length: 56" \
+        	--header "Content-Length: 122" \
         	--header "Content-Type: application/json" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
         	--header "X-Supabase-Api-Version: 2024-01-01" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	--data "{\"challenge_id\":\"123\",\"code\":\"123456\",\"factor_id\":\"123\"}" \
-        	"http://localhost:54321/auth/v1/factors/123/verify"
+        	--data "{\"challenge_id\":\"E621E1F8-C36C-495A-93FC-0C247A3E6E5F\",\"code\":\"123456\",\"factor_id\":\"00000000-0000-0000-0000-000000000123\"}" \
+        	"http://localhost:54321/auth/v1/factors/00000000-0000-0000-0000-000000000123/verify"
         """#
       }
       .register()
 
       let sut = makeSUT()
 
-      Dependencies[sut.clientID].sessionStorage.store(.validSession)
+      sut.dependencies.sessionStorage.store(.valid)
 
       try await sut.mfa.verify(
         params: .init(
           factorId: factorId,
-          challengeId: "123",
+          challengeId: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!,
           code: "123456"
         )
       )
@@ -2295,10 +2375,12 @@ extension AuthMockerTests {
 
     @Test
     func mfaUnenroll() async throws {
+      let factorId = UUID(uuidString: "00000000-0000-0000-0000-000000000123")!
+
       Mock(
-        url: clientURL.appendingPathComponent("factors/123"),
+        url: clientURL.appendingPathComponent("factors/\(factorId)"),
         statusCode: 200,
-        data: [.delete: Data(#"{"id":"123"}"#.utf8)]
+        data: [.delete: Data(#"{"id":"00000000-0000-0000-0000-000000000123"}"#.utf8)]
       )
       .snapshotRequest {
         #"""
@@ -2308,23 +2390,23 @@ extension AuthMockerTests {
         	--header "X-Client-Info: auth-swift/0.0.0" \
         	--header "X-Supabase-Api-Version: 2024-01-01" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	"http://localhost:54321/auth/v1/factors/123"
+        	"http://localhost:54321/auth/v1/factors/00000000-0000-0000-0000-000000000123"
         """#
       }
       .register()
 
       let sut = makeSUT()
 
-      Dependencies[sut.clientID].sessionStorage.store(.validSession)
+      sut.dependencies.sessionStorage.store(.valid)
 
-      let id = try await sut.mfa.unenroll(params: .init(factorId: "123")).id
+      let id = try await sut.mfa.unenroll(params: .init(factorId: factorId)).id
 
-      expectNoDifference(id, "123")
+      expectNoDifference(id, factorId)
     }
 
     @Test
     func mfaChallengeAndVerify() async throws {
-      let factorId = "123"
+      let factorId = UUID(uuidString: "00000000-0000-0000-0000-000000000123")!
       let code = "456"
 
       Mock(
@@ -2334,7 +2416,7 @@ extension AuthMockerTests {
           .post: Data(
             """
             {
-              "id": "12345",
+              "id": "e621e1f8-c36c-495a-93fc-0c247a3e6e5f",
               "type": "totp",
               "expires_at": 12345678
             }
@@ -2350,7 +2432,7 @@ extension AuthMockerTests {
         	--header "X-Client-Info: auth-swift/0.0.0" \
         	--header "X-Supabase-Api-Version: 2024-01-01" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	"http://localhost:54321/auth/v1/factors/123/challenge"
+        	"http://localhost:54321/auth/v1/factors/00000000-0000-0000-0000-000000000123/challenge"
         """#
       }
       .register()
@@ -2367,20 +2449,20 @@ extension AuthMockerTests {
         curl \
         	--request POST \
         	--header "Authorization: Bearer accesstoken" \
-        	--header "Content-Length: 55" \
+        	--header "Content-Length: 119" \
         	--header "Content-Type: application/json" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
         	--header "X-Supabase-Api-Version: 2024-01-01" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	--data "{\"challenge_id\":\"12345\",\"code\":\"456\",\"factor_id\":\"123\"}" \
-        	"http://localhost:54321/auth/v1/factors/123/verify"
+        	--data "{\"challenge_id\":\"E621E1F8-C36C-495A-93FC-0C247A3E6E5F\",\"code\":\"456\",\"factor_id\":\"00000000-0000-0000-0000-000000000123\"}" \
+        	"http://localhost:54321/auth/v1/factors/00000000-0000-0000-0000-000000000123/verify"
         """#
       }
       .register()
 
       let sut = makeSUT()
 
-      Dependencies[sut.clientID].sessionStorage.store(.validSession)
+      sut.dependencies.sessionStorage.store(.valid)
 
       try await sut.mfa.challengeAndVerify(
         params: MFAChallengeAndVerifyParams(
@@ -2394,10 +2476,15 @@ extension AuthMockerTests {
     func mfaListFactors() async throws {
       let sut = makeSUT()
 
-      var session = Session.validSession
+      let factorId1 = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
+      let factorId2 = UUID(uuidString: "00000000-0000-0000-0000-000000000002")!
+      let factorId3 = UUID(uuidString: "00000000-0000-0000-0000-000000000003")!
+      let factorId4 = UUID(uuidString: "00000000-0000-0000-0000-000000000004")!
+
+      var session = Session.valid
       session.user.factors = [
         Factor(
-          id: "1",
+          id: factorId1,
           friendlyName: nil,
           factorType: "totp",
           status: .verified,
@@ -2405,7 +2492,7 @@ extension AuthMockerTests {
           updatedAt: Date()
         ),
         Factor(
-          id: "2",
+          id: factorId2,
           friendlyName: nil,
           factorType: "totp",
           status: .unverified,
@@ -2413,7 +2500,7 @@ extension AuthMockerTests {
           updatedAt: Date()
         ),
         Factor(
-          id: "3",
+          id: factorId3,
           friendlyName: nil,
           factorType: "phone",
           status: .verified,
@@ -2421,7 +2508,7 @@ extension AuthMockerTests {
           updatedAt: Date()
         ),
         Factor(
-          id: "4",
+          id: factorId4,
           friendlyName: nil,
           factorType: "phone",
           status: .unverified,
@@ -2430,21 +2517,25 @@ extension AuthMockerTests {
         ),
       ]
 
-      Dependencies[sut.clientID].sessionStorage.store(session)
+      sut.dependencies.sessionStorage.store(session)
 
       let factors = try await sut.mfa.listFactors()
-      expectNoDifference(factors.totp.map(\.id), ["1"])
-      expectNoDifference(factors.phone.map(\.id), ["3"])
+      expectNoDifference(factors.totp.map(\.id), [factorId1])
+      expectNoDifference(factors.phone.map(\.id), [factorId3])
     }
 
     @Test
     func mfaListFactorsIncludesWebAuthn() async throws {
       let sut = makeSUT()
 
-      var session = Session.validSession
+      let factorId1 = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
+      let factorId2 = UUID(uuidString: "00000000-0000-0000-0000-000000000002")!
+      let factorId3 = UUID(uuidString: "00000000-0000-0000-0000-000000000003")!
+
+      var session = Session.valid
       session.user.factors = [
         Factor(
-          id: "1",
+          id: factorId1,
           friendlyName: "My Passkey",
           factorType: "webauthn",
           status: .verified,
@@ -2452,7 +2543,7 @@ extension AuthMockerTests {
           updatedAt: Date()
         ),
         Factor(
-          id: "2",
+          id: factorId2,
           friendlyName: nil,
           factorType: "webauthn",
           status: .unverified,
@@ -2460,7 +2551,7 @@ extension AuthMockerTests {
           updatedAt: Date()
         ),
         Factor(
-          id: "3",
+          id: factorId3,
           friendlyName: nil,
           factorType: "totp",
           status: .verified,
@@ -2469,11 +2560,11 @@ extension AuthMockerTests {
         ),
       ]
 
-      Dependencies[sut.clientID].sessionStorage.store(session)
+      sut.dependencies.sessionStorage.store(session)
 
       let factors = try await sut.mfa.listFactors()
-      expectNoDifference(factors.webauthn.map(\.id), ["1"])
-      expectNoDifference(factors.totp.map(\.id), ["3"])
+      expectNoDifference(factors.webauthn.map(\.id), [factorId1])
+      expectNoDifference(factors.totp.map(\.id), [factorId3])
     }
 
     @Test
@@ -2501,9 +2592,9 @@ extension AuthMockerTests {
       .register()
 
       let sut = makeSUT()
-      Dependencies[sut.clientID].sessionStorage.store(.validSession)
+      sut.dependencies.sessionStorage.store(.valid)
 
-      let options = try await sut.getPasskeyRegistrationOptions()
+      let options = try await sut.passkeyRegistrationOptions()
 
       expectNoDifference(options.challengeId, "challenge-1")
       expectNoDifference(options.options.objectValue?["challenge"]?.stringValue, "Y2hhbGxlbmdl")
@@ -2540,7 +2631,7 @@ extension AuthMockerTests {
       .register()
 
       let sut = makeSUT()
-      Dependencies[sut.clientID].sessionStorage.store(.validSession)
+      sut.dependencies.sessionStorage.store(.valid)
 
       let passkeys = try await sut.listPasskeys()
 
@@ -2584,7 +2675,7 @@ extension AuthMockerTests {
       #expect(response.session != nil)
 
       // The returned session is persisted by the SDK (read storage directly to avoid a refresh).
-      let stored = Dependencies[sut.clientID].sessionStorage.get()
+      let stored = sut.dependencies.sessionStorage.get()
       expectNoDifference(stored?.accessToken, response.session?.accessToken)
     }
 
@@ -2699,7 +2790,7 @@ extension AuthMockerTests {
         )
 
         let sut = makeSUT()
-        Dependencies[sut.clientID].sessionStorage.store(.validSession)
+        sut.dependencies.sessionStorage.store(.valid)
 
         let passkey = try await sut._registerPasskey(
           presentationAnchor: ASPresentationAnchor(),
@@ -2716,21 +2807,25 @@ extension AuthMockerTests {
         Mock(
           url: clientURL.appendingPathComponent("factors"),
           statusCode: 200,
-          data: [.post: Data(#"{"id":"factor-1","type":"webauthn"}"#.utf8)]
+          data: [
+            .post: Data(#"{"id":"00000000-0000-0000-0000-000000000001","type":"webauthn"}"#.utf8)
+          ]
         )
         .register()
         Mock(
-          url: clientURL.appendingPathComponent("factors/factor-1/challenge"),
+          url: clientURL.appendingPathComponent(
+            "factors/00000000-0000-0000-0000-000000000001/challenge"),
           statusCode: 200,
           data: [
             .post: Data(
-              #"{"id":"ch-1","type":"webauthn","expires_at":12345678,"webauthn":{"type":"create","credential_options":{"challenge":"Y2hhbGxlbmdl","rp":{"id":"example.com"}}}}"#
+              #"{"id":"e621e1f8-c36c-495a-93fc-0c247a3e6e5f","type":"webauthn","expires_at":12345678,"webauthn":{"type":"create","credential_options":{"challenge":"Y2hhbGxlbmdl","rp":{"id":"example.com"}}}}"#
                 .utf8)
           ]
         )
         .register()
         Mock(
-          url: clientURL.appendingPathComponent("factors/factor-1/verify"),
+          url: clientURL.appendingPathComponent(
+            "factors/00000000-0000-0000-0000-000000000001/verify"),
           statusCode: 200,
           data: [.post: MockData.session]
         )
@@ -2747,7 +2842,7 @@ extension AuthMockerTests {
         )
 
         let sut = makeSUT()
-        Dependencies[sut.clientID].sessionStorage.store(.validSession)
+        sut.dependencies.sessionStorage.store(.valid)
 
         let session = try await sut.mfa._enrollWebAuthnFactor(
           friendlyName: "My Passkey",
@@ -2762,17 +2857,19 @@ extension AuthMockerTests {
       @MainActor
       func verifyWebAuthnFactorDrivesFullFlow() async throws {
         Mock(
-          url: clientURL.appendingPathComponent("factors/factor-1/challenge"),
+          url: clientURL.appendingPathComponent(
+            "factors/00000000-0000-0000-0000-000000000001/challenge"),
           statusCode: 200,
           data: [
             .post: Data(
-              #"{"id":"ch-1","type":"webauthn","expires_at":12345678,"webauthn":{"type":"request","credential_options":{"challenge":"Y2hhbGxlbmdl","rpId":"example.com"}}}"#
+              #"{"id":"e621e1f8-c36c-495a-93fc-0c247a3e6e5f","type":"webauthn","expires_at":12345678,"webauthn":{"type":"request","credential_options":{"challenge":"Y2hhbGxlbmdl","rpId":"example.com"}}}"#
                 .utf8)
           ]
         )
         .register()
         Mock(
-          url: clientURL.appendingPathComponent("factors/factor-1/verify"),
+          url: clientURL.appendingPathComponent(
+            "factors/00000000-0000-0000-0000-000000000001/verify"),
           statusCode: 200,
           data: [.post: MockData.session]
         )
@@ -2793,10 +2890,10 @@ extension AuthMockerTests {
         )
 
         let sut = makeSUT()
-        Dependencies[sut.clientID].sessionStorage.store(.validSession)
+        sut.dependencies.sessionStorage.store(.valid)
 
         let session = try await sut.mfa._verifyWebAuthnFactor(
-          factorId: "factor-1",
+          factorId: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,
           presentationAnchor: ASPresentationAnchor(),
           authenticator: authenticator
         )
@@ -2809,7 +2906,7 @@ extension AuthMockerTests {
 
     @Test
     func getAuthenticatorAssuranceLevel_whenAALAndVerifiedFactor_shouldReturnAAL2() async throws {
-      var session = Session.validSession
+      var session = Session.valid
 
       // access token with aal token
       session.accessToken =
@@ -2817,7 +2914,7 @@ extension AuthMockerTests {
 
       session.user.factors = [
         Factor(
-          id: "1",
+          id: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,
           friendlyName: nil,
           factorType: "totp",
           status: .verified,
@@ -2828,9 +2925,9 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      Dependencies[sut.clientID].sessionStorage.store(session)
+      sut.dependencies.sessionStorage.store(session)
 
-      let aal = try await sut.mfa.getAuthenticatorAssuranceLevel()
+      let aal = try await sut.mfa.authenticatorAssuranceLevel()
 
       expectNoDifference(
         aal,
@@ -2872,7 +2969,7 @@ extension AuthMockerTests {
       }
       .register()
 
-      let user = try await sut.admin.getUserById(id)
+      let user = try await sut.admin.user(id: id)
 
       expectNoDifference(user.id, id)
     }
@@ -2949,6 +3046,74 @@ extension AuthMockerTests {
     }
 
     @Test
+    func createUserConfirmingEmailAndPhone() async throws {
+      let sut = makeSUT()
+
+      Mock(
+        url: clientURL.appendingPathComponent("admin/users"),
+        statusCode: 200,
+        data: [.post: MockData.user]
+      )
+      .snapshotRequest {
+        #"""
+        curl \
+        	--request POST \
+        	--header "Content-Length: 113" \
+        	--header "Content-Type: application/json" \
+        	--header "X-Client-Info: auth-swift/0.0.0" \
+        	--header "X-Supabase-Api-Version: 2024-01-01" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	--data "{\"email\":\"test@example.com\",\"email_confirm\":true,\"password\":\"password\",\"phone\":\"1234567890\",\"phone_confirm\":true}" \
+        	"http://localhost:54321/auth/v1/admin/users"
+        """#
+      }
+      .register()
+
+      let attributes = AdminUserAttributes(
+        email: "test@example.com",
+        confirmsEmail: true,
+        password: "password",
+        phone: "1234567890",
+        confirmsPhone: true
+      )
+
+      _ = try await sut.admin.createUser(attributes: attributes)
+    }
+
+    @Test
+    func updateUserByIdConfirmingEmail() async throws {
+      let id = UUID(uuidString: "859f402d-b3de-4105-a1b9-932836d9193b")!
+      let sut = makeSUT()
+
+      Mock(
+        url: clientURL.appendingPathComponent("admin/users/\(id)"),
+        statusCode: 200,
+        data: [.put: MockData.user]
+      )
+      .snapshotRequest {
+        #"""
+        curl \
+        	--request PUT \
+        	--header "Content-Length: 22" \
+        	--header "Content-Type: application/json" \
+        	--header "X-Client-Info: auth-swift/0.0.0" \
+        	--header "X-Supabase-Api-Version: 2024-01-01" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	--data "{\"email_confirm\":true}" \
+        	"http://localhost:54321/auth/v1/admin/users/859F402D-B3DE-4105-A1B9-932836D9193B"
+        """#
+      }
+      .register()
+
+      let user = try await sut.admin.updateUserById(
+        id,
+        attributes: AdminUserAttributes(confirmsEmail: true)
+      )
+
+      expectNoDifference(user.id, id)
+    }
+
+    @Test
     func inviteUserByEmail() async throws {
       let sut = makeSUT()
 
@@ -3000,7 +3165,7 @@ extension AuthMockerTests {
       )
       .register()
 
-      Dependencies[sut.clientID].sessionStorage.store(.validSession)
+      sut.dependencies.sessionStorage.store(.valid)
 
       try await assertAuthStateChanges(
         sut: sut,
@@ -3009,13 +3174,175 @@ extension AuthMockerTests {
             _ = try await sut.user()
             Issue.record("Expected failure")
           } catch {
-            #expect(error as? AuthError == .sessionMissing)
+            #expect((error as? AuthError)?.kind == .sessionMissing)
           }
         },
         expectedEvents: [.initialSession, .signedOut]
       )
 
-      #expect(Dependencies[sut.clientID].sessionStorage.get() == nil)
+      #expect(sut.dependencies.sessionStorage.get() == nil)
+    }
+
+    @Test
+    func userWithForeignJWTKeepsStoredSessionIfSessionNotFoundErrorReturned() async throws {
+      let sut = makeSUT()
+
+      Mock(
+        url: clientURL.appendingPathComponent("user"),
+        statusCode: 403,
+        data: [
+          .get: Data(
+            """
+            {
+              "error_code": "session_not_found",
+              "message": "Session not found"
+            }
+            """.utf8
+          )
+        ]
+      )
+      .register()
+
+      sut.dependencies.sessionStorage.store(.valid)
+
+      try await assertAuthStateChanges(
+        sut: sut,
+        action: {
+          do {
+            _ = try await sut.user(jwt: "foreign-access-token")
+            Issue.record("Expected failure")
+          } catch {
+            #expect((error as? AuthError)?.kind == .sessionMissing)
+          }
+        },
+        expectedEvents: [.initialSession]
+      )
+
+      #expect(sut.dependencies.sessionStorage.get() == .valid)
+    }
+
+    @Test
+    func userWithStoredJWTRemovesSessionIfSessionNotFoundErrorReturned() async throws {
+      let sut = makeSUT()
+
+      Mock(
+        url: clientURL.appendingPathComponent("user"),
+        statusCode: 403,
+        data: [
+          .get: Data(
+            """
+            {
+              "error_code": "session_not_found",
+              "message": "Session not found"
+            }
+            """.utf8
+          )
+        ]
+      )
+      .register()
+
+      sut.dependencies.sessionStorage.store(.valid)
+
+      try await assertAuthStateChanges(
+        sut: sut,
+        action: {
+          do {
+            _ = try await sut.user(jwt: Session.valid.accessToken)
+            Issue.record("Expected failure")
+          } catch {
+            #expect((error as? AuthError)?.kind == .sessionMissing)
+          }
+        },
+        expectedEvents: [.initialSession, .signedOut]
+      )
+
+      #expect(sut.dependencies.sessionStorage.get() == nil)
+    }
+
+    @Test
+    func setSessionWithForeignTokenKeepsStoredSessionIfSessionNotFoundErrorReturned() async throws {
+      let sut = makeSUT()
+
+      Mock(
+        url: clientURL.appendingPathComponent("user"),
+        statusCode: 403,
+        data: [
+          .get: Data(
+            """
+            {
+              "error_code": "session_not_found",
+              "message": "Session not found"
+            }
+            """.utf8
+          )
+        ]
+      )
+      .register()
+
+      sut.dependencies.sessionStorage.store(.valid)
+
+      let accessToken =
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjo0ODUyMTYzNTkzLCJzdWIiOiJmMzNkM2VjOS1hMmVlLTQ3YzQtODBlMS01YmQ5MTlmM2Q4YjgiLCJlbWFpbCI6ImhpQGJpbmFyeXNjcmFwaW5nLmNvIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJlbWFpbCIsInByb3ZpZGVycyI6WyJlbWFpbCJdfSwidXNlcl9tZXRhZGF0YSI6e30sInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.UiEhoahP9GNrBKw_OHBWyqYudtoIlZGkrjs7Qa8hU7I"
+
+      try await assertAuthStateChanges(
+        sut: sut,
+        action: {
+          do {
+            _ = try await sut.setSession(
+              accessToken: accessToken, refreshToken: "dummy-refresh-token")
+            Issue.record("Expected failure")
+          } catch {
+            #expect((error as? AuthError)?.kind == .sessionMissing)
+          }
+        },
+        expectedEvents: [.initialSession]
+      )
+
+      #expect(sut.dependencies.sessionStorage.get() == .valid)
+    }
+
+    @Test
+    func sessionWithURL_implicitFlow_keepsStoredSessionIfSessionNotFoundErrorReturned() async throws
+    {
+      let sut = makeSUT(flowType: .implicit)
+
+      Mock(
+        url: clientURL.appendingPathComponent("user"),
+        statusCode: 403,
+        data: [
+          .get: Data(
+            """
+            {
+              "error_code": "session_not_found",
+              "message": "Session not found"
+            }
+            """.utf8
+          )
+        ]
+      )
+      .register()
+
+      sut.dependencies.sessionStorage.store(.valid)
+
+      let url = URL(
+        string:
+          "https://dummy-url.com/callback#access_token=foreign-access-token&expires_in=60&refresh_token=refreshtoken&token_type=bearer"
+      )!
+
+      try await assertAuthStateChanges(
+        sut: sut,
+        action: {
+          do {
+            _ = try await sut.session(from: url)
+            Issue.record("Expected failure")
+          } catch {
+            #expect((error as? AuthError)?.kind == .sessionMissing)
+          }
+        },
+        expectedEvents: [.initialSession]
+      )
+
+      #expect(sut.dependencies.sessionStorage.get() == .valid)
     }
 
     @Test
@@ -3040,7 +3367,7 @@ extension AuthMockerTests {
       )
       .register()
 
-      Dependencies[sut.clientID].sessionStorage.store(.expiredSession)
+      sut.dependencies.sessionStorage.store(.expired)
 
       let expectedEvents = [AuthChangeEvent.initialSession, .signedOut]
 
@@ -3051,13 +3378,13 @@ extension AuthMockerTests {
             _ = try await sut.session
             Issue.record("Expected failure")
           } catch {
-            #expect(error as? AuthError == .sessionMissing)
+            #expect((error as? AuthError)?.kind == .sessionMissing)
           }
         },
         expectedEvents: expectedEvents
       )
 
-      #expect(Dependencies[sut.clientID].sessionStorage.get() == nil)
+      #expect(sut.dependencies.sessionStorage.get() == nil)
     }
 
     @Test
@@ -3069,11 +3396,11 @@ extension AuthMockerTests {
           URLQueryItem(name: "grant_type", value: "refresh_token")
         ]),
         statusCode: 200,
-        data: [.post: try AuthClient.Configuration.jsonEncoder.encode(Session.validSession)]
+        data: [.post: try AuthClient.Configuration.jsonEncoder.encode(Session.valid)]
       )
       .register()
 
-      Dependencies[sut.clientID].sessionStorage.store(.expiredSession)
+      sut.dependencies.sessionStorage.store(.expired)
 
       let expectedEvents = [AuthChangeEvent.initialSession, .tokenRefreshed]
 
@@ -3086,7 +3413,7 @@ extension AuthMockerTests {
       )
     }
 
-    // MARK: - getClaims Tests
+    // MARK: - claims Tests
 
     @Test
     func getClaims_withHS256JWT_shouldFallbackAndReturnClaims() async throws {
@@ -3106,7 +3433,7 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      let result = try await sut.getClaims(jwt: jwt)
+      let result = try await sut.claims(jwt: jwt)
 
       #expect(result.claims.sub == "1234567890")
       #expect(result.claims.iss == "http://localhost:54321/auth/v1")
@@ -3126,7 +3453,7 @@ extension AuthMockerTests {
       let jwt =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6OTk5OTk5OTk5OSwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.4Adcj0vZKqXRB_mPpDVkWvB3xw7yHYjpzGJLKFQjKEc"
 
-      var session = Session.validSession
+      var session = Session.valid
       session.accessToken = jwt
 
       let user = User(fromMockNamed: "user")
@@ -3140,33 +3467,106 @@ extension AuthMockerTests {
       ).register()
 
       let sut = makeSUT()
-      Dependencies[sut.clientID].sessionStorage.store(session)
+      sut.dependencies.sessionStorage.store(session)
 
-      let result = try await sut.getClaims()
+      let result = try await sut.claims()
 
       #expect(result.claims.sub == "1234567890")
       #expect(result.claims.role == "authenticated")
     }
 
     @Test
-    func getClaims_withProvidedJWKS_shouldStillFallbackForES256() async throws {
-      // ES256 is not yet supported client-side, so it will fallback to server even with JWKS
-      let jwt =
-        "eyJhbGciOiJFUzI1NiIsImtpZCI6InRlc3Qta2lkIiwidHlwIjoiSldUIn0.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6OTk5OTk5OTk5OSwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.dummysignature"
+    func getClaims_withES256JWTAndJWKS_shouldVerifyLocally() async throws {
+      let signer = ES256TestSigner()
+      let jwt = try signer.sign(
+        header: #"{"alg":"ES256","kid":"es256-test-kid","typ":"JWT"}"#,
+        payload:
+          #"{"sub":"1234567890","iss":"http://localhost:54321/auth/v1","aud":"authenticated","exp":9999999999,"iat":1516239022,"role":"authenticated"}"#
+      )
 
-      // JWK is Codable, no custom init needed
-      let jwkDict: [String: Any] = [
-        "kty": "EC",
-        "kid": "test-kid",
-        "alg": "ES256",
-        "crv": "P-256",
-        "x": "MKBCTNIcKUSDii11ySs3526iDZ8AiTo7Tu6KPAqv7D4",
-        "y": "4Etl6SRW2YiLUrN5vfvVHuhp7x8PxltmWWlbbM4IFyM",
-      ]
+      Mock(
+        url: clientURL.appendingPathComponent("user"),
+        ignoreQuery: true,
+        contentType: .json,
+        statusCode: 401,
+        data: [.get: Data()]
+      ).register()
 
-      let jwkData = try JSONSerialization.data(withJSONObject: jwkDict)
-      let jwk = try AuthClient.Configuration.jsonDecoder.decode(JWK.self, from: jwkData)
-      let jwks = JWKS(keys: [jwk])
+      let sut = makeSUT()
+
+      let result = try await sut.claims(
+        jwt: jwt,
+        options: GetClaimsOptions(jwks: JWKS(keys: [signer.jwk]))
+      )
+
+      #expect(result.claims.sub == "1234567890")
+      #expect(result.claims.role == "authenticated")
+      #expect(result.header.alg == "ES256")
+      #expect(result.header.kid == "es256-test-kid")
+    }
+
+    @Test
+    func getClaims_withJWKMissingAlg_shouldVerifyLocally() async throws {
+      let signer = ES256TestSigner()
+      let jwt = try signer.sign(
+        header: #"{"alg":"ES256","kid":"es256-test-kid","typ":"JWT"}"#,
+        payload:
+          #"{"sub":"1234567890","iss":"http://localhost:54321/auth/v1","aud":"authenticated","exp":9999999999,"iat":1516239022,"role":"authenticated"}"#
+      )
+      let key = signer.jwk
+      let keyWithoutAlg = JWK(
+        kty: key.kty,
+        keyOps: key.keyOps,
+        alg: nil,
+        kid: key.kid,
+        n: key.n,
+        e: key.e,
+        crv: key.crv,
+        x: key.x,
+        y: key.y,
+        k: key.k
+      )
+
+      Mock(
+        url: clientURL.appendingPathComponent("user"),
+        ignoreQuery: true,
+        contentType: .json,
+        statusCode: 401,
+        data: [.get: Data()]
+      ).register()
+
+      let sut = makeSUT()
+
+      let result = try await sut.claims(
+        jwt: jwt,
+        options: GetClaimsOptions(jwks: JWKS(keys: [keyWithoutAlg]))
+      )
+
+      #expect(result.claims.sub == "1234567890")
+      #expect(result.claims.role == "authenticated")
+      #expect(result.header.alg == "ES256")
+    }
+
+    @Test
+    func getClaims_withJWKMissingAlgAndMismatchedHeaderAlg_shouldNotVerify() async throws {
+      let signer = ES256TestSigner()
+      let jwt = try signer.sign(
+        header: #"{"alg":"RS256","kid":"es256-test-kid","typ":"JWT"}"#,
+        payload: #"{"sub":"1234567890","exp":9999999999,"role":"authenticated"}"#
+      )
+      let key = signer.jwk
+      let keyWithoutAlg = JWK(
+        kty: key.kty,
+        keyOps: key.keyOps,
+        alg: nil,
+        kid: key.kid,
+        n: key.n,
+        e: key.e,
+        crv: key.crv,
+        x: key.x,
+        y: key.y,
+        k: key.k
+      )
 
       let user = User(fromMockNamed: "user")
 
@@ -3180,10 +3580,49 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      let result = try await sut.getClaims(jwt: jwt, options: GetClaimsOptions(jwks: jwks))
+      let error = await #expect(throws: AuthError.self) {
+        _ = try await sut.claims(
+          jwt: jwt,
+          options: GetClaimsOptions(jwks: JWKS(keys: [keyWithoutAlg]))
+        )
+      }
+      #expect(error?.kind == .jwtVerificationFailed)
+      #expect(error?.message == "Invalid JWT signature")
+    }
 
-      #expect(result.claims.sub == "1234567890")
-      #expect(result.claims.role == "authenticated")
+    @Test
+    func getClaims_withTamperedES256JWT_shouldThrowWithoutFallback() async throws {
+      let signer = ES256TestSigner()
+      let jwt = try signer.sign(
+        header: #"{"alg":"ES256","kid":"es256-test-kid","typ":"JWT"}"#,
+        payload: #"{"sub":"1234567890","exp":9999999999,"role":"authenticated"}"#
+      )
+      let parts = jwt.split(separator: ".")
+      let tamperedPayload = Base64URL.encode(
+        Data(#"{"sub":"1234567890","exp":9999999999,"role":"service_role"}"#.utf8)
+      )
+      let tamperedJWT = "\(parts[0]).\(tamperedPayload).\(parts[2])"
+
+      let user = User(fromMockNamed: "user")
+
+      Mock(
+        url: clientURL.appendingPathComponent("user"),
+        ignoreQuery: true,
+        contentType: .json,
+        statusCode: 200,
+        data: [.get: try! AuthClient.Configuration.jsonEncoder.encode(user)]
+      ).register()
+
+      let sut = makeSUT()
+
+      let error = await #expect(throws: AuthError.self) {
+        _ = try await sut.claims(
+          jwt: tamperedJWT,
+          options: GetClaimsOptions(jwks: JWKS(keys: [signer.jwk]))
+        )
+      }
+      #expect(error?.kind == .jwtVerificationFailed)
+      #expect(error?.message == "Invalid JWT signature")
     }
 
     @Test
@@ -3204,7 +3643,7 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      let result = try await sut.getClaims(jwt: jwt)
+      let result = try await sut.claims(jwt: jwt)
 
       #expect(result.claims.sub == "1234567890")
       #expect(result.claims.role == "authenticated")
@@ -3250,7 +3689,7 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      let result = try await sut.getClaims(jwt: jwt)
+      let result = try await sut.claims(jwt: jwt)
 
       #expect(result.claims.sub == "1234567890")
       #expect(result.claims.role == "authenticated")
@@ -3274,7 +3713,7 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      let result = try await sut.getClaims(jwt: jwt)
+      let result = try await sut.claims(jwt: jwt)
 
       #expect(result.claims.sub == "987654321")
       #expect(result.claims.role == "authenticated")
@@ -3285,13 +3724,10 @@ extension AuthMockerTests {
       let sut = makeSUT()
 
       do {
-        _ = try await sut.getClaims()
+        _ = try await sut.claims()
         Issue.record("Expected sessionMissing error")
       } catch let error as AuthError {
-        guard case .sessionMissing = error else {
-          Issue.record("Expected sessionMissing error, got \(error)")
-          return
-        }
+        #expect(error.kind == .sessionMissing)
       } catch {
         Issue.record("Expected AuthError, got \(error)")
       }
@@ -3304,14 +3740,11 @@ extension AuthMockerTests {
       let sut = makeSUT()
 
       do {
-        _ = try await sut.getClaims(jwt: invalidJWT)
+        _ = try await sut.claims(jwt: invalidJWT)
         Issue.record("Expected jwtVerificationFailed error")
       } catch let error as AuthError {
-        guard case .jwtVerificationFailed(let message) = error else {
-          Issue.record("Expected jwtVerificationFailed error, got \(error)")
-          return
-        }
-        #expect(message == "Invalid JWT structure")
+        #expect(error.kind == .jwtVerificationFailed)
+        #expect(error.message == "Invalid JWT structure")
       } catch {
         Issue.record("Expected AuthError, got \(error)")
       }
@@ -3326,14 +3759,11 @@ extension AuthMockerTests {
       let sut = makeSUT()
 
       do {
-        _ = try await sut.getClaims(jwt: expiredJWT)
+        _ = try await sut.claims(jwt: expiredJWT)
         Issue.record("Expected jwtVerificationFailed error")
       } catch let error as AuthError {
-        guard case .jwtVerificationFailed(let message) = error else {
-          Issue.record("Expected jwtVerificationFailed error, got \(error)")
-          return
-        }
-        #expect(message == "JWT has expired")
+        #expect(error.kind == .jwtVerificationFailed)
+        #expect(error.message == "JWT has expired")
       } catch {
         Issue.record("Expected AuthError, got \(error)")
       }
@@ -3341,7 +3771,7 @@ extension AuthMockerTests {
 
     @Test
     func getClaims_withExpiredJWTAndAllowExpired_shouldReturnClaims() async throws {
-      // JWT with exp in the past but allowExpired option - falls back to server
+      // JWT with exp in the past but allowsExpired option - falls back to server
       let expiredJWT =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6MTUxNjIzOTAyMiwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.aN0HLYHkp7nKZp4xWvBaDqSrCFBxk2tq0KZc4BXGqYs"
 
@@ -3357,9 +3787,9 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      let result = try await sut.getClaims(
+      let result = try await sut.claims(
         jwt: expiredJWT,
-        options: GetClaimsOptions(allowExpired: true)
+        options: GetClaimsOptions(allowsExpired: true)
       )
 
       #expect(result.claims.sub == "1234567890")
@@ -3388,7 +3818,7 @@ extension AuthMockerTests {
       let sut = makeSUT()
 
       do {
-        _ = try await sut.getClaims(jwt: jwt)
+        _ = try await sut.claims(jwt: jwt)
         Issue.record("Expected error from server")
       } catch {
         // Expected to fail
@@ -3414,7 +3844,7 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      let result = try await sut.getClaims(jwt: jwt)
+      let result = try await sut.claims(jwt: jwt)
 
       #expect(result.claims.sub == "1234567890")
       #expect(result.claims.iss == "http://localhost:54321/auth/v1")
@@ -3450,14 +3880,111 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      let result = try await sut.getClaims(jwt: jwt)
+      let result = try await sut.claims(jwt: jwt)
 
       #expect(result.claims.sub == "1234567890")
       #expect(result.claims.aud != nil)
     }
 
+    @Test
+    func transportFailureIsWrapped() async {
+      Mock(
+        url: clientURL.appendingPathComponent("token"),
+        ignoreQuery: true,
+        statusCode: 200,
+        data: [.post: Data()],
+        requestError: URLError(.notConnectedToInternet)
+      )
+      .register()
+
+      let sut = makeSUT()
+
+      do {
+        try await sut.signIn(email: "a@b.c", password: "secret")
+        Issue.record("Expected failure")
+      } catch let error as AuthError {
+        #expect(error.kind == .transport)
+        #expect(error.errorCode == .unknown)
+        #expect((error.underlyingError as? URLError)?.code == .notConnectedToInternet)
+      } catch {
+        Issue.record("Unexpected error \(error)")
+      }
+    }
+
+    @Test
+    func unexpectedResponseBodyIsReported() async {
+      Mock(
+        url: clientURL.appendingPathComponent("token"),
+        ignoreQuery: true,
+        statusCode: 502,
+        data: [.post: Data("<html>bad gateway</html>".utf8)]
+      )
+      .register()
+
+      let sut = makeSUT()
+
+      do {
+        try await sut.signIn(email: "a@b.c", password: "secret")
+        Issue.record("Expected failure")
+      } catch let error as AuthError {
+        #expect(error.kind == .server)
+        #expect(error.errorCode == .unexpectedFailure)
+        #expect(error.response?.statusCode == 502)
+        #expect(error.response?.body == Data("<html>bad gateway</html>".utf8))
+      } catch {
+        Issue.record("Unexpected error \(error)")
+      }
+    }
+
+    @Test
+    func undecodableSuccessBodyIsWrapped() async {
+      Mock(
+        url: clientURL.appendingPathComponent("token"),
+        ignoreQuery: true,
+        statusCode: 200,
+        data: [.post: Data("not json".utf8)]
+      )
+      .register()
+
+      let sut = makeSUT()
+
+      do {
+        try await sut.signIn(email: "a@b.c", password: "secret")
+        Issue.record("Expected failure")
+      } catch let error as AuthError {
+        #expect(error.kind == .decoding)
+        #expect(error.underlyingError is DecodingError)
+      } catch {
+        Issue.record("Unexpected error \(error)")
+      }
+    }
+
+    private func sessionNotFoundMock(scope: String) -> Mock {
+      Mock(
+        url: clientURL.appendingPathComponent("logout").appendingQueryItems([
+          URLQueryItem(name: "scope", value: scope)
+        ]),
+        statusCode: 403,
+        data: [
+          .post: Data(
+            """
+            {
+              "code": "session_not_found",
+              "message": "Session from session_id claim in JWT does not exist"
+            }
+            """.utf8
+          )
+        ],
+        additionalHeaders: [
+          "X-Supabase-Api-Version": "2024-01-01"
+        ]
+      )
+    }
+
     private func makeSUT(
-      flowType: AuthFlowType = .pkce
+      flowType: AuthFlowType = .pkce,
+      date: @escaping @Sendable () -> Date = { Date() },
+      urlOpener: URLOpener = .live
     ) -> AuthClient {
       let sessionConfiguration = URLSessionConfiguration.default
       sessionConfiguration.protocolClasses = [MockingURLProtocol.self]
@@ -3471,22 +3998,17 @@ extension AuthMockerTests {
         ],
         flowType: flowType,
         localStorage: storage,
-        fetch: { request in
-          try await session.data(for: request)
-        }
-      )
+        http: .init(transport: URLSessionTransport(session: session)))
 
-      let sut = AuthClient(configuration: configuration)
-
-      Dependencies[sut.clientID].pkce.generateCodeVerifier = {
+      var pkce = PKCE.live
+      pkce.generateCodeVerifier = {
         "nt_xCJhJXUsIlTmbE_b0r3VHDKLxFTAwXYSj1xF3ZPaulO2gejNornLLiW_C3Ru4w-5lqIh1XE2LTOsSKrj7iA"
       }
-
-      Dependencies[sut.clientID].pkce.generateCodeChallenge = { _ in
+      pkce.generateCodeChallenge = { _ in
         "hgJeigklONUI1pKSS98MIAbtJGaNu0zJU1iSiFOn2lY"
       }
 
-      return sut
+      return AuthClient(configuration: configuration, date: date, pkce: pkce, urlOpener: urlOpener)
     }
 
     /// Convenience method for testing auth state changes and asserting events
@@ -3505,7 +4027,7 @@ extension AuthMockerTests {
       // concurrently-running suite in the process gets its own task scheduling funneled onto the
       // same queue too. Under CI's loaded simulator that queue can back up well past what a fast
       // local run would ever see — 30s gives real headroom without masking a genuinely stuck test.
-      timeout: TimeInterval = 30,
+      timeout: Duration = .seconds(30),
       fileID: StaticString = #fileID,
       filePath: StaticString = #filePath,
       line: UInt = #line,
@@ -3527,7 +4049,7 @@ extension AuthMockerTests {
 
       let result = try await action()
 
-      try await withTimeout(interval: timeout) {
+      try await withTimeout(timeout) {
         defer { finished.setValue(true) }
         while receivedEvents.count < expectedEvents.count {
           await Task.yield()
@@ -3558,56 +4080,6 @@ extension AuthMockerTests {
 
       return result
     }
-  }
-}
-
-extension HTTPResponse {
-  static func stub(
-    _ body: String = "",
-    code: Int = 200,
-    headers: [String: String]? = nil
-  ) -> HTTPResponse {
-    HTTPResponse(
-      data: body.data(using: .utf8)!,
-      response: HTTPURLResponse(
-        url: clientURL,
-        statusCode: code,
-        httpVersion: nil,
-        headerFields: headers
-      )!
-    )
-  }
-
-  static func stub(
-    fromFileName fileName: String,
-    code: Int = 200,
-    headers: [String: String]? = nil
-  ) -> HTTPResponse {
-    HTTPResponse(
-      data: json(named: fileName),
-      response: HTTPURLResponse(
-        url: clientURL,
-        statusCode: code,
-        httpVersion: nil,
-        headerFields: headers
-      )!
-    )
-  }
-
-  static func stub(
-    _ value: some Encodable,
-    code: Int = 200,
-    headers: [String: String]? = nil
-  ) -> HTTPResponse {
-    HTTPResponse(
-      data: try! AuthClient.Configuration.jsonEncoder.encode(value),
-      response: HTTPURLResponse(
-        url: clientURL,
-        statusCode: code,
-        httpVersion: nil,
-        headerFields: headers
-      )!
-    )
   }
 }
 

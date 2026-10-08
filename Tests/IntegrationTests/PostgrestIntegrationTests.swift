@@ -40,9 +40,9 @@ struct User: Codable, Hashable {
 )
 struct PostgrestIntegrationTests {
   let client = PostgrestClient(
-    url: URL(string: "\(DotEnv.SUPABASE_URL)/rest/v1")!,
+    url: URL(string: "\(DotEnv.supabaseURL)/rest/v1")!,
     headers: [
-      "Apikey": DotEnv.SUPABASE_PUBLISHABLE_KEY
+      "Apikey": DotEnv.supabasePublishableKey
     ]
   )
 
@@ -91,7 +91,7 @@ struct PostgrestIntegrationTests {
 
     let drinkCoffeeTodo = insertedTodos[1]
     let updatedTodo: Todo = try await client.from("todos")
-      .update(["is_complete": true])
+      .update(["is_complete": true], returning: .representation)
       .eq("id", value: drinkCoffeeTodo.id.uuidString)
       .single()
       .execute()

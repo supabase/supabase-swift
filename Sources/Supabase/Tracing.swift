@@ -1,21 +1,12 @@
-import Foundation
-
-#if canImport(FoundationNetworking)
-  import FoundationNetworking
-#endif
-
 #if OpenTelemetry
   import OpenTelemetryApi
 #endif
 
-/// Builds and injects the W3C `traceparent` header from the currently active OpenTelemetry span.
+/// Builds the W3C `traceparent` header from the currently active OpenTelemetry span.
 ///
-/// Applied unconditionally by `SupabaseClient` — the `OpenTelemetry` package trait is the sole
-/// on/off switch. Compiles to a no-op when the trait is disabled, and no-ops at runtime when
-/// there's no active span, so calling ``inject(into:)`` is always safe.
-///
-/// Not applied to `FunctionsClient._invokeWithStreamedResponse`, which uses its own `URLSession`
-/// outside `SupabaseClient`'s fetch pipeline (same pre-existing exception as auth header injection).
+/// Applied unconditionally by `SupabaseClient` via `TraceContextMiddleware` — the `OpenTelemetry`
+/// package trait is the sole on/off switch. Compiles to a no-op when the trait is disabled, and
+/// returns `nil` at runtime when there's no active span.
 ///
 /// To enable, add the trait to your dependency declaration:
 ///
@@ -27,14 +18,7 @@ import Foundation
 /// )
 /// ```
 enum TraceContext {
-  /// Sets the `traceparent` header on `request` from the active OpenTelemetry span, if any.
-  static func inject(into request: URLRequest) -> URLRequest {
-    guard let traceparent = traceParentHeader() else { return request }
-    var request = request
-    request.setValue(traceparent, forHTTPHeaderField: "traceparent")
-    return request
-  }
-
+  /// The `traceparent` header value for the active OpenTelemetry span, or `nil` if there is none.
   static func traceParentHeader() -> String? {
     #if OpenTelemetry
       guard let context = OpenTelemetry.instance.contextProvider.activeSpan?.context else {

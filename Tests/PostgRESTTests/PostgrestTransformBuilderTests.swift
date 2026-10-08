@@ -87,7 +87,7 @@ extension PostgrestMockerTests {
         	--header "Content-Type: application/json" \
         	--header "X-Client-Info: postgrest-swift/0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	"http://localhost:54321/rest/v1/cities?countries.order=name.asc.nullslast&select=name,country:countries(name)"
+        	"http://localhost:54321/rest/v1/cities?countries.order=name.asc&select=name,country:countries(name)"
         """#
       }
       .register()
@@ -112,6 +112,38 @@ extension PostgrestMockerTests {
     }
 
     @Test
+    func orderWithoutNullsFirstOmitsNullPlacement() async throws {
+      Mock(
+        url: url.appendingPathComponent("cities"),
+        ignoreQuery: true,
+        statusCode: 200,
+        data: [
+          .get: Data("[]".utf8)
+        ]
+      )
+      .snapshotRequest {
+        #"""
+        curl \
+        	--header "Accept: application/json" \
+        	--header "Content-Type: application/json" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	"http://localhost:54321/rest/v1/cities?order=due_at.desc&select=*"
+        """#
+      }
+      .register()
+
+      // Without an explicit `nullsFirst`, the request must not pick a placement for the caller —
+      // Postgres defaults a descending sort to NULLS FIRST, which `.nullslast` would silently
+      // reverse. See SDK-1633.
+      try await sut
+        .from("cities")
+        .select()
+        .order("due_at", ascending: false)
+        .execute()
+    }
+
+    @Test
     func multipleOrder() async throws {
       Mock(
         url: url.appendingPathComponent("cities"),
@@ -128,7 +160,7 @@ extension PostgrestMockerTests {
         	--header "Content-Type: application/json" \
         	--header "X-Client-Info: postgrest-swift/0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	"http://localhost:54321/rest/v1/cities?order=num_of_habitants.asc.nullslast,name.desc.nullsfirst&select=name,num_of_habitants"
+        	"http://localhost:54321/rest/v1/cities?order=num_of_habitants.asc,name.desc.nullsfirst&select=name,num_of_habitants"
         """#
       }
       .register()
@@ -519,7 +551,7 @@ extension PostgrestMockerTests {
         	--header "Accept: application/json" \
         	--header "Content-Length: 20" \
         	--header "Content-Type: application/json" \
-        	--header "Prefer: return=representation,handling=strict,max-affected=1" \
+        	--header "Prefer: handling=strict,max-affected=1" \
         	--header "X-Client-Info: postgrest-swift/0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	--data "{\"username\":\"admin\"}" \
@@ -553,7 +585,7 @@ extension PostgrestMockerTests {
         	--header "Accept: application/json" \
         	--header "Content-Length: 20" \
         	--header "Content-Type: application/json" \
-        	--header "Prefer: return=representation,handling=strict,max-affected=5" \
+        	--header "Prefer: handling=strict,max-affected=5" \
         	--header "X-Client-Info: postgrest-swift/0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	--data "{\"username\":\"admin\"}" \
@@ -587,7 +619,7 @@ extension PostgrestMockerTests {
         	--request DELETE \
         	--header "Accept: application/json" \
         	--header "Content-Type: application/json" \
-        	--header "Prefer: return=representation,handling=strict,max-affected=5" \
+        	--header "Prefer: handling=strict,max-affected=5" \
         	--header "X-Client-Info: postgrest-swift/0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	"http://localhost:54321/rest/v1/users?id=in.(1,2,3,4,5)"
@@ -676,9 +708,8 @@ extension PostgrestMockerTests {
       .snapshotRequest {
         #"""
         curl \
-        	--header "Accept: application/json" \
+        	--header "Accept: application/vnd.pgrst.array+json;nulls=stripped" \
         	--header "Content-Type: application/json" \
-        	--header "Prefer: return=stripped-nulls" \
         	--header "X-Client-Info: postgrest-swift/0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	"http://localhost:54321/rest/v1/countries?select=*"
@@ -694,6 +725,70 @@ extension PostgrestMockerTests {
     }
 
     @Test
+    func stripNullsKeepsReturnRepresentationOnInsert() async throws {
+      Mock(
+        url: url.appendingPathComponent("users"),
+        ignoreQuery: true,
+        statusCode: 201,
+        data: [
+          .post: Data("[]".utf8)
+        ]
+      )
+      .snapshotRequest {
+        #"""
+        curl \
+        	--request POST \
+        	--header "Accept: application/vnd.pgrst.array+json;nulls=stripped" \
+        	--header "Content-Length: 27" \
+        	--header "Content-Type: application/json" \
+        	--header "Prefer: return=representation" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	--data "{\"id\":1,\"username\":\"admin\"}" \
+        	"http://localhost:54321/rest/v1/users?select=*"
+        """#
+      }
+      .register()
+
+      try await sut
+        .from("users")
+        .insert(User(id: 1, username: "admin"))
+        .select()
+        .stripNulls()
+        .execute()
+    }
+
+    @Test
+    func stripNullsBeforeSingleStripsTheObject() async throws {
+      Mock(
+        url: url.appendingPathComponent("countries"),
+        ignoreQuery: true,
+        statusCode: 200,
+        data: [
+          .get: Data("{}".utf8)
+        ]
+      )
+      .snapshotRequest {
+        #"""
+        curl \
+        	--header "Accept: application/vnd.pgrst.object+json;nulls=stripped" \
+        	--header "Content-Type: application/json" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	"http://localhost:54321/rest/v1/countries?select=*"
+        """#
+      }
+      .register()
+
+      try await sut
+        .from("countries")
+        .select()
+        .stripNulls()
+        .single()
+        .execute()
+    }
+
+    @Test
     func stripNullsWithCSVThrowsError() async throws {
       do {
         try await sut
@@ -704,6 +799,7 @@ extension PostgrestMockerTests {
           .execute()
         Issue.record("Expected error to be thrown")
       } catch let error as PostgrestError {
+        #expect(error.kind == .invalidRequest)
         #expect(error.message == "`.stripNulls()` cannot be combined with `.csv()`")
       }
     }
@@ -719,6 +815,7 @@ extension PostgrestMockerTests {
           .execute()
         Issue.record("Expected error to be thrown")
       } catch let error as PostgrestError {
+        #expect(error.kind == .invalidRequest)
         #expect(error.message == "`.csv()` cannot be combined with `.stripNulls()`")
       }
     }
@@ -770,7 +867,7 @@ extension PostgrestMockerTests {
         	--header "Accept: application/json" \
         	--header "Content-Length: 20" \
         	--header "Content-Type: application/json" \
-        	--header "Prefer: return=representation,tx=rollback" \
+        	--header "Prefer: tx=rollback" \
         	--header "X-Client-Info: postgrest-swift/0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	--data "{\"username\":\"admin\"}" \

@@ -1,8 +1,5 @@
-public import Foundation
-
-#if canImport(FoundationNetworking)
-  public import FoundationNetworking
-#endif
+import Foundation
+public import Helpers
 
 /// An error code thrown by the server.
 public struct ErrorCode: Decodable, RawRepresentable, Sendable, Hashable {
@@ -218,74 +215,136 @@ extension ErrorCode {
   public static let featureDisabled = ErrorCode("feature_disabled")
 }
 
-/// Errors that can be thrown by ``AuthClient`` and related Auth types.
+/// An error thrown by ``AuthClient`` and related Auth types.
+///
+/// Check ``kind`` to learn which party failed, and ``errorCode`` for the GoTrue error code when
+/// the server rejected the request. ``response`` carries the status, headers, body and request
+/// id for ``Kind-swift.struct/server``.
+///
+/// ```swift
+/// do {
+///   try await supabase.auth.signIn(email: email, password: password)
+/// } catch let error as AuthError where error.errorCode == .invalidCredentials {
+///   showWrongPassword()
+/// } catch let error as AuthError where error.errorCode == .weakPassword {
+///   showReasons(error.weakPasswordReasons)
+/// }
+/// ```
 ///
 /// ## Topics
 ///
-/// ### Common errors
+/// ### Inspecting an error
+/// - ``kind``
+/// - ``errorCode``
+/// - ``message``
+/// - ``weakPasswordReasons``
+/// - ``response``
+/// - ``underlyingError``
+///
+/// ### Common values
 /// - ``sessionMissing``
-/// - ``weakPassword(message:reasons:)``
-/// - ``api(message:errorCode:underlyingData:underlyingResponse:)``
-///
-/// ### OAuth flow errors
-/// - ``pkceGrantCodeExchange(message:error:code:)``
-/// - ``implicitGrantRedirect(message:)``
-///
-/// ### JWT errors
-/// - ``jwtVerificationFailed(message:)``
-public enum AuthError: LocalizedError, Equatable {
-  /// Error thrown when a session is required to proceed, but none was found, either thrown by the client, or returned by the server.
-  case sessionMissing
+/// - ``Kind-swift.struct``
+public struct AuthError: SupabaseError {
+  /// What failed. Compare against the static members and keep a fallback branch.
+  public struct Kind: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+    public let rawValue: String
 
-  /// Error thrown when password is deemed weak, check associated reasons to know why.
-  case weakPassword(message: String, reasons: [String])
+    public init(rawValue: String) {
+      self.rawValue = rawValue
+    }
 
-  /// Error thrown by API when an error occurs, check `errorCode` to know more,
-  /// or use `underlyingData` or `underlyingResponse` for access to the response which originated this error.
-  case api(
+    public init(stringLiteral value: String) {
+      self.init(rawValue: value)
+    }
+
+    /// GoTrue answered with a non-2xx status. Branch on ``AuthError/errorCode`` for why (it is
+    /// ``ErrorCode/unexpectedFailure`` when the body was not a GoTrue error payload) and read
+    /// ``AuthError/response`` for the status and body. For ``ErrorCode/weakPassword``, show
+    /// ``AuthError/weakPasswordReasons``.
+    public static let server: Kind = "server"
+    /// A session is required but none is stored, or the server reported the session as gone.
+    /// Sign the user in again.
+    public static let sessionMissing: Kind = "sessionMissing"
+    /// A redirect-based sign-in (OAuth, magic link, PKCE or implicit flow) could not start or
+    /// finish on the client. Either no redirect URL with a scheme is configured, or the redirect
+    /// URL carried an error or no session. Start the sign-in again; ``AuthError/errorCode``
+    /// carries the URL's `error_code` when it had one.
+    public static let oauthFlowFailed: Kind = "oauthFlowFailed"
+    /// Local JWT verification failed: malformed, expired or bad signature. Discard the token and
+    /// refresh the session or sign in again.
+    public static let jwtVerificationFailed: Kind = "jwtVerificationFailed"
+    /// No response arrived, so whether GoTrue applied the request is unknown. Retry reads
+    /// freely; before retrying a sign-up or an update, check that it was not applied.
+    /// ``AuthError/underlyingError`` is usually a `URLError`.
+    public static let transport: Kind = "transport"
+    /// A payload could not be interpreted: a 2xx body did not decode, a WebAuthn options object
+    /// was missing a field, or the authenticator returned an unexpected credential. Nothing to
+    /// retry; report it. ``AuthError/underlyingError`` is the `DecodingError` when there was one.
+    public static let decoding: Kind = "decoding"
+    /// A token refresh finished after the session it started from was signed out or replaced, so
+    /// its rotated tokens were dropped rather than applied to whichever session is stored now.
+    /// Ignore the result; the stored session is unchanged. Distinct from ``sessionMissing``: a
+    /// session may well be stored, just not the one that refresh belonged to.
+    public static let refreshDiscarded: Kind = "refreshDiscarded"
+  }
+
+  public var kind: Kind
+  public var message: String
+  /// The GoTrue error code. `.unknown` when the failure did not come from the server.
+  public var errorCode: ErrorCode
+  /// Why the password was rejected. Empty unless ``errorCode`` is ``ErrorCode/weakPassword``.
+  public var weakPasswordReasons: [String]
+  public var response: HTTPErrorResponse?
+  public var underlyingError: (any Error)?
+
+  public init(
+    kind: Kind,
     message: String,
-    errorCode: ErrorCode,
-    underlyingData: Data,
-    underlyingResponse: HTTPURLResponse
-  )
-
-  /// Error thrown when an error happens during PKCE grant flow.
-  case pkceGrantCodeExchange(message: String, error: String? = nil, code: String? = nil)
-
-  /// Error thrown when an error happens during implicit grant flow.
-  case implicitGrantRedirect(message: String)
-
-  /// Error thrown when JWT verification fails.
-  case jwtVerificationFailed(message: String)
-
-  public var message: String {
-    switch self {
-    case .sessionMissing: "Auth session missing."
-    case .weakPassword(let message, _),
-      .api(let message, _, _, _),
-      .pkceGrantCodeExchange(let message, _, _),
-      .implicitGrantRedirect(let message),
-      .jwtVerificationFailed(let message):
-      message
-    }
+    errorCode: ErrorCode = .unknown,
+    weakPasswordReasons: [String] = [],
+    response: HTTPErrorResponse? = nil,
+    underlyingError: (any Error)? = nil
+  ) {
+    self.kind = kind
+    self.message = message
+    self.errorCode = errorCode
+    self.weakPasswordReasons = weakPasswordReasons
+    self.response = response
+    self.underlyingError = underlyingError
   }
 
-  public var errorCode: ErrorCode {
-    switch self {
-    case .sessionMissing: .sessionNotFound
-    case .weakPassword: .weakPassword
-    case .api(_, let errorCode, _, _): errorCode
-    case .pkceGrantCodeExchange, .implicitGrantRedirect: .unknown
-    case .jwtVerificationFailed: .invalidJWT
-    }
+  public var description: String {
+    formattedDescription(kind: kind.rawValue)
   }
 
-  public var errorDescription: String? {
-    message
+  /// Thrown when a session is required to proceed but none was found, either locally or as
+  /// reported by the server.
+  public static let sessionMissing = AuthError(
+    kind: .sessionMissing, message: "Auth session missing.", errorCode: .sessionNotFound)
+
+  /// Thrown when a token refresh finished after the session it started from was signed out or
+  /// replaced, so its result was dropped instead of applied to the stored session.
+  public static let refreshDiscarded = AuthError(
+    kind: .refreshDiscarded,
+    message: "Token refresh discarded: the session it started from is no longer stored.")
+}
+
+extension AuthError {
+  static func weakPassword(message: String, reasons: [String]) -> AuthError {
+    AuthError(
+      kind: .server, message: message, errorCode: .weakPassword,
+      weakPasswordReasons: reasons)
   }
 
-  public static func ~= (lhs: AuthError, rhs: any Error) -> Bool {
-    guard let rhs = rhs as? AuthError else { return false }
-    return lhs == rhs
+  static func oauthFlowFailed(_ message: String, errorCode: ErrorCode = .unknown) -> AuthError {
+    AuthError(kind: .oauthFlowFailed, message: message, errorCode: errorCode)
+  }
+
+  static func jwtVerificationFailed(_ message: String) -> AuthError {
+    AuthError(kind: .jwtVerificationFailed, message: message, errorCode: .invalidJWT)
+  }
+
+  static func decoding(_ message: String) -> AuthError {
+    AuthError(kind: .decoding, message: message)
   }
 }

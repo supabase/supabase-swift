@@ -24,21 +24,20 @@ public struct TableMacro: ExtensionMacro {
 
   struct Arguments {
     var name: String
-    var schema: String
+    var schema: ExprSyntax?
     var readOnly: Bool
   }
 
   static func arguments(from node: AttributeSyntax) -> Arguments {
     var name = ""
-    var schema = "public"
+    var schema: ExprSyntax?
     var readOnly = false
     for argument in node.arguments?.as(LabeledExprListSyntax.self) ?? [] {
       switch argument.label?.text {
       case nil:
         name = argument.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue ?? ""
       case "schema":
-        schema =
-          argument.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue ?? "public"
+        schema = argument.expression
       case "readOnly":
         readOnly = argument.expression.as(BooleanLiteralExprSyntax.self)?.literal.text == "true"
       default:
@@ -46,6 +45,14 @@ public struct TableMacro: ExtensionMacro {
       }
     }
     return Arguments(name: name, schema: schema, readOnly: readOnly)
+  }
+
+  static func schemaType(of expression: ExprSyntax) -> String? {
+    guard let access = expression.as(MemberAccessExprSyntax.self),
+      access.declName.baseName.tokenKind == .keyword(.self),
+      let base = access.base
+    else { return nil }
+    return base.trimmedDescription
   }
 
   // MARK: Expansion
@@ -72,21 +79,27 @@ public struct TableMacro: ExtensionMacro {
       return []
     }
     let arguments = arguments(from: node)
+    var schema = "PostgREST.PublicSchema"
+    if let expression = arguments.schema {
+      guard let written = schemaType(of: expression) else {
+        context.error("schema: needs a schema type, as in `PrivateSchema.self`", at: expression)
+        return []
+      }
+      schema = written
+    }
     let access = declaration.postgrestAccessLevel
     let properties = declaration.postgrestStoredProperties()
 
     var body: [String] = [
       "  \(access)static let relationName = \"\(arguments.name)\"",
-      "  \(access)static let schema = \"\(arguments.schema)\"",
+      "  \(access)typealias Schema = \(schema)",
       "  \(access)static let selectString = \"*\"",
-      columnNameFunction(access: access, type: type.trimmedDescription, properties: properties),
+      columnsNamespace(access: access, type: type.trimmedDescription, properties: properties),
     ]
-    // The one thing `@PrimaryKey` uniquely does. Without this the marker is inert: after the key
-    // stopped gating `Draft` optionality and stopped being filtered out of `Update`, writing it or
-    // omitting it expanded byte-for-byte the same. Emitted only when a key is declared, and the
-    // `PostgrestKeyedRelation` conformance below rides on the same condition — the requirement has
-    // no default, so a keyless relation does not conform, which is what withholds the
-    // derived-conflict-target `upsert` from it at compile time.
+    // The one thing `@PrimaryKey` uniquely does — the marker changes nothing else about the
+    // expansion. The `PostgrestKeyedRelation` conformance below rides on the same condition, and
+    // its requirement has no default, so a keyless relation does not conform and the
+    // derived-conflict-target `upsert` is withheld from it at compile time.
     let keyColumns = properties.filter(\.isPrimaryKey).map(\.columnName)
     if !keyColumns.isEmpty {
       let list = keyColumns.map { "\"\($0)\"" }.joined(separator: ", ")
@@ -96,21 +109,15 @@ public struct TableMacro: ExtensionMacro {
       body.append(codingKeys)
     }
     if !arguments.readOnly {
-      // `Draft` carries every column, and a column is optional exactly when the database can
-      // fill it in: it is nullable, or it has a default. Being the primary key is not one of the
-      // reasons — `postgres-meta`, which generates supabase-js's types from the same column
-      // metadata, computes `is_nullable || is_identity || default_value !== null` and never
-      // consults the key. `@Default` already carries what `is_identity || default_value !== null`
-      // means, so a generated key is spelled `@PrimaryKey @Default var id: Int` and a natural one
-      // — including each half of a compound key — is required, which is what makes a join table
-      // insertable and an incomplete key a compile error rather than a 400.
+      // A `Draft` column is optional exactly when the database can fill it in — nullable, or
+      // has a default — and never because it is the key, matching the
+      // `is_nullable || is_identity || default_value !== null` that `postgres-meta` computes for
+      // supabase-js from the same column metadata. So a generated key is spelled
+      // `@PrimaryKey @Default var id: Int` and a natural one is required.
       //
-      // There is no matching `Update` shape. An update names the columns it writes, and a row
-      // type cannot say that: one optional field would have to mean both "not assigned" and
-      // "assigned null", so a nullable column could never be cleared. `PostgrestUpdate` builds
-      // the assignments from this type's key paths instead, and `columnName(for:)` above is all
-      // it needs from the macro. Targeting stays a separate concern — the caller filters the
-      // mutation — so the key is assignable like any other column.
+      // There is no matching `Update` shape: one optional field would have to mean both "not
+      // assigned" and "assigned null", so a nullable column could never be cleared.
+      // `PostgrestUpdate` builds the assignments from key paths into `Columns` instead.
       body.append(
         writeShape(
           named: "Draft",
@@ -157,29 +164,32 @@ public struct TableMacro: ExtensionMacro {
     ].compactMap { $0 }
   }
 
-  /// The key-path-to-column mapping.
+  /// The column namespace: one stored property per column. A computed property has nothing to
+  /// land on here — it is simply not one of `properties`.
   ///
-  /// Every stored property gets a case, so `default` is reachable only through a key path to a
-  /// computed property — a mistake at the call site, not a query worth sending. `fatalError` says
-  /// so immediately; returning `""` would build a query with an empty column name and leave
-  /// PostgREST to reject it with a 400 that never names the key path.
-  static func columnNameFunction(
+  /// An optional property gets a `PostgrestNullableColumn` carrying its **wrapped** type, so
+  /// `var dueDate: Date?` emits `PostgrestNullableColumn<Todo, Date>`.
+  ///
+  /// The explicit `init()` is required: a `public` struct's memberwise initializer is internal,
+  /// so `Columns()` would not resolve from another module.
+  static func columnsNamespace(
     access: String,
     type: String,
     properties: [StoredProperty]
   ) -> String {
-    var lines = [
-      "  \(access)static func columnName(for keyPath: PartialKeyPath<Self>) -> String {",
-      "    switch keyPath {",
-    ]
+    var lines = ["  \(access)struct Columns: Sendable {"]
     for property in properties {
-      lines.append("    case \\Self.\(property.name):")
-      lines.append("      return \"\(property.columnName)\"")
+      let column = property.isOptional ? "PostgrestNullableColumn" : "PostgrestColumn"
+      lines.append(
+        "    \(access)let \(property.name) = \(column)<\(type), \(property.unwrappedType)>"
+          + "(\"\(property.columnName)\")"
+      )
     }
-    lines.append("    default:")
-    lines.append("      fatalError(\"\(type): no column is mapped for that key path\")")
-    lines.append("    }")
+    lines.append("")
+    lines.append("    \(access)init() {}")
     lines.append("  }")
+    lines.append("")
+    lines.append("  \(access)static let columns = Columns()")
     return lines.joined(separator: "\n")
   }
 

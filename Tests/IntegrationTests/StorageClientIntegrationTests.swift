@@ -14,9 +14,9 @@ import Testing
 struct StorageClientIntegrationTests {
   let storage = SupabaseStorageClient(
     configuration: StorageClientConfiguration(
-      url: URL(string: "\(DotEnv.SUPABASE_URL)/storage/v1")!,
+      url: URL(string: "\(DotEnv.supabaseURL)/storage/v1")!,
       headers: [
-        "Authorization": "Bearer \(DotEnv.SUPABASE_SECRET_KEY)"
+        "Authorization": "Bearer \(DotEnv.supabaseSecretKey)"
       ]
     )
   )
@@ -47,7 +47,7 @@ struct StorageClientIntegrationTests {
 
     try await storage.createBucket(bucketName, options: .init(isPublic: true))
 
-    var bucket = try await storage.getBucket(bucketName)
+    var bucket = try await storage.bucket(bucketName)
     #expect(bucket.name == bucketName)
     #expect(bucket.id == bucketName)
     #expect(bucket.isPublic == true)
@@ -58,7 +58,7 @@ struct StorageClientIntegrationTests {
     try await storage.updateBucket(
       bucketName, options: BucketOptions(isPublic: false, allowedMimeTypes: ["image/jpeg"]))
 
-    bucket = try await storage.getBucket(bucketName)
+    bucket = try await storage.bucket(bucketName)
     #expect(bucket.allowedMimeTypes == ["image/jpeg"])
 
     try await storage.deleteBucket(bucketName)
@@ -70,20 +70,18 @@ struct StorageClientIntegrationTests {
   @Test
   func getBucketWithWrongId() async {
     do {
-      _ = try await storage.getBucket("not-exist-id")
+      _ = try await storage.bucket("not-exist-id")
       Issue.record("Unexpected success")
+    } catch let error as StorageError {
+      #expect(error.kind == .server)
+      #expect(error.serverError?.error == "Bucket not found")
+      #expect(error.serverError?.code == .noSuchBucket)
+      #expect(error.message == "Bucket not found")
+      // Storage answers a missing bucket with HTTP 400 and puts "404" in the body.
+      #expect(error.serverError?.statusCode == "404")
+      #expect(error.response != nil)
     } catch {
-      assertInlineSnapshot(of: error, as: .dump) {
-        """
-        ▿ StorageError
-          ▿ error: Optional<String>
-            - some: "Bucket not found"
-          - message: "Bucket not found"
-          ▿ statusCode: Optional<String>
-            - some: "404"
-
-        """
-      }
+      Issue.record("Unexpected error \(error)")
     }
   }
 }

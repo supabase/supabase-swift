@@ -10,6 +10,7 @@ import Crypto
 import CryptoSwift
 import CustomDump
 import Foundation
+import Helpers
 import InlineSnapshotTesting
 import P256K
 import TestHelpers
@@ -26,10 +27,10 @@ struct AuthClientIntegrationTests {
   let authClient = makeClient()
 
   static func makeClient(serviceRole: Bool = false) -> AuthClient {
-    let key = serviceRole ? DotEnv.SUPABASE_SECRET_KEY : DotEnv.SUPABASE_PUBLISHABLE_KEY
+    let key = serviceRole ? DotEnv.supabaseSecretKey : DotEnv.supabasePublishableKey
     return AuthClient(
       configuration: AuthClient.Configuration(
-        url: URL(string: "\(DotEnv.SUPABASE_URL)/auth/v1")!,
+        url: URL(string: "\(DotEnv.supabaseURL)/auth/v1")!,
         headers: [
           "apikey": key,
           "Authorization": "Bearer \(key)",
@@ -315,9 +316,9 @@ struct AuthClientIntegrationTests {
 
     let session = try #require(response.session)
 
-    var request = URLRequest(url: URL(string: "\(DotEnv.SUPABASE_URL)/rest/v1/rpc/delete_user")!)
+    var request = URLRequest(url: URL(string: "\(DotEnv.supabaseURL)/rest/v1/rpc/delete_user")!)
     request.httpMethod = "POST"
-    request.setValue(DotEnv.SUPABASE_PUBLISHABLE_KEY, forHTTPHeaderField: "apikey")
+    request.setValue(DotEnv.supabasePublishableKey, forHTTPHeaderField: "apikey")
     request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
 
     _ = try await URLSession.shared.data(for: request)
@@ -341,7 +342,7 @@ struct AuthClientIntegrationTests {
     let client = Self.makeClient(serviceRole: true)
     let pagination = try await client.admin.listUsers(params: PageParams(perPage: 10))
     #expect(pagination.users.count == 10)
-    #expect(pagination.aud == "authenticated")
+    #expect(pagination.audience == "authenticated")
     #expect(pagination.nextPage == 2)
   }
 
@@ -353,7 +354,7 @@ struct AuthClientIntegrationTests {
     let session = try await authClient.session
 
     let client = Self.makeClient(serviceRole: true)
-    let passkeys = try await client.admin.listPasskeys(userId: session.user.id)
+    let passkeys = try await client.admin.listPasskeys(forUser: session.user.id)
     #expect(passkeys.isEmpty)
   }
 
@@ -366,15 +367,12 @@ struct AuthClientIntegrationTests {
 
     let client = Self.makeClient(serviceRole: true)
     do {
-      try await client.admin.deletePasskey(userId: session.user.id, passkeyId: UUID())
+      try await client.admin.deletePasskey(id: UUID(), forUser: session.user.id)
       Issue.record("Expected deletePasskey to throw for a nonexistent passkey")
     } catch let error as AuthError {
-      guard case .api(_, _, _, let response) = error else {
-        Issue.record("Expected AuthError.api, got \(error)")
-        return
-      }
+      #expect(error.kind == .server)
       // Backend returns 404 when the passkey doesn't exist or belongs to another user.
-      #expect(response.statusCode == 404)
+      #expect(error.response?.statusCode == 404)
     }
   }
 
@@ -392,7 +390,7 @@ struct AuthClientIntegrationTests {
         _ = try await authClient.session
         Issue.record("Expected to throw AuthError.sessionMissing")
       } catch let error as AuthError {
-        #expect(error == .sessionMissing)
+        #expect(error.kind == .sessionMissing)
       }
       #expect(authClient.currentSession == nil)
     }
@@ -513,6 +511,83 @@ struct AuthClientIntegrationTests {
     let adminClient = Self.makeClient(serviceRole: true)
     try await adminClient.admin.signOut(jwt: accessToken)
     withExtendedLifetime(adminClient) {}
+  }
+
+  /// Pins the shape of the live JWKS that `claims` local verification depends on.
+  ///
+  /// A stock local project has no `auth.signing_keys_path`, so the CLI falls back to its
+  /// built-in ES256 key. `claims` picks its verifier from the JWK's `alg` field, not from
+  /// the JWT header, so an ES256 key served without `alg` would silently fall back to
+  /// `GET /user` even though the SDK can verify it.
+  @Test
+  func wellKnownJWKSServesES256Key() async throws {
+    let url = URL(string: "\(DotEnv.supabaseURL)/auth/v1/.well-known/jwks.json")!
+    let (data, _) = try await URLSession.shared.data(from: url)
+    let jwks = try AuthClient.Configuration.jsonDecoder.decode(JWKS.self, from: data)
+
+    let jwk = try #require(jwks.keys.first { $0.alg == "ES256" })
+    expectNoDifference(jwk.kty, "EC")
+    expectNoDifference(jwk.crv, "P-256")
+    #expect(jwk.kid != nil)
+
+    // The coordinates must be 32 raw bytes each, or `JWK.p256PublicKey` returns nil.
+    expectNoDifference(Base64URL.decode(try #require(jwk.x))?.count, 32)
+    expectNoDifference(Base64URL.decode(try #require(jwk.y))?.count, 32)
+
+    // The `alg` the server sends must map to a verifier the SDK actually implements.
+    expectNoDifference(JWTAlgorithm(rawValue: try #require(jwk.alg)), .es256)
+    #expect(jwk.p256PublicKey != nil)
+  }
+
+  /// A live access token is ES256, and `claims` returns its claims.
+  @Test
+  func getClaimsWithLiveES256Session() async throws {
+    let email = mockEmail()
+    let session = try #require(
+      try await authClient.signUp(email: email, password: mockPassword()).session
+    )
+
+    let decoded = try #require(JWT.decode(session.accessToken))
+    expectNoDifference(decoded.header["alg"] as? String, "ES256")
+    // Local verification needs a `kid` to look the key up; without one it falls back.
+    #expect(decoded.header["kid"] is String)
+    // The JWS signature is raw r||s, which is what `ECDSASignature(rawRepresentation:)` takes.
+    expectNoDifference(decoded.signature.count, 64)
+
+    let result = try await authClient.claims()
+
+    expectNoDifference(result.header.alg, "ES256")
+    expectNoDifference(result.claims.sub, session.user.id.uuidString.lowercased())
+    expectNoDifference(result.claims.email, email)
+    expectNoDifference(result.claims.role, "authenticated")
+  }
+
+  /// Proves the verification is local, not a `GET /user` round trip.
+  ///
+  /// `jwtVerificationFailed("Invalid JWT signature")` is only reachable from the local
+  /// verification branch. Were the ES256 token still falling back to the server, a tampered
+  /// token would surface a GoTrue API error instead.
+  @Test
+  func getClaimsRejectsTamperedLiveES256Token() async throws {
+    let session = try #require(
+      try await authClient.signUp(email: mockEmail(), password: mockPassword()).session
+    )
+
+    let parts = session.accessToken.split(separator: ".")
+    var payload = try #require(
+      JWT.decodePayload(session.accessToken)
+    )
+    payload["role"] = "service_role"
+    let tamperedPayload = Base64URL.encode(
+      try JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys])
+    )
+    let tamperedJWT = "\(parts[0]).\(tamperedPayload).\(parts[2])"
+
+    let error = await #expect(throws: AuthError.self) {
+      _ = try await authClient.claims(jwt: tamperedJWT)
+    }
+    #expect(error?.kind == .jwtVerificationFailed)
+    #expect(error?.message == "Invalid JWT signature")
   }
 
   @discardableResult

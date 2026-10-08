@@ -15,31 +15,38 @@ struct SessionStorage {
 }
 
 extension SessionStorage {
+  /// Whether storage no longer holds `snapshot`, what an operation saw stored when it started — a
+  /// concurrent sign-out cleared it, another refresh or sign-in replaced it, or a sign-in filled
+  /// storage that was empty.
+  ///
+  /// Callers use this as a commit guard: a request that outlived the session it was issued for
+  /// must not apply its result to whichever session is stored now. The comparison is between two
+  /// storage reads, not between a caller's input and storage, because a `nil` snapshot is
+  /// legitimate — `setSession(accessToken:refreshToken:)` refreshes an externally-sourced token
+  /// with nothing stored yet. That is a hydration only for as long as storage stays empty; once
+  /// another sign-in lands, the hydration is the stale one.
+  func changed(since snapshot: Session?) -> Bool {
+    get()?.refreshToken != snapshot?.refreshToken
+  }
+
   /// Key used to store session on ``AuthLocalStorage``.
   ///
   /// It uses value from ``AuthClient/Configuration/storageKey`` or default to `supabase.auth.token` if not provided.
-  static func key(_ clientID: AuthClientID) -> String {
-    Dependencies[clientID].configuration.storageKey ?? defaultStorageKey
+  static func key(_ configuration: AuthClient.Configuration) -> String {
+    configuration.storageKey ?? defaultStorageKey
   }
 
-  static func live(clientID: AuthClientID) -> SessionStorage {
-    var storage: any AuthLocalStorage {
-      Dependencies[clientID].configuration.localStorage
-    }
-
-    var logger: Logging.Logger {
-      Dependencies[clientID].configuration.logger
-    }
+  static func live(configuration: AuthClient.Configuration) -> SessionStorage {
+    let storage = configuration.localStorage
+    let logger = configuration.logger
 
     let migrations: [StorageMigration] = [
-      .sessionNewKey(clientID: clientID),
-      .storeSessionDirectly(clientID: clientID),
-      .useDefaultEncoder(clientID: clientID),
+      .sessionNewKey(configuration: configuration),
+      .storeSessionDirectly(configuration: configuration),
+      .useDefaultEncoder(configuration: configuration),
     ]
 
-    var key: String {
-      SessionStorage.key(clientID)
-    }
+    let key = SessionStorage.key(configuration)
 
     return SessionStorage(
       get: {
@@ -92,13 +99,12 @@ struct StorageMigration {
 extension StorageMigration {
   /// Migrate stored session from `supabase.session` key to the custom provided storage key
   /// or the default `supabase.auth.token` key.
-  static func sessionNewKey(clientID: AuthClientID) -> StorageMigration {
+  static func sessionNewKey(configuration: AuthClient.Configuration) -> StorageMigration {
     StorageMigration(name: "sessionNewKey") {
-      let storage = Dependencies[clientID].configuration.localStorage
-      let newKey = SessionStorage.key(clientID)
+      let storage = configuration.localStorage
+      let newKey = SessionStorage.key(configuration)
 
       if let storedData = try? storage.retrieve(key: "supabase.session") {
-        // migrate to new key.
         try storage.store(key: newKey, value: storedData)
         try? storage.remove(key: "supabase.session")
       }
@@ -115,15 +121,15 @@ extension StorageMigration {
   /// }
   /// ```
   /// To directly store the `Session` object.
-  static func storeSessionDirectly(clientID: AuthClientID) -> StorageMigration {
+  static func storeSessionDirectly(configuration: AuthClient.Configuration) -> StorageMigration {
     struct StoredSession: Codable {
       var session: Session
       var expirationDate: Date
     }
 
     return StorageMigration(name: "storeSessionDirectly") {
-      let storage = Dependencies[clientID].configuration.localStorage
-      let key = SessionStorage.key(clientID)
+      let storage = configuration.localStorage
+      let key = SessionStorage.key(configuration)
 
       if let data = try? storage.retrieve(key: key),
         let storedSession = try? AuthClient.Configuration.jsonDecoder.decode(
@@ -137,10 +143,10 @@ extension StorageMigration {
     }
   }
 
-  static func useDefaultEncoder(clientID: AuthClientID) -> StorageMigration {
+  static func useDefaultEncoder(configuration: AuthClient.Configuration) -> StorageMigration {
     StorageMigration(name: "useDefaultEncoder") {
-      let storage = Dependencies[clientID].configuration.localStorage
-      let key = SessionStorage.key(clientID)
+      let storage = configuration.localStorage
+      let key = SessionStorage.key(configuration)
 
       let storedData = try? storage.retrieve(key: key)
       let sessionUsingOldDecoder = storedData.flatMap {

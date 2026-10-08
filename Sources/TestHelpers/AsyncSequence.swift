@@ -8,7 +8,7 @@
 import Foundation
 
 extension AsyncSequence {
-  package func collect() async rethrows -> [Element] {
+  @concurrent package func collect() async rethrows -> [Element] {
     try await reduce(into: [Element]()) { $0.append($1) }
   }
 }

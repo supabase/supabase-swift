@@ -32,4 +32,17 @@ struct OperatorTests {
     ]
     #expect(known.map(\.rawValue).count == Set(known.map(\.rawValue)).count)
   }
+
+  /// The legacy constants are spelled once, on ``PostgrestFilterOperator``, including the ones
+  /// whose names differ between the two surfaces.
+  @Test
+  func legacyConstantsDeriveFromTheFilterOperator() {
+    #expect(PostgrestOperator.cs.rawValue == PostgrestFilterOperator.contains.token)
+    #expect(PostgrestOperator.sl.rawValue == PostgrestFilterOperator.rangeLt.token)
+    #expect(PostgrestOperator.match.rawValue == PostgrestFilterOperator.regexMatch.token)
+    #expect(PostgrestOperator.isdistinct.rawValue == PostgrestFilterOperator.isDistinct.token)
+    #expect(
+      PostgrestOperator.wfts.rawValue
+        == PostgrestFilterOperator.textSearch(config: nil, type: .websearch).token)
+  }
 }

@@ -1,10 +1,10 @@
 import ConcurrencyExtras
 import Foundation
 import Logging
+import TestHelpers
 import Testing
 
 @testable import Realtime
-@testable import RealtimeV2
 
 @Suite
 struct ChannelStateManagerTests {
@@ -23,9 +23,9 @@ struct ChannelStateManagerTests {
   }
 
   private func makeHarness(
-    timeoutInterval: TimeInterval = 0.2,
+    timeout: Duration = .milliseconds(200),
     maxRetryAttempts: Int = 3,
-    retryDelay: @escaping @Sendable (Int) -> TimeInterval = { _ in 0.01 }
+    retryDelay: @escaping @Sendable (Int) -> Duration = { _ in .milliseconds(10) }
   ) -> Harness {
     let ref = LockIsolated<Int>(0)
     let ensureConnected = LockIsolated<Bool>(true)
@@ -39,7 +39,7 @@ struct ChannelStateManagerTests {
       topic: "test",
       logger: supabaseDefaultLogger(label: "io.supabase.realtime"),
       maxRetryAttempts: maxRetryAttempts,
-      timeoutInterval: timeoutInterval,
+      timeout: timeout,
       clock: ContinuousClock(),
       makeRef: {
         ref.withValue { $0 += 1 }
@@ -158,7 +158,7 @@ struct ChannelStateManagerTests {
 
   @Test
   func subscribeRetriesOnTimeoutThenSucceeds() async throws {
-    let h = makeHarness(timeoutInterval: 0.05, maxRetryAttempts: 3)
+    let h = makeHarness(timeout: .milliseconds(50), maxRetryAttempts: 3)
 
     // Wait for the second join attempt before confirming.
     let confirmer = Task { [h] in
@@ -181,13 +181,13 @@ struct ChannelStateManagerTests {
 
   @Test
   func subscribeThrowsAfterMaxRetries() async {
-    let h = makeHarness(timeoutInterval: 0.05, maxRetryAttempts: 2)
+    let h = makeHarness(timeout: .milliseconds(50), maxRetryAttempts: 2)
 
     do {
       try await h.sut.subscribe()
       Issue.record("Expected subscribe to throw after max retries")
     } catch {
-      #expect(error is RealtimeError)
+      #expect((error as? RealtimeError)?.kind == .maxRetryAttemptsReached)
     }
 
     let state = await h.sut.state
@@ -200,7 +200,7 @@ struct ChannelStateManagerTests {
 
   @Test
   func subscribeFailsWhenSocketCannotConnect() async {
-    let h = makeHarness(timeoutInterval: 0.2, maxRetryAttempts: 1)
+    let h = makeHarness(timeout: .milliseconds(200), maxRetryAttempts: 1)
     h.ensureConnected.setValue(false)
 
     do {
@@ -222,7 +222,8 @@ struct ChannelStateManagerTests {
   /// transient connect failure must be retried like a timeout.
   @Test
   func subscribeRetriesWhenSocketConnectFailsTransiently() async throws {
-    let h = makeHarness(timeoutInterval: 1.0, maxRetryAttempts: 3, retryDelay: { _ in 0.05 })
+    let h = makeHarness(
+      timeout: .seconds(1), maxRetryAttempts: 3, retryDelay: { _ in .milliseconds(50) })
     h.ensureConnected.setValue(false)
 
     // The "network" comes back shortly after the first failed attempt.
@@ -248,7 +249,8 @@ struct ChannelStateManagerTests {
   /// cancellation. They must surface as a typed error instead.
   @Test
   func connectFailureDoesNotSurfaceAsCancellationError() async {
-    let h = makeHarness(timeoutInterval: 0.2, maxRetryAttempts: 2, retryDelay: { _ in 0.01 })
+    let h = makeHarness(
+      timeout: .milliseconds(200), maxRetryAttempts: 2, retryDelay: { _ in .milliseconds(10) })
     h.ensureConnected.setValue(false)
 
     do {
@@ -256,7 +258,7 @@ struct ChannelStateManagerTests {
       Issue.record("Expected subscribe to throw when socket is not connected")
     } catch {
       #expect(!(error is CancellationError), "Connect failure surfaced as CancellationError")
-      #expect(error is RealtimeError)
+      #expect((error as? RealtimeError)?.kind == .maxRetryAttemptsReached)
     }
   }
 
@@ -298,7 +300,7 @@ struct ChannelStateManagerTests {
 
   @Test
   func unsubscribeWhileSubscribingCancelsSubscribe() async throws {
-    let h = makeHarness(timeoutInterval: 5.0, maxRetryAttempts: 1)
+    let h = makeHarness(timeout: .seconds(5), maxRetryAttempts: 1)
 
     let subscribeTask = Task { try? await h.sut.subscribe() }
 
@@ -335,7 +337,7 @@ struct ChannelStateManagerTests {
   /// on the final retry attempt).
   @Test
   func serverCloseDuringSubscribeSurfacesTypedError() async {
-    let h = makeHarness(timeoutInterval: 5.0, maxRetryAttempts: 1)
+    let h = makeHarness(timeout: .seconds(5), maxRetryAttempts: 1)
 
     let subscribeTask = Task { try await h.sut.subscribe() }
 
@@ -351,8 +353,7 @@ struct ChannelStateManagerTests {
     } catch {
       #expect(!(error is CancellationError), "Server close surfaced as CancellationError")
       #expect(
-        (error as? RealtimeError)?.errorDescription
-          == RealtimeError.channelClosedByServer.errorDescription,
+        (error as? RealtimeError)?.kind == .channelClosedByServer,
         "Expected channelClosedByServer, got \(error)"
       )
     }

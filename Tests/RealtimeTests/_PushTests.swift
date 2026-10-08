@@ -12,7 +12,6 @@ import TestHelpers
 import Testing
 
 @testable import Realtime
-@testable import RealtimeV2
 
 #if !os(Android) && !os(Linux) && !os(Windows)
   @Suite
@@ -31,7 +30,7 @@ import Testing
           headers: ["apiKey": "apikey"]
         ),
         wsTransport: { _, _ in client },
-        http: HTTPClientMock(),
+        http: HTTPClient(transport: RecordingTransport()),
         clock: ContinuousClock()
       )
     }

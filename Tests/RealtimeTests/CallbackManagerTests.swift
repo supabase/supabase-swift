@@ -11,7 +11,6 @@ import Foundation
 import Testing
 
 @testable import Realtime
-@testable import RealtimeV2
 
 @Suite
 struct CallbackManagerTests {
@@ -279,7 +278,7 @@ struct CallbackManagerTests {
       message: RealtimeMessageV2(
         joinRef: nil, ref: nil, topic: "test", event: "system", payload: ["status": "ok"]))
 
-    #expect(receivedMessage.value?._eventType == .system)
+    #expect(receivedMessage.value?.eventType == .system)
     #expect(receivedMessage.value?.status == .ok)
   }
 }

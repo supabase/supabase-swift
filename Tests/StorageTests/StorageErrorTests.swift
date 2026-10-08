@@ -1,4 +1,5 @@
 import Foundation
+import HTTPTypes
 import Testing
 
 @testable import Storage
@@ -6,43 +7,76 @@ import Testing
 @Suite
 struct StorageErrorTests {
   @Test
-  func errorInitialization() {
-    let error = StorageError(
-      statusCode: "404",
-      message: "File not found",
-      error: "NotFound"
-    )
+  func serverErrorDecodesTheWirePayload() throws {
+    let json = Data(
+      """
+      {"statusCode": "403", "message": "Unauthorized access", "error": "Forbidden"}
+      """.utf8)
 
-    #expect(error.statusCode == "404")
-    #expect(error.message == "File not found")
-    #expect(error.error == "NotFound")
+    let payload = try JSONDecoder().decode(StorageError.ServerError.self, from: json)
+
+    #expect(payload.statusCode == "403")
+    #expect(payload.message == "Unauthorized access")
+    #expect(payload.error == "Forbidden")
   }
 
   @Test
-  func localizedError() {
-    let error = StorageError(
-      statusCode: "500",
-      message: "Internal server error",
-      error: nil
-    )
+  func serverErrorDecodesTheCode() throws {
+    let json = Data(
+      """
+      {"statusCode":"404","error":"not_found","message":"Object not found","code":"NoSuchKey"}
+      """.utf8)
 
-    #expect(error.errorDescription == "Internal server error")
+    let payload = try JSONDecoder().decode(StorageError.ServerError.self, from: json)
+
+    #expect(payload.code == .noSuchKey)
+    #expect(payload.error == "not_found")
   }
 
   @Test
-  func decoding() throws {
-    let json = """
-      {
-          "statusCode": "403",
-          "message": "Unauthorized access",
-          "error": "Forbidden"
-      }
-      """.data(using: .utf8)!
+  func serverErrorKeepsACodeItDoesNotKnow() throws {
+    let json = Data(#"{"message":"Error","code":"SomeFutureCode"}"#.utf8)
 
-    let error = try JSONDecoder().decode(StorageError.self, from: json)
+    let payload = try JSONDecoder().decode(StorageError.ServerError.self, from: json)
 
-    #expect(error.statusCode == "403")
-    #expect(error.message == "Unauthorized access")
-    #expect(error.error == "Forbidden")
+    #expect(payload.code == StorageError.Code("SomeFutureCode"))
+    #expect(payload.code?.rawValue == "SomeFutureCode")
+  }
+
+  @Test
+  func serverErrorDecodesWithOnlyAMessage() throws {
+    let payload = try JSONDecoder().decode(
+      StorageError.ServerError.self, from: Data(#"{"message":"Error"}"#.utf8))
+
+    #expect(payload.statusCode == nil)
+    #expect(payload.error == nil)
+    #expect(payload.code == nil)
+    #expect(payload.message == "Error")
+  }
+
+  @Test
+  func errorDescriptionIsTheMessage() {
+    let error = StorageError(kind: .invalidRequest, message: "Cannot build a public URL.")
+
+    #expect(error.errorDescription == "Cannot build a public URL.")
+  }
+
+  @Test
+  func descriptionIncludesKindAndStatus() {
+    let error = StorageError(
+      kind: .server,
+      message: "Object not found",
+      serverError: .init(statusCode: "404", error: "not_found", message: "Object not found"),
+      response: HTTPErrorResponse(statusCode: 404, headers: HTTPFields(), body: Data())
+    )
+
+    #expect(error.description == "StorageError(server): Object not found [status 404]")
+  }
+
+  @Test
+  func conformsToSupabaseError() {
+    let error: any Error = StorageError(kind: .transport, message: "offline")
+
+    #expect((error as? any SupabaseError)?.message == "offline")
   }
 }

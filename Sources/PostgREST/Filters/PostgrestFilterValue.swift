@@ -1,5 +1,6 @@
 public import Foundation
 import Helpers
+import IssueReporting
 
 /// A value that can appear as an element of a Postgres array literal, including SQL `NULL`.
 ///
@@ -34,8 +35,9 @@ public protocol PostgrestArrayElement {
 /// | Swift type | Example `rawValue` |
 /// |---|---|
 /// | `String` | `"hello"` |
-/// | `Int` | `"42"` |
-/// | `Double` | `"3.14"` |
+/// | `Int`, `Int16`, `Int32`, `Int64` | `"42"` |
+/// | `Double`, `Float` | `"3.14"` |
+/// | `Decimal` | `"9.99"` |
 /// | `Bool` | `"true"` |
 /// | `UUID` | `"123e4567-e89b-..."` |
 /// | `Date` | `"2024-01-15T12:00:00.000Z"` |
@@ -62,8 +64,33 @@ extension Int: PostgrestFilterValue {
   public var rawValue: String { "\(self)" }
 }
 
+/// `Int16` can be used directly as a PostgREST filter value.
+extension Int16: PostgrestFilterValue {
+  public var rawValue: String { "\(self)" }
+}
+
+/// `Int32` can be used directly as a PostgREST filter value.
+extension Int32: PostgrestFilterValue {
+  public var rawValue: String { "\(self)" }
+}
+
+/// `Int64` can be used directly as a PostgREST filter value.
+extension Int64: PostgrestFilterValue {
+  public var rawValue: String { "\(self)" }
+}
+
 /// `Double` can be used directly as a PostgREST filter value.
 extension Double: PostgrestFilterValue {
+  public var rawValue: String { "\(self)" }
+}
+
+/// `Float` can be used directly as a PostgREST filter value.
+extension Float: PostgrestFilterValue {
+  public var rawValue: String { "\(self)" }
+}
+
+/// `Decimal` can be used directly as a PostgREST filter value.
+extension Decimal: PostgrestFilterValue {
   public var rawValue: String { "\(self)" }
 }
 
@@ -147,7 +174,13 @@ extension JSONObject: PostgrestArrayElement {}
 extension JSONObject: PostgrestFilterValue {
   public var rawValue: String {
     let value = mapValues(\.value)
-    return JSONSerialization.stringify(value)!
+    // A `JSONObject` only ever holds `JSONValue`s, so serialization cannot fail. An empty object
+    // is a better fallback than trapping inside a filter the caller built from their own data.
+    guard let serialized = JSONSerialization.stringify(value) else {
+      reportIssue("Failed to serialize JSONObject as a PostgREST filter value.")
+      return "{}"
+    }
+    return serialized
   }
 }
 

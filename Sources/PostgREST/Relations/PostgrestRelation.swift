@@ -31,19 +31,28 @@ public protocol PostgrestRelation: PostgrestSelection where Source == Self {
   static var relationName: String { get }
 
   /// The Postgres schema the relation belongs to.
-  static var schema: String { get }
+  ///
+  /// `@Table` sets it from its `schema:` argument, which defaults to ``PublicSchema``. Naming it
+  /// as a type is what lets ``PostgrestSchemaScope`` reject a relation from another schema at
+  /// compile time.
+  associatedtype Schema: PostgrestSchema = PublicSchema
 
-  /// The database column name backing a property.
+  /// The namespace of this relation's columns.
   ///
-  /// Takes a `PartialKeyPath` rather than a `KeyPath<Self, V>` because the property's type
-  /// is not part of the answer — a column name is a column name. Callers that do care about the
-  /// type, every filter among them, constrain it in their own signature and pass the key path
-  /// straight through; `KeyPath` is a `PartialKeyPath` subclass, so that costs nothing at the call
-  /// site.
+  /// `@Table` generates it as a nested `Columns` struct holding one ``PostgrestColumn`` per
+  /// column. A hand-written conformance declares its own.
+  associatedtype Columns: Sendable
+
+  /// The relation's columns, for building filters and selections.
   ///
-  /// - Parameter keyPath: A key path to one of this type's stored properties.
-  /// - Returns: The column name PostgREST expects in a query string.
-  static func columnName(for keyPath: PartialKeyPath<Self>) -> String
+  /// A filter closure receives this value, so a call site names a column as `$0.isDone` rather
+  /// than spelling the relation out.
+  static var columns: Columns { get }
+}
+
+extension PostgrestRelation {
+  /// The name of the relation's ``Schema``, as PostgREST addresses it.
+  public static var schema: String { Schema.name }
 }
 
 /// A relation that declares a primary key.
@@ -75,9 +84,9 @@ public protocol PostgrestKeyedRelation: PostgrestRelation {
 ///
 /// There is no matching `Update` shape. A draft is a whole row, so a row type fits a write that
 /// sends one; an update sends a set of column assignments, which ``PostgrestUpdate`` builds from
-/// this relation's key paths. Modelling both as row types is what once made clearing a nullable
-/// column impossible — a single optional field cannot mean both "not assigned" and "assigned
-/// null".
+/// key paths into this relation's ``PostgrestRelation/Columns`` namespace. Modelling both as row
+/// types is what once made clearing a nullable column impossible — a single optional field cannot
+/// mean both "not assigned" and "assigned null".
 public protocol PostgrestWritableRelation: PostgrestRelation {
   /// The shape a write sends: every column, optional exactly where the database can fill it in —
   /// a nullable column, or one with a default. A primary key is included, and required unless it

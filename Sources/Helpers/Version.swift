@@ -1,5 +1,5 @@
 import Foundation
-import XCTestDynamicOverlay
+import IssueReporting
 
 private let _version = "2.55.1"  // {x-release-please-version}
 

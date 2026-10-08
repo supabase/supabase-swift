@@ -8,7 +8,6 @@
 import Testing
 
 @testable import Realtime
-@testable import RealtimeV2
 
 @Suite
 struct RealtimePostgresFilterTests {
@@ -170,6 +169,7 @@ struct RealtimePostgresFilterTests {
     #expect((.eq("name", value: "a,b") as RealtimePostgresFilter).value == #"name=eq."a,b""#)
     #expect((.eq("name", value: "a(b)") as RealtimePostgresFilter).value == #"name=eq."a(b)""#)
     #expect((.eq("name", value: " a") as RealtimePostgresFilter).value == #"name=eq." a""#)
+    #expect((.eq("name", value: "a\n") as RealtimePostgresFilter).value == "name=eq.\"a\n\"")
   }
 
   @Test

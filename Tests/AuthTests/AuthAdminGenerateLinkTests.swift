@@ -35,10 +35,7 @@ extension AuthMockerTests {
           "Authorization": "Bearer supabase.secret.key",
         ],
         localStorage: storage,
-        fetch: { request in
-          try await session.data(for: request)
-        }
-      )
+        http: .init(transport: URLSessionTransport(session: session)))
 
       return AuthClient(configuration: configuration)
     }

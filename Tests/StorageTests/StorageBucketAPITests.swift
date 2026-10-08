@@ -47,11 +47,7 @@ extension StorageMockerTests {
             "apikey":
               "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
           ],
-          session: StorageHTTPSession(
-            fetch: { try await session.data(for: $0) },
-            upload: { try await session.upload(for: $0, from: $1) }
-          )
-        )
+          http: .init(transport: URLSessionTransport(session: session)))
       )
     }
 
@@ -82,6 +78,26 @@ extension StorageMockerTests {
           "http://localhost:1234/storage/v1",
           "support local host with port without modification"
         ),
+        (
+          "https://blah.supabasexco/storage/v1",
+          "https://blah.supabasexco/storage/v1",
+          "not treat a non-dot separator as a platform host"
+        ),
+        (
+          "https://supabase.co/storage/v1",
+          "https://supabase.co/storage/v1",
+          "not rewrite the bare apex domain, which is not a project host"
+        ),
+        (
+          "https://not-supabase.co/storage/v1",
+          "https://not-supabase.co/storage/v1",
+          "not rewrite a host that only ends with the apex, without a label boundary"
+        ),
+        (
+          "https://mysupabase.in/storage/v1",
+          "https://mysupabase.in/storage/v1",
+          "not rewrite a caller-owned domain ending in the apex"
+        ),
       ]
     )
     func urlConstructionWithNewHostname(input: String, expected: String, description: String) {
@@ -89,12 +105,12 @@ extension StorageMockerTests {
         configuration: StorageClientConfiguration(
           url: URL(string: input)!,
           headers: [:],
-          useNewHostname: true
+          usesNewHostname: true
         )
       )
       #expect(
         storage.configuration.url.absoluteString == expected,
-        "should \(description) if useNewHostname is true"
+        "should \(description) if usesNewHostname is true"
       )
     }
 
@@ -112,14 +128,14 @@ extension StorageMockerTests {
         configuration: StorageClientConfiguration(
           url: URL(string: input)!,
           headers: [:],
-          useNewHostname: false
+          usesNewHostname: false
         )
       )
       #expect(storage.configuration.url.absoluteString == input)
     }
 
     @Test
-    func getBucket() async throws {
+    func bucket() async throws {
       let storage = makeSUT()
 
       Mock(
@@ -150,7 +166,7 @@ extension StorageMockerTests {
       }
       .register()
 
-      let bucket = try await storage.getBucket("bucket123")
+      let bucket = try await storage.bucket("bucket123")
       #expect(bucket.id == "bucket123")
       #expect(bucket.name == "test-bucket")
     }
@@ -328,6 +344,57 @@ extension StorageMockerTests {
       .register()
 
       try await storage.emptyBucket("bucket123")
+    }
+
+    @Test
+    func purgeCacheForBucket() async throws {
+      let storage = makeSUT()
+
+      Mock(
+        url: url.appendingPathComponent("cdn/bucket123"),
+        statusCode: 200,
+        data: [
+          .delete: Data(#"{"message":"success"}"#.utf8)
+        ]
+      )
+      .snapshotRequest {
+        #"""
+        curl \
+        	--request DELETE \
+        	--header "X-Client-Info: storage-swift/0.0.0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	"http://localhost:54321/storage/v1/cdn/bucket123"
+        """#
+      }
+      .register()
+
+      try await storage.purgeCache(bucket: "bucket123")
+    }
+
+    @Test
+    func purgeCacheForBucketTransformationsOnly() async throws {
+      let storage = makeSUT()
+
+      Mock(
+        url: url.appendingPathComponent("cdn/bucket123"),
+        ignoreQuery: true,
+        statusCode: 200,
+        data: [
+          .delete: Data(#"{"message":"success"}"#.utf8)
+        ]
+      )
+      .snapshotRequest {
+        #"""
+        curl \
+        	--request DELETE \
+        	--header "X-Client-Info: storage-swift/0.0.0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	"http://localhost:54321/storage/v1/cdn/bucket123?transformations=true"
+        """#
+      }
+      .register()
+
+      try await storage.purgeCache(bucket: "bucket123", transformationsOnly: true)
     }
 
     @Test

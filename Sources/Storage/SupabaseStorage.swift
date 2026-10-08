@@ -1,10 +1,11 @@
 public import Foundation
+public import Helpers
 public import Logging
 
 /// Configuration for the Supabase Storage client.
 ///
 /// Pass a ``StorageClientConfiguration`` to ``SupabaseStorageClient`` to control the Storage
-/// endpoint URL, authentication headers, and the underlying HTTP session.
+/// endpoint URL, authentication headers, and the underlying transport.
 ///
 /// ```swift
 /// let configuration = StorageClientConfiguration(
@@ -18,15 +19,16 @@ public import Logging
 ///
 /// ### Creating a configuration
 ///
-/// - ``init(url:headers:session:logger:useNewHostname:)``
+/// - ``init(url:headers:http:logger:usesNewHostname:retryEnabled:)``
 ///
 /// ### Configuration properties
 ///
 /// - ``url``
 /// - ``headers``
-/// - ``session``
+/// - ``http``
 /// - ``logger``
-/// - ``useNewHostname``
+/// - ``usesNewHostname``
+/// - ``retryEnabled``
 public struct StorageClientConfiguration: Sendable {
   /// The base URL of the Storage API endpoint (e.g. `https://project.supabase.co/storage/v1`).
   public var url: URL
@@ -42,39 +44,52 @@ public struct StorageClientConfiguration: Sendable {
   /// ever decodes server-defined shapes, so there's no case for letting callers customize it.
   let decoder: JSONDecoder = .supabase()
 
-  /// The HTTP session abstraction used to execute requests.
-  public let session: StorageHTTPSession
+  /// The transport and middleware chain every request goes through.
+  public let http: HTTPClientConfiguration
 
   /// The logger used for debugging HTTP interactions. Defaults to a build-config-aware logger.
   public let logger: Logging.Logger
 
   /// When `true`, rewrites `project.supabase.co` hostnames to `project.storage.supabase.co`,
   /// which disables request buffering and enables uploads larger than 50 GB.
-  public let useNewHostname: Bool
+  public let usesNewHostname: Bool
+
+  /// Whether transient failures of reads are retried. Defaults to `true`.
+  ///
+  /// Only reads are replayed: `GET` and `HEAD` requests and ``StorageFileApi/list(path:options:)``,
+  /// up to three attempts with jittered backoff. Uploads, moves, copies, removals and bucket
+  /// changes are never replayed.
+  public let retryEnabled: Bool
+
+  /// The clock the waits between retries sleep on.
+  package var clock: any Clock<Duration> = ContinuousClock()
 
   /// Creates a ``StorageClientConfiguration``.
   ///
   /// - Parameters:
   ///   - url: The base URL of the Storage API endpoint.
   ///   - headers: HTTP headers sent with every request.
-  ///   - session: The HTTP session used for networking. Defaults to a session backed by `URLSession.shared`.
+  ///   - http: The transport and middleware chain every request goes through.
   ///   - logger: The logger to use. Defaults to a build-config-aware logger; pass a logger backed by
   ///     `SwiftLogNoOpLogHandler` to disable logging entirely.
-  ///   - useNewHostname: When `true`, the storage-specific hostname is used, enabling uploads over 50 GB.
+  ///   - usesNewHostname: When `true`, the storage-specific hostname is used, enabling uploads over 50 GB.
+  ///   - retryEnabled: Whether transient failures of reads are retried.
   public init(
     url: URL,
     headers: [String: String],
-    session: StorageHTTPSession = .init(),
+    http: HTTPClientConfiguration = .init(),
     logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.storage"),
-    useNewHostname: Bool = false
+    usesNewHostname: Bool = false,
+    retryEnabled: Bool = true
   ) {
     self.url = url
     self.headers = headers
-    self.session = session
+    self.http = http
     var logger = logger
     logger[metadataKey: "system"] = "storage"
     self.logger = logger
-    self.useNewHostname = useNewHostname
+    self.usesNewHostname = usesNewHostname
+    self.retryEnabled = retryEnabled
   }
 }
 
@@ -90,7 +105,7 @@ public struct StorageClientConfiguration: Sendable {
 /// let storage = client.storage
 ///
 /// // Upload a file
-/// try await storage.from("avatars").upload("user123.png", data: imageData)
+/// try await storage.from("avatars").upload(path: "user123.png", data: imageData)
 ///
 /// // List all buckets
 /// let buckets = try await storage.listBuckets()
@@ -117,11 +132,12 @@ public struct StorageClientConfiguration: Sendable {
 /// ### Bucket management
 ///
 /// - ``listBuckets()``
-/// - ``getBucket(_:)``
+/// - ``bucket(_:)``
 /// - ``createBucket(_:options:)``
 /// - ``updateBucket(_:options:)``
 /// - ``emptyBucket(_:)``
 /// - ``deleteBucket(_:)``
+/// - ``purgeCache(bucket:transformationsOnly:)``
 public struct SupabaseStorageClient: Sendable {
   let api: StorageApi
 
@@ -131,7 +147,7 @@ public struct SupabaseStorageClient: Sendable {
   /// Creates a ``SupabaseStorageClient`` with the given configuration.
   ///
   /// - Parameter configuration: The configuration that controls the endpoint URL, authentication
-  ///   headers, JSON codecs, and HTTP session.
+  ///   headers, JSON codecs, and transport.
   public init(configuration: StorageClientConfiguration) {
     api = StorageApi(configuration: configuration)
   }

@@ -21,16 +21,17 @@ import HTTPTypes
 /// ### Managing clients
 /// - ``listClients(params:)``
 /// - ``createClient(params:)``
-/// - ``getClient(clientId:)``
-/// - ``updateClient(clientId:params:)``
-/// - ``deleteClient(clientId:)``
-/// - ``regenerateClientSecret(clientId:)``
+/// - ``client(id:)``
+/// - ``updateClient(id:params:)``
+/// - ``deleteClient(id:)``
+/// - ``regenerateClientSecret(id:)``
 public struct AuthAdminOAuth: Sendable {
-  let clientID: AuthClientID
+  let admin: AuthAdmin
 
-  var configuration: AuthClient.Configuration { Dependencies[clientID].configuration }
-  var api: APIClient { Dependencies[clientID].api }
-  var encoder: JSONEncoder { Dependencies[clientID].resolvedEncoder }
+  var url: URL { admin.url }
+  var api: APIClient { admin.api }
+  var encoder: JSONEncoder { admin.encoder }
+  var decoder: JSONDecoder { admin.decoder }
 
   /// Lists all OAuth clients with optional pagination.
   /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
@@ -44,41 +45,33 @@ public struct AuthAdminOAuth: Sendable {
       let aud: String
     }
 
-    let httpResponse = try await api.execute(
+    let (httpResponse, data) = try await api.send(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("admin/oauth/clients"),
         method: .get,
+        url: url.appendingPathComponent("admin/oauth/clients"),
         query: [
-          URLQueryItem(name: "page", value: params?.page?.description ?? ""),
-          URLQueryItem(name: "per_page", value: params?.perPage?.description ?? ""),
-        ]
+          params?.page.map { URLQueryItem(name: "page", value: $0.description) },
+          params?.perPage.map { URLQueryItem(name: "per_page", value: $0.description) },
+        ].compactMap { $0 }
       )
     )
 
-    let response = try httpResponse.decoded(
-      as: Response.self, decoder: configuration.resolvedDecoder)
+    let response = try data.decoded(
+      as: Response.self, decoder: decoder)
 
     var pagination = ListOAuthClientsPaginatedResponse(
       clients: response.clients,
-      aud: response.aud,
+      audience: response.aud,
       lastPage: 0,
-      total: httpResponse.headers[.xTotalCount].flatMap(Int.init) ?? 0
+      total: httpResponse.headerFields[.xTotalCount].flatMap(Int.init) ?? 0
     )
 
-    let links = httpResponse.headers[.link]?.components(separatedBy: ",") ?? []
-    if !links.isEmpty {
-      for link in links {
-        let page = link.components(separatedBy: ";")[0].components(separatedBy: "=")[1].prefix(
-          while: \.isNumber
-        )
-        let rel = link.components(separatedBy: ";")[1].components(separatedBy: "=")[1]
-
-        if rel == "\"last\"", let lastPage = Int(page) {
-          pagination.lastPage = lastPage
-        } else if rel == "\"next\"", let nextPage = Int(page) {
-          pagination.nextPage = nextPage
-        }
-      }
+    let pages = parsePaginationLinks(httpResponse.headerFields[.link])
+    if let lastPage = pages["last"] {
+      pagination.lastPage = lastPage
+    }
+    if let nextPage = pages["next"] {
+      pagination.nextPage = nextPage
     }
 
     return pagination
@@ -92,59 +85,57 @@ public struct AuthAdminOAuth: Sendable {
   public func createClient(params: CreateOAuthClientParams) async throws -> OAuthClient {
     try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("admin/oauth/clients"),
         method: .post,
-        body: encoder.encode(params)
-      )
+        url: url.appendingPathComponent("admin/oauth/clients")
+      ), body: encoder.encode(params)
     )
-    .decoded(decoder: configuration.resolvedDecoder)
+    .decoded(decoder: decoder)
   }
 
   /// Gets details of a specific OAuth client.
   /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
   ///
-  /// - Parameter clientId: The unique identifier of the OAuth client.
+  /// - Parameter id: The unique identifier of the OAuth client.
   /// - Note: This function should only be called on a server. Never expose your `secret` key in the client.
-  public func getClient(clientId: UUID) async throws -> OAuthClient {
+  public func client(id: UUID) async throws -> OAuthClient {
     try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("admin/oauth/clients/\(clientId)"),
-        method: .get
+        method: .get,
+        url: url.appendingPathComponent("admin/oauth/clients/\(id)")
       )
     )
-    .decoded(decoder: configuration.resolvedDecoder)
+    .decoded(decoder: decoder)
   }
 
   /// Updates an existing OAuth client registration. Only the provided fields will be updated.
   /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
   ///
-  /// - Parameter clientId: The unique identifier of the OAuth client.
+  /// - Parameter id: The unique identifier of the OAuth client.
   /// - Parameter params: The fields to update.
   /// - Note: This function should only be called on a server. Never expose your `secret` key in the client.
   public func updateClient(
-    clientId: UUID,
+    id: UUID,
     params: UpdateOAuthClientParams
   ) async throws -> OAuthClient {
     try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("admin/oauth/clients/\(clientId)"),
         method: .put,
-        body: configuration.resolvedEncoder.encode(params)
-      )
+        url: url.appendingPathComponent("admin/oauth/clients/\(id)")
+      ), body: encoder.encode(params)
     )
-    .decoded(decoder: configuration.resolvedDecoder)
+    .decoded(decoder: decoder)
   }
 
   /// Deletes an OAuth client.
   /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
   ///
-  /// - Parameter clientId: The unique identifier of the OAuth client to delete.
+  /// - Parameter id: The unique identifier of the OAuth client to delete.
   /// - Note: This function should only be called on a server. Never expose your `secret` key in the client.
-  public func deleteClient(clientId: UUID) async throws {
+  public func deleteClient(id: UUID) async throws {
     _ = try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("admin/oauth/clients/\(clientId)"),
-        method: .delete
+        method: .delete,
+        url: url.appendingPathComponent("admin/oauth/clients/\(id)")
       )
     )
   }
@@ -152,17 +143,18 @@ public struct AuthAdminOAuth: Sendable {
   /// Regenerates the secret for an OAuth client.
   /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
   ///
-  /// - Parameter clientId: The unique identifier of the OAuth client.
+  /// - Parameter id: The unique identifier of the OAuth client.
   /// - Note: This function should only be called on a server. Never expose your `secret` key in the client.
   @discardableResult
-  public func regenerateClientSecret(clientId: UUID) async throws -> OAuthClient {
+  public func regenerateClientSecret(id: UUID) async throws -> OAuthClient {
     try await api.execute(
       HTTPRequest(
-        url: configuration.url
-          .appendingPathComponent("admin/oauth/clients/\(clientId)/regenerate_secret"),
-        method: .post
+        method: .post,
+        url:
+          url
+          .appendingPathComponent("admin/oauth/clients/\(id)/regenerate_secret")
       )
     )
-    .decoded(decoder: configuration.resolvedDecoder)
+    .decoded(decoder: decoder)
   }
 }

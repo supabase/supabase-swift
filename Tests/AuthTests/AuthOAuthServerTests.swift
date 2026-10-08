@@ -43,10 +43,7 @@ extension AuthMockerTests {
           "apikey": "supabase.publishable.key"
         ],
         localStorage: storage,
-        fetch: { request in
-          try await session.data(for: request)
-        }
-      )
+        http: .init(transport: URLSessionTransport(session: session)))
 
       return AuthClient(configuration: configuration)
     }
@@ -122,6 +119,38 @@ extension AuthMockerTests {
 
       #expect(details.client.uri == nil)
       #expect(details.client.logoUri == nil)
+    }
+
+    @Test
+    func decodeOAuthAuthorizationDetailsWithoutClientNameUserEmailOrScope() throws {
+      let json = """
+        {
+          "authorization_id": "abc123def456",
+          "redirect_uri": "https://example.com/callback",
+          "client": {
+            "id": "\(clientId)"
+          },
+          "user": {
+            "id": "\(userId)"
+          }
+        }
+        """.data(using: .utf8)!
+
+      let response = try AuthClient.Configuration.jsonDecoder.decode(
+        OAuthAuthorizationDetailsResponse.self, from: json
+      )
+
+      guard case .details(let details) = response else {
+        Issue.record("Expected .details case, got \(response)")
+        return
+      }
+
+      #expect(details.authorizationId == "abc123def456")
+      #expect(details.client.id == clientId)
+      #expect(details.client.name == nil)
+      #expect(details.user.id == userId)
+      #expect(details.user.email == nil)
+      #expect(details.scope == nil)
     }
 
     @Test
@@ -204,10 +233,10 @@ extension AuthMockerTests {
       #expect(grant.scopes == ["read", "write"])
     }
 
-    // MARK: - getAuthorizationDetails
+    // MARK: - authorizationDetails
 
     @Test
-    func getAuthorizationDetails() async throws {
+    func authorizationDetails() async throws {
       let responseData = """
         {
           "authorization_id": "abc123def456",
@@ -244,10 +273,10 @@ extension AuthMockerTests {
       .register()
 
       let sut = makeSUT()
-      Dependencies[sut.clientID].sessionStorage.store(.validSession)
+      sut.dependencies.sessionStorage.store(.valid)
 
-      let response = try await sut.oauthServer.getAuthorizationDetails(
-        authorizationId: "abc123def456"
+      let response = try await sut.oauthServer.authorizationDetails(
+        id: "abc123def456"
       )
 
       guard case .details(let details) = response else {
@@ -264,9 +293,9 @@ extension AuthMockerTests {
       let sut = makeSUT()
 
       do {
-        _ = try await sut.oauthServer.getAuthorizationDetails(authorizationId: "abc123def456")
+        _ = try await sut.oauthServer.authorizationDetails(id: "abc123def456")
         Issue.record("Expected AuthError.sessionMissing")
-      } catch AuthError.sessionMissing {
+      } catch let error as AuthError where error.kind == .sessionMissing {
         // expected
       }
     }
@@ -285,13 +314,14 @@ extension AuthMockerTests {
       .register()
 
       let sut = makeSUT()
-      Dependencies[sut.clientID].sessionStorage.store(.validSession)
+      sut.dependencies.sessionStorage.store(.valid)
 
       do {
-        _ = try await sut.oauthServer.getAuthorizationDetails(authorizationId: "missing")
-        Issue.record("Expected AuthError.api")
-      } catch let AuthError.api(_, errorCode, _, _) {
-        #expect(errorCode == .oauthAuthorizationNotFound)
+        _ = try await sut.oauthServer.authorizationDetails(id: "missing")
+        Issue.record("Expected AuthError.server")
+      } catch let error as AuthError {
+        #expect(error.kind == .server)
+        #expect(error.errorCode == .oauthAuthorizationNotFound)
       }
     }
 
@@ -325,10 +355,10 @@ extension AuthMockerTests {
       .register()
 
       let sut = makeSUT()
-      Dependencies[sut.clientID].sessionStorage.store(.validSession)
+      sut.dependencies.sessionStorage.store(.valid)
 
       let redirect = try await sut.oauthServer.approveAuthorization(
-        authorizationId: "abc123def456"
+        id: "abc123def456"
       )
 
       #expect(redirect.redirectURL == URL(string: "https://example.com/callback?code=abc123"))
@@ -364,11 +394,11 @@ extension AuthMockerTests {
       .register()
 
       let sut = makeSUT()
-      Dependencies[sut.clientID].sessionStorage.store(.validSession)
+      sut.dependencies.sessionStorage.store(.valid)
 
       // Denial must NOT throw — it's a successful API call, per RFC 6749 the
       // OAuth error is embedded in the redirect URL's query string.
-      let redirect = try await sut.oauthServer.denyAuthorization(authorizationId: "abc123def456")
+      let redirect = try await sut.oauthServer.denyAuthorization(id: "abc123def456")
 
       #expect(redirect.redirectURL.query?.contains("error=access_denied") == true)
     }
@@ -410,7 +440,7 @@ extension AuthMockerTests {
       .register()
 
       let sut = makeSUT()
-      Dependencies[sut.clientID].sessionStorage.store(.validSession)
+      sut.dependencies.sessionStorage.store(.valid)
 
       let grants = try await sut.oauthServer.listGrants()
 
@@ -443,9 +473,9 @@ extension AuthMockerTests {
       .register()
 
       let sut = makeSUT()
-      Dependencies[sut.clientID].sessionStorage.store(.validSession)
+      sut.dependencies.sessionStorage.store(.valid)
 
-      try await sut.oauthServer.revokeGrant(clientId: clientId)
+      try await sut.oauthServer.revokeGrant(id: clientId)
     }
 
     @Test
@@ -463,13 +493,14 @@ extension AuthMockerTests {
       .register()
 
       let sut = makeSUT()
-      Dependencies[sut.clientID].sessionStorage.store(.validSession)
+      sut.dependencies.sessionStorage.store(.valid)
 
       do {
-        try await sut.oauthServer.revokeGrant(clientId: clientId)
-        Issue.record("Expected AuthError.api")
-      } catch let AuthError.api(_, errorCode, _, _) {
-        #expect(errorCode == .oauthConsentNotFound)
+        try await sut.oauthServer.revokeGrant(id: clientId)
+        Issue.record("Expected AuthError.server")
+      } catch let error as AuthError {
+        #expect(error.kind == .server)
+        #expect(error.errorCode == .oauthConsentNotFound)
       }
     }
   }

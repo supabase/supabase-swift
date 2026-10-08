@@ -376,6 +376,55 @@ extension PostgrestMockerTests {
     }
 
     @Test
+    func insertAndUpsertCannotBeFiltered() throws {
+      let row = User(id: 1, username: "supabase")
+      let users = sut.from("users")
+
+      #expect(type(of: try users.insert(row)) == PostgrestTransformBuilder.self)
+      #expect(type(of: try users.upsert(row)) == PostgrestTransformBuilder.self)
+      #expect(type(of: try users.update(row)) == PostgrestFilterBuilder.self)
+      #expect(type(of: users.delete()) == PostgrestFilterBuilder.self)
+    }
+
+    @Test
+    func insertWithTransforms() async throws {
+      Mock(
+        url: url.appendingPathComponent("users"),
+        ignoreQuery: true,
+        statusCode: 201,
+        data: [
+          .post: Data(#"{"id":1,"username":"supabase"}"#.utf8)
+        ]
+      )
+      .snapshotRequest {
+        #"""
+        curl \
+        	--request POST \
+        	--header "Accept: application/vnd.pgrst.object+json" \
+        	--header "Content-Length: 30" \
+        	--header "Content-Type: application/json" \
+        	--header "Prefer: count=exact,return=representation" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	--data "{\"id\":1,\"username\":\"supabase\"}" \
+        	"http://localhost:54321/rest/v1/users?limit=1&order=id.asc&select=id,username"
+        """#
+      }
+      .register()
+
+      let _: User =
+        try await sut
+        .from("users")
+        .insert(User(id: 1, username: "supabase"), count: .exact)
+        .select("id,username")
+        .order("id")
+        .limit(1)
+        .single()
+        .execute()
+        .value
+    }
+
+    @Test
     func upsertIgnoreDuplicates() async throws {
       Mock(
         url: url.appendingPathComponent("users"),
@@ -392,7 +441,7 @@ extension PostgrestMockerTests {
         	--header "Accept: application/json" \
         	--header "Content-Length: 27" \
         	--header "Content-Type: application/json" \
-        	--header "Prefer: resolution=ignore-duplicates,return=representation" \
+        	--header "Prefer: resolution=ignore-duplicates" \
         	--header "X-Client-Info: postgrest-swift/0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	--data "{\"id\":1,\"username\":\"admin\"}" \
@@ -404,6 +453,158 @@ extension PostgrestMockerTests {
       try await sut
         .from("users")
         .upsert(User(id: 1, username: "admin"), ignoreDuplicates: true)
+        .execute()
+    }
+
+    @Test
+    func insertDefaultToNullFalseSendsMissingDefault() async throws {
+      Mock(
+        url: url.appendingPathComponent("users"),
+        ignoreQuery: true,
+        statusCode: 201,
+        data: [
+          .post: Data()
+        ]
+      )
+      .snapshotRequest {
+        #"""
+        curl \
+        	--request POST \
+        	--header "Accept: application/json" \
+        	--header "Content-Length: 27" \
+        	--header "Content-Type: application/json" \
+        	--header "Prefer: return=minimal,missing=default" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	--data "{\"id\":1,\"username\":\"admin\"}" \
+        	"http://localhost:54321/rest/v1/users"
+        """#
+      }
+      .register()
+
+      try await sut
+        .from("users")
+        .insert(User(id: 1, username: "admin"), returning: .minimal, defaultToNull: false)
+        .execute()
+    }
+
+    @Test
+    func insertDefaultToNullFalseComposesWithReturningAndCount() async throws {
+      Mock(
+        url: url.appendingPathComponent("users"),
+        ignoreQuery: true,
+        statusCode: 201,
+        data: [
+          .post: Data()
+        ]
+      )
+      .snapshotRequest {
+        #"""
+        curl \
+        	--request POST \
+        	--header "Accept: application/json" \
+        	--header "Content-Length: 60" \
+        	--header "Content-Type: application/json" \
+        	--header "Prefer: return=minimal,count=estimated,missing=default" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	--data "[{\"id\":1,\"username\":\"admin\"},{\"id\":2,\"username\":\"supabase\"}]" \
+        	"http://localhost:54321/rest/v1/users?columns=%22id%22,%22username%22"
+        """#
+      }
+      .register()
+
+      try await sut
+        .from("users")
+        .insert(
+          [
+            User(id: 1, username: "admin"),
+            User(id: 2, username: "supabase"),
+          ],
+          returning: .minimal,
+          count: .estimated,
+          defaultToNull: false
+        )
+        .execute()
+    }
+
+    @Test
+    func upsertDefaultToNullFalseKeepsEveryOtherPreference() async throws {
+      // The whole point of the option is that it is one more entry in a header that already carries
+      // `resolution=`, `return=`, `count=` and whatever the caller set. Dropping any of them turns
+      // the request into a different operation — see SDK-1626.
+      Mock(
+        url: url.appendingPathComponent("users"),
+        ignoreQuery: true,
+        statusCode: 201,
+        data: [
+          .post: Data()
+        ]
+      )
+      .snapshotRequest {
+        #"""
+        curl \
+        	--request POST \
+        	--header "Accept: application/json" \
+        	--header "Content-Length: 60" \
+        	--header "Content-Type: application/json" \
+        	--header "Prefer: existing=value,resolution=merge-duplicates,return=minimal,count=estimated,missing=default" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	--data "[{\"id\":1,\"username\":\"admin\"},{\"id\":2,\"username\":\"supabase\"}]" \
+        	"http://localhost:54321/rest/v1/users?columns=%22id%22,%22username%22&on_conflict=username"
+        """#
+      }
+      .register()
+
+      try await sut(withPreferHeader: "existing=value")
+        .from("users")
+        .upsert(
+          [
+            User(id: 1, username: "admin"),
+            User(id: 2, username: "supabase"),
+          ],
+          onConflict: "username",
+          returning: .minimal,
+          count: .estimated,
+          defaultToNull: false
+        )
+        .execute()
+    }
+
+    @Test
+    func upsertDefaultToNullFalseComposesWithIgnoreDuplicates() async throws {
+      Mock(
+        url: url.appendingPathComponent("users"),
+        ignoreQuery: true,
+        statusCode: 201,
+        data: [
+          .post: Data()
+        ]
+      )
+      .snapshotRequest {
+        #"""
+        curl \
+        	--request POST \
+        	--header "Accept: application/json" \
+        	--header "Content-Length: 27" \
+        	--header "Content-Type: application/json" \
+        	--header "Prefer: resolution=ignore-duplicates,missing=default" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	--data "{\"id\":1,\"username\":\"admin\"}" \
+        	"http://localhost:54321/rest/v1/users"
+        """#
+      }
+      .register()
+
+      try await sut
+        .from("users")
+        .upsert(
+          User(id: 1, username: "admin"),
+          ignoreDuplicates: true,
+          defaultToNull: false
+        )
         .execute()
     }
 
@@ -423,7 +624,7 @@ extension PostgrestMockerTests {
         	--request DELETE \
         	--header "Accept: application/json" \
         	--header "Content-Type: application/json" \
-        	--header "Prefer: existing=value,return=representation,count=estimated" \
+        	--header "Prefer: existing=value,count=estimated" \
         	--header "X-Client-Info: postgrest-swift/0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	"http://localhost:54321/rest/v1/users?username=eq.supabase"

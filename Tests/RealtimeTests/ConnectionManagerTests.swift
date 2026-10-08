@@ -1,13 +1,22 @@
 import ConcurrencyExtras
 import Foundation
 import Logging
+import TestHelpers
 import Testing
 
 @testable import Realtime
-@testable import RealtimeV2
 
 @Suite
 struct ConnectionManagerTests {
+  @Test
+  func reconnectBackoffClampsAnUnusableBaseDelay() {
+    // `reconnectDelay` is user-supplied, so the backoff must clamp it into `0...30s`.
+    for base: Duration in [.seconds(1_000_000_000), .seconds(-5)] {
+      let delay = ConnectionManager.reconnectBackoff(baseDelay: base).backoffDelay(retry: 1)
+      #expect(delay >= .zero && delay <= .seconds(30), "baseDelay \(base)")
+    }
+  }
+
   private enum TestError: LocalizedError {
     case sample
 
@@ -26,7 +35,7 @@ struct ConnectionManagerTests {
   private func makeSUT(
     url: URL = URL(string: "ws://localhost")!,
     headers: [String: String] = [:],
-    reconnectDelay: TimeInterval = 0.1,
+    reconnectDelay: Duration = .milliseconds(100),
     transport: WebSocketTransport? = nil
   ) -> ConnectionManager {
     let transportCallCount = self.transportCallCount
@@ -197,7 +206,7 @@ struct ConnectionManagerTests {
     let ws = self.ws
 
     let sut = makeSUT(
-      reconnectDelay: 0.01,
+      reconnectDelay: .milliseconds(10),
       transport: { _, _ in
         connectionCount.withValue { $0 += 1 }
         if connectionCount.value == 2 {
@@ -278,7 +287,7 @@ struct ConnectionManagerTests {
 
   @Test
   func handleErrorFromCurrentConnectionInitiatesReconnect() async throws {
-    let sut = makeSUT(reconnectDelay: 0.01)
+    let sut = makeSUT(reconnectDelay: .milliseconds(10))
     try await sut.connect()
 
     await sut.handleError(TestError.sample, from: ws)
@@ -303,7 +312,7 @@ struct ConnectionManagerTests {
     let ws = self.ws
 
     let sut = makeSUT(
-      reconnectDelay: 0.01,
+      reconnectDelay: .milliseconds(10),
       transport: { _, _ in
         connectionCount.withValue { $0 += 1 }
         if connectionCount.value == 2 {
@@ -347,7 +356,7 @@ struct ConnectionManagerTests {
     let ws = self.ws
 
     let sut = makeSUT(
-      reconnectDelay: 0.01,
+      reconnectDelay: .milliseconds(10),
       transport: { _, _ in
         let attempt = connectionCount.withValue { count -> Int in
           count += 1
@@ -380,7 +389,7 @@ struct ConnectionManagerTests {
 
   @Test
   func handleCloseDoesNotReconnectForApplicationCloseCode() async throws {
-    let sut = makeSUT(reconnectDelay: 0.01)
+    let sut = makeSUT(reconnectDelay: .milliseconds(10))
     try await sut.connect()
 
     // Application-level close codes (4000–4999) must not trigger automatic

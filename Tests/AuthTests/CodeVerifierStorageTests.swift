@@ -18,7 +18,7 @@ struct CodeVerifierStorageTests {
       )
     )
 
-    return (Dependencies[client.clientID].codeVerifierStorage, localStorage, client)
+    return (client.dependencies.codeVerifierStorage, localStorage, client)
   }
 
   @Test

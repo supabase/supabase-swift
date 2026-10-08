@@ -4,7 +4,6 @@ import TestHelpers
 import Testing
 
 @testable import Realtime
-@testable import RealtimeV2
 
 /// Regression tests for SDK-959: deaf-socket stalls on cold-start subscribe.
 ///
@@ -26,9 +25,9 @@ struct RealtimeColdStartTests {
         headers: ["apikey": apiKey],
         // Long heartbeat so heartbeat machinery can't mask subscribe stalls
         // by triggering recovery reconnects on slow CI machines.
-        heartbeatInterval: 10,
-        reconnectDelay: 0.1,
-        timeoutInterval: 2,
+        heartbeatInterval: .seconds(10),
+        reconnectDelay: .milliseconds(100),
+        timeout: .seconds(2),
         accessToken: { "token" }
       ),
       wsTransport: { _, _ in
@@ -36,7 +35,7 @@ struct RealtimeColdStartTests {
         try await Task.sleep(nanoseconds: 20_000_000)
         return socket
       },
-      http: HTTPClientMock(),
+      http: HTTPClient(transport: RecordingTransport()),
       clock: ContinuousClock()
     )
   }
@@ -122,9 +121,9 @@ struct RealtimeColdStartTests {
       url: url,
       options: RealtimeClientOptions(
         headers: ["apikey": apiKey],
-        heartbeatInterval: 10,
-        reconnectDelay: 0.05,
-        timeoutInterval: 5,
+        heartbeatInterval: .seconds(10),
+        reconnectDelay: .milliseconds(50),
+        timeout: .seconds(5),
         accessToken: { "token" }
       ),
       wsTransport: { _, _ in
@@ -133,7 +132,7 @@ struct RealtimeColdStartTests {
         sockets.withValue { $0.append(socket) }
         return socket
       },
-      http: HTTPClientMock(),
+      http: HTTPClient(transport: RecordingTransport()),
       clock: ContinuousClock()
     )
     defer { sut.disconnect() }
@@ -192,9 +191,9 @@ struct RealtimeColdStartTests {
       url: url,
       options: RealtimeClientOptions(
         headers: ["apikey": apiKey],
-        heartbeatInterval: 0.2,
-        reconnectDelay: 0.05,
-        timeoutInterval: 5,
+        heartbeatInterval: .milliseconds(200),
+        reconnectDelay: .milliseconds(50),
+        timeout: .seconds(5),
         accessToken: { "token" }
       ),
       wsTransport: { _, _ in
@@ -207,7 +206,7 @@ struct RealtimeColdStartTests {
         sockets.withValue { $0.append(socket) }
         return socket
       },
-      http: HTTPClientMock(),
+      http: HTTPClient(transport: RecordingTransport()),
       clock: ContinuousClock()
     )
     defer { sut.disconnect() }

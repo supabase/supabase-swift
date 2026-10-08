@@ -64,12 +64,6 @@ extension JSONValue {
   }
 }
 
-extension JSONValueView {
-  init(rendering value: some Codable) {
-    self.init(value: try! JSONValue(value))
-  }
-}
-
 #Preview {
   NavigationStack {
     JSONValueView(

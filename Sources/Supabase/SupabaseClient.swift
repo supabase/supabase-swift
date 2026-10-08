@@ -1,6 +1,7 @@
 import ConcurrencyExtras
 public import Foundation
 import HTTPTypes
+import Helpers
 import IssueReporting
 import Logging
 
@@ -32,10 +33,12 @@ import Logging
 /// - ``realtimeV2``
 ///
 /// ### Querying the Database
-/// - ``from(_:)``
+/// - ``from(_:)->PostgrestQueryBuilder``
+/// - ``from(_:)->PostgrestSource<R>``
 /// - ``rpc(_:params:count:)``
 /// - ``rpc(_:count:)``
-/// - ``schema(_:)``
+/// - ``schema(_:)->PostgrestClient``
+/// - ``schema(_:)->PostgrestSchemaScope<S>``
 ///
 /// ### Realtime Channels
 /// - ``channels``
@@ -67,6 +70,17 @@ import Logging
 /// span is active (via `opentelemetry-swift`) when a request is made gets propagated; with no
 /// active span, or with the trait disabled, requests go out unchanged.
 public final class SupabaseClient: Sendable {
+  /// Derives the default auth storage key from the project ref in `url`'s host, so two projects
+  /// in the same app do not share a stored session.
+  ///
+  /// - Returns: `nil` when `url` has no host, and so no project ref to namespace by. An empty
+  ///   host counts as none: `"".split(separator: ".")` is empty.
+  static func defaultStorageKey(for url: URL) -> String? {
+    url.host(percentEncoded: false)?
+      .split(separator: ".").first
+      .map { "sb-\($0)-auth-token" }
+  }
+
   let options: SupabaseClientOptions
   let supabaseURL: URL
   let supabaseKey: String
@@ -101,9 +115,9 @@ public final class SupabaseClient: Sendable {
     PostgrestClient(
       url: databaseURL,
       schema: options.db.schema,
-      headers: headers,
+      headers: dataHeaders.dictionary,
       logger: options.global.logger,
-      fetch: fetchWithAuth,
+      http: authenticatedHTTP,
       encoder: options.db.encoder,
       decoder: options.db.decoder,
       retryEnabled: options.db.retry
@@ -112,46 +126,52 @@ public final class SupabaseClient: Sendable {
 
   /// The Storage client for uploading, downloading, and managing files.
   public var storage: SupabaseStorageClient {
-    SupabaseStorageClient(
-      configuration: StorageClientConfiguration(
-        url: storageURL,
-        headers: headers,
-        session: StorageHTTPSession(fetch: fetchWithAuth, upload: uploadWithAuth),
-        logger: options.global.logger,
-        useNewHostname: options.storage.useNewHostname
-      )
+    var configuration = StorageClientConfiguration(
+      url: storageURL,
+      headers: dataHeaders.dictionary,
+      http: authenticatedHTTP,
+      logger: options.global.logger,
+      usesNewHostname: options.storage.usesNewHostname,
+      retryEnabled: options.storage.retryEnabled
     )
+    configuration.clock = clock
+    return SupabaseStorageClient(configuration: configuration)
   }
 
   /// The Realtime client for subscribing to database changes and broadcasting presence events.
   public var realtimeV2: RealtimeClientV2 {
     mutableState.withValue {
-      if $0.realtime == nil {
-        $0.realtime = _initRealtimeClient()
+      if let realtime = $0.realtime {
+        return realtime
       }
-      return $0.realtime!
+      let realtime = _initRealtimeClient()
+      $0.realtime = realtime
+      return realtime
     }
   }
 
   /// The Functions client for invoking Supabase Edge Functions.
+  ///
+  /// Built on first access from ``SupabaseClientOptions/FunctionsOptions`` and the global HTTP
+  /// configuration, then cached.
   public var functions: FunctionsClient {
-    var functionsHeaders = _headers
-    if APIKeyFormat.isNew(supabaseKey) {
-      functionsHeaders[.authorization] = nil
-    }
-    return FunctionsClient(
-      url: functionsURL,
-      headers: functionsHeaders.dictionary,
-      region: options.functions.region,
-      logger: options.global.logger,
-      fetch: { [session = options.global.session] request in
-        try await session.data(for: TraceContext.inject(into: request))
-      },
-      decoder: options.functions.decoder,
-      accessToken: { [weak self] in
-        try await self?._getAccessToken()
+    mutableState.withValue {
+      if let functions = $0.functions {
+        return functions
       }
-    )
+      let functions = _initFunctionsClient()
+      $0.functions = functions
+      return functions
+    }
+  }
+
+  /// ``_headers`` without the static `Authorization`, for PostgREST, Storage and Functions: their
+  /// bearer is ``AccessTokenMiddleware``'s job, so a per-call header and the session token both
+  /// win over the key.
+  var dataHeaders: HTTPFields {
+    var headers = _headers
+    headers[.authorization] = nil
+    return headers
   }
 
   let _headers: HTTPFields
@@ -166,6 +186,7 @@ public final class SupabaseClient: Sendable {
   struct MutableState {
     var listenForAuthEventsTask: Task<Void, Never>?
     var realtime: RealtimeClientV2?
+    var functions: FunctionsClient?
 
     var changedAccessToken: String?
   }
@@ -191,31 +212,15 @@ public final class SupabaseClient: Sendable {
   ///   - supabaseURL: Your Supabase project URL, found in the project dashboard.
   ///   - supabaseKey: Your Supabase project anon key, found in the project dashboard.
   ///   - options: Configuration options for the client and its sub-clients.
-  public convenience init(
+  public init(
     supabaseURL: URL,
     supabaseKey: String,
     options: SupabaseClientOptions
   ) {
-    self.init(
-      supabaseURL: supabaseURL,
-      supabaseKey: supabaseKey,
-      options: options,
-      clock: ContinuousClock()
-    )
-  }
-
-  /// `package`-visibility so callers in other targets of this package (e.g. `IntegrationTests`)
-  /// can inject a test clock without exposing it publicly.
-  package init(
-    supabaseURL: URL,
-    supabaseKey: String,
-    options: SupabaseClientOptions,
-    clock: any Clock<Duration>
-  ) {
     self.supabaseURL = supabaseURL
     self.supabaseKey = supabaseKey
     self.options = options
-    self.clock = clock
+    self.clock = options.global.clock
 
     APIKeyFormat.checkFormat(supabaseKey)
 
@@ -234,11 +239,17 @@ public final class SupabaseClient: Sendable {
       )
       .merging(with: HTTPFields(options.global.headers))
 
-    // default storage key uses the supabase project ref as a namespace
-    guard let host = supabaseURL.host(percentEncoded: false) else {
-      preconditionFailure("supabaseURL must have a valid host.")
+    // The default storage key namespaces the stored session by project ref, taken from the URL's
+    // host. `supabaseURL` is supplied once, at construction, so a URL without a host is a
+    // programmer error rather than a runtime condition — trap on it, where the offending value is,
+    // instead of degrading into a shared storage key that silently collides across projects.
+    guard let defaultStorageKey = Self.defaultStorageKey(for: supabaseURL) else {
+      preconditionFailure(
+        """
+        supabaseURL must have a host to derive the auth storage key from, got \(supabaseURL).
+        """
+      )
     }
-    let defaultStorageKey = "sb-\(host.split(separator: ".")[0])-auth-token"
 
     _auth = AuthClient(
       url: supabaseURL.appendingPathComponent("/auth/v1"),
@@ -248,11 +259,15 @@ public final class SupabaseClient: Sendable {
       storageKey: options.auth.storageKey ?? defaultStorageKey,
       localStorage: options.auth.storage,
       logger: options.global.logger,
-      fetch: {
-        // DON'T use `fetchWithAuth` method within the AuthClient as it may cause a deadlock.
-        try await options.global.session.data(for: TraceContext.inject(into: $0))
-      },
-      autoRefreshToken: options.auth.autoRefreshToken
+      // DON'T give the AuthClient `AccessTokenMiddleware` — resolving the access token goes
+      // through the AuthClient itself, which may cause a deadlock.
+      http: HTTPClientConfiguration(
+        transport: options.global.http.transport ?? URLSessionTransport(),
+        middlewares: options.global.http.middlewares + [TraceContextMiddleware()],
+        timeout: options.global.http.timeout
+      ),
+      automaticallyRefreshesToken: options.auth.automaticallyRefreshesToken,
+      clock: clock
     )
 
     if options.auth.accessToken == nil {
@@ -265,6 +280,13 @@ public final class SupabaseClient: Sendable {
   /// - Returns: A query builder for constructing and executing the query.
   public func from(_ table: String) -> PostgrestQueryBuilder {
     rest.from(table)
+  }
+
+  /// Creates a typed source for a relation, queried in the schema the relation declares.
+  /// - Parameter relation: The relation type to query.
+  /// - Returns: A ``PostgrestSource`` for that relation.
+  public func from<R: PostgrestRelation>(_ relation: R.Type) -> PostgrestSource<R> {
+    rest.from(relation)
   }
 
   /// Calls a Postgres function.
@@ -301,6 +323,15 @@ public final class SupabaseClient: Sendable {
   /// - Parameter schema: The schema to query.
   /// - Returns: A ``PostgrestClient`` configured for the given schema.
   public func schema(_ schema: String) -> PostgrestClient {
+    rest.schema(schema)
+  }
+
+  /// Returns a scope that only queries relations declared to live in the given schema.
+  ///
+  /// - Precondition: ``SupabaseClientOptions/DatabaseOptions/schema`` is not set.
+  /// - Parameter schema: The schema type to query.
+  /// - Returns: A ``PostgrestSchemaScope`` for that schema.
+  public func schema<S: PostgrestSchema>(_ schema: S.Type) -> PostgrestSchemaScope<S> {
     rest.schema(schema)
   }
 
@@ -394,45 +425,31 @@ public final class SupabaseClient: Sendable {
     mutableState.listenForAuthEventsTask?.cancel()
   }
 
-  /// A `fetch` closure handed to the REST, Storage and Functions sub-clients.
-  ///
-  /// Captures only the dependencies it needs — never `self` — because each sub-client stores this
-  /// closure for its whole lifetime, and the cached sub-clients (`storage`, `realtimeV2`) are held
-  /// in ``mutableState`` for the lifetime of the client. Capturing `self` here would form a
-  /// `self -> mutableState -> sub-client -> closure -> self` retain cycle that keeps ``deinit`` from
-  /// ever running. `rest` is rebuilt per access and not cached, but it gets the same closure, so the
-  /// no-`self`-capture rule applies uniformly.
-  private var fetchWithAuth: @Sendable (_ request: URLRequest) async throws -> (Data, URLResponse) {
-    { [session = options.global.session, adapt = adaptRequest] request in
-      try await session.data(for: adapt(request))
-    }
+  /// The resolved transport shared by every sub-client.
+  private var transport: any ClientTransport {
+    options.global.http.transport ?? URLSessionTransport()
   }
 
-  /// An `upload` closure handed to the Storage sub-client.
+  /// The shared transport plus the user's middlewares followed by the SDK's, for PostgREST and
+  /// Storage. The bearer is the session token, else the key.
   ///
-  /// Same no-`self`-capture rationale as ``fetchWithAuth``.
-  private var uploadWithAuth:
-    @Sendable (_ request: URLRequest, _ data: Data) async throws -> (Data, URLResponse)
-  {
-    { [session = options.global.session, adapt = adaptRequest] request, data in
-      try await session.upload(for: adapt(request), from: data)
-    }
-  }
-
-  /// Builds a request adapter that injects trace context and the current access token.
-  ///
-  /// The returned closure captures the auth dependencies by value instead of `self`. `AuthClient`
-  /// holds no reference back to ``SupabaseClient``, so no cycle is formed.
-  private var adaptRequest: @Sendable (_ request: URLRequest) async throws -> URLRequest {
-    { [getAccessToken = accessTokenProvider] request in
-      let token = try await getAccessToken()
-
-      var request = TraceContext.inject(into: request)
-      if let token {
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-      }
-      return request
-    }
+  /// ``AccessTokenMiddleware`` captures only the dependencies it needs — never `self` — because
+  /// each sub-client stores its middlewares for its whole lifetime: the cached ``realtimeV2`` and
+  /// ``functions`` sub-clients are held in ``mutableState`` for the lifetime of the client, and a
+  /// caller may hold any sub-client for that long too. Capturing `self` here would form a
+  /// `self -> sub-client -> middleware -> self` retain cycle that keeps ``deinit`` from ever
+  /// running.
+  private var authenticatedHTTP: HTTPClientConfiguration {
+    HTTPClientConfiguration(
+      transport: transport,
+      middlewares: options.global.http.middlewares + [
+        TraceContextMiddleware(),
+        AccessTokenMiddleware(getAccessToken: { [provider = accessTokenProvider, supabaseKey] in
+          try await provider() ?? supabaseKey
+        }),
+      ],
+      timeout: options.global.http.timeout
+    )
   }
 
   /// Resolves the access token to send on outgoing requests, without capturing `self`.
@@ -449,7 +466,7 @@ public final class SupabaseClient: Sendable {
           return try await accessToken()
         }
         return try await auth.session.accessToken
-      } catch AuthError.sessionMissing {
+      } catch let error as AuthError where error.kind == .sessionMissing {
         return nil
       }
     }
@@ -500,6 +517,34 @@ public final class SupabaseClient: Sendable {
     }
   }
 
+  private func _initFunctionsClient() -> FunctionsClient {
+    let http = options.functions.http ?? options.global.http
+    return FunctionsClient(
+      configuration: .init(
+        url: functionsURL,
+        headers: dataHeaders,
+        region: options.functions.region,
+        http: HTTPClientConfiguration(
+          transport: http.transport ?? transport,
+          middlewares: options.global.http.middlewares
+            + (options.functions.http?.middlewares ?? [])
+            + [
+              TraceContextMiddleware(),
+              // The session token, else the legacy JWT key; a new-format key is never a bearer.
+              AccessTokenMiddleware(getAccessToken: {
+                [provider = accessTokenProvider, supabaseKey] in
+                APIKeyFormat.functionsBearerToken(
+                  accessToken: try await provider() ?? supabaseKey, supabaseKey: supabaseKey)
+              }),
+            ],
+          timeout: http.timeout ?? options.global.http.timeout
+        ),
+        logger: options.functions.logger ?? options.global.logger,
+        decoder: options.functions.decoder
+      )
+    )
+  }
+
   private func _initRealtimeClient() -> RealtimeClientV2 {
     var realtimeOptions = options.realtime
     realtimeOptions.headers.merge(with: _headers)
@@ -507,14 +552,13 @@ public final class SupabaseClient: Sendable {
     realtimeOptions.logger = options.global.logger
     realtimeOptions.logger[metadataKey: "system"] = "realtime"
 
-    if realtimeOptions.fetch == nil {
-      realtimeOptions.fetch = { [session = options.global.session] request in
-        try await session.data(for: TraceContext.inject(into: request))
-      }
-    }
-
-    if realtimeOptions.session == nil {
-      realtimeOptions.session = options.global.session
+    if realtimeOptions.http.transport == nil {
+      realtimeOptions.http = HTTPClientConfiguration(
+        transport: transport,
+        middlewares: options.global.http.middlewares + realtimeOptions.http.middlewares
+          + [TraceContextMiddleware()],
+        timeout: realtimeOptions.http.timeout ?? options.global.http.timeout
+      )
     }
 
     if realtimeOptions.accessToken == nil {
@@ -532,10 +576,11 @@ public final class SupabaseClient: Sendable {
       )
     }
 
+    realtimeOptions.clock = clock
+
     return RealtimeClientV2(
       url: supabaseURL.appendingPathComponent("/realtime/v1"),
-      options: realtimeOptions,
-      clock: clock
+      options: realtimeOptions
     )
   }
 }

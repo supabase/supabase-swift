@@ -8,14 +8,14 @@
 import ConcurrencyExtras
 import Foundation
 import TestHelpers
-import XCTestDynamicOverlay
+import IssueReporting
 
 @testable import Auth
 
 let clientURL = URL(string: "http://localhost:54321/auth/v1")!
 
 extension Session {
-  static let validSession = Session(
+  static let valid = Session(
     accessToken: "accesstoken",
     tokenType: "bearer",
     expiresIn: 120,
@@ -24,7 +24,7 @@ extension Session {
     user: User(fromMockNamed: "user")
   )
 
-  static let expiredSession = Session(
+  static let expired = Session(
     accessToken: "accesstoken",
     tokenType: "bearer",
     expiresIn: 30,
