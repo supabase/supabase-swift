@@ -487,18 +487,12 @@ public final class SupabaseClient: Sendable {
     mutableState.withValue { $0.authEventsTask = task }
   }
 
-  /// Sends the session token, or the anon key after sign-out, to ``realtime``. Does nothing
-  /// until ``realtime`` exists: a new client asks the provider for the token when it connects.
+  /// Sends the session token, or the anon key without a session, to ``realtime`` on every
+  /// event; an unchanged token is not sent again. Does nothing until ``realtime`` exists: a new
+  /// client asks the provider for the token when it connects.
   private func handleAuthEvent(_ event: AuthChangeEvent, session: Session?) async {
     guard let realtime = mutableState.realtime else { return }
-    switch event {
-    case .initialSession, .signedIn, .tokenRefreshed, .userUpdated:
-      await realtime.setAuth(session?.accessToken ?? supabaseKey)
-    case .signedOut:
-      await realtime.setAuth(supabaseKey)
-    default:
-      break
-    }
+    await realtime.setAuth(session?.accessToken ?? supabaseKey)
   }
 
   private func _initRealtimeClient() -> RealtimeClient {
