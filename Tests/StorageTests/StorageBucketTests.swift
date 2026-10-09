@@ -974,7 +974,7 @@ extension StorageMockerTests {
           .put: Data(
             """
             {
-              "Id": "123",
+              "Id": "E621E1F8-C36C-495A-93FC-0C247A3E6E5F",
               "Key": "bucket/file.txt"
             }
             """.utf8
@@ -1008,7 +1008,7 @@ extension StorageMockerTests {
           )
         )
 
-      #expect(response.id == "123")
+      #expect(response.id == UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F"))
       #expect(response.path == "file.txt")
       #expect(response.fullPath == "bucket/file.txt")
     }
@@ -1024,7 +1024,7 @@ extension StorageMockerTests {
           .post: Data(
             """
             {
-              "Id": "123",
+              "Id": "E621E1F8-C36C-495A-93FC-0C247A3E6E5F",
               "Key": "bucket/folder/file.txt"
             }
             """.utf8
@@ -1055,7 +1055,7 @@ extension StorageMockerTests {
           .post: Data(
             """
             {
-              "Id": "123",
+              "Id": "E621E1F8-C36C-495A-93FC-0C247A3E6E5F",
               "Key": "bucket/file.txt"
             }
             """.utf8
@@ -1086,7 +1086,7 @@ extension StorageMockerTests {
           options: UploadOptions(contentType: "image/png")
         )
 
-      #expect(response.id == "123")
+      #expect(response.id == UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F"))
       #expect(response.path == "file.txt")
       #expect(response.fullPath == "bucket/file.txt")
     }
@@ -1102,7 +1102,7 @@ extension StorageMockerTests {
           .put: Data(
             """
             {
-              "Id": "123",
+              "Id": "E621E1F8-C36C-495A-93FC-0C247A3E6E5F",
               "Key": "bucket/file.txt"
             }
             """.utf8
@@ -1137,7 +1137,7 @@ extension StorageMockerTests {
           )
         )
 
-      #expect(response.id == "123")
+      #expect(response.id == UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F"))
       #expect(response.path == "file.txt")
       #expect(response.fullPath == "bucket/file.txt")
     }
