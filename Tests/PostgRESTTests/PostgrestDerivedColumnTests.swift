@@ -56,7 +56,7 @@ struct PostgrestDerivedColumnTests {
   @Test
   func castingThenJSONPathInheritsTheCastsSelectOnlyPosition() {
     let composed = Item.columns.cost.cast(to: .text).jsonText("k")
-    #expect(composed.postgrestExpression == "cost::text->>k")
+    #expect(composed.postgrestExpression == #"cost::text->>"k""#)
     #expect((composed as Any) is any _PostgrestFilterableExpression == false)
     #expect((composed as Any) is any _PostgrestOrderableExpression == false)
   }
@@ -70,17 +70,43 @@ struct PostgrestDerivedColumnTests {
 
   @Test
   func jsonPathsRenderTheirArrows() {
-    #expect(Item.columns.data.jsonText("name").postgrestExpression == "data->>name")
-    #expect(Item.columns.data.jsonObject("meta").postgrestExpression == "data->meta")
+    #expect(Item.columns.data.jsonText("name").postgrestExpression == #"data->>"name""#)
+    #expect(Item.columns.data.jsonObject("meta").postgrestExpression == #"data->"meta""#)
+  }
+
+  /// Bare, `->0` is an array index and `->a.b` is a `PGRST100`; quoted, both reach the key.
+  @Test
+  func aKeyIsAlwaysQuoted() {
+    #expect(Item.columns.data.jsonText("0").postgrestExpression == #"data->>"0""#)
+    #expect(Item.columns.data.jsonObject("a.b").postgrestExpression == #"data->"a.b""#)
+    #expect(Item.columns.data.jsonText("p(q),r").postgrestExpression == #"data->>"p(q),r""#)
+    #expect(Item.columns.data.jsonText("").postgrestExpression == #"data->>"""#)
+  }
+
+  /// Inside the quotes PostgREST reads a backslash as escaping the next character, so a stray
+  /// `\` is dropped (`"b\s"` reads key `bs`) and an unescaped `"` ends the key early.
+  @Test
+  func aKeyEscapesQuotesAndBackslashes() {
+    #expect(Item.columns.data.jsonText(#"q"t"#).postgrestExpression == #"data->>"q\"t""#)
+    #expect(Item.columns.data.jsonText(#"b\s"#).postgrestExpression == #"data->>"b\\s""#)
+  }
+
+  @Test
+  func anIndexIsBare() {
+    #expect(Item.columns.data.jsonObject(0).postgrestExpression == "data->0")
+    #expect(Item.columns.data.jsonText(-1).postgrestExpression == "data->>-1")
+    #expect(
+      Item.columns.data.jsonObject("tags").jsonText(1).postgrestExpression
+        == #"data->"tags"->>1"#)
   }
 
   /// Every operator applies to a JSON path, because it conforms to the filterable protocol.
   @Test
   func aJSONPathComposesWithEveryOperator() {
     let name = Item.columns.data.jsonText("name")
-    #expect(rendered(name.eq("Ada")) == "data->>name=eq.Ada")
-    #expect(rendered(name.like("A%")) == "data->>name=like.A%")
-    #expect(rendered(name.in(["Ada", "Bob"])) == "data->>name=in.(Ada,Bob)")
+    #expect(rendered(name.eq("Ada")) == #"data->>"name"=eq.Ada"#)
+    #expect(rendered(name.like("A%")) == #"data->>"name"=like.A%"#)
+    #expect(rendered(name.in(["Ada", "Bob"])) == #"data->>"name"=in.(Ada,Bob)"#)
     #expect((name as Any) is any _PostgrestOrderableExpression)
   }
 
@@ -90,9 +116,9 @@ struct PostgrestDerivedColumnTests {
   /// is null.
   @Test
   func aJSONPathIsNullTestableOnANotNullColumn() {
-    #expect(rendered(Item.columns.data.jsonText("name").isNull()) == "data->>name=is.null")
+    #expect(rendered(Item.columns.data.jsonText("name").isNull()) == #"data->>"name"=is.null"#)
     // No `isNotNull()` anywhere on the surface; `!` covers it.
-    #expect(rendered(!Item.columns.data.jsonText("name").isNull()) == "data->>name=not.is.null")
+    #expect(rendered(!Item.columns.data.jsonText("name").isNull()) == #"data->>"name"=not.is.null"#)
   }
 
   /// The operator is keyed on the filterable position, so a select-only derivation does not pick
@@ -120,7 +146,7 @@ struct PostgrestDerivedColumnTests {
     let filter = Item.columns.data.jsonText("name").eq("Ada") || Item.columns.cost.eq(2)
     #expect(
       filter.queryItems().map { "\($0.name)=\($0.value ?? "")" }
-        == ["or=(data->>name.eq.Ada,cost.eq.2.0)"])
+        == [#"or=(data->>"name".eq.Ada,cost.eq.2.0)"#])
   }
 
   /// A JSON path orders like any other orderable expression.
@@ -131,6 +157,6 @@ struct PostgrestDerivedColumnTests {
       .select()
       .order { $0.data.jsonText("name").asc() }
       .execute()
-    #expect(capture.query?.contains("order=data->>name.asc") == true)
+    #expect(capture.query?.contains(#"order=data->>"name".asc"#) == true)
   }
 }

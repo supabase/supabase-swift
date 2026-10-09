@@ -97,14 +97,14 @@ struct PostgrestRelatedColumnsTests {
   @Test
   func aJSONTextPathOverAnEmbedRendersInsideTheParentheses() {
     #expect(
-      Todo.columns.orders.amount.jsonText("k").postgrestExpression == "orders(amount->>k)")
+      Todo.columns.orders.amount.jsonText("k").postgrestExpression == #"orders(amount->>"k")"#)
   }
 
   /// `jsonObject(_:)` is declared on the base protocol too, so it needs the same shadow.
   @Test
   func aJSONObjectPathOverAnEmbedRendersInsideTheParentheses() {
     #expect(
-      Todo.columns.orders.amount.jsonObject("k").postgrestExpression == "orders(amount->k)")
+      Todo.columns.orders.amount.jsonObject("k").postgrestExpression == #"orders(amount->"k")"#)
   }
 
   @Test
@@ -166,8 +166,8 @@ struct PostgrestRelatedColumnsTests {
   @Test
   func aToOneProjectionShadowsCastAndJSONPathToo() {
     #expect(Order.columns.todo.id.cast(to: .text).postgrestExpression == "todo(id::text)")
-    #expect(Order.columns.todo.id.jsonText("k").postgrestExpression == "todo(id->>k)")
-    #expect(Order.columns.todo.id.jsonObject("k").postgrestExpression == "todo(id->k)")
+    #expect(Order.columns.todo.id.jsonText("k").postgrestExpression == #"todo(id->>"k")"#)
+    #expect(Order.columns.todo.id.jsonObject("k").postgrestExpression == #"todo(id->"k")"#)
   }
 
   /// A cast of a to-one projection must not be orderable even though the projection is, which is
@@ -177,7 +177,7 @@ struct PostgrestRelatedColumnsTests {
   func aToOneCastIsNotOrderableButAToOneJSONPathIs() {
     #expect(
       (Order.columns.todo.id.cast(to: .text) as Any) is any _PostgrestOrderableExpression == false)
-    #expect(Order.columns.todo.id.jsonText("k").asc().rendered == "todo(id->>k).asc")
+    #expect(Order.columns.todo.id.jsonText("k").asc().rendered == #"todo(id->>"k").asc"#)
   }
 
   /// A to-one projection has the identical rendering bug if unshadowed: PostgREST answers 200 for
@@ -213,9 +213,9 @@ struct PostgrestRelatedColumnsTests {
         == "todo(amount.sum()::text)")
     #expect(
       Order.columns.todo.id.cast(to: .text).jsonText("k").postgrestExpression
-        == "todo(id::text->>k)")
+        == #"todo(id::text->>"k")"#)
     #expect(
-      Order.columns.todo.id.sum().jsonObject("k").postgrestExpression == "todo(id.sum()->k)")
+      Order.columns.todo.id.sum().jsonObject("k").postgrestExpression == #"todo(id.sum()->"k")"#)
     #expect(Order.columns.todo.id.sum().sum().postgrestExpression == "todo(id.sum().sum())")
     #expect(
       Order.columns.todo.id.cast(to: .text).cast(to: .int).postgrestExpression
