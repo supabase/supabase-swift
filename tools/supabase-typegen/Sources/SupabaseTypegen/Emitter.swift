@@ -117,8 +117,10 @@ extension FilePlan {
       schemas.append(SchemaPlan(name: schema, typeName: typeName))
     }
 
-    // The enums of the selected schemas, and any other enum a generated column uses.
-    let usedEnums = Set(model.relations.flatMap { $0.columns.compactMap(\.enumID) })
+    let usedEnums = Set(
+      model.relations.flatMap {
+        $0.columns.compactMap(\.enumID) + $0.functions.compactMap(\.returnEnumID)
+      })
     let enumTypes = model.enums.values
       .filter { model.schemas.contains($0.name.schema) || usedEnums.contains($0.id) }
       .sorted { $0.name < $1.name }

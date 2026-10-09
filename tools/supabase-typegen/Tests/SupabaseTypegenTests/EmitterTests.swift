@@ -250,6 +250,38 @@ struct EmitterTests {
     #expect(result.standardOutput.contains("PostgrestComputedField<T, Date>"))
   }
 
+  /// An enum of a schema that is not selected is generated when only a computed field returns it.
+  @Test
+  func computedFieldEnumOfAnotherSchemaIsGenerated() {
+    let input = Fixture.integration { object in
+      object["schemas"] = [["name": "public"]]
+      object["tables"] = [["id": 1, "schema": "public", "name": "t"]]
+      for key in ["views", "materializedViews", "foreignTables", "primaryKeys", "columns"] {
+        object[key] = [Any]()
+      }
+      object["types"] = [
+        ["id": 10, "schema": "public", "name": "t", "enums": [Any](), "type_relation_id": 1],
+        [
+          "id": 20, "schema": "other", "name": "mood", "enums": ["happy", "sad"],
+          "type_relation_id": NSNull(),
+        ],
+      ]
+      object["functions"] = [
+        [
+          "schema": "public", "name": "mood", "args": [["mode": "in", "type_id": 10]],
+          "identity_argument_types": "t", "return_type_id": 20,
+          "return_type_relation_id": NSNull(), "is_set_returning_function": false,
+          "prorows": NSNull(),
+        ]
+      ]
+    }
+    let result = run(arguments: []) { input }
+    #expect(result.exitCode == 0)
+    #expect(result.standardError.isEmpty, "\(result.standardError)")
+    #expect(result.standardOutput.contains("enum OtherMood: String,"))
+    #expect(result.standardOutput.contains("PostgrestComputedField<T, OtherMood>"))
+  }
+
   /// A relation listed twice, here in both `tables` and `views`, is generated once, as the first.
   @Test
   func relationListedTwiceIsGeneratedOnce() {
