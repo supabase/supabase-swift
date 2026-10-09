@@ -72,7 +72,7 @@ public enum RealtimePostgresIsValue: Sendable {
 /// ### Logical Operators
 /// - ``not(_:)``
 /// - ``and(_:)``
-public enum RealtimePostgresFilter {
+public enum RealtimePostgresFilter: Sendable {
   /// Match rows where `column` equals `value` (`column=eq.value`).
   case eq(_ column: String, value: any RealtimePostgresFilterValue)
   /// Match rows where `column` does not equal `value` (`column=neq.value`).
@@ -164,13 +164,13 @@ public enum RealtimePostgresFilter {
   }
 
   private static func serialize(_ value: any RealtimePostgresFilterValue) -> String {
-    escapePostgRESTFilterValue(value.rawValue)
+    escapePostgRESTFilterValue(value.realtimeFilterValue)
   }
 
   private static func dedupe(_ values: [any RealtimePostgresFilterValue])
     -> [any RealtimePostgresFilterValue]
   {
     var seen = Set<String>()
-    return values.filter { seen.insert($0.rawValue).inserted }
+    return values.filter { seen.insert($0.realtimeFilterValue).inserted }
   }
 }

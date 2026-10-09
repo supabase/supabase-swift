@@ -24,17 +24,49 @@ package struct RealtimeJoinConfig: Encodable, Hashable {
   package var presence: PresenceJoinConfig = .init()
   package var postgresChanges: [PostgresJoinConfig] = []
   package var isPrivate: Bool = false
+  package var postgresChangesOptions: PostgresChangesOptions?
 
   package init(
     broadcast: BroadcastJoinConfig = .init(),
     presence: PresenceJoinConfig = .init(),
     postgresChanges: [PostgresJoinConfig] = [],
-    isPrivate: Bool = false
+    isPrivate: Bool = false,
+    postgresChangesOptions: PostgresChangesOptions? = nil
   ) {
     self.broadcast = broadcast
     self.presence = presence
     self.postgresChanges = postgresChanges
     self.isPrivate = isPrivate
+    self.postgresChangesOptions = postgresChangesOptions
+  }
+
+  /// The join config for a channel's public configuration and its postgres bindings, in order.
+  package init(_ configuration: RealtimeChannelConfiguration, bindings: [PostgresJoinConfig]) {
+    self.init(
+      broadcast: BroadcastJoinConfig(
+        acknowledgeBroadcasts: configuration.broadcast.acknowledge,
+        receiveOwnBroadcasts: configuration.broadcast.receiveOwnMessages,
+        replay: configuration.broadcast.replay.map {
+          ReplayOption(
+            since: Int(($0.since.timeIntervalSince1970 * 1000).rounded()), limit: $0.limit)
+        },
+        replicationReady: configuration.broadcast.waitForReplication),
+      presence: PresenceJoinConfig(key: configuration.presence.key ?? ""),
+      postgresChanges: bindings,
+      isPrivate: configuration.isPrivate,
+      postgresChangesOptions: configuration.postgresChanges.waitForSubscription
+        ? PostgresChangesOptions(
+          wait: true, timeout: configuration.postgresChanges.subscriptionTimeout)
+        : nil)
+  }
+
+  /// How much longer than the engine's timeout the join reply may take: the server holds it until
+  /// the postgres bindings are attached when asked to wait.
+  package var extraJoinTimeout: Duration {
+    guard let options = postgresChangesOptions, options.wait, !postgresChanges.isEmpty else {
+      return .zero
+    }
+    return options.timeout
   }
 
   enum CodingKeys: String, CodingKey {
@@ -42,6 +74,24 @@ package struct RealtimeJoinConfig: Encodable, Hashable {
     case presence
     case isPrivate = "private"
     case postgresChanges = "postgres_changes"
+    case postgresChangesOptions = "postgres_changes_options"
+  }
+}
+
+/// Sent as `postgres_changes_options`.
+package struct PostgresChangesOptions: Encodable, Hashable, Sendable {
+  /// Sent as `wait`: the server replies to the join only once the bindings are attached.
+  package var wait: Bool
+  /// Not sent. How long the client gives the server to attach the bindings.
+  package var timeout: Duration
+
+  package init(wait: Bool, timeout: Duration) {
+    self.wait = wait
+    self.timeout = timeout
+  }
+
+  enum CodingKeys: String, CodingKey {
+    case wait
   }
 }
 

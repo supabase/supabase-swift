@@ -460,8 +460,7 @@ supporting_symbols:
   - RealtimeSystemMessage.extension
   - RealtimeSystemMessage.channel
   # Stream and payload types the v3 channel streams carry (SDK-2105). They support
-  # realtime.subscriptions.broadcast and realtime.subscriptions.postgres_changes, which stay
-  # not_implemented until the channel exposes the streams (SDK-2104).
+  # realtime.subscriptions.broadcast and realtime.subscriptions.postgres_changes.
   - RealtimeStream
   - RealtimeStream.Failure
   - RealtimeStream.makeAsyncIterator
@@ -1656,45 +1655,119 @@ features:
     note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
 
   realtime.channel.subscribe:
-    status: not_implemented
-    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
+    status: implemented
+    symbols:
+      - RealtimeChannel.subscribe
+    # The channel handle and its join options belong to subscribe. Presence.key is sent with
+    # every join; the presence capabilities land with SDK-2113.
+    supporting_symbols:
+      - RealtimeChannel
+      - RealtimeChannel.topic
+      - RealtimeChannel.configuration
+      - RealtimeChannel.status
+      - RealtimeChannel.statusChanges
+      - RealtimeChannel.events
+      - RealtimeChannelConfiguration
+      - RealtimeChannelConfiguration.init
+      - RealtimeChannelConfiguration.broadcast
+      - RealtimeChannelConfiguration.presence
+      - RealtimeChannelConfiguration.postgresChanges
+      - RealtimeChannelConfiguration.Broadcast
+      - RealtimeChannelConfiguration.Broadcast.waitForReplication
+      - RealtimeChannelConfiguration.Presence
+      - RealtimeChannelConfiguration.Presence.key
+      - RealtimeChannelConfiguration.PostgresChanges
+      - RealtimeChannelConfiguration.PostgresChanges.waitForSubscription
+      - RealtimeChannelConfiguration.PostgresChanges.subscriptionTimeout
   realtime.channel.unsubscribe:
-    status: not_implemented
-    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
+    status: implemented
+    symbols:
+      - RealtimeChannel.unsubscribe
   realtime.channel.broadcast:
-    status: not_implemented
-    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
+    status: implemented
+    symbols:
+      - RealtimeChannel.broadcast
   realtime.channel.broadcast_http:
-    status: not_implemented
-    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
+    status: implemented
+    symbols:
+      - RealtimeChannel.httpSend
 
   realtime.subscriptions.broadcast:
-    status: not_implemented
-    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
+    status: implemented
+    symbols:
+      - RealtimeChannel.broadcasts
   realtime.subscriptions.postgres_changes:
-    status: not_implemented
-    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
+    status: implemented
+    symbols:
+      - RealtimeChannel.postgresChanges
+    supporting_symbols:
+      - PostgresChangeEvent
+      - PostgresChangeEvent.init
+      - PostgresChangeEvent.insert
+      - PostgresChangeEvent.update
+      - PostgresChangeEvent.delete
+      - PostgresChangeEvent.all
   realtime.subscriptions.subscribe_presence:
     status: not_implemented
     note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
   realtime.subscriptions.postgres_changes_filter:
-    status: not_implemented
-    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
+    status: implemented
+    symbols:
+      - RealtimePostgresFilter
+    supporting_symbols:
+      - RealtimePostgresFilter.eq
+      - RealtimePostgresFilter.neq
+      - RealtimePostgresFilter.gt
+      - RealtimePostgresFilter.gte
+      - RealtimePostgresFilter.lt
+      - RealtimePostgresFilter.lte
+      - RealtimePostgresFilter.in
+      - RealtimePostgresFilter.like
+      - RealtimePostgresFilter.ilike
+      - RealtimePostgresFilter.match
+      - RealtimePostgresFilter.imatch
+      - RealtimePostgresFilter.is
+      - RealtimePostgresFilter.isDistinct
+      - RealtimePostgresFilter.not
+      - RealtimePostgresFilter.and
+      - RealtimePostgresFilterValue
+      - RealtimePostgresFilterValue.realtimeFilterValue
+      - String.realtimeFilterValue
+      - Int.realtimeFilterValue
+      - Double.realtimeFilterValue
+      - Bool.realtimeFilterValue
+      - UUID.realtimeFilterValue
+      - Date.realtimeFilterValue
+      - RealtimePostgresIsValue
+      - RealtimePostgresIsValue.null
+      - RealtimePostgresIsValue.true
+      - RealtimePostgresIsValue.false
+      - RealtimePostgresIsValue.unknown
   realtime.subscriptions.private_channel:
-    status: not_implemented
-    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
+    status: implemented
+    symbols:
+      - RealtimeChannelConfiguration.isPrivate
   realtime.subscriptions.broadcast_self:
-    status: not_implemented
-    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
+    status: implemented
+    symbols:
+      - RealtimeChannelConfiguration.Broadcast.receiveOwnMessages
   realtime.subscriptions.broadcast_ack:
-    status: not_implemented
-    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
+    status: implemented
+    symbols:
+      - RealtimeChannelConfiguration.Broadcast.acknowledge
   realtime.subscriptions.broadcast_replay:
-    status: not_implemented
-    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
+    status: implemented
+    symbols:
+      - RealtimeChannelConfiguration.Broadcast.replay
+    supporting_symbols:
+      - RealtimeChannelConfiguration.Broadcast.Replay
+      - RealtimeChannelConfiguration.Broadcast.Replay.init
+      - RealtimeChannelConfiguration.Broadcast.Replay.since
+      - RealtimeChannelConfiguration.Broadcast.Replay.limit
   realtime.subscriptions.postgres_changes_multiple_filters:
-    status: not_implemented
-    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
+    status: implemented
+    symbols:
+      - RealtimeChannel.postgresChanges
 
   realtime.presence.track:
     status: not_implemented

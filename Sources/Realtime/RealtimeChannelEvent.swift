@@ -29,3 +29,28 @@ public struct RealtimeSystemMessage: Sendable, Hashable {
   /// The channel the message is about, as the server names it.
   public var channel: String?
 }
+
+extension RealtimeChannelEvent {
+  /// A rejoin or a `system` message; `nil` for anything else.
+  package init?(_ inbound: ChannelInbound) {
+    switch inbound {
+    case .resubscribed:
+      self = .resubscribed
+    case .message(let message) where message.event == "system":
+      let payload = message.payload
+      let status = payload["status"]?.stringValue ?? ""
+      let text = payload["message"]?.stringValue ?? ""
+      let `extension` = payload["extension"]?.stringValue
+      if `extension` == "postgres_changes" {
+        self = status == "ok" ? .postgresChangesReady : .postgresChangesFailed(text)
+      } else {
+        self = .serverMessage(
+          RealtimeSystemMessage(
+            status: status, message: text, extension: `extension`,
+            channel: payload["channel"]?.stringValue))
+      }
+    case .message, .broadcast, .presenceChanged:
+      return nil
+    }
+  }
+}
