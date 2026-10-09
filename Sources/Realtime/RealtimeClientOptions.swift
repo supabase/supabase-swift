@@ -49,7 +49,13 @@ public struct RealtimeClientOptions: Sendable {
   /// next result.
   public var accessToken: (@Sendable () async throws -> String?)?
   /// Where the client logs.
-  public var logger: Logger = supabaseDefaultLogger(label: "io.supabase.realtime")
+  public var logger: Logger {
+    get { customLogger ?? supabaseDefaultLogger(label: "io.supabase.realtime") }
+    set { customLogger = newValue }
+  }
+  /// The logger the caller set, or `nil` while ``logger`` is the default. `SupabaseClient` uses
+  /// its global logger only when this is `nil`.
+  package var customLogger: Logger?
   /// The clock for heartbeats, timeouts and retries.
   public var clock: any Clock<Duration> = ContinuousClock()
 

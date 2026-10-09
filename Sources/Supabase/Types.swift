@@ -20,6 +20,13 @@ public struct SupabaseClientOptions: Sendable {
   public let global: GlobalOptions
   /// Options for the Edge Functions sub-client.
   public let functions: FunctionsOptions
+  /// Options for the Realtime sub-client.
+  ///
+  /// ``SupabaseClient`` fills in what it owns: the `apikey` and `Authorization` headers (yours
+  /// win), the access token from Auth, ``GlobalOptions/clock``, ``GlobalOptions/logger`` when
+  /// you left ``RealtimeClientOptions/logger`` unset, and ``GlobalOptions/http`` for REST
+  /// broadcasts when you left ``RealtimeClientOptions/http`` without a transport.
+  public let realtime: RealtimeClientOptions
   /// Options for the Storage sub-client.
   public let storage: StorageOptions
 
@@ -121,7 +128,7 @@ public struct SupabaseClientOptions: Sendable {
     public let http: HTTPClientConfiguration
 
     /// The clock the time-based sub-client behaviors sleep on: Auth's token auto-refresh, Auth's
-    /// and Storage's request-retry backoff.
+    /// and Storage's request-retry backoff, and Realtime's heartbeats, timeouts and retries.
     ///
     /// Defaults to `ContinuousClock()`. Pass a `TestClock` (swift-clocks) to drive those
     /// behaviors deterministically in tests instead of waiting out real seconds.
@@ -200,18 +207,21 @@ public struct SupabaseClientOptions: Sendable {
   ///   - auth: Options for the Auth sub-client.
   ///   - global: Options shared across all sub-clients.
   ///   - functions: Options for the Edge Functions sub-client.
+  ///   - realtime: Options for the Realtime sub-client.
   ///   - storage: Options for the Storage sub-client.
   public init(
     db: DatabaseOptions = .init(),
     auth: AuthOptions,
     global: GlobalOptions = .init(),
     functions: FunctionsOptions = .init(),
+    realtime: RealtimeClientOptions = .init(),
     storage: StorageOptions = .init()
   ) {
     self.db = db
     self.auth = auth
     self.global = global
     self.functions = functions
+    self.realtime = realtime
     self.storage = storage
   }
 }
@@ -222,12 +232,14 @@ extension SupabaseClientOptions {
       db: DatabaseOptions = .init(),
       global: GlobalOptions = .init(),
       functions: FunctionsOptions = .init(),
+      realtime: RealtimeClientOptions = .init(),
       storage: StorageOptions = .init()
     ) {
       self.db = db
       auth = .init()
       self.global = global
       self.functions = functions
+      self.realtime = realtime
       self.storage = storage
     }
   #endif
