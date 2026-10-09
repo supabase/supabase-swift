@@ -33,6 +33,7 @@ let usage = """
     --output <path>            Write to this file. Default: -, standard output.
     --access-control <level>   public or internal. Default: internal.
     -h, --help                 Print this message.
+    --version                  Print the supabase-swift release this generator ships with.
 
   """
 
@@ -45,6 +46,7 @@ struct Options: Equatable {
   var output = "-"
   var accessControl = AccessControl.internal
   var help = false
+  var version = false
 
   struct UsageError: Error {
     var message: String
@@ -56,6 +58,10 @@ struct Options: Equatable {
     while let argument = remaining.popFirst() {
       if argument == "-h" || argument == "--help" {
         help = true
+        continue
+      }
+      if argument == "--version" {
+        version = true
         continue
       }
       guard argument.hasPrefix("--") else {
@@ -88,8 +94,8 @@ struct Options: Equatable {
   }
 }
 
-/// Runs the generator. Reads standard input only once the arguments are valid, so `--help` and a
-/// bad option do not wait for input.
+/// Runs the generator. Reads standard input only once the arguments are valid, so `--help`,
+/// `--version` and a bad option do not wait for input.
 func run(arguments: [String], standardInput: () -> Data) -> RunResult {
   let options: Options
   do {
@@ -100,6 +106,9 @@ func run(arguments: [String], standardInput: () -> Data) -> RunResult {
   }
   if options.help {
     return RunResult(exitCode: ExitCode.success, standardOutput: usage)
+  }
+  if options.version {
+    return RunResult(exitCode: ExitCode.success, standardOutput: "\(version)\n")
   }
 
   let metadata: GeneratorMetadata

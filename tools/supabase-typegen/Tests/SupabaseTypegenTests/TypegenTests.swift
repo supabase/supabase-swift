@@ -136,6 +136,15 @@ struct TypegenTests {
   }
 
   @Test
+  func versionPrintsTheReleaseWithoutReadingStandardInput() {
+    let result = SupabaseTypegen.run(arguments: ["--version"]) {
+      Issue.record("read standard input")
+      return Data()
+    }
+    #expect(result == RunResult(exitCode: 0, standardOutput: "\(version)\n"))
+  }
+
+  @Test
   func outputWritesTheFile() throws {
     let url = FileManager.default.temporaryDirectory
       .appendingPathComponent("\(UUID().uuidString).swift")
@@ -161,6 +170,7 @@ struct TypegenTests {
     #expect(options.output == "-")
     #expect(options.accessControl == .internal)
     #expect(!options.help)
+    #expect(!options.version)
   }
 
   @Test

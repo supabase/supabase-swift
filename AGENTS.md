@@ -542,6 +542,33 @@ own schema, and not named like a column (compared as Postgres names). A scalar r
 that returns `void`, `record`, a set of scalars, or a row type the generator does not emit is
 skipped. Each skip, and each rename that a name clash needs, is a note on standard error.
 
+#### Releasing the typegen binary
+
+`supabase gen types --lang swift` runs `supabase-typegen` from the user's `PATH`, so each release
+carries prebuilt binaries: `supabase-typegen-macos-universal.tar.gz` (arm64 and x86_64) and
+`supabase-typegen-linux-x86_64.tar.gz` (Swift runtime linked statically). Each archive holds only
+the `supabase-typegen` executable. `.github/workflows/typegen-binaries.yml` builds them, and
+`release.yml` calls it with the tag each time release-please creates a release. A pull request
+that touches `tools/supabase-typegen` or that workflow runs the same build without a tag: it checks
+the binaries and keeps them as workflow artifacts, and changes no release. To attach the binaries
+to an existing release again, run the workflow by hand with its tag (only a tag that contains
+`tools/supabase-typegen` builds).
+
+`supabase-typegen --version` prints the release. The value lives in
+`tools/supabase-typegen/Sources/SupabaseTypegen/Version.swift`, which release-please bumps with
+`Sources/Helpers/Version.swift`. The workflow fails if the binary's version does not match the tag.
+The generated file has no version in it, so the goldens do not change on each release.
+
+Users install it like this (the README has the same steps):
+
+```bash
+VERSION=2.55.1 # the supabase-swift version the project uses
+ASSET=supabase-typegen-macos-universal.tar.gz # or supabase-typegen-linux-x86_64.tar.gz
+mkdir -p ~/.local/bin
+curl -fsSL "https://github.com/supabase/supabase-swift/releases/download/v$VERSION/$ASSET" | tar -xz -C ~/.local/bin
+supabase-typegen --version
+```
+
 #### Refreshing the typegen fixtures
 
 `tools/supabase-typegen/Tests/SupabaseTypegenTests/Fixtures` holds `GeneratorMetadata` documents,
