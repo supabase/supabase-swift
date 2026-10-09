@@ -183,10 +183,10 @@ struct FileUploadView: View {
       isUploading = true
       uploadProgress = 0
 
-      let options = FileOptions(
-        cacheControl: cacheControl,
+      let options = UploadOptions(
         contentType: "image/jpeg",
-        shouldUpsert: upsertEnabled
+        cacheControl: .maxAge(.seconds(Int(cacheControl) ?? 3600)),
+        upsert: upsertEnabled
       )
 
       // Simulate progress
@@ -223,9 +223,9 @@ struct FileUploadView: View {
       isUploading = true
       uploadProgress = 0
 
-      let options = FileOptions(
-        cacheControl: cacheControl,
-        shouldUpsert: upsertEnabled
+      let options = UploadOptions(
+        cacheControl: .maxAge(.seconds(Int(cacheControl) ?? 3600)),
+        upsert: upsertEnabled
       )
 
       for i in 1...3 {
@@ -264,10 +264,10 @@ struct FileUploadView: View {
 
       let data = sampleText.data(using: .utf8)!
 
-      let options = FileOptions(
-        cacheControl: cacheControl,
+      let options = UploadOptions(
         contentType: "text/plain",
-        shouldUpsert: upsertEnabled
+        cacheControl: .maxAge(.seconds(Int(cacheControl) ?? 3600)),
+        upsert: upsertEnabled
       )
 
       for i in 1...3 {

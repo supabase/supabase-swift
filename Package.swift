@@ -244,6 +244,7 @@ let package = Package(
       dependencies: [
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
+        .product(name: "IssueReporting", package: "swift-issue-reporting"),
         .product(name: "Logging", package: "swift-log"),
         "Helpers",
       ]
