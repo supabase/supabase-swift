@@ -308,3 +308,4 @@ Xfrontend
 Xswiftc
 linux
 xattr
+darwin
