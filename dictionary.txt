@@ -319,3 +319,7 @@ tstzmultirange
 tstzrange
 mebibyte
 maxage
+noea
+nowe
+soea
+sowe

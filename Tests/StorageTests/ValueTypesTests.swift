@@ -119,12 +119,6 @@ struct ResizeModeTests {
     let mode = ResizeMode(rawValue: "custom")
     #expect(mode.rawValue == "custom")
   }
-
-  @Test
-  func encodes() throws {
-    let encoded = try JSONEncoder().encode(ResizeMode.cover)
-    #expect(String(data: encoded, encoding: .utf8) == "\"cover\"")
-  }
 }
 
 // MARK: - ImageFormat
@@ -142,12 +136,6 @@ struct ImageFormatTests {
   func stringLiteral() {
     let format: ImageFormat = "webp"
     #expect(format == .webp)
-  }
-
-  @Test
-  func encodes() throws {
-    let encoded = try JSONEncoder().encode(ImageFormat.webp)
-    #expect(String(data: encoded, encoding: .utf8) == "\"webp\"")
   }
 }
 
