@@ -854,21 +854,13 @@ features:
       - PostgrestClient.Configuration.schema
   database.query.rpc:
     status: implemented
-    note: "Two spellings. The untyped `rpc(_:params:head:get:count:)` takes a name and any Encodable params. The typed `rpc(_:)` takes a `@Function` value: its properties are the arguments, `Result` is what comes back, `readOnly()` sends it as a GET with the arguments in the query string, and a set-returning function flows into `PostgrestQuery` through `rows()`/`where(_:)`/`order(_:)` for filters, ordering and paging. A function is not a relation, so `from(_:)` rejects it at compile time."
+    note: "Two spellings. The untyped `rpc(_:params:head:get:count:)` takes a name and any Encodable params. The typed `rpc(_:)` takes a `@Function` value: its properties are the arguments, `Result` is what comes back, `readOnly()` sends it as a GET with the arguments in the query string, and a set-returning function flows into `_PostgrestQuery` through `rows()`/`where(_:)`/`order(_:)` for filters, ordering and paging. A function is not a relation, so `from(_:)` rejects it at compile time."
+    # The typed `rpc(_:)` is `@_spi(Experimental)` and `_PostgrestFunction`/`_PostgrestFunctionQuery`
+    # are `_`-prefixed, so the symbol graph does not hold them. The names below are the untyped
+    # overloads.
     symbols:
       - PostgrestClient.rpc
       - SupabaseClient.rpc
-      - PostgrestFunction
-      - PostgrestFunction.functionName
-      - PostgrestFunction.Schema
-      - PostgrestFunction.Result
-      - PostgrestFunctionQuery
-      - PostgrestFunctionQuery.request
-      - PostgrestFunctionQuery.readOnly
-      - PostgrestFunctionQuery.execute
-      - PostgrestFunctionQuery.rows
-      - PostgrestFunctionQuery.where
-      - PostgrestFunctionQuery.order
 
   database.mutate.insert:
     status: implemented

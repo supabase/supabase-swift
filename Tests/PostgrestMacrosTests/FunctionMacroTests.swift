@@ -38,7 +38,7 @@ struct FunctionMacroTests {
       extension SearchTodos {
         static let functionName = "search_todos"
 
-        typealias Schema = PostgREST.PublicSchema
+        typealias Schema = PostgREST._PublicSchema
 
         enum CodingKeys: String, CodingKey {
           case keyword = "keyword"

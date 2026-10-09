@@ -89,15 +89,15 @@ public macro Table(
 /// - Parameters:
 ///   - name: The function's name as PostgREST addresses it.
 ///   - schema: The type naming the Postgres schema, written as `PrivateSchema.self`. Defaults to
-///     ``PostgREST/PublicSchema``.
+///     ``PostgREST/_PublicSchema``.
 @attached(
   extension,
-  conformances: Encodable, Sendable, PostgrestFunction,
+  conformances: Encodable, Sendable, _PostgrestFunction,
   names: named(functionName), named(Schema), named(CodingKeys)
 )
 public macro Function(
   _ name: String,
-  schema: any PostgrestSchema.Type = PublicSchema.self
+  schema: any _PostgrestSchema.Type = _PublicSchema.self
 ) = #externalMacro(module: "PostgrestMacrosPlugin", type: "FunctionMacro")
 
 /// Overrides the database column name for a property.
