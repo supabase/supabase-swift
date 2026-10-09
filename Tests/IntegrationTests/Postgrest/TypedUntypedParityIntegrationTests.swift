@@ -5,22 +5,13 @@
 //  Created by Guilherme Souza on 07/10/26.
 //
 
+import CustomDump
 import Foundation
 import PostgrestMacros
 import Testing
 
 // `Users` is in `Generated.swift`. The rows are the four seed users in `supabase/seed.sql`; every
 // test here is read-only.
-
-// `Users` is generated without `Equatable`, and Swift synthesizes `==` only in the declaring
-// file, so this one lists every stored property.
-extension Users: Equatable {
-  public static func == (lhs: Users, rhs: Users) -> Bool {
-    lhs.id == rhs.id && lhs.email == rhs.email && lhs.username == rhs.username
-      && lhs.ageRange == rhs.ageRange && lhs.catchphrase == rhs.catchphrase
-      && lhs.data == rhs.data && lhs.status == rhs.status
-  }
-}
 
 /// The server-side half of `TypedUntypedParityTests`: the same filter spelled through
 /// `from(Users.self)` and through `from("users")` has to return the same rows from a live
@@ -41,7 +32,11 @@ struct TypedUntypedParityIntegrationTests {
   ) async throws {
     let typedRows = try await typed.order { $0.username.asc() }.execute().value
     let untypedRows: [Users] = try await untyped.order("username").execute().value
-    #expect(typedRows == untypedRows, sourceLocation: sourceLocation)
+    // `Users` is generated without `Equatable`; a dump compares every stored property.
+    #expect(
+      String(customDumping: typedRows) == String(customDumping: untypedRows),
+      sourceLocation: sourceLocation
+    )
     // At least: other suites in the same run insert users of their own and delete them in their
     // `init()`, so an exact count would depend on suite order.
     #expect(typedRows.count >= count, sourceLocation: sourceLocation)
