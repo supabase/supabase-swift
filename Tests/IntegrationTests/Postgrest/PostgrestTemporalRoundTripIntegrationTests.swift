@@ -65,9 +65,8 @@ struct PostgrestTemporalRoundTripIntegrationTests {
     try await deleteRow()
   }
 
-  /// The write half works: Postgres reads the encoder's full timestamp as its day. The read half
-  /// does not: PostgREST sends a `date` as `2026-10-09`, and the shared decoder in
-  /// `Helpers/Codable.swift` accepts only a value with a time.
+  /// Postgres reads the encoder's full timestamp as its day, and PostgREST sends the day back with
+  /// no time (`2026-10-09`), which the decoder reads as midnight UTC.
   @Test
   func dateRoundTrip() async throws {
     try await insertRow()
@@ -79,15 +78,13 @@ struct PostgrestTemporalRoundTripIntegrationTests {
       .value
     #expect(days == [["on_day": String(day.ISO8601Format().prefix(10))]])
 
-    await withKnownIssue("the decoder rejects a date with no time") {
-      let row = try await client.from(TemporalValues.self)
-        .select()
-        .where { $0.atInstant.eq(instant) }
-        .single()
-        .execute()
-        .value
-      #expect(row.onDay == day)
-    }
+    let row = try await client.from(TemporalValues.self)
+      .select()
+      .where { $0.atInstant.eq(instant) }
+      .single()
+      .execute()
+      .value
+    #expect(row.onDay == day)
     try await deleteRow()
   }
 }
