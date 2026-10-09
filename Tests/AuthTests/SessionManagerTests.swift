@@ -185,12 +185,12 @@ struct SessionManagerTests {
   // MARK: - Commit guard (SDK-1882)
 
   /// A session with tokens derived from `name`, so two sessions in one test are distinguishable.
-  private func session(_ name: String) -> Session {
+  private func session(_ name: String, expiresIn: TimeInterval = 120) -> Session {
     Session(
       accessToken: "\(name)-access",
       tokenType: "bearer",
-      expiresIn: 120,
-      expiresAt: Date().addingTimeInterval(120).timeIntervalSince1970,
+      expiresIn: expiresIn,
+      expiresAt: Date().addingTimeInterval(expiresIn).timeIntervalSince1970,
       refreshToken: "\(name)-refresh",
       user: User(fromMockNamed: "user")
     )
@@ -407,6 +407,93 @@ struct SessionManagerTests {
     expectNoDifference(result.refreshToken, hydrated.refreshToken)
     expectNoDifference(
       dependencies.sessionStorage.get()?.refreshToken, hydrated.refreshToken)
+  }
+
+  // MARK: - Refresh lost to another client
+
+  @Test
+  func sessionReturnsTheSessionAnotherClientStoredWhenItsOwnRefreshIsDiscarded() async throws {
+    let userA = session("A", expiresIn: -1)
+    let refreshedByOtherClient = session("A2")
+    let refreshedHere = session("A3")
+
+    dependencies.sessionStorage.store(userA)
+    let (requestSeen, release) = heldTokenResponse {
+      (HTTPResponse(status: .ok), try AuthClient.Configuration.jsonEncoder.encode(refreshedHere))
+    }
+    let (events, stopCollecting) = collectAuthEvents()
+    defer { stopCollecting() }
+
+    let load = Task { try await sut.session() }
+    let sawRequest = await waitUntil { requestSeen.value }
+    #expect(sawRequest)
+
+    await sut.update(refreshedByOtherClient)
+
+    release()
+    let returned = try await load.value
+
+    expectNoDifference(returned.refreshToken, refreshedByOtherClient.refreshToken)
+    expectNoDifference(
+      dependencies.sessionStorage.get()?.refreshToken, refreshedByOtherClient.refreshToken)
+    #expect(!events.value.contains(.tokenRefreshed))
+  }
+
+  @Test
+  func sessionReturnsTheSessionAnotherClientStoredWhenTheServerRejectsItsTokenAsAlreadyUsed()
+    async throws
+  {
+    let userA = session("A", expiresIn: -1)
+    let refreshedByOtherClient = session("A2")
+
+    dependencies.sessionStorage.store(userA)
+    let (requestSeen, release) = heldTokenResponse {
+      (
+        HTTPResponse(status: .badRequest, headerFields: [.apiVersionHeaderName: "2024-01-01"]),
+        Data(
+          #"{"code":"refresh_token_already_used","message":"Invalid Refresh Token: Already Used"}"#
+            .utf8)
+      )
+    }
+    let (events, stopCollecting) = collectAuthEvents()
+    defer { stopCollecting() }
+
+    let load = Task { try await sut.session() }
+    let sawRequest = await waitUntil { requestSeen.value }
+    #expect(sawRequest)
+
+    await sut.update(refreshedByOtherClient)
+
+    release()
+    let returned = try await load.value
+
+    expectNoDifference(returned.refreshToken, refreshedByOtherClient.refreshToken)
+    expectNoDifference(
+      dependencies.sessionStorage.get()?.refreshToken, refreshedByOtherClient.refreshToken)
+    #expect(!events.value.contains(.signedOut))
+  }
+
+  @Test
+  func sessionStillFailsWhenStorageWasClearedDuringItsRefresh() async throws {
+    let userA = session("A", expiresIn: -1)
+    let refreshedHere = session("A2")
+
+    dependencies.sessionStorage.store(userA)
+    let (requestSeen, release) = heldTokenResponse {
+      (HTTPResponse(status: .ok), try AuthClient.Configuration.jsonEncoder.encode(refreshedHere))
+    }
+
+    let load = Task { try await sut.session() }
+    let sawRequest = await waitUntil { requestSeen.value }
+    #expect(sawRequest)
+
+    await sut.remove()
+
+    release()
+    let result = await load.result
+
+    #expect(dependencies.sessionStorage.get() == nil)
+    #expect((result.error as? AuthError)?.kind == .refreshDiscarded)
   }
 
   // MARK: - Ownership (SDK-1894)

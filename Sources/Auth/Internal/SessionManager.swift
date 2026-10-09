@@ -101,7 +101,15 @@ private actor LiveSessionManager {
       }
 
       logger.debug("session expired")
-      return try await refreshSession(currentSession.refreshToken)
+      do {
+        return try await refreshSession(currentSession.refreshToken)
+      } catch let error as AuthError {
+        if let stored = sessionStorage.get(), !stored.isExpired {
+          logger.debug("Refresh failed, returning the session another client stored meanwhile")
+          return stored
+        }
+        throw error
+      }
     }
   }
 
