@@ -115,7 +115,10 @@ struct StorageAPI: Sendable {
       let (responseHead, responseBody) = try await http.stream(head, body: request.body)
       response = responseHead
       if let responseBody {
-        data = try await Data(collecting: responseBody, upTo: .max)
+        data =
+          (200..<300).contains(response.status.code)
+          ? try await Data(collecting: responseBody, upTo: .max)
+          : try await Data(collecting: responseBody, truncatingAt: Self.errorBodyCap)
       } else {
         data = Data()
       }
@@ -132,25 +135,77 @@ struct StorageAPI: Sendable {
     }
 
     guard (200..<300).contains(response.status.code) else {
-      if let serverError = try? JSONDecoder.storage.decode(
-        StorageError.ServerError.self, from: data)
-      {
-        throw StorageError(
-          kind: .server,
-          message: serverError.message,
-          serverError: serverError,
-          response: HTTPErrorResponse(response, body: data)
-        )
-      }
-
-      throw StorageError(
-        kind: .server,
-        message: "Unexpected response with status code \(response.status.code).",
-        response: HTTPErrorResponse(response, body: data)
-      )
+      throw Self.serverError(response, body: data)
     }
 
     return data
+  }
+
+  /// How much of an error body is kept. A failure never needs more, and a request that reached
+  /// the wrong host can answer with a page or a file.
+  static let errorBodyCap = 1 << 20
+
+  /// The ``StorageError`` for a non-2xx response: the decoded JSON body when there is one, the
+  /// text of a plain-text body (the tus routes answer that way, with the code implied by the
+  /// status), or the status alone.
+  static func serverError(_ response: HTTPResponse, body: Data) -> StorageError {
+    let httpResponse = HTTPErrorResponse(response, body: body)
+
+    if let serverError = try? JSONDecoder.storage.decode(StorageError.ServerError.self, from: body)
+    {
+      return StorageError(
+        kind: .server,
+        message: serverError.message,
+        code: serverError.code,
+        serverStatusCode: serverError.statusCode,
+        serverError: serverError,
+        response: httpResponse
+      )
+    }
+
+    let status = response.status.code
+    if response.headerFields[.contentType]?.lowercased().hasPrefix("text/plain") == true,
+      let text = String(data: body, encoding: .utf8)?.trimmingCharacters(
+        in: .whitespacesAndNewlines),
+      !text.isEmpty
+    {
+      let code: StorageError.Code? =
+        switch status {
+        case 404: .noSuchUpload
+        case 409: .keyAlreadyExists
+        case 413: .entityTooLarge
+        default: nil
+        }
+      return StorageError(
+        kind: .server,
+        message: text,
+        code: code,
+        serverStatusCode: status,
+        serverError: .init(statusCode: status, code: code, message: text),
+        response: httpResponse
+      )
+    }
+
+    return StorageError(
+      kind: .server,
+      message: "Unexpected response with status code \(status).",
+      response: httpResponse
+    )
+  }
+}
+
+extension Data {
+  /// Collects `body` and stops after `cap` bytes instead of throwing, for bodies that are only
+  /// reported, never used.
+  fileprivate init(collecting body: HTTPBody, truncatingAt cap: Int) async throws {
+    self.init()
+    for try await chunk in body {
+      append(contentsOf: chunk)
+      if count >= cap {
+        removeSubrange(cap...)
+        break
+      }
+    }
   }
 }
 
