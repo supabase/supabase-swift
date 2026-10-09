@@ -11,7 +11,7 @@ import SwiftUI
 struct BucketDetailView: View {
   let bucket: Bucket
 
-  @State private var fileObjects = ActionState<[FileObject], Error>.idle
+  @State private var fileObjects = ActionState<[StorageObject], Error>.idle
   @State private var presentBucketDetails = false
 
   @State private var lastActionResult: (action: String, result: Any)?
@@ -87,7 +87,7 @@ struct BucketDetailView: View {
         )
       }
     }
-    .navigationDestination(for: FileObject.self) {
+    .navigationDestination(for: StorageObject.self) {
       FileObjectDetailView(api: supabase.storage.from(bucket.id), fileObject: $0)
     }
   }
