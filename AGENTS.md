@@ -544,8 +544,8 @@ skipped. Each skip, and each rename that a name clash needs, is a note on standa
 
 #### Releasing the typegen binary
 
-`supabase gen types --lang swift` runs `supabase-typegen` from the user's `PATH`, so each release
-carries prebuilt binaries: `supabase-typegen-macos-universal.tar.gz` (arm64 and x86_64) and
+`supabase gen types --lang swift` runs `supabase-typegen`, so each release carries prebuilt
+binaries: `supabase-typegen-macos-universal.tar.gz` (arm64 and x86_64) and
 `supabase-typegen-linux-x86_64.tar.gz` (Swift runtime linked statically). Each archive holds only
 the `supabase-typegen` executable. `.github/workflows/typegen-binaries.yml` builds them, and
 `release.yml` calls it with the tag each time release-please creates a release. A pull request
@@ -559,7 +559,15 @@ to an existing release again, run the workflow by hand with its tag (only a tag 
 `Sources/Helpers/Version.swift`. The workflow fails if the binary's version does not match the tag.
 The generated file has no version in it, so the goldens do not change on each release.
 
-Users install it like this (the README has the same steps):
+The CLI (supabase/sdk#264) reads the supabase-swift version from the project's `Package.resolved`
+and downloads `https://github.com/supabase/supabase-swift/releases/download/v<version>/<asset>`
+itself. It takes the macOS archive on darwin arm64 and x64, and the Linux one on linux x64. It
+extracts the entry named `supabase-typegen`. So the asset names, the `v<version>` tag, and one
+`supabase-typegen` file at the archive root are a contract with the CLI. Change none of them
+without a matching change in supabase/sdk.
+
+When the download is not possible, the CLI falls back to `supabase-typegen` on the `PATH`. Users
+install it like this (the README has the same steps):
 
 ```bash
 VERSION=2.55.1 # the supabase-swift version the project uses

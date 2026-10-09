@@ -130,8 +130,11 @@ for try await chunk in response.body {
 ### Generate database types
 
 `supabase gen types --lang swift` writes `@Table` structs for your schema. It runs the
-`supabase-typegen` executable, which ships with each supabase-swift release. Install the build
-that matches the supabase-swift version your project uses:
+`supabase-typegen` executable, which ships with each supabase-swift release. The CLI reads your
+supabase-swift version from `Package.resolved` and downloads the matching build itself. You need
+to install it by hand only when the CLI cannot do that, for example without network access. It then
+uses the `supabase-typegen` it finds on your `PATH`. Install the build that matches the
+supabase-swift version your project uses:
 
 ```bash
 VERSION=2.55.1 # your supabase-swift version
