@@ -241,8 +241,8 @@ struct EmitterTests {
       ]
       object["types"] = [
         [
-          "id": 1, "schema": "public", "name": "status", "enums": ["pending", "in_progress", "done"],
-          "type_relation_id": NSNull(),
+          "id": 1, "schema": "public", "name": "status",
+          "enums": ["pending", "in_progress", "done"], "type_relation_id": NSNull(),
         ]
       ]
     }

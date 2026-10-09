@@ -22,7 +22,7 @@ enum Naming {
   static let columnsMembers: Set = ["init", "self"]
 
   /// Case names an enum does not take. They compile, but `Status.init` and `Status.self` name the
-  /// initializer and the metatype, and `rawValue` reads as the property every case has.
+  /// initializer and the type itself, and `rawValue` reads as the property every case has.
   static let enumMembers: Set = ["rawValue", "init", "self"]
 
   /// The type names the generated file or `@Table`'s expansion refer to unqualified. A generated
