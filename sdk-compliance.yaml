@@ -151,6 +151,9 @@ supporting_symbols:
   - StorageError.code
   - StorageError.serverStatusCode
   - StorageError.isNotFound
+  # A standalone StorageClient's per-request token provider, the Storage twin of
+  # database.configuration.access_token; the matrix has no storage id for it yet.
+  - StorageClientConfiguration.accessToken
   - StorageError.init
   - StorageError.kind
   - StorageError.message

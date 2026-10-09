@@ -1,5 +1,6 @@
 import Foundation
 import HTTPTypes
+import IssueReporting
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -40,8 +41,14 @@ struct StorageAPI: Sendable {
   ///   headers, and transport.
   init(configuration: StorageClientConfiguration) {
     var configuration = configuration
-    if HTTPFields(configuration.headers)[.xClientInfo] == nil {
+    let headers = HTTPFields(configuration.headers)
+    if headers[.xClientInfo] == nil {
       configuration.headers["X-Client-Info"] = "storage-swift/\(version)"
+    }
+    if configuration.accessToken != nil, headers[.authorization] != nil {
+      reportIssue(
+        "StorageClientConfiguration.headers carries Authorization, which wins over every token "
+          + "accessToken resolves; drop the header to let accessToken take effect.")
     }
 
     // if legacy uri is used, replace with new storage host (disables request buffering to allow > 50GB uploads)
@@ -101,10 +108,14 @@ struct StorageAPI: Sendable {
     var policy = configuration.retryEnabled ? RetryPolicy.default : .disabled
     if request.replayable { policy.retryableMethods.insert(request.head.method) }
     let retry = RetryRequestInterceptor(policy: policy, clock: configuration.clock)
+    let accessToken = configuration.accessToken.map { AccessTokenMiddleware(getAccessToken: $0) }
     let http = HTTPClient(
       configuration: configuration.http,
       retrying: retry,
-      appending: [LoggerInterceptor(logger: configuration.logger)])
+      appending: (accessToken.map { [$0] } ?? []) + [
+        LoggerInterceptor(logger: configuration.logger)
+      ]
+    )
 
     var head = request.head
     head.headerFields = HTTPFields(configuration.headers).merging(with: head.headerFields)
