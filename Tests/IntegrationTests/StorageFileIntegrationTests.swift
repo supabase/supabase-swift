@@ -165,7 +165,7 @@ final class StorageFileIntegrationTests {
     try await storage.from(bucketName).upload(
       path: uploadPath,
       data: file,
-      options: FileOptions(
+      options: UploadOptions(
         contentType: "image/jpeg"
       )
     )
@@ -182,7 +182,7 @@ final class StorageFileIntegrationTests {
       try await storage.from(bucketName).upload(
         path: uploadPath,
         data: file,
-        options: FileOptions(
+        options: UploadOptions(
           contentType: "image/jpeg"
         )
       )
@@ -364,7 +364,7 @@ final class StorageFileIntegrationTests {
     try await storage.from(bucketName).upload(
       path: uploadPath,
       data: file,
-      options: FileOptions(
+      options: UploadOptions(
         metadata: ["value": 42]
       )
     )
@@ -390,8 +390,8 @@ final class StorageFileIntegrationTests {
     try await storage.from(bucketName).upload(
       path: uploadPath,
       data: file,
-      options: FileOptions(
-        cacheControl: "14400"
+      options: UploadOptions(
+        cacheControl: .maxAge(.seconds(14400))
       )
     )
 
