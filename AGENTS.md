@@ -461,9 +461,10 @@ Integration tests require a local Supabase instance (see "Running a Local Supaba
 `swift test` flags below match CI's macOS job: swift-snapshot-testing needs Swift Testing's
 cross-import overlays, which SwiftPM does not turn on by itself, and those overlays need
 macOS 14. `--eager` starts every service before `start` returns, as CI does. On Linux, drop the
-experimental-stack variable and every flag:
+experimental-stack variable and every flag, but keep `INTEGRATION_TESTS`:
 
 ```bash
+export INTEGRATION_TESTS=1  # the suites skip themselves without it
 export SUPABASE_EXPERIMENTAL_STACK=1
 SWIFT_FLAGS="--triple arm64-apple-macosx14.0 -Xswiftc -Xfrontend -Xswiftc -enable-cross-import-overlays"
 cd Tests/IntegrationTests

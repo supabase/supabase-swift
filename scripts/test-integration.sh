@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# The integration suites skip themselves unless this is set.
+export INTEGRATION_TESTS=1
+
 # Mirrors the integration-tests job in .github/workflows/ci.yml. On macOS it uses the CLI's
 # experimental native stack (no Docker); Linux has no native stack and falls back to Docker.
 START_FLAGS=()
