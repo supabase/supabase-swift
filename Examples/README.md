@@ -187,9 +187,15 @@ The Examples app is configured to use a local Supabase instance from the `/supab
 # Navigate to the root directory
 cd /path/to/supabase-swift
 
-# Start Supabase local development
-supabase start
+# Start Supabase local development with the CLI's experimental native stack (macOS, no Docker)
+export SUPABASE_EXPERIMENTAL_STACK=1
+supabase start --runtime native
 ```
+
+The native stack starts much faster than Docker, and CI uses it too. On Linux, run plain
+`supabase start`, which uses Docker. If `start` fails because port 54322 is already in use, an
+older Docker stack still holds the ports. Stop it with the experimental variable unset:
+`env -u SUPABASE_EXPERIMENTAL_STACK supabase stop`.
 
 This will start the local Supabase services:
 - **API**: http://127.0.0.1:54321
@@ -520,7 +526,7 @@ supabase status
 
 # Restart services
 supabase stop
-supabase start
+SUPABASE_EXPERIMENTAL_STACK=1 supabase start --runtime native
 ```
 
 ### Connection errors

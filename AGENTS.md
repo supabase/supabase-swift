@@ -432,19 +432,49 @@ Dropping support for older versions is NOT considered a breaking change and happ
 
 Dependencies are managed in `Package.swift`. Use version ranges when possible to allow flexibility.
 
-### Working with Integration Tests
+### Running a Local Supabase Stack
 
-Integration tests require a local Supabase instance:
+On macOS, always start local Supabase with the CLI's experimental native stack. It runs every
+service as a native process, with no Docker, so it starts much faster. CI's macOS integration job
+uses the same stack, so a local run matches CI. Use it for local development, the integration
+tests, and the `Examples` app:
 
 ```bash
+export SUPABASE_EXPERIMENTAL_STACK=1
+supabase start --runtime native
+```
+
+- `supabase start` applies the migrations and the seed. You do not need `supabase db reset`
+  after it.
+- An older Docker stack (one started without `SUPABASE_EXPERIMENTAL_STACK`) holds the same
+  ports, so the native stack fails with "Public port 54322 ... is already in use". Stop the
+  Docker stack with the variable unset, from the directory that started it:
+
+  ```bash
+  env -u SUPABASE_EXPERIMENTAL_STACK supabase stop
+  ```
+- Linux has no native stack. There, run plain `supabase start`, which uses Docker.
+
+### Working with Integration Tests
+
+Integration tests require a local Supabase instance (see "Running a Local Supabase Stack"). The
+`swift test` flags below match CI's macOS job: swift-snapshot-testing needs Swift Testing's
+cross-import overlays, which SwiftPM does not turn on by itself, and those overlays need
+macOS 14. `--eager` starts every service before `start` returns, as CI does. On Linux, drop the
+experimental-stack variable and every flag:
+
+```bash
+export SUPABASE_EXPERIMENTAL_STACK=1
+SWIFT_FLAGS="--triple arm64-apple-macosx14.0 -Xswiftc -Xfrontend -Xswiftc -enable-cross-import-overlays"
 cd Tests/IntegrationTests
-supabase start
-supabase db reset
+supabase start --runtime native --eager
 cd ../..
-swift test --filter IntegrationTests --skip verifyOTPForSecureEmailChange
+swift test $SWIFT_FLAGS --filter IntegrationTests --skip verifyOTPForSecureEmailChange --no-parallel
 cd Tests/IntegrationTests
 supabase stop
 ```
+
+`./scripts/test-integration.sh` runs these steps for you.
 
 `verifyOTPForSecureEmailChange` needs `auth.email.enable_confirmations = true` to reach GoTrue's
 secure-email-change "single confirmation" response, which every other integration test relies on
@@ -453,9 +483,9 @@ second, minimal project instead of forking that setting for the whole suite:
 
 ```bash
 cd Tests/IntegrationTests/supabase-secure-email-change
-supabase start
+supabase start --runtime native --eager
 cd ../../..
-swift test --filter verifyOTPForSecureEmailChange
+swift test $SWIFT_FLAGS --filter verifyOTPForSecureEmailChange --no-parallel
 cd Tests/IntegrationTests/supabase-secure-email-change
 supabase stop
 ```
