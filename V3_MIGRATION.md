@@ -3893,3 +3893,24 @@ spells a typed-API type also fails until you add the prefix:
 | `PublicSchema` | `_PublicSchema` |
 
 Regenerate the output of `supabase-typegen`: the generated file uses the new names.
+
+## `SupabaseStorageClient` is now `StorageClient`, and `StorageFileApi` is now `StorageBucket`
+
+The Storage client is `StorageClient`, matching `FunctionsClient` and `PostgrestClient`. The
+value `from(_:)` returns is `StorageBucket`: it is a handle on one bucket, and `Api` was neither
+the Swift spelling of the acronym nor a noun. `StorageBucket.id` is public, so a stored handle can
+say which bucket it points at. `from(_:)` and `StorageClientConfiguration` keep their names.
+
+This is a compile error wherever either type name is spelled out. `supabase.storage.from("x")`
+call chains that never name the type are unaffected.
+
+```swift
+// Before
+let storage = SupabaseStorageClient(configuration: configuration)
+let avatars: StorageFileApi = storage.from("avatars")
+
+// After
+let storage = StorageClient(configuration: configuration)
+let avatars: StorageBucket = storage.from("avatars")
+print(avatars.id) // "avatars"
+```

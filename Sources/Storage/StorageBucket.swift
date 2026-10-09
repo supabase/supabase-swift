@@ -38,7 +38,7 @@ enum FileUpload {
 
 /// Supabase Storage File API for file operations within a specific bucket.
 ///
-/// Obtain a ``StorageFileApi`` by calling ``SupabaseStorageClient/from(_:)`` with the bucket
+/// Obtain a ``StorageBucket`` by calling ``StorageClient/from(_:)`` with the bucket
 /// identifier you want to operate on:
 ///
 /// ```swift
@@ -93,24 +93,24 @@ enum FileUpload {
 /// ### Configuration
 ///
 /// - ``configuration``
-public struct StorageFileApi: Sendable {
+public struct StorageBucket: Sendable {
   /// The identifier of the bucket this instance operates on.
-  let bucketId: String
+  public let id: String
 
   let api: StorageApi
 
   /// The configuration used to initialize this client instance.
   public var configuration: StorageClientConfiguration { api.configuration }
 
-  init(bucketId: String, api: StorageApi) {
-    self.bucketId = bucketId
+  init(id: String, api: StorageApi) {
+    self.id = id
     self.api = api
   }
 
-  /// Returns a new ``StorageFileApi`` with an additional HTTP header merged into the underlying
+  /// Returns a new ``StorageBucket`` with an additional HTTP header merged into the underlying
   /// configuration, included in all requests made by the returned instance.
   ///
-  /// Because ``StorageFileApi`` is an immutable value type, this method does not mutate `self` —
+  /// Because ``StorageBucket`` is an immutable value type, this method does not mutate `self` —
   /// it returns a new instance. Discarding the return value is a no-op, so always use the result:
   ///
   /// ```swift
@@ -122,9 +122,9 @@ public struct StorageFileApi: Sendable {
   /// - Parameters:
   ///   - value: The value of the header field.
   ///   - key: The name of the header field. The key is case-insensitively stored as lowercase.
-  /// - Returns: A new ``StorageFileApi`` with the header merged into the configuration's headers.
+  /// - Returns: A new ``StorageBucket`` with the header merged into the configuration's headers.
   public func setHeader(_ value: String, forKey key: String) -> Self {
-    StorageFileApi(bucketId: bucketId, api: api.setHeader(value, forKey: key))
+    StorageBucket(id: id, api: api.setHeader(value, forKey: key))
   }
 
   private struct MoveResponse: Decodable {
@@ -318,7 +318,7 @@ public struct StorageFileApi: Sendable {
       ),
       body: api.configuration.encoder.encode(
         [
-          "bucketId": bucketId,
+          "bucketId": id,
           "sourceKey": _removeEmptyFolders(source),
           "destinationKey": _removeEmptyFolders(destination),
           "destinationBucket": options?.destinationBucket,
@@ -361,7 +361,7 @@ public struct StorageFileApi: Sendable {
       ),
       body: api.configuration.encoder.encode(
         [
-          "bucketId": bucketId,
+          "bucketId": id,
           "sourceKey": _removeEmptyFolders(source),
           "destinationKey": _removeEmptyFolders(destination),
           "destinationBucket": options?.destinationBucket,
@@ -487,7 +487,7 @@ public struct StorageFileApi: Sendable {
     let response = try await api.execute(
       HTTPRequest(
         method: .post,
-        url: api.configuration.url.appendingPathComponent("object/sign/\(bucketId)")
+        url: api.configuration.url.appendingPathComponent("object/sign/\(id)")
       ),
       body: encoder.encode(
         Params(expiresIn: expiresIn, paths: paths.map(_removeEmptyFolders))
@@ -613,7 +613,7 @@ public struct StorageFileApi: Sendable {
     try await api.execute(
       HTTPRequest(
         method: .delete,
-        url: api.configuration.url.appendingPathComponent("object/\(bucketId)")
+        url: api.configuration.url.appendingPathComponent("object/\(id)")
       ), body: api.configuration.encoder.encode(["prefixes": paths.map(_removeEmptyFolders)])
     )
     .decoded(decoder: api.configuration.decoder)
@@ -650,7 +650,7 @@ public struct StorageFileApi: Sendable {
     return try await api.execute(
       HTTPRequest(
         method: .post,
-        url: api.configuration.url.appendingPathComponent("object/list/\(bucketId)")
+        url: api.configuration.url.appendingPathComponent("object/list/\(id)")
       ), body: encoder.encode(options), replayable: true
     )
     .decoded(decoder: api.configuration.decoder)
@@ -892,7 +892,7 @@ public struct StorageFileApi: Sendable {
       HTTPRequest(
         method: .post,
         url: api.configuration.url.appendingPathComponent(
-          "object/upload/sign/\(bucketId)/\(cleanPath)"),
+          "object/upload/sign/\(id)/\(cleanPath)"),
         headerFields: headers
       )
     )
@@ -1003,7 +1003,7 @@ public struct StorageFileApi: Sendable {
       HTTPRequest(
         method: .put,
         url: api.configuration.url
-          .appendingPathComponent("object/upload/sign/\(bucketId)/\(cleanPath)"),
+          .appendingPathComponent("object/upload/sign/\(id)/\(cleanPath)"),
         query: [URLQueryItem(name: "token", value: token)],
         headerFields: headers
       ),
@@ -1018,7 +1018,7 @@ public struct StorageFileApi: Sendable {
   }
 
   private func _getFinalPath(_ path: String) -> String {
-    "\(bucketId)/\(_removeEmptyFolders(path))"
+    "\(id)/\(_removeEmptyFolders(path))"
   }
 
   private func _removeEmptyFolders(_ path: String) -> String {

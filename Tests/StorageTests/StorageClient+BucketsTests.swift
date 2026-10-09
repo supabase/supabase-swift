@@ -10,7 +10,7 @@ import Testing
 #endif
 
 /// Shared serialization boundary for the Mocker-backed Storage test suites (this one and
-/// ``StorageFileAPITests``): Mocker's mock registry is process-global, so these suites can't just
+/// ``StorageBucketTests``): Mocker's mock registry is process-global, so these suites can't just
 /// serialize their own tests internally, they must never run concurrently *with each other* either
 /// -- otherwise one suite's `Mocker.removeAll()` (see `makeSUT()`) can wipe out mocks the other
 /// suite just registered. `.serialized` on a suite applies recursively to its nested suites, so
@@ -24,7 +24,7 @@ enum StorageMockerTests {}
 
 extension StorageMockerTests {
   @Suite(.mockerSerialized)
-  struct StorageBucketAPITests {
+  struct StorageClientBucketsTests {
     let url = URL(string: "http://localhost:54321/storage/v1")!
 
     init() {
@@ -33,14 +33,14 @@ extension StorageMockerTests {
       ]
     }
 
-    private func makeSUT() -> SupabaseStorageClient {
+    private func makeSUT() -> StorageClient {
       Mocker.removeAll()
 
       let configuration = URLSessionConfiguration.ephemeral
       configuration.protocolClasses = [MockingURLProtocol.self]
       let session = URLSession(configuration: configuration)
 
-      return SupabaseStorageClient(
+      return StorageClient(
         configuration: StorageClientConfiguration(
           url: url,
           headers: [
@@ -101,7 +101,7 @@ extension StorageMockerTests {
       ]
     )
     func urlConstructionWithNewHostname(input: String, expected: String, description: String) {
-      let storage = SupabaseStorageClient(
+      let storage = StorageClient(
         configuration: StorageClientConfiguration(
           url: URL(string: input)!,
           headers: [:],
@@ -124,7 +124,7 @@ extension StorageMockerTests {
       ]
     )
     func urlConstructionWithoutNewHostname(input: String) {
-      let storage = SupabaseStorageClient(
+      let storage = StorageClient(
         configuration: StorageClientConfiguration(
           url: URL(string: input)!,
           headers: [:],

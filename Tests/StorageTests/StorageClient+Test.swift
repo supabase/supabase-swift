@@ -1,5 +1,5 @@
 //
-//  SupabaseStorageClient+Test.swift
+//  StorageClient+Test.swift
 //
 //
 //  Created by Guilherme Souza on 04/11/23.
@@ -9,13 +9,13 @@ import Foundation
 import Helpers
 import Storage
 
-extension SupabaseStorageClient {
+extension StorageClient {
   static func test(
     supabaseURL: String,
     apiKey: String,
     http: HTTPClientConfiguration = .init()
-  ) -> SupabaseStorageClient {
-    SupabaseStorageClient(
+  ) -> StorageClient {
+    StorageClient(
       configuration: StorageClientConfiguration(
         url: URL(string: supabaseURL)!,
         headers: [

@@ -124,7 +124,7 @@ public final class SupabaseClient: Sendable {
   }
 
   /// The Storage client for uploading, downloading, and managing files.
-  public var storage: SupabaseStorageClient {
+  public var storage: StorageClient {
     var configuration = StorageClientConfiguration(
       url: storageURL,
       headers: dataHeaders.dictionary,
@@ -134,7 +134,7 @@ public final class SupabaseClient: Sendable {
       retryEnabled: options.storage.retryEnabled
     )
     configuration.clock = clock
-    return SupabaseStorageClient(configuration: configuration)
+    return StorageClient(configuration: configuration)
   }
 
   /// The Realtime client for subscribing to database changes and broadcasting presence events.
