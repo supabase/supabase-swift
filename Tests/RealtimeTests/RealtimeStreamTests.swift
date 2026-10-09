@@ -14,11 +14,14 @@ import Testing
 
 @Suite(.timeLimit(.minutes(1)))
 struct RealtimeStreamTests {
-  let mirror = EngineMirror()
+  let engine = RealtimeEngine(
+    configuration: RealtimeEngineConfiguration(url: URL(string: "ws://fake")!),
+    transport: FakeRealtimeServer().transport)
   let topic = "realtime:room"
 
   init() {
-    mirror.install(topic, owner: testOwner.id)
+    engine.withState { [topic] in $0.install(topic, owner: testOwner, config: RealtimeJoinConfig())
+    }
   }
 
   private func message(_ event: String) -> ChannelInbound {
@@ -40,9 +43,9 @@ struct RealtimeStreamTests {
 
   @Test
   func aStreamRegisteredBeforeAYieldReceivesIt() async {
-    let stream = RealtimeStream(mirror.inbound(topic), transform: Self.eventName)
-    mirror.yield(message("a"), to: topic)
-    mirror.finishInbound(topic)
+    let stream = RealtimeStream(engine.inbound(topic), transform: Self.eventName)
+    engine.yield(message("a"), to: topic)
+    engine.finishInbound(topic)
 
     var received: [String] = []
     for await event in stream { received.append(event) }
@@ -52,16 +55,16 @@ struct RealtimeStreamTests {
   @Test
   func twoStreamsEachReceiveAMessageOnce() async {
     let (first, firstTask) = events(
-      RealtimeStream(mirror.inbound(topic), transform: Self.eventName))
+      RealtimeStream(engine.inbound(topic), transform: Self.eventName))
     let (second, secondTask) = events(
-      RealtimeStream(mirror.inbound(topic), transform: Self.eventName))
+      RealtimeStream(engine.inbound(topic), transform: Self.eventName))
     defer {
       firstTask.cancel()
       secondTask.cancel()
     }
-    #expect(mirror.listenerCount(topic) == 2)
+    #expect(engine.listenerCount(topic) == 2)
 
-    mirror.yield(message("a"), to: topic)
+    engine.yield(message("a"), to: topic)
 
     #expect(await waitUntil { first.value == ["a"] && second.value == ["a"] })
     try? await Task.sleep(nanoseconds: 50_000_000)
@@ -71,34 +74,34 @@ struct RealtimeStreamTests {
 
   @Test
   func cancellingIterationRemovesTheListener() async {
-    let (_, task) = events(RealtimeStream(mirror.inbound(topic), transform: Self.eventName))
-    #expect(mirror.listenerCount(topic) == 1)
+    let (_, task) = events(RealtimeStream(engine.inbound(topic), transform: Self.eventName))
+    #expect(engine.listenerCount(topic) == 1)
 
     task.cancel()
 
-    #expect(await waitUntil { mirror.listenerCount(topic) == 0 })
+    #expect(await waitUntil { engine.listenerCount(topic) == 0 })
   }
 
   @Test
   func finishingTheTopicEndsTheStreamAndRemovesItsListeners() async {
-    let stream = mirror.inbound(topic)
+    let stream = engine.inbound(topic)
 
-    mirror.finishInbound(topic)
+    engine.finishInbound(topic)
     for await _ in stream {}
 
-    #expect(mirror.listenerCount(topic) == 0)
+    #expect(engine.listenerCount(topic) == 0)
   }
 
   @Test
   func aNilTransformSkipsTheElement() async {
-    let stream = RealtimeStream(mirror.inbound(topic)) { inbound -> String? in
+    let stream = RealtimeStream(engine.inbound(topic)) { inbound -> String? in
       guard let name = Self.eventName(inbound), name != "skip" else { return nil }
       return name
     }
-    mirror.yield(message("skip"), to: topic)
-    mirror.yield(.resubscribed, to: topic)
-    mirror.yield(message("keep"), to: topic)
-    mirror.finishInbound(topic)
+    engine.yield(message("skip"), to: topic)
+    engine.yield(.resubscribed, to: topic)
+    engine.yield(message("keep"), to: topic)
+    engine.finishInbound(topic)
 
     var received: [String] = []
     for await event in stream { received.append(event) }
@@ -115,5 +118,15 @@ struct RealtimeStreamTests {
     var received: [Int] = []
     for await value in RealtimeStream(base) { received.append(value) }
     #expect(received == [1, 2])
+  }
+}
+
+extension RealtimeEngine {
+  func yield(_ value: ChannelInbound, to topic: String) {
+    withState { $0.yield(value, to: topic) }
+  }
+
+  func finishInbound(_ topic: String) {
+    withState { $0.finishInbound(topic) }
   }
 }

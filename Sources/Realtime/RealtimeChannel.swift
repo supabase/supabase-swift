@@ -75,12 +75,12 @@ public final class RealtimeChannel: Sendable {
 
   /// The subscription status, read without waiting.
   public var status: RealtimeChannelStatus {
-    engine.mirror.channel(wireTopic, owner: owner.id)
+    engine.channelStatus(wireTopic, owner: owner)
   }
 
   /// The subscription status, starting with the current one. Only the newest status is buffered.
   public var statusChanges: RealtimeStream<RealtimeChannelStatus> {
-    RealtimeStream(engine.mirror.channelStatuses(wireTopic, owner: owner))
+    RealtimeStream(engine.channelStatuses(wireTopic, owner: owner))
   }
 
   /// Rejoins and `system` messages from the server.
@@ -128,8 +128,8 @@ public final class RealtimeChannel: Sendable {
     try await engine.subscribe(wireTopic, owner: owner)
     // A stream made while the join was in flight may have missed both the join and its own
     // update, since the status still read as unsubscribed.
-    await engine.updateBindings(wireTopic, owner: owner, bindings.value)
-    if wantsPresence.value { await engine.enablePresence(wireTopic, owner: owner) }
+    engine.updateBindings(wireTopic, owner: owner, bindings.value)
+    if wantsPresence.value { engine.enablePresence(wireTopic, owner: owner) }
     guard !bindings.value.isEmpty, !configuration.postgresChanges.waitForSubscription else {
       return
     }
@@ -188,7 +188,7 @@ public final class RealtimeChannel: Sendable {
     case .unsubscribed:
       break
     case .subscribing, .subscribed, .resubscribing, .unsubscribing, .failed:
-      Task { [engine, wireTopic, owner] in await engine.enablePresence(wireTopic, owner: owner) }
+      engine.enablePresence(wireTopic, owner: owner)
     }
   }
 
@@ -390,15 +390,13 @@ public final class RealtimeChannel: Sendable {
     case .unsubscribed:
       break
     case .subscribing, .subscribed, .resubscribing, .unsubscribing, .failed:
-      Task { [engine, wireTopic, owner] in
-        await engine.updateBindings(wireTopic, owner: owner, all)
-      }
+      engine.updateBindings(wireTopic, owner: owner, all)
     }
     return RealtimeStream(inbound) { [engine, wireTopic, logger = engine.logger] inbound in
       guard case .message(let message) = inbound, message.event == "postgres_changes",
         let ids = message.payload["ids"]?.arrayValue?.compactMap(\.intValue)
       else { return nil }
-      let serverIDs = engine.mirror.postgresChangeIDs(wireTopic)
+      let serverIDs = engine.postgresChangeIDs(wireTopic)
       guard index < serverIDs.count, ids.contains(serverIDs[index]) else { return nil }
       let data = message.payload["data"]?.objectValue ?? [:]
       do {

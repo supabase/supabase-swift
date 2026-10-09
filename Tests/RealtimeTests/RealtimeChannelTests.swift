@@ -341,7 +341,7 @@ struct RealtimeChannelTests {
 
     let bindings = joins.last?.payload["config"]?.objectValue?["postgres_changes"]?.arrayValue
     #expect(bindings?.count == 2)
-    let ids = engine.mirror.postgresChangeIDs(wireTopic)
+    let ids = engine.postgresChangeIDs(wireTopic)
     try #require(ids.count == 2)
     server.pushPostgresChanges(topic: wireTopic, ids: [ids[1]], data: postgresData("DELETE", id: 5))
     server.pushPostgresChanges(topic: wireTopic, ids: [ids[0]], data: postgresData("INSERT", id: 6))
@@ -362,7 +362,7 @@ struct RealtimeChannelTests {
     await waitUntil { channel.status.isSubscribed }
     pushPostgresReady()
     try await subscribing.value
-    #expect(engine.mirror.postgresChangeIDs(wireTopic) == [1, 2])
+    #expect(engine.postgresChangeIDs(wireTopic) == [1, 2])
 
     server.pushPostgresChanges(topic: wireTopic, ids: [2], data: postgresData("DELETE", id: 7))
     server.pushPostgresChanges(topic: wireTopic, ids: [1], data: postgresData("INSERT", id: 8))
@@ -429,7 +429,7 @@ struct RealtimeChannelTests {
     #expect(channel.status.isSubscribed)
 
     server.pushPostgresChanges(
-      topic: wireTopic, ids: engine.mirror.postgresChangeIDs(wireTopic),
+      topic: wireTopic, ids: engine.postgresChangeIDs(wireTopic),
       data: postgresData("INSERT", id: 4))
     let change = await changes.next()
     #expect(change?.record?["id"] == 4)

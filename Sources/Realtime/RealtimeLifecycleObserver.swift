@@ -31,7 +31,7 @@
       #endif
       observers = [
         NotificationCenter.default.addObserver(forName: name, object: nil, queue: nil) { _ in
-          Task { await engine.wake() }
+          engine.wake()
         }
       ]
     }
