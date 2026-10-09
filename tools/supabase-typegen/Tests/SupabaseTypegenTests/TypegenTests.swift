@@ -103,6 +103,7 @@ struct TypegenTests {
     (["--bogus=1"], "unknown option '--bogus'"),
     (["--schema"], "option '--schema' needs a value"),
     (["--output="], "option '--output' needs a value"),
+    (["--output", "--schema", "public"], "option '--output' needs a value"),
     (
       ["--access-control", "private"],
       "option '--access-control' expects public or internal, got 'private'"

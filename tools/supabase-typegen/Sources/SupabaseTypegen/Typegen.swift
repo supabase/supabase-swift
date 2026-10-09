@@ -66,9 +66,10 @@ struct Options: Equatable {
       guard ["--schema", "--output", "--access-control"].contains(name) else {
         throw UsageError(message: "unknown option '\(name)'")
       }
-      guard let value = parts.count == 2 ? String(parts[1]) : remaining.popFirst(),
-        !value.isEmpty
-      else {
+      // The next argument is an option of its own, not this one's value: `--output --schema public`
+      // must not write to a file named `--schema`.
+      let next = remaining.first?.hasPrefix("--") == false ? remaining.popFirst() : nil
+      guard let value = parts.count == 2 ? String(parts[1]) : next, !value.isEmpty else {
         throw UsageError(message: "option '\(name)' needs a value")
       }
       switch name {
