@@ -30,7 +30,7 @@ public struct FunctionMacro: ExtensionMacro {
     }
     // Reuses `@Table`'s argument reader: `@Function` takes the same `name` and `schema:` pair.
     let arguments = TableMacro.arguments(from: node)
-    var schema = "PostgREST.PublicSchema"
+    var schema = "PostgREST._PublicSchema"
     if let expression = arguments.schema {
       guard let written = TableMacro.schemaType(of: expression) else {
         context.error("schema: needs a schema type, as in `PrivateSchema.self`", at: expression)
@@ -52,7 +52,7 @@ public struct FunctionMacro: ExtensionMacro {
     }
 
     let clause = inheritanceClause(
-      wanted: ["Encodable", "Sendable", "PostgrestFunction"], missing: protocols)
+      wanted: ["Encodable", "Sendable", "_PostgrestFunction"], missing: protocols)
     return [
       try ExtensionDeclSyntax(
         """

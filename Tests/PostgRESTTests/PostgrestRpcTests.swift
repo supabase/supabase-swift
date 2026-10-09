@@ -9,14 +9,14 @@ import Foundation
 import IssueReporting
 import Testing
 
-@testable import PostgREST
+@_spi(Experimental) @testable import PostgREST
 
-/// The typed `rpc(_:)` over hand-written `PostgrestFunction` conformances, so this target needs
+/// The typed `rpc(_:)` over hand-written `_PostgrestFunction` conformances, so this target needs
 /// no macro import. `from(SearchTodos.self)` does not compile — `SearchTodos` is not a
-/// `PostgrestRelation` — which Swift cannot assert at runtime; everything below is the half it can.
+/// `_PostgrestRelation` — which Swift cannot assert at runtime; everything below is the half it can.
 @Suite
 struct PostgrestRpcTests {
-  struct Todo: PostgrestRelation {
+  struct Todo: _PostgrestRelation {
     static let relationName = "todos"
     static let selectString = "*"
     var id: Int
@@ -28,13 +28,13 @@ struct PostgrestRpcTests {
     }
 
     struct Columns: Sendable {
-      let id = PostgrestColumn<Todo, Int>("id")
-      let isDone = PostgrestColumn<Todo, Bool>("is_done")
+      let id = _PostgrestColumn<Todo, Int>("id")
+      let isDone = _PostgrestColumn<Todo, Bool>("is_done")
     }
     static let columns = Columns()
   }
 
-  struct SearchTodos: PostgrestFunction {
+  struct SearchTodos: _PostgrestFunction {
     typealias Result = [Todo]
     static let functionName = "search_todos"
     var keyword: String
@@ -42,29 +42,29 @@ struct PostgrestRpcTests {
     var tags: [String]
   }
 
-  struct CountTodos: PostgrestFunction {
+  struct CountTodos: _PostgrestFunction {
     typealias Result = Int
     static let functionName = "count_todos"
     var done: Bool
   }
 
   /// No `Result`, so it defaults to `Void`; no arguments, so it encodes as `{}`.
-  struct Ping: PostgrestFunction {
+  struct Ping: _PostgrestFunction {
     static let functionName = "ping"
   }
 
-  enum PrivateSchema: PostgrestSchema {
+  enum PrivateSchema: _PostgrestSchema {
     static let name = "private"
   }
 
-  struct Audit: PostgrestFunction {
+  struct Audit: _PostgrestFunction {
     typealias Schema = PrivateSchema
     typealias Result = Int
     static let functionName = "audit"
   }
 
   /// A conformance that does not encode as an object, which `@Function` can never produce.
-  struct Pair: PostgrestFunction {
+  struct Pair: _PostgrestFunction {
     typealias Result = Int
     static let functionName = "pair"
     func encode(to encoder: any Encoder) throws {

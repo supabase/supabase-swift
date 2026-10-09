@@ -1,5 +1,5 @@
 //
-//  PostgrestFunction.swift
+//  _PostgrestFunction.swift
 //  PostgREST
 //
 //  Created by Guilherme Souza on 07/10/26.
@@ -26,12 +26,12 @@ import IssueReporting
 /// ```
 ///
 /// > Warning: Part of the typed query API, which is alpha. Its shape may change in a minor release.
-public protocol PostgrestFunction: Encodable, Sendable {
+public protocol _PostgrestFunction: Encodable, Sendable {
   /// The function's name as PostgREST addresses it, without the `rpc/` prefix.
   static var functionName: String { get }
 
-  /// The schema the function lives in. Defaults to ``PublicSchema``.
-  associatedtype Schema: PostgrestSchema = PublicSchema
+  /// The schema the function lives in. Defaults to ``_PublicSchema``.
+  associatedtype Schema: _PostgrestSchema = _PublicSchema
 
   /// What the function returns, decoded from the response. Defaults to `Void` for a function that
   /// returns nothing. Spell a set-returning function as an array of a relation, `[Todo]`, to filter
@@ -39,17 +39,17 @@ public protocol PostgrestFunction: Encodable, Sendable {
   associatedtype Result: Sendable = Void
 }
 
-/// A call to a ``PostgrestFunction``, before it is sent.
+/// A call to a ``_PostgrestFunction``, before it is sent.
 ///
-/// Built by ``PostgrestClient/rpc(_:)``. A set-returning function flows into ``PostgrestQuery``
+/// Built by ``PostgrestClient/rpc(_:)``. A set-returning function flows into ``_PostgrestQuery``
 /// through ``where(_:)``, ``order(_:)`` or ``rows()``, which is where filters, ordering and paging
 /// live; any other result executes directly.
 ///
 /// > Warning: Part of the typed query API, which is alpha. Its shape may change in a minor release.
-public struct PostgrestFunctionQuery<F: PostgrestFunction>: Sendable {
+public struct _PostgrestFunctionQuery<F: _PostgrestFunction>: Sendable {
   let client: PostgrestClient
 
-  public var request: PostgrestRequest
+  public var request: _PostgrestRequest
 
   /// Sends the call as a `GET`, with the arguments in the query string rather than the body.
   ///
@@ -79,7 +79,7 @@ public struct PostgrestFunctionQuery<F: PostgrestFunction>: Sendable {
   }
 }
 
-extension PostgrestFunctionQuery where F.Result: Decodable {
+extension _PostgrestFunctionQuery where F.Result: Decodable {
   /// Sends the call and decodes its result.
   @discardableResult
   public func execute() async throws -> PostgrestResponse<F.Result> {
@@ -89,7 +89,7 @@ extension PostgrestFunctionQuery where F.Result: Decodable {
   }
 }
 
-extension PostgrestFunctionQuery where F.Result == Void {
+extension _PostgrestFunctionQuery where F.Result == Void {
   /// Sends the call to a function that returns nothing.
   @discardableResult
   public func execute() async throws -> PostgrestResponse<Void> {
@@ -97,24 +97,25 @@ extension PostgrestFunctionQuery where F.Result == Void {
   }
 }
 
-extension PostgrestFunctionQuery {
+extension _PostgrestFunctionQuery {
   /// The rows of a set-returning function as a query, so they can be filtered, ordered, paged
   /// and counted like a relation's.
-  public func rows<Row: PostgrestRelation>() -> PostgrestQuery<Row, [Row]> where F.Result == [Row] {
-    PostgrestQuery(client: client, request: request)
+  public func rows<Row: _PostgrestRelation>() -> _PostgrestQuery<Row, [Row]>
+  where F.Result == [Row] {
+    _PostgrestQuery(client: client, request: request)
   }
 
-  /// Keeps only the returned rows matching the filter. See ``PostgrestFilterableRequest/where(_:)``.
-  public func `where`<Row: PostgrestRelation>(
-    _ build: (Row.Columns) -> PostgrestFilter<Row>
-  ) -> PostgrestQuery<Row, [Row]> where F.Result == [Row] {
+  /// Keeps only the returned rows matching the filter. See ``_PostgrestFilterableRequest/where(_:)``.
+  public func `where`<Row: _PostgrestRelation>(
+    _ build: (Row.Columns) -> _PostgrestFilter<Row>
+  ) -> _PostgrestQuery<Row, [Row]> where F.Result == [Row] {
     rows().where(build)
   }
 
-  /// Orders the returned rows, like `PostgrestQuery.order(_:)`.
-  public func order<Row: PostgrestRelation>(
-    _ build: (Row.Columns) -> PostgrestOrdering<Row>
-  ) -> PostgrestQuery<Row, [Row]> where F.Result == [Row] {
+  /// Orders the returned rows, like `_PostgrestQuery.order(_:)`.
+  public func order<Row: _PostgrestRelation>(
+    _ build: (Row.Columns) -> _PostgrestOrdering<Row>
+  ) -> _PostgrestQuery<Row, [Row]> where F.Result == [Row] {
     rows().order(build)
   }
 }
@@ -123,20 +124,36 @@ extension PostgrestClient {
   /// Calls a database function with typed arguments.
   ///
   /// The call is a `POST` to `rpc/<name>` carrying `function` as its JSON body. Chain
-  /// ``PostgrestFunctionQuery/readOnly()`` to send it as a `GET` instead.
+  /// ``_PostgrestFunctionQuery/readOnly()`` to send it as a `GET` instead.
   ///
   /// ```swift
   /// let hits = try await client.rpc(SearchTodos(keyword: "groceries")).execute().value
   /// ```
   ///
+  /// > Warning: The typed query API is experimental. Its shape may change in a minor release.
+  /// > Opt in with `@_spi(Experimental) import Supabase`.
+  ///
   /// - Throws: The encoding error if `function` cannot be encoded.
-  public func rpc<F: PostgrestFunction>(_ function: F) throws -> PostgrestFunctionQuery<F> {
+  @_spi(Experimental)
+  public func rpc<F: _PostgrestFunction>(_ function: F) throws -> _PostgrestFunctionQuery<F> {
     let client =
-      configuration.schema == nil && F.Schema.name != PublicSchema.name
+      configuration.schema == nil && F.Schema.name != _PublicSchema.name
       ? schema(F.Schema.name)
       : self
     var request = client.makeRequest("rpc/\(F.functionName)", method: .post)
     request.body = try PostgrestClient.Configuration.jsonEncoder.encode(function)
-    return PostgrestFunctionQuery(client: client, request: request)
+    return _PostgrestFunctionQuery(client: client, request: request)
+  }
+
+  // See the unavailable `from(_:_:)` twin: it names the missing SPI import.
+  @available(
+    *, unavailable,
+    message:
+      "The typed query API is experimental. Opt in with `@_spi(Experimental) import Supabase`."
+  )
+  public func rpc<F: _PostgrestFunction>(_ function: F, _: Void = ()) throws
+    -> _PostgrestFunctionQuery<F>
+  {
+    fatalError()
   }
 }
