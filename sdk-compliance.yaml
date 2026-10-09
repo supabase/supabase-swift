@@ -1463,15 +1463,19 @@ features:
   storage.file_buckets.create_file_bucket:
     status: implemented
     symbols:
-      - StorageByteCount
-      - StorageByteCount.init
-      - StorageByteCount.intValue
-      - StorageByteCount.kilobytes
-      - StorageByteCount.megabytes
-      - StorageByteCount.gigabytes
-      - StorageByteCount.stringValue
-      - StorageByteCount.encode
+      - ByteCount
+      - ByteCount.init
+      - ByteCount.rawValue
+      - ByteCount.bytes
+      - ByteCount.encode
+      - ByteCount.kilobytes
+      - ByteCount.megabytes
+      - ByteCount.gigabytes
       - BucketOptions.isPublic
+      - BucketOptions
+      - BucketOptions.init
+      - BucketOptions.fileSizeLimit
+      - BucketOptions.allowedMimeTypes
   storage.file_buckets.get_bucket:
     status: implemented
     symbols:
