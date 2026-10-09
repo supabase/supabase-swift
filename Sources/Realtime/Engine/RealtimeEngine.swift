@@ -986,13 +986,20 @@ package actor RealtimeEngine {
       if generation == self.generation { supervisor = nil }
     }
     while !Task.isCancelled, !handles.isShutDown, generation == self.generation {
-      guard case .connecting = connection else { return }
-      await attemptConnection(generation: generation)
-      guard generation == self.generation, case .reconnecting(_, let retryIn, _) = connection
-      else { return }
-      let woke = await sleepUntilWoken(retryIn)
-      guard generation == self.generation else { return }
-      if !woke { applyConnection(.retryTimerFired) }
+      // Read fresh on every pass: a wake while the last attempt was unwinding has already moved
+      // the machine from `.reconnecting` to `.connecting`, and that means attempt again.
+      switch connection {
+      case .connecting:
+        await attemptConnection(generation: generation)
+      case .reconnecting(_, let retryIn, _):
+        // `sleepUntilWoken` registers its wake signal before its first suspension, so this read
+        // and the registration are one actor step: a later wake always finds the signal.
+        let woke = await sleepUntilWoken(retryIn)
+        guard generation == self.generation else { return }
+        if !woke { applyConnection(.retryTimerFired) }
+      case .connected, .disconnected:
+        return
+      }
     }
   }
 

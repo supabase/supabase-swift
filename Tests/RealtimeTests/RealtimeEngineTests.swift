@@ -8,6 +8,7 @@
 import Clocks
 import ConcurrencyExtras
 import Foundation
+import HTTPTypes
 import TestHelpers
 import Testing
 
@@ -141,6 +142,32 @@ struct RealtimeEngineTests {
     try await connecting.value
 
     await expectConnected()
+  }
+
+  /// The socket closes while a frame is still being written, so the supervisor is still
+  /// unwinding its socket tasks when the wake lands. The wake must still reconnect.
+  @Test
+  func aWakeDuringSocketTeardownReconnects() async throws {
+    let transport = StallingTransport()
+    var configuration = RealtimeEngineConfiguration(url: URL(string: "ws://fake")!)
+    configuration.connection = .init(
+      reconnect: .steps([.seconds(60)]), idleDisconnectAfter: .seconds(50))
+    let engine = RealtimeEngine(configuration: configuration, transport: transport, clock: clock)
+    try await engine.connect()
+
+    // The heartbeat is the first frame out; its send stalls until released.
+    await advance(by: configuration.heartbeatInterval)
+    await eventually { transport.isSending }
+    transport.closeConnection()
+    await eventually {
+      if case .reconnecting = await engine.connectionState { true } else { false }
+    }
+
+    await engine.wake()
+    transport.releaseSends()
+
+    await eventually { await engine.connectionState.isConnected }
+    #expect(transport.connectCount == 2)
   }
 
   @Test
@@ -903,6 +930,63 @@ struct RealtimeEngineTests {
 
 /// The one handle the engine-level tests act as.
 let testOwner = ChannelOwner()
+
+/// A transport whose sends wait until ``releaseSends()``, and whose socket closes on demand.
+private final class StallingTransport: WebSocketTransport {
+  private struct State {
+    var connectCount = 0
+    var isSending = false
+    var isReleased = false
+    var stalledSends: [CheckedContinuation<Void, Never>] = []
+    var events: AsyncStream<WebSocketEvent>.Continuation?
+  }
+
+  private struct Connection: WebSocketConnection {
+    let events: AsyncStream<WebSocketEvent>
+    let transport: StallingTransport
+
+    func send(_ frame: WebSocketFrame) async throws {
+      await withCheckedContinuation { continuation in
+        let isReleased = transport.state.withValue {
+          if $0.isReleased { return true }
+          $0.isSending = true
+          $0.stalledSends.append(continuation)
+          return false
+        }
+        if isReleased { continuation.resume() }
+      }
+    }
+
+    func close(code: WebSocketCloseCode, reason: String?) async {}
+  }
+
+  private let state = LockIsolated(State())
+
+  var connectCount: Int { state.connectCount }
+  var isSending: Bool { state.isSending }
+
+  func connect(to url: URL, headerFields: HTTPFields) async throws -> any WebSocketConnection {
+    let (events, continuation) = AsyncStream<WebSocketEvent>.makeStream()
+    state.withValue {
+      $0.connectCount += 1
+      $0.events = continuation
+    }
+    return Connection(events: events, transport: self)
+  }
+
+  func closeConnection() {
+    state.events?.yield(.closed(code: .goingAway, reason: nil))
+  }
+
+  func releaseSends() {
+    let stalled = state.withValue { state in
+      state.isReleased = true
+      defer { state.stalledSends = [] }
+      return state.stalledSends
+    }
+    stalled.forEach { $0.resume() }
+  }
+}
 
 /// A join config with presence on, so a track goes out at once instead of rejoining first.
 let presenceEnabled: RealtimeJoinConfig = {
