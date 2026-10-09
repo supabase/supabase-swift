@@ -192,7 +192,9 @@ jobs:
       - name: "Cache Swift Package"
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: .build
+          path: |
+            .build
+            tools/supabase-typegen/.build
           key: ${{ runner.os }}-spm-${{ matrix.container }}
       - name: "Build Swift Package"
         run: swift build --explicit-target-dependency-import-check error
