@@ -1558,14 +1558,12 @@ features:
       - ResizeMode.cover
       - ResizeMode.contain
       - ResizeMode.fill
-      - ResizeMode.encode
       - ImageFormat
       - ImageFormat.init
       - ImageFormat.rawValue
       - ImageFormat.origin
       - ImageFormat.webp
       - ImageFormat.avif
-      - ImageFormat.encode
   storage.file_buckets.copy_cross_bucket:
     status: implemented
     note: "Not a separate method: the destinationBucket field of the options: DestinationOptions? parameter on StorageBucket.copy."

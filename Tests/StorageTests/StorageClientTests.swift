@@ -48,7 +48,7 @@ struct StorageClientTests {
 
     let baseUrlWithAllOptions = try sut.from(bucketId).publicURL(
       path: path, download: "test",
-      options: TransformOptions(width: 300, height: 300)
+      transform: ImageTransform(width: 300, height: 300)
     )
     assertInlineSnapshot(of: baseUrlWithAllOptions, as: .description) {
       """

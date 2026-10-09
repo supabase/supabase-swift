@@ -60,7 +60,7 @@ enum FileUpload {
 /// ### Downloading files
 ///
 /// - ``download(path:options:query:cacheNonce:)``
-/// - ``publicURL(path:download:options:cacheNonce:)-(_,DownloadBehavior?,_,_)``
+/// - ``publicURL(path:download:transform:cacheNonce:)-(_,DownloadBehavior?,_,_)``
 ///
 /// ### Managing files
 ///
@@ -295,7 +295,7 @@ public struct StorageBucket: Sendable {
   ///   - expiresIn: Seconds until the URL expires, e.g. `60` for one minute.
   ///   - download: An optional custom download filename. Pass a non-nil string to force a download
   ///     with that filename in the `Content-Disposition` header, or `nil` for inline display.
-  ///   - transform: Optional image transformation options applied server-side before delivery.
+  ///   - transform: An optional image transformation applied server-side before delivery.
   ///   - cacheNonce: An optional nonce appended as a `cacheNonce` query parameter for
   ///     cache-busting purposes.
   /// - Returns: A signed `URL` ready to share.
@@ -305,7 +305,7 @@ public struct StorageBucket: Sendable {
     path: String,
     expiresIn: Int,
     download: String? = nil,
-    transform: TransformOptions? = nil,
+    transform: ImageTransform? = nil,
     cacheNonce: String? = nil
   ) async throws -> URL {
     let response = try await api.execute(
@@ -338,7 +338,7 @@ public struct StorageBucket: Sendable {
   ///   - download: Controls whether the URL triggers a file download. Pass `.withOriginalName` to
   ///     download using the file's original name, `.named("custom.pdf")` for a custom name, or
   ///     `nil` for inline display.
-  ///   - transform: Optional image transformation options applied server-side before delivery.
+  ///   - transform: An optional image transformation applied server-side before delivery.
   ///   - cacheNonce: An optional nonce appended as a `cacheNonce` query parameter for
   ///     cache-busting purposes.
   /// - Returns: A signed `URL` ready to share.
@@ -347,7 +347,7 @@ public struct StorageBucket: Sendable {
     path: String,
     expiresIn: Int,
     download: DownloadBehavior? = nil,
-    transform: TransformOptions? = nil,
+    transform: ImageTransform? = nil,
     cacheNonce: String? = nil
   ) async throws -> URL {
     try await createSignedURL(
@@ -495,7 +495,7 @@ public struct StorageBucket: Sendable {
   /// Downloads a file from a private bucket and returns its raw bytes.
   ///
   /// For public buckets, prefer requesting the URL returned by
-  /// ``publicURL(path:download:options:cacheNonce:)-(_,DownloadBehavior?,_,_)`` directly.
+  /// ``publicURL(path:download:transform:cacheNonce:)-(_,DownloadBehavior?,_,_)`` directly.
   ///
   /// ```swift
   /// let data = try await storage.from("avatars").download(path: "user123.png")
@@ -504,7 +504,7 @@ public struct StorageBucket: Sendable {
   ///
   /// - Parameters:
   ///   - path: The file path including the file name, e.g. `"folder/image.png"`.
-  ///   - options: Optional image transformation options applied server-side before delivery.
+  ///   - transform: An optional image transformation applied server-side before delivery.
   ///   - additionalQueryItems: Extra URL query items appended to the request.
   ///   - cacheNonce: An optional nonce appended as a `cacheNonce` query parameter for
   ///     cache-busting purposes.
@@ -513,13 +513,13 @@ public struct StorageBucket: Sendable {
   @discardableResult
   public func download(
     path: String,
-    options: TransformOptions? = nil,
+    transform: ImageTransform? = nil,
     query additionalQueryItems: [URLQueryItem]? = nil,
     cacheNonce: String? = nil
   ) async throws -> Data {
     try await api.execute(
       api.requests.download(
-        bucket: id, key: ObjectKey(path), transform: options?.queryItems ?? [],
+        bucket: id, key: ObjectKey(path), transform: transform?.queryItems ?? [],
         query: (additionalQueryItems ?? []) + Self.urlQuery(download: nil, cacheNonce: cacheNonce))
     )
   }
@@ -582,7 +582,7 @@ public struct StorageBucket: Sendable {
   ///   - path: The file path including the file name, e.g. `"folder/image.png"`.
   ///   - download: An optional custom download filename. Pass a non-nil string to force a download
   ///     with that name, or `nil` for inline display.
-  ///   - options: Optional image transformation options applied server-side before delivery.
+  ///   - transform: An optional image transformation applied server-side before delivery.
   ///   - cacheNonce: An optional nonce appended as a `cacheNonce` query parameter for
   ///     cache-busting purposes.
   /// - Returns: The publicly accessible `URL` for the file.
@@ -591,11 +591,11 @@ public struct StorageBucket: Sendable {
   public func publicURL(
     path: String,
     download: String? = nil,
-    options: TransformOptions? = nil,
+    transform: ImageTransform? = nil,
     cacheNonce: String? = nil
   ) throws -> URL {
     api.requests.publicURL(
-      bucket: id, key: try ObjectKey(path), transform: options?.queryItems ?? [],
+      bucket: id, key: try ObjectKey(path), transform: transform?.queryItems ?? [],
       query: Self.urlQuery(download: download, cacheNonce: cacheNonce))
   }
 
@@ -616,7 +616,7 @@ public struct StorageBucket: Sendable {
   ///   - download: Controls whether the URL triggers a file download. Pass `.withOriginalName` to
   ///     download using the file's original name, `.named("custom.pdf")` for a custom name, or
   ///     `nil` for inline display.
-  ///   - options: Optional image transformation options applied server-side before delivery.
+  ///   - transform: An optional image transformation applied server-side before delivery.
   ///   - cacheNonce: An optional nonce appended as a `cacheNonce` query parameter for
   ///     cache-busting purposes.
   /// - Returns: The publicly accessible `URL` for the file.
@@ -624,13 +624,13 @@ public struct StorageBucket: Sendable {
   public func publicURL(
     path: String,
     download: DownloadBehavior? = nil,
-    options: TransformOptions? = nil,
+    transform: ImageTransform? = nil,
     cacheNonce: String? = nil
   ) throws -> URL {
     try publicURL(
       path: path,
       download: download?.queryValue,
-      options: options,
+      transform: transform,
       cacheNonce: cacheNonce
     )
   }
