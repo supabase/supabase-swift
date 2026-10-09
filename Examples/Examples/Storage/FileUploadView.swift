@@ -265,8 +265,8 @@ struct FileUploadView: View {
       let data = sampleText.data(using: .utf8)!
 
       let options = UploadOptions(
-        cacheControl: .maxAge(.seconds(Int(cacheControl) ?? 3600)),
         contentType: "text/plain",
+        cacheControl: .maxAge(.seconds(Int(cacheControl) ?? 3600)),
         upsert: upsertEnabled
       )
 
