@@ -27,6 +27,30 @@ extension _PostgrestDerivedExpression where Value == Int, Position == _Postgrest
 /// `order`, so filtering or ordering by one is a compile error. Grouping needs nothing declared —
 /// selecting a plain column alongside an aggregate groups by it.
 ///
+/// ## Selecting an aggregate
+///
+/// Declare the aggregate on the relation's `Columns`, then select it with `@SelectionOf` from the
+/// `PostgrestMacros` module, under a property of the same name:
+///
+/// ```swift
+/// extension Order.Columns {
+///   var total: _PostgrestAggregate<Order, Double> { amount.sum() }
+///   var taxTotal: _PostgrestAggregate<Order, Double> { tax.sum() }
+/// }
+///
+/// @SelectionOf(Order.self)
+/// struct OrderTotals {
+///   var category: String
+///   var total: Double?
+///   var taxTotal: Double?
+/// }
+///
+/// // select=category:category,total:amount.sum(),tax_total:tax.sum()
+/// ```
+///
+/// The selection aliases each entry with its property name. Without the alias, PostgREST keys an
+/// aggregate by the function name, so two `sum()`s in one select list would collide.
+///
 /// > Important: Requires PostgREST's `db-aggregates-enabled` setting. It is on for hosted
 /// > Supabase and off by default when self-hosting.
 ///
@@ -62,8 +86,8 @@ extension _PostgrestColumnExpression {
   /// The sum of this expression across the group, typed `Double` whatever the column's type.
   ///
   /// > Important: The wire value is a JSON integer, so past 2^53 a `Double` rounds it silently.
-  /// > When a total can get that large, alias the aggregate in `select` and decode that field as
-  /// > `Int` or `Decimal`.
+  /// > When a total can get that large, declare its property in the selection as `Int` or
+  /// > `Decimal`. The property's type decides how the field decodes, not `Value`.
   public func sum() -> _PostgrestDerivedExpression<Root, Double, _PostgrestSelectOnly> {
     aggregate(.sum)
   }

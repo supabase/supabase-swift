@@ -234,6 +234,23 @@ public macro Relationship(computed: AnyKeyPath) =
 /// ``PostgREST/_PostgrestQuery/embedded(_:_:)`` and ``PostgREST/_PostgrestQuery/requiring(_:_:)``
 /// available on a query selecting it.
 ///
+/// A property can also name a member you declare on the relation's `Columns`, such as an
+/// aggregate or a cast. The entry is aliased with the property name like any other:
+///
+/// ```swift
+/// extension Order.Columns {
+///   var total: _PostgrestAggregate<Order, Double> { amount.sum() }
+/// }
+///
+/// @SelectionOf(Order.self)
+/// struct OrderTotals {
+///   var category: String
+///   var total: Double?
+/// }
+///
+/// // "category:category,total:amount.sum()"
+/// ```
+///
 /// The annotated type must be declared at file scope. The macro attaches an extension, and Swift
 /// does not allow an extension of a type nested inside another type.
 ///

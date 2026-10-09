@@ -36,6 +36,28 @@ struct SelectionTodoInheritedColumn {
   var dueDate: Date?
 }
 
+@Table("orders")
+struct SelectionOrder {
+  @PrimaryKey var id: Int
+  var category: String
+  var amount: Double
+  var tax: Double
+}
+
+extension SelectionOrder.Columns {
+  var total: _PostgrestAggregate<SelectionOrder, Double> { amount.sum() }
+  var taxTotal: _PostgrestAggregate<SelectionOrder, Double> { tax.sum() }
+  var rows: _PostgrestAggregate<SelectionOrder, Int> { .countAll }
+}
+
+@SelectionOf(SelectionOrder.self)
+struct SelectionOrderTotals: Hashable {
+  var category: String
+  var total: Double?
+  var taxTotal: Double?
+  var rows: Int
+}
+
 @Suite
 struct SelectionIntegrationTests {
   typealias TodoSummary = SelectionTodoSummary
@@ -89,5 +111,29 @@ struct SelectionIntegrationTests {
     // wire the `:` and `,` are escaped.
     #expect(capture.query?.contains("select=id:id,is_done:is_done") == true)
     #expect(capture.query?.contains("is_done=eq.false") == true)
+  }
+
+  @Test
+  func aggregatesDeclaredOnColumnsGetTheirOwnKeys() {
+    // Two `sum()`s would both come back as `sum`. Each property aliases its own aggregate, so the
+    // response keys are distinct.
+    #expect(
+      SelectionOrderTotals.selectString
+        == "category:category,total:amount.sum(),tax_total:tax.sum(),rows:count()"
+    )
+  }
+
+  @Test
+  func aggregateSelectionDecodesTheGroupedRows() async throws {
+    let capture = RequestCapture(
+      body: #"[{"category":"books","total":10.5,"tax_total":2,"rows":3}]"#
+    )
+    let rows = try await capture.client
+      .from(SelectionOrder.self)
+      .select(SelectionOrderTotals.self)
+      .execute()
+      .value
+
+    #expect(rows == [SelectionOrderTotals(category: "books", total: 10.5, taxTotal: 2, rows: 3)])
   }
 }
