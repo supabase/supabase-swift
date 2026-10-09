@@ -39,9 +39,9 @@ import HTTPTypes
 /// - ``from(_:)``
 @_spi(Experimental)
 public struct StorageVectorsClient: Sendable {
-  private let api: StorageApi
+  private let api: StorageAPI
 
-  init(api: StorageApi) {
+  init(api: StorageAPI) {
     self.api = api
   }
 
@@ -75,7 +75,7 @@ public struct StorageVectorsClient: Sendable {
       HTTPRequest(
         method: .post,
         url: api.configuration.url.appendingPathComponent("vector/CreateVectorBucket")
-      ), body: JSONEncoder.unconfiguredEncoder.encode(VectorBucketNameBody(vectorBucketName: name))
+      ), body: JSONEncoder.storage.encode(VectorBucketNameBody(vectorBucketName: name))
     )
   }
 
@@ -96,9 +96,9 @@ public struct StorageVectorsClient: Sendable {
       HTTPRequest(
         method: .post,
         url: api.configuration.url.appendingPathComponent("vector/GetVectorBucket")
-      ), body: JSONEncoder.unconfiguredEncoder.encode(VectorBucketNameBody(vectorBucketName: name))
+      ), body: JSONEncoder.storage.encode(VectorBucketNameBody(vectorBucketName: name))
     )
-    .decoded(decoder: .supabase())
+    .decoded()
     return response.vectorBucket
   }
 
@@ -132,11 +132,11 @@ public struct StorageVectorsClient: Sendable {
         method: .post,
         url: api.configuration.url.appendingPathComponent("vector/ListVectorBuckets")
       ),
-      body: JSONEncoder.unconfiguredEncoder.encode(
+      body: JSONEncoder.storage.encode(
         VectorBucketListBody(maxResults: maxResults, nextToken: nextToken, prefix: prefix)
       )
     )
-    .decoded(decoder: .supabase())
+    .decoded()
     return ListVectorBucketsResponse(
       vectorBuckets: response.vectorBuckets,
       nextToken: response.nextToken
@@ -158,7 +158,7 @@ public struct StorageVectorsClient: Sendable {
       HTTPRequest(
         method: .post,
         url: api.configuration.url.appendingPathComponent("vector/DeleteVectorBucket")
-      ), body: JSONEncoder.unconfiguredEncoder.encode(VectorBucketNameBody(vectorBucketName: name))
+      ), body: JSONEncoder.storage.encode(VectorBucketNameBody(vectorBucketName: name))
     )
   }
 }

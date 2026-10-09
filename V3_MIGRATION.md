@@ -3914,3 +3914,36 @@ let storage = StorageClient(configuration: configuration)
 let avatars: StorageBucket = storage.from("avatars")
 print(avatars.id) // "avatars"
 ```
+
+## Storage normalizes every object path the same way and refuses `..` segments
+
+Every `StorageBucket` method that takes an object path now runs it through one normalizer
+before building the request: a leading or trailing `/` is dropped, runs of `/` collapse to one,
+each URL segment is percent-encoded (`+` included, as `%2B`), and a path that is empty or
+contains a `.` or `..` segment throws `StorageError` with kind `.invalidRequest` before any
+request is sent. Bucket ids get the same encoding for the one URL segment they occupy.
+
+Before, `download`, `info`, `exists`, `createSignedURL`, `purgeCache` and `publicURL` stripped a
+leading `/`; `upload`, `update` and the signed-upload methods also collapsed `//`; `publicURL`
+built its URL through `URLComponents.path` while everything else used
+`appendingPathComponent`, so the same key could be encoded two ways, and `+`, `..` and `//`
+reached the server untouched. The server rejects those keys, or a URL parser folds `..` away
+and silently targets another object.
+
+This compiles unchanged. Search your code for paths built with `".."` or `"."` segments, and for
+callers that relied on an empty path reaching the server: both now throw `.invalidRequest`.
+`FileUploadResponse.path`, `SignedUploadURL.path` and the paths sent in `move`, `copy`,
+`remove`, `list` and `createSignedURLs` bodies are the normalized form, as they already were
+for uploads.
+
+```swift
+// Before: sent as-is, the server answered InvalidKey
+try await storage.from("avatars").remove(paths: ["/users/../1.png"])
+
+// After: throws before sending
+do {
+  try await storage.from("avatars").remove(paths: ["/users/../1.png"])
+} catch let error as StorageError where error.kind == .invalidRequest {
+  // fix the path
+}
+```

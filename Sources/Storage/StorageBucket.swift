@@ -5,15 +5,6 @@ import HTTPTypes
   import FoundationNetworking
 #endif
 
-let defaultSearchOptions = SearchOptions(
-  limit: 100,
-  offset: 0,
-  sortBy: SortBy(
-    column: "name",
-    order: "asc"
-  )
-)
-
 enum FileUpload {
   case data(Data)
   case url(URL)
@@ -36,19 +27,19 @@ enum FileUpload {
   }
 }
 
-/// Supabase Storage File API for file operations within a specific bucket.
+/// A handle on one Storage bucket, for file operations within it.
 ///
 /// Obtain a ``StorageBucket`` by calling ``StorageClient/from(_:)`` with the bucket
 /// identifier you want to operate on:
 ///
 /// ```swift
-/// let fileApi = storage.from("avatars")
+/// let avatars = storage.from("avatars")
 ///
 /// // Upload a PNG
-/// try await fileApi.upload(path: "user123.png", data: imageData)
+/// try await avatars.upload(path: "user123.png", data: imageData)
 ///
 /// // Generate a signed URL valid for 60 seconds
-/// let url = try await fileApi.createSignedURL(path: "user123.png", expiresIn: 60)
+/// let url = try await avatars.createSignedURL(path: "user123.png", expiresIn: 60)
 /// ```
 ///
 /// ## Topics
@@ -97,12 +88,12 @@ public struct StorageBucket: Sendable {
   /// The identifier of the bucket this instance operates on.
   public let id: String
 
-  let api: StorageApi
+  let api: StorageAPI
 
   /// The configuration used to initialize this client instance.
   public var configuration: StorageClientConfiguration { api.configuration }
 
-  init(id: String, api: StorageApi) {
+  init(id: String, api: StorageAPI) {
     self.id = id
     self.api = api
   }
@@ -127,10 +118,6 @@ public struct StorageBucket: Sendable {
     StorageBucket(id: id, api: api.setHeader(value, forKey: key))
   }
 
-  private struct MoveResponse: Decodable {
-    let message: String
-  }
-
   private struct SignedURLAPIResponse: Decodable {
     let signedURL: String
   }
@@ -147,44 +134,17 @@ public struct StorageBucket: Sendable {
     file: FileUpload,
     options: FileOptions
   ) async throws -> FileUploadResponse {
-    var headers = options.headers.map { HTTPFields($0) } ?? HTTPFields()
+    let key = try ObjectKey(path)
+    let response: UploadResponse = try await api.execute(
+      api.requests.upload(method: method, bucket: id, key: key, file: file, options: options)
+    )
+    .decoded()
 
-    if method == .post {
-      headers[.xUpsert] = "\(options.shouldUpsert)"
+    guard let objectId = response.id else {
+      throw StorageError(kind: .decoding, message: "The upload response carries no object id.")
     }
 
-    headers[.duplex] = options.duplex
-
-    struct UploadResponse: Decodable {
-      let key: String
-      let id: String
-
-      enum CodingKeys: String, CodingKey {
-        case key = "Key"
-        case id = "Id"
-      }
-    }
-
-    let cleanPath = _removeEmptyFolders(path)
-    let _path = _getFinalPath(cleanPath)
-
-    let response = try await api.upload(
-      HTTPRequest(
-        method: method,
-        url: api.configuration.url.appendingPathComponent("object/\(_path)"),
-        headerFields: headers
-      ),
-      file: file,
-      path: path,
-      options: options
-    )
-    .decoded(as: UploadResponse.self, decoder: api.configuration.decoder)
-
-    return FileUploadResponse(
-      id: response.id,
-      path: cleanPath,
-      fullPath: response.key
-    )
+    return FileUploadResponse(id: objectId, path: key.path, fullPath: response.key)
   }
 
   /// Uploads a file to an existing bucket.
@@ -207,12 +167,7 @@ public struct StorageBucket: Sendable {
     data: Data,
     options: FileOptions = FileOptions()
   ) async throws -> FileUploadResponse {
-    try await _uploadOrUpdate(
-      method: .post,
-      path: path,
-      file: .data(data),
-      options: options
-    )
+    try await _uploadOrUpdate(method: .post, path: path, file: .data(data), options: options)
   }
 
   /// Uploads a file from a local file URL to an existing bucket.
@@ -234,12 +189,7 @@ public struct StorageBucket: Sendable {
     fileURL: URL,
     options: FileOptions = FileOptions()
   ) async throws -> FileUploadResponse {
-    try await _uploadOrUpdate(
-      method: .post,
-      path: path,
-      file: .url(fileURL),
-      options: options
-    )
+    try await _uploadOrUpdate(method: .post, path: path, file: .url(fileURL), options: options)
   }
 
   /// Replaces an existing file at the specified path with new data.
@@ -260,12 +210,7 @@ public struct StorageBucket: Sendable {
     data: Data,
     options: FileOptions = FileOptions()
   ) async throws -> FileUploadResponse {
-    try await _uploadOrUpdate(
-      method: .put,
-      path: path,
-      file: .data(data),
-      options: options
-    )
+    try await _uploadOrUpdate(method: .put, path: path, file: .data(data), options: options)
   }
 
   /// Replaces an existing file at the specified path with a new local file.
@@ -286,12 +231,7 @@ public struct StorageBucket: Sendable {
     fileURL: URL,
     options: FileOptions = FileOptions()
   ) async throws -> FileUploadResponse {
-    try await _uploadOrUpdate(
-      method: .put,
-      path: path,
-      file: .url(fileURL),
-      options: options
-    )
+    try await _uploadOrUpdate(method: .put, path: path, file: .url(fileURL), options: options)
   }
 
   /// Moves an existing file to a new path, optionally within a different bucket.
@@ -312,18 +252,9 @@ public struct StorageBucket: Sendable {
     options: DestinationOptions? = nil
   ) async throws {
     try await api.execute(
-      HTTPRequest(
-        method: .post,
-        url: api.configuration.url.appendingPathComponent("object/move")
-      ),
-      body: api.configuration.encoder.encode(
-        [
-          "bucketId": id,
-          "sourceKey": _removeEmptyFolders(source),
-          "destinationKey": _removeEmptyFolders(destination),
-          "destinationBucket": options?.destinationBucket,
-        ]
-      )
+      api.requests.move(
+        bucket: id, source: ObjectKey(source), destination: ObjectKey(destination),
+        destinationBucket: options?.destinationBucket)
     )
   }
 
@@ -346,29 +277,12 @@ public struct StorageBucket: Sendable {
     to destination: String,
     options: DestinationOptions? = nil
   ) async throws -> String {
-    struct UploadResponse: Decodable {
-      let key: String
-
-      enum CodingKeys: String, CodingKey {
-        case key = "Key"
-      }
-    }
-
-    return try await api.execute(
-      HTTPRequest(
-        method: .post,
-        url: api.configuration.url.appendingPathComponent("object/copy")
-      ),
-      body: api.configuration.encoder.encode(
-        [
-          "bucketId": id,
-          "sourceKey": _removeEmptyFolders(source),
-          "destinationKey": _removeEmptyFolders(destination),
-          "destinationBucket": options?.destinationBucket,
-        ]
-      )
+    try await api.execute(
+      api.requests.copy(
+        bucket: id, source: ObjectKey(source), destination: ObjectKey(destination),
+        destinationBucket: options?.destinationBucket)
     )
-    .decoded(as: UploadResponse.self, decoder: api.configuration.decoder)
+    .decoded(as: UploadResponse.self)
     .key
   }
 
@@ -392,25 +306,14 @@ public struct StorageBucket: Sendable {
     transform: TransformOptions? = nil,
     cacheNonce: String? = nil
   ) async throws -> URL {
-    struct Body: Encodable {
-      let expiresIn: Int
-      let transform: TransformOptions?
-    }
-
-    let encoder = JSONEncoder.unconfiguredEncoder
-
     let response = try await api.execute(
-      HTTPRequest(
-        method: .post,
-        url: api.configuration.url.appendingPathComponent("object/sign/\(_getFinalPath(path))")
-      ),
-      body: encoder.encode(
-        Body(expiresIn: expiresIn, transform: transform)
-      )
+      api.requests.sign(
+        bucket: id, key: ObjectKey(path), expiresIn: expiresIn, transform: transform)
     )
-    .decoded(as: SignedURLAPIResponse.self, decoder: api.configuration.decoder)
+    .decoded(as: SignedURLAPIResponse.self)
 
-    return try makeSignedURL(response.signedURL, download: download, cacheNonce: cacheNonce)
+    return try api.requests.resolve(
+      response.signedURL, query: Self.urlQuery(download: download, cacheNonce: cacheNonce))
   }
 
   /// Creates a signed URL for sharing a private file for a fixed period of time.
@@ -477,27 +380,15 @@ public struct StorageBucket: Sendable {
     download: String? = nil,
     cacheNonce: String? = nil
   ) async throws -> [SignedURLResult] {
-    struct Params: Encodable {
-      let expiresIn: Int
-      let paths: [String]
-    }
-
-    let encoder = JSONEncoder.unconfiguredEncoder
-
     let response = try await api.execute(
-      HTTPRequest(
-        method: .post,
-        url: api.configuration.url.appendingPathComponent("object/sign/\(id)")
-      ),
-      body: encoder.encode(
-        Params(expiresIn: expiresIn, paths: paths.map(_removeEmptyFolders))
-      )
+      api.requests.sign(bucket: id, keys: paths.map { try ObjectKey($0) }, expiresIn: expiresIn)
     )
-    .decoded(as: [SignedURLsAPIResponse].self, decoder: api.configuration.decoder)
+    .decoded(as: [SignedURLsAPIResponse].self)
 
+    let query = Self.urlQuery(download: download, cacheNonce: cacheNonce)
     return try response.map { item in
       if let signedURLString = item.signedURL {
-        let url = try makeSignedURL(signedURLString, download: download, cacheNonce: cacheNonce)
+        let url = try api.requests.resolve(signedURLString, query: query)
         return .success(path: item.path, signedURL: url)
       } else {
         return .failure(path: item.path, error: item.error ?? "Unknown error")
@@ -549,53 +440,16 @@ public struct StorageBucket: Sendable {
     )
   }
 
-  /// Creates multiple signed URLs. Use a signed URL to share a file for a fixed amount of time.
-  ///
-  /// Each item in the returned array is a ``SignedURLResult``: either `.success(path:signedURL:)` or
-  /// `.failure(path:error:)`. Exactly one case is guaranteed per item.
-  /// - Parameters:
-  ///   - paths: The file paths to be downloaded, including the current file names. For example `["folder/image.png", "folder2/image2.png"]`.
-  ///   - expiresIn: The number of seconds until the signed URLs expire. For example, `60` for URLs which are valid for one minute.
-  ///   - download: Trigger a download with the default file name.
-  ///   - cacheNonce: A nonce value appended as a `cacheNonce` query parameter for cache invalidation.
-  private func makeSignedURL(_ signedURL: String, download: String?, cacheNonce: String? = nil)
-    throws -> URL
-  {
-    guard let signedURLComponents = URLComponents(string: signedURL),
-      var baseComponents = URLComponents(
-        url: api.configuration.url, resolvingAgainstBaseURL: false)
-    else {
-      throw StorageError(
-        kind: .decoding, message: "Cannot build a signed URL from '\(signedURL)'.")
+  /// The `download` and `cacheNonce` query items every URL-returning method appends.
+  private static func urlQuery(download: String?, cacheNonce: String?) -> [URLQueryItem] {
+    var query: [URLQueryItem] = []
+    if let download {
+      query.append(URLQueryItem(name: "download", value: download))
     }
-
-    baseComponents.path +=
-      signedURLComponents.path.hasPrefix("/")
-      ? signedURLComponents.path : "/\(signedURLComponents.path)"
-    baseComponents.queryItems = signedURLComponents.queryItems
-
-    // Only touched when there is something to add — assigning an empty array would leave a bare
-    // "?" on a URL that previously had no query at all.
-    if download != nil || cacheNonce != nil {
-      var queryItems = baseComponents.queryItems ?? []
-
-      if let download {
-        queryItems.append(URLQueryItem(name: "download", value: download))
-      }
-
-      if let cacheNonce {
-        queryItems.append(URLQueryItem(name: "cacheNonce", value: cacheNonce))
-      }
-
-      baseComponents.queryItems = queryItems
+    if let cacheNonce {
+      query.append(URLQueryItem(name: "cacheNonce", value: cacheNonce))
     }
-
-    guard let signedURL = baseComponents.url else {
-      throw StorageError(
-        kind: .decoding, message: "Cannot build a signed URL from '\(signedURL)'.")
-    }
-
-    return signedURL
+    return query
   }
 
   /// Deletes one or more files from the bucket.
@@ -610,13 +464,8 @@ public struct StorageBucket: Sendable {
   /// - Throws: ``StorageError`` if the request fails or the caller is not authorized.
   @discardableResult
   public func remove(paths: [String]) async throws -> [FileObject] {
-    try await api.execute(
-      HTTPRequest(
-        method: .delete,
-        url: api.configuration.url.appendingPathComponent("object/\(id)")
-      ), body: api.configuration.encoder.encode(["prefixes": paths.map(_removeEmptyFolders)])
-    )
-    .decoded(decoder: api.configuration.decoder)
+    try await api.execute(api.requests.remove(bucket: id, keys: paths.map { try ObjectKey($0) }))
+      .decoded()
   }
 
   /// Lists all files within a bucket folder.
@@ -635,25 +484,10 @@ public struct StorageBucket: Sendable {
     path: String? = nil,
     options: SearchOptions? = nil
   ) async throws -> [FileObject] {
-    let encoder = JSONEncoder.unconfiguredEncoder
-
-    var options = options ?? defaultSearchOptions
-    options.limit = options.limit ?? defaultSearchOptions.limit
-    options.offset = options.offset ?? defaultSearchOptions.offset
-    options.prefix = _removeEmptyFolders(path ?? "")
-
-    var sortBy = options.sortBy ?? SortBy()
-    sortBy.column = sortBy.column ?? defaultSearchOptions.sortBy?.column
-    sortBy.order = sortBy.order ?? defaultSearchOptions.sortBy?.order
-    options.sortBy = sortBy
-
-    return try await api.execute(
-      HTTPRequest(
-        method: .post,
-        url: api.configuration.url.appendingPathComponent("object/list/\(id)")
-      ), body: encoder.encode(options), replayable: true
+    try await api.execute(
+      api.requests.list(bucket: id, prefix: ObjectKey(prefix: path ?? ""), options: options)
     )
-    .decoded(decoder: api.configuration.decoder)
+    .decoded()
   }
 
   /// Downloads a file from a private bucket and returns its raw bytes.
@@ -681,25 +515,10 @@ public struct StorageBucket: Sendable {
     query additionalQueryItems: [URLQueryItem]? = nil,
     cacheNonce: String? = nil
   ) async throws -> Data {
-    var queryItems = options?.queryItems ?? []
-    let renderPath = options.map { !$0.isEmpty } == true ? "render/image/authenticated" : "object"
-    let _path = _getFinalPath(path)
-
-    if let additionalQueryItems {
-      queryItems.append(contentsOf: additionalQueryItems)
-    }
-
-    if let cacheNonce {
-      queryItems.append(URLQueryItem(name: "cacheNonce", value: cacheNonce))
-    }
-
-    return try await api.execute(
-      HTTPRequest(
-        method: .get,
-        url: api.configuration.url
-          .appendingPathComponent("\(renderPath)/\(_path)"),
-        query: queryItems
-      )
+    try await api.execute(
+      api.requests.download(
+        bucket: id, key: ObjectKey(path), transform: options?.queryItems ?? [],
+        query: (additionalQueryItems ?? []) + Self.urlQuery(download: nil, cacheNonce: cacheNonce))
     )
   }
 
@@ -709,15 +528,7 @@ public struct StorageBucket: Sendable {
   /// - Returns: A ``FileObjectV2`` containing size, content type, ETag, and other metadata.
   /// - Throws: ``StorageError`` if the file does not exist or the caller is not authorized.
   public func info(path: String) async throws -> FileObjectV2 {
-    let _path = _getFinalPath(path)
-
-    return try await api.execute(
-      HTTPRequest(
-        method: .get,
-        url: api.configuration.url.appendingPathComponent("object/info/\(_path)")
-      )
-    )
-    .decoded(decoder: api.configuration.decoder)
+    try await api.execute(api.requests.info(bucket: id, key: ObjectKey(path))).decoded()
   }
 
   /// Checks whether a file exists in the bucket without downloading it.
@@ -730,12 +541,7 @@ public struct StorageBucket: Sendable {
   ///   authorization errors).
   public func exists(path: String) async throws -> Bool {
     do {
-      try await api.execute(
-        HTTPRequest(
-          method: .head,
-          url: api.configuration.url.appendingPathComponent("object/\(_getFinalPath(path))")
-        )
-      )
+      try await api.execute(api.requests.exists(bucket: id, key: ObjectKey(path)))
       return true
     } catch let error as StorageError {
       if let statusCode = error.response?.statusCode, [400, 404].contains(statusCode) {
@@ -758,11 +564,8 @@ public struct StorageBucket: Sendable {
   /// - Throws: ``StorageError`` if the caller is not authorized or cache purging is not enabled.
   public func purgeCache(path: String, transformationsOnly: Bool = false) async throws {
     try await api.execute(
-      HTTPRequest(
-        method: .delete,
-        url: api.configuration.url.appendingPathComponent("cdn/\(_getFinalPath(path))"),
-        query: transformationsOnly ? [URLQueryItem(name: "transformations", value: "true")] : []
-      )
+      api.requests.purgeCache(
+        bucket: id, key: ObjectKey(path), transformationsOnly: transformationsOnly)
     )
   }
 
@@ -778,7 +581,7 @@ public struct StorageBucket: Sendable {
   ///   - cacheNonce: An optional nonce appended as a `cacheNonce` query parameter for
   ///     cache-busting purposes.
   /// - Returns: The publicly accessible `URL` for the file.
-  /// - Throws: ``StorageError`` with kind ``StorageError/Kind-swift.struct/invalidRequest`` if the resulting URL cannot be constructed.
+  /// - Throws: ``StorageError`` with kind ``StorageError/Kind-swift.struct/invalidRequest`` if the path is empty or contains a `..` segment.
   @_disfavoredOverload
   public func publicURL(
     path: String,
@@ -786,35 +589,9 @@ public struct StorageBucket: Sendable {
     options: TransformOptions? = nil,
     cacheNonce: String? = nil
   ) throws -> URL {
-    var queryItems: [URLQueryItem] = []
-
-    guard var components = URLComponents(url: api.configuration.url, resolvingAgainstBaseURL: true)
-    else {
-      throw StorageError(kind: .invalidRequest, message: "Cannot build a public URL for '\(path)'.")
-    }
-
-    if let download {
-      queryItems.append(URLQueryItem(name: "download", value: download))
-    }
-
-    if let optionsQueryItems = options?.queryItems {
-      queryItems.append(contentsOf: optionsQueryItems)
-    }
-
-    if let cacheNonce {
-      queryItems.append(URLQueryItem(name: "cacheNonce", value: cacheNonce))
-    }
-
-    let renderPath = options.map { !$0.isEmpty } == true ? "render/image" : "object"
-
-    components.path += "/\(renderPath)/public/\(_getFinalPath(path))"
-    components.queryItems = !queryItems.isEmpty ? queryItems : nil
-
-    guard let generatedUrl = components.url else {
-      throw StorageError(kind: .invalidRequest, message: "Cannot build a public URL for '\(path)'.")
-    }
-
-    return generatedUrl
+    api.requests.publicURL(
+      bucket: id, key: try ObjectKey(path), transform: options?.queryItems ?? [],
+      query: Self.urlQuery(download: download, cacheNonce: cacheNonce))
   }
 
   /// Returns the public URL for a file in a public bucket.
@@ -838,7 +615,7 @@ public struct StorageBucket: Sendable {
   ///   - cacheNonce: An optional nonce appended as a `cacheNonce` query parameter for
   ///     cache-busting purposes.
   /// - Returns: The publicly accessible `URL` for the file.
-  /// - Throws: ``StorageError`` with kind ``StorageError/Kind-swift.struct/invalidRequest`` if the resulting URL cannot be constructed.
+  /// - Throws: ``StorageError`` with kind ``StorageError/Kind-swift.struct/invalidRequest`` if the path is empty or contains a `..` segment.
   public func publicURL(
     path: String,
     download: DownloadBehavior? = nil,
@@ -881,44 +658,22 @@ public struct StorageBucket: Sendable {
       let url: String
     }
 
-    var headers = HTTPFields()
-    if let shouldUpsert = options?.shouldUpsert, shouldUpsert {
-      headers[.xUpsert] = "true"
-    }
-
-    let cleanPath = _removeEmptyFolders(path)
-
+    let key = try ObjectKey(path)
     let response = try await api.execute(
-      HTTPRequest(
-        method: .post,
-        url: api.configuration.url.appendingPathComponent(
-          "object/upload/sign/\(id)/\(cleanPath)"),
-        headerFields: headers
-      )
+      api.requests.createSignedUploadURL(
+        bucket: id, key: key, upsert: options?.shouldUpsert ?? false)
     )
-    .decoded(as: Response.self, decoder: api.configuration.decoder)
+    .decoded(as: Response.self)
 
-    let signedURL = try makeSignedURL(response.url, download: nil)
-
-    guard let components = URLComponents(url: signedURL, resolvingAgainstBaseURL: false) else {
-      throw StorageError(
-        kind: .decoding, message: "Cannot build a signed upload URL for '\(path)'.")
-    }
-
-    guard let token = components.queryItems?.first(where: { $0.name == "token" })?.value else {
+    let signedURL = try api.requests.resolve(response.url)
+    guard
+      let token = URLComponents(url: signedURL, resolvingAgainstBaseURL: false)?.queryItems?
+        .first(where: { $0.name == "token" })?.value
+    else {
       throw StorageError(kind: .decoding, message: "No token returned by API")
     }
 
-    guard let url = components.url else {
-      throw StorageError(
-        kind: .decoding, message: "Cannot build a signed upload URL for '\(path)'.")
-    }
-
-    return SignedUploadURL(
-      signedURL: url,
-      path: cleanPath,
-      token: token
-    )
+    return SignedUploadURL(signedURL: signedURL, path: key.path, token: token)
   }
 
   /// Uploads raw data to a pre-signed upload URL.
@@ -940,12 +695,7 @@ public struct StorageBucket: Sendable {
     data: Data,
     options: FileOptions? = nil
   ) async throws -> SignedURLUploadResponse {
-    try await _uploadToSignedURL(
-      path: path,
-      token: token,
-      file: .data(data),
-      options: options
-    )
+    try await _uploadToSignedURL(path: path, token: token, file: .data(data), options: options)
   }
 
   /// Uploads a local file to a pre-signed upload URL.
@@ -969,12 +719,7 @@ public struct StorageBucket: Sendable {
     fileURL: URL,
     options: FileOptions? = nil
   ) async throws -> SignedURLUploadResponse {
-    try await _uploadToSignedURL(
-      path: path,
-      token: token,
-      file: .url(fileURL),
-      options: options
-    )
+    try await _uploadToSignedURL(path: path, token: token, file: .url(fileURL), options: options)
   }
 
   private func _uploadToSignedURL(
@@ -983,55 +728,13 @@ public struct StorageBucket: Sendable {
     file: FileUpload,
     options: FileOptions?
   ) async throws -> SignedURLUploadResponse {
-    let options = options ?? FileOptions()
-    var headers = options.headers.map { HTTPFields($0) } ?? HTTPFields()
-
-    headers[.xUpsert] = "\(options.shouldUpsert)"
-    headers[.duplex] = options.duplex
-
-    struct UploadResponse: Decodable {
-      let key: String
-
-      enum CodingKeys: String, CodingKey {
-        case key = "Key"
-      }
-    }
-
-    let cleanPath = _removeEmptyFolders(path)
-
-    let fullPath = try await api.upload(
-      HTTPRequest(
-        method: .put,
-        url: api.configuration.url
-          .appendingPathComponent("object/upload/sign/\(id)/\(cleanPath)"),
-        query: [URLQueryItem(name: "token", value: token)],
-        headerFields: headers
-      ),
-      file: file,
-      path: path,
-      options: options
+    let key = try ObjectKey(path)
+    let response: UploadResponse = try await api.execute(
+      api.requests.uploadToSignedURL(
+        bucket: id, key: key, token: token, file: file, options: options ?? FileOptions())
     )
-    .decoded(as: UploadResponse.self, decoder: api.configuration.decoder)
-    .key
+    .decoded()
 
-    return SignedURLUploadResponse(path: cleanPath, fullPath: fullPath)
+    return SignedURLUploadResponse(path: key.path, fullPath: response.key)
   }
-
-  private func _getFinalPath(_ path: String) -> String {
-    "\(id)/\(_removeEmptyFolders(path))"
-  }
-
-  private func _removeEmptyFolders(_ path: String) -> String {
-    let trimmedPath = path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-    let cleanedPath = trimmedPath.replacingOccurrences(
-      of: "/+", with: "/", options: .regularExpression
-    )
-    return cleanedPath
-  }
-}
-
-extension HTTPField.Name {
-  static let duplex = Self("duplex")!
-  static let xMetadata = Self("x-metadata")!
-  static let xUpsert = Self("x-upsert")!
 }

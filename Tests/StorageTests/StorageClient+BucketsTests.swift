@@ -27,12 +27,6 @@ extension StorageMockerTests {
   struct StorageClientBucketsTests {
     let url = URL(string: "http://localhost:54321/storage/v1")!
 
-    init() {
-      JSONEncoder.storageEncoder.outputFormatting = [
-        .sortedKeys
-      ]
-    }
-
     private func makeSUT() -> StorageClient {
       Mocker.removeAll()
 

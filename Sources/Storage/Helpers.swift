@@ -23,9 +23,16 @@ import Foundation
   }
 #endif
 
-func encodeMetadata(_ metadata: JSONObject) -> Data {
-  let encoder = JSONValue.encoder
-  return (try? encoder.encode(metadata)) ?? Data("{}".utf8)
+/// The `x-metadata` header value: the user metadata as base64 JSON.
+func encodeMetadata(_ metadata: JSONObject) throws -> String {
+  do {
+    return try JSONEncoder.storage.encode(metadata).base64EncodedString()
+  } catch {
+    throw StorageError(
+      kind: .invalidRequest,
+      message: "The upload metadata cannot be encoded as JSON.",
+      underlyingError: error)
+  }
 }
 
 extension String {
