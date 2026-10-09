@@ -407,6 +407,8 @@ jobs:
           echo "SwiftLint $INSTALLED"
       - name: Run SwiftLint
         run: swiftlint lint --strict
+      - name: Check lock discipline in the Realtime engine core
+        run: ./scripts/check-lock-discipline.sh
 
   ci-success:
     name: CI Success
