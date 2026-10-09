@@ -12,7 +12,7 @@ import Testing
 
 @Suite
 struct PostgrestFilterPatternTests {
-  struct Todo: PostgrestRelation {
+  struct Todo: _PostgrestRelation {
     static let relationName = "todos"
     static let selectString = "*"
 
@@ -21,15 +21,15 @@ struct PostgrestFilterPatternTests {
     var note: String?
 
     struct Columns: Sendable {
-      let id = PostgrestColumn<Todo, Int>("id")
-      let task = PostgrestColumn<Todo, String>("task")
-      let note = PostgrestNullableColumn<Todo, String>("note")
+      let id = _PostgrestColumn<Todo, Int>("id")
+      let task = _PostgrestColumn<Todo, String>("task")
+      let note = _PostgrestNullableColumn<Todo, String>("note")
     }
 
     static let columns = Columns()
   }
 
-  private func rendered(_ filter: PostgrestFilter<Todo>) -> String {
+  private func rendered(_ filter: _PostgrestFilter<Todo>) -> String {
     filter.queryItems().map { "\($0.name)=\($0.value ?? "")" }.joined(separator: "&")
   }
 

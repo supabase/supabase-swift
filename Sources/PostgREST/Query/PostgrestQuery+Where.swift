@@ -8,7 +8,7 @@
 import Foundation
 import Helpers
 
-extension PostgrestFilterableRequest {
+extension _PostgrestFilterableRequest {
   /// Scopes the request by a filter.
   ///
   /// The closure receives the relation's column namespace. Each PostgREST operator is a method
@@ -36,14 +36,14 @@ extension PostgrestFilterableRequest {
   ///
   /// - Parameter build: Builds the filter from the relation's columns.
   /// - Returns: A new request with the filter applied. The receiver is unchanged.
-  public func `where`(_ build: (Relation.Columns) -> PostgrestFilter<Relation>) -> Self {
+  public func `where`(_ build: (Relation.Columns) -> _PostgrestFilter<Relation>) -> Self {
     var filtered = self
     filtered.request.query.append(contentsOf: build(Relation.columns).queryItems())
     return filtered
   }
 }
 
-extension PostgrestQuery {
+extension _PostgrestQuery {
   /// Sorts the result.
   ///
   /// The direction is spelled on the column, the same way an operator is:
@@ -57,7 +57,7 @@ extension PostgrestQuery {
   ///
   /// - Parameter build: Builds the sort key from the relation's columns.
   public func order(
-    _ build: (R.Columns) -> PostgrestOrdering<R>
+    _ build: (R.Columns) -> _PostgrestOrdering<R>
   ) -> Self {
     appendingOrder(build(R.columns).rendered)
   }
@@ -70,14 +70,14 @@ extension PostgrestQuery {
   /// .order { $0.dueDate.nulls(.first) }    // order=due_at.nullsfirst
   /// ```
   ///
-  /// Chain ``PostgrestOrderableExpression/asc()`` or ``PostgrestOrderableExpression/desc()`` when
+  /// Chain ``_PostgrestOrderableExpression/asc()`` or ``_PostgrestOrderableExpression/desc()`` when
   /// the direction matters. Direction and placement are independent on the wire, so
-  /// ``PostgrestOrderableExpression/nulls(_:)`` sets a placement without choosing one.
-  public func order<E: PostgrestOrderableExpression>(
+  /// ``_PostgrestOrderableExpression/nulls(_:)`` sets a placement without choosing one.
+  public func order<E: _PostgrestOrderableExpression>(
     _ build: (R.Columns) -> E
   ) -> Self where E.Root == R {
     appendingOrder(
-      PostgrestOrdering<R>(column: build(R.columns).postgrestExpression, ascending: nil).rendered
+      _PostgrestOrdering<R>(column: build(R.columns).postgrestExpression, ascending: nil).rendered
     )
   }
 

@@ -44,7 +44,6 @@ public import Logging
 /// ### Switching the Schema
 ///
 /// - ``schema(_:)->PostgrestClient``
-/// - ``schema(_:)->PostgrestSchemaScope<S>``
 ///
 /// ### Inspecting Configuration
 ///

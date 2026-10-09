@@ -6,7 +6,7 @@
 //
 
 import Foundation
-import PostgrestMacros
+@_spi(Experimental) import PostgrestMacros
 import Testing
 
 // `Counters` is in `Generated.swift`, the table in
@@ -14,7 +14,7 @@ import Testing
 
 /// The live half of `TableIntegrationTests.aGeneratedColumnNeverReachesAWriteBody`: against a real
 /// `GENERATED ALWAYS` identity key and a `GENERATED ALWAYS … STORED` column, the generated `Draft`
-/// and `PostgrestUpdate` produce writes Postgres accepts, and the generated values come back.
+/// and `_PostgrestUpdate` produce writes Postgres accepts, and the generated values come back.
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil))
 struct PostgrestGeneratedColumnIntegrationTests {
   let client = PostgrestClient(

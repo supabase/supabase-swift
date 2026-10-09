@@ -8,8 +8,8 @@
 /// A Postgres type to cast to, paired with the Swift type that cast produces so the two cannot
 /// disagree.
 ///
-/// A type with no shipped target is still reachable: `PostgrestCastTarget<String>("citext")`.
-public struct PostgrestCastTarget<Value>: Sendable {
+/// A type with no shipped target is still reachable: `_PostgrestCastTarget<String>("citext")`.
+public struct _PostgrestCastTarget<Value>: Sendable {
   /// The Postgres type name, as it appears after `::`.
   public let sqlType: String
 
@@ -21,29 +21,29 @@ public struct PostgrestCastTarget<Value>: Sendable {
   }
 }
 
-extension PostgrestCastTarget where Value == String {
+extension _PostgrestCastTarget where Value == String {
   /// `::text`
-  public static var text: PostgrestCastTarget<String> { PostgrestCastTarget("text") }
+  public static var text: _PostgrestCastTarget<String> { _PostgrestCastTarget("text") }
 }
 
-extension PostgrestCastTarget where Value == Int {
+extension _PostgrestCastTarget where Value == Int {
   /// `::int`
-  public static var int: PostgrestCastTarget<Int> { PostgrestCastTarget("int") }
+  public static var int: _PostgrestCastTarget<Int> { _PostgrestCastTarget("int") }
 }
 
-extension PostgrestCastTarget where Value == Double {
+extension _PostgrestCastTarget where Value == Double {
   /// `::double precision`
-  public static var double: PostgrestCastTarget<Double> {
-    PostgrestCastTarget("double precision")
+  public static var double: _PostgrestCastTarget<Double> {
+    _PostgrestCastTarget("double precision")
   }
 }
 
-extension PostgrestCastTarget where Value == Bool {
+extension _PostgrestCastTarget where Value == Bool {
   /// `::boolean`
-  public static var boolean: PostgrestCastTarget<Bool> { PostgrestCastTarget("boolean") }
+  public static var boolean: _PostgrestCastTarget<Bool> { _PostgrestCastTarget("boolean") }
 }
 
-extension PostgrestColumnExpression {
+extension _PostgrestColumnExpression {
   /// Casts this expression to another Postgres type.
   ///
   /// ```swift
@@ -59,8 +59,8 @@ extension PostgrestColumnExpression {
   ///
   /// - Parameter target: The Postgres type to cast to.
   public func cast<T>(
-    to target: PostgrestCastTarget<T>
-  ) -> PostgrestDerivedExpression<Root, T, PostgrestSelectOnly> {
+    to target: _PostgrestCastTarget<T>
+  ) -> _PostgrestDerivedExpression<Root, T, _PostgrestSelectOnly> {
     _deriving("::\(target.sqlType)")
   }
 
@@ -77,7 +77,7 @@ extension PostgrestColumnExpression {
   /// to-many embed does neither.
   ///
   /// - Parameter path: The key or index to read.
-  public func jsonText(_ path: String) -> PostgrestDerivedExpression<Root, String, Position> {
+  public func jsonText(_ path: String) -> _PostgrestDerivedExpression<Root, String, Position> {
     _deriving("->>\(path)")
   }
 
@@ -90,7 +90,7 @@ extension PostgrestColumnExpression {
   /// > chain ``jsonText(_:)`` or ``cast(to:)`` to reach a scalar.
   ///
   /// - Parameter path: The key or index to read.
-  public func jsonObject(_ path: String) -> PostgrestDerivedExpression<Root, Value, Position> {
+  public func jsonObject(_ path: String) -> _PostgrestDerivedExpression<Root, Value, Position> {
     _deriving("->\(path)")
   }
 }

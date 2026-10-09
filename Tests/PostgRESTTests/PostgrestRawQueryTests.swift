@@ -8,31 +8,31 @@
 import Foundation
 import Testing
 
-@testable import PostgREST
+@_spi(Experimental) @testable import PostgREST
 
 @Suite
 struct PostgrestRawQueryTests {
-  struct Todo: PostgrestRelation {
+  struct Todo: _PostgrestRelation {
     static let relationName = "todos"
     static let selectString = "*"
 
     var id: Int
 
     struct Columns: Sendable {
-      let id = PostgrestColumn<Todo, Int>("id")
+      let id = _PostgrestColumn<Todo, Int>("id")
     }
 
     static let columns = Columns()
   }
 
   /// This fixture is documentation, not enforcement. Swift Testing cannot assert that code fails
-  /// to compile, so nothing here fails if `stripNulls()` is ever added to `PostgrestRawQuery`.
+  /// to compile, so nothing here fails if `stripNulls()` is ever added to `_PostgrestRawQuery`.
   ///
-  /// What it records: `csv()`, `geojson()` and `explain(…)` return `PostgrestRawQuery`, and that
-  /// type has no `stripNulls()` and no way back to `PostgrestQuery`. So these lines do not compile:
+  /// What it records: `csv()`, `geojson()` and `explain(…)` return `_PostgrestRawQuery`, and that
+  /// type has no `stripNulls()` and no way back to `_PostgrestQuery`. So these lines do not compile:
   ///
   /// ```swift
-  /// query.csv().stripNulls()        // value of type 'PostgrestRawQuery' has no member 'stripNulls'
+  /// query.csv().stripNulls()        // value of type '_PostgrestRawQuery' has no member 'stripNulls'
   /// query.csv().where { $0.id.eq(1) }  // no member 'where'
   /// ```
   ///
@@ -41,8 +41,8 @@ struct PostgrestRawQueryTests {
   /// `stripNullsBeforeCSVIsNotSent()` below.
   ///
   /// Paste either line into this function to see the compile error.
-  func compileTimeFixture(_ query: PostgrestQuery<Todo, [Todo]>) {
-    let raw: PostgrestRawQuery = query.csv()
+  func compileTimeFixture(_ query: _PostgrestQuery<Todo, [Todo]>) {
+    let raw: _PostgrestRawQuery = query.csv()
     _ = raw
   }
 

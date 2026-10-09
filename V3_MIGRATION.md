@@ -3800,3 +3800,96 @@ and switch to the right column before v4, where the aliases are removed.
 
 `match(_:)` with a dictionary is not deprecated: it is the multi-column equality shorthand every
 Supabase SDK has, not an alias of another method here.
+
+## The typed PostgREST API is opt-in: `@_spi(Experimental)` entry points and `_`-prefixed types
+
+The typed query API is experimental, and the compiler now says so. The two ways into it,
+`from(_:)` with a relation type and `schema(_:)` with a schema type, on both `SupabaseClient` and
+`PostgrestClient`, are `@_spi(Experimental)`. Every public type the API declares gains a `_`
+prefix. The macros (`@Table`, `@SelectionOf`, `@Column`, …) keep their names.
+`PostgrestFilterValue` and `PostgrestArrayElement` keep theirs too: they shipped in v2, and the
+string builders use them.
+
+The API will change in minor releases while feedback is collected. A note in the documentation
+is easy to miss, so the opt-in is now a line of code in each file that runs a typed query. Only
+the entry points are SPI, not the types: Swift rejects a `public` type that conforms to an SPI
+protocol or uses an SPI macro, so a gate on the types would block models declared `public` in
+their own module, and the generator's `--access-control public` output. The `_` prefix marks those
+types as unstable instead.
+
+```swift
+// Before
+import Supabase
+
+let todos = try await client.from(Todo.self).select().execute().value
+
+// After
+@_spi(Experimental) import Supabase
+
+let todos = try await client.from(Todo.self).select().execute().value
+```
+
+`@_spi(Experimental) import PostgREST` and `@_spi(Experimental) import PostgrestMacros` work the
+same way. Files that only declare `@Table` or `@SelectionOf` types do not need the SPI import.
+
+This is a compile error. Without the import, a typed `from(_:)` or `schema(_:)` fails with "The
+typed query API is experimental. Opt in with `@_spi(Experimental) import Supabase`." Code that
+spells a typed-API type also fails until you add the prefix:
+
+| Before | After |
+| --- | --- |
+| `PostgrestAggregate` | `_PostgrestAggregate` |
+| `PostgrestCastColumn` | `_PostgrestCastColumn` |
+| `PostgrestCastTarget` | `_PostgrestCastTarget` |
+| `PostgrestColumn` | `_PostgrestColumn` |
+| `PostgrestColumnExpression` | `_PostgrestColumnExpression` |
+| `PostgrestComputedField` | `_PostgrestComputedField` |
+| `PostgrestConflictResolution` | `_PostgrestConflictResolution` |
+| `PostgrestDerivedExpression` | `_PostgrestDerivedExpression` |
+| `PostgrestEmbed` | `_PostgrestEmbed` |
+| `PostgrestEmbeddedScope` | `_PostgrestEmbeddedScope` |
+| `PostgrestEmbeddingSelection` | `_PostgrestEmbeddingSelection` |
+| `PostgrestEveryPosition` | `_PostgrestEveryPosition` |
+| `PostgrestExecutableMutationPhase` | `_PostgrestExecutableMutationPhase` |
+| `PostgrestFilter` | `_PostgrestFilter` |
+| `PostgrestFilterOperator` | `_PostgrestFilterOperator` |
+| `PostgrestFilterableExpression` | `_PostgrestFilterableExpression` |
+| `PostgrestFilterablePosition` | `_PostgrestFilterablePosition` |
+| `PostgrestFilterableRequest` | `_PostgrestFilterableRequest` |
+| `PostgrestGeneratedColumn` | `_PostgrestGeneratedColumn` |
+| `PostgrestInsertPhase` | `_PostgrestInsertPhase` |
+| `PostgrestKeyedRelation` | `_PostgrestKeyedRelation` |
+| `PostgrestMutation` | `_PostgrestMutation` |
+| `PostgrestMutationPhase` | `_PostgrestMutationPhase` |
+| `PostgrestNotNull` | `_PostgrestNotNull` |
+| `PostgrestNullPlacement` | `_PostgrestNullPlacement` |
+| `PostgrestNullability` | `_PostgrestNullability` |
+| `PostgrestNullable` | `_PostgrestNullable` |
+| `PostgrestNullableColumn` | `_PostgrestNullableColumn` |
+| `PostgrestNullableExpression` | `_PostgrestNullableExpression` |
+| `PostgrestOrderableExpression` | `_PostgrestOrderableExpression` |
+| `PostgrestOrderablePosition` | `_PostgrestOrderablePosition` |
+| `PostgrestOrdering` | `_PostgrestOrdering` |
+| `PostgrestPosition` | `_PostgrestPosition` |
+| `PostgrestQuery` | `_PostgrestQuery` |
+| `PostgrestRawQuery` | `_PostgrestRawQuery` |
+| `PostgrestRelation` | `_PostgrestRelation` |
+| `PostgrestRequest` | `_PostgrestRequest` |
+| `PostgrestSchema` | `_PostgrestSchema` |
+| `PostgrestSchemaScope` | `_PostgrestSchemaScope` |
+| `PostgrestScopedPhase` | `_PostgrestScopedPhase` |
+| `PostgrestSelectAndOrder` | `_PostgrestSelectAndOrder` |
+| `PostgrestSelectOnly` | `_PostgrestSelectOnly` |
+| `PostgrestSelection` | `_PostgrestSelection` |
+| `PostgrestSource` | `_PostgrestSource` |
+| `PostgrestStoredColumn` | `_PostgrestStoredColumn` |
+| `PostgrestToManyColumn` | `_PostgrestToManyColumn` |
+| `PostgrestToManyRelation` | `_PostgrestToManyRelation` |
+| `PostgrestToOneColumn` | `_PostgrestToOneColumn` |
+| `PostgrestToOneRelation` | `_PostgrestToOneRelation` |
+| `PostgrestUnscopedPhase` | `_PostgrestUnscopedPhase` |
+| `PostgrestUpdate` | `_PostgrestUpdate` |
+| `PostgrestWritableRelation` | `_PostgrestWritableRelation` |
+| `PublicSchema` | `_PublicSchema` |
+
+Regenerate the output of `supabase-typegen`: the generated file uses the new names.

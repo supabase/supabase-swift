@@ -6,7 +6,7 @@
 //
 
 import Foundation
-import PostgrestMacros
+@_spi(Experimental) import PostgrestMacros
 import Testing
 
 // `NoteSummaries` and `Notes` are in `Generated.swift`, the view and its table in

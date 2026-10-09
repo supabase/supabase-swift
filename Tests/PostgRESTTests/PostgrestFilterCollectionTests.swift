@@ -12,7 +12,7 @@ import Testing
 
 @Suite
 struct PostgrestFilterCollectionTests {
-  struct Post: PostgrestRelation {
+  struct Post: _PostgrestRelation {
     static let relationName = "posts"
     static let selectString = "*"
 
@@ -21,15 +21,15 @@ struct PostgrestFilterCollectionTests {
     var content: String
 
     struct Columns: Sendable {
-      let tags = PostgrestColumn<Post, [String]>("tags")
-      let scheduled = PostgrestColumn<Post, String>("scheduled")
-      let content = PostgrestColumn<Post, String>("content")
+      let tags = _PostgrestColumn<Post, [String]>("tags")
+      let scheduled = _PostgrestColumn<Post, String>("scheduled")
+      let content = _PostgrestColumn<Post, String>("content")
     }
 
     static let columns = Columns()
   }
 
-  private func rendered(_ filter: PostgrestFilter<Post>) -> String {
+  private func rendered(_ filter: _PostgrestFilter<Post>) -> String {
     filter.queryItems().map { "\($0.name)=\($0.value ?? "")" }.joined(separator: "&")
   }
 

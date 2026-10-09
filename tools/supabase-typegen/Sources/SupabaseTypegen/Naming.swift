@@ -27,18 +27,21 @@ enum Naming {
 
   /// The type names the generated file or `@Table`'s expansion refer to unqualified. A generated
   /// type with one of these names would shadow it — including the types `@Table` nests inside the
-  /// struct: in `struct Draft`, the expansion's `PostgrestColumn<Draft, …>` inside `Columns`
+  /// struct: in `struct Draft`, the expansion's `_PostgrestColumn<Draft, …>` inside `Columns`
   /// finds the nested `Draft.Draft` first.
   static let referencedTypes: Set = [
     "Bool", "Date", "Decimal", "Double", "Int", "JSONValue", "String", "UUID",
     "Decodable", "Encodable", "Sendable", "CodingKey", "Optional", "Array",
     "Codable", "Hashable", "PostgrestFilterValue",
-    "PostgREST", "PostgrestMacros", "PostgrestSchema", "PublicSchema", "Foundation", "Swift",
+    "PostgREST", "PostgrestMacros", "_PostgrestSchema", "_PublicSchema", "Foundation", "Swift",
     "Type", "Self", "Any", "Protocol",
     "Draft", "Columns", "CodingKeys", "Schema",
-    "PostgrestColumn", "PostgrestNullableColumn", "PostgrestGeneratedColumn", "PostgrestNotNull",
-    "PostgrestNullable", "PostgrestRelation", "PostgrestKeyedRelation", "PostgrestWritableRelation",
-    "PostgrestEmbed", "PostgrestComputedField", "PostgrestToOneRelation", "PostgrestToManyRelation",
+    "_PostgrestColumn", "_PostgrestNullableColumn", "_PostgrestGeneratedColumn",
+    "_PostgrestNotNull",
+    "_PostgrestNullable", "_PostgrestRelation", "_PostgrestKeyedRelation",
+    "_PostgrestWritableRelation",
+    "_PostgrestEmbed", "_PostgrestComputedField", "_PostgrestToOneRelation",
+    "_PostgrestToManyRelation",
   ]
 
   /// `snake_case` (or any other spelling) to `lowerCamelCase`, escaped. `1st_place` becomes

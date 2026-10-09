@@ -28,8 +28,8 @@ public struct PostgrestOperator: RawRepresentable, Hashable, Sendable, Expressib
   }
 
   /// The legacy spelling of a typed operator, so every token is declared once, on
-  /// ``PostgrestFilterOperator``.
-  init(_ operator: PostgrestFilterOperator) {
+  /// ``_PostgrestFilterOperator``.
+  init(_ operator: _PostgrestFilterOperator) {
     self.init(rawValue: `operator`.token)
   }
 
@@ -104,7 +104,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
 
   func filtering(
     _ column: String,
-    _ operator: PostgrestFilterOperator,
+    _ operator: _PostgrestFilterOperator,
     _ value: any PostgrestFilterValue
   ) -> Self {
     appending(.comparison(column: column, operator: `operator`, operand: .value(value.rawValue)))

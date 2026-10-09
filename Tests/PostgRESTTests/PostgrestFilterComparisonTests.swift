@@ -12,7 +12,7 @@ import Testing
 
 @Suite
 struct PostgrestFilterComparisonTests {
-  struct Todo: PostgrestRelation {
+  struct Todo: _PostgrestRelation {
     static let relationName = "todos"
     static let selectString = "*"
 
@@ -21,15 +21,15 @@ struct PostgrestFilterComparisonTests {
     var dueDate: Date?
 
     struct Columns: Sendable {
-      let id = PostgrestColumn<Todo, Int>("id")
-      let isDone = PostgrestColumn<Todo, Bool>("is_done")
-      let dueDate = PostgrestNullableColumn<Todo, Date>("due_at")
+      let id = _PostgrestColumn<Todo, Int>("id")
+      let isDone = _PostgrestColumn<Todo, Bool>("is_done")
+      let dueDate = _PostgrestNullableColumn<Todo, Date>("due_at")
     }
 
     static let columns = Columns()
   }
 
-  private func rendered(_ filter: PostgrestFilter<Todo>) -> String {
+  private func rendered(_ filter: _PostgrestFilter<Todo>) -> String {
     filter.queryItems().map { "\($0.name)=\($0.value ?? "")" }.joined(separator: "&")
   }
 

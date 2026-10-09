@@ -13,7 +13,7 @@ enum PostgrestAggregateFunction: String, Sendable {
   var call: String { "\(rawValue)()" }
 }
 
-extension PostgrestDerivedExpression where Value == Int, Position == PostgrestSelectOnly {
+extension _PostgrestDerivedExpression where Value == Int, Position == _PostgrestSelectOnly {
   /// `count()` — counts rows rather than values of a column.
   public static var countAll: Self {
     Self(embed: nil, inner: PostgrestAggregateFunction.count.call)
@@ -50,12 +50,12 @@ extension PostgrestDerivedExpression where Value == Int, Position == PostgrestSe
 ///
 /// The result's `Value` is the *non-optional* type. It types the expression, not the response —
 /// nothing in the SDK decodes through it — so it stays non-optional for the same reason a nullable
-/// column's ``PostgrestColumn`` does: an optional `Value` would strip the operators from anything
+/// column's ``_PostgrestColumn`` does: an optional `Value` would strip the operators from anything
 /// chained off it.
-extension PostgrestColumnExpression {
+extension _PostgrestColumnExpression {
   private func aggregate<V>(
     _ function: PostgrestAggregateFunction
-  ) -> PostgrestDerivedExpression<Root, V, PostgrestSelectOnly> {
+  ) -> _PostgrestDerivedExpression<Root, V, _PostgrestSelectOnly> {
     _deriving(".\(function.call)")
   }
 
@@ -64,27 +64,27 @@ extension PostgrestColumnExpression {
   /// > Important: The wire value is a JSON integer, so past 2^53 a `Double` rounds it silently.
   /// > When a total can get that large, alias the aggregate in `select` and decode that field as
   /// > `Int` or `Decimal`.
-  public func sum() -> PostgrestDerivedExpression<Root, Double, PostgrestSelectOnly> {
+  public func sum() -> _PostgrestDerivedExpression<Root, Double, _PostgrestSelectOnly> {
     aggregate(.sum)
   }
 
   /// The mean of this expression across the group.
-  public func avg() -> PostgrestDerivedExpression<Root, Double, PostgrestSelectOnly> {
+  public func avg() -> _PostgrestDerivedExpression<Root, Double, _PostgrestSelectOnly> {
     aggregate(.avg)
   }
 
   /// The smallest value of this expression in the group, keeping the expression's own type.
-  public func min() -> PostgrestDerivedExpression<Root, Value, PostgrestSelectOnly> {
+  public func min() -> _PostgrestDerivedExpression<Root, Value, _PostgrestSelectOnly> {
     aggregate(.min)
   }
 
   /// The largest value of this expression in the group.
-  public func max() -> PostgrestDerivedExpression<Root, Value, PostgrestSelectOnly> {
+  public func max() -> _PostgrestDerivedExpression<Root, Value, _PostgrestSelectOnly> {
     aggregate(.max)
   }
 
   /// How many non-null values of this expression are in the group.
-  public func count() -> PostgrestDerivedExpression<Root, Int, PostgrestSelectOnly> {
+  public func count() -> _PostgrestDerivedExpression<Root, Int, _PostgrestSelectOnly> {
     aggregate(.count)
   }
 }

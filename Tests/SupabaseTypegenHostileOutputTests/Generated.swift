@@ -1,11 +1,11 @@
 public import Foundation
 public import PostgrestMacros
 
-public enum DateSchema: PostgrestSchema {
+public enum DateSchema: _PostgrestSchema {
   public static let name = "date"
 }
 
-public enum MySchema: PostgrestSchema {
+public enum MySchema: _PostgrestSchema {
   public static let name = #"my"schema"#
 }
 
@@ -115,46 +115,46 @@ public struct Hostile {
 }
 
 extension Hostile.Columns {
-  public var selfComputed: PostgrestComputedField<Hostile, String> {
+  public var selfComputed: _PostgrestComputedField<Hostile, String> {
     .init("Self")
   }
-  public var userIdComputed: PostgrestComputedField<Hostile, String> {
+  public var userIdComputed: _PostgrestComputedField<Hostile, String> {
     .init("UserId")
   }
-  public var atTime: PostgrestComputedField<Hostile, Date> {
+  public var atTime: _PostgrestComputedField<Hostile, Date> {
     .init("at_time")
   }
-  public var classes: PostgrestToManyRelation<Hostile, MySchemaClass> {
+  public var classes: _PostgrestToManyRelation<Hostile, MySchemaClass> {
     .init("classes")
   }
-  public var duration: PostgrestComputedField<Hostile, JSONValue> {
+  public var duration: _PostgrestComputedField<Hostile, JSONValue> {
     .init("duration")
   }
-  public var getThings: PostgrestComputedField<Hostile, Int> {
+  public var getThings: _PostgrestComputedField<Hostile, Int> {
     .init("getThings")
   }
-  public var getThings2: PostgrestComputedField<Hostile, Int> {
+  public var getThings2: _PostgrestComputedField<Hostile, Int> {
     .init("get_things")
   }
-  public var moodsOf: PostgrestComputedField<Hostile, [Mood]> {
+  public var moodsOf: _PostgrestComputedField<Hostile, [Mood]> {
     .init("moods_of")
   }
-  public var sayHiBackSlash: PostgrestComputedField<Hostile, String> {
+  public var sayHiBackSlash: _PostgrestComputedField<Hostile, String> {
     .init(#"say "hi" back\slash"#)
   }
-  public var shouted: PostgrestComputedField<Hostile, String> {
+  public var shouted: _PostgrestComputedField<Hostile, String> {
     .init("shouted")
   }
-  public var tags: PostgrestComputedField<Hostile, [String]> {
+  public var tags: _PostgrestComputedField<Hostile, [String]> {
     .init("tags")
   }
-  public var weirdMany: PostgrestToManyRelation<Hostile, WeIrdName> {
+  public var weirdMany: _PostgrestToManyRelation<Hostile, WeIrdName> {
     .init("weird_many")
   }
-  public var weirdOne: PostgrestToOneRelation<Hostile, WeIrdName> {
+  public var weirdOne: _PostgrestToOneRelation<Hostile, WeIrdName> {
     .init("weird_one")
   }
-  public var weirdSingle: PostgrestToOneRelation<Hostile, WeIrdName> {
+  public var weirdSingle: _PostgrestToOneRelation<Hostile, WeIrdName> {
     .init("weird_single")
   }
 }

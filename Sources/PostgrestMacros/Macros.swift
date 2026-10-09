@@ -9,7 +9,7 @@
 // protocols that live in `PostgREST`, and a user should not have to import both.
 @_exported public import PostgREST
 
-/// Synthesizes ``PostgrestRelation`` conformance for a struct that maps to a relation.
+/// Synthesizes ``_PostgrestRelation`` conformance for a struct that maps to a relation.
 ///
 /// ```swift
 /// @Table("todos")
@@ -39,22 +39,26 @@
 /// The annotated type must be declared at file scope. The macro attaches an extension, and Swift
 /// does not allow an extension of a type nested inside another type.
 ///
+/// > Warning: The typed query API is experimental. Its shape may change in a minor release.
+/// > Declaring a `@Table` type needs no opt-in, but a file that queries one through
+/// > `from(_:)` needs `@_spi(Experimental) import Supabase`.
+///
 /// - Parameters:
 ///   - name: The relation's name as PostgREST addresses it.
 ///   - schema: The type naming the Postgres schema, written as `PrivateSchema.self`. Defaults to
-///     ``PostgREST/PublicSchema``.
-///   - readOnly: Pass `true` for a view. The type then conforms to ``PostgREST/PostgrestRelation``
+///     ``PostgREST/_PublicSchema``.
+///   - readOnly: Pass `true` for a view. The type then conforms to ``PostgREST/_PostgrestRelation``
 ///     only, and the write methods are not available on it.
 @attached(
   extension,
-  conformances: Decodable, Sendable, PostgrestRelation, PostgrestKeyedRelation,
-  PostgrestWritableRelation,
+  conformances: Decodable, Sendable, _PostgrestRelation, _PostgrestKeyedRelation,
+  _PostgrestWritableRelation,
   names: named(relationName), named(Schema), named(selectString), named(Columns),
   named(columns), named(primaryKeyColumns), named(CodingKeys), named(Draft)
 )
 public macro Table(
   _ name: String,
-  schema: any PostgrestSchema.Type = PublicSchema.self,
+  schema: any _PostgrestSchema.Type = _PublicSchema.self,
   readOnly: Bool = false
 ) = #externalMacro(module: "PostgrestMacrosPlugin", type: "TableMacro")
 
@@ -86,12 +90,12 @@ public macro Column(_ name: String) =
 /// `is_nullable || is_identity || default_value !== null`, and never consults the primary key.
 ///
 /// An update can assign the key like any other column, so a natural key can be renamed:
-/// ``PostgREST/PostgrestUpdate`` takes a key path to any stored property, and the key is not
+/// ``PostgREST/_PostgrestUpdate`` takes a key path to any stored property, and the key is not
 /// special among them. Which rows a write touches is decided by the filters on the mutation, not
 /// by this marker.
 ///
-/// What the marker does produce is a ``PostgREST/PostgrestKeyedRelation`` conformance, carrying
-/// ``PostgREST/PostgrestKeyedRelation/primaryKeyColumns`` — the column names in declaration order.
+/// What the marker does produce is a ``PostgREST/_PostgrestKeyedRelation`` conformance, carrying
+/// ``PostgREST/_PostgrestKeyedRelation/primaryKeyColumns`` — the column names in declaration order.
 /// That conformance is what makes `upsert(_:)` available: it derives the conflict target from the
 /// key, so no caller repeats it as a string. Leave the marker off and the relation does not conform,
 /// which turns an upsert with no target into a compile error rather than a silent plain insert.
@@ -119,7 +123,7 @@ public macro Default() =
 ///
 /// The property stays in the decoded row, in `CodingKeys` and in `Columns`, so it selects,
 /// filters and orders like any other column. It is left out of `Draft`, and its column is a
-/// ``PostgREST/PostgrestGeneratedColumn``, which ``PostgREST/PostgrestUpdate`` cannot assign. A
+/// ``PostgREST/_PostgrestGeneratedColumn``, which ``PostgREST/_PostgrestUpdate`` cannot assign. A
 /// write naming it would be rejected by Postgres with `428C9`; with the marker it does not compile.
 ///
 /// ```swift
@@ -179,7 +183,7 @@ public macro Relationship(_ foreignKey: AnyKeyPath) =
 ///
 /// ```swift
 /// extension Channel.Columns {
-///   var getMessages: PostgrestToManyRelation<Channel, Message> { .init("get_messages") }
+///   var getMessages: _PostgrestToManyRelation<Channel, Message> { .init("get_messages") }
 /// }
 ///
 /// @SelectionOf(Channel.self)
@@ -192,13 +196,13 @@ public macro Relationship(_ foreignKey: AnyKeyPath) =
 /// ```
 ///
 /// The key path names the relationship on the selection's relation's `Columns` namespace, where a
-/// ``PostgREST/PostgrestToManyRelation`` or ``PostgREST/PostgrestToOneRelation`` declares it. The
+/// ``PostgREST/_PostgrestToManyRelation`` or ``PostgREST/_PostgrestToOneRelation`` declares it. The
 /// relationship's target has to be the property's selection's relation, or the expansion does not
 /// compile. PostgREST addresses the embed by the function name, with no foreign-key hint: a
 /// function name is never ambiguous.
 ///
-/// Scopes work as for a foreign-key embed: ``PostgREST/PostgrestQuery/embedded(_:_:)`` and
-/// ``PostgREST/PostgrestQuery/requiring(_:_:)``.
+/// Scopes work as for a foreign-key embed: ``PostgREST/_PostgrestQuery/embedded(_:_:)`` and
+/// ``PostgREST/_PostgrestQuery/requiring(_:_:)``.
 ///
 /// - Parameter computed: A key path to the relationship on the relation's `Columns`, for example
 ///   `\Channel.Columns.getMessages`.
@@ -226,8 +230,8 @@ public macro Relationship(computed: AnyKeyPath) =
 ///
 /// A property that holds another selection rather than a column is an embed, declared with
 /// ``Relationship(_:)``. A selection with at least one embed also gets an `Embeds` namespace and
-/// conforms to ``PostgREST/PostgrestEmbeddingSelection``, which is what makes
-/// ``PostgREST/PostgrestQuery/embedded(_:_:)`` and ``PostgREST/PostgrestQuery/requiring(_:_:)``
+/// conforms to ``PostgREST/_PostgrestEmbeddingSelection``, which is what makes
+/// ``PostgREST/_PostgrestQuery/embedded(_:_:)`` and ``PostgREST/_PostgrestQuery/requiring(_:_:)``
 /// available on a query selecting it.
 ///
 /// The annotated type must be declared at file scope. The macro attaches an extension, and Swift
@@ -236,7 +240,7 @@ public macro Relationship(computed: AnyKeyPath) =
 /// - Parameter relation: The relation this selects from, for example `Todo.self`.
 @attached(
   extension,
-  conformances: Decodable, Sendable, PostgrestSelection, PostgrestEmbeddingSelection,
+  conformances: Decodable, Sendable, _PostgrestSelection, _PostgrestEmbeddingSelection,
   names: named(Source), named(selectString), named(CodingKeys), named(_columnCheck),
   named(Embeds), named(embeds)
 )

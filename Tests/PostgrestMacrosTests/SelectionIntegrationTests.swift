@@ -6,7 +6,7 @@
 //
 
 import Foundation
-import PostgrestMacros
+@_spi(Experimental) import PostgrestMacros
 import Testing
 
 // File scope, for the same reason as `TableIntegrationTests`: `@Table` and `@SelectionOf` both

@@ -173,13 +173,13 @@ struct EmitterTests {
       result.standardOutput.contains(
         """
         extension Channels.Columns {
-          var channelMessages: PostgrestToManyRelation<Channels, Messages> {
+          var channelMessages: _PostgrestToManyRelation<Channels, Messages> {
             .init("channel_messages")
           }
-          var firstMessage: PostgrestToOneRelation<Channels, Messages> {
+          var firstMessage: _PostgrestToOneRelation<Channels, Messages> {
             .init("first_message")
           }
-          var shoutedSlug: PostgrestComputedField<Channels, String> {
+          var shoutedSlug: _PostgrestComputedField<Channels, String> {
             .init("shouted_slug")
           }
         }
@@ -196,11 +196,11 @@ struct EmitterTests {
     let result = run(arguments: []) { Fixture.postgrestTypegen }
     for expected in [
       "extension TodosMatview.Columns {\n  var getTodosByMatview: "
-        + "PostgrestToOneRelation<TodosMatview, Todos> {",
+        + "_PostgrestToOneRelation<TodosMatview, Todos> {",
       "extension UsersView.Columns {",
       "extension ForeignTable.Columns {",
-      "var getUserAuditSetofSingleRow: PostgrestToOneRelation<Users, UsersAudit>",
-      "var getTodosFromUser: PostgrestToManyRelation<Users, Todos>",
+      "var getUserAuditSetofSingleRow: _PostgrestToOneRelation<Users, UsersAudit>",
+      "var getTodosFromUser: _PostgrestToManyRelation<Users, Todos>",
     ] {
       #expect(result.standardOutput.contains(expected), "\(expected)")
     }
@@ -247,7 +247,7 @@ struct EmitterTests {
     let result = run(arguments: []) { input }
     #expect(result.exitCode == 0, "\(result.standardError)")
     #expect(result.standardOutput.contains("import Foundation"))
-    #expect(result.standardOutput.contains("PostgrestComputedField<T, Date>"))
+    #expect(result.standardOutput.contains("_PostgrestComputedField<T, Date>"))
   }
 
   /// An enum of a schema that is not selected is generated when only a computed field returns it.
@@ -279,7 +279,7 @@ struct EmitterTests {
     #expect(result.exitCode == 0)
     #expect(result.standardError.isEmpty, "\(result.standardError)")
     #expect(result.standardOutput.contains("enum OtherMood: String,"))
-    #expect(result.standardOutput.contains("PostgrestComputedField<T, OtherMood>"))
+    #expect(result.standardOutput.contains("_PostgrestComputedField<T, OtherMood>"))
   }
 
   /// A relation listed twice, here in both `tables` and `views`, is generated once, as the first.

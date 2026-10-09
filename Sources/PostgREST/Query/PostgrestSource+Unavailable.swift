@@ -5,7 +5,7 @@
 //  Created by Guilherme Souza on 02/10/26.
 //
 
-// Unconstrained, unavailable twins of every constrained member of `PostgrestSource`, so a
+// Unconstrained, unavailable twins of every constrained member of `_PostgrestSource`, so a
 // misuse such as `client.from(ReadOnly.self).delete()` names the real problem (SDK-1621).
 //
 // Without them the solver blames `from`: "cannot convert value of type 'ReadOnly.Type' to
@@ -19,10 +19,10 @@
 // one. The typed mutation and selection tests would stop compiling if it did not. The diagnostic
 // itself is a compile failure, which a Swift Testing test cannot assert.
 
-extension PostgrestSource {
+extension _PostgrestSource {
   @available(
     *, unavailable,
-    message: "delete() needs a PostgrestWritableRelation; this relation is read-only"
+    message: "delete() needs a _PostgrestWritableRelation; this relation is read-only"
   )
   public func delete() -> Never {
     fatalError()
@@ -31,17 +31,17 @@ extension PostgrestSource {
   @_disfavoredOverload
   @available(
     *, unavailable,
-    message: "insert(_:) takes the relation's Draft, which only a PostgrestWritableRelation has"
+    message: "insert(_:) takes the relation's Draft, which only a _PostgrestWritableRelation has"
   )
   public func insert<T>(_ values: T) -> Never {
     fatalError()
   }
 
-  // Closure form only: a `PostgrestUpdate<R>` cannot be built for a read-only `R`. The closure's
+  // Closure form only: a `_PostgrestUpdate<R>` cannot be built for a read-only `R`. The closure's
   // `$0` has nothing to infer from here, so the error is "cannot infer type of closure parameter"
   // rather than this message, but it lands on `update` instead of on `from`.
   @_disfavoredOverload
-  @available(*, unavailable, message: "update(_:) needs a PostgrestWritableRelation")
+  @available(*, unavailable, message: "update(_:) needs a _PostgrestWritableRelation")
   public func update<T>(_ build: (inout T) -> Void) -> Never {
     fatalError()
   }
@@ -50,11 +50,11 @@ extension PostgrestSource {
   @available(
     *, unavailable,
     message:
-      "upsert(_:) merges on the primary key, so it needs a PostgrestWritableRelation with a @PrimaryKey (PostgrestKeyedRelation); name a unique constraint with upsert(_:onConflict:) otherwise"
+      "upsert(_:) merges on the primary key, so it needs a _PostgrestWritableRelation with a @PrimaryKey (_PostgrestKeyedRelation); name a unique constraint with upsert(_:onConflict:) otherwise"
   )
   public func upsert<T>(
     _ values: T,
-    resolution: PostgrestConflictResolution = .mergeDuplicates
+    resolution: _PostgrestConflictResolution = .mergeDuplicates
   ) -> Never {
     fatalError()
   }
@@ -63,13 +63,13 @@ extension PostgrestSource {
   @available(
     *, unavailable,
     message:
-      "upsert(_:onConflict:) takes the relation's Draft, which only a PostgrestWritableRelation has, and key paths to its stored columns"
+      "upsert(_:onConflict:) takes the relation's Draft, which only a _PostgrestWritableRelation has, and key paths to its stored columns"
   )
   public func upsert<T>(
     _ values: T,
     onConflict column: PartialKeyPath<R.Columns>,
     _ additional: PartialKeyPath<R.Columns>...,
-    resolution: PostgrestConflictResolution = .mergeDuplicates
+    resolution: _PostgrestConflictResolution = .mergeDuplicates
   ) -> Never {
     fatalError()
   }
@@ -79,7 +79,7 @@ extension PostgrestSource {
     *, unavailable,
     message: "select(_:) takes a selection declared against this relation; its Source must be R"
   )
-  public func select<S: PostgrestSelection>(_ selection: S.Type) -> Never {
+  public func select<S: _PostgrestSelection>(_ selection: S.Type) -> Never {
     fatalError()
   }
 }

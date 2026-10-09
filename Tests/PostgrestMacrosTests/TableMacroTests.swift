@@ -41,15 +41,15 @@ struct TableMacroTests {
       extension Todo {
         static let relationName = "todos"
 
-        typealias Schema = PostgREST.PublicSchema
+        typealias Schema = PostgREST._PublicSchema
 
         static let selectString = "*"
 
         struct Columns: Sendable {
-          let id = PostgrestColumn<Todo, Int>("id")
-          let task = PostgrestColumn<Todo, String>("task")
-          let isDone = PostgrestColumn<Todo, Bool>("is_done")
-          let dueDate = PostgrestNullableColumn<Todo, Date>("due_at")
+          let id = _PostgrestColumn<Todo, Int>("id")
+          let task = _PostgrestColumn<Todo, String>("task")
+          let isDone = _PostgrestColumn<Todo, Bool>("is_done")
+          let dueDate = _PostgrestNullableColumn<Todo, Date>("due_at")
 
           init() {
           }
@@ -109,12 +109,12 @@ struct TableMacroTests {
       extension ActiveTodo {
         static let relationName = "active_todos"
 
-        typealias Schema = PostgREST.PublicSchema
+        typealias Schema = PostgREST._PublicSchema
 
         static let selectString = "*"
 
         struct Columns: Sendable {
-          let id = PostgrestColumn<ActiveTodo, Int>("id")
+          let id = _PostgrestColumn<ActiveTodo, Int>("id")
 
           init() {
           }
@@ -152,13 +152,13 @@ struct TableMacroTests {
       extension Weird {
         static let relationName = "we\"ird\\name"
 
-        typealias Schema = PostgREST.PublicSchema
+        typealias Schema = PostgREST._PublicSchema
 
         static let selectString = "*"
 
         struct Columns: Sendable {
-          let sayHi = PostgrestColumn<Weird, String>("say \"hi\"")
-          let backSlash = PostgrestColumn<Weird, String>("back\\slash")
+          let sayHi = _PostgrestColumn<Weird, String>("say \"hi\"")
+          let backSlash = _PostgrestColumn<Weird, String>("back\\slash")
 
           init() {
           }
@@ -194,7 +194,7 @@ struct TableMacroTests {
 
   @Test
   func aWritableTableWithNoKeyOmitsPrimaryKeyColumns() {
-    // `primaryKeyColumns` is mandatory on `PostgrestKeyedRelation`, so not emitting it is what
+    // `primaryKeyColumns` is mandatory on `_PostgrestKeyedRelation`, so not emitting it is what
     // keeps this type off that protocol — and off the derived-target `upsert` with it. Emitting an
     // empty literal would conform it and send an empty `on_conflict`, a different request.
     assertMacro {
@@ -213,12 +213,12 @@ struct TableMacroTests {
       extension AuditEvent {
         static let relationName = "audit_events"
 
-        typealias Schema = PostgREST.PublicSchema
+        typealias Schema = PostgREST._PublicSchema
 
         static let selectString = "*"
 
         struct Columns: Sendable {
-          let action = PostgrestColumn<AuditEvent, String>("action")
+          let action = _PostgrestColumn<AuditEvent, String>("action")
 
           init() {
           }
@@ -271,8 +271,8 @@ struct TableMacroTests {
         public static let selectString = "*"
 
         public struct Columns: Sendable {
-          public let id = PostgrestColumn<Todo, Int>("id")
-          public let task = PostgrestColumn<Todo, String>("task")
+          public let id = _PostgrestColumn<Todo, Int>("id")
+          public let task = _PostgrestColumn<Todo, String>("task")
 
           public init() {
           }
@@ -328,12 +328,12 @@ struct TableMacroTests {
       extension Todo {
         static let relationName = "todos"
 
-        typealias Schema = PostgREST.PublicSchema
+        typealias Schema = PostgREST._PublicSchema
 
         static let selectString = "*"
 
         struct Columns: Sendable {
-          let htmlURL = PostgrestColumn<Todo, String>("html_url")
+          let htmlURL = _PostgrestColumn<Todo, String>("html_url")
 
           init() {
           }
@@ -382,16 +382,16 @@ struct TableMacroTests {
       extension Todo {
         static let relationName = "todos"
 
-        typealias Schema = PostgREST.PublicSchema
+        typealias Schema = PostgREST._PublicSchema
 
         static let selectString = "*"
 
         struct Columns: Sendable {
-          let id = PostgrestColumn<Todo, Int>("id")
-          let task = PostgrestColumn<Todo, String>("task")
-          let note = PostgrestColumn<Todo, String>("note")
-          let draft = PostgrestColumn<Todo, String>("draft")
-          let review = PostgrestColumn<Todo, String>("review")
+          let id = _PostgrestColumn<Todo, Int>("id")
+          let task = _PostgrestColumn<Todo, String>("task")
+          let note = _PostgrestColumn<Todo, String>("note")
+          let draft = _PostgrestColumn<Todo, String>("draft")
+          let review = _PostgrestColumn<Todo, String>("review")
 
           init() {
           }
@@ -459,15 +459,15 @@ struct TableMacroTests {
       extension Membership {
         static let relationName = "memberships"
 
-        typealias Schema = PostgREST.PublicSchema
+        typealias Schema = PostgREST._PublicSchema
 
         static let selectString = "*"
 
         struct Columns: Sendable {
-          let userID = PostgrestColumn<Membership, Int>("user_id")
-          let teamID = PostgrestColumn<Membership, Int>("team_id")
-          let isAdmin = PostgrestColumn<Membership, Bool>("is_admin")
-          let isOwner = PostgrestColumn<Membership, Bool>("is_owner")
+          let userID = _PostgrestColumn<Membership, Int>("user_id")
+          let teamID = _PostgrestColumn<Membership, Int>("team_id")
+          let isAdmin = _PostgrestColumn<Membership, Bool>("is_admin")
+          let isOwner = _PostgrestColumn<Membership, Bool>("is_owner")
 
           init() {
           }
@@ -510,7 +510,7 @@ struct TableMacroTests {
   }
 
   /// `@Generated` keeps the column everywhere a read needs it and drops it from `Draft`; its
-  /// column type is the one `PostgrestUpdate` has no subscript for.
+  /// column type is the one `_PostgrestUpdate` has no subscript for.
   @Test
   func aGeneratedColumnIsReadOnly() {
     assertMacro {
@@ -533,14 +533,14 @@ struct TableMacroTests {
       extension Counter {
         static let relationName = "counters"
 
-        typealias Schema = PostgREST.PublicSchema
+        typealias Schema = PostgREST._PublicSchema
 
         static let selectString = "*"
 
         struct Columns: Sendable {
-          let id = PostgrestGeneratedColumn<Counter, Int, PostgrestNotNull>("id")
-          let count = PostgrestColumn<Counter, Int>("count")
-          let updatedAt = PostgrestGeneratedColumn<Counter, Date, PostgrestNullable>("updated_at")
+          let id = _PostgrestGeneratedColumn<Counter, Int, _PostgrestNotNull>("id")
+          let count = _PostgrestColumn<Counter, Int>("count")
+          let updatedAt = _PostgrestGeneratedColumn<Counter, Date, _PostgrestNullable>("updated_at")
 
           init() {
           }
@@ -602,13 +602,13 @@ struct TableMacroTests {
       extension Todo {
         static let relationName = "todos"
 
-        typealias Schema = PostgREST.PublicSchema
+        typealias Schema = PostgREST._PublicSchema
 
         static let selectString = "*"
 
         struct Columns: Sendable {
-          let id = PostgrestColumn<Todo, Int>("id")
-          let task = PostgrestColumn<Todo, String>("task")
+          let id = _PostgrestColumn<Todo, Int>("id")
+          let task = _PostgrestColumn<Todo, String>("task")
 
           init() {
           }
@@ -666,14 +666,14 @@ struct TableMacroTests {
       extension UserRole {
         static let relationName = "user_roles"
 
-        typealias Schema = PostgREST.PublicSchema
+        typealias Schema = PostgREST._PublicSchema
 
         static let selectString = "*"
 
         struct Columns: Sendable {
-          let userID = PostgrestColumn<UserRole, UUID>("user_id")
-          let roleID = PostgrestColumn<UserRole, UUID>("role_id")
-          let grantedAt = PostgrestColumn<UserRole, Date>("granted_at")
+          let userID = _PostgrestColumn<UserRole, UUID>("user_id")
+          let roleID = _PostgrestColumn<UserRole, UUID>("role_id")
+          let grantedAt = _PostgrestColumn<UserRole, Date>("granted_at")
 
           init() {
           }
@@ -734,13 +734,13 @@ struct TableMacroTests {
       extension UserRole {
         static let relationName = "user_roles"
 
-        typealias Schema = PostgREST.PublicSchema
+        typealias Schema = PostgREST._PublicSchema
 
         static let selectString = "*"
 
         struct Columns: Sendable {
-          let userID = PostgrestColumn<UserRole, UUID>("user_id")
-          let roleID = PostgrestColumn<UserRole, UUID>("role_id")
+          let userID = _PostgrestColumn<UserRole, UUID>("user_id")
+          let roleID = _PostgrestColumn<UserRole, UUID>("role_id")
 
           init() {
           }
@@ -801,15 +801,15 @@ struct TableMacroTests {
       extension Todo {
         static let relationName = "todos"
 
-        typealias Schema = PostgREST.PublicSchema
+        typealias Schema = PostgREST._PublicSchema
 
         static let selectString = "*"
 
         struct Columns: Sendable {
-          let id = PostgrestColumn<Todo, Int>("id")
-          let task = PostgrestColumn<Todo, String>("task")
-          let note = PostgrestNullableColumn<Todo, String>("note")
-          let tag = PostgrestNullableColumn<Todo, String>("tag")
+          let id = _PostgrestColumn<Todo, Int>("id")
+          let task = _PostgrestColumn<Todo, String>("task")
+          let note = _PostgrestNullableColumn<Todo, String>("note")
+          let tag = _PostgrestNullableColumn<Todo, String>("tag")
 
           init() {
           }
@@ -871,13 +871,13 @@ struct TableMacroTests {
       extension Todo {
         static let relationName = "todos"
 
-        typealias Schema = PostgREST.PublicSchema
+        typealias Schema = PostgREST._PublicSchema
 
         static let selectString = "*"
 
         struct Columns: Sendable {
-          let id = PostgrestColumn<Todo, Int>("id")
-          let dueDate = PostgrestNullableColumn<Todo, Date>("due_at")
+          let id = _PostgrestColumn<Todo, Int>("id")
+          let dueDate = _PostgrestNullableColumn<Todo, Date>("due_at")
 
           init() {
           }

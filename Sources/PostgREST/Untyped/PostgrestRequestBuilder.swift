@@ -74,11 +74,11 @@ public struct PostgrestRequestBuilder<Phase>: Sendable {
   let client: PostgrestClient
 
   /// The request this builder sends. Every method returns a copy with a changed request.
-  var request: PostgrestRequest
+  var request: _PostgrestRequest
 
   var configuration: PostgrestClient.Configuration { client.configuration }
 
-  init(client: PostgrestClient, request: PostgrestRequest) {
+  init(client: PostgrestClient, request: _PostgrestRequest) {
     self.client = client
     self.request = request
   }

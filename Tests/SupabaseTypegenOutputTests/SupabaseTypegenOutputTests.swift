@@ -7,7 +7,7 @@
 
 import Foundation
 import HTTPTypes
-import PostgrestMacros
+@_spi(Experimental) import PostgrestMacros
 import TestHelpers
 import Testing
 

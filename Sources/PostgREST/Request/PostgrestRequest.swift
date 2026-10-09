@@ -14,17 +14,18 @@ import Logging
   import FoundationNetworking
 #endif
 
-/// The request every PostgREST call sends, held as a plain value: the typed ``PostgrestQuery``,
-/// ``PostgrestMutation`` and ``PostgrestRawQuery``, and the untyped ``PostgrestRequestBuilder``.
+/// The request every PostgREST call sends, held as a plain value: the typed ``_PostgrestQuery``,
+/// ``_PostgrestMutation`` and ``_PostgrestRawQuery``, and the untyped ``PostgrestRequestBuilder``.
 ///
 /// Every method on those types returns a copy with a changed request, so chaining off the same
 /// value twice gives two independent requests.
 ///
-/// > Warning: Part of the typed query API, which is alpha. Its shape may change in a minor release.
+/// > Warning: Part of the typed query API, which is experimental. Its shape may change in a minor
+/// > release. Opt in with `@_spi(Experimental) import Supabase`.
 ///
 /// Its members are not public yet. Reading a request back without sending it is planned, but the
 /// shape is not settled.
-public struct PostgrestRequest: Sendable {
+public struct _PostgrestRequest: Sendable {
   var method: HTTPTypes.HTTPRequest.Method
   var relation: String
   var query: [URLQueryItem] = []
@@ -194,8 +195,8 @@ extension PostgrestClient {
   func makeRequest(
     _ relation: String,
     method: HTTPTypes.HTTPRequest.Method = .get
-  ) -> PostgrestRequest {
-    PostgrestRequest(
+  ) -> _PostgrestRequest {
+    _PostgrestRequest(
       method: method, relation: relation, headerFields: HTTPFields(configuration.headers))
   }
 }

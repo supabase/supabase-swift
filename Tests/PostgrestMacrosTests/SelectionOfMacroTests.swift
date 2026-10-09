@@ -144,7 +144,7 @@ struct SelectionOfMacroTests {
         ]
 
         struct Embeds: Sendable {
-          let comments = PostgrestEmbed<CommentBody>(alias: "comments", foreignKey: Comment.columns.todoID.postgrestExpression)
+          let comments = _PostgrestEmbed<CommentBody>(alias: "comments", foreignKey: Comment.columns.todoID.postgrestExpression)
 
           init() {
           }
@@ -197,7 +197,7 @@ struct SelectionOfMacroTests {
         ]
 
         struct Embeds: Sendable {
-          let author = PostgrestEmbed<UserName>(alias: "author", foreignKey: Comment.columns.authorID.postgrestExpression)
+          let author = _PostgrestEmbed<UserName>(alias: "author", foreignKey: Comment.columns.authorID.postgrestExpression)
 
           init() {
           }
@@ -249,7 +249,7 @@ struct SelectionOfMacroTests {
         ]
 
         struct Embeds: Sendable {
-          let messages = PostgrestEmbed<Message>(alias: "messages", relation: Channel.columns.getMessages)
+          let messages = _PostgrestEmbed<Message>(alias: "messages", relation: Channel.columns.getMessages)
 
           init() {
           }

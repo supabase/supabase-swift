@@ -8,15 +8,15 @@
 import Foundation
 import Testing
 
-@testable import PostgREST
+@_spi(Experimental) @testable import PostgREST
 
 @Suite
 struct PostgrestSchemaScopeTests {
-  enum PrivateSchema: PostgrestSchema {
+  enum PrivateSchema: _PostgrestSchema {
     static let name = "private"
   }
 
-  struct Secret: PostgrestWritableRelation {
+  struct Secret: _PostgrestWritableRelation {
     typealias Schema = PrivateSchema
     static let relationName = "secrets"
     static let selectString = "*"
@@ -24,7 +24,7 @@ struct PostgrestSchemaScopeTests {
     var id: Int
 
     struct Columns: Sendable {
-      let id = PostgrestColumn<Secret, Int>("id")
+      let id = _PostgrestColumn<Secret, Int>("id")
     }
 
     static let columns = Columns()
@@ -34,14 +34,14 @@ struct PostgrestSchemaScopeTests {
     }
   }
 
-  struct Todo: PostgrestRelation {
+  struct Todo: _PostgrestRelation {
     static let relationName = "todos"
     static let selectString = "*"
 
     var id: Int
 
     struct Columns: Sendable {
-      let id = PostgrestColumn<Todo, Int>("id")
+      let id = _PostgrestColumn<Todo, Int>("id")
     }
 
     static let columns = Columns()
@@ -85,7 +85,7 @@ struct PostgrestSchemaScopeTests {
   func thePublicScopeSendsItsProfile() async throws {
     let capture = QueryCapture()
 
-    _ = try await capture.client.schema(PublicSchema.self).from(Todo.self).select().execute()
+    _ = try await capture.client.schema(_PublicSchema.self).from(Todo.self).select().execute()
 
     #expect(capture.header("Accept-Profile") == "public")
   }

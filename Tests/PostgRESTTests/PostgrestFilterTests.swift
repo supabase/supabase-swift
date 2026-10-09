@@ -12,27 +12,27 @@ import Testing
 
 @Suite
 struct PostgrestFilterTests {
-  struct Todo: PostgrestRelation {
+  struct Todo: _PostgrestRelation {
     static let relationName = "todos"
     static let selectString = "*"
 
     var id: Int
 
     struct Columns: Sendable {
-      let id = PostgrestColumn<Todo, Int>("id")
+      let id = _PostgrestColumn<Todo, Int>("id")
     }
 
     static let columns = Columns()
   }
 
-  private func rendered(_ filter: PostgrestFilter<Todo>) -> [String] {
+  private func rendered(_ filter: _PostgrestFilter<Todo>) -> [String] {
     filter.queryItems().map { "\($0.name)=\($0.value ?? "")" }
   }
 
   private func c(
-    _ column: String, _ op: PostgrestFilterOperator, _ value: String
-  ) -> PostgrestFilter<Todo> {
-    PostgrestFilter<Todo>(column: column, operator: op, value: value)
+    _ column: String, _ op: _PostgrestFilterOperator, _ value: String
+  ) -> _PostgrestFilter<Todo> {
+    _PostgrestFilter<Todo>(column: column, operator: op, value: value)
   }
 
   /// PostgREST ANDs separate query parameters implicitly, so a top-level AND flattens.
@@ -87,7 +87,7 @@ struct PostgrestFilterTests {
   @Test
   func rawPassesAnOperandThroughUntouched() {
     #expect(rendered(.raw("cost::text", "eq.10")) == ["cost::text=eq.10"])
-    #expect(rendered(!PostgrestFilter<Todo>.raw("x", "eq.1")) == ["x=not.eq.1"])
+    #expect(rendered(!_PostgrestFilter<Todo>.raw("x", "eq.1")) == ["x=not.eq.1"])
     #expect(rendered(c("id", .eq, "1") || .raw("x", "eq.2")) == ["or=(id.eq.1,x.eq.2)"])
   }
 
@@ -146,7 +146,7 @@ struct PostgrestFilterTests {
   /// The same by way of `not.and`, which also routes its children through `group()`.
   @Test
   func aRawLeafUnderAndNestedInNotStillReachesTheGroupGrammar() {
-    let filter = !(c("id", .eq, "1") && PostgrestFilter<Todo>.raw("cost::text", "eq.10"))
+    let filter = !(c("id", .eq, "1") && _PostgrestFilter<Todo>.raw("cost::text", "eq.10"))
     #expect(rendered(filter) == ["not.and=(id.eq.1,cost::text.eq.10)"])
   }
 
@@ -154,7 +154,7 @@ struct PostgrestFilterTests {
   @Test
   func negatedRawLeafInsideAGroupMovesNotNextToTheOperand() {
     #expect(
-      rendered(c("id", .eq, "1") || !PostgrestFilter<Todo>.raw("x", "eq.2"))
+      rendered(c("id", .eq, "1") || !_PostgrestFilter<Todo>.raw("x", "eq.2"))
         == ["or=(id.eq.1,x.not.eq.2)"])
   }
 

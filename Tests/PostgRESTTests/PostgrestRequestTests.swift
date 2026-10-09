@@ -9,18 +9,18 @@ import Foundation
 import HTTPTypes
 import Testing
 
-@testable import PostgREST
+@_spi(Experimental) @testable import PostgREST
 
 @Suite
 struct PostgrestRequestTests {
-  struct Todo: PostgrestWritableRelation {
+  struct Todo: _PostgrestWritableRelation {
     static let relationName = "todos"
     static let selectString = "*"
 
     var id: Int
 
     struct Columns: Sendable {
-      let id = PostgrestColumn<Todo, Int>("id")
+      let id = _PostgrestColumn<Todo, Int>("id")
     }
 
     static let columns = Columns()
@@ -34,7 +34,7 @@ struct PostgrestRequestTests {
     url: URL(string: "https://example.supabase.co")!)
 
   private func accept(_ accept: String?) -> String? {
-    var request = PostgrestRequest(relation: "todos")
+    var request = _PostgrestRequest(relation: "todos")
     request.stripsNulls = true
     if let accept {
       request.headerFields[.accept] = accept

@@ -15,17 +15,34 @@ extension PostgrestClient {
   /// let todos = try await client.from(Todo.self).select().execute().value
   /// ```
   ///
-  /// A relation that names a schema other than ``PublicSchema`` is queried in that schema, unless
+  /// A relation that names a schema other than ``_PublicSchema`` is queried in that schema, unless
   /// this client was already scoped to one, in which case the client's schema wins.
   ///
+  /// > Warning: The typed query API is experimental. Its shape may change in a minor release.
+  /// > Opt in with `@_spi(Experimental) import Supabase`.
+  ///
   /// - Parameter relation: The relation type to query.
-  /// - Returns: A ``PostgrestSource`` for that relation.
-  public func from<R: PostgrestRelation>(_ relation: R.Type) -> PostgrestSource<R> {
+  /// - Returns: A ``_PostgrestSource`` for that relation.
+  @_spi(Experimental)
+  public func from<R: _PostgrestRelation>(_ relation: R.Type) -> _PostgrestSource<R> {
     let client =
-      configuration.schema == nil && R.schema != PublicSchema.name
+      configuration.schema == nil && R.schema != _PublicSchema.name
       ? schema(R.schema)
       : self
-    return PostgrestSource(client: client)
+    return _PostgrestSource(client: client)
+  }
+
+  // Without the SPI import the solver blames the argument instead: "cannot convert value of type
+  // 'Todo.Type' to expected argument type 'String'". This visible twin catches the call and names
+  // the fix. The extra `Void` parameter only avoids a redeclaration; with the SPI import, the
+  // available overload ranks above it.
+  @available(
+    *, unavailable,
+    message:
+      "The typed query API is experimental. Opt in with `@_spi(Experimental) import Supabase`."
+  )
+  public func from<R: _PostgrestRelation>(_ relation: R.Type, _: Void = ()) -> _PostgrestSource<R> {
+    fatalError()
   }
 }
 
@@ -36,15 +53,15 @@ extension PostgrestClient {
 /// `PostgrestClient.from(_:)`.
 ///
 /// This is a value type: chaining off the same source twice gives two independent requests.
-public struct PostgrestSource<R: PostgrestRelation>: Sendable {
+public struct _PostgrestSource<R: _PostgrestRelation>: Sendable {
   let client: PostgrestClient
 
-  var request: PostgrestRequest { client.makeRequest(R.relationName) }
+  var request: _PostgrestRequest { client.makeRequest(R.relationName) }
 
   /// Selects every column of the relation.
   ///
-  /// - Returns: A ``PostgrestQuery`` decoding into `[R]`.
-  public func select() -> PostgrestQuery<R, [R]> {
+  /// - Returns: A ``_PostgrestQuery`` decoding into `[R]`.
+  public func select() -> _PostgrestQuery<R, [R]> {
     select(columns: R.selectString)
   }
 
@@ -60,16 +77,16 @@ public struct PostgrestSource<R: PostgrestRelation>: Sendable {
   ///
   /// - Parameter selection: A type declaring the columns to fetch, normally annotated with
   ///   `@SelectionOf` from the `PostgrestMacros` module.
-  /// - Returns: A ``PostgrestQuery`` decoding into `[S]`.
-  public func select<S: PostgrestSelection>(
+  /// - Returns: A ``_PostgrestQuery`` decoding into `[S]`.
+  public func select<S: _PostgrestSelection>(
     _ selection: S.Type
-  ) -> PostgrestQuery<R, [S]> where S.Source == R {
+  ) -> _PostgrestQuery<R, [S]> where S.Source == R {
     select(columns: S.selectString)
   }
 
-  private func select<Output>(columns: String) -> PostgrestQuery<R, Output> {
+  private func select<Output>(columns: String) -> _PostgrestQuery<R, Output> {
     var request = request
     request.query.append(URLQueryItem(name: "select", value: columns))
-    return PostgrestQuery(client: client, request: request)
+    return _PostgrestQuery(client: client, request: request)
   }
 }

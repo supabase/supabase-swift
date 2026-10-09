@@ -4,6 +4,7 @@ import HTTPTypes
 import Helpers
 import IssueReporting
 import Logging
+@_spi(Experimental) import PostgREST
 
 #if canImport(FoundationNetworking)
   public import FoundationNetworking
@@ -34,11 +35,9 @@ import Logging
 ///
 /// ### Querying the Database
 /// - ``from(_:)->PostgrestQueryBuilder``
-/// - ``from(_:)->PostgrestSource<R>``
 /// - ``rpc(_:params:count:)``
 /// - ``rpc(_:count:)``
 /// - ``schema(_:)->PostgrestClient``
-/// - ``schema(_:)->PostgrestSchemaScope<S>``
 ///
 /// ### Realtime Channels
 /// - ``channels``
@@ -283,10 +282,25 @@ public final class SupabaseClient: Sendable {
   }
 
   /// Creates a typed source for a relation, queried in the schema the relation declares.
+  ///
+  /// > Warning: The typed query API is experimental. Its shape may change in a minor release.
+  /// > Opt in with `@_spi(Experimental) import Supabase`.
+  ///
   /// - Parameter relation: The relation type to query.
-  /// - Returns: A ``PostgrestSource`` for that relation.
-  public func from<R: PostgrestRelation>(_ relation: R.Type) -> PostgrestSource<R> {
+  /// - Returns: A ``_PostgrestSource`` for that relation.
+  @_spi(Experimental)
+  public func from<R: _PostgrestRelation>(_ relation: R.Type) -> _PostgrestSource<R> {
     rest.from(relation)
+  }
+
+  // See the unavailable `PostgrestClient.from(_:_:)` twin: it names the missing SPI import.
+  @available(
+    *, unavailable,
+    message:
+      "The typed query API is experimental. Opt in with `@_spi(Experimental) import Supabase`."
+  )
+  public func from<R: _PostgrestRelation>(_ relation: R.Type, _: Void = ()) -> _PostgrestSource<R> {
+    fatalError()
   }
 
   /// Calls a Postgres function.
@@ -329,10 +343,27 @@ public final class SupabaseClient: Sendable {
   /// Returns a scope that only queries relations declared to live in the given schema.
   ///
   /// - Precondition: ``SupabaseClientOptions/DatabaseOptions/schema`` is not set.
+  ///
+  /// > Warning: The typed query API is experimental. Its shape may change in a minor release.
+  /// > Opt in with `@_spi(Experimental) import Supabase`.
+  ///
   /// - Parameter schema: The schema type to query.
-  /// - Returns: A ``PostgrestSchemaScope`` for that schema.
-  public func schema<S: PostgrestSchema>(_ schema: S.Type) -> PostgrestSchemaScope<S> {
+  /// - Returns: A ``_PostgrestSchemaScope`` for that schema.
+  @_spi(Experimental)
+  public func schema<S: _PostgrestSchema>(_ schema: S.Type) -> _PostgrestSchemaScope<S> {
     rest.schema(schema)
+  }
+
+  // See the unavailable `PostgrestClient.from(_:_:)` twin.
+  @available(
+    *, unavailable,
+    message:
+      "The typed query API is experimental. Opt in with `@_spi(Experimental) import Supabase`."
+  )
+  public func schema<S: _PostgrestSchema>(
+    _ schema: S.Type, _: Void = ()
+  ) -> _PostgrestSchemaScope<S> {
+    fatalError()
   }
 
   /// All active Realtime channels.

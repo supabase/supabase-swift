@@ -6,7 +6,7 @@
 //
 
 import Foundation
-import PostgrestMacros
+@_spi(Experimental) import PostgrestMacros
 import Testing
 
 // File scope: `@SelectionOf` attaches extensions, which cannot be nested in a type.

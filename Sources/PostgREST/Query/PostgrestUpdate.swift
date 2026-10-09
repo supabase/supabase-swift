@@ -29,7 +29,7 @@ import Foundation
 ///
 /// Assigning the same column twice keeps the last value.
 @dynamicMemberLookup
-public struct PostgrestUpdate<R: PostgrestWritableRelation>: Encodable, Sendable {
+public struct _PostgrestUpdate<R: _PostgrestWritableRelation>: Encodable, Sendable {
   private var values: [String: PostgrestUpdateValue] = [:]
 
   /// Builds an update from a closure that assigns to the columns it changes.
@@ -38,7 +38,7 @@ public struct PostgrestUpdate<R: PostgrestWritableRelation>: Encodable, Sendable
   /// layer decide what an update changes and another layer send it.
   ///
   /// - Parameter build: A closure that assigns to the columns this update writes.
-  public init(_ build: (inout PostgrestUpdate<R>) -> Void) {
+  public init(_ build: (inout _PostgrestUpdate<R>) -> Void) {
     build(&self)
   }
 
@@ -55,16 +55,16 @@ public struct PostgrestUpdate<R: PostgrestWritableRelation>: Encodable, Sendable
   /// This overload takes a `NOT NULL` column, so the assigned type is not optional and
   /// `$0.task = nil` is a compile error.
   ///
-  /// - Parameter keyPath: A key path into the relation's ``PostgrestRelation/Columns`` namespace,
+  /// - Parameter keyPath: A key path into the relation's ``_PostgrestRelation/Columns`` namespace,
   ///   the same place a filter reads a column name from.
   public subscript<V: Encodable & Sendable>(
-    dynamicMember keyPath: KeyPath<R.Columns, PostgrestColumn<R, V>>
+    dynamicMember keyPath: KeyPath<R.Columns, _PostgrestColumn<R, V>>
   ) -> V {
     @available(
       *, unavailable,
       message: "An update names the columns it writes; it does not read them back."
     )
-    get { fatalError("PostgrestUpdate is write-only") }
+    get { fatalError("_PostgrestUpdate is write-only") }
     set {
       values[R.columns[keyPath: keyPath].postgrestExpression] = PostgrestUpdateValue(newValue)
     }
@@ -77,13 +77,13 @@ public struct PostgrestUpdate<R: PostgrestWritableRelation>: Encodable, Sendable
   ///
   /// - Parameter keyPath: A key path to one of the relation's nullable columns.
   public subscript<V: Encodable & Sendable>(
-    dynamicMember keyPath: KeyPath<R.Columns, PostgrestNullableColumn<R, V>>
+    dynamicMember keyPath: KeyPath<R.Columns, _PostgrestNullableColumn<R, V>>
   ) -> V? {
     @available(
       *, unavailable,
       message: "An update names the columns it writes; it does not read them back."
     )
-    get { fatalError("PostgrestUpdate is write-only") }
+    get { fatalError("_PostgrestUpdate is write-only") }
     set {
       values[R.columns[keyPath: keyPath].postgrestExpression] = PostgrestUpdateValue(newValue)
     }

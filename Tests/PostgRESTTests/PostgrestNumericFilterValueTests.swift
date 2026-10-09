@@ -1,10 +1,10 @@
 import Foundation
-import PostgREST
+@_spi(Experimental) import PostgREST
 import Testing
 
 @Suite
 struct PostgrestNumericFilterValueTests {
-  struct Product: PostgrestRelation {
+  struct Product: _PostgrestRelation {
     static let relationName = "products"
     static let selectString = "*"
 
@@ -14,10 +14,10 @@ struct PostgrestNumericFilterValueTests {
     var stock: Int32
 
     struct Columns: Sendable {
-      let id = PostgrestColumn<Product, Int64>("id")
-      let price = PostgrestColumn<Product, Decimal>("price")
-      let weight = PostgrestColumn<Product, Float>("weight")
-      let stock = PostgrestColumn<Product, Int32>("stock")
+      let id = _PostgrestColumn<Product, Int64>("id")
+      let price = _PostgrestColumn<Product, Decimal>("price")
+      let weight = _PostgrestColumn<Product, Float>("weight")
+      let stock = _PostgrestColumn<Product, Int32>("stock")
     }
 
     static let columns = Columns()

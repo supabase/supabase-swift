@@ -13,7 +13,7 @@ import Testing
 
 @Suite
 struct PostgrestUpdateTests {
-  struct Todo: PostgrestWritableRelation {
+  struct Todo: _PostgrestWritableRelation {
     static let relationName = "todos"
     static let selectString = "*"
 
@@ -28,9 +28,9 @@ struct PostgrestUpdateTests {
     }
 
     struct Columns: Sendable {
-      let id = PostgrestColumn<Todo, Int>("id")
-      let task = PostgrestColumn<Todo, String>("task")
-      let dueAt = PostgrestNullableColumn<Todo, String>("due_at")
+      let id = _PostgrestColumn<Todo, Int>("id")
+      let task = _PostgrestColumn<Todo, String>("task")
+      let dueAt = _PostgrestNullableColumn<Todo, String>("due_at")
     }
 
     static let columns = Columns()
@@ -43,13 +43,13 @@ struct PostgrestUpdateTests {
   /// Decodes an encoded payload back into a key/value map, because `JSONEncoder` does not
   /// preserve the key order of a dictionary-backed keyed container. Comparing the JSON text
   /// would make a passing test depend on hash ordering.
-  private func encoded(_ update: PostgrestUpdate<Todo>) throws -> [String: JSONValue] {
+  private func encoded(_ update: _PostgrestUpdate<Todo>) throws -> [String: JSONValue] {
     try JSONDecoder().decode([String: JSONValue].self, from: JSONEncoder().encode(update))
   }
 
   @Test
   func assigningNilSendsAnExplicitNull() throws {
-    let update = PostgrestUpdate<Todo> { $0.dueAt = nil }
+    let update = _PostgrestUpdate<Todo> { $0.dueAt = nil }
     expectNoDifference(try encoded(update), ["due_at": .null])
   }
 
@@ -58,7 +58,7 @@ struct PostgrestUpdateTests {
   /// that matters: its wire name (`due_at`) differs from its Swift name.
   @Test
   func assignmentsResolveThroughTheColumnNamespace() throws {
-    let update = PostgrestUpdate<Todo> {
+    let update = _PostgrestUpdate<Todo> {
       $0.task = "buy oat milk"
       $0.dueAt = nil
     }
@@ -73,13 +73,13 @@ struct PostgrestUpdateTests {
 
   @Test
   func aColumnNeverAssignedIsAbsentFromTheBody() throws {
-    let update = PostgrestUpdate<Todo> { $0.task = "buy oat milk" }
+    let update = _PostgrestUpdate<Todo> { $0.task = "buy oat milk" }
     expectNoDifference(try encoded(update), ["task": "buy oat milk"])
   }
 
   @Test
   func clearingAndSettingCoexistInOnePayload() throws {
-    let update = PostgrestUpdate<Todo> {
+    let update = _PostgrestUpdate<Todo> {
       $0.task = "buy oat milk"
       $0.dueAt = nil
     }
@@ -88,7 +88,7 @@ struct PostgrestUpdateTests {
 
   @Test
   func theLastAssignmentToAColumnWins() throws {
-    let update = PostgrestUpdate<Todo> {
+    let update = _PostgrestUpdate<Todo> {
       $0.task = "first"
       $0.task = "second"
     }
@@ -97,7 +97,7 @@ struct PostgrestUpdateTests {
 
   @Test
   func anUpdateThatNamesNothingIsEmpty() throws {
-    let update = PostgrestUpdate<Todo> { _ in }
+    let update = _PostgrestUpdate<Todo> { _ in }
     #expect(update.isEmpty)
     expectNoDifference(try encoded(update), [:])
   }
@@ -106,7 +106,7 @@ struct PostgrestUpdateTests {
   func aKeyColumnCanBeAssigned() throws {
     // SDK-1607: renaming a natural key is a real operation, so the key is assignable like any
     // other column. Targeting is the filter's job, not the payload's.
-    let update = PostgrestUpdate<Todo> { $0.id = 2 }
+    let update = _PostgrestUpdate<Todo> { $0.id = 2 }
     expectNoDifference(try encoded(update), ["id": 2])
   }
 }

@@ -8,11 +8,11 @@
 import Foundation
 import Testing
 
-@testable import PostgREST
+@_spi(Experimental) @testable import PostgREST
 
 @Suite
 struct PostgrestMutationTests {
-  struct Todo: PostgrestWritableRelation, PostgrestKeyedRelation {
+  struct Todo: _PostgrestWritableRelation, _PostgrestKeyedRelation {
     static let relationName = "todos"
     static let selectString = "*"
 
@@ -31,10 +31,10 @@ struct PostgrestMutationTests {
     }
 
     struct Columns: Sendable {
-      let id = PostgrestColumn<Todo, Int>("id")
-      let task = PostgrestColumn<Todo, String>("task")
-      let isDone = PostgrestColumn<Todo, Bool>("is_done")
-      let note = PostgrestNullableColumn<Todo, String>("note")
+      let id = _PostgrestColumn<Todo, Int>("id")
+      let task = _PostgrestColumn<Todo, String>("task")
+      let isDone = _PostgrestColumn<Todo, Bool>("is_done")
+      let note = _PostgrestNullableColumn<Todo, String>("note")
     }
 
     static let columns = Columns()
@@ -53,15 +53,15 @@ struct PostgrestMutationTests {
     }
   }
 
-  /// A view: conforms to `PostgrestRelation` only, so the writes must not be offered.
-  struct ActiveTodo: PostgrestRelation {
+  /// A view: conforms to `_PostgrestRelation` only, so the writes must not be offered.
+  struct ActiveTodo: _PostgrestRelation {
     static let relationName = "active_todos"
     static let selectString = "*"
 
     var id: Int
 
     struct Columns: Sendable {
-      let id = PostgrestColumn<ActiveTodo, Int>("id")
+      let id = _PostgrestColumn<ActiveTodo, Int>("id")
     }
 
     static let columns = Columns()
@@ -116,7 +116,7 @@ struct PostgrestMutationTests {
   @Test
   func anUpdateBuiltAheadOfTimeCanBeHandedToTheSource() async throws {
     // The payload is a value, so one layer can decide the change and another can send it.
-    let update = PostgrestUpdate<Todo> { $0.note = nil }
+    let update = _PostgrestUpdate<Todo> { $0.note = nil }
     let capture = QueryCapture()
     _ = try await capture.client.from(Todo.self).update(update).where { $0.id.eq(1) }.execute()
     #expect(capture.bodyString == #"{"note":null}"#)
@@ -140,7 +140,7 @@ struct PostgrestMutationTests {
     //   source.upsert(draft).where { $0.id.eq(1) }
     //
     // What can be checked at run time is the phase each write returns, and that the conditional
-    // `PostgrestFilterableRequest` conformance is missing where `where(_:)` must not be offered.
+    // `_PostgrestFilterableRequest` conformance is missing where `where(_:)` must not be offered.
     let source = QueryCapture().client.from(Todo.self)
     let draft = Todo.Draft(task: "buy milk")
 
@@ -149,21 +149,21 @@ struct PostgrestMutationTests {
     let update = try source.update { $0.task = "done" }
     let delete = source.delete()
 
-    #expect(type(of: insert) == PostgrestMutation<Todo, PostgrestInsertPhase>.self)
+    #expect(type(of: insert) == _PostgrestMutation<Todo, _PostgrestInsertPhase>.self)
     #expect(
-      type(of: try source.insert([draft])) == PostgrestMutation<Todo, PostgrestInsertPhase>.self)
-    #expect(type(of: upsert) == PostgrestMutation<Todo, PostgrestInsertPhase>.self)
-    #expect(type(of: update) == PostgrestMutation<Todo, PostgrestUnscopedPhase>.self)
-    #expect(type(of: delete) == PostgrestMutation<Todo, PostgrestUnscopedPhase>.self)
+      type(of: try source.insert([draft])) == _PostgrestMutation<Todo, _PostgrestInsertPhase>.self)
+    #expect(type(of: upsert) == _PostgrestMutation<Todo, _PostgrestInsertPhase>.self)
+    #expect(type(of: update) == _PostgrestMutation<Todo, _PostgrestUnscopedPhase>.self)
+    #expect(type(of: delete) == _PostgrestMutation<Todo, _PostgrestUnscopedPhase>.self)
 
-    #expect(!(insert as Any is any PostgrestFilterableRequest))
-    #expect(!(upsert as Any is any PostgrestFilterableRequest))
-    #expect(!(delete as Any is any PostgrestFilterableRequest))
+    #expect(!(insert as Any is any _PostgrestFilterableRequest))
+    #expect(!(upsert as Any is any _PostgrestFilterableRequest))
+    #expect(!(delete as Any is any _PostgrestFilterableRequest))
 
     let scoped = delete.where { $0.id.eq(1) }
-    #expect(type(of: scoped) == PostgrestMutation<Todo, PostgrestScopedPhase>.self)
-    #expect(type(of: delete.all()) == PostgrestMutation<Todo, PostgrestScopedPhase>.self)
-    #expect(scoped as Any is any PostgrestFilterableRequest)
+    #expect(type(of: scoped) == _PostgrestMutation<Todo, _PostgrestScopedPhase>.self)
+    #expect(type(of: delete.all()) == _PostgrestMutation<Todo, _PostgrestScopedPhase>.self)
+    #expect(scoped as Any is any _PostgrestFilterableRequest)
   }
 
   @Test
@@ -186,7 +186,7 @@ struct PostgrestMutationTests {
 
   @Test
   func aScopedMutationAcceptsMoreFilters() async throws {
-    // The first filter leaves the unscoped phase, later ones go through `PostgrestFilterableRequest`.
+    // The first filter leaves the unscoped phase, later ones go through `_PostgrestFilterableRequest`.
     // Both have to reach the wire, ANDed like any other `where`.
     let capture = QueryCapture()
     _ = try await capture.client.from(Todo.self).delete()

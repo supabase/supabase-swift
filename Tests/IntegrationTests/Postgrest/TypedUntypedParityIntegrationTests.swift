@@ -7,7 +7,7 @@
 
 import CustomDump
 import Foundation
-import PostgrestMacros
+@_spi(Experimental) import PostgrestMacros
 import Testing
 
 // `Users` is in `Generated.swift`. The rows are the four seed users in `supabase/seed.sql`; every
@@ -25,7 +25,7 @@ struct TypedUntypedParityIntegrationTests {
   )
 
   private func expectSameRows(
-    typed: PostgrestQuery<Users, [Users]>,
+    typed: _PostgrestQuery<Users, [Users]>,
     untyped: PostgrestFilterBuilder,
     count: Int,
     sourceLocation: SourceLocation = #_sourceLocation
