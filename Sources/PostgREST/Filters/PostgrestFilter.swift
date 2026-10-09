@@ -55,6 +55,9 @@ indirect enum PostgrestFilterNode: Sendable {
 ///
 /// A top-level `&&` renders as separate query parameters, `||` as one `or=(…)`, and an `&&`
 /// nested inside an `||` as `and(…)`.
+///
+/// The six comparisons also have operator spellings that build the same filter:
+/// `$0.priority > 3` is `$0.priority.gt(3)`, and `$0.dueDate == nil` is `$0.dueDate.isNull()`.
 public struct _PostgrestFilter<R: _PostgrestRelation>: Sendable {
   typealias Node = PostgrestFilterNode
   typealias Operand = PostgrestFilterNode.Operand
