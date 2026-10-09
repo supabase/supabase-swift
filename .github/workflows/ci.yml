@@ -195,7 +195,7 @@ jobs:
           path: |
             .build
             tools/supabase-typegen/.build
-          key: ${{ runner.os }}-spm-${{ matrix.container }}
+          key: ${{ runner.os }}-spm-${{ matrix.container }}-typegen
       - name: "Build Swift Package"
         run: swift build --explicit-target-dependency-import-check error
       - name: "Test Swift Package"
