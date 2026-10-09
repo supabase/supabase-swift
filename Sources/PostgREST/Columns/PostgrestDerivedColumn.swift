@@ -64,33 +64,60 @@ extension _PostgrestColumnExpression {
     _deriving("::\(target.sqlType)")
   }
 
-  /// Reads a `json`/`jsonb` path as text, with `->>`.
+  /// Reads a `json`/`jsonb` object key as text, with `->>`.
   ///
   /// ```swift
-  /// .where { $0.data.jsonText("name").eq("Ada") }   // data->>name=eq.Ada
+  /// .where { $0.data.jsonText("name").eq("Ada") }   // data->>"name"=eq.Ada
   /// ```
   ///
-  /// Comparison is textual, so `data->>n=gt.2` excludes a row where `n` is `10`. Use
-  /// ``jsonObject(_:)`` for numeric comparison.
+  /// Comparison is textual, so `data->>"n"=gt.2` excludes a row where `n` is `10`. Use
+  /// ``jsonObject(_:)-(String)`` for numeric comparison.
   ///
   /// Keeps the receiver's positions: a JSON path on a stored column filters and orders, one on a
   /// to-many embed does neither.
   ///
-  /// - Parameter path: The key or index to read.
-  public func jsonText(_ path: String) -> _PostgrestDerivedExpression<Root, String, Position> {
-    _deriving("->>\(path)")
+  /// - Parameter key: The object key to read. Always a key, even when it looks like a number:
+  ///   `jsonText("0")` reads the key `"0"`. Use ``jsonText(_:)-(Int)`` for an array element.
+  public func jsonText(_ key: String) -> _PostgrestDerivedExpression<Root, String, Position> {
+    _deriving("->>\(quotedJSONKey(key))")
   }
 
-  /// Reads a `json`/`jsonb` path as JSON, with `->`.
+  /// Reads a `json`/`jsonb` array element as text, with `->>`.
   ///
-  /// Comparison is numeric for numbers, so `data->n=gt.2` includes a row where `n` is `10`.
+  /// - Parameter index: The zero-based array index. A negative index counts from the end.
+  public func jsonText(_ index: Int) -> _PostgrestDerivedExpression<Root, String, Position> {
+    _deriving("->>\(index)")
+  }
+
+  /// Reads a `json`/`jsonb` object key as JSON, with `->`.
+  ///
+  /// Comparison is numeric for numbers, so `data->"n"=gt.2` includes a row where `n` is `10`.
   ///
   /// > Note: Meant to be chained onward, not selected directly. The result keeps the receiver's
   /// > `Value`, but `->` returns raw `jsonb`, which generally will not decode as that type —
-  /// > chain ``jsonText(_:)`` or ``cast(to:)`` to reach a scalar.
+  /// > chain ``jsonText(_:)-(String)`` or ``cast(to:)`` to reach a scalar.
   ///
-  /// - Parameter path: The key or index to read.
-  public func jsonObject(_ path: String) -> _PostgrestDerivedExpression<Root, Value, Position> {
-    _deriving("->\(path)")
+  /// - Parameter key: The object key to read. Always a key, even when it looks like a number.
+  ///   Use ``jsonObject(_:)-(Int)`` for an array element.
+  public func jsonObject(_ key: String) -> _PostgrestDerivedExpression<Root, Value, Position> {
+    _deriving("->\(quotedJSONKey(key))")
   }
+
+  /// Reads a `json`/`jsonb` array element as JSON, with `->`.
+  ///
+  /// - Parameter index: The zero-based array index. A negative index counts from the end.
+  public func jsonObject(_ index: Int) -> _PostgrestDerivedExpression<Root, Value, Position> {
+    _deriving("->\(index)")
+  }
+}
+
+/// PostgREST reads a bare all-digit operand as an array index and stops at a `.`, so a key is
+/// always quoted. Inside the quotes a backslash escapes the next character.
+private func quotedJSONKey(_ key: String) -> String {
+  var quoted = "\""
+  for character in key {
+    if character == "\\" || character == "\"" { quoted.append("\\") }
+    quoted.append(character)
+  }
+  return quoted + "\""
 }
