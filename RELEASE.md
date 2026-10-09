@@ -61,6 +61,13 @@ BREAKING CHANGE: This removes the old API
 
 Release-please also supports `release/*` branches for managing releases from feature branches if needed.
 
+`release/v2` ships v2 patch releases while `main` moves toward v3. Release-please updates
+`.release-please-manifest.json`, `CHANGELOG.md`, and `Sources/Helpers/Version.swift` only on
+the branch it releases from. After each `release/v2` release, open a `chore` PR to `main` that
+copies the new manifest version, the new `CHANGELOG.md` sections, and the new `_version` from
+`release/v2`. Otherwise `main` keeps an old version, and a later patch release from `main`
+proposes a version whose tag already exists.
+
 ## Manual Release
 
 To manually trigger the release-please workflow:
