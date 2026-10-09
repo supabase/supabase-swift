@@ -159,9 +159,14 @@ extension DatabaseModel {
       )
     }
 
+    // A document that lists one relation twice, say in both `tables` and `views`, keeps the first.
+    var seen: Set<QualifiedName> = []
     relations =
       kinds
-      .filter { selected.contains($0.0.schema) }
+      .filter {
+        selected.contains($0.0.schema)
+          && seen.insert(QualifiedName(schema: $0.0.schema, name: $0.0.name)).inserted
+      }
       .map { relation, kind in
         let columns = (columnsByRelation[relation.id] ?? [])
           .sorted { ($0.ordinalPosition, $0.name) < ($1.ordinalPosition, $1.name) }

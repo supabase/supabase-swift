@@ -250,6 +250,27 @@ struct EmitterTests {
     #expect(result.standardOutput.contains("PostgrestComputedField<T, Date>"))
   }
 
+  /// A relation listed twice, here in both `tables` and `views`, is generated once, as the first.
+  @Test
+  func relationListedTwiceIsGeneratedOnce() {
+    let input = Fixture.integration { object in
+      object["tables"] = [["id": 1, "schema": "public", "name": "t"]]
+      object["views"] = [
+        [
+          "id": 2, "schema": "public", "name": "t", "is_updatable": false,
+          "is_insert_enabled": false, "is_update_enabled": false,
+        ]
+      ]
+      for key in ["materializedViews", "foreignTables", "primaryKeys", "columns", "functions"] {
+        object[key] = [Any]()
+      }
+    }
+    let result = run(arguments: []) { input }
+    #expect(result.exitCode == 0, "\(result.standardError)")
+    #expect(result.standardOutput.contains("@Table(\"t\")\nstruct T {"))
+    #expect(result.standardOutput.components(separatedBy: "@Table(").count == 2)
+  }
+
   /// A document with one table, `public.t`, whose only column `c` has the given type, and the
   /// enum `public.status`.
   private func generated(format: String, typeSchema: String) -> RunResult {

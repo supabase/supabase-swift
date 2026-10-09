@@ -180,7 +180,7 @@ extension FilePlan {
     }
 
     let relationTypeNames = Dictionary(
-      uniqueKeysWithValues: zip(model.relations.map(\.name), typeNames))
+      zip(model.relations.map(\.name), typeNames), uniquingKeysWith: { first, _ in first })
     for index in relations.indices {
       relations[index].computed = computedMembers(
         of: relations[index], relationTypeNames: relationTypeNames, enumTypeNames: enumTypeNames)
