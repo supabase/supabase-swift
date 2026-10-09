@@ -126,7 +126,7 @@ other forecloses it. Worth a line in §6 (Migration) once that section is revisi
 | Errors | A struct with an extensible kind, not an enum. See [ADR 0001](../adr/0001-public-error-types-are-structs.md). |
 | Macro | Ships in a separate opt-in module, so `PostgREST` never depends on swift-syntax. |
 | Delivery order | Typed layer first over today's builders, then the value-typed core beneath it. See §5 and the note at the top of §4.1 — "today's builders" no longer means the class hierarchy this row was written against. |
-| Schema source | Both: a macro for hand-written types, and a rewritten postgres-meta generator. |
+| Schema source | Both: a macro for hand-written types, and a generator rewritten in Swift in this repository (stage 5). |
 | This document | Design only. Implementation is staged and planned separately. |
 
 Three decisions deserve their reasoning up front, because all three look arbitrary otherwise.
@@ -153,8 +153,10 @@ visibility per import, so every expression in every file of every consuming app 
 overload-resolve against. Prior art exists, but the type-check cost is real and unmeasured. Methods
 carry no such cost, so they ship first and the operator layer is added later once measured.
 
-The existing postgres-meta Swift template
-(`src/server/templates/swift.ts`) is not actively used and may be rewritten freely. Today it emits a
+The existing Swift generator is not actively used and may be replaced freely. It started as
+postgres-meta's `src/server/templates/swift.ts` and now lives in postgrest-typegen in supabase/sdk
+(`packages/postgrest-typegen/src/generation/swift.ts`). Stage 5 replaces it with a generator written in
+Swift in this repository, which reads postgrest-typegen's `GeneratorMetadata` document. Today it emits a
 `PublicSchema` namespace enum containing `TodosSelect` / `TodosInsert` / `TodosUpdate` structs with
 `CodingKeys`, conforming to `Codable, Hashable, Sendable` and `Identifiable` where an identity
 column exists. It emits no relation-name constants. The SDK team owns this contract.
@@ -341,7 +343,7 @@ Both paths synthesize them properly instead:
 This is the correction PR #1036 forced: an earlier draft defaulted `Insert = Self` for hand-written
 types, which quietly gave them worse insert semantics than generated ones.
 
-The generator's mapping follows directly from what postgres-meta exposes:
+The generator's mapping follows directly from what the `GeneratorMetadata` document exposes:
 
 | Source | Conformance |
 |---|---|
@@ -351,8 +353,10 @@ The generator's mapping follows directly from what postgres-meta exposes:
 | Materialized view | `PostgrestRelation` |
 
 **Why one write capability rather than three.** Postgres distinguishes insertable, updatable and
-deletable views, but `PostgresView` in postgres-meta exposes only a single `is_updatable` boolean and
-no trigger flags, and `PostgresMaterializedView` exposes no write metadata at all. Three protocols
+deletable views, but `PostgresView` exposed only a single `is_updatable` boolean and
+no trigger flags when this was decided, and `PostgresMaterializedView` exposes no write metadata at all.
+(Views have since gained optional, trigger-aware `is_insert_enabled` and `is_update_enabled`; see the
+stage 5 plan, Task 2.) Three protocols
 would offer a distinction the generator cannot populate without guessing. A genuinely insert-only
 view is an additive refinement later.
 
@@ -372,7 +376,7 @@ struct Todo {
 @Table("active_todos", readOnly: true)
 struct ActiveTodo { var id: UUID; var task: String }
 
-// Generator path — macro-free, emitted by postgres-meta
+// Generator path — macro-free, emitted by the stage 5 generator
 struct Todo: PostgrestWritableRelation, Codable, Hashable, Sendable, Identifiable { /* explicit */ }
 ```
 
@@ -853,7 +857,7 @@ first over today's builders, then replace the internals beneath it.**
 | 2 | Value-typed core swapped in beneath stage 1: request model, transport, response, errors, filter tree |
 | 3 | `where`, `embedded` / `requiring` scope, `@Function`; operator layer once measured |
 | 4 | Deprecate today's builders |
-| 5 | Rewrite the postgres-meta Swift template (separate repository) |
+| 5 | Rewrite the Swift generator in Swift, in this repository (SDK-2190) |
 
 **Stage 1's integration target moved.** "Today's builders" meant the `PostgrestBuilder` class
 hierarchy when this table was written, and PR #1036's typed wrappers (`TypedPostgrestQueryBuilder`
@@ -1020,8 +1024,8 @@ The branch also carries a 712-line design spec and a 1,857-line implementation p
 `docs/superpowers/` before that path was gitignored and removed from the branch tip. Three things from
 it that this document was missing:
 
-**The user-facing command is `supabase gen types swift`.** Stage 5 rewrites the postgres-meta template,
-but that is the implementation; the command is what users type, and it should use the same schema
+**The user-facing command is `supabase gen types swift`.** Stage 5 rewrites the generator in this
+repository, but that is the implementation; the command is what users type, and it should use the same schema
 introspection as `--lang typescript`.
 
 **Generated enums must conform to `PostgrestFilterValue`.** A Postgres enum becomes a Swift
