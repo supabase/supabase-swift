@@ -33,13 +33,19 @@ struct ObjectKey: Hashable, Sendable {
 
   /// Normalizes a listing prefix, which may be empty to mean the bucket root.
   init(prefix path: String) throws {
-    let segments = path.split(separator: "/", omittingEmptySubsequences: true).map(String.init)
+    self.init(lenient: path)
     if let dots = segments.first(where: { $0 == "." || $0 == ".." }) {
       throw StorageError(
         kind: .invalidRequest,
         message: "An object path must not contain a '\(dots)' segment: '\(path)'.")
     }
-    self.segments = segments
+  }
+
+  /// Normalizes without refusing anything, for ``StorageBucket/publicURL`` which cannot throw:
+  /// a `.` or `..` segment is kept and fully percent-encoded, so the URL stays valid and no parser
+  /// folds it away; the server then rejects the key.
+  init(lenient path: String) {
+    segments = path.split(separator: "/", omittingEmptySubsequences: true).map(String.init)
   }
 
   /// What stays literal inside one segment: `.urlPathAllowed` minus the separator and minus
@@ -52,6 +58,10 @@ struct ObjectKey: Hashable, Sendable {
 
   /// Percent-encodes one segment. Bucket ids go through this for the one segment they occupy.
   static func encode(_ segment: String) -> String {
-    segment.addingPercentEncoding(withAllowedCharacters: allowed) ?? segment
+    switch segment {
+    case ".": "%2E"
+    case "..": "%2E%2E"
+    default: segment.addingPercentEncoding(withAllowedCharacters: allowed) ?? segment
+    }
   }
 }
