@@ -500,6 +500,9 @@ Swift mapping (a composite, a range, `bytea`, `interval`, `time`, an extension t
 `JSONValue` decodes whatever PostgREST sends for the column and writes it back unchanged, so one
 such column never stops generation; a typed filter on it takes a `JSONValue` operand.
 
+A Postgres `date` becomes `Date`, read and written as midnight UTC. A caller who builds "today" at
+local midnight east of UTC writes the previous day; build the value in a UTC calendar.
+
 Computed fields and relationships come from `functions`: one `extension <Type>.Columns` per
 relation, for each function with one input argument of the relation's row type, in the relation's
 own schema, and not named like a column (compared as Postgres names). A scalar return type gives
