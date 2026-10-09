@@ -27,8 +27,8 @@ enum Naming {
 
   /// The type names the generated file or `@Table`'s expansion refer to unqualified. A generated
   /// type with one of these names would shadow it — including the types `@Table` nests inside the
-  /// struct: in `struct Draft`, the expansion's `PostgrestColumn<Draft, …>` inside `Columns` finds
-  /// the nested `Draft.Draft` first.
+  /// struct: in `struct Draft`, the expansion's `PostgrestColumn<Draft, …>` inside `Columns`
+  /// finds the nested `Draft.Draft` first.
   static let referencedTypes: Set = [
     "Bool", "Date", "Decimal", "Double", "Int", "JSONValue", "String", "UUID",
     "Decodable", "Encodable", "Sendable", "CodingKey", "Optional", "Array",
