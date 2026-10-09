@@ -336,7 +336,7 @@ final class StorageFileIntegrationTests {
   func getPublishURLWithTransformationOptions() throws {
     let res = try storage.from(bucketName).publicURL(
       path: uploadPath,
-      options: TransformOptions(
+      transform: ImageTransform(
         width: 700,
         height: 300,
         quality: 70

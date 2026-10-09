@@ -311,3 +311,7 @@ xattr
 darwin
 mebibyte
 maxage
+noea
+nowe
+soea
+sowe
