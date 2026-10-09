@@ -46,6 +46,9 @@ public struct SelectionOfMacro: ExtensionMacro {
     if declaration.postgrestDiagnoseRelationships(in: context) {
       return []
     }
+    if declaration.postgrestDiagnoseAggregates(in: context) {
+      return []
+    }
     let access = declaration.postgrestAccessLevel
     let properties = declaration.postgrestStoredProperties()
 
@@ -97,7 +100,9 @@ public struct SelectionOfMacro: ExtensionMacro {
   /// agree the alias is a no-op, so it is emitted unconditionally rather than guessed at.
   ///
   /// A `@Relationship` property renders an embed instead of a column, and every part of it is read
-  /// off a type rather than spelled here — see ``embed(_:)``.
+  /// off a type rather than spelled here — see ``embed(_:)``. An `@Aggregate` property renders the
+  /// aggregate of the column its key path names; the alias is what keeps two `sum()`s apart, since
+  /// PostgREST otherwise keys each by the function name.
   static func selectString(
     access: String, relation: String, properties: [StoredProperty]
   ) -> String {
@@ -108,9 +113,13 @@ public struct SelectionOfMacro: ExtensionMacro {
     var lines = ["  \(access)static let selectString = ["]
     for property in properties {
       let value =
-        property.embed != nil
-        ? embed(property)
-        : "\\(\(relation).columns.\(property.name).postgrestExpression)"
+        if property.embed != nil {
+          embed(property)
+        } else if let aggregate = property.aggregate {
+          "\\(\(aggregate.expression(relation: relation)).postgrestExpression)"
+        } else {
+          "\\(\(relation).columns.\(property.name).postgrestExpression)"
+        }
       lines.append("    \"\(postgrestEscaped(property.columnName)):\(value)\",")
     }
     lines.append("  ].joined(separator: \",\")")
@@ -186,6 +195,11 @@ public struct SelectionOfMacro: ExtensionMacro {
   /// part that can be wrong, since the compiler already checks the key path at the attribute but
   /// nothing yet says the column it names belongs to a relation this expansion can reach. A
   /// computed relationship contributes its declaration on this relation's namespace.
+  ///
+  /// An aggregate is coerced to `any _PostgrestColumnExpression<Relation, Property>`, with the
+  /// property's `Optional` removed. That one coercion checks both halves: a key path rooted on
+  /// another relation fails on `Root`, and a property typed other than the aggregate's result —
+  /// `Int` for a `sum()`, which is `Double` — fails on `Value`.
   static func columnCheck(relation: String, properties: [StoredProperty]) -> String {
     var lines = [
       "  /// Fails to compile if a property does not name a column on \(relation), or an embed's",
@@ -197,7 +211,13 @@ public struct SelectionOfMacro: ExtensionMacro {
         switch property.embed {
         case .foreignKey(let reference): "\(reference).postgrestExpression"
         case .computed(let member): "\(relation).columns.\(member).postgrestEmbedName"
-        case nil: "\(relation).columns.\(property.name).postgrestExpression"
+        case nil:
+          if let aggregate = property.aggregate {
+            "(\(aggregate.expression(relation: relation)) as any _PostgrestColumnExpression<"
+              + "\(relation), \(property.unwrappedType)>).postgrestExpression"
+          } else {
+            "\(relation).columns.\(property.name).postgrestExpression"
+          }
         }
       lines.append("    \(reference),")
     }

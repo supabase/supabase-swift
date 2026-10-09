@@ -296,4 +296,50 @@ struct SelectionOfMacroTests {
       """#
     }
   }
+
+  @Test
+  func expandsAggregates() {
+    assertMacro {
+      #"""
+      @SelectionOf(Order.self)
+      struct OrderTotals {
+        var category: String
+        @Aggregate(.sum, of: \Order.amount) var total: Double?
+        @Aggregate(.count) var rows: Int
+      }
+      """#
+    } expansion: {
+      #"""
+      struct OrderTotals {
+        var category: String
+        @Aggregate(.sum, of: \Order.amount) var total: Double?
+        @Aggregate(.count) var rows: Int
+      }
+
+      extension OrderTotals {
+        typealias Source = Order
+
+        static let selectString = [
+          "category:\(Order.columns.category.postgrestExpression)",
+          "total:\(Order.columns.amount.sum().postgrestExpression)",
+          "rows:\(_PostgrestAggregate<Order, Int>.countAll.postgrestExpression)",
+        ].joined(separator: ",")
+
+        enum CodingKeys: String, CodingKey {
+          case category = "category"
+          case total = "total"
+          case rows = "rows"
+        }
+
+        /// Fails to compile if a property does not name a column on Order, or an embed's
+        /// foreign key does not name one on its own relation.
+        private static let _columnCheck: [String] = [
+          Order.columns.category.postgrestExpression,
+          (Order.columns.amount.sum() as any _PostgrestColumnExpression<Order, Double>).postgrestExpression,
+          (_PostgrestAggregate<Order, Int>.countAll as any _PostgrestColumnExpression<Order, Int>).postgrestExpression,
+        ]
+      }
+      """#
+    }
+  }
 }

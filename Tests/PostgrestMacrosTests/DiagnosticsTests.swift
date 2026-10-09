@@ -389,4 +389,91 @@ struct DiagnosticsTests {
       """
     }
   }
+
+  @Test
+  func tableRejectsAnAggregateProperty() {
+    assertMacro {
+      #"""
+      @Table("orders")
+      struct Order {
+        var id: Int
+        @Aggregate(.sum, of: \Order.amount) var total: Double?
+      }
+      """#
+    } diagnostics: {
+      #"""
+      @Table("orders")
+      struct Order {
+        var id: Int
+        @Aggregate(.sum, of: \Order.amount) var total: Double?
+        ┬──────────────────────────────────
+        ╰─ 🛑 @Aggregate belongs on a @SelectionOf type, not on @Table
+      }
+      """#
+    }
+  }
+
+  @Test
+  func selectionOfRejectsAnAggregateWithNoColumn() {
+    // Only `count()` has a form with no column; `sum()` on its own is not a select entry.
+    assertMacro {
+      #"""
+      @SelectionOf(Order.self)
+      struct OrderTotals {
+        @Aggregate(.sum) var total: Double?
+      }
+      """#
+    } diagnostics: {
+      #"""
+      @SelectionOf(Order.self)
+      struct OrderTotals {
+        @Aggregate(.sum) var total: Double?
+        ┬───────────────
+        ╰─ 🛑 @Aggregate requires a function and a key path to one column, written with its root, as in '@Aggregate(.sum, of: \Order.amount)', or '@Aggregate(.count)' to count rows
+      }
+      """#
+    }
+  }
+
+  @Test
+  func selectionOfRejectsAnAggregateWithNoRoot() {
+    assertMacro {
+      #"""
+      @SelectionOf(Order.self)
+      struct OrderTotals {
+        @Aggregate(.sum, of: \.amount) var total: Double?
+      }
+      """#
+    } diagnostics: {
+      #"""
+      @SelectionOf(Order.self)
+      struct OrderTotals {
+        @Aggregate(.sum, of: \.amount) var total: Double?
+        ┬─────────────────────────────
+        ╰─ 🛑 @Aggregate requires a function and a key path to one column, written with its root, as in '@Aggregate(.sum, of: \Order.amount)', or '@Aggregate(.count)' to count rows
+      }
+      """#
+    }
+  }
+
+  @Test
+  func selectionOfRejectsAnAggregateOnAnEmbed() {
+    assertMacro {
+      #"""
+      @SelectionOf(Order.self)
+      struct OrderTotals {
+        @Aggregate(.count) @Relationship(\Item.orderID) var items: [ItemBody]
+      }
+      """#
+    } diagnostics: {
+      #"""
+      @SelectionOf(Order.self)
+      struct OrderTotals {
+        @Aggregate(.count) @Relationship(\Item.orderID) var items: [ItemBody]
+        ┬─────────────────
+        ╰─ 🛑 @Aggregate cannot be combined with @Relationship
+      }
+      """#
+    }
+  }
 }

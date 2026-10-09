@@ -36,6 +36,33 @@ struct SelectionTodoInheritedColumn {
   var dueDate: Date?
 }
 
+@Table("orders")
+struct SelectionOrder {
+  @PrimaryKey var id: Int
+  var category: String
+  var amount: Double
+  var tax: Double
+}
+
+@SelectionOf(SelectionOrder.self)
+struct SelectionOrderTotals: Hashable {
+  var category: String
+  @Aggregate(.sum, of: \SelectionOrder.amount) var total: Double?
+  @Aggregate(.sum, of: \SelectionOrder.tax) var taxTotal: Double?
+  @Aggregate(.count) var rows: Int
+}
+
+/// The escape hatch for what `@Aggregate` does not cover: a `Columns` member, selected under a
+/// property of the same name, which is not tied to the expression's `Value`.
+extension SelectionOrder.Columns {
+  var exactTotal: _PostgrestAggregate<SelectionOrder, Double> { amount.sum() }
+}
+
+@SelectionOf(SelectionOrder.self)
+struct SelectionOrderExactTotal {
+  var exactTotal: Int?
+}
+
 @Suite
 struct SelectionIntegrationTests {
   typealias TodoSummary = SelectionTodoSummary
@@ -89,5 +116,34 @@ struct SelectionIntegrationTests {
     // wire the `:` and `,` are escaped.
     #expect(capture.query?.contains("select=id:id,is_done:is_done") == true)
     #expect(capture.query?.contains("is_done=eq.false") == true)
+  }
+
+  @Test
+  func aColumnsMemberSelectsUnderThePropertyName() {
+    #expect(SelectionOrderExactTotal.selectString == "exact_total:amount.sum()")
+  }
+
+  @Test
+  func aggregatesGetTheirOwnKeys() {
+    // Two `sum()`s would both come back as `sum`. Each property aliases its own aggregate, so the
+    // response keys are distinct.
+    #expect(
+      SelectionOrderTotals.selectString
+        == "category:category,total:amount.sum(),tax_total:tax.sum(),rows:count()"
+    )
+  }
+
+  @Test
+  func aggregateSelectionDecodesTheGroupedRows() async throws {
+    let capture = RequestCapture(
+      body: #"[{"category":"books","total":10.5,"tax_total":2,"rows":3}]"#
+    )
+    let rows = try await capture.client
+      .from(SelectionOrder.self)
+      .select(SelectionOrderTotals.self)
+      .execute()
+      .value
+
+    #expect(rows == [SelectionOrderTotals(category: "books", total: 10.5, taxTotal: 2, rows: 3)])
   }
 }
