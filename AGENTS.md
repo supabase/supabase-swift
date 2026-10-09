@@ -513,9 +513,12 @@ skipped. Each skip, and each rename that a name clash needs, is a note on standa
 
 #### Refreshing the typegen fixtures
 
-`tools/supabase-typegen/Tests/SupabaseTypegenTests/Fixtures` holds `GeneratorMetadata` documents produced by
-postgrest-typegen's `introspect` (in [supabase/sdk](https://github.com/supabase/sdk)), the input of
-the `supabase-typegen` executable. Regenerate them after a migration in
+`tools/supabase-typegen/Tests/SupabaseTypegenTests/Fixtures` holds `GeneratorMetadata` documents,
+the input of the `supabase-typegen` executable. Two come from postgrest-typegen's `introspect` (in
+[supabase/sdk](https://github.com/supabase/sdk)): `generator_metadata.json`, from the integration
+migrations, and `postgrest_typegen_metadata.json`, from postgrest-typegen's own test fixtures.
+`hostile_metadata.json` is hand-written to exercise renames and fallbacks: the script below does not
+touch it and `provenance.json` does not describe it. Regenerate the other two after a migration in
 `Tests/IntegrationTests/supabase` changes or after updating postgrest-typegen:
 
 ```bash
