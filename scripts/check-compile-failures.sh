@@ -29,7 +29,10 @@ for fixture in Tests/CompileFailures/*.swift; do
   if output="$(swiftc -typecheck -I "$bin" -I "$bin/Modules" "$fixture" 2>&1)"; then
     echo "FAIL $fixture: compiled, but must not"
     status=1
-  elif [ "$(grep -c "^$fixture:[0-9]*:[0-9]*: error:" <<<"$output")" -ne 1 ] || ! grep -qF "error: $expected" <<<"$output"; then
+    continue
+  fi
+  errors="$(grep "^$fixture:[0-9]*:[0-9]*: error: " <<<"$output" || true)"
+  if [ "$(grep -c . <<<"$errors")" -ne 1 ] || [ "${errors#*: error: }" != "$expected" ]; then
     echo "FAIL $fixture: expected exactly one error, '$expected'. Got:"
     echo "$output"
     status=1
