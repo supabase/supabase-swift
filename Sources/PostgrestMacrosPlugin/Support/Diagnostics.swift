@@ -62,20 +62,61 @@ func postgrestEmbedReference(_ attribute: AttributeSyntax) -> PostgrestEmbedRefe
   }
 }
 
+/// What an `@Aggregate` attribute selects.
+struct PostgrestAggregateReference {
+  /// The function's case name, `sum`, which is also the name of the method that applies it.
+  var function: String
+
+  /// The column, rendered as a namespace reference, `Order.columns.amount`, or `nil` for
+  /// `count()`, which counts rows rather than values of a column.
+  var column: String?
+
+  /// The expression the selection emits, `Order.columns.amount.sum()`.
+  func expression(relation: String) -> String {
+    guard let column else { return "_PostgrestAggregate<\(relation), Int>.countAll" }
+    return "\(column).\(function)()"
+  }
+}
+
+/// The `@Aggregate` arguments, or `nil` if they are not a written `.function` and, unless the
+/// function is `.count`, an `of:` key path to one column with a written root.
+///
+/// The key path names the relation's stored property, not its `Columns` member. An attribute
+/// argument is type-checked before `@Table` expands, so `Order.columns.amount` does not resolve
+/// there, while `\Order.amount` does — the same reason `@Relationship` takes one.
+func postgrestAggregateReference(_ attribute: AttributeSyntax) -> PostgrestAggregateReference? {
+  guard
+    let arguments = attribute.arguments?.as(LabeledExprListSyntax.self),
+    let function = arguments.first?.expression.as(MemberAccessExprSyntax.self)?
+      .declName.baseName.text
+  else { return nil }
+  guard let argument = arguments.dropFirst().first else {
+    return function == "count" ? PostgrestAggregateReference(function: function) : nil
+  }
+  guard
+    argument.label?.text == "of",
+    let keyPath = argument.expression.as(KeyPathExprSyntax.self),
+    keyPath.components.count == 1,
+    let root = keyPath.root?.trimmedDescription,
+    let property = keyPath.components.first?.component.as(KeyPathPropertyComponentSyntax.self)
+  else { return nil }
+  let name = property.declName.baseName.trimmedDescription
+  return PostgrestAggregateReference(function: function, column: "\(root).columns.\(name)")
+}
+
 extension DeclGroupSyntax {
-  /// The first `@Relationship` attribute on a stored property, if any.
+  /// The first `@Relationship` or `@Aggregate` attribute on a stored property, if any.
   ///
-  /// Embeds belong to a selection, never to a relation, so `@Table` rejects one. A relation carries
-  /// columns; the property naming the other side of a join is declared by the selection that wants
-  /// it embedded.
+  /// Both belong to a selection, never to a relation, so `@Table` rejects them. A relation carries
+  /// columns; an embed or an aggregate is declared by the selection that wants it.
   ///
   /// Matching on the attribute *name* rather than resolving the macro is what keeps this working
-  /// from `@Table`, which never expands `@Relationship` itself.
-  func postgrestRelationshipAttribute() -> AttributeSyntax? {
+  /// from `@Table`, which never expands either attribute itself.
+  func postgrestSelectionOnlyAttribute() -> AttributeSyntax? {
     for member in memberBlock.members {
       guard let variable = member.decl.as(VariableDeclSyntax.self) else { continue }
       for attribute in variable.attributes.compactMap({ $0.as(AttributeSyntax.self) })
-      where attribute.attributeName.trimmedDescription == "Relationship" {
+      where ["Relationship", "Aggregate"].contains(attribute.attributeName.trimmedDescription) {
         return attribute
       }
     }
@@ -223,6 +264,40 @@ extension DeclGroupSyntax {
           at: attribute
         )
         reported = true
+      }
+    }
+    return reported
+  }
+}
+
+extension DeclGroupSyntax {
+  /// Reports every `@Aggregate` whose arguments cannot be read, and every property carrying both
+  /// `@Aggregate` and `@Relationship`.
+  ///
+  /// Left alone, the property falls through to the plain-column path and the reader gets "value of
+  /// type 'Order.Columns' has no member 'total'" on a line they did not write.
+  ///
+  /// Returns `true` if anything was reported.
+  func postgrestDiagnoseAggregates(in context: some MacroExpansionContext) -> Bool {
+    var reported = false
+    for member in memberBlock.members {
+      guard let variable = member.decl.as(VariableDeclSyntax.self) else { continue }
+      let attributes = variable.attributes.compactMap { $0.as(AttributeSyntax.self) }
+      let names = attributes.map(\.attributeName.trimmedDescription)
+      for attribute in attributes where attribute.attributeName.trimmedDescription == "Aggregate" {
+        if names.contains("Relationship") {
+          context.error("@Aggregate cannot be combined with @Relationship", at: attribute)
+          reported = true
+        } else if postgrestAggregateReference(attribute) == nil {
+          context.error(
+            """
+            @Aggregate requires a function and a key path to one column, written with its root, \
+            as in '@Aggregate(.sum, of: \\Order.amount)', or '@Aggregate(.count)' to count rows
+            """,
+            at: attribute
+          )
+          reported = true
+        }
       }
     }
     return reported

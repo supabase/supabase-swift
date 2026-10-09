@@ -212,6 +212,49 @@ public macro Relationship(computed: AnyKeyPath) =
     module: "PostgrestMacrosPlugin", type: "MarkerMacro"
   )
 
+/// Declares a selection property as an aggregate of one of the relation's columns.
+///
+/// ```swift
+/// @SelectionOf(Order.self)
+/// struct OrderTotals {
+///   var category: String
+///   @Aggregate(.sum, of: \Order.amount) var total: Double?
+///   @Aggregate(.sum, of: \Order.tax) var taxTotal: Double?
+///   @Aggregate(.count) var rows: Int
+/// }
+///
+/// // "category:category,total:amount.sum(),tax_total:tax.sum(),rows:count()"
+/// ```
+///
+/// Each entry is aliased with the property name, so two aggregates of the same function come back
+/// under their own keys rather than both as `sum`. Selecting a plain column alongside groups by it.
+///
+/// The key path names the relation's stored property, written with its root. The expansion checks
+/// it against the selection's relation, and checks the property's type against the aggregate's
+/// result: `Double` for `sum` and `avg`, `Int` for `count`, and the column's own type for `min`
+/// and `max`. Declare `sum`, `avg`, `min` and `max` optional — they are `null` when no rows match.
+///
+/// With no column, `.count` counts rows: `count()`. Every other function requires one.
+///
+/// For an expression this attribute does not cover — a cast, a JSON path, an aggregate through an
+/// embed, or a `sum` decoded as `Int` or `Decimal` past 2^53 — declare it on the relation's
+/// `Columns` and select it under a property of the same name.
+///
+/// Aggregates belong to a selection. Writing this on a ``Table(_:schema:readOnly:)`` property is a
+/// compile error.
+///
+/// > Important: Requires PostgREST's `db-aggregates-enabled` setting. It is on for hosted
+/// > Supabase and off by default when self-hosting.
+///
+/// - Parameters:
+///   - function: The aggregate function, for example `.sum`.
+///   - column: A key path to the column, for example `\Order.amount`. Omit it only for `.count`.
+@attached(peer)
+public macro Aggregate(_ function: _PostgrestAggregateFunction, of column: AnyKeyPath? = nil) =
+  #externalMacro(
+    module: "PostgrestMacrosPlugin", type: "MarkerMacro"
+  )
+
 /// Declares a named subset of a relation's columns.
 ///
 /// ```swift
@@ -234,21 +277,23 @@ public macro Relationship(computed: AnyKeyPath) =
 /// ``PostgREST/_PostgrestQuery/embedded(_:_:)`` and ``PostgREST/_PostgrestQuery/requiring(_:_:)``
 /// available on a query selecting it.
 ///
-/// A property can also name a member you declare on the relation's `Columns`, such as an
-/// aggregate or a cast. The entry is aliased with the property name like any other:
+/// A property that holds an aggregate is declared with ``Aggregate(_:of:)``. A property can also
+/// name a member you declare on the relation's `Columns`, such as a cast. Either way, the entry
+/// is aliased with the property name like any other:
 ///
 /// ```swift
 /// extension Order.Columns {
-///   var total: _PostgrestAggregate<Order, Double> { amount.sum() }
+///   var amountText: _PostgrestCastColumn<Order, String> { amount.cast(to: .text) }
 /// }
 ///
 /// @SelectionOf(Order.self)
 /// struct OrderTotals {
 ///   var category: String
-///   var total: Double?
+///   @Aggregate(.sum, of: \Order.amount) var total: Double?
+///   var amountText: String
 /// }
 ///
-/// // "category:category,total:amount.sum()"
+/// // "category:category,total:amount.sum(),amount_text:amount::text"
 /// ```
 ///
 /// The annotated type must be declared at file scope. The macro attaches an extension, and Swift

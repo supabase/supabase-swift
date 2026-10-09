@@ -23,6 +23,9 @@ struct StoredProperty {
   /// What `@Relationship` embeds, or `nil` for a plain column.
   var embed: PostgrestEmbedReference?
 
+  /// What `@Aggregate` selects, or `nil` for a plain column or an embed.
+  var aggregate: PostgrestAggregateReference? = nil
+
   /// The database column name: an explicit `@Column`, otherwise the snake_case form.
   ///
   /// For an embed this is the PostgREST alias rather than a column: the response comes back keyed
@@ -144,6 +147,7 @@ extension DeclGroupSyntax {
         .representedLiteralValue
 
       let embed = attribute("Relationship").flatMap(postgrestEmbedReference)
+      let aggregate = attribute("Aggregate").flatMap(postgrestAggregateReference)
 
       let bindings = Array(variable.bindings)
       return bindings.indices.compactMap { index -> StoredProperty? in
@@ -163,7 +167,8 @@ extension DeclGroupSyntax {
           hasDefault: attribute("Default") != nil,
           isGenerated: attribute("Generated") != nil,
           explicitColumn: column,
-          embed: embed
+          embed: embed,
+          aggregate: aggregate
         )
       }
     }

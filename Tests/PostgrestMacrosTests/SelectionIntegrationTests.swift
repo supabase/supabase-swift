@@ -44,18 +44,23 @@ struct SelectionOrder {
   var tax: Double
 }
 
-extension SelectionOrder.Columns {
-  var total: _PostgrestAggregate<SelectionOrder, Double> { amount.sum() }
-  var taxTotal: _PostgrestAggregate<SelectionOrder, Double> { tax.sum() }
-  var rows: _PostgrestAggregate<SelectionOrder, Int> { .countAll }
-}
-
 @SelectionOf(SelectionOrder.self)
 struct SelectionOrderTotals: Hashable {
   var category: String
-  var total: Double?
-  var taxTotal: Double?
-  var rows: Int
+  @Aggregate(.sum, of: \SelectionOrder.amount) var total: Double?
+  @Aggregate(.sum, of: \SelectionOrder.tax) var taxTotal: Double?
+  @Aggregate(.count) var rows: Int
+}
+
+/// The escape hatch for what `@Aggregate` does not cover: a `Columns` member, selected under a
+/// property of the same name, which is not tied to the expression's `Value`.
+extension SelectionOrder.Columns {
+  var exactTotal: _PostgrestAggregate<SelectionOrder, Double> { amount.sum() }
+}
+
+@SelectionOf(SelectionOrder.self)
+struct SelectionOrderExactTotal {
+  var exactTotal: Int?
 }
 
 @Suite
@@ -114,7 +119,12 @@ struct SelectionIntegrationTests {
   }
 
   @Test
-  func aggregatesDeclaredOnColumnsGetTheirOwnKeys() {
+  func aColumnsMemberSelectsUnderThePropertyName() {
+    #expect(SelectionOrderExactTotal.selectString == "exact_total:amount.sum()")
+  }
+
+  @Test
+  func aggregatesGetTheirOwnKeys() {
     // Two `sum()`s would both come back as `sum`. Each property aliases its own aggregate, so the
     // response keys are distinct.
     #expect(
