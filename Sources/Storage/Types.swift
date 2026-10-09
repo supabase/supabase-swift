@@ -37,7 +37,7 @@ public struct SearchOptions: Encodable, Sendable {
   /// Zero-based offset used for paginating results. Defaults to `0`.
   public var offset: Int?
 
-  /// The column and direction to sort results by. Can be any column inside a ``FileObject``.
+  /// The column and direction to sort results by. Can be any column inside a ``StorageObject``.
   public var sortBy: SortBy?
 
   /// A substring filter applied to file names.
@@ -330,7 +330,7 @@ public struct SignedUploadURL: Sendable {
   public let token: String
 }
 
-/// The response returned after a successful file upload or update.
+/// The object an upload, update, or signed-URL upload created.
 ///
 /// ## Topics
 ///
@@ -339,31 +339,28 @@ public struct SignedUploadURL: Sendable {
 /// - ``id``
 /// - ``path``
 /// - ``fullPath``
-public struct FileUploadResponse: Sendable {
-  /// The unique identifier assigned to the uploaded object.
-  public let id: String
+public struct UploadedObject: Hashable, Sendable {
+  /// The unique identifier assigned to the object. `nil` after a signed-URL upload, which
+  /// Storage answers without one.
+  public let id: UUID?
 
-  /// The relative file path within the bucket, as provided to the upload call.
+  /// The normalized file path within the bucket, as provided to the upload call.
   public let path: String
 
   /// The full storage key including the bucket name, e.g. `"avatars/user123.png"`.
   public let fullPath: String
-}
 
-/// The response returned after a successful upload via a signed URL.
-///
-/// ## Topics
-///
-/// ### Properties
-///
-/// - ``path``
-/// - ``fullPath``
-public struct SignedURLUploadResponse: Sendable {
-  /// The relative file path within the bucket, as provided to the upload call.
-  public let path: String
-
-  /// The full storage key including the bucket name, e.g. `"avatars/user123.png"`.
-  public let fullPath: String
+  /// Creates an ``UploadedObject``.
+  ///
+  /// - Parameters:
+  ///   - id: The object identifier, when Storage returned one.
+  ///   - path: The file path within the bucket.
+  ///   - fullPath: The full storage key including the bucket name.
+  public init(id: UUID? = nil, path: String, fullPath: String) {
+    self.id = id
+    self.path = path
+    self.fullPath = fullPath
+  }
 }
 
 /// Options for creating a signed upload URL.
@@ -410,19 +407,19 @@ public struct DestinationOptions: Sendable {
   }
 }
 
-/// Metadata about a file stored in a Supabase Storage bucket.
+/// One entry of a bucket listing: a file, or a folder when listing one level at a time.
 ///
-/// ``FileObject`` is returned by ``StorageBucket/list(path:options:)`` and
+/// ``StorageObject`` is returned by ``StorageBucket/list(path:options:)`` and
 /// ``StorageBucket/remove(paths:)``.
 ///
 /// ## Topics
 ///
-/// ### Identifying the file
+/// ### Identifying the object
 ///
-/// - ``id``
 /// - ``name``
-/// - ``bucketId``
-/// - ``owner``
+/// - ``id``
+/// - ``version``
+/// - ``isFolder``
 ///
 /// ### Timestamps
 ///
@@ -430,93 +427,182 @@ public struct DestinationOptions: Sendable {
 /// - ``updatedAt``
 /// - ``lastAccessedAt``
 ///
-/// ### Metadata and associations
+/// ### Metadata
 ///
 /// - ``metadata``
-/// - ``buckets``
-public struct FileObject: Identifiable, Hashable, Decodable, Sendable {
-  /// The name of the file, including its extension.
+/// - ``userMetadata``
+///
+/// ### Versioning
+///
+/// - ``isVersioned``
+/// - ``isDeleteMarker``
+/// - ``archivedAt``
+public struct StorageObject: Identifiable, Hashable, Decodable, Sendable {
+  /// The name of the file, including its extension. Relative to the listed prefix in
+  /// ``StorageBucket/list(path:options:)``, the full key in ``StorageBucket/remove(paths:)``.
   public var name: String
 
-  /// The identifier of the bucket that contains this file.
-  public var bucketId: String?
-
-  /// The user ID of the file owner.
-  public var owner: String?
-
-  /// The unique identifier of this file object.
+  /// The unique identifier of this object. `nil` for a folder row.
   public var id: UUID?
 
-  /// The date and time the file was last updated.
-  public var updatedAt: Date?
+  /// The version identifier of this object. `nil` for a folder row and on older servers.
+  public var version: String?
 
-  /// The date and time the file was created.
+  /// The date and time the object was created.
   public var createdAt: Date?
 
-  /// The date and time the file was last accessed.
+  /// The date and time the object was last updated.
+  public var updatedAt: Date?
+
+  /// The date and time the object was last accessed.
   public var lastAccessedAt: Date?
 
-  /// Arbitrary key-value metadata attached to the file at upload time.
-  public var metadata: [String: JSONValue]?
+  /// What Storage recorded about the stored bytes: size, MIME type, ETag. `nil` for a folder row.
+  public var metadata: ObjectMetadata?
 
-  /// The bucket associated with this file, if it was eagerly loaded.
-  public var buckets: Bucket?
+  /// The metadata the uploader attached through ``UploadOptions/metadata``.
+  public var userMetadata: [String: JSONValue]?
 
-  /// Creates a ``FileObject``.
-  ///
-  /// - Parameters:
-  ///   - name: The file name including its extension.
-  ///   - bucketId: The bucket identifier.
-  ///   - owner: The owner's user ID.
-  ///   - id: The unique object identifier.
-  ///   - updatedAt: Last-updated timestamp.
-  ///   - createdAt: Creation timestamp.
-  ///   - lastAccessedAt: Last-accessed timestamp.
-  ///   - metadata: Arbitrary key-value metadata.
-  ///   - buckets: The associated ``Bucket``, if available.
+  /// Whether this object was created while the bucket had versioning enabled.
+  public var isVersioned: Bool?
+
+  /// Whether this entry is a delete marker rather than an object version.
+  public var isDeleteMarker: Bool?
+
+  /// The date and time this version was archived.
+  public var archivedAt: Date?
+
+  /// Whether this entry is a folder: ``StorageBucket/list(path:options:)`` lists one level, and
+  /// a folder arrives as a row with no ``id``.
+  public var isFolder: Bool { id == nil }
+
+  /// Creates a ``StorageObject``.
   public init(
     name: String,
-    bucketId: String? = nil,
-    owner: String? = nil,
     id: UUID? = nil,
-    updatedAt: Date? = nil,
+    version: String? = nil,
     createdAt: Date? = nil,
+    updatedAt: Date? = nil,
     lastAccessedAt: Date? = nil,
-    metadata: [String: JSONValue]? = nil,
-    buckets: Bucket? = nil
+    metadata: ObjectMetadata? = nil,
+    userMetadata: [String: JSONValue]? = nil,
+    isVersioned: Bool? = nil,
+    isDeleteMarker: Bool? = nil,
+    archivedAt: Date? = nil
   ) {
     self.name = name
-    self.bucketId = bucketId
-    self.owner = owner
     self.id = id
-    self.updatedAt = updatedAt
+    self.version = version
     self.createdAt = createdAt
+    self.updatedAt = updatedAt
     self.lastAccessedAt = lastAccessedAt
     self.metadata = metadata
-    self.buckets = buckets
+    self.userMetadata = userMetadata
+    self.isVersioned = isVersioned
+    self.isDeleteMarker = isDeleteMarker
+    self.archivedAt = archivedAt
   }
 
   enum CodingKeys: String, CodingKey {
     case name
-    case bucketId = "bucket_id"
-    case owner
     case id
-    case updatedAt = "updated_at"
+    case version
     case createdAt = "created_at"
+    case updatedAt = "updated_at"
     case lastAccessedAt = "last_accessed_at"
     case metadata
-    case buckets
+    case userMetadata = "user_metadata"
+    case isVersioned = "is_versioned"
+    case isDeleteMarker = "is_delete_marker"
+    case archivedAt = "archived_at"
   }
 }
 
-/// Extended metadata about a file stored in Supabase Storage, returned by the v2 API.
+/// What Storage recorded about an object's bytes when it was stored.
 ///
-/// ``FileObjectV2`` is returned by ``StorageBucket/info(path:)`` and provides richer metadata
-/// compared to ``FileObject``.
+/// Keys Storage adds later, or that this SDK does not name, are kept in ``additional``.
 ///
 /// ## Topics
 ///
-/// ### Identifying the file
+/// ### Properties
+///
+/// - ``eTag``
+/// - ``size``
+/// - ``mimeType``
+/// - ``cacheControl``
+/// - ``lastModified``
+/// - ``contentLength``
+/// - ``additional``
+public struct ObjectMetadata: Hashable, Decodable, Sendable {
+  /// The entity tag of the stored bytes.
+  public var eTag: String?
+
+  /// The size in bytes.
+  public var size: Int64?
+
+  /// The MIME type, as sent in `Content-Type` at upload.
+  public var mimeType: String?
+
+  /// The `Cache-Control` header stored with the object.
+  public var cacheControl: String?
+
+  /// When the bytes were last written.
+  public var lastModified: Date?
+
+  /// The `Content-Length` recorded at upload, usually equal to ``size``.
+  public var contentLength: Int64?
+
+  /// Every other key Storage sent, by its wire name.
+  public var additional: [String: JSONValue]
+
+  /// Creates an ``ObjectMetadata``.
+  public init(
+    eTag: String? = nil,
+    size: Int64? = nil,
+    mimeType: String? = nil,
+    cacheControl: String? = nil,
+    lastModified: Date? = nil,
+    contentLength: Int64? = nil,
+    additional: [String: JSONValue] = [:]
+  ) {
+    self.eTag = eTag
+    self.size = size
+    self.mimeType = mimeType
+    self.cacheControl = cacheControl
+    self.lastModified = lastModified
+    self.contentLength = contentLength
+    self.additional = additional
+  }
+
+  private enum CodingKeys: String, CodingKey, CaseIterable {
+    case eTag
+    case size
+    case mimeType = "mimetype"
+    case cacheControl
+    case lastModified
+    case contentLength
+  }
+
+  public init(from decoder: any Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    eTag = try container.decodeIfPresent(String.self, forKey: .eTag)
+    size = try container.decodeIfPresent(Int64.self, forKey: .size)
+    mimeType = try container.decodeIfPresent(String.self, forKey: .mimeType)
+    cacheControl = try container.decodeIfPresent(String.self, forKey: .cacheControl)
+    lastModified = try container.decodeIfPresent(String.self, forKey: .lastModified)?.date
+    contentLength = try container.decodeIfPresent(Int64.self, forKey: .contentLength)
+
+    let known = Set(CodingKeys.allCases.map(\.rawValue))
+    let all = try decoder.singleValueContainer().decode([String: JSONValue].self)
+    additional = all.filter { !known.contains($0.key) }
+  }
+}
+
+/// Everything Storage knows about one object, returned by ``StorageBucket/info(path:)``.
+///
+/// ## Topics
+///
+/// ### Identifying the object
 ///
 /// - ``id``
 /// - ``version``
@@ -528,7 +614,7 @@ public struct FileObject: Identifiable, Hashable, Decodable, Sendable {
 /// - ``size``
 /// - ``contentType``
 /// - ``cacheControl``
-/// - ``etag``
+/// - ``eTag``
 ///
 /// ### Timestamps
 ///
@@ -537,63 +623,115 @@ public struct FileObject: Identifiable, Hashable, Decodable, Sendable {
 /// - ``lastAccessedAt``
 /// - ``lastModified``
 ///
-/// ### Metadata
+/// ### Metadata and versioning
 ///
-/// - ``metadata``
-public struct FileObjectV2: Identifiable, Hashable, Decodable, Sendable {
+/// - ``userMetadata``
+/// - ``isVersioned``
+/// - ``isDeleteMarker``
+/// - ``archivedAt``
+public struct ObjectInfo: Identifiable, Hashable, Decodable, Sendable {
   /// The unique identifier of this object.
-  public let id: String
+  public var id: UUID
 
-  /// The storage version string for this object.
-  public let version: String
+  /// The version identifier of this object.
+  public var version: String
 
-  /// The file name including its extension.
-  public let name: String
+  /// The full key of the object within its bucket.
+  public var name: String
 
-  /// The identifier of the bucket that contains this file.
-  public let bucketId: String?
+  /// The identifier of the bucket that contains this object.
+  public var bucketId: String?
 
-  /// The date and time the file was last updated.
-  public let updatedAt: Date?
+  /// The size in bytes.
+  public var size: Int64?
 
-  /// The date and time the file was created.
-  public let createdAt: Date?
+  /// The MIME type, as sent in `Content-Type` at upload.
+  public var contentType: String?
 
-  /// The date and time the file was last accessed.
-  public let lastAccessedAt: Date?
+  /// The `Cache-Control` header stored with the object.
+  public var cacheControl: String?
 
-  /// The file size in bytes.
-  public let size: Int?
+  /// The entity tag of the stored bytes.
+  public var eTag: String?
 
-  /// The `Cache-Control` header value associated with this file.
-  public let cacheControl: String?
+  /// When the bytes were last written.
+  public var lastModified: Date?
 
-  /// The MIME content type of the file.
-  public let contentType: String?
+  /// The date and time the object was created.
+  public var createdAt: Date?
 
-  /// The ETag of the stored object.
-  public let etag: String?
+  /// The date and time the object row was last updated.
+  public var updatedAt: Date?
 
-  /// The date and time the object was last modified.
-  public let lastModified: Date?
+  /// The date and time the object was last accessed.
+  public var lastAccessedAt: Date?
 
-  /// Arbitrary key-value metadata attached to the file at upload time.
-  public let metadata: [String: JSONValue]?
+  /// The metadata the uploader attached through ``UploadOptions/metadata``.
+  public var userMetadata: [String: JSONValue]?
+
+  /// Whether this object was created while the bucket had versioning enabled.
+  public var isVersioned: Bool?
+
+  /// Whether this entry is a delete marker rather than an object version.
+  public var isDeleteMarker: Bool?
+
+  /// The date and time this version was archived.
+  public var archivedAt: Date?
+
+  /// Creates an ``ObjectInfo``.
+  public init(
+    id: UUID,
+    version: String,
+    name: String,
+    bucketId: String? = nil,
+    size: Int64? = nil,
+    contentType: String? = nil,
+    cacheControl: String? = nil,
+    eTag: String? = nil,
+    lastModified: Date? = nil,
+    createdAt: Date? = nil,
+    updatedAt: Date? = nil,
+    lastAccessedAt: Date? = nil,
+    userMetadata: [String: JSONValue]? = nil,
+    isVersioned: Bool? = nil,
+    isDeleteMarker: Bool? = nil,
+    archivedAt: Date? = nil
+  ) {
+    self.id = id
+    self.version = version
+    self.name = name
+    self.bucketId = bucketId
+    self.size = size
+    self.contentType = contentType
+    self.cacheControl = cacheControl
+    self.eTag = eTag
+    self.lastModified = lastModified
+    self.createdAt = createdAt
+    self.updatedAt = updatedAt
+    self.lastAccessedAt = lastAccessedAt
+    self.userMetadata = userMetadata
+    self.isVersioned = isVersioned
+    self.isDeleteMarker = isDeleteMarker
+    self.archivedAt = archivedAt
+  }
 
   enum CodingKeys: String, CodingKey {
     case id
     case version
     case name
     case bucketId = "bucket_id"
-    case updatedAt = "updated_at"
-    case createdAt = "created_at"
-    case lastAccessedAt = "last_accessed_at"
     case size
-    case cacheControl = "cache_control"
     case contentType = "content_type"
-    case etag
+    case cacheControl = "cache_control"
+    case eTag = "etag"
     case lastModified = "last_modified"
-    case metadata
+    case createdAt = "created_at"
+    case updatedAt = "updated_at"
+    case lastAccessedAt = "last_accessed_at"
+    case userMetadata = "metadata"
+    case isVersioned = "is_versioned"
+    case isDeleteMarker = "is_delete_marker"
+    case archivedAt = "archived_at"
   }
 }
 

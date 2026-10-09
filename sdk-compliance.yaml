@@ -1510,6 +1510,11 @@ features:
     symbols:
       - StorageBucket.upload
       - UploadOptions.upsert
+      - UploadedObject
+      - UploadedObject.init
+      - UploadedObject.id
+      - UploadedObject.path
+      - UploadedObject.fullPath
   storage.file_buckets.download:
     status: implemented
     symbols:
@@ -1518,6 +1523,29 @@ features:
     status: implemented
     symbols:
       - StorageBucket.list
+      - StorageObject
+      - StorageObject.init
+      - StorageObject.name
+      - StorageObject.id
+      - StorageObject.version
+      - StorageObject.createdAt
+      - StorageObject.updatedAt
+      - StorageObject.lastAccessedAt
+      - StorageObject.metadata
+      - StorageObject.userMetadata
+      - StorageObject.isVersioned
+      - StorageObject.isDeleteMarker
+      - StorageObject.archivedAt
+      - StorageObject.isFolder
+      - ObjectMetadata
+      - ObjectMetadata.init
+      - ObjectMetadata.eTag
+      - ObjectMetadata.size
+      - ObjectMetadata.mimeType
+      - ObjectMetadata.cacheControl
+      - ObjectMetadata.lastModified
+      - ObjectMetadata.contentLength
+      - ObjectMetadata.additional
       - SortOrder
       - SortOrder.init
       - SortOrder.rawValue
@@ -1571,6 +1599,24 @@ features:
     status: implemented
     symbols:
       - StorageBucket.info
+      - ObjectInfo
+      - ObjectInfo.init
+      - ObjectInfo.id
+      - ObjectInfo.version
+      - ObjectInfo.name
+      - ObjectInfo.bucketId
+      - ObjectInfo.size
+      - ObjectInfo.contentType
+      - ObjectInfo.cacheControl
+      - ObjectInfo.eTag
+      - ObjectInfo.lastModified
+      - ObjectInfo.createdAt
+      - ObjectInfo.updatedAt
+      - ObjectInfo.lastAccessedAt
+      - ObjectInfo.userMetadata
+      - ObjectInfo.isVersioned
+      - ObjectInfo.isDeleteMarker
+      - ObjectInfo.archivedAt
   storage.file_buckets.download_with_transform:
     status: implemented
     symbols:

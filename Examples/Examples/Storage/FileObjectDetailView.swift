@@ -10,7 +10,7 @@ import SwiftUI
 
 struct FileObjectDetailView: View {
   let api: StorageBucket
-  let fileObject: FileObject
+  let fileObject: StorageObject
 
   @Environment(\.openURL) var openURL
   @State var lastActionResult: (action: String, result: Any)?
@@ -21,14 +21,15 @@ struct FileObjectDetailView: View {
         JSONValueView(
           value: .object([
             "name": .string(fileObject.name),
-            "bucketId": fileObject.bucketId.map(JSONValue.string) ?? .null,
-            "owner": fileObject.owner.map(JSONValue.string) ?? .null,
             "id": fileObject.id.map { .string($0.uuidString) } ?? .null,
             "updatedAt": fileObject.updatedAt.map { .string($0.description) } ?? .null,
             "createdAt": fileObject.createdAt.map { .string($0.description) } ?? .null,
             "lastAccessedAt": fileObject.lastAccessedAt.map { .string($0.description) } ?? .null,
-            "metadata": fileObject.metadata.map(JSONValue.object) ?? .null,
-            "buckets": fileObject.buckets.map { .string($0.name) } ?? .null,
+            "version": fileObject.version.map(JSONValue.string) ?? .null,
+            "size": fileObject.metadata?.size.map { .string(String($0)) } ?? .null,
+            "mimeType": fileObject.metadata?.mimeType.map(JSONValue.string) ?? .null,
+            "eTag": fileObject.metadata?.eTag.map(JSONValue.string) ?? .null,
+            "userMetadata": fileObject.userMetadata.map(JSONValue.object) ?? .null,
           ])
         )
       }

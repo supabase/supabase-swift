@@ -133,18 +133,15 @@ public struct StorageBucket: Sendable {
     path: String,
     file: FileUpload,
     options: UploadOptions
-  ) async throws -> FileUploadResponse {
+  ) async throws -> UploadedObject {
     let key = try ObjectKey(path)
     let response: UploadResponse = try await api.execute(
       api.requests.upload(method: method, bucket: id, key: key, file: file, options: options)
     )
     .decoded()
 
-    guard let objectId = response.id else {
-      throw StorageError(kind: .decoding, message: "The upload response carries no object id.")
-    }
-
-    return FileUploadResponse(id: objectId, path: key.path, fullPath: response.key)
+    return UploadedObject(
+      id: response.id.flatMap(UUID.init(uuidString:)), path: key.path, fullPath: response.key)
   }
 
   /// Uploads a file to an existing bucket.
@@ -159,14 +156,14 @@ public struct StorageBucket: Sendable {
   ///     The bucket must already exist before attempting to upload.
   ///   - data: The raw bytes to store in the bucket.
   ///   - options: Upload options such as cache control, content type, and upsert behavior.
-  /// - Returns: A ``FileUploadResponse`` containing the stored object's identifier and path.
+  /// - Returns: An ``UploadedObject`` containing the stored object's identifier and path.
   /// - Throws: ``StorageError`` if the upload fails or the caller is not authorized.
   @discardableResult
   public func upload(
     path: String,
     data: Data,
     options: UploadOptions = UploadOptions()
-  ) async throws -> FileUploadResponse {
+  ) async throws -> UploadedObject {
     try await _uploadOrUpdate(method: .post, path: path, file: .data(data), options: options)
   }
 
@@ -181,14 +178,14 @@ public struct StorageBucket: Sendable {
   ///     The bucket must already exist before attempting to upload.
   ///   - fileURL: A `file://` URL pointing to the local file to upload.
   ///   - options: Upload options such as cache control, content type, and upsert behavior.
-  /// - Returns: A ``FileUploadResponse`` containing the stored object's identifier and path.
+  /// - Returns: An ``UploadedObject`` containing the stored object's identifier and path.
   /// - Throws: ``StorageError`` if the upload fails or the caller is not authorized.
   @discardableResult
   public func upload(
     path: String,
     fileURL: URL,
     options: UploadOptions = UploadOptions()
-  ) async throws -> FileUploadResponse {
+  ) async throws -> UploadedObject {
     try await _uploadOrUpdate(method: .post, path: path, file: .url(fileURL), options: options)
   }
 
@@ -203,14 +200,14 @@ public struct StorageBucket: Sendable {
   ///   - data: The raw bytes to overwrite the existing file with.
   ///   - options: Upload options such as cache control and content type. `upsert` is ignored:
   ///     `update` always replaces the object.
-  /// - Returns: A ``FileUploadResponse`` containing the updated object's identifier and path.
+  /// - Returns: An ``UploadedObject`` containing the updated object's identifier and path.
   /// - Throws: ``StorageError`` if the path does not exist or the caller is not authorized.
   @discardableResult
   public func update(
     path: String,
     data: Data,
     options: UploadOptions = UploadOptions()
-  ) async throws -> FileUploadResponse {
+  ) async throws -> UploadedObject {
     try await _uploadOrUpdate(method: .put, path: path, file: .data(data), options: options)
   }
 
@@ -225,14 +222,14 @@ public struct StorageBucket: Sendable {
   ///   - fileURL: A `file://` URL pointing to the local file to use as the replacement.
   ///   - options: Upload options such as cache control and content type. `upsert` is ignored:
   ///     `update` always replaces the object.
-  /// - Returns: A ``FileUploadResponse`` containing the updated object's identifier and path.
+  /// - Returns: An ``UploadedObject`` containing the updated object's identifier and path.
   /// - Throws: ``StorageError`` if the path does not exist or the caller is not authorized.
   @discardableResult
   public func update(
     path: String,
     fileURL: URL,
     options: UploadOptions = UploadOptions()
-  ) async throws -> FileUploadResponse {
+  ) async throws -> UploadedObject {
     try await _uploadOrUpdate(method: .put, path: path, file: .url(fileURL), options: options)
   }
 
@@ -478,10 +475,10 @@ public struct StorageBucket: Sendable {
   ///
   /// - Parameter paths: File paths to delete, including the file name,
   ///   e.g. `["folder/image.png", "other/doc.pdf"]`.
-  /// - Returns: An array of ``FileObject`` values representing the files that were removed.
+  /// - Returns: An array of ``StorageObject`` values representing the files that were removed.
   /// - Throws: ``StorageError`` if the request fails or the caller is not authorized.
   @discardableResult
-  public func remove(paths: [String]) async throws -> [FileObject] {
+  public func remove(paths: [String]) async throws -> [StorageObject] {
     try await api.execute(api.requests.remove(bucket: id, keys: paths.map { try ObjectKey($0) }))
       .decoded()
   }
@@ -496,12 +493,12 @@ public struct StorageBucket: Sendable {
   ///   - path: The folder prefix to list, e.g. `"users/"`. Pass `nil` to list the bucket root.
   ///   - options: Search options for filtering, sorting, and paginating results. Defaults to the
   ///     first 100 files sorted by name ascending.
-  /// - Returns: An array of ``FileObject`` values representing the matching files and folders.
+  /// - Returns: An array of ``StorageObject`` values representing the matching files and folders.
   /// - Throws: ``StorageError`` if the request fails or the caller is not authorized.
   public func list(
     path: String? = nil,
     options: SearchOptions? = nil
-  ) async throws -> [FileObject] {
+  ) async throws -> [StorageObject] {
     try await api.execute(
       api.requests.list(bucket: id, prefix: ObjectKey(prefix: path ?? ""), options: options)
     )
@@ -543,9 +540,9 @@ public struct StorageBucket: Sendable {
   /// Retrieves metadata about an existing file without downloading its content.
   ///
   /// - Parameter path: The file path including the file name, e.g. `"folder/image.png"`.
-  /// - Returns: A ``FileObjectV2`` containing size, content type, ETag, and other metadata.
+  /// - Returns: A ``ObjectInfo`` containing size, content type, ETag, and other metadata.
   /// - Throws: ``StorageError`` if the file does not exist or the caller is not authorized.
-  public func info(path: String) async throws -> FileObjectV2 {
+  public func info(path: String) async throws -> ObjectInfo {
     try await api.execute(api.requests.info(bucket: id, key: ObjectKey(path))).decoded()
   }
 
@@ -708,7 +705,8 @@ public struct StorageBucket: Sendable {
   ///   - data: The raw bytes to store in the bucket.
   ///   - options: Upload options such as cache control and content type. `upsert` is ignored:
   ///     the token decides whether an existing object is replaced.
-  /// - Returns: A ``SignedURLUploadResponse`` containing the stored object path.
+  /// - Returns: An ``UploadedObject`` with the stored path; Storage returns no object id for a
+  ///   signed-URL upload, so ``UploadedObject/id`` is `nil`.
   /// - Throws: ``StorageError`` if the token is invalid, expired, or the upload fails.
   @discardableResult
   public func uploadToSignedURL(
@@ -716,7 +714,7 @@ public struct StorageBucket: Sendable {
     token: String,
     data: Data,
     options: UploadOptions = UploadOptions()
-  ) async throws -> SignedURLUploadResponse {
+  ) async throws -> UploadedObject {
     try await _uploadToSignedURL(path: path, token: token, file: .data(data), options: options)
   }
 
@@ -733,7 +731,8 @@ public struct StorageBucket: Sendable {
   ///   - fileURL: A `file://` URL pointing to the local file to upload.
   ///   - options: Upload options such as cache control and content type. `upsert` is ignored:
   ///     the token decides whether an existing object is replaced.
-  /// - Returns: A ``SignedURLUploadResponse`` containing the stored object path.
+  /// - Returns: An ``UploadedObject`` with the stored path; Storage returns no object id for a
+  ///   signed-URL upload, so ``UploadedObject/id`` is `nil`.
   /// - Throws: ``StorageError`` if the token is invalid, expired, or the upload fails.
   @discardableResult
   public func uploadToSignedURL(
@@ -741,7 +740,7 @@ public struct StorageBucket: Sendable {
     token: String,
     fileURL: URL,
     options: UploadOptions = UploadOptions()
-  ) async throws -> SignedURLUploadResponse {
+  ) async throws -> UploadedObject {
     try await _uploadToSignedURL(path: path, token: token, file: .url(fileURL), options: options)
   }
 
@@ -750,7 +749,7 @@ public struct StorageBucket: Sendable {
     token: String,
     file: FileUpload,
     options: UploadOptions
-  ) async throws -> SignedURLUploadResponse {
+  ) async throws -> UploadedObject {
     let key = try ObjectKey(path)
     let response: UploadResponse = try await api.execute(
       api.requests.uploadToSignedURL(
@@ -758,6 +757,6 @@ public struct StorageBucket: Sendable {
     )
     .decoded()
 
-    return SignedURLUploadResponse(path: key.path, fullPath: response.key)
+    return UploadedObject(id: nil, path: key.path, fullPath: response.key)
   }
 }
