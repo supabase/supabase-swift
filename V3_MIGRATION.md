@@ -3947,3 +3947,39 @@ do {
   // fix the path
 }
 ```
+
+## `StorageError` gains `code`, `serverStatusCode` and `isNotFound`; `ServerError.statusCode` is an `Int?`
+
+`StorageError` now carries the two fields callers branch on at the top level: `code` (the
+`StorageError.Code` Storage sent, such as `.noSuchKey`) and `serverStatusCode` (the status
+Storage spells in the body, such as `404`). `isNotFound` is `true` for `.noSuchKey`,
+`.noSuchBucket`, or a 404 in either the body or the HTTP status. `ServerError.statusCode` is
+decoded as an `Int?` from either `"404"` or `404` instead of being kept as a `String?`.
+`StorageError.Code` can be written as a string literal.
+
+On the object, bucket, render and CDN routes Storage answers HTTP 400 for nearly every failure
+and puts the real status in the body, so `response?.statusCode` is the wrong field to branch
+on and `serverError?.statusCode == "404"` was both buried and a string comparison. The error
+decoder also accepts the Iceberg catalog body, `{"error": {"message", "type", "code"}}`, and a
+plain-text body from the resumable-upload routes (the text becomes `message`; 404, 409 and 413
+imply `.noSuchUpload`, `.keyAlreadyExists` and `.entityTooLarge`). Error bodies are kept up to
+1 MiB.
+
+This is a compile error only where `ServerError.statusCode` was compared with or assigned to a
+`String`. Everything else is additive.
+
+```swift
+// Before
+} catch let error as StorageError where error.serverError?.statusCode == "404" {
+  showMissing()
+} catch let error as StorageError where error.serverError?.code == .keyAlreadyExists {
+  showDuplicate()
+}
+
+// After
+} catch let error as StorageError where error.isNotFound {
+  showMissing()
+} catch let error as StorageError where error.code == .keyAlreadyExists {
+  showDuplicate()
+}
+```
