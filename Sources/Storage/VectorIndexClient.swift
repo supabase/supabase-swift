@@ -54,9 +54,9 @@ public struct VectorIndexClient: Sendable {
   /// The name of the index this client operates on.
   public let indexName: String
 
-  private let api: StorageApi
+  private let api: StorageAPI
 
-  init(vectorBucketName: String, indexName: String, api: StorageApi) {
+  init(vectorBucketName: String, indexName: String, api: StorageAPI) {
     self.vectorBucketName = vectorBucketName
     self.indexName = indexName
     self.api = api
@@ -87,7 +87,7 @@ public struct VectorIndexClient: Sendable {
         method: .post,
         url: api.configuration.url.appendingPathComponent("vector/PutVectors")
       ),
-      body: JSONEncoder.unconfiguredEncoder.encode(
+      body: JSONEncoder.storage.encode(
         PutVectorsBody(
           vectorBucketName: vectorBucketName,
           indexName: indexName,
@@ -121,7 +121,7 @@ public struct VectorIndexClient: Sendable {
         method: .post,
         url: api.configuration.url.appendingPathComponent("vector/GetVectors")
       ),
-      body: JSONEncoder.unconfiguredEncoder.encode(
+      body: JSONEncoder.storage.encode(
         GetVectorsBody(
           vectorBucketName: vectorBucketName,
           indexName: indexName,
@@ -131,7 +131,7 @@ public struct VectorIndexClient: Sendable {
         )
       )
     )
-    .decoded(decoder: .supabase())
+    .decoded()
     return response.vectors
   }
 
@@ -167,7 +167,7 @@ public struct VectorIndexClient: Sendable {
         method: .post,
         url: api.configuration.url.appendingPathComponent("vector/ListVectors")
       ),
-      body: JSONEncoder.unconfiguredEncoder.encode(
+      body: JSONEncoder.storage.encode(
         ListVectorsBody(
           vectorBucketName: vectorBucketName,
           indexName: indexName,
@@ -180,7 +180,7 @@ public struct VectorIndexClient: Sendable {
         )
       )
     )
-    .decoded(decoder: .supabase())
+    .decoded()
     return ListVectorsResponse(vectors: response.vectors, nextToken: response.nextToken)
   }
 
@@ -223,7 +223,7 @@ public struct VectorIndexClient: Sendable {
         method: .post,
         url: api.configuration.url.appendingPathComponent("vector/QueryVectors")
       ),
-      body: JSONEncoder.unconfiguredEncoder.encode(
+      body: JSONEncoder.storage.encode(
         QueryVectorsBody(
           vectorBucketName: vectorBucketName,
           indexName: indexName,
@@ -235,7 +235,7 @@ public struct VectorIndexClient: Sendable {
         )
       )
     )
-    .decoded(decoder: .supabase())
+    .decoded()
     return QueryVectorsResponse(vectors: response.vectors, distanceMetric: response.distanceMetric)
   }
 
@@ -255,7 +255,7 @@ public struct VectorIndexClient: Sendable {
         method: .post,
         url: api.configuration.url.appendingPathComponent("vector/DeleteVectors")
       ),
-      body: JSONEncoder.unconfiguredEncoder.encode(
+      body: JSONEncoder.storage.encode(
         DeleteVectorsBody(vectorBucketName: vectorBucketName, indexName: indexName, keys: keys)
       )
     )

@@ -5,17 +5,15 @@
 //  Created by Guilherme Souza on 18/10/23.
 //
 
-import ConcurrencyExtras
 import Foundation
 
 extension JSONEncoder {
-  /// Default encoder used by ``StorageClientConfiguration`` when no `encoder` is supplied,
-  /// converting Swift's `camelCase` property names to the API's `snake_case` keys.
-  static let storageEncoder: JSONEncoder = {
-    let encoder = JSONEncoder()
-    encoder.keyEncodingStrategy = .convertToSnakeCase
-    return encoder
-  }()
+  /// The one encoder Storage uses for request bodies. Wire keys that are not the Swift
+  /// property name are spelled in each type's `CodingKeys`.
+  static let storage = JSONEncoder.supabase()
+}
 
-  static let unconfiguredEncoder: JSONEncoder = .init()
+extension JSONDecoder {
+  /// The one decoder Storage uses for response bodies.
+  static let storage = JSONDecoder.supabase()
 }
