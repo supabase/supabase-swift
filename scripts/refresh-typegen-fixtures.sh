@@ -34,7 +34,19 @@ introspect() {
   local id
   id="$(docker run -d --quiet -e POSTGRES_PASSWORD=postgres -p 127.0.0.1::5432 "$image")"
   CONTAINERS+=("$id")
-  until docker exec "$id" pg_isready -q -h 127.0.0.1 -U postgres; do sleep 1; done
+  local tries=0
+  until docker exec "$id" pg_isready -q -h 127.0.0.1 -U postgres; do
+    if [[ "$(docker inspect -f '{{.State.Running}}' "$id")" != true ]]; then
+      echo "refresh-typegen-fixtures: the $image container exited before Postgres was ready:" >&2
+      docker logs --tail 20 "$id" >&2
+      exit 1
+    fi
+    if ((++tries >= 60)); then
+      echo "refresh-typegen-fixtures: Postgres in the $image container is not ready after 60s" >&2
+      exit 1
+    fi
+    sleep 1
+  done
   for file in "$@"; do
     docker exec -i -e PGPASSWORD=postgres "$id" \
       psql -q -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d postgres <"$file" >/dev/null
