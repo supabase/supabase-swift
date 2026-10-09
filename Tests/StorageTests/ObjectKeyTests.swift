@@ -21,7 +21,7 @@ struct ObjectKeyTests {
       ("a#b.png", "a#b.png", "a%23b.png"),
       ("a?b.png", "a?b.png", "a%3Fb.png"),
       ("100%.png", "100%.png", "100%25.png"),
-      ("ünïcode/文件.png", "ünïcode/文件.png", "%C3%BCn%C3%AFcode/%E6%96%87%E4%BB%B6.png"),
+      ("café/文件.png", "café/文件.png", "caf%C3%A9/%E6%96%87%E4%BB%B6.png"),
       ("a;b=c&d.png", "a;b=c&d.png", "a;b=c&d.png"),
     ]
   )

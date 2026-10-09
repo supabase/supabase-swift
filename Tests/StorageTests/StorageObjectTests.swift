@@ -71,7 +71,7 @@ struct StorageObjectTests {
   }
 
   @Test
-  func metadataToleratesAnUnparseableLastModified() throws {
+  func metadataToleratesAnUnparsableLastModified() throws {
     let json = Data(#"{"size": 1, "lastModified": "yesterday"}"#.utf8)
 
     let metadata = try JSONDecoder.storage.decode(ObjectMetadata.self, from: json)

@@ -147,6 +147,13 @@ supporting_symbols:
   - StorageError.ServerError.statusCode
   - StorageError.ServerError.error
   - StorageError.ServerError.message
+  - StorageError.ServerError.code
+  - StorageError.code
+  - StorageError.serverStatusCode
+  - StorageError.isNotFound
+  # A standalone StorageClient's per-request token provider, the Storage twin of
+  # database.configuration.access_token; the matrix has no storage id for it yet.
+  - StorageClientConfiguration.accessToken
   - StorageError.init
   - StorageError.kind
   - StorageError.message
@@ -1459,6 +1466,10 @@ features:
       - ByteCount.megabytes
       - ByteCount.gigabytes
       - BucketOptions.isPublic
+      - BucketOptions
+      - BucketOptions.init
+      - BucketOptions.fileSizeLimit
+      - BucketOptions.allowedMimeTypes
   storage.file_buckets.get_bucket:
     status: implemented
     symbols:
@@ -1483,10 +1494,17 @@ features:
     status: implemented
     symbols:
       - StorageClient.from
+      - StorageBucket.id
   storage.file_buckets.upload:
     status: implemented
     symbols:
       - StorageBucket.upload
+      - UploadedObject
+      - UploadedObject.init
+      - UploadedObject.id
+      - UploadedObject.path
+      - UploadedObject.fullPath
+      - UploadOptions.upsert
   storage.file_buckets.download:
     status: implemented
     symbols:
@@ -1494,6 +1512,29 @@ features:
   storage.file_buckets.list_files:
     status: implemented
     symbols:
+      - StorageObject
+      - StorageObject.init
+      - StorageObject.name
+      - StorageObject.id
+      - StorageObject.version
+      - StorageObject.createdAt
+      - StorageObject.updatedAt
+      - StorageObject.lastAccessedAt
+      - StorageObject.metadata
+      - StorageObject.userMetadata
+      - StorageObject.isVersioned
+      - StorageObject.isDeleteMarker
+      - StorageObject.archivedAt
+      - StorageObject.isFolder
+      - ObjectMetadata
+      - ObjectMetadata.init
+      - ObjectMetadata.eTag
+      - ObjectMetadata.size
+      - ObjectMetadata.mimeType
+      - ObjectMetadata.cacheControl
+      - ObjectMetadata.lastModified
+      - ObjectMetadata.contentLength
+      - ObjectMetadata.additional
       - SortOrder
       - SortOrder.init
       - SortOrder.rawValue
@@ -1547,9 +1588,54 @@ features:
     status: implemented
     symbols:
       - StorageBucket.info
+      - ObjectInfo
+      - ObjectInfo.init
+      - ObjectInfo.id
+      - ObjectInfo.version
+      - ObjectInfo.name
+      - ObjectInfo.bucketId
+      - ObjectInfo.size
+      - ObjectInfo.contentType
+      - ObjectInfo.cacheControl
+      - ObjectInfo.eTag
+      - ObjectInfo.lastModified
+      - ObjectInfo.createdAt
+      - ObjectInfo.updatedAt
+      - ObjectInfo.lastAccessedAt
+      - ObjectInfo.userMetadata
+      - ObjectInfo.isVersioned
+      - ObjectInfo.isDeleteMarker
+      - ObjectInfo.archivedAt
   storage.file_buckets.download_with_transform:
     status: implemented
     symbols:
+      - ImageTransform
+      - ImageTransform.init
+      - ImageTransform.width
+      - ImageTransform.height
+      - ImageTransform.resize
+      - ImageTransform.quality
+      - ImageTransform.format
+      - ImageTransform.gravity
+      - ImageTransform.focalPoint
+      - Gravity
+      - Gravity.init
+      - Gravity.rawValue
+      - Gravity.north
+      - Gravity.south
+      - Gravity.east
+      - Gravity.west
+      - Gravity.northEast
+      - Gravity.northWest
+      - Gravity.southEast
+      - Gravity.southWest
+      - Gravity.center
+      - Gravity.smart
+      - Gravity.focalPoint
+      - FocalPoint
+      - FocalPoint.init
+      - FocalPoint.x
+      - FocalPoint.y
       - ResizeMode
       - ResizeMode.init
       - ResizeMode.rawValue
@@ -1579,6 +1665,15 @@ features:
       - UploadOptions.metadata
       - UploadOptions.cacheControl
       - UploadOptions.contentType
+      - UploadOptions
+      - UploadOptions.init
+      - UploadOptions.headers
+      - CacheControl
+      - CacheControl.init
+      - CacheControl.rawValue
+      - CacheControl.maxAge
+      - CacheControl.noCache
+      - CacheControl.noStore
   # Not a separate method: a bare `cacheNonce: String?` parameter repeated on
   # createSignedURL, createSignedURLs, download, and publicURL — no
   # dedicated named symbol exists distinct from those methods, which are
@@ -1638,7 +1733,7 @@ features:
   storage.errors.error_codes:
     status: implemented
     symbols:
-      - StorageError.ServerError.code
+      - StorageError.code
     supporting_symbols:
       - StorageError.Code
       - StorageError.Code.init

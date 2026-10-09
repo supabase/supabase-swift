@@ -152,8 +152,8 @@ struct StorageAPI: Sendable {
     return data
   }
 
-  /// How much of an error body is kept. A failure never needs more, and a misrouted request can
-  /// answer with a page or a file.
+  /// How much of an error body is kept. A failure never needs more, and a request that reached
+  /// the wrong host can answer with a page or a file.
   static let errorBodyCap = 1 << 20
 
   /// The ``StorageError`` for a non-2xx response: the decoded JSON body when there is one, the

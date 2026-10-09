@@ -130,7 +130,7 @@ struct StorageBucketPathTests {
     arguments: operations,
     [
       ("/folder//my file+#?%.png/", "folder/my file+#?%.png", "folder/my%20file%2B%23%3F%25.png"),
-      ("ünïcode/文件.png", "ünïcode/文件.png", "%C3%BCn%C3%AFcode/%E6%96%87%E4%BB%B6.png"),
+      ("café/文件.png", "café/文件.png", "caf%C3%A9/%E6%96%87%E4%BB%B6.png"),
     ]
   )
   func sendsTheNormalizedKey(

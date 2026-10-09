@@ -59,7 +59,7 @@ enum FileUpload {
 ///
 /// ### Downloading files
 ///
-/// - ``download(path:options:query:cacheNonce:)``
+/// - ``download(path:transform:query:cacheNonce:)``
 /// - ``publicURL(path:download:transform:cacheNonce:)``
 ///
 /// ### Managing files
