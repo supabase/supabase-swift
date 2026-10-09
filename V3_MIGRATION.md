@@ -4157,3 +4157,30 @@ try await storage.createBucket("logs", options: BucketOptions(fileSizeLimit: "5m
 try await storage.updateBucket("avatars", options: BucketOptions(allowedMimeTypes: ["image/png"]))
 let name = try await storage.createBucket("logs", options: BucketOptions(fileSizeLimit: .megabytes(5)))
 ```
+
+## The `download: String?` overloads and `SignedURL` are gone; `publicURL` no longer throws; `createSignedUploadURL(path:upsert:)`
+
+`createSignedURL`, `createSignedURLs` and `publicURL` each had a second overload that spelled
+the download behavior as a `String?`, kept only so `download: "name"` still compiled. Only the
+`download: DownloadBehavior?` form remains. `SignedURL` was public but returned by nothing.
+`publicURL(path:)` returns a `URL` without `throws`: the base URL is validated when the client
+is created and every path is percent-encoded into a valid URL (a `.` or `..` segment is sent
+encoded rather than refused, and Storage rejects the key). `createSignedUploadURL` takes
+`upsert: Bool = false` instead of `options: CreateSignedUploadURLOptions?`.
+
+This is a compile error for `download: "name"`, for `SignedURL`, and for
+`CreateSignedUploadURLOptions`. A `try` in front of `publicURL` becomes a warning.
+
+```swift
+// Before
+let url = try bucket.publicURL(path: "a.pdf", download: "report.pdf")
+let signed = try await bucket.createSignedURL(path: "a.pdf", expiresIn: .seconds(60), download: "")
+let upload = try await bucket.createSignedUploadURL(
+  path: "a.pdf", options: CreateSignedUploadURLOptions(shouldUpsert: true))
+
+// After
+let url = bucket.publicURL(path: "a.pdf", download: .named("report.pdf"))
+let signed = try await bucket.createSignedURL(
+  path: "a.pdf", expiresIn: .seconds(60), download: .withOriginalName)
+let upload = try await bucket.createSignedUploadURL(path: "a.pdf", upsert: true)
+```
