@@ -962,7 +962,13 @@ required by anything today. Deferred until asked for.
 contract: `@SelectionOf`'s per-shape declaration cost is the one question the stage 1 alpha exists to
 gather feedback on, and generating shapes before that feedback arrives answers it in advance. Naming
 them had no obvious answer either. Embeds fall out with selections, since §4.5 puts `@Relationship`
-on selections and makes it an error on a relation. Revisit after the alpha feedback; not permanent.
+on selections and makes it an error on a relation.
+
+*Closed 2026-10-09 (SDK-1589): no generated selections.* The decision no longer waits on the alpha
+feedback. A user who needs a column subset writes one `@SelectionOf` by hand, the same as for a
+hand-written relation, and that is enough to use the typed API end to end. Reopen SDK-1589 only if
+the feedback says the per-shape declaration cost is a real burden; it must then also answer the
+naming question and use the `@Relationship(\Message.senderID)` KeyPath spelling stage 3 shipped.
 
 **Generated Postgres enums are `RawRepresentable` structs, not Swift enums.** Also settled in the
 stage 5 plan, Task 3, and it was not previously recorded here as a question at all. A
