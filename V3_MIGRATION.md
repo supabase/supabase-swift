@@ -4072,3 +4072,19 @@ let data = try await bucket.download(
   path: "a.png", transform: ImageTransform(width: 200, height: 200, resize: .cover))
 let url = try bucket.publicURL(path: "a.png", transform: ImageTransform(format: .webp))
 ```
+
+## `expiresIn` on `createSignedURL` and `createSignedURLs` is a `Duration`
+
+Both methods take `expiresIn: Duration` instead of an `Int` of seconds, as Realtime and
+Functions already do for their intervals. Whole seconds are sent on the wire; a value under one
+second throws `StorageError` with kind `.invalidRequest` before any request is sent.
+
+This is a compile error at every call site.
+
+```swift
+// Before
+let url = try await bucket.createSignedURL(path: "a.png", expiresIn: 60)
+
+// After
+let url = try await bucket.createSignedURL(path: "a.png", expiresIn: .seconds(60))
+```

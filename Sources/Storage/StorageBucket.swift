@@ -39,7 +39,7 @@ enum FileUpload {
 /// try await avatars.upload(path: "user123.png", data: imageData)
 ///
 /// // Generate a signed URL valid for 60 seconds
-/// let url = try await avatars.createSignedURL(path: "user123.png", expiresIn: 60)
+/// let url = try await avatars.createSignedURL(path: "user123.png", expiresIn: .seconds(60))
 /// ```
 ///
 /// ## Topics
@@ -292,7 +292,8 @@ public struct StorageBucket: Sendable {
   ///
   /// - Parameters:
   ///   - path: The file path including the file name, e.g. `"folder/image.png"`.
-  ///   - expiresIn: Seconds until the URL expires, e.g. `60` for one minute.
+  ///   - expiresIn: How long the URL stays valid, e.g. `.seconds(60)`. Whole seconds are sent;
+  ///     less than one second throws ``StorageError`` with kind `invalidRequest`.
   ///   - download: An optional custom download filename. Pass a non-nil string to force a download
   ///     with that filename in the `Content-Disposition` header, or `nil` for inline display.
   ///   - transform: An optional image transformation applied server-side before delivery.
@@ -303,14 +304,15 @@ public struct StorageBucket: Sendable {
   @_disfavoredOverload
   public func createSignedURL(
     path: String,
-    expiresIn: Int,
+    expiresIn: Duration,
     download: String? = nil,
     transform: ImageTransform? = nil,
     cacheNonce: String? = nil
   ) async throws -> URL {
     let response = try await api.execute(
       api.requests.sign(
-        bucket: id, key: ObjectKey(path), expiresIn: expiresIn, transform: transform)
+        bucket: id, key: ObjectKey(path), expiresIn: Self.seconds(expiresIn),
+        transform: transform)
     )
     .decoded(as: SignedURLAPIResponse.self)
 
@@ -322,19 +324,20 @@ public struct StorageBucket: Sendable {
   ///
   /// ```swift
   /// // Inline preview URL, valid for 5 minutes
-  /// let url = try await storage.from("docs").createSignedURL(path: "report.pdf", expiresIn: 300)
+  /// let url = try await storage.from("docs").createSignedURL(path: "report.pdf", expiresIn: .seconds(300))
   ///
   /// // Force download with original file name
   /// let downloadURL = try await storage.from("docs").createSignedURL(
   ///   path: "report.pdf",
-  ///   expiresIn: 60,
+  ///   expiresIn: .seconds(60),
   ///   download: .withOriginalName
   /// )
   /// ```
   ///
   /// - Parameters:
   ///   - path: The file path including the file name, e.g. `"folder/image.png"`.
-  ///   - expiresIn: Seconds until the URL expires, e.g. `60` for one minute.
+  ///   - expiresIn: How long the URL stays valid, e.g. `.seconds(60)`. Whole seconds are sent;
+  ///     less than one second throws ``StorageError`` with kind `invalidRequest`.
   ///   - download: Controls whether the URL triggers a file download. Pass `.withOriginalName` to
   ///     download using the file's original name, `.named("custom.pdf")` for a custom name, or
   ///     `nil` for inline display.
@@ -345,7 +348,7 @@ public struct StorageBucket: Sendable {
   /// - Throws: ``StorageError`` if the path does not exist or the caller is not authorized.
   public func createSignedURL(
     path: String,
-    expiresIn: Int,
+    expiresIn: Duration,
     download: DownloadBehavior? = nil,
     transform: ImageTransform? = nil,
     cacheNonce: String? = nil
@@ -367,7 +370,8 @@ public struct StorageBucket: Sendable {
   ///
   /// - Parameters:
   ///   - paths: File paths to sign, e.g. `["folder/image.png", "folder2/image2.png"]`.
-  ///   - expiresIn: Seconds until the URLs expire, e.g. `60` for one minute.
+  ///   - expiresIn: How long the URLs stay valid, e.g. `.seconds(60)`. Whole seconds are sent;
+  ///     less than one second throws ``StorageError`` with kind `invalidRequest`.
   ///   - download: An optional custom download filename. Pass a non-nil string to force a download,
   ///     or `nil` for inline display.
   ///   - cacheNonce: An optional nonce appended as a `cacheNonce` query parameter for
@@ -378,12 +382,13 @@ public struct StorageBucket: Sendable {
   @_disfavoredOverload
   public func createSignedURLs(
     paths: [String],
-    expiresIn: Int,
+    expiresIn: Duration,
     download: String? = nil,
     cacheNonce: String? = nil
   ) async throws -> [SignedURLResult] {
     let response = try await api.execute(
-      api.requests.sign(bucket: id, keys: paths.map { try ObjectKey($0) }, expiresIn: expiresIn)
+      api.requests.sign(
+        bucket: id, keys: paths.map { try ObjectKey($0) }, expiresIn: Self.seconds(expiresIn))
     )
     .decoded(as: [SignedURLsAPIResponse].self)
 
@@ -407,7 +412,7 @@ public struct StorageBucket: Sendable {
   /// ```swift
   /// let results = try await storage.from("docs").createSignedURLs(
   ///   paths: ["a.pdf", "b.pdf", "missing.pdf"],
-  ///   expiresIn: 3600
+  ///   expiresIn: .seconds(3600)
   /// )
   /// for result in results {
   ///   switch result {
@@ -419,7 +424,8 @@ public struct StorageBucket: Sendable {
   ///
   /// - Parameters:
   ///   - paths: File paths to sign, e.g. `["folder/image.png", "folder2/image2.png"]`.
-  ///   - expiresIn: Seconds until the URLs expire, e.g. `60` for one minute.
+  ///   - expiresIn: How long the URLs stay valid, e.g. `.seconds(60)`. Whole seconds are sent;
+  ///     less than one second throws ``StorageError`` with kind `invalidRequest`.
   ///   - download: Controls whether the URLs trigger a file download. Pass `.withOriginalName` to
   ///     download using each file's original name, `.named("custom")` for a custom name, or `nil`
   ///     for inline display.
@@ -430,7 +436,7 @@ public struct StorageBucket: Sendable {
   ///   paths are reported as ``SignedURLResult/failure(path:error:)`` rather than thrown.
   public func createSignedURLs(
     paths: [String],
-    expiresIn: Int,
+    expiresIn: Duration,
     download: DownloadBehavior? = nil,
     cacheNonce: String? = nil
   ) async throws -> [SignedURLResult] {
@@ -440,6 +446,16 @@ public struct StorageBucket: Sendable {
       download: download?.queryValue,
       cacheNonce: cacheNonce
     )
+  }
+
+  /// The whole seconds the sign routes take. A per-call value, so a bad one throws rather than
+  /// traps.
+  private static func seconds(_ expiresIn: Duration) throws -> Int {
+    guard expiresIn >= .seconds(1) else {
+      throw StorageError(
+        kind: .invalidRequest, message: "A signed URL must expire at least one second from now.")
+    }
+    return Int(expiresIn.components.seconds)
   }
 
   /// The `download` and `cacheNonce` query items every URL-returning method appends.
