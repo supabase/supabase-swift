@@ -19,6 +19,10 @@ import Testing
 /// only where `Output == [S]` and `S: _PostgrestEmbeddingSelection`. A relation never conforms, so
 /// `client.from(Todo.self).select().requiring(\.comments) { $0 }` is *no such member* — a
 /// whole-row select declares no embeds to scope.
+///
+/// Another is checked outside `swift test`: a parent filter cannot be ORed with an embedded one.
+/// See `Tests/CompileFailures/PostgrestParentOrEmbeddedFilter.swift`, which
+/// `scripts/check-compile-failures.sh` requires to fail to compile.
 @Suite
 struct PostgrestEmbeddedScopeTests {
   struct Todo: _PostgrestRelation {
