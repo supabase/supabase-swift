@@ -21,7 +21,9 @@ Backgrounded
 backgrounding
 bitbucket
 Bitbucket
+bpchar
 bytea
+caseless
 chan
 checkmark
 Cloudflare
@@ -65,6 +67,7 @@ gearshape
 github
 gitlab
 GitLab
+goldens
 gotrue
 GoTrue
 Guilherme
@@ -169,6 +172,7 @@ Rlbn
 Rvci
 sadcat
 secp256k1
+setof
 siwe
 SIWE
 siws
@@ -215,6 +219,7 @@ unicode
 uniquing
 unsubscription
 untracks
+uppercased
 upserted
 upserts
 URLAPI
@@ -299,8 +304,3 @@ xcprivacy
 nonsending
 Subrange
 fkey
-bpchar
-caseless
-goldens
-uppercased
-setof
