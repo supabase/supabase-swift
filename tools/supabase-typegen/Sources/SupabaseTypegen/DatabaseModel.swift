@@ -83,6 +83,12 @@ struct DatabaseModel: Equatable {
   }
 }
 
+/// The element type name of the Postgres array type `typeName`, which is the element's name with a
+/// leading `_`: `text` for `_text`. `nil` when `typeName` names no array.
+func arrayElement(of typeName: String) -> String? {
+  typeName.hasPrefix("_") ? String(typeName.dropFirst()) : nil
+}
+
 struct QualifiedName: Hashable, Comparable {
   var schema: String
   var name: String
@@ -148,8 +154,8 @@ extension DatabaseModel {
           returnTypeID: function.returnTypeId,
           returnType: returnType.map { QualifiedName(schema: $0.schema, name: $0.name) },
           returnEnumID: returnType.flatMap { type in
-            let element = type.name.hasPrefix("_") ? String(type.name.dropFirst()) : type.name
-            return enumIDs[QualifiedName(schema: type.schema, name: element)]
+            enumIDs[
+              QualifiedName(schema: type.schema, name: arrayElement(of: type.name) ?? type.name)]
           },
           returnsRow: function.returnTypeRelationId != nil,
           returnRelation: function.returnTypeRelationId.flatMap { relationNames[$0] },
@@ -176,8 +182,7 @@ extension DatabaseModel {
           name: QualifiedName(schema: relation.schema, name: relation.name),
           kind: kind,
           columns: columns.map { column in
-            let element =
-              column.format.hasPrefix("_") ? String(column.format.dropFirst()) : column.format
+            let element = arrayElement(of: column.format) ?? column.format
             return Column(
               name: column.name,
               format: column.format,

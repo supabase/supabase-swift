@@ -100,7 +100,7 @@ indirect enum SwiftType: Equatable {
   /// Whether the type needs `Foundation`.
   var usesFoundation: Bool {
     switch self {
-    case .named(let name): ["Date", "Decimal", "UUID"].contains(name)
+    case .named(let name): FilePlan.foundationScalarTypes.values.contains(name)
     case .array(let inner), .optional(let inner): inner.usesFoundation
     }
   }
@@ -161,8 +161,8 @@ extension FilePlan {
       )
     }
 
-    let typeNames = numberingRepeats(
-      of: bases, taken: Set(owners.keys), kind: "type", labels: declarations.map(\.label))
+    let typeNames = numberRepeats(
+      in: bases, avoiding: Set(owners.keys), kind: "type", labels: declarations.map(\.label))
     let enumTypeNames = Dictionary(
       uniqueKeysWithValues: zip(enumTypes.map(\.id), typeNames.dropFirst(model.relations.count)))
     for (type, typeName) in zip(enumTypes, typeNames.dropFirst(model.relations.count)) {
@@ -239,7 +239,6 @@ extension FilePlan {
       }
     }
 
-    // A computed member lives in `Columns` next to one `let` per column.
     let taken = Set(plan.properties.map(\.name))
     let bases = members.map { member in
       let base = Naming.propertyName(member.function.name.name)
@@ -253,19 +252,19 @@ extension FilePlan {
           + "already has \(bare)")
       return renamed
     }
-    let names = numberingRepeats(
-      of: bases, taken: taken, kind: "member",
+    let names = numberRepeats(
+      in: bases, avoiding: taken, kind: "member",
       labels: members.map { "function \($0.function.name.schema).\($0.function.name.name)" })
     return zip(members, names).map {
       ComputedPlan(name: $1, function: $0.function.name.name, kind: $0.kind)
     }
   }
 
-  /// `bases`, with every repeat after the first numbered and noted. `labels` names each one in the
-  /// note.
-  private mutating func numberingRepeats(
-    of bases: [String],
-    taken: Set<String>,
+  /// `bases`, with every repeat after the first numbered past the names in `taken`, and noted.
+  /// `labels` names each one in the note.
+  private mutating func numberRepeats(
+    in bases: [String],
+    avoiding taken: Set<String>,
     kind: String,
     labels: [String]
   ) -> [String] {
@@ -291,8 +290,8 @@ extension FilePlan {
       notes.append("\(label) \(value) is named \(renamed): the enum reserves \(bare)")
       return renamed
     }
-    let names = numberingRepeats(
-      of: bases, taken: [], kind: "value", labels: type.values.map { "\(label) \($0)" })
+    let names = numberRepeats(
+      in: bases, avoiding: [], kind: "value", labels: type.values.map { "\(label) \($0)" })
     return zip(names, type.values).map { EnumPlan.Member(name: $0, value: $1) }
   }
 
@@ -321,8 +320,8 @@ extension FilePlan {
       notes.append("\(qualified).\(column.name) is named \(renamed): @Table reserves \(bare)")
       return renamed
     }
-    let names = numberingRepeats(
-      of: bases, taken: [], kind: "column",
+    let names = numberRepeats(
+      in: bases, avoiding: [], kind: "column",
       labels: relation.columns.map { "\(qualified).\($0.name)" })
     return zip(relation.columns, names).map { column, name in
       return PropertyPlan(
@@ -365,16 +364,22 @@ extension FilePlan {
       ?? name
   }
 
-  private static let scalarTypes: [String: String] = [
+  /// The `pg_catalog` types whose Swift type is in `Foundation`.
+  fileprivate static let foundationScalarTypes = [
     "uuid": "UUID",
-    "text": "String", "varchar": "String", "bpchar": "String", "char": "String",
-    "bool": "Bool",
-    "int2": "Int", "int4": "Int", "int8": "Int",
-    "float4": "Double", "float8": "Double",
     "numeric": "Decimal",
     "timestamptz": "Date", "timestamp": "Date", "date": "Date",
-    "json": "JSONValue", "jsonb": "JSONValue",
   ]
+
+  private static let scalarTypes = foundationScalarTypes.merging(
+    [
+      "text": "String", "varchar": "String", "bpchar": "String", "char": "String",
+      "bool": "Bool",
+      "int2": "Int", "int4": "Int", "int8": "Int",
+      "float4": "Double", "float8": "Double",
+      "json": "JSONValue", "jsonb": "JSONValue",
+    ],
+    uniquingKeysWith: { first, _ in first })
 
   /// A type with no mapping, such as a composite, a range, `bytea`, `interval` or `time`, is
   /// `JSONValue`, with a note: it decodes whatever PostgREST sends for the column and writes it
@@ -400,8 +405,8 @@ extension FilePlan {
     subject: String,
     enumTypeNames: [Int: String]
   ) -> SwiftType {
-    let isArray = name.hasPrefix("_")
-    let element = isArray ? String(name.dropFirst()) : name
+    let arrayElementName = arrayElement(of: name)
+    let element = arrayElementName ?? name
     let scalar: String
     if let enumTypeName = enumID.flatMap({ enumTypeNames[$0] }) {
       scalar = enumTypeName
@@ -415,7 +420,7 @@ extension FilePlan {
       notes.append(
         "\(subject) \(schema).\(element), which is not mapped; it is decoded as JSONValue")
     }
-    return isArray ? .array(.named(scalar)) : .named(scalar)
+    return arrayElementName == nil ? .named(scalar) : .array(.named(scalar))
   }
 }
 
@@ -489,20 +494,18 @@ extension FilePlan {
             for member in relation.computed {
               let name = TokenSyntax.identifier(member.name)
               let literal = StringLiteralExprSyntax(content: member.function)
-              switch member.kind {
-              case .field(let valueType):
-                DeclSyntax(
-                  "\(access) var \(name): PostgrestComputedField<\(type), \(valueType.syntax)> { .init(\(literal)) }"
-                )
-              case .toOne(let target):
-                DeclSyntax(
-                  "\(access) var \(name): PostgrestToOneRelation<\(type), \(TokenSyntax.identifier(target))> { .init(\(literal)) }"
-                )
-              case .toMany(let target):
-                DeclSyntax(
-                  "\(access) var \(name): PostgrestToManyRelation<\(type), \(TokenSyntax.identifier(target))> { .init(\(literal)) }"
-                )
-              }
+              let (wrapper, value): (String, SwiftType) =
+                switch member.kind {
+                case .field(let valueType): ("PostgrestComputedField", valueType)
+                case .toOne(let target): ("PostgrestToOneRelation", .named(target))
+                case .toMany(let target): ("PostgrestToManyRelation", .named(target))
+                }
+              DeclSyntax(
+                """
+                \(access) var \(name): \(raw: wrapper)<\(type), \(value.syntax)> \
+                { .init(\(literal)) }
+                """
+              )
             }
           }
           .with(\.leadingTrivia, .newlines(2))

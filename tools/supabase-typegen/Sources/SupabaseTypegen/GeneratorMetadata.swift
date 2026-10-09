@@ -104,7 +104,7 @@ struct GeneratorMetadata: Decodable {
   }
 }
 
-enum IdentityGeneration: String, Decodable, Equatable {
+enum IdentityGeneration: String, Decodable {
   case always = "ALWAYS"
   case byDefault = "BY DEFAULT"
 }

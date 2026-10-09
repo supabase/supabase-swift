@@ -370,7 +370,7 @@ struct EmitterTests {
   )
   func unmappedTypeIsJSONValueWithANote(format: String, typeSchema: String) {
     let result = generated(format: format, typeSchema: typeSchema)
-    let element = format.hasPrefix("_") ? String(format.dropFirst()) : format
+    let element = arrayElement(of: format) ?? format
     #expect(result.exitCode == 0)
     #expect(
       result.standardError
@@ -379,7 +379,7 @@ struct EmitterTests {
     )
     #expect(
       result.standardOutput.contains(
-        format.hasPrefix("_") ? "\n  var c: [JSONValue]\n" : "\n  var c: JSONValue\n"))
+        arrayElement(of: format) == nil ? "\n  var c: JSONValue\n" : "\n  var c: [JSONValue]\n"))
   }
 
   @Test
