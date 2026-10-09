@@ -9,10 +9,10 @@ import Testing
 
 @Suite
 struct DownloadBehaviorURLTests {
-  let bucket: StorageFileApi
+  let bucket: StorageBucket
 
   init() {
-    bucket = SupabaseStorageClient.test(
+    bucket = StorageClient.test(
       supabaseURL: "http://localhost:54321/storage/v1",
       apiKey: "test-api-key"
     ).from("test-bucket")

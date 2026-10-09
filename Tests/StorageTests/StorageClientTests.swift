@@ -14,7 +14,7 @@ import IssueReporting
 #endif
 
 @Suite
-struct SupabaseStorageTests {
+struct StorageClientTests {
   let supabaseURL = URL(string: "http://localhost:54321/storage/v1")!
   let bucketId = "tests"
 
@@ -201,8 +201,8 @@ struct SupabaseStorageTests {
   private func makeSUT(
     fetch: @escaping @Sendable (URLRequest) async throws -> (Data, URLResponse) = unimplemented(
       "makeSUT.fetch")
-  ) -> SupabaseStorageClient {
-    SupabaseStorageClient.test(
+  ) -> StorageClient {
+    StorageClient.test(
       supabaseURL: supabaseURL.absoluteString,
       apiKey: "test.api.key",
       http: .init(
@@ -363,7 +363,7 @@ struct SupabaseStorageTests {
       )
     })
 
-    // First, make a request with setHeader on StorageFileApi
+    // First, make a request with setHeader on StorageBucket
     _ = try await sut.from(bucketId)
       .setHeader("child-value", forKey: "X-Child-Header")
       .list()
@@ -373,11 +373,11 @@ struct SupabaseStorageTests {
         == "child-value"
     )
 
-    // Then make a request from a new StorageFileApi instance (via sut.from())
+    // Then make a request from a new StorageBucket instance (via sut.from())
     // The new instance should NOT have the previous instance's header
     _ = try await sut.from(bucketId).list()
 
-    // The new StorageFileApi instance should NOT have the previous instance's header
+    // The new StorageBucket instance should NOT have the previous instance's header
     #expect(capturedRequests[1].value(forHTTPHeaderField: "X-Child-Header") == nil)
   }
 
