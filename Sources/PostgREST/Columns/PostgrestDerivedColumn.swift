@@ -63,7 +63,12 @@ extension _PostgrestColumnExpression {
   ) -> _PostgrestDerivedExpression<Root, T, _PostgrestSelectOnly> {
     _deriving("::\(target.sqlType)")
   }
+}
 
+// The JSON paths need a `json`/`jsonb` column. The generator types exactly those as `JSONValue`,
+// so `$0.duration.jsonText("k")` on an `interval` column does not compile, where the server would
+// answer `42883 operator does not exist`.
+extension _PostgrestColumnExpression where Value == JSONValue {
   /// Reads a `json`/`jsonb` object key as text, with `->>`.
   ///
   /// ```swift

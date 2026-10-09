@@ -19,11 +19,13 @@ struct PostgrestFilterCollectionTests {
     var tags: [String]
     var scheduled: _PostgresRange<Date>
     var content: String
+    var metadata: JSONValue
 
     struct Columns: Sendable {
       let tags = _PostgrestColumn<Post, [String]>("tags")
       let scheduled = _PostgrestColumn<Post, _PostgresRange<Date>>("scheduled")
       let content = _PostgrestColumn<Post, String>("content")
+      let metadata = _PostgrestColumn<Post, JSONValue>("metadata")
     }
 
     static let columns = Columns()
@@ -78,12 +80,35 @@ struct PostgrestFilterCollectionTests {
     #expect(rendered(s.overlapsRange("[25,35)")) == "scheduled=ov.[25,35)")
   }
 
-  /// The third operand shape `cs`/`cd` take: a JSON object literal, on a `jsonb` column.
+  /// The third operand shape `cs`/`cd` take: a JSON value, on a `jsonb` column. Keys are sorted,
+  /// which containment ignores.
   @Test
-  func containmentOperatorsTakeJSONLiteral() {
-    let content = Post.columns.content
-    #expect(rendered(content.containsJSON(#"{"a":1}"#)) == #"content=cs.{"a":1}"#)
-    #expect(rendered(content.containedByJSON(#"{"a":1}"#)) == #"content=cd.{"a":1}"#)
+  func containmentOperatorsTakeJSON() {
+    let metadata = Post.columns.metadata
+    #expect(
+      rendered(metadata.containsJSON(["b": ["c": 2], "a": 1]))
+        == #"metadata=cs.{"a":1,"b":{"c":2}}"#)
+    #expect(rendered(metadata.containedByJSON(["a": 1])) == #"metadata=cd.{"a":1}"#)
+  }
+
+  /// The operand is encoded as JSON, not as a filter value: `JSONValue`'s filter form renders
+  /// `.array` as the Postgres literal `{20}` and `.string` bare, both a `22P02` against `jsonb`.
+  @Test
+  func aJSONOperandIsEncodedAsJSON() {
+    let metadata = Post.columns.metadata
+    #expect(rendered(metadata.containsJSON([20])) == "metadata=cs.[20]")
+    #expect(rendered(metadata.containsJSON("x")) == #"metadata=cs."x""#)
+    #expect(rendered(metadata.containsJSON(["url": "a/b"])) == #"metadata=cs.{"url":"a/b"}"#)
+  }
+
+  /// Inside a group the operand is quoted like any other value. PostgREST unquotes it before
+  /// parsing the JSON.
+  @Test
+  func aJSONOperandIsQuotedInsideAGroup() {
+    let metadata = Post.columns.metadata
+    let filter = metadata.containsJSON(["a": 1, "n": 10]) || metadata.containsJSON(["n": 3])
+    #expect(
+      rendered(filter) == #"or=(metadata.cs."{\"a\":1,\"n\":10}",metadata.cs."{\"n\":3}")"#)
   }
 
   @Test

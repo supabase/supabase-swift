@@ -24,6 +24,7 @@ struct PostgrestRelatedColumnsTests {
       let id = _PostgrestColumn<Order, Int>("id")
       let todoID = _PostgrestColumn<Order, Int>("todo_id")
       let amount = _PostgrestColumn<Order, Double>("amount")
+      let meta = _PostgrestColumn<Order, JSONValue>("meta")
       let shippedAt = _PostgrestNullableColumn<Order, Date>("shipped_at")
       // The to-one direction of the same pair: many orders per todo, one todo per order.
       let todo = _PostgrestToOneRelation<Order, Todo>("todo")
@@ -47,6 +48,7 @@ struct PostgrestRelatedColumnsTests {
       let name = _PostgrestColumn<Todo, String>("name")
       // Numeric, so an aggregate over the to-one direction has something meaningful to sum.
       let amount = _PostgrestColumn<Todo, Double>("amount")
+      let meta = _PostgrestColumn<Todo, JSONValue>("meta")
       // What the generator emits from postgres-meta's foreign-key metadata: the relationship,
       // declared once, checked at every use.
       let orders = _PostgrestToManyRelation<Todo, Order>("orders")
@@ -97,14 +99,14 @@ struct PostgrestRelatedColumnsTests {
   @Test
   func aJSONTextPathOverAnEmbedRendersInsideTheParentheses() {
     #expect(
-      Todo.columns.orders.amount.jsonText("k").postgrestExpression == #"orders(amount->>"k")"#)
+      Todo.columns.orders.meta.jsonText("k").postgrestExpression == #"orders(meta->>"k")"#)
   }
 
   /// `jsonObject(_:)` is declared on the base protocol too, so it needs the same shadow.
   @Test
   func aJSONObjectPathOverAnEmbedRendersInsideTheParentheses() {
     #expect(
-      Todo.columns.orders.amount.jsonObject("k").postgrestExpression == #"orders(amount->"k")"#)
+      Todo.columns.orders.meta.jsonObject("k").postgrestExpression == #"orders(meta->"k")"#)
   }
 
   @Test
@@ -166,8 +168,8 @@ struct PostgrestRelatedColumnsTests {
   @Test
   func aToOneProjectionShadowsCastAndJSONPathToo() {
     #expect(Order.columns.todo.id.cast(to: .text).postgrestExpression == "todo(id::text)")
-    #expect(Order.columns.todo.id.jsonText("k").postgrestExpression == #"todo(id->>"k")"#)
-    #expect(Order.columns.todo.id.jsonObject("k").postgrestExpression == #"todo(id->"k")"#)
+    #expect(Order.columns.todo.meta.jsonText("k").postgrestExpression == #"todo(meta->>"k")"#)
+    #expect(Order.columns.todo.meta.jsonObject("k").postgrestExpression == #"todo(meta->"k")"#)
   }
 
   /// A cast of a to-one projection must not be orderable even though the projection is, which is
@@ -177,7 +179,7 @@ struct PostgrestRelatedColumnsTests {
   func aToOneCastIsNotOrderableButAToOneJSONPathIs() {
     #expect(
       (Order.columns.todo.id.cast(to: .text) as Any) is any _PostgrestOrderableExpression == false)
-    #expect(Order.columns.todo.id.jsonText("k").asc().rendered == #"todo(id->>"k").asc"#)
+    #expect(Order.columns.todo.meta.jsonText("k").asc().rendered == #"todo(meta->>"k").asc"#)
   }
 
   /// A to-one projection has the identical rendering bug if unshadowed: PostgREST answers 200 for
@@ -212,10 +214,11 @@ struct PostgrestRelatedColumnsTests {
       Order.columns.todo.amount.sum().cast(to: .text).postgrestExpression
         == "todo(amount.sum()::text)")
     #expect(
-      Order.columns.todo.id.cast(to: .text).jsonText("k").postgrestExpression
-        == #"todo(id::text->>"k")"#)
+      Order.columns.todo.meta.jsonObject("k").cast(to: .text).postgrestExpression
+        == #"todo(meta->"k"::text)"#)
     #expect(
-      Order.columns.todo.id.sum().jsonObject("k").postgrestExpression == #"todo(id.sum()->"k")"#)
+      Order.columns.todo.meta.jsonObject("a").jsonText("b").postgrestExpression
+        == #"todo(meta->"a"->>"b")"#)
     #expect(Order.columns.todo.id.sum().sum().postgrestExpression == "todo(id.sum().sum())")
     #expect(
       Order.columns.todo.id.cast(to: .text).cast(to: .int).postgrestExpression

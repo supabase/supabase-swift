@@ -53,4 +53,43 @@ struct PostgrestJSONPathIntegrationTests {
     try await client.from("key_value_storage").delete().like("key", pattern: "\(prefix)%")
       .execute()
   }
+
+  /// Every operand shape `containsJSON` encodes, top level and inside `or=(…)`.
+  @Test
+  func containmentTakesEveryJSONShape() async throws {
+    let prefix = "json-contains-\(UUID().uuidString)"
+    let object: JSONValue = ["a": 1, "n": 10, "s": "x,y", "u": "a/b"]
+    let array: JSONValue = ["x", 20]
+    try await client.from("key_value_storage").insert(
+      [
+        ["key": .string("\(prefix)-object"), "value": object],
+        ["key": .string("\(prefix)-array"), "value": array],
+      ] as [JSONObject]
+    ).execute()
+
+    func keys(
+      _ filter: (KeyValueStorage.Columns) -> _PostgrestFilter<KeyValueStorage>
+    ) async throws -> [String] {
+      try await client.from(KeyValueStorage.self).select()
+        .where { $0.key.like("\(prefix)%") && filter($0) }
+        .order { $0.key.asc() }
+        .execute().value.map(\.key)
+    }
+
+    #expect(
+      try await keys { $0.value.containsJSON(["s": "x,y", "u": "a/b"]) } == ["\(prefix)-object"])
+    #expect(try await keys { $0.value.containsJSON([20]) } == ["\(prefix)-array"])
+    #expect(try await keys { $0.value.containsJSON("x") } == ["\(prefix)-array"])
+    #expect(
+      try await keys {
+        $0.value.containedByJSON(["a": 1, "n": 10, "s": "x,y", "u": "a/b", "z": 0])
+      }
+        == ["\(prefix)-object"])
+    #expect(
+      try await keys { $0.value.containsJSON(["a": 1, "n": 10]) || $0.value.containsJSON([20]) }
+        == ["\(prefix)-array", "\(prefix)-object"])
+
+    try await client.from("key_value_storage").delete().like("key", pattern: "\(prefix)%")
+      .execute()
+  }
 }
