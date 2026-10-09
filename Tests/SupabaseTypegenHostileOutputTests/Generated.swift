@@ -1,6 +1,10 @@
 public import Foundation
 public import PostgrestMacros
 
+public enum DateSchema: PostgrestSchema {
+  public static let name = "date"
+}
+
 public enum MySchema: PostgrestSchema {
   public static let name = #"my"schema"#
 }

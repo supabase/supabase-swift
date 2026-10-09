@@ -108,10 +108,14 @@ indirect enum SwiftType: Equatable {
 
 extension FilePlan {
   init(_ model: DatabaseModel) throws(DataError) {
-    schemas = model.schemas.filter { $0 != "public" }
-      .map { SchemaPlan(name: $0, typeName: Naming.typeName($0)) }
     relations = []
     enums = []
+    schemas = []
+    for schema in model.schemas where schema != "public" {
+      let typeName = Self.unshadowed(
+        Naming.typeName(schema), suffix: "Schema", label: "schema \(schema)", notes: &notes)
+      schemas.append(SchemaPlan(name: schema, typeName: typeName))
+    }
 
     // The enums of the selected schemas, and any other enum a generated column uses.
     let usedEnums = Set(model.relations.flatMap { $0.columns.compactMap(\.enumID) })
@@ -136,14 +140,9 @@ extension FilePlan {
     for declaration in declarations {
       let schema = declaration.name.schema
       let prefix = schema == "public" ? "" : schema + "_"
-      var base = Naming.typeName(prefix + declaration.name.name)
-      if Naming.referencedTypes.contains(Naming.unescaped(base)) {
-        let renamed = Naming.identifier(Naming.unescaped(base) + declaration.suffix)
-        notes.append(
-          "\(declaration.label) is named \(renamed): \(Naming.unescaped(base)) would shadow a type "
-            + "the generated code uses")
-        base = renamed
-      }
+      let base = Self.unshadowed(
+        Naming.typeName(prefix + declaration.name.name), suffix: declaration.suffix,
+        label: declaration.label, notes: &notes)
       bases.append(base)
       owners[base, default: []].append((schema, declaration.label))
     }
@@ -542,5 +541,20 @@ extension FilePlan {
     configuration.indentation = .spaces(2)
     configuration.lineLength = 100
     return configuration
+  }
+}
+
+extension FilePlan {
+  /// `base`, or `base` with `suffix` and a note when it would shadow a type the generated code
+  /// uses.
+  fileprivate static func unshadowed(
+    _ base: String, suffix: String, label: String, notes: inout [String]
+  ) -> String {
+    let bare = Naming.unescaped(base)
+    guard Naming.referencedTypes.contains(bare) else { return base }
+    let renamed = Naming.identifier(bare + suffix)
+    notes.append(
+      "\(label) is named \(renamed): \(bare) would shadow a type the generated code uses")
+    return renamed
   }
 }

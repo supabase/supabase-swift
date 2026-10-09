@@ -59,7 +59,10 @@ struct GoldenCase: CustomTestStringConvertible, Sendable {
   // Without `inventory`, whose `books` clashes with `public.inventory_books`.
   static let hostile = GoldenCase(
     fixture: "hostile_metadata",
-    arguments: ["--access-control", "public", "--schema", "public", "--schema", #"my"schema"#],
+    arguments: [
+      "--access-control", "public", "--schema", "public", "--schema", #"my"schema"#,
+      "--schema", "date",
+    ],
     golden: "Tests/SupabaseTypegenHostileOutputTests/Generated.swift"
   )
 
@@ -107,6 +110,7 @@ struct EmitterTests {
   func hostileFixtureReportsEveryRenameAndFallback() {
     let result = run(arguments: GoldenCase.hostile.arguments) { Fixture.data("hostile_metadata") }
     let notes = [
+      "schema date is named DateSchema: Date would shadow a type the generated code uses",
       "public.coding_keys is named CodingKeysTable: "
         + "CodingKeys would shadow a type the generated code uses",
       "public.columns is named ColumnsTable: Columns would shadow a type the generated code uses",

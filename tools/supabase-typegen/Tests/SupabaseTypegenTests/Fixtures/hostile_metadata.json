@@ -2,6 +2,9 @@
   "version": 1,
   "schemas": [
     {
+      "name": "date"
+    },
+    {
       "name": "inventory"
     },
     {
