@@ -53,6 +53,19 @@ public struct Messages {
   public var username: String?
 }
 
+@Table("note_summaries")
+public struct NoteSummaries {
+  public var id: Int?
+  public var body: String?
+  public var bodyLength: Int?
+}
+
+@Table("notes")
+public struct Notes {
+  @PrimaryKey @Default public var id: Int
+  public var body: String
+}
+
 @Table("posts")
 public struct Posts {
   @PrimaryKey @Default public var id: Int

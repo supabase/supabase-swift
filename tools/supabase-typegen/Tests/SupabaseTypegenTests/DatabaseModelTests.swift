@@ -48,11 +48,12 @@ struct DatabaseModelTests {
   func viewFlagsFallBackToIsUpdatable() throws {
     func kind(isUpdatable: Bool, isInsertEnabled: Bool?) throws -> DatabaseModel.Relation.Kind {
       let data = Fixture.integration { object in
-        var views = object["views"] as! [[String: Any]]
-        views[0]["is_updatable"] = isUpdatable
-        views[0]["is_insert_enabled"] = isInsertEnabled
-        views[0]["is_update_enabled"] = nil
-        object["views"] = views
+        var view = (object["views"] as! [[String: Any]])
+          .first { $0["name"] as? String == "updatable_view" }!
+        view["is_updatable"] = isUpdatable
+        view["is_insert_enabled"] = isInsertEnabled
+        view["is_update_enabled"] = nil
+        object["views"] = [view]
       }
       return try relation(model(data), "public", "updatable_view").kind
     }

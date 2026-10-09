@@ -459,11 +459,12 @@ struct EmitterTests {
     isUpdatable: Bool, isInsertEnabled: Bool?, isUpdateEnabled: Bool?
   ) -> String? {
     let input = Fixture.integration { object in
-      var views = object["views"] as! [[String: Any]]
-      views[0]["is_updatable"] = isUpdatable
-      views[0]["is_insert_enabled"] = isInsertEnabled
-      views[0]["is_update_enabled"] = isUpdateEnabled
-      object["views"] = views
+      var view = (object["views"] as! [[String: Any]])
+        .first { $0["name"] as? String == "updatable_view" }!
+      view["is_updatable"] = isUpdatable
+      view["is_insert_enabled"] = isInsertEnabled
+      view["is_update_enabled"] = isUpdateEnabled
+      object["views"] = [view]
     }
     return run(arguments: []) { input }.standardOutput
       .split(separator: "\n").first { $0.hasPrefix("@Table(\"updatable_view\"") }.map(String.init)
