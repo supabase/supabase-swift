@@ -16,7 +16,7 @@ struct StoredProperty {
   var hasDefault: Bool
 
   /// `@Generated`: the database fills the column in and refuses a written value, so it has no
-  /// field in `Draft` and its column type is one `PostgrestUpdate` cannot assign.
+  /// field in `Draft` and its column type is one `_PostgrestUpdate` cannot assign.
   var isGenerated: Bool
   var explicitColumn: String?
 
@@ -48,12 +48,12 @@ struct StoredProperty {
 ///
 /// Three spellings count, because all three mean a nullable column: `Int?`, `Optional<Int>` and
 /// `Int!`. A generated schema can emit either of the first two, and the `!` spelling reaches a
-/// generic argument where it is illegal — `PostgrestColumn<Todo, String!>` does not compile, and
+/// generic argument where it is illegal — `_PostgrestColumn<Todo, String!>` does not compile, and
 /// the error lands on macro-expanded code the author never wrote.
 ///
 /// Stripping *every* layer is what keeps `Value` non-optional, which the whole wrapped-type design
 /// rests on: a column is nullable or it is not, so `Optional<Int>!` and `Int??` both describe a
-/// nullable `Int`. Leaving one layer on gives `PostgrestNullableColumn<Todo, Int?>`, and because
+/// nullable `Int`. Leaving one layer on gives `_PostgrestNullableColumn<Todo, Int?>`, and because
 /// `Optional` deliberately does not conform to `PostgrestFilterValue` that column silently loses
 /// every operator — "no member `eq`" rather than anything naming the real problem.
 ///
@@ -111,7 +111,7 @@ extension DeclGroupSyntax {
   ///
   /// - **Every binding counts.** `var task: String, note: String` is one `VariableDeclSyntax` with
   ///   two bindings. Reading only the first silently drops `note` from `CodingKeys`, the column
-  ///   map, `Draft` and `PostgrestUpdate`.
+  ///   map, `Draft` and `_PostgrestUpdate`.
   /// - **A shared annotation sits on the last binding.** In `var draft, review: String` only
   ///   `review` carries the type, so a binding without one takes the next annotation forward —
   ///   but only when it has no initializer of its own. In `var a = 1, b: String`, `a` is an `Int`

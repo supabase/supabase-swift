@@ -34,30 +34,30 @@ struct TableMacroSupportTests {
 
   @Test
   func namesEveryLinkInTheRefinementChain() {
-    // `PostgrestWritableRelation` alone is not enough: a macro-generated extension does not derive
-    // the inherited conformance, and reports a missing `PostgrestRelation` with no useful note.
+    // `_PostgrestWritableRelation` alone is not enough: a macro-generated extension does not derive
+    // the inherited conformance, and reports a missing `_PostgrestRelation` with no useful note.
     #expect(
       clause(
         readOnly: false,
-        missing: ["Decodable", "Sendable", "PostgrestRelation", "PostgrestWritableRelation"]
-      ) == ": Decodable, Sendable, PostgrestRelation, PostgrestWritableRelation"
+        missing: ["Decodable", "Sendable", "_PostgrestRelation", "_PostgrestWritableRelation"]
+      ) == ": Decodable, Sendable, _PostgrestRelation, _PostgrestWritableRelation"
     )
   }
 
   @Test
   func aDeclaredKeyAddsTheKeyedRelation() {
-    // What gates the derived-target `upsert`. Listed after `PostgrestRelation` for the same reason
+    // What gates the derived-target `upsert`. Listed after `_PostgrestRelation` for the same reason
     // the whole chain is listed: the generated extension does not derive an inherited conformance.
     #expect(
       clause(
         readOnly: false,
         hasPrimaryKey: true,
         missing: [
-          "Decodable", "Sendable", "PostgrestRelation", "PostgrestKeyedRelation",
-          "PostgrestWritableRelation",
+          "Decodable", "Sendable", "_PostgrestRelation", "_PostgrestKeyedRelation",
+          "_PostgrestWritableRelation",
         ]
       )
-        == ": Decodable, Sendable, PostgrestRelation, PostgrestKeyedRelation, PostgrestWritableRelation"
+        == ": Decodable, Sendable, _PostgrestRelation, _PostgrestKeyedRelation, _PostgrestWritableRelation"
     )
   }
 
@@ -68,16 +68,16 @@ struct TableMacroSupportTests {
       clause(
         readOnly: true,
         hasPrimaryKey: true,
-        missing: ["Decodable", "Sendable", "PostgrestRelation", "PostgrestKeyedRelation"]
-      ) == ": Decodable, Sendable, PostgrestRelation, PostgrestKeyedRelation"
+        missing: ["Decodable", "Sendable", "_PostgrestRelation", "_PostgrestKeyedRelation"]
+      ) == ": Decodable, Sendable, _PostgrestRelation, _PostgrestKeyedRelation"
     )
   }
 
   @Test
   func readOnlyStopsAtTheReadableRelation() {
     #expect(
-      clause(readOnly: true, missing: ["Decodable", "Sendable", "PostgrestRelation"])
-        == ": Decodable, Sendable, PostgrestRelation"
+      clause(readOnly: true, missing: ["Decodable", "Sendable", "_PostgrestRelation"])
+        == ": Decodable, Sendable, _PostgrestRelation"
     )
   }
 
@@ -85,8 +85,8 @@ struct TableMacroSupportTests {
   func skipsWhatTheTypeAlreadyDeclares() {
     // `struct Todo: Decodable, Sendable` must not get a second Decodable conformance.
     #expect(
-      clause(readOnly: false, missing: ["PostgrestRelation", "PostgrestWritableRelation"])
-        == ": PostgrestRelation, PostgrestWritableRelation"
+      clause(readOnly: false, missing: ["_PostgrestRelation", "_PostgrestWritableRelation"])
+        == ": _PostgrestRelation, _PostgrestWritableRelation"
     )
     #expect(clause(readOnly: false, missing: []) == "")
   }

@@ -537,8 +537,8 @@ local midnight east of UTC writes the previous day; build the value in a UTC cal
 Computed fields and relationships come from `functions`: one `extension <Type>.Columns` per
 relation, for each function with one input argument of the relation's row type, in the relation's
 own schema, and not named like a column (compared as Postgres names). A scalar return type gives
-`PostgrestComputedField` (the mapping above applies); a row type gives `PostgrestToOneRelation`, or
-`PostgrestToManyRelation` when the function returns a `SETOF` with more than one `ROWS`. A function
+`_PostgrestComputedField` (the mapping above applies); a row type gives `_PostgrestToOneRelation`, or
+`_PostgrestToManyRelation` when the function returns a `SETOF` with more than one `ROWS`. A function
 that returns `void`, `record`, a set of scalars, or a row type the generator does not emit is
 skipped. Each skip, and each rename that a name clash needs, is a note on standard error.
 

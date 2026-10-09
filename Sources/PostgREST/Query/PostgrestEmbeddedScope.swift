@@ -16,8 +16,9 @@ import IssueReporting
 /// comes back under, the name PostgREST addresses the embed by, and the embedded selection, which
 /// gives the nested select list.
 ///
-/// > Warning: Part of the typed query API, which is alpha. Its shape may change in a minor release.
-public struct PostgrestEmbed<Selection: PostgrestSelection>: Sendable {
+/// > Warning: Part of the typed query API, which is experimental. Its shape may change in a minor
+/// > release. Opt in with `@_spi(Experimental) import Supabase`.
+public struct _PostgrestEmbed<Selection: _PostgrestSelection>: Sendable {
   /// The name the response carries the embed under, and the prefix of every scoped parameter.
   ///
   /// PostgREST accepts an alias in place of the resource name in `comments.limit=5`, so one
@@ -48,7 +49,7 @@ public struct PostgrestEmbed<Selection: PostgrestSelection>: Sendable {
   /// - Parameters:
   ///   - alias: The name the response carries the embed under.
   ///   - relation: The relationship, as declared on the parent's `Columns` namespace.
-  public init<Root>(alias: String, relation: PostgrestToManyRelation<Root, Selection.Source>) {
+  public init<Root>(alias: String, relation: _PostgrestToManyRelation<Root, Selection.Source>) {
     self.alias = alias
     self.embedName = relation.postgrestEmbedName
   }
@@ -59,7 +60,7 @@ public struct PostgrestEmbed<Selection: PostgrestSelection>: Sendable {
   /// - Parameters:
   ///   - alias: The name the response carries the embed under.
   ///   - relation: The relationship, as declared on the parent's `Columns` namespace.
-  public init<Root>(alias: String, relation: PostgrestToOneRelation<Root, Selection.Source>) {
+  public init<Root>(alias: String, relation: _PostgrestToOneRelation<Root, Selection.Source>) {
     self.alias = alias
     self.embedName = relation.postgrestEmbedName
   }
@@ -79,17 +80,18 @@ public struct PostgrestEmbed<Selection: PostgrestSelection>: Sendable {
 /// A selection that declares at least one embed.
 ///
 /// `@SelectionOf` conforms a type to this whenever a property carries `@Relationship`, and emits
-/// the ``Embeds`` namespace with one ``PostgrestEmbed`` per such property. A relation never
+/// the ``Embeds`` namespace with one ``_PostgrestEmbed`` per such property. A relation never
 /// conforms — a whole-row select declares no embeds — which is what keeps
-/// ``PostgrestQuery/embedded(_:_:)`` and ``PostgrestQuery/requiring(_:_:)`` off a plain
+/// ``_PostgrestQuery/embedded(_:_:)`` and ``_PostgrestQuery/requiring(_:_:)`` off a plain
 /// `select()`: there is nothing there to scope.
 ///
-/// > Warning: Part of the typed query API, which is alpha. Its shape may change in a minor release.
-public protocol PostgrestEmbeddingSelection: PostgrestSelection {
-  /// The namespace of this selection's embeds, one ``PostgrestEmbed`` per `@Relationship`.
+/// > Warning: Part of the typed query API, which is experimental. Its shape may change in a minor
+/// > release. Opt in with `@_spi(Experimental) import Supabase`.
+public protocol _PostgrestEmbeddingSelection: _PostgrestSelection {
+  /// The namespace of this selection's embeds, one ``_PostgrestEmbed`` per `@Relationship`.
   associatedtype Embeds: Sendable
 
-  /// The selection's embeds, for naming one in ``PostgrestQuery/embedded(_:_:)``.
+  /// The selection's embeds, for naming one in ``_PostgrestQuery/embedded(_:_:)``.
   static var embeds: Embeds { get }
 }
 
@@ -97,8 +99,8 @@ public protocol PostgrestEmbeddingSelection: PostgrestSelection {
 
 /// Filters, sort keys and a row window applied inside one embed.
 ///
-/// Built in the closure passed to ``PostgrestQuery/embedded(_:_:)`` or
-/// ``PostgrestQuery/requiring(_:_:)``. Everything here targets the embedded *relation*, not the
+/// Built in the closure passed to ``_PostgrestQuery/embedded(_:_:)`` or
+/// ``_PostgrestQuery/requiring(_:_:)``. Everything here targets the embedded *relation*, not the
 /// nested selection, so a column the selection leaves out is still filterable:
 ///
 /// ```swift
@@ -113,8 +115,9 @@ public protocol PostgrestEmbeddingSelection: PostgrestSelection {
 /// parent filter against an embedded one — they are separate query parameters and always AND.
 /// Keeping them apart in the types means that combination cannot be written.
 ///
-/// > Warning: Part of the typed query API, which is alpha. Its shape may change in a minor release.
-public struct PostgrestEmbeddedScope<S: PostgrestSelection>: Sendable {
+/// > Warning: Part of the typed query API, which is experimental. Its shape may change in a minor
+/// > release. Opt in with `@_spi(Experimental) import Supabase`.
+public struct _PostgrestEmbeddedScope<S: _PostgrestSelection>: Sendable {
   /// The scope's parameters, named relative to this embed: `approved`, `or`, `order`, `limit`.
   var items: [URLQueryItem] = []
 
@@ -123,24 +126,24 @@ public struct PostgrestEmbeddedScope<S: PostgrestSelection>: Sendable {
   var innerEntries: [[String]] = []
 
   /// Narrows the embedded rows by a filter. Two calls AND together.
-  public func `where`(_ build: (S.Source.Columns) -> PostgrestFilter<S.Source>) -> Self {
+  public func `where`(_ build: (S.Source.Columns) -> _PostgrestFilter<S.Source>) -> Self {
     var scope = self
     scope.items.append(contentsOf: build(S.Source.columns).queryItems())
     return scope
   }
 
   /// Sorts the embedded rows. Repeated calls append, so the second key breaks ties in the first.
-  public func order(_ build: (S.Source.Columns) -> PostgrestOrdering<S.Source>) -> Self {
+  public func order(_ build: (S.Source.Columns) -> _PostgrestOrdering<S.Source>) -> Self {
     var scope = self
     scope.items.mergeOrder(build(S.Source.columns).rendered)
     return scope
   }
 
   /// Sorts the embedded rows by a column expression, leaving the direction to PostgREST.
-  public func order<E: PostgrestOrderableExpression>(
+  public func order<E: _PostgrestOrderableExpression>(
     _ build: (S.Source.Columns) -> E
   ) -> Self where E.Root == S.Source {
-    order { PostgrestOrdering(column: build($0).postgrestExpression, ascending: nil) }
+    order { _PostgrestOrdering(column: build($0).postgrestExpression, ascending: nil) }
   }
 
   /// Limits the number of embedded rows per parent.
@@ -161,8 +164,8 @@ public struct PostgrestEmbeddedScope<S: PostgrestSelection>: Sendable {
   /// Folds a nested scope into this one, prefixing its parameters with the embed's alias and
   /// carrying its `!inner` marks one level further out.
   func merging<T>(
-    _ nested: PostgrestEmbeddedScope<T>,
-    at embed: PostgrestEmbed<T>,
+    _ nested: _PostgrestEmbeddedScope<T>,
+    at embed: _PostgrestEmbed<T>,
     inner: Bool
   ) -> Self {
     var scope = self
@@ -177,27 +180,27 @@ public struct PostgrestEmbeddedScope<S: PostgrestSelection>: Sendable {
   }
 }
 
-extension PostgrestEmbeddedScope where S: PostgrestEmbeddingSelection {
+extension _PostgrestEmbeddedScope where S: _PostgrestEmbeddingSelection {
   /// Scopes an embed nested in this one. Renders a dotted path: `comments.replies.limit=3`.
   public func embedded<T>(
-    _ embed: KeyPath<S.Embeds, PostgrestEmbed<T>>,
-    _ scope: (PostgrestEmbeddedScope<T>) -> PostgrestEmbeddedScope<T>
+    _ embed: KeyPath<S.Embeds, _PostgrestEmbed<T>>,
+    _ scope: (_PostgrestEmbeddedScope<T>) -> _PostgrestEmbeddedScope<T>
   ) -> Self {
-    merging(scope(PostgrestEmbeddedScope<T>()), at: S.embeds[keyPath: embed], inner: false)
+    merging(scope(_PostgrestEmbeddedScope<T>()), at: S.embeds[keyPath: embed], inner: false)
   }
 
   /// Scopes an embed nested in this one and drops the rows of *this* embed that have no match.
   public func requiring<T>(
-    _ embed: KeyPath<S.Embeds, PostgrestEmbed<T>>,
-    _ scope: (PostgrestEmbeddedScope<T>) -> PostgrestEmbeddedScope<T>
+    _ embed: KeyPath<S.Embeds, _PostgrestEmbed<T>>,
+    _ scope: (_PostgrestEmbeddedScope<T>) -> _PostgrestEmbeddedScope<T>
   ) -> Self {
-    merging(scope(PostgrestEmbeddedScope<T>()), at: S.embeds[keyPath: embed], inner: true)
+    merging(scope(_PostgrestEmbeddedScope<T>()), at: S.embeds[keyPath: embed], inner: true)
   }
 }
 
 // MARK: - Query
 
-extension PostgrestQuery {
+extension _PostgrestQuery {
   /// Shapes the rows of one embed without changing which parent rows come back.
   ///
   /// ```swift
@@ -219,11 +222,11 @@ extension PostgrestQuery {
   ///   - embed: The embed to scope, as `\.comments`.
   ///   - scope: Builds the filters, sort keys and row window for the embed.
   /// - Returns: A new query with the scope applied. The receiver is unchanged.
-  public func embedded<S: PostgrestEmbeddingSelection, T>(
-    _ embed: KeyPath<S.Embeds, PostgrestEmbed<T>>,
-    _ scope: (PostgrestEmbeddedScope<T>) -> PostgrestEmbeddedScope<T>
+  public func embedded<S: _PostgrestEmbeddingSelection, T>(
+    _ embed: KeyPath<S.Embeds, _PostgrestEmbed<T>>,
+    _ scope: (_PostgrestEmbeddedScope<T>) -> _PostgrestEmbeddedScope<T>
   ) -> Self where Output == [S], S.Source == R {
-    applying(PostgrestEmbeddedScope<S>().embedded(embed, scope))
+    applying(_PostgrestEmbeddedScope<S>().embedded(embed, scope))
   }
 
   /// Shapes the rows of one embed and drops the parent rows that have no match.
@@ -251,15 +254,15 @@ extension PostgrestQuery {
   ///   - embed: The embed to scope, as `\.comments`.
   ///   - scope: Builds the filters, sort keys and row window for the embed.
   /// - Returns: A new query with the scope applied. The receiver is unchanged.
-  public func requiring<S: PostgrestEmbeddingSelection, T>(
-    _ embed: KeyPath<S.Embeds, PostgrestEmbed<T>>,
-    _ scope: (PostgrestEmbeddedScope<T>) -> PostgrestEmbeddedScope<T>
+  public func requiring<S: _PostgrestEmbeddingSelection, T>(
+    _ embed: KeyPath<S.Embeds, _PostgrestEmbed<T>>,
+    _ scope: (_PostgrestEmbeddedScope<T>) -> _PostgrestEmbeddedScope<T>
   ) -> Self where Output == [S], S.Source == R {
-    applying(PostgrestEmbeddedScope<S>().requiring(embed, scope))
+    applying(_PostgrestEmbeddedScope<S>().requiring(embed, scope))
   }
 
   /// Appends a top-level scope's parameters and marks its `!inner` entries in `select`.
-  private func applying<S>(_ scope: PostgrestEmbeddedScope<S>) -> Self {
+  private func applying<S>(_ scope: _PostgrestEmbeddedScope<S>) -> Self {
     var query = self
     query.request.query += scope.items
     guard

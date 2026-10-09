@@ -8,11 +8,11 @@
 import Foundation
 import Testing
 
-@testable import PostgREST
+@_spi(Experimental) @testable import PostgREST
 
 @Suite
 struct PostgrestQueryWhereTests {
-  struct Todo: PostgrestWritableRelation {
+  struct Todo: _PostgrestWritableRelation {
     static let relationName = "todos"
     static let selectString = "*"
 
@@ -23,11 +23,11 @@ struct PostgrestQueryWhereTests {
     var metadata: String
 
     struct Columns: Sendable {
-      let id = PostgrestColumn<Todo, Int>("id")
-      let isDone = PostgrestColumn<Todo, Bool>("is_done")
-      let priority = PostgrestColumn<Todo, Int>("priority")
-      let dueDate = PostgrestNullableColumn<Todo, Date>("due_at")
-      let metadata = PostgrestColumn<Todo, String>("metadata")
+      let id = _PostgrestColumn<Todo, Int>("id")
+      let isDone = _PostgrestColumn<Todo, Bool>("is_done")
+      let priority = _PostgrestColumn<Todo, Int>("priority")
+      let dueDate = _PostgrestNullableColumn<Todo, Date>("due_at")
+      let metadata = _PostgrestColumn<Todo, String>("metadata")
     }
 
     static let columns = Columns()

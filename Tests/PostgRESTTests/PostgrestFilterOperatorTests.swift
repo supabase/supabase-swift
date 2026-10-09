@@ -13,7 +13,7 @@ import Testing
 struct PostgrestFilterOperatorTests {
   @Test
   func everyOperatorRendersItsToken() {
-    let tokens: [(PostgrestFilterOperator, String)] = [
+    let tokens: [(_PostgrestFilterOperator, String)] = [
       (.eq, "eq"), (.neq, "neq"), (.gt, "gt"), (.gte, "gte"), (.lt, "lt"), (.lte, "lte"),
       (.is, "is"), (.isDistinct, "isdistinct"), (.in, "in"),
       (.like, "like"), (.ilike, "ilike"),
@@ -35,11 +35,11 @@ struct PostgrestFilterOperatorTests {
   @Test
   func textSearchFoldsItsTypeAndConfigIntoTheToken() {
     #expect(
-      PostgrestFilterOperator.textSearch(config: "english", type: nil).token == "fts(english)")
-    #expect(PostgrestFilterOperator.textSearch(config: nil, type: .plain).token == "plfts")
-    #expect(PostgrestFilterOperator.textSearch(config: nil, type: .phrase).token == "phfts")
+      _PostgrestFilterOperator.textSearch(config: "english", type: nil).token == "fts(english)")
+    #expect(_PostgrestFilterOperator.textSearch(config: nil, type: .plain).token == "plfts")
+    #expect(_PostgrestFilterOperator.textSearch(config: nil, type: .phrase).token == "phfts")
     #expect(
-      PostgrestFilterOperator.textSearch(config: "english", type: .websearch).token
+      _PostgrestFilterOperator.textSearch(config: "english", type: .websearch).token
         == "wfts(english)")
   }
 }

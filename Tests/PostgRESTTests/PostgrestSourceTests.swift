@@ -8,11 +8,11 @@
 import Foundation
 import Testing
 
-@testable import PostgREST
+@_spi(Experimental) @testable import PostgREST
 
 @Suite
 struct PostgrestSourceTests {
-  struct Todo: PostgrestRelation {
+  struct Todo: _PostgrestRelation {
     static let relationName = "todos"
     static let selectString = "*"
 
@@ -20,8 +20,8 @@ struct PostgrestSourceTests {
     var task: String
 
     struct Columns: Sendable {
-      let id = PostgrestColumn<Todo, Int>("id")
-      let task = PostgrestColumn<Todo, String>("task")
+      let id = _PostgrestColumn<Todo, Int>("id")
+      let task = _PostgrestColumn<Todo, String>("task")
     }
 
     static let columns = Columns()

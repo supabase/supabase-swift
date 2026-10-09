@@ -12,7 +12,7 @@ import Testing
 
 @Suite
 struct PostgrestAggregateTests {
-  struct Order: PostgrestRelation {
+  struct Order: _PostgrestRelation {
     static let relationName = "orders"
     static let selectString = "*"
 
@@ -20,8 +20,8 @@ struct PostgrestAggregateTests {
     var quantity: Int
 
     struct Columns: Sendable {
-      let amount = PostgrestColumn<Order, Double>("amount")
-      let quantity = PostgrestColumn<Order, Int>("quantity")
+      let amount = _PostgrestColumn<Order, Double>("amount")
+      let quantity = _PostgrestColumn<Order, Int>("quantity")
     }
 
     static let columns = Columns()
@@ -51,7 +51,7 @@ struct PostgrestAggregateTests {
   /// `Value` is the non-optional result type: it types the expression, not the response. An
   /// aggregate over zero matching rows comes back `null` on the wire (`count` excepted), and the
   /// caller decodes that as an optional — the wrapped-type invariant here matches
-  /// ``PostgrestColumn``'s, where an optional `Value` strips the operators from anything chained
+  /// ``_PostgrestColumn``'s, where an optional `Value` strips the operators from anything chained
   /// off it.
   @Test
   func theResultTypeStaysNonOptional() {
@@ -62,7 +62,7 @@ struct PostgrestAggregateTests {
   /// `count()` with no column counts rows, so it takes no argument and is a static.
   @Test
   func countAllRendersWithNoColumn() {
-    #expect(PostgrestAggregate<Order, Int>.countAll.postgrestExpression == "count()")
+    #expect(_PostgrestAggregate<Order, Int>.countAll.postgrestExpression == "count()")
   }
 
   /// PostgREST has no `HAVING` and cannot order by an aggregate. Neither call must compile:
@@ -72,7 +72,7 @@ struct PostgrestAggregateTests {
   @Test
   func anAggregateIsSelectableAndNothingElse() {
     let sum = Order.columns.amount.sum()
-    #expect((sum as Any) is any PostgrestFilterableExpression == false)
-    #expect((sum as Any) is any PostgrestOrderableExpression == false)
+    #expect((sum as Any) is any _PostgrestFilterableExpression == false)
+    #expect((sum as Any) is any _PostgrestOrderableExpression == false)
   }
 }

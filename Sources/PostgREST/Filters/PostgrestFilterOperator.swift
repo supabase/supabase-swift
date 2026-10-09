@@ -7,13 +7,13 @@
 
 /// An operator of the typed filter API, and the token PostgREST reads it as.
 ///
-/// Every operator method on ``PostgrestFilterableExpression`` builds its filter through one of
+/// Every operator method on ``_PostgrestFilterableExpression`` builds its filter through one of
 /// these cases, so the wire spelling of an operator is declared once, here, and a consumer that
-/// maps a ``PostgrestFilter`` onto another representation switches over it exhaustively.
+/// maps a ``_PostgrestFilter`` onto another representation switches over it exhaustively.
 ///
 /// Closed on purpose: an operator this SDK has no case for goes through
-/// ``PostgrestFilterableExpression/raw(_:)``, which sends the operand as written.
-public enum PostgrestFilterOperator: Hashable, Sendable {
+/// ``_PostgrestFilterableExpression/raw(_:)``, which sends the operand as written.
+public enum _PostgrestFilterOperator: Hashable, Sendable {
   /// Equals, `eq`.
   case eq
 

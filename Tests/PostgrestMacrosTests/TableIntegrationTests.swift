@@ -6,7 +6,7 @@
 //
 
 import Foundation
-import PostgrestMacros
+@_spi(Experimental) import PostgrestMacros
 import Testing
 
 // Declared at file scope on purpose. `@Table` attaches an extension, and Swift does not allow an
@@ -41,7 +41,7 @@ struct IntegrationNote {
 }
 
 // A `GENERATED ALWAYS` identity key and a generated nullable column. Both read like any other
-// column and neither can be written: `Draft` has no field for them, and `PostgrestUpdate` has no
+// column and neither can be written: `Draft` has no field for them, and `_PostgrestUpdate` has no
 // subscript for their column type.
 @Table("counters")
 struct IntegrationCounter {
@@ -51,7 +51,7 @@ struct IntegrationCounter {
 }
 
 // A writable table with no declared key — an append-only log. It must not conform to
-// `PostgrestKeyedRelation`, so the derived-target `upsert` is simply not available on it: there is
+// `_PostgrestKeyedRelation`, so the derived-target `upsert` is simply not available on it: there is
 // no key for PostgREST to merge on, and the call would quietly insert another row every time.
 @Table("audit_events")
 struct IntegrationAuditEvent {
@@ -74,11 +74,16 @@ struct IntegrationActiveTodo {
   var task: String
 }
 
-/// Shadows `PostgREST.PublicSchema` the way the postgres-meta Swift generator's output does, so
-/// every `@Table` in this module compiles against the collision.
+/// Shadows `PostgREST._PublicSchema`, so every `@Table` in this module proves the macro names the
+/// SDK's type fully qualified.
+enum _PublicSchema {}
+
+/// The postgres-meta Swift generator emits a `PublicSchema` of its own, which collided with the
+/// SDK's type before that type gained its `_` prefix. Kept so the generator's spelling stays
+/// covered too.
 enum PublicSchema {}
 
-enum IntegrationPrivateSchema: PostgrestSchema {
+enum IntegrationPrivateSchema: _PostgrestSchema {
   static let name = "private"
 }
 
@@ -100,7 +105,7 @@ struct TableIntegrationTests {
 
   @Test
   func macroSuppliesTheSchemaType() {
-    #expect(Todo.Schema.self == PostgREST.PublicSchema.self)
+    #expect(Todo.Schema.self == PostgREST._PublicSchema.self)
     #expect(IntegrationSecret.Schema.self == IntegrationPrivateSchema.self)
     #expect(IntegrationSecret.schema == "private")
   }
@@ -170,7 +175,7 @@ struct TableIntegrationTests {
     #expect(capture.bodyString == #"{"count":1}"#)
 
     // Likewise `$0.id = 2` and `$0.updatedAt = nil` do not compile inside the update closure:
-    // `PostgrestUpdate` subscripts `PostgrestColumn`/`PostgrestNullableColumn` only, and a
+    // `_PostgrestUpdate` subscripts `_PostgrestColumn`/`_PostgrestNullableColumn` only, and a
     // generated column is neither.
     let update = RequestCapture()
     _ = try await update.client.from(IntegrationCounter.self)
@@ -210,12 +215,12 @@ struct TableIntegrationTests {
   @Test
   func onlyARelationWithADeclaredKeyIsKeyed() {
     // The conformance *is* the mechanism. `primaryKeyColumns` is mandatory on
-    // `PostgrestKeyedRelation`, so "no key" is a missing conformance rather than an empty array —
+    // `_PostgrestKeyedRelation`, so "no key" is a missing conformance rather than an empty array —
     // and an empty `on_conflict`, which is a different request, stops being representable.
-    #expect(Todo.self is any PostgrestKeyedRelation.Type)
-    #expect(IntegrationUserRole.self is any PostgrestKeyedRelation.Type)
-    #expect(!(IntegrationAuditEvent.self is any PostgrestKeyedRelation.Type))
-    #expect(!(IntegrationActiveTodo.self is any PostgrestKeyedRelation.Type))
+    #expect(Todo.self is any _PostgrestKeyedRelation.Type)
+    #expect(IntegrationUserRole.self is any _PostgrestKeyedRelation.Type)
+    #expect(!(IntegrationAuditEvent.self is any _PostgrestKeyedRelation.Type))
+    #expect(!(IntegrationActiveTodo.self is any _PostgrestKeyedRelation.Type))
   }
 
   @Test
@@ -254,7 +259,7 @@ struct TableIntegrationTests {
 
   @Test
   func aPartialUpdateNamesOnlyWhatItChanges() throws {
-    let data = try JSONEncoder().encode(PostgrestUpdate<Todo> { $0.isDone = true })
+    let data = try JSONEncoder().encode(_PostgrestUpdate<Todo> { $0.isDone = true })
     let json = String(decoding: data, as: UTF8.self)
     #expect(json == #"{"is_done":true}"#)
   }

@@ -6,7 +6,7 @@
 //
 
 import Foundation
-import PostgrestMacros
+@_spi(Experimental) import PostgrestMacros
 import Testing
 
 // File scope, for the same reason as `SelectionIntegrationTests`: both macros attach extensions.
@@ -19,7 +19,7 @@ struct ComputedUser {
 }
 
 extension ComputedUser.Columns {
-  var fullName: PostgrestComputedField<ComputedUser, String> { .init("full_name") }
+  var fullName: _PostgrestComputedField<ComputedUser, String> { .init("full_name") }
 }
 
 @Table("channels")
@@ -36,10 +36,10 @@ struct ComputedMessage {
 }
 
 extension ComputedChannel.Columns {
-  var getMessages: PostgrestToManyRelation<ComputedChannel, ComputedMessage> {
+  var getMessages: _PostgrestToManyRelation<ComputedChannel, ComputedMessage> {
     .init("get_messages")
   }
-  var latestMessage: PostgrestToOneRelation<ComputedChannel, ComputedMessage> {
+  var latestMessage: _PostgrestToOneRelation<ComputedChannel, ComputedMessage> {
     .init("latest_message")
   }
 }

@@ -14,32 +14,32 @@
 // Only the array shape is type-checked (`where Value == [E]`), so `contains(["a"])` on a
 // `String` column does not compile. A range and a jsonb column have no distinguishing Swift
 // type to constrain on, so the range and JSON methods sit on bare
-// `PostgrestFilterableExpression` and compile on any column; pairing one with the wrong column
+// `_PostgrestFilterableExpression` and compile on any column; pairing one with the wrong column
 // is a server error (`42883 operator does not exist`), not a wrong answer.
 //
 // The array operand is the `[E]` itself: its `rawValue` is the `{a,b}` literal with every member
 // escaped as the literal requires.
 
-extension PostgrestFilterableExpression {
+extension _PostgrestFilterableExpression {
   /// Matches rows where this array column contains every element of `values`.
   ///
   /// An empty `values` matches every row whose column is non-null — the opposite of `in` and
   /// `likeAnyOf`, since every array contains the empty array.
-  public func contains<E: PostgrestArrayElement>(_ values: [E]) -> PostgrestFilter<Root>
+  public func contains<E: PostgrestArrayElement>(_ values: [E]) -> _PostgrestFilter<Root>
   where Value == [E] {
-    PostgrestFilter(column: postgrestExpression, operator: .contains, value: values)
+    _PostgrestFilter(column: postgrestExpression, operator: .contains, value: values)
   }
 
   /// Matches rows where every element of this array column is contained by `values`.
-  public func containedBy<E: PostgrestArrayElement>(_ values: [E]) -> PostgrestFilter<Root>
+  public func containedBy<E: PostgrestArrayElement>(_ values: [E]) -> _PostgrestFilter<Root>
   where Value == [E] {
-    PostgrestFilter(column: postgrestExpression, operator: .containedBy, value: values)
+    _PostgrestFilter(column: postgrestExpression, operator: .containedBy, value: values)
   }
 
   /// Matches rows where this array column shares at least one element with `values`.
-  public func overlaps<E: PostgrestArrayElement>(_ values: [E]) -> PostgrestFilter<Root>
+  public func overlaps<E: PostgrestArrayElement>(_ values: [E]) -> _PostgrestFilter<Root>
   where Value == [E] {
-    PostgrestFilter(column: postgrestExpression, operator: .overlaps, value: values)
+    _PostgrestFilter(column: postgrestExpression, operator: .overlaps, value: values)
   }
 }
 
@@ -48,71 +48,71 @@ extension PostgrestFilterableExpression {
 // A range literal is taken as a string, and is a single value so that a group escapes its
 // `)`/`]`: bare, they close an enclosing `or=(…)` early and 400. The opposite of `in`'s list.
 
-extension PostgrestFilterableExpression {
+extension _PostgrestFilterableExpression {
   /// Matches rows where this range column contains `range`.
   ///
   /// - Parameter range: A Postgres range literal, for example `"[2,3)"`.
-  public func containsRange(_ range: String) -> PostgrestFilter<Root> {
-    PostgrestFilter(column: postgrestExpression, operator: .contains, value: range)
+  public func containsRange(_ range: String) -> _PostgrestFilter<Root> {
+    _PostgrestFilter(column: postgrestExpression, operator: .contains, value: range)
   }
 
   /// Matches rows where this range column is contained by `range`.
-  public func containedByRange(_ range: String) -> PostgrestFilter<Root> {
-    PostgrestFilter(column: postgrestExpression, operator: .containedBy, value: range)
+  public func containedByRange(_ range: String) -> _PostgrestFilter<Root> {
+    _PostgrestFilter(column: postgrestExpression, operator: .containedBy, value: range)
   }
 
   /// Matches rows where this range column overlaps `range`.
-  public func overlapsRange(_ range: String) -> PostgrestFilter<Root> {
-    PostgrestFilter(column: postgrestExpression, operator: .overlaps, value: range)
+  public func overlapsRange(_ range: String) -> _PostgrestFilter<Root> {
+    _PostgrestFilter(column: postgrestExpression, operator: .overlaps, value: range)
   }
 
   /// Matches rows where this range column is strictly to the left of `range`.
   ///
   /// - Parameter range: A Postgres range literal, for example `"[2024-01-01,2024-02-01)"`.
-  public func rangeLt(_ range: String) -> PostgrestFilter<Root> {
-    PostgrestFilter(column: postgrestExpression, operator: .rangeLt, value: range)
+  public func rangeLt(_ range: String) -> _PostgrestFilter<Root> {
+    _PostgrestFilter(column: postgrestExpression, operator: .rangeLt, value: range)
   }
 
   /// Matches rows where this range column is strictly to the right of `range`.
-  public func rangeGt(_ range: String) -> PostgrestFilter<Root> {
-    PostgrestFilter(column: postgrestExpression, operator: .rangeGt, value: range)
+  public func rangeGt(_ range: String) -> _PostgrestFilter<Root> {
+    _PostgrestFilter(column: postgrestExpression, operator: .rangeGt, value: range)
   }
 
   /// Matches rows where this range column does not extend to the left of `range`.
-  public func rangeGte(_ range: String) -> PostgrestFilter<Root> {
-    PostgrestFilter(column: postgrestExpression, operator: .rangeGte, value: range)
+  public func rangeGte(_ range: String) -> _PostgrestFilter<Root> {
+    _PostgrestFilter(column: postgrestExpression, operator: .rangeGte, value: range)
   }
 
   /// Matches rows where this range column does not extend to the right of `range`.
-  public func rangeLte(_ range: String) -> PostgrestFilter<Root> {
-    PostgrestFilter(column: postgrestExpression, operator: .rangeLte, value: range)
+  public func rangeLte(_ range: String) -> _PostgrestFilter<Root> {
+    _PostgrestFilter(column: postgrestExpression, operator: .rangeLte, value: range)
   }
 
   /// Matches rows where this range column is adjacent to `range`.
-  public func rangeAdjacent(_ range: String) -> PostgrestFilter<Root> {
-    PostgrestFilter(column: postgrestExpression, operator: .rangeAdjacent, value: range)
+  public func rangeAdjacent(_ range: String) -> _PostgrestFilter<Root> {
+    _PostgrestFilter(column: postgrestExpression, operator: .rangeAdjacent, value: range)
   }
 }
 
 // MARK: - JSON operands
 
-extension PostgrestFilterableExpression {
+extension _PostgrestFilterableExpression {
   /// Matches rows where this `jsonb` column contains `json`.
   ///
   /// - Parameter json: A JSON object literal, for example `#"{"a":1}"#`.
-  public func containsJSON(_ json: String) -> PostgrestFilter<Root> {
-    PostgrestFilter(column: postgrestExpression, operator: .contains, value: json)
+  public func containsJSON(_ json: String) -> _PostgrestFilter<Root> {
+    _PostgrestFilter(column: postgrestExpression, operator: .contains, value: json)
   }
 
   /// Matches rows where this `jsonb` column is contained by `json`.
-  public func containedByJSON(_ json: String) -> PostgrestFilter<Root> {
-    PostgrestFilter(column: postgrestExpression, operator: .containedBy, value: json)
+  public func containedByJSON(_ json: String) -> _PostgrestFilter<Root> {
+    _PostgrestFilter(column: postgrestExpression, operator: .containedBy, value: json)
   }
 }
 
 // MARK: - Text search
 
-extension PostgrestFilterableExpression where Value == String {
+extension _PostgrestFilterableExpression where Value == String {
   /// Matches rows where this `text` or `tsvector` column matches the full-text `query`.
   ///
   /// - Parameters:
@@ -124,8 +124,8 @@ extension PostgrestFilterableExpression where Value == String {
     _ query: String,
     config: String? = nil,
     type: TextSearchType? = nil
-  ) -> PostgrestFilter<Root> {
-    PostgrestFilter(
+  ) -> _PostgrestFilter<Root> {
+    _PostgrestFilter(
       column: postgrestExpression,
       operator: .textSearch(config: config, type: type),
       value: query

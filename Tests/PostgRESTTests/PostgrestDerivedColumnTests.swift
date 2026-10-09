@@ -8,11 +8,11 @@
 import Foundation
 import Testing
 
-@testable import PostgREST
+@_spi(Experimental) @testable import PostgREST
 
 @Suite
 struct PostgrestDerivedColumnTests {
-  struct Item: PostgrestRelation {
+  struct Item: _PostgrestRelation {
     static let relationName = "items"
     static let selectString = "*"
 
@@ -20,14 +20,14 @@ struct PostgrestDerivedColumnTests {
     var data: String
 
     struct Columns: Sendable {
-      let cost = PostgrestColumn<Item, Double>("cost")
-      let data = PostgrestColumn<Item, String>("data")
+      let cost = _PostgrestColumn<Item, Double>("cost")
+      let data = _PostgrestColumn<Item, String>("data")
     }
 
     static let columns = Columns()
   }
 
-  private func rendered(_ filter: PostgrestFilter<Item>) -> String {
+  private func rendered(_ filter: _PostgrestFilter<Item>) -> String {
     filter.queryItems().map { "\($0.name)=\($0.value ?? "")" }.joined(separator: "&")
   }
 
@@ -44,9 +44,9 @@ struct PostgrestDerivedColumnTests {
   @Test
   func aCastIsSelectableAndNothingElse() {
     let costText = Item.columns.cost.cast(to: .text)
-    #expect((costText as Any) is any PostgrestColumnExpression)
-    #expect((costText as Any) is any PostgrestFilterableExpression == false)
-    #expect((costText as Any) is any PostgrestOrderableExpression == false)
+    #expect((costText as Any) is any _PostgrestColumnExpression)
+    #expect((costText as Any) is any _PostgrestFilterableExpression == false)
+    #expect((costText as Any) is any _PostgrestOrderableExpression == false)
   }
 
   /// A JSON path chained onto a cast still compiles — both are declared on the base protocol —
@@ -57,14 +57,14 @@ struct PostgrestDerivedColumnTests {
   func castingThenJSONPathInheritsTheCastsSelectOnlyPosition() {
     let composed = Item.columns.cost.cast(to: .text).jsonText("k")
     #expect(composed.postgrestExpression == "cost::text->>k")
-    #expect((composed as Any) is any PostgrestFilterableExpression == false)
-    #expect((composed as Any) is any PostgrestOrderableExpression == false)
+    #expect((composed as Any) is any _PostgrestFilterableExpression == false)
+    #expect((composed as Any) is any _PostgrestOrderableExpression == false)
   }
 
   /// A Postgres type with no shipped target is still reachable, and still says what it produces.
   @Test
   func aCustomTargetNamesItsOwnSwiftType() {
-    let citext = PostgrestCastTarget<String>("citext")
+    let citext = _PostgrestCastTarget<String>("citext")
     #expect(Item.columns.data.cast(to: citext).postgrestExpression == "data::citext")
   }
 
@@ -81,7 +81,7 @@ struct PostgrestDerivedColumnTests {
     #expect(rendered(name.eq("Ada")) == "data->>name=eq.Ada")
     #expect(rendered(name.like("A%")) == "data->>name=like.A%")
     #expect(rendered(name.in(["Ada", "Bob"])) == "data->>name=in.(Ada,Bob)")
-    #expect((name as Any) is any PostgrestOrderableExpression)
+    #expect((name as Any) is any _PostgrestOrderableExpression)
   }
 
   /// A JSON extraction is null-testable whatever the column's own nullability: `data` is a
@@ -98,17 +98,17 @@ struct PostgrestDerivedColumnTests {
   /// The operator is keyed on the filterable position, so a select-only derivation does not pick
   /// it up. Neither call must compile:
   ///
-  ///     $0.cost.cast(to: .text).isNull()   // does not conform to PostgrestNullableExpression
+  ///     $0.cost.cast(to: .text).isNull()   // does not conform to _PostgrestNullableExpression
   ///     $0.cost.sum().isNull()             // same
   ///
   /// Nor does a `NOT NULL` stored column gain it — that guarantee is what put `isNull()` on a
   /// refinement rather than on the base protocol.
   @Test
   func onlyAFilterableDerivationIsNullTestable() {
-    #expect((Item.columns.data.jsonText("name") as Any) is any PostgrestNullableExpression)
-    #expect((Item.columns.cost.cast(to: .text) as Any) is any PostgrestNullableExpression == false)
-    #expect((Item.columns.cost.sum() as Any) is any PostgrestNullableExpression == false)
-    #expect((Item.columns.cost as Any) is any PostgrestNullableExpression == false)
+    #expect((Item.columns.data.jsonText("name") as Any) is any _PostgrestNullableExpression)
+    #expect((Item.columns.cost.cast(to: .text) as Any) is any _PostgrestNullableExpression == false)
+    #expect((Item.columns.cost.sum() as Any) is any _PostgrestNullableExpression == false)
+    #expect((Item.columns.cost as Any) is any _PostgrestNullableExpression == false)
   }
 
   /// A JSON path survives a logic tree, which a cast does not.

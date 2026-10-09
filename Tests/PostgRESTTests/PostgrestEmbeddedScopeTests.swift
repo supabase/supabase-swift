@@ -9,45 +9,45 @@ import Foundation
 import HTTPTypes
 import Testing
 
-@testable import PostgREST
+@_spi(Experimental) @testable import PostgREST
 
 /// The scope construct from spec §4.4, over hand-written conformances that spell out what
 /// `@SelectionOf` generates. The macro-generated form is covered end to end in
 /// `RelationshipIntegrationTests`.
 ///
 /// One property is checked by the compiler rather than here: `embedded`/`requiring` are declared
-/// only where `Output == [S]` and `S: PostgrestEmbeddingSelection`. A relation never conforms, so
+/// only where `Output == [S]` and `S: _PostgrestEmbeddingSelection`. A relation never conforms, so
 /// `client.from(Todo.self).select().requiring(\.comments) { $0 }` is *no such member* — a
 /// whole-row select declares no embeds to scope.
 @Suite
 struct PostgrestEmbeddedScopeTests {
-  struct Todo: PostgrestRelation {
+  struct Todo: _PostgrestRelation {
     static let relationName = "todos"
     static let selectString = "*"
 
     var id: Int
 
     struct Columns: Sendable {
-      let id = PostgrestColumn<Todo, Int>("id")
-      let isDone = PostgrestColumn<Todo, Bool>("is_done")
+      let id = _PostgrestColumn<Todo, Int>("id")
+      let isDone = _PostgrestColumn<Todo, Bool>("is_done")
     }
 
     static let columns = Columns()
   }
 
-  struct Comment: PostgrestRelation {
+  struct Comment: _PostgrestRelation {
     static let relationName = "comments"
     static let selectString = "*"
 
     var id: Int
 
     struct Columns: Sendable {
-      let id = PostgrestColumn<Comment, Int>("id")
-      let todoID = PostgrestColumn<Comment, Int>("todo_id")
-      let parentID = PostgrestNullableColumn<Comment, Int>("parent_id")
-      let approved = PostgrestColumn<Comment, Bool>("approved")
-      let authorID = PostgrestColumn<Comment, Int>("author_id")
-      let createdAt = PostgrestColumn<Comment, Date>("created_at")
+      let id = _PostgrestColumn<Comment, Int>("id")
+      let todoID = _PostgrestColumn<Comment, Int>("todo_id")
+      let parentID = _PostgrestNullableColumn<Comment, Int>("parent_id")
+      let approved = _PostgrestColumn<Comment, Bool>("approved")
+      let authorID = _PostgrestColumn<Comment, Int>("author_id")
+      let createdAt = _PostgrestColumn<Comment, Date>("created_at")
     }
 
     static let columns = Columns()
@@ -55,7 +55,7 @@ struct PostgrestEmbeddedScopeTests {
 
   /// Selects `id` and `body` only. `approved`, `authorID` and `createdAt` are deliberately not
   /// selected: a scope filters the embedded *relation*, so they stay filterable.
-  struct CommentBody: PostgrestSelection {
+  struct CommentBody: _PostgrestSelection {
     typealias Source = Comment
     static let selectString = "id:id,body:body"
 
@@ -64,7 +64,7 @@ struct PostgrestEmbeddedScopeTests {
   }
 
   /// A comment with its replies, so a scope can nest.
-  struct CommentWithReplies: PostgrestEmbeddingSelection {
+  struct CommentWithReplies: _PostgrestEmbeddingSelection {
     typealias Source = Comment
     static let selectString = "id:id,replies:\(embeds.replies.postgrestExpression)"
 
@@ -72,13 +72,13 @@ struct PostgrestEmbeddedScopeTests {
     var replies: [CommentBody]
 
     struct Embeds: Sendable {
-      let replies = PostgrestEmbed<CommentBody>(alias: "replies", foreignKey: "parent_id")
+      let replies = _PostgrestEmbed<CommentBody>(alias: "replies", foreignKey: "parent_id")
     }
 
     static let embeds = Embeds()
   }
 
-  struct TodoWithComments: PostgrestEmbeddingSelection {
+  struct TodoWithComments: _PostgrestEmbeddingSelection {
     typealias Source = Todo
     static let selectString = "id:id,comments:\(embeds.comments.postgrestExpression)"
 
@@ -86,13 +86,13 @@ struct PostgrestEmbeddedScopeTests {
     var comments: [CommentBody]
 
     struct Embeds: Sendable {
-      let comments = PostgrestEmbed<CommentBody>(alias: "comments", foreignKey: "todo_id")
+      let comments = _PostgrestEmbed<CommentBody>(alias: "comments", foreignKey: "todo_id")
     }
 
     static let embeds = Embeds()
   }
 
-  struct TodoWithThreads: PostgrestEmbeddingSelection {
+  struct TodoWithThreads: _PostgrestEmbeddingSelection {
     typealias Source = Todo
     static let selectString = "id:id,comments:\(embeds.comments.postgrestExpression)"
 
@@ -100,7 +100,7 @@ struct PostgrestEmbeddedScopeTests {
     var comments: [CommentWithReplies]
 
     struct Embeds: Sendable {
-      let comments = PostgrestEmbed<CommentWithReplies>(alias: "comments", foreignKey: "todo_id")
+      let comments = _PostgrestEmbed<CommentWithReplies>(alias: "comments", foreignKey: "todo_id")
     }
 
     static let embeds = Embeds()

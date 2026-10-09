@@ -301,13 +301,13 @@ struct DiagnosticsTests {
       extension Todo {
         static let relationName = "todos"
 
-        typealias Schema = PostgREST.PublicSchema
+        typealias Schema = PostgREST._PublicSchema
 
         static let selectString = "*"
 
         struct Columns: Sendable {
-          let id = PostgrestColumn<Todo, Int>("id")
-          let task = PostgrestColumn<Todo, String>("task")
+          let id = _PostgrestColumn<Todo, Int>("id")
+          let task = _PostgrestColumn<Todo, String>("task")
 
           init() {
           }

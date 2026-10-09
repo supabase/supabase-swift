@@ -14,14 +14,14 @@
 ///
 /// Omitting the direction sends `order=id` bare, so PostgREST's own default applies rather than
 /// a value frozen into the client.
-public struct PostgrestOrdering<Root: PostgrestRelation>: Sendable {
+public struct _PostgrestOrdering<Root: _PostgrestRelation>: Sendable {
   let column: String
 
   /// `nil` sends no direction, so PostgREST's default applies (ascending, `NULL`s last on 16.1).
   let ascending: Bool?
 
   /// `nil` sends no placement, so the database default applies.
-  var nullPlacement: PostgrestNullPlacement?
+  var nullPlacement: _PostgrestNullPlacement?
 
   var rendered: String {
     column
@@ -34,7 +34,7 @@ public struct PostgrestOrdering<Root: PostgrestRelation>: Sendable {
   /// ```swift
   /// .order { $0.priority.desc().nulls(.first) }
   /// ```
-  public func nulls(_ placement: PostgrestNullPlacement) -> Self {
+  public func nulls(_ placement: _PostgrestNullPlacement) -> Self {
     var copy = self
     copy.nullPlacement = placement
     return copy
@@ -42,7 +42,7 @@ public struct PostgrestOrdering<Root: PostgrestRelation>: Sendable {
 }
 
 /// Where `NULL`s sort relative to other values.
-public struct PostgrestNullPlacement: RawRepresentable, Hashable, Sendable {
+public struct _PostgrestNullPlacement: RawRepresentable, Hashable, Sendable {
   public let rawValue: String
 
   public init(rawValue: String) {
@@ -50,23 +50,23 @@ public struct PostgrestNullPlacement: RawRepresentable, Hashable, Sendable {
   }
 
   /// `nullsfirst`
-  public static let first = PostgrestNullPlacement(rawValue: "nullsfirst")
+  public static let first = _PostgrestNullPlacement(rawValue: "nullsfirst")
 
   /// `nullslast`
-  public static let last = PostgrestNullPlacement(rawValue: "nullslast")
+  public static let last = _PostgrestNullPlacement(rawValue: "nullslast")
 }
 
-extension PostgrestOrderableExpression {
+extension _PostgrestOrderableExpression {
   /// Sorts by this expression, smallest first.
   ///
-  /// Null placement is left to the database unless you chain ``PostgrestOrdering/nulls(_:)``.
-  public func asc() -> PostgrestOrdering<Root> {
-    PostgrestOrdering(column: postgrestExpression, ascending: true)
+  /// Null placement is left to the database unless you chain ``_PostgrestOrdering/nulls(_:)``.
+  public func asc() -> _PostgrestOrdering<Root> {
+    _PostgrestOrdering(column: postgrestExpression, ascending: true)
   }
 
   /// Sorts by this expression, largest first.
-  public func desc() -> PostgrestOrdering<Root> {
-    PostgrestOrdering(column: postgrestExpression, ascending: false)
+  public func desc() -> _PostgrestOrdering<Root> {
+    _PostgrestOrdering(column: postgrestExpression, ascending: false)
   }
 
   /// Sorts by this expression with an explicit `NULL` placement, leaving the direction to
@@ -79,7 +79,7 @@ extension PostgrestOrderableExpression {
   /// The two parts are independent on the wire, so a placement does not require picking a
   /// direction: `order=name.nullsfirst` is a 200. Without this, wanting PostgREST's default
   /// direction *and* an explicit placement would force a direction into the query anyway.
-  public func nulls(_ placement: PostgrestNullPlacement) -> PostgrestOrdering<Root> {
-    PostgrestOrdering(column: postgrestExpression, ascending: nil, nullPlacement: placement)
+  public func nulls(_ placement: _PostgrestNullPlacement) -> _PostgrestOrdering<Root> {
+    _PostgrestOrdering(column: postgrestExpression, ascending: nil, nullPlacement: placement)
   }
 }

@@ -447,7 +447,7 @@ extension FilePlan {
 
       for schema in schemas {
         try EnumDeclSyntax(
-          "\(access) enum \(TokenSyntax.identifier(schema.typeName)): PostgrestSchema"
+          "\(access) enum \(TokenSyntax.identifier(schema.typeName)): _PostgrestSchema"
         ) {
           DeclSyntax("\(access) static let name = \(StringLiteralExprSyntax(content: schema.name))")
         }
@@ -496,9 +496,9 @@ extension FilePlan {
               let literal = StringLiteralExprSyntax(content: member.function)
               let (wrapper, value): (String, SwiftType) =
                 switch member.kind {
-                case .field(let valueType): ("PostgrestComputedField", valueType)
-                case .toOne(let target): ("PostgrestToOneRelation", .named(target))
-                case .toMany(let target): ("PostgrestToManyRelation", .named(target))
+                case .field(let valueType): ("_PostgrestComputedField", valueType)
+                case .toOne(let target): ("_PostgrestToOneRelation", .named(target))
+                case .toMany(let target): ("_PostgrestToManyRelation", .named(target))
                 }
               DeclSyntax(
                 """

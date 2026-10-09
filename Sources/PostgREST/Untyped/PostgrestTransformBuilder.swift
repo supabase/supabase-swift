@@ -217,7 +217,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestTransformablePhase {
   public func stripNulls() -> PostgrestTransformBuilder {
     var copy = PostgrestTransformBuilder(carryingFrom: self)
     // The media type is only final once the chain runs (`single()` may come later), so the core
-    // applies the flag when it builds the request (`PostgrestRequest.httpRequest(for:)`).
+    // applies the flag when it builds the request (`_PostgrestRequest.httpRequest(for:)`).
     copy.request.stripsNulls = true
     return copy
   }

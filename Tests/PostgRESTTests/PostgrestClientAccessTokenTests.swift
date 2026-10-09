@@ -10,7 +10,7 @@ import Foundation
 import TestHelpers
 import Testing
 
-@testable import PostgREST
+@_spi(Experimental) @testable import PostgREST
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -159,12 +159,12 @@ struct PostgrestClientAccessTokenTests {
   @Test
   func accessTokenErrorFailsTheTypedQueryTheSameWay() async throws {
     struct TokenError: Error, Equatable {}
-    struct Todo: PostgrestRelation {
+    struct Todo: _PostgrestRelation {
       static let relationName = "todos"
       static let selectString = "*"
       var id: Int
       struct Columns: Sendable {
-        let id = PostgrestColumn<Todo, Int>("id")
+        let id = _PostgrestColumn<Todo, Int>("id")
       }
       static let columns = Columns()
     }

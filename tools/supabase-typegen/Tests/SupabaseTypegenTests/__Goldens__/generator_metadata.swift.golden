@@ -13,13 +13,13 @@ struct Channels {
 }
 
 extension Channels.Columns {
-  var channelMessages: PostgrestToManyRelation<Channels, Messages> {
+  var channelMessages: _PostgrestToManyRelation<Channels, Messages> {
     .init("channel_messages")
   }
-  var firstMessage: PostgrestToOneRelation<Channels, Messages> {
+  var firstMessage: _PostgrestToOneRelation<Channels, Messages> {
     .init("first_message")
   }
-  var shoutedSlug: PostgrestComputedField<Channels, String> {
+  var shoutedSlug: _PostgrestComputedField<Channels, String> {
     .init("shouted_slug")
   }
 }

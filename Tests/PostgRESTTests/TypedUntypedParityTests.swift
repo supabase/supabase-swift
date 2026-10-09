@@ -9,7 +9,7 @@ import CustomDump
 import Foundation
 import Testing
 
-@testable import PostgREST
+@_spi(Experimental) @testable import PostgREST
 
 /// The typed API and the untyped string builders share one request core, so one operation spelled
 /// both ways has to put the same bytes on the wire. Each test builds a request through
@@ -22,7 +22,7 @@ import Testing
 ///   count client-side (SDK-1635), the untyped one asks for the object media type.
 @Suite
 struct TypedUntypedParityTests {
-  struct Todo: PostgrestWritableRelation, PostgrestKeyedRelation {
+  struct Todo: _PostgrestWritableRelation, _PostgrestKeyedRelation {
     static let relationName = "todos"
     static let selectString = "*"
 
@@ -41,11 +41,11 @@ struct TypedUntypedParityTests {
     }
 
     struct Columns: Sendable {
-      let id = PostgrestColumn<Todo, Int>("id")
-      let task = PostgrestColumn<Todo, String>("task")
-      let isDone = PostgrestColumn<Todo, Bool>("is_done")
-      let note = PostgrestNullableColumn<Todo, String>("note")
-      let tags = PostgrestColumn<Todo, [String]>("tags")
+      let id = _PostgrestColumn<Todo, Int>("id")
+      let task = _PostgrestColumn<Todo, String>("task")
+      let isDone = _PostgrestColumn<Todo, Bool>("is_done")
+      let note = _PostgrestNullableColumn<Todo, String>("note")
+      let tags = _PostgrestColumn<Todo, [String]>("tags")
     }
 
     static let columns = Columns()

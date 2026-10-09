@@ -1,7 +1,7 @@
 public import Foundation
 public import PostgrestMacros
 
-public enum Inventory: PostgrestSchema {
+public enum Inventory: _PostgrestSchema {
   public static let name = "inventory"
 }
 
@@ -59,7 +59,7 @@ public struct Events {
 }
 
 extension Events.Columns {
-  public var daysSinceEvent: PostgrestComputedField<Events, Decimal> {
+  public var daysSinceEvent: _PostgrestComputedField<Events, Decimal> {
     .init("days_since_event")
   }
 }
@@ -88,7 +88,7 @@ public struct ForeignTable {
 }
 
 extension ForeignTable.Columns {
-  public var foreignTableLabel: PostgrestComputedField<ForeignTable, String> {
+  public var foreignTableLabel: _PostgrestComputedField<ForeignTable, String> {
     .init("foreign_table_label")
   }
 }
@@ -101,7 +101,7 @@ public struct IntervalTest {
 }
 
 extension IntervalTest.Columns {
-  public var doubleDuration: PostgrestComputedField<IntervalTest, JSONValue> {
+  public var doubleDuration: _PostgrestComputedField<IntervalTest, JSONValue> {
     .init("double_duration")
   }
 }
@@ -145,31 +145,31 @@ public struct Todos {
 }
 
 extension Todos.Columns {
-  public var blurb: PostgrestComputedField<Todos, String> {
+  public var blurb: _PostgrestComputedField<Todos, String> {
     .init("blurb")
   }
-  public var blurbVarchar: PostgrestComputedField<Todos, String> {
+  public var blurbVarchar: _PostgrestComputedField<Todos, String> {
     .init("blurb_varchar")
   }
-  public var detailsIsLong: PostgrestComputedField<Todos, Bool> {
+  public var detailsIsLong: _PostgrestComputedField<Todos, Bool> {
     .init("details_is_long")
   }
-  public var detailsLength: PostgrestComputedField<Todos, Int> {
+  public var detailsLength: _PostgrestComputedField<Todos, Int> {
     .init("details_length")
   }
-  public var detailsWords: PostgrestComputedField<Todos, [String]> {
+  public var detailsWords: _PostgrestComputedField<Todos, [String]> {
     .init("details_words")
   }
-  public var functionReturningSingleRow: PostgrestToOneRelation<Todos, Users> {
+  public var functionReturningSingleRow: _PostgrestToOneRelation<Todos, Users> {
     .init("function_returning_single_row")
   }
-  public var getTodosSetofRows: PostgrestToManyRelation<Todos, Todos> {
+  public var getTodosSetofRows: _PostgrestToManyRelation<Todos, Todos> {
     .init("get_todos_setof_rows")
   }
-  public var testUnnamedRowScalar: PostgrestComputedField<Todos, Int> {
+  public var testUnnamedRowScalar: _PostgrestComputedField<Todos, Int> {
     .init("test_unnamed_row_scalar")
   }
-  public var testUnnamedRowSetof: PostgrestToManyRelation<Todos, Todos> {
+  public var testUnnamedRowSetof: _PostgrestToManyRelation<Todos, Todos> {
     .init("test_unnamed_row_setof")
   }
 }
@@ -182,10 +182,10 @@ public struct TodosMatview {
 }
 
 extension TodosMatview.Columns {
-  public var getTodosByMatview: PostgrestToOneRelation<TodosMatview, Todos> {
+  public var getTodosByMatview: _PostgrestToOneRelation<TodosMatview, Todos> {
     .init("get_todos_by_matview")
   }
-  public var todosMatviewLabel: PostgrestComputedField<TodosMatview, String> {
+  public var todosMatviewLabel: _PostgrestComputedField<TodosMatview, String> {
     .init("todos_matview_label")
   }
 }
@@ -198,10 +198,10 @@ public struct TodosView {
 }
 
 extension TodosView.Columns {
-  public var blurbVarchar: PostgrestComputedField<TodosView, String> {
+  public var blurbVarchar: _PostgrestComputedField<TodosView, String> {
     .init("blurb_varchar")
   }
-  public var testUnnamedViewRow: PostgrestToManyRelation<TodosView, Todos> {
+  public var testUnnamedViewRow: _PostgrestToManyRelation<TodosView, Todos> {
     .init("test_unnamed_view_row")
   }
 }
@@ -231,28 +231,28 @@ public struct Users {
 }
 
 extension Users.Columns {
-  public var functionUsingSetofRowsOne: PostgrestToOneRelation<Users, Todos> {
+  public var functionUsingSetofRowsOne: _PostgrestToOneRelation<Users, Todos> {
     .init("function_using_setof_rows_one")
   }
-  public var functionUsingTableReturns: PostgrestToOneRelation<Users, Todos> {
+  public var functionUsingTableReturns: _PostgrestToOneRelation<Users, Todos> {
     .init("function_using_table_returns")
   }
-  public var getSingleUserSummaryFromView: PostgrestToOneRelation<Users, UserTodosSummaryView> {
+  public var getSingleUserSummaryFromView: _PostgrestToOneRelation<Users, UserTodosSummaryView> {
     .init("get_single_user_summary_from_view")
   }
-  public var getTodosFromUser: PostgrestToManyRelation<Users, Todos> {
+  public var getTodosFromUser: _PostgrestToManyRelation<Users, Todos> {
     .init("get_todos_from_user")
   }
-  public var getTodosSetofRows: PostgrestToManyRelation<Users, Todos> {
+  public var getTodosSetofRows: _PostgrestToManyRelation<Users, Todos> {
     .init("get_todos_setof_rows")
   }
-  public var getUserAuditSetofSingleRow: PostgrestToOneRelation<Users, UsersAudit> {
+  public var getUserAuditSetofSingleRow: _PostgrestToOneRelation<Users, UsersAudit> {
     .init("get_user_audit_setof_single_row")
   }
-  public var postgrestResolvableWithOverrideFunction: PostgrestToManyRelation<Users, Todos> {
+  public var postgrestResolvableWithOverrideFunction: _PostgrestToManyRelation<Users, Todos> {
     .init("postgrest_resolvable_with_override_function")
   }
-  public var testUnnamedRowSetof: PostgrestToManyRelation<Users, Todos> {
+  public var testUnnamedRowSetof: _PostgrestToManyRelation<Users, Todos> {
     .init("test_unnamed_row_setof")
   }
 }
@@ -266,7 +266,7 @@ public struct UsersAudit {
 }
 
 extension UsersAudit.Columns {
-  public var createdAgo: PostgrestComputedField<UsersAudit, Decimal> {
+  public var createdAgo: _PostgrestComputedField<UsersAudit, Decimal> {
     .init("created_ago")
   }
 }
@@ -281,10 +281,11 @@ public struct UsersView {
 }
 
 extension UsersView.Columns {
-  public var getSingleUserSummaryFromView: PostgrestToOneRelation<UsersView, UserTodosSummaryView> {
+  public var getSingleUserSummaryFromView: _PostgrestToOneRelation<UsersView, UserTodosSummaryView>
+  {
     .init("get_single_user_summary_from_view")
   }
-  public var getTodosFromUser: PostgrestToManyRelation<UsersView, Todos> {
+  public var getTodosFromUser: _PostgrestToManyRelation<UsersView, Todos> {
     .init("get_todos_from_user")
   }
 }

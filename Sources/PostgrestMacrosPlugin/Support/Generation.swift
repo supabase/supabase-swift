@@ -35,8 +35,8 @@ func postgrestEscaped(_ value: String) -> String {
 /// Two rules are baked in, and both fail confusingly if you skip them:
 ///
 /// - `wanted` must name every protocol in the refinement chain. A macro-generated extension does
-///   not derive an inherited conformance, so `extension Todo: PostgrestWritableRelation` alone
-///   reports a missing `PostgrestRelation` with no note saying which requirement is unmet.
+///   not derive an inherited conformance, so `extension Todo: _PostgrestWritableRelation` alone
+///   reports a missing `_PostgrestRelation` with no note saying which requirement is unmet.
 /// - `missing` is the compiler's `conformingTo:` list, which excludes whatever the type already
 ///   declares. Filtering by it is what keeps `struct Todo: Decodable` from getting a second
 ///   `Decodable` conformance.

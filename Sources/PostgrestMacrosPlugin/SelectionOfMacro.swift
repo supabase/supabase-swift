@@ -63,8 +63,8 @@ public struct SelectionOfMacro: ExtensionMacro {
     }
 
     let clause = inheritanceClause(
-      wanted: ["Decodable", "Sendable", "PostgrestSelection"]
-        + (embeds.isEmpty ? [] : ["PostgrestEmbeddingSelection"]),
+      wanted: ["Decodable", "Sendable", "_PostgrestSelection"]
+        + (embeds.isEmpty ? [] : ["_PostgrestEmbeddingSelection"]),
       missing: protocols
     )
     return [
@@ -118,13 +118,13 @@ public struct SelectionOfMacro: ExtensionMacro {
   }
 
   /// The right-hand side of one embed entry, `comments!todo_id(id:id,body:body)`, read off the
-  /// ``PostgrestEmbed`` in the `Embeds` namespace so the select list and a `requiring` scope's
+  /// ``_PostgrestEmbed`` in the `Embeds` namespace so the select list and a `requiring` scope's
   /// `!inner` rewrite cannot disagree about how the entry is spelled.
   static func embed(_ property: StoredProperty) -> String {
     "\\(embeds.\(property.name).postgrestExpression)"
   }
 
-  /// The embed namespace: one ``PostgrestEmbed`` per `@Relationship` property.
+  /// The embed namespace: one ``_PostgrestEmbed`` per `@Relationship` property.
   ///
   /// Three interpolations feed each one, none of them a literal the macro could write:
   ///
@@ -157,7 +157,7 @@ public struct SelectionOfMacro: ExtensionMacro {
       case nil: continue
       }
       lines.append(
-        "    \(access)let \(property.name) = PostgrestEmbed<\(property.embeddedSelection)>("
+        "    \(access)let \(property.name) = _PostgrestEmbed<\(property.embeddedSelection)>("
           + "alias: \"\(postgrestEscaped(property.columnName))\", \(target))"
       )
     }

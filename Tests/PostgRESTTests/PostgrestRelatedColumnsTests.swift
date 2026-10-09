@@ -12,7 +12,7 @@ import Testing
 
 @Suite
 struct PostgrestRelatedColumnsTests {
-  struct Order: PostgrestRelation {
+  struct Order: _PostgrestRelation {
     static let relationName = "orders"
     static let selectString = "*"
 
@@ -21,18 +21,18 @@ struct PostgrestRelatedColumnsTests {
     var amount: Double
 
     struct Columns: Sendable {
-      let id = PostgrestColumn<Order, Int>("id")
-      let todoID = PostgrestColumn<Order, Int>("todo_id")
-      let amount = PostgrestColumn<Order, Double>("amount")
-      let shippedAt = PostgrestNullableColumn<Order, Date>("shipped_at")
+      let id = _PostgrestColumn<Order, Int>("id")
+      let todoID = _PostgrestColumn<Order, Int>("todo_id")
+      let amount = _PostgrestColumn<Order, Double>("amount")
+      let shippedAt = _PostgrestNullableColumn<Order, Date>("shipped_at")
       // The to-one direction of the same pair: many orders per todo, one todo per order.
-      let todo = PostgrestToOneRelation<Order, Todo>("todo")
+      let todo = _PostgrestToOneRelation<Order, Todo>("todo")
     }
 
     static let columns = Columns()
   }
 
-  struct Todo: PostgrestRelation {
+  struct Todo: _PostgrestRelation {
     static let relationName = "todos"
     static let selectString = "*"
 
@@ -40,16 +40,16 @@ struct PostgrestRelatedColumnsTests {
     var title: String
 
     struct Columns: Sendable {
-      let id = PostgrestColumn<Todo, Int>("id")
-      let title = PostgrestColumn<Todo, String>("title")
+      let id = _PostgrestColumn<Todo, Int>("id")
+      let title = _PostgrestColumn<Todo, String>("title")
       // Deliberately named `name`: every public member of the relation type shadows a projected
       // column of the same name, so this is the case that regressed.
-      let name = PostgrestColumn<Todo, String>("name")
+      let name = _PostgrestColumn<Todo, String>("name")
       // Numeric, so an aggregate over the to-one direction has something meaningful to sum.
-      let amount = PostgrestColumn<Todo, Double>("amount")
+      let amount = _PostgrestColumn<Todo, Double>("amount")
       // What the generator emits from postgres-meta's foreign-key metadata: the relationship,
       // declared once, checked at every use.
-      let orders = PostgrestToManyRelation<Todo, Order>("orders")
+      let orders = _PostgrestToManyRelation<Todo, Order>("orders")
     }
 
     static let columns = Columns()
@@ -125,7 +125,7 @@ struct PostgrestRelatedColumnsTests {
   /// not filterable directly — SDK-1575's embed scope uses this:
   ///
   ///     .where { $0.orders.id.eq(7) }
-  ///     -> value of type 'PostgrestToManyColumn<…>' has no member 'eq'
+  ///     -> value of type '_PostgrestToManyColumn<…>' has no member 'eq'
   ///
   /// Nor orderable. Checked on an erased value, since a positive `is` on the concrete type would
   /// be a compile-time truism.
@@ -133,8 +133,8 @@ struct PostgrestRelatedColumnsTests {
   func theFilterFormIsDottedAndSeparate() {
     #expect(Todo.columns.orders.id.embeddedFilterName == "orders.id")
     #expect(Todo.columns.orders.id.postgrestExpression == "orders(id)")
-    #expect((Todo.columns.orders.id as Any) is any PostgrestFilterableExpression == false)
-    #expect((Todo.columns.orders.id as Any) is any PostgrestOrderableExpression == false)
+    #expect((Todo.columns.orders.id as Any) is any _PostgrestFilterableExpression == false)
+    #expect((Todo.columns.orders.id as Any) is any _PostgrestOrderableExpression == false)
   }
 
   /// A to-one projection renders and filters exactly like a to-many one — the difference between
@@ -143,10 +143,10 @@ struct PostgrestRelatedColumnsTests {
   func aToOneProjectionWrapsInTheEmbedNameAndFilterForm() {
     #expect(Order.columns.todo.title.postgrestExpression == "todo(title)")
     #expect(Order.columns.todo.title.embeddedFilterName == "todo.title")
-    #expect((Order.columns.todo.title as Any) is any PostgrestFilterableExpression == false)
+    #expect((Order.columns.todo.title as Any) is any _PostgrestFilterableExpression == false)
   }
 
-  /// The reason `PostgrestToOneRelation` is a separate type: its projections are orderable, while
+  /// The reason `_PostgrestToOneRelation` is a separate type: its projections are orderable, while
   /// a to-many projection's `order` is a 400 PGRST118. Proven behaviorally, by rendering
   /// `asc()`/`desc()`, rather than with an `is` check that asserts nothing on a concrete type.
   @Test
@@ -154,11 +154,11 @@ struct PostgrestRelatedColumnsTests {
     #expect(Order.columns.todo.title.asc().rendered == "todo(title).asc")
     // A direction is optional here too.
     #expect(
-      PostgrestOrdering<Order>(
+      _PostgrestOrdering<Order>(
         column: Order.columns.todo.title.postgrestExpression, ascending: nil
       ).rendered == "todo(title)")
     #expect(Order.columns.todo.title.desc().rendered == "todo(title).desc")
-    #expect((Todo.columns.orders.amount as Any) is any PostgrestOrderableExpression == false)
+    #expect((Todo.columns.orders.amount as Any) is any _PostgrestOrderableExpression == false)
   }
 
   /// A to-one embed needs the same shadowing as a to-many one; both would otherwise render
@@ -171,12 +171,12 @@ struct PostgrestRelatedColumnsTests {
   }
 
   /// A cast of a to-one projection must not be orderable even though the projection is, which is
-  /// why ``PostgrestToOneColumn/cast(to:)`` returns `PostgrestToOneDerivedColumn` rather than
+  /// why ``_PostgrestToOneColumn/cast(to:)`` returns `PostgrestToOneDerivedColumn` rather than
   /// `Self`. A JSON path stays orderable. Proven behaviorally by calling `asc()`.
   @Test
   func aToOneCastIsNotOrderableButAToOneJSONPathIs() {
     #expect(
-      (Order.columns.todo.id.cast(to: .text) as Any) is any PostgrestOrderableExpression == false)
+      (Order.columns.todo.id.cast(to: .text) as Any) is any _PostgrestOrderableExpression == false)
     #expect(Order.columns.todo.id.jsonText("k").asc().rendered == "todo(id->>k).asc")
   }
 
@@ -197,13 +197,13 @@ struct PostgrestRelatedColumnsTests {
   @Test
   func aToOneAggregateIsNotOrderableEvenThoughTheProjectionIs() {
     #expect(Order.columns.todo.id.asc().rendered == "todo(id).asc")
-    #expect((Order.columns.todo.id.sum() as Any) is any PostgrestOrderableExpression == false)
-    #expect((Order.columns.todo.id.count() as Any) is any PostgrestOrderableExpression == false)
+    #expect((Order.columns.todo.id.sum() as Any) is any _PostgrestOrderableExpression == false)
+    #expect((Order.columns.todo.id.count() as Any) is any _PostgrestOrderableExpression == false)
   }
 
   /// The point of `PostgrestToOneDerivedColumn`: it keeps `embed` and `inner` apart, so anything
   /// chained onto a cast or aggregate lands inside the embed's parentheses. Returning a flat
-  /// `PostgrestCastColumn`/`PostgrestAggregate` put it outside, where PostgREST answers 200 and
+  /// `_PostgrestCastColumn`/`_PostgrestAggregate` put it outside, where PostgREST answers 200 and
   /// silently discards it — measured for all six outside forms. The inside form applies:
   /// `probe_parent(id.sum()::text)` returns `{"sum": "1"}`.
   @Test
@@ -253,9 +253,9 @@ struct PostgrestRelatedColumnsTests {
     let chained = Order.columns.todo.amount.sum().cast(to: .text)
 
     for value in [fromCast as Any, fromAggregate as Any, chained as Any] {
-      #expect(value is any PostgrestOrderableExpression == false)
-      #expect(value is any PostgrestFilterableExpression == false)
-      #expect(value is any PostgrestColumnExpression)
+      #expect(value is any _PostgrestOrderableExpression == false)
+      #expect(value is any _PostgrestFilterableExpression == false)
+      #expect(value is any _PostgrestColumnExpression)
     }
   }
 

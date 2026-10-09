@@ -8,7 +8,7 @@
 import Foundation
 import Helpers
 
-/// One node of a filter tree, without the relation type: the typed ``PostgrestFilter`` wraps
+/// One node of a filter tree, without the relation type: the typed ``_PostgrestFilter`` wraps
 /// one, and the untyped ``PostgrestRequestBuilder`` builds one from a string column, so both
 /// render through the same code.
 indirect enum PostgrestFilterNode: Sendable {
@@ -30,7 +30,7 @@ indirect enum PostgrestFilterNode: Sendable {
     case `is`(Bool?)
   }
 
-  case comparison(column: String, operator: PostgrestFilterOperator, operand: Operand)
+  case comparison(column: String, operator: _PostgrestFilterOperator, operand: Operand)
 
   /// Everything after the `=` as one string the caller wrote, sent as is in every position.
   case raw(column: String, operand: String)
@@ -55,7 +55,7 @@ indirect enum PostgrestFilterNode: Sendable {
 ///
 /// A top-level `&&` renders as separate query parameters, `||` as one `or=(…)`, and an `&&`
 /// nested inside an `||` as `and(…)`.
-public struct PostgrestFilter<R: PostgrestRelation>: Sendable {
+public struct _PostgrestFilter<R: _PostgrestRelation>: Sendable {
   typealias Node = PostgrestFilterNode
   typealias Operand = PostgrestFilterNode.Operand
 
@@ -65,11 +65,11 @@ public struct PostgrestFilter<R: PostgrestRelation>: Sendable {
     self.node = node
   }
 
-  init(column: String, operator: PostgrestFilterOperator, value: some PostgrestFilterValue) {
+  init(column: String, operator: _PostgrestFilterOperator, value: some PostgrestFilterValue) {
     self.node = .comparison(column: column, operator: `operator`, operand: .value(value.rawValue))
   }
 
-  init(column: String, operator: PostgrestFilterOperator, operand: Operand) {
+  init(column: String, operator: _PostgrestFilterOperator, operand: Operand) {
     self.node = .comparison(column: column, operator: `operator`, operand: operand)
   }
 
@@ -80,7 +80,7 @@ public struct PostgrestFilter<R: PostgrestRelation>: Sendable {
   /// A filter written entirely in PostgREST syntax, for an expression the generated namespace
   /// cannot name.
   ///
-  /// Nothing here is checked. Prefer ``PostgrestFilterableExpression/raw(_:)``, which keeps the
+  /// Nothing here is checked. Prefer ``_PostgrestFilterableExpression/raw(_:)``, which keeps the
   /// column compiler-checked and takes only the operand as a string.
   ///
   /// ```swift
@@ -122,18 +122,18 @@ public struct PostgrestFilter<R: PostgrestRelation>: Sendable {
 // MARK: - Composition
 
 /// Matches rows satisfying both filters.
-public func && <R>(lhs: PostgrestFilter<R>, rhs: PostgrestFilter<R>) -> PostgrestFilter<R> {
-  PostgrestFilter(node: .and(PostgrestFilter<R>.flatten(lhs.node, rhs.node, as: .and)))
+public func && <R>(lhs: _PostgrestFilter<R>, rhs: _PostgrestFilter<R>) -> _PostgrestFilter<R> {
+  _PostgrestFilter(node: .and(_PostgrestFilter<R>.flatten(lhs.node, rhs.node, as: .and)))
 }
 
 /// Matches rows satisfying either filter.
-public func || <R>(lhs: PostgrestFilter<R>, rhs: PostgrestFilter<R>) -> PostgrestFilter<R> {
-  PostgrestFilter(node: .or(PostgrestFilter<R>.flatten(lhs.node, rhs.node, as: .or)))
+public func || <R>(lhs: _PostgrestFilter<R>, rhs: _PostgrestFilter<R>) -> _PostgrestFilter<R> {
+  _PostgrestFilter(node: .or(_PostgrestFilter<R>.flatten(lhs.node, rhs.node, as: .or)))
 }
 
 /// Matches rows that do not satisfy `operand`.
-prefix public func ! <R>(operand: PostgrestFilter<R>) -> PostgrestFilter<R> {
-  PostgrestFilter(node: .not(operand.node))
+prefix public func ! <R>(operand: _PostgrestFilter<R>) -> _PostgrestFilter<R> {
+  _PostgrestFilter(node: .not(operand.node))
 }
 
 // MARK: - Rendering
@@ -165,7 +165,7 @@ extension PostgrestFilterNode.Operand {
   }
 }
 
-extension PostgrestFilter {
+extension _PostgrestFilter {
   /// The query items this filter contributes to a request.
   func queryItems() -> [URLQueryItem] {
     node.queryItems()
