@@ -349,9 +349,19 @@ for target in package.targets {
   }
 
   // Generated code is compiled the way an app's library target would be: with library evolution,
-  // so the access levels `--access-control public` and the macros write are checked too.
-  if target.name.hasPrefix("SupabaseTypegen") {
-    swiftSettings.append(.unsafeFlags(["-enable-library-evolution"]))
+  // so the access levels `--access-control public` and the macros write are checked too. Apple
+  // platforms only: on Linux, Foundation is not built with library evolution, so the flag fails.
+  if [
+    "SupabaseTypegenOutputTests",
+    "SupabaseTypegenPostgrestTypegenOutputTests",
+    "SupabaseTypegenHostileOutputTests",
+  ].contains(target.name) {
+    swiftSettings.append(
+      .unsafeFlags(
+        ["-enable-library-evolution"],
+        .when(platforms: [.macOS, .iOS, .tvOS, .watchOS, .visionOS, .macCatalyst])
+      )
+    )
   }
 
   target.swiftSettings = swiftSettings

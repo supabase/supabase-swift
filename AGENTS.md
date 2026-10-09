@@ -479,13 +479,17 @@ SUPABASE_TYPEGEN_RECORD=1 swift test --package-path tools/supabase-typegen --fil
 
 Three of the goldens are the `Generated.swift` sources of root test targets
 (`SupabaseTypegenOutputTests`, `SupabaseTypegenPostgrestTypegenOutputTests`,
-`SupabaseTypegenHostileOutputTests`), built with `-enable-library-evolution`. A change to the macros
-or to `PostgREST` that breaks generated code fails `swift test` at the root; a generator change that
-is not recorded fails `EmitterTests`. `SupabaseTypegenOutputTests` also runs queries through the
-generated types. `IntegrationTests` compiles the same file through the symlink
-`Tests/IntegrationTests/Postgrest/Generated.swift` (a test target cannot depend on another), so the
-Postgrest integration tests query the integration schema with its generated models. After changing
-a migration there, refresh the fixtures and record the goldens.
+`SupabaseTypegenHostileOutputTests`), built with `-enable-library-evolution` on Apple platforms
+only, because Linux's Foundation is not built with library evolution. On Darwin the build prints
+warnings that `PostgrestMacros` was not compiled with library evolution; they are expected. The
+macOS CI jobs compile the generated code with library evolution; the Linux job runs the same
+behavioral tests without it. A change to the macros or to `PostgREST` that breaks generated code
+fails `swift test` at the root; a generator change that is not recorded fails `EmitterTests`.
+`SupabaseTypegenOutputTests` also runs queries through the generated types. `IntegrationTests`
+compiles the same file through the symlink `Tests/IntegrationTests/Postgrest/Generated.swift` (a
+test target cannot depend on another), so the Postgrest integration tests query the integration
+schema with its generated models. After changing a migration there, refresh the fixtures and record
+the goldens.
 
 A Postgres enum becomes a Swift `enum` (`String, Codable, Hashable, Sendable,
 PostgrestFilterValue`), generated for every enum in a selected schema and for any other enum a
