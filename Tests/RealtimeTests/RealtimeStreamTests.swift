@@ -17,6 +17,10 @@ struct RealtimeStreamTests {
   let mirror = EngineMirror()
   let topic = "realtime:room"
 
+  init() {
+    mirror.install(topic, owner: testOwner.id)
+  }
+
   private func message(_ event: String) -> ChannelInbound {
     .message(RealtimeMessageV2(joinRef: nil, ref: nil, topic: topic, event: event, payload: [:]))
   }

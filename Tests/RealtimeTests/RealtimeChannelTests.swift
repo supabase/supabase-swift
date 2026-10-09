@@ -448,6 +448,34 @@ struct RealtimeChannelTests {
     _ = try? await subscribing.value
   }
 
+  // MARK: - Ownership
+
+  @Test
+  func aNewHandleWaitsForTheRetiredOneAndThenOwnsTheTopic() async throws {
+    let old = makeChannel()
+    let oldEvents = old.events
+    let oldBroadcasts = old.broadcasts(event: "ping")
+    try await old.subscribe()
+    // What `RealtimeClient.removeChannel` does before it reaches the engine.
+    old.owner.retire()
+    let new = makeChannel()
+    let received = new.broadcasts(event: "ping")
+    let subscription = Task { try await new.subscribe() }
+    await settle()
+    #expect(!new.status.isSubscribed)
+
+    await engine.removeChannel(wireTopic, owner: old.owner)
+    try await subscription.value
+
+    #expect(new.status.isSubscribed)
+    #expect(joins.count == 2)
+    #expect(await hasFinished(oldEvents))
+    #expect(await hasFinished(oldBroadcasts))
+    server.pushBroadcast(topic: wireTopic, event: "ping", payload: ["n": 1])
+    var iterator = received.makeAsyncIterator()
+    #expect(await iterator.next()?.event == "ping")
+  }
+
   // MARK: - REST broadcast
 
   @Test

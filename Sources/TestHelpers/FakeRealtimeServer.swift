@@ -22,7 +22,7 @@ package struct StubWebSocketTransport: WebSocketTransport {
   package func connect(to url: URL, headerFields: HTTPFields) async throws
     -> any WebSocketConnection
   {
-    try server.accept()
+    try server.accept(url: url, headerFields: headerFields)
   }
 }
 
@@ -53,6 +53,8 @@ package final class FakeRealtimeServer: Sendable {
     var failsNextSend = false
     var pendingUpgradeRefusal: Int?
     var connectCount = 0
+    var upgradeURL: URL?
+    var upgradeHeaders: HTTPFields = [:]
     var current: StubWebSocketConnection?
     var sentFrames: [WebSocketFrame] = []
     var sentMessages: [RealtimeMessageV2] = []
@@ -124,6 +126,10 @@ package final class FakeRealtimeServer: Sendable {
   // MARK: Observation
 
   package var connectCount: Int { state.value.connectCount }
+  /// The URL of the last upgrade request.
+  package var upgradeURL: URL? { state.value.upgradeURL }
+  /// The header fields of the last upgrade request.
+  package var upgradeHeaders: HTTPFields { state.value.upgradeHeaders }
   package var isConnected: Bool { state.value.current != nil }
   /// Every frame the client sent over any connection, in send order.
   package var sentFrames: [WebSocketFrame] { state.value.sentFrames }
@@ -225,9 +231,11 @@ package final class FakeRealtimeServer: Sendable {
 
   // MARK: Client → server
 
-  func accept() throws -> StubWebSocketConnection {
+  func accept(url: URL, headerFields: HTTPFields) throws -> StubWebSocketConnection {
     let connection = StubWebSocketConnection(server: self)
     try state.withValue { state in
+      state.upgradeURL = url
+      state.upgradeHeaders = headerFields
       if let status = state.pendingUpgradeRefusal {
         state.pendingUpgradeRefusal = nil
         throw RealtimeError.upgradeFailed(status: status)

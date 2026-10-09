@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 06/10/26.
 //
 
+import ConcurrencyExtras
 package import Foundation
 package import HTTPTypes
 package import Helpers
@@ -21,6 +22,23 @@ package enum ChannelInbound: Sendable {
   /// The presence set changed, after a `presence_state` or `presence_diff`. `state` is the
   /// whole set after the change.
   case presenceChanged(PresenceChange, state: PresenceState)
+}
+
+/// The identity of one channel handle. Engine calls that create, join or remove channel state
+/// only act for the owner of the topic's record, and a retired owner can never create one, so a
+/// removed handle cannot touch the channel that replaced it.
+package final class ChannelOwner: Sendable {
+  package let id = UUID()
+  private let retired = LockIsolated(false)
+
+  package init() {}
+
+  /// Whether the handle was removed from its client.
+  package var isRetired: Bool { retired.value }
+
+  package func retire() {
+    retired.setValue(true)
+  }
 }
 
 package struct RealtimeEngineConfiguration: Sendable {
@@ -40,6 +58,8 @@ package struct RealtimeEngineConfiguration: Sendable {
     rateLimitBackoff: .seconds(30),
     lingerAfterLastListener: .seconds(2))
   package var accessToken: (@Sendable () async throws -> String?)?
+  /// The token joins carry until the provider or `setAuth(_:)` gives another.
+  package var initialAccessToken: String?
   /// How long before the token's `exp` the engine asks the provider for a fresh one.
   package var accessTokenRefreshLeeway: Duration = .seconds(60)
   /// The shortest wait between two provider calls, so a token already inside the leeway, or a
@@ -66,6 +86,7 @@ package actor RealtimeEngine {
   }
 
   private struct ChannelRecord {
+    let owner: ChannelOwner
     var config: RealtimeJoinConfig
     var state: ChannelMachine.State = .unsubscribed
     var joinRef: String?
@@ -100,13 +121,25 @@ package actor RealtimeEngine {
   package nonisolated let mirror = EngineMirror()
   private var registry = ListenerRegistry()
 
+  /// What ``shutdown()`` reaches without awaiting the actor.
+  private struct Handles {
+    var supervisor: Task<Void, Never>?
+    var socket: (any WebSocketConnection)?
+    var isShutDown = false
+  }
+
+  private nonisolated let handles = LockIsolated(Handles())
+
   private var connection: ConnectionMachine.State = .disconnected(nil)
   private var channels: [String: ChannelRecord] = [:]
-  private var supervisor: Task<Void, Never>?
+  private var supervisor: Task<Void, Never>? {
+    get { handles.supervisor }
+    set { handles.withValue { $0.supervisor = newValue } }
+  }
   /// Bumped on every supervisor start and every forced teardown, so callbacks from an older
   /// socket are ignored.
   private var generation = 0
-  private var socket: (any WebSocketConnection)?
+  private var socket: (any WebSocketConnection)? { handles.socket }
   private var outbound: AsyncStream<WebSocketFrame>.Continuation?
   private var wakeSignal: AsyncStream<Void>.Continuation?
   private var idleTask: Task<Void, Never>?
@@ -115,6 +148,8 @@ package actor RealtimeEngine {
   /// machine sent on its own).
   private var pendingReplies: [String: ReplySlot] = [:]
   private var connectWaiters: [CheckedContinuation<Void, any Error>] = []
+  /// `addChannel` calls waiting for a retired owner's record to go, by topic.
+  private var removalWaiters: [String: [CheckedContinuation<Void, Never>]] = [:]
 
   var pendingReplyCount: Int { pendingReplies.count }
   private var refCounter = 0
@@ -130,6 +165,7 @@ package actor RealtimeEngine {
     self.transport = transport
     self.clock = clock
     self.logger = configuration.logger
+    _ = tokens.apply(configuration.initialAccessToken, generation: tokens.beginRefresh())
   }
 
   // MARK: - Connection API
@@ -170,6 +206,23 @@ package actor RealtimeEngine {
     applyConnection(.wakeSignal)
   }
 
+  /// Stops the engine for good without waiting: cancels the supervisor and closes the socket.
+  /// The supervisor then moves the engine to `.disconnected`, and a later connect ends there
+  /// at once. For a `deinit`, which cannot await.
+  package nonisolated func shutdown() {
+    let (supervisor, socket) = handles.withValue {
+      $0.isShutDown = true
+      return ($0.supervisor, $0.socket)
+    }
+    supervisor?.cancel()
+    if let socket {
+      Task { await socket.close(code: .normalClosure, reason: nil) }
+    }
+  }
+
+  /// The token joins carry: the last one `setAuth(_:)` or the provider gave.
+  package var accessToken: String? { tokens.token }
+
   package func connectionStates() -> AsyncStream<ConnectionMachine.State> {
     let (stream, continuation) = AsyncStream<ConnectionMachine.State>.makeStream(
       bufferingPolicy: .bufferingNewest(1))
@@ -189,31 +242,55 @@ package actor RealtimeEngine {
 
   // MARK: - Channel API
 
-  /// Adds the channel, or replaces the config of a channel the engine already has. The new config
-  /// goes out with the next join.
-  package func addChannel(_ topic: String, config: RealtimeJoinConfig = RealtimeJoinConfig()) {
-    guard channels[topic] == nil else {
-      channels[topic]?.config = config
+  /// Adds the channel, or replaces the config of the owner's channel. The new config goes out
+  /// with the next join.
+  ///
+  /// When a retired owner still holds the topic, this waits until its removal finishes, then
+  /// installs a fresh record. A retired `owner`, or a topic another live owner holds, is a no-op.
+  package func addChannel(
+    _ topic: String, owner: ChannelOwner, config: RealtimeJoinConfig = RealtimeJoinConfig()
+  ) async {
+    while let record = channels[topic], record.owner !== owner, record.owner.isRetired,
+      !owner.isRetired
+    {
+      await withCheckedContinuation { removalWaiters[topic, default: []].append($0) }
+    }
+    guard !owner.isRetired else { return }
+    if let record = channels[topic] {
+      if record.owner === owner { channels[topic]?.config = config }
       return
     }
-    channels[topic] = ChannelRecord(config: config)
+    channels[topic] = ChannelRecord(owner: owner, config: config)
+    mirror.install(topic, owner: owner.id)
     applyConnection(.channelAdded)
+  }
+
+  private func isOwner(_ owner: ChannelOwner, of topic: String) -> Bool {
+    channels[topic]?.owner === owner
   }
 
   /// Replaces the channel's postgres bindings. A joined or joining channel joins again with them.
   ///
   /// A channel only adds bindings, and each addition sends its snapshot from its own task, so a
   /// list no longer than the current one is unchanged or stale and is ignored.
-  package func updateBindings(_ topic: String, _ bindings: [PostgresJoinConfig]) {
-    guard let record = channels[topic], bindings.count > record.config.postgresChanges.count
+  package func updateBindings(
+    _ topic: String, owner: ChannelOwner, _ bindings: [PostgresJoinConfig]
+  ) {
+    guard let record = channels[topic], record.owner === owner,
+      bindings.count > record.config.postgresChanges.count
     else { return }
     channels[topic]?.config.postgresChanges = bindings
     applyChannel(topic, .bindingsChanged)
   }
 
-  package func removeChannel(_ topic: String) async {
-    guard channels[topic] != nil else { return }
-    await unsubscribe(topic)
+  /// Leaves and forgets the owner's channel, and finishes every stream of `owner`.
+  package func removeChannel(_ topic: String, owner: ChannelOwner) async {
+    guard isOwner(owner, of: topic) else {
+      mirror.removeChannel(topic, owner: owner.id)
+      return
+    }
+    await leave(topic)
+    guard isOwner(owner, of: topic) else { return }
     channels[topic]?.rejoinTask?.cancel()
     channels[topic]?.joinTask?.cancel()
     channels[topic]?.lingerTask?.cancel()
@@ -221,11 +298,11 @@ package actor RealtimeEngine {
     rejectSubscribe(
       topic, with: RealtimeError(kind: .notSubscribed, message: "channel \(topic) was removed"))
     channels[topic] = nil
-    mirror.removeChannel(topic)
-    mirror.finishInbound(topic)
+    mirror.removeChannel(topic, owner: owner.id)
     registry.channelStates[topic]?.values.forEach { $0.finish() }
     registry.channelStates[topic] = nil
     if channels.isEmpty { applyConnection(.lastChannelRemoved) }
+    removalWaiters.removeValue(forKey: topic)?.forEach { $0.resume() }
   }
 
   package func channelState(_ topic: String) -> ChannelMachine.State? {
@@ -239,9 +316,12 @@ package actor RealtimeEngine {
 
   /// Returns once the join is acknowledged. Throws the server's reason for a fatal join error,
   /// or `.notSubscribed` when the channel is unsubscribed before the join completes.
-  package func subscribe(_ topic: String) async throws {
-    guard channels[topic] != nil else {
-      throw RealtimeError(kind: .notSubscribed, message: "unknown channel \(topic)")
+  package func subscribe(_ topic: String, owner: ChannelOwner) async throws {
+    guard isOwner(owner, of: topic) else {
+      throw RealtimeError(
+        kind: .notSubscribed,
+        message: owner.isRetired
+          ? "channel \(topic) was removed" : "unknown channel \(topic)")
     }
     applyChannel(topic, .subscribeRequested)
     if channels[topic]?.state.isSubscribed == true { return }
@@ -250,7 +330,12 @@ package actor RealtimeEngine {
 
   /// Sends the leave and returns once the server replied, the reply timed out, or the socket
   /// was already gone.
-  package func unsubscribe(_ topic: String) async {
+  package func unsubscribe(_ topic: String, owner: ChannelOwner) async {
+    guard isOwner(owner, of: topic) else { return }
+    await leave(topic)
+  }
+
+  private func leave(_ topic: String) async {
     applyChannel(topic, .unsubscribeRequested)
     guard case .unsubscribing = channels[topic]?.state else { return }
     if let ref = channels[topic]?.pendingLeaveRef {
@@ -273,10 +358,12 @@ package actor RealtimeEngine {
     return stream
   }
 
-  /// Every message on the topic, unbounded. Registers before it returns; ending the iteration
-  /// removes the listener.
-  package nonisolated func inbound(_ topic: String) -> AsyncStream<ChannelInbound> {
-    mirror.inbound(topic)
+  /// Every message `owner` receives on the topic, unbounded. Registers before it returns; ending
+  /// the iteration removes the listener.
+  package nonisolated func inbound(_ topic: String, owner: ChannelOwner) -> AsyncStream<
+    ChannelInbound
+  > {
+    mirror.inbound(topic, owner: owner.id)
   }
 
   package nonisolated func listenerCount(_ topic: String) -> Int {
@@ -292,9 +379,9 @@ package actor RealtimeEngine {
   /// error.
   @discardableResult
   package func send(
-    _ topic: String, event: String, payload: JSONObject, awaitReply: Bool
+    _ topic: String, owner: ChannelOwner, event: String, payload: JSONObject, awaitReply: Bool
   ) async throws -> JSONObject? {
-    let joinRef = try joinRefForPush(topic)
+    let joinRef = try joinRefForPush(topic, owner: owner)
     let ref = makeRef()
     let message = RealtimeMessageV2(
       joinRef: joinRef, ref: ref, topic: topic, event: event, payload: payload)
@@ -306,9 +393,9 @@ package actor RealtimeEngine {
 
   /// Sends a kind-3 binary broadcast on a subscribed channel.
   package func sendBroadcast(
-    _ topic: String, event: String, data: Data, awaitReply: Bool = false
+    _ topic: String, owner: ChannelOwner, event: String, data: Data, awaitReply: Bool = false
   ) async throws {
-    let joinRef = try joinRefForPush(topic)
+    let joinRef = try joinRefForPush(topic, owner: owner)
     let ref = makeRef()
     let frame = try serializer.encodeBroadcastPush(
       joinRef: joinRef, ref: ref, topic: topic, event: event, binaryPayload: data)
@@ -318,9 +405,14 @@ package actor RealtimeEngine {
     _ = try await awaitAcknowledgement(ref: ref)
   }
 
-  /// Stores the token for the next join and pushes it to every joined channel. `nil` is
-  /// ignored: the server never receives a null token.
-  package func setAuth(_ token: String?) {
+  /// Stores the token for the next join and pushes it to every joined channel. `nil` asks the
+  /// provider again, and keeps the current token when there is none: the server never receives
+  /// a null token.
+  package func setAuth(_ token: String?) async {
+    guard let token else {
+      if await refreshAccessToken() { pushAccessTokenToJoinedChannels() }
+      return
+    }
     guard tokens.apply(token, generation: tokens.beginRefresh()) else { return }
     scheduleTokenRefresh()
     pushAccessTokenToJoinedChannels()
@@ -337,15 +429,17 @@ package actor RealtimeEngine {
   ///
   /// Returns once the server acknowledged the push, or at once when the push was coalesced or
   /// dropped as unchanged.
-  package func trackPresence(_ topic: String, payload: JSONObject) async throws {
-    _ = try joinRefForPush(topic)
+  package func trackPresence(_ topic: String, owner: ChannelOwner, payload: JSONObject)
+    async throws
+  {
+    _ = try joinRefForPush(topic, owner: owner)
     channels[topic]?.presence.trackedPayload = payload
     try await sendPresence(
       topic, payload: ["type": "presence", "event": "track", "payload": .object(payload)])
   }
 
-  package func untrackPresence(_ topic: String) async throws {
-    _ = try joinRefForPush(topic)
+  package func untrackPresence(_ topic: String, owner: ChannelOwner) async throws {
+    _ = try joinRefForPush(topic, owner: owner)
     channels[topic]?.presence.trackedPayload = nil
     try await sendPresence(topic, payload: ["type": "presence", "event": "untrack"])
   }
@@ -362,8 +456,9 @@ package actor RealtimeEngine {
 
   /// Joins again with presence enabled, unless the channel already joins with it. The server only
   /// sends `presence_state` to a join that enabled presence.
-  package func enablePresence(_ topic: String) {
-    guard let record = channels[topic], !record.config.presence.enabled else { return }
+  package func enablePresence(_ topic: String, owner: ChannelOwner) {
+    guard let record = channels[topic], record.owner === owner, !record.config.presence.enabled
+    else { return }
     channels[topic]?.config.presence.enabled = true
     applyChannel(topic, .bindingsChanged)
   }
@@ -670,8 +765,10 @@ package actor RealtimeEngine {
     try? enqueue(.text(try serializer.encodeText(message)))
   }
 
-  private func joinRefForPush(_ topic: String) throws -> String {
-    guard let record = channels[topic], record.state.isSubscribed, let joinRef = record.joinRef
+  /// Throws `.notSubscribed` unless `owner` holds the topic's record and it is joined.
+  private func joinRefForPush(_ topic: String, owner: ChannelOwner) throws -> String {
+    guard let record = channels[topic], record.owner === owner, record.state.isSubscribed,
+      let joinRef = record.joinRef
     else {
       throw RealtimeError(
         kind: .notSubscribed, message: "channel \(topic) is not subscribed", isRetryable: false)
@@ -796,8 +893,14 @@ package actor RealtimeEngine {
   // MARK: - Supervisor
 
   private func run(generation: Int) async {
-    defer { if self.generation == generation { supervisor = nil } }
-    while !Task.isCancelled, generation == self.generation {
+    defer {
+      if generation == self.generation, Task.isCancelled || handles.isShutDown {
+        tokenRefreshTask?.cancel()
+        applyConnection(.disconnectRequested)
+      }
+      if generation == self.generation { supervisor = nil }
+    }
+    while !Task.isCancelled, !handles.isShutDown, generation == self.generation {
       guard case .connecting = connection else { return }
       await attemptConnection(generation: generation)
       guard generation == self.generation, case .reconnecting(_, let retryIn, _) = connection
@@ -815,13 +918,21 @@ package actor RealtimeEngine {
         [transport, configuration] in
         try await transport.connect(to: configuration.url, headerFields: configuration.headers)
       }
-      guard generation == self.generation else {
+      // Checked and stored under one lock, so `shutdown()` either sees the socket or makes this
+      // close it.
+      let isCurrent =
+        generation == self.generation
+        && handles.withValue {
+          guard !$0.isShutDown else { return false }
+          $0.socket = connected
+          return true
+        }
+      guard isCurrent else {
         await connected.close(code: .normalClosure, reason: nil)
         return
       }
       let (frames, continuation) = AsyncStream<WebSocketFrame>.makeStream(
         bufferingPolicy: .unbounded)
-      socket = connected
       outbound = continuation
       applyConnection(.upgradeSucceeded)
       await withTaskGroup(of: Void.self) { group in
@@ -886,7 +997,7 @@ package actor RealtimeEngine {
   }
 
   private func socketWentAway() {
-    socket = nil
+    handles.withValue { $0.socket = nil }
     outbound?.finish()
     outbound = nil
   }

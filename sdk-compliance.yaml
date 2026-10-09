@@ -386,6 +386,7 @@ supporting_symbols:
   - RealtimeError.Kind.server
   - RealtimeError.Kind.transport
   - RealtimeError.Kind.decoding
+  - RealtimeError.Kind.encoding
   - RealtimeError.init
   - RealtimeError.kind
   - RealtimeError.message
@@ -428,7 +429,7 @@ supporting_symbols:
   - RealtimeError.ServerCode.missingPartition
   # Status and event types the v3 client and channel streams carry (SDK-2107). They support
   # realtime.client.connection_state, realtime.client.listen_heartbeats and the channel status
-  # streams, which stay not_implemented until the client exposes them (SDK-2108).
+  # streams.
   - RealtimeConnectionStatus
   - RealtimeConnectionStatus.disconnected
   - RealtimeConnectionStatus.connecting
@@ -1627,32 +1628,58 @@ features:
   # ── Realtime ───────────────────────────────────────────────────────────────
 
   realtime.client.connect:
-    status: not_implemented
-    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
+    status: implemented
+    symbols:
+      - RealtimeClient.connect
+    # The client, its options, and the options that shape every connection belong to connect.
+    # pause/resume are the lifecycle variants of connect/disconnect.
+    supporting_symbols:
+      - RealtimeClient
+      - RealtimeClient.init
+      - RealtimeClient.pause
+      - RealtimeClient.resume
+      - RealtimeClientOptions
+      - RealtimeClientOptions.init
+      - RealtimeClientOptions.headers
+      - RealtimeClientOptions.timeout
+      - RealtimeClientOptions.connectOnSubscribe
+      - RealtimeClientOptions.handleAppLifecycle
+      - RealtimeClientOptions.maximumMessageSize
+      - RealtimeClientOptions.http
+      - RealtimeClientOptions.clock
   realtime.client.disconnect:
-    status: not_implemented
-    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
+    status: implemented
+    symbols:
+      - RealtimeClient.disconnect
   realtime.client.get_channels:
-    status: not_implemented
-    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
+    status: implemented
+    symbols:
+      - RealtimeClient.channels
   realtime.client.remove_channel:
-    status: not_implemented
-    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
+    status: implemented
+    symbols:
+      - RealtimeClient.removeChannel
   realtime.client.remove_all_channels:
-    status: not_implemented
-    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
+    status: implemented
+    symbols:
+      - RealtimeClient.removeAllChannels
   realtime.client.connection_state:
-    status: not_implemented
-    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
+    status: implemented
+    symbols:
+      - RealtimeClient.status
+      - RealtimeClient.statusChanges
   realtime.client.listen_heartbeats:
-    status: not_implemented
-    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
+    status: implemented
+    symbols:
+      - RealtimeClient.heartbeats
   realtime.client.set_auth_token:
-    status: not_implemented
-    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
+    status: implemented
+    symbols:
+      - RealtimeClient.setAuth
   realtime.client.channel:
-    status: not_implemented
-    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
+    status: implemented
+    symbols:
+      - RealtimeClient.channel
 
   realtime.channel.subscribe:
     status: implemented
@@ -1803,29 +1830,74 @@ features:
     symbols:
       - RealtimeChannelConfiguration.Presence.key
 
-  # Swift always has a native WebSocket (URLSessionWebSocketTask); unlike
-  # supabase-js, there's no runtime (Node <22, Cloudflare Workers, Deno) that
-  # needs an injected WebSocket constructor, and the SDK exposes none — the
-  # transport is always the internal URLSessionWebSocket.
-  realtime.configuration.custom_websocket_transport: not_applicable
+  realtime.configuration.custom_websocket_transport:
+    status: implemented
+    symbols:
+      - RealtimeClientOptions.webSocketTransport
+    supporting_symbols:
+      - WebSocketTransport
+      - WebSocketTransport.connect
+      - WebSocketConnection
+      - WebSocketConnection.events
+      - WebSocketConnection.send
+      - WebSocketConnection.close
+      - WebSocketFrame
+      - WebSocketFrame.text
+      - WebSocketFrame.binary
+      - WebSocketEvent
+      - WebSocketEvent.frame
+      - WebSocketEvent.closed
+      - WebSocketCloseCode
+      - WebSocketCloseCode.init
+      - WebSocketCloseCode.rawValue
+      - WebSocketCloseCode.normalClosure
+      - WebSocketCloseCode.goingAway
+      - WebSocketCloseCode.protocolError
+      - WebSocketCloseCode.abnormalClosure
+      - URLSessionWebSocketTransport
+      - URLSessionWebSocketTransport.init
+      - URLSessionWebSocketTransport.connect
   realtime.configuration.reconnect_backoff:
-    status: not_implemented
-    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
+    status: implemented
+    symbols:
+      - RealtimeClientOptions.reconnect
+    # The same policy type sets the channel rejoin backoff.
+    supporting_symbols:
+      - BackoffPolicy
+      - BackoffPolicy.fullJitter
+      - BackoffPolicy.steps
+      - RealtimeClientOptions.rejoin
   realtime.configuration.heartbeat_interval:
-    status: not_implemented
-    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
+    status: implemented
+    symbols:
+      - RealtimeClientOptions.heartbeatInterval
+    supporting_symbols:
+      - RealtimeClientOptions.heartbeatTimeout
   realtime.configuration.access_token_callback:
-    status: not_implemented
-    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
+    status: implemented
+    symbols:
+      - RealtimeClientOptions.accessToken
   realtime.configuration.deferred_disconnect:
-    status: not_implemented
-    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
+    status: implemented
+    symbols:
+      - RealtimeClientOptions.disconnectOnEmptyChannelsAfter
   realtime.configuration.custom_logger:
-    status: not_implemented
-    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
+    status: implemented
+    symbols:
+      - RealtimeClientOptions.logger
+    # The server-side log level of the socket, sent as the log_level query parameter.
+    supporting_symbols:
+      - RealtimeClientOptions.serverLogLevel
+      - RealtimeServerLogLevel
+      - RealtimeServerLogLevel.init
+      - RealtimeServerLogLevel.rawValue
+      - RealtimeServerLogLevel.info
+      - RealtimeServerLogLevel.warning
+      - RealtimeServerLogLevel.error
   realtime.configuration.binary_protocol:
-    status: not_implemented
-    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
+    status: implemented
+    no_public_symbols: true
+    note: "Always on: the client only speaks protocol 2.0.0 (vsn=2.0.0), so there is no option to select it. Protocol 1.0.0 was removed in v3."
 
   # ── Storage ────────────────────────────────────────────────────────────────
 

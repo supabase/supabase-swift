@@ -71,7 +71,7 @@ struct FakeRealtimeServerTests {
     let error = await #expect(throws: RealtimeError.self) {
       _ = try await server.transport.connect(to: URL(string: "ws://fake")!, headerFields: [:])
     }
-    #expect(error?.kind == .transport)
+    #expect(error?.kind == .unauthorized)
     #expect(error?.isRetryable == false)
     #expect(error?.message.contains("403") == true)
 
