@@ -3,79 +3,23 @@ import Testing
 
 @testable import Storage
 
-// MARK: - StorageByteCount
+// MARK: - ByteCount
 
 @Suite
-struct StorageByteCountTests {
+struct ByteCountTests {
   @Test
-  func integerInit() {
-    let count = StorageByteCount(5_000_000)
-    #expect(count.intValue == 5_000_000)
+  func bytesAndLiteral() {
+    #expect(ByteCount(bytes: 5_000_000).bytes == 5_000_000)
+    let literal: ByteCount = 2048
+    #expect(literal.bytes == 2048)
+    #expect(ByteCount(bytes: 1) == 1)
   }
 
   @Test
-  func integerLiteral() {
-    let count: StorageByteCount = 2048
-    #expect(count.intValue == 2048)
-  }
-
-  @Test
-  func equality() {
-    #expect(StorageByteCount(1_000_000) == StorageByteCount(1_000_000))
-  }
-
-  @Test
-  func kilobytes() {
-    let count = StorageByteCount.kilobytes(500)
-    #expect(count.intValue == nil)
-    #expect(count.stringValue == "500kb")
-  }
-
-  @Test
-  func megabytes() {
-    let count = StorageByteCount.megabytes(1.5)
-    #expect(count.intValue == nil)
-    #expect(count.stringValue == "1.5mb")
-  }
-
-  @Test
-  func gigabytes() {
-    let count = StorageByteCount.gigabytes(2)
-    #expect(count.intValue == nil)
-    #expect(count.stringValue == "2gb")
-  }
-
-  @Test
-  func stringLiteralNumeric() {
-    let count: StorageByteCount = "1000000"
-    #expect(count.intValue == 1_000_000)
-  }
-
-  @Test
-  func stringLiteralHumanReadable() {
-    let count: StorageByteCount = "1mb"
-    #expect(count.intValue == nil)
-  }
-
-  @Test
-  func encodesAsNumber() throws {
-    let encoded = try JSONEncoder().encode(StorageByteCount(1_000_000))
-    let json = String(decoding: encoded, as: UTF8.self)
-    #expect(json == "1000000")
-  }
-
-  @Test
-  func encodesAsString() throws {
-    let count: StorageByteCount = "1mb"
-    let encoded = try JSONEncoder().encode(count)
-    let json = String(decoding: encoded, as: UTF8.self)
-    #expect(json == "\"1mb\"")
-  }
-
-  @Test
-  func gigabytesWholeValueOutsideInt64Range() {
-    let count = StorageByteCount.gigabytes(1e19)
-    #expect(count.stringValue == "1e+19gb")
+  func unitsAreBinary() {
+    #expect(ByteCount.kilobytes(500).bytes == 512_000)
+    #expect(ByteCount.megabytes(1).bytes == 1_048_576)
+    #expect(ByteCount.gigabytes(2).bytes == 2_147_483_648)
   }
 }
 

@@ -241,10 +241,52 @@ extension StorageMockerTests {
       .register()
 
       let options = BucketOptions(isPublic: true)
-      try await storage.createBucket(
+      let name = try await storage.createBucket(
         "newbucket",
         options: options
       )
+
+      #expect(name == "new-bucket")
+    }
+
+    /// Sending every field on update used to reset `public` to `false` whenever a caller only
+    /// wanted to change the MIME types.
+    @Test
+    func updateBucketSendsOnlyTheFieldsThatAreSet() async throws {
+      let storage = makeSUT()
+
+      Mock(
+        url: url.appendingPathComponent("bucket/bucket123"),
+        statusCode: 200,
+        data: [.put: Data(#"{"message":"Successfully updated"}"#.utf8)]
+      )
+      .snapshotRequest {
+        #"""
+        curl \
+        	--request PUT \
+        	--header "Content-Length: 37" \
+        	--header "Content-Type: application/json" \
+        	--header "X-Client-Info: storage-swift/0.0.0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	--data "{\"allowed_mime_types\":[\"image\/png\"]}" \
+        	"http://localhost:54321/storage/v1/bucket/bucket123"
+        """#
+      }
+      .register()
+
+      try await storage.updateBucket(
+        "bucket123", options: BucketOptions(allowedMimeTypes: ["image/png"]))
+    }
+
+    @Test
+    func updateBucketWithNothingToChangeThrowsBeforeSending() async {
+      let storage = makeSUT()
+
+      await #expect {
+        try await storage.updateBucket("bucket123", options: BucketOptions())
+      } throws: { error in
+        (error as? StorageError)?.kind == .invalidRequest
+      }
     }
 
     @Test
@@ -273,11 +315,11 @@ extension StorageMockerTests {
         #"""
         curl \
         	--request PUT \
-        	--header "Content-Length: 51" \
+        	--header "Content-Length: 15" \
         	--header "Content-Type: application/json" \
         	--header "X-Client-Info: storage-swift/0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	--data "{\"id\":\"bucket123\",\"name\":\"bucket123\",\"public\":true}" \
+        	--data "{\"public\":true}" \
         	"http://localhost:54321/storage/v1/bucket/bucket123"
         """#
       }
@@ -434,7 +476,7 @@ extension StorageMockerTests {
     }
 
     @Test
-    func createBucketWithHumanReadableFileSizeLimit() async throws {
+    func createBucketWithMegabytesFileSizeLimit() async throws {
       let storage = makeSUT()
 
       Mock(
@@ -459,11 +501,11 @@ extension StorageMockerTests {
         #"""
         curl \
         	--request POST \
-        	--header "Content-Length: 76" \
+        	--header "Content-Length: 78" \
         	--header "Content-Type: application/json" \
         	--header "X-Client-Info: storage-swift/0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	--data "{\"file_size_limit\":\"1mb\",\"id\":\"newbucket\",\"name\":\"newbucket\",\"public\":false}" \
+        	--data "{\"file_size_limit\":1048576,\"id\":\"newbucket\",\"name\":\"newbucket\",\"public\":false}" \
         	"http://localhost:54321/storage/v1/bucket"
         """#
       }
@@ -471,7 +513,7 @@ extension StorageMockerTests {
 
       try await storage.createBucket(
         "newbucket",
-        options: BucketOptions(isPublic: false, fileSizeLimit: "1mb")
+        options: BucketOptions(isPublic: false, fileSizeLimit: .megabytes(1))
       )
     }
   }

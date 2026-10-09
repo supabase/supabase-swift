@@ -25,11 +25,13 @@ extension StorageClient {
     try await api.execute(api.requests.bucket(id)).decoded()
   }
 
+  /// The create and update body. `nil` fields are left out, so an update changes only what the
+  /// caller set.
   struct BucketParameters: Encodable {
-    var id: String
-    var name: String
-    var `public`: Bool
-    var fileSizeLimit: StorageByteCount?
+    var id: String?
+    var name: String?
+    var `public`: Bool?
+    var fileSizeLimit: Int64?
     var allowedMimeTypes: [String]?
 
     enum CodingKeys: String, CodingKey {
@@ -38,6 +40,18 @@ extension StorageClient {
       case `public`
       case fileSizeLimit = "file_size_limit"
       case allowedMimeTypes = "allowed_mime_types"
+    }
+
+    init(id: String? = nil, name: String? = nil, options: BucketOptions) {
+      self.id = id
+      self.name = name
+      self.public = options.isPublic
+      self.fileSizeLimit = options.fileSizeLimit?.bytes
+      self.allowedMimeTypes = options.allowedMimeTypes
+    }
+
+    var isEmpty: Bool {
+      `public` == nil && fileSizeLimit == nil && allowedMimeTypes == nil
     }
   }
 
@@ -52,50 +66,49 @@ extension StorageClient {
   ///
   /// - Parameters:
   ///   - id: A unique identifier for the bucket. This also becomes the bucket name.
-  ///   - options: Options that control visibility, file-size limits, and allowed MIME types.
-  ///     Defaults to a private bucket with no size or type restrictions.
+  ///   - options: Options that control visibility, file-size limits, and allowed MIME types. A
+  ///     `nil` field takes the server default: a private bucket with no size or type restrictions.
+  /// - Returns: The bucket name the server stored.
   /// - Throws: ``StorageError`` if a bucket with the same identifier already exists, or if the
   ///   caller is not authorized.
-  public func createBucket(_ id: String, options: BucketOptions = BucketOptions(isPublic: false))
-    async throws
+  @discardableResult
+  public func createBucket(_ id: String, options: BucketOptions = BucketOptions()) async throws
+    -> String
   {
-    try await api.execute(
-      api.requests.createBucket(
-        BucketParameters(
-          id: id,
-          name: id,
-          public: options.isPublic,
-          fileSizeLimit: options.fileSizeLimit.map { StorageByteCount(stringLiteral: $0) },
-          allowedMimeTypes: options.allowedMimeTypes
-        ))
+    struct Response: Decodable {
+      let name: String
+    }
+
+    return try await api.execute(
+      api.requests.createBucket(BucketParameters(id: id, name: id, options: options))
     )
+    .decoded(as: Response.self)
+    .name
   }
 
   /// Updates an existing Storage bucket's settings.
   ///
+  /// Only the fields set on `options` are sent; the others keep their current value.
+  ///
   /// ```swift
   /// try await storage.updateBucket(
   ///   "avatars",
-  ///   options: BucketOptions(isPublic: false, allowedMimeTypes: ["image/png", "image/jpeg"])
+  ///   options: BucketOptions(allowedMimeTypes: ["image/png", "image/jpeg"])
   /// )
   /// ```
   ///
   /// - Parameters:
   ///   - id: The unique identifier of the bucket to update.
-  ///   - options: The new options to apply to the bucket.
-  /// - Throws: ``StorageError`` if the bucket does not exist or the caller is not authorized.
+  ///   - options: The settings to change. At least one field must be set.
+  /// - Throws: ``StorageError`` with kind ``StorageError/Kind-swift.struct/invalidRequest`` if no
+  ///   field is set, or if the bucket does not exist or the caller is not authorized.
   public func updateBucket(_ id: String, options: BucketOptions) async throws {
-    try await api.execute(
-      api.requests.updateBucket(
-        id,
-        BucketParameters(
-          id: id,
-          name: id,
-          public: options.isPublic,
-          fileSizeLimit: options.fileSizeLimit.map { StorageByteCount(stringLiteral: $0) },
-          allowedMimeTypes: options.allowedMimeTypes
-        ))
-    )
+    let parameters = BucketParameters(options: options)
+    guard !parameters.isEmpty else {
+      throw StorageError(
+        kind: .invalidRequest, message: "updateBucket needs at least one field to change.")
+    }
+    try await api.execute(api.requests.updateBucket(id, parameters))
   }
 
   /// Removes all objects inside a bucket without deleting the bucket itself.

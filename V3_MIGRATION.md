@@ -4129,3 +4129,31 @@ let size = files[0].metadata?.size
 let info: ObjectInfo = try await bucket.info(path: "a.png")
 print(info.eTag ?? "", info.userMetadata ?? [:])
 ```
+
+## `BucketOptions` fields are all optional, `updateBucket` is a partial update, and `ByteCount` replaces `StorageByteCount`
+
+`BucketOptions` is `isPublic: Bool?`, `fileSizeLimit: ByteCount?`, `allowedMimeTypes: [String]?`,
+every field `nil` by default. `createBucket` leaves a `nil` field to the server default and now
+returns the bucket name the server stored. `updateBucket` sends only the fields that are set
+and throws `StorageError` with kind `.invalidRequest` when none is. `ByteCount` holds one
+`Int64` of bytes, with `.kilobytes(_:)`, `.megabytes(_:)`, `.gigabytes(_:)` (binary units, the
+way Storage reads `"1mb"`) and integer literals; the human-readable string form is gone.
+
+`isPublic` used to default to `false` and `updateBucket` sent every field, so changing only
+`allowedMimeTypes` silently made a public bucket private. `StorageByteCount` carried either an
+integer or a string and was re-parsed on the way out.
+
+This is a compile error for `StorageByteCount`, for a `fileSizeLimit` given as a string, and
+wherever `BucketOptions.isPublic` was read as a non-optional `Bool`. `BucketOptions(isPublic:
+true)` and `.megabytes(5)` compile unchanged; the behavior change is that an update no longer
+resets the fields you did not pass.
+
+```swift
+// Before: this also made the bucket private
+try await storage.updateBucket("avatars", options: BucketOptions(allowedMimeTypes: ["image/png"]))
+try await storage.createBucket("logs", options: BucketOptions(fileSizeLimit: "5mb"))
+
+// After: only the MIME types change
+try await storage.updateBucket("avatars", options: BucketOptions(allowedMimeTypes: ["image/png"]))
+let name = try await storage.createBucket("logs", options: BucketOptions(fileSizeLimit: .megabytes(5)))
+```
