@@ -168,6 +168,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-spm-
       - run: swift build -c ${{ matrix.config }}
+      - name: Check compile-failure fixtures
+        if: matrix.config == 'debug'
+        run: ./scripts/check-compile-failures.sh debug
 
   linux:
     name: Linux (${{ matrix.container }})

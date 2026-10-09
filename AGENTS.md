@@ -62,6 +62,9 @@ PLATFORM=IOS XCODEBUILD_ARGUMENT=test ./scripts/xcodebuild.sh
 # Run integration tests (requires Supabase instance)
 ./scripts/test-integration.sh
 
+# Check that Tests/CompileFailures fixtures fail to compile, with the expected error
+./scripts/check-compile-failures.sh
+
 # Generate code coverage
 DERIVED_DATA_PATH=~/.derivedData/Debug ./scripts/generate-coverage.sh
 ```
