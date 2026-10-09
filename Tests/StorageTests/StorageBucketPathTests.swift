@@ -99,7 +99,7 @@ struct StorageBucketPathTests {
       return nil
     },
     Operation(name: "publicURL", placement: .url, response: "") {
-      try $0.publicURL(path: $1)
+      $0.publicURL(path: $1)
     },
   ]
 
@@ -154,7 +154,9 @@ struct StorageBucketPathTests {
     }
   }
 
-  @Test(arguments: operations.filter { $0.name != "list" }, ["", "/", "a/../b.png", "./a.png"])
+  @Test(
+    arguments: operations.filter { $0.name != "list" && $0.name != "publicURL" },
+    ["", "/", "a/../b.png", "./a.png"])
   func refusesAnInvalidPathBeforeSending(operation: Operation, input: String) async {
     let requests = LockIsolated<[HTTPRequest]>([])
     let bodies = LockIsolated<[Data]>([])
@@ -166,6 +168,21 @@ struct StorageBucketPathTests {
       (error as? StorageError)?.kind == .invalidRequest
     }
     #expect(requests.value.isEmpty)
+  }
+
+  /// `publicURL` cannot throw, so a path every other method refuses is sent encoded instead:
+  /// the URL stays valid, no parser folds the segment away, and Storage rejects the key.
+  @Test(arguments: [
+    ("a/../b.png", "/storage/v1/object/public/bucket/a/%2E%2E/b.png"),
+    ("./a.png", "/storage/v1/object/public/bucket/%2E/a.png"),
+    ("", "/storage/v1/object/public/bucket/"),
+  ])
+  func publicURLEncodesWhatOtherMethodsRefuse(input: String, path: String) {
+    let requests = LockIsolated<[HTTPRequest]>([])
+    let bodies = LockIsolated<[Data]>([])
+    let bucket = makeSUT(response: "", requests: requests, bodies: bodies)
+
+    #expect(bucket.publicURL(path: input).path(percentEncoded: true) == path)
   }
 
   @Test
