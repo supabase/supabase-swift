@@ -23,7 +23,7 @@ public struct RealtimePresence: Sendable {
   /// The presence set, read without waiting. It is empty until the server sends the set for the
   /// current join.
   public var state: PresenceState {
-    channel.engine.mirror.presence(channel.wireTopic, owner: channel.owner.id)
+    channel.engine.presence(channel.wireTopic, owner: channel.owner)
   }
 
   /// The whole presence set after every update from the server.

@@ -86,18 +86,18 @@ struct RealtimeEngineTests {
 
   @Test
   func mirrorReflectsConnectionAndChannelStatusSynchronously() async throws {
-    #expect(engine.mirror.channel(topic).isSubscribed == false)
+    #expect(engine.channelStatus(topic).isSubscribed == false)
 
     try await engine.connect()
-    #expect(engine.mirror.connection.isConnected)
+    #expect(engine.connectionStatus.isConnected)
 
     await engine.addChannel(topic)
     try await engine.subscribe(topic)
-    #expect(engine.mirror.channel(topic).isSubscribed)
+    #expect(engine.channelStatus(topic).isSubscribed)
 
     await engine.removeChannel(topic)
-    guard case .unsubscribed = engine.mirror.channel(topic) else {
-      Issue.record("expected .unsubscribed after removal, got \(engine.mirror.channel(topic))")
+    guard case .unsubscribed = engine.channelStatus(topic) else {
+      Issue.record("expected .unsubscribed after removal, got \(engine.channelStatus(topic))")
       return
     }
   }
@@ -1044,12 +1044,8 @@ extension RealtimeEngine {
   }
 }
 
-extension EngineMirror {
-  func channel(_ topic: String) -> RealtimeChannelStatus {
-    channel(topic, owner: testOwner.id)
-  }
-
-  func inbound(_ topic: String) -> AsyncStream<ChannelInbound> {
-    inbound(topic, owner: testOwner)
+extension RealtimeEngine {
+  func channelStatus(_ topic: String) -> RealtimeChannelStatus {
+    channelStatus(topic, owner: testOwner)
   }
 }

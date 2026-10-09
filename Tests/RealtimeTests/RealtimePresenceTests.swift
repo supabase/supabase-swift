@@ -84,7 +84,7 @@ struct RealtimePresenceTests {
     #expect(presencePushes.count == 1)
     #expect(presencePushes.first?.payload["event"] == "track")
     #expect(presencePushes.first?.payload["payload"] == ["name": "ana"])
-    #expect(await engine.pendingReplyCount == 0)
+    #expect(engine.pendingReplyCount == 0)
   }
 
   @Test

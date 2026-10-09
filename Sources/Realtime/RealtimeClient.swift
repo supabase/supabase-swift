@@ -49,9 +49,9 @@ public final class RealtimeClient: Sendable {
       baseURL: url, apikey: apikey, http: options.http, timeout: options.timeout,
       clock: options.clock,
       accessToken: {
-        guard let accessToken else { return await engine.accessToken ?? apikey }
+        guard let accessToken else { return engine.accessToken ?? apikey }
         if let token = try await accessToken() { return token }
-        return await engine.accessToken
+        return engine.accessToken
       })
     #if os(iOS) || os(tvOS) || os(visionOS) || os(macOS)
       lifecycleObserver =
@@ -95,12 +95,12 @@ public final class RealtimeClient: Sendable {
 
   /// The socket's status, read without waiting.
   public var status: RealtimeConnectionStatus {
-    engine.mirror.connection
+    engine.connectionStatus
   }
 
   /// The socket's status, starting with the current one. Only the newest status is buffered.
   public var statusChanges: RealtimeStream<RealtimeConnectionStatus> {
-    RealtimeStream(engine.mirror.connectionStatuses())
+    RealtimeStream(engine.connectionStatuses())
   }
 
   /// Every heartbeat the client sends, and its outcome.

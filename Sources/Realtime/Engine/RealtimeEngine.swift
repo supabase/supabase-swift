@@ -76,42 +76,51 @@ package struct RealtimeEngineConfiguration: Sendable {
   }
 }
 
+/// ``EngineState`` behind a lock, changed in place.
+///
+/// The rest of the SDK uses `LockIsolated`, but it copies the value out and back on every call:
+/// the first change to each dictionary in `EngineState` would copy the whole dictionary, and a
+/// re-entrant call would silently drop the inner write. The lock is recursive only so that a
+/// re-entrant call reaches the `precondition` and traps with a message instead of deadlocking.
+private final class EngineStateLock: @unchecked Sendable {
+  private let lock = NSRecursiveLock()
+  private var state: EngineState
+  private var isLocked = false
+
+  init(_ state: EngineState) {
+    self.state = state
+  }
+
+  func withLock<T>(_ body: (inout EngineState) -> T) -> T {
+    lock.lock()
+    defer { lock.unlock() }
+    precondition(!isLocked, "RealtimeEngine.withState re-entered under its own lock")
+    isLocked = true
+    defer { isLocked = false }
+    return body(&state)
+  }
+}
+
 /// The one mutable core of Realtime: one socket, one supervisor task, pure machines for the
 /// connection and every channel, and fan-out to listeners.
-package actor RealtimeEngine {
-  private enum ReplySlot {
-    case expected
-    case waiting(CheckedContinuation<RealtimeMessageV2, any Error>)
-    case arrived(RealtimeMessageV2)
+///
+/// All mutable state is one ``EngineState`` behind one lock. Synchronous reads and stream
+/// registration take the lock directly; socket, timer and reply tasks take it to apply an event,
+/// then run the deferred work outside it. Nothing awaits under the lock, so there is no
+/// suspension point between a check and the change it guards.
+package final class RealtimeEngine: Sendable {
+  private enum Gate: Sendable {
+    /// Wait for the channel's next subscribe outcome.
+    case wait
+    case done
+    /// Wait for the acknowledgement of this ref.
+    case ack(String)
   }
 
-  private struct ChannelRecord {
-    let owner: ChannelOwner
-    var config: RealtimeJoinConfig
-    var state: ChannelMachine.State = .unsubscribed
-    var joinRef: String?
-    var subscribeWaiters: [UUID: CheckedContinuation<Void, any Error>] = [:]
-    var pendingLeaveRef: String?
-    /// Leaves that found another leave in flight, resumed once the channel stops unsubscribing.
-    var leaveWaiters: [CheckedContinuation<Void, Never>] = []
-    var joinTask: Task<Void, Never>?
-    var rejoinTask: Task<Void, Never>?
-    var lingerTask: Task<Void, Never>?
-    var presence = PresenceTracker()
-    var tokenPush = Throttle()
-    var presencePush = Throttle()
-  }
-
-  /// One send per window per channel; a newer value inside the window replaces the pending one.
-  private struct Throttle {
-    var window: Task<Void, Never>?
-    var pending: JSONObject?
-    var lastSent: JSONObject?
-  }
-
-  private struct ListenerRegistry {
-    var channelStates: [String: [UUID: AsyncStream<ChannelMachine.State>.Continuation]] = [:]
-    var connectionStates: [UUID: AsyncStream<ConnectionMachine.State>.Continuation] = [:]
+  private enum SupervisorStep: Sendable {
+    case attempt
+    case sleep(Duration)
+    case stop
   }
 
   private let configuration: RealtimeEngineConfiguration
@@ -119,44 +128,7 @@ package actor RealtimeEngine {
   let clock: any Clock<Duration>
   private let serializer = RealtimeSerializer()
   let logger: Logger
-  /// What public handles read without awaiting the actor.
-  package nonisolated let mirror = EngineMirror()
-  private var registry = ListenerRegistry()
-
-  /// What ``shutdown()`` reaches without awaiting the actor.
-  private struct Handles {
-    var supervisor: Task<Void, Never>?
-    var socket: (any WebSocketConnection)?
-    var isShutDown = false
-  }
-
-  private nonisolated let handles = LockIsolated(Handles())
-
-  private var connection: ConnectionMachine.State = .disconnected(nil)
-  private var channels: [String: ChannelRecord] = [:]
-  private var supervisor: Task<Void, Never>? {
-    get { handles.supervisor }
-    set { handles.withValue { $0.supervisor = newValue } }
-  }
-  /// Bumped on every supervisor start and every forced teardown, so callbacks from an older
-  /// socket are ignored.
-  private var generation = 0
-  private var socket: (any WebSocketConnection)? { handles.socket }
-  private var outbound: AsyncStream<WebSocketFrame>.Continuation?
-  private var wakeSignal: AsyncStream<Void>.Continuation?
-  private var idleTask: Task<Void, Never>?
-  /// One slot per ref a caller will wait on. A reply for a ref with no slot is dropped: either it
-  /// is late (the waiter timed out) or nobody awaits it (a push sent without a reply, a leave the
-  /// machine sent on its own).
-  private var pendingReplies: [String: ReplySlot] = [:]
-  private var connectWaiters: [UUID: CheckedContinuation<Void, any Error>] = [:]
-  /// `addChannel` calls waiting for a retired owner's record to go, by topic.
-  private var removalWaiters: [String: [CheckedContinuation<Void, Never>]] = [:]
-
-  var pendingReplyCount: Int { pendingReplies.count }
-  private var refCounter = 0
-  private var tokens = TokenState()
-  private var tokenRefreshTask: Task<Void, Never>?
+  private let state: EngineStateLock
 
   package init(
     configuration: RealtimeEngineConfiguration,
@@ -167,74 +139,107 @@ package actor RealtimeEngine {
     self.transport = transport
     self.clock = clock
     self.logger = configuration.logger
-    _ = tokens.apply(configuration.initialAccessToken, generation: tokens.beginRefresh())
+    state = EngineStateLock(EngineState(configuration: configuration, clock: clock))
+    withState { state in
+      state.engine = self
+      let generation = state.tokens.beginRefresh()
+      _ = state.tokens.apply(configuration.initialAccessToken, generation: generation)
+    }
+  }
+
+  /// Runs `body` under the lock, then the work it deferred, outside the lock.
+  @discardableResult
+  func withState<T: Sendable, E: Error>(
+    _ body: @Sendable (inout EngineState) throws(E) -> T
+  ) throws(E) -> T {
+    let (result, deferred) = state.withLock { state in
+      let result = Result { () throws(E) -> T in try body(&state) }
+      return (result, state.takeDeferred())
+    }
+    for work in deferred { work() }
+    return try result.get()
   }
 
   // MARK: - Connection API
 
-  package var connectionState: ConnectionMachine.State { connection }
+  package var connectionState: ConnectionMachine.State { withState { $0.connection } }
+
+  package var connectionStatus: RealtimeConnectionStatus {
+    withState { $0.connection.publicStatus }
+  }
 
   /// Returns once the socket is connected. Throws the fatal error when the upgrade is refused
   /// for good (401, 403, 404), `.notConnected` when `disconnect()` wins the race, and
   /// `CancellationError` when the calling task is cancelled; the socket keeps connecting.
   package func connect() async throws {
-    switch connection {
-    case .connected: return
-    case .disconnected, .reconnecting: applyConnection(.connectRequested)
-    case .connecting: break
-    }
     let id = UUID()
     try await withTaskCancellationHandler {
       try await withCheckedThrowingContinuation {
         (continuation: CheckedContinuation<Void, any Error>) in
-        if Task.isCancelled {
-          continuation.resume(throwing: CancellationError())
-        } else {
-          connectWaiters[id] = continuation
+        withState { state in
+          switch state.connection {
+          case .connected:
+            state.later { continuation.resume() }
+            return
+          case .disconnected, .reconnecting: state.applyConnection(.connectRequested)
+          case .connecting: break
+          }
+          if Task.isCancelled {
+            state.later { continuation.resume(throwing: CancellationError()) }
+          } else {
+            state.connectWaiters[id] = continuation
+            state.resolveConnectWaiters()
+          }
         }
       }
     } onCancel: {
-      Task { await self.cancelConnectWaiter(id) }
+      withState { state in
+        guard let waiter = state.connectWaiters.removeValue(forKey: id) else { return }
+        state.later { waiter.resume(throwing: CancellationError()) }
+      }
     }
-  }
-
-  private func cancelConnectWaiter(_ id: UUID) {
-    connectWaiters.removeValue(forKey: id)?.resume(throwing: CancellationError())
   }
 
   /// Leaves every channel, closes the socket, and returns once it is closed.
   package func disconnect() async {
-    applyConnection(.disconnectRequested)
+    let supervisor = withState { state in
+      state.applyConnection(.disconnectRequested)
+      return state.supervisor
+    }
     await supervisor?.value
   }
 
   /// Closes the socket but keeps every channel wanting its subscription.
   package func pause() async {
-    applyConnection(.pauseRequested)
+    let supervisor = withState { state in
+      state.applyConnection(.pauseRequested)
+      return state.supervisor
+    }
     await supervisor?.value
   }
 
   /// Reconnects after `pause()` and rejoins every channel that was subscribed.
   package func resume() async {
-    if case .disconnected = connection { applyConnection(.resumeRequested) }
+    withState { state in
+      if case .disconnected = state.connection { state.applyConnection(.resumeRequested) }
+    }
     try? await connect()
   }
 
   /// The network path became satisfied or the app came to the foreground.
   package func wake() {
-    applyConnection(.wakeSignal)
+    withState { $0.applyConnection(.wakeSignal) }
   }
 
   /// Stops the engine for good without waiting: finishes every stream, cancels the supervisor and
   /// closes the socket.
   /// The supervisor then moves the engine to `.disconnected`, and a later connect ends there
   /// at once. For a `deinit`, which cannot await.
-  package nonisolated func shutdown() {
-    let (supervisor, socket) = handles.withValue {
-      $0.isShutDown = true
-      return ($0.supervisor, $0.socket)
+  package func shutdown() {
+    let (supervisor, socket) = withState { state in
+      state.shutDown()
+      return (state.supervisor, state.socket)
     }
-    mirror.shutDown()
     supervisor?.cancel()
     if let socket {
       Task { await socket.close(code: .normalClosure, reason: nil) }
@@ -242,23 +247,59 @@ package actor RealtimeEngine {
   }
 
   /// The token joins carry: the last one `setAuth(_:)` or the provider gave.
-  package var accessToken: String? { tokens.token }
+  package var accessToken: String? { withState { $0.tokens.token } }
+
+  var pendingReplyCount: Int { withState { $0.pendingReplies.count } }
+
+  /// Makes a stream and registers it in one critical section, or finishes it when `register`
+  /// returns `false`. The finish runs outside the lock, since it calls `onTermination`.
+  private func listen<Element: Sendable>(
+    _ policy: AsyncStream<Element>.Continuation.BufferingPolicy,
+    register: @Sendable (inout EngineState, UUID, AsyncStream<Element>.Continuation) -> Bool,
+    unregister: @escaping @Sendable (inout EngineState, UUID) -> Void
+  ) -> AsyncStream<Element> {
+    let (stream, continuation) = AsyncStream<Element>.makeStream(bufferingPolicy: policy)
+    let id = UUID()
+    continuation.onTermination = { [weak self] _ in self?.withState { unregister(&$0, id) } }
+    if !withState({ register(&$0, id, continuation) }) { continuation.finish() }
+    return stream
+  }
 
   package func connectionStates() -> AsyncStream<ConnectionMachine.State> {
-    let (stream, continuation) = AsyncStream<ConnectionMachine.State>.makeStream(
-      bufferingPolicy: .bufferingNewest(1))
-    let id = UUID()
-    continuation.onTermination = { [weak self] _ in
-      Task { await self?.forgetListener { $0.connectionStates[id] = nil } }
+    listen(.bufferingNewest(1)) { state, id, continuation in
+      state.connectionStates[id] = continuation
+      return true
+    } unregister: { state, id in
+      state.connectionStates[id] = nil
     }
-    registry.connectionStates[id] = continuation
-    return stream
+  }
+
+  /// The socket's status, starting with the current one, keeping only the newest. Registers
+  /// before it returns.
+  package func connectionStatuses() -> AsyncStream<RealtimeConnectionStatus> {
+    listen(.bufferingNewest(1)) { state, id, continuation in
+      guard !state.isShutDown else {
+        continuation.yield(.disconnected(nil))
+        return false
+      }
+      continuation.yield(state.connection.publicStatus)
+      state.connectionStatuses[id] = continuation
+      return true
+    } unregister: { state, id in
+      state.connectionStatuses[id] = nil
+    }
   }
 
   /// Every heartbeat step, unbounded so a latency display misses none. Registers before it
   /// returns.
-  package nonisolated func heartbeats() -> AsyncStream<HeartbeatEvent> {
-    mirror.heartbeats()
+  package func heartbeats() -> AsyncStream<HeartbeatEvent> {
+    listen(.unbounded) { state, id, continuation in
+      guard !state.isShutDown else { return false }
+      state.heartbeats[id] = continuation
+      return true
+    } unregister: { state, id in
+      state.heartbeats[id] = nil
+    }
   }
 
   // MARK: - Channel API
@@ -271,23 +312,18 @@ package actor RealtimeEngine {
   package func addChannel(
     _ topic: String, owner: ChannelOwner, config: RealtimeJoinConfig = RealtimeJoinConfig()
   ) async {
-    while let record = channels[topic], record.owner !== owner, record.owner.isRetired,
-      !owner.isRetired
-    {
-      await withCheckedContinuation { removalWaiters[topic, default: []].append($0) }
-    }
-    guard !owner.isRetired else { return }
-    if let record = channels[topic] {
-      if record.owner === owner { channels[topic]?.config = config }
-      return
-    }
-    channels[topic] = ChannelRecord(owner: owner, config: config)
-    mirror.install(topic, owner: owner.id)
-    applyConnection(.channelAdded)
-  }
-
-  private func isOwner(_ owner: ChannelOwner, of topic: String) -> Bool {
-    channels[topic]?.owner === owner
+    while await withCheckedContinuation({ (continuation: CheckedContinuation<Bool, Never>) in
+      withState { state in
+        if let record = state.channels[topic], record.owner !== owner, record.owner.isRetired,
+          !owner.isRetired
+        {
+          state.removalWaiters[topic, default: []].append(continuation)
+        } else {
+          state.install(topic, owner: owner, config: config)
+          state.later { continuation.resume(returning: false) }
+        }
+      }
+    }) {}
   }
 
   /// Replaces the channel's postgres bindings. A joined or joining channel joins again with them.
@@ -297,133 +333,174 @@ package actor RealtimeEngine {
   package func updateBindings(
     _ topic: String, owner: ChannelOwner, _ bindings: [PostgresJoinConfig]
   ) {
-    guard let record = channels[topic], record.owner === owner,
-      bindings.count > record.config.postgresChanges.count
-    else { return }
-    channels[topic]?.config.postgresChanges = bindings
-    applyChannel(topic, .bindingsChanged)
+    withState { state in
+      guard let record = state.channels[topic], record.owner === owner,
+        bindings.count > record.config.postgresChanges.count
+      else { return }
+      state.channels[topic]?.config.postgresChanges = bindings
+      state.applyChannel(topic, .bindingsChanged)
+    }
   }
 
   /// Leaves and forgets the owner's channel, and finishes every stream of `owner`.
   package func removeChannel(_ topic: String, owner: ChannelOwner) async {
-    guard isOwner(owner, of: topic) else {
-      mirror.removeChannel(topic, owner: owner.id)
-      return
+    let isOwner = withState { state in
+      guard state.isOwner(owner, of: topic) else {
+        state.dropListeners(topic, owner: owner.id)
+        return false
+      }
+      return true
     }
+    guard isOwner else { return }
     await leave(topic)
-    defer { removalWaiters.removeValue(forKey: topic)?.forEach { $0.resume() } }
-    guard isOwner(owner, of: topic) else { return }
-    channels[topic]?.rejoinTask?.cancel()
-    channels[topic]?.joinTask?.cancel()
-    channels[topic]?.lingerTask?.cancel()
-    resetThrottles(topic)
-    rejectSubscribe(
-      topic, with: RealtimeError(kind: .notSubscribed, message: "channel \(topic) was removed"))
-    channels[topic]?.leaveWaiters.forEach { $0.resume() }
-    channels[topic] = nil
-    mirror.removeChannel(topic, owner: owner.id)
-    registry.channelStates[topic]?.values.forEach { $0.finish() }
-    registry.channelStates[topic] = nil
-    if channels.isEmpty { applyConnection(.lastChannelRemoved) }
+    withState { $0.forget(topic, owner: owner) }
   }
 
   package func channelState(_ topic: String) -> ChannelMachine.State? {
-    channels[topic]?.state
+    withState { $0.channels[topic]?.state }
+  }
+
+  /// `.unsubscribed` unless `owner` holds the topic's record.
+  package func channelStatus(_ topic: String, owner: ChannelOwner) -> RealtimeChannelStatus {
+    withState { state in
+      guard let record = state.channels[topic], record.owner === owner else { return .unsubscribed }
+      return record.state.publicStatus
+    }
   }
 
   /// The server ids of the channel's postgres bindings, by position, from the last join.
   package func postgresChangeIDs(_ topic: String) -> [Int] {
-    mirror.postgresChangeIDs(topic)
+    withState { $0.channels[topic]?.postgresChangeIDs ?? [] }
   }
 
   /// Returns once the join is acknowledged. Throws the server's reason for a fatal join error,
   /// `.notSubscribed` when the channel is unsubscribed before the join completes, and
   /// `CancellationError` when the calling task is cancelled; the channel keeps joining.
   package func subscribe(_ topic: String, owner: ChannelOwner) async throws {
-    guard isOwner(owner, of: topic) else {
-      throw RealtimeError(
-        kind: .notSubscribed,
-        message: owner.isRetired
-          ? "channel \(topic) was removed" : "unknown channel \(topic)")
+    _ = try await gate(topic) { state in
+      guard state.isOwner(owner, of: topic) else {
+        throw RealtimeError(
+          kind: .notSubscribed,
+          message: owner.isRetired
+            ? "channel \(topic) was removed" : "unknown channel \(topic)")
+      }
+      state.applyChannel(topic, .subscribeRequested)
+      return state.channels[topic]?.state.isSubscribed == true ? .done : .wait
     }
-    applyChannel(topic, .subscribeRequested)
-    if channels[topic]?.state.isSubscribed == true { return }
-    try await waitForSubscription(topic)
   }
 
-  /// Resumes on the channel's next `resolveSubscribe` or `rejectSubscribe`.
-  private func waitForSubscription(_ topic: String) async throws {
+  /// Runs `decide` under the lock. On `.wait` it parks the caller on the channel's next
+  /// `resolveSubscribe` or `rejectSubscribe` in the same critical section, so a join that
+  /// completes right after `decide` still reaches it. Returns the ref of an `.ack`.
+  private func gate(
+    _ topic: String, _ decide: @Sendable (inout EngineState) throws -> Gate
+  ) async throws -> String? {
     let id = UUID()
-    try await withTaskCancellationHandler {
+    return try await withTaskCancellationHandler {
       try await withCheckedThrowingContinuation {
-        (continuation: CheckedContinuation<Void, any Error>) in
-        if Task.isCancelled {
-          continuation.resume(throwing: CancellationError())
-        } else if channels[topic] == nil {
-          continuation.resume(
-            throwing: RealtimeError(kind: .notSubscribed, message: "channel \(topic) was removed"))
-        } else {
-          channels[topic]?.subscribeWaiters[id] = continuation
+        (continuation: CheckedContinuation<String?, any Error>) in
+        withState { state in
+          let gate: Gate
+          do {
+            gate = try decide(&state)
+          } catch {
+            state.later { continuation.resume(throwing: error) }
+            return
+          }
+          switch gate {
+          case .done:
+            state.later { continuation.resume(returning: nil) }
+          case .ack(let ref):
+            state.later { continuation.resume(returning: ref) }
+          case .wait:
+            if Task.isCancelled {
+              state.later { continuation.resume(throwing: CancellationError()) }
+            } else if state.channels[topic] == nil {
+              state.later {
+                continuation.resume(
+                  throwing: RealtimeError(
+                    kind: .notSubscribed, message: "channel \(topic) was removed"))
+              }
+            } else {
+              state.channels[topic]?.subscribeWaiters[id] = continuation
+            }
+          }
         }
       }
     } onCancel: {
-      Task { await self.cancelSubscribeWaiter(topic, id: id) }
+      withState { state in
+        guard let waiter = state.channels[topic]?.subscribeWaiters.removeValue(forKey: id)
+        else { return }
+        state.later { waiter.resume(throwing: CancellationError()) }
+      }
     }
-  }
-
-  private func cancelSubscribeWaiter(_ topic: String, id: UUID) {
-    channels[topic]?.subscribeWaiters.removeValue(forKey: id)?.resume(
-      throwing: CancellationError())
   }
 
   /// Sends the leave and returns once the server replied, the reply timed out, or the socket
   /// was already gone.
   package func unsubscribe(_ topic: String, owner: ChannelOwner) async {
-    guard isOwner(owner, of: topic) else { return }
+    guard withState({ $0.isOwner(owner, of: topic) }) else { return }
     await leave(topic)
   }
 
   private func leave(_ topic: String) async {
-    if case .unsubscribing = channels[topic]?.state {
-      await withCheckedContinuation { channels[topic]?.leaveWaiters.append($0) }
-      return
+    let ref = await withCheckedContinuation { continuation in
+      withState { $0.beginLeave(topic, continuation) }
     }
-    applyChannel(topic, .unsubscribeRequested)
-    guard case .unsubscribing = channels[topic]?.state else { return }
-    if let ref = channels[topic]?.pendingLeaveRef {
-      expectReply(ref)
-      _ = try? await withTimeout(configuration.timeout, clock: clock) {
-        try await self.waitForReply(ref)
-      }
+    guard let ref else { return }
+    _ = try? await withTimeout(configuration.timeout, clock: clock) {
+      try await self.waitForReply(ref)
     }
-    applyChannel(topic, .leaveCompleted)
+    withState { $0.applyChannel(topic, .leaveCompleted) }
   }
 
   package func channelStates(_ topic: String) -> AsyncStream<ChannelMachine.State> {
-    let (stream, continuation) = AsyncStream<ChannelMachine.State>.makeStream(
-      bufferingPolicy: .bufferingNewest(1))
-    let id = UUID()
-    continuation.onTermination = { [weak self] _ in
-      Task { await self?.forgetListener { $0.channelStates[topic]?[id] = nil } }
+    listen(.bufferingNewest(1)) { state, id, continuation in
+      state.channelStates[topic, default: [:]][id] = continuation
+      return true
+    } unregister: { state, id in
+      state.channelStates[topic]?[id] = nil
     }
-    registry.channelStates[topic, default: [:]][id] = continuation
-    return stream
+  }
+
+  /// The channel's status, starting with the current one, keeping only the newest. Registers
+  /// before it returns. For a retired owner, or after shutdown, it yields `.unsubscribed` and
+  /// ends.
+  package func channelStatuses(_ topic: String, owner: ChannelOwner)
+    -> AsyncStream<RealtimeChannelStatus>
+  {
+    let key = EngineState.ListenerKey(topic: topic, owner: owner.id)
+    return listen(.bufferingNewest(1)) { state, id, continuation in
+      guard !state.isShutDown, !owner.isRetired else {
+        continuation.yield(.unsubscribed)
+        return false
+      }
+      let record = state.channels[topic]
+      continuation.yield(record?.owner === owner ? record!.state.publicStatus : .unsubscribed)
+      state.channelStatuses[key, default: [:]][id] = continuation
+      return true
+    } unregister: { state, id in
+      state.channelStatuses[key]?[id] = nil
+    }
   }
 
   /// Every message `owner` receives on the topic, unbounded. Registers before it returns; ending
-  /// the iteration removes the listener.
-  package nonisolated func inbound(_ topic: String, owner: ChannelOwner) -> AsyncStream<
-    ChannelInbound
-  > {
-    mirror.inbound(topic, owner: owner)
+  /// the iteration removes the listener. For a retired owner, or after shutdown, it ends at once.
+  package func inbound(_ topic: String, owner: ChannelOwner) -> AsyncStream<ChannelInbound> {
+    let key = EngineState.ListenerKey(topic: topic, owner: owner.id)
+    return listen(.unbounded) { state, id, continuation in
+      guard !state.isShutDown, !owner.isRetired else { return false }
+      state.inbound[key, default: [:]][id] = continuation
+      return true
+    } unregister: { state, id in
+      state.inbound[key]?[id] = nil
+      if state.inbound[key]?.isEmpty == true { state.inbound[key] = nil }
+    }
   }
 
-  package nonisolated func listenerCount(_ topic: String) -> Int {
-    mirror.listenerCount(topic)
-  }
-
-  private func forgetListener(_ remove: @Sendable (inout ListenerRegistry) -> Void) {
-    remove(&registry)
+  /// The live owner's listeners on the topic.
+  package func listenerCount(_ topic: String) -> Int {
+    withState { state in state.liveKey(topic).flatMap { state.inbound[$0]?.count } ?? 0 }
   }
 
   /// Sends a push on a subscribed channel. With `awaitReply` it returns the reply payload, or
@@ -433,13 +510,17 @@ package actor RealtimeEngine {
   package func send(
     _ topic: String, owner: ChannelOwner, event: String, payload: JSONObject, awaitReply: Bool
   ) async throws -> JSONObject? {
-    let joinRef = try joinRefForPush(topic, owner: owner)
-    let ref = makeRef()
-    let message = RealtimeMessageV2(
-      joinRef: joinRef, ref: ref, topic: topic, event: event, payload: payload)
-    try enqueue(.text(try serializer.encodeText(message)))
-    guard awaitReply else { return nil }
-    expectReply(ref)
+    let ref = try withState { state throws -> String? in
+      let joinRef = try state.joinRefForPush(topic, owner: owner)
+      let ref = state.makeRef()
+      let message = RealtimeMessageV2(
+        joinRef: joinRef, ref: ref, topic: topic, event: event, payload: payload)
+      try state.enqueue(.text(try state.serializer.encodeText(message)))
+      guard awaitReply else { return nil }
+      state.expectReply(ref)
+      return ref
+    }
+    guard let ref else { return nil }
     return try await awaitAcknowledgement(ref: ref)
   }
 
@@ -447,13 +528,17 @@ package actor RealtimeEngine {
   package func sendBroadcast(
     _ topic: String, owner: ChannelOwner, event: String, data: Data, awaitReply: Bool = false
   ) async throws {
-    let joinRef = try joinRefForPush(topic, owner: owner)
-    let ref = makeRef()
-    let frame = try serializer.encodeBroadcastPush(
-      joinRef: joinRef, ref: ref, topic: topic, event: event, binaryPayload: data)
-    try enqueue(.binary(frame))
-    guard awaitReply else { return }
-    expectReply(ref)
+    let ref = try withState { state throws -> String? in
+      let joinRef = try state.joinRefForPush(topic, owner: owner)
+      let ref = state.makeRef()
+      let frame = try state.serializer.encodeBroadcastPush(
+        joinRef: joinRef, ref: ref, topic: topic, event: event, binaryPayload: data)
+      try state.enqueue(.binary(frame))
+      guard awaitReply else { return nil }
+      state.expectReply(ref)
+      return ref
+    }
+    guard let ref else { return }
     _ = try await awaitAcknowledgement(ref: ref)
   }
 
@@ -462,18 +547,31 @@ package actor RealtimeEngine {
   /// a null token.
   package func setAuth(_ token: String?) async {
     guard let token else {
-      if await refreshAccessToken() { pushAccessTokenToJoinedChannels() }
+      if await refreshAccessToken() { withState { $0.pushAccessTokenToJoinedChannels() } }
       return
     }
-    guard tokens.apply(token, generation: tokens.beginRefresh()) else { return }
-    scheduleTokenRefresh()
-    pushAccessTokenToJoinedChannels()
+    withState { state in
+      let generation = state.tokens.beginRefresh()
+      guard state.tokens.apply(token, generation: generation) else { return }
+      state.scheduleTokenRefresh()
+      state.pushAccessTokenToJoinedChannels()
+    }
   }
 
   // MARK: - Presence API
 
   package func presenceState(_ topic: String) -> PresenceState {
-    channels[topic]?.presence.state ?? PresenceState()
+    withState { $0.channels[topic]?.presence.state ?? PresenceState() }
+  }
+
+  /// Empty unless `owner` holds the topic's record.
+  package func presence(_ topic: String, owner: ChannelOwner) -> PresenceState {
+    withState { state in
+      guard let record = state.channels[topic], record.owner === owner else {
+        return PresenceState()
+      }
+      return record.presence.state
+    }
   }
 
   /// Tracks `payload` on a subscribed channel, re-sent after every rejoin. Calls inside the
@@ -487,380 +585,94 @@ package actor RealtimeEngine {
   package func trackPresence(_ topic: String, owner: ChannelOwner, payload: JSONObject)
     async throws
   {
-    // A join already in flight sends `trackedPayload` once it succeeds: replace it and wait.
-    if let record = channels[topic], record.owner === owner, case .subscribing = record.state,
-      record.presence.trackedPayload != nil
-    {
-      channels[topic]?.presence.trackedPayload = payload
-      try await waitForSubscription(topic)
-      return
+    let ref = try await gate(topic) { state in
+      // A join already in flight sends `trackedPayload` once it succeeds: replace it and wait.
+      if let record = state.channels[topic], record.owner === owner,
+        case .subscribing = record.state, record.presence.trackedPayload != nil
+      {
+        state.channels[topic]?.presence.trackedPayload = payload
+        return .wait
+      }
+      _ = try state.joinRefForPush(topic, owner: owner)
+      state.channels[topic]?.presence.trackedPayload = payload
+      if state.channels[topic]?.config.presence.enabled == false {
+        state.applyChannel(topic, .bindingsChanged)
+        return .wait
+      }
+      guard
+        let ref = try state.throttledSend(
+          topic, event: "presence",
+          payload: ["type": "presence", "event": "track", "payload": .object(payload)],
+          keyPath: \.presencePush, window: state.configuration.presenceTrackInterval)
+      else { return .done }
+      state.expectReply(ref)
+      return .ack(ref)
     }
-    _ = try joinRefForPush(topic, owner: owner)
-    channels[topic]?.presence.trackedPayload = payload
-    if channels[topic]?.config.presence.enabled == false {
-      applyChannel(topic, .bindingsChanged)
-      try await waitForSubscription(topic)
-      return
-    }
+    guard let ref else { return }
     do {
-      try await sendPresence(
-        topic, payload: ["type": "presence", "event": "track", "payload": .object(payload)])
+      _ = try await awaitAcknowledgement(ref: ref)
     } catch let error as RealtimeError
       where error.kind == .server || error.kind == .payloadTooLarge
     {
       // The server refused this payload; re-sending it on every rejoin would be refused too.
-      if channels[topic]?.presence.trackedPayload == payload {
-        channels[topic]?.presence.trackedPayload = nil
-        channels[topic]?.presencePush.lastSent = nil
+      withState { state in
+        guard state.channels[topic]?.presence.trackedPayload == payload else { return }
+        state.channels[topic]?.presence.trackedPayload = nil
+        state.channels[topic]?.presencePush.lastSent = nil
       }
       throw error
     }
   }
 
   package func untrackPresence(_ topic: String, owner: ChannelOwner) async throws {
-    _ = try joinRefForPush(topic, owner: owner)
-    channels[topic]?.presence.trackedPayload = nil
-    try await sendPresence(topic, payload: ["type": "presence", "event": "untrack"])
-  }
-
-  private func sendPresence(_ topic: String, payload: JSONObject) async throws {
-    guard
-      let ref = try throttledSend(
-        topic, event: "presence", payload: payload, keyPath: \.presencePush,
-        window: configuration.presenceTrackInterval)
-    else { return }
-    expectReply(ref)
+    let ref = try withState { state throws -> String? in
+      _ = try state.joinRefForPush(topic, owner: owner)
+      state.channels[topic]?.presence.trackedPayload = nil
+      guard
+        let ref = try state.throttledSend(
+          topic, event: "presence", payload: ["type": "presence", "event": "untrack"],
+          keyPath: \.presencePush, window: state.configuration.presenceTrackInterval)
+      else { return nil }
+      state.expectReply(ref)
+      return ref
+    }
+    guard let ref else { return }
     _ = try await awaitAcknowledgement(ref: ref)
   }
 
   /// Joins again with presence enabled, unless the channel already joins with it. The server only
   /// sends `presence_state` to a join that enabled presence.
   package func enablePresence(_ topic: String, owner: ChannelOwner) {
-    guard let record = channels[topic], record.owner === owner, !record.config.presence.enabled
-    else { return }
-    channels[topic]?.config.presence.enabled = true
-    applyChannel(topic, .bindingsChanged)
-  }
-
-  private func pushAccessTokenToJoinedChannels() {
-    guard let token = tokens.token, connection.isConnected else { return }
-    for (topic, record) in channels where record.state.isSubscribed {
-      _ = try? throttledSend(
-        topic, event: "access_token", payload: ["access_token": .string(token)],
-        keyPath: \.tokenPush, window: configuration.accessTokenPushInterval)
+    withState { state in
+      guard let record = state.channels[topic], record.owner === owner,
+        !record.config.presence.enabled
+      else { return }
+      state.channels[topic]?.config.presence.enabled = true
+      state.applyChannel(topic, .bindingsChanged)
     }
   }
 
-  /// Sends now if the channel's window is open, otherwise keeps `payload` as the one to send
-  /// when the window closes. An unchanged payload is dropped, as the server would drop it.
-  ///
-  /// Returns the ref of the push when it went out now, and `nil` when it was kept or dropped.
-  private func throttledSend(
-    _ topic: String, event: String, payload: JSONObject,
-    keyPath: WritableKeyPath<ChannelRecord, Throttle>, window: Duration
-  ) throws -> String? {
-    guard var record = channels[topic], record.state.isSubscribed, let joinRef = record.joinRef
-    else { return nil }
-    if record[keyPath: keyPath].window != nil {
-      record[keyPath: keyPath].pending = payload
-      channels[topic] = record
-      return nil
-    }
-    guard record[keyPath: keyPath].lastSent != payload else { return nil }
-    let ref = makeRef()
-    let message = RealtimeMessageV2(
-      joinRef: joinRef, ref: ref, topic: topic, event: event, payload: payload)
-    try enqueue(.text(try serializer.encodeText(message)))
-    record[keyPath: keyPath].lastSent = payload
-    record[keyPath: keyPath].pending = nil
-    record[keyPath: keyPath].window = Task {
-      try? await clock.sleep(for: window)
-      guard !Task.isCancelled else { return }
-      closeThrottleWindow(topic, event: event, keyPath: keyPath, window: window)
-    }
-    channels[topic] = record
-    return ref
-  }
+  // MARK: - Replies
 
-  private func closeThrottleWindow(
-    _ topic: String, event: String, keyPath: WritableKeyPath<ChannelRecord, Throttle>,
-    window: Duration
-  ) {
-    guard var record = channels[topic] else { return }
-    record[keyPath: keyPath].window = nil
-    let pending = record[keyPath: keyPath].pending
-    record[keyPath: keyPath].pending = nil
-    channels[topic] = record
-    if let pending {
-      _ = try? throttledSend(
-        topic, event: event, payload: pending, keyPath: keyPath, window: window)
-    }
-  }
-
-  private func resetThrottles(_ topic: String) {
-    channels[topic]?.tokenPush.window?.cancel()
-    channels[topic]?.presencePush.window?.cancel()
-    channels[topic]?.tokenPush = Throttle()
-    channels[topic]?.presencePush = Throttle()
-  }
-
-  // MARK: - Machines
-
-  private func applyConnection(_ event: ConnectionMachine.Event) {
-    let before = connection.key
-    let effects = ConnectionMachine.transition(
-      &connection, event, configuration: configuration.connection)
-    for effect in effects { perform(effect) }
-    if connection.key != before {
-      let state = connection
-      mirror.setConnection(state.publicStatus)
-      registry.connectionStates.values.forEach { $0.yield(state) }
-    }
-    resolveConnectWaiters()
-  }
-
-  private func resolveConnectWaiters() {
-    guard !connectWaiters.isEmpty else { return }
-    switch connection {
-    case .connected:
-      let waiters = connectWaiters.values
-      connectWaiters = [:]
-      waiters.forEach { $0.resume() }
-    case .disconnected(let error):
-      let waiters = connectWaiters.values
-      connectWaiters = [:]
-      let failure = error ?? RealtimeError(kind: .notConnected, message: "disconnected")
-      waiters.forEach { $0.resume(throwing: failure) }
-    case .connecting, .reconnecting:
-      break
-    }
-  }
-
-  private func perform(_ effect: ConnectionMachine.Effect) {
-    switch effect {
-    case .openTransport:
-      if supervisor == nil {
-        generation += 1
-        let generation = generation
-        supervisor = Task { await self.run(generation: generation) }
-      } else {
-        wakeSignal?.yield()
-      }
-    case .closeTransport(let code):
-      if let socket {
-        Task { await socket.close(code: code, reason: nil) }
-      } else {
-        supervisor?.cancel()
-        supervisor = nil
-        generation += 1
-      }
-    case .startHeartbeat, .stopHeartbeat, .scheduleRetry:
-      break
-    case .cancelRetry:
-      wakeSignal?.yield()
-    case .scheduleIdleDisconnect(let delay):
-      idleTask?.cancel()
-      idleTask = Task {
-        try? await clock.sleep(for: delay)
-        guard !Task.isCancelled else { return }
-        applyConnection(.idleTimerFired)
-      }
-    case .cancelIdleDisconnect:
-      idleTask?.cancel()
-      idleTask = nil
-    case .rejoinAllChannels:
-      for topic in channels.keys { applyChannel(topic, .socketConnected) }
-    case .failPendingReplies:
-      failPendingReplies()
-    case .channelsSocketLost:
-      let error = connection.error ?? RealtimeError.socketClosed(code: nil, reason: nil)
-      for topic in channels.keys {
-        applyChannel(topic, .socketLost(error))
-        if !error.isRetryable { rejectSubscribe(topic, with: error) }
-      }
-    case .channelsUnsubscribed:
-      for topic in channels.keys {
-        applyChannel(topic, .unsubscribeRequested)
-        applyChannel(topic, .leaveCompleted)
-      }
-    }
-  }
-
-  private func applyChannel(_ topic: String, _ event: ChannelMachine.Event) {
-    guard var record = channels[topic] else { return }
-    let before = record.state.key
-    let effects = ChannelMachine.transition(
-      &record.state, event, configuration: configuration.channel)
-    channels[topic] = record
-    for effect in effects { perform(effect, on: topic) }
-    if let state = channels[topic]?.state, state.key != before {
-      mirror.setChannel(topic, state.publicStatus)
-      registry.channelStates[topic]?.values.forEach { $0.yield(state) }
-      if before == "unsubscribing" {
-        let waiters = channels[topic]?.leaveWaiters ?? []
-        channels[topic]?.leaveWaiters = []
-        waiters.forEach { $0.resume() }
-      }
-    }
-  }
-
-  private func perform(_ effect: ChannelMachine.Effect, on topic: String) {
-    switch effect {
-    case .sendJoin:
-      sendJoin(topic)
-    case .sendLeave:
-      sendLeave(topic)
-    case .scheduleRejoin(let delay):
-      channels[topic]?.rejoinTask?.cancel()
-      channels[topic]?.rejoinTask = Task {
-        try? await clock.sleep(for: delay)
-        guard !Task.isCancelled else { return }
-        applyChannel(topic, .rejoinTimerFired)
-      }
-    case .cancelRejoin:
-      channels[topic]?.rejoinTask?.cancel()
-      channels[topic]?.rejoinTask = nil
-    case .refreshToken:
-      Task {
-        await refreshAccessToken()
-        applyChannel(topic, .tokenRefreshed)
-      }
-    case .emitResubscribed:
-      mirror.yield(.resubscribed, to: topic)
-    case .resolveSubscribe:
-      let waiters = channels[topic]?.subscribeWaiters.values.map { $0 } ?? []
-      channels[topic]?.subscribeWaiters = [:]
-      waiters.forEach { $0.resume() }
-    case .rejectSubscribe:
-      let error =
-        channels[topic]?.state.error
-        ?? RealtimeError(kind: .notSubscribed, message: "channel \(topic) was unsubscribed")
-      rejectSubscribe(topic, with: error)
-    case .resendPresenceTrack:
-      if let payload = channels[topic]?.presence.trackedPayload {
-        _ = try? throttledSend(
-          topic, event: "presence",
-          payload: ["type": "presence", "event": "track", "payload": .object(payload)],
-          keyPath: \.presencePush, window: configuration.presenceTrackInterval)
-      }
-    case .finishDataStreams:
-      mirror.finishInbound(topic)
-    case .scheduleLinger(let delay):
-      channels[topic]?.lingerTask?.cancel()
-      channels[topic]?.lingerTask = Task {
-        try? await clock.sleep(for: delay)
-        guard !Task.isCancelled else { return }
-        applyChannel(topic, .lingerTimerFired)
-      }
-    case .cancelLinger:
-      channels[topic]?.lingerTask?.cancel()
-      channels[topic]?.lingerTask = nil
-    }
-  }
-
-  private func rejectSubscribe(_ topic: String, with error: RealtimeError) {
-    let waiters = channels[topic]?.subscribeWaiters.values.map { $0 } ?? []
-    channels[topic]?.subscribeWaiters = [:]
-    waiters.forEach { $0.resume(throwing: error) }
-  }
-
-  // MARK: - Join and leave
-
-  private func sendJoin(_ topic: String) {
-    guard connection.isConnected, outbound != nil else {
-      if configuration.connectOnSubscribe, case .disconnected = connection {
-        applyConnection(.connectRequested)
-      }
-      return
-    }
-    resetThrottles(topic)
-    guard var record = channels[topic] else { return }
-    let ref = makeRef()
-    record.config.presence.enabled =
-      record.config.presence.enabled || record.presence.trackedPayload != nil
-    record.presence.reset()
-    channels[topic] = record
-    mirror.setPresence(topic, record.presence.state)
-    let payload = RealtimeJoinPayload(
-      config: record.config, accessToken: tokens.token,
-      version: configuration.headers[.xClientInfo])
-    guard let encoded = try? JSONObject(payload) else {
-      logger.error("failed to encode the phx_join payload for \(topic)")
-      return
-    }
-    let message = RealtimeMessageV2(
-      joinRef: ref, ref: ref, topic: topic, event: "phx_join", payload: encoded)
-    channels[topic]?.joinRef = ref
-    channels[topic]?.joinTask?.cancel()
+  func awaitJoinReply(_ topic: String, ref: String) async {
+    let extra = withState { $0.channels[topic]?.config.extraJoinTimeout } ?? .zero
     do {
-      try enqueue(.text(try serializer.encodeText(message)))
-    } catch {
-      logger.error("failed to send phx_join for \(topic): \(error)")
-      return
-    }
-    expectReply(ref)
-    channels[topic]?.joinTask = Task { await self.awaitJoinReply(topic, ref: ref) }
-  }
-
-  private func awaitJoinReply(_ topic: String, ref: String) async {
-    do {
-      let timeout = configuration.timeout + (channels[topic]?.config.extraJoinTimeout ?? .zero)
-      let reply = try await withTimeout(timeout, clock: clock) {
+      let reply = try await withTimeout(configuration.timeout + extra, clock: clock) {
         try await self.waitForReply(ref)
       }
-      guard channels[topic]?.joinRef == ref else { return }
-      applyChannel(topic, .joinReplied(joinResult(topic, reply: reply)))
+      withState { state in
+        guard state.channels[topic]?.joinRef == ref else { return }
+        let result = state.joinResult(topic, reply: reply)
+        state.applyChannel(topic, .joinReplied(result))
+      }
     } catch is TimeoutError {
-      guard channels[topic]?.joinRef == ref else { return }
-      applyChannel(topic, .joinTimedOut)
+      withState { state in
+        guard state.channels[topic]?.joinRef == ref else { return }
+        state.applyChannel(topic, .joinTimedOut)
+      }
     } catch {
       // The socket went away; `channelsSocketLost` already moved the channel on.
     }
-  }
-
-  private func joinResult(_ topic: String, reply: RealtimeMessageV2)
-    -> Result<ChannelMachine.JoinReply, RealtimeError>
-  {
-    let response = reply.payload["response"]?.objectValue ?? [:]
-    guard reply.status == .ok else {
-      let reason = response["reason"]?.stringValue ?? "Unknown Error on Channel"
-      return .failure(.joinError(reason: reason))
-    }
-    let declared = channels[topic]?.config.postgresChanges ?? []
-    let replied =
-      (try? JSONDecoder().decode(
-        [PostgresJoinConfig].self,
-        from: JSONEncoder().encode(response["postgres_changes"] ?? .array([])))) ?? []
-    return ChannelMachine.verify(declared: declared, replied: replied).map { ids in
-      mirror.setPostgresChangeIDs(topic, ids)
-      return ChannelMachine.JoinReply(postgresChangeIDs: ids)
-    }
-  }
-
-  private func sendLeave(_ topic: String) {
-    guard connection.isConnected, let joinRef = channels[topic]?.joinRef else {
-      applyChannel(topic, .leaveCompleted)
-      return
-    }
-    let ref = makeRef()
-    let message = RealtimeMessageV2(
-      joinRef: joinRef, ref: ref, topic: topic, event: "phx_leave", payload: [:])
-    channels[topic]?.pendingLeaveRef = ref
-    try? enqueue(.text(try serializer.encodeText(message)))
-  }
-
-  /// Throws `.notSubscribed` unless `owner` holds the topic's record and it is joined.
-  private func joinRefForPush(_ topic: String, owner: ChannelOwner) throws -> String {
-    guard let record = channels[topic], record.owner === owner, record.state.isSubscribed,
-      let joinRef = record.joinRef
-    else {
-      throw RealtimeError(
-        kind: .notSubscribed, message: "channel \(topic) is not subscribed", isRetryable: false)
-    }
-    guard connection.isConnected else {
-      throw RealtimeError(kind: .notConnected, message: "socket is not connected")
-    }
-    return joinRef
   }
 
   private func awaitAcknowledgement(ref: String) async throws -> JSONObject {
@@ -880,125 +692,78 @@ package actor RealtimeEngine {
     return reply.payload
   }
 
-  // MARK: - Wire
-
-  private func makeRef() -> String {
-    refCounter += 1
-    return String(refCounter)
-  }
-
-  private func enqueue(_ frame: WebSocketFrame) throws {
-    guard let outbound else {
-      throw RealtimeError(kind: .notConnected, message: "socket is not connected")
-    }
-    outbound.yield(frame)
-  }
-
   /// Resumes with the `phx_reply` for `ref`, with `.notConnected` when the socket goes away
   /// first, or with `CancellationError` when the waiting task is cancelled (which is how
   /// `withTimeout` unwinds it).
   private func waitForReply(_ ref: String) async throws -> RealtimeMessageV2 {
-    if case .arrived(let message)? = pendingReplies[ref] {
-      pendingReplies[ref] = nil
-      return message
-    }
-    return try await withTaskCancellationHandler {
+    try await withTaskCancellationHandler {
       try await withCheckedThrowingContinuation { continuation in
-        if Task.isCancelled {
-          continuation.resume(throwing: CancellationError())
-        } else {
-          pendingReplies[ref] = .waiting(continuation)
-        }
+        withState { $0.awaitReply(ref, continuation) }
       }
     } onCancel: {
-      Task { await self.cancelReply(ref) }
+      withState { $0.cancelReply(ref) }
     }
-  }
-
-  /// Call in the same synchronous stretch as the `enqueue` so the reply cannot land before it.
-  private func expectReply(_ ref: String) {
-    if case .waiting? = pendingReplies[ref] { return }
-    pendingReplies[ref] = .expected
-  }
-
-  private func cancelReply(_ ref: String) {
-    if case .waiting(let waiter)? = pendingReplies.removeValue(forKey: ref) {
-      waiter.resume(throwing: CancellationError())
-    }
-  }
-
-  private func deliverReply(_ message: RealtimeMessageV2, ref: String) {
-    switch pendingReplies[ref] {
-    case .waiting(let waiter)?:
-      pendingReplies[ref] = nil
-      waiter.resume(returning: message)
-    case .expected?:
-      pendingReplies[ref] = .arrived(message)
-    case .arrived?, nil:
-      break
-    }
-  }
-
-  private func failPendingReplies() {
-    let slots = pendingReplies.values
-    pendingReplies = [:]
-    let error = RealtimeError(kind: .notConnected, message: "socket closed before the reply")
-    for case .waiting(let waiter) in slots { waiter.resume(throwing: error) }
   }
 
   /// Asks the provider for a token and keeps it if it is newer than any refresh that started
   /// later. Returns whether the stored token changed. Either way the next refresh is scheduled,
   /// so a provider that fails or returns the old token is asked again.
   @discardableResult
-  private func refreshAccessToken() async -> Bool {
+  func refreshAccessToken() async -> Bool {
     guard let provider = configuration.accessToken else { return false }
-    let generation = tokens.beginRefresh()
+    let generation = withState { $0.tokens.beginRefresh() }
     let result = try? await provider()
-    let changed = tokens.apply(result, generation: generation)
-    scheduleTokenRefresh(atLeast: configuration.accessTokenRetryInterval)
-    return changed
-  }
-
-  /// Refreshes `accessTokenRefreshLeeway` before the token's `exp`, since the server closes
-  /// every channel the moment it expires.
-  private func scheduleTokenRefresh(atLeast minimum: Duration = .zero) {
-    tokenRefreshTask?.cancel()
-    tokenRefreshTask = nil
-    guard
-      let due = tokens.refreshDelay(now: Date(), leeway: configuration.accessTokenRefreshLeeway)
-    else { return }
-    let delay = max(due, minimum)
-    tokenRefreshTask = Task {
-      try? await clock.sleep(for: delay)
-      guard !Task.isCancelled else { return }
-      if await refreshAccessToken() { pushAccessTokenToJoinedChannels() }
+    return withState { [configuration] state in
+      let changed = state.tokens.apply(result, generation: generation)
+      state.scheduleTokenRefresh(atLeast: configuration.accessTokenRetryInterval)
+      return changed
     }
   }
 
   // MARK: - Supervisor
 
-  private func run(generation: Int) async {
+  func run(generation: Int) async {
     defer {
-      if generation == self.generation, Task.isCancelled || handles.isShutDown {
-        tokenRefreshTask?.cancel()
-        applyConnection(.disconnectRequested)
+      withState { state in
+        guard generation == state.generation else { return }
+        if Task.isCancelled || state.isShutDown {
+          state.cancel(state.tokenRefreshTimer?.task)
+          state.applyConnection(.disconnectRequested)
+        }
+        if generation == state.generation { state.supervisor = nil }
       }
-      if generation == self.generation { supervisor = nil }
     }
-    while !Task.isCancelled, !handles.isShutDown, generation == self.generation {
-      // Read fresh on every pass: a wake while the last attempt was unwinding has already moved
-      // the machine from `.reconnecting` to `.connecting`, and that means attempt again.
-      switch connection {
-      case .connecting:
+    while true {
+      let (signals, wake) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
+      // Reading the state and registering the wake signal in one critical section means a wake
+      // either finds the signal or has already moved the machine to `.connecting`.
+      let step = withState { state -> SupervisorStep in
+        guard !Task.isCancelled, !state.isShutDown, generation == state.generation else {
+          return .stop
+        }
+        switch state.connection {
+        case .connecting:
+          return .attempt
+        case .reconnecting(_, let retryIn, _):
+          state.wakeSignal = wake
+          return .sleep(retryIn)
+        case .connected, .disconnected:
+          return .stop
+        }
+      }
+      switch step {
+      case .attempt:
         await attemptConnection(generation: generation)
-      case .reconnecting(_, let retryIn, _):
-        // `sleepUntilWoken` registers its wake signal before its first suspension, so this read
-        // and the registration are one actor step: a later wake always finds the signal.
-        let woke = await sleepUntilWoken(retryIn)
-        guard generation == self.generation else { return }
-        if !woke { applyConnection(.retryTimerFired) }
-      case .connected, .disconnected:
+      case .stop:
         return
+      case .sleep(let retryIn):
+        let woke = await sleepUntilWoken(retryIn, signals: signals)
+        withState { state in
+          state.wakeSignal = nil
+          guard generation == state.generation, !woke else { return }
+          state.applyConnection(.retryTimerFired)
+        }
+        wake.finish()
       }
     }
   }
@@ -1010,23 +775,20 @@ package actor RealtimeEngine {
         [transport, configuration] in
         try await transport.connect(to: configuration.url, headerFields: configuration.headers)
       }
-      // Checked and stored under one lock, so `shutdown()` either sees the socket or makes this
-      // close it.
-      let isCurrent =
-        generation == self.generation
-        && handles.withValue {
-          guard !$0.isShutDown else { return false }
-          $0.socket = connected
-          return true
-        }
-      guard isCurrent else {
+      // One critical section, so `shutdown()` either sees the socket or makes this close it.
+      let frames = withState { state -> AsyncStream<WebSocketFrame>? in
+        guard generation == state.generation, !state.isShutDown else { return nil }
+        state.socket = connected
+        let (frames, continuation) = AsyncStream<WebSocketFrame>.makeStream(
+          bufferingPolicy: .unbounded)
+        state.outbound = continuation
+        state.applyConnection(.upgradeSucceeded)
+        return frames
+      }
+      guard let frames else {
         await connected.close(code: .normalClosure, reason: nil)
         return
       }
-      let (frames, continuation) = AsyncStream<WebSocketFrame>.makeStream(
-        bufferingPolicy: .unbounded)
-      outbound = continuation
-      applyConnection(.upgradeSucceeded)
       await withTaskGroup(of: Void.self) { group in
         group.addTask { await self.readLoop(connected, generation: generation) }
         group.addTask { await self.writeLoop(connected, frames: frames) }
@@ -1038,22 +800,21 @@ package actor RealtimeEngine {
     } catch is CancellationError {
       return
     } catch is TimeoutError {
-      applyConnection(.upgradeFailed(RealtimeError(kind: .timeout, message: "connect timed out")))
+      withState {
+        $0.applyConnection(
+          .upgradeFailed(RealtimeError(kind: .timeout, message: "connect timed out")))
+      }
     } catch let error as RealtimeError {
-      applyConnection(.upgradeFailed(error))
+      withState { $0.applyConnection(.upgradeFailed(error)) }
     } catch {
-      applyConnection(.upgradeFailed(.transport("\(error)", underlyingError: error)))
+      withState {
+        $0.applyConnection(.upgradeFailed(.transport("\(error)", underlyingError: error)))
+      }
     }
   }
 
   /// Sleeps `duration` on the clock, or returns early with `true` on a wake signal.
-  private func sleepUntilWoken(_ duration: Duration) async -> Bool {
-    let (signals, continuation) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
-    wakeSignal = continuation
-    defer {
-      wakeSignal = nil
-      continuation.finish()
-    }
+  private func sleepUntilWoken(_ duration: Duration, signals: AsyncStream<Void>) async -> Bool {
     return await withTaskGroup(of: Bool.self) { group in
       group.addTask { [clock] in
         try? await clock.sleep(for: duration)
@@ -1071,27 +832,49 @@ package actor RealtimeEngine {
 
   private func readLoop(_ connected: any WebSocketConnection, generation: Int) async {
     for await event in connected.events {
-      guard generation == self.generation else { return }
       switch event {
       case .frame(.text(let text)):
-        handleText(text)
+        let message: RealtimeMessageV2?
+        do {
+          message = try serializer.decodeText(text)
+        } catch {
+          logger.warning("dropping undecodable frame: \(error)")
+          message = nil
+        }
+        let isCurrent = withState { state in
+          guard generation == state.generation else { return false }
+          if let message { state.handle(message) }
+          return true
+        }
+        guard isCurrent else { return }
       case .frame(.binary(let data)):
-        handleBinary(data)
+        let broadcast: DecodedBroadcast?
+        do {
+          broadcast = try serializer.decodeBinary(data)
+        } catch {
+          logger.warning("dropping undecodable binary frame: \(error)")
+          broadcast = nil
+        }
+        let isCurrent = withState { state in
+          guard generation == state.generation else { return false }
+          if let broadcast { state.yield(.broadcast(broadcast), to: broadcast.topic) }
+          return true
+        }
+        guard isCurrent else { return }
       case .closed(let code, let reason):
-        socketWentAway()
-        applyConnection(.transportClosed(code: code, reason: reason))
+        withState { state in
+          guard generation == state.generation else { return }
+          state.socketWentAway()
+          state.applyConnection(.transportClosed(code: code, reason: reason))
+        }
         return
       }
     }
-    guard generation == self.generation else { return }
-    socketWentAway()
-    applyConnection(.transportClosed(code: nil, reason: nil))
-  }
-
-  private func socketWentAway() {
-    handles.withValue { $0.socket = nil }
-    outbound?.finish()
-    outbound = nil
+    withState { state in
+      guard generation == state.generation else { return }
+      state.socketWentAway()
+      state.applyConnection(.transportClosed(code: nil, reason: nil))
+    }
   }
 
   private func writeLoop(_ connected: any WebSocketConnection, frames: AsyncStream<WebSocketFrame>)
@@ -1111,111 +894,35 @@ package actor RealtimeEngine {
   private func heartbeatLoop(generation: Int) async {
     while !Task.isCancelled {
       guard (try? await clock.sleep(for: configuration.heartbeatInterval)) != nil else { return }
-      guard generation == self.generation, connection.isConnected else { return }
-      let ref = makeRef()
-      let heartbeat = RealtimeMessageV2(
-        joinRef: nil, ref: ref, topic: "phoenix", event: "heartbeat", payload: [:])
-      guard (try? enqueue(.text(try serializer.encodeText(heartbeat)))) != nil else { return }
-      expectReply(ref)
-      mirror.yieldHeartbeat(.sent)
+      let ref = withState { state -> String? in
+        guard generation == state.generation, state.connection.isConnected else { return nil }
+        let ref = state.makeRef()
+        let heartbeat = RealtimeMessageV2(
+          joinRef: nil, ref: ref, topic: "phoenix", event: "heartbeat", payload: [:])
+        guard (try? state.enqueue(.text(try state.serializer.encodeText(heartbeat)))) != nil
+        else { return nil }
+        state.expectReply(ref)
+        state.yieldHeartbeat(.sent)
+        return ref
+      }
+      guard let ref else { return }
       do {
         let latency = try await clock.measure {
           _ = try await withTimeout(configuration.heartbeatTimeout, clock: clock) {
             try await self.waitForReply(ref)
           }
         }
-        mirror.yieldHeartbeat(.acknowledged(latency: latency))
+        withState { $0.yieldHeartbeat(.acknowledged(latency: latency)) }
       } catch is TimeoutError {
-        guard generation == self.generation else { return }
-        mirror.yieldHeartbeat(.timedOut)
-        applyConnection(.heartbeatTimedOut)
+        withState { state in
+          guard generation == state.generation else { return }
+          state.yieldHeartbeat(.timedOut)
+          state.applyConnection(.heartbeatTimedOut)
+        }
         return
       } catch {
         return
       }
-    }
-  }
-
-  // MARK: - Inbound
-
-  private func handleText(_ text: String) {
-    let message: RealtimeMessageV2
-    do {
-      message = try serializer.decodeText(text)
-    } catch {
-      logger.warning("dropping undecodable frame: \(error)")
-      return
-    }
-    if message.event == "phx_reply", let ref = message.ref {
-      deliverReply(message, ref: ref)
-      return
-    }
-    guard let record = channels[message.topic] else { return }
-    if let joinRef = message.joinRef, let current = record.joinRef, joinRef != current {
-      logger.debug("dropping stale \(message.event) for \(message.topic)")
-      return
-    }
-    switch message.event {
-    case "phx_close":
-      applyChannel(message.topic, .serverClosed)
-    case "phx_error":
-      applyChannel(message.topic, .serverErrored)
-    case "presence_state":
-      let change = channels[message.topic]?.presence.applyState(message.payload)
-      mirror.yield(.message(message), to: message.topic)
-      change.map { yieldPresence($0, to: message.topic) }
-    case "presence_diff":
-      let change = channels[message.topic]?.presence.applyDiff(message.payload)
-      mirror.yield(.message(message), to: message.topic)
-      if let change = change ?? nil { yieldPresence(change, to: message.topic) }
-    default:
-      // A postgres_changes error leaves the channel open while the server retries the binding.
-      if message.event == "system", message.payload["status"] == "error",
-        message.payload["extension"] != "postgres_changes"
-      {
-        let text = message.payload["message"]?.stringValue ?? "system error"
-        applyChannel(message.topic, .systemError(message: text))
-      }
-      mirror.yield(.message(message), to: message.topic)
-    }
-  }
-
-  private func yieldPresence(_ change: PresenceChange, to topic: String) {
-    let state = channels[topic]?.presence.state ?? PresenceState()
-    mirror.setPresence(topic, state)
-    mirror.yield(.presenceChanged(change, state: state), to: topic)
-  }
-
-  private func handleBinary(_ data: Data) {
-    do {
-      let broadcast = try serializer.decodeBinary(data)
-      mirror.yield(.broadcast(broadcast), to: broadcast.topic)
-    } catch {
-      logger.warning("dropping undecodable binary frame: \(error)")
-    }
-  }
-}
-
-extension ConnectionMachine.State {
-  fileprivate var key: String {
-    switch self {
-    case .disconnected(let error): "disconnected:\(error?.message ?? "")"
-    case .connecting(let attempt): "connecting:\(attempt)"
-    case .connected: "connected"
-    case .reconnecting(let attempt, let retryIn, _): "reconnecting:\(attempt):\(retryIn)"
-    }
-  }
-}
-
-extension ChannelMachine.State {
-  fileprivate var key: String {
-    switch self {
-    case .unsubscribed: "unsubscribed"
-    case .subscribing(let attempt, _): "subscribing:\(attempt)"
-    case .subscribed: "subscribed"
-    case .resubscribing(let attempt, let retryIn, _): "resubscribing:\(attempt):\(retryIn)"
-    case .unsubscribing: "unsubscribing"
-    case .failed(let error): "failed:\(error.message)"
     }
   }
 }

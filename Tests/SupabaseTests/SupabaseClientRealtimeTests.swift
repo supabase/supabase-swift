@@ -168,14 +168,14 @@ struct SupabaseClientRealtimeTests {
   func aCustomLoggerSurvives() async {
     let client = makeClient { $0.logger = Logger(label: "custom") }
 
-    #expect(await client.realtime.engine.logger.label == "custom")
+    #expect(client.realtime.engine.logger.label == "custom")
   }
 
   @Test
   func theGlobalLoggerIsUsedByDefault() async {
     let client = makeClient()
 
-    let logger = await client.realtime.engine.logger
+    let logger = client.realtime.engine.logger
     #expect(logger.label == "global")
     #expect(logger[metadataKey: "system"] == "realtime")
   }
