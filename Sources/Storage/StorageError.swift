@@ -3,14 +3,19 @@ public import Helpers
 
 /// An error thrown by the Storage client.
 ///
-/// Check ``kind`` to learn what failed. For ``Kind-swift.struct/server``, ``serverError`` holds
-/// the body Storage returned and ``response`` holds the status, headers and request id.
+/// Check ``kind`` to learn what failed. For ``Kind-swift.struct/server``, ``code`` and
+/// ``serverStatusCode`` carry what Storage put in the body, ``serverError`` holds that body as
+/// sent, and ``response`` holds the HTTP status, headers and request id. On the object, bucket,
+/// render and CDN routes the HTTP status is 400 for nearly every failure, so branch on ``code``
+/// or ``serverStatusCode``, not on `response?.statusCode`.
 ///
 /// ```swift
 /// do {
 ///   try await storage.from("avatars").download(path: "missing.png")
-/// } catch let error as StorageError where error.kind == .server {
-///   print(error.response?.statusCode ?? 0, error.serverError?.error ?? "", error.message)
+/// } catch let error as StorageError where error.isNotFound {
+///   showPlaceholder()
+/// } catch let error as StorageError {
+///   print(error.code?.rawValue ?? "", error.message)
 /// }
 /// ```
 public struct StorageError: SupabaseError {
@@ -26,9 +31,9 @@ public struct StorageError: SupabaseError {
       self.init(rawValue: value)
     }
 
-    /// Storage answered with a non-2xx status. Branch on ``StorageError/response`` for the
-    /// status code and on ``StorageError/serverError`` for the code and message Storage sent;
-    /// `serverError` is `nil` when the body was not a Storage error payload.
+    /// Storage answered with a non-2xx status. Branch on ``StorageError/code`` and
+    /// ``StorageError/serverStatusCode`` for what Storage reported; ``StorageError/serverError``
+    /// is `nil` when the body was not a Storage error payload.
     public static let server: Kind = "server"
     /// No response arrived, so whether Storage applied the request is unknown. Retry reads
     /// freely; before retrying an upload, move or delete, check that it was not applied.
@@ -38,8 +43,8 @@ public struct StorageError: SupabaseError {
     /// type, or a required field was missing. Nothing to retry; report it.
     /// ``StorageError/underlyingError`` is the `DecodingError` when there was one.
     public static let decoding: Kind = "decoding"
-    /// The SDK refused to send: a URL could not be built from the configuration and the given
-    /// path. Fix the path or the client configuration. No request was sent.
+    /// The SDK refused to send: an object path was empty or contained a `..` segment, or a
+    /// per-call value such as an expiry was out of range. Fix the call. No request was sent.
     public static let invalidRequest: Kind = "invalidRequest"
   }
 
@@ -47,7 +52,7 @@ public struct StorageError: SupabaseError {
   ///
   /// Compare against the static members and keep a fallback branch: Storage adds codes, and a
   /// server newer than the SDK can send one this version does not know.
-  public struct Code: Decodable, RawRepresentable, Sendable, Hashable {
+  public struct Code: Decodable, RawRepresentable, Sendable, Hashable, ExpressibleByStringLiteral {
     public var rawValue: String
 
     public init(rawValue: String) {
@@ -57,15 +62,22 @@ public struct StorageError: SupabaseError {
     public init(_ rawValue: String) {
       self.init(rawValue: rawValue)
     }
+
+    public init(stringLiteral value: String) {
+      self.init(rawValue: value)
+    }
   }
 
-  /// The error body Storage returns for a rejected request, with its wire field names.
+  /// The error body Storage returns for a rejected request.
+  ///
+  /// Decodes the flat shape the object, bucket, render, CDN and vector routes send,
+  /// `{"statusCode": "404", "error": "not_found", "message": "...", "code": "NoSuchKey"}`, and
+  /// the Iceberg catalog shape, `{"error": {"message": "...", "type": "...", "code": 404}}`,
+  /// whose `type` lands in ``error`` and whose numeric `code` lands in ``statusCode``.
   public struct ServerError: Decodable, Hashable, Sendable {
-    /// The HTTP status as Storage spells it in the body, e.g. `"404"`.
-    ///
-    /// Prefer ``HTTPErrorResponse/statusCode`` on the enclosing ``StorageError/response`` for
-    /// the integer.
-    public var statusCode: String?
+    /// The status Storage reports in the body, e.g. `404`, which is the real outcome when the
+    /// HTTP status is 400. Decoded from either `"404"` or `404`.
+    public var statusCode: Int?
     /// A short identifier such as `"not_found"` or `"Duplicate"`, when Storage sends one.
     public var error: String?
     /// The machine-readable code, such as ``Code/noSuchKey``, when Storage sends one.
@@ -74,32 +86,104 @@ public struct StorageError: SupabaseError {
     public var message: String
 
     public init(
-      statusCode: String? = nil, error: String? = nil, code: Code? = nil, message: String
+      statusCode: Int? = nil, error: String? = nil, code: Code? = nil, message: String
     ) {
       self.statusCode = statusCode
       self.error = error
       self.code = code
       self.message = message
     }
+
+    private enum CodingKeys: String, CodingKey {
+      case statusCode, error, code, message
+    }
+
+    private enum IcebergKeys: String, CodingKey {
+      case message, type, code
+    }
+
+    /// A field Storage spells as a string on some routes and as a number on others.
+    private enum StringOrInt: Decodable {
+      case string(String)
+      case int(Int)
+
+      init(from decoder: any Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let int = try? container.decode(Int.self) {
+          self = .int(int)
+        } else {
+          self = .string(try container.decode(String.self))
+        }
+      }
+
+      var int: Int? {
+        switch self {
+        case .int(let int): int
+        case .string(let string): Int(string)
+        }
+      }
+    }
+
+    public init(from decoder: any Decoder) throws {
+      let container = try decoder.container(keyedBy: CodingKeys.self)
+
+      if let iceberg = try? container.nestedContainer(keyedBy: IcebergKeys.self, forKey: .error) {
+        message = try iceberg.decode(String.self, forKey: .message)
+        error = try iceberg.decodeIfPresent(String.self, forKey: .type)
+        switch try iceberg.decodeIfPresent(StringOrInt.self, forKey: .code) {
+        case .string(let value):
+          code = Code(value)
+        case .int(let value):
+          statusCode = value
+          code = error.map { Code(rawValue: $0) }
+        case nil:
+          code = error.map { Code(rawValue: $0) }
+        }
+        return
+      }
+
+      message = try container.decode(String.self, forKey: .message)
+      error = try container.decodeIfPresent(String.self, forKey: .error)
+      code = try container.decodeIfPresent(Code.self, forKey: .code)
+      statusCode = try container.decodeIfPresent(StringOrInt.self, forKey: .statusCode)?.int
+    }
   }
 
   public var kind: Kind
   public var message: String
+  /// The code Storage sent, such as ``Code/noSuchKey``. Set when ``kind`` is
+  /// ``Kind-swift.struct/server`` and the body carried one; `nil` otherwise.
+  public var code: Code?
+  /// The status Storage reports in the body, such as `404`, which is the real outcome when the
+  /// HTTP status is 400. Set when ``kind`` is ``Kind-swift.struct/server`` and the body carried
+  /// one; `nil` otherwise.
+  public var serverStatusCode: Int?
   /// The decoded error body. Set when ``kind`` is ``Kind-swift.struct/server`` and the body was
   /// a Storage error payload; `nil` otherwise.
   public var serverError: ServerError?
   public var response: HTTPErrorResponse?
   public var underlyingError: (any Error)?
 
+  /// Whether Storage reported that the object or bucket does not exist: ``code`` is
+  /// ``Code/noSuchKey`` or ``Code/noSuchBucket``, or the server or HTTP status is 404.
+  public var isNotFound: Bool {
+    code == .noSuchKey || code == .noSuchBucket || serverStatusCode == 404
+      || response?.statusCode == 404
+  }
+
   public init(
     kind: Kind,
     message: String,
+    code: Code? = nil,
+    serverStatusCode: Int? = nil,
     serverError: ServerError? = nil,
     response: HTTPErrorResponse? = nil,
     underlyingError: (any Error)? = nil
   ) {
     self.kind = kind
     self.message = message
+    self.code = code
+    self.serverStatusCode = serverStatusCode
     self.serverError = serverError
     self.response = response
     self.underlyingError = underlyingError

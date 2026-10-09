@@ -317,3 +317,4 @@ timetz
 tsrange
 tstzmultirange
 tstzrange
+mebibyte
