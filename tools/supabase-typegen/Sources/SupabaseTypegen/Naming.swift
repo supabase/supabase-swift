@@ -21,8 +21,8 @@ enum Naming {
   /// plus `init()`.
   static let columnsMembers: Set = ["init", "self"]
 
-  /// Static member names an enum struct cannot take: its own members, which `Status.rawValue`,
-  /// `Status.init` and `Status.self` would name instead.
+  /// Case names an enum does not take. They compile, but `Status.init` and `Status.self` name the
+  /// initializer and the metatype, and `rawValue` reads as the property every case has.
   static let enumMembers: Set = ["rawValue", "init", "self"]
 
   /// The type names the generated file or `@Table`'s expansion refer to unqualified. A generated
@@ -32,7 +32,7 @@ enum Naming {
   static let referencedTypes: Set = [
     "Bool", "Date", "Decimal", "Double", "Int", "JSONValue", "String", "UUID",
     "Decodable", "Encodable", "Sendable", "CodingKey", "Optional", "Array",
-    "Codable", "Hashable", "RawRepresentable", "ExpressibleByStringLiteral", "PostgrestFilterValue",
+    "Codable", "Hashable", "PostgrestFilterValue",
     "PostgREST", "PostgrestMacros", "PostgrestSchema", "PublicSchema", "Foundation", "Swift",
     "Type", "Self", "Any", "Protocol",
     "Draft", "Columns", "CodingKeys", "Schema",

@@ -97,10 +97,10 @@ struct EmitterTests {
         + "Codable would shadow a type the generated code uses",
       "public.user_profiles is named UserProfiles2: another type is also named UserProfiles",
       "enum public.user profiles is named UserProfiles3: another type is also named UserProfiles",
-      "enum public.mood value self is named selfCase: the struct reserves self",
-      "enum public.mood value Self is named selfCase: the struct reserves self",
-      "enum public.mood value rawValue is named rawValueCase: the struct reserves rawValue",
-      "enum public.mood value init is named initCase: the struct reserves init",
+      "enum public.mood value self is named selfCase: the enum reserves self",
+      "enum public.mood value Self is named selfCase: the enum reserves self",
+      "enum public.mood value rawValue is named rawValueCase: the enum reserves rawValue",
+      "enum public.mood value init is named initCase: the enum reserves init",
       "enum public.mood value Self is named selfCase2: another value is also named selfCase",
       "enum public.mood value in-progress is named inProgress2: "
         + "another value is also named inProgress",
@@ -241,7 +241,7 @@ struct EmitterTests {
       ]
       object["types"] = [
         [
-          "id": 1, "schema": "public", "name": "status", "enums": ["pending", "done"],
+          "id": 1, "schema": "public", "name": "status", "enums": ["pending", "in_progress", "done"],
           "type_relation_id": NSNull(),
         ]
       ]
@@ -304,24 +304,15 @@ struct EmitterTests {
   }
 
   @Test
-  func enumBecomesARawRepresentableStruct() {
+  func enumBecomesASwiftEnum() {
     let result = generated(format: "status", typeSchema: "public")
     #expect(
       result.standardOutput.contains(
         """
-        struct Status: RawRepresentable, Codable, Hashable, Sendable,
-          ExpressibleByStringLiteral, PostgrestFilterValue
-        {
-          let rawValue: String
-          init(rawValue: String) {
-            self.rawValue = rawValue
-          }
-          init(stringLiteral value: String) {
-            self.init(rawValue: value)
-          }
-
-          static let pending: Status = "pending"
-          static let done: Status = "done"
+        enum Status: String, Codable, Hashable, Sendable, PostgrestFilterValue {
+          case pending
+          case inProgress = "in_progress"
+          case done
         }
         """
       )

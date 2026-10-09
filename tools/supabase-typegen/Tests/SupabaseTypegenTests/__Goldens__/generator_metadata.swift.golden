@@ -1,19 +1,9 @@
 import Foundation
 import PostgrestMacros
 
-struct UserStatus: RawRepresentable, Codable, Hashable, Sendable,
-  ExpressibleByStringLiteral, PostgrestFilterValue
-{
-  let rawValue: String
-  init(rawValue: String) {
-    self.rawValue = rawValue
-  }
-  init(stringLiteral value: String) {
-    self.init(rawValue: value)
-  }
-
-  static let online: UserStatus = "ONLINE"
-  static let offline: UserStatus = "OFFLINE"
+enum UserStatus: String, Codable, Hashable, Sendable, PostgrestFilterValue {
+  case online = "ONLINE"
+  case offline = "OFFLINE"
 }
 
 @Table("channels")

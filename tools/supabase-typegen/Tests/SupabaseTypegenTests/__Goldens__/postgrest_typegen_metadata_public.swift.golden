@@ -5,50 +5,20 @@ public enum Inventory: PostgrestSchema {
   public static let name = "inventory"
 }
 
-public struct InventoryUserStatus: RawRepresentable, Codable, Hashable, Sendable,
-  ExpressibleByStringLiteral, PostgrestFilterValue
-{
-  public let rawValue: String
-  public init(rawValue: String) {
-    self.rawValue = rawValue
-  }
-  public init(stringLiteral value: String) {
-    self.init(rawValue: value)
-  }
-
-  public static let stocked: InventoryUserStatus = "STOCKED"
-  public static let discontinued: InventoryUserStatus = "DISCONTINUED"
+public enum InventoryUserStatus: String, Codable, Hashable, Sendable, PostgrestFilterValue {
+  case stocked = "STOCKED"
+  case discontinued = "DISCONTINUED"
 }
 
-public struct MemeStatus: RawRepresentable, Codable, Hashable, Sendable,
-  ExpressibleByStringLiteral, PostgrestFilterValue
-{
-  public let rawValue: String
-  public init(rawValue: String) {
-    self.rawValue = rawValue
-  }
-  public init(stringLiteral value: String) {
-    self.init(rawValue: value)
-  }
-
-  public static let new: MemeStatus = "new"
-  public static let old: MemeStatus = "old"
-  public static let retired: MemeStatus = "retired"
+public enum MemeStatus: String, Codable, Hashable, Sendable, PostgrestFilterValue {
+  case new
+  case old
+  case retired
 }
 
-public struct UserStatus: RawRepresentable, Codable, Hashable, Sendable,
-  ExpressibleByStringLiteral, PostgrestFilterValue
-{
-  public let rawValue: String
-  public init(rawValue: String) {
-    self.rawValue = rawValue
-  }
-  public init(stringLiteral value: String) {
-    self.init(rawValue: value)
-  }
-
-  public static let active: UserStatus = "ACTIVE"
-  public static let inactive: UserStatus = "INACTIVE"
+public enum UserStatus: String, Codable, Hashable, Sendable, PostgrestFilterValue {
+  case active = "ACTIVE"
+  case inactive = "INACTIVE"
 }
 
 @Table("items", schema: Inventory.self)

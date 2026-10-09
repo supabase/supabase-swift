@@ -279,7 +279,7 @@ extension FilePlan {
     }
   }
 
-  /// One static member per value, in declaration order. The literal keeps the exact label.
+  /// One case per value, in declaration order. The raw value keeps the exact label.
   private mutating func members(of type: DatabaseModel.EnumType) -> [EnumPlan.Member] {
     let label = "enum \(type.name.schema).\(type.name.name) value"
     let bases = type.values.map { value in
@@ -287,7 +287,7 @@ extension FilePlan {
       let bare = Naming.unescaped(base)
       guard Naming.enumMembers.contains(bare) else { return base }
       let renamed = Naming.identifier(bare + "Case")
-      notes.append("\(label) \(value) is named \(renamed): the struct reserves \(bare)")
+      notes.append("\(label) \(value) is named \(renamed): the enum reserves \(bare)")
       return renamed
     }
     let names = numberingRepeats(
@@ -419,7 +419,7 @@ extension FilePlan {
 }
 
 extension FilePlan {
-  /// The generated file: one struct per enum type and one `@Table` struct per relation,
+  /// The generated file: one `enum` per enum type and one `@Table` struct per relation,
   /// formatted, ending in one newline.
   func render(accessControl: Options.AccessControl) throws -> String {
     let access: DeclModifierListSyntax =
@@ -449,24 +449,19 @@ extension FilePlan {
       }
 
       for type in enums {
-        let name = TokenSyntax.identifier(type.typeName)
-        try StructDeclSyntax(
+        try EnumDeclSyntax(
           """
-          \(access) struct \(name): RawRepresentable, Codable, Hashable, Sendable,
-            ExpressibleByStringLiteral, PostgrestFilterValue
+          \(access) enum \(TokenSyntax.identifier(type.typeName)): String, Codable, Hashable, \
+          Sendable, PostgrestFilterValue
           """
         ) {
-          DeclSyntax("\(access) let rawValue: String")
-          DeclSyntax("\(access) init(rawValue: String) { self.rawValue = rawValue }")
-          DeclSyntax("\(access) init(stringLiteral value: String) { self.init(rawValue: value) }")
-          for (index, member) in type.members.enumerated() {
-            DeclSyntax(
-              """
-              \(access) static let \(TokenSyntax.identifier(member.name)): \(name) = \
-              \(StringLiteralExprSyntax(content: member.value))
-              """
-            )
-            .with(\.leadingTrivia, index == 0 ? .newlines(2) : .newline)
+          for member in type.members {
+            let name = TokenSyntax.identifier(member.name)
+            if Naming.unescaped(member.name) == member.value {
+              DeclSyntax("case \(name)")
+            } else {
+              DeclSyntax("case \(name) = \(StringLiteralExprSyntax(content: member.value))")
+            }
           }
         }
         .with(\.leadingTrivia, .newlines(2))

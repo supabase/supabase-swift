@@ -5,88 +5,38 @@ enum MySchema: PostgrestSchema {
   static let name = #"my"schema"#
 }
 
-struct InventoryState: RawRepresentable, Codable, Hashable, Sendable,
-  ExpressibleByStringLiteral, PostgrestFilterValue
-{
-  let rawValue: String
-  init(rawValue: String) {
-    self.rawValue = rawValue
-  }
-  init(stringLiteral value: String) {
-    self.init(rawValue: value)
-  }
-
-  static let inStock: InventoryState = "in stock"
+enum InventoryState: String, Codable, Hashable, Sendable, PostgrestFilterValue {
+  case inStock = "in stock"
 }
 
-struct MySchemaStatus: RawRepresentable, Codable, Hashable, Sendable,
-  ExpressibleByStringLiteral, PostgrestFilterValue
-{
-  let rawValue: String
-  init(rawValue: String) {
-    self.rawValue = rawValue
-  }
-  init(stringLiteral value: String) {
-    self.init(rawValue: value)
-  }
-
-  static let on: MySchemaStatus = "on"
-  static let off: MySchemaStatus = "off"
+enum MySchemaStatus: String, Codable, Hashable, Sendable, PostgrestFilterValue {
+  case on
+  case off
 }
 
-struct CodableEnum: RawRepresentable, Codable, Hashable, Sendable,
-  ExpressibleByStringLiteral, PostgrestFilterValue
-{
-  let rawValue: String
-  init(rawValue: String) {
-    self.rawValue = rawValue
-  }
-  init(stringLiteral value: String) {
-    self.init(rawValue: value)
-  }
-
-  static let a: CodableEnum = "a"
+enum CodableEnum: String, Codable, Hashable, Sendable, PostgrestFilterValue {
+  case a
 }
 
-struct Mood: RawRepresentable, Codable, Hashable, Sendable,
-  ExpressibleByStringLiteral, PostgrestFilterValue
-{
-  let rawValue: String
-  init(rawValue: String) {
-    self.rawValue = rawValue
-  }
-  init(stringLiteral value: String) {
-    self.init(rawValue: value)
-  }
-
-  static let happy: Mood = "happy"
-  static let sad: Mood = "sad"
-  static let selfCase: Mood = "self"
-  static let selfCase2: Mood = "Self"
-  static let rawValueCase: Mood = "rawValue"
-  static let initCase: Mood = "init"
-  static let inProgress: Mood = "in progress"
-  static let inProgress2: Mood = "in-progress"
-  static let inPROGRESS: Mood = "IN_PROGRESS"
-  static let _1st: Mood = "1st"
-  static let `default`: Mood = "default"
-  static let sayHi: Mood = #"say "hi""#
-  static let backSlash: Mood = #"back\slash"#
-  static let unnamed: Mood = "__"
+enum Mood: String, Codable, Hashable, Sendable, PostgrestFilterValue {
+  case happy
+  case sad
+  case selfCase = "self"
+  case selfCase2 = "Self"
+  case rawValueCase = "rawValue"
+  case initCase = "init"
+  case inProgress = "in progress"
+  case inProgress2 = "in-progress"
+  case inPROGRESS = "IN_PROGRESS"
+  case _1st = "1st"
+  case `default`
+  case sayHi = #"say "hi""#
+  case backSlash = #"back\slash"#
+  case unnamed = "__"
 }
 
-struct UserProfiles3: RawRepresentable, Codable, Hashable, Sendable,
-  ExpressibleByStringLiteral, PostgrestFilterValue
-{
-  let rawValue: String
-  init(rawValue: String) {
-    self.rawValue = rawValue
-  }
-  init(stringLiteral value: String) {
-    self.init(rawValue: value)
-  }
-
-  static let a: UserProfiles3 = "a"
+enum UserProfiles3: String, Codable, Hashable, Sendable, PostgrestFilterValue {
+  case a
 }
 
 @Table("class", schema: MySchema.self)
