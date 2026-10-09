@@ -31,12 +31,10 @@ supporting_symbols:
   - JSONValue.rawValue
 
   # The injected clock is a testability seam shared across Auth's token auto-refresh and
-  # request-retry backoff and Realtime's heartbeat timer and reconnect backoff, rather than a
-  # capability any one feature implements. `SupabaseClient` forwards `GlobalOptions.clock` to the
+  # request-retry backoff, rather than a capability any one feature implements. `SupabaseClient` forwards `GlobalOptions.clock` to the
   # per-sub-client properties, so all three spell the same knob at a different layer.
   - SupabaseClientOptions.GlobalOptions.clock
   - AuthClient.Configuration.clock
-  - RealtimeClientOptions.clock
   # A per-module logger override on the facade, mirroring `GlobalOptions.logger`; a logging
   # knob, not a capability.
   - SupabaseClientOptions.FunctionsOptions.logger
@@ -436,9 +434,6 @@ supporting_symbols:
   - RealtimeError.ServerCode.errorOnRpcCall
   - RealtimeError.ServerCode.postgresChangesSubscribeTimeout
   - RealtimeError.ServerCode.unknownErrorOnChannel
-  # The default server-reply timeout governs subscribe, unsubscribe,
-  # broadcast and broadcast_http alike rather than being owned by one.
-  - RealtimeClientOptions.defaultTimeout
   # Test-only infrastructure (Trait.requiresMainSerialExecutor skips a test on platforms where
   # withMainSerialExecutor is a no-op) rather than a capability any feature implements.
   - Trait.requiresMainSerialExecutor
@@ -896,10 +891,8 @@ features:
     symbols:
       - SupabaseClientOptions.AuthOptions.accessToken
   client.authentication_integration.cross_client_token_sync:
-    status: implemented
-    note: "Automatic and always-on whenever AuthOptions.accessToken (third_party_auth) is nil: SupabaseClient listens to AuthClient.authStateChanges and pushes the current token to realtime/database/storage/functions. There is no separate opt-in symbol."
-    symbols:
-      - AuthClient.authStateChanges
+    status: not_implemented
+    note: "Returns with the v3 Realtime client in the Phase 2 stack (SDK-2108); the v2 listener that pushed Auth tokens to realtime was removed."
   client.authentication_integration.oauth_flow_type:
     status: implemented
     symbols:
@@ -1564,137 +1557,86 @@ features:
   # ── Realtime ───────────────────────────────────────────────────────────────
 
   realtime.client.connect:
-    status: implemented
-    symbols:
-      - RealtimeClientV2.connect
+    status: not_implemented
+    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
   realtime.client.disconnect:
-    status: implemented
-    symbols:
-      - RealtimeClientV2.disconnect
+    status: not_implemented
+    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
   realtime.client.get_channels:
-    status: implemented
-    symbols:
-      - RealtimeClientV2.channels
+    status: not_implemented
+    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
   realtime.client.remove_channel:
-    status: implemented
-    symbols:
-      - RealtimeClientV2.removeChannel
+    status: not_implemented
+    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
   realtime.client.remove_all_channels:
-    status: implemented
-    symbols:
-      - RealtimeClientV2.removeAllChannels
+    status: not_implemented
+    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
   realtime.client.connection_state:
-    status: implemented
-    symbols:
-      - RealtimeClientV2.status
-    supporting_symbols:
-      - RealtimeClientStatus.init
-      - RealtimeClientStatus.rawValue
+    status: not_implemented
+    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
   realtime.client.listen_heartbeats:
-    status: implemented
-    symbols:
-      - RealtimeClientV2.onHeartbeat
-    supporting_symbols:
-      - HeartbeatStatus.init
-      - HeartbeatStatus.rawValue
+    status: not_implemented
+    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
   realtime.client.set_auth_token:
-    status: implemented
-    symbols:
-      - RealtimeClientV2.setAuth
+    status: not_implemented
+    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
   realtime.client.channel:
-    status: implemented
-    symbols:
-      - RealtimeClientV2.channel
+    status: not_implemented
+    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
 
   realtime.channel.subscribe:
-    status: implemented
-    symbols:
-      - RealtimeChannelV2.subscribeWithError
-    supporting_symbols:
-      - RealtimeChannelStatus.init
-      - RealtimeChannelStatus.rawValue
+    status: not_implemented
+    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
   realtime.channel.unsubscribe:
-    status: implemented
-    symbols:
-      - RealtimeChannelV2.unsubscribe
+    status: not_implemented
+    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
   realtime.channel.broadcast:
-    status: implemented
-    symbols:
-      - RealtimeChannelV2.broadcast
-    supporting_symbols:
-      - PushStatus.init
-      - PushStatus.rawValue
+    status: not_implemented
+    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
   realtime.channel.broadcast_http:
-    status: implemented
-    symbols:
-      - RealtimeChannelV2.httpSend
+    status: not_implemented
+    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
 
   realtime.subscriptions.broadcast:
-    status: implemented
-    symbols:
-      - BroadcastJoinConfig.replicationReady
-    supporting_symbols:
-      - RealtimeMessageV2.eventType
-      - RealtimeMessageV2.EventType.init
-      - RealtimeMessageV2.EventType.rawValue
+    status: not_implemented
+    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
   realtime.subscriptions.postgres_changes:
-    status: implemented
-    symbols:
-      - RealtimeChannelV2.onPostgresChange
+    status: not_implemented
+    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
   realtime.subscriptions.subscribe_presence:
-    status: implemented
-    symbols:
-      - RealtimeChannelV2.onPresenceChange
+    status: not_implemented
+    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
   realtime.subscriptions.postgres_changes_filter:
-    status: implemented
-    symbols:
-      - RealtimePostgresFilter.like
-      - RealtimePostgresFilter.ilike
-      - RealtimePostgresFilter.match
-      - RealtimePostgresFilter.imatch
-      - RealtimePostgresFilter.is
-      - RealtimePostgresFilter.isDistinct
-      - RealtimePostgresFilter.not
-      - RealtimePostgresFilter.and
-      - RealtimePostgresIsValue
-      - RealtimePostgresIsValue.null
-      - RealtimePostgresIsValue.true
-      - RealtimePostgresIsValue.false
-      - RealtimePostgresIsValue.unknown
+    status: not_implemented
+    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
   realtime.subscriptions.private_channel:
-    status: implemented
-    symbols:
-      - RealtimeChannelConfig.isPrivate
+    status: not_implemented
+    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
   realtime.subscriptions.broadcast_self:
-    status: implemented
-    symbols:
-      - BroadcastJoinConfig.receiveOwnBroadcasts
+    status: not_implemented
+    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
   realtime.subscriptions.broadcast_ack:
-    status: implemented
-    symbols:
-      - BroadcastJoinConfig.acknowledgeBroadcasts
+    status: not_implemented
+    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
   realtime.subscriptions.broadcast_replay:
-    status: implemented
-    symbols:
-      - BroadcastJoinConfig.replay
-    supporting_symbols:
-      - ReplayOption
-      - ReplayOption.init
-  realtime.subscriptions.postgres_changes_multiple_filters: not_implemented
+    status: not_implemented
+    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
+  realtime.subscriptions.postgres_changes_multiple_filters:
+    status: not_implemented
+    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
 
   realtime.presence.track:
-    status: implemented
-    symbols:
-      - RealtimeChannelV2.track
+    status: not_implemented
+    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
   realtime.presence.untrack:
-    status: implemented
-    symbols:
-      - RealtimeChannelV2.untrack
-  realtime.presence.presence_state: not_implemented
+    status: not_implemented
+    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
+  realtime.presence.presence_state:
+    status: not_implemented
+    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
   realtime.presence.presence_key:
-    status: implemented
-    symbols:
-      - PresenceJoinConfig.key
+    status: not_implemented
+    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
 
   # Swift always has a native WebSocket (URLSessionWebSocketTask); unlike
   # supabase-js, there's no runtime (Node <22, Cloudflare Workers, Deno) that
@@ -1702,35 +1644,23 @@ features:
   # transport is always the internal URLSessionWebSocket.
   realtime.configuration.custom_websocket_transport: not_applicable
   realtime.configuration.reconnect_backoff:
-    status: partially_implemented
-    note: "RealtimeClientOptions.reconnectDelay configures a fixed base delay; there is no hook to supply a custom attempt-count-to-delay function — the backoff curve itself (ConnectionManager.reconnectBackoff, built on RetryPolicy's equal-jitter exponential) is hardcoded."
+    status: not_implemented
+    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
   realtime.configuration.heartbeat_interval:
-    status: implemented
-    note: "Set via the heartbeatInterval parameter of RealtimeClientOptions.init; the backing stored property is internal, not public."
-    symbols:
-      - RealtimeClientOptions.init
+    status: not_implemented
+    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
   realtime.configuration.access_token_callback:
-    status: implemented
-    note: "Set via the accessToken parameter of RealtimeClientOptions.init; the backing stored property is package-visibility, not public."
-    symbols:
-      - RealtimeClientOptions.init
+    status: not_implemented
+    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
   realtime.configuration.deferred_disconnect:
-    status: implemented
-    note: "Set via the disconnectOnEmptyChannelsAfter parameter of RealtimeClientOptions.init; the backing stored property is internal, not public."
-    symbols:
-      - RealtimeClientOptions.init
+    status: not_implemented
+    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
   realtime.configuration.custom_logger:
-    status: implemented
-    note: "Set via the logger/logLevel parameters of RealtimeClientOptions.init; the backing stored properties are internal/package, not public."
-    symbols:
-      - RealtimeClientOptions.init
-    supporting_symbols:
-      - LogLevel.init
-      - LogLevel.rawValue
+    status: not_implemented
+    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
   realtime.configuration.binary_protocol:
-    status: implemented
-    no_public_symbols: true
-    note: "Always on: the client only speaks protocol 2.0.0 (vsn=2.0.0), so there is no option to select it. Protocol 1.0.0 was removed in v3."
+    status: not_implemented
+    note: "v3 public API lands in the Phase 2 stack (SDK-2103…SDK-2108)"
 
   # ── Storage ────────────────────────────────────────────────────────────────
 

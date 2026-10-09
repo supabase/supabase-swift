@@ -23,14 +23,6 @@ struct HomeView: View {
         Label("Database", systemImage: "cylinder.split.1x2")
       }
 
-      // Realtime Tab
-      NavigationStack {
-        RealtimeExamplesView()
-      }
-      .tabItem {
-        Label("Realtime", systemImage: "bolt")
-      }
-
       // Storage Tab
       NavigationStack {
         StorageExamplesView()

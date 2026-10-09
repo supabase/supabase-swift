@@ -15,8 +15,6 @@ final class AppViewModel {
   var session: Session?
   var selectedChannel: Channel?
 
-  var realtimeConnectionStatus: RealtimeClientStatus?
-
   init() {
     Task {
       for await (event, session) in supabase.auth.authStateChanges {
@@ -25,18 +23,6 @@ final class AppViewModel {
           return
         }
         self.session = session
-
-        if session == nil {
-          for subscription in supabase.channels {
-            await subscription.unsubscribe()
-          }
-        }
-      }
-    }
-
-    Task {
-      for await status in supabase.realtimeV2.statusChange {
-        realtimeConnectionStatus = status
       }
     }
   }

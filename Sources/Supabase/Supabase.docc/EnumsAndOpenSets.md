@@ -16,10 +16,9 @@ A value stays an `enum` when the set of cases is fixed by design:
 
 - The cases carry associated values, so a struct cannot express them: `AuthResponse`,
   `VerifyOTPResponse`, `OAuthAuthorizationDetailsResponse`, `AudienceClaim`, `SignedURLResult`,
-  `DownloadBehavior`, `AnyAction`, `RealtimePostgresFilter`, `JSONValue`.
+  `DownloadBehavior`, `RealtimePostgresFilter`, `JSONValue`.
 - The SDK has to implement each case, so a value it has no code for is meaningless:
-  `AuthFlowType`, `RealtimePostgresIsValue`, `PostgrestFilterOperator`, `PostgresChangeEvent`
-  (each event maps to its own `PostgresAction` type).
+  `AuthFlowType`, `RealtimePostgresIsValue`, `PostgrestFilterOperator`, `PostgresChangeEvent`.
 
 Switch over these exhaustively. Adding a case to one of them is a breaking change and only ships
 in a major release, so the compiler tells you exactly where to look when you upgrade.
@@ -36,9 +35,9 @@ case .failure(let error): ...
 A value is a `RawRepresentable` struct when the set can grow without a major release:
 
 - The server defines it, so a new value can appear before the SDK has a name for it: `Provider`,
-  `FactorStatus`, `PushStatus`, `LogLevel`, `RealtimeMessageV2.EventType`.
+  `FactorStatus`.
 - Consumers `switch` over it and the SDK expects to add members in minor releases:
-  `AuthChangeEvent`, `RealtimeClientStatus`, `RealtimeChannelStatus`, `HeartbeatStatus`.
+  `AuthChangeEvent`.
 
 These types conform to `RawRepresentable`, `Hashable`, `Sendable` and `ExpressibleByStringLiteral`.
 The known values are `static let` members, so call sites read the same as they did with an
@@ -58,7 +57,7 @@ Equality, `contains`, and string literals work as you would expect:
 ```swift
 if event == .signedIn { ... }
 if [.signedIn, .tokenRefreshed].contains(event) { ... }
-let level: LogLevel = "debug"  // a value the SDK has no member for yet
+let provider: Provider = "some-new-provider"  // a value the SDK has no member for yet
 ```
 
 `init(rawValue:)` never fails. An unrecognized value round-trips through `rawValue` instead of
