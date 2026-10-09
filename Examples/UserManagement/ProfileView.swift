@@ -174,7 +174,7 @@ struct ProfileView: View {
       .upload(
         path: filePath,
         data: data,
-        options: FileOptions(contentType: "image/jpeg", shouldUpsert: true)
+        options: UploadOptions(contentType: "image/jpeg", upsert: true)
       )
 
     return filePath

@@ -4006,3 +4006,43 @@ do {
   signInAgain()
 }
 ```
+
+## `UploadOptions` replaces `FileOptions`; `cacheControl` is a `CacheControl`; `duplex` is gone
+
+`upload`, `update` and `uploadToSignedURL` take `UploadOptions`. Its fields are `contentType`,
+`cacheControl: CacheControl`, `upsert`, `metadata` and `headers: HTTPFields`.
+
+| Before | After |
+| --- | --- |
+| `FileOptions(cacheControl: "14400")` | `UploadOptions(cacheControl: .maxAge(.seconds(14400)))` |
+| `FileOptions(shouldUpsert: true)` | `UploadOptions(upsert: true)` |
+| `FileOptions(headers: ["X-Mode": "test"])` | `UploadOptions(headers: [.init("X-Mode")!: "test"])` |
+| `FileOptions(duplex: "half")` | *(removed)* |
+| `uploadToSignedURL(..., options: nil)` | `uploadToSignedURL(...)` |
+
+`cacheControl` used to be a `String` of seconds that the SDK wrapped as `max-age=`, so
+`"no-cache"` was impossible to send (#550). `CacheControl.rawValue` is now the header verbatim:
+`.maxAge(_:)`, `.noCache`, `.noStore`, or any string literal. `duplex` only meant something to
+`fetch()` in JavaScript. `update(path:)` sends `PUT`, which always replaces, so it ignores
+`upsert` (and reports an issue in debug builds when it is set); a signed-URL upload takes
+upsert from its token and no longer sends an `x-upsert` header. A metadata value that cannot
+be encoded as JSON throws `StorageError` with kind `.invalidRequest` instead of silently
+sending `{}`.
+
+This is a compile error at every call site that names `FileOptions`, `shouldUpsert`, `duplex`,
+or passes `cacheControl` as a string.
+
+```swift
+// Before
+try await bucket.upload(
+  path: "a.png", data: data,
+  options: FileOptions(cacheControl: "86400", contentType: "image/png", shouldUpsert: true)
+)
+
+// After
+try await bucket.upload(
+  path: "a.png", data: data,
+  options: UploadOptions(
+    contentType: "image/png", cacheControl: .maxAge(.seconds(86400)), upsert: true)
+)
+```
