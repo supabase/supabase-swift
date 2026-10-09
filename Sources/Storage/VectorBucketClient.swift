@@ -43,9 +43,9 @@ public struct VectorBucketClient: Sendable {
   /// The name of the vector bucket this client operates on.
   public let vectorBucketName: String
 
-  private let api: StorageApi
+  private let api: StorageAPI
 
-  init(vectorBucketName: String, api: StorageApi) {
+  init(vectorBucketName: String, api: StorageAPI) {
     self.vectorBucketName = vectorBucketName
     self.api = api
   }
@@ -86,7 +86,7 @@ public struct VectorBucketClient: Sendable {
         method: .post,
         url: api.configuration.url.appendingPathComponent("vector/CreateIndex")
       ),
-      body: JSONEncoder.unconfiguredEncoder.encode(
+      body: JSONEncoder.storage.encode(
         CreateIndexBody(
           vectorBucketName: vectorBucketName,
           indexName: indexName,
@@ -117,11 +117,11 @@ public struct VectorBucketClient: Sendable {
         method: .post,
         url: api.configuration.url.appendingPathComponent("vector/GetIndex")
       ),
-      body: JSONEncoder.unconfiguredEncoder.encode(
+      body: JSONEncoder.storage.encode(
         VectorBucketIndexNameBody(vectorBucketName: vectorBucketName, indexName: indexName)
       )
     )
-    .decoded(decoder: .supabase())
+    .decoded()
     return response.index
   }
 
@@ -156,7 +156,7 @@ public struct VectorBucketClient: Sendable {
         method: .post,
         url: api.configuration.url.appendingPathComponent("vector/ListIndexes")
       ),
-      body: JSONEncoder.unconfiguredEncoder.encode(
+      body: JSONEncoder.storage.encode(
         ListIndexesBody(
           vectorBucketName: vectorBucketName,
           prefix: prefix,
@@ -165,7 +165,7 @@ public struct VectorBucketClient: Sendable {
         )
       )
     )
-    .decoded(decoder: .supabase())
+    .decoded()
     return ListVectorIndexesResponse(indexes: response.indexes, nextToken: response.nextToken)
   }
 
@@ -185,7 +185,7 @@ public struct VectorBucketClient: Sendable {
         method: .post,
         url: api.configuration.url.appendingPathComponent("vector/DeleteIndex")
       ),
-      body: JSONEncoder.unconfiguredEncoder.encode(
+      body: JSONEncoder.storage.encode(
         VectorBucketIndexNameBody(vectorBucketName: vectorBucketName, indexName: indexName)
       )
     )
