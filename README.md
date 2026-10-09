@@ -127,6 +127,33 @@ for try await chunk in response.body {
 }
 ```
 
+### Generate database types
+
+`supabase gen types --lang swift` writes `@Table` structs for your schema. It runs the
+`supabase-typegen` executable, which ships with each supabase-swift release. The CLI reads your
+supabase-swift version from `Package.resolved` and downloads the matching build itself. You need
+to install it by hand only when the CLI cannot do that, for example without network access. It then
+uses the `supabase-typegen` it finds on your `PATH`. Install the build that matches the
+supabase-swift version your project uses:
+
+```bash
+VERSION=2.55.1 # your supabase-swift version
+ASSET=supabase-typegen-macos-universal.tar.gz # or supabase-typegen-linux-x86_64.tar.gz
+mkdir -p ~/.local/bin
+curl -fsSL "https://github.com/supabase/supabase-swift/releases/download/v$VERSION/$ASSET" | tar -xz -C ~/.local/bin
+supabase-typegen --version
+```
+
+Put `~/.local/bin` on your `PATH` if it is not there yet. Then generate the file:
+
+```bash
+supabase gen types --lang swift --local > Sources/App/Database.swift
+```
+
+On macOS, a binary you download with a browser is quarantined, and Gatekeeper blocks it. `curl`
+does not set the quarantine flag. To clear it from a browser download, run
+`xattr -d com.apple.quarantine ~/.local/bin/supabase-typegen`.
+
 Additional examples are available in the [Examples](https://github.com/supabase/supabase-swift/tree/main/Examples) directory.
 
 ## Support Policy

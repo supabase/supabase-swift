@@ -306,3 +306,6 @@ Subrange
 fkey
 Xfrontend
 Xswiftc
+linux
+xattr
+darwin

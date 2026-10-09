@@ -6,7 +6,8 @@
       "prerelease": true,
       "prerelease-type": "beta",
       "extra-files": [
-        "Sources/Helpers/Version.swift"
+        "Sources/Helpers/Version.swift",
+        "tools/supabase-typegen/Sources/SupabaseTypegen/Version.swift"
       ]
     }
   },
