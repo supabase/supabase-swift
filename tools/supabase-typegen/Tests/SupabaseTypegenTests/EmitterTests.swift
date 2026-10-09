@@ -17,6 +17,7 @@ import Testing
 struct GoldenCase: CustomTestStringConvertible, Sendable {
   var fixture: String
   var arguments: [String]
+  /// The golden file, relative to the repository root.
   var golden: String
 
   var schemas: [String] {
@@ -25,43 +26,62 @@ struct GoldenCase: CustomTestStringConvertible, Sendable {
 
   var testDescription: String { golden }
 
-  static let all = [
-    GoldenCase(fixture: "generator_metadata", arguments: [], golden: "generator_metadata"),
-    GoldenCase(
-      fixture: "postgrest_typegen_metadata",
-      arguments: ["--access-control", "public"],
-      golden: "postgrest_typegen_metadata_public"
-    ),
-    // Without `inventory`, whose `books` clashes with `public.inventory_books`.
-    GoldenCase(
-      fixture: "hostile_metadata",
-      arguments: ["--schema", "public", "--schema", #"my"schema"#],
-      golden: "hostile_metadata"
-    ),
-  ]
+  /// `#filePath` is `tools/supabase-typegen/Tests/SupabaseTypegenTests/EmitterTests.swift`.
+  var url: URL {
+    URL(fileURLWithPath: #filePath)
+      .deletingLastPathComponent()
+      .appendingPathComponent("../../../../\(golden)")
+      .standardized
+  }
+
+  static let integration = GoldenCase(
+    fixture: "generator_metadata",
+    arguments: [],
+    golden: "tools/supabase-typegen/Tests/SupabaseTypegenTests/__Goldens__/"
+      + "generator_metadata.swift.golden"
+  )
+
+  // The goldens below are the sources of test targets in the root package, so `swift build
+  // --build-tests` there compiles them against `PostgrestMacros`. Each fixture needs its own
+  // target: they declare types with the same names.
+  static let integrationPublic = GoldenCase(
+    fixture: "generator_metadata",
+    arguments: ["--access-control", "public"],
+    golden: "Tests/SupabaseTypegenOutputTests/Generated.swift"
+  )
+
+  static let postgrestTypegen = GoldenCase(
+    fixture: "postgrest_typegen_metadata",
+    arguments: ["--access-control", "public"],
+    golden: "Tests/SupabaseTypegenPostgrestTypegenOutputTests/Generated.swift"
+  )
+
+  // Without `inventory`, whose `books` clashes with `public.inventory_books`.
+  static let hostile = GoldenCase(
+    fixture: "hostile_metadata",
+    arguments: ["--access-control", "public", "--schema", "public", "--schema", #"my"schema"#],
+    golden: "Tests/SupabaseTypegenHostileOutputTests/Generated.swift"
+  )
+
+  static let all = [integration, integrationPublic, postgrestTypegen, hostile]
 }
 
 @Suite
 struct EmitterTests {
-  private static let goldens = URL(fileURLWithPath: #filePath)
-    .deletingLastPathComponent()
-    .appendingPathComponent("__Goldens__")
-
   @Test(arguments: GoldenCase.all)
   func outputMatchesTheGoldenFile(_ golden: GoldenCase) throws {
     let result = run(arguments: golden.arguments) { Fixture.data(golden.fixture) }
     #expect(result.exitCode == 0, "\(result.standardError)")
 
-    let url = Self.goldens.appendingPathComponent("\(golden.golden).swift.golden")
     if ProcessInfo.processInfo.environment["SUPABASE_TYPEGEN_RECORD"] == "1" {
-      try Data(result.standardOutput.utf8).write(to: url)
-      Issue.record("Recorded \(url.lastPathComponent); run again without SUPABASE_TYPEGEN_RECORD")
+      try Data(result.standardOutput.utf8).write(to: golden.url)
+      Issue.record("Recorded \(golden.golden); run again without SUPABASE_TYPEGEN_RECORD")
       return
     }
-    let expected = try String(contentsOf: url, encoding: .utf8)
+    let expected = try String(contentsOf: golden.url, encoding: .utf8)
     #expect(
       result.standardOutput == expected,
-      "Output differs from \(url.lastPathComponent); record with SUPABASE_TYPEGEN_RECORD=1"
+      "Output differs from \(golden.golden); record with SUPABASE_TYPEGEN_RECORD=1"
     )
   }
 
@@ -85,7 +105,7 @@ struct EmitterTests {
 
   @Test
   func hostileFixtureReportsEveryRenameAndFallback() {
-    let result = run(arguments: GoldenCase.all[2].arguments) { Fixture.data("hostile_metadata") }
+    let result = run(arguments: GoldenCase.hostile.arguments) { Fixture.data("hostile_metadata") }
     let notes = [
       "public.coding_keys is named CodingKeysTable: "
         + "CodingKeys would shadow a type the generated code uses",

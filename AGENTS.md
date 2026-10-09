@@ -473,9 +473,16 @@ the generator decides `@Column` with the macro's own function.
 swift build --package-path tools/supabase-typegen
 swift test --package-path tools/supabase-typegen
 
-# Rewrite the golden files in Tests/SupabaseTypegenTests/__Goldens__ after an intended change
+# Rewrite the golden files after an intended change
 SUPABASE_TYPEGEN_RECORD=1 swift test --package-path tools/supabase-typegen --filter EmitterTests
 ```
+
+Three of the goldens are the `Generated.swift` sources of root test targets
+(`SupabaseTypegenOutputTests`, `SupabaseTypegenPostgrestTypegenOutputTests`,
+`SupabaseTypegenHostileOutputTests`), built with `-enable-library-evolution`. A change to the macros
+or to `PostgREST` that breaks generated code fails `swift test` at the root; a generator change that
+is not recorded fails `EmitterTests`. `SupabaseTypegenOutputTests` also runs queries through the
+generated types.
 
 A Postgres enum becomes a Swift `enum` (`String, Codable, Hashable, Sendable,
 PostgrestFilterValue`), generated for every enum in a selected schema and for any other enum a

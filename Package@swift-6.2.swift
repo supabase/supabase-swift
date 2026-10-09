@@ -201,6 +201,28 @@ let package = Package(
         "PostgrestMacrosPlugin",
       ]
     ),
+    // The sources of these three are `supabase-typegen`'s golden output, written by its
+    // `EmitterTests`; building them is the check that generated code still compiles.
+    .testTarget(
+      name: "SupabaseTypegenOutputTests",
+      dependencies: [
+        .product(name: "HTTPTypes", package: "swift-http-types"),
+        "PostgrestMacros",
+        "TestHelpers",
+      ]
+    ),
+    .testTarget(
+      name: "SupabaseTypegenPostgrestTypegenOutputTests",
+      dependencies: [
+        .product(name: "HTTPTypes", package: "swift-http-types"),
+        "PostgrestMacros",
+        "TestHelpers",
+      ]
+    ),
+    .testTarget(
+      name: "SupabaseTypegenHostileOutputTests",
+      dependencies: ["PostgrestMacros"]
+    ),
     .target(
       name: "Realtime",
       dependencies: [
@@ -324,6 +346,12 @@ for target in package.targets {
   // default `@MainActor` isolation (SE-0466). The SDK targets themselves stay nonisolated.
   if target.name == "DefaultIsolationTests" {
     swiftSettings.append(.defaultIsolation(MainActor.self))
+  }
+
+  // Generated code is compiled the way an app's library target would be: with library evolution,
+  // so the access levels `--access-control public` and the macros write are checked too.
+  if target.name.hasPrefix("SupabaseTypegen") {
+    swiftSettings.append(.unsafeFlags(["-enable-library-evolution"]))
   }
 
   target.swiftSettings = swiftSettings
