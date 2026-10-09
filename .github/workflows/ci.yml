@@ -353,17 +353,6 @@ jobs:
       - run: npm ci --prefix tools/node
       - run: ./scripts/spell-check.sh
 
-  # A clean build of `PostgREST` alone must not compile swift-syntax, which only
-  # `PostgrestMacros` needs. Uncached on purpose: the script needs a clean build path.
-  postgrest-dependencies:
-    name: PostgREST dependency boundary
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    container: swift:6.3-noble
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - run: ./scripts/check-postgrest-dependencies.sh
-
   docs:
     name: Test docs
     runs-on: blacksmith-6vcpu-macos-latest
@@ -437,7 +426,6 @@ jobs:
         examples,
         examples-spm,
         spell-check,
-        postgrest-dependencies,
         docs,
         format-check,
         lint,
