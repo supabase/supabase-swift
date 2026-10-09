@@ -100,6 +100,19 @@
       "comment": null
     },
     {
+      "id": 16771,
+      "schema": "public",
+      "name": "temporal_values",
+      "rls_enabled": false,
+      "rls_forced": false,
+      "replica_identity": "DEFAULT",
+      "bytes": 8192,
+      "size": "8192 bytes",
+      "live_rows_estimate": 0,
+      "dead_rows_estimate": 0,
+      "comment": null
+    },
+    {
       "id": 16650,
       "schema": "public",
       "name": "todos",
@@ -645,6 +658,90 @@
       "comment": null
     },
     {
+      "table_id": 16771,
+      "schema": "public",
+      "table": "temporal_values",
+      "id": "16771.2",
+      "ordinal_position": 2,
+      "name": "at_instant",
+      "default_value": null,
+      "data_type": "timestamp with time zone",
+      "format": "timestamptz",
+      "type_schema": "pg_catalog",
+      "is_identity": false,
+      "identity_generation": null,
+      "is_generated": false,
+      "is_nullable": false,
+      "is_updatable": true,
+      "is_unique": false,
+      "check": null,
+      "enums": [],
+      "comment": null
+    },
+    {
+      "table_id": 16771,
+      "schema": "public",
+      "table": "temporal_values",
+      "id": "16771.3",
+      "ordinal_position": 3,
+      "name": "at_local",
+      "default_value": null,
+      "data_type": "timestamp without time zone",
+      "format": "timestamp",
+      "type_schema": "pg_catalog",
+      "is_identity": false,
+      "identity_generation": null,
+      "is_generated": false,
+      "is_nullable": false,
+      "is_updatable": true,
+      "is_unique": false,
+      "check": null,
+      "enums": [],
+      "comment": null
+    },
+    {
+      "table_id": 16771,
+      "schema": "public",
+      "table": "temporal_values",
+      "id": "16771.1",
+      "ordinal_position": 1,
+      "name": "id",
+      "default_value": null,
+      "data_type": "integer",
+      "format": "int4",
+      "type_schema": "pg_catalog",
+      "is_identity": true,
+      "identity_generation": "ALWAYS",
+      "is_generated": false,
+      "is_nullable": false,
+      "is_updatable": true,
+      "is_unique": false,
+      "check": null,
+      "enums": [],
+      "comment": null
+    },
+    {
+      "table_id": 16771,
+      "schema": "public",
+      "table": "temporal_values",
+      "id": "16771.4",
+      "ordinal_position": 4,
+      "name": "on_day",
+      "default_value": null,
+      "data_type": "date",
+      "format": "date",
+      "type_schema": "pg_catalog",
+      "is_identity": false,
+      "identity_generation": null,
+      "is_generated": false,
+      "is_nullable": false,
+      "is_updatable": true,
+      "is_unique": false,
+      "check": null,
+      "enums": [],
+      "comment": null
+    },
+    {
       "table_id": 16650,
       "schema": "public",
       "table": "todos",
@@ -983,6 +1080,12 @@
       "table_id": 16742,
       "schema": "public",
       "table_name": "replies",
+      "name": "id"
+    },
+    {
+      "table_id": 16771,
+      "schema": "public",
+      "table_name": "temporal_values",
       "name": "id"
     },
     {
@@ -7648,6 +7751,16 @@
       "type_relation_id": null
     },
     {
+      "id": 16772,
+      "name": "_temporal_values",
+      "schema": "public",
+      "format": "temporal_values[]",
+      "enums": [],
+      "attributes": [],
+      "comment": null,
+      "type_relation_id": null
+    },
+    {
       "id": 16651,
       "name": "_todos",
       "schema": "public",
@@ -7756,6 +7869,16 @@
       "attributes": [],
       "comment": null,
       "type_relation_id": 16742
+    },
+    {
+      "id": 16773,
+      "name": "temporal_values",
+      "schema": "public",
+      "format": "temporal_values",
+      "enums": [],
+      "attributes": [],
+      "comment": null,
+      "type_relation_id": 16771
     },
     {
       "id": 16652,

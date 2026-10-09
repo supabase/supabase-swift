@@ -70,6 +70,14 @@ struct Replies {
   @Default var approved: Bool
 }
 
+@Table("temporal_values")
+struct TemporalValues {
+  @PrimaryKey @Generated var id: Int
+  var atInstant: Date
+  var atLocal: Date
+  var onDay: Date
+}
+
 @Table("todos")
 struct Todos {
   @PrimaryKey @Default var id: UUID

@@ -482,7 +482,10 @@ Three of the goldens are the `Generated.swift` sources of root test targets
 `SupabaseTypegenHostileOutputTests`), built with `-enable-library-evolution`. A change to the macros
 or to `PostgREST` that breaks generated code fails `swift test` at the root; a generator change that
 is not recorded fails `EmitterTests`. `SupabaseTypegenOutputTests` also runs queries through the
-generated types.
+generated types. `IntegrationTests` compiles the same file through the symlink
+`Tests/IntegrationTests/Postgrest/Generated.swift` (a test target cannot depend on another), so the
+Postgrest integration tests query the integration schema with its generated models. After changing
+a migration there, refresh the fixtures and record the goldens.
 
 A Postgres enum becomes a Swift `enum` (`String, Codable, Hashable, Sendable,
 PostgrestFilterValue`), generated for every enum in a selected schema and for any other enum a
