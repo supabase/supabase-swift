@@ -287,10 +287,6 @@ struct StorageRequests: Sendable {
       head: HTTPRequest(method: .get, url: url("object/info/\(objectPath(bucket, key))")))
   }
 
-  func exists(bucket: String, key: ObjectKey) -> StorageRequest {
-    StorageRequest(head: HTTPRequest(method: .head, url: url("object/\(objectPath(bucket, key))")))
-  }
-
   /// A transform routes to `render/image/public`; the plain public object route otherwise.
   func publicURL(bucket: String, key: ObjectKey, transform: [URLQueryItem], query: [URLQueryItem])
     -> URL
