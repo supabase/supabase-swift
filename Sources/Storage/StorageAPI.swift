@@ -1,5 +1,6 @@
 import Foundation
 import HTTPTypes
+import IssueReporting
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -40,7 +41,8 @@ struct StorageAPI: Sendable {
   ///   headers, and transport.
   init(configuration: StorageClientConfiguration) {
     var configuration = configuration
-    if HTTPFields(configuration.headers)[.xClientInfo] == nil {
+    let headers = HTTPFields(configuration.headers)
+    if headers[.xClientInfo] == nil {
       configuration.headers["X-Client-Info"] = "storage-swift/\(version)"
     }
 
@@ -104,7 +106,8 @@ struct StorageAPI: Sendable {
     let http = HTTPClient(
       configuration: configuration.http,
       retrying: retry,
-      appending: [LoggerInterceptor(logger: configuration.logger)])
+      appending: [LoggerInterceptor(logger: configuration.logger)]
+    )
 
     var head = request.head
     head.headerFields = HTTPFields(configuration.headers).merging(with: head.headerFields)
@@ -124,7 +127,7 @@ struct StorageAPI: Sendable {
       }
     } catch {
       // Only the network layer's own failures are relabelled. `CancellationError`, and anything
-      // thrown by user code that runs inside `stream` (a custom `ClientTransport` or middleware, an `accessToken` closure),
+      // thrown by user code that runs inside `stream` (a custom `ClientTransport` or middleware),
       // propagate as themselves.
       guard let urlError = error as? URLError else { throw error }
       // `URLSession` reports a cancelled `Task` as `URLError(.cancelled)`. A `.cancelled` with no

@@ -10,10 +10,19 @@ public import Logging
 /// ```swift
 /// let configuration = StorageClientConfiguration(
 ///   url: URL(string: "https://project.supabase.co/storage/v1")!,
-///   headers: ["Authorization": "Bearer \(accessToken)"]
+///   headers: ["apikey": key],
+///   http: HTTPClientConfiguration(
+///     middlewares: [AccessTokenMiddleware { try await session.accessToken }]
+///   )
 /// )
 /// let storage = StorageClient(configuration: configuration)
 /// ```
+///
+/// A user's token enters a request through the middleware chain in ``http``, never through a
+/// configuration field: `AccessTokenMiddleware` resolves it for every request, so a token that
+/// rotates is always current, and `SupabaseClient` installs the same middleware for its own
+/// Storage client. A static `Authorization` in ``headers`` is sent as-is and wins over any
+/// middleware, which only sets the header when the request has none.
 ///
 /// ## Topics
 ///
@@ -33,7 +42,10 @@ public struct StorageClientConfiguration: Sendable {
   /// The base URL of the Storage API endpoint (e.g. `https://project.supabase.co/storage/v1`).
   public var url: URL
 
-  /// HTTP headers sent with every request, such as the `Authorization` header.
+  /// HTTP headers sent with every request.
+  ///
+  /// A static `Authorization` here wins over any middleware in ``http``. For a token that
+  /// rotates, leave it out and add an `AccessTokenMiddleware` instead.
   public var headers: [String: String]
 
   /// The transport and middleware chain every request goes through.
