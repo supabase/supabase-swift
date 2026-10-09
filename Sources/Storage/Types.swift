@@ -2,7 +2,7 @@ public import Foundation
 
 /// Options for searching and paginating files within a bucket.
 ///
-/// Pass a ``SearchOptions`` value to ``StorageFileApi/list(path:options:)`` to control which files
+/// Pass a ``SearchOptions`` value to ``StorageBucket/list(path:options:)`` to control which files
 /// are returned and how they are ordered.
 ///
 /// ```swift
@@ -63,7 +63,7 @@ public struct SearchOptions: Encodable, Sendable {
   }
 }
 
-/// A column-and-direction pair used to sort ``StorageFileApi/list(path:options:)`` results.
+/// A column-and-direction pair used to sort ``StorageBucket/list(path:options:)`` results.
 ///
 /// ```swift
 /// SortBy(column: "name", order: .ascending)
@@ -172,7 +172,7 @@ public struct FileOptions: Sendable {
 
 /// A single signed URL returned as part of a batch sign operation.
 ///
-/// Returned by ``StorageFileApi/createSignedURLs(paths:expiresIn:download:cacheNonce:)-(_,_,DownloadBehavior?,_)``
+/// Returned by ``StorageBucket/createSignedURLs(paths:expiresIn:download:cacheNonce:)-(_,_,DownloadBehavior?,_)``
 /// (the legacy `[SignedURL]` overload). Prefer the ``SignedURLResult`` overload for new code.
 ///
 /// ## Topics
@@ -205,7 +205,7 @@ public struct SignedURL: Decodable, Sendable {
   }
 }
 
-/// Represents the per-item result of a ``StorageFileApi/createSignedURLs(paths:expiresIn:download:cacheNonce:)-(_,_,DownloadBehavior?,_)`` call.
+/// Represents the per-item result of a ``StorageBucket/createSignedURLs(paths:expiresIn:download:cacheNonce:)-(_,_,DownloadBehavior?,_)`` call.
 ///
 /// It is guaranteed that exactly one case applies per item: either the URL was signed
 /// successfully, or the path did not exist or was inaccessible.
@@ -268,9 +268,9 @@ public enum SignedURLResult: Sendable {
   }
 }
 
-/// A signed upload URL created by ``StorageFileApi/createSignedUploadURL(path:options:)``.
+/// A signed upload URL created by ``StorageBucket/createSignedUploadURL(path:options:)``.
 ///
-/// Pass ``token`` to ``StorageFileApi/uploadToSignedURL(path:token:data:options:)`` to perform the
+/// Pass ``token`` to ``StorageBucket/uploadToSignedURL(path:token:data:options:)`` to perform the
 /// authenticated upload.
 ///
 /// ## Topics
@@ -329,7 +329,7 @@ public struct SignedURLUploadResponse: Sendable {
 
 /// Options for creating a signed upload URL.
 ///
-/// Pass this to ``StorageFileApi/createSignedUploadURL(path:options:)`` to control whether an
+/// Pass this to ``StorageBucket/createSignedUploadURL(path:options:)`` to control whether an
 /// existing file at the destination path should be overwritten.
 ///
 /// ## Topics
@@ -351,7 +351,7 @@ public struct CreateSignedUploadURLOptions: Sendable {
 
 /// Options for specifying a destination bucket when moving or copying files.
 ///
-/// Pass to ``StorageFileApi/move(from:to:options:)`` or ``StorageFileApi/copy(from:to:options:)``
+/// Pass to ``StorageBucket/move(from:to:options:)`` or ``StorageBucket/copy(from:to:options:)``
 /// to move or copy a file across buckets.
 ///
 /// ## Topics
@@ -373,8 +373,8 @@ public struct DestinationOptions: Sendable {
 
 /// Metadata about a file stored in a Supabase Storage bucket.
 ///
-/// ``FileObject`` is returned by ``StorageFileApi/list(path:options:)`` and
-/// ``StorageFileApi/remove(paths:)``.
+/// ``FileObject`` is returned by ``StorageBucket/list(path:options:)`` and
+/// ``StorageBucket/remove(paths:)``.
 ///
 /// ## Topics
 ///
@@ -472,7 +472,7 @@ public struct FileObject: Identifiable, Hashable, Decodable, Sendable {
 
 /// Extended metadata about a file stored in Supabase Storage, returned by the v2 API.
 ///
-/// ``FileObjectV2`` is returned by ``StorageFileApi/info(path:)`` and provides richer metadata
+/// ``FileObjectV2`` is returned by ``StorageBucket/info(path:)`` and provides richer metadata
 /// compared to ``FileObject``.
 ///
 /// ## Topics
@@ -561,7 +561,7 @@ public struct FileObjectV2: Identifiable, Hashable, Decodable, Sendable {
 /// A Supabase Storage bucket.
 ///
 /// Buckets are the top-level containers for files. Retrieve bucket details with
-/// ``SupabaseStorageClient/bucket(_:)`` or ``SupabaseStorageClient/listBuckets()``.
+/// ``StorageClient/bucket(_:)`` or ``StorageClient/listBuckets()``.
 ///
 /// ## Topics
 ///
@@ -845,7 +845,7 @@ extension ImageFormat: Encodable {
 
 // MARK: - SortOrder
 
-/// Sort direction for ``StorageFileApi/list(path:options:)`` results.
+/// Sort direction for ``StorageBucket/list(path:options:)`` results.
 ///
 /// ```swift
 /// SortBy(column: "name", order: .ascending)
@@ -974,9 +974,9 @@ public struct BucketOptions: Sendable {
 
 /// Options for server-side image transformation applied before the asset is served to the client.
 ///
-/// Pass a ``TransformOptions`` value to ``StorageFileApi/download(path:options:query:cacheNonce:)``,
-/// ``StorageFileApi/publicURL(path:download:options:cacheNonce:)-(_,DownloadBehavior?,_,_)``, or
-/// ``StorageFileApi/createSignedURL(path:expiresIn:download:transform:cacheNonce:)-(_,_,DownloadBehavior?,_,_)`` to resize,
+/// Pass a ``TransformOptions`` value to ``StorageBucket/download(path:options:query:cacheNonce:)``,
+/// ``StorageBucket/publicURL(path:download:options:cacheNonce:)-(_,DownloadBehavior?,_,_)``, or
+/// ``StorageBucket/createSignedURL(path:expiresIn:download:transform:cacheNonce:)-(_,_,DownloadBehavior?,_,_)`` to resize,
 /// reformat, or adjust the quality of images on the fly.
 ///
 /// ```swift
