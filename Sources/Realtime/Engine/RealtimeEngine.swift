@@ -86,7 +86,6 @@ package actor RealtimeEngine {
   }
 
   private struct ListenerRegistry {
-    var inbound: [String: [UUID: AsyncStream<ChannelInbound>.Continuation]] = [:]
     var channelStates: [String: [UUID: AsyncStream<ChannelMachine.State>.Continuation]] = [:]
     var connectionStates: [UUID: AsyncStream<ConnectionMachine.State>.Continuation] = [:]
   }
@@ -206,8 +205,7 @@ package actor RealtimeEngine {
       topic, with: RealtimeError(kind: .notSubscribed, message: "channel \(topic) was removed"))
     channels[topic] = nil
     mirror.removeChannel(topic)
-    registry.inbound[topic]?.values.forEach { $0.finish() }
-    registry.inbound[topic] = nil
+    mirror.finishInbound(topic)
     registry.channelStates[topic]?.values.forEach { $0.finish() }
     registry.channelStates[topic] = nil
     if channels.isEmpty { applyConnection(.lastChannelRemoved) }
@@ -258,20 +256,14 @@ package actor RealtimeEngine {
     return stream
   }
 
-  /// Every message on the topic, unbounded. Ending the iteration removes the listener.
-  package func inbound(_ topic: String) -> AsyncStream<ChannelInbound> {
-    let (stream, continuation) = AsyncStream<ChannelInbound>.makeStream(
-      bufferingPolicy: .unbounded)
-    let id = UUID()
-    continuation.onTermination = { [weak self] _ in
-      Task { await self?.forgetListener { $0.inbound[topic]?[id] = nil } }
-    }
-    registry.inbound[topic, default: [:]][id] = continuation
-    return stream
+  /// Every message on the topic, unbounded. Registers before it returns; ending the iteration
+  /// removes the listener.
+  package nonisolated func inbound(_ topic: String) -> AsyncStream<ChannelInbound> {
+    mirror.inbound(topic)
   }
 
-  package func listenerCount(_ topic: String) -> Int {
-    registry.inbound[topic]?.count ?? 0
+  package nonisolated func listenerCount(_ topic: String) -> Int {
+    mirror.listenerCount(topic)
   }
 
   private func forgetListener(_ remove: @Sendable (inout ListenerRegistry) -> Void) {
@@ -518,7 +510,7 @@ package actor RealtimeEngine {
         applyChannel(topic, .tokenRefreshed)
       }
     case .emitResubscribed:
-      registry.inbound[topic]?.values.forEach { $0.yield(.resubscribed) }
+      mirror.yield(.resubscribed, to: topic)
     case .resolveSubscribe:
       let waiters = channels[topic]?.subscribeWaiters ?? []
       channels[topic]?.subscribeWaiters = []
@@ -534,8 +526,7 @@ package actor RealtimeEngine {
           topic, payload: ["type": "presence", "event": "track", "payload": .object(payload)])
       }
     case .finishDataStreams:
-      registry.inbound[topic]?.values.forEach { $0.finish() }
-      registry.inbound[topic] = nil
+      mirror.finishInbound(topic)
     case .scheduleLinger(let delay):
       channels[topic]?.lingerTask?.cancel()
       channels[topic]?.lingerTask = Task {
@@ -927,29 +918,29 @@ package actor RealtimeEngine {
       applyChannel(message.topic, .serverErrored)
     case "presence_state":
       let change = channels[message.topic]?.presence.applyState(message.payload)
-      registry.inbound[message.topic]?.values.forEach { $0.yield(.message(message)) }
+      mirror.yield(.message(message), to: message.topic)
       change.map { yieldPresence($0, to: message.topic) }
     case "presence_diff":
       let change = channels[message.topic]?.presence.applyDiff(message.payload)
-      registry.inbound[message.topic]?.values.forEach { $0.yield(.message(message)) }
+      mirror.yield(.message(message), to: message.topic)
       if let change = change ?? nil { yieldPresence(change, to: message.topic) }
     default:
       if message.event == "system", message.payload["status"] == "error" {
         let text = message.payload["message"]?.stringValue ?? "system error"
         applyChannel(message.topic, .systemError(message: text))
       }
-      registry.inbound[message.topic]?.values.forEach { $0.yield(.message(message)) }
+      mirror.yield(.message(message), to: message.topic)
     }
   }
 
   private func yieldPresence(_ change: PresenceChange, to topic: String) {
-    registry.inbound[topic]?.values.forEach { $0.yield(.presenceChanged(change)) }
+    mirror.yield(.presenceChanged(change), to: topic)
   }
 
   private func handleBinary(_ data: Data) {
     do {
       let broadcast = try serializer.decodeBinary(data)
-      registry.inbound[broadcast.topic]?.values.forEach { $0.yield(.broadcast(broadcast)) }
+      mirror.yield(.broadcast(broadcast), to: broadcast.topic)
     } catch {
       logger.warning("dropping undecodable binary frame: \(error)")
     }
