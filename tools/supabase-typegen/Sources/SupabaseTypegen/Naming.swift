@@ -43,17 +43,18 @@ enum Naming {
 
   /// `snake_case` (or any other spelling) to `lowerCamelCase`, escaped. `1st_place` becomes
   /// `_1stPlace`, `class` becomes `` `class` ``.
+  /// `IN_PROGRESS` becomes `inProgress`.
   static func propertyName(_ name: String) -> String {
-    var words = words(of: name)
-    if let first = words.first {
-      words[0] = first.allSatisfy(\.isUppercase) ? first.lowercased() : lowercasedFirst(first)
-    }
-    return identifier(words.enumerated().map { $0 == 0 ? $1 : uppercasedFirst($1) }.joined())
+    let words = words(of: name)
+    guard let first = words.first else { return identifier("") }
+    let head = isAllCaps(first) ? first.lowercased() : lowercasedFirst(first)
+    return identifier(head + words.dropFirst().map(capitalized).joined())
   }
 
-  /// `snake_case` (or any other spelling) to `UpperCamelCase`, escaped.
+  /// `snake_case` (or any other spelling) to `UpperCamelCase`, escaped. `ORDER_STATUS` becomes
+  /// `OrderStatus`.
   static func typeName(_ name: String) -> String {
-    identifier(words(of: name).map(uppercasedFirst).joined())
+    identifier(words(of: name).map(capitalized).joined())
   }
 
   /// `name` as it must be spelled in source: as is when it is a valid identifier, in backticks when
@@ -79,8 +80,16 @@ enum Naming {
     name.filter { $0 != "`" }
   }
 
-  private static func uppercasedFirst(_ word: String) -> String {
-    word.prefix(1).uppercased() + word.dropFirst()
+  /// A word with no lowercase letter, such as `STATUS` or `ID`.
+  private static func isAllCaps(_ word: String) -> Bool {
+    !word.contains(where: \.isLowercase)
+  }
+
+  /// `word` with its first letter uppercased, and the rest lowercased when it is all caps:
+  /// `status` and `STATUS` both become `Status`, `userId` becomes `UserId`.
+  private static func capitalized(_ word: String) -> String {
+    let rest = isAllCaps(word) ? word.dropFirst().lowercased() : String(word.dropFirst())
+    return word.prefix(1).uppercased() + rest
   }
 
   private static func lowercasedFirst(_ word: String) -> String {

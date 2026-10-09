@@ -27,7 +27,8 @@ public enum Mood: String, Codable, Hashable, Sendable, PostgrestFilterValue {
   case initCase = "init"
   case inProgress = "in progress"
   case inProgress2 = "in-progress"
-  case inPROGRESS = "IN_PROGRESS"
+  case inProgress3 = "IN_PROGRESS"
+  case orderStatusPending = "ORDER_STATUS_PENDING"
   case _1st = "1st"
   case `default`
   case sayHi = #"say "hi""#

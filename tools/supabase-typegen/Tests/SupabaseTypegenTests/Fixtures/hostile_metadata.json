@@ -934,6 +934,7 @@
         "in progress",
         "in-progress",
         "IN_PROGRESS",
+        "ORDER_STATUS_PENDING",
         "1st",
         "default",
         "say \"hi\"",

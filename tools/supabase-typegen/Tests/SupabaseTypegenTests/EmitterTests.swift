@@ -124,6 +124,8 @@ struct EmitterTests {
       "enum public.mood value Self is named selfCase2: another value is also named selfCase",
       "enum public.mood value in-progress is named inProgress2: "
         + "another value is also named inProgress",
+      "enum public.mood value IN_PROGRESS is named inProgress3: "
+        + "another value is also named inProgress",
       "public.hostile.self is named selfColumn: @Table reserves self",
       "public.hostile.columns is named columnsColumn: @Table reserves columns",
       "public.hostile.select_string is named selectStringColumn: @Table reserves selectString",
