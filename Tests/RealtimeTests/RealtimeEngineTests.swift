@@ -802,7 +802,7 @@ struct RealtimeEngineTests {
     }
     #expect(raw == ["presence_diff", "presence_state", "presence_diff"])
     let changes = events.value.compactMap { event -> PresenceChange? in
-      guard case .presenceChanged(let change) = event else { return nil }
+      guard case .presenceChanged(let change, _) = event else { return nil }
       return change
     }
     guard changes.count == 2 else {
