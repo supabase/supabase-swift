@@ -248,6 +248,9 @@ struct DateFormatterTests {
       ("2024-01-02T03:04:05Z", 1_704_164_645.0),
       // Postgres `timestamp` (no time zone): read as UTC.
       ("2024-01-02T03:04:05.123456", 1_704_164_645.123456),
+      ("2024-01-02T03:04:05", 1_704_164_645.0),
+      // Postgres `date`: the day only, read as midnight UTC.
+      ("2024-01-02", 1_704_153_600.0),
     ]
   )
   func parsesOffset(input: String, expectedTimeIntervalSince1970: Double) throws {

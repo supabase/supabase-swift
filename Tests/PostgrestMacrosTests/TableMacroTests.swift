@@ -130,6 +130,68 @@ struct TableMacroTests {
     }
   }
 
+  /// `representedLiteralValue` undoes the escapes in the attribute arguments, so the expansion has
+  /// to escape a quote or a backslash again before splicing the name into its own literals.
+  @Test
+  func namesWithAQuoteOrABackslashRoundTrip() {
+    assertMacro {
+      #"""
+      @Table(#"we"ird\name"#)
+      struct Weird {
+        @PrimaryKey @Column(#"say "hi""#) var sayHi: String
+        @Column("back\\slash") var backSlash: String
+      }
+      """#
+    } expansion: {
+      #"""
+      struct Weird {
+        @PrimaryKey @Column(#"say "hi""#) var sayHi: String
+        @Column("back\\slash") var backSlash: String
+      }
+
+      extension Weird {
+        static let relationName = "we\"ird\\name"
+
+        typealias Schema = PostgREST.PublicSchema
+
+        static let selectString = "*"
+
+        struct Columns: Sendable {
+          let sayHi = PostgrestColumn<Weird, String>("say \"hi\"")
+          let backSlash = PostgrestColumn<Weird, String>("back\\slash")
+
+          init() {
+          }
+        }
+
+        static let columns = Columns()
+
+        static let primaryKeyColumns: [String] = ["say \"hi\""]
+
+        enum CodingKeys: String, CodingKey {
+          case sayHi = "say \"hi\""
+          case backSlash = "back\\slash"
+        }
+
+        struct Draft: Encodable, Sendable {
+          var sayHi: String
+          var backSlash: String
+
+          enum CodingKeys: String, CodingKey {
+            case sayHi = "say \"hi\""
+            case backSlash = "back\\slash"
+          }
+
+          init(sayHi: String, backSlash: String) {
+            self.sayHi = sayHi
+            self.backSlash = backSlash
+          }
+        }
+      }
+      """#
+    }
+  }
+
   @Test
   func aWritableTableWithNoKeyOmitsPrimaryKeyColumns() {
     // `primaryKeyColumns` is mandatory on `PostgrestKeyedRelation`, so not emitting it is what

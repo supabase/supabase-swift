@@ -11,11 +11,16 @@
 included:
   - Sources
   - Tests
+  - tools/supabase-typegen/Sources
+  - tools/supabase-typegen/Tests
 
 excluded:
   - .build
+  - tools/supabase-typegen/.build
   - Tests/IntegrationTests/supabase
   - "**/__Snapshots__"
+  # A golden of supabase-typegen, generated from a fixture whose names are hostile on purpose.
+  - Tests/SupabaseTypegenHostileOutputTests/Generated.swift
 
 # Rules disabled because they currently have violations.
 # Remove entries here as violations are fixed in follow-up PRs.

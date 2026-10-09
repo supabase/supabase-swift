@@ -9,82 +9,59 @@ import Foundation
 import PostgrestMacros
 import Testing
 
-// File scope: `@Table` and `@SelectionOf` attach extensions, which cannot be nested in a type.
+// File scope: `@SelectionOf` attaches extensions, which cannot be nested in a type. The tables are
+// in `Generated.swift`.
 // The schema and rows are in `supabase/migrations/20261006000000_embedded_scope.sql` and
 // `supabase/seed.sql`. Every test here is read-only.
 
-@Table("discussions")
-struct Discussion {
-  @PrimaryKey @Default var id: Int
-  var title: String
-  var pinnedPostID: Int?
-}
-
-@Table("posts")
-struct Post {
-  @PrimaryKey @Default var id: Int
-  var discussionID: Int
-  var author: String
-  @Default var approved: Bool
-  @Default var createdAt: Date
-}
-
-@Table("replies")
-struct Reply {
-  @PrimaryKey @Default var id: Int
-  var postID: Int
-  var body: String
-  @Default var approved: Bool
-}
-
 /// Leaves `approved` and `createdAt` out on purpose: a scope filters and orders the embedded
 /// relation, so both stay usable inside one.
-@SelectionOf(Post.self)
+@SelectionOf(Posts.self)
 struct PostBody {
   var id: Int
   var author: String
 }
 
-@SelectionOf(Discussion.self)
+@SelectionOf(Discussions.self)
 struct DiscussionWithPosts {
   var id: Int
-  @Relationship(\Post.discussionID) var posts: [PostBody]
+  @Relationship(\Posts.discussionId) var posts: [PostBody]
 }
 
 /// The alias differs from the relation name, so the scope prefix is `items.`, not `posts.`.
-@SelectionOf(Discussion.self)
+@SelectionOf(Discussions.self)
 struct DiscussionWithItems {
   var id: Int
-  @Relationship(\Post.discussionID) var items: [PostBody]
+  @Relationship(\Posts.discussionId) var items: [PostBody]
 }
 
-@SelectionOf(Reply.self)
+@SelectionOf(Replies.self)
 struct ReplyBody {
   var id: Int
 }
 
-@SelectionOf(Post.self)
+@SelectionOf(Posts.self)
 struct PostWithReplies {
   var id: Int
-  @Relationship(\Reply.postID) var replies: [ReplyBody]
+  @Relationship(\Replies.postId) var replies: [ReplyBody]
 }
 
-@SelectionOf(Discussion.self)
+@SelectionOf(Discussions.self)
 struct DiscussionWithThreads {
   var id: Int
-  @Relationship(\Post.discussionID) var posts: [PostWithReplies]
+  @Relationship(\Posts.discussionId) var posts: [PostWithReplies]
 }
 
-@SelectionOf(Discussion.self)
+@SelectionOf(Discussions.self)
 struct DiscussionTitle {
   var title: String
 }
 
 /// The many-to-one direction, against the pair that has two foreign keys between it.
-@SelectionOf(Post.self)
+@SelectionOf(Posts.self)
 struct PostWithDiscussion {
   var id: Int
-  @Relationship(\Post.discussionID) var discussion: DiscussionTitle?
+  @Relationship(\Posts.discussionId) var discussion: DiscussionTitle?
 }
 
 /// The server-side half of `PostgrestEmbeddedScopeTests`: the same scopes against a live
@@ -100,7 +77,7 @@ struct PostgrestEmbeddedScopeIntegrationTests {
   /// every parent in place. Discussion 3 has no posts and 4 has no approved one; both come back.
   @Test
   func embeddedKeepsEveryParentRow() async throws {
-    let rows = try await client.from(Discussion.self)
+    let rows = try await client.from(Discussions.self)
       .select(DiscussionWithPosts.self)
       .order { $0.id }
       .embedded(\.posts) { $0.where { $0.approved.eq(true) }.order { $0.id } }
@@ -114,7 +91,7 @@ struct PostgrestEmbeddedScopeIntegrationTests {
   /// `!inner`, placed after the foreign-key hint, drops the parents with no matching post.
   @Test
   func requiringDropsParentsWithNoMatch() async throws {
-    let rows = try await client.from(Discussion.self)
+    let rows = try await client.from(Discussions.self)
       .select(DiscussionWithPosts.self)
       .order { $0.id }
       .requiring(\.posts) { $0.where { $0.approved.eq(true) }.order { $0.id } }
@@ -129,7 +106,7 @@ struct PostgrestEmbeddedScopeIntegrationTests {
   /// server. Discussion 1 has three matching posts and keeps only the newest.
   @Test
   func orOrderAndLimitApplyInsideTheScope() async throws {
-    let rows = try await client.from(Discussion.self)
+    let rows = try await client.from(Discussions.self)
       .select(DiscussionWithPosts.self)
       .order { $0.id }
       .requiring(\.posts) {
@@ -146,7 +123,7 @@ struct PostgrestEmbeddedScopeIntegrationTests {
 
   @Test
   func rangeAppliesInsideTheScope() async throws {
-    let rows = try await client.from(Discussion.self)
+    let rows = try await client.from(Discussions.self)
       .select(DiscussionWithPosts.self)
       .where { $0.id.eq(1) }
       .embedded(\.posts) { $0.order { $0.id }.range(1...1) }
@@ -159,7 +136,7 @@ struct PostgrestEmbeddedScopeIntegrationTests {
   /// A dotted path reaches the inner embed: `posts.replies.approved` and `posts.replies.limit`.
   @Test
   func nestedScopeShapesTheInnerEmbed() async throws {
-    let rows = try await client.from(Discussion.self)
+    let rows = try await client.from(Discussions.self)
       .select(DiscussionWithThreads.self)
       .where { $0.id.eq(1) }
       .embedded(\.posts) {
@@ -177,7 +154,7 @@ struct PostgrestEmbeddedScopeIntegrationTests {
   /// discussions without such a post stay, with an empty `posts`.
   @Test
   func nestedRequiringConstrainsItsOwnParentOnly() async throws {
-    let rows = try await client.from(Discussion.self)
+    let rows = try await client.from(Discussions.self)
       .select(DiscussionWithThreads.self)
       .order { $0.id }
       .embedded(\.posts) {
@@ -194,7 +171,7 @@ struct PostgrestEmbeddedScopeIntegrationTests {
   /// PostgREST accepts the alias in place of the relation name as the scope prefix.
   @Test
   func theAliasPrefixesTheScope() async throws {
-    let rows = try await client.from(Discussion.self)
+    let rows = try await client.from(Discussions.self)
       .select(DiscussionWithItems.self)
       .order { $0.id }
       .requiring(\.items) { $0.where { $0.author.eq("bob") } }
@@ -209,7 +186,7 @@ struct PostgrestEmbeddedScopeIntegrationTests {
   /// `posts.discussion_id`, and `!inner` keeps only the posts whose discussion matches.
   @Test
   func requiringAToOneEmbed() async throws {
-    let rows = try await client.from(Post.self)
+    let rows = try await client.from(Posts.self)
       .select(PostWithDiscussion.self)
       .order { $0.id }
       .requiring(\.discussion) { $0.where { $0.title.eq("swift") } }

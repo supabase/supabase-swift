@@ -192,14 +192,18 @@ jobs:
       - name: "Cache Swift Package"
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: .build
-          key: ${{ runner.os }}-spm-${{ matrix.container }}
+          path: |
+            .build
+            tools/supabase-typegen/.build
+          key: ${{ runner.os }}-spm-${{ matrix.container }}-typegen
       - name: "Build Swift Package"
         run: swift build --explicit-target-dependency-import-check error
       - name: "Test Swift Package"
         run: swift test --skip IntegrationTests
       - name: "Test Swift Package (OpenTelemetry trait)"
         run: swift test --traits OpenTelemetry --filter SupabaseTests
+      - name: "Test supabase-typegen"
+        run: swift test --package-path tools/supabase-typegen
 
   integration-tests:
     name: Integration Tests (${{ matrix.name }})
@@ -372,7 +376,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Lint formatting
-        run: swift format lint --strict --recursive Sources Tests Package.swift Examples
+        run: swift format lint --strict --recursive Sources Tests Package.swift Examples tools/supabase-typegen/Sources tools/supabase-typegen/Tests tools/supabase-typegen/Package.swift
 
   lint:
     name: SwiftLint

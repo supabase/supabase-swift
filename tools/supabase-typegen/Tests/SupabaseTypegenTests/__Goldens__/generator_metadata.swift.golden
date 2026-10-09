@@ -1,0 +1,118 @@
+import Foundation
+import PostgrestMacros
+
+enum UserStatus: String, Codable, Hashable, Sendable, PostgrestFilterValue {
+  case online = "ONLINE"
+  case offline = "OFFLINE"
+}
+
+@Table("channels")
+struct Channels {
+  @PrimaryKey @Default var id: Int
+  var slug: String
+}
+
+extension Channels.Columns {
+  var channelMessages: PostgrestToManyRelation<Channels, Messages> {
+    .init("channel_messages")
+  }
+  var firstMessage: PostgrestToOneRelation<Channels, Messages> {
+    .init("first_message")
+  }
+  var shoutedSlug: PostgrestComputedField<Channels, String> {
+    .init("shouted_slug")
+  }
+}
+
+@Table("counters")
+struct Counters {
+  @PrimaryKey @Generated var id: Int
+  var count: Int
+  @Generated var doubled: Int?
+}
+
+@Table("discussions")
+struct Discussions {
+  @PrimaryKey @Default var id: Int
+  var title: String
+  var pinnedPostId: Int?
+}
+
+@Table("key_value_storage")
+struct KeyValueStorage {
+  @PrimaryKey var key: String
+  var value: JSONValue?
+}
+
+@Table("messages")
+struct Messages {
+  @PrimaryKey @Default var id: Int
+  var channelId: Int?
+  var data: JSONValue?
+  var message: String?
+  var username: String?
+}
+
+@Table("note_summaries")
+struct NoteSummaries {
+  var id: Int?
+  var body: String?
+  var bodyLength: Int?
+}
+
+@Table("notes")
+struct Notes {
+  @PrimaryKey @Default var id: Int
+  var body: String
+}
+
+@Table("posts")
+struct Posts {
+  @PrimaryKey @Default var id: Int
+  var discussionId: Int
+  var author: String
+  @Default var approved: Bool
+  @Default var createdAt: Date
+}
+
+@Table("replies")
+struct Replies {
+  @PrimaryKey @Default var id: Int
+  var postId: Int
+  var body: String
+  @Default var approved: Bool
+}
+
+@Table("temporal_values")
+struct TemporalValues {
+  @PrimaryKey @Generated var id: Int
+  var atInstant: Date
+  var atLocal: Date
+  var onDay: Date
+}
+
+@Table("todos")
+struct Todos {
+  @PrimaryKey @Default var id: UUID
+  var description: String
+  @Default var isComplete: Bool
+  @Default var tags: [String]?
+  @Default var createdAt: Date?
+}
+
+@Table("updatable_view")
+struct UpdatableView {
+  var username: String?
+  var nonUpdatableColumn: Int?
+}
+
+@Table("users")
+struct Users {
+  @PrimaryKey @Default var id: UUID
+  var email: String?
+  var username: String?
+  var ageRange: JSONValue?
+  var catchphrase: String?
+  var data: JSONValue?
+  @Default var status: UserStatus?
+}

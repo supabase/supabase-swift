@@ -7,8 +7,8 @@
 
 /// Converts a Swift property name to its snake_case database column name.
 ///
-/// `isDone` becomes `is_done`; `dueDate` becomes `due_date`; an already-lowercase name is unchanged.
-/// A run of capitals is one word, so `htmlURL` becomes `html_url` and `urlSession` stays
+/// `isDone` becomes `is_done`; `dueDate` becomes `due_date`; an already-lowercase name is
+/// unchanged. A run of capitals is one word, so `htmlURL` becomes `html_url` and `urlSession` stays
 /// `url_session`.
 func camelToSnakeCase(_ name: String) -> String {
   var out = ""

@@ -21,7 +21,9 @@ Backgrounded
 backgrounding
 bitbucket
 Bitbucket
+bpchar
 bytea
+caseless
 chan
 checkmark
 Cloudflare
@@ -65,6 +67,7 @@ gearshape
 github
 gitlab
 GitLab
+goldens
 gotrue
 GoTrue
 Guilherme
@@ -103,6 +106,7 @@ lnbm
 Lukas
 magiclink
 magnifyingglass
+matview
 metamask
 metas
 Metas
@@ -152,6 +156,7 @@ postgrest
 Postgrest
 PostgREST
 preconcurrency
+prorows
 questionmark
 radiowaves
 Ranbir
@@ -167,6 +172,7 @@ Rlbn
 Rvci
 sadcat
 secp256k1
+setof
 siwe
 SIWE
 siws
@@ -191,6 +197,7 @@ SUPABASE
 supabaseswiftintegrationtest
 supabot
 swiftlint
+sysexits
 testpath
 testuser
 timestamptz
@@ -203,6 +210,7 @@ tsvector
 Twilio
 typealias
 Typealiases
+typegen
 unconfigured
 unenroll
 Unenroll
@@ -211,6 +219,7 @@ unicode
 uniquing
 unsubscription
 untracks
+uppercased
 upserted
 upserts
 URLAPI

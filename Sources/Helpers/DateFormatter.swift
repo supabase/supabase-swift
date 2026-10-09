@@ -50,10 +50,19 @@ extension String {
     ) {
       return date
     }
-    return try? Date(
+    if let date = try? Date(
       self,
       strategy: .iso8601.currentTimestamp(includingFractionalSeconds: false)
-    )
+    ) {
+      return date
+    }
+    // A `date` column: the day only, read as midnight UTC. Parsing accepts a trailing remainder,
+    // so the value must format back to the whole string.
+    let day: Date.ISO8601FormatStyle = .iso8601.year().month().day()
+    guard let date = try? Date(self, strategy: day), date.formatted(day) == self else {
+      return nil
+    }
+    return date
   }
 
   /// Rewrites a Postgres timestamp's UTC offset into the canonical `+HH:MM` form that
