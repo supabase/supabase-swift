@@ -53,11 +53,11 @@ struct StorageBucketPathTests {
       name: "createSignedURL", placement: .url,
       response: #"{"signedURL":"/object/sign/bucket/x?token=t"}"#
     ) {
-      _ = try await $0.createSignedURL(path: $1, expiresIn: 60)
+      _ = try await $0.createSignedURL(path: $1, expiresIn: .seconds(60))
       return nil
     },
     Operation(name: "createSignedURLs", placement: .body, response: "[]") {
-      _ = try await $0.createSignedURLs(paths: [$1], expiresIn: 60)
+      _ = try await $0.createSignedURLs(paths: [$1], expiresIn: .seconds(60))
       return nil
     },
     Operation(name: "move", placement: .body, response: #"{"message":"ok"}"#) {
