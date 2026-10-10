@@ -84,14 +84,22 @@ struct FilePlan {
 }
 
 /// A Swift type the generator writes for a column.
-indirect enum SwiftType: Equatable {
+indirect enum SwiftType: Equatable, Sendable {
   case named(String)
+  /// A generic type with one argument, such as `_PostgresRange<Int>`.
+  case generic(String, SwiftType)
   case array(SwiftType)
   case optional(SwiftType)
 
   var syntax: TypeSyntax {
     switch self {
     case .named(let name): TypeSyntax(IdentifierTypeSyntax(name: .identifier(name)))
+    case .generic(let name, let argument):
+      TypeSyntax(
+        IdentifierTypeSyntax(
+          name: .identifier(name),
+          genericArgumentClause: GenericArgumentClauseSyntax(
+            arguments: [GenericArgumentSyntax(argument: .type(argument.syntax))])))
     case .array(let element): TypeSyntax(ArrayTypeSyntax(element: element.syntax))
     case .optional(let wrapped): TypeSyntax(OptionalTypeSyntax(wrappedType: wrapped.syntax))
     }
@@ -101,7 +109,7 @@ indirect enum SwiftType: Equatable {
   var usesFoundation: Bool {
     switch self {
     case .named(let name): FilePlan.foundationScalarTypes.values.contains(name)
-    case .array(let inner), .optional(let inner): inner.usesFoundation
+    case .generic(_, let inner), .array(let inner), .optional(let inner): inner.usesFoundation
     }
   }
 }
@@ -371,20 +379,38 @@ extension FilePlan {
     "timestamptz": "Date", "timestamp": "Date", "date": "Date",
   ]
 
-  private static let scalarTypes = foundationScalarTypes.merging(
-    [
-      "text": "String", "varchar": "String", "bpchar": "String", "char": "String",
-      "bool": "Bool",
-      "int2": "Int", "int4": "Int", "int8": "Int",
-      "float4": "Double", "float8": "Double",
-      "json": "JSONValue", "jsonb": "JSONValue",
-    ],
-    uniquingKeysWith: { first, _ in first })
+  /// One Swift type per Postgres type. A type with no plain Swift counterpart gets one of
+  /// PostgREST's `_Postgres…` types when that changes what compiles or how a value is encoded: a
+  /// range gets the range filters, an `interval` or a `time` gets no `like`, a `bytea` is read in
+  /// hex. `JSONValue` is only ever `json`/`jsonb`, so it can stand for a JSON column.
+  private static let scalarTypes: [String: SwiftType] =
+    foundationScalarTypes
+    .mapValues(SwiftType.named)
+    .merging(
+      [
+        "text": .named("String"), "varchar": .named("String"), "bpchar": .named("String"),
+        "char": .named("String"),
+        "inet": .named("String"), "cidr": .named("String"), "macaddr": .named("String"),
+        "money": .named("String"), "xml": .named("String"),
+        "bool": .named("Bool"),
+        "int2": .named("Int"), "int4": .named("Int"), "int8": .named("Int"),
+        "float4": .named("Double"), "float8": .named("Double"),
+        "json": .named("JSONValue"), "jsonb": .named("JSONValue"),
+        "int4range": .generic("_PostgresRange", .named("Int")),
+        "int8range": .generic("_PostgresRange", .named("Int")),
+        "numrange": .generic("_PostgresRange", .named("Decimal")),
+        "tsrange": .generic("_PostgresRange", .named("Date")),
+        "tstzrange": .generic("_PostgresRange", .named("Date")),
+        "daterange": .generic("_PostgresRange", .named("Date")),
+        "interval": .named("_PostgresInterval"),
+        "time": .named("_PostgresTime"), "timetz": .named("_PostgresTime"),
+        "bytea": .named("_PostgresBytes"),
+      ],
+      uniquingKeysWith: { first, _ in first })
 
-  /// A type with no mapping, such as a composite, a range, `bytea`, `interval` or `time`, is
-  /// `JSONValue`, with a note: it decodes whatever PostgREST sends for the column and writes it
-  /// back unchanged, so generation never stops at one column. A computed field's return type
-  /// follows the same rule.
+  /// A type with no mapping, such as a composite or a geometric type, is `_PostgresUnmapped`, with
+  /// a note: it decodes whatever PostgREST sends for the column and writes it back unchanged, so
+  /// generation never stops at one column. A computed field's return type follows the same rule.
   private mutating func swiftType(
     of column: DatabaseModel.Column,
     qualified: String,
@@ -407,20 +433,20 @@ extension FilePlan {
   ) -> SwiftType {
     let arrayElementName = arrayElement(of: name)
     let element = arrayElementName ?? name
-    let scalar: String
+    let scalar: SwiftType
     if let enumTypeName = enumID.flatMap({ enumTypeNames[$0] }) {
-      scalar = enumTypeName
+      scalar = .named(enumTypeName)
     } else if let mapped = schema == "pg_catalog" ? Self.scalarTypes[element] : nil {
       scalar = mapped
     } else if element == "citext" {
       // An extension type, so its schema is wherever the extension was installed.
-      scalar = "String"
+      scalar = .named("String")
     } else {
-      scalar = "JSONValue"
+      scalar = .named("_PostgresUnmapped")
       notes.append(
-        "\(subject) \(schema).\(element), which is not mapped; it is decoded as JSONValue")
+        "\(subject) \(schema).\(element), which is not mapped; it is decoded as _PostgresUnmapped")
     }
-    return arrayElementName == nil ? .named(scalar) : .array(.named(scalar))
+    return arrayElementName == nil ? scalar : .array(scalar)
   }
 }
 

@@ -66,6 +66,28 @@ struct Notes {
   var body: String
 }
 
+@Table("postgres_values")
+struct PostgresValues {
+  @PrimaryKey @Generated var id: Int
+  var intSpan: _PostgresRange<Int>?
+  var bigSpan: _PostgresRange<Int>?
+  var numSpan: _PostgresRange<Decimal>?
+  var localSpan: _PostgresRange<Date>?
+  var instantSpan: _PostgresRange<Date>?
+  var daySpan: _PostgresRange<Date>?
+  var duration: _PostgresInterval?
+  var atTime: _PostgresTime?
+  var atTimeTz: _PostgresTime?
+  var payload: _PostgresBytes?
+  var address: String?
+  var network: String?
+  var mac: String?
+  var price: String?
+  var document: String?
+  var pair: _PostgresUnmapped?
+  var spot: _PostgresUnmapped?
+}
+
 @Table("posts")
 struct Posts {
   @PrimaryKey @Default var id: Int
@@ -111,7 +133,7 @@ struct Users {
   @PrimaryKey @Default var id: UUID
   var email: String?
   var username: String?
-  var ageRange: JSONValue?
+  var ageRange: _PostgresRange<Int>?
   var catchphrase: String?
   var data: JSONValue?
   @Default var status: UserStatus?

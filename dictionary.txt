@@ -309,3 +309,11 @@ Xswiftc
 linux
 xattr
 darwin
+daterange
+inet
+macaddr
+numrange
+timetz
+tsrange
+tstzmultirange
+tstzrange

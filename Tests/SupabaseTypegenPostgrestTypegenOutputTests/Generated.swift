@@ -96,12 +96,12 @@ extension ForeignTable.Columns {
 @Table("interval_test")
 public struct IntervalTest {
   @PrimaryKey @Default public var id: Int
-  public var durationRequired: JSONValue
-  public var durationOptional: JSONValue?
+  public var durationRequired: _PostgresInterval
+  public var durationOptional: _PostgresInterval?
 }
 
 extension IntervalTest.Columns {
-  public var doubleDuration: _PostgrestComputedField<IntervalTest, JSONValue> {
+  public var doubleDuration: _PostgrestComputedField<IntervalTest, _PostgresInterval> {
     .init("double_duration")
   }
 }
@@ -127,8 +127,8 @@ public struct ScalarTypeTest {
 
 @Table("table_with_other_tables_row_type")
 public struct TableWithOtherTablesRowType {
-  public var col1: JSONValue?
-  public var col2: JSONValue?
+  public var col1: _PostgresUnmapped?
+  public var col2: _PostgresUnmapped?
 }
 
 @Table("table_with_primary_key_other_than_id")
