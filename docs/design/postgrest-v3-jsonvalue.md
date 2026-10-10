@@ -88,9 +88,11 @@ conformances keep the call site short: `containsJSON(["a": 1])`, `containsJSON([
 The operand must be **JSON-encoded**, not rendered through `PostgrestFilterValue.rawValue`. That
 `rawValue` is correct for objects and arrays, but `.string("x")` renders `x`, which is invalid
 JSON (`22P02`). Encode the whole value with `JSONEncoder`, sorted keys and unescaped slashes. Only a
-non-finite `.double` fails to encode; then send `NaN`, which PostgREST rejects with `22P02`
-(measured, also inside `or=(…)`), rather than a valid stand-in such as `null` that would match
-other rows.
+non-finite `.double` fails to encode. Send no stand-in operand for it: `null` is a valid
+containment operand and matches JSON-null rows, so a `delete` would remove them. A filter method
+cannot throw, so the filter carries the failure, and `execute()` throws
+`PostgrestError(kind: .invalidRequest)` before the request is built. The same holds for a
+comparison or `in` on a JSON path (item 3).
 
 Key order does not matter. `cs.{"b":{"c":2},"a":1}` and `cs.{"a":1,"b":{"c":2}}` return the same
 row, and a `cd` operand in scrambled order with reordered array members matches. So `.sortedKeys`
