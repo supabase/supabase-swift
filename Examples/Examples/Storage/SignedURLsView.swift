@@ -228,7 +228,7 @@ struct SignedURLsView: View {
 
       signedURL = try await supabase.storage
         .from(selectedBucket)
-        .createSignedURL(path: filePath, expiresIn: expiresInSeconds)
+        .createSignedURL(path: filePath, expiresIn: .seconds(expiresInSeconds))
     } catch {
       self.error = error
     }

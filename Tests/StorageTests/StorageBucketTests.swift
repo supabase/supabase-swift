@@ -527,7 +527,7 @@ extension StorageMockerTests {
 
       let url = try await storage.from("bucket").createSignedURL(
         path: "file.txt",
-        expiresIn: 3600
+        expiresIn: .seconds(3600)
       )
       #expect(
         url.absoluteString == "\(self.url)/object/upload/sign/bucket/file.txt?token=abc.def.ghi")
@@ -555,7 +555,7 @@ extension StorageMockerTests {
       do {
         _ = try await storage.from("bucket").createSignedURL(
           path: "file.txt",
-          expiresIn: 3600
+          expiresIn: .seconds(3600)
         )
         Issue.record("expected createSignedURL to throw")
       } catch let error as StorageError {
@@ -597,12 +597,30 @@ extension StorageMockerTests {
 
       let url = try await storage.from("bucket").createSignedURL(
         path: "file.txt",
-        expiresIn: 3600,
+        expiresIn: .seconds(3600),
         download: .withOriginalName
       )
       #expect(
         url.absoluteString
           == "\(self.url)/object/upload/sign/bucket/file.txt?token=abc.def.ghi&download=")
+    }
+
+    @Test(arguments: [Duration.zero, .milliseconds(999), .seconds(-5)])
+    func createSignedURLRejectsLessThanOneSecondBeforeSending(expiresIn: Duration) async {
+      let storage = makeFailingSUT {
+        Issue.record("A request was sent"); throw URLError(.badURL)
+      }
+
+      await #expect {
+        try await storage.from("bucket").createSignedURL(path: "file.txt", expiresIn: expiresIn)
+      } throws: { error in
+        (error as? StorageError)?.kind == .invalidRequest
+      }
+      await #expect {
+        try await storage.from("bucket").createSignedURLs(paths: ["file.txt"], expiresIn: expiresIn)
+      } throws: { error in
+        (error as? StorageError)?.kind == .invalidRequest
+      }
     }
 
     @Test
@@ -646,7 +664,7 @@ extension StorageMockerTests {
       let paths = ["file.txt", "file2.txt"]
       let results: [SignedURLResult] = try await storage.from("bucket").createSignedURLs(
         paths: paths,
-        expiresIn: 3600
+        expiresIn: .seconds(3600)
       )
       #expect(results.count == 2)
       guard case .success(let path0, let url0) = results[0] else {
@@ -706,7 +724,7 @@ extension StorageMockerTests {
       let paths = ["file.txt", "file2.txt"]
       let results: [SignedURLResult] = try await storage.from("bucket").createSignedURLs(
         paths: paths,
-        expiresIn: 3600,
+        expiresIn: .seconds(3600),
         download: .withOriginalName
       )
       #expect(results.count == 2)
@@ -755,7 +773,7 @@ extension StorageMockerTests {
 
       let results: [SignedURLResult] = try await storage.from("bucket").createSignedURLs(
         paths: ["file.txt", "missing.txt"],
-        expiresIn: 3600
+        expiresIn: .seconds(3600)
       )
       #expect(results.count == 2)
       guard case .success(let path0, _) = results[0] else {
@@ -1359,7 +1377,7 @@ extension StorageMockerTests {
       let storage = makeBodyCapturingSUT(body: body, response: "[]")
 
       _ = try await storage.from("bucket")
-        .createSignedURLs(paths: ["/folder//a.png", "b.png/"], expiresIn: 60)
+        .createSignedURLs(paths: ["/folder//a.png", "b.png/"], expiresIn: .seconds(60))
 
       let sent = try JSONDecoder().decode(Sent.self, from: #require(body.value))
       #expect(sent.paths == ["folder/a.png", "b.png"])
@@ -1924,7 +1942,7 @@ extension StorageMockerTests {
 
       let url = try await storage.from("bucket").createSignedURL(
         path: "file.txt",
-        expiresIn: 3600,
+        expiresIn: .seconds(3600),
         cacheNonce: "abc123"
       )
       #expect(
@@ -1956,7 +1974,7 @@ extension StorageMockerTests {
 
       let results: [SignedURLResult] = try await storage.from("bucket").createSignedURLs(
         paths: ["file.txt"],
-        expiresIn: 3600,
+        expiresIn: .seconds(3600),
         cacheNonce: "abc123"
       )
       guard case .success(_, let url) = results[0] else {

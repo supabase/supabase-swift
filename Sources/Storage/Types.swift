@@ -250,7 +250,7 @@ public struct SignedURL: Decodable, Sendable {
 /// successfully, or the path did not exist or was inaccessible.
 ///
 /// ```swift
-/// let results = try await storage.from("docs").createSignedURLs(paths: paths, expiresIn: 3600)
+/// let results = try await storage.from("docs").createSignedURLs(paths: paths, expiresIn: .seconds(3600))
 /// for result in results {
 ///   switch result {
 ///   case .success(let path, let url): print(path, url)
