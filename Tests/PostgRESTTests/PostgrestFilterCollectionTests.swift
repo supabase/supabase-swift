@@ -8,7 +8,7 @@
 import Foundation
 import Testing
 
-@testable import PostgREST
+@_spi(Experimental) @testable import PostgREST
 
 @Suite
 struct PostgrestFilterCollectionTests {
@@ -109,6 +109,28 @@ struct PostgrestFilterCollectionTests {
     let filter = metadata.containsJSON(["a": 1, "n": 10]) || metadata.containsJSON(["n": 3])
     #expect(
       rendered(filter) == #"or=(metadata.cs."{\"a\":1,\"n\":10}",metadata.cs."{\"n\":3}")"#)
+  }
+
+  /// A non-finite `Double` has no JSON form. No stand-in operand is sent — `cs.null` matches
+  /// JSON-null rows — so `execute()` throws before the request is built, alone or in a group.
+  @Test(
+    arguments: [
+      { (c: Post.Columns) in c.metadata.containsJSON(["n": .double(.nan)]) },
+      { (c: Post.Columns) in c.metadata.containedByJSON(.double(.infinity)) },
+      { (c: Post.Columns) in c.content.eq("x") || !c.metadata.containsJSON([.double(.nan)]) },
+    ] as [@Sendable (Post.Columns) -> _PostgrestFilter<Post>]
+  )
+  func aJSONOperandWithNoJSONFormFailsTheRequestBeforeItIsSent(
+    filter: @Sendable (Post.Columns) -> _PostgrestFilter<Post>
+  ) async throws {
+    let capture = QueryCapture()
+    do {
+      _ = try await capture.client.from(Post.self).select().where(filter).execute()
+      Issue.record("Expected an error")
+    } catch let error as PostgrestError {
+      #expect(error.kind == .invalidRequest)
+    }
+    #expect(capture.query == nil)
   }
 
   @Test

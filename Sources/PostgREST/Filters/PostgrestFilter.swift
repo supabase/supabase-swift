@@ -28,6 +28,10 @@ indirect enum PostgrestFilterNode: Sendable {
 
     /// The `IS` keyword: `null` for `nil`, otherwise `true` or `false`. Never quoted.
     case `is`(Bool?)
+
+    /// A value with no wire form, such as a non-finite `Double` as JSON. It is never sent: the
+    /// request records the reason, and `execute()` throws it before building the request.
+    case invalid(String)
   }
 
   case comparison(column: String, operator: _PostgrestFilterOperator, operand: Operand)
@@ -152,6 +156,8 @@ extension PostgrestFilterNode.Operand {
       return "(\(members.map(escapePostgRESTFilterValue).joined(separator: ",")))"
     case .is(let bool):
       return bool.map { "\($0)" } ?? "null"
+    case .invalid:
+      return ""
     }
   }
 
@@ -162,7 +168,7 @@ extension PostgrestFilterNode.Operand {
     switch self {
     case .value(let raw):
       return escapePostgRESTFilterValue(raw)
-    case .list, .is:
+    case .list, .is, .invalid:
       return topLevel
     }
   }
@@ -172,6 +178,24 @@ extension _PostgrestFilter {
   /// The query items this filter contributes to a request.
   func queryItems() -> [URLQueryItem] {
     node.queryItems()
+  }
+
+  /// Why this filter cannot be sent, or `nil` when it can.
+  var invalidFilterReason: String? {
+    node.invalidFilterReason
+  }
+}
+
+extension PostgrestFilterNode {
+  /// The first operand anywhere in the tree that has no wire form.
+  var invalidFilterReason: String? {
+    switch self {
+    case .comparison(_, _, .invalid(let reason)): reason
+    case .comparison, .raw: nil
+    case .and(let children), .or(let children):
+      children.lazy.compactMap(\.invalidFilterReason).first
+    case .not(let inner): inner.invalidFilterReason
+    }
   }
 }
 

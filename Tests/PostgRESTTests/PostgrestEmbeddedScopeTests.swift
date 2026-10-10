@@ -52,6 +52,7 @@ struct PostgrestEmbeddedScopeTests {
       let approved = _PostgrestColumn<Comment, Bool>("approved")
       let authorID = _PostgrestColumn<Comment, Int>("author_id")
       let createdAt = _PostgrestColumn<Comment, Date>("created_at")
+      let meta = _PostgrestColumn<Comment, JSONValue>("meta")
     }
 
     static let columns = Columns()
@@ -134,6 +135,19 @@ struct PostgrestEmbeddedScopeTests {
         + "&comments.order=created_at.desc.nullslast"
         + "&comments.limit=5"
     )
+  }
+
+  /// An operand with no wire form inside a scope fails the whole query before it is sent.
+  @Test
+  func anOperandWithNoJSONFormInAScopeFailsTheQuery() async throws {
+    let capture = QueryCapture()
+    await #expect(throws: PostgrestError.self) {
+      try await capture.client.from(Todo.self)
+        .select(TodoWithComments.self)
+        .embedded(\.comments) { $0.where { $0.meta.containsJSON(["n": .double(.nan)]) } }
+        .execute()
+    }
+    #expect(capture.query == nil)
   }
 
   /// The trap the two names exist for: the same scope without `!inner` keeps every parent row.

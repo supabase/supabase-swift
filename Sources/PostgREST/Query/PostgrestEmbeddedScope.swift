@@ -121,6 +121,9 @@ public struct _PostgrestEmbeddedScope<S: _PostgrestSelection>: Sendable {
   /// The scope's parameters, named relative to this embed: `approved`, `or`, `order`, `limit`.
   var items: [URLQueryItem] = []
 
+  /// Why a filter in this scope has no wire form; the query it is applied to throws it.
+  var invalidFilterReason: String?
+
   /// Nested embeds to mark `!inner`, each as the chain of select-entry heads leading to it,
   /// relative to this embed's own entry.
   var innerEntries: [[String]] = []
@@ -128,7 +131,9 @@ public struct _PostgrestEmbeddedScope<S: _PostgrestSelection>: Sendable {
   /// Narrows the embedded rows by a filter. Two calls AND together.
   public func `where`(_ build: (S.Source.Columns) -> _PostgrestFilter<S.Source>) -> Self {
     var scope = self
-    scope.items.append(contentsOf: build(S.Source.columns).queryItems())
+    let filter = build(S.Source.columns)
+    scope.items.append(contentsOf: filter.queryItems())
+    scope.invalidFilterReason = scope.invalidFilterReason ?? filter.invalidFilterReason
     return scope
   }
 
@@ -172,6 +177,7 @@ public struct _PostgrestEmbeddedScope<S: _PostgrestSelection>: Sendable {
     scope.items += nested.items.map {
       URLQueryItem(name: "\(embed.alias).\($0.name)", value: $0.value)
     }
+    scope.invalidFilterReason = scope.invalidFilterReason ?? nested.invalidFilterReason
     if inner {
       scope.innerEntries.append([embed.selectEntryHead])
     }
@@ -265,6 +271,8 @@ extension _PostgrestQuery {
   private func applying<S>(_ scope: _PostgrestEmbeddedScope<S>) -> Self {
     var query = self
     query.request.query += scope.items
+    query.request.invalidFilterReason =
+      query.request.invalidFilterReason ?? scope.invalidFilterReason
     guard
       !scope.innerEntries.isEmpty,
       let index = query.request.query.firstIndex(where: { $0.name == "select" }),
