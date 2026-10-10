@@ -3118,7 +3118,7 @@ extension AuthMockerTests {
       let sut = makeSUT()
 
       Mock(
-        url: clientURL.appendingPathComponent("admin/invite"),
+        url: clientURL.appendingPathComponent("invite"),
         ignoreQuery: true,
         statusCode: 200,
         data: [.post: MockData.user]
@@ -3133,7 +3133,7 @@ extension AuthMockerTests {
         	--header "X-Supabase-Api-Version: 2024-01-01" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	--data "{\"data\":{\"full_name\":\"John Doe\"},\"email\":\"test@example.com\"}" \
-        	"http://localhost:54321/auth/v1/admin/invite?redirect_to=https://example.com"
+        	"http://localhost:54321/auth/v1/invite?redirect_to=https://example.com"
         """#
       }
       .register()
