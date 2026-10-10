@@ -105,7 +105,7 @@
       return HTTPBody(chunks, length: body.length, iterationBehavior: .single)
     }
 
-    let storage = SupabaseStorageClient(
+    let storage = StorageClient(
       configuration: StorageClientConfiguration(
         url: URL(string: "\(DotEnv.supabaseURL)/storage/v1")!,
         headers: ["Authorization": "Bearer \(DotEnv.supabaseSecretKey)"]

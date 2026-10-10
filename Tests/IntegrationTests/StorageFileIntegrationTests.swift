@@ -16,7 +16,7 @@ import Testing
 
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil))
 final class StorageFileIntegrationTests {
-  let storage = SupabaseStorageClient(
+  let storage = StorageClient(
     configuration: StorageClientConfiguration(
       url: URL(string: "\(DotEnv.supabaseURL)/storage/v1")!,
       headers: [

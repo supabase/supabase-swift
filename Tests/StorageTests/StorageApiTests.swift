@@ -34,7 +34,7 @@ struct StorageApiTests {
 
   /// Answers every request with a 503 and records the path of each attempt.
   private func makeSUT(retryEnabled: Bool = true) -> (
-    SupabaseStorageClient, LockIsolated<[String]>
+    StorageClient, LockIsolated<[String]>
   ) {
     let attempts = LockIsolated<[String]>([])
     var configuration = StorageClientConfiguration(
@@ -48,7 +48,7 @@ struct StorageApiTests {
       retryEnabled: retryEnabled
     )
     configuration.clock = ImmediateClock()
-    return (SupabaseStorageClient(configuration: configuration), attempts)
+    return (StorageClient(configuration: configuration), attempts)
   }
 
   @Test

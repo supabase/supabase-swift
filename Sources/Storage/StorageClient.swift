@@ -4,7 +4,7 @@ public import Logging
 
 /// Configuration for the Supabase Storage client.
 ///
-/// Pass a ``StorageClientConfiguration`` to ``SupabaseStorageClient`` to control the Storage
+/// Pass a ``StorageClientConfiguration`` to ``StorageClient`` to control the Storage
 /// endpoint URL, authentication headers, and the underlying transport.
 ///
 /// ```swift
@@ -12,7 +12,7 @@ public import Logging
 ///   url: URL(string: "https://project.supabase.co/storage/v1")!,
 ///   headers: ["Authorization": "Bearer \(accessToken)"]
 /// )
-/// let storage = SupabaseStorageClient(configuration: configuration)
+/// let storage = StorageClient(configuration: configuration)
 /// ```
 ///
 /// ## Topics
@@ -56,7 +56,7 @@ public struct StorageClientConfiguration: Sendable {
 
   /// Whether transient failures of reads are retried. Defaults to `true`.
   ///
-  /// Only reads are replayed: `GET` and `HEAD` requests and ``StorageFileApi/list(path:options:)``,
+  /// Only reads are replayed: `GET` and `HEAD` requests and ``StorageBucket/list(path:options:)``,
   /// up to three attempts with jittered backoff. Uploads, moves, copies, removals and bucket
   /// changes are never replayed.
   public let retryEnabled: Bool
@@ -95,8 +95,8 @@ public struct StorageClientConfiguration: Sendable {
 
 /// The top-level Supabase Storage client for managing buckets and files.
 ///
-/// ``SupabaseStorageClient`` provides bucket-management operations directly and a ``from(_:)``
-/// method to obtain a ``StorageFileApi`` scoped to a specific bucket.
+/// ``StorageClient`` provides bucket-management operations directly and a ``from(_:)``
+/// method to obtain a ``StorageBucket`` scoped to a specific bucket.
 ///
 /// Typically you obtain an instance via the main `SupabaseClient`:
 ///
@@ -138,13 +138,13 @@ public struct StorageClientConfiguration: Sendable {
 /// - ``emptyBucket(_:)``
 /// - ``deleteBucket(_:)``
 /// - ``purgeCache(bucket:transformationsOnly:)``
-public struct SupabaseStorageClient: Sendable {
+public struct StorageClient: Sendable {
   let api: StorageApi
 
   /// The configuration used to initialize this client instance.
   public var configuration: StorageClientConfiguration { api.configuration }
 
-  /// Creates a ``SupabaseStorageClient`` with the given configuration.
+  /// Creates a ``StorageClient`` with the given configuration.
   ///
   /// - Parameter configuration: The configuration that controls the endpoint URL, authentication
   ///   headers, JSON codecs, and transport.
@@ -156,11 +156,11 @@ public struct SupabaseStorageClient: Sendable {
     self.api = api
   }
 
-  /// Returns a new ``SupabaseStorageClient`` with an additional HTTP header merged into the
+  /// Returns a new ``StorageClient`` with an additional HTTP header merged into the
   /// underlying configuration, included in all requests made by the returned instance (and by
-  /// ``StorageFileApi`` instances subsequently obtained via ``from(_:)``).
+  /// ``StorageBucket`` instances subsequently obtained via ``from(_:)``).
   ///
-  /// Because ``SupabaseStorageClient`` is an immutable value type, this method does not mutate
+  /// Because ``StorageClient`` is an immutable value type, this method does not mutate
   /// `self` — it returns a new instance. Discarding the return value is a no-op, so always use
   /// the result:
   ///
@@ -171,21 +171,21 @@ public struct SupabaseStorageClient: Sendable {
   /// - Parameters:
   ///   - value: The value of the header field.
   ///   - key: The name of the header field. The key is case-insensitively stored as lowercase.
-  /// - Returns: A new ``SupabaseStorageClient`` with the header merged into the configuration's
+  /// - Returns: A new ``StorageClient`` with the header merged into the configuration's
   ///   headers.
   public func setHeader(_ value: String, forKey key: String) -> Self {
-    SupabaseStorageClient(api: api.setHeader(value, forKey: key))
+    StorageClient(api: api.setHeader(value, forKey: key))
   }
 
-  /// Returns a ``StorageFileApi`` scoped to the given bucket.
+  /// Returns a ``StorageBucket`` scoped to the given bucket.
   ///
   /// Use the returned object to upload, download, list, move, copy, or delete files within the
   /// specified bucket.
   ///
   /// - Parameter id: The unique identifier of the bucket to operate on.
-  /// - Returns: A ``StorageFileApi`` configured for the given bucket.
-  public func from(_ id: String) -> StorageFileApi {
-    StorageFileApi(bucketId: id, api: api)
+  /// - Returns: A ``StorageBucket`` configured for the given bucket.
+  public func from(_ id: String) -> StorageBucket {
+    StorageBucket(id: id, api: api)
   }
 
   /// A client for managing vector buckets.

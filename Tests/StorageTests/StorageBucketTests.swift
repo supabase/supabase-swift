@@ -13,7 +13,7 @@ import Testing
 
 extension StorageMockerTests {
   @Suite(.mockerSerialized)
-  struct StorageFileAPITests {
+  struct StorageBucketTests {
     let url = URL(string: "http://localhost:54321/storage/v1")!
 
     init() {
@@ -21,14 +21,14 @@ extension StorageMockerTests {
       JSONEncoder.unconfiguredEncoder.outputFormatting = [.sortedKeys]
     }
 
-    private func makeSUT() -> SupabaseStorageClient {
+    private func makeSUT() -> StorageClient {
       Mocker.removeAll()
 
       let configuration = URLSessionConfiguration.ephemeral
       configuration.protocolClasses = [MockingURLProtocol.self]
       let session = URLSession(configuration: configuration)
 
-      return SupabaseStorageClient(
+      return StorageClient(
         configuration: StorageClientConfiguration(
           url: url,
           headers: [
@@ -42,9 +42,9 @@ extension StorageMockerTests {
     /// A client whose transport records the request head, for asserting the emitted upload
     /// headers.
     private func makeRequestCapturingSUT(request captured: LockIsolated<HTTPRequest?>)
-      -> SupabaseStorageClient
+      -> StorageClient
     {
-      SupabaseStorageClient(
+      StorageClient(
         configuration: StorageClientConfiguration(
           url: url,
           headers: [:],
@@ -67,9 +67,9 @@ extension StorageMockerTests {
     }
 
     private func makeBodyCapturingSUT(body captured: LockIsolated<Data?>, response: String)
-      -> SupabaseStorageClient
+      -> StorageClient
     {
-      SupabaseStorageClient(
+      StorageClient(
         configuration: StorageClientConfiguration(
           url: url,
           headers: [:],
@@ -88,9 +88,9 @@ extension StorageMockerTests {
     }
 
     private func makeFailingSUT(_ failure: @escaping @Sendable () throws -> Never)
-      -> SupabaseStorageClient
+      -> StorageClient
     {
-      SupabaseStorageClient(
+      StorageClient(
         configuration: StorageClientConfiguration(
           url: url,
           headers: [:],

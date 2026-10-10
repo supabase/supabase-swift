@@ -14,7 +14,7 @@ import HTTPTypes
 
 /// A client for managing Supabase Storage's alpha "vector buckets" feature (`storage.vectors`).
 ///
-/// Obtain an instance via ``SupabaseStorageClient/vectors``:
+/// Obtain an instance via ``StorageClient/vectors``:
 ///
 /// ```swift
 /// try await client.storage.vectors.createBucket("documents")

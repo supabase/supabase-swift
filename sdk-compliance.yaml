@@ -1471,35 +1471,36 @@ features:
   storage.file_buckets.get_bucket:
     status: implemented
     symbols:
-      - SupabaseStorageClient.bucket
+      - StorageClient.bucket
   storage.file_buckets.list_file_buckets:
     status: implemented
     symbols:
-      - SupabaseStorageClient.listBuckets
+      - StorageClient.listBuckets
   storage.file_buckets.update_bucket:
     status: implemented
     symbols:
-      - SupabaseStorageClient.updateBucket
+      - StorageClient.updateBucket
   storage.file_buckets.delete_file_bucket:
     status: implemented
     symbols:
-      - SupabaseStorageClient.deleteBucket
+      - StorageClient.deleteBucket
   storage.file_buckets.empty_bucket:
     status: implemented
     symbols:
-      - SupabaseStorageClient.emptyBucket
+      - StorageClient.emptyBucket
   storage.file_buckets.access_bucket:
     status: implemented
     symbols:
-      - SupabaseStorageClient.from
+      - StorageClient.from
+      - StorageBucket.id
   storage.file_buckets.upload:
     status: implemented
     symbols:
-      - StorageFileApi.upload
+      - StorageBucket.upload
   storage.file_buckets.download:
     status: implemented
     symbols:
-      - StorageFileApi.download
+      - StorageBucket.download
   storage.file_buckets.list_files:
     status: implemented
     symbols:
@@ -1512,50 +1513,50 @@ features:
   storage.file_buckets.move:
     status: implemented
     symbols:
-      - StorageFileApi.move
+      - StorageBucket.move
   storage.file_buckets.copy:
     status: implemented
     symbols:
-      - StorageFileApi.copy
+      - StorageBucket.copy
   storage.file_buckets.remove:
     status: implemented
     symbols:
-      - StorageFileApi.remove
+      - StorageBucket.remove
   storage.file_buckets.get_public_url:
     status: implemented
     symbols:
-      - StorageFileApi.publicURL
+      - StorageBucket.publicURL
       - DownloadBehavior
       - DownloadBehavior.withOriginalName
       - DownloadBehavior.named
   storage.file_buckets.create_signed_url:
     status: implemented
     symbols:
-      - StorageFileApi.createSignedURL
+      - StorageBucket.createSignedURL
   storage.file_buckets.create_signed_urls:
     status: implemented
     symbols:
-      - StorageFileApi.createSignedURLs
+      - StorageBucket.createSignedURLs
   storage.file_buckets.create_signed_upload_url:
     status: implemented
     symbols:
-      - StorageFileApi.createSignedUploadURL
+      - StorageBucket.createSignedUploadURL
   storage.file_buckets.upload_with_signed_url:
     status: implemented
     symbols:
-      - StorageFileApi.uploadToSignedURL
+      - StorageBucket.uploadToSignedURL
   storage.file_buckets.update_file:
     status: implemented
     symbols:
-      - StorageFileApi.update
+      - StorageBucket.update
   storage.file_buckets.file_exists:
     status: implemented
     symbols:
-      - StorageFileApi.exists
+      - StorageBucket.exists
   storage.file_buckets.file_info:
     status: implemented
     symbols:
-      - StorageFileApi.info
+      - StorageBucket.info
   storage.file_buckets.download_with_transform:
     status: implemented
     symbols:
@@ -1575,17 +1576,17 @@ features:
       - ImageFormat.encode
   storage.file_buckets.copy_cross_bucket:
     status: implemented
-    note: "Not a separate method: the destinationBucket field of the options: DestinationOptions? parameter on StorageFileApi.copy."
+    note: "Not a separate method: the destinationBucket field of the options: DestinationOptions? parameter on StorageBucket.copy."
     symbols:
       - DestinationOptions.destinationBucket
   storage.file_buckets.move_cross_bucket:
     status: implemented
-    note: "Not a separate method: the destinationBucket field of the options: DestinationOptions? parameter on StorageFileApi.move."
+    note: "Not a separate method: the destinationBucket field of the options: DestinationOptions? parameter on StorageBucket.move."
     symbols:
       - DestinationOptions.destinationBucket
   storage.file_buckets.upload_with_metadata:
     status: implemented
-    note: "Not a separate method: the metadata/cacheControl/contentType fields of the options: FileOptions parameter on StorageFileApi.upload."
+    note: "Not a separate method: the metadata/cacheControl/contentType fields of the options: FileOptions parameter on StorageBucket.upload."
     symbols:
       - FileOptions.metadata
       - FileOptions.cacheControl
@@ -1599,11 +1600,11 @@ features:
   storage.file_buckets.purge_bucket_cache:
     status: implemented
     symbols:
-      - SupabaseStorageClient.purgeCache
+      - StorageClient.purgeCache
   storage.file_buckets.purge_cache:
     status: implemented
     symbols:
-      - StorageFileApi.purgeCache
+      - StorageBucket.purgeCache
   storage.file_buckets.request_cancellation: implemented
 
   # ── Storage — Vector Buckets ───────────────────────────────────────────────

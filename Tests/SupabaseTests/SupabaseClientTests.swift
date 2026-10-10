@@ -492,7 +492,7 @@ struct SupabaseClientTests {
       _ = client.functions
       _ = client.realtimeV2
 
-      // `storage` builds a fresh, uncached `SupabaseStorageClient` on every access (see
+      // `storage` builds a fresh, uncached `StorageClient` on every access (see
       // `SupabaseClient.storage`), so discarding the result here can't exercise the same
       // detection: nothing keeps the closures it captures alive past this statement, so this
       // arm can't prove `storage` is cycle-free the way the cached sub-clients above can.
