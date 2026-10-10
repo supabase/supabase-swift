@@ -520,6 +520,22 @@ struct SupabaseClientTests {
     #expect(client.functions.configuration.headers[.init("Apikey")!] == "sb_publishable_abc123")
   }
 
+  /// Storage gets the same headers as Functions: no static bearer for a publishable key, so the
+  /// session token from `AccessTokenMiddleware` is the only `Authorization` Storage sends.
+  @Test
+  func storageOmitsAuthorizationBearerForNewFormatKey() {
+    let client = SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "sb_publishable_abc123",
+      options: SupabaseClientOptions(auth: .init(storage: AuthLocalStorageMock()))
+    )
+
+    let headers = HTTPFields(client.storage.configuration.headers)
+    #expect(headers[.authorization] == nil)
+    #expect(headers[.init("Apikey")!] == "sb_publishable_abc123")
+    #expect(client.storage.configuration.accessToken == nil)
+  }
+
   /// The legacy-key bearer is the `accessToken` provider's fallback, not a static header, so a
   /// per-call `Authorization` and the session token both win over it. The wire behavior is
   /// covered by `SupabaseClientFunctionsAuthTests`.

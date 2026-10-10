@@ -19,7 +19,7 @@ public import Logging
 ///
 /// ### Creating a configuration
 ///
-/// - ``init(url:headers:http:logger:usesNewHostname:retryEnabled:)``
+/// - ``init(url:headers:http:logger:usesNewHostname:retryEnabled:accessToken:)``
 ///
 /// ### Configuration properties
 ///
@@ -29,11 +29,15 @@ public import Logging
 /// - ``logger``
 /// - ``usesNewHostname``
 /// - ``retryEnabled``
+/// - ``accessToken``
 public struct StorageClientConfiguration: Sendable {
   /// The base URL of the Storage API endpoint (e.g. `https://project.supabase.co/storage/v1`).
   public var url: URL
 
-  /// HTTP headers sent with every request, such as the `Authorization` header.
+  /// HTTP headers sent with every request.
+  ///
+  /// A static `Authorization` here wins over ``accessToken``: the token is only sent when the
+  /// request carries no `Authorization`. Prefer ``accessToken`` for a token that rotates.
   public var headers: [String: String]
 
   /// The transport and middleware chain every request goes through.
@@ -53,6 +57,13 @@ public struct StorageClientConfiguration: Sendable {
   /// changes are never replayed.
   public let retryEnabled: Bool
 
+  /// Resolved for every request and sent as `Authorization: Bearer <token>` unless the request
+  /// already carries `Authorization`. `nil` (the default) sends no bearer token.
+  ///
+  /// For a standalone client whose session token rotates; `SupabaseClient` injects its own
+  /// token middleware and leaves this `nil`.
+  public var accessToken: (@Sendable () async throws -> String?)?
+
   /// The clock the waits between retries sleep on.
   package var clock: any Clock<Duration> = ContinuousClock()
 
@@ -66,13 +77,16 @@ public struct StorageClientConfiguration: Sendable {
   ///     `SwiftLogNoOpLogHandler` to disable logging entirely.
   ///   - usesNewHostname: When `true`, the storage-specific hostname is used, enabling uploads over 50 GB.
   ///   - retryEnabled: Whether transient failures of reads are retried.
+  ///   - accessToken: Resolved for every request and sent as a bearer token when the request
+  ///     carries no `Authorization` header.
   public init(
     url: URL,
     headers: [String: String],
     http: HTTPClientConfiguration = .init(),
     logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.storage"),
     usesNewHostname: Bool = false,
-    retryEnabled: Bool = true
+    retryEnabled: Bool = true,
+    accessToken: (@Sendable () async throws -> String?)? = nil
   ) {
     self.url = url
     self.headers = headers
@@ -82,6 +96,7 @@ public struct StorageClientConfiguration: Sendable {
     self.logger = logger
     self.usesNewHostname = usesNewHostname
     self.retryEnabled = retryEnabled
+    self.accessToken = accessToken
   }
 }
 
