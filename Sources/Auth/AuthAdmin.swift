@@ -110,7 +110,7 @@ public struct AuthAdmin: Sendable {
   ) async throws -> User {
     try await api.execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("admin/invite"),
+        url: configuration.url.appendingPathComponent("invite"),
         method: .post,
         query: [
           (redirectTo ?? configuration.redirectToURL).map {
