@@ -138,15 +138,11 @@ struct EmitterTests {
         + "@Table reserves primaryKeyColumns",
       "public.hostile.userId is named userId2: another column is also named userId",
       "public.hostile.user-id is named userId3: another column is also named userId",
-      "public.hostile.span has the type pg_catalog.int4range, which is not mapped; "
-        + "it is decoded as JSONValue",
       #"function my"schema.elsewhere(hostile) is not generated: "#
         + "it is not in the schema of public.hostile",
       "function public.anything(hostile) is not generated: it returns record, not a value",
       "function public.books_of(hostile) is not generated: "
         + "it returns inventory.books, which is not generated",
-      "function public.duration(hostile) returns the type pg_catalog.interval, "
-        + "which is not mapped; it is decoded as JSONValue",
       "function public.id(hostile) is not generated: "
         + "hostile has a column of the same name, which PostgREST resolves",
       "function public.many_ints(hostile) is not generated: "
@@ -348,6 +344,22 @@ struct EmitterTests {
       ("date", "pg_catalog", "Date"),
       ("json", "pg_catalog", "JSONValue"),
       ("jsonb", "pg_catalog", "JSONValue"),
+      ("inet", "pg_catalog", "String"),
+      ("cidr", "pg_catalog", "String"),
+      ("macaddr", "pg_catalog", "String"),
+      ("money", "pg_catalog", "String"),
+      ("xml", "pg_catalog", "String"),
+      ("int4range", "pg_catalog", "_PostgresRange<Int>"),
+      ("int8range", "pg_catalog", "_PostgresRange<Int>"),
+      ("numrange", "pg_catalog", "_PostgresRange<Decimal>"),
+      ("tsrange", "pg_catalog", "_PostgresRange<Date>"),
+      ("tstzrange", "pg_catalog", "_PostgresRange<Date>"),
+      ("daterange", "pg_catalog", "_PostgresRange<Date>"),
+      ("interval", "pg_catalog", "_PostgresInterval"),
+      ("time", "pg_catalog", "_PostgresTime"),
+      ("timetz", "pg_catalog", "_PostgresTime"),
+      ("bytea", "pg_catalog", "_PostgresBytes"),
+      ("_bytea", "pg_catalog", "[_PostgresBytes]"),
       ("_int4", "pg_catalog", "[Int]"),
       ("_text", "pg_catalog", "[String]"),
       ("status", "public", "Status"),
@@ -363,23 +375,23 @@ struct EmitterTests {
 
   @Test(
     arguments: [
-      ("bytea", "pg_catalog"), ("interval", "pg_catalog"), ("time", "pg_catalog"),
-      ("int4range", "pg_catalog"), ("address", "public"), ("geometry", "extensions"),
-      ("_bytea", "pg_catalog"),
+      ("point", "pg_catalog"), ("tstzmultirange", "pg_catalog"), ("address", "public"),
+      ("geometry", "extensions"), ("_point", "pg_catalog"),
     ]
   )
-  func unmappedTypeIsJSONValueWithANote(format: String, typeSchema: String) {
+  func unmappedTypeIsPostgresUnmappedWithANote(format: String, typeSchema: String) {
     let result = generated(format: format, typeSchema: typeSchema)
     let element = arrayElement(of: format) ?? format
     #expect(result.exitCode == 0)
     #expect(
       result.standardError
         == "supabase-typegen: note: public.t.c has the type \(typeSchema).\(element), which is "
-        + "not mapped; it is decoded as JSONValue\n"
+        + "not mapped; it is decoded as _PostgresUnmapped\n"
     )
     #expect(
       result.standardOutput.contains(
-        arrayElement(of: format) == nil ? "\n  var c: JSONValue\n" : "\n  var c: [JSONValue]\n"))
+        arrayElement(of: format) == nil
+          ? "\n  var c: _PostgresUnmapped\n" : "\n  var c: [_PostgresUnmapped]\n"))
   }
 
   @Test

@@ -100,7 +100,7 @@ public struct Hostile {
   public var hashValue: Int
   public var mood: Mood
   public var moods: [Mood]?
-  public var span: JSONValue?
+  public var span: _PostgresRange<Int>?
   public var nick: String
   public var ids: [UUID]?
   public var price: Decimal
@@ -127,7 +127,7 @@ extension Hostile.Columns {
   public var classes: _PostgrestToManyRelation<Hostile, MySchemaClass> {
     .init("classes")
   }
-  public var duration: _PostgrestComputedField<Hostile, JSONValue> {
+  public var duration: _PostgrestComputedField<Hostile, _PostgresInterval> {
     .init("duration")
   }
   public var getThings: _PostgrestComputedField<Hostile, Int> {

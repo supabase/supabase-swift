@@ -11,11 +11,12 @@
 // column's Postgres type rather than by the operator: `{a,b}` for an array, `[1,3)` for a range,
 // `{"a":1}` for jsonb. Mixing them is a 400.
 //
-// Only the array shape is type-checked (`where Value == [E]`), so `contains(["a"])` on a
-// `String` column does not compile. A range and a jsonb column have no distinguishing Swift
-// type to constrain on, so the range and JSON methods sit on bare
-// `_PostgrestFilterableExpression` and compile on any column; pairing one with the wrong column
-// is a server error (`42883 operator does not exist`), not a wrong answer.
+// The array and range shapes are type-checked (`where Value == [E]`, `where Value ==
+// _PostgresRange<B>`), so `contains(["a"])` on a `String` column does not compile, nor does a
+// `daterange` operand on an `int4range` column. A jsonb column has no distinguishing Swift type to
+// constrain on, so the JSON methods sit on bare `_PostgrestFilterableExpression` and compile on
+// any column; pairing one with the wrong column is a server error (`42883 operator does not
+// exist`), not a wrong answer.
 //
 // The array operand is the `[E]` itself: its `rawValue` is the `{a,b}` literal with every member
 // escaped as the literal requires.
@@ -45,51 +46,60 @@ extension _PostgrestFilterableExpression {
 
 // MARK: - Range operands
 //
-// A range literal is taken as a string, and is a single value so that a group escapes its
-// `)`/`]`: bare, they close an enclosing `or=(…)` early and 400. The opposite of `in`'s list.
+// A range operand is a single value, so a group quotes it: a bare `)`/`]` closes an enclosing
+// `or=(…)` early and 400s. At top level it stays bare, since `eq."[1,10)"` is a `22P02`. Every
+// operator takes a range, never an element: `int_span=cs.5` is a `22P02` too.
 
 extension _PostgrestFilterableExpression {
   /// Matches rows where this range column contains `range`.
   ///
-  /// - Parameter range: A Postgres range literal, for example `"[2,3)"`.
-  public func containsRange(_ range: String) -> _PostgrestFilter<Root> {
+  /// - Parameter range: A range of the column's own type, for example `"[2,3)"`.
+  public func containsRange<B>(_ range: _PostgresRange<B>) -> _PostgrestFilter<Root>
+  where Value == _PostgresRange<B> {
     _PostgrestFilter(column: postgrestExpression, operator: .contains, value: range)
   }
 
   /// Matches rows where this range column is contained by `range`.
-  public func containedByRange(_ range: String) -> _PostgrestFilter<Root> {
+  public func containedByRange<B>(_ range: _PostgresRange<B>) -> _PostgrestFilter<Root>
+  where Value == _PostgresRange<B> {
     _PostgrestFilter(column: postgrestExpression, operator: .containedBy, value: range)
   }
 
   /// Matches rows where this range column overlaps `range`.
-  public func overlapsRange(_ range: String) -> _PostgrestFilter<Root> {
+  public func overlapsRange<B>(_ range: _PostgresRange<B>) -> _PostgrestFilter<Root>
+  where Value == _PostgresRange<B> {
     _PostgrestFilter(column: postgrestExpression, operator: .overlaps, value: range)
   }
 
   /// Matches rows where this range column is strictly to the left of `range`.
   ///
-  /// - Parameter range: A Postgres range literal, for example `"[2024-01-01,2024-02-01)"`.
-  public func rangeLt(_ range: String) -> _PostgrestFilter<Root> {
+  /// - Parameter range: A range of the column's own type, for example `"[2024-01-01,2024-02-01)"`.
+  public func rangeLt<B>(_ range: _PostgresRange<B>) -> _PostgrestFilter<Root>
+  where Value == _PostgresRange<B> {
     _PostgrestFilter(column: postgrestExpression, operator: .rangeLt, value: range)
   }
 
   /// Matches rows where this range column is strictly to the right of `range`.
-  public func rangeGt(_ range: String) -> _PostgrestFilter<Root> {
+  public func rangeGt<B>(_ range: _PostgresRange<B>) -> _PostgrestFilter<Root>
+  where Value == _PostgresRange<B> {
     _PostgrestFilter(column: postgrestExpression, operator: .rangeGt, value: range)
   }
 
   /// Matches rows where this range column does not extend to the left of `range`.
-  public func rangeGte(_ range: String) -> _PostgrestFilter<Root> {
+  public func rangeGte<B>(_ range: _PostgresRange<B>) -> _PostgrestFilter<Root>
+  where Value == _PostgresRange<B> {
     _PostgrestFilter(column: postgrestExpression, operator: .rangeGte, value: range)
   }
 
   /// Matches rows where this range column does not extend to the right of `range`.
-  public func rangeLte(_ range: String) -> _PostgrestFilter<Root> {
+  public func rangeLte<B>(_ range: _PostgresRange<B>) -> _PostgrestFilter<Root>
+  where Value == _PostgresRange<B> {
     _PostgrestFilter(column: postgrestExpression, operator: .rangeLte, value: range)
   }
 
   /// Matches rows where this range column is adjacent to `range`.
-  public func rangeAdjacent(_ range: String) -> _PostgrestFilter<Root> {
+  public func rangeAdjacent<B>(_ range: _PostgresRange<B>) -> _PostgrestFilter<Root>
+  where Value == _PostgresRange<B> {
     _PostgrestFilter(column: postgrestExpression, operator: .rangeAdjacent, value: range)
   }
 }

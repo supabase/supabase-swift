@@ -528,11 +528,27 @@ the goldens.
 A Postgres enum becomes a Swift `enum` (`String, Codable, Hashable, Sendable,
 PostgrestFilterValue`), generated for every enum in a selected schema and for any other enum a
 generated column uses. "Enum-like Values" governs the SDK's own types, not this generated code: a
-label added to the Postgres enum fails to decode until the user regenerates. A column type with no
-Swift mapping (a composite, a range, `bytea`, `interval`, `time`, an extension type other than
-`citext`) becomes `JSONValue`, and the generator writes a note naming the column on standard error.
-`JSONValue` decodes whatever PostgREST sends for the column and writes it back unchanged, so one
-such column never stops generation; a typed filter on it takes a `JSONValue` operand.
+label added to the Postgres enum fails to decode until the user regenerates.
+
+Each Postgres type maps to one Swift type, so the generated `@Table` property's type is the column's
+Postgres type. An app that decodes a column as its own type declares it in `@SelectionOf`. A type
+with no plain Swift counterpart gets one of PostgREST's `_Postgres…` types (in
+`Sources/PostgREST/Columns/PostgresValueTypes.swift`) when that changes what compiles or how a
+value is encoded, and a plain Swift type otherwise:
+
+| Postgres | Swift |
+| -------- | ----- |
+| `json`, `jsonb` | `JSONValue`, and nothing else is |
+| `int4range`, `int8range` / `numrange` / `tsrange`, `tstzrange`, `daterange` | `_PostgresRange<Int>` / `<Decimal>` / `<Date>`, the only type the range filters accept |
+| `interval` | `_PostgresInterval`, the text PostgREST sends, not parsed (it depends on `IntervalStyle`) |
+| `time`, `timetz` | `_PostgresTime` |
+| `bytea` | `_PostgresBytes`, `Data` in the `\x…` hex form, not base64 |
+| `inet`, `cidr`, `macaddr`, `money`, `xml` | `String` |
+| a composite, a geometric type, an extension type other than `citext` | `_PostgresUnmapped` |
+
+`_PostgresUnmapped` holds whatever JSON PostgREST sends for the column and writes it back
+unchanged, so one such column never stops generation, and the generator writes a note naming the
+column on standard error. It has no filters: Postgres has no equality for a composite or a `point`.
 
 A Postgres `date` becomes `Date`, read and written as midnight UTC. A caller who builds "today" at
 local midnight east of UTC writes the previous day; build the value in a UTC calendar.
