@@ -826,15 +826,15 @@ public struct Bucket: Identifiable, Hashable, Decodable, Sendable {
   }
 }
 
-// MARK: - StorageByteCount
+// MARK: - ByteCount
 
-/// A file size limit for a Storage bucket, expressed as an integer byte count or a human-readable string.
+/// A number of bytes, for a bucket's file-size limit, in any form Storage reads.
 ///
-/// ``StorageByteCount`` is accepted wherever a file-size limit is required (e.g. ``BucketOptions``).
-/// You can create instances using the static factory methods, integer literals, or string literals.
+/// Storage accepts an exact count or a size string such as `"1.5mb"`, so the value is kept as it
+/// will be sent. A whole number of bytes encodes as a JSON number, anything else as a string.
 ///
 /// ```swift
-/// BucketOptions(fileSizeLimit: .megabytes(1.5))
+/// BucketOptions(fileSizeLimit: .megabytes(1.5))   // "1.5mb"
 /// BucketOptions(fileSizeLimit: "500kb")
 /// BucketOptions(fileSizeLimit: 5_000_000)
 /// ```
@@ -843,88 +843,79 @@ public struct Bucket: Identifiable, Hashable, Decodable, Sendable {
 ///
 /// ### Creating a byte count
 ///
-/// - ``init(_:)``
-/// - ``init(stringValue:)``
+/// - ``init(bytes:)``
+/// - ``init(rawValue:)``
 /// - ``kilobytes(_:)``
 /// - ``megabytes(_:)``
 /// - ``gigabytes(_:)``
 ///
-/// ### Accessing the stored value
+/// ### Reading the value
 ///
-/// - ``intValue``
-/// - ``stringValue``
-public struct StorageByteCount: Sendable, Hashable {
-  /// The exact byte count, or `nil` when a human-readable string value is used.
-  public let intValue: Int64?
+/// - ``rawValue``
+/// - ``bytes``
+public struct ByteCount: RawRepresentable, Hashable, Sendable {
+  /// The value as Storage reads it: a byte count such as `"5242880"`, or a size string such as
+  /// `"1.5mb"`.
+  public let rawValue: String
 
-  /// A human-readable size string (e.g. `"1.5mb"`, `"500kb"`), or `nil` when an integer is used.
-  public let stringValue: String?
-
-  /// Creates a ``StorageByteCount`` from an exact byte count.
-  ///
-  /// - Parameter intValue: The number of bytes.
-  public init(_ intValue: Int64) {
-    self.intValue = intValue
-    self.stringValue = nil
+  /// Creates a ``ByteCount`` from a value Storage reads, such as `"1.5mb"` or `"5242880"`.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
   }
 
-  /// Creates a ``StorageByteCount`` from a human-readable size string.
-  ///
-  /// - Parameter stringValue: A size string such as `"500kb"`, `"1.5mb"`, or `"2gb"`.
-  public init(stringValue: String) {
-    self.intValue = nil
-    self.stringValue = stringValue
+  /// Creates a ``ByteCount`` from an exact number of bytes.
+  public init(bytes: Int64) {
+    self.init(rawValue: String(bytes))
   }
 
-  private static func formatValue(_ value: Double) -> String {
-    value.truncatingRemainder(dividingBy: 1) == 0
+  /// The exact number of bytes, or `nil` when the value is a size string Storage parses.
+  public var bytes: Int64? {
+    Int64(rawValue)
+  }
+
+  private static func unit(_ value: Double, _ suffix: String) -> ByteCount {
+    let number =
+      value.truncatingRemainder(dividingBy: 1) == 0
       ? Int64(exactly: value).map(String.init) ?? String(value)
       : String(value)
+    return ByteCount(rawValue: number + suffix)
   }
 
-  /// Creates a ``StorageByteCount`` from a number of kilobytes.
-  ///
-  /// - Parameter value: Size in kilobytes.
-  public static func kilobytes(_ value: Double) -> Self {
-    Self(stringValue: "\(formatValue(value))kb")
+  /// `value` kilobytes, sent as `"<value>kb"`.
+  public static func kilobytes(_ value: Double) -> ByteCount {
+    unit(value, "kb")
   }
 
-  /// Creates a ``StorageByteCount`` from a number of megabytes.
-  ///
-  /// - Parameter value: Size in megabytes.
-  public static func megabytes(_ value: Double) -> Self {
-    Self(stringValue: "\(formatValue(value))mb")
+  /// `value` megabytes, sent as `"<value>mb"`.
+  public static func megabytes(_ value: Double) -> ByteCount {
+    unit(value, "mb")
   }
 
-  /// Creates a ``StorageByteCount`` from a number of gigabytes.
-  ///
-  /// - Parameter value: Size in gigabytes.
-  public static func gigabytes(_ value: Double) -> Self {
-    Self(stringValue: "\(formatValue(value))gb")
+  /// `value` gigabytes, sent as `"<value>gb"`.
+  public static func gigabytes(_ value: Double) -> ByteCount {
+    unit(value, "gb")
   }
 }
 
-extension StorageByteCount: ExpressibleByIntegerLiteral {
-  public init(integerLiteral value: Int64) { self.init(value) }
+extension ByteCount: ExpressibleByIntegerLiteral {
+  public init(integerLiteral value: Int64) {
+    self.init(bytes: value)
+  }
 }
 
-extension StorageByteCount: ExpressibleByStringLiteral {
+extension ByteCount: ExpressibleByStringLiteral {
   public init(stringLiteral value: String) {
-    if let n = Int64(value) {
-      self.init(n)
-    } else {
-      self.init(stringValue: value)
-    }
+    self.init(rawValue: value)
   }
 }
 
-extension StorageByteCount: Encodable {
+extension ByteCount: Encodable {
   public func encode(to encoder: any Encoder) throws {
     var container = encoder.singleValueContainer()
-    if let string = stringValue {
-      try container.encode(string)
+    if let bytes {
+      try container.encode(bytes)
     } else {
-      try container.encode(intValue ?? 0)
+      try container.encode(rawValue)
     }
   }
 }
@@ -1081,7 +1072,12 @@ public enum DownloadBehavior: Sendable {
 
 // MARK: - BucketOptions
 
-/// Options used when creating or updating a Storage bucket.
+/// The settings of a Storage bucket, for ``StorageClient/createBucket(_:options:)`` and
+/// ``StorageClient/updateBucket(_:options:)``.
+///
+/// Every field is optional. On create, a `nil` field takes the server default (private, no size
+/// limit, every MIME type). On update, only the fields that are set are sent, so the others keep
+/// their current value.
 ///
 /// ```swift
 /// try await storage.createBucket(
@@ -1092,6 +1088,8 @@ public enum DownloadBehavior: Sendable {
 ///     allowedMimeTypes: ["image/png", "image/jpeg"]
 ///   )
 /// )
+/// // Change one setting, keep the rest
+/// try await storage.updateBucket("user-uploads", options: BucketOptions(isPublic: true))
 /// ```
 ///
 /// ## Topics
@@ -1105,30 +1103,30 @@ public enum DownloadBehavior: Sendable {
 /// - ``isPublic``
 /// - ``fileSizeLimit``
 /// - ``allowedMimeTypes``
-public struct BucketOptions: Sendable {
+public struct BucketOptions: Hashable, Sendable {
   /// Whether the bucket is publicly accessible without an authorization token.
-  public var isPublic: Bool
+  public var isPublic: Bool?
 
-  /// Maximum file size allowed for uploads, stored as a string for the API (e.g. `"10mb"`).
-  public var fileSizeLimit: String?
+  /// Maximum file size allowed for uploads.
+  public var fileSizeLimit: ByteCount?
 
-  /// MIME types accepted during upload, e.g. `["image/png", "image/*"]`. `nil` allows all types.
+  /// MIME types accepted during upload, e.g. `["image/png", "image/*"]`.
   public var allowedMimeTypes: [String]?
 
-  /// Creates a ``BucketOptions`` value.
+  /// Creates a ``BucketOptions`` value. A `nil` field is left to the server on create and left
+  /// unchanged on update.
   ///
   /// - Parameters:
-  ///   - isPublic: Whether the bucket is publicly readable. Defaults to `false`.
-  ///   - fileSizeLimit: Maximum upload size. Use ``StorageByteCount`` factory methods for
-  ///     convenience, e.g. `.megabytes(10)`. Defaults to `nil` (no limit).
-  ///   - allowedMimeTypes: Permitted MIME types. `nil` allows all MIME types.
+  ///   - isPublic: Whether the bucket is publicly readable.
+  ///   - fileSizeLimit: Maximum upload size, e.g. `.megabytes(10)`.
+  ///   - allowedMimeTypes: Permitted MIME types.
   public init(
-    isPublic: Bool = false,
-    fileSizeLimit: StorageByteCount? = nil,
+    isPublic: Bool? = nil,
+    fileSizeLimit: ByteCount? = nil,
     allowedMimeTypes: [String]? = nil
   ) {
     self.isPublic = isPublic
-    self.fileSizeLimit = fileSizeLimit?.stringValue ?? fileSizeLimit?.intValue.map(String.init)
+    self.fileSizeLimit = fileSizeLimit
     self.allowedMimeTypes = allowedMimeTypes
   }
 }
