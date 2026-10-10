@@ -1243,6 +1243,69 @@ extension AuthMockerTests {
     #endif
 
     @Test
+    func updateUserKeepsTheSessionRefreshedDuringTheRequest() async throws {
+      let sut = makeSUT()
+      sut.dependencies.sessionStorage.store(.valid)
+      var refreshedSession = Session.valid
+      refreshedSession.accessToken = "accesstoken-refreshed"
+      refreshedSession.refreshToken = "refreshtoken-refreshed"
+
+      var mock = Mock(
+        url: clientURL.appendingPathComponent("user"),
+        ignoreQuery: true,
+        statusCode: 200,
+        data: [.put: MockData.user]
+      )
+      mock.onRequestHandler = OnRequestHandler(callback: {
+        sut.dependencies.sessionStorage.store(refreshedSession)
+      })
+      mock.register()
+
+      let updatedUser = try await assertAuthStateChanges(
+        sut: sut,
+        action: {
+          try await sut.update(user: UserAttributes(data: ["name": .string("Updated")]))
+        },
+        expectedEvents: [.initialSession, .userUpdated]
+      )
+
+      var expectedSession = refreshedSession
+      expectedSession.user = updatedUser
+      expectNoDifference(sut.dependencies.sessionStorage.get(), expectedSession)
+    }
+
+    @Test
+    func updateUserLeavesAnotherUsersSessionUntouched() async throws {
+      let sut = makeSUT()
+      sut.dependencies.sessionStorage.store(.valid)
+      var otherSession = Session.valid
+      otherSession.accessToken = "accesstoken-other"
+      otherSession.refreshToken = "refreshtoken-other"
+      otherSession.user.id = UUID(uuidString: "00000000-0000-0000-0000-000000000002")!
+
+      var mock = Mock(
+        url: clientURL.appendingPathComponent("user"),
+        ignoreQuery: true,
+        statusCode: 200,
+        data: [.put: MockData.user]
+      )
+      mock.onRequestHandler = OnRequestHandler(callback: {
+        sut.dependencies.sessionStorage.store(otherSession)
+      })
+      mock.register()
+
+      try await assertAuthStateChanges(
+        sut: sut,
+        action: {
+          try await sut.update(user: UserAttributes(data: ["name": .string("Updated")]))
+        },
+        expectedEvents: [.initialSession]
+      )
+
+      expectNoDifference(sut.dependencies.sessionStorage.get(), otherSession)
+    }
+
+    @Test
     func sessionWithURL_implicitFlow() async throws {
       Mock(
         url: clientURL.appendingPathComponent("user"),

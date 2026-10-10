@@ -20,6 +20,7 @@ struct SessionManager: Sendable {
   var session: @Sendable () async throws -> Session
   var refreshSession: @Sendable (_ refreshToken: String) async throws -> Session
   var update: @Sendable (_ session: Session) async -> Void
+  var updateUser: @Sendable (_ user: User) async -> Session?
   var remove: @Sendable () async -> Void
   /// Deletes the stored session only while `ownership` still covers it. Returns whether it
   /// deleted, so the caller emits `.signedOut` for a sign-out that actually happened.
@@ -51,6 +52,7 @@ extension SessionManager {
       session: { try await instance.session() },
       refreshSession: { try await instance.refreshSession($0) },
       update: { await instance.update($0) },
+      updateUser: { await instance.update(user: $0) },
       remove: { await instance.remove() },
       removeIfUnchanged: { await instance.removeIfUnchanged(since: $0) },
       startAutoRefresh: { await instance.startAutoRefreshToken() },
@@ -184,6 +186,15 @@ private actor LiveSessionManager {
 
   func update(_ session: Session) {
     sessionStorage.store(session)
+  }
+
+  func update(user: User) -> Session? {
+    guard var session = sessionStorage.get(), session.user.id == user.id else {
+      return nil
+    }
+    session.user = user
+    sessionStorage.store(session)
+    return session
   }
 
   func remove() {
