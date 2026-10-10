@@ -147,8 +147,8 @@ struct StorageClientTests {
         .upload(
           path: "file1.txt",
           data: "test data".data(using: .utf8)!,
-          options: FileOptions(
-            cacheControl: "14400",
+          options: UploadOptions(
+            cacheControl: .maxAge(.seconds(14400)),
             metadata: ["key": "value"]
           )
         )
@@ -191,7 +191,7 @@ struct StorageClientTests {
         .upload(
           path: "sadcat.jpg",
           fileURL: uploadFileURL("sadcat.jpg"),
-          options: FileOptions(
+          options: UploadOptions(
             metadata: ["key": "value"]
           )
         )

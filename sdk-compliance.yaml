@@ -1501,6 +1501,7 @@ features:
     status: implemented
     symbols:
       - StorageBucket.upload
+      - UploadOptions.upsert
   storage.file_buckets.download:
     status: implemented
     symbols:
@@ -1590,11 +1591,20 @@ features:
       - DestinationOptions.destinationBucket
   storage.file_buckets.upload_with_metadata:
     status: implemented
-    note: "Not a separate method: the metadata/cacheControl/contentType fields of the options: FileOptions parameter on StorageBucket.upload."
+    note: "Not a separate method: the metadata/cacheControl/contentType fields of the options: UploadOptions parameter on StorageBucket.upload."
     symbols:
-      - FileOptions.metadata
-      - FileOptions.cacheControl
-      - FileOptions.contentType
+      - UploadOptions.metadata
+      - UploadOptions.cacheControl
+      - UploadOptions.contentType
+      - UploadOptions
+      - UploadOptions.init
+      - UploadOptions.headers
+      - CacheControl
+      - CacheControl.init
+      - CacheControl.rawValue
+      - CacheControl.maxAge
+      - CacheControl.noCache
+      - CacheControl.noStore
   # Not a separate method: a bare `cacheNonce: String?` parameter repeated on
   # createSignedURL, createSignedURLs, download, and publicURL — no
   # dedicated named symbol exists distinct from those methods, which are

@@ -983,7 +983,7 @@ extension StorageMockerTests {
         .update(
           path: "file.txt",
           data: Data("hello world".utf8),
-          options: FileOptions(
+          options: UploadOptions(
             metadata: [
               "mode": "test"
             ]
@@ -1019,7 +1019,7 @@ extension StorageMockerTests {
         .upload(
           path: "/folder//file.txt",
           data: Data("hello world!".utf8),
-          options: FileOptions(contentType: "text/plain")
+          options: UploadOptions(contentType: "text/plain")
         )
 
       #expect(response.path == "folder/file.txt")
@@ -1065,7 +1065,7 @@ extension StorageMockerTests {
         .upload(
           path: "file.txt",
           fileURL: Bundle.module.url(forResource: "file", withExtension: "txt")!,
-          options: FileOptions(contentType: "image/png")
+          options: UploadOptions(contentType: "image/png")
         )
 
       #expect(response.id == "123")
@@ -1112,7 +1112,7 @@ extension StorageMockerTests {
         .update(
           path: "file.txt",
           fileURL: Bundle.module.url(forResource: "file", withExtension: "txt")!,
-          options: FileOptions(
+          options: UploadOptions(
             metadata: [
               "mode": "test"
             ]
@@ -1764,7 +1764,6 @@ extension StorageMockerTests {
         	--header "Content-Type: text/plain" \
         	--header "X-Client-Info: storage-swift/0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	--header "x-upsert: false" \
         	--data "hello world" \
         	"http://localhost:54321/storage/v1/object/upload/sign/bucket/folder/file.txt?token=abc.def.ghi"
         """#
@@ -1805,7 +1804,6 @@ extension StorageMockerTests {
         	--header "Content-Type: text/plain" \
         	--header "X-Client-Info: storage-swift/0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	--header "x-upsert: false" \
         	--data "hello world" \
         	"http://localhost:54321/storage/v1/object/upload/sign/bucket/file.txt?token=abc.def.ghi"
         """#
@@ -1884,7 +1882,6 @@ extension StorageMockerTests {
         	--header "X-Client-Info: storage-swift/0.0.0" \
         	--header "X-Mode: test" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	--header "x-upsert: false" \
         	--data "hello world!
         " \
         	"http://localhost:54321/storage/v1/object/upload/sign/bucket/file.txt?token=abc.def.ghi"
@@ -1897,8 +1894,8 @@ extension StorageMockerTests {
           path: "file.txt",
           token: "abc.def.ghi",
           fileURL: Bundle.module.url(forResource: "file", withExtension: "txt")!,
-          options: FileOptions(
-            headers: ["X-Mode": "test"]
+          options: UploadOptions(
+            headers: [.init("X-Mode")!: "test"]
           )
         )
 
