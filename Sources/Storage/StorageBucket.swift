@@ -533,21 +533,24 @@ public struct StorageBucket: Sendable {
 
   /// Checks whether a file exists in the bucket without downloading it.
   ///
-  /// Returns `false` for HTTP 400 and 404 responses, and re-throws for any other error.
+  /// Reads the object's metadata, so the answer is `false` only when Storage reports that the
+  /// key does not exist (``StorageError/Code/noSuchKey``, or a 404 in the body with no code).
+  /// Every other failure throws, including a missing bucket (``StorageError/Code/noSuchBucket``)
+  /// and an expired session (``StorageError/Code/invalidJWT``), which a `HEAD` request could not
+  /// tell apart from a missing file.
   ///
   /// - Parameter path: The file path including the file name, e.g. `"folder/image.png"`.
   /// - Returns: `true` if the file exists and is accessible, `false` if it does not exist.
-  /// - Throws: ``StorageError`` for errors other than "not found" (e.g. network failure or
-  ///   authorization errors).
+  /// - Throws: ``StorageError`` for errors other than a missing key (e.g. network failure,
+  ///   authorization errors, or a missing bucket).
   public func exists(path: String) async throws -> Bool {
     do {
-      try await api.execute(api.requests.exists(bucket: id, key: ObjectKey(path)))
+      _ = try await info(path: path)
       return true
-    } catch let error as StorageError {
-      if let statusCode = error.response?.statusCode, [400, 404].contains(statusCode) {
-        return false
-      }
-      throw error
+    } catch let error as StorageError
+      where error.code == .noSuchKey || (error.code == nil && error.serverStatusCode == 404)
+    {
+      return false
     }
   }
 

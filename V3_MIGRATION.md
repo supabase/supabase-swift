@@ -3983,3 +3983,26 @@ This is a compile error only where `ServerError.statusCode` was compared with or
   showDuplicate()
 }
 ```
+
+## `exists(path:)` throws for every failure except a missing key
+
+`StorageBucket.exists(path:)` reads `object/info` and returns `false` only when Storage reports
+`NoSuchKey` (or a 404 in the body with no code). It used to send a `HEAD` request and map any
+HTTP 400 or 404 to `false`. `HEAD` carries no body, and Storage answers HTTP 400 for both a
+missing file and an invalid or expired JWT, so an expired session read as "the file does not
+exist". A missing bucket (`NoSuchBucket`) now throws as well.
+
+This compiles unchanged. Search your code for `exists(` and make sure a `false` is not the only
+branch: an authorization failure now surfaces as a thrown `StorageError`.
+
+```swift
+// Before: false for "missing", "no such bucket" and "bad token" alike
+if try await bucket.exists(path: "a.png") { ... }
+
+// After
+do {
+  if try await bucket.exists(path: "a.png") { ... }
+} catch let error as StorageError where error.code == .invalidJWT {
+  signInAgain()
+}
+```
