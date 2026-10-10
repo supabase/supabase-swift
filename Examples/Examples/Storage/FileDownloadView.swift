@@ -11,7 +11,7 @@ import SwiftUI
 struct FileDownloadView: View {
   @State private var selectedBucket = ""
   @State private var buckets: [Bucket] = []
-  @State private var files: [FileObject] = []
+  @State private var files: [StorageObject] = []
   @State private var downloadedData: Data?
   @State private var downloadedImage: UIImage?
   @State private var downloadedText: String?
@@ -63,8 +63,8 @@ struct FileDownloadView: View {
                 Text(file.name)
                   .font(.subheadline)
 
-                if let metadata = file.metadata, let size = metadata["size"]?.intValue {
-                  Text(ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file))
+                if let size = file.metadata?.size {
+                  Text(ByteCountFormatter.string(fromByteCount: size, countStyle: .file))
                     .font(.caption)
                     .foregroundColor(.secondary)
                 }
@@ -155,7 +155,7 @@ struct FileDownloadView: View {
     }
   }
 
-  func iconForFile(_ file: FileObject) -> String {
+  func iconForFile(_ file: StorageObject) -> String {
     let name = file.name.lowercased()
     if name.hasSuffix(".jpg") || name.hasSuffix(".jpeg") || name.hasSuffix(".png")
       || name

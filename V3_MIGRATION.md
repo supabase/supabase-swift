@@ -4088,3 +4088,44 @@ let url = try await bucket.createSignedURL(path: "a.png", expiresIn: 60)
 // After
 let url = try await bucket.createSignedURL(path: "a.png", expiresIn: .seconds(60))
 ```
+
+## `StorageObject`, `ObjectMetadata`, `ObjectInfo` and `UploadedObject` replace `FileObject`, `FileObjectV2` and the two upload responses
+
+| Before | After |
+| --- | --- |
+| `FileObject` (from `list` and `remove`) | `StorageObject` |
+| `FileObject.metadata: [String: JSONValue]?` | `StorageObject.metadata: ObjectMetadata?` (`eTag`, `size: Int64?`, `mimeType`, `cacheControl`, `lastModified: Date?`, `contentLength`, `additional`) |
+| `FileObject.bucketId`, `.owner`, `.buckets` | *(removed: join artifacts the server deprecated and no longer returns from `list`)* |
+| `FileObjectV2` (from `info`) | `ObjectInfo` |
+| `FileObjectV2.id: String` | `ObjectInfo.id: UUID` |
+| `FileObjectV2.size: Int?` | `ObjectInfo.size: Int64?` |
+| `FileObjectV2.etag` | `ObjectInfo.eTag` |
+| `FileObjectV2.metadata` (the uploader's metadata) | `ObjectInfo.userMetadata` |
+| `FileUploadResponse` (from `upload` and `update`) | `UploadedObject` |
+| `FileUploadResponse.id: String` | `UploadedObject.id: UUID?` |
+| `SignedURLUploadResponse` (from `uploadToSignedURL`) | `UploadedObject` with `id == nil` |
+
+Every listing entry, info result and upload result is a `Decodable` struct with one object id
+type (`UUID`), `Int64` sizes and `Date` timestamps. `StorageObject` gains `version`,
+`userMetadata`, `isVersioned`, `isDeleteMarker`, `archivedAt` and a computed `isFolder`
+(`id == nil`), which the server already sends. The old `metadata` dictionary mixed what
+Storage recorded about the bytes with whatever the uploader attached; the two are now separate
+and the first is typed. `upload` and `uploadToSignedURL` used to return two unrelated types
+that differed only by the id Storage omits after a signed-URL upload.
+
+This is a compile error wherever one of the old type names is spelled, wherever `metadata["size"]`
+is read as a dictionary, and wherever `id` was compared with a `String`.
+
+```swift
+// Before
+let files: [FileObject] = try await bucket.list()
+let size = files[0].metadata?["size"]?.intValue
+let info: FileObjectV2 = try await bucket.info(path: "a.png")
+print(info.etag ?? "", info.metadata ?? [:])
+
+// After
+let files: [StorageObject] = try await bucket.list()
+let size = files[0].metadata?.size
+let info: ObjectInfo = try await bucket.info(path: "a.png")
+print(info.eTag ?? "", info.userMetadata ?? [:])
+```

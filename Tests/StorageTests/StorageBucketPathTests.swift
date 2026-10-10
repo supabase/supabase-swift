@@ -81,13 +81,15 @@ struct StorageBucketPathTests {
       return nil
     },
     Operation(
-      name: "info", placement: .url, response: #"{"id":"id","version":"v","name":"x"}"#
+      name: "info", placement: .url,
+      response: #"{"id":"E621E1F8-C36C-495A-93FC-0C247A3E6E5F","version":"v","name":"x"}"#
     ) {
       _ = try await $0.info(path: $1)
       return nil
     },
     Operation(
-      name: "exists", placement: .url, response: #"{"id":"id","version":"v","name":"x"}"#
+      name: "exists", placement: .url,
+      response: #"{"id":"E621E1F8-C36C-495A-93FC-0C247A3E6E5F","version":"v","name":"x"}"#
     ) {
       _ = try await $0.exists(path: $1)
       return nil
