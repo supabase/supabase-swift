@@ -51,6 +51,10 @@ public struct _PostgrestRequest: Sendable {
   /// `maybeSingle()`. The "multiple rows" variant still throws.
   var nullOnNoRows = false
 
+  /// Why a filter on this request has no wire form, set by the first such filter. A filter method
+  /// cannot throw, so the failure waits here and `execute()` throws it before anything is sent.
+  var invalidFilterReason: String?
+
   init(
     method: HTTPTypes.HTTPRequest.Method = .get,
     relation: String,
@@ -76,6 +80,10 @@ public struct _PostgrestRequest: Sendable {
     on client: PostgrestClient,
     decode: (Data) throws -> T
   ) async throws -> PostgrestResponse<T> {
+    if let invalidFilterReason {
+      throw PostgrestError(kind: .invalidRequest, message: invalidFilterReason)
+    }
+
     // CSV has no `nulls=stripped` variant. The typed `csv()` drops the flag; the untyped builder
     // can still carry both, so the core refuses it before anything is sent.
     if stripsNulls, headerFields[.accept] == "text/csv" {

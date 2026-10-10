@@ -5,18 +5,19 @@
 //  Created by Guilherme Souza on 26/08/26.
 //
 
+import Foundation
+import Helpers
+
 // MARK: - Array operands
 //
 // `cs`, `cd` and `ov` each get three methods, because the operand literal is chosen by the
 // column's Postgres type rather than by the operator: `{a,b}` for an array, `[1,3)` for a range,
 // `{"a":1}` for jsonb. Mixing them is a 400.
 //
-// The array and range shapes are type-checked (`where Value == [E]`, `where Value ==
-// _PostgresRange<B>`), so `contains(["a"])` on a `String` column does not compile, nor does a
-// `daterange` operand on an `int4range` column. A jsonb column has no distinguishing Swift type to
-// constrain on, so the JSON methods sit on bare `_PostgrestFilterableExpression` and compile on
-// any column; pairing one with the wrong column is a server error (`42883 operator does not
-// exist`), not a wrong answer.
+// Every shape is type-checked: `where Value == [E]`, `where Value == _PostgresRange<B>` and
+// `where Value == JSONValue`. So `contains(["a"])` on a `String` column does not compile, nor does
+// a `daterange` operand on an `int4range` column, nor `containsJSON` on a `text` column. Each
+// would be a server error (`42883 operator does not exist`).
 //
 // The array operand is the `[E]` itself: its `rawValue` is the `{a,b}` literal with every member
 // escaped as the literal requires.
@@ -106,18 +107,39 @@ extension _PostgrestFilterableExpression {
 
 // MARK: - JSON operands
 
-extension _PostgrestFilterableExpression {
+extension _PostgrestFilterableExpression where Value == JSONValue {
   /// Matches rows where this `jsonb` column contains `json`.
   ///
-  /// - Parameter json: A JSON object literal, for example `#"{"a":1}"#`.
-  public func containsJSON(_ json: String) -> _PostgrestFilter<Root> {
-    _PostgrestFilter(column: postgrestExpression, operator: .contains, value: json)
+  /// ```swift
+  /// .where { $0.data.containsJSON(["a": 1]) }   // data=cs.{"a":1}
+  /// ```
+  ///
+  /// - Parameter json: Any JSON value. An object matches rows holding at least those keys and
+  ///   values; on an array column, `[20]` or `20` matches arrays holding `20`.
+  public func containsJSON(_ json: JSONValue) -> _PostgrestFilter<Root> {
+    _PostgrestFilter(column: postgrestExpression, operator: .contains, operand: jsonOperand(json))
   }
 
   /// Matches rows where this `jsonb` column is contained by `json`.
-  public func containedByJSON(_ json: String) -> _PostgrestFilter<Root> {
-    _PostgrestFilter(column: postgrestExpression, operator: .containedBy, value: json)
+  public func containedByJSON(_ json: JSONValue) -> _PostgrestFilter<Root> {
+    _PostgrestFilter(
+      column: postgrestExpression, operator: .containedBy, operand: jsonOperand(json))
   }
+}
+
+/// `JSONValue`'s ``PostgrestFilterValue/rawValue`` is its filter form — an `.array` as the Postgres
+/// literal `{20}`, a `.string` bare — and `jsonb` reads both as `22P02`.
+///
+/// Only a non-finite `.double` fails to encode. No operand stands in for it: `null` is a valid
+/// containment operand and matches JSON-null rows, so a `delete` would remove them. The filter
+/// carries the failure instead, and `execute()` throws it before the request is built.
+private func jsonOperand(_ json: JSONValue) -> PostgrestFilterNode.Operand {
+  let encoder = JSONEncoder()
+  encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+  guard let data = try? encoder.encode(json) else {
+    return .invalid("\(json) has no JSON form, so it cannot be a jsonb filter operand.")
+  }
+  return .value(String(decoding: data, as: UTF8.self))
 }
 
 // MARK: - Text search

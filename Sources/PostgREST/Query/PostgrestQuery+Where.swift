@@ -38,7 +38,10 @@ extension _PostgrestFilterableRequest {
   /// - Returns: A new request with the filter applied. The receiver is unchanged.
   public func `where`(_ build: (Relation.Columns) -> _PostgrestFilter<Relation>) -> Self {
     var filtered = self
-    filtered.request.query.append(contentsOf: build(Relation.columns).queryItems())
+    let filter = build(Relation.columns)
+    filtered.request.query.append(contentsOf: filter.queryItems())
+    filtered.request.invalidFilterReason =
+      filtered.request.invalidFilterReason ?? filter.invalidFilterReason
     return filtered
   }
 }
