@@ -459,6 +459,17 @@ struct AuthClientIntegrationTests {
   }
 
   @Test
+  func inviteUserByEmail() async throws {
+    let client = Self.makeClient(serviceRole: true)
+    let email = mockEmail()
+
+    let user = try await client.admin.inviteUserByEmail(email)
+
+    expectNoDifference(user.email, email)
+    #expect(user.invitedAt != nil)
+  }
+
+  @Test
   func adminSignOut() async throws {
     let email = mockEmail()
     let password = mockPassword()
