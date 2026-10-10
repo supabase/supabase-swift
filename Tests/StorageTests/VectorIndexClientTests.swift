@@ -28,7 +28,7 @@ extension StorageMockerTests {
       let session = URLSession(configuration: configuration)
 
       return StorageVectorsClient(
-        api: StorageApi(
+        api: StorageAPI(
           configuration: StorageClientConfiguration(
             url: url,
             headers: [:],

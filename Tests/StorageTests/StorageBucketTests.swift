@@ -16,11 +16,6 @@ extension StorageMockerTests {
   struct StorageBucketTests {
     let url = URL(string: "http://localhost:54321/storage/v1")!
 
-    init() {
-      JSONEncoder.storageEncoder.outputFormatting = [.sortedKeys]
-      JSONEncoder.unconfiguredEncoder.outputFormatting = [.sortedKeys]
-    }
-
     private func makeSUT() -> StorageClient {
       Mocker.removeAll()
 
@@ -444,11 +439,11 @@ extension StorageMockerTests {
         #"""
         curl \
         	--request POST \
-        	--header "Content-Length: 107" \
+        	--header "Content-Length: 82" \
         	--header "Content-Type: application/json" \
         	--header "X-Client-Info: storage-swift/0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	--data "{\"bucketId\":\"bucket\",\"destinationBucket\":null,\"destinationKey\":\"new\/path.txt\",\"sourceKey\":\"old\/path.txt\"}" \
+        	--data "{\"bucketId\":\"bucket\",\"destinationKey\":\"new\/path.txt\",\"sourceKey\":\"old\/path.txt\"}" \
         	"http://localhost:54321/storage/v1/object/move"
         """#
       }
@@ -481,11 +476,11 @@ extension StorageMockerTests {
         #"""
         curl \
         	--request POST \
-        	--header "Content-Length: 111" \
+        	--header "Content-Length: 86" \
         	--header "Content-Type: application/json" \
         	--header "X-Client-Info: storage-swift/0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	--data "{\"bucketId\":\"bucket\",\"destinationBucket\":null,\"destinationKey\":\"dest\/file.txt\",\"sourceKey\":\"source\/file.txt\"}" \
+        	--data "{\"bucketId\":\"bucket\",\"destinationKey\":\"dest\/file.txt\",\"sourceKey\":\"source\/file.txt\"}" \
         	"http://localhost:54321/storage/v1/object/copy"
         """#
       }
@@ -850,11 +845,11 @@ extension StorageMockerTests {
         #"""
         curl \
         	--request POST \
-        	--header "Content-Length: 98" \
+        	--header "Content-Length: 73" \
         	--header "Content-Type: application/json" \
         	--header "X-Client-Info: storage-swift/0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	--data "{\"bucketId\":\"bucket\",\"destinationBucket\":null,\"destinationKey\":\"destination\",\"sourceKey\":\"source\"}" \
+        	--data "{\"bucketId\":\"bucket\",\"destinationKey\":\"destination\",\"sourceKey\":\"source\"}" \
         	"http://localhost:54321/storage/v1/object/move"
         """#
       }
@@ -887,11 +882,11 @@ extension StorageMockerTests {
         #"""
         curl \
         	--request POST \
-        	--header "Content-Length: 98" \
+        	--header "Content-Length: 73" \
         	--header "Content-Type: application/json" \
         	--header "X-Client-Info: storage-swift/0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	--data "{\"bucketId\":\"bucket\",\"destinationBucket\":null,\"destinationKey\":\"destination\",\"sourceKey\":\"source\"}" \
+        	--data "{\"bucketId\":\"bucket\",\"destinationKey\":\"destination\",\"sourceKey\":\"source\"}" \
         	"http://localhost:54321/storage/v1/object/move"
         """#
       }

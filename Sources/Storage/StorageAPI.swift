@@ -8,10 +8,10 @@ import HTTPTypes
 /// Internal implementation detail shared by ``StorageClient``, ``StorageBucket``, and the
 /// Vectors trio (``StorageVectorsClient``, ``VectorBucketClient``, ``VectorIndexClient``).
 ///
-/// Holds the ``StorageClientConfiguration`` and the underlying HTTP client used to execute
-/// requests. Each of the types above holds a ``StorageApi`` value and delegates to it rather than
-/// inheriting from it.
-struct StorageApi: Sendable {
+/// Holds the ``StorageClientConfiguration``, the ``StorageRequests`` builder for its base URL,
+/// and sends requests through the shared `HTTPClient`. Each of the types above holds a
+/// ``StorageAPI`` value and delegates to it rather than inheriting from it.
+struct StorageAPI: Sendable {
   /// The apex domains the storage hostname rewrite applies to, each carrying a leading dot so the
   /// match has to land on a hostname-label boundary.
   ///
@@ -29,15 +29,18 @@ struct StorageApi: Sendable {
   }
 
   /// The configuration used to initialize this client instance.
-  let configuration: StorageClientConfiguration
+  private(set) var configuration: StorageClientConfiguration
 
-  /// Creates a ``StorageApi`` with the given configuration.
+  /// Builds the request for each route under ``configuration``'s URL.
+  let requests: StorageRequests
+
+  /// Creates a ``StorageAPI`` with the given configuration.
   ///
   /// - Parameter configuration: The configuration that controls the endpoint URL, authentication
-  ///   headers, JSON codecs, and transport.
+  ///   headers, and transport.
   init(configuration: StorageClientConfiguration) {
     var configuration = configuration
-    if configuration.headers["X-Client-Info"] == nil {
+    if HTTPFields(configuration.headers)[.xClientInfo] == nil {
       configuration.headers["X-Client-Info"] = "storage-swift/\(version)"
     }
 
@@ -68,62 +71,49 @@ struct StorageApi: Sendable {
     }
 
     self.configuration = configuration
+    self.requests = StorageRequests(url: configuration.url)
   }
 
-  /// Returns a new ``StorageApi`` with an additional HTTP header merged into
-  /// ``configuration``'s headers, included in all requests made by the returned instance.
-  ///
-  /// Because ``StorageApi`` is an immutable value type, this method does not mutate `self` — it
-  /// returns a new instance. Discarding the return value is a no-op, so always use the result:
-  ///
-  /// ```swift
-  /// storage.from("avatars")
-  ///   .setHeader("x-custom-header", forKey: "X-Custom-Header")
-  ///   .list()
-  /// ```
+  /// Returns a copy with `value` merged into ``configuration``'s headers, included in all requests
+  /// made by the returned instance.
   ///
   /// - Parameters:
   ///   - value: The value of the header field.
   ///   - key: The name of the header field. The key is case-insensitively stored as lowercase.
-  /// - Returns: A new ``StorageApi`` with the header merged into ``configuration``'s headers.
   func setHeader(_ value: String, forKey key: String) -> Self {
-    var configuration = configuration
-    configuration.headers[key.lowercased()] = value
-    return StorageApi(configuration: configuration)
+    var copy = self
+    copy.configuration.headers[key.lowercased()] = value
+    return copy
   }
 
-  /// Sends `request` with the client's default headers and returns the response body.
-  ///
-  /// `replayable` marks a `POST` that only reads (a list) as safe to retry.
+  /// Sends `head` with the client's default headers and returns the response body.
   @discardableResult
-  func execute(_ request: HTTPRequest, body: Data, replayable: Bool = false) async throws -> Data {
-    try await execute(request, body: HTTPBody(body), replayable: replayable)
+  func execute(_ head: HTTPRequest, body: Data? = nil) async throws -> Data {
+    try await execute(StorageRequest(head: head, body: body.map { HTTPBody($0) }))
   }
 
   /// Sends `request` with the client's default headers and returns the response body.
   ///
-  /// Only `GET`, `HEAD` and `replayable` requests are retried, and only when
+  /// Only `GET`, `HEAD` and ``StorageRequest/replayable`` requests are retried, and only when
   /// ``StorageClientConfiguration/retryEnabled`` is `true`.
   @discardableResult
-  func execute(
-    _ request: HTTPRequest, body: HTTPBody? = nil, replayable: Bool = false
-  ) async throws -> Data {
+  func execute(_ request: StorageRequest) async throws -> Data {
     var policy = configuration.retryEnabled ? RetryPolicy.default : .disabled
-    if replayable { policy.retryableMethods.insert(request.method) }
+    if request.replayable { policy.retryableMethods.insert(request.head.method) }
     let retry = RetryRequestInterceptor(policy: policy, clock: configuration.clock)
     let http = HTTPClient(
       configuration: configuration.http,
       retrying: retry,
       appending: [LoggerInterceptor(logger: configuration.logger)])
 
-    var request = request
-    request.headerFields = HTTPFields(configuration.headers).merging(with: request.headerFields)
+    var head = request.head
+    head.headerFields = HTTPFields(configuration.headers).merging(with: head.headerFields)
 
     let response: HTTPResponse
     let data: Data
     do {
-      let (head, responseBody) = try await http.stream(request, body: body)
-      response = head
+      let (responseHead, responseBody) = try await http.stream(head, body: request.body)
+      response = responseHead
       if let responseBody {
         data = try await Data(collecting: responseBody, upTo: .max)
       } else {
@@ -142,7 +132,7 @@ struct StorageApi: Sendable {
     }
 
     guard (200..<300).contains(response.status.code) else {
-      if let serverError = try? configuration.decoder.decode(
+      if let serverError = try? JSONDecoder.storage.decode(
         StorageError.ServerError.self, from: data)
       {
         throw StorageError(
@@ -162,37 +152,13 @@ struct StorageApi: Sendable {
 
     return data
   }
-
-  /// Sends `file` as the raw request body, the same shape supabase-js uses for `ArrayBuffer`
-  /// uploads. What a multipart form would carry as fields travels in headers instead:
-  /// `Content-Type`, `Cache-Control`, and base64 JSON in `x-metadata`.
-  func upload(
-    _ request: HTTPRequest,
-    file: FileUpload,
-    path: String,
-    options: FileOptions
-  ) async throws -> Data {
-    var request = request
-    if request.headerFields[.contentType] == nil {
-      request.headerFields[.contentType] = file.contentType(forPath: path, options: options)
-    }
-    if request.headerFields[.cacheControl] == nil {
-      request.headerFields[.cacheControl] = "max-age=\(options.cacheControl)"
-    }
-    if let metadata = options.metadata {
-      request.headerFields[.xMetadata] = encodeMetadata(metadata).base64EncodedString()
-    }
-    return try await execute(request, body: try file.httpBody())
-  }
 }
 
 extension Data {
   /// Shadows `Data.decoded(as:decoder:)` from Helpers inside the Storage module so every
   /// existing decode call site throws ``StorageError`` with kind `.decoding` instead of a bare
   /// `DecodingError`. Same-module declarations win over imported ones with the same signature.
-  func decoded<T: Decodable>(as _: T.Type = T.self, decoder: JSONDecoder = JSONDecoder()) throws
-    -> T
-  {
+  func decoded<T: Decodable>(as _: T.Type = T.self, decoder: JSONDecoder = .storage) throws -> T {
     do {
       return try decoder.decode(T.self, from: self)
     } catch {
