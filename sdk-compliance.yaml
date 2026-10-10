@@ -1565,20 +1565,45 @@ features:
   storage.file_buckets.download_with_transform:
     status: implemented
     symbols:
+      - ImageTransform
+      - ImageTransform.init
+      - ImageTransform.width
+      - ImageTransform.height
+      - ImageTransform.resize
+      - ImageTransform.quality
+      - ImageTransform.format
+      - ImageTransform.gravity
+      - ImageTransform.focalPoint
+      - Gravity
+      - Gravity.init
+      - Gravity.rawValue
+      - Gravity.north
+      - Gravity.south
+      - Gravity.east
+      - Gravity.west
+      - Gravity.northEast
+      - Gravity.northWest
+      - Gravity.southEast
+      - Gravity.southWest
+      - Gravity.center
+      - Gravity.smart
+      - Gravity.focalPoint
+      - FocalPoint
+      - FocalPoint.init
+      - FocalPoint.x
+      - FocalPoint.y
       - ResizeMode
       - ResizeMode.init
       - ResizeMode.rawValue
       - ResizeMode.cover
       - ResizeMode.contain
       - ResizeMode.fill
-      - ResizeMode.encode
       - ImageFormat
       - ImageFormat.init
       - ImageFormat.rawValue
       - ImageFormat.origin
       - ImageFormat.webp
       - ImageFormat.avif
-      - ImageFormat.encode
   storage.file_buckets.copy_cross_bucket:
     status: implemented
     note: "Not a separate method: the destinationBucket field of the options: DestinationOptions? parameter on StorageBucket.copy."

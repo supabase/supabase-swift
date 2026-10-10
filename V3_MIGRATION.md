@@ -4046,3 +4046,29 @@ try await bucket.upload(
     contentType: "image/png", cacheControl: .maxAge(.seconds(86400)), upsert: true)
 )
 ```
+
+## `ImageTransform` replaces `TransformOptions`, and the argument is `transform:` everywhere
+
+`download`, `publicURL` and `createSignedURL` take `transform: ImageTransform?`. `download` and
+`publicURL` used to label it `options:`. `ImageTransform` stores `resize: ResizeMode?` and
+`format: ImageFormat?` as their typed values (`TransformOptions` kept them as `String?` behind
+a typed initializer) and adds `gravity: Gravity?` and `focalPoint: FocalPoint?`, which the
+render routes accept and no other Supabase SDK types. `ImageTransform` is not `Encodable`; the
+SDK turns it into query items. `ResizeMode` and `ImageFormat` are no longer `Encodable` either:
+they are only ever read through `rawValue`.
+
+This is a compile error wherever `TransformOptions` is named, wherever `download` or
+`publicURL` passes `options:`, and wherever `ResizeMode` or `ImageFormat` is passed to a
+`JSONEncoder`.
+
+```swift
+// Before
+let data = try await bucket.download(
+  path: "a.png", options: TransformOptions(width: 200, height: 200, resize: .cover))
+let url = try bucket.publicURL(path: "a.png", options: TransformOptions(format: .webp))
+
+// After
+let data = try await bucket.download(
+  path: "a.png", transform: ImageTransform(width: 200, height: 200, resize: .cover))
+let url = try bucket.publicURL(path: "a.png", transform: ImageTransform(format: .webp))
+```
