@@ -32,6 +32,25 @@ indirect enum PostgrestFilterNode: Sendable {
     /// A value with no wire form, such as a non-finite `Double` as JSON. It is never sent: the
     /// request records the reason, and `execute()` throws it before building the request.
     case invalid(String)
+
+    /// A typed value's operand, or `.invalid` when it has none.
+    static func typed(_ value: some PostgrestFilterValue) -> Self {
+      value._typedOperand.map(Self.value) ?? .invalid(Self.noWireForm(value))
+    }
+
+    /// A typed `in` list, or `.invalid` when a member has no operand.
+    static func typedList<V: PostgrestFilterValue>(_ values: [V]) -> Self {
+      var members: [String] = []
+      for value in values {
+        guard let member = value._typedOperand else { return .invalid(Self.noWireForm(value)) }
+        members.append(member)
+      }
+      return .list(members)
+    }
+
+    private static func noWireForm(_ value: some PostgrestFilterValue) -> String {
+      "\(value) has no wire form, so the filter cannot be sent."
+    }
   }
 
   case comparison(column: String, operator: _PostgrestFilterOperator, operand: Operand)
@@ -73,7 +92,7 @@ public struct _PostgrestFilter<R: _PostgrestRelation>: Sendable {
   }
 
   init(column: String, operator: _PostgrestFilterOperator, value: some PostgrestFilterValue) {
-    self.node = .comparison(column: column, operator: `operator`, operand: .value(value.rawValue))
+    self.node = .comparison(column: column, operator: `operator`, operand: .typed(value))
   }
 
   init(column: String, operator: _PostgrestFilterOperator, operand: Operand) {

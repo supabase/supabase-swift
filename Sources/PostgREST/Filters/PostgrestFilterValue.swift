@@ -45,9 +45,15 @@ public protocol PostgrestArrayElement {
 public protocol PostgrestFilterValue: PostgrestArrayElement {
   /// The string representation sent to PostgREST as the filter value.
   var rawValue: String { get }
+
+  /// The operand the typed query API sends for this value, or `nil` when the value has no wire
+  /// form. Defaults to ``rawValue``; the untyped builder always sends ``rawValue``.
+  var _typedOperand: String? { get }
 }
 
 extension PostgrestFilterValue {
+  public var _typedOperand: String? { rawValue }
+
   /// Escaping the raw value as a scalar is always correct for a non-`nil`, non-array value.
   public var postgrestArrayElement: String {
     escapePostgRESTArrayLiteralElement(rawValue)
@@ -142,6 +148,19 @@ extension JSONValue: PostgrestFilterValue {
     case .bool(let bool): bool.rawValue
     case .null: "NULL"
     }
+  }
+
+  /// The typed API only has a `JSONValue` operand on a `json`/`jsonb` expression, since the
+  /// generator types no other column as `JSONValue`, and PostgREST reads that operand as JSON. So
+  /// it is encoded as JSON here, where ``rawValue`` is the filter form the untyped builder sends —
+  /// a `.string` bare, an `.array` as the Postgres literal `{20}`, `.null` as `NULL`.
+  ///
+  /// Only a non-finite `.double` fails to encode, and then this is `nil`. No operand stands in for
+  /// it: `null` is a valid operand that matches JSON-null rows, so a `delete` would remove them.
+  public var _typedOperand: String? {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+    return (try? encoder.encode(self)).map { String(decoding: $0, as: UTF8.self) }
   }
 
   /// `.null` is an actual SQL `NULL` array member, not the string `"NULL"`, and `.array` is a

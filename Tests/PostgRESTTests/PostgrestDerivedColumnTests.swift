@@ -75,12 +75,60 @@ struct PostgrestDerivedColumnTests {
     #expect(Item.columns.data.jsonObject("meta").postgrestExpression == #"data->"meta""#)
   }
 
-  /// A path keeps its receiver's `Value`, so `->` chains on and filters by containment.
+  /// `->` produces `jsonb`, so a path is a `JSONValue` and chains on and filters by containment.
   @Test
-  func aJSONObjectPathChainsAndFiltersByContainment() {
-    let meta = Item.columns.data.jsonObject("meta")
+  func jsonObjectReturnsJSONValue() {
+    let meta: _PostgrestDerivedExpression<Item, JSONValue, _PostgrestEveryPosition> =
+      Item.columns.data.jsonObject("meta")
     #expect(meta.jsonText("k").postgrestExpression == #"data->"meta"->>"k""#)
     #expect(rendered(meta.containsJSON(["c": 2])) == #"data->"meta"=cs.{"c":2}"#)
+  }
+
+  /// PostgREST reads a `jsonb` comparison's operand as JSON. In filter form `.string("1")` went out
+  /// as `eq.1` and matched the number 1, and `.null` as `eq.NULL`, a `22P02`.
+  @Test
+  func aJSONComparisonEncodesItsOperandAsJSON() {
+    let a = Item.columns.data.jsonObject("a")
+    #expect(rendered(a.eq("1")) == #"data->"a"=eq."1""#)
+    #expect(rendered(a.eq(1)) == #"data->"a"=eq.1"#)
+    #expect(rendered(a.gt(2)) == #"data->"a"=gt.2"#)
+    #expect(rendered(a.eq(.null)) == #"data->"a"=eq.null"#)
+    #expect(rendered(a.eq(["c": 2])) == #"data->"a"=eq.{"c":2}"#)
+    #expect(rendered(a.neq("1")) == #"data->"a"=neq."1""#)
+    #expect(rendered(a.isDistinct("1")) == #"data->"a"=isdistinct."1""#)
+    #expect(rendered(Item.columns.data.eq(["a": 1])) == #"data=eq.{"a":1}"#)
+  }
+
+  /// List members and grouped operands are JSON first, then quoted like any other value.
+  @Test
+  func aJSONOperandIsQuotedInAListAndAGroup() {
+    let a = Item.columns.data.jsonObject("a")
+    #expect(rendered(a.in(["1", 2])) == #"data->"a"=in.("\"1\"",2)"#)
+    #expect(
+      rendered(a.eq("x,y") || Item.columns.cost.eq(2))
+        == #"or=(data->"a".eq."\"x,y\"",cost.eq.2.0)"#)
+  }
+
+  /// A non-finite `Double` has no JSON form, so a comparison or `in` with it is never sent. No
+  /// stand-in operand is: `eq.null` matches JSON-null rows.
+  @Test(
+    arguments: [
+      { (c: Item.Columns) in c.data.jsonObject("a").eq(.double(.nan)) },
+      { (c: Item.Columns) in c.data.jsonObject("a").in([1, .double(.infinity)]) },
+      { (c: Item.Columns) in c.cost.eq(2) || c.data.eq(["n": .double(.nan)]) },
+    ] as [@Sendable (Item.Columns) -> _PostgrestFilter<Item>]
+  )
+  func aComparisonWithNoJSONFormFailsTheRequestBeforeItIsSent(
+    filter: @Sendable (Item.Columns) -> _PostgrestFilter<Item>
+  ) async throws {
+    let capture = QueryCapture()
+    do {
+      _ = try await capture.client.from(Item.self).select().where(filter).execute()
+      Issue.record("Expected an error")
+    } catch let error as PostgrestError {
+      #expect(error.kind == .invalidRequest)
+    }
+    #expect(capture.query == nil)
   }
 
   /// Bare, `->0` is an array index and `->a.b` is a `PGRST100`; quoted, both reach the key.

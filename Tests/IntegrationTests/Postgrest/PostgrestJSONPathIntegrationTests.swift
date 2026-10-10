@@ -92,4 +92,36 @@ struct PostgrestJSONPathIntegrationTests {
     try await client.from("key_value_storage").delete().like("key", pattern: "\(prefix)%")
       .execute()
   }
+
+  /// A `->` path compares as JSON: the string `"1"` and the number `1` are different rows.
+  @Test
+  func aJSONObjectPathComparesAsJSON() async throws {
+    let prefix = "json-compare-\(UUID().uuidString)"
+    let values: [JSONValue] = [["a": 1], ["a": "1"], ["a": .null], ["a": "x,y"], ["a": 10]]
+    try await client.from("key_value_storage").insert(
+      values.enumerated().map { ["key": .string("\(prefix)-\($0.offset)"), "value": $0.element] }
+        as [JSONObject]
+    ).execute()
+
+    func keys(
+      _ filter: (KeyValueStorage.Columns) -> _PostgrestFilter<KeyValueStorage>
+    ) async throws -> [String] {
+      try await client.from(KeyValueStorage.self).select()
+        .where { $0.key.like("\(prefix)%") && filter($0) }
+        .order { $0.key.asc() }
+        .execute().value.map { String($0.key.dropFirst(prefix.count + 1)) }
+    }
+
+    #expect(try await keys { $0.value.jsonObject("a").eq("1") } == ["1"])
+    #expect(try await keys { $0.value.jsonObject("a").eq(1) } == ["0"])
+    #expect(try await keys { $0.value.jsonObject("a").eq(.null) } == ["2"])
+    #expect(try await keys { $0.value.jsonObject("a").gt(2) } == ["4"])
+    #expect(try await keys { $0.value.jsonObject("a").in(["1", "x,y"]) } == ["1", "3"])
+    #expect(
+      try await keys { $0.value.jsonObject("a").eq("x,y") || $0.value.jsonObject("a").eq(1) }
+        == ["0", "3"])
+
+    try await client.from("key_value_storage").delete().like("key", pattern: "\(prefix)%")
+      .execute()
+  }
 }

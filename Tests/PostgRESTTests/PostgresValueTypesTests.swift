@@ -46,6 +46,18 @@ struct PostgresValueTypesTests {
       rendered(columns.payload.eq(_PostgresBytes(Data([0xde, 0xad])))) == #"payload=eq.\xdead"#)
   }
 
+  /// Only a `JSONValue` operand is encoded as JSON. When every unmapped column was a `JSONValue`, an
+  /// interval operand went out as `eq."1 day"`, and a range or a `bytea` one quoted is a `22P02`.
+  @Test
+  func aNonJSONOperandIsNotEncodedAsJSON() {
+    let columns = Row.columns
+    #expect(rendered(columns.duration.eq("1 day")) == "duration=eq.1 day")
+    #expect(rendered(columns.duration.in(["1 day", "-1 days"])) == "duration=in.(1 day,-1 days)")
+    #expect(rendered(columns.span.neq("[1,10)")) == "span=neq.[1,10)")
+    #expect(
+      rendered(columns.payload.isDistinct(_PostgresBytes(Data()))) == #"payload=isdistinct.\x"#)
+  }
+
   /// Inside a group or a list, a value with `,`, `)` or `\` is quoted and escaped; PostgREST
   /// unquotes it before Postgres parses it.
   @Test
