@@ -1,5 +1,7 @@
 # PostgREST v3 — `JSONValue` on the typed `json`/`jsonb` surface
 
+<!-- cspell:words daterange inet macaddr numrange timetz tsrange tstzrange -->
+
 Recommendation for [SDK-1651](https://linear.app/supabase/issue/SDK-1651). It covers the four
 opportunities the issue lists, which `JSONValue` to build on, and what the typegen should emit for a
 `jsonb` column. Every server claim below was measured on a live PostgREST (local native stack,
@@ -9,13 +11,22 @@ CLI 2.120.0); the requests and responses are in [Evidence](#evidence).
 
 | # | Opportunity | Verdict |
 | - | ----------- | ------- |
-| 1 | Gate the JSON methods on a JSON column type | **Accept**, with a marker protocol, not `where Value == JSONValue` |
+| 1 | Gate the JSON methods on a JSON column type | **Accept**, as `where Value == JSONValue`, once the typegen gives every other Postgres type its own Swift type |
 | 2 | Take a typed operand in `containsJSON`/`containedByJSON` | **Accept**, as `JSONValue` (not `JSONObject`), JSON-encoded |
 | 3 | `jsonObject(_:)` returns `JSONValue` | **Accept**, and comparisons on it must JSON-encode the operand |
 | 4 | Separate a key from an array index | **Accept**, and always double-quote the key |
 
 - **Which `JSONValue`:** `Helpers.JSONValue`. The `HTTPRuntime` copy no longer exists.
-- **Typegen:** keep `JSONValue` for `json`/`jsonb`. It is the only type the generator can know.
+- **Typegen:** `JSONValue` for `json`/`jsonb`, and for nothing else. Every other Postgres type
+  gets its own Swift type, so the generated property's type is the column's Postgres type.
+
+> **Revised.** The first version of this document gated the JSON methods on a marker protocol, so
+> an app could opt its own `Codable` type for a `jsonb` column in. Review found that the typegen
+> also emitted `JSONValue` for every type it could not map — `interval`, `time`, `bytea`, ranges,
+> composites. So `JSONValue` could not stand for a JSON column: the gate let `jsonText` compile on
+> an `interval` column, and encoding a `JSONValue` operand as JSON would quote a range or `bytea`
+> operand, which Postgres rejects. The design below is the one adopted: one Swift type per
+> Postgres type, and `JSONValue` reserved for `json`/`jsonb`.
 
 The code has moved since the issue was filed, so two of its cost notes no longer hold:
 
@@ -53,36 +64,20 @@ changes the rendering (`10` versus `10.0`), but not the result. jsonb compares n
 `value->n=eq.10` and `value->n=eq.10.0` both match `{"n":10}` and `{"n":10.0}`, and
 `cs.{"n":3.0}` matches `{"n":3}`. No follow-up is needed here.
 
-## 1. A distinguishing type for JSON columns — accept, as a marker protocol
+## 1. A distinguishing type for JSON columns — accept, as `where Value == JSONValue`
 
 The gap is real. `containsJSON` on a `text` column compiles and fails at run time with `42883`
 (measured below). The same is true of `containsJSON` on a `jsonText(_:)` result, which is `text`.
 
-Do **not** gate on `where Value == JSONValue`. The typegen emits `JSONValue`, but a hand-written
-`@Table` can type a `jsonb` column as the app's own `Codable` struct (`var settings: Settings`).
-`@Table` copies the property type into `_PostgrestColumn<Root, Settings>`, so an equality gate
-takes `containsJSON` and the path methods away from that column. Typing the column as `JSONValue`
-to get them back throws away the decode type the caller wants for `select`.
-
-Gate on a marker protocol instead:
-
-```swift
-public protocol _PostgrestJSONColumnValue {}
-extension JSONValue: _PostgrestJSONColumnValue {}
-
-// An app opts its own decoded shape in with one line:
-extension Settings: _PostgrestJSONColumnValue {}
-```
-
 `containsJSON`, `containedByJSON`, `jsonText` and `jsonObject` move to
-`extension _PostgrestColumnExpression where Value: _PostgrestJSONColumnValue` (the filters on
-`_PostgrestFilterableExpression`). Generated code gets the gate with no change to the generator.
-A hand-written column of an app type that does not opt in loses the methods, which is the
-intended compile error. Its fallback is `raw(_:)`, which already exists.
+`where Value == JSONValue`. That gate is only sound if `JSONValue` means `json`/`jsonb`, so it
+rests on the typegen change in [Postgres types](#postgres-types-one-swift-type-each): every other
+Postgres type gets its own Swift type.
 
-This adds one public type, against the issue's hope of none. A marker protocol is the smallest
-type that answers both open questions: it keeps the caller's decode type and it gates the
-operators. Ranges keep no gate, as the issue asks.
+Users do not hand-write `@Table` structs; the typegen writes them. So the property type in a
+`@Table` struct is the column's Postgres type, and an app that wants its own `Codable` shape for a
+`jsonb` column declares it in `@SelectionOf`, whose column check compares names only. No opt-in
+protocol is needed, and the methods stay closed to every other column. Its fallback is `raw(_:)`.
 
 ## 2. Typed operand for `containsJSON`/`containedByJSON` — accept, as `JSONValue`
 
@@ -92,8 +87,10 @@ conformances keep the call site short: `containsJSON(["a": 1])`, `containsJSON([
 
 The operand must be **JSON-encoded**, not rendered through `PostgrestFilterValue.rawValue`. That
 `rawValue` is correct for objects and arrays, but `.string("x")` renders `x`, which is invalid
-JSON (`22P02`). Encode the whole value with `JSONSerialization` and `.fragmentsAllowed`, in the
-same options `JSONObject.rawValue` uses.
+JSON (`22P02`). Encode the whole value with `JSONEncoder`, sorted keys and unescaped slashes. Only a
+non-finite `.double` fails to encode; then send `NaN`, which PostgREST rejects with `22P02`
+(measured, also inside `or=(…)`), rather than a valid stand-in such as `null` that would match
+other rows.
 
 Key order does not matter. `cs.{"b":{"c":2},"a":1}` and `cs.{"a":1,"b":{"c":2}}` return the same
 row, and a `cd` operand in scrambled order with reordered array members matches. So `.sortedKeys`
@@ -109,9 +106,11 @@ The return type alone is not enough. The comparison family (`eq`, `gt`, …) use
 `PostgrestFilterValue.rawValue`, and that gives defect 1 above. Comparisons on a
 `JSONValue`-typed expression must JSON-encode the operand, the same as item 2. Do not change
 `JSONValue.rawValue` itself: the untyped v2 builder relies on `.string("x")` rendering `x` when a
-`JSONValue` is compared against a `text` column. Add a more constrained overload set
-(`where Value == JSONValue`) that Swift prefers over the generic one, or a separate operand
-encoder on `_PostgrestFilter`. The follow-up chooses.
+`JSONValue` is compared against a `text` column. Give `PostgrestFilterValue` a `_typedOperand`
+requirement that defaults to `rawValue`, and have `JSONValue` implement it with the JSON encoding.
+The typed filters send `_typedOperand`, the untyped builder keeps `rawValue`, and the compiler, not
+a runtime cast, picks the form. A `JSONValue` operand then only reaches the typed API from a
+`json`/`jsonb` expression.
 
 Numeric comparison stays typed: `.gt(2)` still compiles through `ExpressibleByIntegerLiteral`,
 and `data->n=gt.2` matches `10`, while `data->>n=gt.2` (text) does not.
@@ -141,29 +140,84 @@ Split the path parameter:
 - `jsonObject(_ index: Int)` and `jsonText(_ index: Int)` render bare `->0` / `->>0`. Negative
   indexes work.
 
-Not measured: how PostgREST escapes a `"` inside a quoted key. The follow-up must test it before
-choosing an escape.
+Inside the quotes a backslash escapes the next character: `->"q\"t"` reads the key `q"t`, and
+`->"b\s"` reads `bs`. So the key escapes `\` and `"` with a backslash (measured in SDK-2205).
 
-## Typegen: is `JSONValue` the right generated type?
+## Postgres types: one Swift type each
 
-Yes. `tools/supabase-typegen/Sources/SupabaseTypegen/Emitter.swift` maps `json` and `jsonb` to
-`JSONValue`. The database schema has no shape for a `jsonb` column, so the generator has no better
-type to emit. With the marker protocol from item 1, the generated type gets the JSON methods with
-no generator change. A caller who wants a decoded shape declares their own selection type, or
-hand-writes the column with an opted-in type. No generator change is recommended.
+`JSONValue` is the right generated type for `json`/`jsonb`: the schema has no shape for the
+column. It is the wrong type for anything else, which is what the first version of this document
+missed. The typegen maps each Postgres type to one Swift type. A dedicated type exists only where it
+changes what compiles or how a value is encoded; otherwise the plain Swift type is used. The
+dedicated types live in PostgREST, keep the `_` prefix of the typed API, conform to
+`PostgrestFilterValue` with the filter-form `rawValue`, and read and write the text form
+PostgREST uses.
+
+| Postgres | Swift | Why a dedicated type |
+| -------- | ----- | -------------------- |
+| `json`, `jsonb` | `JSONValue` | the JSON methods; the JSON operand |
+| `int4range`, `int8range` | `_PostgresRange<Int>` | the range filters take only a range of the column's own bound type |
+| `numrange` | `_PostgresRange<Decimal>` | as above |
+| `tsrange`, `tstzrange`, `daterange` | `_PostgresRange<Date>` | as above |
+| `interval` | `_PostgresInterval` | no `like` (`42883`); text not parsed, it depends on `IntervalStyle` |
+| `time`, `timetz` | `_PostgresTime` | no `like` (`42883`) |
+| `bytea` | `_PostgresBytes` | `Data`, read and written in the `\x…` hex form, not base64 |
+| `inet`, `cidr`, `macaddr`, `money`, `xml` | `String` | none needed |
+| composites, geometric and other unmapped types | `_PostgresUnmapped` | holds the JSON PostgREST sends; no filters |
+
+The range gate closes the gap this document first called unsolvable: a range filter on a
+non-range column, or with a `daterange` operand on an `int4range` column, no longer compiles.
+
+`_PostgresUnmapped` has no comparisons because Postgres has none for these types: `eq` on a
+composite is `0A000`, on a `point` `42883`. Note that a JSON path does work on a composite column
+(`pair->>currency=eq.USD` matches), but `_PostgresUnmapped` gets no JSON methods; `raw(_:)` reaches
+it.
+
+### What the server does, per type
+
+Measured on a live PostgREST with one column of each type
+(`Tests/IntegrationTests/supabase/migrations/20261010000000_postgres_values.sql`):
+
+| Type | JSON PostgREST sends | Operand at top level | Quoted (as inside `or=(…)`) |
+| ---- | -------------------- | -------------------- | --------------------------- |
+| `int4range` | `"[1,10)"`, `"empty"` | `eq.[1,10)`, `cs.[2,3)` | `eq."[1,10)"` at top level is `22P02`; inside `or=(…)` quoted works, bare is `PGRST100` |
+| `tsrange` | `"[\"2024-01-01 00:00:00\",…)"` | `ov.[2024-01-15 00:00,2024-01-16 00:00)` | — |
+| `daterange` | canonical: `[2024-01-01,2024-01-31]` comes back `[2024-01-01,2024-02-01)` | — | — |
+| any range | — | an element operand, `cs.5`, is `22P02` | — |
+| `interval` | `"1 day 02:00:00"`, `"-1 days"` | `eq.1 day 02:00:00`, `eq.26:00:00`, `eq.P1DT2H` all match | `eq."1 day 02:00:00"` also matches |
+| `time` | `"13:45:00"`, `"00:00:00.5"` | `eq.13:45`, `gt.12:00` | `eq."13:45"` also matches |
+| `timetz` | `"13:45:00+02"` | `eq.13:45:00+02`; `eq.11:45:00+00` does not match | — |
+| `bytea` | `"\\xdeadbeef"`, `"\\x"` | `eq.\xdeadbeef` (case-insensitive) | `eq."\xdeadbeef"` is `22P02`; `"\\xdeadbeef"` in a group or list works |
+| `money` | `"$12.34"`, `"$1,000.00"` | `eq.12.34`, `eq.$12.34`, `gt.100` | — |
+| `inet`, `cidr`, `macaddr` | `"192.168.0.1/24"`, … | `eq.` matches; `macaddr` also in `08-00-2b-…` form | — |
+| `xml` | `"<a>1</a>"` | `eq.` is `42883` | — |
+| composite | `{"amount":1,"currency":"USD"}` | `eq.(1,USD)` is `0A000`; `->>` works | — |
+| `point` | `"(1,2)"` | `eq.` is `42883` | — |
+
+`like` on `interval` and on `time` is `42883`. Every text form above, written back in a `PATCH`
+body, round-trips (`"PT90M"` reads back as `"01:30:00"`).
+
+One correction to the review finding that started this revision: a quoted interval works
+(`eq."1 day"` matches), so the interval case was not itself a failure. A quoted range or `bytea`
+is, and so the bug was real.
 
 ## Follow-up work
 
-Three PR-sized pieces, in this order. All are source-breaking on the unreleased
-`@_spi(Experimental)` surface, so they should land before the next release. Each updates
-`sdk-compliance.yaml` if it adds or renames a public symbol.
+PR-sized pieces, in this order. All change the unreleased `@_spi(Experimental)` surface, so they
+should land before the next release.
 
 1. **SDK-2205 — quote JSON path keys and add an `Int` index overload** (item 4, defect 2).
-   Independent of the others.
-2. **SDK-2206 — gate the JSON methods on `_PostgrestJSONColumnValue` and take a JSON-encoded
-   `JSONValue` in `containsJSON`/`containedByJSON`** (items 1 and 2).
-3. **SDK-2207 — `jsonObject(_:)` returns `JSONValue`, and comparisons on it JSON-encode the
-   operand** (item 3, defect 1). Depends on SDK-2206 for the gate.
+   Merged in supabase/supabase-swift#1498.
+2. **SDK-2208 — one Swift type per Postgres type in the typegen**, with the range gate. The base
+   of the stack.
+3. **SDK-2206 — gate the JSON methods on `where Value == JSONValue` and take a JSON-encoded
+   `JSONValue` in `containsJSON`/`containedByJSON`** (items 1 and 2). On SDK-2208.
+4. **SDK-2207 — `jsonObject(_:)` returns `JSONValue`, and the typed operand is chosen by the
+   `_typedOperand` requirement** (item 3, defect 1). On SDK-2206.
+
+Not planned now: a check in `@SelectionOf` that a property's type can decode the column's
+generated type. Today the macro compares column names only, which is what lets an app decode a
+`jsonb` column as its own type.
 
 The issue's acceptance criteria ask for a spec in `supabase/sdk`. This document is the spec for
 these pieces instead: the changes are Swift-only, and no other SDK has this typed surface.
