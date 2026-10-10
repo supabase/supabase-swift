@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.55.4-beta](https://github.com/supabase/supabase-swift/compare/v2.55.3...v2.55.4-beta) (2026-10-10)
+
+
+### Bug Fixes
+
+* **auth:** post admin invites to the /invite route the Auth server serves ([#1505](https://github.com/supabase/supabase-swift/issues/1505)) ([#1518](https://github.com/supabase/supabase-swift/issues/1518)) ([19528e2](https://github.com/supabase/supabase-swift/commit/19528e2edefb4735ffc9eea8a0e90b00dd5d3c5a))
+
 ## [2.55.3](https://github.com/supabase/supabase-swift/compare/v2.55.2...v2.55.3) (2026-09-29)
 
 ### Bug Fixes
