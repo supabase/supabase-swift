@@ -96,22 +96,24 @@ extension _PostgrestColumnExpression where Value == JSONValue {
 
   /// Reads a `json`/`jsonb` object key as JSON, with `->`.
   ///
-  /// Comparison is numeric for numbers, so `data->"n"=gt.2` includes a row where `n` is `10`.
+  /// The result is a `JSONValue`, whatever the column decodes as, because `->` returns `jsonb`.
+  /// It chains on, filters by containment, and compares as JSON: `.eq("1")` sends `eq."1"` and
+  /// matches the string, `.eq(1)` the number. Numbers compare numerically, so `data->"n"=gt.2`
+  /// includes a row where `n` is `10`.
   ///
-  /// > Note: Meant to be chained onward, not selected directly. The result keeps the receiver's
-  /// > `Value`, but `->` returns raw `jsonb`, which generally will not decode as that type —
-  /// > chain ``jsonText(_:)-(String)`` or ``cast(to:)`` to reach a scalar.
+  /// > Note: `jsonb` orders values of different types by type before value, and a number sorts
+  /// > above a string, so `.gt("3")` matches a row where the value is the number `3`.
   ///
   /// - Parameter key: The object key to read. Always a key, even when it looks like a number.
   ///   Use ``jsonObject(_:)-(Int)`` for an array element.
-  public func jsonObject(_ key: String) -> _PostgrestDerivedExpression<Root, Value, Position> {
+  public func jsonObject(_ key: String) -> _PostgrestDerivedExpression<Root, JSONValue, Position> {
     _deriving("->\(quotedJSONKey(key))")
   }
 
   /// Reads a `json`/`jsonb` array element as JSON, with `->`.
   ///
   /// - Parameter index: The zero-based array index. A negative index counts from the end.
-  public func jsonObject(_ index: Int) -> _PostgrestDerivedExpression<Root, Value, Position> {
+  public func jsonObject(_ index: Int) -> _PostgrestDerivedExpression<Root, JSONValue, Position> {
     _deriving("->\(index)")
   }
 }

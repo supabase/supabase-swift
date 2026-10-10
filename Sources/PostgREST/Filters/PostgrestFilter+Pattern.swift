@@ -74,6 +74,6 @@ extension _PostgrestFilterableExpression where Value: PostgrestFilterValue {
   /// An empty `values` matches no rows.
   public func `in`(_ values: [Value]) -> _PostgrestFilter<Root> {
     _PostgrestFilter(
-      column: postgrestExpression, operator: .in, operand: .list(values.map(\.rawValue)))
+      column: postgrestExpression, operator: .in, operand: .typedList(values))
   }
 }
