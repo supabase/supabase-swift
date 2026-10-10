@@ -58,6 +58,15 @@ struct ObjectKeyTests {
   }
 
   @Test
+  func lenientKeepsDotSegmentsFullyEncoded() {
+    let key = ObjectKey(lenient: "/a/../b/./c.png//")
+
+    #expect(key.path == "a/../b/./c.png")
+    #expect(key.encoded == "a/%2E%2E/b/%2E/c.png")
+    #expect(ObjectKey(lenient: "/").segments.isEmpty)
+  }
+
+  @Test
   func encodesABucketIdAsOneSegment() {
     #expect(ObjectKey.encode("my bucket/x+y") == "my%20bucket%2Fx%2By")
   }

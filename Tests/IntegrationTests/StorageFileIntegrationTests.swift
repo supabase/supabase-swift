@@ -48,7 +48,7 @@ final class StorageFileIntegrationTests {
 
   @Test
   func publicURL() throws {
-    let publicURL = try storage.from(bucketName).publicURL(path: uploadPath)
+    let publicURL = storage.from(bucketName).publicURL(path: uploadPath)
     #expect(
       publicURL.absoluteString
         == "\(DotEnv.supabaseURL)/storage/v1/object/public/\(bucketName)/\(uploadPath)"
@@ -57,7 +57,7 @@ final class StorageFileIntegrationTests {
 
   @Test
   func getPublicURLWithDownloadQueryString() throws {
-    let publicURL = try storage.from(bucketName).publicURL(
+    let publicURL = storage.from(bucketName).publicURL(
       path: uploadPath, download: .withOriginalName)
     #expect(
       publicURL.absoluteString
@@ -67,8 +67,8 @@ final class StorageFileIntegrationTests {
 
   @Test
   func getPublicURLWithCustomDownload() throws {
-    let publicURL = try storage.from(bucketName).publicURL(
-      path: uploadPath, download: "test.jpg")
+    let publicURL = storage.from(bucketName).publicURL(
+      path: uploadPath, download: .named("test.jpg"))
     #expect(
       publicURL.absoluteString
         == "\(DotEnv.supabaseURL)/storage/v1/object/public/\(bucketName)/\(uploadPath)?download=test.jpg"
@@ -105,7 +105,7 @@ final class StorageFileIntegrationTests {
     _ = try await storage.from(bucketName).upload(path: uploadPath, data: file)
 
     let url = try await storage.from(bucketName).createSignedURL(
-      path: uploadPath, expiresIn: .seconds(2000), download: "test.jpg")
+      path: uploadPath, expiresIn: .seconds(2000), download: .named("test.jpg"))
     #expect(
       url.absoluteString.contains(
         "\(DotEnv.supabaseURL)/storage/v1/object/sign/\(bucketName)/\(uploadPath)")
@@ -226,7 +226,7 @@ final class StorageFileIntegrationTests {
     try await storage.from(bucketName).upload(path: uploadPath, data: file)
 
     let res = try await storage.from(bucketName).createSignedUploadURL(
-      path: uploadPath, options: CreateSignedUploadURLOptions(shouldUpsert: true))
+      path: uploadPath, upsert: true)
     let uploadRes = try await storage.from(bucketName).uploadToSignedURL(
       path: res.path, token: res.token, data: file)
     #expect(uploadRes.path == uploadPath)
@@ -334,7 +334,7 @@ final class StorageFileIntegrationTests {
 
   @Test
   func getPublishURLWithTransformationOptions() throws {
-    let res = try storage.from(bucketName).publicURL(
+    let res = storage.from(bucketName).publicURL(
       path: uploadPath,
       transform: ImageTransform(
         width: 700,
@@ -395,7 +395,7 @@ final class StorageFileIntegrationTests {
       )
     )
 
-    let publicURL = try storage.from(bucketName).publicURL(path: uploadPath)
+    let publicURL = storage.from(bucketName).publicURL(path: uploadPath)
 
     let (_, response) = try await URLSession.shared.data(from: publicURL)
     let httpResponse = try #require(response as? HTTPURLResponse)
