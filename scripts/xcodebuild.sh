@@ -7,6 +7,9 @@
 #   WORKSPACE            Xcode workspace (default: Supabase.xcworkspace)
 #   XCODEBUILD_ARGUMENT  xcodebuild action, e.g. build | test (default: test)
 #   DERIVED_DATA_PATH    (default: ~/.derivedData/$CONFIG)
+#   WARNINGS_FILE        when set, compiler warnings are appended to this file instead of
+#                        being annotated here, and the `warnings` CI job annotates the
+#                        deduplicated union of every job's file (see collect-warnings.sh)
 set -euo pipefail
 
 CONFIG="${CONFIG-Debug}"
@@ -54,8 +57,33 @@ if [[ -n "$XCODEBUILD_ARGUMENT" ]]; then
 fi
 XCODEBUILD_ARGS+=("${XCODEBUILD_FLAGS[@]}")
 
-if command -v xcbeautify >/dev/null 2>&1; then
-  xcodebuild "${XCODEBUILD_ARGS[@]}" | xcbeautify
-else
-  xcodebuild "${XCODEBUILD_ARGS[@]}"
+RAW_LOG=/dev/null
+if [[ -n "${WARNINGS_FILE-}" ]]; then
+  RAW_LOG="$(mktemp)"
+  trap 'rm -f "$RAW_LOG"' EXIT
 fi
+
+beautify() {
+  if [[ -n "${WARNINGS_FILE-}" ]]; then
+    # xcbeautify annotates every warning it sees, which the matrix then repeats once per
+    # platform, Xcode version and configuration. Drop its warning and notice annotations
+    # and let the `warnings` job annotate the deduplicated union instead. Error
+    # annotations are kept: those belong to the job that failed.
+    xcbeautify | grep --line-buffered -Ev '^::(warning|notice)' || true
+  else
+    xcbeautify
+  fi
+}
+
+STATUS=0
+if command -v xcbeautify >/dev/null 2>&1; then
+  xcodebuild "${XCODEBUILD_ARGS[@]}" | tee "$RAW_LOG" | beautify || STATUS=$?
+else
+  xcodebuild "${XCODEBUILD_ARGS[@]}" | tee "$RAW_LOG" || STATUS=$?
+fi
+
+if [[ -n "${WARNINGS_FILE-}" ]]; then
+  "$(dirname "${BASH_SOURCE[0]}")/collect-warnings.sh" "$RAW_LOG" >>"$WARNINGS_FILE"
+fi
+
+exit "$STATUS"
