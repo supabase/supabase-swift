@@ -41,9 +41,8 @@ struct StorageAPI: Sendable {
   ///   headers, and transport.
   init(configuration: StorageClientConfiguration) {
     var configuration = configuration
-    let headers = HTTPFields(configuration.headers)
-    if headers[.xClientInfo] == nil {
-      configuration.headers["X-Client-Info"] = "storage-swift/\(version)"
+    if configuration.headers[.xClientInfo] == nil {
+      configuration.headers[.xClientInfo] = "storage-swift/\(version)"
     }
 
     // if legacy uri is used, replace with new storage host (disables request buffering to allow > 50GB uploads)
@@ -80,11 +79,11 @@ struct StorageAPI: Sendable {
   /// made by the returned instance.
   ///
   /// - Parameters:
+  ///   - name: The header field.
   ///   - value: The value of the header field.
-  ///   - key: The name of the header field. The key is case-insensitively stored as lowercase.
-  func setHeader(_ value: String, forKey key: String) -> Self {
+  func setHeader(name: HTTPField.Name, value: String) -> Self {
     var copy = self
-    copy.configuration.headers[key.lowercased()] = value
+    copy.configuration.headers[name] = value
     return copy
   }
 
@@ -110,7 +109,7 @@ struct StorageAPI: Sendable {
     )
 
     var head = request.head
-    head.headerFields = HTTPFields(configuration.headers).merging(with: head.headerFields)
+    head.headerFields = configuration.headers.merging(with: head.headerFields)
 
     let response: HTTPResponse
     let data: Data

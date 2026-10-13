@@ -19,7 +19,7 @@ final class VectorIndexClientIntegrationTests {
     configuration: StorageClientConfiguration(
       url: URL(string: "\(DotEnv.supabaseURL)/storage/v1")!,
       headers: [
-        "Authorization": "Bearer \(DotEnv.supabaseSecretKey)"
+        .authorization: "Bearer \(DotEnv.supabaseSecretKey)"
       ]
     )
   ).vectors

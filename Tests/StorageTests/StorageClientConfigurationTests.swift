@@ -23,7 +23,7 @@ struct StorageClientConfigurationTests {
 
   /// Records the head of every request and answers an empty bucket list.
   private func makeSUT(
-    headers: [String: String],
+    headers: HTTPFields,
     accessToken: (@Sendable () async throws -> String?)? = nil,
     requests: LockIsolated<[HTTPRequest]>
   ) -> StorageClient {
@@ -92,7 +92,7 @@ struct StorageClientConfigurationTests {
   func staticAuthorizationHeaderWinsOverAccessTokenMiddleware() async throws {
     let requests = LockIsolated<[HTTPRequest]>([])
     let storage = makeSUT(
-      headers: ["Authorization": "Bearer static"], accessToken: { "token-1" }, requests: requests)
+      headers: [.authorization: "Bearer static"], accessToken: { "token-1" }, requests: requests)
 
     _ = try await storage.listBuckets()
 
@@ -102,7 +102,7 @@ struct StorageClientConfigurationTests {
   @Test
   func xClientInfoIsMatchedCaseInsensitively() async throws {
     let requests = LockIsolated<[HTTPRequest]>([])
-    let storage = makeSUT(headers: ["x-client-info": "my-app/1.0"], requests: requests)
+    let storage = makeSUT(headers: [.init("x-client-info")!: "my-app/1.0"], requests: requests)
 
     _ = try await storage.listBuckets()
 
@@ -114,14 +114,14 @@ struct StorageClientConfigurationTests {
     let storage = StorageClient(
       configuration: StorageClientConfiguration(
         url: URL(string: "https://project.supabase.co/storage/v1")!,
-        headers: ["X-Client-Info": "custom/1"],
+        headers: [.xClientInfo: "custom/1"],
         usesNewHostname: true
       )
-    ).setHeader("value", forKey: "X-Custom")
+    ).setHeader(name: .init("X-Custom")!, value: "value")
 
     #expect(
       storage.configuration.url.absoluteString == "https://project.storage.supabase.co/storage/v1")
-    #expect(storage.configuration.headers["X-Client-Info"] == "custom/1")
-    #expect(storage.configuration.headers["x-custom"] == "value")
+    #expect(storage.configuration.headers[.xClientInfo] == "custom/1")
+    #expect(storage.configuration.headers[.init("x-custom")!] == "value")
   }
 }

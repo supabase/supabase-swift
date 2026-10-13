@@ -1,4 +1,5 @@
 public import Foundation
+public import HTTPTypes
 public import Helpers
 public import Logging
 
@@ -10,7 +11,7 @@ public import Logging
 /// ```swift
 /// let configuration = StorageClientConfiguration(
 ///   url: URL(string: "https://project.supabase.co/storage/v1")!,
-///   headers: ["apikey": key],
+///   headers: [.init("apikey")!: key],
 ///   http: HTTPClientConfiguration(
 ///     middlewares: [AccessTokenMiddleware { try await session.accessToken }]
 ///   )
@@ -42,11 +43,11 @@ public struct StorageClientConfiguration: Sendable {
   /// The base URL of the Storage API endpoint (e.g. `https://project.supabase.co/storage/v1`).
   public var url: URL
 
-  /// HTTP headers sent with every request.
+  /// HTTP headers sent with every request. `HTTPFields` matches names case-insensitively.
   ///
   /// A static `Authorization` here wins over any middleware in ``http``. For a token that
   /// rotates, leave it out and add an `AccessTokenMiddleware` instead.
-  public var headers: [String: String]
+  public var headers: HTTPFields
 
   /// The transport and middleware chain every request goes through.
   public let http: HTTPClientConfiguration
@@ -80,7 +81,7 @@ public struct StorageClientConfiguration: Sendable {
   ///   - retryEnabled: Whether transient failures of reads are retried.
   public init(
     url: URL,
-    headers: [String: String],
+    headers: HTTPFields,
     http: HTTPClientConfiguration = .init(),
     logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.storage"),
     usesNewHostname: Bool = false,
@@ -127,7 +128,7 @@ public struct StorageClientConfiguration: Sendable {
 ///
 /// ### Customizing headers
 ///
-/// - ``setHeader(_:forKey:)``
+/// - ``setHeader(name:value:)``
 ///
 /// ### Accessing buckets
 ///
@@ -169,16 +170,16 @@ public struct StorageClient: Sendable {
   /// the result:
   ///
   /// ```swift
-  /// let storage = client.storage.setHeader("x-custom-header", forKey: "X-Custom-Header")
+  /// let storage = client.storage.setHeader(name: .init("X-Custom-Header")!, value: "x-custom-header")
   /// ```
   ///
   /// - Parameters:
+  ///   - name: The header field. Names match case-insensitively.
   ///   - value: The value of the header field.
-  ///   - key: The name of the header field. The key is case-insensitively stored as lowercase.
   /// - Returns: A new ``StorageClient`` with the header merged into the configuration's
   ///   headers.
-  public func setHeader(_ value: String, forKey key: String) -> Self {
-    StorageClient(api: api.setHeader(value, forKey: key))
+  public func setHeader(name: HTTPField.Name, value: String) -> Self {
+    StorageClient(api: api.setHeader(name: name, value: value))
   }
 
   /// Returns a ``StorageBucket`` scoped to the given bucket.

@@ -136,7 +136,7 @@ struct SupabaseClientTests {
     var dataHeaders = client.headers
     dataHeaders["Authorization"] = nil
     expectNoDifference(dataHeaders, client.functions.configuration.headers.dictionary)
-    expectNoDifference(dataHeaders, client.storage.configuration.headers)
+    expectNoDifference(dataHeaders, client.storage.configuration.headers.dictionary)
     expectNoDifference(dataHeaders, client.rest.configuration.headers)
 
     #expect(client.functions.configuration.region == .apNortheast1)
@@ -530,7 +530,7 @@ struct SupabaseClientTests {
       options: SupabaseClientOptions(auth: .init(storage: AuthLocalStorageMock()))
     )
 
-    let headers = HTTPFields(client.storage.configuration.headers)
+    let headers = client.storage.configuration.headers
     #expect(headers[.authorization] == nil)
     #expect(headers[.init("Apikey")!] == "sb_publishable_abc123")
   }
