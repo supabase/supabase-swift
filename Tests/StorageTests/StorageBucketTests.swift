@@ -1183,7 +1183,7 @@ extension StorageMockerTests {
     }
 
     @Test
-    func download_withEmptyTransformOptions() async throws {
+    func download_withEmptyImageTransform() async throws {
       let storage = makeSUT()
 
       Mock(
@@ -1196,17 +1196,17 @@ extension StorageMockerTests {
       .register()
 
       let data = try await storage.from("bucket")
-        .download(path: "file.txt", options: TransformOptions())
+        .download(path: "file.txt", transform: ImageTransform())
 
       #expect(data == Data("hello world".utf8))
     }
 
     @Test
-    func getPublicURL_withEmptyTransformOptions() throws {
+    func getPublicURL_withEmptyImageTransform() throws {
       let storage = makeSUT()
 
       let publicURL = try storage.from("bucket")
-        .publicURL(path: "image.png", options: TransformOptions())
+        .publicURL(path: "image.png", transform: ImageTransform())
 
       #expect(
         publicURL.absoluteString.contains("/object/public/"),
@@ -1219,11 +1219,11 @@ extension StorageMockerTests {
     }
 
     @Test
-    func getPublicURL_withActualTransformOptions() throws {
+    func getPublicURL_withActualImageTransform() throws {
       let storage = makeSUT()
 
       let publicURL = try storage.from("bucket")
-        .publicURL(path: "image.png", options: TransformOptions(width: 200))
+        .publicURL(path: "image.png", transform: ImageTransform(width: 200))
 
       #expect(
         publicURL.absoluteString.contains("/render/image/"),
@@ -1399,7 +1399,7 @@ extension StorageMockerTests {
         curl \
         	--header "X-Client-Info: storage-swift/0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	"http://localhost:54321/storage/v1/render/image/authenticated/bucket/sadcat.txt?format=cover"
+        	"http://localhost:54321/storage/v1/render/image/authenticated/bucket/sadcat.txt?resize=cover"
         """#
       }
       .register()
@@ -1407,7 +1407,7 @@ extension StorageMockerTests {
       let data = try await storage.from("bucket")
         .download(
           path: "sadcat.txt",
-          options: TransformOptions(format: "cover")
+          transform: ImageTransform(resize: .cover)
         )
 
       #expect(data == imageData)

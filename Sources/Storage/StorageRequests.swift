@@ -222,15 +222,15 @@ struct StorageRequests: Sendable {
 
   private struct SignBody: Encodable {
     let expiresIn: Int
-    let transform: TransformOptions?
+    let transform: ImageTransform.Body?
   }
 
-  func sign(bucket: String, key: ObjectKey, expiresIn: Int, transform: TransformOptions?) throws
+  func sign(bucket: String, key: ObjectKey, expiresIn: Int, transform: ImageTransform?) throws
     -> StorageRequest
   {
     StorageRequest(
       head: HTTPRequest(method: .post, url: url("object/sign/\(objectPath(bucket, key))")),
-      body: try json(SignBody(expiresIn: expiresIn, transform: transform)))
+      body: try json(SignBody(expiresIn: expiresIn, transform: transform?.body)))
   }
 
   private struct SignManyBody: Encodable {
