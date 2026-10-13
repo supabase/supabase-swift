@@ -1452,19 +1452,19 @@ extension StorageMockerTests {
       let storage = makeSUT()
 
       Mock(
-        url: url.appendingPathComponent("object/bucket/file.txt"),
+        url: url.appendingPathComponent("object/info/bucket/file.txt"),
         statusCode: 200,
         data: [
-          .head: Data()
+          .get: Data(
+            #"{"id":"b5a2d6ea-7c5e-4d3a-9b3e-1f2e3d4c5b6a","version":"v1","name":"file.txt"}"#.utf8)
         ]
       )
       .snapshotRequest {
         #"""
         curl \
-        	--head \
         	--header "X-Client-Info: storage-swift/0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	"http://localhost:54321/storage/v1/object/bucket/file.txt"
+        	"http://localhost:54321/storage/v1/object/info/bucket/file.txt"
         """#
       }
       .register()
@@ -1474,26 +1474,20 @@ extension StorageMockerTests {
       #expect(exists)
     }
 
+    /// Storage answers a missing key with HTTP 400 and `NoSuchKey` in the body.
     @Test
-    func exists_400_error() async throws {
+    func existsIsFalseForNoSuchKey() async throws {
       let storage = makeSUT()
 
       Mock(
-        url: url.appendingPathComponent("object/bucket/file.txt"),
+        url: url.appendingPathComponent("object/info/bucket/file.txt"),
         statusCode: 400,
         data: [
-          .head: Data()
+          .get: Data(
+            #"{"statusCode":"404","error":"not_found","message":"Object not found","code":"NoSuchKey"}"#
+              .utf8)
         ]
       )
-      .snapshotRequest {
-        #"""
-        curl \
-        	--head \
-        	--header "X-Client-Info: storage-swift/0.0.0" \
-        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	"http://localhost:54321/storage/v1/object/bucket/file.txt"
-        """#
-      }
       .register()
 
       let exists = try await storage.from("bucket").exists(path: "file.txt")
@@ -1501,31 +1495,51 @@ extension StorageMockerTests {
       #expect(!exists)
     }
 
+    /// An older server that sends no `code` still says 404 in the body.
     @Test
-    func exists_404_error() async throws {
+    func existsIsFalseForABody404WithoutACode() async throws {
       let storage = makeSUT()
 
       Mock(
-        url: url.appendingPathComponent("object/bucket/file.txt"),
-        statusCode: 404,
+        url: url.appendingPathComponent("object/info/bucket/file.txt"),
+        statusCode: 400,
         data: [
-          .head: Data()
+          .get: Data(#"{"statusCode":"404","error":"not_found","message":"Object not found"}"#.utf8)
         ]
       )
-      .snapshotRequest {
-        #"""
-        curl \
-        	--head \
-        	--header "X-Client-Info: storage-swift/0.0.0" \
-        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	"http://localhost:54321/storage/v1/object/bucket/file.txt"
-        """#
-      }
       .register()
 
       let exists = try await storage.from("bucket").exists(path: "file.txt")
 
       #expect(!exists)
+    }
+
+    /// A missing bucket and an expired session both arrive as HTTP 400; neither means "the file
+    /// does not exist".
+    @Test(arguments: [
+      ("NoSuchBucket", "404", StorageError.Code.noSuchBucket), ("InvalidJWT", "400", .invalidJWT),
+    ])
+    func existsRethrowsOtherServerErrors(raw: String, status: String, code: StorageError.Code)
+      async throws
+    {
+      let storage = makeSUT()
+
+      Mock(
+        url: url.appendingPathComponent("object/info/bucket/file.txt"),
+        statusCode: 400,
+        data: [
+          .get: Data(
+            #"{"statusCode":"\#(status)","error":"\#(raw)","message":"\#(raw)","code":"\#(raw)"}"#
+              .utf8)
+        ]
+      )
+      .register()
+
+      await #expect {
+        try await storage.from("bucket").exists(path: "file.txt")
+      } throws: { error in
+        (error as? StorageError)?.code == code
+      }
     }
 
     @Test

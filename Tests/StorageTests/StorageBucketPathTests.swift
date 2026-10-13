@@ -86,7 +86,9 @@ struct StorageBucketPathTests {
       _ = try await $0.info(path: $1)
       return nil
     },
-    Operation(name: "exists", placement: .url, response: "") {
+    Operation(
+      name: "exists", placement: .url, response: #"{"id":"id","version":"v","name":"x"}"#
+    ) {
       _ = try await $0.exists(path: $1)
       return nil
     },
