@@ -5,7 +5,7 @@ import HTTPTypes
   import FoundationNetworking
 #endif
 
-/// Internal implementation detail shared by ``SupabaseStorageClient``, ``StorageFileApi``, and the
+/// Internal implementation detail shared by ``StorageClient``, ``StorageBucket``, and the
 /// Vectors trio (``StorageVectorsClient``, ``VectorBucketClient``, ``VectorIndexClient``).
 ///
 /// Holds the ``StorageClientConfiguration`` and the underlying HTTP client used to execute

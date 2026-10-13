@@ -12,7 +12,7 @@ import Testing
 
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil), .serialized)
 struct StorageVectorsClientIntegrationTests {
-  let vectors = SupabaseStorageClient(
+  let vectors = StorageClient(
     configuration: StorageClientConfiguration(
       url: URL(string: "\(DotEnv.supabaseURL)/storage/v1")!,
       headers: [

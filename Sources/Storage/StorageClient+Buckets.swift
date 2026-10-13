@@ -6,8 +6,8 @@ import HTTPTypes
 #endif
 
 /// Bucket-management operations (listing, creating, updating, emptying, and deleting) for
-/// ``SupabaseStorageClient``.
-extension SupabaseStorageClient {
+/// ``StorageClient``.
+extension StorageClient {
   /// Retrieves the details of all Storage buckets within the project.
   ///
   /// - Returns: An array of ``Bucket`` objects, one for each bucket in the project.

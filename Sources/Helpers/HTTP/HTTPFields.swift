@@ -9,7 +9,7 @@ extension HTTPFields {
   /// Some of these keys are dynamic, so a name RFC 9110 rejects (an empty string, one holding a
   /// space or a colon) must not trap. `HTTPResponse.init` builds fields straight from
   /// `response.allHeaderFields`, which the server and any proxy in front of it control, and
-  /// `FunctionsClient.invoke` and `StorageFileApi` pass per-call headers. Dropping the bad entry
+  /// `FunctionsClient.invoke` and `StorageBucket` pass per-call headers. Dropping the bad entry
   /// and reporting keeps the remaining headers — and the response — usable.
   package init(_ dictionary: [String: String]) {
     self.init(
