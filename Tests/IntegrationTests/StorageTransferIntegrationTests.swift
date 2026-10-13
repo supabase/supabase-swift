@@ -230,4 +230,25 @@ final class StorageTransferIntegrationTests {
 
     #expect(error?.isNotFound == true)
   }
+
+  // MARK: - Downloads to a file
+
+  @Test
+  func downloadWritesToAFileAndReplacesWhatWasThere() async throws {
+    try await bucket.upload(path: "file.bin", data: payload)
+    let directory = FileManager.default.temporaryDirectory
+      .appendingPathComponent("transfer-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let destination = directory.appendingPathComponent("file.bin")
+    try Data("old".utf8).write(to: destination)
+    let log = ProgressLog()
+
+    let response = try await bucket.download(path: "file.bin", progress: log.callback)
+    try await response.write(to: destination)
+
+    #expect(try Data(contentsOf: destination) == payload)
+    #expect(try FileManager.default.contentsOfDirectory(atPath: directory.path) == ["file.bin"])
+    log.expectRisesTo(Int64(payload.count))
+  }
 }

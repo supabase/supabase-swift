@@ -145,6 +145,60 @@ struct HTTPBodyTests {
     #expect(try Data(contentsOf: url) == Data("on disk".utf8))
   }
 
+  /// A fresh directory, so a test can check that no temporary file is left behind.
+  private func makeDirectory() throws -> URL {
+    let directory = FileManager.default.temporaryDirectory
+      .appendingPathComponent("HTTPBodyTests-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    return directory
+  }
+
+  @Test
+  func writeToFileReplacesAnExistingFile() async throws {
+    let directory = try makeDirectory()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let url = directory.appendingPathComponent("a.txt")
+    try Data("old contents".utf8).write(to: url)
+
+    try await HTTPBody(Data("new".utf8)).write(to: url)
+
+    #expect(try Data(contentsOf: url) == Data("new".utf8))
+    #expect(try FileManager.default.contentsOfDirectory(atPath: directory.path) == ["a.txt"])
+  }
+
+  @Test
+  func aFailedWriteKeepsTheOldFileAndLeavesNoTemporaryFile() async throws {
+    struct Lost: Error {}
+    let directory = try makeDirectory()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let url = directory.appendingPathComponent("a.txt")
+    try Data("old contents".utf8).write(to: url)
+    let chunks = AsyncThrowingStream<ArraySlice<UInt8>, any Error> {
+      $0.yield(ArraySlice([1, 2]))
+      $0.finish(throwing: Lost())
+    }
+
+    await #expect(throws: Lost.self) {
+      try await HTTPBody(chunks, length: .unknown, iterationBehavior: .single).write(to: url)
+    }
+
+    #expect(try Data(contentsOf: url) == Data("old contents".utf8))
+    #expect(try FileManager.default.contentsOfDirectory(atPath: directory.path) == ["a.txt"])
+  }
+
+  @Test
+  func writeToAMissingDirectoryThrowsAndCreatesNothing() async throws {
+    let directory = try makeDirectory()
+    defer { try? FileManager.default.removeItem(at: directory) }
+
+    await #expect(throws: (any Error).self) {
+      try await HTTPBody(Data("new".utf8)).write(
+        to: directory.appendingPathComponent("missing/a.txt"))
+    }
+
+    #expect(try FileManager.default.contentsOfDirectory(atPath: directory.path).isEmpty)
+  }
+
   @Test
   func reportingProgressReportsCumulativeBytes() async throws {
     let chunks = AsyncStream<ArraySlice<UInt8>> { continuation in

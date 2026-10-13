@@ -229,15 +229,46 @@ extension Data {
 }
 
 extension HTTPBody {
-  /// Streams the body to a file, chunk by chunk, creating or truncating it first.
+  /// Streams the body to a file, chunk by chunk, so it never has to fit in memory.
+  ///
+  /// The bytes go to a temporary file next to `fileURL`, which then replaces `fileURL` in one
+  /// move. So `fileURL` holds either its old contents or the whole body, never a partial one, and
+  /// a failed or cancelled write leaves no temporary file behind. The directory must exist.
   public func write(to fileURL: URL) async throws {
-    guard FileManager.default.createFile(atPath: fileURL.path, contents: nil) else {
-      throw CocoaError(.fileWriteUnknown)
-    }
-    let handle = try FileHandle(forWritingTo: fileURL)
-    defer { try? handle.close() }
-    for try await chunk in self {
-      try handle.write(contentsOf: chunk)
+    let fileManager = FileManager.default
+    let temporary = fileURL.deletingLastPathComponent().appendingPathComponent(
+      ".\(fileURL.lastPathComponent).\(UUID().uuidString).download")
+
+    do {
+      guard fileManager.createFile(atPath: temporary.path, contents: nil) else {
+        throw CocoaError(.fileWriteUnknown, userInfo: [NSFilePathErrorKey: temporary.path])
+      }
+      let handle = try FileHandle(forWritingTo: temporary)
+      do {
+        for try await chunk in self {
+          try handle.write(contentsOf: chunk)
+        }
+        try handle.close()
+      } catch {
+        try? handle.close()
+        throw error
+      }
+      #if os(Windows)
+        if fileManager.fileExists(atPath: fileURL.path) {
+          _ = try fileManager.replaceItemAt(fileURL, withItemAt: temporary)
+        } else {
+          try fileManager.moveItem(at: temporary, to: fileURL)
+        }
+      #else
+        // `rename(2)` replaces an existing file atomically. swift-corelibs-foundation's
+        // `replaceItemAt` fails with "The file doesn't exist" when the destination does.
+        guard rename(temporary.path, fileURL.path) == 0 else {
+          throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+        }
+      #endif
+    } catch {
+      try? fileManager.removeItem(at: temporary)
+      throw error
     }
   }
 

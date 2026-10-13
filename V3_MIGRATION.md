@@ -3648,7 +3648,7 @@ On Linux the body is delivered whole when the server closes the connection, beca
 
 `HTTPBody.Iterator.next()` throws `CancellationError` when the iterating task is cancelled.
 That reaches every API that hands out or drains an `HTTPBody`: `FunctionStreamResponse.body`,
-Storage's `bytes(path:)`, `Data(collecting:upTo:)`, `HTTPBody.write(to:)` and a custom
+Storage's `DownloadResponse`, `Data(collecting:upTo:)`, `HTTPBody.write(to:)` and a custom
 `ClientMiddleware` reading a response body.
 
 The chunks come from an `AsyncThrowingStream`, whose iterator returns `nil` when its consumer is
