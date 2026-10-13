@@ -7,6 +7,7 @@
 
 import Foundation
 import HTTPTypes
+import IssueReporting
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -133,11 +134,14 @@ struct StorageRequests: Sendable {
   /// travels in headers: `Content-Type`, `Cache-Control`, and base64 JSON in `x-metadata`.
   func upload(
     method: HTTPRequest.Method, bucket: String, key: ObjectKey, file: FileUpload,
-    options: FileOptions
+    options: UploadOptions
   ) throws -> StorageRequest {
     var headers = try uploadHeaders(file: file, key: key, options: options)
     if method == .post {
-      headers[.xUpsert] = "\(options.shouldUpsert)"
+      headers[.xUpsert] = "\(options.upsert)"
+    } else if options.upsert {
+      reportIssue(
+        "UploadOptions.upsert has no effect on update(path:): PUT always replaces the object.")
     }
     return StorageRequest(
       head: HTTPRequest(
@@ -145,11 +149,11 @@ struct StorageRequests: Sendable {
       body: try file.httpBody())
   }
 
+  /// Upsert is decided by the token, so `options.upsert` is not sent.
   func uploadToSignedURL(
-    bucket: String, key: ObjectKey, token: String, file: FileUpload, options: FileOptions
+    bucket: String, key: ObjectKey, token: String, file: FileUpload, options: UploadOptions
   ) throws -> StorageRequest {
-    var headers = try uploadHeaders(file: file, key: key, options: options)
-    headers[.xUpsert] = "\(options.shouldUpsert)"
+    let headers = try uploadHeaders(file: file, key: key, options: options)
     return StorageRequest(
       head: HTTPRequest(
         method: .put,
@@ -160,16 +164,15 @@ struct StorageRequests: Sendable {
       body: try file.httpBody())
   }
 
-  private func uploadHeaders(file: FileUpload, key: ObjectKey, options: FileOptions) throws
+  private func uploadHeaders(file: FileUpload, key: ObjectKey, options: UploadOptions) throws
     -> HTTPFields
   {
-    var headers = options.headers.map { HTTPFields($0) } ?? HTTPFields()
-    headers[.duplex] = options.duplex
+    var headers = options.headers
     if headers[.contentType] == nil {
       headers[.contentType] = file.contentType(forPath: key.path, options: options)
     }
     if headers[.cacheControl] == nil {
-      headers[.cacheControl] = "max-age=\(options.cacheControl)"
+      headers[.cacheControl] = options.cacheControl.rawValue
     }
     if let metadata = options.metadata {
       headers[.xMetadata] = try encodeMetadata(metadata)
@@ -309,7 +312,6 @@ struct UploadResponse: Decodable {
 }
 
 extension HTTPField.Name {
-  static let duplex = Self("duplex")!
   static let xMetadata = Self("x-metadata")!
   static let xUpsert = Self("x-upsert")!
 }

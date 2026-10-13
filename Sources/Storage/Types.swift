@@ -1,4 +1,5 @@
 public import Foundation
+public import HTTPTypes
 
 /// Options for searching and paginating files within a bucket.
 ///
@@ -97,77 +98,115 @@ public struct SortBy: Encodable, Sendable {
 /// Options applied when uploading or updating a file.
 ///
 /// ```swift
-/// let options = FileOptions(
-///   cacheControl: "86400",
+/// let options = UploadOptions(
 ///   contentType: "image/png",
-///   shouldUpsert: true
+///   cacheControl: .maxAge(.seconds(86400)),
+///   upsert: true
 /// )
 /// try await storage.from("avatars").upload(path: "user123.png", data: imageData, options: options)
 /// ```
 ///
 /// ## Topics
 ///
-/// ### Creating file options
+/// ### Creating upload options
 ///
-/// - ``init(cacheControl:contentType:shouldUpsert:duplex:metadata:headers:)``
+/// - ``init(contentType:cacheControl:upsert:metadata:headers:)``
 ///
 /// ### Upload configuration
 ///
-/// - ``cacheControl``
 /// - ``contentType``
-/// - ``shouldUpsert``
-/// - ``duplex``
+/// - ``cacheControl``
+/// - ``upsert``
 /// - ``metadata``
 /// - ``headers``
-public struct FileOptions: Sendable {
-  /// The number of seconds the asset is cached in the browser and in the Supabase CDN.
-  ///
-  /// This value is set in the `Cache-Control: max-age=<seconds>` header. Defaults to `"3600"`.
-  public var cacheControl: String
-
+public struct UploadOptions: Sendable {
   /// The `Content-Type` header value, e.g. `"image/png"`. When `nil`, the type is inferred from
   /// the file extension.
   public var contentType: String?
 
-  /// When `true`, overwrites an existing file at the same path. When `false` (the default), an
-  /// error is thrown if an object already exists at the destination path.
-  public var shouldUpsert: Bool
+  /// The `Cache-Control` header stored with the object and sent back on every download.
+  /// Defaults to one hour, ``CacheControl/maxAge(_:)`` with `.seconds(3600)`.
+  public var cacheControl: CacheControl
 
-  /// Enables or disables duplex streaming on the underlying `fetch()` call, allowing simultaneous
-  /// reading and writing within the same stream.
-  public var duplex: String?
+  /// When `true`, ``StorageBucket/upload(path:data:options:)`` overwrites an existing file at the
+  /// same path. When `false` (the default), it throws ``StorageError/Code/keyAlreadyExists``.
+  ///
+  /// ``StorageBucket/update(path:data:options:)`` always overwrites and ignores this flag, and
+  /// ``StorageBucket/uploadToSignedURL(path:token:data:options:)`` takes it from the token.
+  public var upsert: Bool
 
   /// Arbitrary key-value metadata to attach to the uploaded object. You can later use this to
   /// filter or search for files.
   public var metadata: [String: JSONValue]?
 
-  /// Extra HTTP headers to include with the upload request.
-  public var headers: [String: String]?
+  /// Extra HTTP headers to include with the upload request. A header set here wins over the one
+  /// the SDK would send for the same name.
+  public var headers: HTTPFields
 
-  /// Creates a ``FileOptions`` value.
+  /// Creates an ``UploadOptions`` value.
   ///
   /// - Parameters:
-  ///   - cacheControl: Seconds for the `Cache-Control: max-age` header. Defaults to `"3600"`.
   ///   - contentType: MIME type for the `Content-Type` header. Inferred from the extension when `nil`.
-  ///   - shouldUpsert: Whether to overwrite an existing file. Defaults to `false`.
-  ///   - duplex: Duplex streaming mode string, if needed.
+  ///   - cacheControl: The `Cache-Control` header to store with the object. Defaults to one hour.
+  ///   - upsert: Whether to overwrite an existing file. Defaults to `false`.
   ///   - metadata: Arbitrary metadata key-value pairs to attach to the object.
   ///   - headers: Extra HTTP headers for the upload request.
   public init(
-    cacheControl: String = "3600",
     contentType: String? = nil,
-    shouldUpsert: Bool = false,
-    duplex: String? = nil,
+    cacheControl: CacheControl = .maxAge(.seconds(3600)),
+    upsert: Bool = false,
     metadata: [String: JSONValue]? = nil,
-    headers: [String: String]? = nil
+    headers: HTTPFields = [:]
   ) {
-    self.cacheControl = cacheControl
     self.contentType = contentType
-    self.shouldUpsert = shouldUpsert
-    self.duplex = duplex
+    self.cacheControl = cacheControl
+    self.upsert = upsert
     self.metadata = metadata
     self.headers = headers
   }
+}
+
+/// A `Cache-Control` header value, stored with an object at upload and sent back on every
+/// download.
+///
+/// Storage keeps the value verbatim, so any directive the HTTP spec allows works. Use the
+/// static members for the common ones, or a string literal for anything else:
+///
+/// ```swift
+/// UploadOptions(cacheControl: .maxAge(.seconds(86400)))
+/// UploadOptions(cacheControl: .noCache)
+/// UploadOptions(cacheControl: "max-age=60, s-maxage=3600")
+/// ```
+///
+/// ## Topics
+///
+/// ### Common directives
+///
+/// - ``maxAge(_:)``
+/// - ``noCache``
+/// - ``noStore``
+public struct CacheControl: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+  /// The header value as sent, e.g. `"max-age=3600"`.
+  public let rawValue: String
+
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
+  /// `max-age=N`: cache for `duration`, rounded down to whole seconds.
+  public static func maxAge(_ duration: Duration) -> CacheControl {
+    CacheControl(rawValue: "max-age=\(duration.components.seconds)")
+  }
+
+  /// `no-cache`: revalidate with Storage before every use.
+  public static let noCache: CacheControl = "no-cache"
+
+  /// `no-store`: never cache.
+  public static let noStore: CacheControl = "no-store"
 }
 
 /// A single signed URL returned as part of a batch sign operation.
