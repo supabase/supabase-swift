@@ -150,6 +150,10 @@ supporting_symbols:
   - StorageClient
   - StorageClient.init
   - StorageClient.configuration
+  - StorageError.ServerError.code
+  - StorageError.code
+  - StorageError.serverStatusCode
+  - StorageError.isNotFound
   - StorageError.init
   - StorageError.kind
   - StorageError.message
@@ -1659,7 +1663,7 @@ features:
   storage.errors.error_codes:
     status: implemented
     symbols:
-      - StorageError.ServerError.code
+      - StorageError.code
     supporting_symbols:
       - StorageError.Code
       - StorageError.Code.init

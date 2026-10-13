@@ -148,7 +148,7 @@ final class StorageFileIntegrationTests {
       #expect(error.serverError?.code == .entityTooLarge)
       #expect(error.message == "The object exceeded the maximum allowed size")
       // Storage answers with HTTP 400 and puts "413" in the body.
-      #expect(error.serverError?.statusCode == "413")
+      #expect(error.serverStatusCode == 413)
       #expect(error.response != nil)
     } catch {
       Issue.record("Unexpected error \(error)")
@@ -193,7 +193,7 @@ final class StorageFileIntegrationTests {
       #expect(error.serverError?.code == .invalidMimeType)
       #expect(error.message == "mime type image/jpeg is not supported")
       // Storage answers with HTTP 400 and puts "415" in the body.
-      #expect(error.serverError?.statusCode == "415")
+      #expect(error.serverStatusCode == 415)
       #expect(error.response != nil)
     } catch {
       Issue.record("Unexpected error \(error)")
@@ -248,7 +248,7 @@ final class StorageFileIntegrationTests {
       #expect(error.serverError?.code == .keyAlreadyExists)
       #expect(error.message == "The resource already exists")
       // Storage answers with HTTP 400 and puts "409" in the body.
-      #expect(error.serverError?.statusCode == "409")
+      #expect(error.serverStatusCode == 409)
       #expect(error.response != nil)
     } catch {
       Issue.record("Unexpected error \(error)")
