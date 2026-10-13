@@ -39,6 +39,10 @@ import HTTPTypesFoundation
 /// - The SDK sets `URLRequest.timeoutInterval` on every request it sends
 ///   (``HTTPClientConfiguration/timeout``, or 60 seconds — 150 for Functions — when unset), so
 ///   it wins over the session's `timeoutIntervalForRequest`.
+/// - Every request ignores the session's `URLCache`
+///   (`URLRequest.CachePolicy.reloadIgnoringLocalCacheData`). Storage serves objects with the
+///   `Cache-Control` they were uploaded with, and the default session would otherwise answer
+///   `info`, `exists` or `download` from a cached copy after the object changed or was removed.
 /// - A buffered response body is `.multiple`, while a streamed one is `.single`, so
 ///   replay-sensitive middleware behaves differently per platform.
 /// - An empty response body comes back as `nil` on Linux but as a non-nil body that yields no
@@ -175,9 +179,10 @@ public struct URLSessionTransport: ClientTransport {
   #endif
 
   private static func makeURLRequest(_ request: HTTPTypes.HTTPRequest) throws -> URLRequest {
-    guard let urlRequest = URLRequest(httpRequest: request) else {
+    guard var urlRequest = URLRequest(httpRequest: request) else {
       throw URLError(.badURL)
     }
+    urlRequest.cachePolicy = .reloadIgnoringLocalCacheData
     return urlRequest
   }
 
