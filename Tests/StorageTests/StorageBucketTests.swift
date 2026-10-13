@@ -1708,9 +1708,7 @@ extension StorageMockerTests {
       let response = try await storage.from("bucket")
         .createSignedUploadURL(
           path: "file.txt",
-          options: CreateSignedUploadURLOptions(
-            shouldUpsert: true
-          )
+          upsert: true
         )
 
       #expect(response.path == "file.txt")
@@ -1990,7 +1988,7 @@ extension StorageMockerTests {
     func getPublicURL_cacheNonce() throws {
       let storage = makeSUT()
 
-      let url = try storage.from("bucket").publicURL(
+      let url = storage.from("bucket").publicURL(
         path: "file.txt",
         cacheNonce: "abc123"
       )

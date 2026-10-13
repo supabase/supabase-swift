@@ -256,7 +256,7 @@ struct SignedURLsView: View {
       error = nil
       publicURL = nil
 
-      publicURL = try supabase.storage
+      publicURL = supabase.storage
         .from(selectedBucket)
         .publicURL(path: filePath)
     } catch {

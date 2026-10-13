@@ -209,42 +209,7 @@ public struct CacheControl: RawRepresentable, Hashable, Sendable, ExpressibleByS
   public static let noStore: CacheControl = "no-store"
 }
 
-/// A single signed URL returned as part of a batch sign operation.
-///
-/// Returned by ``StorageBucket/createSignedURLs(paths:expiresIn:download:cacheNonce:)-(_,_,DownloadBehavior?,_)``
-/// (the legacy `[SignedURL]` overload). Prefer the ``SignedURLResult`` overload for new code.
-///
-/// ## Topics
-///
-/// ### Properties
-///
-/// - ``error``
-/// - ``signedURL``
-/// - ``path``
-public struct SignedURL: Decodable, Sendable {
-  /// An optional error message. Non-nil when the path could not be signed.
-  public var error: String?
-
-  /// The signed URL.
-  public var signedURL: URL
-
-  /// The requested file path.
-  public var path: String
-
-  /// Creates a ``SignedURL``.
-  ///
-  /// - Parameters:
-  ///   - error: An optional error message when signing failed.
-  ///   - signedURL: The resulting signed URL.
-  ///   - path: The requested file path.
-  public init(error: String? = nil, signedURL: URL, path: String) {
-    self.error = error
-    self.signedURL = signedURL
-    self.path = path
-  }
-}
-
-/// Represents the per-item result of a ``StorageBucket/createSignedURLs(paths:expiresIn:download:cacheNonce:)-(_,_,DownloadBehavior?,_)`` call.
+/// Represents the per-item result of a ``StorageBucket/createSignedURLs(paths:expiresIn:download:cacheNonce:)`` call.
 ///
 /// It is guaranteed that exactly one case applies per item: either the URL was signed
 /// successfully, or the path did not exist or was inaccessible.
@@ -307,7 +272,7 @@ public enum SignedURLResult: Sendable {
   }
 }
 
-/// A signed upload URL created by ``StorageBucket/createSignedUploadURL(path:options:)``.
+/// A signed upload URL created by ``StorageBucket/createSignedUploadURL(path:upsert:)``.
 ///
 /// Pass ``token`` to ``StorageBucket/uploadToSignedURL(path:token:data:options:)`` to perform the
 /// authenticated upload.
@@ -360,28 +325,6 @@ public struct UploadedObject: Hashable, Sendable {
     self.id = id
     self.path = path
     self.fullPath = fullPath
-  }
-}
-
-/// Options for creating a signed upload URL.
-///
-/// Pass this to ``StorageBucket/createSignedUploadURL(path:options:)`` to control whether an
-/// existing file at the destination path should be overwritten.
-///
-/// ## Topics
-///
-/// ### Properties
-///
-/// - ``shouldUpsert``
-public struct CreateSignedUploadURLOptions: Sendable {
-  /// When `true`, an existing file at the destination path is overwritten by the subsequent upload.
-  public var shouldUpsert: Bool
-
-  /// Creates a ``CreateSignedUploadURLOptions`` value.
-  ///
-  /// - Parameter shouldUpsert: Whether to overwrite an existing object at the destination path.
-  public init(shouldUpsert: Bool) {
-    self.shouldUpsert = shouldUpsert
   }
 }
 
@@ -1137,8 +1080,8 @@ public struct BucketOptions: Hashable, Sendable {
 ///
 /// Pass an ``ImageTransform`` as the `transform:` argument of
 /// ``StorageBucket/download(path:transform:query:cacheNonce:)``,
-/// ``StorageBucket/publicURL(path:download:transform:cacheNonce:)-(_,DownloadBehavior?,_,_)`` or
-/// ``StorageBucket/createSignedURL(path:expiresIn:download:transform:cacheNonce:)-(_,_,DownloadBehavior?,_,_)``
+/// ``StorageBucket/publicURL(path:download:transform:cacheNonce:)`` or
+/// ``StorageBucket/createSignedURL(path:expiresIn:download:transform:cacheNonce:)``
 /// to resize, crop, reformat, or adjust the quality of an image on the fly.
 ///
 /// ```swift
