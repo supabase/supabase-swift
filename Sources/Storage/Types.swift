@@ -128,11 +128,11 @@ public struct UploadOptions: Sendable {
   /// Defaults to one hour, ``CacheControl/maxAge(_:)`` with `.seconds(3600)`.
   public var cacheControl: CacheControl
 
-  /// When `true`, ``StorageBucket/upload(path:data:options:)`` overwrites an existing file at the
+  /// When `true`, ``StorageBucket/upload(path:data:options:progress:)`` overwrites an existing file at the
   /// same path. When `false` (the default), it throws ``StorageError/Code/keyAlreadyExists``.
   ///
-  /// ``StorageBucket/update(path:data:options:)`` always overwrites and ignores this flag, and
-  /// ``StorageBucket/uploadToSignedURL(path:token:data:options:)`` takes it from the token.
+  /// ``StorageBucket/update(path:data:options:progress:)`` always overwrites and ignores this flag, and
+  /// ``StorageBucket/uploadToSignedURL(path:token:data:options:progress:)`` takes it from the token.
   public var upsert: Bool
 
   /// Arbitrary key-value metadata to attach to the uploaded object. You can later use this to
@@ -274,7 +274,7 @@ public enum SignedURLResult: Sendable {
 
 /// A signed upload URL created by ``StorageBucket/createSignedUploadURL(path:upsert:)``.
 ///
-/// Pass ``token`` to ``StorageBucket/uploadToSignedURL(path:token:data:options:)`` to perform the
+/// Pass ``token`` to ``StorageBucket/uploadToSignedURL(path:token:data:options:progress:)`` to perform the
 /// authenticated upload.
 ///
 /// ## Topics

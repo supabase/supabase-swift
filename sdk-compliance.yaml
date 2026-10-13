@@ -1522,6 +1522,12 @@ features:
       - UploadedObject.id
       - UploadedObject.path
       - UploadedObject.fullPath
+      # The `progress:` closure every upload and download takes.
+      - TransferProgress
+      - TransferProgress.init
+      - TransferProgress.completedBytes
+      - TransferProgress.totalBytes
+      - TransferProgress.fractionCompleted
   storage.file_buckets.download:
     status: implemented
     symbols:
