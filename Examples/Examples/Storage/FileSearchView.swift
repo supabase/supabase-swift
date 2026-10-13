@@ -11,13 +11,13 @@ import SwiftUI
 struct FileSearchView: View {
   @State private var selectedBucket = ""
   @State private var buckets: [Bucket] = []
-  @State private var files: [FileObject] = []
+  @State private var files: [StorageObject] = []
   @State private var searchText = ""
   @State private var folderPath = ""
   @State private var sortColumn: SortColumn = .name
   @State private var sortOrder: SortOrder = .ascending
   @State private var limit = "100"
-  @State private var selectedFile: FileObjectV2?
+  @State private var selectedFile: ObjectInfo?
   @State private var error: Error?
   @State private var isLoading = false
 
@@ -144,7 +144,7 @@ struct FileSearchView: View {
       if let selectedFile {
         Section("File Details") {
           DetailRow(label: "Name", value: selectedFile.name)
-          DetailRow(label: "ID", value: selectedFile.id)
+          DetailRow(label: "ID", value: selectedFile.id.uuidString)
           DetailRow(label: "Version", value: selectedFile.version)
 
           if let contentType = selectedFile.contentType {
@@ -174,11 +174,11 @@ struct FileSearchView: View {
             DetailRow(label: "Last Modified", value: lastModified.formatted())
           }
 
-          if let etag = selectedFile.etag {
+          if let etag = selectedFile.eTag {
             DetailRow(label: "ETag", value: etag)
           }
 
-          if let metadata = selectedFile.metadata, !metadata.isEmpty {
+          if let metadata = selectedFile.userMetadata, !metadata.isEmpty {
             Text("Metadata:")
               .font(.caption)
               .foregroundColor(.secondary)
@@ -234,7 +234,7 @@ struct FileSearchView: View {
 
             print("Size:", fileInfo.size)
             print("Type:", fileInfo.contentType)
-            print("ETag:", fileInfo.etag)
+            print("ETag:", fileInfo.eTag)
             """
         )
 
@@ -258,7 +258,7 @@ struct FileSearchView: View {
     }
   }
 
-  func iconForFile(_ file: FileObject) -> String {
+  func iconForFile(_ file: StorageObject) -> String {
     let name = file.name.lowercased()
     if name.hasSuffix(".jpg") || name.hasSuffix(".jpeg") || name.hasSuffix(".png")
       || name

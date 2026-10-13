@@ -329,7 +329,6 @@ final class StorageFileIntegrationTests {
 
     let res = try await storage.from(bucketName).remove(paths: [uploadPath])
     #expect(res.count == 1)
-    #expect(res[0].bucketId == bucketName)
     #expect(res[0].name == uploadPath)
   }
 
@@ -372,7 +371,7 @@ final class StorageFileIntegrationTests {
 
     let info = try await storage.from(bucketName).info(path: uploadPath)
     #expect(info.name == uploadPath)
-    #expect(info.metadata == ["value": 42])
+    #expect(info.userMetadata == ["value": 42])
   }
 
   @Test

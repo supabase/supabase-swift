@@ -11,7 +11,7 @@ import SwiftUI
 struct FileManagementView: View {
   @State private var selectedBucket = ""
   @State private var buckets: [Bucket] = []
-  @State private var files: [FileObject] = []
+  @State private var files: [StorageObject] = []
   @State private var sourcePath = ""
   @State private var destinationPath = ""
   @State private var destinationBucket = ""
