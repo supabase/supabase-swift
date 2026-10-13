@@ -5,28 +5,6 @@ public import HTTPTypes
   import FoundationNetworking
 #endif
 
-enum FileUpload {
-  case data(Data)
-  case url(URL)
-
-  /// The raw request body. A `Data` upload is sent from memory; a file URL streams from disk
-  /// through `URLSession`'s upload task, so neither shape is copied by the SDK.
-  func httpBody() throws -> HTTPBody {
-    switch self {
-    case .data(let data): HTTPBody(data)
-    case .url(let url): try HTTPBody(fileURL: url)
-    }
-  }
-
-  func contentType(forPath path: String, options: UploadOptions) -> String {
-    if let contentType = options.contentType { return contentType }
-    switch self {
-    case .data: return mimeType(forPathExtension: path.pathExtension)
-    case .url(let url): return mimeType(forPathExtension: url.pathExtension)
-    }
-  }
-}
-
 /// A handle on one Storage bucket, for file operations within it.
 ///
 /// Obtain a ``StorageBucket`` by calling ``StorageClient/from(_:)`` with the bucket
@@ -48,14 +26,17 @@ enum FileUpload {
 ///
 /// - ``upload(path:data:options:progress:)``
 /// - ``upload(path:fileURL:options:progress:)``
+/// - ``upload(path:body:options:progress:)``
 /// - ``update(path:data:options:progress:)``
 /// - ``update(path:fileURL:options:progress:)``
+/// - ``update(path:body:options:progress:)``
 ///
 /// ### Uploading via signed URLs
 ///
 /// - ``createSignedUploadURL(path:upsert:)``
 /// - ``uploadToSignedURL(path:token:data:options:progress:)``
 /// - ``uploadToSignedURL(path:token:fileURL:options:progress:)``
+/// - ``uploadToSignedURL(path:token:body:options:progress:)``
 ///
 /// ### Downloading files
 ///
@@ -146,13 +127,13 @@ public struct StorageBucket: Sendable {
   private func _uploadOrUpdate(
     method: HTTPRequest.Method,
     path: String,
-    file: FileUpload,
+    body: HTTPBody,
     options: UploadOptions,
     progress: (@Sendable (TransferProgress) -> Void)?
   ) async throws -> UploadedObject {
     let key = try ObjectKey(path)
     let response = try await sendUpload(
-      api.requests.upload(method: method, bucket: id, key: key, file: file, options: options),
+      api.requests.upload(method: method, bucket: id, key: key, body: body, options: options),
       progress: progress)
 
     return UploadedObject(
@@ -182,7 +163,7 @@ public struct StorageBucket: Sendable {
     progress: (@Sendable (TransferProgress) -> Void)? = nil
   ) async throws -> UploadedObject {
     try await _uploadOrUpdate(
-      method: .post, path: path, file: .data(data), options: options, progress: progress)
+      method: .post, path: path, body: HTTPBody(data), options: options, progress: progress)
   }
 
   /// Uploads a file from a local file URL to an existing bucket.
@@ -207,7 +188,41 @@ public struct StorageBucket: Sendable {
     progress: (@Sendable (TransferProgress) -> Void)? = nil
   ) async throws -> UploadedObject {
     try await _uploadOrUpdate(
-      method: .post, path: path, file: .url(fileURL), options: options, progress: progress)
+      method: .post, path: path, body: HTTPBody(fileURL: fileURL),
+      options: options.inferringContentType(from: fileURL), progress: progress)
+  }
+
+  /// Uploads a stream of bytes to an existing bucket.
+  ///
+  /// The body streams as it is sent, so its bytes never have to sit in memory at once. A
+  /// ``HTTPBody/Length/known(_:)`` length is sent as `Content-Length`, which lets Storage refuse
+  /// an object over the bucket's size limit before any byte is sent; with
+  /// ``HTTPBody/Length/unknown`` the upload is sent chunked and only fails once the limit is
+  /// passed. A ``HTTPBody/IterationBehavior/single`` body cannot be sent twice, so the request is
+  /// never retried and a redirect is not followed.
+  ///
+  /// ```swift
+  /// let body = HTTPBody(chunks, length: .known(size), iterationBehavior: .single)
+  /// try await storage.from("videos").upload(path: "clip.mov", body: body)
+  /// ```
+  ///
+  /// - Parameters:
+  ///   - path: The relative file path within the bucket, e.g. `"folder/subfolder/filename.png"`.
+  ///     The bucket must already exist before attempting to upload.
+  ///   - body: The bytes to store in the bucket.
+  ///   - options: Upload options such as cache control, content type, and upsert behavior.
+  ///   - progress: Called as the bytes are sent; see ``TransferProgress``.
+  /// - Returns: An ``UploadedObject`` containing the stored object's identifier and path.
+  /// - Throws: ``StorageError`` if the upload fails or the caller is not authorized.
+  @discardableResult
+  public func upload(
+    path: String,
+    body: HTTPBody,
+    options: UploadOptions = UploadOptions(),
+    progress: (@Sendable (TransferProgress) -> Void)? = nil
+  ) async throws -> UploadedObject {
+    try await _uploadOrUpdate(
+      method: .post, path: path, body: body, options: options, progress: progress)
   }
 
   /// Replaces an existing file at the specified path with new data.
@@ -232,7 +247,7 @@ public struct StorageBucket: Sendable {
     progress: (@Sendable (TransferProgress) -> Void)? = nil
   ) async throws -> UploadedObject {
     try await _uploadOrUpdate(
-      method: .put, path: path, file: .data(data), options: options, progress: progress)
+      method: .put, path: path, body: HTTPBody(data), options: options, progress: progress)
   }
 
   /// Replaces an existing file at the specified path with a new local file.
@@ -257,7 +272,37 @@ public struct StorageBucket: Sendable {
     progress: (@Sendable (TransferProgress) -> Void)? = nil
   ) async throws -> UploadedObject {
     try await _uploadOrUpdate(
-      method: .put, path: path, file: .url(fileURL), options: options, progress: progress)
+      method: .put, path: path, body: HTTPBody(fileURL: fileURL),
+      options: options.inferringContentType(from: fileURL), progress: progress)
+  }
+
+  /// Replaces an existing file at the specified path with a stream of bytes.
+  ///
+  /// The body streams as it is sent, so its bytes never have to sit in memory at once. A
+  /// ``HTTPBody/Length/known(_:)`` length is sent as `Content-Length`, which lets Storage refuse
+  /// an object over the bucket's size limit before any byte is sent; with
+  /// ``HTTPBody/Length/unknown`` the upload is sent chunked and only fails once the limit is
+  /// passed. A ``HTTPBody/IterationBehavior/single`` body cannot be sent twice, so the request is
+  /// never retried and a redirect is not followed.
+  ///
+  /// - Parameters:
+  ///   - path: The relative file path within the bucket, e.g. `"folder/subfolder/filename.png"`.
+  ///     The bucket must already exist before attempting to update.
+  ///   - body: The bytes to overwrite the existing file with.
+  ///   - options: Upload options such as cache control and content type. `upsert` is ignored:
+  ///     `update` always replaces the object.
+  ///   - progress: Called as the bytes are sent; see ``TransferProgress``.
+  /// - Returns: An ``UploadedObject`` containing the updated object's identifier and path.
+  /// - Throws: ``StorageError`` if the path does not exist or the caller is not authorized.
+  @discardableResult
+  public func update(
+    path: String,
+    body: HTTPBody,
+    options: UploadOptions = UploadOptions(),
+    progress: (@Sendable (TransferProgress) -> Void)? = nil
+  ) async throws -> UploadedObject {
+    try await _uploadOrUpdate(
+      method: .put, path: path, body: body, options: options, progress: progress)
   }
 
   /// Moves an existing file to a new path, optionally within a different bucket.
@@ -658,7 +703,7 @@ public struct StorageBucket: Sendable {
     progress: (@Sendable (TransferProgress) -> Void)? = nil
   ) async throws -> UploadedObject {
     try await _uploadToSignedURL(
-      path: path, token: token, file: .data(data), options: options, progress: progress)
+      path: path, token: token, body: HTTPBody(data), options: options, progress: progress)
   }
 
   /// Uploads a local file to a pre-signed upload URL.
@@ -687,22 +732,65 @@ public struct StorageBucket: Sendable {
     progress: (@Sendable (TransferProgress) -> Void)? = nil
   ) async throws -> UploadedObject {
     try await _uploadToSignedURL(
-      path: path, token: token, file: .url(fileURL), options: options, progress: progress)
+      path: path, token: token, body: HTTPBody(fileURL: fileURL),
+      options: options.inferringContentType(from: fileURL), progress: progress)
+  }
+
+  /// Uploads a stream of bytes to a pre-signed upload URL.
+  ///
+  /// Obtain the `token` from ``createSignedUploadURL(path:upsert:)`` before calling this method.
+  /// The body streams as it is sent, so its bytes never have to sit in memory at once. A
+  /// ``HTTPBody/Length/known(_:)`` length is sent as `Content-Length`, which lets Storage refuse
+  /// an object over the bucket's size limit before any byte is sent; with
+  /// ``HTTPBody/Length/unknown`` the upload is sent chunked and only fails once the limit is
+  /// passed. A ``HTTPBody/IterationBehavior/single`` body cannot be sent twice, so the request is
+  /// never retried and a redirect is not followed.
+  ///
+  /// - Parameters:
+  ///   - path: The destination file path, e.g. `"folder/subfolder/filename.png"`.
+  ///     The bucket must already exist.
+  ///   - token: The upload token from ``createSignedUploadURL(path:upsert:)``.
+  ///   - body: The bytes to store in the bucket.
+  ///   - options: Upload options such as cache control and content type. `upsert` is ignored:
+  ///     the token decides whether an existing object is replaced.
+  ///   - progress: Called as the bytes are sent; see ``TransferProgress``.
+  /// - Returns: An ``UploadedObject`` with the stored path; Storage returns no object id for a
+  ///   signed-URL upload, so ``UploadedObject/id`` is `nil`.
+  /// - Throws: ``StorageError`` if the token is invalid, expired, or the upload fails.
+  @discardableResult
+  public func uploadToSignedURL(
+    path: String,
+    token: String,
+    body: HTTPBody,
+    options: UploadOptions = UploadOptions(),
+    progress: (@Sendable (TransferProgress) -> Void)? = nil
+  ) async throws -> UploadedObject {
+    try await _uploadToSignedURL(
+      path: path, token: token, body: body, options: options, progress: progress)
   }
 
   private func _uploadToSignedURL(
     path: String,
     token: String,
-    file: FileUpload,
+    body: HTTPBody,
     options: UploadOptions,
     progress: (@Sendable (TransferProgress) -> Void)?
   ) async throws -> UploadedObject {
     let key = try ObjectKey(path)
     let response = try await sendUpload(
       api.requests.uploadToSignedURL(
-        bucket: id, key: key, token: token, file: file, options: options),
+        bucket: id, key: key, token: token, body: body, options: options),
       progress: progress)
 
     return UploadedObject(id: nil, path: key.path, fullPath: response.key)
+  }
+}
+
+extension UploadOptions {
+  /// A file keeps its own type when the storage path has a different extension, or none.
+  fileprivate func inferringContentType(from fileURL: URL) -> UploadOptions {
+    var options = self
+    options.contentType = contentType ?? mimeType(forPathExtension: fileURL.pathExtension)
+    return options
   }
 }

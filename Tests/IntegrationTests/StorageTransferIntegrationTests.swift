@@ -92,4 +92,57 @@ final class StorageTransferIntegrationTests {
 
     log.expectRisesTo(Int64(payload.count))
   }
+
+  // MARK: - Streamed upload bodies
+
+  /// `payload` as 1 MiB chunks, pulled one at a time.
+  private func streamed(length: HTTPBody.Length) -> HTTPBody {
+    let payload = payload
+    let chunks = AsyncStream { continuation in
+      for start in stride(from: 0, to: payload.count, by: 1 << 20) {
+        continuation.yield(ArraySlice(payload[start..<min(start + (1 << 20), payload.count)]))
+      }
+      continuation.finish()
+    }
+    return HTTPBody(chunks, length: length, iterationBehavior: .single)
+  }
+
+  @Test(arguments: [HTTPBody.Length.known(4 << 20), .unknown])
+  func uploadsAStreamedBody(length: HTTPBody.Length) async throws {
+    let log = ProgressLog()
+
+    try await bucket.upload(
+      path: "stream.bin", body: streamed(length: length), progress: log.callback)
+
+    #expect(try await bucket.info(path: "stream.bin").size == Int64(payload.count))
+    let completed = log.reports.value.map(\.completedBytes)
+    #expect(completed == completed.sorted())
+    #expect(completed.last == Int64(payload.count))
+  }
+
+  @Test
+  func updatesAndSignsWithAStreamedBody() async throws {
+    try await bucket.upload(path: "a.bin", data: Data("old".utf8))
+    try await bucket.update(path: "a.bin", body: streamed(length: .known(4 << 20)))
+    let signed = try await bucket.createSignedUploadURL(path: "b.bin")
+    try await bucket.uploadToSignedURL(
+      path: "b.bin", token: signed.token, body: streamed(length: .known(4 << 20)))
+
+    #expect(try await bucket.info(path: "a.bin").size == Int64(payload.count))
+    #expect(try await bucket.info(path: "b.bin").size == Int64(payload.count))
+  }
+
+  @Test
+  func aKnownLengthOverTheBucketLimitIsRefused() async throws {
+    let name = try await StorageIntegration.newBucket(
+      "transfer-small", options: BucketOptions(isPublic: true, fileSizeLimit: .megabytes(1)))
+    defer { StorageIntegration.dropBucket(name) }
+
+    let error = await StorageIntegration.storageError {
+      try await StorageIntegration.admin.from(name).upload(
+        path: "big.bin", body: self.streamed(length: .known(4 << 20)))
+    }
+
+    #expect(error?.code == .entityTooLarge)
+  }
 }
