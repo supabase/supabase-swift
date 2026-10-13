@@ -277,13 +277,26 @@ struct StorageRequests: Sendable {
   }
 
   /// A transform routes to `render/image/authenticated`; the plain object route otherwise.
-  func download(bucket: String, key: ObjectKey, transform: [URLQueryItem], query: [URLQueryItem])
-    -> StorageRequest
-  {
+  func download(
+    bucket: String, key: ObjectKey, transform: ImageTransform?, options: DownloadOptions
+  ) -> StorageRequest {
+    let transform = transform?.queryItems ?? []
     let route = transform.isEmpty ? "object" : "render/image/authenticated"
+    var query = transform
+    if let versionId = options.versionId {
+      query.append(URLQueryItem(name: "versionId", value: versionId))
+    }
+    if let cacheNonce = options.cacheNonce {
+      query.append(URLQueryItem(name: "cacheNonce", value: cacheNonce))
+    }
+    var headers = HTTPFields()
+    if let range = options.range {
+      headers[.range] = "bytes=\(range.lowerBound)-\(range.upperBound)"
+    }
     return StorageRequest(
       head: HTTPRequest(
-        method: .get, url: url("\(route)/\(objectPath(bucket, key))", query: transform + query)))
+        method: .get, url: url("\(route)/\(objectPath(bucket, key))", query: query),
+        headerFields: headers.merging(with: options.headers)))
   }
 
   func info(bucket: String, key: ObjectKey) -> StorageRequest {

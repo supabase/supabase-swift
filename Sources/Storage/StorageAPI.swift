@@ -99,6 +99,14 @@ struct StorageAPI: Sendable {
   /// ``StorageClientConfiguration/retryEnabled`` is `true`.
   @discardableResult
   func execute(_ request: StorageRequest) async throws -> Data {
+    guard let body = try await stream(request).body else { return Data() }
+    return try await Data(collecting: body, upTo: .max)
+  }
+
+  /// Sends `request` with the client's default headers and returns as soon as a 2xx head
+  /// arrives, with the body still streaming. A non-2xx response throws its ``StorageError``
+  /// before returning. A network failure while the body streams throws the same errors.
+  func stream(_ request: StorageRequest) async throws -> (head: HTTPResponse, body: HTTPBody?) {
     var policy = configuration.retryEnabled ? RetryPolicy.default : .disabled
     if request.replayable { policy.retryableMethods.insert(request.head.method) }
     let retry = RetryRequestInterceptor(policy: policy, clock: configuration.clock)
@@ -112,35 +120,37 @@ struct StorageAPI: Sendable {
     head.headerFields = configuration.headers.merging(with: head.headerFields)
 
     let response: HTTPResponse
-    let data: Data
+    let body: HTTPBody?
     do {
-      let (responseHead, responseBody) = try await http.stream(head, body: request.body)
-      response = responseHead
-      if let responseBody {
-        data =
-          (200..<300).contains(response.status.code)
-          ? try await Data(collecting: responseBody, upTo: .max)
-          : try await Data(collecting: responseBody, truncatingAt: Self.errorBodyCap)
-      } else {
-        data = Data()
-      }
+      (response, body) = try await http.stream(head, body: request.body)
     } catch {
-      // Only the network layer's own failures are relabelled. `CancellationError`, and anything
-      // thrown by user code that runs inside `stream` (a custom `ClientTransport` or middleware),
-      // propagate as themselves.
-      guard let urlError = error as? URLError else { throw error }
-      // `URLSession` reports a cancelled `Task` as `URLError(.cancelled)`. A `.cancelled` with no
-      // task cancellation behind it (a middleware cancelled the request) stays a transport error.
-      if urlError.code == .cancelled, Task.isCancelled { throw CancellationError() }
-      throw StorageError(
-        kind: .transport, message: urlError.localizedDescription, underlyingError: urlError)
+      throw Self.transportError(error)
     }
+    let mapped = body?.mapError(Self.transportError)
 
     guard (200..<300).contains(response.status.code) else {
+      let data =
+        if let mapped {
+          try await Data(collecting: mapped, truncatingAt: Self.errorBodyCap)
+        } else {
+          Data()
+        }
       throw Self.serverError(response, body: data)
     }
 
-    return data
+    return (response, mapped)
+  }
+
+  /// Relabels the network layer's own failures. `CancellationError`, and anything thrown by user
+  /// code that runs inside the exchange (a custom `ClientTransport` or middleware), pass through
+  /// as themselves.
+  private static func transportError(_ error: any Error) -> any Error {
+    guard let urlError = error as? URLError else { return error }
+    // `URLSession` reports a cancelled `Task` as `URLError(.cancelled)`. A `.cancelled` with no
+    // task cancellation behind it (a middleware cancelled the request) stays a transport error.
+    if urlError.code == .cancelled, Task.isCancelled { return CancellationError() }
+    return StorageError(
+      kind: .transport, message: urlError.localizedDescription, underlyingError: urlError)
   }
 
   /// How much of an error body is kept. A failure never needs more, and a request that reached

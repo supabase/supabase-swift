@@ -145,4 +145,38 @@ final class StorageTransferIntegrationTests {
 
     #expect(error?.code == .entityTooLarge)
   }
+
+  // MARK: - Data downloads
+
+  @Test
+  func downloadsARange() async throws {
+    try await bucket.upload(path: "range.bin", data: payload)
+
+    let data = try await bucket.download(
+      path: "range.bin", options: DownloadOptions(range: 1000...1999))
+
+    #expect(data == payload[1000...1999])
+  }
+
+  @Test
+  func downloadReportsProgressUpToTheSize() async throws {
+    try await bucket.upload(path: "progress.bin", data: payload)
+    let log = ProgressLog()
+
+    let data = try await bucket.download(path: "progress.bin", progress: log.callback)
+
+    #expect(data == payload)
+    log.expectRisesTo(Int64(payload.count))
+  }
+
+  @Test
+  func downloadSendsTheCacheNonceAndHeaders() async throws {
+    try await bucket.upload(path: "nonce.bin", data: payload)
+
+    let data = try await bucket.download(
+      path: "nonce.bin",
+      options: DownloadOptions(cacheNonce: UUID().uuidString, headers: [.range: "bytes=0-9"]))
+
+    #expect(data == payload[0...9])
+  }
 }

@@ -1170,7 +1170,7 @@ extension StorageMockerTests {
     }
 
     @Test
-    func downloadWithAdditionalQuery() async throws {
+    func download_versionId() async throws {
       let storage = makeSUT()
 
       Mock(
@@ -1186,16 +1186,13 @@ extension StorageMockerTests {
         curl \
         	--header "X-Client-Info: storage-swift/0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	"http://localhost:54321/storage/v1/object/bucket/file.txt?version=1"
+        	"http://localhost:54321/storage/v1/object/bucket/file.txt?versionId=v1"
         """#
       }
       .register()
 
       let data = try await storage.from("bucket")
-        .download(
-          path: "file.txt",
-          query: [URLQueryItem(name: "version", value: "1")]
-        )
+        .download(path: "file.txt", options: DownloadOptions(versionId: "v1"))
 
       #expect(data == Data("hello world".utf8))
     }
@@ -2019,7 +2016,7 @@ extension StorageMockerTests {
       .register()
 
       let data = try await storage.from("bucket")
-        .download(path: "file.txt", cacheNonce: "abc123")
+        .download(path: "file.txt", options: DownloadOptions(cacheNonce: "abc123"))
 
       #expect(data == Data("hello world".utf8))
     }
