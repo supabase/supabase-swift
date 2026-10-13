@@ -319,7 +319,7 @@ struct StorageClientIntegrationTests {
 
     let payload = Data("from SupabaseClient".utf8)
     try await client.storage.from(name).upload(path: "file.txt", data: payload)
-    #expect(try await client.storage.from(name).download(path: "file.txt") == payload)
+    #expect(try await client.storage.from(name).download(path: "file.txt").data() == payload)
     #expect(try await client.storage.listBuckets().contains { $0.id == name })
   }
 

@@ -1537,6 +1537,8 @@ features:
       - DownloadOptions.range
       - DownloadOptions.cacheNonce
       - DownloadOptions.headers
+      - DownloadResponse.data
+      - DownloadResponse.write
   storage.file_buckets.list_files:
     status: implemented
     symbols:
@@ -1708,7 +1710,20 @@ features:
   # dedicated named symbol exists distinct from those methods, which are
   # already claimed by their own capabilities above.
   storage.file_buckets.url_cache_nonce: implemented
-  storage.file_buckets.download_as_stream: not_implemented
+  storage.file_buckets.download_as_stream:
+    status: implemented
+    symbols:
+      - StorageBucket.download
+      - DownloadResponse
+      - DownloadResponse.init
+      - DownloadResponse.httpResponse
+      - DownloadResponse.body
+      - DownloadResponse.contentType
+      - DownloadResponse.contentLength
+      - DownloadResponse.contentRange
+      - DownloadResponse.eTag
+      - DownloadResponse.lastModified
+      - DownloadResponse.cacheControl
   storage.file_buckets.download_specific_version:
     status: implemented
     symbols:

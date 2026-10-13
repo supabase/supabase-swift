@@ -11,7 +11,7 @@ public import Helpers
 ///
 /// ```swift
 /// do {
-///   try await storage.from("avatars").download(path: "missing.png")
+///   _ = try await storage.from("avatars").download(path: "missing.png")
 /// } catch let error as StorageError where error.isNotFound {
 ///   showPlaceholder()
 /// } catch let error as StorageError {

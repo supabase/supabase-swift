@@ -159,7 +159,7 @@ struct ProfileView: View {
   }
 
   private func downloadImage(path: String) async throws {
-    let data = try await supabase.storage.from("avatars").download(path: path)
+    let data = try await supabase.storage.from("avatars").download(path: path).data()
     avatarImage = AvatarImage(data: data)
   }
 

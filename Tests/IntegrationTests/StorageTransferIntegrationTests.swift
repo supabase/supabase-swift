@@ -153,7 +153,8 @@ final class StorageTransferIntegrationTests {
     try await bucket.upload(path: "range.bin", data: payload)
 
     let data = try await bucket.download(
-      path: "range.bin", options: DownloadOptions(range: 1000...1999))
+      path: "range.bin", options: DownloadOptions(range: 1000...1999)
+    ).data()
 
     #expect(data == payload[1000...1999])
   }
@@ -163,7 +164,7 @@ final class StorageTransferIntegrationTests {
     try await bucket.upload(path: "progress.bin", data: payload)
     let log = ProgressLog()
 
-    let data = try await bucket.download(path: "progress.bin", progress: log.callback)
+    let data = try await bucket.download(path: "progress.bin", progress: log.callback).data()
 
     #expect(data == payload)
     log.expectRisesTo(Int64(payload.count))
@@ -175,8 +176,58 @@ final class StorageTransferIntegrationTests {
 
     let data = try await bucket.download(
       path: "nonce.bin",
-      options: DownloadOptions(cacheNonce: UUID().uuidString, headers: [.range: "bytes=0-9"]))
+      options: DownloadOptions(cacheNonce: UUID().uuidString, headers: [.range: "bytes=0-9"])
+    ).data()
 
     #expect(data == payload[0...9])
+  }
+
+  // MARK: - Response metadata and streaming
+
+  @Test
+  func downloadStreamsTheObjectWithItsMetadata() async throws {
+    try await bucket.upload(
+      path: "bytes.bin", data: payload,
+      options: UploadOptions(contentType: "application/octet-stream", cacheControl: .noCache))
+
+    let response = try await bucket.download(path: "bytes.bin")
+    var received = Data()
+    var chunks = 0
+    for try await chunk in response.body {
+      received.append(contentsOf: chunk)
+      chunks += 1
+    }
+
+    #expect(received == payload)
+    #if !canImport(FoundationNetworking)
+      #expect(chunks > 1)
+    #endif
+    #expect(response.contentType == "application/octet-stream")
+    #expect(response.contentLength == Int64(payload.count))
+    #expect(response.cacheControl?.contains("no-cache") == true)
+    #expect(response.eTag != nil)
+    #expect(response.lastModified != nil)
+  }
+
+  @Test
+  func downloadOfARangeReportsItsContentRange() async throws {
+    try await bucket.upload(path: "bytes-range.bin", data: payload)
+
+    let response = try await bucket.download(
+      path: "bytes-range.bin", options: DownloadOptions(range: 10...19))
+
+    #expect(response.httpResponse.status == .partialContent)
+    #expect(response.contentRange == "bytes 10-19/\(payload.count)")
+    #expect(response.contentLength == 10)
+    #expect(try await response.data() == payload[10...19])
+  }
+
+  @Test
+  func downloadOfAMissingObjectThrowsBeforeReturning() async throws {
+    let error = await StorageIntegration.storageError {
+      _ = try await self.bucket.download(path: "missing.bin")
+    }
+
+    #expect(error?.isNotFound == true)
   }
 }

@@ -235,9 +235,9 @@
           _ = try await rawSend(.post, objectURL("o.bin"), body: streamedBody(fileURL))
         }
       case "download-api-data":
-        // Storage public API → Data.
-        let downloaded = try await measure("storage.download(path:) → Data") {
-          try await storage.from(bucket).download(path: "seed.bin")
+        // Storage public API → DownloadResponse.data().
+        let downloaded = try await measure("storage.download(path:).data()") {
+          try await storage.from(bucket).download(path: "seed.bin").data()
         }
         #expect(downloaded.count == Self.fileSize)
       case "download-transport-file":

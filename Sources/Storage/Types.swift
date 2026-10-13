@@ -173,6 +173,7 @@ public struct UploadOptions: Sendable {
 /// ```swift
 /// // The first kilobyte of the object
 /// let head = try await bucket.download(path: "log.txt", options: DownloadOptions(range: 0...1023))
+///   .data()
 /// ```
 public struct DownloadOptions: Sendable {
   /// The bytes to fetch, both ends included, sent as `Range: bytes=a-b`. Storage answers with
@@ -1131,7 +1132,8 @@ public struct BucketOptions: Hashable, Sendable {
 ///
 /// ```swift
 /// let transform = ImageTransform(width: 200, height: 200, resize: .cover, quality: 80)
-/// let data = try await storage.from("avatars").download(path: "user.png", transform: transform)
+/// let thumbnail = try await storage.from("avatars").download(path: "user.png", transform: transform)
+///   .data()
 /// ```
 ///
 /// ## Topics
