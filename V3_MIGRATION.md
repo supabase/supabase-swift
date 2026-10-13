@@ -4129,3 +4129,33 @@ let size = files[0].metadata?.size
 let info: ObjectInfo = try await bucket.info(path: "a.png")
 print(info.eTag ?? "", info.userMetadata ?? [:])
 ```
+
+## `BucketOptions` fields are all optional, `updateBucket` is a partial update, and `ByteCount` replaces `StorageByteCount`
+
+`BucketOptions` is `isPublic: Bool?`, `fileSizeLimit: ByteCount?`, `allowedMimeTypes: [String]?`,
+every field `nil` by default. `createBucket` leaves a `nil` field to the server default and now
+returns the bucket name the server stored. `updateBucket` sends only the fields that are set
+and throws `StorageError` with kind `.invalidRequest` when none is. `ByteCount` keeps the
+value as Storage reads it (`rawValue`): an exact count from `init(bytes:)` or an integer literal,
+or a size string such as `"1.5mb"` from `.megabytes(1.5)` or a string literal. `bytes` is the
+exact count when there is one.
+
+`isPublic` used to default to `false` and `updateBucket` sent every field, so changing only
+`allowedMimeTypes` silently made a public bucket private. `StorageByteCount` carried the same two forms in
+two optional fields and `BucketOptions` re-parsed them into a `String?`.
+
+This is a compile error for `StorageByteCount`, `intValue` and `stringValue`, and wherever
+`BucketOptions.isPublic` was read as a non-optional `Bool`. `BucketOptions(isPublic: true)`,
+`.megabytes(5)` and `fileSizeLimit: "5mb"` compile unchanged; the behavior change is that an update no longer
+resets the fields you did not pass.
+
+```swift
+// Before: this also made the bucket private
+try await storage.updateBucket("avatars", options: BucketOptions(allowedMimeTypes: ["image/png"]))
+try await storage.createBucket("logs", options: BucketOptions(fileSizeLimit: StorageByteCount(stringValue: "5mb")))
+
+// After: only the MIME types change
+try await storage.updateBucket("avatars", options: BucketOptions(allowedMimeTypes: ["image/png"]))
+let name = try await storage.createBucket("logs", options: BucketOptions(fileSizeLimit: .megabytes(5)))
+```
+

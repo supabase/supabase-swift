@@ -45,7 +45,8 @@ struct StorageClientIntegrationTests {
     var buckets = try await storage.listBuckets()
     #expect(!buckets.contains(where: { $0.name == bucketName }))
 
-    try await storage.createBucket(bucketName, options: .init(isPublic: true))
+    let created = try await storage.createBucket(bucketName, options: .init(isPublic: true))
+    #expect(created == bucketName)
 
     var bucket = try await storage.bucket(bucketName)
     #expect(bucket.name == bucketName)
@@ -55,10 +56,18 @@ struct StorageClientIntegrationTests {
     buckets = try await storage.listBuckets()
     #expect(buckets.contains { $0.id == bucket.id })
 
+    // A partial update leaves the other settings alone: the bucket stays public.
     try await storage.updateBucket(
-      bucketName, options: BucketOptions(isPublic: false, allowedMimeTypes: ["image/jpeg"]))
+      bucketName, options: BucketOptions(allowedMimeTypes: ["image/jpeg"]))
 
     bucket = try await storage.bucket(bucketName)
+    #expect(bucket.allowedMimeTypes == ["image/jpeg"])
+    #expect(bucket.isPublic == true)
+
+    try await storage.updateBucket(bucketName, options: BucketOptions(isPublic: false))
+
+    bucket = try await storage.bucket(bucketName)
+    #expect(bucket.isPublic == false)
     #expect(bucket.allowedMimeTypes == ["image/jpeg"])
 
     try await storage.deleteBucket(bucketName)
