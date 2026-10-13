@@ -83,7 +83,7 @@ struct StorageClientTests {
     })
     let results: [SignedURLResult] = try await sut.from(bucketId).createSignedURLs(
       paths: ["file1.txt", "file2.txt"],
-      expiresIn: 60
+      expiresIn: .seconds(60)
     )
 
     #expect(results.count == 2)

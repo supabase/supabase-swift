@@ -79,7 +79,8 @@ final class StorageFileIntegrationTests {
   func signURL() async throws {
     _ = try await storage.from(bucketName).upload(path: uploadPath, data: file)
 
-    let url = try await storage.from(bucketName).createSignedURL(path: uploadPath, expiresIn: 2000)
+    let url = try await storage.from(bucketName).createSignedURL(
+      path: uploadPath, expiresIn: .seconds(2000))
     #expect(
       url.absoluteString.contains(
         "\(DotEnv.supabaseURL)/storage/v1/object/sign/\(bucketName)/\(uploadPath)")
@@ -91,7 +92,7 @@ final class StorageFileIntegrationTests {
     _ = try await storage.from(bucketName).upload(path: uploadPath, data: file)
 
     let url = try await storage.from(bucketName).createSignedURL(
-      path: uploadPath, expiresIn: 2000, download: .withOriginalName)
+      path: uploadPath, expiresIn: .seconds(2000), download: .withOriginalName)
     #expect(
       url.absoluteString.contains(
         "\(DotEnv.supabaseURL)/storage/v1/object/sign/\(bucketName)/\(uploadPath)")
@@ -104,7 +105,7 @@ final class StorageFileIntegrationTests {
     _ = try await storage.from(bucketName).upload(path: uploadPath, data: file)
 
     let url = try await storage.from(bucketName).createSignedURL(
-      path: uploadPath, expiresIn: 2000, download: "test.jpg")
+      path: uploadPath, expiresIn: .seconds(2000), download: "test.jpg")
     #expect(
       url.absoluteString.contains(
         "\(DotEnv.supabaseURL)/storage/v1/object/sign/\(bucketName)/\(uploadPath)")
