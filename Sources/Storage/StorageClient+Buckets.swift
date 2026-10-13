@@ -13,13 +13,7 @@ extension StorageClient {
   /// - Returns: An array of ``Bucket`` objects, one for each bucket in the project.
   /// - Throws: ``StorageError`` if the request fails or the caller is not authorized.
   public func listBuckets() async throws -> [Bucket] {
-    try await api.execute(
-      HTTPRequest(
-        method: .get,
-        url: api.configuration.url.appendingPathComponent("bucket")
-      )
-    )
-    .decoded(decoder: api.configuration.decoder)
+    try await api.execute(api.requests.listBuckets()).decoded()
   }
 
   /// Retrieves the details of an existing Storage bucket.
@@ -28,13 +22,7 @@ extension StorageClient {
   /// - Returns: The ``Bucket`` with the given identifier.
   /// - Throws: ``StorageError`` if the bucket does not exist or the caller is not authorized.
   public func bucket(_ id: String) async throws -> Bucket {
-    try await api.execute(
-      HTTPRequest(
-        method: .get,
-        url: api.configuration.url.appendingPathComponent("bucket/\(id)")
-      )
-    )
-    .decoded(decoder: api.configuration.decoder)
+    try await api.execute(api.requests.bucket(id)).decoded()
   }
 
   struct BucketParameters: Encodable {
@@ -43,6 +31,14 @@ extension StorageClient {
     var `public`: Bool
     var fileSizeLimit: StorageByteCount?
     var allowedMimeTypes: [String]?
+
+    enum CodingKeys: String, CodingKey {
+      case id
+      case name
+      case `public`
+      case fileSizeLimit = "file_size_limit"
+      case allowedMimeTypes = "allowed_mime_types"
+    }
   }
 
   /// Creates a new Storage bucket.
@@ -64,19 +60,14 @@ extension StorageClient {
     async throws
   {
     try await api.execute(
-      HTTPRequest(
-        method: .post,
-        url: api.configuration.url.appendingPathComponent("bucket")
-      ),
-      body: api.configuration.encoder.encode(
+      api.requests.createBucket(
         BucketParameters(
           id: id,
           name: id,
           public: options.isPublic,
           fileSizeLimit: options.fileSizeLimit.map { StorageByteCount(stringLiteral: $0) },
           allowedMimeTypes: options.allowedMimeTypes
-        )
-      )
+        ))
     )
   }
 
@@ -95,19 +86,15 @@ extension StorageClient {
   /// - Throws: ``StorageError`` if the bucket does not exist or the caller is not authorized.
   public func updateBucket(_ id: String, options: BucketOptions) async throws {
     try await api.execute(
-      HTTPRequest(
-        method: .put,
-        url: api.configuration.url.appendingPathComponent("bucket/\(id)")
-      ),
-      body: api.configuration.encoder.encode(
+      api.requests.updateBucket(
+        id,
         BucketParameters(
           id: id,
           name: id,
           public: options.isPublic,
           fileSizeLimit: options.fileSizeLimit.map { StorageByteCount(stringLiteral: $0) },
           allowedMimeTypes: options.allowedMimeTypes
-        )
-      )
+        ))
     )
   }
 
@@ -119,12 +106,7 @@ extension StorageClient {
   /// - Parameter id: The unique identifier of the bucket to empty.
   /// - Throws: ``StorageError`` if the bucket does not exist or the caller is not authorized.
   public func emptyBucket(_ id: String) async throws {
-    try await api.execute(
-      HTTPRequest(
-        method: .post,
-        url: api.configuration.url.appendingPathComponent("bucket/\(id)/empty")
-      )
-    )
+    try await api.execute(api.requests.emptyBucket(id))
   }
 
   /// Deletes an existing bucket.
@@ -136,12 +118,7 @@ extension StorageClient {
   /// - Throws: ``StorageError`` if the bucket is not empty, does not exist, or the caller is not
   ///   authorized.
   public func deleteBucket(_ id: String) async throws {
-    try await api.execute(
-      HTTPRequest(
-        method: .delete,
-        url: api.configuration.url.appendingPathComponent("bucket/\(id)")
-      )
-    )
+    try await api.execute(api.requests.deleteBucket(id))
   }
 
   /// Purges the CDN cache for every file in a bucket, so the next request for each one is served
@@ -157,11 +134,6 @@ extension StorageClient {
   /// - Throws: ``StorageError`` if the caller is not authorized or cache purging is not enabled.
   public func purgeCache(bucket: String, transformationsOnly: Bool = false) async throws {
     try await api.execute(
-      HTTPRequest(
-        method: .delete,
-        url: api.configuration.url.appendingPathComponent("cdn/\(bucket)"),
-        query: transformationsOnly ? [URLQueryItem(name: "transformations", value: "true")] : []
-      )
-    )
+      api.requests.purgeCache(bucket: bucket, key: nil, transformationsOnly: transformationsOnly))
   }
 }

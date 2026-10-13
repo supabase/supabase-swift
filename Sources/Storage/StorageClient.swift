@@ -36,14 +36,6 @@ public struct StorageClientConfiguration: Sendable {
   /// HTTP headers sent with every request, such as the `Authorization` header.
   public var headers: [String: String]
 
-  /// The JSON encoder used to serialize request bodies. Not publicly configurable: Storage only
-  /// ever encodes server-defined shapes, so there's no case for letting callers customize it.
-  let encoder: JSONEncoder = .storageEncoder
-
-  /// The JSON decoder used to deserialize response bodies. Not publicly configurable: Storage only
-  /// ever decodes server-defined shapes, so there's no case for letting callers customize it.
-  let decoder: JSONDecoder = .supabase()
-
   /// The transport and middleware chain every request goes through.
   public let http: HTTPClientConfiguration
 
@@ -139,7 +131,7 @@ public struct StorageClientConfiguration: Sendable {
 /// - ``deleteBucket(_:)``
 /// - ``purgeCache(bucket:transformationsOnly:)``
 public struct StorageClient: Sendable {
-  let api: StorageApi
+  let api: StorageAPI
 
   /// The configuration used to initialize this client instance.
   public var configuration: StorageClientConfiguration { api.configuration }
@@ -149,10 +141,10 @@ public struct StorageClient: Sendable {
   /// - Parameter configuration: The configuration that controls the endpoint URL, authentication
   ///   headers, JSON codecs, and transport.
   public init(configuration: StorageClientConfiguration) {
-    api = StorageApi(configuration: configuration)
+    api = StorageAPI(configuration: configuration)
   }
 
-  init(api: StorageApi) {
+  init(api: StorageAPI) {
     self.api = api
   }
 
