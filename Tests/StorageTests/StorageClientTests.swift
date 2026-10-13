@@ -253,7 +253,7 @@ struct StorageClientTests {
     })
 
     _ = try await sut.from(bucketId)
-      .setHeader("custom-value", forKey: "X-Custom-Header")
+      .setHeader(name: .init("X-Custom-Header")!, value: "custom-value")
       .list()
 
     #expect(
@@ -288,8 +288,8 @@ struct StorageClientTests {
     })
 
     _ = try await sut.from(bucketId)
-      .setHeader("value-a", forKey: "X-Header-A")
-      .setHeader("value-b", forKey: "X-Header-B")
+      .setHeader(name: .init("X-Header-A")!, value: "value-a")
+      .setHeader(name: .init("X-Header-B")!, value: "value-b")
       .list()
 
     #expect(capturedRequest.value?.value(forHTTPHeaderField: "X-Header-A") == "value-a")
@@ -324,8 +324,8 @@ struct StorageClientTests {
     })
 
     _ = try await sut.from(bucketId)
-      .setHeader("initial-value", forKey: "X-Custom-Header")
-      .setHeader("updated-value", forKey: "X-Custom-Header")
+      .setHeader(name: .init("X-Custom-Header")!, value: "initial-value")
+      .setHeader(name: .init("X-Custom-Header")!, value: "updated-value")
       .list()
 
     #expect(
@@ -365,7 +365,7 @@ struct StorageClientTests {
 
     // First, make a request with setHeader on StorageBucket
     _ = try await sut.from(bucketId)
-      .setHeader("child-value", forKey: "X-Child-Header")
+      .setHeader(name: .init("X-Child-Header")!, value: "child-value")
       .list()
 
     #expect(
@@ -410,7 +410,7 @@ struct StorageClientTests {
 
     _ =
       try await sut
-      .setHeader("client-value", forKey: "X-Client-Header")
+      .setHeader(name: .init("X-Client-Header")!, value: "client-value")
       .from(bucketId)
       .list()
 

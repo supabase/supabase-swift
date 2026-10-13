@@ -4185,3 +4185,27 @@ let signed = try await bucket.createSignedURL(
   path: "a.pdf", expiresIn: .seconds(60), download: .withOriginalName)
 let upload = try await bucket.createSignedUploadURL(path: "a.pdf", upsert: true)
 ```
+
+## Storage headers are `HTTPFields`, and `setHeader` takes an `HTTPField.Name`
+
+`StorageClientConfiguration.headers` is `HTTPFields` (from `swift-http-types`, re-exported by
+the SDK) instead of `[String: String]`, as `FunctionsClient.Configuration.headers` already is.
+`setHeader(_:forKey:)` on `StorageClient` and `StorageBucket` becomes `setHeader(name:value:)`,
+with the name an `HTTPField.Name`. Names match case-insensitively, so a `content-type` replaces a
+`Content-Type` instead of sending both, and a name that is not a legal HTTP field name cannot be
+spelled at all.
+
+```swift
+// Before
+StorageClientConfiguration(url: url, headers: ["apikey": key, "X-Custom-Key": "value"])
+storage.from("avatars").setHeader("value", forKey: "X-Custom-Key")
+
+// After
+StorageClientConfiguration(url: url, headers: [.init("apikey")!: key, .init("X-Custom-Key")!: "value"])
+storage.from("avatars").setHeader(name: .init("X-Custom-Key")!, value: "value")
+// or, for a name HTTPTypes already defines
+StorageClientConfiguration(url: url, headers: [.authorization: "Bearer \(token)"])
+```
+
+Compile error at every site that passes a dictionary literal with `String` keys, calls
+`setHeader(_:forKey:)`, or reads `configuration.headers` as a dictionary.

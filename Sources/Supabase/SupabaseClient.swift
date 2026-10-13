@@ -127,7 +127,7 @@ public final class SupabaseClient: Sendable {
   public var storage: StorageClient {
     var configuration = StorageClientConfiguration(
       url: storageURL,
-      headers: dataHeaders.dictionary,
+      headers: dataHeaders,
       http: authenticatedHTTP,
       logger: options.global.logger,
       usesNewHostname: options.storage.usesNewHostname,

@@ -795,6 +795,9 @@ features:
       - ClientTransport.send
       - ClientMiddleware
       - ClientMiddleware.intercept
+      - AccessTokenMiddleware
+      - AccessTokenMiddleware.init
+      - AccessTokenMiddleware.intercept
       - URLSessionTransport
       - URLSessionTransport.init
       - URLSessionTransport.send

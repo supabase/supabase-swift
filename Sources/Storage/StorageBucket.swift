@@ -1,5 +1,5 @@
 public import Foundation
-import HTTPTypes
+public import HTTPTypes
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -79,7 +79,7 @@ enum FileUpload {
 ///
 /// ### Customizing headers
 ///
-/// - ``setHeader(_:forKey:)``
+/// - ``setHeader(name:value:)``
 ///
 /// ### Configuration
 ///
@@ -106,16 +106,16 @@ public struct StorageBucket: Sendable {
   ///
   /// ```swift
   /// storage.from("avatars")
-  ///   .setHeader("x-custom-header", forKey: "X-Custom-Header")
+  ///   .setHeader(name: .init("X-Custom-Header")!, value: "x-custom-header")
   ///   .list()
   /// ```
   ///
   /// - Parameters:
+  ///   - name: The header field. Names match case-insensitively.
   ///   - value: The value of the header field.
-  ///   - key: The name of the header field. The key is case-insensitively stored as lowercase.
   /// - Returns: A new ``StorageBucket`` with the header merged into the configuration's headers.
-  public func setHeader(_ value: String, forKey key: String) -> Self {
-    StorageBucket(id: id, api: api.setHeader(value, forKey: key))
+  public func setHeader(name: HTTPField.Name, value: String) -> Self {
+    StorageBucket(id: id, api: api.setHeader(name: name, value: value))
   }
 
   private struct SignedURLAPIResponse: Decodable {
