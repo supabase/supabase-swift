@@ -16,8 +16,8 @@ Read the matching file before you act:
   when trapping is allowed, and test conventions. Read it before you write or review Swift code.
 - [CONTRIBUTING.md](CONTRIBUTING.md) — commit conventions, `sdk-compliance.yaml`, and the
   feature, bug-fix, and dependency workflows. Read it before you commit or change public API.
-- [TYPEGEN.md](TYPEGEN.md) — the `tools/supabase-typegen` package, its goldens, and its fixtures.
-  Read it before you touch the generator, the `@Table` macros, or an integration migration.
+- [tools/supabase-typegen/README.md](tools/supabase-typegen/README.md) — the typegen package, its
+  goldens, and its fixtures. Read it before you touch the generator, the `@Table` macros, or an integration migration.
 - [RELEASE.md](RELEASE.md) — release-please, release branches, and the typegen binary release.
   Read it before you touch versions, `CHANGELOG.md`, or release workflows.
 

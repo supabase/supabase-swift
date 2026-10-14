@@ -1,4 +1,4 @@
-# The typegen tool
+# supabase-typegen
 
 `tools/supabase-typegen` is a separate SwiftPM package holding the `supabase-typegen` executable,
 which turns a `GeneratorMetadata` document into `@Table` structs. It is not part of the root
@@ -6,6 +6,8 @@ package on purpose: SwiftPM fetches the dependencies of every product a package 
 swift-format dependency would reach every app that depends on `Supabase` and pin their
 swift-syntax to one major. Its `CamelToSnake.swift` is a symlink to the `@Table` macro's source, so
 the generator decides `@Column` with the macro's own function.
+
+Run these from the repository root:
 
 ```bash
 swift build --package-path tools/supabase-typegen
@@ -31,7 +33,7 @@ the goldens.
 
 A Postgres enum becomes a Swift `enum` (`String, Codable, Hashable, Sendable,
 PostgrestFilterValue`), generated for every enum in a selected schema and for any other enum a
-generated column uses. "Enum-like Values" in [CODE_STYLE.md](CODE_STYLE.md) governs the SDK's own types, not this generated code: a
+generated column uses. "Enum-like Values" in [CODE_STYLE.md](../../CODE_STYLE.md) governs the SDK's own types, not this generated code: a
 label added to the Postgres enum fails to decode until the user regenerates.
 
 Each Postgres type maps to one Swift type, so the generated `@Table` property's type is the column's
@@ -67,7 +69,7 @@ skipped. Each skip, and each rename that a name clash needs, is a note on standa
 
 ## Releasing the typegen binary
 
-See "Releasing the typegen binary" in [RELEASE.md](RELEASE.md).
+See "Releasing the typegen binary" in [RELEASE.md](../../RELEASE.md).
 
 ## Refreshing the typegen fixtures
 
