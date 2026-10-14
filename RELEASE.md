@@ -61,12 +61,16 @@ BREAKING CHANGE: This removes the old API
 
 Release-please also supports `release/*` branches for managing releases from feature branches if needed.
 
-`release/v2` ships v2 patch releases while `main` moves toward v3. Release-please updates
-`.release-please-manifest.json`, `CHANGELOG.md`, and `Sources/Helpers/Version.swift` only on
-the branch it releases from. After each `release/v2` release, open a `chore` PR to `main` that
-copies the new manifest version, the new `CHANGELOG.md` sections, and the new `_version` from
-`release/v2`. Otherwise `main` keeps an old version, and a later patch release from `main`
-proposes a version whose tag already exists.
+`release/v2` ships v2 patch releases while `main` moves toward v3. Release-please finds the
+last release of a branch from that branch's Git history: the newest release PR or release tag it
+can reach. It reads `.release-please-manifest.json` only when the history has no release. Tags
+from `release/v2` are not in the history of `main`, so a `release/v2` release does not change
+what release-please on `main` treats as the last release. Copying the manifest version from
+`release/v2` to `main` does not change it either.
+
+To set the next version of `main`, set `release-as` in `release-please-config.json`. It is set to
+`3.0.0-beta.1` for the first v3 beta. Remove it after that release ships; later betas then
+continue from the `v3.0.0-beta.1` tag on `main`.
 
 ## Manual Release
 
