@@ -26,7 +26,7 @@
 # gates genuinely new public API against the matrix on every PR diff.
 # Making that backlog fatal here would fail on a clean main and train
 # whoever runs this to ignore or disable it. Register new public API in
-# sdk-compliance.yaml as you add it — see AGENTS.md.
+# sdk-compliance.yaml as you add it — see CONTRIBUTING.md.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

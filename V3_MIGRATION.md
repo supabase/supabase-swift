@@ -1744,7 +1744,7 @@ that carried an error or no session (what v2 reported as `.pkce(_:)` and
 The redirect URL is read per call: `redirectTo` is a parameter of the sign-in method, falling back
 to `AuthClient.Configuration.redirectToURL`. A value that varies per call is not something to trap
 on, and the enclosing method already throws, so an error costs nothing. (A value fixed once at
-construction is different — those still trap. See "When trapping is allowed" in `AGENTS.md`.)
+construction is different — those still trap. See "When trapping is allowed" in `CODE_STYLE.md`.)
 
 This also restores something v3 dropped. `AuthError.invalidRedirectScheme` existed in v2 and was
 listed above as removed with no replacement, on the grounds that it no longer represented anything

@@ -1,0 +1,143 @@
+# Code Style and Conventions
+
+## Swift Style
+
+- Use 2 spaces for indentation (configured in `.editorconfig`)
+- Enable strict concurrency checking (`StrictConcurrency` feature)
+- Use `ExistentialAny` feature for explicit existential types
+- Follow Swift API Design Guidelines
+- Prefer `async/await` over completion handlers
+- Mark types as `Sendable` where appropriate for concurrency safety
+
+## Enum-like Values
+
+- Use a Swift `enum` only when the value is genuinely closed: the cases carry associated values (`AuthResponse`, `SignedURLResult`), every case is fixed by the language or protocol itself (HTTP methods, a `CodingKeys` set), or the SDK has to implement each case so a value it has no code for is meaningless (`AuthFlowType`, `RealtimePostgresIsValue`). Adding a case to one of these is a major bump.
+- Any enum-like value sent to or received from the backend, and any status or event value a consumer will `switch` over (`AuthChangeEvent`, `RealtimeClientStatus`, `PushStatus`), must be a `RawRepresentable` struct instead, so a value the backend adds later (or that this SDK just doesn't have a case for yet) round-trips through `.rawValue` instead of failing to decode or blocking construction until an SDK upgrade. The consumer-facing policy lives in `Sources/Supabase/Supabase.docc/EnumsAndOpenSets.md`; keep it in sync when a type changes shape:
+
+  ```swift
+  public struct Provider: RawRepresentable, Codable, Hashable, Sendable, ExpressibleByStringLiteral {
+    public let rawValue: String
+
+    public init(rawValue: String) {
+      self.rawValue = rawValue
+    }
+
+    public init(stringLiteral value: String) {
+      self.init(rawValue: value)
+    }
+
+    public static let apple: Provider = "apple"
+    public static let github: Provider = "github"
+  }
+  ```
+
+- Conform to exactly what the value's actual usage needs — `Codable` only if it's ever decoded, `Encodable`-only if it's write-only, no `Codable`/`Encodable` at all if it's read via `.rawValue` directly into a header or query string (never through `JSONEncoder`/`JSONDecoder`). Don't upgrade a type's conformance just because a sibling type in the same file has more.
+- Don't add a `CaseIterable`/`Identifiable` replacement (a `knownCases` array, a custom `Identifiable`) to the SDK type unless something inside this package actually needs one — a consuming app can keep its own list of the values it cares about (see `Examples/Examples/Auth/KnownProviders.swift`).
+- `init(rawValue:)` is intentionally non-failable — it always succeeds, which is what makes constructing/decoding an unrecognized value safe instead of an error. Any breaking-change migration note for a type like this must call out that `if let x = X(rawValue:)` goes from compiling to a compile error, and that interpolating the value directly (`"\(x)"`) silently stops printing the case name.
+
+## File Headers
+
+Use standard file headers with copyright:
+
+```swift
+//
+//  FileName.swift
+//  ModuleName
+//
+//  Created by Author Name on DD/MM/YY.
+//
+```
+
+## Module Organization
+
+- Each module is independent and can be used standalone
+- Use `@_exported import` in main Supabase module to re-export all sub-modules
+- Keep module dependencies minimal
+- Prefer protocol-oriented design
+
+## Codable Conformance
+
+- Only conform a type to the direction the SDK actually uses: a type the SDK
+  only decodes from a server response gets `Decodable`, a type the SDK only
+  encodes into a request body gets `Encodable`. Conform to full `Codable`
+  only when the same type is genuinely used in both directions (e.g. a type
+  the SDK both sends and receives over the wire, or persists to disk via
+  `JSONEncoder`/`JSONDecoder`, like Auth's `Session`).
+- Before narrowing a type from `Codable` to `Decodable`/`Encodable`, check
+  whether any other type embeds it and relies on synthesized `Codable` — a
+  container relying on synthesized conformance stops compiling the moment a
+  field it holds drops the direction the container needs, so the container
+  must narrow the same way (or gain its own hand-written coder). The same
+  check applies in reverse when widening a type back toward `Codable`: every
+  stored property must be at least as conformant as the type you're widening
+  to.
+- Don't hand-write `encode(to:)`/`init(from:)` for the unused direction "for
+  symmetry" — dead coders accumulate and mislead readers about how the type
+  is actually used. See `V3_MIGRATION.md` for prior cleanup along these
+  lines (`VerifyOTPResponse`, and the broader SDK-1473 pass).
+
+## Error Handling
+
+- Use strongly-typed errors conforming to `Error` protocol
+- Provide `LocalizedError` conformance where appropriate
+- Use `async throws` for async error handling
+- Report issues using `IssueReporting` (from swift-issue-reporting on Swift 6.4+, from
+  xctest-dynamic-overlay on earlier toolchains — see the comment atop `Package@swift-6.2.swift`)
+
+### When trapping is allowed
+
+The dividing line is *when the value is fixed*, not who supplied it.
+
+- **Fixed once, at construction** — an initializer argument, a configuration field, a `package`
+  tuning constant. `precondition`/`preconditionFailure` is the right tool: the value cannot change
+  afterwards, so a bad one is a programmer error, and trapping reports it at the exact point it
+  was introduced. `SupabaseClient.init` traps on a `supabaseURL` with no host; `StorageApi` traps
+  on a URL it cannot decompose.
+  Degrading instead would bury the mistake behind an unrelated failure much later.
+- **Varies at runtime, or comes from the server** — a per-call parameter, a response header, a
+  decoded payload, a WebSocket close code. Never trap. Throw if the context already throws;
+  otherwise `reportIssue` and fall back. `HTTPFields.init(_:)` drops invalid field names rather
+  than trapping precisely because `HTTPResponse.init` builds it from `response.allHeaderFields`,
+  which a proxy or a hostile server controls.
+
+A value being "user input" is not on its own a reason to avoid trapping — `supabaseURL` is user
+input and traps. A value being *dynamic* is. See SDK-1793.
+
+## Testing Conventions
+
+This project uses the [Swift Testing](https://developer.apple.com/documentation/testing) framework, and only Swift Testing — do not use XCTest or `XCTestCase`.
+
+- Test files should mirror source file structure (`Foo.swift` → `FooTests.swift`)
+- Suite naming: the type name matches the file name (`FooTests.swift` → `struct FooTests`), with an explicit `@Suite` attribute even when no custom name/tags are needed
+- Test function names drop the `test` prefix (the `@Test` attribute already conveys that) — write `fooBehavior()`, not `testFooBehavior()`
+- Use `@testable import` for internal access
+- Prefer `#expect`/`#require` for assertions; `#expect(x != nil, "message")` reads the same as `XCTAssertNotNil(x, "message")` did
+- `expectNoDifference` (CustomDump) and `withExpectedIssue`/`reportIssue` (IssueReporting) work unchanged at call sites
+- Use snapshot testing for complex data structures (via swift-snapshot-testing); `assertSnapshot`/`assertInlineSnapshot` work inside `@Test` functions
+- Use Mocker for URLSession mocking
+- Use CustomDump for test assertions with better output
+- Keep integration tests separate in `IntegrationTests` directory
+- Test targets get full Swift 6 language mode checking, matching production targets
+
+Example test structure (Swift Testing):
+
+```swift
+import Testing
+@testable import ModuleName
+
+@Suite
+struct FeatureTests {
+  @Test
+  func featureBehavior() {
+    // Arrange
+    let input = "test"
+
+    // Act
+    let result = feature(input)
+
+    // Assert
+    #expect(result == expected)
+  }
+}
+```
+
