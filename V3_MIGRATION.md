@@ -4283,3 +4283,24 @@ let files = try await bucket.list(
 
 A column Storage adds later is spelled with a literal: `sortBy: "new_column"`. `SearchOptions`,
 `SortBy` and an `options: nil` argument are compile errors.
+
+## `Bucket.owner` is replaced by `ownerId`; `Bucket` gains `type`
+
+Storage deprecated a bucket's `owner` in favor of `owner_id`, so `Bucket.owner` is removed and
+`Bucket.ownerId: String?` reads the new field. It is `nil` for a bucket with no owner.
+`Bucket.type: BucketType?` says whether the bucket holds files (`.standard`) or Iceberg tables
+(`.analytics`); it is `nil` from `bucket(_:)`, which Storage answers without it. The
+`Bucket` initializer drops `owner:` and takes `type:` and `ownerId:` as optional arguments after
+`name:`.
+
+```swift
+// Before
+let owner: String = bucket.owner
+
+// After
+let owner: String? = bucket.ownerId
+```
+
+Code that reads `owner` or passes `owner:` to the initializer is a compile error. The same release adds
+`listBuckets(options:)` with paging, sort and a name filter, and `BucketOptions.type` for
+`createBucket`; `updateBucket` throws if `type` is set, because a bucket cannot change type.

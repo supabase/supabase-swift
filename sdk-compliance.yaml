@@ -1485,14 +1485,37 @@ features:
       - BucketOptions.init
       - BucketOptions.fileSizeLimit
       - BucketOptions.allowedMimeTypes
+      - BucketOptions.type
+      - BucketType
+      - BucketType.init
+      - BucketType.rawValue
+      - BucketType.encode
+      - BucketType.standard
+      - BucketType.analytics
   storage.file_buckets.get_bucket:
     status: implemented
     symbols:
       - StorageClient.bucket
+      - Bucket.type
+      - Bucket.ownerId
   storage.file_buckets.list_file_buckets:
     status: implemented
     symbols:
       - StorageClient.listBuckets
+      - BucketListOptions
+      - BucketListOptions.init
+      - BucketListOptions.limit
+      - BucketListOptions.offset
+      - BucketListOptions.sortBy
+      - BucketListOptions.order
+      - BucketListOptions.search
+      - BucketSortColumn
+      - BucketSortColumn.init
+      - BucketSortColumn.rawValue
+      - BucketSortColumn.id
+      - BucketSortColumn.name
+      - BucketSortColumn.createdAt
+      - BucketSortColumn.updatedAt
   storage.file_buckets.update_bucket:
     status: implemented
     symbols:

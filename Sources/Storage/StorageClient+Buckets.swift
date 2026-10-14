@@ -8,12 +8,20 @@ import HTTPTypes
 /// Bucket-management operations (listing, creating, updating, emptying, and deleting) for
 /// ``StorageClient``.
 extension StorageClient {
-  /// Retrieves the details of all Storage buckets within the project.
+  /// Retrieves the Storage buckets within the project.
   ///
-  /// - Returns: An array of ``Bucket`` objects, one for each bucket in the project.
+  /// ```swift
+  /// let recent = try await storage.listBuckets(
+  ///   options: BucketListOptions(limit: 10, sortBy: .createdAt, order: .descending))
+  /// ```
+  ///
+  /// - Parameter options: Paging, sort and a name filter. Defaults to every bucket.
+  /// - Returns: The buckets the caller can see.
   /// - Throws: ``StorageError`` if the request fails or the caller is not authorized.
-  public func listBuckets() async throws -> [Bucket] {
-    try await api.execute(api.requests.listBuckets()).decoded()
+  public func listBuckets(options: BucketListOptions = BucketListOptions()) async throws
+    -> [Bucket]
+  {
+    try await api.execute(api.requests.listBuckets(options)).decoded()
   }
 
   /// Retrieves the details of an existing Storage bucket.
@@ -33,6 +41,7 @@ extension StorageClient {
     var `public`: Bool?
     var fileSizeLimit: ByteCount?
     var allowedMimeTypes: [String]?
+    var type: BucketType?
 
     enum CodingKeys: String, CodingKey {
       case id
@@ -40,6 +49,7 @@ extension StorageClient {
       case `public`
       case fileSizeLimit = "file_size_limit"
       case allowedMimeTypes = "allowed_mime_types"
+      case type
     }
 
     init(id: String? = nil, name: String? = nil, options: BucketOptions) {
@@ -66,8 +76,9 @@ extension StorageClient {
   ///
   /// - Parameters:
   ///   - id: A unique identifier for the bucket. This also becomes the bucket name.
-  ///   - options: Options that control visibility, file-size limits, and allowed MIME types. A
-  ///     `nil` field takes the server default: a private bucket with no size or type restrictions.
+  ///   - options: Options that control visibility, file-size limits, allowed MIME types and the
+  ///     bucket type. A `nil` field takes the server default: a private standard bucket with no
+  ///     size or type restrictions.
   /// - Returns: The bucket name the server stored.
   /// - Throws: ``StorageError`` if a bucket with the same identifier already exists, or if the
   ///   caller is not authorized.
@@ -79,11 +90,11 @@ extension StorageClient {
       let name: String
     }
 
-    return try await api.execute(
-      api.requests.createBucket(BucketParameters(id: id, name: id, options: options))
-    )
-    .decoded(as: Response.self)
-    .name
+    var parameters = BucketParameters(id: id, name: id, options: options)
+    parameters.type = options.type
+    return try await api.execute(api.requests.createBucket(parameters))
+      .decoded(as: Response.self)
+      .name
   }
 
   /// Updates an existing Storage bucket's settings.
@@ -99,10 +110,15 @@ extension StorageClient {
   ///
   /// - Parameters:
   ///   - id: The unique identifier of the bucket to update.
-  ///   - options: The settings to change. At least one field must be set.
+  ///   - options: The settings to change. At least one field must be set, and not
+  ///     ``BucketOptions/type``: a bucket cannot change type.
   /// - Throws: ``StorageError`` with kind ``StorageError/Kind-swift.struct/invalidRequest`` if no
-  ///   field is set, or if the bucket does not exist or the caller is not authorized.
+  ///   field is set or ``BucketOptions/type`` is, or if the bucket does not exist or the caller is not authorized.
   public func updateBucket(_ id: String, options: BucketOptions) async throws {
+    guard options.type == nil else {
+      throw StorageError(
+        kind: .invalidRequest, message: "updateBucket cannot change a bucket's type.")
+    }
     let parameters = BucketParameters(options: options)
     guard !parameters.isEmpty else {
       throw StorageError(
