@@ -1839,9 +1839,13 @@ features:
 
   # ── Storage — Analytics Buckets ────────────────────────────────────────────
 
-  storage.analytics.create_analytics_bucket: not_implemented
-  storage.analytics.list_analytics_buckets: not_implemented
-  storage.analytics.delete_analytics_bucket: not_implemented
+  # StorageAnalyticsClient is @_spi(Experimental) (analytics buckets are a public
+  # alpha of Supabase Storage), so the public symbol graph the compliance scanner
+  # reads never contains it. The Iceberg REST catalog (namespaces, tables) is not
+  # wrapped: there is no Swift Iceberg client to hand it to.
+  storage.analytics.create_analytics_bucket: implemented
+  storage.analytics.list_analytics_buckets: implemented
+  storage.analytics.delete_analytics_bucket: implemented
   storage.analytics.create_namespace: not_implemented
   storage.analytics.list_namespaces: not_implemented
   storage.analytics.delete_namespace: not_implemented

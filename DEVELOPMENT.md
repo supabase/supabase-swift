@@ -161,6 +161,15 @@ supabase stop
 
 `./scripts/test-integration.sh` runs these steps for you.
 
+The CLI starts Storage without object lifecycles, analytics (Iceberg) buckets or a CDN purge
+endpoint, and has no setting for them. On the Docker stack (Linux, and CI's Linux job),
+`./scripts/enable-storage-test-features.sh` recreates the storage container with them on and a stub
+that records each CDN purge; then `STORAGE_TEST_FEATURES=1` runs their full integration tests. The
+native stack cannot, so without the variable those suites check that Storage refuses each call
+instead. To run the full tests on macOS, start the Docker stack (unset
+`SUPABASE_EXPERIMENTAL_STACK` and drop `--runtime native --eager`) and run the script after
+`supabase start`.
+
 `verifyOTPForSecureEmailChange` needs `auth.email.enable_confirmations = true` to reach GoTrue's
 secure-email-change "single confirmation" response, which every other integration test relies on
 being `false` (so `signUp`/`signIn` resolve without confirming an email). It runs against a
