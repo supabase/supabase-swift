@@ -133,10 +133,10 @@ struct StorageRequests: Sendable {
   /// supabase-js uses for `ArrayBuffer` uploads; what a multipart form would carry as fields
   /// travels in headers: `Content-Type`, `Cache-Control`, and base64 JSON in `x-metadata`.
   func upload(
-    method: HTTPRequest.Method, bucket: String, key: ObjectKey, file: FileUpload,
+    method: HTTPRequest.Method, bucket: String, key: ObjectKey, body: HTTPBody,
     options: UploadOptions
   ) throws -> StorageRequest {
-    var headers = try uploadHeaders(file: file, key: key, options: options)
+    var headers = try uploadHeaders(key: key, options: options)
     if method == .post {
       headers[.xUpsert] = "\(options.upsert)"
     } else if options.upsert {
@@ -146,14 +146,14 @@ struct StorageRequests: Sendable {
     return StorageRequest(
       head: HTTPRequest(
         method: method, url: url("object/\(objectPath(bucket, key))"), headerFields: headers),
-      body: try file.httpBody())
+      body: body)
   }
 
   /// Upsert is decided by the token, so `options.upsert` is not sent.
   func uploadToSignedURL(
-    bucket: String, key: ObjectKey, token: String, file: FileUpload, options: UploadOptions
+    bucket: String, key: ObjectKey, token: String, body: HTTPBody, options: UploadOptions
   ) throws -> StorageRequest {
-    let headers = try uploadHeaders(file: file, key: key, options: options)
+    let headers = try uploadHeaders(key: key, options: options)
     return StorageRequest(
       head: HTTPRequest(
         method: .put,
@@ -161,15 +161,16 @@ struct StorageRequests: Sendable {
           "object/upload/sign/\(objectPath(bucket, key))",
           query: [URLQueryItem(name: "token", value: token)]),
         headerFields: headers),
-      body: try file.httpBody())
+      body: body)
   }
 
-  private func uploadHeaders(file: FileUpload, key: ObjectKey, options: UploadOptions) throws
+  private func uploadHeaders(key: ObjectKey, options: UploadOptions) throws
     -> HTTPFields
   {
     var headers = options.headers
     if headers[.contentType] == nil {
-      headers[.contentType] = file.contentType(forPath: key.path, options: options)
+      headers[.contentType] =
+        options.contentType ?? mimeType(forPathExtension: key.path.pathExtension)
     }
     if headers[.cacheControl] == nil {
       headers[.cacheControl] = options.cacheControl.rawValue
