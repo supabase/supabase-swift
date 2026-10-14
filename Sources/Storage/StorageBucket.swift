@@ -40,7 +40,7 @@ public import HTTPTypes
 ///
 /// ### Downloading files
 ///
-/// - ``download(path:transform:query:cacheNonce:)``
+/// - ``download(path:transform:options:progress:)``
 /// - ``publicURL(path:download:transform:cacheNonce:)``
 ///
 /// ### Managing files
@@ -528,23 +528,29 @@ public struct StorageBucket: Sendable {
   /// - Parameters:
   ///   - path: The file path including the file name, e.g. `"folder/image.png"`.
   ///   - transform: An optional image transformation applied server-side before delivery.
-  ///   - additionalQueryItems: Extra URL query items appended to the request.
-  ///   - cacheNonce: An optional nonce appended as a `cacheNonce` query parameter for
-  ///     cache-busting purposes.
+  ///   - options: The byte range, version, cache nonce and extra headers.
+  ///   - progress: Called as the bytes arrive; see ``TransferProgress``. ``TransferProgress/totalBytes``
+  ///     is `nil` when Storage sends no `Content-Length`, as for a transformed image.
   /// - Returns: The raw file data.
   /// - Throws: ``StorageError`` if the file does not exist or the caller is not authorized.
-  @discardableResult
   public func download(
     path: String,
     transform: ImageTransform? = nil,
-    query additionalQueryItems: [URLQueryItem]? = nil,
-    cacheNonce: String? = nil
+    options: DownloadOptions = DownloadOptions(),
+    progress: (@Sendable (TransferProgress) -> Void)? = nil
   ) async throws -> Data {
-    try await api.execute(
+    let (_, body) = try await api.stream(
       api.requests.download(
-        bucket: id, key: ObjectKey(path), transform: transform?.queryItems ?? [],
-        query: (additionalQueryItems ?? []) + Self.urlQuery(download: nil, cacheNonce: cacheNonce))
+        bucket: id, key: ObjectKey(path), transform: transform, options: options)
     )
+    guard let body else { return Data() }
+
+    var data = Data()
+    for try await chunk in body {
+      data.append(contentsOf: chunk)
+      progress?(TransferProgress(completedBytes: Int64(data.count), of: body.length))
+    }
+    return data
   }
 
   /// Retrieves metadata about an existing file without downloading its content.

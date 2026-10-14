@@ -31,10 +31,11 @@ public struct TransferProgress: Hashable, Sendable {
   }
 
   /// `completedBytes / totalBytes`, from `0` to `1`, or `nil` when ``totalBytes`` is unknown or
-  /// zero.
+  /// zero. Capped at `1`: a compressed response can deliver more bytes than its
+  /// `Content-Length`.
   public var fractionCompleted: Double? {
     guard let totalBytes, totalBytes > 0 else { return nil }
-    return Double(completedBytes) / Double(totalBytes)
+    return min(1, Double(completedBytes) / Double(totalBytes))
   }
 }
 

@@ -4209,3 +4209,28 @@ StorageClientConfiguration(url: url, headers: [.authorization: "Bearer \(token)"
 
 Compile error at every site that passes a dictionary literal with `String` keys, calls
 `setHeader(_:forKey:)`, or reads `configuration.headers` as a dictionary.
+
+## `StorageBucket.download` takes `DownloadOptions`; `query:` and `cacheNonce:` are gone
+
+`download(path:transform:query:cacheNonce:)` is now
+`download(path:transform:options:progress:)`. `DownloadOptions` carries the byte `range`, the
+`versionId`, the `cacheNonce` and extra `headers`. The free-form
+`query: [URLQueryItem]?` parameter is removed: every query parameter Storage reads on a download
+now has a typed field, and `DownloadOptions.headers` is the one escape hatch, as
+`UploadOptions.headers` already is for uploads. `@discardableResult` is removed too, because
+discarding downloaded bytes is never what a caller means.
+
+```swift
+// Before
+let data = try await bucket.download(path: "a.png", cacheNonce: "v2")
+let old = try await bucket.download(
+  path: "a.png", query: [URLQueryItem(name: "versionId", value: id)])
+try await bucket.download(path: "warm-the-cache.png")
+
+// After
+let data = try await bucket.download(path: "a.png", options: DownloadOptions(cacheNonce: "v2"))
+let old = try await bucket.download(path: "a.png", options: DownloadOptions(versionId: id))
+_ = try await bucket.download(path: "warm-the-cache.png")
+```
+
+`query:` and `cacheNonce:` are compile errors, and a discarded result is a warning.

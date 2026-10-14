@@ -128,11 +128,13 @@ public struct UploadOptions: Sendable {
   /// Defaults to one hour, ``CacheControl/maxAge(_:)`` with `.seconds(3600)`.
   public var cacheControl: CacheControl
 
-  /// When `true`, ``StorageBucket/upload(path:data:options:progress:)`` overwrites an existing file at the
-  /// same path. When `false` (the default), it throws ``StorageError/Code/keyAlreadyExists``.
+  /// When `true`, ``StorageBucket/upload(path:data:options:progress:)`` overwrites an existing
+  /// file at the same path. When `false` (the default), it throws
+  /// ``StorageError/Code/keyAlreadyExists``.
   ///
-  /// ``StorageBucket/update(path:data:options:progress:)`` always overwrites and ignores this flag, and
-  /// ``StorageBucket/uploadToSignedURL(path:token:data:options:progress:)`` takes it from the token.
+  /// ``StorageBucket/update(path:data:options:progress:)`` always overwrites and ignores this
+  /// flag, and ``StorageBucket/uploadToSignedURL(path:token:data:options:progress:)`` takes it
+  /// from the token.
   public var upsert: Bool
 
   /// Arbitrary key-value metadata to attach to the uploaded object. You can later use this to
@@ -162,6 +164,49 @@ public struct UploadOptions: Sendable {
     self.cacheControl = cacheControl
     self.upsert = upsert
     self.metadata = metadata
+    self.headers = headers
+  }
+}
+
+/// Options for downloading a file.
+///
+/// ```swift
+/// // The first kilobyte of the object
+/// let head = try await bucket.download(path: "log.txt", options: DownloadOptions(range: 0...1023))
+/// ```
+public struct DownloadOptions: Sendable {
+  /// The bytes to fetch, both ends included, sent as `Range: bytes=a-b`. Storage answers with
+  /// `206 Partial Content` and only those bytes. `nil` (the default) fetches the whole object.
+  public var range: ClosedRange<Int64>?
+
+  /// The version of the object to fetch, for a bucket with versioning. `nil` (the default)
+  /// fetches the current version.
+  public var versionId: String?
+
+  /// A nonce appended as a `cacheNonce` query parameter, so a CDN serves a fresh copy instead
+  /// of a cached one.
+  public var cacheNonce: String?
+
+  /// Extra HTTP headers to include with the download request. A header set here wins over the
+  /// one the SDK would send for the same name.
+  public var headers: HTTPFields
+
+  /// Creates a ``DownloadOptions`` value.
+  ///
+  /// - Parameters:
+  ///   - range: The bytes to fetch, both ends included. Fetches the whole object when `nil`.
+  ///   - versionId: The version of the object to fetch. Fetches the current version when `nil`.
+  ///   - cacheNonce: A cache-busting nonce sent as the `cacheNonce` query parameter.
+  ///   - headers: Extra HTTP headers for the download request.
+  public init(
+    range: ClosedRange<Int64>? = nil,
+    versionId: String? = nil,
+    cacheNonce: String? = nil,
+    headers: HTTPFields = [:]
+  ) {
+    self.range = range
+    self.versionId = versionId
+    self.cacheNonce = cacheNonce
     self.headers = headers
   }
 }
@@ -1079,7 +1124,7 @@ public struct BucketOptions: Hashable, Sendable {
 /// A server-side image transformation applied before the asset is served.
 ///
 /// Pass an ``ImageTransform`` as the `transform:` argument of
-/// ``StorageBucket/download(path:transform:query:cacheNonce:)``,
+/// ``StorageBucket/download(path:transform:options:progress:)``,
 /// ``StorageBucket/publicURL(path:download:transform:cacheNonce:)`` or
 /// ``StorageBucket/createSignedURL(path:expiresIn:download:transform:cacheNonce:)``
 /// to resize, crop, reformat, or adjust the quality of an image on the fly.
