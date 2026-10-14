@@ -433,25 +433,26 @@ public struct UploadedObject: Hashable, Sendable {
   }
 }
 
-/// Options for specifying a destination bucket when moving or copying files.
+/// One version of an object, for ``StorageBucket/remove(versions:)``.
 ///
-/// Pass to ``StorageBucket/move(from:to:options:)`` or ``StorageBucket/copy(from:to:options:)``
-/// to move or copy a file across buckets.
-///
-/// ## Topics
-///
-/// ### Properties
-///
-/// - ``destinationBucket``
-public struct DestinationOptions: Sendable {
-  /// The identifier of the destination bucket. When `nil`, the operation stays within the source bucket.
-  public var destinationBucket: String?
+/// ```swift
+/// try await bucket.remove(versions: [ObjectVersion(path: "a.png", versionId: oldVersion)])
+/// ```
+public struct ObjectVersion: Hashable, Sendable {
+  /// The object path, e.g. `"folder/image.png"`.
+  public var path: String
 
-  /// Creates a ``DestinationOptions`` value.
+  /// The version to address, from ``StorageObject/version`` or ``ObjectInfo/version``.
+  public var versionId: String
+
+  /// Creates an ``ObjectVersion``.
   ///
-  /// - Parameter destinationBucket: The destination bucket identifier, or `nil` to use the same bucket.
-  public init(destinationBucket: String? = nil) {
-    self.destinationBucket = destinationBucket
+  /// - Parameters:
+  ///   - path: The object path.
+  ///   - versionId: The version to address.
+  public init(path: String, versionId: String) {
+    self.path = path
+    self.versionId = versionId
   }
 }
 
@@ -646,7 +647,7 @@ public struct ObjectMetadata: Hashable, Decodable, Sendable {
   }
 }
 
-/// Everything Storage knows about one object, returned by ``StorageBucket/info(path:)``.
+/// Everything Storage knows about one object, returned by ``StorageBucket/info(path:versionId:)``.
 ///
 /// ## Topics
 ///
@@ -1340,8 +1341,8 @@ public struct BucketOptions: Hashable, Sendable {
 ///
 /// Pass an ``ImageTransform`` as the `transform:` argument of
 /// ``StorageBucket/download(path:transform:options:progress:)``,
-/// ``StorageBucket/publicURL(path:download:transform:cacheNonce:)`` or
-/// ``StorageBucket/createSignedURL(path:expiresIn:download:transform:cacheNonce:)``
+/// ``StorageBucket/publicURL(path:download:transform:versionId:cacheNonce:)`` or
+/// ``StorageBucket/createSignedURL(path:expiresIn:download:transform:versionId:cacheNonce:)``
 /// to resize, crop, reformat, or adjust the quality of an image on the fly.
 ///
 /// ```swift

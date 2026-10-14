@@ -4304,3 +4304,24 @@ let owner: String? = bucket.ownerId
 Code that reads `owner` or passes `owner:` to the initializer is a compile error. The same release adds
 `listBuckets(options:)` with paging, sort and a name filter, and `BucketOptions.type` for
 `createBucket`; `updateBucket` throws if `type` is set, because a bucket cannot change type.
+
+## `move` and `copy` take `toBucket:` instead of `DestinationOptions`
+
+`StorageBucket.move(from:to:options:)` and `copy(from:to:options:)` are now
+`move(from:to:toBucket:sourceVersionId:)` and `copy(from:to:toBucket:sourceVersionId:)`.
+`DestinationOptions` held one field, the destination bucket, which is now the `toBucket:`
+argument. `sourceVersionId:` moves or copies a specific version in a versioned bucket.
+`DestinationOptions` is removed.
+
+```swift
+// Before
+try await bucket.move(
+  from: "a.png", to: "a.png", options: DestinationOptions(destinationBucket: "archive"))
+
+// After
+try await bucket.move(from: "a.png", to: "a.png", toBucket: "archive")
+```
+
+`DestinationOptions` and the `options:` label are compile errors. The same release adds
+`versionId:` to `info(path:)`, `createSignedURL` and `publicURL`, and `remove(versions:)`, which
+deletes specific versions given as `ObjectVersion` values.

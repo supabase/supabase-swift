@@ -219,41 +219,46 @@ struct StorageRequests: Sendable {
     let sourceKey: String
     let destinationKey: String
     let destinationBucket: String?
+    let sourceVersionId: String?
   }
 
-  func move(bucket: String, source: ObjectKey, destination: ObjectKey, destinationBucket: String?)
-    throws -> StorageRequest
-  {
+  func move(
+    bucket: String, source: ObjectKey, destination: ObjectKey, destinationBucket: String?,
+    sourceVersionId: String?
+  ) throws -> StorageRequest {
     StorageRequest(
       head: HTTPRequest(method: .post, url: url("object/move")),
       body: try json(
         MoveOrCopyBody(
           bucketId: bucket, sourceKey: source.path, destinationKey: destination.path,
-          destinationBucket: destinationBucket)))
+          destinationBucket: destinationBucket, sourceVersionId: sourceVersionId)))
   }
 
-  func copy(bucket: String, source: ObjectKey, destination: ObjectKey, destinationBucket: String?)
-    throws -> StorageRequest
-  {
+  func copy(
+    bucket: String, source: ObjectKey, destination: ObjectKey, destinationBucket: String?,
+    sourceVersionId: String?
+  ) throws -> StorageRequest {
     StorageRequest(
       head: HTTPRequest(method: .post, url: url("object/copy")),
       body: try json(
         MoveOrCopyBody(
           bucketId: bucket, sourceKey: source.path, destinationKey: destination.path,
-          destinationBucket: destinationBucket)))
+          destinationBucket: destinationBucket, sourceVersionId: sourceVersionId)))
   }
 
   private struct SignBody: Encodable {
     let expiresIn: Int
     let transform: ImageTransform.Body?
+    let versionId: String?
   }
 
-  func sign(bucket: String, key: ObjectKey, expiresIn: Int, transform: ImageTransform?) throws
-    -> StorageRequest
-  {
+  func sign(
+    bucket: String, key: ObjectKey, expiresIn: Int, transform: ImageTransform?, versionId: String?
+  ) throws -> StorageRequest {
     StorageRequest(
       head: HTTPRequest(method: .post, url: url("object/sign/\(objectPath(bucket, key))")),
-      body: try json(SignBody(expiresIn: expiresIn, transform: transform?.body)))
+      body: try json(
+        SignBody(expiresIn: expiresIn, transform: transform?.body, versionId: versionId)))
   }
 
   private struct SignManyBody: Encodable {
@@ -267,14 +272,29 @@ struct StorageRequests: Sendable {
       body: try json(SignManyBody(expiresIn: expiresIn, paths: keys.map(\.path))))
   }
 
-  private struct RemoveBody: Encodable {
-    let prefixes: [String]
+  private struct RemoveBody<Prefix: Encodable>: Encodable {
+    let prefixes: [Prefix]
+  }
+
+  private struct VersionPrefix: Encodable {
+    let path: String
+    let versionId: String
   }
 
   func remove(bucket: String, keys: [ObjectKey]) throws -> StorageRequest {
     StorageRequest(
       head: HTTPRequest(method: .delete, url: url("object/\(ObjectKey.encode(bucket))")),
       body: try json(RemoveBody(prefixes: keys.map(\.path))))
+  }
+
+  func remove(bucket: String, versions: [(key: ObjectKey, versionId: String)]) throws
+    -> StorageRequest
+  {
+    StorageRequest(
+      head: HTTPRequest(method: .delete, url: url("object/\(ObjectKey.encode(bucket))")),
+      body: try json(
+        RemoveBody(
+          prefixes: versions.map { VersionPrefix(path: $0.key.path, versionId: $0.versionId) })))
   }
 
   private struct SortBody: Encodable {
@@ -373,9 +393,13 @@ struct StorageRequests: Sendable {
         headerFields: headers.merging(with: options.headers)))
   }
 
-  func info(bucket: String, key: ObjectKey) -> StorageRequest {
+  func info(bucket: String, key: ObjectKey, versionId: String?) -> StorageRequest {
     StorageRequest(
-      head: HTTPRequest(method: .get, url: url("object/info/\(objectPath(bucket, key))")))
+      head: HTTPRequest(
+        method: .get,
+        url: url(
+          "object/info/\(objectPath(bucket, key))",
+          query: versionId.map { [URLQueryItem(name: "versionId", value: $0)] } ?? [])))
   }
 
   /// A transform routes to `render/image/public`; the plain public object route otherwise.
