@@ -185,7 +185,8 @@
 
     static let scenarios = [
       "upload-api-data", "upload-api-file", "upload-transport-file", "upload-transport-data",
-      "upload-transport-stream", "download-api-data", "download-transport-file",
+      "upload-transport-stream", "download-api-data", "download-api-file",
+      "download-transport-file",
       "download-transport-data", "download-transport-iterate",
     ]
 
@@ -240,6 +241,16 @@
           try await storage.from(bucket).download(path: "seed.bin").data()
         }
         #expect(downloaded.count == Self.fileSize)
+      case "download-api-file":
+        // Storage public API → DownloadResponse.write(to:): a temporary file, then one move.
+        let downloadURL = FileManager.default.temporaryDirectory.appendingPathComponent(
+          "memprobe-download-\(UUID().uuidString).bin")
+        defer { try? FileManager.default.removeItem(at: downloadURL) }
+        try await measure("storage.download(path:).write(to:)") {
+          try await storage.from(bucket).download(path: "seed.bin").write(to: downloadURL)
+        }
+        let attrs = try FileManager.default.attributesOfItem(atPath: downloadURL.path)
+        #expect((attrs[.size] as? Int) == Self.fileSize)
       case "download-transport-file":
         // Response streamed straight to disk.
         let downloadURL = FileManager.default.temporaryDirectory.appendingPathComponent(
