@@ -142,7 +142,7 @@ public struct StorageClientConfiguration: Sendable {
 /// - ``updateBucket(_:options:)``
 /// - ``emptyBucket(_:)``
 /// - ``deleteBucket(_:)``
-/// - ``purgeCache(bucket:transformationsOnly:)``
+/// - ``purgeCache(bucket:includingTransformations:)``
 ///
 /// ### Bucket lifecycle
 ///

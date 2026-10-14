@@ -4344,3 +4344,23 @@ let key: String = try await bucket.copy(from: "a.png", to: "b.png").fullPath
 ```
 
 Code that used the result as a `String` is a compile error.
+
+## `purgeCache` takes `includingTransformations:`, and `StorageClient.purgeCache` can purge every bucket
+
+`StorageClient.purgeCache(bucket:transformationsOnly:)` and
+`StorageBucket.purgeCache(path:transformationsOnly:)` relabel `transformationsOnly:` to
+`includingTransformations:`. The behavior is the same: Storage's `transformations=true` purges
+the resized and reformatted variants as well as the original, not only the variants, so the old
+label was wrong. `StorageClient.purgeCache` also takes `bucket: nil`, which purges every bucket in
+the project.
+
+```swift
+// Before
+try await storage.purgeCache(bucket: "avatars", transformationsOnly: true)
+
+// After
+try await storage.purgeCache(bucket: "avatars", includingTransformations: true)
+try await storage.purgeCache(bucket: nil)  // every bucket
+```
+
+Code that passed `transformationsOnly:` is a compile error.

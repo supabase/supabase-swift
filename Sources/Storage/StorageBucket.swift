@@ -55,7 +55,7 @@ public import HTTPTypes
 /// - ``list(path:options:)``
 /// - ``info(path:versionId:)``
 /// - ``exists(path:)``
-/// - ``purgeCache(path:transformationsOnly:)``
+/// - ``purgeCache(path:includingTransformations:)``
 ///
 /// ### Creating signed URLs
 ///
@@ -659,20 +659,21 @@ public struct StorageBucket: Sendable {
   }
 
   /// Purges the CDN cache for a file, so the next request for it is served from Storage again.
+  /// The CDN can take up to 60 seconds to apply the purge.
   ///
-  /// > Important: This requires the `secret` key. On self-hosted Storage, the `purgeCache` tenant
-  /// > feature and a CDN purge endpoint must be configured, otherwise the request fails.
+  /// > Important: This requires the `secret` key and the `purgeCache` tenant feature. On
+  /// > self-hosted Storage, a CDN purge endpoint must also be configured, otherwise the request
+  /// > fails.
   ///
   /// - Parameters:
   ///   - path: The file path including the file name, e.g. `"folder/image.png"`. Only that exact
   ///     file is purged; there is no wildcard or folder purge.
-  ///   - transformationsOnly: Pass `true` to purge only the resized and reformatted variants,
-  ///     leaving the original file cached.
+  ///   - includingTransformations: Pass `true` to also purge the resized and reformatted variants.
   /// - Throws: ``StorageError`` if the caller is not authorized or cache purging is not enabled.
-  public func purgeCache(path: String, transformationsOnly: Bool = false) async throws {
+  public func purgeCache(path: String, includingTransformations: Bool = false) async throws {
     try await api.execute(
       api.requests.purgeCache(
-        bucket: id, key: ObjectKey(path), transformationsOnly: transformationsOnly)
+        bucket: id, key: ObjectKey(path), includingTransformations: includingTransformations)
     )
   }
 
