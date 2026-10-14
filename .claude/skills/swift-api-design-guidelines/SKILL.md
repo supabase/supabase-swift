@@ -8,7 +8,7 @@ description: >
   terms of art, per https://www.swift.org/documentation/api-design-guidelines/. Also use when
   reviewing a PR's diff for naming issues, or when the user asks "does this read well",
   "what should I call this", or "is this the Swift-y name". This is the naming/clarity layer;
-  AGENTS.md's "Enum-like Values" and "Codable Conformance" sections cover the structural rules
+  CODE_STYLE.md's "Enum-like Values" and "Codable Conformance" sections cover the structural rules
   (RawRepresentable vs enum, which protocols to conform to) — use both together when a change
   touches an enum-like value's shape.
 ---
