@@ -115,6 +115,18 @@ struct StorageRequests: Sendable {
     StorageRequest(head: HTTPRequest(method: .delete, url: url("bucket/\(ObjectKey.encode(id))")))
   }
 
+  func lifecycle(_ id: String, method: HTTPRequest.Method, body: HTTPBody? = nil) -> StorageRequest
+  {
+    StorageRequest(
+      head: HTTPRequest(method: method, url: url("bucket/\(ObjectKey.encode(id))/lifecycle")),
+      body: body)
+  }
+
+  func setLifecycle(_ id: String, _ configuration: LifecycleConfiguration) throws -> StorageRequest
+  {
+    lifecycle(id, method: .put, body: try json(configuration))
+  }
+
   /// `DELETE cdn/{bucket}` purges the bucket; with `key`, one object.
   func purgeCache(bucket: String, key: ObjectKey?, transformationsOnly: Bool) -> StorageRequest {
     let path = key.map { objectPath(bucket, $0) } ?? ObjectKey.encode(bucket)

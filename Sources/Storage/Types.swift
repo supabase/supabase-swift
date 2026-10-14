@@ -1642,3 +1642,83 @@ public struct FocalPoint: Hashable, Sendable {
     self.y = y
   }
 }
+
+/// The lifecycle policy of a Standard bucket: the rules that expire previous object versions.
+///
+/// Read it with ``StorageClient/lifecycle(forBucket:)`` and replace it with
+/// ``StorageClient/setLifecycle(_:forBucket:)``.
+public struct LifecycleConfiguration: Hashable, Codable, Sendable {
+  /// The rules. Storage takes 1 to 1000.
+  public var rules: [LifecycleRule]
+
+  public init(rules: [LifecycleRule]) {
+    self.rules = rules
+  }
+}
+
+/// One rule of a ``LifecycleConfiguration``.
+///
+/// The rule applies to every object in the bucket. Its only action is
+/// ``noncurrentVersionExpiration``, so it does work only once versioning has kept previous
+/// versions.
+public struct LifecycleRule: Hashable, Codable, Sendable {
+  /// The rule's identifier: unique in the configuration, at most 255 characters. Storage
+  /// generates one when this is `nil`.
+  public var id: String?
+  public var status: LifecycleRuleStatus
+  public var noncurrentVersionExpiration: NoncurrentVersionExpiration
+
+  public init(
+    id: String? = nil,
+    status: LifecycleRuleStatus = .enabled,
+    noncurrentVersionExpiration: NoncurrentVersionExpiration
+  ) {
+    self.id = id
+    self.status = status
+    self.noncurrentVersionExpiration = noncurrentVersionExpiration
+  }
+
+  private enum EncodingKeys: String, CodingKey {
+    case id, status, filter, noncurrentVersionExpiration
+  }
+
+  // Storage requires `filter`, and accepts only the empty object.
+  public func encode(to encoder: any Encoder) throws {
+    var container = encoder.container(keyedBy: EncodingKeys.self)
+    try container.encodeIfPresent(id, forKey: .id)
+    try container.encode(status, forKey: .status)
+    try container.encode([String: String](), forKey: .filter)
+    try container.encode(noncurrentVersionExpiration, forKey: .noncurrentVersionExpiration)
+  }
+}
+
+/// Whether a ``LifecycleRule`` is applied.
+public struct LifecycleRuleStatus: RawRepresentable, Codable, Hashable, Sendable,
+  ExpressibleByStringLiteral
+{
+  public let rawValue: String
+
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
+  public static let enabled: LifecycleRuleStatus = "Enabled"
+  public static let disabled: LifecycleRuleStatus = "Disabled"
+}
+
+/// When a ``LifecycleRule`` deletes previous versions of an object.
+public struct NoncurrentVersionExpiration: Hashable, Codable, Sendable {
+  /// The days a version stays after a newer one replaces it. At least 1.
+  public var noncurrentDays: Int
+  /// The newest previous versions to keep regardless of age, 1 to 100. `nil` keeps none.
+  public var newerNoncurrentVersions: Int?
+
+  public init(noncurrentDays: Int, newerNoncurrentVersions: Int? = nil) {
+    self.noncurrentDays = noncurrentDays
+    self.newerNoncurrentVersions = newerNoncurrentVersions
+  }
+}

@@ -143,6 +143,12 @@ public struct StorageClientConfiguration: Sendable {
 /// - ``emptyBucket(_:)``
 /// - ``deleteBucket(_:)``
 /// - ``purgeCache(bucket:transformationsOnly:)``
+///
+/// ### Bucket lifecycle
+///
+/// - ``lifecycle(forBucket:)``
+/// - ``setLifecycle(_:forBucket:)``
+/// - ``deleteLifecycle(forBucket:)``
 public struct StorageClient: Sendable {
   let api: StorageAPI
 
