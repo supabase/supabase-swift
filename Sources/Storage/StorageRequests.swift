@@ -289,6 +289,45 @@ struct StorageRequests: Sendable {
       body: try json(body), replayable: true)
   }
 
+  private struct ListV2Body: Encodable {
+    let prefix: String
+    let limit: Int?
+    let cursor: String?
+    let withDelimiter: Bool
+    let sortBy: SortBody?
+    let exactMatch: Bool?
+    let noncurrentVersions: String?
+    let deleteMarkers: String?
+
+    enum CodingKeys: String, CodingKey {
+      case prefix, limit, cursor, sortBy, exactMatch, noncurrentVersions, deleteMarkers
+      case withDelimiter = "with_delimiter"
+    }
+  }
+
+  /// The cursor locks the sort and filters server-side, so every page sends the same options.
+  func objects(bucket: String, prefix: ListPrefix, options: ObjectListingOptions, cursor: String?)
+    throws -> StorageRequest
+  {
+    let sortBy =
+      options.sortBy == nil && options.order == nil
+      ? nil
+      : SortBody(
+        column: (options.sortBy ?? .name).rawValue, order: options.order ?? .ascending)
+    let body = ListV2Body(
+      prefix: prefix.path,
+      limit: options.pageSize,
+      cursor: cursor,
+      withDelimiter: options.delimited,
+      sortBy: sortBy,
+      exactMatch: options.exactMatch,
+      noncurrentVersions: options.versions?.rawValue,
+      deleteMarkers: options.deleteMarkers?.rawValue)
+    return StorageRequest(
+      head: HTTPRequest(method: .post, url: url("object/list-v2/\(ObjectKey.encode(bucket))")),
+      body: try json(body), replayable: true)
+  }
+
   /// A transform routes to `render/image/authenticated`; the plain object route otherwise.
   func download(
     bucket: String, key: ObjectKey, transform: ImageTransform?, options: DownloadOptions
