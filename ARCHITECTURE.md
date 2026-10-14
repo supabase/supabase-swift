@@ -27,29 +27,9 @@ This is the official Supabase SDK for Swift, mirroring the design of supabase-js
 
 ## Dependencies
 
-`Package.swift` serves Swift 6.4+ and `Package@swift-6.2.swift` serves earlier toolchains. Keep
-the two in sync.
-
-### Core Dependencies
-
-- `swift-crypto`: Cryptographic operations
-- `swift-http-types`: Modern HTTP types
-- `swift-clocks`: Time-based operations
-- `swift-concurrency-extras`: Concurrency utilities
-- `swift-log`: Logging
-- `swift-issue-reporting` (Swift 6.4+) / `xctest-dynamic-overlay` (earlier toolchains): issue
-  reporting
-- `swift-syntax`: Only for `PostgrestMacrosPlugin`
-- `opentelemetry-swift-core`: Only with the `OpenTelemetry` package trait, which adds W3C
-  `traceparent` headers from the active span
-
-### Test Dependencies
-
-- `swift-snapshot-testing`: Snapshot testing
-- `swift-custom-dump`: Better test output
-- `swift-macro-testing`: Macro expansion tests
-- `Mocker`: URL mocking
-- `swift-secp256k1`, `CryptoSwift`: Integration tests only
+[`Package.swift`](Package.swift) lists the dependencies and says which target uses each one. It
+serves Swift 6.4+, and [`Package@swift-6.2.swift`](Package@swift-6.2.swift) serves earlier
+toolchains. Keep the two in sync.
 
 ## Architecture Notes
 
