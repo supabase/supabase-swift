@@ -8,16 +8,27 @@ This is the official Supabase SDK for Swift, mirroring the design of supabase-js
   - `Auth/`: Authentication module
   - `Functions/`: Edge Functions client
   - `PostgREST/`: Database client
+  - `PostgrestMacros/`: The `@Table` macros. An opt-in product: `Supabase` does not re-export
+    it, so only apps that `import PostgrestMacros` compile swift-syntax
+  - `PostgrestMacrosPlugin/`: The compiler plugin that implements the macros
   - `Realtime/`: Realtime subscriptions
   - `Storage/`: File storage client
   - `Supabase/`: Main client that integrates all modules
-  - `Helpers/`: Shared utilities
+  - `Helpers/`: Shared utilities, including the HTTP layer
   - `TestHelpers/`: Test utilities
-- `Tests/`: Unit and integration tests organized by module
+- `Tests/`: Unit and integration tests organized by module, plus:
+  - `CompileFailures/`: Fixtures that must fail to compile
+    (`./scripts/check-compile-failures.sh`)
+  - `SupabaseTypegen*OutputTests/`: Compile and run code from `supabase-typegen` (see
+    [tools/supabase-typegen/README.md](tools/supabase-typegen/README.md))
 - `Examples/`: Example applications demonstrating SDK usage
-- `docs/`: Documentation files
+- `tools/`: `supabase-typegen` (a separate SwiftPM package) and the Node tooling for spell checks
+- `docs/migrations/`: Older migration guides. Current ones are the root `V<N>_MIGRATION.md` files
 
 ## Dependencies
+
+`Package.swift` serves Swift 6.4+ and `Package@swift-6.2.swift` serves earlier toolchains. Keep
+the two in sync.
 
 ### Core Dependencies
 
@@ -25,14 +36,20 @@ This is the official Supabase SDK for Swift, mirroring the design of supabase-js
 - `swift-http-types`: Modern HTTP types
 - `swift-clocks`: Time-based operations
 - `swift-concurrency-extras`: Concurrency utilities
+- `swift-log`: Logging
+- `swift-issue-reporting` (Swift 6.4+) / `xctest-dynamic-overlay` (earlier toolchains): issue
+  reporting
+- `swift-syntax`: Only for `PostgrestMacrosPlugin`
+- `opentelemetry-swift-core`: Only with the `OpenTelemetry` package trait, which adds W3C
+  `traceparent` headers from the active span
 
 ### Test Dependencies
 
 - `swift-snapshot-testing`: Snapshot testing
 - `swift-custom-dump`: Better test output
-- `swift-issue-reporting` (Swift 6.4+) / `xctest-dynamic-overlay` (earlier toolchains): test
-  utilities and issue reporting
+- `swift-macro-testing`: Macro expansion tests
 - `Mocker`: URL mocking
+- `swift-secp256k1`, `CryptoSwift`: Integration tests only
 
 ## Architecture Notes
 
