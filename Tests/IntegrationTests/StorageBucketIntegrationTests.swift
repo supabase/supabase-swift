@@ -313,7 +313,7 @@ final class StorageBucketIntegrationTests {
   func downloadsAnObject() async throws {
     try await storage.from(bucketName).upload(path: uploadPath, data: file)
 
-    let res = try await storage.from(bucketName).download(path: uploadPath)
+    let res = try await storage.from(bucketName).download(path: uploadPath).data()
     #expect(res.count > 0)
   }
 
@@ -403,7 +403,7 @@ final class StorageBucketIntegrationTests {
     try await storage.from(bucketName)
       .upload(path: uploadPath, fileURL: uploadFileURL("sadcat.jpg"))
 
-    let uploadedFile = try await storage.from(bucketName).download(path: uploadPath)
+    let uploadedFile = try await storage.from(bucketName).download(path: uploadPath).data()
 
     #expect(uploadedFile == file)
   }
@@ -438,7 +438,7 @@ final class StorageBucketIntegrationTests {
 
     #expect(try await api.exists(path: input))
     #expect(try await api.info(path: input).name == key)
-    #expect(try await api.download(path: input) == payload)
+    #expect(try await api.download(path: input).data() == payload)
     #expect(try await api.list(path: folder).map(\.name).contains(leaf))
 
     let (publicBytes, publicResponse) = try await StorageIntegration.fetch(
@@ -486,7 +486,7 @@ final class StorageBucketIntegrationTests {
   @Test(arguments: ["", "/", "//", "a/../b.png", "./a.png", "folder/./a.png"])
   func refusesAnInvalidPathWithoutARequest(input: String) async throws {
     let error = await StorageIntegration.storageError {
-      try await storage.from(bucketName).download(path: input)
+      _ = try await storage.from(bucketName).download(path: input)
     }
 
     #expect(error?.kind == .invalidRequest)
@@ -514,7 +514,7 @@ final class StorageBucketIntegrationTests {
     let api = storage.from(bucketName)
 
     let operations: [() async throws -> Void] = [
-      { try await api.download(path: "missing.png") },
+      { _ = try await api.download(path: "missing.png") },
       { _ = try await api.info(path: "missing.png") },
       { try await api.move(from: "missing.png", to: "x.png") },
       { _ = try await api.copy(from: "missing.png", to: "x.png") },
@@ -567,7 +567,7 @@ final class StorageBucketIntegrationTests {
 
     let replacement = Data("replacement".utf8)
     try await api.upload(path: uploadPath, data: replacement, options: UploadOptions(upsert: true))
-    #expect(try await api.download(path: uploadPath) == replacement)
+    #expect(try await api.download(path: uploadPath).data() == replacement)
   }
 
   /// Row level security: the anon role reads an empty listing and cannot write.
@@ -681,7 +681,7 @@ final class StorageBucketIntegrationTests {
     let updated = try await api.update(
       path: uploadPath, data: replacement, options: UploadOptions(contentType: "text/plain"))
     #expect(updated.path == uploadPath)
-    #expect(try await api.download(path: uploadPath) == replacement)
+    #expect(try await api.download(path: uploadPath).data() == replacement)
     #expect(try await api.info(path: uploadPath).size == Int64(replacement.count))
 
     // The server's PUT creates a missing object; the SDK does not pre-check.
@@ -736,7 +736,7 @@ final class StorageBucketIntegrationTests {
     let info = try await api.info(path: "signed.txt")
     #expect(info.contentType == "text/plain")
     #expect(info.userMetadata == ["via": "signed-url"])
-    #expect(try await api.download(path: "signed.txt") == file)
+    #expect(try await api.download(path: "signed.txt").data() == file)
   }
 
   // MARK: - Signed and public URLs

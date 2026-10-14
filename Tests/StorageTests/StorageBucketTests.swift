@@ -1163,10 +1163,10 @@ extension StorageMockerTests {
       }
       .register()
 
-      let data = try await storage.from("bucket")
+      let response = try await storage.from("bucket")
         .download(path: "file.txt")
 
-      #expect(data == Data("hello world".utf8))
+      #expect(try await response.data() == Data("hello world".utf8))
     }
 
     @Test
@@ -1191,10 +1191,10 @@ extension StorageMockerTests {
       }
       .register()
 
-      let data = try await storage.from("bucket")
+      let response = try await storage.from("bucket")
         .download(path: "file.txt", options: DownloadOptions(versionId: "v1"))
 
-      #expect(data == Data("hello world".utf8))
+      #expect(try await response.data() == Data("hello world".utf8))
     }
 
     @Test
@@ -1210,10 +1210,10 @@ extension StorageMockerTests {
       )
       .register()
 
-      let data = try await storage.from("bucket")
+      let response = try await storage.from("bucket")
         .download(path: "file.txt", transform: ImageTransform())
 
-      #expect(data == Data("hello world".utf8))
+      #expect(try await response.data() == Data("hello world".utf8))
     }
 
     @Test
@@ -1280,10 +1280,10 @@ extension StorageMockerTests {
       }
       .register()
 
-      let data = try await storage.from("bucket")
+      let response = try await storage.from("bucket")
         .download(path: "/file.txt")
 
-      #expect(data == Data("hello world".utf8))
+      #expect(try await response.data() == Data("hello world".utf8))
     }
 
     @Test
@@ -1312,10 +1312,10 @@ extension StorageMockerTests {
       )
       .register()
 
-      let data = try await storage.from("bucket")
+      let response = try await storage.from("bucket")
         .download(path: "folder//file.txt/")
 
-      #expect(data == Data("hello world".utf8))
+      #expect(try await response.data() == Data("hello world".utf8))
     }
 
     @Test
@@ -1419,13 +1419,13 @@ extension StorageMockerTests {
       }
       .register()
 
-      let data = try await storage.from("bucket")
+      let response = try await storage.from("bucket")
         .download(
           path: "sadcat.txt",
           transform: ImageTransform(resize: .cover)
         )
 
-      #expect(data == imageData)
+      #expect(try await response.data() == imageData)
     }
 
     @Test
@@ -2015,10 +2015,10 @@ extension StorageMockerTests {
       }
       .register()
 
-      let data = try await storage.from("bucket")
+      let response = try await storage.from("bucket")
         .download(path: "file.txt", options: DownloadOptions(cacheNonce: "abc123"))
 
-      #expect(data == Data("hello world".utf8))
+      #expect(try await response.data() == Data("hello world".utf8))
     }
   }
 }

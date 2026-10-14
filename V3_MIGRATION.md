@@ -4234,3 +4234,29 @@ _ = try await bucket.download(path: "warm-the-cache.png")
 ```
 
 `query:` and `cacheNonce:` are compile errors, and a discarded result is a warning.
+
+## `StorageBucket.download` returns a `DownloadResponse` that streams the object
+
+`download(path:transform:options:progress:)` now returns as soon as Storage sends the response
+headers. The returned `DownloadResponse` holds the `HTTPResponse`, typed accessors for the common
+headers (`contentType`, `contentLength`, `contentRange`, `eTag`, `lastModified`, `cacheControl`)
+and a `body: HTTPBody` that streams the object. Before, `download` collected the whole object
+into `Data`, so a large object grew memory until the app was killed. There is now one download
+method: read the body with `data()`, write it to a file with `write(to:)`, or iterate `body`.
+
+```swift
+// Before
+let data = try await bucket.download(path: "a.png")
+
+// After
+let data = try await bucket.download(path: "a.png").data()
+// or, without holding the object in memory
+try await bucket.download(path: "a.mov").write(to: fileURL)
+```
+
+`data(upTo:)` takes an optional cap: past it, it throws `HTTPBodyTooLargeError`. The body can
+be read once. `progress:` now reports as the body is read,
+not as it arrives.
+
+Every call that used the `Data` result is a compile error. A call that discarded it,
+`_ = try await bucket.download(path:)`, still compiles but no longer reads the body.

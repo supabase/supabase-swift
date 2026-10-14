@@ -1,3 +1,4 @@
+import ConcurrencyExtras
 public import Foundation
 public import HTTPTypes
 
@@ -41,6 +42,7 @@ public import HTTPTypes
 /// ### Downloading files
 ///
 /// - ``download(path:transform:options:progress:)``
+/// - ``DownloadResponse``
 /// - ``publicURL(path:download:transform:cacheNonce:)``
 ///
 /// ### Managing files
@@ -515,42 +517,68 @@ public struct StorageBucket: Sendable {
     .decoded()
   }
 
-  /// Downloads a file from a private bucket and returns its raw bytes.
+  /// Downloads a file, returning as soon as Storage sends the response headers.
+  ///
+  /// The response's ``DownloadResponse/body`` streams the object and can be read once. Read it
+  /// into memory, write it to a file, or process it chunk by chunk:
+  ///
+  /// ```swift
+  /// let avatars = storage.from("avatars")
+  ///
+  /// // Into memory
+  /// let data = try await avatars.download(path: "user123.png").data()
+  ///
+  /// // To a file, without holding the object in memory
+  /// try await avatars.download(path: "user123.png").write(to: fileURL)
+  ///
+  /// // Chunk by chunk
+  /// for try await chunk in try await avatars.download(path: "user123.png").body {
+  ///   parser.feed(chunk)
+  /// }
+  /// ```
   ///
   /// For public buckets, prefer requesting the URL returned by
   /// ``publicURL(path:download:transform:cacheNonce:)`` directly.
-  ///
-  /// ```swift
-  /// let data = try await storage.from("avatars").download(path: "user123.png")
-  /// let image = UIImage(data: data)
-  /// ```
   ///
   /// - Parameters:
   ///   - path: The file path including the file name, e.g. `"folder/image.png"`.
   ///   - transform: An optional image transformation applied server-side before delivery.
   ///   - options: The byte range, version, cache nonce and extra headers.
-  ///   - progress: Called as the bytes arrive; see ``TransferProgress``. ``TransferProgress/totalBytes``
-  ///     is `nil` when Storage sends no `Content-Length`, as for a transformed image.
-  /// - Returns: The raw file data.
-  /// - Throws: ``StorageError`` if the file does not exist or the caller is not authorized.
+  ///   - progress: Called as the body is read; see ``TransferProgress``.
+  ///     ``TransferProgress/totalBytes`` is `nil` when Storage sends no `Content-Length`, as for a
+  ///     transformed image.
+  /// - Returns: The response headers and the body.
+  /// - Throws: ``StorageError`` if the file does not exist or the caller is not authorized,
+  ///   before any byte of the body is read. A network failure while the body streams throws
+  ///   ``StorageError`` with kind `transport` from the body.
   public func download(
     path: String,
     transform: ImageTransform? = nil,
     options: DownloadOptions = DownloadOptions(),
     progress: (@Sendable (TransferProgress) -> Void)? = nil
-  ) async throws -> Data {
-    let (_, body) = try await api.stream(
+  ) async throws -> DownloadResponse {
+    let (head, body) = try await api.stream(
       api.requests.download(
         bucket: id, key: ObjectKey(path), transform: transform, options: options)
     )
-    guard let body else { return Data() }
-
-    var data = Data()
-    for try await chunk in body {
-      data.append(contentsOf: chunk)
-      progress?(TransferProgress(completedBytes: Int64(data.count), of: body.length))
+    var response = body ?? HTTPBody(Data())
+    if let progress {
+      // Not `reportingProgress`: Linux buffers responses into in-memory bodies, which it leaves
+      // to `URLSession`'s upload counts. The counter makes the body one-pass, as documented.
+      let read = LockIsolated<Int64>(0)
+      let length = response.length
+      response = HTTPBody(
+        response.map { chunk in
+          let completed = read.withValue {
+            $0 += Int64(chunk.count)
+            return $0
+          }
+          progress(TransferProgress(completedBytes: completed, of: length))
+          return chunk
+        },
+        length: length, iterationBehavior: .single)
     }
-    return data
+    return DownloadResponse(httpResponse: head, body: response)
   }
 
   /// Retrieves metadata about an existing file without downloading its content.

@@ -212,6 +212,7 @@ struct FileDownloadView: View {
       let data = try await supabase.storage
         .from(selectedBucket)
         .download(path: path)
+        .data()
 
       downloadedData = data
 

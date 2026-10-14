@@ -77,7 +77,7 @@ struct StorageBucketPathTests {
       return nil
     },
     Operation(name: "download", placement: .url, response: "bytes") {
-      try await $0.download(path: $1)
+      _ = try await $0.download(path: $1)
       return nil
     },
     Operation(
