@@ -459,7 +459,7 @@ final class StorageBucketIntegrationTests {
     }
 
     let copied = try await api.copy(from: input, to: "\(key).copy")
-    #expect(copied == "\(bucketName)/\(key).copy")
+    #expect(copied.fullPath == "\(bucketName)/\(key).copy")
     try await api.move(from: "\(key).copy", to: "\(key).moved")
     #expect(try await api.exists(path: "\(key).moved"))
     #expect(try await !api.exists(path: "\(key).copy"))

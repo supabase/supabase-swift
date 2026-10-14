@@ -215,11 +215,18 @@ struct StorageRequests: Sendable {
   }
 
   private struct MoveOrCopyBody: Encodable {
+    struct Metadata: Encodable {
+      let cacheControl: String?
+      let mimetype: String?
+    }
+
     let bucketId: String
     let sourceKey: String
     let destinationKey: String
     let destinationBucket: String?
     let sourceVersionId: String?
+    var copyMetadata: Bool?
+    var metadata: Metadata?
   }
 
   func move(
@@ -234,16 +241,32 @@ struct StorageRequests: Sendable {
           destinationBucket: destinationBucket, sourceVersionId: sourceVersionId)))
   }
 
+  /// User metadata and upsert travel in headers, as on upload; the system metadata override in
+  /// the body.
   func copy(
     bucket: String, source: ObjectKey, destination: ObjectKey, destinationBucket: String?,
-    sourceVersionId: String?
+    sourceVersionId: String?, options: CopyOptions
   ) throws -> StorageRequest {
-    StorageRequest(
-      head: HTTPRequest(method: .post, url: url("object/copy")),
-      body: try json(
-        MoveOrCopyBody(
-          bucketId: bucket, sourceKey: source.path, destinationKey: destination.path,
-          destinationBucket: destinationBucket, sourceVersionId: sourceVersionId)))
+    var body = MoveOrCopyBody(
+      bucketId: bucket, sourceKey: source.path, destinationKey: destination.path,
+      destinationBucket: destinationBucket, sourceVersionId: sourceVersionId)
+    if !options.copyMetadata {
+      body.copyMetadata = false
+    }
+    if options.cacheControl != nil || options.contentType != nil {
+      body.metadata = MoveOrCopyBody.Metadata(
+        cacheControl: options.cacheControl?.rawValue, mimetype: options.contentType)
+    }
+    var headers = HTTPFields()
+    if options.upsert {
+      headers[.xUpsert] = "true"
+    }
+    if let metadata = options.metadata {
+      headers[.xMetadata] = try encodeMetadata(metadata)
+    }
+    return StorageRequest(
+      head: HTTPRequest(method: .post, url: url("object/copy"), headerFields: headers),
+      body: try json(body))
   }
 
   private struct SignBody: Encodable {

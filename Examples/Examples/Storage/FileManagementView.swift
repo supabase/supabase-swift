@@ -172,14 +172,14 @@ struct FileManagementView: View {
         CodeExample(
           code: """
             // Copy a file
-            let newPath = try await supabase.storage
+            let copy = try await supabase.storage
               .from("my-bucket")
               .copy(
                 from: "folder/original.jpg",
                 to: "folder/copy.jpg"
               )
 
-            print("Copied to:", newPath)
+            print("Copied to:", copy.fullPath)
             """
         )
 
@@ -280,12 +280,12 @@ struct FileManagementView: View {
         successMessage = "File moved successfully to \(destinationPath)"
 
       case .copy:
-        let newPath = try await supabase.storage
+        let copy = try await supabase.storage
           .from(selectedBucket)
           .copy(
             from: sourcePath, to: destinationPath,
             toBucket: destinationBucket.isEmpty ? nil : destinationBucket)
-        successMessage = "File copied successfully to \(newPath)"
+        successMessage = "File copied successfully to \(copy.fullPath)"
 
       case .delete:
         let removed = try await supabase.storage

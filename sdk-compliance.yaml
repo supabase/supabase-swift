@@ -1645,6 +1645,13 @@ features:
     status: implemented
     symbols:
       - StorageBucket.copy
+      - CopyOptions
+      - CopyOptions.init
+      - CopyOptions.upsert
+      - CopyOptions.copyMetadata
+      - CopyOptions.metadata
+      - CopyOptions.contentType
+      - CopyOptions.cacheControl
   storage.file_buckets.remove:
     status: implemented
     symbols:
