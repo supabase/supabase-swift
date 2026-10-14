@@ -1,98 +1,156 @@
 public import Foundation
 public import HTTPTypes
 
-/// Options for searching and paginating files within a bucket.
-///
-/// Pass a ``SearchOptions`` value to ``StorageBucket/list(path:options:)`` to control which files
-/// are returned and how they are ordered.
+/// Options for ``StorageBucket/list(path:options:)``: paging, sort, a name filter and the
+/// version filters.
 ///
 /// ```swift
-/// let options = SearchOptions(
-///   limit: 50,
-///   offset: 0,
-///   sortBy: SortBy(column: "created_at", order: .descending),
-///   search: "avatar"
-/// )
+/// let options = ListOptions(limit: 50, sortBy: .createdAt, order: .descending, search: "avatar")
 /// let files = try await storage.from("avatars").list(options: options)
 /// ```
 ///
+/// A `nil` field takes the server default: the first 100 entries, sorted by name ascending.
+///
 /// ## Topics
 ///
-/// ### Creating search options
+/// ### Creating list options
 ///
-/// - ``init(limit:offset:sortBy:search:)``
+/// - ``init(limit:offset:sortBy:order:search:exactMatch:versions:deleteMarkers:)``
 ///
-/// ### Filter and sort properties
+/// ### Paging and sorting
 ///
 /// - ``limit``
 /// - ``offset``
 /// - ``sortBy``
+/// - ``order``
+///
+/// ### Filtering
+///
 /// - ``search``
-public struct SearchOptions: Encodable, Sendable {
-  var prefix: String
-
-  /// Maximum number of files to return. Defaults to `100`.
+/// - ``exactMatch``
+/// - ``versions``
+/// - ``deleteMarkers``
+public struct ListOptions: Sendable {
+  /// Maximum number of entries to return. Defaults to `100`.
   public var limit: Int?
 
   /// Zero-based offset used for paginating results. Defaults to `0`.
   public var offset: Int?
 
-  /// The column and direction to sort results by. Can be any column inside a ``StorageObject``.
-  public var sortBy: SortBy?
+  /// The column to sort by. Defaults to ``ObjectSortColumn/name``.
+  public var sortBy: ObjectSortColumn?
 
-  /// A substring filter applied to file names.
+  /// The sort direction. Defaults to ``SortOrder/ascending``.
+  public var order: SortOrder?
+
+  /// A substring filter applied to names within the listed folder.
   public var search: String?
 
-  /// Creates a ``SearchOptions`` value.
+  /// Whether `path` names one object rather than a folder. When `true`, Storage does not append
+  /// a `/` to it.
+  public var exactMatch: Bool?
+
+  /// Whether noncurrent versions of versioned objects are left out, included, or the only
+  /// entries returned.
+  public var versions: VersionFilter?
+
+  /// Whether delete markers are left out, included, or the only entries returned.
+  public var deleteMarkers: VersionFilter?
+
+  /// Creates a ``ListOptions`` value.
   ///
   /// - Parameters:
-  ///   - limit: Maximum number of files to return.
+  ///   - limit: Maximum number of entries to return.
   ///   - offset: Zero-based offset for pagination.
-  ///   - sortBy: Column and direction to sort by.
-  ///   - search: A substring filter applied to file names.
+  ///   - sortBy: The column to sort by.
+  ///   - order: The sort direction.
+  ///   - search: A substring filter applied to names.
+  ///   - exactMatch: Whether `path` names one object rather than a folder.
+  ///   - versions: The filter for noncurrent versions.
+  ///   - deleteMarkers: The filter for delete markers.
   public init(
     limit: Int? = nil,
     offset: Int? = nil,
-    sortBy: SortBy? = nil,
-    search: String? = nil
+    sortBy: ObjectSortColumn? = nil,
+    order: SortOrder? = nil,
+    search: String? = nil,
+    exactMatch: Bool? = nil,
+    versions: VersionFilter? = nil,
+    deleteMarkers: VersionFilter? = nil
   ) {
-    prefix = ""
     self.limit = limit
     self.offset = offset
     self.sortBy = sortBy
+    self.order = order
     self.search = search
+    self.exactMatch = exactMatch
+    self.versions = versions
+    self.deleteMarkers = deleteMarkers
   }
 }
 
-/// A column-and-direction pair used to sort ``StorageBucket/list(path:options:)`` results.
-///
-/// ```swift
-/// SortBy(column: "name", order: .ascending)
-/// SortBy(column: "created_at", order: .descending)
-/// ```
+/// The column a listing is sorted by.
 ///
 /// ## Topics
 ///
-/// ### Properties
+/// ### Predefined columns
 ///
-/// - ``column``
-/// - ``order``
-public struct SortBy: Encodable, Sendable {
-  /// The name of the column to sort by, e.g. `"name"` or `"created_at"`.
-  public var column: String?
+/// - ``name``
+/// - ``updatedAt``
+/// - ``createdAt``
+/// - ``lastAccessedAt``
+public struct ObjectSortColumn: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+  /// The column name sent to Storage, e.g. `"updated_at"`.
+  public let rawValue: String
 
-  /// The sort direction.
-  public var order: SortOrder?
+  /// Creates an ``ObjectSortColumn`` from the column name Storage expects.
+  public init(rawValue: String) { self.rawValue = rawValue }
 
-  /// Creates a ``SortBy`` value.
-  ///
-  /// - Parameters:
-  ///   - column: The column name to sort by.
-  ///   - order: The sort direction. Use ``SortOrder/ascending`` or ``SortOrder/descending``.
-  public init(column: String? = nil, order: SortOrder? = nil) {
-    self.column = column
-    self.order = order
-  }
+  public init(stringLiteral value: String) { self.init(rawValue: value) }
+
+  /// Sort by object name.
+  public static let name = ObjectSortColumn(rawValue: "name")
+
+  /// Sort by the time the object was last updated.
+  public static let updatedAt = ObjectSortColumn(rawValue: "updated_at")
+
+  /// Sort by the time the object was created.
+  public static let createdAt = ObjectSortColumn(rawValue: "created_at")
+
+  /// Sort by the time the object was last read.
+  public static let lastAccessedAt = ObjectSortColumn(rawValue: "last_accessed_at")
+}
+
+/// Whether a listing leaves out, includes, or returns only one kind of version entry.
+///
+/// Used for noncurrent versions and for delete markers in a versioned bucket. Storage rejects
+/// either filter with ``StorageError/Code/featureNotEnabled`` when the project has no object
+/// versioning.
+///
+/// ## Topics
+///
+/// ### Predefined filters
+///
+/// - ``exclude``
+/// - ``include``
+/// - ``only``
+public struct VersionFilter: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+  /// The value sent to Storage, e.g. `"include"`.
+  public let rawValue: String
+
+  /// Creates a ``VersionFilter`` from the value Storage expects.
+  public init(rawValue: String) { self.rawValue = rawValue }
+
+  public init(stringLiteral value: String) { self.init(rawValue: value) }
+
+  /// Leave these entries out. The server default.
+  public static let exclude = VersionFilter(rawValue: "exclude")
+
+  /// Return these entries alongside the others.
+  public static let include = VersionFilter(rawValue: "include")
+
+  /// Return only these entries.
+  public static let only = VersionFilter(rawValue: "only")
 }
 
 /// Options applied when uploading or updating a file.
@@ -991,7 +1049,7 @@ extension ImageFormat: ExpressibleByStringLiteral {
 /// Sort direction for ``StorageBucket/list(path:options:)`` results.
 ///
 /// ```swift
-/// SortBy(column: "name", order: .ascending)
+/// ListOptions(sortBy: .createdAt, order: .descending)
 /// ```
 ///
 /// ## Topics

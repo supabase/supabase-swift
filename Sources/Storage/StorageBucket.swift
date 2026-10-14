@@ -503,13 +503,14 @@ public struct StorageBucket: Sendable {
   ///
   /// - Parameters:
   ///   - path: The folder prefix to list, e.g. `"users/"`. Pass `nil` to list the bucket root.
-  ///   - options: Search options for filtering, sorting, and paginating results. Defaults to the
-  ///     first 100 files sorted by name ascending.
-  /// - Returns: An array of ``StorageObject`` values representing the matching files and folders.
+  ///   - options: Paging, sort and filters. Defaults to the first 100 entries sorted by name
+  ///     ascending.
+  /// - Returns: The files and folders one level under `path`, with names relative to it. A
+  ///   folder is an entry whose ``StorageObject/isFolder`` is `true`.
   /// - Throws: ``StorageError`` if the request fails or the caller is not authorized.
   public func list(
     path: String? = nil,
-    options: SearchOptions? = nil
+    options: ListOptions = ListOptions()
   ) async throws -> [StorageObject] {
     try await api.execute(
       api.requests.list(bucket: id, prefix: ObjectKey(prefix: path ?? ""), options: options)

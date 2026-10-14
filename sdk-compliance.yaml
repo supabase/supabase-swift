@@ -1557,6 +1557,21 @@ features:
       - StorageObject.isDeleteMarker
       - StorageObject.archivedAt
       - StorageObject.isFolder
+      - ListOptions
+      - ListOptions.init
+      - ListOptions.limit
+      - ListOptions.offset
+      - ListOptions.sortBy
+      - ListOptions.order
+      - ListOptions.search
+      - ListOptions.exactMatch
+      - ObjectSortColumn
+      - ObjectSortColumn.init
+      - ObjectSortColumn.rawValue
+      - ObjectSortColumn.name
+      - ObjectSortColumn.updatedAt
+      - ObjectSortColumn.createdAt
+      - ObjectSortColumn.lastAccessedAt
       - ObjectMetadata
       - ObjectMetadata.init
       - ObjectMetadata.eTag
@@ -1728,6 +1743,17 @@ features:
     status: implemented
     symbols:
       - DownloadOptions.versionId
+  storage.file_buckets.list_file_versions:
+    status: implemented
+    symbols:
+      - ListOptions.versions
+      - ListOptions.deleteMarkers
+      - VersionFilter
+      - VersionFilter.init
+      - VersionFilter.rawValue
+      - VersionFilter.exclude
+      - VersionFilter.include
+      - VersionFilter.only
   storage.file_buckets.purge_bucket_cache:
     status: implemented
     symbols:

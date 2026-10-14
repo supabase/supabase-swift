@@ -4260,3 +4260,26 @@ not as it arrives.
 
 Every call that used the `Data` result is a compile error. A call that discarded it,
 `_ = try await bucket.download(path:)`, still compiles but no longer reads the body.
+
+## `ListOptions` replaces `SearchOptions` and `SortBy`
+
+`StorageBucket.list(path:options:)` takes a `ListOptions` instead of a `SearchOptions?`. The sort
+is two fields instead of a nested `SortBy`: `sortBy` is an `ObjectSortColumn` (`.name`,
+`.updatedAt`, `.createdAt`, `.lastAccessedAt`) instead of a column-name `String`, and `order` is
+the `SortOrder` it was before. `ListOptions` also adds `exactMatch` and the `versions` and
+`deleteMarkers` filters (`VersionFilter`: `.exclude`, `.include`, `.only`) for versioned buckets.
+`SearchOptions` and `SortBy` are removed.
+
+```swift
+// Before
+let files = try await bucket.list(
+  path: "photos",
+  options: SearchOptions(limit: 50, sortBy: SortBy(column: "created_at", order: .descending)))
+
+// After
+let files = try await bucket.list(
+  path: "photos", options: ListOptions(limit: 50, sortBy: .createdAt, order: .descending))
+```
+
+A column Storage adds later is spelled with a literal: `sortBy: "new_column"`. `SearchOptions`,
+`SortBy` and an `options: nil` argument are compile errors.
