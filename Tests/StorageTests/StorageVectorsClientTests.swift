@@ -81,7 +81,7 @@ extension StorageMockerTests {
 
       let bucket = try await vectors.bucket("documents")
       #expect(bucket.vectorBucketName == "documents")
-      #expect(bucket.creationTime == 1_730_000_000)
+      #expect(bucket.creationTime == Date(timeIntervalSince1970: 1_730_000_000))
     }
 
     @Test
@@ -101,7 +101,7 @@ extension StorageMockerTests {
         ]
       ).register()
 
-      let response = try await vectors.listBuckets(prefix: "doc", maxResults: 2)
+      let response = try await vectors.listBuckets(prefix: "doc", maxResults: 2).page()
       #expect(response.vectorBuckets.map(\.vectorBucketName) == ["documents", "images"])
       #expect(response.nextToken == "page-2")
     }

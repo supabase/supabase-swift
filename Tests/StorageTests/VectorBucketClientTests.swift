@@ -93,7 +93,7 @@ extension StorageMockerTests {
       #expect(index.dataType == .float32)
       #expect(index.dimension == 1536)
       #expect(index.distanceMetric == .cosine)
-      #expect(index.creationTime == 1_730_000_000)
+      #expect(index.creationTime == Date(timeIntervalSince1970: 1_730_000_000))
     }
 
     @Test
@@ -113,7 +113,7 @@ extension StorageMockerTests {
         ]
       ).register()
 
-      let response = try await bucket.listIndexes(prefix: "e", maxResults: 2)
+      let response = try await bucket.listIndexes(prefix: "e", maxResults: 2).page()
       #expect(response.indexes.map(\.indexName) == ["embeddings", "summaries"])
       #expect(response.nextToken == "page-2")
     }

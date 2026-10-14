@@ -38,7 +38,7 @@ final class VectorIndexClientIntegrationTests {
     let bucketName = bucketName
     Task {
       let bucket = vectors.from(bucketName)
-      if let indexes = try? await bucket.listIndexes() {
+      if let indexes = try? await bucket.listIndexes().page() {
         for index in indexes.indexes {
           try? await bucket.deleteIndex(index.indexName)
         }
@@ -52,7 +52,7 @@ final class VectorIndexClientIntegrationTests {
     let bucket = vectors.from(bucketName)
     let indexName = "test-index"
 
-    var page = try await bucket.listIndexes()
+    var page = try await bucket.listIndexes().page()
     #expect(!page.indexes.contains { $0.indexName == indexName })
 
     try await bucket.createIndex(
@@ -71,12 +71,12 @@ final class VectorIndexClientIntegrationTests {
     #expect(index.dimension == 3)
     #expect(index.distanceMetric == .cosine)
 
-    page = try await bucket.listIndexes()
+    page = try await bucket.listIndexes().page()
     #expect(page.indexes.contains { $0.indexName == indexName })
 
     try await bucket.deleteIndex(indexName)
 
-    page = try await bucket.listIndexes()
+    page = try await bucket.listIndexes().page()
     #expect(!page.indexes.contains { $0.indexName == indexName })
   }
 
@@ -105,12 +105,12 @@ final class VectorIndexClientIntegrationTests {
     }
     #expect(a.metadata?["type"]?.stringValue == "doc")
 
-    let listed = try await index.listVectors(returnData: true)
+    let listed = try await index.listVectors(returnData: true).page()
     #expect(listed.vectors.map(\.key).sorted() == ["a", "b"])
 
     try await index.deleteVectors(keys: ["a"])
 
-    let afterDelete = try await index.listVectors()
+    let afterDelete = try await index.listVectors().page()
     #expect(afterDelete.vectors.map(\.key) == ["b"])
   }
 

@@ -32,7 +32,7 @@ import HTTPTypes
 ///
 /// - ``createIndex(_:dimension:distanceMetric:dataType:metadataConfiguration:)``
 /// - ``indexDetails(_:)``
-/// - ``listIndexes(prefix:maxResults:nextToken:)``
+/// - ``listIndexes(prefix:maxResults:)``
 /// - ``deleteIndex(_:)``
 ///
 /// ### Accessing vector data
@@ -121,18 +121,15 @@ public struct VectorBucketClient: Sendable {
         VectorBucketIndexNameBody(vectorBucketName: vectorBucketName, indexName: indexName)
       )
     )
-    .decoded()
+    .decoded(decoder: .vectors)
     return response.index
   }
 
-  /// Lists the vector indexes in this bucket, optionally filtered by name prefix.
-  ///
-  /// Results are paginated: pass the ``ListVectorIndexesResponse/nextToken`` of a previous
-  /// response as `nextToken` to fetch the following page.
+  /// Lists the vector indexes in this bucket, optionally filtered by name prefix, one page per
+  /// request as you iterate.
   ///
   /// ```swift
-  /// let page = try await bucket.listIndexes(prefix: "embeddings-")
-  /// for index in page.indexes {
+  /// for try await index in bucket.listIndexes(prefix: "embeddings-") {
   ///   print(index.indexName)
   /// }
   /// ```
@@ -142,31 +139,34 @@ public struct VectorBucketClient: Sendable {
   /// - Parameters:
   ///   - prefix: Returns only indexes whose name starts with this prefix. Pass `nil` for all
   ///     indexes.
-  ///   - maxResults: The maximum number of indexes to return in this page.
-  ///   - nextToken: The pagination token from a previous response.
-  /// - Returns: A page of indexes, plus the token for the next page when more results exist.
-  /// - Throws: ``StorageError`` when the API rejects the request.
+  ///   - maxResults: The maximum number of indexes per page (up to 500).
+  /// - Returns: The listing. Iterating it throws ``StorageError`` when the API rejects a request.
   public func listIndexes(
     prefix: String? = nil,
-    maxResults: Int? = nil,
-    nextToken: String? = nil
-  ) async throws -> ListVectorIndexesResponse {
-    let response: ListIndexesResponseBody = try await api.execute(
-      HTTPRequest(
-        method: .post,
-        url: api.configuration.url.appendingPathComponent("vector/ListIndexes")
-      ),
-      body: JSONEncoder.storage.encode(
-        ListIndexesBody(
-          vectorBucketName: vectorBucketName,
-          prefix: prefix,
-          maxResults: maxResults,
-          nextToken: nextToken
+    maxResults: Int? = nil
+  ) -> PagedListing<ListVectorIndexesResponse, VectorIndexSummary> {
+    PagedListing(
+      fetch: { [api, vectorBucketName] nextToken in
+        let response: ListIndexesResponseBody = try await api.execute(
+          HTTPRequest(
+            method: .post,
+            url: api.configuration.url.appendingPathComponent("vector/ListIndexes")
+          ),
+          body: JSONEncoder.storage.encode(
+            ListIndexesBody(
+              vectorBucketName: vectorBucketName,
+              prefix: prefix,
+              maxResults: maxResults,
+              nextToken: nextToken
+            )
+          )
         )
-      )
+        .decoded(decoder: .vectors)
+        return ListVectorIndexesResponse(indexes: response.indexes, nextToken: response.nextToken)
+      },
+      nextToken: \.nextToken,
+      elements: \.indexes
     )
-    .decoded()
-    return ListVectorIndexesResponse(indexes: response.indexes, nextToken: response.nextToken)
   }
 
   /// Deletes a vector index and all of its vector data.
@@ -374,12 +374,12 @@ public struct VectorIndex: Decodable, Sendable, Hashable {
   /// Configuration for which metadata keys are excluded from filtering, if any.
   public var metadataConfiguration: VectorIndexMetadataConfiguration?
 
-  /// UNIX timestamp (seconds) of when the index was created, if known.
-  public var creationTime: TimeInterval?
+  /// When the index was created, if known.
+  public var creationTime: Date?
 }
 
 /// A summary of a vector index, as returned by
-/// ``VectorBucketClient/listIndexes(prefix:maxResults:nextToken:)``.
+/// ``VectorBucketClient/listIndexes(prefix:maxResults:)``.
 ///
 /// - Warning: Experimental. See ``StorageVectorsClient``.
 @_spi(Experimental)
@@ -390,12 +390,12 @@ public struct VectorIndexSummary: Decodable, Sendable, Hashable {
   /// The name of the vector bucket this index belongs to.
   public var vectorBucketName: String
 
-  /// UNIX timestamp (seconds) of when the index was created, if known.
-  public var creationTime: TimeInterval?
+  /// When the index was created, if known.
+  public var creationTime: Date?
 }
 
 /// A page of vector indexes, as returned by
-/// ``VectorBucketClient/listIndexes(prefix:maxResults:nextToken:)``.
+/// ``VectorBucketClient/listIndexes(prefix:maxResults:)``.
 ///
 /// - Warning: Experimental. See ``StorageVectorsClient``.
 @_spi(Experimental)

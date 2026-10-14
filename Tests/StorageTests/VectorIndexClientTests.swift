@@ -110,7 +110,8 @@ extension StorageMockerTests {
       ).register()
 
       let response = try await index.listVectors(
-        maxResults: 2, segment: VectorListSegment(count: 4, index: 0))
+        maxResults: 2, segment: VectorListSegment(count: 4, index: 0)
+      ).page()
       #expect(response.vectors.map(\.key) == ["doc-1", "doc-2"])
       #expect(response.nextToken == "page-2")
     }

@@ -31,7 +31,7 @@ struct StorageVectorsClientIntegrationTests {
   func vectorBucket_CRUD() async throws {
     let bucketName = "test-vector-bucket"
 
-    var page = try await vectors.listBuckets()
+    var page = try await vectors.listBuckets().page()
     #expect(!page.vectorBuckets.contains { $0.vectorBucketName == bucketName })
 
     try await vectors.createBucket(bucketName)
@@ -39,12 +39,12 @@ struct StorageVectorsClientIntegrationTests {
     let bucket = try await vectors.bucket(bucketName)
     #expect(bucket.vectorBucketName == bucketName)
 
-    page = try await vectors.listBuckets()
+    page = try await vectors.listBuckets().page()
     #expect(page.vectorBuckets.contains { $0.vectorBucketName == bucketName })
 
     try await vectors.deleteBucket(bucketName)
 
-    page = try await vectors.listBuckets()
+    page = try await vectors.listBuckets().page()
     #expect(!page.vectorBuckets.contains { $0.vectorBucketName == bucketName })
   }
 
@@ -53,10 +53,10 @@ struct StorageVectorsClientIntegrationTests {
     let bucketName = "test-vector-bucket"
     try await vectors.createBucket(bucketName)
 
-    let matching = try await vectors.listBuckets(prefix: "test-vector-")
+    let matching = try await vectors.listBuckets(prefix: "test-vector-").page()
     #expect(matching.vectorBuckets.contains { $0.vectorBucketName == bucketName })
 
-    let nonMatching = try await vectors.listBuckets(prefix: "no-such-prefix-")
+    let nonMatching = try await vectors.listBuckets(prefix: "no-such-prefix-").page()
     #expect(!nonMatching.vectorBuckets.contains { $0.vectorBucketName == bucketName })
 
     try await vectors.deleteBucket(bucketName)

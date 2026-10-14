@@ -16,4 +16,11 @@ extension JSONEncoder {
 extension JSONDecoder {
   /// The one decoder Storage uses for response bodies.
   static let storage = JSONDecoder.supabase()
+
+  /// The one decoder the Vectors routes use. They send timestamps as epoch seconds.
+  static let vectors: JSONDecoder = {
+    let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .secondsSince1970
+    return decoder
+  }()
 }
