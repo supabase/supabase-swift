@@ -1,7 +1,7 @@
 #if canImport(CoreTransferable) && canImport(UniformTypeIdentifiers)
   import ConcurrencyExtras
   public import CoreTransferable
-  public import Foundation
+  import Foundation
   public import UniformTypeIdentifiers
 
   extension StorageBucket {
@@ -62,7 +62,7 @@
     let provider = NSItemProvider()
     provider.register(item)
 
-    let exportFailed = { (error: (any Error)?) in
+    let exportFailed: @Sendable ((any Error)?) -> StorageError = { error in
       StorageError(
         kind: .invalidRequest,
         message: "The item cannot be exported as \(contentType.identifier).",
