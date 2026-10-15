@@ -103,6 +103,7 @@ public actor ResumableUpload {
   private var record: ResumableUploadRecord?
   private var loop: Task<Void, Never>?
   private var pauseRequested = false
+  private var startInProgress = false
   private let progressBroadcaster = StreamBroadcaster<TransferProgress>(
     bufferingPolicy: .bufferingNewest(1))
   private let stateBroadcaster = StreamBroadcaster<State>(bufferingPolicy: .unbounded)
@@ -129,6 +130,11 @@ public actor ResumableUpload {
       live[key] = upload
       return upload
     }
+  }
+
+  /// Whether a handle for `fingerprint` is in flight in this process.
+  static func isLive(fingerprint: String, api: StorageAPI) -> Bool {
+    live.withValue { $0[liveKey(fingerprint: fingerprint, api: api)] != nil }
   }
 
   /// The live handle for `record`, or a pending one built from it.
@@ -199,9 +205,14 @@ public actor ResumableUpload {
   /// - Throws: ``StorageError`` when the server refuses the upload, in which case ``state`` is
   ///   ``State/failed(_:)``.
   public func start() async throws {
-    guard case .pending = state else { return }
+    // The actor is reentrant across the await below, so a second start() must not reach
+    // create(); it would open a second tus upload and overwrite the record.
+    guard case .pending = state, !startInProgress else { return }
+    startInProgress = true
+    defer { startInProgress = false }
     do {
       let record = try await loadOrCreateRecord()
+      guard case .pending = state else { return }
       self.record = record
       state = .uploading
       startLoop(from: record.lastKnownOffset, next: .append)

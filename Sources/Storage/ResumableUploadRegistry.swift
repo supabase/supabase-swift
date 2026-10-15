@@ -55,11 +55,14 @@ public struct ResumableUploadRegistry: Sendable {
     return uploads
   }
 
-  /// Deletes every record and sandbox copy. Uploads in flight keep going and write their
-  /// record again on the next chunk.
+  /// Deletes the record and sandbox copy of every upload that is not in flight in this
+  /// process. An upload in flight keeps its files until it completes or is cancelled.
   ///
-  /// - Throws: The file system's error when the directory cannot be removed.
+  /// - Throws: The file system's error when the record directory cannot be read.
   public func clear() throws {
-    try store.removeAll()
+    for record in try store.records()
+    where !ResumableUpload.isLive(fingerprint: record.fingerprint, api: api) {
+      try store.remove(record)
+    }
   }
 }
