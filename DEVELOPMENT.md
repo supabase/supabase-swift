@@ -29,8 +29,28 @@ PLATFORM=MACOS ./scripts/xcodebuild.sh
 
 ## Testing Commands
 
+### macOS test flags
+
+On macOS, every SwiftPM command that compiles the tests needs these flags: `swift test` and
+`swift build --build-tests`. Define them once per shell:
+
 ```bash
-# Run all tests via Swift Package Manager
+SWIFT_FLAGS=(--triple "$(uname -m)-apple-macosx14.0" -Xswiftc -Xfrontend -Xswiftc -enable-cross-import-overlays)
+swift test "${SWIFT_FLAGS[@]}"
+```
+
+- Why: swift-snapshot-testing 1.19+ records Swift Testing attachments through cross-import
+  overlays (`_Testing_Foundation`, `_Testing_AppKit`). Xcode turns them on; SwiftPM does not, so
+  `SnapshotTesting` fails to compile with "requires that 'Data' conform to 'Attachable'". The
+  overlays need macOS 14, hence the triple. Upstream:
+  [pointfreeco/swift-snapshot-testing#1085](https://github.com/pointfreeco/swift-snapshot-testing/issues/1085).
+- Keep `SWIFT_FLAGS` an array and expand it as `"${SWIFT_FLAGS[@]}"`. zsh, the macOS default
+  shell, does not split a plain string, so `swift test $SWIFT_FLAGS` fails with "Unknown option".
+- Linux, plain `swift build`, and Xcode (`./scripts/xcodebuild.sh`) need no flags. Library code
+  never imports Swift Testing, so this affects only test builds, not apps that use the SDK.
+
+```bash
+# Run all tests via Swift Package Manager (macOS: add "${SWIFT_FLAGS[@]}")
 swift test
 
 # Run tests for a specific module
@@ -142,19 +162,18 @@ supabase start --runtime native
 ## Working with Integration Tests
 
 Integration tests require a local Supabase instance (see "Running a Local Supabase Stack"). The
-`swift test` flags below match CI's macOS job: swift-snapshot-testing needs Swift Testing's
-cross-import overlays, which SwiftPM does not turn on by itself, and those overlays need
-macOS 14. `--eager` starts every service before `start` returns, as CI does. On Linux, drop the
+`swift test` commands below use the [macOS test flags](#macos-test-flags), as CI's macOS job
+does. `--eager` starts every service before `start` returns, as CI does. On Linux, drop the
 experimental-stack variable and every flag, but keep `INTEGRATION_TESTS`:
 
 ```bash
 export INTEGRATION_TESTS=1  # the suites skip themselves without it
 export SUPABASE_EXPERIMENTAL_STACK=1
-SWIFT_FLAGS="--triple arm64-apple-macosx14.0 -Xswiftc -Xfrontend -Xswiftc -enable-cross-import-overlays"
+SWIFT_FLAGS=(--triple "$(uname -m)-apple-macosx14.0" -Xswiftc -Xfrontend -Xswiftc -enable-cross-import-overlays)
 cd Tests/IntegrationTests
 supabase start --runtime native --eager
 cd ../..
-swift test $SWIFT_FLAGS --filter IntegrationTests --skip verifyOTPForSecureEmailChange --no-parallel
+swift test "${SWIFT_FLAGS[@]}" --filter IntegrationTests --skip verifyOTPForSecureEmailChange --no-parallel
 cd Tests/IntegrationTests
 supabase stop
 ```
@@ -179,7 +198,7 @@ second, minimal project instead of forking that setting for the whole suite:
 cd Tests/IntegrationTests/supabase-secure-email-change
 supabase start --runtime native --eager
 cd ../../..
-swift test $SWIFT_FLAGS --filter verifyOTPForSecureEmailChange --no-parallel
+swift test "${SWIFT_FLAGS[@]}" --filter verifyOTPForSecureEmailChange --no-parallel
 cd Tests/IntegrationTests/supabase-secure-email-change
 supabase stop
 ```

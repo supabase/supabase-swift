@@ -23,6 +23,9 @@ Read the matching file before you act:
 
 ## Notes for AI coding agents
 
+- On macOS, run `swift test` and `swift build --build-tests` with the flags from
+  "macOS test flags" in [DEVELOPMENT.md](DEVELOPMENT.md); without them, swift-snapshot-testing
+  fails to compile
 - Always run `./scripts/format.sh` before committing Swift code
 - Run `swiftlint lint --strict` before committing; it must not report new violations
 - Any change to public API (add, remove, rename, or move a symbol) updates
