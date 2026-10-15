@@ -21,7 +21,7 @@ Example: `feat(auth): add PKCE flow support`
 
 The `!`/`BREAKING CHANGE:` marker is the same one release-please and the API stability check key
 off to bump majors and flag reviewers. Every commit carrying it also requires an entry in the
-root `V<N>_MIGRATION.md` — see the writing-migration-guides skill for the format.
+major-version migration guide (`V<N>_MIGRATION.md` and `docs/migrations/v<N>/`) — see the writing-migration-guides skill for the format.
 
 ## Capability Compliance
 
