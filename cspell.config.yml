@@ -50,8 +50,14 @@ patterns:
   - name: url-encoded-fragment
     pattern: /%[0-9A-Fa-f]{1,2}[A-Za-z][A-Za-z0-9._~!$&'()*+,;=:@/?-]*/g
 
+  # tus `Upload-Metadata` is a comma-separated list of `key base64value` pairs,
+  # whose short values (`contentType dmlkZW8vbXA0`) fall under the blob length.
+  - name: tus-upload-metadata-pair
+    pattern: /\b(bucketName|objectName|contentType|cacheControl|metadata) [A-Za-z0-9+/=]+/g
+
 ignoreRegExpList:
   - github-url-host
   - base64-blob
   - base64-header-value
   - url-encoded-fragment
+  - tus-upload-metadata-pair
