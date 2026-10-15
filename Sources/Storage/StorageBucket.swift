@@ -257,7 +257,8 @@ public struct StorageBucket: Sendable {
   ) throws -> ResumableUpload {
     let key = try ObjectKey(path)
     let (size, _) = try ResumableStore.attributes(of: fileURL)
-    let fingerprint = try ResumableStore.fingerprint(bucketId: id, path: key.path, fileURL: fileURL)
+    let fingerprint = try ResumableStore.fingerprint(
+      url: api.configuration.url, bucketId: id, path: key.path, fileURL: fileURL)
     return ResumableUpload.handle(fingerprint: fingerprint, api: api) {
       ResumableUpload(
         id: ResumableUpload.ID(rawValue: fingerprint),
@@ -282,7 +283,8 @@ public struct StorageBucket: Sendable {
     options: UploadOptions = UploadOptions()
   ) throws -> ResumableUpload {
     let key = try ObjectKey(path)
-    let fingerprint = ResumableStore.fingerprint(bucketId: id, path: key.path, data: data)
+    let fingerprint = ResumableStore.fingerprint(
+      url: api.configuration.url, bucketId: id, path: key.path, data: data)
     return ResumableUpload.handle(fingerprint: fingerprint, api: api) {
       ResumableUpload(
         id: ResumableUpload.ID(rawValue: fingerprint),
