@@ -168,6 +168,26 @@
     }
 
     @Test
+    func readerClosingItsEndIsNotAFailure() async throws {
+      let chunks = CountingChunks(count: 8, size: 100)
+      let body = chunks.body(length: .known(800), iterationBehavior: .single)
+      let (input, output) = makeBoundStreams(bufferSize: 150)
+      let failure = LockIsolated<(any Error)?>(nil)
+      let bridge = HTTPBodyOutputStreamBridge(body: body, output: output) { failure.setValue($0) }
+      defer { bridge.cancel() }
+
+      // URLSession closes its end once the server has answered without reading the whole body
+      // (an early 413). That must not cancel the task and lose the response.
+      await poll { chunks.pulls.value >= 2 }
+      input.open()
+      var buffer = [UInt8](repeating: 0, count: 100)
+      #expect(input.read(&buffer, maxLength: 100) == 100)
+      input.close()
+      try await Task.sleep(for: .milliseconds(200))
+      #expect(failure.value == nil)
+    }
+
+    @Test
     func multipleBodyReplaysOnASecondBridge() async throws {
       let chunks = CountingChunks(count: 3, size: 10)
       let body = chunks.body(length: .known(30), iterationBehavior: .multiple)
