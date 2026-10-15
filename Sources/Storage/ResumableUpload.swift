@@ -88,7 +88,11 @@ public actor ResumableUpload {
   public private(set) var state: State = .pending {
     didSet {
       stateBroadcaster.yield(state)
-      if state.isTerminal { stateBroadcaster.finish(); progressBroadcaster.finish() }
+      if state.isTerminal {
+        stateBroadcaster.finish()
+        progressBroadcaster.finish()
+        Self.live.withValue { if $0[liveKey] === self { $0.removeValue(forKey: liveKey) } }
+      }
     }
   }
 
@@ -102,6 +106,44 @@ public actor ResumableUpload {
   private let progressBroadcaster = StreamBroadcaster<TransferProgress>(
     bufferingPolicy: .bufferingNewest(1))
   private let stateBroadcaster = StreamBroadcaster<State>(bufferingPolicy: .unbounded)
+
+  /// The handles that are not yet terminal, one per record, so two callers asking for the
+  /// same upload drive one tus session instead of two.
+  private static let live = LockIsolated<[String: ResumableUpload]>([:])
+
+  private nonisolated var liveKey: String { Self.liveKey(fingerprint: id.rawValue, api: api) }
+
+  private static func liveKey(fingerprint: String, api: StorageAPI) -> String {
+    ResumableStore(configuration: api.configuration.resumable).directory
+      .appendingPathComponent(fingerprint).path
+  }
+
+  /// The live handle for `fingerprint`, or the one `make` builds.
+  static func handle(
+    fingerprint: String, api: StorageAPI, make: @Sendable () -> ResumableUpload
+  ) -> ResumableUpload {
+    let key = liveKey(fingerprint: fingerprint, api: api)
+    return live.withValue { live in
+      if let existing = live[key] { return existing }
+      let upload = make()
+      live[key] = upload
+      return upload
+    }
+  }
+
+  /// The live handle for `record`, or a pending one built from it.
+  static func handle(record: ResumableUploadRecord, api: StorageAPI) -> ResumableUpload {
+    handle(fingerprint: record.fingerprint, api: api) {
+      ResumableUpload(
+        id: ID(rawValue: record.fingerprint), bucketId: record.bucketId, path: record.path,
+        totalBytes: record.totalBytes, input: .prepared(record.source),
+        options: UploadOptions(
+          contentType: record.contentType,
+          cacheControl: CacheControl(rawValue: record.cacheControl),
+          upsert: record.upsert, metadata: record.metadata),
+        api: api)
+    }
+  }
 
   init(
     id: ID, bucketId: String, path: String, totalBytes: Int64, input: Input,

@@ -26,6 +26,9 @@ struct StorageRequest: Sendable {
 /// segment they occupy.
 struct StorageRequests: Sendable {
   private let base: URLComponents
+  /// The base for the tus route: on hosted Supabase always the storage host, whatever
+  /// `usesNewHostname` says, as the gateway host buffers the whole request.
+  private let resumableBase: URLComponents
 
   /// The base URL every route is appended to.
   let url: URL
@@ -42,10 +45,21 @@ struct StorageRequests: Sendable {
     }
     self.base = components
     self.url = url
+    var resumable = components
+    resumable.host =
+      URLComponents(
+        url: StorageAPI.storageHost(url), resolvingAgainstBaseURL: false)?.host
+    self.resumableBase = resumable
   }
 
   /// The URL for `encodedPath` under the base, with `query` appended.
   func url(_ encodedPath: String, query: [URLQueryItem] = []) -> URL {
+    url(encodedPath, query: query, under: base)
+  }
+
+  private func url(_ encodedPath: String, query: [URLQueryItem] = [], under base: URLComponents)
+    -> URL
+  {
     var components = base
     components.percentEncodedPath += "/\(encodedPath)"
     guard let url = components.url else {
@@ -240,7 +254,8 @@ struct StorageRequests: Sendable {
       headers[.contentType] = Self.tusContentType
     }
     return StorageRequest(
-      head: HTTPRequest(method: .post, url: url("upload/resumable"), headerFields: headers),
+      head: HTTPRequest(
+        method: .post, url: url("upload/resumable", under: resumableBase), headerFields: headers),
       body: firstChunk.map { HTTPBody($0) })
   }
 

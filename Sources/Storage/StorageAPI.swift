@@ -29,6 +29,28 @@ struct StorageAPI: Sendable {
       && legacySupabaseHostSuffixes.contains(where: host.hasSuffix)
   }
 
+  /// `url` with `project-ref.supabase.co` rewritten to `project-ref.storage.supabase.co`; any
+  /// other host is returned as is.
+  static func storageHost(_ url: URL) -> URL {
+    // `url` is supplied once, at construction, so a URL that cannot be decomposed into host
+    // components is a programmer error, not a runtime condition. Trap here, where the offending
+    // value is, rather than letting it fail later as an opaque `URLError`.
+    guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+      let host = components.host
+    else {
+      preconditionFailure("Storage client initialized with an invalid URL: \(url)")
+    }
+    guard isLegacySupabaseHost(host) else { return url }
+
+    // Substitute on the same label boundary the check used, so a host that happens to start
+    // with `supabase.` is not rewritten at that leading position too.
+    components.host = host.replacingOccurrences(of: ".supabase.", with: ".storage.supabase.")
+    guard let rewritten = components.url else {
+      preconditionFailure("Rewriting the storage host produced an invalid URL: \(components)")
+    }
+    return rewritten
+  }
+
   /// The configuration used to initialize this client instance.
   private(set) var configuration: StorageClientConfiguration
 
@@ -48,27 +70,7 @@ struct StorageAPI: Sendable {
     // if legacy uri is used, replace with new storage host (disables request buffering to allow > 50GB uploads)
     // "project-ref.supabase.co" becomes "project-ref.storage.supabase.co"
     if configuration.usesNewHostname == true {
-      // `configuration.url` is supplied once, at construction, so a URL that cannot be decomposed
-      // into host components is a programmer error, not a runtime condition. Trap here, where the
-      // offending value is, rather than letting it fail later as an opaque `URLError`.
-      guard
-        var components = URLComponents(url: configuration.url, resolvingAgainstBaseURL: false),
-        let host = components.host
-      else {
-        preconditionFailure("Storage client initialized with an invalid URL: \(configuration.url)")
-      }
-
-      if Self.isLegacySupabaseHost(host) {
-        // Substitute on the same label boundary the check used, so a host that happens to start
-        // with `supabase.` is not rewritten at that leading position too.
-        components.host = host.replacingOccurrences(of: ".supabase.", with: ".storage.supabase.")
-
-        guard let rewritten = components.url else {
-          preconditionFailure("Rewriting the storage host produced an invalid URL: \(components)")
-        }
-
-        configuration.url = rewritten
-      }
+      configuration.url = Self.storageHost(configuration.url)
     }
 
     self.configuration = configuration

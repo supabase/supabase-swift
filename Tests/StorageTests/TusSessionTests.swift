@@ -89,6 +89,35 @@ struct TusSessionTests {
   }
 
   @Test
+  func createTargetsTheStorageHostOnHostedSupabase() async throws {
+    let sent = LockIsolated<URL?>(nil)
+    let sut = TusSession(
+      api: StorageAPI(
+        configuration: StorageClientConfiguration(
+          url: URL(string: "https://ref.supabase.co/storage/v1")!,
+          headers: [:],
+          http: .init(
+            transport: ClosureTransport { request, _ in
+              sent.setValue(request.url)
+              return (
+                HTTPResponse(
+                  status: .created,
+                  headerFields: [.location: "/storage/v1/upload/resumable/abc", .uploadOffset: "0"]),
+                nil
+              )
+            }))))
+
+    let created = try await sut.create(
+      bucket: "bucket", key: try ObjectKey("video.mp4"), length: 20, options: options)
+
+    #expect(
+      sent.value == URL(string: "https://ref.storage.supabase.co/storage/v1/upload/resumable"))
+    #expect(
+      created.uploadURL
+        == URL(string: "https://ref.storage.supabase.co/storage/v1/upload/resumable/abc"))
+  }
+
+  @Test
   func createWithTheFirstChunkSendsItAsAnOffsetStream() async throws {
     let sut = makeSUT { request in
       #expect(
