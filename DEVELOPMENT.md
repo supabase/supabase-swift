@@ -46,16 +46,17 @@ swift test "${SWIFT_FLAGS[@]}"
   [pointfreeco/swift-snapshot-testing#1085](https://github.com/pointfreeco/swift-snapshot-testing/issues/1085).
 - Keep `SWIFT_FLAGS` an array and expand it as `"${SWIFT_FLAGS[@]}"`. zsh, the macOS default
   shell, does not split a plain string, so `swift test $SWIFT_FLAGS` fails with "Unknown option".
-- Linux, plain `swift build`, and Xcode (`./scripts/xcodebuild.sh`) need no flags. Library code
-  never imports Swift Testing, so this affects only test builds, not apps that use the SDK.
+- Linux, plain `swift build`, and Xcode (`./scripts/xcodebuild.sh`) need no flags. On Linux, set
+  `SWIFT_FLAGS=()`: an empty array expands to nothing, so the commands below work unchanged. Library code never imports Swift Testing, so this affects only test builds, not
+  apps that use the SDK.
 
 ```bash
-# Run all tests via Swift Package Manager (macOS: add "${SWIFT_FLAGS[@]}")
-swift test
+# Run all tests via Swift Package Manager
+swift test "${SWIFT_FLAGS[@]}"
 
 # Run tests for a specific module
-swift test --filter AuthTests
-swift test --filter StorageTests
+swift test "${SWIFT_FLAGS[@]}" --filter AuthTests
+swift test "${SWIFT_FLAGS[@]}" --filter StorageTests
 
 # Run tests via Xcode
 PLATFORM=IOS XCODEBUILD_ARGUMENT=test ./scripts/xcodebuild.sh
