@@ -285,3 +285,48 @@ struct ListPrefix {
     path = key.path.isEmpty || !prefix.hasSuffix("/") ? key.path : key.path + "/"
   }
 }
+
+/// A token-paged listing: iterate it for the elements of every page, iterate ``pages`` for the
+/// pages, or call ``page(after:)`` for one page.
+///
+/// - Warning: Experimental. See ``StorageVectorsClient``.
+@_spi(Experimental)
+public struct PagedListing<Page: Sendable, Element>: AsyncSequence, Sendable {
+  let fetch: @Sendable (_ token: String?) async throws -> Page
+  let nextToken: @Sendable (Page) -> String?
+  let elements: @Sendable (Page) -> [Element]
+
+  /// The pages of this listing, fetched one at a time as you iterate.
+  public var pages: PageSequence<Page> {
+    PageSequence(fetch: fetch, nextCursor: nextToken)
+  }
+
+  /// Fetches one page.
+  ///
+  /// - Parameter token: The `nextToken` of the previous page, or `nil` for the first.
+  /// - Returns: The page.
+  /// - Throws: ``StorageError`` when the API rejects the request.
+  public func page(after token: String? = nil) async throws -> Page {
+    try await fetch(token)
+  }
+
+  public func makeAsyncIterator() -> AsyncIterator {
+    AsyncIterator(pages: pages.makeAsyncIterator(), elements: elements)
+  }
+
+  /// Returns the elements of each page in order, fetching the next page when one runs out.
+  public struct AsyncIterator: AsyncIteratorProtocol {
+    var pages: PageSequence<Page>.AsyncIterator
+    let elements: @Sendable (Page) -> [Element]
+    var buffer: IndexingIterator<[Element]> = [].makeIterator()
+
+    /// Returns the next element, or `nil` after the last page.
+    public mutating func next() async throws -> Element? {
+      while true {
+        if let element = buffer.next() { return element }
+        guard let page = try await pages.next() else { return nil }
+        buffer = elements(page).makeIterator()
+      }
+    }
+  }
+}

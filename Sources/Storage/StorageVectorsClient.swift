@@ -18,7 +18,9 @@ import HTTPTypes
 ///
 /// ```swift
 /// try await client.storage.vectors.createBucket("documents")
-/// let buckets = try await client.storage.vectors.listBuckets().vectorBuckets
+/// for try await bucket in client.storage.vectors.listBuckets() {
+///   print(bucket.vectorBucketName)
+/// }
 /// ```
 ///
 /// - Warning: Vector buckets are a public alpha feature of Supabase Storage and this API is
@@ -31,7 +33,8 @@ import HTTPTypes
 ///
 /// - ``createBucket(_:)``
 /// - ``bucket(_:)``
-/// - ``listBuckets(prefix:maxResults:nextToken:)``
+/// - ``listBuckets(prefix:maxResults:)``
+/// - ``PagedListing``
 /// - ``deleteBucket(_:)``
 ///
 /// ### Managing indexes and vector data
@@ -98,48 +101,51 @@ public struct StorageVectorsClient: Sendable {
         url: api.configuration.url.appendingPathComponent("vector/GetVectorBucket")
       ), body: JSONEncoder.storage.encode(VectorBucketNameBody(vectorBucketName: name))
     )
-    .decoded()
+    .decoded(decoder: .vectors)
     return response.vectorBucket
   }
 
-  /// Lists the vector buckets in the project, optionally filtered by name prefix.
-  ///
-  /// Results are paginated: pass the ``ListVectorBucketsResponse/nextToken`` of a previous response
-  /// as `nextToken` to fetch the following page.
+  /// Lists the vector buckets in the project, optionally filtered by name prefix, one page per
+  /// request as you iterate.
   ///
   /// ```swift
-  /// let page = try await client.storage.vectors.listBuckets(prefix: "docs")
-  /// for bucket in page.vectorBuckets {
+  /// for try await bucket in client.storage.vectors.listBuckets(prefix: "docs") {
   ///   print(bucket.vectorBucketName)
   /// }
+  ///
+  /// // One page at a time
+  /// let page = try await client.storage.vectors.listBuckets().page(after: savedToken)
   /// ```
   ///
   /// - Warning: Experimental. See ``StorageVectorsClient``.
   ///
   /// - Parameters:
   ///   - prefix: Returns only buckets whose name starts with this prefix. Pass `nil` for all buckets.
-  ///   - maxResults: The maximum number of buckets to return in this page.
-  ///   - nextToken: The pagination token from a previous response.
-  /// - Returns: A page of buckets, plus the token for the next page when more results exist.
-  /// - Throws: ``StorageError`` when the API rejects the request.
+  ///   - maxResults: The maximum number of buckets per page (up to 500).
+  /// - Returns: The listing. Iterating it throws ``StorageError`` when the API rejects a request.
   public func listBuckets(
     prefix: String? = nil,
-    maxResults: Int? = nil,
-    nextToken: String? = nil
-  ) async throws -> ListVectorBucketsResponse {
-    let response: ListVectorBucketsResponseBody = try await api.execute(
-      HTTPRequest(
-        method: .post,
-        url: api.configuration.url.appendingPathComponent("vector/ListVectorBuckets")
-      ),
-      body: JSONEncoder.storage.encode(
-        VectorBucketListBody(maxResults: maxResults, nextToken: nextToken, prefix: prefix)
-      )
-    )
-    .decoded()
-    return ListVectorBucketsResponse(
-      vectorBuckets: response.vectorBuckets,
-      nextToken: response.nextToken
+    maxResults: Int? = nil
+  ) -> PagedListing<ListVectorBucketsResponse, VectorBucket> {
+    PagedListing(
+      fetch: { [api] nextToken in
+        let response: ListVectorBucketsResponseBody = try await api.execute(
+          HTTPRequest(
+            method: .post,
+            url: api.configuration.url.appendingPathComponent("vector/ListVectorBuckets")
+          ),
+          body: JSONEncoder.storage.encode(
+            VectorBucketListBody(maxResults: maxResults, nextToken: nextToken, prefix: prefix)
+          )
+        )
+        .decoded(decoder: .vectors)
+        return ListVectorBucketsResponse(
+          vectorBuckets: response.vectorBuckets,
+          nextToken: response.nextToken
+        )
+      },
+      nextToken: \.nextToken,
+      elements: \.vectorBuckets
     )
   }
 
@@ -190,12 +196,12 @@ public struct VectorBucket: Decodable, Sendable, Hashable {
   /// The name of the vector bucket.
   public var vectorBucketName: String
 
-  /// UNIX timestamp (seconds) of when the bucket was created, if known.
-  public var creationTime: TimeInterval?
+  /// When the bucket was created, if known.
+  public var creationTime: Date?
 }
 
 /// A page of vector buckets, as returned by
-/// ``StorageVectorsClient/listBuckets(prefix:maxResults:nextToken:)``.
+/// ``StorageVectorsClient/listBuckets(prefix:maxResults:)``.
 ///
 /// - Warning: Experimental. See ``StorageVectorsClient``.
 @_spi(Experimental)

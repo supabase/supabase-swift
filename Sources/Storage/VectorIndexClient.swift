@@ -44,7 +44,7 @@ import HTTPTypes
 /// ### Reading vectors
 ///
 /// - ``vectors(keys:returnData:returnMetadata:)``
-/// - ``listVectors(maxResults:nextToken:returnData:returnMetadata:segment:)``
+/// - ``listVectors(maxResults:returnData:returnMetadata:segment:)``
 /// - ``queryVectors(_:topK:filter:returnDistance:returnMetadata:)``
 @_spi(Experimental)
 public struct VectorIndexClient: Sendable {
@@ -80,7 +80,8 @@ public struct VectorIndexClient: Sendable {
   /// - Warning: Experimental. See ``StorageVectorsClient``.
   ///
   /// - Parameter vectors: The vectors to insert or update.
-  /// - Throws: ``StorageError`` when the API rejects the request.
+  /// - Throws: ``StorageError`` when the API rejects the request, including for fewer than 1 or
+  ///   more than 500 vectors.
   public func putVectors(_ vectors: [VectorEntry]) async throws {
     try await api.execute(
       HTTPRequest(
@@ -110,7 +111,8 @@ public struct VectorIndexClient: Sendable {
   ///   - returnData: Whether to include vector embedding data in the response. Defaults to `false`.
   ///   - returnMetadata: Whether to include metadata in the response. Defaults to `false`.
   /// - Returns: The matching vectors, in no particular order.
-  /// - Throws: ``StorageError`` when the API rejects the request.
+  /// - Throws: ``StorageError`` when the API rejects the request, including for fewer than 1 or
+  ///   more than 100 keys.
   public func vectors(
     keys: [String],
     returnData: Bool = false,
@@ -131,57 +133,60 @@ public struct VectorIndexClient: Sendable {
         )
       )
     )
-    .decoded()
+    .decoded(decoder: .vectors)
     return response.vectors
   }
 
-  /// Lists vectors in this index with pagination.
+  /// Lists the vectors in this index, one page per request as you iterate.
   ///
-  /// Results are paginated: pass the ``ListVectorsResponse/nextToken`` of a previous response as
-  /// `nextToken` to fetch the following page. Use `segment` to scan the index in parallel across
-  /// multiple workers.
+  /// Use `segment` to scan the index in parallel across multiple workers.
   ///
   /// ```swift
-  /// let page = try await index.listVectors(maxResults: 500, returnMetadata: true)
+  /// for try await vector in index.listVectors(maxResults: 500, returnMetadata: true) {
+  ///   print(vector.key)
+  /// }
   /// ```
   ///
   /// - Warning: Experimental. See ``StorageVectorsClient``.
   ///
   /// - Parameters:
-  ///   - maxResults: The maximum number of vectors to return in this page (up to 1000).
-  ///   - nextToken: The pagination token from a previous response.
+  ///   - maxResults: The maximum number of vectors per page (up to 1000).
   ///   - returnData: Whether to include vector embedding data in the response. Defaults to `false`.
   ///   - returnMetadata: Whether to include metadata in the response. Defaults to `false`.
   ///   - segment: Scans only the given slice of the index, for parallel listing.
-  /// - Returns: A page of vectors, plus the token for the next page when more results exist.
-  /// - Throws: ``StorageError`` when the API rejects the request.
+  /// - Returns: The listing. Iterating it throws ``StorageError`` when the API rejects a request.
   public func listVectors(
     maxResults: Int? = nil,
-    nextToken: String? = nil,
     returnData: Bool = false,
     returnMetadata: Bool = false,
     segment: VectorListSegment? = nil
-  ) async throws -> ListVectorsResponse {
-    let response: ListVectorsResponseBody = try await api.execute(
-      HTTPRequest(
-        method: .post,
-        url: api.configuration.url.appendingPathComponent("vector/ListVectors")
-      ),
-      body: JSONEncoder.storage.encode(
-        ListVectorsBody(
-          vectorBucketName: vectorBucketName,
-          indexName: indexName,
-          maxResults: maxResults,
-          nextToken: nextToken,
-          returnData: returnData,
-          returnMetadata: returnMetadata,
-          segmentCount: segment?.count,
-          segmentIndex: segment?.index
+  ) -> PagedListing<ListVectorsResponse, VectorMatch> {
+    PagedListing(
+      fetch: { [api, vectorBucketName, indexName] nextToken in
+        let response: ListVectorsResponseBody = try await api.execute(
+          HTTPRequest(
+            method: .post,
+            url: api.configuration.url.appendingPathComponent("vector/ListVectors")
+          ),
+          body: JSONEncoder.storage.encode(
+            ListVectorsBody(
+              vectorBucketName: vectorBucketName,
+              indexName: indexName,
+              maxResults: maxResults,
+              nextToken: nextToken,
+              returnData: returnData,
+              returnMetadata: returnMetadata,
+              segmentCount: segment?.count,
+              segmentIndex: segment?.index
+            )
+          )
         )
-      )
+        .decoded(decoder: .vectors)
+        return ListVectorsResponse(vectors: response.vectors, nextToken: response.nextToken)
+      },
+      nextToken: \.nextToken,
+      elements: \.vectors
     )
-    .decoded()
-    return ListVectorsResponse(vectors: response.vectors, nextToken: response.nextToken)
   }
 
   /// Queries for the vectors most similar to `queryVector` using approximate nearest neighbor
@@ -235,7 +240,7 @@ public struct VectorIndexClient: Sendable {
         )
       )
     )
-    .decoded()
+    .decoded(decoder: .vectors)
     return QueryVectorsResponse(vectors: response.vectors, distanceMetric: response.distanceMetric)
   }
 
@@ -248,7 +253,8 @@ public struct VectorIndexClient: Sendable {
   /// - Warning: Experimental. See ``StorageVectorsClient``.
   ///
   /// - Parameter keys: The keys of the vectors to delete.
-  /// - Throws: ``StorageError`` when the API rejects the request.
+  /// - Throws: ``StorageError`` when the API rejects the request, including for fewer than 1 or
+  ///   more than 500 keys.
   public func deleteVectors(keys: [String]) async throws {
     try await api.execute(
       HTTPRequest(
@@ -361,7 +367,7 @@ public struct VectorEntry: Encodable, Sendable, Hashable {
 }
 
 /// A vector returned from ``VectorIndexClient/vectors(keys:returnData:returnMetadata:)``,
-/// ``VectorIndexClient/listVectors(maxResults:nextToken:returnData:returnMetadata:segment:)``, or
+/// ``VectorIndexClient/listVectors(maxResults:returnData:returnMetadata:segment:)``, or
 /// ``VectorIndexClient/queryVectors(_:topK:filter:returnDistance:returnMetadata:)``.
 ///
 /// - Warning: Experimental. See ``StorageVectorsClient``.
@@ -383,7 +389,7 @@ public struct VectorMatch: Decodable, Sendable, Hashable {
 }
 
 /// A parallel scan segment for
-/// ``VectorIndexClient/listVectors(maxResults:nextToken:returnData:returnMetadata:segment:)``.
+/// ``VectorIndexClient/listVectors(maxResults:returnData:returnMetadata:segment:)``.
 ///
 /// Splitting a list operation across `count` segments and listing each `index` concurrently lets
 /// multiple workers scan a large index in parallel.
@@ -409,7 +415,7 @@ public struct VectorListSegment: Sendable, Hashable {
 }
 
 /// A page of vectors, as returned by
-/// ``VectorIndexClient/listVectors(maxResults:nextToken:returnData:returnMetadata:segment:)``.
+/// ``VectorIndexClient/listVectors(maxResults:returnData:returnMetadata:segment:)``.
 ///
 /// - Warning: Experimental. See ``StorageVectorsClient``.
 @_spi(Experimental)

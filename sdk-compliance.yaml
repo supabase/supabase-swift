@@ -1795,20 +1795,24 @@ features:
 
   # ── Storage — Vector Buckets ───────────────────────────────────────────────
 
-  storage.vector_buckets.create_vector_bucket: not_implemented
-  storage.vector_buckets.list_vector_buckets: not_implemented
-  storage.vector_buckets.delete_vector_bucket: not_implemented
-  storage.vector_buckets.access_vector_index: not_implemented
-  storage.vector_buckets.create_index: not_implemented
-  storage.vector_buckets.delete_index: not_implemented
-  storage.vector_buckets.get_index: not_implemented
-  storage.vector_buckets.list_indexes: not_implemented
-  storage.vector_buckets.put_vectors: not_implemented
-  storage.vector_buckets.get_vectors: not_implemented
-  storage.vector_buckets.delete_vectors: not_implemented
-  storage.vector_buckets.list_vectors: not_implemented
-  storage.vector_buckets.query_vectors: not_implemented
-  storage.vector_buckets.parallel_scan: not_implemented
+  # StorageVectorsClient, VectorBucketClient and VectorIndexClient are all
+  # @_spi(Experimental) (vector buckets are a public alpha of Supabase Storage),
+  # so the public symbol graph the compliance scanner reads never contains them.
+  # parallel_scan is listVectors(segment:).
+  storage.vector_buckets.create_vector_bucket: implemented
+  storage.vector_buckets.list_vector_buckets: implemented
+  storage.vector_buckets.delete_vector_bucket: implemented
+  storage.vector_buckets.access_vector_index: implemented
+  storage.vector_buckets.create_index: implemented
+  storage.vector_buckets.delete_index: implemented
+  storage.vector_buckets.get_index: implemented
+  storage.vector_buckets.list_indexes: implemented
+  storage.vector_buckets.put_vectors: implemented
+  storage.vector_buckets.get_vectors: implemented
+  storage.vector_buckets.delete_vectors: implemented
+  storage.vector_buckets.list_vectors: implemented
+  storage.vector_buckets.query_vectors: implemented
+  storage.vector_buckets.parallel_scan: implemented
 
   # ── Storage — Analytics Buckets ────────────────────────────────────────────
 
