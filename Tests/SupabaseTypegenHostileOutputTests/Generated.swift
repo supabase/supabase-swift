@@ -226,4 +226,11 @@ extension _PostgrestRpc {
   public func rowsFunction() throws -> _PostgrestFunctionCall<Int?> {
     try self.value("rows")
   }
+
+  public func selfAndArgument(`self` selfArgument2: Int, selfArgument: Int) throws
+    -> _PostgrestFunctionCall<Void>
+  {
+    try self.perform(
+      "self_and_argument", arguments: ["self": selfArgument2, "self_argument": selfArgument])
+  }
 }

@@ -404,12 +404,15 @@ extension FilePlan {
       let labels = numberRepeats(
         in: ordered.map { Naming.propertyName($0.name) }, avoiding: [], kind: "parameter",
         labels: ordered.map { "\(callable.label) parameter \($0.name)" })
+      // `self` as a parameter would hide the `_PostgrestRpc` the method calls through.
+      let selfName =
+        labels.contains("selfArgument")
+        ? Self.numbered("selfArgument", avoiding: Set(labels)) : "selfArgument"
       parameters = zip(ordered, labels).map { argument, label in
         let type = swiftType(argument.type, subject: "parameter \(argument.name) has the type")
         return ParameterPlan(
           label: label,
-          // `self` as a parameter would hide the `_PostgrestRpc` the method calls through.
-          internalName: Naming.unescaped(label) == "self" ? "selfArgument" : nil,
+          internalName: Naming.unescaped(label) == "self" ? selfName : nil,
           argument: argument.name,
           type: argument.hasDefault ? .optional(type) : type,
           hasDefault: argument.hasDefault

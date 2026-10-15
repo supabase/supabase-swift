@@ -81,9 +81,17 @@ The return type picks the entry point:
 | --------------- | ----- |
 | `SETOF` a generated relation | `_PostgrestQuery<Relation, [Relation]>`, filterable through its columns |
 | a row of a generated relation | `_PostgrestFunctionCall<Relation?>`, `nil` when the function finds none |
-| `RETURNS TABLE` or `OUT` parameters | a read-only `@Table` struct named `<Function>Row`, queried or read like a relation |
+| `RETURNS TABLE` or `OUT` parameters | a read-only `@Table` struct named `<Function>Row`, filterable through its columns |
 | a scalar, an array, or a set of scalars | `_PostgrestFunctionCall<T?>`, or `<[T?]>` for a set |
 | `void` | `_PostgrestFunctionCall<Void>` |
+
+A `<Function>Row` struct names the function as its relation, so `client.from(_:)` accepts it but
+sends a request for a relation that does not exist: reach its rows through the function's method.
+
+Parameters come in the order postgrest-typegen lists them: required ones first, then the defaulted
+ones, each by name rather than by their position in the function's declaration. A numbered
+overload's number follows the document's order of overloads, so adding an overload can renumber
+the ones after it.
 
 A function whose sole parameter is an unnamed `json` or `jsonb` takes the whole body as
 `_ body: JSONValue`. An overload PostgREST cannot resolve, one with another unnamed parameter, one
