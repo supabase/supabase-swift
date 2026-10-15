@@ -5,6 +5,7 @@ import Helpers
 import IssueReporting
 import Logging
 @_spi(Experimental) import PostgREST
+@_spi(Experimental) import Storage
 
 #if canImport(FoundationNetworking)
   public import FoundationNetworking
@@ -134,6 +135,7 @@ public final class SupabaseClient: Sendable {
       retryEnabled: options.storage.retryEnabled
     )
     configuration.clock = clock
+    configuration.resumable = options.storage.resumable
     return StorageClient(configuration: configuration)
   }
 

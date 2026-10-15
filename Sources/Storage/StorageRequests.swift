@@ -381,7 +381,9 @@ struct StorageRequests: Sendable {
     StorageRequest(
       head: HTTPRequest(method: .post, url: url("object/sign/\(objectPath(bucket, key))")),
       body: try json(
-        SignBody(expiresIn: expiresIn, transform: transform?.body, versionId: versionId)))
+        SignBody(
+          expiresIn: expiresIn, transform: transform?.isEmpty == false ? transform?.body : nil,
+          versionId: versionId)))
   }
 
   private struct SignManyBody: Encodable {
