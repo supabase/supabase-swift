@@ -45,9 +45,16 @@ final class ResumableUploadModel {
     await upload?.pause()
   }
 
+  /// A handle restored from disk is `.pending` until `start()`; after that `resume()` is the
+  /// call that continues a paused or failed upload.
   func resume() async {
+    guard let upload else { return }
     do {
-      try await upload?.resume()
+      if case .pending = await upload.state {
+        try await upload.start()
+      } else {
+        try await upload.resume()
+      }
     } catch {
       self.error = error
     }
@@ -105,6 +112,24 @@ final class ResumableUploadModel {
       UIApplication.shared.endBackgroundTask(backgroundTask)
       backgroundTask = .invalid
     }
+  }
+}
+
+/// A picked photo or video staged as a file, so a large video never sits in memory whole; the
+/// SDK copies it into its own store during `start()`.
+struct PickedFile: Transferable {
+  let url: URL
+
+  static var transferRepresentation: some TransferRepresentation {
+    FileRepresentation(importedContentType: .movie) { try PickedFile(staging: $0.file) }
+    FileRepresentation(importedContentType: .image) { try PickedFile(staging: $0.file) }
+  }
+
+  private init(staging received: URL) throws {
+    url = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString)
+      .appendingPathExtension(received.pathExtension)
+    try FileManager.default.copyItem(at: received, to: url)
   }
 }
 
@@ -215,11 +240,13 @@ struct ResumableUploadView: View {
     .onChange(of: selectedPhoto) { _, item in
       guard let item else { return }
       Task {
-        guard let data = try? await item.loadTransferable(type: Data.self) else { return }
+        guard let picked = try? await item.loadTransferable(type: PickedFile.self) else { return }
         selectedPhoto = nil
         await model.start {
-          try supabase.storage.from(selectedBucket).resumableUpload(path: filePath, data: data)
+          try supabase.storage.from(selectedBucket)
+            .resumableUpload(path: filePath, fileURL: picked.url)
         }
+        try? FileManager.default.removeItem(at: picked.url)
       }
     }
     .fileImporter(isPresented: $isImporting, allowedContentTypes: [.item]) { result in
