@@ -138,3 +138,78 @@ struct Users {
   var data: JSONValue?
   @Default var status: UserStatus?
 }
+
+@Table("channel_message_counts", readOnly: true)
+struct ChannelMessageCountsRow {
+  var channelId: Int?
+  var messageCount: Int?
+  var slug: String?
+}
+
+@Table("get_username_and_status", readOnly: true)
+struct GetUsernameAndStatusRow {
+  var status: UserStatus?
+  var username: String?
+}
+
+extension _PostgrestRpc {
+  func channelMessageCounts(minMessages: Int? = nil) throws -> _PostgrestQuery<
+    ChannelMessageCountsRow, [ChannelMessageCountsRow]
+  > {
+    try self.rows("channel_message_counts", arguments: ["min_messages": minMessages])
+  }
+
+  func deleteUser() throws -> _PostgrestFunctionCall<Void> {
+    try self.perform("delete_user")
+  }
+
+  func echo(_ body: JSONValue) throws -> _PostgrestFunctionCall<JSONValue?> {
+    try self.value("echo", arguments: _PostgrestArguments(body))
+  }
+
+  func getArrayElement(arr: [Int], index: Int) throws -> _PostgrestFunctionCall<Int?> {
+    try self.value("get_array_element", arguments: ["arr": arr, "index": index])
+  }
+
+  func getStatus(nameParam: String) throws -> _PostgrestFunctionCall<String?> {
+    try self.value("get_status", arguments: ["name_param": nameParam])
+  }
+
+  func getUsernameAndStatus(nameParam: String) throws -> _PostgrestQuery<
+    GetUsernameAndStatusRow, [GetUsernameAndStatusRow]
+  > {
+    try self.rows("get_username_and_status", arguments: ["name_param": nameParam])
+  }
+
+  func messageById(messageId: Int) throws -> _PostgrestFunctionCall<Messages?> {
+    try self.row("message_by_id", arguments: ["message_id": messageId])
+  }
+
+  func messageIds(statuses: [UserStatus]) throws -> _PostgrestFunctionCall<[Int?]> {
+    try self.value("message_ids", arguments: ["statuses": statuses])
+  }
+
+  func messagesOf(channelId: Int) throws -> _PostgrestQuery<Messages, [Messages]> {
+    try self.rows("messages_of", arguments: ["channel_id": channelId])
+  }
+
+  func messagesOf(channelSlug: String, maxCount: Int) throws -> _PostgrestQuery<
+    Messages, [Messages]
+  > {
+    try self.rows("messages_of", arguments: ["channel_slug": channelSlug, "max_count": maxCount])
+  }
+
+  func searchMessages(query: String, channelId: Int? = nil) throws -> _PostgrestQuery<
+    Messages, [Messages]
+  > {
+    try self.rows("search_messages", arguments: ["query": query, "channel_id": channelId])
+  }
+
+  func sleepFor(seconds: Double) throws -> _PostgrestFunctionCall<Void> {
+    try self.perform("sleep_for", arguments: ["seconds": seconds])
+  }
+
+  func voidFunc() throws -> _PostgrestFunctionCall<Void> {
+    try self.perform("void_func")
+  }
+}

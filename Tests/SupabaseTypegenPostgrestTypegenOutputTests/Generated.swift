@@ -297,3 +297,138 @@ public struct UsersViewWithMultipleRefsToUsers {
   public var secondId: Int?
   public var secondName: String?
 }
+
+@Table("function_returning_table", readOnly: true)
+public struct FunctionReturningTableRow {
+  public var id: Int?
+  public var name: String?
+}
+
+@Table("function_returning_table_with_args", readOnly: true)
+public struct FunctionReturningTableWithArgsRow {
+  public var id: Int?
+  public var name: String?
+}
+
+extension _PostgrestRpc {
+  public func addIntervalToDuration(
+    additionalInterval: _PostgresInterval, baseDuration: _PostgresInterval
+  ) throws -> _PostgrestFunctionCall<_PostgresInterval?> {
+    try self.value(
+      "add_interval_to_duration",
+      arguments: ["additional_interval": additionalInterval, "base_duration": baseDuration])
+  }
+
+  public func functionReturningRow() throws -> _PostgrestFunctionCall<Users?> {
+    try self.row("function_returning_row")
+  }
+
+  public func functionReturningSetOfRows() throws -> _PostgrestQuery<Users, [Users]> {
+    try self.rows("function_returning_set_of_rows")
+  }
+
+  public func functionReturningTable() throws -> _PostgrestQuery<
+    FunctionReturningTableRow, [FunctionReturningTableRow]
+  > {
+    try self.rows("function_returning_table")
+  }
+
+  public func functionReturningTableWithArgs(userId: Int) throws -> _PostgrestQuery<
+    FunctionReturningTableWithArgsRow, [FunctionReturningTableWithArgsRow]
+  > {
+    try self.rows("function_returning_table_with_args", arguments: ["user_id": userId])
+  }
+
+  public func getCompositeTypeData() throws -> _PostgrestFunctionCall<[_PostgresUnmapped?]> {
+    try self.value("get_composite_type_data")
+  }
+
+  public func getSingleUserSummaryFromView(searchUserId: Int) throws -> _PostgrestQuery<
+    UserTodosSummaryView, [UserTodosSummaryView]
+  > {
+    try self.rows("get_single_user_summary_from_view", arguments: ["search_user_id": searchUserId])
+  }
+
+  public func getTodosFromUser(searchUserId: Int) throws -> _PostgrestQuery<Todos, [Todos]> {
+    try self.rows("get_todos_from_user", arguments: ["search_user_id": searchUserId])
+  }
+
+  public func getUserIds() throws -> _PostgrestFunctionCall<[Int?]> {
+    try self.value("get_user_ids")
+  }
+
+  public func getUserSummary() throws -> _PostgrestFunctionCall<[_PostgresUnmapped?]> {
+    try self.value("get_user_summary")
+  }
+
+  public func polymorphicFunctionWithNoParamsOrUnnamed() throws -> _PostgrestFunctionCall<Int?> {
+    try self.value("polymorphic_function_with_no_params_or_unnamed")
+  }
+
+  public func polymorphicFunctionWithUnnamedJson(_ body: JSONValue) throws
+    -> _PostgrestFunctionCall<Int?>
+  {
+    try self.value("polymorphic_function_with_unnamed_json", arguments: _PostgrestArguments(body))
+  }
+
+  public func polymorphicFunctionWithUnnamedJsonb(_ body: JSONValue) throws
+    -> _PostgrestFunctionCall<Int?>
+  {
+    try self.value("polymorphic_function_with_unnamed_jsonb", arguments: _PostgrestArguments(body))
+  }
+
+  public func postgresFdwDisconnectAll() throws -> _PostgrestFunctionCall<Bool?> {
+    try self.value("postgres_fdw_disconnect_all")
+  }
+
+  public func postgresFdwGetConnections() throws -> _PostgrestFunctionCall<[_PostgresUnmapped?]> {
+    try self.value("postgres_fdw_get_connections")
+  }
+
+  public func postgresFdwHandler() throws -> _PostgrestFunctionCall<_PostgresUnmapped?> {
+    try self.value("postgres_fdw_handler")
+  }
+
+  public func postgrestResolvableWithOverrideFunction() throws -> _PostgrestFunctionCall<Void> {
+    try self.perform("postgrest_resolvable_with_override_function")
+  }
+
+  public func postgrestResolvableWithOverrideFunction(a: String) throws -> _PostgrestFunctionCall<
+    Int?
+  > {
+    try self.value("postgrest_resolvable_with_override_function", arguments: ["a": a])
+  }
+
+  public func postgrestResolvableWithOverrideFunction(b: Int) throws -> _PostgrestFunctionCall<
+    String?
+  > {
+    try self.value("postgrest_resolvable_with_override_function", arguments: ["b": b])
+  }
+
+  public func postgrestResolvableWithOverrideFunction(completed: Bool, todoId: Int) throws
+    -> _PostgrestQuery<Todos, [Todos]>
+  {
+    try self.rows(
+      "postgrest_resolvable_with_override_function",
+      arguments: ["completed": completed, "todo_id": todoId])
+  }
+
+  public func postgrestResolvableWithOverrideFunction(userId: Int) throws -> _PostgrestQuery<
+    Users, [Users]
+  > {
+    try self.rows("postgrest_resolvable_with_override_function", arguments: ["user_id": userId])
+  }
+
+  public func postgrestUnresolvableFunction() throws -> _PostgrestFunctionCall<Void> {
+    try self.perform("postgrest_unresolvable_function")
+  }
+
+  public func searchTodosByDetails(searchDetails: String) throws -> _PostgrestQuery<Todos, [Todos]>
+  {
+    try self.rows("search_todos_by_details", arguments: ["search_details": searchDetails])
+  }
+
+  public func testUnnamedRowSetof(userId: Int) throws -> _PostgrestQuery<Todos, [Todos]> {
+    try self.rows("test_unnamed_row_setof", arguments: ["user_id": userId])
+  }
+}

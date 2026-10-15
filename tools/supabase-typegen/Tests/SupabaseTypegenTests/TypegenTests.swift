@@ -19,9 +19,11 @@ enum Fixture {
   static let integration = data("generator_metadata")
   static let postgrestTypegen = data("postgrest_typegen_metadata")
 
-  /// The integration fixture with `edit` applied to its top-level JSON object.
+  /// The integration fixture with `edit` applied to its top-level JSON object. Its
+  /// `rpcFunctions` start empty, since they name relations and types an edit may remove.
   static func integration(_ edit: (inout [String: Any]) -> Void) -> Data {
     var object = try! JSONSerialization.jsonObject(with: integration) as! [String: Any]
+    object["rpcFunctions"] = [Any]()
     edit(&object)
     return try! JSONSerialization.data(withJSONObject: object)
   }
