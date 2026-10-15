@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 13/10/26.
 //
 
+import ConcurrencyExtras
 import Foundation
 import Helpers
 import Storage
@@ -64,17 +65,35 @@ enum StorageIntegration {
   static func newBucket(
     _ prefix: String, options: BucketOptions = BucketOptions(isPublic: true)
   ) async throws -> String {
+    await finishPendingDrops()
     let name = "\(prefix)-\(UUID().uuidString.lowercased())"
     _ = try await admin.createBucket(name, options: options)
     return name
   }
 
+  /// Drops still running from earlier tests.
+  ///
+  /// Storage's file backend removes empty folders up to its root after each delete, without a
+  /// lock against uploads. When a drop deletes the last object on the stack while another test
+  /// uploads, the upload's `mkdir` loses its parent and fails with ENOENT. So each new bucket
+  /// waits for earlier drops to finish.
+  private static let pendingDrops = LockIsolated<[Task<Void, Never>]>([])
+
+  static func finishPendingDrops() async {
+    let drops = pendingDrops.withValue { drops in
+      defer { drops = [] }
+      return drops
+    }
+    for drop in drops { await drop.value }
+  }
+
   /// Async cleanup can outlive the test if the process exits right after; fine for a local stack.
   static func dropBucket(_ name: String) {
-    Task {
+    let drop = Task {
       try? await admin.emptyBucket(name)
       try? await admin.deleteBucket(name)
     }
+    pendingDrops.withValue { $0.append(drop) }
   }
 
   static func fixtureURL(_ name: String) -> URL {
