@@ -23,7 +23,7 @@ This is the official Supabase SDK for Swift, mirroring the design of supabase-js
     [tools/supabase-typegen/README.md](tools/supabase-typegen/README.md))
 - `Examples/`: Example applications demonstrating SDK usage
 - `tools/`: `supabase-typegen` (a separate SwiftPM package) and the Node tooling for spell checks
-- `docs/migrations/`: Older migration guides. Current ones are the root `V<N>_MIGRATION.md` files
+- `docs/migrations/`: Migration guides. `docs/migrations/v<N>/` holds one file per module for major version `<N>`; the root `V<N>_MIGRATION.md` is its overview
 
 ## Dependencies
 

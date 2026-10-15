@@ -73,7 +73,7 @@ Use standard file headers with copyright:
   to.
 - Don't hand-write `encode(to:)`/`init(from:)` for the unused direction "for
   symmetry" — dead coders accumulate and mislead readers about how the type
-  is actually used. See `V3_MIGRATION.md` for prior cleanup along these
+  is actually used. See `docs/migrations/v3/` for prior cleanup along these
   lines (`VerifyOTPResponse`, and the broader SDK-1473 pass).
 
 ## Error Handling
