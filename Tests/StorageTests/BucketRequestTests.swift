@@ -92,22 +92,47 @@ struct BucketRequestTests {
     let sent = LockIsolated<[Sent]>([])
     let storage = Self.makeClient(sent: sent, response: #"{"name":"t"}"#)
 
-    try await storage.createBucket("t", options: BucketOptions(type: .analytics))
+    try await storage.createBucket("t", options: CreateBucketOptions(type: .analytics))
 
     #expect(sent.value.map(\.body) == [#"{"id":"t","name":"t","type":"ANALYTICS"}"#])
   }
 
   @Test
-  func updateBucketRefusesATypeBeforeSending() async throws {
+  func bucketDecodesTheVersioningStatus() async throws {
+    let storage = Self.makeClient(
+      response: """
+        [{"id":"a","name":"a","public":false,"versioning_status":"SUSPENDED",
+          "created_at":"2024-01-01T00:00:00.000Z","updated_at":"2024-01-01T00:00:00.000Z"},
+         {"id":"b","name":"b","public":false,"versioning_status":"PAUSED",
+          "created_at":"2024-01-01T00:00:00.000Z","updated_at":"2024-01-01T00:00:00.000Z"},
+         {"id":"c","name":"c","public":false,
+          "created_at":"2024-01-01T00:00:00.000Z","updated_at":"2024-01-01T00:00:00.000Z"}]
+        """)
+
+    let buckets = try await storage.listBuckets()
+
+    #expect(buckets.map(\.versioningStatus) == [.suspended, "PAUSED", nil])
+  }
+
+  @Test
+  func createBucketSendsTheVersioningStatus() async throws {
+    let sent = LockIsolated<[Sent]>([])
+    let storage = Self.makeClient(sent: sent, response: #"{"name":"t"}"#)
+
+    try await storage.createBucket("t", options: CreateBucketOptions(versioningStatus: .enabled))
+
+    #expect(sent.value.map(\.body) == [#"{"id":"t","name":"t","versioning_status":"ENABLED"}"#])
+  }
+
+  @Test
+  func updateBucketSendsOnlyTheVersioningStatus() async throws {
     let sent = LockIsolated<[Sent]>([])
     let storage = Self.makeClient(sent: sent, response: #"{"message":"ok"}"#)
 
-    let error = await #expect(throws: StorageError.self) {
-      try await storage.updateBucket("t", options: BucketOptions(isPublic: true, type: .standard))
-    }
+    try await storage.updateBucket("t", options: UpdateBucketOptions(versioningStatus: .suspended))
 
-    #expect(error?.kind == .invalidRequest)
-    #expect(sent.value.isEmpty)
+    #expect(sent.value.map(\.request.method) == [.put])
+    #expect(sent.value.map(\.body) == [#"{"versioning_status":"SUSPENDED"}"#])
   }
 
   @Test

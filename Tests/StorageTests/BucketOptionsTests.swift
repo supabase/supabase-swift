@@ -6,7 +6,7 @@ import Testing
 struct BucketOptionsTests {
   @Test
   func everyFieldDefaultsToNil() {
-    let options = BucketOptions()
+    let options = CreateBucketOptions()
 
     #expect(options.isPublic == nil)
     #expect(options.fileSizeLimit == nil)
@@ -15,7 +15,7 @@ struct BucketOptionsTests {
 
   @Test
   func customInitialization() {
-    let options = BucketOptions(
+    let options = CreateBucketOptions(
       isPublic: true,
       fileSizeLimit: .megabytes(5),
       allowedMimeTypes: ["image/jpeg", "image/png"]
@@ -28,6 +28,6 @@ struct BucketOptionsTests {
 
   @Test
   func fileSizeLimitFromAnIntegerLiteral() {
-    #expect(BucketOptions(fileSizeLimit: 5_000_000).fileSizeLimit?.bytes == 5_000_000)
+    #expect(CreateBucketOptions(fileSizeLimit: 5_000_000).fileSizeLimit?.bytes == 5_000_000)
   }
 }

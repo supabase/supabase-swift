@@ -161,8 +161,8 @@ supabase stop
 
 `./scripts/test-integration.sh` runs these steps for you.
 
-The CLI starts Storage without object lifecycles, analytics (Iceberg) buckets or a CDN purge
-endpoint, and has no setting for them. On the Docker stack (Linux, and CI's Linux job),
+The CLI starts Storage without object lifecycles, object versioning, analytics (Iceberg) buckets
+or a CDN purge endpoint, and has no setting for them. On the Docker stack (Linux, and CI's Linux job),
 `./scripts/enable-storage-test-features.sh` recreates the storage container with them on and a stub
 that records each CDN purge; then `STORAGE_TEST_FEATURES=1` runs their full integration tests. The
 native stack cannot, so without the variable those suites check that Storage refuses each call

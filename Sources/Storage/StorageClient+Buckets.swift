@@ -42,6 +42,7 @@ extension StorageClient {
     var fileSizeLimit: ByteCount?
     var allowedMimeTypes: [String]?
     var type: BucketType?
+    var versioningStatus: String?
 
     enum CodingKeys: String, CodingKey {
       case id
@@ -50,18 +51,28 @@ extension StorageClient {
       case fileSizeLimit = "file_size_limit"
       case allowedMimeTypes = "allowed_mime_types"
       case type
+      case versioningStatus = "versioning_status"
     }
 
-    init(id: String? = nil, name: String? = nil, options: BucketOptions) {
+    init(id: String, options: CreateBucketOptions) {
       self.id = id
-      self.name = name
+      self.name = id
       self.public = options.isPublic
       self.fileSizeLimit = options.fileSizeLimit
       self.allowedMimeTypes = options.allowedMimeTypes
+      self.type = options.type
+      self.versioningStatus = options.versioningStatus?.rawValue
+    }
+
+    init(options: UpdateBucketOptions) {
+      self.public = options.isPublic
+      self.fileSizeLimit = options.fileSizeLimit
+      self.allowedMimeTypes = options.allowedMimeTypes
+      self.versioningStatus = options.versioningStatus?.rawValue
     }
 
     var isEmpty: Bool {
-      `public` == nil && fileSizeLimit == nil && allowedMimeTypes == nil
+      `public` == nil && fileSizeLimit == nil && allowedMimeTypes == nil && versioningStatus == nil
     }
   }
 
@@ -70,31 +81,31 @@ extension StorageClient {
   /// ```swift
   /// try await storage.createBucket(
   ///   "avatars",
-  ///   options: BucketOptions(isPublic: true, fileSizeLimit: .megabytes(5))
+  ///   options: CreateBucketOptions(isPublic: true, fileSizeLimit: .megabytes(5))
   /// )
   /// ```
   ///
   /// - Parameters:
   ///   - id: A unique identifier for the bucket. This also becomes the bucket name.
-  ///   - options: Options that control visibility, file-size limits, allowed MIME types and the
-  ///     bucket type. A `nil` field takes the server default: a private standard bucket with no
-  ///     size or type restrictions.
+  ///   - options: Options that control visibility, file-size limits, allowed MIME types, the
+  ///     bucket type and versioning. A `nil` field takes the server default: a private standard
+  ///     bucket with no size or type restrictions and versioning off.
   /// - Returns: The bucket name the server stored.
   /// - Throws: ``StorageError`` if a bucket with the same identifier already exists, or if the
   ///   caller is not authorized.
   @discardableResult
-  public func createBucket(_ id: String, options: BucketOptions = BucketOptions()) async throws
-    -> String
-  {
+  public func createBucket(
+    _ id: String, options: CreateBucketOptions = CreateBucketOptions()
+  ) async throws -> String {
     struct Response: Decodable {
       let name: String
     }
 
-    var parameters = BucketParameters(id: id, name: id, options: options)
-    parameters.type = options.type
-    return try await api.execute(api.requests.createBucket(parameters))
-      .decoded(as: Response.self)
-      .name
+    return try await api.execute(
+      api.requests.createBucket(BucketParameters(id: id, options: options))
+    )
+    .decoded(as: Response.self)
+    .name
   }
 
   /// Updates an existing Storage bucket's settings.
@@ -104,21 +115,18 @@ extension StorageClient {
   /// ```swift
   /// try await storage.updateBucket(
   ///   "avatars",
-  ///   options: BucketOptions(allowedMimeTypes: ["image/png", "image/jpeg"])
+  ///   options: UpdateBucketOptions(allowedMimeTypes: ["image/png", "image/jpeg"])
   /// )
+  /// try await storage.updateBucket(
+  ///   "avatars", options: UpdateBucketOptions(versioningStatus: .suspended))
   /// ```
   ///
   /// - Parameters:
   ///   - id: The unique identifier of the bucket to update.
-  ///   - options: The settings to change. At least one field must be set, and not
-  ///     ``BucketOptions/type``: a bucket cannot change type.
+  ///   - options: The settings to change. At least one field must be set.
   /// - Throws: ``StorageError`` with kind ``StorageError/Kind-swift.struct/invalidRequest`` if no
-  ///   field is set or ``BucketOptions/type`` is, or if the bucket does not exist or the caller is not authorized.
-  public func updateBucket(_ id: String, options: BucketOptions) async throws {
-    guard options.type == nil else {
-      throw StorageError(
-        kind: .invalidRequest, message: "updateBucket cannot change a bucket's type.")
-    }
+  ///   field is set, or if the bucket does not exist or the caller is not authorized.
+  public func updateBucket(_ id: String, options: UpdateBucketOptions) async throws {
     let parameters = BucketParameters(options: options)
     guard !parameters.isEmpty else {
       throw StorageError(

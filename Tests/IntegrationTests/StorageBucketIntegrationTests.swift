@@ -127,7 +127,7 @@ final class StorageBucketIntegrationTests {
   func uploadFileWithinFileSizeLimit() async throws {
     bucketName = try await newBucket(
       prefix: "with-limit",
-      options: BucketOptions(isPublic: true, fileSizeLimit: .megabytes(1))
+      options: CreateBucketOptions(isPublic: true, fileSizeLimit: .megabytes(1))
     )
 
     try await storage.from(bucketName).upload(path: uploadPath, data: file)
@@ -137,7 +137,7 @@ final class StorageBucketIntegrationTests {
   func uploadFileThatExceedFileSizeLimit() async throws {
     bucketName = try await newBucket(
       prefix: "with-limit",
-      options: BucketOptions(isPublic: true, fileSizeLimit: .kilobytes(1))
+      options: CreateBucketOptions(isPublic: true, fileSizeLimit: .kilobytes(1))
     )
 
     do {
@@ -160,7 +160,7 @@ final class StorageBucketIntegrationTests {
   func uploadFileWithValidMimeType() async throws {
     bucketName = try await newBucket(
       prefix: "with-mimetype",
-      options: BucketOptions(isPublic: true, allowedMimeTypes: ["image/jpeg"])
+      options: CreateBucketOptions(isPublic: true, allowedMimeTypes: ["image/jpeg"])
     )
 
     try await storage.from(bucketName).upload(
@@ -176,7 +176,7 @@ final class StorageBucketIntegrationTests {
   func uploadFileWithInvalidMimeType() async throws {
     bucketName = try await newBucket(
       prefix: "with-mimetype",
-      options: BucketOptions(isPublic: true, allowedMimeTypes: ["image/png"])
+      options: CreateBucketOptions(isPublic: true, allowedMimeTypes: ["image/png"])
     )
 
     do {
@@ -871,7 +871,7 @@ final class StorageBucketIntegrationTests {
 
   private func newBucket(
     prefix: String = "",
-    options: BucketOptions = BucketOptions(isPublic: true)
+    options: CreateBucketOptions = CreateBucketOptions(isPublic: true)
   ) async throws -> String {
     await StorageIntegration.finishPendingDrops()
     let bucketName = "\(!prefix.isEmpty ? prefix + "-" : "")bucket-\(UUID().uuidString)"
@@ -881,7 +881,7 @@ final class StorageBucketIntegrationTests {
   @discardableResult
   private func findOrCreateBucket(
     name: String,
-    options: BucketOptions = BucketOptions(isPublic: true)
+    options: CreateBucketOptions = CreateBucketOptions(isPublic: true)
   ) async throws -> String {
     do {
       _ = try await storage.bucket(name)

@@ -18,7 +18,8 @@ struct BucketListingIntegrationTests {
     let prefix = "bucket-listing-\(UUID().uuidString.lowercased().prefix(8))"
     let names = ["\(prefix)-a", "\(prefix)-b", "\(prefix)-c"]
     for name in names {
-      try await StorageIntegration.admin.createBucket(name, options: BucketOptions(type: .standard))
+      try await StorageIntegration.admin.createBucket(
+        name, options: CreateBucketOptions(type: .standard))
     }
     defer { names.forEach(StorageIntegration.dropBucket) }
 

@@ -117,7 +117,11 @@ Every failure is a ``StorageError`` or a `CancellationError`. See <doc:HandlingE
 
 - ``Bucket``
 - ``BucketType``
-- ``BucketOptions``
+- ``BucketVersioningStatus``
+- ``BucketVersioningCreateStatus``
+- ``BucketVersioningUpdateStatus``
+- ``CreateBucketOptions``
+- ``UpdateBucketOptions``
 - ``BucketListOptions``
 - ``BucketSortColumn``
 - ``ByteCount``

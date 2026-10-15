@@ -63,7 +63,7 @@ enum StorageIntegration {
   static let admin = client()
 
   static func newBucket(
-    _ prefix: String, options: BucketOptions = BucketOptions(isPublic: true)
+    _ prefix: String, options: CreateBucketOptions = CreateBucketOptions(isPublic: true)
   ) async throws -> String {
     await finishPendingDrops()
     let name = "\(prefix)-\(UUID().uuidString.lowercased())"

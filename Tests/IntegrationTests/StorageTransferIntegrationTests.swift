@@ -135,7 +135,7 @@ final class StorageTransferIntegrationTests {
   @Test
   func aKnownLengthOverTheBucketLimitIsRefused() async throws {
     let name = try await StorageIntegration.newBucket(
-      "transfer-small", options: BucketOptions(isPublic: true, fileSizeLimit: .megabytes(1)))
+      "transfer-small", options: CreateBucketOptions(isPublic: true, fileSizeLimit: .megabytes(1)))
     defer { StorageIntegration.dropBucket(name) }
 
     let error = await StorageIntegration.storageError {

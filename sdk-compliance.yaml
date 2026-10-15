@@ -1486,12 +1486,12 @@ features:
       - ByteCount.kilobytes
       - ByteCount.megabytes
       - ByteCount.gigabytes
-      - BucketOptions.isPublic
-      - BucketOptions
-      - BucketOptions.init
-      - BucketOptions.fileSizeLimit
-      - BucketOptions.allowedMimeTypes
-      - BucketOptions.type
+      - CreateBucketOptions
+      - CreateBucketOptions.init
+      - CreateBucketOptions.isPublic
+      - CreateBucketOptions.fileSizeLimit
+      - CreateBucketOptions.allowedMimeTypes
+      - CreateBucketOptions.type
       - BucketType
       - BucketType.init
       - BucketType.rawValue
@@ -1535,6 +1535,11 @@ features:
     status: implemented
     symbols:
       - StorageClient.updateBucket
+      - UpdateBucketOptions
+      - UpdateBucketOptions.init
+      - UpdateBucketOptions.isPublic
+      - UpdateBucketOptions.fileSizeLimit
+      - UpdateBucketOptions.allowedMimeTypes
   storage.file_buckets.delete_file_bucket:
     status: implemented
     symbols:
@@ -1866,8 +1871,28 @@ features:
       - ObjectVersion.init
       - ObjectVersion.path
       - ObjectVersion.versionId
-  # Bucket and BucketOptions do not carry `versioning_status` yet.
-  storage.file_buckets.bucket_versioning_status: not_implemented
+  storage.file_buckets.bucket_versioning_status:
+    status: implemented
+    symbols:
+      - Bucket.versioningStatus
+      - CreateBucketOptions.versioningStatus
+      - UpdateBucketOptions.versioningStatus
+      - BucketVersioningStatus
+      - BucketVersioningStatus.init
+      - BucketVersioningStatus.rawValue
+      - BucketVersioningStatus.disabled
+      - BucketVersioningStatus.enabled
+      - BucketVersioningStatus.suspended
+      - BucketVersioningCreateStatus
+      - BucketVersioningCreateStatus.init
+      - BucketVersioningCreateStatus.rawValue
+      - BucketVersioningCreateStatus.disabled
+      - BucketVersioningCreateStatus.enabled
+      - BucketVersioningUpdateStatus
+      - BucketVersioningUpdateStatus.init
+      - BucketVersioningUpdateStatus.rawValue
+      - BucketVersioningUpdateStatus.enabled
+      - BucketVersioningUpdateStatus.suspended
   storage.file_buckets.list_file_versions:
     status: implemented
     symbols:
