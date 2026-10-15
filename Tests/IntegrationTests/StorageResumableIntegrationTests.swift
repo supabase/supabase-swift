@@ -7,7 +7,7 @@
 
 import Foundation
 import Helpers
-import Storage
+@_spi(Experimental) import Storage
 import Testing
 
 #if canImport(FoundationNetworking)
@@ -52,11 +52,11 @@ final class StorageResumableIntegrationTests {
 
   /// A client whose records live in this test's directory, so a second one can find them.
   private func client() -> StorageClient {
-    StorageClient(
-      configuration: StorageClientConfiguration(
-        url: StorageIntegration.url,
-        headers: [.authorization: "Bearer \(DotEnv.supabaseSecretKey)"],
-        resumable: ResumableUploadConfiguration(directory: directory)))
+    var configuration = StorageClientConfiguration(
+      url: StorageIntegration.url,
+      headers: [.authorization: "Bearer \(DotEnv.supabaseSecretKey)"])
+    configuration.resumable = ResumableUploadConfiguration(directory: directory)
+    return StorageClient(configuration: configuration)
   }
 
   private func bucket(_ client: StorageClient) -> StorageBucket {

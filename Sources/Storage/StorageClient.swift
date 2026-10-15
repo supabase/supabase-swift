@@ -29,7 +29,7 @@ public import Logging
 ///
 /// ### Creating a configuration
 ///
-/// - ``init(url:headers:http:logger:usesNewHostname:retryEnabled:resumable:)``
+/// - ``init(url:headers:http:logger:usesNewHostname:retryEnabled:)``
 ///
 /// ### Configuration properties
 ///
@@ -39,7 +39,6 @@ public import Logging
 /// - ``logger``
 /// - ``usesNewHostname``
 /// - ``retryEnabled``
-/// - ``resumable``
 public struct StorageClientConfiguration: Sendable {
   /// The base URL of the Storage API endpoint (e.g. `https://project.supabase.co/storage/v1`).
   public var url: URL
@@ -68,7 +67,9 @@ public struct StorageClientConfiguration: Sendable {
   public let retryEnabled: Bool
 
   /// How resumable uploads are chunked, retried and persisted.
-  public var resumable: ResumableUploadConfiguration
+  ///
+  /// - Warning: Experimental. See ``ResumableUpload``.
+  @_spi(Experimental) public var resumable = ResumableUploadConfiguration()
 
   /// The clock the waits between retries sleep on.
   package var clock: any Clock<Duration> = ContinuousClock()
@@ -83,15 +84,13 @@ public struct StorageClientConfiguration: Sendable {
   ///     `SwiftLogNoOpLogHandler` to disable logging entirely.
   ///   - usesNewHostname: When `true`, the storage-specific hostname is used, enabling uploads over 50 GB.
   ///   - retryEnabled: Whether transient failures of reads are retried.
-  ///   - resumable: How resumable uploads are chunked, retried and persisted.
   public init(
     url: URL,
     headers: HTTPFields,
     http: HTTPClientConfiguration = .init(),
     logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.storage"),
     usesNewHostname: Bool = false,
-    retryEnabled: Bool = true,
-    resumable: ResumableUploadConfiguration = ResumableUploadConfiguration()
+    retryEnabled: Bool = true
   ) {
     self.url = url
     self.headers = headers
@@ -101,7 +100,6 @@ public struct StorageClientConfiguration: Sendable {
     self.logger = logger
     self.usesNewHostname = usesNewHostname
     self.retryEnabled = retryEnabled
-    self.resumable = resumable
   }
 }
 

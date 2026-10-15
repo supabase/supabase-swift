@@ -24,7 +24,7 @@
   import Helpers
   import Testing
 
-  @testable import Storage
+  @_spi(Experimental) @testable import Storage
 
   private let megabyte = 1 << 20
 

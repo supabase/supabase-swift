@@ -7,7 +7,7 @@
 
 import FacebookLogin
 import GoogleSignIn
-import Supabase
+@_spi(Experimental) import Supabase
 import SwiftUI
 import UIKit
 

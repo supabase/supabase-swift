@@ -6,7 +6,7 @@
 //
 
 import PhotosUI
-import Supabase
+@_spi(Experimental) import Supabase
 import SwiftUI
 
 /// Mirrors one ``ResumableUpload`` for SwiftUI and keeps the app alive for a short while when
