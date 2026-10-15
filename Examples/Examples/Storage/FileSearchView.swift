@@ -212,13 +212,11 @@ struct FileSearchView: View {
               .from("my-bucket")
               .list(
                 path: "folder/subfolder",
-                options: SearchOptions(
+                options: ListOptions(
                   limit: 100,
                   offset: 0,
-                  sortBy: SortBy(
-                    column: "\(sortColumn.rawValue)",
-                    order: .\(sortOrder == .ascending ? "ascending" : "descending")
-                  ),
+                  sortBy: "\(sortColumn.rawValue)",
+                  order: .\(sortOrder == .ascending ? "ascending" : "descending"),
                   search: "\(searchText.isEmpty ? "photo" : searchText)"
                 )
               )
@@ -295,13 +293,11 @@ struct FileSearchView: View {
       isLoading = true
       defer { isLoading = false }
 
-      let options = SearchOptions(
+      let options = ListOptions(
         limit: Int(limit),
         offset: 0,
-        sortBy: SortBy(
-          column: sortColumn.rawValue,
-          order: sortOrder == .ascending ? .ascending : .descending
-        ),
+        sortBy: ObjectSortColumn(rawValue: sortColumn.rawValue),
+        order: sortOrder == .ascending ? .ascending : .descending,
         search: searchText.isEmpty ? nil : searchText
       )
 

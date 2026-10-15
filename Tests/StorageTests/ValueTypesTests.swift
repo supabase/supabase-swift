@@ -39,21 +39,28 @@ struct ByteCountTests {
   }
 }
 
-// MARK: - SortBy
+// MARK: - ObjectSortColumn
 
 @Suite
-struct SortByTests {
+struct ObjectSortColumnTests {
   @Test
-  func initWithDefaultedOrder() {
-    let sortBy = SortBy(column: "name")
-    #expect(sortBy.column == "name")
-    #expect(sortBy.order == nil)
+  func staticConstants() {
+    #expect(ObjectSortColumn.name.rawValue == "name")
+    #expect(ObjectSortColumn.updatedAt.rawValue == "updated_at")
+    #expect(ObjectSortColumn.createdAt.rawValue == "created_at")
+    #expect(ObjectSortColumn.lastAccessedAt.rawValue == "last_accessed_at")
   }
+}
 
+// MARK: - VersionFilter
+
+@Suite
+struct VersionFilterTests {
   @Test
-  func initWithSortOrder() {
-    let sortBy = SortBy(column: "name", order: .ascending)
-    #expect(sortBy.order == .ascending)
+  func staticConstants() {
+    #expect(VersionFilter.exclude.rawValue == "exclude")
+    #expect(VersionFilter.include.rawValue == "include")
+    #expect(VersionFilter.only.rawValue == "only")
   }
 }
 

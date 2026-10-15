@@ -255,25 +255,38 @@ struct StorageRequests: Sendable {
       body: try json(RemoveBody(prefixes: keys.map(\.path))))
   }
 
-  private static let defaultSearchOptions = SearchOptions(
-    limit: 100, offset: 0, sortBy: SortBy(column: "name", order: .ascending))
+  private struct SortBody: Encodable {
+    let column: String
+    let order: SortOrder
+  }
 
-  /// Fills in the server defaults the caller left `nil`, so a partial `SortBy` keeps the other
-  /// half instead of dropping it.
-  func list(bucket: String, prefix: ObjectKey, options: SearchOptions?) throws -> StorageRequest {
-    let defaults = Self.defaultSearchOptions
-    var options = options ?? defaults
-    options.limit = options.limit ?? defaults.limit
-    options.offset = options.offset ?? defaults.offset
-    options.prefix = prefix.path
-    var sortBy = options.sortBy ?? SortBy()
-    sortBy.column = sortBy.column ?? defaults.sortBy?.column
-    sortBy.order = sortBy.order ?? defaults.sortBy?.order
-    options.sortBy = sortBy
+  private struct ListBody: Encodable {
+    let prefix: String
+    let limit: Int
+    let offset: Int
+    let sortBy: SortBody
+    let search: String?
+    let exactMatch: Bool?
+    let noncurrentVersions: String?
+    let deleteMarkers: String?
+  }
 
+  /// Sends the server defaults for the fields the caller left `nil`, so a sort column without an
+  /// order (or the reverse) keeps the other half.
+  func list(bucket: String, prefix: ObjectKey, options: ListOptions) throws -> StorageRequest {
+    let body = ListBody(
+      prefix: prefix.path,
+      limit: options.limit ?? 100,
+      offset: options.offset ?? 0,
+      sortBy: SortBody(
+        column: (options.sortBy ?? .name).rawValue, order: options.order ?? .ascending),
+      search: options.search,
+      exactMatch: options.exactMatch,
+      noncurrentVersions: options.versions?.rawValue,
+      deleteMarkers: options.deleteMarkers?.rawValue)
     return StorageRequest(
       head: HTTPRequest(method: .post, url: url("object/list/\(ObjectKey.encode(bucket))")),
-      body: try json(options), replayable: true)
+      body: try json(body), replayable: true)
   }
 
   /// A transform routes to `render/image/authenticated`; the plain object route otherwise.

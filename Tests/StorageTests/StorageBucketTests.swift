@@ -274,7 +274,7 @@ extension StorageMockerTests {
 
       _ = try await storage.from("bucket").list(
         path: "folder",
-        options: SearchOptions(sortBy: SortBy(column: "updated_at"))
+        options: ListOptions(sortBy: .updatedAt)
       )
     }
 
@@ -303,7 +303,7 @@ extension StorageMockerTests {
 
       _ = try await storage.from("bucket").list(
         path: "folder",
-        options: SearchOptions(sortBy: SortBy(order: .descending))
+        options: ListOptions(order: .descending)
       )
     }
 
@@ -332,7 +332,7 @@ extension StorageMockerTests {
 
       _ = try await storage.from("bucket").list(
         path: "folder",
-        options: SearchOptions(sortBy: SortBy(column: "updated_at", order: .descending))
+        options: ListOptions(sortBy: .updatedAt, order: .descending)
       )
     }
 
@@ -361,7 +361,7 @@ extension StorageMockerTests {
 
       _ = try await storage.from("bucket").list(
         path: "folder",
-        options: SearchOptions(offset: 10, sortBy: SortBy(column: "name", order: .ascending))
+        options: ListOptions(offset: 10, sortBy: .name, order: .ascending)
       )
     }
 
@@ -390,7 +390,7 @@ extension StorageMockerTests {
 
       _ = try await storage.from("bucket").list(
         path: "folder",
-        options: SearchOptions(limit: 50, sortBy: SortBy(column: "name", order: .ascending))
+        options: ListOptions(limit: 50, sortBy: .name, order: .ascending)
       )
     }
 
@@ -419,8 +419,26 @@ extension StorageMockerTests {
 
       _ = try await storage.from("bucket").list(
         path: "folder",
-        options: SearchOptions(
-          limit: 0, offset: 5, sortBy: SortBy(column: "name", order: .ascending))
+        options: ListOptions(
+          limit: 0, offset: 5, sortBy: .name, order: .ascending)
+      )
+    }
+
+    @Test
+    func listFilesSendsSearchExactMatchAndVersionFilters() async throws {
+      let body = LockIsolated<Data?>(nil)
+      let storage = makeBodyCapturingSUT(body: body, response: "[]")
+
+      _ = try await storage.from("bucket").list(
+        path: "folder/a.txt",
+        options: ListOptions(
+          sortBy: .lastAccessedAt, search: "a", exactMatch: true, versions: .include,
+          deleteMarkers: .only)
+      )
+
+      #expect(
+        String(decoding: try #require(body.value), as: UTF8.self)
+          == #"{"deleteMarkers":"only","exactMatch":true,"limit":100,"noncurrentVersions":"include","offset":0,"prefix":"folder\/a.txt","search":"a","sortBy":{"column":"last_accessed_at","order":"asc"}}"#
       )
     }
 
