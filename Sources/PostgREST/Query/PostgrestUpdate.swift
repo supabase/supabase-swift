@@ -110,8 +110,11 @@ struct PostgrestUpdateValue: Encodable, Sendable {
     self.value = value
   }
 
+  // Through a container, not `value.encode(to:)`, so `JSONEncoder` still applies its own
+  // handling of `Date` and `Decimal`.
   func encode(to encoder: any Encoder) throws {
-    try value.encode(to: encoder)
+    var container = encoder.singleValueContainer()
+    try container.encode(value)
   }
 }
 

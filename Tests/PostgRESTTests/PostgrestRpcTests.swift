@@ -82,17 +82,33 @@ struct PostgrestRpcTests {
   }
 
   @Test
-  func countSendsTheArgumentsAsQueryItems() async throws {
-    let capture = QueryCapture(body: "", responseHeaders: ["Content-Range": "*/2"])
+  func countCallsTheFunctionWithItsArgumentsAndAsksForNoRows() async throws {
+    let capture = QueryCapture(body: "[]", responseHeaders: ["Content-Range": "*/2"])
 
     let query: _PostgrestQuery<Book, [Book]> = try capture.client.rpc.rows(
       "search_books", arguments: ["query": "dune"])
-    let count = try await query.where { $0.id.gt(1) }.count(.exact)
+    let count = try await query.where { $0.id.gt(1) }.limit(5).count(.exact)
 
     #expect(count == 2)
-    #expect(capture.httpMethod == "HEAD")
-    #expect(capture.query == "query=dune&id=gt.1")
-    #expect(capture.bodyString == nil)
+    #expect(capture.httpMethod == "POST")
+    #expect(capture.query == "id=gt.1&limit=0")
+    #expect(capture.bodyString == #"{"query":"dune"}"#)
+    #expect(capture.header("Prefer") == "count=exact")
+  }
+
+  @Test
+  func datesAndDecimalsAreSentTheWayPostgresReadsThem() async throws {
+    let capture = QueryCapture()
+    let since: Date? = Date(timeIntervalSince1970: 0)
+
+    let query: _PostgrestQuery<Book, [Book]> = try capture.client.rpc.rows(
+      "search_books", arguments: ["since": since, "max_price": Decimal(string: "1.5")!])
+    _ = try await query.execute()
+
+    let body = try JSONDecoder().decode(
+      [String: JSONValue].self, from: Data(try #require(capture.bodyString).utf8))
+    #expect(body["max_price"] == 1.5)
+    #expect(body["since"]?.stringValue?.hasPrefix("1970-01-01T00:00:00") == true)
   }
 
   @Test
