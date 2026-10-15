@@ -43,6 +43,14 @@ struct StorageExamplesView: View {
           )
         }
 
+        NavigationLink(destination: ResumableUploadView()) {
+          ExampleRow(
+            title: "Resumable Upload",
+            description: "Pause, resume, cancel, and continue after a relaunch",
+            icon: "arrow.up.circle.dotted"
+          )
+        }
+
         NavigationLink(destination: FileDownloadView()) {
           ExampleRow(
             title: "Download Files",
