@@ -10,6 +10,9 @@ public import Foundation
 /// How ``ResumableUpload`` chunks, retries and persists an upload.
 ///
 /// Set it on ``StorageClientConfiguration/resumable``.
+///
+/// - Warning: Experimental. See ``ResumableUpload``.
+@_spi(Experimental)
 public struct ResumableUploadConfiguration: Sendable {
   /// The bytes sent per request. Hosted Supabase accepts exactly 6 MiB, the default, for every
   /// chunk but the last; a self-hosted Storage can be configured for another size.

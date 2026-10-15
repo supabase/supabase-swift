@@ -29,6 +29,10 @@ import Logging
 /// upload retries, with a `HEAD` for the server's offset before each attempt, until
 /// ``ResumableUploadConfiguration/retryTimeout`` is spent; then it fails and its record stays
 /// on disk for ``resume()``, in this process or the next.
+///
+/// - Warning: Experimental. Opt in with `@_spi(Experimental) import Supabase` (or `import
+///   Storage`); the API may change in a future release.
+@_spi(Experimental)
 public actor ResumableUpload {
   /// The identity of an upload: the same file to the same path in the same bucket has the same
   /// `ID`, whichever URL it is picked through.

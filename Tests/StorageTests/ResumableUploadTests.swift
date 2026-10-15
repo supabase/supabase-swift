@@ -5,7 +5,7 @@ import HTTPTypes
 import TestHelpers
 import Testing
 
-@testable import Storage
+@_spi(Experimental) @testable import Storage
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -94,9 +94,9 @@ struct ResumableUploadTests {
     var configuration = StorageClientConfiguration(
       url: URL(string: "http://localhost:54321/storage/v1")!,
       headers: [:],
-      http: .init(transport: ClosureTransport { try await script.send($0, body: $1) }),
-      resumable: ResumableUploadConfiguration(
-        chunkSize: 8, retryTimeout: retryTimeout, directory: root.appendingPathComponent("store")))
+      http: .init(transport: ClosureTransport { try await script.send($0, body: $1) }))
+    configuration.resumable = ResumableUploadConfiguration(
+      chunkSize: 8, retryTimeout: retryTimeout, directory: root.appendingPathComponent("store"))
     configuration.clock = ImmediateClock()
     return StorageClient(configuration: configuration).from("bucket")
   }

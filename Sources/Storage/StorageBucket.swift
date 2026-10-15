@@ -28,8 +28,6 @@ public import HTTPTypes
 /// - ``upload(path:data:options:progress:)``
 /// - ``upload(path:fileURL:options:progress:)``
 /// - ``upload(path:body:options:progress:)``
-/// - ``resumableUpload(path:fileURL:options:)``
-/// - ``resumableUpload(path:data:options:)``
 /// - ``update(path:data:options:progress:)``
 /// - ``update(path:fileURL:options:progress:)``
 /// - ``update(path:body:options:progress:)``
@@ -250,6 +248,7 @@ public struct StorageBucket: Sendable {
   ///   - options: Upload options such as cache control, content type, and upsert behavior.
   /// - Throws: ``StorageError`` if `path` is not a valid object path, and the file system's error
   ///   if `fileURL` cannot be read.
+  @_spi(Experimental)
   public func resumableUpload(
     path: String,
     fileURL: URL,
@@ -277,6 +276,7 @@ public struct StorageBucket: Sendable {
   ///   - data: The raw bytes to store in the bucket.
   ///   - options: Upload options such as cache control, content type, and upsert behavior.
   /// - Throws: ``StorageError`` if `path` is not a valid object path.
+  @_spi(Experimental)
   public func resumableUpload(
     path: String,
     data: Data,

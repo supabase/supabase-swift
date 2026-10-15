@@ -10,6 +10,9 @@ import Foundation
 extension StorageClient {
   /// The resumable uploads this client's ``StorageClientConfiguration/resumable`` directory
   /// holds records for: the ones in flight, paused, or left by a previous run.
+  ///
+  /// - Warning: Experimental. See ``ResumableUpload``.
+  @_spi(Experimental)
   public var resumableUploads: ResumableUploadRegistry {
     ResumableUploadRegistry(api: api)
   }
@@ -23,6 +26,8 @@ extension StorageClient {
 ///   Task { try await upload.result }
 /// }
 /// ```
+/// - Warning: Experimental. See ``ResumableUpload``.
+@_spi(Experimental)
 public struct ResumableUploadRegistry: Sendable {
   let api: StorageAPI
 
