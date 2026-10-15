@@ -130,6 +130,22 @@ struct ResumableUploadRegistryTests {
   }
 
   @Test
+  func clearKeepsTheUploadInFlight() async throws {
+    _ = try saveRecord(fingerprint: "a")
+    respond(.created, headers: [.location: "/storage/v1/upload/resumable/x", .uploadOffset: "0"])
+    let upload = try storage.from("bucket").resumableUpload(path: "video.mp4", fileURL: fileURL)
+    try await upload.start()
+    let record = try #require(try store.record(fingerprint: upload.id.rawValue))
+
+    try storage.resumableUploads.clear()
+
+    #expect(try store.records().map(\.fingerprint) == [upload.id.rawValue])
+    #expect(FileManager.default.fileExists(atPath: store.fileURL(for: record).path))
+    respond(.noContent)
+    await upload.cancel()
+  }
+
+  @Test
   func clearRemovesEveryRecord() throws {
     _ = try saveRecord(fingerprint: "a")
     _ = try saveRecord(fingerprint: "b")
