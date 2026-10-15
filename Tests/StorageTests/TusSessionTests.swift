@@ -89,6 +89,18 @@ struct TusSessionTests {
   }
 
   @Test
+  func createWithoutUploadOffsetStartsAtZero() async throws {
+    let sut = makeSUT { _ in
+      self.response(201, headers: ["Location": "/storage/v1/upload/resumable/abc"])
+    }
+
+    let created = try await sut.create(
+      bucket: "bucket", key: try ObjectKey("a"), length: 20, options: options)
+
+    #expect(created.offset == 0)
+  }
+
+  @Test
   func createWithTheFirstChunkSendsItAsAnOffsetStream() async throws {
     let sut = makeSUT { request in
       #expect(
