@@ -433,6 +433,67 @@ public struct UploadedObject: Hashable, Sendable {
   }
 }
 
+/// Options for ``StorageBucket/copy(from:to:toBucket:sourceVersionId:options:)``.
+///
+/// ```swift
+/// let copy = try await bucket.copy(
+///   from: "a.png", to: "b.png",
+///   options: CopyOptions(upsert: true, cacheControl: .noCache))
+/// ```
+///
+/// ## Topics
+///
+/// ### Creating copy options
+///
+/// - ``init(upsert:copyMetadata:metadata:contentType:cacheControl:)``
+///
+/// ### Options
+///
+/// - ``upsert``
+/// - ``copyMetadata``
+/// - ``metadata``
+/// - ``contentType``
+/// - ``cacheControl``
+public struct CopyOptions: Sendable {
+  /// Whether the copy replaces an object already at the destination. Defaults to `false`, which
+  /// makes the copy fail when the destination exists.
+  public var upsert: Bool
+
+  /// Whether the copy keeps the source's metadata. Defaults to `true`.
+  public var copyMetadata: Bool
+
+  /// User metadata for the copy, in place of the source's.
+  public var metadata: [String: JSONValue]?
+
+  /// The MIME type of the copy, in place of the source's.
+  public var contentType: String?
+
+  /// The `Cache-Control` of the copy, in place of the source's.
+  public var cacheControl: CacheControl?
+
+  /// Creates a ``CopyOptions`` value.
+  ///
+  /// - Parameters:
+  ///   - upsert: Whether the copy replaces an object at the destination.
+  ///   - copyMetadata: Whether the copy keeps the source's metadata.
+  ///   - metadata: User metadata for the copy.
+  ///   - contentType: The MIME type of the copy.
+  ///   - cacheControl: The `Cache-Control` of the copy.
+  public init(
+    upsert: Bool = false,
+    copyMetadata: Bool = true,
+    metadata: [String: JSONValue]? = nil,
+    contentType: String? = nil,
+    cacheControl: CacheControl? = nil
+  ) {
+    self.upsert = upsert
+    self.copyMetadata = copyMetadata
+    self.metadata = metadata
+    self.contentType = contentType
+    self.cacheControl = cacheControl
+  }
+}
+
 /// One version of an object, for ``StorageBucket/remove(versions:)``.
 ///
 /// ```swift

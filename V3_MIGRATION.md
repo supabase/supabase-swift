@@ -4325,3 +4325,22 @@ try await bucket.move(from: "a.png", to: "a.png", toBucket: "archive")
 `DestinationOptions` and the `options:` label are compile errors. The same release adds
 `versionId:` to `info(path:)`, `createSignedURL` and `publicURL`, and `remove(versions:)`, which
 deletes specific versions given as `ObjectVersion` values.
+
+## `copy` returns an `UploadedObject` and takes `CopyOptions`
+
+`StorageBucket.copy(from:to:toBucket:sourceVersionId:)` returned the copy's full key as a
+`String`. It now returns an `UploadedObject`, like `upload`: `fullPath` is the old `String`, `path`
+is the destination path within the bucket, and `id` is the new object's ID. A new `options:`
+parameter takes a `CopyOptions`: `upsert` replaces an object already at the destination,
+`copyMetadata: false` drops the source's metadata, and `metadata`, `contentType` and
+`cacheControl` set the copy's own.
+
+```swift
+// Before
+let key: String = try await bucket.copy(from: "a.png", to: "b.png")
+
+// After
+let key: String = try await bucket.copy(from: "a.png", to: "b.png").fullPath
+```
+
+Code that used the result as a `String` is a compile error.

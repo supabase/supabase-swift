@@ -509,7 +509,8 @@ extension StorageMockerTests {
         to: "dest/file.txt"
       )
 
-      #expect(key == "object/dest/file.txt")
+      #expect(key.fullPath == "object/dest/file.txt")
+      #expect(key.path == "dest/file.txt")
     }
 
     @Test

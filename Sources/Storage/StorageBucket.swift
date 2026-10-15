@@ -48,7 +48,7 @@ public import HTTPTypes
 /// ### Managing files
 ///
 /// - ``move(from:to:toBucket:sourceVersionId:)``
-/// - ``copy(from:to:toBucket:sourceVersionId:)``
+/// - ``copy(from:to:toBucket:sourceVersionId:options:)``
 /// - ``remove(paths:)``
 /// - ``remove(versions:)``
 /// - ``objects(prefix:options:)``
@@ -337,7 +337,8 @@ public struct StorageBucket: Sendable {
   /// Copies an existing file to a new path, optionally within a different bucket.
   ///
   /// ```swift
-  /// let newPath = try await storage.from("docs").copy(from: "original.pdf", to: "backup/original.pdf")
+  /// let copy = try await storage.from("docs").copy(from: "original.pdf", to: "backup/original.pdf")
+  /// print(copy.fullPath)  // "docs/backup/original.pdf"
   /// ```
   ///
   /// - Parameters:
@@ -345,22 +346,28 @@ public struct StorageBucket: Sendable {
   ///   - destination: The destination path including the new file name, e.g. `"folder/image-copy.png"`.
   ///   - toBucket: The bucket to copy the file into. `nil` copies it within this bucket.
   ///   - sourceVersionId: The version of the source to copy. `nil` copies the current version.
-  /// - Returns: The full storage path of the newly created copy.
-  /// - Throws: ``StorageError`` if the source does not exist or the caller is not authorized.
+  ///   - options: Whether to replace an existing destination, and the metadata of the copy.
+  /// - Returns: The copy's identifier and path.
+  /// - Throws: ``StorageError`` if the source does not exist, the destination exists and
+  ///   ``CopyOptions/upsert`` is `false`, or the caller is not authorized.
   @discardableResult
   public func copy(
     from source: String,
     to destination: String,
     toBucket: String? = nil,
-    sourceVersionId: String? = nil
-  ) async throws -> String {
-    try await api.execute(
+    sourceVersionId: String? = nil,
+    options: CopyOptions = CopyOptions()
+  ) async throws -> UploadedObject {
+    let destinationKey = try ObjectKey(destination)
+    let response = try await api.execute(
       api.requests.copy(
-        bucket: id, source: ObjectKey(source), destination: ObjectKey(destination),
-        destinationBucket: toBucket, sourceVersionId: sourceVersionId)
+        bucket: id, source: ObjectKey(source), destination: destinationKey,
+        destinationBucket: toBucket, sourceVersionId: sourceVersionId, options: options)
     )
     .decoded(as: UploadResponse.self)
-    .key
+    return UploadedObject(
+      id: response.id.flatMap(UUID.init(uuidString:)), path: destinationKey.path,
+      fullPath: response.key)
   }
 
   /// Creates a signed URL for sharing a private file for a fixed period of time.
@@ -492,13 +499,17 @@ public struct StorageBucket: Sendable {
   /// ```
   ///
   /// - Parameter paths: File paths to delete, including the file name,
-  ///   e.g. `["folder/image.png", "other/doc.pdf"]`.
+  ///   e.g. `["folder/image.png", "other/doc.pdf"]`. Storage takes at most 1000 by default; a
+  ///   project can set another limit.
   /// - Returns: An array of ``StorageObject`` values representing the files that were removed.
-  /// - Throws: ``StorageError`` if the request fails or the caller is not authorized.
+  /// - Throws: ``StorageError`` if the request fails, names more objects than the project allows,
+  ///   or the caller is not authorized.
   @discardableResult
   public func remove(paths: [String]) async throws -> [StorageObject] {
-    try await api.execute(api.requests.remove(bucket: id, keys: paths.map { try ObjectKey($0) }))
-      .decoded()
+    try await api.execute(
+      api.requests.remove(bucket: id, keys: paths.map { try ObjectKey($0) })
+    )
+    .decoded()
   }
 
   /// Deletes specific versions of objects in a versioned bucket.
@@ -511,9 +522,11 @@ public struct StorageBucket: Sendable {
   ///   })
   /// ```
   ///
-  /// - Parameter versions: The object versions to delete.
+  /// - Parameter versions: The object versions to delete. Storage takes at most 1000 by default;
+  ///   a project can set another limit.
   /// - Returns: The deleted versions.
-  /// - Throws: ``StorageError`` if the request fails or the caller is not authorized.
+  /// - Throws: ``StorageError`` if the request fails, names more versions than the project
+  ///   allows, or the caller is not authorized.
   @discardableResult
   public func remove(versions: [ObjectVersion]) async throws -> [StorageObject] {
     try await api.execute(
