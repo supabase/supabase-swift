@@ -265,7 +265,7 @@ struct StorageRequests: Sendable {
         method: .head, url: uploadURL, headerFields: [.tusResumable: Self.tusVersion]))
   }
 
-  func tusAppend(_ chunk: Data, at offset: Int64, to uploadURL: URL) -> StorageRequest {
+  func tusAppend(_ chunk: HTTPBody, at offset: Int64, to uploadURL: URL) -> StorageRequest {
     StorageRequest(
       head: HTTPRequest(
         method: .patch, url: uploadURL,
@@ -274,7 +274,7 @@ struct StorageRequests: Sendable {
           .contentType: Self.tusContentType,
           .uploadOffset: "\(offset)",
         ]),
-      body: HTTPBody(chunk))
+      body: chunk)
   }
 
   func tusTerminate(_ uploadURL: URL) -> StorageRequest {

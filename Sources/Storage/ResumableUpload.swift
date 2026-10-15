@@ -337,8 +337,10 @@ public actor ResumableUpload {
   private func append(at offset: Int64, with tus: TusSession) async throws -> Int64? {
     guard var record else { return nil }
     if offset < totalBytes {
-      let chunk = try await Self.read(
-        store.fileURL(for: record), at: offset, count: record.chunkSize)
+      let range = FileRange(
+        fileURL: store.fileURL(for: record), offset: offset,
+        count: min(record.chunkSize, totalBytes - offset))
+      let chunk = HTTPBody(range, length: .known(range.count), iterationBehavior: .multiple)
       let appended = try await tus.append(chunk, at: offset, to: record.uploadURL)
       record.lastKnownOffset = appended.offset
       self.record = record
@@ -434,14 +436,6 @@ public actor ResumableUpload {
         kind: .invalidRequest, message: "The upload source could not be read.",
         underlyingError: error)
   }
-
-  @concurrent
-  private static func read(_ fileURL: URL, at offset: Int64, count: Int64) async throws -> Data {
-    let handle = try FileHandle(forReadingFrom: fileURL)
-    defer { try? handle.close() }
-    try handle.seek(toOffset: UInt64(offset))
-    return try handle.read(upToCount: Int(count)) ?? Data()
-  }
 }
 
 /// Fans one producer out to any number of `AsyncStream` consumers. A new consumer gets the
@@ -491,5 +485,52 @@ final class StreamBroadcaster<Element: Sendable>: Sendable {
       for continuation in subscribers.continuations.values { continuation.finish() }
       subscribers.continuations.removeAll()
     }
+  }
+}
+
+/// `count` bytes of a file from `offset`, in 64 KiB pieces. Each pass re-opens the file, so a
+/// retried PATCH replays the same bytes. An in-memory chunk is not an option: URLSession keeps a
+/// copy of every `Data` request body after its task ends, so a long upload would hold the whole
+/// file.
+struct FileRange: AsyncSequence, Sendable {
+  typealias Element = ArraySlice<UInt8>
+
+  let fileURL: URL
+  let offset: Int64
+  let count: Int64
+
+  struct AsyncIterator: AsyncIteratorProtocol {
+    let fileURL: URL
+    let offset: Int64
+    var remaining: Int64
+    var handle: FileHandle?
+
+    mutating func next() async throws -> ArraySlice<UInt8>? {
+      guard remaining > 0 else {
+        try handle?.close()
+        handle = nil
+        return nil
+      }
+      let open = try handle ?? Self.open(fileURL, at: offset)
+      handle = open
+      guard let piece = try open.read(upToCount: Int(Swift.min(remaining, 64 * 1024))),
+        !piece.isEmpty
+      else {
+        remaining = 0
+        return nil
+      }
+      remaining -= Int64(piece.count)
+      return ArraySlice(piece)
+    }
+
+    private static func open(_ fileURL: URL, at offset: Int64) throws -> FileHandle {
+      let handle = try FileHandle(forReadingFrom: fileURL)
+      try handle.seek(toOffset: UInt64(offset))
+      return handle
+    }
+  }
+
+  func makeAsyncIterator() -> AsyncIterator {
+    AsyncIterator(fileURL: fileURL, offset: offset, remaining: count)
   }
 }

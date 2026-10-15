@@ -418,8 +418,8 @@ public struct SignedUploadURL: Sendable {
 /// - ``path``
 /// - ``fullPath``
 public struct UploadedObject: Hashable, Sendable {
-  /// The unique identifier assigned to the object. `nil` after a signed-URL upload, which
-  /// Storage answers without one.
+  /// The unique identifier assigned to the object. `nil` after a signed-URL or resumable
+  /// upload, which Storage answers without one.
   public let id: UUID?
 
   /// The normalized file path within the bucket, as provided to the upload call.
