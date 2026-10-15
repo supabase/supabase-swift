@@ -29,7 +29,7 @@ public import Logging
 ///
 /// ### Creating a configuration
 ///
-/// - ``init(url:headers:http:logger:usesNewHostname:retryEnabled:)``
+/// - ``init(url:headers:http:logger:usesNewHostname:retryEnabled:resumable:)``
 ///
 /// ### Configuration properties
 ///
