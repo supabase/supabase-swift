@@ -18,11 +18,13 @@ import Foundation
 /// }
 /// ```
 public struct PageSequence<Page: Sendable>: AsyncSequence, Sendable {
+  /// Each element is one page.
   public typealias Element = Page
 
   let fetch: @Sendable (_ cursor: String?) async throws -> Page
   let nextCursor: @Sendable (Page) -> String?
 
+  /// Returns an iterator that fetches one page per call to ``AsyncIterator/next()``.
   public func makeAsyncIterator() -> AsyncIterator {
     AsyncIterator(sequence: self)
   }
@@ -86,6 +88,7 @@ public struct PageSequence<Page: Sendable>: AsyncSequence, Sendable {
 /// - ``page(after:)``
 /// - ``Page``
 public struct ObjectListing: AsyncSequence, Sendable {
+  /// Each element is one object, with its full key as its name.
   public typealias Element = StorageObject
 
   /// The pages of this listing.
@@ -110,6 +113,7 @@ public struct ObjectListing: AsyncSequence, Sendable {
     try await fetch(cursor)
   }
 
+  /// Returns an iterator over the objects of every page, in order.
   public func makeAsyncIterator() -> AsyncIterator {
     AsyncIterator(pages: pages.makeAsyncIterator())
   }
@@ -310,6 +314,7 @@ public struct PagedListing<Page: Sendable, Element>: AsyncSequence, Sendable {
     try await fetch(token)
   }
 
+  /// Returns an iterator over the elements of every page, in order.
   public func makeAsyncIterator() -> AsyncIterator {
     AsyncIterator(pages: pages.makeAsyncIterator(), elements: elements)
   }

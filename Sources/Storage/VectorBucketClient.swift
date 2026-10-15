@@ -269,15 +269,18 @@ public struct VectorDataType: RawRepresentable, Hashable, Sendable {
 }
 
 extension VectorDataType: ExpressibleByStringLiteral {
+  /// Creates a ``VectorDataType`` from a string literal.
   public init(stringLiteral value: String) { self.init(rawValue: value) }
 }
 
 extension VectorDataType: Codable {
+  /// Encodes the raw value as a single string.
   public func encode(to encoder: any Encoder) throws {
     var container = encoder.singleValueContainer()
     try container.encode(rawValue)
   }
 
+  /// Decodes the raw value from a single string.
   public init(from decoder: any Decoder) throws {
     let container = try decoder.singleValueContainer()
     self.init(rawValue: try container.decode(String.self))
@@ -320,15 +323,18 @@ public struct VectorDistanceMetric: RawRepresentable, Hashable, Sendable {
 }
 
 extension VectorDistanceMetric: ExpressibleByStringLiteral {
+  /// Creates a ``VectorDistanceMetric`` from a string literal.
   public init(stringLiteral value: String) { self.init(rawValue: value) }
 }
 
 extension VectorDistanceMetric: Codable {
+  /// Encodes the raw value as a single string.
   public func encode(to encoder: any Encoder) throws {
     var container = encoder.singleValueContainer()
     try container.encode(rawValue)
   }
 
+  /// Decodes the raw value from a single string.
   public init(from decoder: any Decoder) throws {
     let container = try decoder.singleValueContainer()
     self.init(rawValue: try container.decode(String.self))
