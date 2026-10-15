@@ -25,8 +25,13 @@ import Foundation
 
 /// The `x-metadata` header value: the user metadata as base64 JSON.
 func encodeMetadata(_ metadata: JSONObject) throws -> String {
+  try Data(encodeMetadataJSON(metadata).utf8).base64EncodedString()
+}
+
+/// The user metadata as a JSON string.
+func encodeMetadataJSON(_ metadata: JSONObject) throws -> String {
   do {
-    return try JSONEncoder.storage.encode(metadata).base64EncodedString()
+    return String(decoding: try JSONEncoder.storage.encode(metadata), as: UTF8.self)
   } catch {
     throw StorageError(
       kind: .invalidRequest,
