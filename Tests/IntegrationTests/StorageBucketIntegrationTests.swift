@@ -15,6 +15,19 @@ import Testing
   import FoundationNetworking
 #endif
 
+#if canImport(CoreTransferable)
+  import CoreTransferable
+  import UniformTypeIdentifiers
+
+  private struct JPEGFile: Transferable {
+    var fileURL: URL
+
+    static var transferRepresentation: some TransferRepresentation {
+      FileRepresentation(exportedContentType: .jpeg) { SentTransferredFile($0.fileURL) }
+    }
+  }
+#endif
+
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil))
 final class StorageBucketIntegrationTests {
   let storage = StorageIntegration.client()
@@ -705,6 +718,21 @@ final class StorageBucketIntegrationTests {
     #expect(info.contentType == "image/jpeg")
     #expect(info.size == Int64(file.count))
   }
+
+  #if canImport(CoreTransferable)
+    @Test
+    func transferableUploadRoundTrip() async throws {
+      let api = storage.from(bucketName)
+
+      try await api.upload(
+        path: "transferable.jpg", item: JPEGFile(fileURL: uploadFileURL("sadcat.jpg")),
+        contentType: .jpeg)
+
+      let info = try await api.info(path: "transferable.jpg")
+      #expect(info.contentType == "image/jpeg")
+      #expect(try await api.download(path: "transferable.jpg").data() == file)
+    }
+  #endif
 
   @Test
   func signedUploadRoundTrip() async throws {
