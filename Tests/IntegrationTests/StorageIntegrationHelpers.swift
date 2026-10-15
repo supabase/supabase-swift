@@ -31,6 +31,33 @@ enum StorageIntegration {
       ))
   }
 
+  /// Whether `scripts/enable-storage-test-features.sh` turned on object lifecycles, analytics
+  /// buckets and the CDN purge stub. Only the Docker stack can; the native one refuses those calls.
+  static let hasTestFeatures = ProcessInfo.processInfo.environment["STORAGE_TEST_FEATURES"] != nil
+
+  /// A purge Storage forwarded to the CDN purge stub.
+  struct ForwardedPurge: Decodable, Equatable {
+    struct Body: Decodable, Equatable {
+      var type: String
+      var bucketId: String?
+      var objectName: String?
+    }
+    var path: String
+    var body: Body
+  }
+
+  /// The purges Storage forwarded to the CDN purge stub, oldest first.
+  static func forwardedPurges() async throws -> [ForwardedPurge] {
+    let (data, _) = try await fetch(URL(string: "http://127.0.0.1:54329/requests")!)
+    return try JSONDecoder().decode([ForwardedPurge].self, from: data)
+  }
+
+  static func clearForwardedPurges() async throws {
+    var request = URLRequest(url: URL(string: "http://127.0.0.1:54329/requests")!)
+    request.httpMethod = "DELETE"
+    _ = try await URLSession.shared.data(for: request)
+  }
+
   /// The service-role client every suite uses to set up and tear down.
   static let admin = client()
 

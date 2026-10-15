@@ -197,12 +197,24 @@ public struct StorageClient: Sendable {
   ///
   /// ```swift
   /// try await client.storage.vectors.createBucket("documents")
-  /// let buckets = try await client.storage.vectors.listBuckets().vectorBuckets
+  /// let buckets = try await client.storage.vectors.listBuckets().page().vectorBuckets
   /// ```
   ///
   /// - Warning: Experimental. See ``StorageVectorsClient``.
   @_spi(Experimental)
   public var vectors: StorageVectorsClient {
     StorageVectorsClient(api: api)
+  }
+
+  /// A client for managing analytics (Iceberg) buckets.
+  ///
+  /// ```swift
+  /// try await client.storage.analytics.createBucket("events")
+  /// ```
+  ///
+  /// - Warning: Experimental. See ``StorageAnalyticsClient``.
+  @_spi(Experimental)
+  public var analytics: StorageAnalyticsClient {
+    StorageAnalyticsClient(api: api)
   }
 }

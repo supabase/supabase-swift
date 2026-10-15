@@ -18,6 +18,11 @@ run_suite() {
   local project="$1"
   shift
   (cd "$project" && supabase start ${START_FLAGS[@]+"${START_FLAGS[@]}"})
+  # Only the Docker stack can run the Storage features the CLI leaves off.
+  if [[ "$(uname)" != "Darwin" && "$project" == Tests/IntegrationTests ]]; then
+    ./scripts/enable-storage-test-features.sh
+    export STORAGE_TEST_FEATURES=1
+  fi
   trap "(cd '$project' && supabase stop)" EXIT
   swift test ${SWIFT_FLAGS[@]+"${SWIFT_FLAGS[@]}"} "$@" --no-parallel
   (cd "$project" && supabase stop)

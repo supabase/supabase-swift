@@ -127,6 +127,28 @@ struct StorageRequests: Sendable {
       ))
   }
 
+  // MARK: - Analytics buckets
+
+  func analyticsBuckets(_ options: BucketListOptions) -> StorageRequest {
+    StorageRequest(
+      head: HTTPRequest(method: .get, url: url("iceberg/bucket", query: options.queryItems)))
+  }
+
+  private struct AnalyticsBucketBody: Encodable {
+    let name: String
+  }
+
+  func createAnalyticsBucket(_ name: String) throws -> StorageRequest {
+    StorageRequest(
+      head: HTTPRequest(method: .post, url: url("iceberg/bucket")),
+      body: try json(AnalyticsBucketBody(name: name)))
+  }
+
+  func deleteAnalyticsBucket(_ name: String) -> StorageRequest {
+    StorageRequest(
+      head: HTTPRequest(method: .delete, url: url("iceberg/bucket/\(ObjectKey.encode(name))")))
+  }
+
   // MARK: - Objects
 
   /// `POST` creates, `PUT` replaces. The file travels as the raw body, the same shape

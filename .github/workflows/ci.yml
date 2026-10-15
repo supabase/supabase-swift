@@ -216,8 +216,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Linux runs the CLI's Docker stack, so scripts/enable-storage-test-features.sh can
+          # turn on the Storage features the CLI leaves off (lifecycles, analytics buckets, CDN
+          # purge), and their full integration tests run here. The native stack cannot.
           - name: Linux
             runner: ubuntu-latest
+            storage-features: true
           # The CLI's experimental stack backend runs every service as a native process on macOS
           # arm64, so no Docker is needed. Only macOS runs RealtimeIntegrationTests (the Swift
           # Linux images' libcurl has no WebSocket support) and MemoryProbeIntegrationTests
@@ -257,6 +261,11 @@ jobs:
       - name: "Start Supabase"
         working-directory: Tests/IntegrationTests
         run: supabase start ${{ matrix.start-flags }}
+      - name: "Enable Storage test features"
+        if: matrix.storage-features
+        run: |
+          ./scripts/enable-storage-test-features.sh
+          echo "STORAGE_TEST_FEATURES=1" >> "$GITHUB_ENV"
       - name: "Run Integration Tests"
         run: >-
           swift test ${{ matrix.swift-flags }}
