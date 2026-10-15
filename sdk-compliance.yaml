@@ -150,6 +150,12 @@ supporting_symbols:
   - StorageClient
   - StorageClient.init
   - StorageClient.configuration
+  - StorageClientConfiguration
+  - StorageClientConfiguration.init
+  - StorageClientConfiguration.url
+  - StorageClientConfiguration.headers
+  - StorageClientConfiguration.logger
+  - StorageClientConfiguration.usesNewHostname
   - StorageError.ServerError.code
   - StorageError.code
   - StorageError.serverStatusCode
@@ -1496,6 +1502,15 @@ features:
     status: implemented
     symbols:
       - StorageClient.bucket
+      - Bucket
+      - Bucket.init
+      - Bucket.id
+      - Bucket.name
+      - Bucket.isPublic
+      - Bucket.fileSizeLimit
+      - Bucket.allowedMimeTypes
+      - Bucket.createdAt
+      - Bucket.updatedAt
       - Bucket.type
       - Bucket.ownerId
   storage.file_buckets.list_file_buckets:
@@ -1706,10 +1721,20 @@ features:
     status: implemented
     symbols:
       - StorageBucket.createSignedURLs
+      - SignedURLResult
+      - SignedURLResult.success
+      - SignedURLResult.failure
+      - SignedURLResult.path
+      - SignedURLResult.signedURL
+      - SignedURLResult.error
   storage.file_buckets.create_signed_upload_url:
     status: implemented
     symbols:
       - StorageBucket.createSignedUploadURL
+      - SignedUploadURL
+      - SignedUploadURL.path
+      - SignedUploadURL.signedURL
+      - SignedUploadURL.token
   storage.file_buckets.upload_with_signed_url:
     status: implemented
     symbols:
@@ -1841,6 +1866,8 @@ features:
       - ObjectVersion.init
       - ObjectVersion.path
       - ObjectVersion.versionId
+  # Bucket and BucketOptions do not carry `versioning_status` yet.
+  storage.file_buckets.bucket_versioning_status: not_implemented
   storage.file_buckets.list_file_versions:
     status: implemented
     symbols:
