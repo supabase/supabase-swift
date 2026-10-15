@@ -106,6 +106,7 @@ public struct ObjectSortColumn: RawRepresentable, Hashable, Sendable, Expressibl
   /// Creates an ``ObjectSortColumn`` from the column name Storage expects.
   public init(rawValue: String) { self.rawValue = rawValue }
 
+  /// Creates a ``ObjectSortColumn`` from a string literal.
   public init(stringLiteral value: String) { self.init(rawValue: value) }
 
   /// Sort by object name.
@@ -142,6 +143,7 @@ public struct VersionFilter: RawRepresentable, Hashable, Sendable, ExpressibleBy
   /// Creates a ``VersionFilter`` from the value Storage expects.
   public init(rawValue: String) { self.rawValue = rawValue }
 
+  /// Creates a ``VersionFilter`` from a string literal.
   public init(stringLiteral value: String) { self.init(rawValue: value) }
 
   /// Leave these entries out. The server default.
@@ -294,10 +296,12 @@ public struct CacheControl: RawRepresentable, Hashable, Sendable, ExpressibleByS
   /// The header value as sent, e.g. `"max-age=3600"`.
   public let rawValue: String
 
+  /// Creates a ``CacheControl`` from a header value, sent as is.
   public init(rawValue: String) {
     self.rawValue = rawValue
   }
 
+  /// Creates a ``CacheControl`` from a string literal.
   public init(stringLiteral value: String) {
     self.init(rawValue: value)
   }
@@ -701,6 +705,7 @@ public struct ObjectMetadata: Hashable, Decodable, Sendable {
     case contentLength
   }
 
+  /// Decodes the known keys and keeps every other key in ``additional``.
   public init(from decoder: any Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     eTag = try container.decodeIfPresent(String.self, forKey: .eTag)
@@ -970,12 +975,15 @@ public struct BucketType: RawRepresentable, Codable, Hashable, Sendable,
   /// Creates a ``BucketType`` from the value Storage sends.
   public init(rawValue: String) { self.rawValue = rawValue }
 
+  /// Creates a ``BucketType`` from a string literal.
   public init(stringLiteral value: String) { self.init(rawValue: value) }
 
+  /// Decodes the raw value from a single string.
   public init(from decoder: any Decoder) throws {
     self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
   }
 
+  /// Encodes the raw value as a single string.
   public func encode(to encoder: any Encoder) throws {
     var container = encoder.singleValueContainer()
     try container.encode(rawValue)
@@ -1075,6 +1083,7 @@ public struct BucketSortColumn: RawRepresentable, Hashable, Sendable, Expressibl
   /// Creates a ``BucketSortColumn`` from the column name Storage expects.
   public init(rawValue: String) { self.rawValue = rawValue }
 
+  /// Creates a ``BucketSortColumn`` from a string literal.
   public init(stringLiteral value: String) { self.init(rawValue: value) }
 
   /// Sort by bucket ID.
@@ -1162,18 +1171,21 @@ public struct ByteCount: RawRepresentable, Hashable, Sendable {
 }
 
 extension ByteCount: ExpressibleByIntegerLiteral {
+  /// Creates a ``ByteCount`` of an exact number of bytes.
   public init(integerLiteral value: Int64) {
     self.init(bytes: value)
   }
 }
 
 extension ByteCount: ExpressibleByStringLiteral {
+  /// Creates a ``ByteCount`` from a string literal.
   public init(stringLiteral value: String) {
     self.init(rawValue: value)
   }
 }
 
 extension ByteCount: Encodable {
+  /// Encodes an exact byte count as a JSON number and a size string as a string.
   public func encode(to encoder: any Encoder) throws {
     var container = encoder.singleValueContainer()
     if let bytes {
@@ -1220,6 +1232,7 @@ public struct ResizeMode: RawRepresentable, Hashable, Sendable {
 }
 
 extension ResizeMode: ExpressibleByStringLiteral {
+  /// Creates a ``ResizeMode`` from a string literal.
   public init(stringLiteral value: String) { self.init(rawValue: value) }
 }
 
@@ -1258,6 +1271,7 @@ public struct ImageFormat: RawRepresentable, Hashable, Sendable {
 }
 
 extension ImageFormat: ExpressibleByStringLiteral {
+  /// Creates a ``ImageFormat`` from a string literal.
   public init(stringLiteral value: String) { self.init(rawValue: value) }
 }
 
@@ -1292,10 +1306,12 @@ public struct SortOrder: RawRepresentable, Hashable, Sendable {
 }
 
 extension SortOrder: ExpressibleByStringLiteral {
+  /// Creates a ``SortOrder`` from a string literal.
   public init(stringLiteral value: String) { self.init(rawValue: value) }
 }
 
 extension SortOrder: Encodable {
+  /// Encodes the raw value as a single string.
   public func encode(to encoder: any Encoder) throws {
     var container = encoder.singleValueContainer()
     try container.encode(rawValue)
@@ -1626,6 +1642,7 @@ public struct Gravity: RawRepresentable, Hashable, Sendable {
 }
 
 extension Gravity: ExpressibleByStringLiteral {
+  /// Creates a ``Gravity`` from a string literal.
   public init(stringLiteral value: String) { self.init(rawValue: value) }
 }
 
@@ -1659,6 +1676,7 @@ public struct LifecycleConfiguration: Hashable, Codable, Sendable {
   /// The rules. Storage takes 1 to 1000.
   public var rules: [LifecycleRule]
 
+  /// Creates a ``LifecycleConfiguration``.
   public init(rules: [LifecycleRule]) {
     self.rules = rules
   }
@@ -1673,9 +1691,12 @@ public struct LifecycleRule: Hashable, Codable, Sendable {
   /// The rule's identifier: unique in the configuration, at most 255 characters. Storage
   /// generates one when this is `nil`.
   public var id: String?
+  /// Whether the rule is applied. Defaults to ``LifecycleRuleStatus/enabled``.
   public var status: LifecycleRuleStatus
+  /// When previous versions are deleted.
   public var noncurrentVersionExpiration: NoncurrentVersionExpiration
 
+  /// Creates a ``LifecycleRule``.
   public init(
     id: String? = nil,
     status: LifecycleRuleStatus = .enabled,
@@ -1691,6 +1712,7 @@ public struct LifecycleRule: Hashable, Codable, Sendable {
   }
 
   // Storage requires `filter`, and accepts only the empty object.
+  /// Encodes the rule with the empty `filter` Storage requires.
   public func encode(to encoder: any Encoder) throws {
     var container = encoder.container(keyedBy: EncodingKeys.self)
     try container.encodeIfPresent(id, forKey: .id)
@@ -1704,17 +1726,22 @@ public struct LifecycleRule: Hashable, Codable, Sendable {
 public struct LifecycleRuleStatus: RawRepresentable, Codable, Hashable, Sendable,
   ExpressibleByStringLiteral
 {
+  /// The status as Storage sends it, `"Enabled"` or `"Disabled"`.
   public let rawValue: String
 
+  /// Creates a ``LifecycleRuleStatus`` from the value Storage sends.
   public init(rawValue: String) {
     self.rawValue = rawValue
   }
 
+  /// Creates a ``LifecycleRuleStatus`` from a string literal.
   public init(stringLiteral value: String) {
     self.init(rawValue: value)
   }
 
+  /// The rule is applied.
   public static let enabled: LifecycleRuleStatus = "Enabled"
+  /// The rule is kept but not applied.
   public static let disabled: LifecycleRuleStatus = "Disabled"
 }
 
@@ -1725,6 +1752,7 @@ public struct NoncurrentVersionExpiration: Hashable, Codable, Sendable {
   /// The newest previous versions to keep regardless of age, 1 to 100. `nil` keeps none.
   public var newerNoncurrentVersions: Int?
 
+  /// Creates a ``NoncurrentVersionExpiration``.
   public init(noncurrentDays: Int, newerNoncurrentVersions: Int? = nil) {
     self.noncurrentDays = noncurrentDays
     self.newerNoncurrentVersions = newerNoncurrentVersions

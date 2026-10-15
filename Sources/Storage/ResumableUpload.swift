@@ -37,8 +37,10 @@ public actor ResumableUpload {
   /// The identity of an upload: the same file to the same path in the same bucket has the same
   /// `ID`, whichever URL it is picked through.
   public struct ID: RawRepresentable, Hashable, Sendable {
+    /// The fingerprint of the endpoint, bucket, path and source.
     public let rawValue: String
 
+    /// Creates an ``ID`` from a fingerprint.
     public init(rawValue: String) {
       self.rawValue = rawValue
     }
@@ -80,6 +82,7 @@ public actor ResumableUpload {
     case recreate
   }
 
+  /// The identity of this upload. Asking for the same upload again returns the same `ID`.
   public nonisolated let id: ID
   /// The bucket the object goes to.
   public nonisolated let bucketId: String

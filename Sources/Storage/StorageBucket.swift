@@ -28,6 +28,7 @@ public import HTTPTypes
 /// - ``upload(path:data:options:progress:)``
 /// - ``upload(path:fileURL:options:progress:)``
 /// - ``upload(path:body:options:progress:)``
+/// - ``upload(path:item:contentType:options:progress:)``
 /// - ``update(path:data:options:progress:)``
 /// - ``update(path:fileURL:options:progress:)``
 /// - ``update(path:body:options:progress:)``
