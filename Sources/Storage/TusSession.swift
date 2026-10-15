@@ -54,10 +54,11 @@ struct TusSession: Sendable {
         kind: .server, message: "The resumable upload was created without a Location.",
         response: HTTPErrorResponse(head, body: Data()))
     }
-    // Plain creation (no body) answers without Upload-Offset; only creation-with-upload carries it.
+    // Plain creation (no body) answers without Upload-Offset; creation-with-upload must carry it.
     return Created(
       uploadURL: uploadURL,
-      offset: head.headerFields[.uploadOffset] == nil ? 0 : try uploadOffset(of: head),
+      offset: firstChunk == nil && head.headerFields[.uploadOffset] == nil
+        ? 0 : try uploadOffset(of: head),
       expiresAt: head.headerFields[.uploadExpires].flatMap(DownloadResponse.httpDate))
   }
 
