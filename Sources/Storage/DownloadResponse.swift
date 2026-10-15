@@ -90,7 +90,7 @@ public struct DownloadResponse: Sendable {
   }
 
   /// Parses an IMF-fixdate such as `Tue, 13 Oct 2026 15:00:00 GMT`, the form Storage sends.
-  private static func httpDate(_ string: String) -> Date? {
+  static func httpDate(_ string: String) -> Date? {
     let formatter = DateFormatter()
     formatter.locale = Locale(identifier: "en_US_POSIX")
     formatter.timeZone = TimeZone(identifier: "GMT")

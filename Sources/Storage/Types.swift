@@ -312,6 +312,14 @@ public struct CacheControl: RawRepresentable, Hashable, Sendable, ExpressibleByS
 
   /// `no-store`: never cache.
   public static let noStore: CacheControl = "no-store"
+
+  /// The `N` of a `max-age=N` value, or `nil` for any other directive.
+  var maxAgeSeconds: String? {
+    let prefix = "max-age="
+    guard rawValue.hasPrefix(prefix) else { return nil }
+    let digits = rawValue.dropFirst(prefix.count)
+    return digits.allSatisfy(\.isNumber) && !digits.isEmpty ? String(digits) : nil
+  }
 }
 
 /// Represents the per-item result of a ``StorageBucket/createSignedURLs(paths:expiresIn:download:cacheNonce:)`` call.

@@ -220,6 +220,74 @@ struct StorageRequests: Sendable {
     return headers
   }
 
+  // MARK: - Resumable (tus 1.0)
+
+  static let tusVersion = "1.0.0"
+  static let tusContentType = "application/offset+octet-stream"
+
+  /// `POST upload/resumable`. The object's attributes travel in `Upload-Metadata` as
+  /// `key base64(value)` pairs, the form storage-api reads them in; `cacheControl` is the
+  /// `max-age` seconds alone, as the server rebuilds the header from it.
+  func tusCreate(
+    bucket: String, key: ObjectKey, length: Int64, options: UploadOptions, firstChunk: Data?
+  ) throws -> StorageRequest {
+    var headers = options.headers
+    headers[.tusResumable] = Self.tusVersion
+    headers[.uploadLength] = "\(length)"
+    headers[.uploadMetadata] = try tusMetadata(bucket: bucket, key: key, options: options)
+    headers[.xUpsert] = "\(options.upsert)"
+    if firstChunk != nil {
+      headers[.contentType] = Self.tusContentType
+    }
+    return StorageRequest(
+      head: HTTPRequest(method: .post, url: url("upload/resumable"), headerFields: headers),
+      body: firstChunk.map { HTTPBody($0) })
+  }
+
+  func tusOffset(of uploadURL: URL) -> StorageRequest {
+    StorageRequest(
+      head: HTTPRequest(
+        method: .head, url: uploadURL, headerFields: [.tusResumable: Self.tusVersion]))
+  }
+
+  func tusAppend(_ chunk: Data, at offset: Int64, to uploadURL: URL) -> StorageRequest {
+    StorageRequest(
+      head: HTTPRequest(
+        method: .patch, url: uploadURL,
+        headerFields: [
+          .tusResumable: Self.tusVersion,
+          .contentType: Self.tusContentType,
+          .uploadOffset: "\(offset)",
+        ]),
+      body: HTTPBody(chunk))
+  }
+
+  func tusTerminate(_ uploadURL: URL) -> StorageRequest {
+    StorageRequest(
+      head: HTTPRequest(
+        method: .delete, url: uploadURL, headerFields: [.tusResumable: Self.tusVersion]))
+  }
+
+  private func tusMetadata(bucket: String, key: ObjectKey, options: UploadOptions) throws
+    -> String
+  {
+    var entries = [
+      ("bucketName", bucket),
+      ("objectName", key.path),
+      ("contentType", options.contentType ?? mimeType(forPathExtension: key.path.pathExtension)),
+    ]
+    if let seconds = options.cacheControl.maxAgeSeconds {
+      entries.append(("cacheControl", seconds))
+    }
+    if let metadata = options.metadata {
+      entries.append(("metadata", try encodeMetadataJSON(metadata)))
+    }
+    return
+      entries
+      .map { "\($0.0) \(Data($0.1.utf8).base64EncodedString())" }
+      .joined(separator: ",")
+  }
+
   func createSignedUploadURL(bucket: String, key: ObjectKey, upsert: Bool) -> StorageRequest {
     var headers = HTTPFields()
     if upsert {
@@ -466,4 +534,11 @@ struct UploadResponse: Decodable {
 extension HTTPField.Name {
   static let xMetadata = Self("x-metadata")!
   static let xUpsert = Self("x-upsert")!
+
+  static let tusResumable = Self("Tus-Resumable")!
+  static let tusComplete = Self("Tus-Complete")!
+  static let uploadLength = Self("Upload-Length")!
+  static let uploadMetadata = Self("Upload-Metadata")!
+  static let uploadOffset = Self("Upload-Offset")!
+  static let uploadExpires = Self("Upload-Expires")!
 }
