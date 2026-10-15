@@ -1458,7 +1458,7 @@ public func from(_ id: String) -> StorageFileApi {
 }
 ```
 
-So `storage.setHeader("v", forKey: "X-Foo")` followed by `storage.from("bucket").list()` silently
+So `storage.setHeader("v", forKey: "X-Foo")` followed by `storage.from("bucket").download(path: "a.txt")` silently
 dropped `X-Foo` — the new `StorageFileApi` never saw it. Meanwhile the same header *did* reach
 `storage.vectors` calls, since `vectors` passed `self` (the live instance, headers and all) through
 instead of rebuilding from `configuration`. This composition-based rewrite passes the whole `api`
@@ -1475,7 +1475,7 @@ existed only so `SupabaseStorageClient` could inherit its bucket-management meth
 was possible even though nothing here did it — switch to constructing/using
 `SupabaseStorageClient` instead; its methods are a superset, since the bucket methods moved there.
 
-Calling methods (`from(_:)`, `upload`, `download`, `list`, and friends) compiles unchanged; this
+Calling methods (`from(_:)`, `upload`, `download`, and friends) compiles unchanged; this
 only breaks code that depended on these types being reference types: a `weak var` holding one, an
 `AnyObject` constraint, or an identity check with `===`. None of those compile against a struct.
 
@@ -1504,12 +1504,12 @@ across accesses even if you do capture and reuse `setHeader`'s result:
 // This does not persist the header on `client.storage` — the next access builds a new,
 // unmodified instance from `client`'s own configuration.
 _ = client.storage.setHeader("v", forKey: "X-Foo")
-try await client.storage.from("bucket").list() // X-Foo is not sent
+try await client.storage.from("bucket").download(path: "a.txt") // X-Foo is not sent
 
 // Hold the returned value instead, and use it directly rather than going through
 // `client.storage` again.
 let storage = client.storage.setHeader("v", forKey: "X-Foo")
-try await storage.from("bucket").list() // X-Foo is sent
+try await storage.from("bucket").download(path: "a.txt") // X-Foo is sent
 ```
 
 ## `setHeader(_:forKey:)` on `SupabaseStorageClient`/`StorageFileApi` no longer mutates in place
@@ -2624,7 +2624,7 @@ Functions is unchanged: it does not retry. Storage now retries its reads; see be
   502, 503, 504 or Cloudflare 520–524/530.
 - **Both** report a cancelled task as `CancellationError`, even when the transport reported it
   as `URLError.cancelled`.
-- **Storage** now retries reads: GET, HEAD and `list()`, up to 3 attempts with the same
+- **Storage** now retries reads: GET, HEAD and each page of `objects(prefix:options:)`, up to 3 attempts with the same
   jittered wait as Auth (500 ms base, 20 s cap). Uploads, moves, copies, removals and bucket
   changes are never retried. Pass `retryEnabled: false` to `StorageClientConfiguration`, or
   `storage: .init(retryEnabled: false)` to `SupabaseClientOptions`, to keep the old single-attempt
@@ -4107,8 +4107,8 @@ let url = try await bucket.createSignedURL(path: "a.png", expiresIn: .seconds(60
 
 Every listing entry, info result and upload result is a `Decodable` struct with one object id
 type (`UUID`), `Int64` sizes and `Date` timestamps. `StorageObject` gains `version`,
-`userMetadata`, `isVersioned`, `isDeleteMarker`, `archivedAt` and a computed `isFolder`
-(`id == nil`), which the server already sends. The old `metadata` dictionary mixed what
+`userMetadata`, `isVersioned`, `isDeleteMarker` and `archivedAt`, which the server already
+sends. The old `metadata` dictionary mixed what
 Storage recorded about the bytes with whatever the uploader attached; the two are now separate
 and the first is typed. `upload` and `uploadToSignedURL` used to return two unrelated types
 that differed only by the id Storage omits after a signed-URL upload.
@@ -4123,8 +4123,8 @@ let size = files[0].metadata?["size"]?.intValue
 let info: FileObjectV2 = try await bucket.info(path: "a.png")
 print(info.etag ?? "", info.metadata ?? [:])
 
-// After
-let files: [StorageObject] = try await bucket.list()
+// After (`list` is removed; see the `list(path:options:)` section)
+let files: [StorageObject] = try await bucket.objects().page().objects
 let size = files[0].metadata?.size
 let info: ObjectInfo = try await bucket.info(path: "a.png")
 print(info.eTag ?? "", info.userMetadata ?? [:])
@@ -4287,28 +4287,77 @@ not as it arrives.
 Every call that used the `Data` result is a compile error. A call that discarded it,
 `_ = try await bucket.download(path:)`, still compiles but no longer reads the body.
 
-## `ListOptions` replaces `SearchOptions` and `SortBy`
+## `StorageBucket.list(path:options:)` is removed; `objects(prefix:options:)` is the one listing API
 
-`StorageBucket.list(path:options:)` takes a `ListOptions` instead of a `SearchOptions?`. The sort
-is two fields instead of a nested `SortBy`: `sortBy` is an `ObjectSortColumn` (`.name`,
-`.updatedAt`, `.createdAt`, `.lastAccessedAt`) instead of a column-name `String`, and `order` is
-the `SortOrder` it was before. `ListOptions` also adds `exactMatch` and the `versions` and
-`deleteMarkers` filters (`VersionFilter`: `.exclude`, `.include`, `.only`) for versioned buckets.
-`SearchOptions` and `SortBy` are removed.
+`StorageBucket.list(path:options:)` (`StorageFileApi.list` in v2), its `SearchOptions` and
+`SortBy` options, and the folder rows it returned are gone.
+`StorageBucket.objects(prefix:options:)` lists a bucket instead. It returns an `ObjectListing`,
+an `AsyncSequence` that sends one request per page and follows Storage's cursor for you.
+`ObjectListingOptions` holds its options. Pre-release v3 builds called the old options
+`ListOptions` and had `ObjectSortColumn.lastAccessedAt` and `StorageObject.isFolder`; those are
+removed too.
+
+**Why**: the Storage team is dropping the legacy `POST /object/list/{bucket}` endpoint from the
+client SDKs at their next major version, and v3 is that version for Swift. `objects` uses
+`POST /object/list-v2/{bucket}`, which pages with a cursor instead of an offset, so a listing
+stays correct while objects are added or removed between pages.
 
 ```swift
 // Before
 let files = try await bucket.list(
   path: "photos",
   options: SearchOptions(limit: 50, sortBy: SortBy(column: "created_at", order: .descending)))
+for file in files where file.id != nil {
+  print(file.name)  // "beach.png"
+}
 
-// After
-let files = try await bucket.list(
-  path: "photos", options: ListOptions(limit: 50, sortBy: .createdAt, order: .descending))
+// After: one page
+let page = try await bucket.objects(
+  prefix: "photos/",
+  options: ObjectListingOptions(pageSize: 50, sortBy: .createdAt, order: .descending)
+).page()
+for object in page.objects {
+  print(object.name)  // "photos/beach.png"
+}
+print(page.folders)  // ["photos/2026/"]
+
+// After: every object under the prefix, at every depth, across all pages
+for try await object in bucket.objects(
+  prefix: "photos/", options: ObjectListingOptions(delimited: false))
+{
+  print(object.name)
+}
 ```
 
-A column Storage adds later is spelled with a literal: `sortBy: "new_column"`. `SearchOptions`,
-`SortBy` and an `options: nil` argument are compile errors.
+| Before | After |
+| --- | --- |
+| `list(path: "photos")` | `objects(prefix: "photos/")`. End the prefix with `/` to stay in one folder: `"photos"` also matches `"photos-old/a.png"`. |
+| `list()` | `objects()` |
+| `limit` | `ObjectListingOptions.pageSize` (Storage defaults to and caps at 1000, folders included) |
+| `offset` | No equivalent. Pass the previous page's `nextCursor` to `ObjectListing.page(after:)`, or iterate `pages`. |
+| `sortBy` column `name`, `updated_at`, `created_at` | `ObjectListingOptions.sortBy`: `.name`, `.updatedAt`, `.createdAt` |
+| `sortBy` order | `ObjectListingOptions.order`: `.ascending`, `.descending` |
+| `search` | No equivalent. Put the start of the name in the prefix, or filter names as you iterate. |
+| `exactMatch`, `versions`, `deleteMarkers` (pre-release `ListOptions`) | The `ObjectListingOptions` fields of the same names |
+| A folder row: `id == nil` | A string in `ObjectListing.Page.folders`, e.g. `"photos/2026/"` |
+| A name relative to `path`, `"beach.png"` | The full key, `"photos/beach.png"` |
+
+What `objects` cannot do:
+
+- **Offset paging.** Jumping to page 5 directly is not possible. Keep cursors to resume, and
+  pass a cursor only to the listing it came from.
+- **`search`.** There is no substring match on names. A prefix matches only the start of a key.
+- **Sorting by last access.** Storage's cursor listing sorts by `name`, `updated_at` or
+  `created_at` only. The pre-release `ObjectSortColumn.lastAccessedAt` is removed. Sort the
+  objects yourself by `StorageObject.lastAccessedAt` if you need that order.
+- **Old Storage servers.** A self-hosted Storage server that predates the cursor listing answers
+  `objects` with `StorageError.Code.featureNotEnabled`. Upgrade the server; the SDK no longer
+  calls the old endpoint.
+
+This is a compile error: `list`, `SearchOptions`, `SortBy`, `ListOptions`,
+`ObjectSortColumn.lastAccessedAt` and `StorageObject.isFolder` no longer exist. Code that used the
+returned names as paths must handle the change from relative names to full keys. The full key
+works directly with `download(path:)`, `remove(paths:)` and the other path-taking methods.
 
 ## `Bucket.owner` is replaced by `ownerId`; `Bucket` gains `type`
 

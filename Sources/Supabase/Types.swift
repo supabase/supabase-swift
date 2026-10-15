@@ -187,9 +187,8 @@ public struct SupabaseClientOptions: Sendable {
     /// Whether storage client should be initialized with the new hostname format, i.e. `project-ref.storage.supabase.co`
     public let usesNewHostname: Bool
 
-    /// Whether to automatically retry transient Storage errors on reads (`GET`, `HEAD`,
-    /// `list(path:options:)` and each page of `objects(prefix:options:)`). Writes are never
-    /// retried. Defaults to `true`.
+    /// Whether to automatically retry transient Storage errors on reads (`GET`, `HEAD` and each
+    /// page of `objects(prefix:options:)`). Writes are never retried. Defaults to `true`.
     public let retryEnabled: Bool
 
     /// How resumable uploads are chunked, retried and persisted. See

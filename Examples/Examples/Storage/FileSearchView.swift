@@ -2,7 +2,7 @@
 //  FileSearchView.swift
 //  Examples
 //
-//  Demonstrates file search, listing with options, and metadata
+//  Demonstrates prefix search, listing with options, and metadata
 //
 
 import Supabase
@@ -70,10 +70,10 @@ struct FileSearchView: View {
       }
 
       Section("Search Options") {
-        TextField("Search files", text: $searchText)
+        TextField("Folder path (optional)", text: $folderPath)
           .textInputAutocapitalization(.never)
 
-        TextField("Folder path (optional)", text: $folderPath)
+        TextField("Name starts with", text: $searchText)
           .textInputAutocapitalization(.never)
 
         Picker("Sort by", selection: $sortColumn) {
@@ -89,7 +89,7 @@ struct FileSearchView: View {
         }
 
         HStack {
-          Text("Limit")
+          Text("Page size")
           TextField("100", text: $limit)
             .keyboardType(.numberPad)
             .multilineTextAlignment(.trailing)
@@ -207,19 +207,19 @@ struct FileSearchView: View {
       Section("Code Examples") {
         CodeExample(
           code: """
-            // List files with options
-            let files = try await supabase.storage
+            // List the first page of objects whose keys start with a prefix
+            let page = try await supabase.storage
               .from("my-bucket")
-              .list(
-                path: "folder/subfolder",
-                options: ListOptions(
-                  limit: 100,
-                  offset: 0,
+              .objects(
+                prefix: "folder/subfolder/\(searchText.isEmpty ? "photo" : searchText)",
+                options: ObjectListingOptions(
+                  pageSize: 100,
                   sortBy: "\(sortColumn.rawValue)",
-                  order: .\(sortOrder == .ascending ? "ascending" : "descending"),
-                  search: "\(searchText.isEmpty ? "photo" : searchText)"
+                  order: .\(sortOrder == .ascending ? "ascending" : "descending")
                 )
               )
+              .page()
+            let files = page.objects
             """
         )
 
@@ -293,20 +293,19 @@ struct FileSearchView: View {
       isLoading = true
       defer { isLoading = false }
 
-      let options = ListOptions(
-        limit: Int(limit),
-        offset: 0,
+      let options = ObjectListingOptions(
+        pageSize: Int(limit),
         sortBy: ObjectSortColumn(rawValue: sortColumn.rawValue),
-        order: sortOrder == .ascending ? .ascending : .descending,
-        search: searchText.isEmpty ? nil : searchText
+        order: sortOrder == .ascending ? .ascending : .descending
       )
+      // The listing has no substring search: the name filter is the start of the key.
+      let folder = folderPath.isEmpty || folderPath.hasSuffix("/") ? folderPath : folderPath + "/"
 
       files = try await supabase.storage
         .from(selectedBucket)
-        .list(
-          path: folderPath.isEmpty ? nil : folderPath,
-          options: options
-        )
+        .objects(prefix: folder + searchText, options: options)
+        .page()
+        .objects
     } catch {
       self.error = error
     }

@@ -259,10 +259,10 @@ final class StorageBucketIntegrationTests {
   @Test
   func listObjects() async throws {
     try await storage.from(bucketName).upload(path: uploadPath, data: file)
-    let res = try await storage.from(bucketName).list(path: "testpath")
+    let level = try await StorageIntegration.level(storage.from(bucketName), prefix: "testpath/")
 
-    #expect(res.count == 1)
-    #expect(res[0].name == uploadPath.replacingOccurrences(of: "testpath/", with: ""))
+    #expect(level.objects == [uploadPath])
+    #expect(level.folders.isEmpty)
   }
 
   @Test
@@ -354,9 +354,12 @@ final class StorageBucketIntegrationTests {
     let path = "empty-folder/.placeholder"
     try await storage.from(bucketName).upload(path: path, data: Data())
 
-    let files = try await storage.from(bucketName).list()
-    #expect(files.map(\.name) == ["empty-folder"])
-    #expect(files.allSatisfy { $0.id == nil })
+    let root = try await StorageIntegration.level(storage.from(bucketName))
+    #expect(root.folders == ["empty-folder/"])
+    #expect(root.objects.isEmpty)
+    let folder = try await StorageIntegration.level(
+      storage.from(bucketName), prefix: "empty-folder/")
+    #expect(folder.objects == [path])
   }
 
   @Test
@@ -435,7 +438,6 @@ final class StorageBucketIntegrationTests {
     let api = storage.from(bucketName)
     let payload = Data("hello storage".utf8)
     let folder = key.split(separator: "/").dropLast().joined(separator: "/")
-    let leaf = String(key.split(separator: "/").last!)
 
     let uploaded = try await api.upload(path: input, data: payload)
     #expect(uploaded.path == key)
@@ -445,7 +447,9 @@ final class StorageBucketIntegrationTests {
     #expect(try await api.exists(path: input))
     #expect(try await api.info(path: input).name == key)
     #expect(try await api.download(path: input).data() == payload)
-    #expect(try await api.list(path: folder).map(\.name).contains(leaf))
+    #expect(
+      try await StorageIntegration.level(api, prefix: folder.isEmpty ? "" : "\(folder)/").objects
+        .contains(key))
 
     let (publicBytes, publicResponse) = try await StorageIntegration.fetch(
       api.publicURL(path: input))
@@ -500,16 +504,25 @@ final class StorageBucketIntegrationTests {
   }
 
   @Test
-  func listAcceptsAnyFolderSpelling() async throws {
+  func objectsAcceptsAnyPrefixSpelling() async throws {
     let api = storage.from(bucketName)
     try await api.upload(path: "nested/deeper/a.txt", data: file)
 
-    for prefix in ["nested/deeper", "/nested/deeper", "nested//deeper/", "nested/deeper/"] {
-      #expect(try await api.list(path: prefix).map(\.name) == ["a.txt"], "prefix \(prefix)")
+    for prefix in ["nested/deeper/", "/nested/deeper/", "nested//deeper/", "//nested/deeper/"] {
+      let level = try await StorageIntegration.level(api, prefix: prefix)
+      #expect(level.objects == ["nested/deeper/a.txt"], "prefix \(prefix)")
+      #expect(level.folders.isEmpty, "prefix \(prefix)")
     }
-    #expect(try await api.list(path: "nested").map(\.name) == ["deeper"])
-    #expect(try await api.list().map(\.name) == ["nested"])
-    #expect(try await api.list(path: "/").map(\.name) == ["nested"])
+    // Without the trailing `/` the prefix is the start of a key, so the folder itself matches.
+    for prefix in ["nested/deeper", "/nested//deeper"] {
+      let level = try await StorageIntegration.level(api, prefix: prefix)
+      #expect(level.folders == ["nested/deeper/"], "prefix \(prefix)")
+      #expect(level.objects.isEmpty, "prefix \(prefix)")
+    }
+    #expect(
+      try await StorageIntegration.level(api, prefix: "nested/").folders == ["nested/deeper/"])
+    #expect(try await StorageIntegration.level(api).folders == ["nested/"])
+    #expect(try await StorageIntegration.level(api, prefix: "/").folders == ["nested/"])
   }
 
   // MARK: - Errors
@@ -585,7 +598,9 @@ final class StorageBucketIntegrationTests {
       .init("apikey")!: DotEnv.supabasePublishableKey,
     ])
 
-    #expect(try await anon.from(bucketName).list().isEmpty)
+    let anonLevel = try await StorageIntegration.level(anon.from(bucketName))
+    #expect(anonLevel.objects.isEmpty)
+    #expect(anonLevel.folders.isEmpty)
 
     let error = await StorageIntegration.storageError {
       try await anon.from(bucketName).upload(path: "anon.txt", data: file)
@@ -647,19 +662,19 @@ final class StorageBucketIntegrationTests {
   }
 
   @Test
-  func listReturnsTypedMetadataAndFolderRows() async throws {
+  func objectsReturnTypedMetadataAndFolders() async throws {
     let api = storage.from(bucketName)
     let payload = Data("listed".utf8)
     try await api.upload(
       path: "listing/a.txt", data: payload, options: UploadOptions(contentType: "text/plain"))
     try await api.upload(path: "listing/sub/b.txt", data: payload)
 
-    let rows = try await api.list(path: "listing")
-    #expect(Set(rows.map(\.name)) == ["sub", "a.txt"])
+    let page = try await api.objects(prefix: "listing/").page()
+    #expect(page.objects.map(\.name) == ["listing/a.txt"])
+    #expect(page.folders == ["listing/sub/"])
 
-    let fileRow = try #require(rows.first { $0.name == "a.txt" })
+    let fileRow = try #require(page.objects.first)
     #expect(fileRow.id != nil)
-    #expect(!fileRow.isFolder)
     #expect(fileRow.version != nil)
     #expect(fileRow.createdAt != nil)
     #expect(fileRow.updatedAt != nil)
@@ -671,11 +686,6 @@ final class StorageBucketIntegrationTests {
     #expect(metadata.eTag != nil)
     #expect(metadata.lastModified != nil)
     #expect(metadata.additional["httpStatusCode"] == 200)
-
-    let folder = try #require(rows.first { $0.name == "sub" })
-    #expect(folder.id == nil)
-    #expect(folder.isFolder)
-    #expect(folder.metadata == nil)
   }
 
   @Test

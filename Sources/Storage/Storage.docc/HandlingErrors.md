@@ -68,10 +68,9 @@ A transport failure means no answer arrived, so whether Storage applied the requ
 Reads are safe to retry. Before you retry an upload, a move or a removal, check that it did not
 already happen.
 
-The SDK retries reads for you: `GET` and `HEAD` requests, ``StorageBucket/list(path:options:)``
-and each page of ``StorageBucket/objects(prefix:options:)``, up to three attempts with jittered
-backoff. It never replays an upload, a move, a copy, a
-removal or a bucket change. Turn retries off with ``StorageClientConfiguration/retryEnabled``.
+The SDK retries reads for you: `GET` and `HEAD` requests and each page of
+``StorageBucket/objects(prefix:options:)``, up to three attempts with jittered backoff. It never
+replays an upload, a move, a copy, a removal or a bucket change. Turn retries off with ``StorageClientConfiguration/retryEnabled``.
 
 A transport failure can also arrive after a download returned, while you read
 ``DownloadResponse/body``. Handle errors around the read, not only around the call.

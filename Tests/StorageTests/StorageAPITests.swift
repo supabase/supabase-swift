@@ -53,11 +53,11 @@ struct StorageAPITests {
   }
 
   @Test
-  func listIsRetriedPerPolicy() async {
+  func objectsPageIsRetriedPerPolicy() async {
     let (storage, attempts) = makeSUT()
 
     await #expect(throws: StorageError.self) {
-      _ = try await storage.from("bucket").list()
+      _ = try await storage.from("bucket").objects().page()
     }
 
     #expect(attempts.value.count == RetryPolicy.default.maxAttempts)
@@ -90,7 +90,7 @@ struct StorageAPITests {
     let (storage, attempts) = makeSUT(retryEnabled: false)
 
     await #expect(throws: StorageError.self) {
-      _ = try await storage.from("bucket").list()
+      _ = try await storage.from("bucket").objects().page()
     }
 
     #expect(attempts.value.count == 1)

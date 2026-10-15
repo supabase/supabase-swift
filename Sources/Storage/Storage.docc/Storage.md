@@ -100,7 +100,6 @@ Every failure is a ``StorageError`` or a `CancellationError`. See <doc:HandlingE
 - ``ObjectListing``
 - ``ObjectListingOptions``
 - ``PageSequence``
-- ``ListOptions``
 - ``ObjectSortColumn``
 - ``SortOrder``
 - ``VersionFilter``

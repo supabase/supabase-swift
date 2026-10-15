@@ -99,7 +99,7 @@ extension StorageMockerTests {
       let storage = makeFailingSUT { throw URLError(.timedOut) }
 
       do {
-        _ = try await storage.from("bucket").list()
+        _ = try await storage.from("bucket").objects().page()
         Issue.record("Expected failure")
       } catch let error as StorageError {
         #expect(error.kind == .transport)
@@ -115,7 +115,7 @@ extension StorageMockerTests {
       let storage = makeFailingSUT { throw CancellationError() }
 
       await #expect(throws: CancellationError.self) {
-        _ = try await storage.from("bucket").list()
+        _ = try await storage.from("bucket").objects().page()
       }
     }
 
@@ -126,7 +126,7 @@ extension StorageMockerTests {
       let storage = makeFailingSUT { throw URLError(.cancelled) }
 
       do {
-        _ = try await storage.from("bucket").list()
+        _ = try await storage.from("bucket").objects().page()
         Issue.record("Expected failure")
       } catch let error as StorageError {
         #expect(error.kind == .transport)
@@ -144,7 +144,7 @@ extension StorageMockerTests {
       let (requestStarted, onRequestStarted) = AsyncStream<Void>.makeStream()
 
       var mock = Mock(
-        url: url.appendingPathComponent("object/list/bucket"),
+        url: url.appendingPathComponent("object/list-v2/bucket"),
         statusCode: 200,
         data: [.post: Data("[]".utf8)]
       )
@@ -155,7 +155,7 @@ extension StorageMockerTests {
       mock.onRequestHandler = OnRequestHandler(requestCallback: { _ in onRequestStarted.yield() })
       mock.register()
 
-      let task = Task { try await storage.from("bucket").list() }
+      let task = Task { try await storage.from("bucket").objects().page() }
       for await _ in requestStarted { break }
       task.cancel()
 
@@ -174,7 +174,7 @@ extension StorageMockerTests {
       let storage = makeFailingSUT { throw FetchError() }
 
       await #expect(throws: FetchError.self) {
-        _ = try await storage.from("bucket").list()
+        _ = try await storage.from("bucket").objects().page()
       }
     }
 
@@ -183,14 +183,14 @@ extension StorageMockerTests {
       let storage = makeSUT()
 
       Mock(
-        url: url.appendingPathComponent("object/list/bucket"),
+        url: url.appendingPathComponent("object/list-v2/bucket"),
         statusCode: 200,
         data: [.post: Data("not json".utf8)]
       )
       .register()
 
       do {
-        _ = try await storage.from("bucket").list()
+        _ = try await storage.from("bucket").objects().page()
         Issue.record("Expected failure")
       } catch let error as StorageError {
         #expect(error.kind == .decoding)
@@ -204,242 +204,6 @@ extension StorageMockerTests {
     func configuration() {
       let storage = makeSUT()
       #expect(storage.from("bucket").configuration.url == url)
-    }
-
-    @Test
-    func listFiles() async throws {
-      let storage = makeSUT()
-
-      Mock(
-        url: url.appendingPathComponent("object/list/bucket"),
-        statusCode: 200,
-        data: [
-          .post: Data(
-            """
-            [
-              {
-                "name": "test.txt",
-                "id": "E621E1F8-C36C-495A-93FC-0C247A3E6E5F",
-                "updatedAt": "2024-01-01T00:00:00Z",
-                "createdAt": "2024-01-01T00:00:00Z",
-                "lastAccessedAt": "2024-01-01T00:00:00Z",
-                "metadata": {}
-              }
-            ]
-            """.utf8
-          )
-        ]
-      )
-      .snapshotRequest {
-        #"""
-        curl \
-        	--request POST \
-        	--header "Content-Length: 83" \
-        	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: storage-swift/0.0.0" \
-        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	--data "{\"limit\":100,\"offset\":0,\"prefix\":\"folder\",\"sortBy\":{\"column\":\"name\",\"order\":\"asc\"}}" \
-        	"http://localhost:54321/storage/v1/object/list/bucket"
-        """#
-      }
-      .register()
-
-      let result = try await storage.from("bucket").list(path: "folder")
-      #expect(result.count == 1)
-      #expect(result[0].name == "test.txt")
-    }
-
-    @Test
-    func listFilesWithPartialSortByColumn() async throws {
-      let storage = makeSUT()
-
-      Mock(
-        url: url.appendingPathComponent("object/list/bucket"),
-        statusCode: 200,
-        data: [.post: Data("[]".utf8)]
-      )
-      .snapshotRequest {
-        #"""
-        curl \
-        	--request POST \
-        	--header "Content-Length: 89" \
-        	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: storage-swift/0.0.0" \
-        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	--data "{\"limit\":100,\"offset\":0,\"prefix\":\"folder\",\"sortBy\":{\"column\":\"updated_at\",\"order\":\"asc\"}}" \
-        	"http://localhost:54321/storage/v1/object/list/bucket"
-        """#
-      }
-      .register()
-
-      _ = try await storage.from("bucket").list(
-        path: "folder",
-        options: ListOptions(sortBy: .updatedAt)
-      )
-    }
-
-    @Test
-    func listFilesWithPartialSortByOrder() async throws {
-      let storage = makeSUT()
-
-      Mock(
-        url: url.appendingPathComponent("object/list/bucket"),
-        statusCode: 200,
-        data: [.post: Data("[]".utf8)]
-      )
-      .snapshotRequest {
-        #"""
-        curl \
-        	--request POST \
-        	--header "Content-Length: 84" \
-        	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: storage-swift/0.0.0" \
-        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	--data "{\"limit\":100,\"offset\":0,\"prefix\":\"folder\",\"sortBy\":{\"column\":\"name\",\"order\":\"desc\"}}" \
-        	"http://localhost:54321/storage/v1/object/list/bucket"
-        """#
-      }
-      .register()
-
-      _ = try await storage.from("bucket").list(
-        path: "folder",
-        options: ListOptions(order: .descending)
-      )
-    }
-
-    @Test
-    func listFilesWithFullSortByOverride() async throws {
-      let storage = makeSUT()
-
-      Mock(
-        url: url.appendingPathComponent("object/list/bucket"),
-        statusCode: 200,
-        data: [.post: Data("[]".utf8)]
-      )
-      .snapshotRequest {
-        #"""
-        curl \
-        	--request POST \
-        	--header "Content-Length: 90" \
-        	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: storage-swift/0.0.0" \
-        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	--data "{\"limit\":100,\"offset\":0,\"prefix\":\"folder\",\"sortBy\":{\"column\":\"updated_at\",\"order\":\"desc\"}}" \
-        	"http://localhost:54321/storage/v1/object/list/bucket"
-        """#
-      }
-      .register()
-
-      _ = try await storage.from("bucket").list(
-        path: "folder",
-        options: ListOptions(sortBy: .updatedAt, order: .descending)
-      )
-    }
-
-    @Test
-    func listFilesPreservesDefaultLimitWhenOnlyOffsetProvided() async throws {
-      let storage = makeSUT()
-
-      Mock(
-        url: url.appendingPathComponent("object/list/bucket"),
-        statusCode: 200,
-        data: [.post: Data("[]".utf8)]
-      )
-      .snapshotRequest {
-        #"""
-        curl \
-        	--request POST \
-        	--header "Content-Length: 84" \
-        	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: storage-swift/0.0.0" \
-        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	--data "{\"limit\":100,\"offset\":10,\"prefix\":\"folder\",\"sortBy\":{\"column\":\"name\",\"order\":\"asc\"}}" \
-        	"http://localhost:54321/storage/v1/object/list/bucket"
-        """#
-      }
-      .register()
-
-      _ = try await storage.from("bucket").list(
-        path: "folder",
-        options: ListOptions(offset: 10, sortBy: .name, order: .ascending)
-      )
-    }
-
-    @Test
-    func listFilesPreservesDefaultOffsetWhenOnlyLimitProvided() async throws {
-      let storage = makeSUT()
-
-      Mock(
-        url: url.appendingPathComponent("object/list/bucket"),
-        statusCode: 200,
-        data: [.post: Data("[]".utf8)]
-      )
-      .snapshotRequest {
-        #"""
-        curl \
-        	--request POST \
-        	--header "Content-Length: 82" \
-        	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: storage-swift/0.0.0" \
-        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	--data "{\"limit\":50,\"offset\":0,\"prefix\":\"folder\",\"sortBy\":{\"column\":\"name\",\"order\":\"asc\"}}" \
-        	"http://localhost:54321/storage/v1/object/list/bucket"
-        """#
-      }
-      .register()
-
-      _ = try await storage.from("bucket").list(
-        path: "folder",
-        options: ListOptions(limit: 50, sortBy: .name, order: .ascending)
-      )
-    }
-
-    @Test
-    func listFilesWithExplicitZeroLimitIsNotTreatedAsMissing() async throws {
-      let storage = makeSUT()
-
-      Mock(
-        url: url.appendingPathComponent("object/list/bucket"),
-        statusCode: 200,
-        data: [.post: Data("[]".utf8)]
-      )
-      .snapshotRequest {
-        #"""
-        curl \
-        	--request POST \
-        	--header "Content-Length: 81" \
-        	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: storage-swift/0.0.0" \
-        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	--data "{\"limit\":0,\"offset\":5,\"prefix\":\"folder\",\"sortBy\":{\"column\":\"name\",\"order\":\"asc\"}}" \
-        	"http://localhost:54321/storage/v1/object/list/bucket"
-        """#
-      }
-      .register()
-
-      _ = try await storage.from("bucket").list(
-        path: "folder",
-        options: ListOptions(
-          limit: 0, offset: 5, sortBy: .name, order: .ascending)
-      )
-    }
-
-    @Test
-    func listFilesSendsSearchExactMatchAndVersionFilters() async throws {
-      let body = LockIsolated<Data?>(nil)
-      let storage = makeBodyCapturingSUT(body: body, response: "[]")
-
-      _ = try await storage.from("bucket").list(
-        path: "folder/a.txt",
-        options: ListOptions(
-          sortBy: .lastAccessedAt, search: "a", exactMatch: true, versions: .include,
-          deleteMarkers: .only)
-      )
-
-      #expect(
-        String(decoding: try #require(body.value), as: UTF8.self)
-          == #"{"deleteMarkers":"only","exactMatch":true,"limit":100,"noncurrentVersions":"include","offset":0,"prefix":"folder\/a.txt","search":"a","sortBy":{"column":"last_accessed_at","order":"asc"}}"#
-      )
     }
 
     @Test
@@ -1435,20 +1199,6 @@ extension StorageMockerTests {
 
       let sent = try JSONDecoder().decode(Sent.self, from: #require(body.value))
       #expect(sent.paths == ["folder/a.png", "b.png"])
-    }
-
-    @Test
-    func listCleansPath() async throws {
-      struct Sent: Decodable {
-        let prefix: String
-      }
-      let body = LockIsolated(Data?.none)
-      let storage = makeBodyCapturingSUT(body: body, response: "[]")
-
-      _ = try await storage.from("bucket").list(path: "/folder//nested/")
-
-      let sent = try JSONDecoder().decode(Sent.self, from: #require(body.value))
-      #expect(sent.prefix == "folder/nested")
     }
 
     @Test

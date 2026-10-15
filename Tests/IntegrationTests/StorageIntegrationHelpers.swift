@@ -118,6 +118,19 @@ enum StorageIntegration {
     return nil
   }
 
+  /// The folders and object keys one level under `prefix`, across every page.
+  static func level(_ bucket: StorageBucket, prefix: String = "") async throws
+    -> (folders: [String], objects: [String])
+  {
+    var folders: [String] = []
+    var objects: [String] = []
+    for try await page in bucket.objects(prefix: prefix).pages {
+      folders += page.folders
+      objects += page.objects.map(\.name)
+    }
+    return (folders, objects)
+  }
+
   static func fetch(_ url: URL) async throws -> (Data, HTTPURLResponse) {
     let (data, response) = try await URLSession.shared.data(from: url)
     return (data, try #require(response as? HTTPURLResponse))

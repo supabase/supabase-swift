@@ -61,9 +61,9 @@ public struct StorageClientConfiguration: Sendable {
 
   /// Whether transient failures of reads are retried. Defaults to `true`.
   ///
-  /// Only reads are replayed: `GET` and `HEAD` requests, ``StorageBucket/list(path:options:)`` and
-  /// each page of ``StorageBucket/objects(prefix:options:)``, up to three attempts with jittered
-  /// backoff. Uploads, moves, copies, removals and bucket changes are never replayed.
+  /// Only reads are replayed: `GET` and `HEAD` requests and each page of
+  /// ``StorageBucket/objects(prefix:options:)``, up to three attempts with jittered backoff.
+  /// Uploads, moves, copies, removals and bucket changes are never replayed.
   public let retryEnabled: Bool
 
   /// How resumable uploads are chunked, retried and persisted.

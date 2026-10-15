@@ -69,4 +69,47 @@ struct ObjectListingIntegrationTests {
     #expect(first.objects.map(\.name) == ["2026/a.txt"])
     #expect(second.objects.map(\.name) == ["2026/b.txt"])
   }
+
+  @Test
+  func sortByAndOrderApply() async throws {
+    let (name, bucket) = try await Self.seededBucket()
+    defer { StorageIntegration.dropBucket(name) }
+
+    let descending = try await bucket.objects(
+      prefix: "2026/", options: ObjectListingOptions(sortBy: .name, order: .descending)
+    ).page()
+    #expect(descending.objects.map(\.name) == ["2026/c.txt", "2026/b.txt", "2026/a.txt"])
+
+    var byCreation: [String] = []
+    for try await object in bucket.objects(
+      options: ObjectListingOptions(delimited: false, sortBy: .createdAt, order: .ascending))
+    {
+      byCreation.append(object.name)
+    }
+    #expect(byCreation == Self.keys)
+  }
+
+  @Test
+  func versionFiltersAreAccepted() async throws {
+    let name = try await StorageIntegration.newBucket("object-listing-versions")
+    defer { StorageIntegration.dropBucket(name) }
+    let bucket = StorageIntegration.admin.from(name)
+    try await bucket.upload(path: "a.txt", data: Data("a".utf8))
+
+    // Versioning is off on the local stack, so every filter that keeps current objects
+    // returns the one upload, and `.only` returns nothing.
+    let included = try await bucket.objects(
+      options: ObjectListingOptions(versions: .include, deleteMarkers: .include)
+    ).page()
+    #expect(included.objects.map(\.name) == ["a.txt"])
+
+    let excluded = try await bucket.objects(
+      options: ObjectListingOptions(versions: .exclude, deleteMarkers: .exclude)
+    ).page()
+    #expect(excluded.objects.map(\.name) == ["a.txt"])
+
+    let onlyVersions = try await bucket.objects(options: ObjectListingOptions(versions: .only))
+      .page()
+    #expect(onlyVersions.objects.isEmpty)
+  }
 }

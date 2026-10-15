@@ -53,7 +53,6 @@ public import HTTPTypes
 /// - ``remove(paths:)``
 /// - ``remove(versions:)``
 /// - ``objects(prefix:options:)``
-/// - ``list(path:options:)``
 /// - ``info(path:versionId:)``
 /// - ``exists(path:)``
 /// - ``purgeCache(path:includingTransformations:)``
@@ -93,7 +92,7 @@ public struct StorageBucket: Sendable {
   /// ```swift
   /// storage.from("avatars")
   ///   .setHeader(name: .init("X-Custom-Header")!, value: "x-custom-header")
-  ///   .list()
+  ///   .download(path: "user123.png")
   /// ```
   ///
   /// - Parameters:
@@ -580,11 +579,15 @@ public struct StorageBucket: Sendable {
   /// Deletes specific versions of objects in a versioned bucket.
   ///
   /// ```swift
-  /// let versions = try await bucket.list(path: "docs", options: ListOptions(versions: .only))
-  /// try await bucket.remove(
-  ///   versions: versions.compactMap { object in
-  ///     object.version.map { ObjectVersion(path: "docs/\(object.name)", versionId: $0) }
-  ///   })
+  /// var versions: [ObjectVersion] = []
+  /// for try await object in bucket.objects(
+  ///   prefix: "docs/", options: ObjectListingOptions(versions: .only))
+  /// {
+  ///   if let versionId = object.version {
+  ///     versions.append(ObjectVersion(path: object.name, versionId: versionId))
+  ///   }
+  /// }
+  /// try await bucket.remove(versions: versions)
   /// ```
   ///
   /// - Parameter versions: The object versions to delete. Storage takes at most 1000 by default;
@@ -597,29 +600,6 @@ public struct StorageBucket: Sendable {
     try await api.execute(
       api.requests.remove(
         bucket: id, versions: versions.map { (try ObjectKey($0.path), $0.versionId) })
-    )
-    .decoded()
-  }
-
-  /// Lists all files within a bucket folder.
-  ///
-  /// ```swift
-  /// let files = try await storage.from("avatars").list(path: "users/")
-  /// ```
-  ///
-  /// - Parameters:
-  ///   - path: The folder prefix to list, e.g. `"users/"`. Pass `nil` to list the bucket root.
-  ///   - options: Paging, sort and filters. Defaults to the first 100 entries sorted by name
-  ///     ascending.
-  /// - Returns: The files and folders one level under `path`, with names relative to it. A
-  ///   folder is an entry whose ``StorageObject/isFolder`` is `true`.
-  /// - Throws: ``StorageError`` if the request fails or the caller is not authorized.
-  public func list(
-    path: String? = nil,
-    options: ListOptions = ListOptions()
-  ) async throws -> [StorageObject] {
-    try await api.execute(
-      api.requests.list(bucket: id, prefix: ObjectKey(prefix: path ?? ""), options: options)
     )
     .decoded()
   }

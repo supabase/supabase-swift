@@ -1620,7 +1620,6 @@ features:
   storage.file_buckets.list_files:
     status: implemented
     symbols:
-      - StorageBucket.list
       - StorageObject
       - StorageObject.init
       - StorageObject.name
@@ -1634,22 +1633,12 @@ features:
       - StorageObject.isVersioned
       - StorageObject.isDeleteMarker
       - StorageObject.archivedAt
-      - StorageObject.isFolder
-      - ListOptions
-      - ListOptions.init
-      - ListOptions.limit
-      - ListOptions.offset
-      - ListOptions.sortBy
-      - ListOptions.order
-      - ListOptions.search
-      - ListOptions.exactMatch
       - ObjectSortColumn
       - ObjectSortColumn.init
       - ObjectSortColumn.rawValue
       - ObjectSortColumn.name
       - ObjectSortColumn.updatedAt
       - ObjectSortColumn.createdAt
-      - ObjectSortColumn.lastAccessedAt
       - StorageBucket.objects
       - ObjectListing
       - ObjectListing.Element
@@ -1896,8 +1885,6 @@ features:
   storage.file_buckets.list_file_versions:
     status: implemented
     symbols:
-      - ListOptions.versions
-      - ListOptions.deleteMarkers
       - ObjectListingOptions.versions
       - ObjectListingOptions.deleteMarkers
       - VersionFilter

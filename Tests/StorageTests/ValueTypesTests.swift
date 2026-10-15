@@ -48,7 +48,6 @@ struct ObjectSortColumnTests {
     #expect(ObjectSortColumn.name.rawValue == "name")
     #expect(ObjectSortColumn.updatedAt.rawValue == "updated_at")
     #expect(ObjectSortColumn.createdAt.rawValue == "created_at")
-    #expect(ObjectSortColumn.lastAccessedAt.rawValue == "last_accessed_at")
   }
 }
 

@@ -1,94 +1,6 @@
 public import Foundation
 public import HTTPTypes
 
-/// Options for ``StorageBucket/list(path:options:)``: paging, sort, a name filter and the
-/// version filters.
-///
-/// ```swift
-/// let options = ListOptions(limit: 50, sortBy: .createdAt, order: .descending, search: "avatar")
-/// let files = try await storage.from("avatars").list(options: options)
-/// ```
-///
-/// A `nil` field takes the server default: the first 100 entries, sorted by name ascending.
-///
-/// ## Topics
-///
-/// ### Creating list options
-///
-/// - ``init(limit:offset:sortBy:order:search:exactMatch:versions:deleteMarkers:)``
-///
-/// ### Paging and sorting
-///
-/// - ``limit``
-/// - ``offset``
-/// - ``sortBy``
-/// - ``order``
-///
-/// ### Filtering
-///
-/// - ``search``
-/// - ``exactMatch``
-/// - ``versions``
-/// - ``deleteMarkers``
-public struct ListOptions: Sendable {
-  /// Maximum number of entries to return. Defaults to `100`.
-  public var limit: Int?
-
-  /// Zero-based offset used for paginating results. Defaults to `0`.
-  public var offset: Int?
-
-  /// The column to sort by. Defaults to ``ObjectSortColumn/name``.
-  public var sortBy: ObjectSortColumn?
-
-  /// The sort direction. Defaults to ``SortOrder/ascending``.
-  public var order: SortOrder?
-
-  /// A substring filter applied to names within the listed folder.
-  public var search: String?
-
-  /// Whether `path` names one object rather than a folder. When `true`, Storage does not append
-  /// a `/` to it.
-  public var exactMatch: Bool?
-
-  /// Whether noncurrent versions of versioned objects are left out, included, or the only
-  /// entries returned.
-  public var versions: VersionFilter?
-
-  /// Whether delete markers are left out, included, or the only entries returned.
-  public var deleteMarkers: VersionFilter?
-
-  /// Creates a ``ListOptions`` value.
-  ///
-  /// - Parameters:
-  ///   - limit: Maximum number of entries to return.
-  ///   - offset: Zero-based offset for pagination.
-  ///   - sortBy: The column to sort by.
-  ///   - order: The sort direction.
-  ///   - search: A substring filter applied to names.
-  ///   - exactMatch: Whether `path` names one object rather than a folder.
-  ///   - versions: The filter for noncurrent versions.
-  ///   - deleteMarkers: The filter for delete markers.
-  public init(
-    limit: Int? = nil,
-    offset: Int? = nil,
-    sortBy: ObjectSortColumn? = nil,
-    order: SortOrder? = nil,
-    search: String? = nil,
-    exactMatch: Bool? = nil,
-    versions: VersionFilter? = nil,
-    deleteMarkers: VersionFilter? = nil
-  ) {
-    self.limit = limit
-    self.offset = offset
-    self.sortBy = sortBy
-    self.order = order
-    self.search = search
-    self.exactMatch = exactMatch
-    self.versions = versions
-    self.deleteMarkers = deleteMarkers
-  }
-}
-
 /// The column a listing is sorted by.
 ///
 /// ## Topics
@@ -98,7 +10,6 @@ public struct ListOptions: Sendable {
 /// - ``name``
 /// - ``updatedAt``
 /// - ``createdAt``
-/// - ``lastAccessedAt``
 public struct ObjectSortColumn: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
   /// The column name sent to Storage, e.g. `"updated_at"`.
   public let rawValue: String
@@ -117,10 +28,6 @@ public struct ObjectSortColumn: RawRepresentable, Hashable, Sendable, Expressibl
 
   /// Sort by the time the object was created.
   public static let createdAt = ObjectSortColumn(rawValue: "created_at")
-
-  /// Sort by the time the object was last read. Only ``StorageBucket/list(path:options:)``
-  /// accepts it.
-  public static let lastAccessedAt = ObjectSortColumn(rawValue: "last_accessed_at")
 }
 
 /// Whether a listing leaves out, includes, or returns only one kind of version entry.
@@ -529,9 +436,9 @@ public struct ObjectVersion: Hashable, Sendable {
   }
 }
 
-/// One entry of a bucket listing: a file, or a folder when listing one level at a time.
+/// One object of a bucket listing.
 ///
-/// ``StorageObject`` is returned by ``StorageBucket/list(path:options:)`` and
+/// ``StorageObject`` is returned by ``StorageBucket/objects(prefix:options:)`` and
 /// ``StorageBucket/remove(paths:)``.
 ///
 /// ## Topics
@@ -541,7 +448,6 @@ public struct ObjectVersion: Hashable, Sendable {
 /// - ``name``
 /// - ``id``
 /// - ``version``
-/// - ``isFolder``
 ///
 /// ### Timestamps
 ///
@@ -560,14 +466,13 @@ public struct ObjectVersion: Hashable, Sendable {
 /// - ``isDeleteMarker``
 /// - ``archivedAt``
 public struct StorageObject: Identifiable, Hashable, Decodable, Sendable {
-  /// The name of the file, including its extension. Relative to the listed prefix in
-  /// ``StorageBucket/list(path:options:)``, the full key in ``StorageBucket/remove(paths:)``.
+  /// The full key of the object, e.g. `"2026/beach.png"`.
   public var name: String
 
-  /// The unique identifier of this object. `nil` for a folder row.
+  /// The unique identifier of this object.
   public var id: UUID?
 
-  /// The version identifier of this object. `nil` for a folder row and on older servers.
+  /// The version identifier of this object. `nil` on older servers.
   public var version: String?
 
   /// The date and time the object was created.
@@ -579,7 +484,7 @@ public struct StorageObject: Identifiable, Hashable, Decodable, Sendable {
   /// The date and time the object was last accessed.
   public var lastAccessedAt: Date?
 
-  /// What Storage recorded about the stored bytes: size, MIME type, ETag. `nil` for a folder row.
+  /// What Storage recorded about the stored bytes: size, MIME type, ETag.
   public var metadata: ObjectMetadata?
 
   /// The metadata the uploader attached through ``UploadOptions/metadata``.
@@ -593,10 +498,6 @@ public struct StorageObject: Identifiable, Hashable, Decodable, Sendable {
 
   /// The date and time this version was archived.
   public var archivedAt: Date?
-
-  /// Whether this entry is a folder: ``StorageBucket/list(path:options:)`` lists one level, and
-  /// a folder arrives as a row with no ``id``.
-  public var isFolder: Bool { id == nil }
 
   /// Creates a ``StorageObject``.
   public init(
@@ -1381,10 +1282,11 @@ extension ImageFormat: ExpressibleByStringLiteral {
 
 // MARK: - SortOrder
 
-/// Sort direction for ``StorageBucket/list(path:options:)`` results.
+/// Sort direction for ``StorageBucket/objects(prefix:options:)`` and
+/// ``StorageClient/listBuckets(options:)`` results.
 ///
 /// ```swift
-/// ListOptions(sortBy: .createdAt, order: .descending)
+/// ObjectListingOptions(sortBy: .createdAt, order: .descending)
 /// ```
 ///
 /// ## Topics

@@ -4,20 +4,13 @@ Walk the objects under a prefix with a cursor, or read one folder at a time.
 
 ## Overview
 
-A bucket has two listing methods.
+``StorageBucket/objects(prefix:options:)`` lists a bucket. It returns an ``ObjectListing``,
+which fetches one page per request as you iterate and follows Storage's cursor for you. Names
+are full keys, such as `"2026/beach.png"`, and folders arrive apart from objects, as full
+prefixes ending in `/`.
 
-| | ``StorageBucket/objects(prefix:options:)`` | ``StorageBucket/list(path:options:)`` |
-| --- | --- | --- |
-| Returns | an ``ObjectListing``, fetched as you iterate | one array, in one request |
-| Paging | a cursor, carried for you | `limit` and `offset` |
-| Depth | one level with folders, or every key | one level |
-| Names | full keys, `"2026/beach.png"` | relative to the path, `"beach.png"` |
-| Folders | ``ObjectListing/Page/folders`` | rows with ``StorageObject/isFolder`` |
-| Options | ``ObjectListingOptions`` | ``ListOptions`` |
-
-Prefer `objects`. Use `list` when you need its `search` filter or the
-``ObjectSortColumn/lastAccessedAt`` sort, or on a project created before the cursor listing
-existed. Such a project answers `objects` with ``StorageError/Code/featureNotEnabled``.
+A Storage server that predates this listing answers with
+``StorageError/Code/featureNotEnabled``.
 
 ### Every object
 
@@ -76,22 +69,10 @@ A cursor carries the sort and filters of its listing. Pass it only to the listin
 
 ``ObjectListingOptions`` sets the page size (Storage caps it at 1000, folders included), the
 depth, the sort and the filters. ``ObjectListingOptions/exactMatch`` treats the prefix as one
-object key. ``ObjectListingOptions/versions`` and ``ObjectListingOptions/deleteMarkers`` take a
+object key. ``ObjectListingOptions/sortBy`` takes ``ObjectSortColumn/name``,
+``ObjectSortColumn/updatedAt`` or ``ObjectSortColumn/createdAt``.
+``ObjectListingOptions/versions`` and ``ObjectListingOptions/deleteMarkers`` take a
 ``VersionFilter`` for buckets with versioning.
 
-### One folder with list
-
-``StorageBucket/list(path:options:)`` returns one level under `path`, 100 entries by default.
-Page with ``ListOptions/limit`` and ``ListOptions/offset``.
-
-```swift
-let files = try await supabase.storage.from("avatars").list(
-  path: "users",
-  options: ListOptions(limit: 50, offset: 50, sortBy: .createdAt, order: .descending, search: "avatar")
-)
-for file in files where !file.isFolder {
-  print(file.name)
-}
-```
-
-A folder arrives as a row with no ``StorageObject/id`` and no metadata.
+The listing has no name search. To narrow a listing, list a longer prefix, or filter the names
+as you iterate.

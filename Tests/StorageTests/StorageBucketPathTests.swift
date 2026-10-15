@@ -72,10 +72,6 @@ struct StorageBucketPathTests {
       try await $0.remove(paths: [$1])
       return nil
     },
-    Operation(name: "list", placement: .body, response: "[]") {
-      _ = try await $0.list(path: $1)
-      return nil
-    },
     Operation(name: "download", placement: .url, response: "bytes") {
       _ = try await $0.download(path: $1)
       return nil
@@ -183,18 +179,6 @@ struct StorageBucketPathTests {
     let bucket = makeSUT(response: "", requests: requests, bodies: bodies)
 
     #expect(bucket.publicURL(path: input).path(percentEncoded: true) == path)
-  }
-
-  @Test
-  func listAcceptsTheEmptyPrefix() async throws {
-    let requests = LockIsolated<[HTTPRequest]>([])
-    let bodies = LockIsolated<[Data]>([])
-    let bucket = makeSUT(response: "[]", requests: requests, bodies: bodies)
-
-    _ = try await bucket.list(path: "/")
-
-    let json = try String(decoding: #require(bodies.value.first), as: UTF8.self)
-    #expect(json.contains(#""prefix":"""#))
   }
 
   @Test

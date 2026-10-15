@@ -256,7 +256,9 @@ struct FileManagementView: View {
 
       files = try await supabase.storage
         .from(selectedBucket)
-        .list()
+        .objects(options: ObjectListingOptions(delimited: false))
+        .page()
+        .objects
     } catch {
       self.error = error
     }

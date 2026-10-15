@@ -227,16 +227,7 @@ struct StorageClientTests {
       capturedRequest.setValue(request)
       return (
         """
-        [
-          {
-            "name": "test.txt",
-            "id": "E621E1F8-C36C-495A-93FC-0C247A3E6E5F",
-            "updatedAt": "2024-01-01T00:00:00Z",
-            "createdAt": "2024-01-01T00:00:00Z",
-            "lastAccessedAt": "2024-01-01T00:00:00Z",
-            "metadata": {}
-          }
-        ]
+        {"hasNext": false, "objects": []}
         """.data(using: .utf8)!,
         HTTPURLResponse(
           url: self.supabaseURL,
@@ -249,7 +240,7 @@ struct StorageClientTests {
 
     _ = try await sut.from(bucketId)
       .setHeader(name: .init("X-Custom-Header")!, value: "custom-value")
-      .list()
+      .objects().page()
 
     #expect(
       capturedRequest.value?.value(forHTTPHeaderField: "X-Custom-Header") == "custom-value")
@@ -262,16 +253,7 @@ struct StorageClientTests {
       capturedRequest.setValue(request)
       return (
         """
-        [
-          {
-            "name": "test.txt",
-            "id": "E621E1F8-C36C-495A-93FC-0C247A3E6E5F",
-            "updatedAt": "2024-01-01T00:00:00Z",
-            "createdAt": "2024-01-01T00:00:00Z",
-            "lastAccessedAt": "2024-01-01T00:00:00Z",
-            "metadata": {}
-          }
-        ]
+        {"hasNext": false, "objects": []}
         """.data(using: .utf8)!,
         HTTPURLResponse(
           url: self.supabaseURL,
@@ -285,7 +267,7 @@ struct StorageClientTests {
     _ = try await sut.from(bucketId)
       .setHeader(name: .init("X-Header-A")!, value: "value-a")
       .setHeader(name: .init("X-Header-B")!, value: "value-b")
-      .list()
+      .objects().page()
 
     #expect(capturedRequest.value?.value(forHTTPHeaderField: "X-Header-A") == "value-a")
     #expect(capturedRequest.value?.value(forHTTPHeaderField: "X-Header-B") == "value-b")
@@ -298,16 +280,7 @@ struct StorageClientTests {
       capturedRequest.setValue(request)
       return (
         """
-        [
-          {
-            "name": "test.txt",
-            "id": "E621E1F8-C36C-495A-93FC-0C247A3E6E5F",
-            "updatedAt": "2024-01-01T00:00:00Z",
-            "createdAt": "2024-01-01T00:00:00Z",
-            "lastAccessedAt": "2024-01-01T00:00:00Z",
-            "metadata": {}
-          }
-        ]
+        {"hasNext": false, "objects": []}
         """.data(using: .utf8)!,
         HTTPURLResponse(
           url: self.supabaseURL,
@@ -321,7 +294,7 @@ struct StorageClientTests {
     _ = try await sut.from(bucketId)
       .setHeader(name: .init("X-Custom-Header")!, value: "initial-value")
       .setHeader(name: .init("X-Custom-Header")!, value: "updated-value")
-      .list()
+      .objects().page()
 
     #expect(
       capturedRequest.value?.value(forHTTPHeaderField: "X-Custom-Header") == "updated-value")
@@ -332,16 +305,7 @@ struct StorageClientTests {
     let capturedRequests = LockIsolated<[URLRequest]>([])
 
     let listResponse = """
-      [
-        {
-          "name": "test.txt",
-          "id": "E621E1F8-C36C-495A-93FC-0C247A3E6E5F",
-          "updatedAt": "2024-01-01T00:00:00Z",
-          "createdAt": "2024-01-01T00:00:00Z",
-          "lastAccessedAt": "2024-01-01T00:00:00Z",
-          "metadata": {}
-        }
-      ]
+      {"hasNext": false, "objects": []}
       """
 
     let sut = makeSUT(fetch: { request in
@@ -361,7 +325,7 @@ struct StorageClientTests {
     // First, make a request with setHeader on StorageBucket
     _ = try await sut.from(bucketId)
       .setHeader(name: .init("X-Child-Header")!, value: "child-value")
-      .list()
+      .objects().page()
 
     #expect(
       capturedRequests[0].value(forHTTPHeaderField: "X-Child-Header")
@@ -370,7 +334,7 @@ struct StorageClientTests {
 
     // Then make a request from a new StorageBucket instance (via sut.from())
     // The new instance should NOT have the previous instance's header
-    _ = try await sut.from(bucketId).list()
+    _ = try await sut.from(bucketId).objects().page()
 
     // The new StorageBucket instance should NOT have the previous instance's header
     #expect(capturedRequests[1].value(forHTTPHeaderField: "X-Child-Header") == nil)
@@ -383,16 +347,7 @@ struct StorageClientTests {
       capturedRequest.setValue(request)
       return (
         """
-        [
-          {
-            "name": "test.txt",
-            "id": "E621E1F8-C36C-495A-93FC-0C247A3E6E5F",
-            "updatedAt": "2024-01-01T00:00:00Z",
-            "createdAt": "2024-01-01T00:00:00Z",
-            "lastAccessedAt": "2024-01-01T00:00:00Z",
-            "metadata": {}
-          }
-        ]
+        {"hasNext": false, "objects": []}
         """.data(using: .utf8)!,
         HTTPURLResponse(
           url: self.supabaseURL,
@@ -407,7 +362,7 @@ struct StorageClientTests {
       try await sut
       .setHeader(name: .init("X-Client-Header")!, value: "client-value")
       .from(bucketId)
-      .list()
+      .objects().page()
 
     #expect(
       capturedRequest.value?.value(forHTTPHeaderField: "X-Client-Header") == "client-value")

@@ -74,11 +74,11 @@ public struct PageSequence<Page: Sendable>: AsyncSequence, Sendable {
 /// }
 /// ```
 ///
-/// Object names are full keys, not names relative to the prefix as in
-/// ``StorageBucket/list(path:options:)``.
+/// Object names are full keys, e.g. `"2026/beach.png"`, and folders are full prefixes ending in
+/// `/`.
 ///
-/// Storage projects created before this listing existed answer with ``StorageError`` code
-/// ``StorageError/Code/featureNotEnabled``; use ``StorageBucket/list(path:options:)`` there.
+/// A Storage server that predates this listing answers with ``StorageError`` code
+/// ``StorageError/Code/featureNotEnabled``.
 ///
 /// ## Topics
 ///

@@ -23,9 +23,13 @@ struct StorageClientIntegrationTests {
     let testBucketName = "test-bucket"
     do {
       // First empty the bucket (required before deletion)
-      let files = try await storage.from(testBucketName).list()
-      if !files.isEmpty {
-        let filePaths = files.map { $0.name }
+      var filePaths: [String] = []
+      for try await object in storage.from(testBucketName).objects(
+        options: ObjectListingOptions(delimited: false))
+      {
+        filePaths.append(object.name)
+      }
+      if !filePaths.isEmpty {
         try await storage.from(testBucketName).remove(paths: filePaths)
       }
       try await storage.deleteBucket(testBucketName)
@@ -260,7 +264,7 @@ struct StorageClientIntegrationTests {
         }
       ])
 
-    #expect(try await client.from(name).list().map(\.name) == ["seed.txt"])
+    #expect(try await StorageIntegration.level(client.from(name)).objects == ["seed.txt"])
     try await client.from(name).upload(path: "via-middleware.txt", data: Data("m".utf8))
     #expect(try await client.from(name).exists(path: "via-middleware.txt"))
     #expect(await calls.count == 3)
@@ -275,7 +279,7 @@ struct StorageClientIntegrationTests {
       middlewares: [AccessTokenMiddleware { nil }])
 
     // The gateway maps the anon apikey to the anon role: reads are filtered, writes refused.
-    #expect(try await client.from(name).list().isEmpty)
+    #expect(try await StorageIntegration.level(client.from(name)).objects.isEmpty)
     let error = await StorageIntegration.storageError {
       try await client.from(name).upload(path: "anon.txt", data: Data("a".utf8))
     }
@@ -305,8 +309,9 @@ struct StorageClientIntegrationTests {
     let elevated = anon.setHeader(
       name: .authorization, value: "Bearer \(DotEnv.supabaseSecretKey)")
 
-    #expect(try await elevated.from(name).list().map(\.name) == ["seed.txt"])
-    #expect(try await anon.from(name).list().isEmpty)  // the original client is unchanged
+    #expect(try await StorageIntegration.level(elevated.from(name)).objects == ["seed.txt"])
+    // the original client is unchanged
+    #expect(try await StorageIntegration.level(anon.from(name)).objects.isEmpty)
   }
 
   @Test
@@ -334,7 +339,7 @@ struct StorageClientIntegrationTests {
       supabaseKey: DotEnv.supabaseNewFormatPublishableKey,
       options: SupabaseClientOptions(auth: .init(storage: InMemoryLocalStorage())))
 
-    #expect(try await client.storage.from(name).list().isEmpty)
+    #expect(try await StorageIntegration.level(client.storage.from(name)).objects.isEmpty)
     let error = await StorageIntegration.storageError {
       try await client.storage.from(name).upload(path: "anon.txt", data: Data("a".utf8))
     }

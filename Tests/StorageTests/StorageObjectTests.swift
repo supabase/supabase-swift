@@ -42,7 +42,6 @@ struct StorageObjectTests {
 
     #expect(object.id == UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F"))
     #expect(object.version == "v2")
-    #expect(!object.isFolder)
     #expect(object.metadata?.eTag == "\"abc\"")
     #expect(object.metadata?.size == 28834)
     #expect(object.metadata?.mimeType == "image/jpeg")
@@ -54,20 +53,6 @@ struct StorageObjectTests {
     #expect(object.isVersioned == true)
     #expect(object.isDeleteMarker == false)
     #expect(object.lastAccessedAt == nil)
-  }
-
-  @Test
-  func decodesAFolderRow() throws {
-    let json = Data(
-      """
-      {"name": "folder", "id": null, "updated_at": null, "created_at": null, "last_accessed_at": null, "metadata": null}
-      """.utf8)
-
-    let object = try JSONDecoder.storage.decode(StorageObject.self, from: json)
-
-    #expect(object.isFolder)
-    #expect(object.metadata == nil)
-    #expect(object.version == nil)
   }
 
   @Test

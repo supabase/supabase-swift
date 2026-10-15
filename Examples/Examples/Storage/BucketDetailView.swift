@@ -98,7 +98,10 @@ struct BucketDetailView: View {
     fileObjects = .inFlight
     fileObjects = await .result(
       Result { @Sendable in
-        try await supabase.storage.from(bucket.id).list()
+        try await supabase.storage.from(bucket.id)
+          .objects(options: ObjectListingOptions(delimited: false))
+          .page()
+          .objects
       }
     )
   }
