@@ -164,9 +164,7 @@ struct FileManagementView: View {
               .move(
                 from: "file.jpg",
                 to: "file.jpg",
-                options: DestinationOptions(
-                  destinationBucket: "target-bucket"
-                )
+                toBucket: "target-bucket"
               )
             """
         )
@@ -274,27 +272,19 @@ struct FileManagementView: View {
 
       switch selectedOperation {
       case .move:
-        let options =
-          destinationBucket.isEmpty
-          ? nil
-          : DestinationOptions(
-            destinationBucket: destinationBucket
-          )
         try await supabase.storage
           .from(selectedBucket)
-          .move(from: sourcePath, to: destinationPath, options: options)
+          .move(
+            from: sourcePath, to: destinationPath,
+            toBucket: destinationBucket.isEmpty ? nil : destinationBucket)
         successMessage = "File moved successfully to \(destinationPath)"
 
       case .copy:
-        let options =
-          destinationBucket.isEmpty
-          ? nil
-          : DestinationOptions(
-            destinationBucket: destinationBucket
-          )
         let newPath = try await supabase.storage
           .from(selectedBucket)
-          .copy(from: sourcePath, to: destinationPath, options: options)
+          .copy(
+            from: sourcePath, to: destinationPath,
+            toBucket: destinationBucket.isEmpty ? nil : destinationBucket)
         successMessage = "File copied successfully to \(newPath)"
 
       case .delete:

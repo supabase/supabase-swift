@@ -43,22 +43,23 @@ public import HTTPTypes
 ///
 /// - ``download(path:transform:options:progress:)``
 /// - ``DownloadResponse``
-/// - ``publicURL(path:download:transform:cacheNonce:)``
+/// - ``publicURL(path:download:transform:versionId:cacheNonce:)``
 ///
 /// ### Managing files
 ///
-/// - ``move(from:to:options:)``
-/// - ``copy(from:to:options:)``
+/// - ``move(from:to:toBucket:sourceVersionId:)``
+/// - ``copy(from:to:toBucket:sourceVersionId:)``
 /// - ``remove(paths:)``
+/// - ``remove(versions:)``
 /// - ``objects(prefix:options:)``
 /// - ``list(path:options:)``
-/// - ``info(path:)``
+/// - ``info(path:versionId:)``
 /// - ``exists(path:)``
 /// - ``purgeCache(path:transformationsOnly:)``
 ///
 /// ### Creating signed URLs
 ///
-/// - ``createSignedURL(path:expiresIn:download:transform:cacheNonce:)``
+/// - ``createSignedURL(path:expiresIn:download:transform:versionId:cacheNonce:)``
 /// - ``createSignedURLs(paths:expiresIn:download:cacheNonce:)``
 ///
 /// ### Customizing headers
@@ -317,18 +318,19 @@ public struct StorageBucket: Sendable {
   /// - Parameters:
   ///   - source: The original file path including the file name, e.g. `"folder/image.png"`.
   ///   - destination: The new file path including the new file name, e.g. `"archive/image.png"`.
-  ///   - options: Optional ``DestinationOptions`` specifying a destination bucket. When `nil`,
-  ///     the file is moved within the same bucket.
+  ///   - toBucket: The bucket to move the file into. `nil` moves it within this bucket.
+  ///   - sourceVersionId: The version of the source to move. `nil` moves the current version.
   /// - Throws: ``StorageError`` if the source does not exist or the caller is not authorized.
   public func move(
     from source: String,
     to destination: String,
-    options: DestinationOptions? = nil
+    toBucket: String? = nil,
+    sourceVersionId: String? = nil
   ) async throws {
     try await api.execute(
       api.requests.move(
         bucket: id, source: ObjectKey(source), destination: ObjectKey(destination),
-        destinationBucket: options?.destinationBucket)
+        destinationBucket: toBucket, sourceVersionId: sourceVersionId)
     )
   }
 
@@ -341,20 +343,21 @@ public struct StorageBucket: Sendable {
   /// - Parameters:
   ///   - source: The original file path including the file name, e.g. `"folder/image.png"`.
   ///   - destination: The destination path including the new file name, e.g. `"folder/image-copy.png"`.
-  ///   - options: Optional ``DestinationOptions`` specifying a destination bucket. When `nil`,
-  ///     the file is copied within the same bucket.
+  ///   - toBucket: The bucket to copy the file into. `nil` copies it within this bucket.
+  ///   - sourceVersionId: The version of the source to copy. `nil` copies the current version.
   /// - Returns: The full storage path of the newly created copy.
   /// - Throws: ``StorageError`` if the source does not exist or the caller is not authorized.
   @discardableResult
   public func copy(
     from source: String,
     to destination: String,
-    options: DestinationOptions? = nil
+    toBucket: String? = nil,
+    sourceVersionId: String? = nil
   ) async throws -> String {
     try await api.execute(
       api.requests.copy(
         bucket: id, source: ObjectKey(source), destination: ObjectKey(destination),
-        destinationBucket: options?.destinationBucket)
+        destinationBucket: toBucket, sourceVersionId: sourceVersionId)
     )
     .decoded(as: UploadResponse.self)
     .key
@@ -382,6 +385,7 @@ public struct StorageBucket: Sendable {
   ///     download using the file's original name, `.named("custom.pdf")` for a custom name, or
   ///     `nil` for inline display.
   ///   - transform: An optional image transformation applied server-side before delivery.
+  ///   - versionId: The version the URL serves. `nil` serves the current version.
   ///   - cacheNonce: An optional nonce appended as a `cacheNonce` query parameter for
   ///     cache-busting purposes.
   /// - Returns: A signed `URL` ready to share.
@@ -391,12 +395,13 @@ public struct StorageBucket: Sendable {
     expiresIn: Duration,
     download: DownloadBehavior? = nil,
     transform: ImageTransform? = nil,
+    versionId: String? = nil,
     cacheNonce: String? = nil
   ) async throws -> URL {
     let response = try await api.execute(
       api.requests.sign(
         bucket: id, key: ObjectKey(path), expiresIn: Self.seconds(expiresIn),
-        transform: transform)
+        transform: transform, versionId: versionId)
     )
     .decoded(as: SignedURLAPIResponse.self)
 
@@ -496,6 +501,28 @@ public struct StorageBucket: Sendable {
       .decoded()
   }
 
+  /// Deletes specific versions of objects in a versioned bucket.
+  ///
+  /// ```swift
+  /// let versions = try await bucket.list(path: "docs", options: ListOptions(versions: .only))
+  /// try await bucket.remove(
+  ///   versions: versions.compactMap { object in
+  ///     object.version.map { ObjectVersion(path: "docs/\(object.name)", versionId: $0) }
+  ///   })
+  /// ```
+  ///
+  /// - Parameter versions: The object versions to delete.
+  /// - Returns: The deleted versions.
+  /// - Throws: ``StorageError`` if the request fails or the caller is not authorized.
+  @discardableResult
+  public func remove(versions: [ObjectVersion]) async throws -> [StorageObject] {
+    try await api.execute(
+      api.requests.remove(
+        bucket: id, versions: versions.map { (try ObjectKey($0.path), $0.versionId) })
+    )
+    .decoded()
+  }
+
   /// Lists all files within a bucket folder.
   ///
   /// ```swift
@@ -540,7 +567,7 @@ public struct StorageBucket: Sendable {
   /// ```
   ///
   /// For public buckets, prefer requesting the URL returned by
-  /// ``publicURL(path:download:transform:cacheNonce:)`` directly.
+  /// ``publicURL(path:download:transform:versionId:cacheNonce:)`` directly.
   ///
   /// - Parameters:
   ///   - path: The file path including the file name, e.g. `"folder/image.png"`.
@@ -585,11 +612,14 @@ public struct StorageBucket: Sendable {
 
   /// Retrieves metadata about an existing file without downloading its content.
   ///
-  /// - Parameter path: The file path including the file name, e.g. `"folder/image.png"`.
+  /// - Parameters:
+  ///   - path: The file path including the file name, e.g. `"folder/image.png"`.
+  ///   - versionId: The version to describe. `nil` describes the current version.
   /// - Returns: A ``ObjectInfo`` containing size, content type, ETag, and other metadata.
   /// - Throws: ``StorageError`` if the file does not exist or the caller is not authorized.
-  public func info(path: String) async throws -> ObjectInfo {
-    try await api.execute(api.requests.info(bucket: id, key: ObjectKey(path))).decoded()
+  public func info(path: String, versionId: String? = nil) async throws -> ObjectInfo {
+    try await api.execute(api.requests.info(bucket: id, key: ObjectKey(path), versionId: versionId))
+      .decoded()
   }
 
   /// Checks whether a file exists in the bucket without downloading it.
@@ -655,6 +685,7 @@ public struct StorageBucket: Sendable {
   ///     download using the file's original name, `.named("custom.pdf")` for a custom name, or
   ///     `nil` for inline display.
   ///   - transform: An optional image transformation applied server-side before delivery.
+  ///   - versionId: The version the URL serves. `nil` serves the current version.
   ///   - cacheNonce: An optional nonce appended as a `cacheNonce` query parameter for
   ///     cache-busting purposes.
   /// - Returns: The publicly accessible `URL` for the file.
@@ -662,11 +693,16 @@ public struct StorageBucket: Sendable {
     path: String,
     download: DownloadBehavior? = nil,
     transform: ImageTransform? = nil,
+    versionId: String? = nil,
     cacheNonce: String? = nil
   ) -> URL {
-    api.requests.publicURL(
+    var query = Self.urlQuery(download: download, cacheNonce: cacheNonce)
+    if let versionId {
+      query.append(URLQueryItem(name: "versionId", value: versionId))
+    }
+    return api.requests.publicURL(
       bucket: id, key: ObjectKey(lenient: path), transform: transform?.queryItems ?? [],
-      query: Self.urlQuery(download: download, cacheNonce: cacheNonce))
+      query: query)
   }
 
   /// Creates a signed upload URL that allows uploading a file without further authentication.

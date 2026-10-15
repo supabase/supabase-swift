@@ -1744,16 +1744,10 @@ features:
       - ImageFormat.origin
       - ImageFormat.webp
       - ImageFormat.avif
-  storage.file_buckets.copy_cross_bucket:
-    status: implemented
-    note: "Not a separate method: the destinationBucket field of the options: DestinationOptions? parameter on StorageBucket.copy."
-    symbols:
-      - DestinationOptions.destinationBucket
-  storage.file_buckets.move_cross_bucket:
-    status: implemented
-    note: "Not a separate method: the destinationBucket field of the options: DestinationOptions? parameter on StorageBucket.move."
-    symbols:
-      - DestinationOptions.destinationBucket
+  # Not separate methods: the `toBucket:` parameter of StorageBucket.copy and
+  # StorageBucket.move, which their own capabilities already claim.
+  storage.file_buckets.copy_cross_bucket: implemented
+  storage.file_buckets.move_cross_bucket: implemented
   storage.file_buckets.upload_with_metadata:
     status: implemented
     note: "Not a separate method: the metadata/cacheControl/contentType fields of the options: UploadOptions parameter on StorageBucket.upload."
@@ -1793,6 +1787,18 @@ features:
     status: implemented
     symbols:
       - DownloadOptions.versionId
+  # Not separate methods: the `versionId:` parameter of StorageBucket.info and
+  # the `sourceVersionId:` parameter of StorageBucket.move and StorageBucket.copy.
+  storage.file_buckets.file_info_specific_version: implemented
+  storage.file_buckets.move_specific_version: implemented
+  storage.file_buckets.copy_specific_version: implemented
+  storage.file_buckets.remove_specific_version:
+    status: implemented
+    symbols:
+      - ObjectVersion
+      - ObjectVersion.init
+      - ObjectVersion.path
+      - ObjectVersion.versionId
   storage.file_buckets.list_file_versions:
     status: implemented
     symbols:

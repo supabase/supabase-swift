@@ -278,7 +278,7 @@ final class StorageBucketIntegrationTests {
     try await storage.from(bucketName).move(
       from: uploadPath,
       to: newPath,
-      options: DestinationOptions(destinationBucket: newBucketName)
+      toBucket: newBucketName
     )
 
     _ = try await storage.from(newBucketName).download(path: newPath)
@@ -303,7 +303,7 @@ final class StorageBucketIntegrationTests {
     try await storage.from(bucketName).copy(
       from: uploadPath,
       to: newPath,
-      options: DestinationOptions(destinationBucket: newBucketName)
+      toBucket: newBucketName
     )
 
     _ = try await storage.from(newBucketName).download(path: newPath)
