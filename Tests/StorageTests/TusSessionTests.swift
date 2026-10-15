@@ -1,5 +1,6 @@
 import ConcurrencyExtras
 import Foundation
+import Helpers
 import HTTPTypes
 import HTTPTypesFoundation
 import InlineSnapshotTesting
@@ -86,6 +87,18 @@ struct TusSessionTests {
     #expect(created.uploadURL == uploadURL)
     #expect(created.offset == 0)
     #expect(created.expiresAt == Date(timeIntervalSince1970: 1_791_903_600))
+  }
+
+  @Test
+  func createWithoutUploadOffsetStartsAtZero() async throws {
+    let sut = makeSUT { _ in
+      self.response(201, headers: ["Location": "/storage/v1/upload/resumable/abc"])
+    }
+
+    let created = try await sut.create(
+      bucket: "bucket", key: try ObjectKey("a"), length: 20, options: options)
+
+    #expect(created.offset == 0)
   }
 
   @Test
@@ -189,7 +202,7 @@ struct TusSessionTests {
         204, headers: ["Upload-Offset": "17", "Tus-Complete": "1"], body: #"{"Key":"bucket/a"}"#)
     }
 
-    let appended = try await sut.append(Data("chunk".utf8), at: 12, to: uploadURL)
+    let appended = try await sut.append(HTTPBody(Data("chunk".utf8)), at: 12, to: uploadURL)
 
     #expect(
       appended
@@ -200,7 +213,7 @@ struct TusSessionTests {
   func appendWithoutCompletionReportsIncomplete() async throws {
     let sut = makeSUT { _ in self.response(204, headers: ["Upload-Offset": "17"]) }
 
-    let appended = try await sut.append(Data("chunk".utf8), at: 12, to: uploadURL)
+    let appended = try await sut.append(HTTPBody(Data("chunk".utf8)), at: 12, to: uploadURL)
 
     #expect(appended == TusSession.Appended(offset: 17, complete: false, body: Data()))
   }
@@ -212,7 +225,7 @@ struct TusSessionTests {
     }
 
     let error = await #expect(throws: TusSession.Failure.self) {
-      try await sut.append(Data("chunk".utf8), at: 12, to: uploadURL)
+      try await sut.append(HTTPBody(Data("chunk".utf8)), at: 12, to: uploadURL)
     }
     guard case .offsetConflict(let storageError)? = error else {
       Issue.record("Expected offsetConflict, got \(String(describing: error))")
@@ -228,7 +241,7 @@ struct TusSessionTests {
     }
 
     let error = await #expect(throws: TusSession.Failure.self) {
-      try await sut.append(Data("chunk".utf8), at: 12, to: uploadURL)
+      try await sut.append(HTTPBody(Data("chunk".utf8)), at: 12, to: uploadURL)
     }
     guard case .uploadGone? = error else {
       Issue.record("Expected uploadGone, got \(String(describing: error))")

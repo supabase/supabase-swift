@@ -184,7 +184,8 @@
     }
 
     static let scenarios = [
-      "upload-api-data", "upload-api-file", "upload-transport-file", "upload-transport-data",
+      "upload-api-data", "upload-api-file", "upload-api-resumable", "upload-transport-file",
+      "upload-transport-data",
       "upload-transport-stream", "download-api-data", "download-api-file",
       "download-transport-file",
       "download-transport-data", "download-transport-iterate",
@@ -217,6 +218,19 @@
         // Storage public API, file URL → raw `HTTPBody(fileURL:)` → URLSession.upload(for:fromFile:).
         try await measure("storage.upload(fileURL:)") {
           try await storage.from(bucket).upload(path: "o.bin", fileURL: fileURL)
+        }
+      case "upload-api-resumable":
+        // Storage public API, file URL → tus, one 6 MiB chunk read per PATCH.
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
+          "memprobe-resumable-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        var configuration = storage.configuration
+        configuration.resumable.directory = directory
+        let resumable = StorageClient(configuration: configuration).from(bucket)
+        try await measure("storage.resumableUpload(fileURL:)") {
+          let upload = try resumable.resumableUpload(path: "o.bin", fileURL: fileURL)
+          try await upload.start()
+          _ = try await upload.result
         }
       case "upload-transport-file":
         // HTTPBody(fileURL:) → URLSession.upload(for:fromFile:).

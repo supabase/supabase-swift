@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Helpers
 import HTTPTypes
 
 /// Speaks tus 1.0 to `upload/resumable` through the shared `HTTPClient`, so the access token,
@@ -54,9 +55,10 @@ struct TusSession: Sendable {
         kind: .server, message: "The resumable upload was created without a Location.",
         response: HTTPErrorResponse(head, body: Data()))
     }
+    // Plain creation (no body) answers without Upload-Offset; only creation-with-upload carries it.
     return Created(
       uploadURL: uploadURL,
-      offset: try uploadOffset(of: head),
+      offset: head.headerFields[.uploadOffset] == nil ? 0 : try uploadOffset(of: head),
       expiresAt: head.headerFields[.uploadExpires].flatMap(DownloadResponse.httpDate))
   }
 
@@ -67,7 +69,7 @@ struct TusSession: Sendable {
     return try uploadOffset(of: head)
   }
 
-  func append(_ chunk: Data, at offset: Int64, to uploadURL: URL) async throws -> Appended {
+  func append(_ chunk: HTTPBody, at offset: Int64, to uploadURL: URL) async throws -> Appended {
     let (head, body) = try await send(
       api.requests.tusAppend(chunk, at: offset, to: uploadURL), conflictIsOffset: true)
     let data = if let body { try await Data(collecting: body, upTo: .max) } else { Data() }
