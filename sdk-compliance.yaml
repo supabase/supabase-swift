@@ -1581,6 +1581,39 @@ features:
       - TransferProgress.completedBytes
       - TransferProgress.totalBytes
       - TransferProgress.fractionCompleted
+  storage.file_buckets.resumable_upload:
+    status: implemented
+    symbols:
+      - StorageBucket.resumableUpload
+      - ResumableUpload
+      - ResumableUpload.ID
+      - ResumableUpload.ID.init
+      - ResumableUpload.ID.rawValue
+      - ResumableUpload.State
+      - ResumableUpload.State.pending
+      - ResumableUpload.State.uploading
+      - ResumableUpload.State.paused
+      - ResumableUpload.State.completed
+      - ResumableUpload.State.failed
+      - ResumableUpload.State.cancelled
+      - ResumableUpload.id
+      - ResumableUpload.bucketId
+      - ResumableUpload.path
+      - ResumableUpload.totalBytes
+      - ResumableUpload.state
+      - ResumableUpload.progress
+      - ResumableUpload.states
+      - ResumableUpload.result
+      - ResumableUpload.start
+      - ResumableUpload.pause
+      - ResumableUpload.resume
+      - ResumableUpload.cancel
+      - ResumableUploadConfiguration
+      - ResumableUploadConfiguration.init
+      - ResumableUploadConfiguration.chunkSize
+      - ResumableUploadConfiguration.retryTimeout
+      - ResumableUploadConfiguration.directory
+      - StorageClientConfiguration.resumable
   storage.file_buckets.download:
     status: implemented
     symbols:

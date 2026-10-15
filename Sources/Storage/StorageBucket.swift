@@ -28,6 +28,8 @@ public import HTTPTypes
 /// - ``upload(path:data:options:progress:)``
 /// - ``upload(path:fileURL:options:progress:)``
 /// - ``upload(path:body:options:progress:)``
+/// - ``resumableUpload(path:fileURL:options:)``
+/// - ``resumableUpload(path:data:options:)``
 /// - ``update(path:data:options:progress:)``
 /// - ``update(path:fileURL:options:progress:)``
 /// - ``update(path:body:options:progress:)``
@@ -227,6 +229,62 @@ public struct StorageBucket: Sendable {
   ) async throws -> UploadedObject {
     try await _uploadOrUpdate(
       method: .post, path: path, body: body, options: options, progress: progress)
+  }
+
+  /// A resumable upload of a local file, to start with ``ResumableUpload/start()``.
+  ///
+  /// The file is sent in ``ResumableUploadConfiguration/chunkSize`` pieces over tus, so the
+  /// upload can be paused, resumed, and continued after the process restarts. A file outside
+  /// the app container, or in its temporary directory, is copied first so it is still there
+  /// next launch.
+  ///
+  /// ```swift
+  /// let upload = try bucket.resumableUpload(path: "video.mp4", fileURL: url)
+  /// try await upload.start()
+  /// let object = try await upload.result
+  /// ```
+  ///
+  /// - Parameters:
+  ///   - path: The relative file path within the bucket, e.g. `"folder/subfolder/filename.mp4"`.
+  ///   - fileURL: A `file://` URL pointing to the local file to upload.
+  ///   - options: Upload options such as cache control, content type, and upsert behavior.
+  /// - Throws: ``StorageError`` if `path` is not a valid object path, and the file system's error
+  ///   if `fileURL` cannot be read.
+  public func resumableUpload(
+    path: String,
+    fileURL: URL,
+    options: UploadOptions = UploadOptions()
+  ) throws -> ResumableUpload {
+    let key = try ObjectKey(path)
+    let (size, _) = try ResumableStore.attributes(of: fileURL)
+    return ResumableUpload(
+      id: ResumableUpload.ID(
+        rawValue: try ResumableStore.fingerprint(bucketId: id, path: key.path, fileURL: fileURL)),
+      bucketId: id, path: key.path, totalBytes: size, input: .file(fileURL),
+      options: options.inferringContentType(from: fileURL), api: api)
+  }
+
+  /// A resumable upload of bytes in memory, to start with ``ResumableUpload/start()``.
+  ///
+  /// The bytes are written to the upload's record directory first, so the upload can continue
+  /// after the process restarts.
+  ///
+  /// - Parameters:
+  ///   - path: The relative file path within the bucket, e.g. `"folder/subfolder/filename.png"`.
+  ///   - data: The raw bytes to store in the bucket.
+  ///   - options: Upload options such as cache control, content type, and upsert behavior.
+  /// - Throws: ``StorageError`` if `path` is not a valid object path.
+  public func resumableUpload(
+    path: String,
+    data: Data,
+    options: UploadOptions = UploadOptions()
+  ) throws -> ResumableUpload {
+    let key = try ObjectKey(path)
+    return ResumableUpload(
+      id: ResumableUpload.ID(
+        rawValue: ResumableStore.fingerprint(bucketId: id, path: key.path, data: data)),
+      bucketId: id, path: key.path, totalBytes: Int64(data.count), input: .data(data),
+      options: options, api: api)
   }
 
   /// Replaces an existing file at the specified path with new data.

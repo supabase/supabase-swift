@@ -53,6 +53,14 @@ struct ResumableStore: Sendable {
   /// How long a record lives when the server sends no `Upload-Expires`.
   static let defaultLifetime: TimeInterval = 24 * 60 * 60
 
+  init(configuration: ResumableUploadConfiguration) {
+    if let directory = configuration.directory {
+      self.init(directory: directory)
+    } else {
+      self.init()
+    }
+  }
+
   init(
     directory: URL = FileManager.default.urls(
       for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -72,10 +80,9 @@ struct ResumableStore: Sendable {
   /// SHA-256 of the bucket, path, size and modification date, so the same file picked twice
   /// through different temporary URLs is the same upload.
   static func fingerprint(bucketId: String, path: String, fileURL: URL) throws -> String {
-    let attributes = try FileManager.default.attributesOfItem(atPath: fileURL.path)
-    let size = (attributes[.size] as? NSNumber)?.int64Value ?? 0
-    let modified = (attributes[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0
-    return fingerprint("\(bucketId)\n\(path)\n\(size)\n\(modified)")
+    let (size, modificationDate) = try attributes(of: fileURL)
+    return fingerprint(
+      "\(bucketId)\n\(path)\n\(size)\n\(modificationDate.timeIntervalSince1970)")
   }
 
   static func fingerprint(bucketId: String, path: String, data: Data) -> String {
@@ -115,12 +122,25 @@ struct ResumableStore: Sendable {
   }
 
   func fileURL(for record: ResumableUploadRecord) -> URL {
-    switch record.source {
+    fileURL(for: record.source, fingerprint: record.fingerprint)
+  }
+
+  func fileURL(for source: ResumableSource, fingerprint: String) -> URL {
+    switch source {
     case .container(let relativePath):
       container.appendingPathComponent(relativePath)
     case .sandboxCopy:
-      sandboxCopyURL(fingerprint: record.fingerprint)
+      sandboxCopyURL(fingerprint: fingerprint)
     }
+  }
+
+  /// The size and modification date of the file at `url`, as the record keeps them.
+  static func attributes(of url: URL) throws -> (size: Int64, modificationDate: Date) {
+    let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+    return (
+      (attributes[.size] as? NSNumber)?.int64Value ?? 0,
+      (attributes[.modificationDate] as? Date) ?? Date(timeIntervalSince1970: 0)
+    )
   }
 
   // MARK: - Records
