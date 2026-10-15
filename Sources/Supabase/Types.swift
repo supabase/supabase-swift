@@ -2,6 +2,7 @@ public import Clocks
 public import Foundation
 public import Helpers
 public import Logging
+@_spi(Experimental) public import Storage
 
 #if canImport(FoundationNetworking)
   public import FoundationNetworking
@@ -186,9 +187,16 @@ public struct SupabaseClientOptions: Sendable {
     /// Whether storage client should be initialized with the new hostname format, i.e. `project-ref.storage.supabase.co`
     public let usesNewHostname: Bool
 
-    /// Whether to automatically retry transient Storage errors on reads (`GET`, `HEAD` and
-    /// listing files). Writes are never retried. Defaults to `true`.
+    /// Whether to automatically retry transient Storage errors on reads (`GET`, `HEAD`,
+    /// `list(path:options:)` and each page of `objects(prefix:options:)`). Writes are never
+    /// retried. Defaults to `true`.
     public let retryEnabled: Bool
+
+    /// How resumable uploads are chunked, retried and persisted. See
+    /// `StorageClientConfiguration.resumable`.
+    ///
+    /// - Warning: Experimental. See `ResumableUpload`.
+    @_spi(Experimental) public var resumable = ResumableUploadConfiguration()
 
     public init(usesNewHostname: Bool = false, retryEnabled: Bool = true) {
       self.usesNewHostname = usesNewHostname

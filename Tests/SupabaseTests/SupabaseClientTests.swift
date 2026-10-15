@@ -13,7 +13,7 @@ import Testing
 @testable import Auth
 @testable import Functions
 @testable import Realtime
-@testable import Supabase
+@_spi(Experimental) @testable import Supabase
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -203,6 +203,24 @@ struct SupabaseClientTests {
       )
     )
     #expect(noRetryClient.rest.configuration.retryEnabled == false)
+  }
+
+  @Test
+  func storageResumableOptionForwardsToStorageClient() {
+    var storageOptions = SupabaseClientOptions.StorageOptions()
+    storageOptions.resumable = ResumableUploadConfiguration(
+      chunkSize: 1024, retryTimeout: .seconds(5))
+    let client = SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      options: SupabaseClientOptions(
+        auth: SupabaseClientOptions.AuthOptions(storage: AuthLocalStorageMock()),
+        storage: storageOptions
+      )
+    )
+
+    #expect(client.storage.configuration.resumable.chunkSize == 1024)
+    #expect(client.storage.configuration.resumable.retryTimeout == .seconds(5))
   }
 
   #if !os(Linux) && !os(Android)

@@ -553,6 +553,44 @@ extension StorageMockerTests {
     }
 
     @Test
+    func createSignedURL_emptyTransformIsNotSent() async throws {
+      let storage = makeSUT()
+
+      Mock(
+        url: url.appendingPathComponent("object/sign/bucket/file.txt"),
+        statusCode: 200,
+        data: [
+          .post: Data(
+            """
+            {
+              "signedURL": "object/sign/bucket/file.txt?token=abc.def.ghi"
+            }
+            """.utf8
+          )
+        ]
+      )
+      .snapshotRequest {
+        #"""
+        curl \
+        	--request POST \
+        	--header "Content-Length: 18" \
+        	--header "Content-Type: application/json" \
+        	--header "X-Client-Info: storage-swift/0.0.0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	--data "{\"expiresIn\":3600}" \
+        	"http://localhost:54321/storage/v1/object/sign/bucket/file.txt"
+        """#
+      }
+      .register()
+
+      _ = try await storage.from("bucket").createSignedURL(
+        path: "file.txt",
+        expiresIn: .seconds(3600),
+        transform: ImageTransform()
+      )
+    }
+
+    @Test
     func createSignedURL_malformedSignedURL() async throws {
       let storage = makeSUT()
 
