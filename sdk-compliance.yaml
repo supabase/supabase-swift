@@ -1614,6 +1614,11 @@ features:
       - ResumableUploadConfiguration.retryTimeout
       - ResumableUploadConfiguration.directory
       - StorageClientConfiguration.resumable
+      - StorageClient.resumableUploads
+      - ResumableUploadRegistry
+      - ResumableUploadRegistry.pending
+      - ResumableUploadRegistry.resumeAll
+      - ResumableUploadRegistry.clear
   storage.file_buckets.download:
     status: implemented
     symbols:

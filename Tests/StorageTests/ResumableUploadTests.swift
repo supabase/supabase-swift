@@ -358,6 +358,26 @@ struct ResumableUploadTests {
   }
 
   @Test
+  func concurrentStartsCreateOneUpload() async throws {
+    let script = Script([
+      { request, body in
+        try await Task.sleep(for: .milliseconds(50))
+        return try await Self.created(offset: 0)(request, body)
+      },
+      Self.appended(offset: 8), Self.appended(offset: 16),
+      Self.appended(offset: 20, complete: true),
+    ])
+    let upload = try makeBucket(script).resumableUpload(path: "video.mp4", fileURL: fileURL)
+
+    async let first: Void = upload.start()
+    async let second: Void = upload.start()
+    _ = try await (first, second)
+    _ = try await upload.result
+
+    #expect(script.log.value.filter { $0.hasPrefix("POST") }.count == 1)
+  }
+
+  @Test
   func startTwiceIsANoOp() async throws {
     let script = Script([
       Self.created(offset: 0), Self.appended(offset: 8), Self.appended(offset: 16),

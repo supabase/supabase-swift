@@ -88,7 +88,11 @@ public actor ResumableUpload {
   public private(set) var state: State = .pending {
     didSet {
       stateBroadcaster.yield(state)
-      if state.isTerminal { stateBroadcaster.finish(); progressBroadcaster.finish() }
+      if state.isTerminal {
+        stateBroadcaster.finish()
+        progressBroadcaster.finish()
+        Self.live.withValue { if $0[liveKey]?.upload === self { $0.removeValue(forKey: liveKey) } }
+      }
     }
   }
 
@@ -99,9 +103,63 @@ public actor ResumableUpload {
   private var record: ResumableUploadRecord?
   private var loop: Task<Void, Never>?
   private var pauseRequested = false
+  private var startInProgress = false
   private let progressBroadcaster = StreamBroadcaster<TransferProgress>(
     bufferingPolicy: .bufferingNewest(1))
   private let stateBroadcaster = StreamBroadcaster<State>(bufferingPolicy: .unbounded)
+
+  /// The handles that are not yet terminal, one per record, so two callers asking for the
+  /// same upload drive one tus session instead of two. Held weakly, so a handle that never
+  /// starts lives only as long as its caller keeps it.
+  private struct Live {
+    weak var upload: ResumableUpload?
+    var started = false
+  }
+
+  private static let live = LockIsolated<[String: Live]>([:])
+
+  private nonisolated var liveKey: String { Self.liveKey(fingerprint: id.rawValue, api: api) }
+
+  private static func liveKey(fingerprint: String, api: StorageAPI) -> String {
+    ResumableStore(configuration: api.configuration.resumable).directory
+      .appendingPathComponent(fingerprint).path
+  }
+
+  /// The live handle for `fingerprint`, or the one `make` builds.
+  static func handle(
+    fingerprint: String, api: StorageAPI, make: @Sendable () -> ResumableUpload
+  ) -> ResumableUpload {
+    let key = liveKey(fingerprint: fingerprint, api: api)
+    return live.withValue { live in
+      if let existing = live[key]?.upload { return existing }
+      let upload = make()
+      live = live.filter { $0.value.upload != nil }
+      live[key] = Live(upload: upload)
+      return upload
+    }
+  }
+
+  /// Whether a handle for `fingerprint` has started and is not yet terminal in this process.
+  static func isLive(fingerprint: String, api: StorageAPI) -> Bool {
+    live.withValue { live in
+      let entry = live[liveKey(fingerprint: fingerprint, api: api)]
+      return entry?.upload != nil && entry?.started == true
+    }
+  }
+
+  /// The live handle for `record`, or a pending one built from it.
+  static func handle(record: ResumableUploadRecord, api: StorageAPI) -> ResumableUpload {
+    handle(fingerprint: record.fingerprint, api: api) {
+      ResumableUpload(
+        id: ID(rawValue: record.fingerprint), bucketId: record.bucketId, path: record.path,
+        totalBytes: record.totalBytes, input: .prepared(record.source),
+        options: UploadOptions(
+          contentType: record.contentType,
+          cacheControl: CacheControl(rawValue: record.cacheControl),
+          upsert: record.upsert, metadata: record.metadata),
+        api: api)
+    }
+  }
 
   init(
     id: ID, bucketId: String, path: String, totalBytes: Int64, input: Input,
@@ -157,10 +215,20 @@ public actor ResumableUpload {
   /// - Throws: ``StorageError`` when the server refuses the upload, in which case ``state`` is
   ///   ``State/failed(_:)``.
   public func start() async throws {
-    guard case .pending = state else { return }
+    // The actor is reentrant across the await below, so a second start() must not reach
+    // create(); it would open a second tus upload and overwrite the record.
+    guard case .pending = state, !startInProgress else { return }
+    startInProgress = true
+    defer { startInProgress = false }
     do {
       let record = try await loadOrCreateRecord()
+      guard case .pending = state else { return }
       self.record = record
+      Self.live.withValue { live in
+        if live[liveKey]?.upload == nil || live[liveKey]?.upload === self {
+          live[liveKey] = Live(upload: self, started: true)
+        }
+      }
       state = .uploading
       startLoop(from: record.lastKnownOffset, next: .append)
     } catch is CancellationError {

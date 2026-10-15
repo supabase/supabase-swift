@@ -77,16 +77,19 @@ struct ResumableStore: Sendable {
 
   // MARK: - Fingerprint
 
-  /// SHA-256 of the bucket, path, size and modification date, so the same file picked twice
-  /// through different temporary URLs is the same upload.
-  static func fingerprint(bucketId: String, path: String, fileURL: URL) throws -> String {
+  /// SHA-256 of the endpoint, bucket, path, size and modification date, so the same file picked
+  /// twice through different temporary URLs is the same upload, and clients of two projects that
+  /// share a record directory never share an upload.
+  static func fingerprint(url: URL, bucketId: String, path: String, fileURL: URL) throws -> String {
     let (size, modificationDate) = try attributes(of: fileURL)
     return fingerprint(
-      "\(bucketId)\n\(path)\n\(size)\n\(modificationDate.timeIntervalSince1970)")
+      "\(url.absoluteString)\n\(bucketId)\n\(path)\n\(size)\n\(modificationDate.timeIntervalSince1970)"
+    )
   }
 
-  static func fingerprint(bucketId: String, path: String, data: Data) -> String {
-    fingerprint("\(bucketId)\n\(path)\n\(data.count)\n\(hex(SHA256.hash(data: data)))")
+  static func fingerprint(url: URL, bucketId: String, path: String, data: Data) -> String {
+    fingerprint(
+      "\(url.absoluteString)\n\(bucketId)\n\(path)\n\(data.count)\n\(hex(SHA256.hash(data: data)))")
   }
 
   private static func fingerprint(_ input: String) -> String {

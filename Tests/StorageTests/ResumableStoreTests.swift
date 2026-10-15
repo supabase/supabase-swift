@@ -21,6 +21,8 @@ struct ResumableStoreTests {
       temporaryDirectory: container.appendingPathComponent("tmp"))
   }
 
+  private static let url = URL(string: "http://localhost:54321/storage/v1")!
+
   private func writeFile(
     _ name: String, in directory: URL? = nil, bytes: Int = 10,
     modifiedAt: Date = Date(timeIntervalSince1970: 1_700_000_000)
@@ -53,25 +55,35 @@ struct ResumableStoreTests {
     let b = try writeFile("b.mp4")
 
     let fingerprint = try ResumableStore.fingerprint(
-      bucketId: "bucket", path: "video.mp4", fileURL: a)
+      url: Self.url, bucketId: "bucket", path: "video.mp4", fileURL: a)
 
     #expect(
       fingerprint
-        == (try ResumableStore.fingerprint(bucketId: "bucket", path: "video.mp4", fileURL: b)))
+        == (try ResumableStore.fingerprint(
+          url: Self.url, bucketId: "bucket", path: "video.mp4", fileURL: b)))
     #expect(fingerprint.count == 64)
     #expect(
       fingerprint
-        != (try ResumableStore.fingerprint(bucketId: "other", path: "video.mp4", fileURL: a)))
-    #expect(
-      fingerprint
-        != (try ResumableStore.fingerprint(bucketId: "bucket", path: "other.mp4", fileURL: a)))
+        != (try ResumableStore.fingerprint(
+          url: URL(string: "http://other.test/storage/v1")!, bucketId: "bucket", path: "video.mp4",
+          fileURL: a)))
     #expect(
       fingerprint
         != (try ResumableStore.fingerprint(
+          url: Self.url, bucketId: "other", path: "video.mp4", fileURL: a)))
+    #expect(
+      fingerprint
+        != (try ResumableStore.fingerprint(
+          url: Self.url, bucketId: "bucket", path: "other.mp4", fileURL: a)))
+    #expect(
+      fingerprint
+        != (try ResumableStore.fingerprint(
+          url: Self.url,
           bucketId: "bucket", path: "video.mp4", fileURL: writeFile("c.mp4", bytes: 11))))
     #expect(
       fingerprint
         != (try ResumableStore.fingerprint(
+          url: Self.url,
           bucketId: "bucket", path: "video.mp4",
           fileURL: writeFile("d.mp4", modifiedAt: Date(timeIntervalSince1970: 1)))))
   }
@@ -79,15 +91,18 @@ struct ResumableStoreTests {
   @Test
   func fingerprintOfDataFollowsItsBytes() {
     let fingerprint = ResumableStore.fingerprint(
+      url: Self.url,
       bucketId: "bucket", path: "video.mp4", data: Data("abc".utf8))
 
     #expect(
       fingerprint
-        == ResumableStore.fingerprint(bucketId: "bucket", path: "video.mp4", data: Data("abc".utf8))
+        == ResumableStore.fingerprint(
+          url: Self.url, bucketId: "bucket", path: "video.mp4", data: Data("abc".utf8))
     )
     #expect(
       fingerprint
-        != ResumableStore.fingerprint(bucketId: "bucket", path: "video.mp4", data: Data("abd".utf8))
+        != ResumableStore.fingerprint(
+          url: Self.url, bucketId: "bucket", path: "video.mp4", data: Data("abd".utf8))
     )
   }
 

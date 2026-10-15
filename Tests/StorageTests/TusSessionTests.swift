@@ -89,15 +89,32 @@ struct TusSessionTests {
   }
 
   @Test
-  func createWithoutUploadOffsetStartsAtZero() async throws {
-    let sut = makeSUT { _ in
-      self.response(201, headers: ["Location": "/storage/v1/upload/resumable/abc"])
-    }
+  func createTargetsTheStorageHostOnHostedSupabase() async throws {
+    let sent = LockIsolated<URL?>(nil)
+    let sut = TusSession(
+      api: StorageAPI(
+        configuration: StorageClientConfiguration(
+          url: URL(string: "https://ref.supabase.co/storage/v1")!,
+          headers: [:],
+          http: .init(
+            transport: ClosureTransport { request, _ in
+              sent.setValue(request.url)
+              return (
+                HTTPResponse(
+                  status: .created,
+                  headerFields: [.location: "/storage/v1/upload/resumable/abc", .uploadOffset: "0"]),
+                nil
+              )
+            }))))
 
     let created = try await sut.create(
-      bucket: "bucket", key: try ObjectKey("a"), length: 20, options: options)
+      bucket: "bucket", key: try ObjectKey("video.mp4"), length: 20, options: options)
 
-    #expect(created.offset == 0)
+    #expect(
+      sent.value == URL(string: "https://ref.storage.supabase.co/storage/v1/upload/resumable"))
+    #expect(
+      created.uploadURL
+        == URL(string: "https://ref.storage.supabase.co/storage/v1/upload/resumable/abc"))
   }
 
   @Test

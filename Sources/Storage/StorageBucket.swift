@@ -257,11 +257,14 @@ public struct StorageBucket: Sendable {
   ) throws -> ResumableUpload {
     let key = try ObjectKey(path)
     let (size, _) = try ResumableStore.attributes(of: fileURL)
-    return ResumableUpload(
-      id: ResumableUpload.ID(
-        rawValue: try ResumableStore.fingerprint(bucketId: id, path: key.path, fileURL: fileURL)),
-      bucketId: id, path: key.path, totalBytes: size, input: .file(fileURL),
-      options: options.inferringContentType(from: fileURL), api: api)
+    let fingerprint = try ResumableStore.fingerprint(
+      url: api.configuration.url, bucketId: id, path: key.path, fileURL: fileURL)
+    return ResumableUpload.handle(fingerprint: fingerprint, api: api) {
+      ResumableUpload(
+        id: ResumableUpload.ID(rawValue: fingerprint),
+        bucketId: id, path: key.path, totalBytes: size, input: .file(fileURL),
+        options: options.inferringContentType(from: fileURL), api: api)
+    }
   }
 
   /// A resumable upload of bytes in memory, to start with ``ResumableUpload/start()``.
@@ -280,11 +283,14 @@ public struct StorageBucket: Sendable {
     options: UploadOptions = UploadOptions()
   ) throws -> ResumableUpload {
     let key = try ObjectKey(path)
-    return ResumableUpload(
-      id: ResumableUpload.ID(
-        rawValue: ResumableStore.fingerprint(bucketId: id, path: key.path, data: data)),
-      bucketId: id, path: key.path, totalBytes: Int64(data.count), input: .data(data),
-      options: options, api: api)
+    let fingerprint = ResumableStore.fingerprint(
+      url: api.configuration.url, bucketId: id, path: key.path, data: data)
+    return ResumableUpload.handle(fingerprint: fingerprint, api: api) {
+      ResumableUpload(
+        id: ResumableUpload.ID(rawValue: fingerprint),
+        bucketId: id, path: key.path, totalBytes: Int64(data.count), input: .data(data),
+        options: options, api: api)
+    }
   }
 
   /// Replaces an existing file at the specified path with new data.
