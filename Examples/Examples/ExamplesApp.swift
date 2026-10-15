@@ -60,6 +60,10 @@ struct ExamplesApp: App {
         .onOpenURL {
           supabase.handle($0)
         }
+        .task {
+          // Uploads interrupted by a relaunch carry on from their last confirmed offset.
+          _ = try? await supabase.storage.resumableUploads.resumeAll()
+        }
     }
   }
 }
