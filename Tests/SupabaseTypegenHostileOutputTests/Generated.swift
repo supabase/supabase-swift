@@ -178,3 +178,59 @@ public struct UserProfiles2 {
 public struct WeIrdName {
   public var id: Int
 }
+
+@Table("report", readOnly: true)
+public struct ReportRow {
+  @Column("columns") public var columnsColumn: Int?
+  public var mood: Mood?
+  @Column("self") public var selfColumn: String?
+}
+
+extension _PostgrestRpc {
+  public func dateToday() throws -> _PostgrestFunctionCall<Date?> {
+    try self.value("today", schema: DateSchema.self)
+  }
+
+  public func mySchemaRestock(`self` selfArgument: Int, `in`: String? = nil) throws
+    -> _PostgrestQuery<MySchemaClass, [MySchemaClass]>
+  {
+    try self.rows("restock", arguments: ["self": selfArgument, "in": `in`], schema: MySchema.self)
+  }
+
+  public func labels(userId: Int, userId2: Int) throws -> _PostgrestFunctionCall<Void> {
+    try self.perform("labels", arguments: ["user_id": userId, "userId": userId2])
+  }
+
+  public func moods(at: Date) throws -> _PostgrestFunctionCall<[Mood?]> {
+    try self.value("moods", arguments: ["at": at])
+  }
+
+  public func mySchemaRestock2(`self` selfArgument: Int, `in`: String? = nil) throws
+    -> _PostgrestQuery<MySchemaClass, [MySchemaClass]>
+  {
+    try self.rows("my_schema_restock", arguments: ["self": selfArgument, "in": `in`])
+  }
+
+  public func pick(userId: Int) throws -> _PostgrestFunctionCall<Int?> {
+    try self.value("pick", arguments: ["user_id": userId])
+  }
+
+  public func pick2(userId: Int) throws -> _PostgrestFunctionCall<Int?> {
+    try self.value("pick", arguments: ["userId": userId])
+  }
+
+  public func report() throws -> _PostgrestFunctionCall<ReportRow?> {
+    try self.row("report")
+  }
+
+  public func rowsFunction() throws -> _PostgrestFunctionCall<Int?> {
+    try self.value("rows")
+  }
+
+  public func selfAndArgument(`self` selfArgument2: Int, selfArgument: Int) throws
+    -> _PostgrestFunctionCall<Void>
+  {
+    try self.perform(
+      "self_and_argument", arguments: ["self": selfArgument2, "self_argument": selfArgument])
+  }
+}

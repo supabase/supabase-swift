@@ -6,11 +6,12 @@
 //
 
 /// What the emitter reads: the relations of the selected schemas with their columns, keys and
-/// candidate computed members, and every enum type of the document.
+/// candidate computed members, the functions those schemas expose under `/rpc`, and every enum
+/// type of the document.
 ///
 /// Every collection is in a deterministic order that does not depend on the document's order:
 /// relations by schema then name, columns by `ordinal_position`, functions by schema, name, then
-/// signature.
+/// signature, and `/rpc` functions by schema then name with their overloads in document order.
 struct DatabaseModel: Equatable {
   /// The selected schemas, sorted.
   var schemas: [String]
@@ -18,6 +19,9 @@ struct DatabaseModel: Equatable {
   /// Every enum type in the document, keyed by type id. A column may use an enum of a schema that
   /// is not selected.
   var enums: [Int: EnumType]
+  /// The functions of the selected schemas PostgREST calls under `/rpc`, or `nil` when the
+  /// document predates `rpcFunctions`.
+  var rpcFunctions: [RpcFunction]?
 
   struct Relation: Equatable {
     var name: QualifiedName
@@ -39,6 +43,8 @@ struct DatabaseModel: Equatable {
       case view(isInsertEnabled: Bool, isUpdateEnabled: Bool)
       case materializedView
       case foreignTable
+      /// The rows of a `RETURNS TABLE` or `OUT` parameter function, named after the function.
+      case functionResult
     }
   }
 
@@ -73,6 +79,53 @@ struct DatabaseModel: Equatable {
     var isSetReturning: Bool
     /// The `ROWS` estimate; `ROWS 1` on a set-returning function marks a to-one relationship.
     var rows: Int?
+  }
+
+  struct RpcFunction: Equatable {
+    var name: QualifiedName
+    /// Ordered by argument list, as postgrest-typegen orders them.
+    var overloads: [RpcOverload]
+  }
+
+  struct RpcOverload: Equatable {
+    /// The input parameters, in name order.
+    var arguments: [RpcArgument]
+    /// `nil` when the document does not list the return type.
+    var returnType: RpcType?
+    /// Whether the function returns the rows of a relation.
+    var returnsRelationRows: Bool
+    /// The relation whose rows are returned, or `nil` when the document does not list it.
+    var returnRelation: QualifiedName?
+    /// The columns of a `RETURNS TABLE` or `OUT` parameter result, in name order.
+    var columns: [RpcColumn]?
+    var isSetReturning: Bool
+    /// Whether the function is a computed field of a relation, which `Columns` members cover.
+    var isComputedField: Bool
+    /// Why PostgREST cannot resolve a call to this overload, when it cannot.
+    var error: String?
+  }
+
+  struct RpcArgument: Equatable {
+    /// Empty for an unnamed parameter.
+    var name: String
+    /// `nil` when the document does not list the type.
+    var type: RpcType?
+    var hasDefault: Bool
+    /// Whether the parameter takes a row of a relation.
+    var isRow: Bool
+  }
+
+  struct RpcColumn: Equatable {
+    var name: String
+    /// `nil` when the document does not list the type.
+    var type: RpcType?
+  }
+
+  /// A Postgres type: its schema, and its name, which is `_text` for an array of `text`.
+  struct RpcType: Equatable {
+    var name: QualifiedName
+    /// The id of the enum type, or of its elements for an array, or `nil` when it is not an enum.
+    var enumID: Int?
   }
 
   struct EnumType: Equatable {
@@ -163,6 +216,46 @@ extension DatabaseModel {
           rows: function.prorows
         )
       )
+    }
+
+    func rpcType(format: String?, schema: String?) -> RpcType? {
+      guard let format, let schema else { return nil }
+      return RpcType(
+        name: QualifiedName(schema: schema, name: format),
+        enumID: enumIDs[QualifiedName(schema: schema, name: arrayElement(of: format) ?? format)]
+      )
+    }
+    rpcFunctions = metadata.rpcFunctions.map { functions in
+      functions.filter { selected.contains($0.schema) }.map { function in
+        RpcFunction(
+          name: QualifiedName(schema: function.schema, name: function.name),
+          overloads: function.overloads.map { overload in
+            RpcOverload(
+              arguments: overload.args.map { argument in
+                RpcArgument(
+                  name: argument.name,
+                  type: rpcType(format: argument.format, schema: argument.typeSchema),
+                  hasDefault: argument.hasDefault,
+                  isRow: argument.relationId != nil
+                )
+              },
+              returnType: rpcType(
+                format: overload.returns.format, schema: overload.returns.typeSchema),
+              returnsRelationRows: overload.returns.relationId != nil,
+              returnRelation: overload.returns.relationId.flatMap { relationNames[$0] },
+              columns: overload.returns.columns.map { columns in
+                columns.map {
+                  RpcColumn(name: $0.name, type: rpcType(format: $0.format, schema: $0.typeSchema))
+                }
+              },
+              isSetReturning: overload.isSetReturning,
+              isComputedField: overload.computedFieldOf != nil,
+              error: overload.error
+            )
+          }
+        )
+      }
+      .sorted { $0.name < $1.name }
     }
 
     // A document that lists one relation twice, say in both `tables` and `views`, keeps the first.
