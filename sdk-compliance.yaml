@@ -1866,8 +1866,26 @@ features:
       - ObjectVersion.init
       - ObjectVersion.path
       - ObjectVersion.versionId
-  # Bucket and BucketOptions do not carry `versioning_status` yet.
-  storage.file_buckets.bucket_versioning_status: not_implemented
+  storage.file_buckets.bucket_versioning_status:
+    status: implemented
+    symbols:
+      - Bucket.versioningStatus
+      - BucketVersioningStatus
+      - BucketVersioningStatus.init
+      - BucketVersioningStatus.rawValue
+      - BucketVersioningStatus.disabled
+      - BucketVersioningStatus.enabled
+      - BucketVersioningStatus.suspended
+      - BucketVersioningCreateStatus
+      - BucketVersioningCreateStatus.init
+      - BucketVersioningCreateStatus.rawValue
+      - BucketVersioningCreateStatus.disabled
+      - BucketVersioningCreateStatus.enabled
+      - BucketVersioningUpdateStatus
+      - BucketVersioningUpdateStatus.init
+      - BucketVersioningUpdateStatus.rawValue
+      - BucketVersioningUpdateStatus.enabled
+      - BucketVersioningUpdateStatus.suspended
   storage.file_buckets.list_file_versions:
     status: implemented
     symbols:

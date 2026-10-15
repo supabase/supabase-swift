@@ -42,6 +42,7 @@ extension StorageClient {
     var fileSizeLimit: ByteCount?
     var allowedMimeTypes: [String]?
     var type: BucketType?
+    var versioningStatus: String?
 
     enum CodingKeys: String, CodingKey {
       case id
@@ -50,6 +51,7 @@ extension StorageClient {
       case fileSizeLimit = "file_size_limit"
       case allowedMimeTypes = "allowed_mime_types"
       case type
+      case versioningStatus = "versioning_status"
     }
 
     init(id: String? = nil, name: String? = nil, options: BucketOptions) {
@@ -61,7 +63,7 @@ extension StorageClient {
     }
 
     var isEmpty: Bool {
-      `public` == nil && fileSizeLimit == nil && allowedMimeTypes == nil
+      `public` == nil && fileSizeLimit == nil && allowedMimeTypes == nil && versioningStatus == nil
     }
   }
 
@@ -79,19 +81,24 @@ extension StorageClient {
   ///   - options: Options that control visibility, file-size limits, allowed MIME types and the
   ///     bucket type. A `nil` field takes the server default: a private standard bucket with no
   ///     size or type restrictions.
+  ///   - versioning: Whether the bucket keeps a new version of an object on each write. `nil`
+  ///     takes the server default, ``BucketVersioningCreateStatus/disabled``.
   /// - Returns: The bucket name the server stored.
   /// - Throws: ``StorageError`` if a bucket with the same identifier already exists, or if the
   ///   caller is not authorized.
   @discardableResult
-  public func createBucket(_ id: String, options: BucketOptions = BucketOptions()) async throws
-    -> String
-  {
+  public func createBucket(
+    _ id: String,
+    options: BucketOptions = BucketOptions(),
+    versioning: BucketVersioningCreateStatus? = nil
+  ) async throws -> String {
     struct Response: Decodable {
       let name: String
     }
 
     var parameters = BucketParameters(id: id, name: id, options: options)
     parameters.type = options.type
+    parameters.versioningStatus = versioning?.rawValue
     return try await api.execute(api.requests.createBucket(parameters))
       .decoded(as: Response.self)
       .name
@@ -99,27 +106,36 @@ extension StorageClient {
 
   /// Updates an existing Storage bucket's settings.
   ///
-  /// Only the fields set on `options` are sent; the others keep their current value.
+  /// Only the fields set on `options`, and `versioning` when set, are sent; the others keep their
+  /// current value.
   ///
   /// ```swift
   /// try await storage.updateBucket(
   ///   "avatars",
   ///   options: BucketOptions(allowedMimeTypes: ["image/png", "image/jpeg"])
   /// )
+  /// try await storage.updateBucket("avatars", versioning: .suspended)
   /// ```
   ///
   /// - Parameters:
   ///   - id: The unique identifier of the bucket to update.
-  ///   - options: The settings to change. At least one field must be set, and not
-  ///     ``BucketOptions/type``: a bucket cannot change type.
-  /// - Throws: ``StorageError`` with kind ``StorageError/Kind-swift.struct/invalidRequest`` if no
-  ///   field is set or ``BucketOptions/type`` is, or if the bucket does not exist or the caller is not authorized.
-  public func updateBucket(_ id: String, options: BucketOptions) async throws {
+  ///   - options: The settings to change. Not ``BucketOptions/type``: a bucket cannot change type.
+  ///   - versioning: The versioning status to move the bucket to. A bucket must have had
+  ///     versioning turned on before it can be suspended.
+  /// - Throws: ``StorageError`` with kind ``StorageError/Kind-swift.struct/invalidRequest`` if
+  ///   neither an option nor `versioning` is set or ``BucketOptions/type`` is, or if the bucket does
+  ///   not exist or the caller is not authorized.
+  public func updateBucket(
+    _ id: String,
+    options: BucketOptions = BucketOptions(),
+    versioning: BucketVersioningUpdateStatus? = nil
+  ) async throws {
     guard options.type == nil else {
       throw StorageError(
         kind: .invalidRequest, message: "updateBucket cannot change a bucket's type.")
     }
-    let parameters = BucketParameters(options: options)
+    var parameters = BucketParameters(options: options)
+    parameters.versioningStatus = versioning?.rawValue
     guard !parameters.isEmpty else {
       throw StorageError(
         kind: .invalidRequest, message: "updateBucket needs at least one field to change.")

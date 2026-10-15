@@ -111,6 +111,44 @@ struct BucketRequestTests {
   }
 
   @Test
+  func bucketDecodesTheVersioningStatus() async throws {
+    let storage = Self.makeClient(
+      response: """
+        [{"id":"a","name":"a","public":false,"versioning_status":"SUSPENDED",
+          "created_at":"2024-01-01T00:00:00.000Z","updated_at":"2024-01-01T00:00:00.000Z"},
+         {"id":"b","name":"b","public":false,"versioning_status":"PAUSED",
+          "created_at":"2024-01-01T00:00:00.000Z","updated_at":"2024-01-01T00:00:00.000Z"},
+         {"id":"c","name":"c","public":false,
+          "created_at":"2024-01-01T00:00:00.000Z","updated_at":"2024-01-01T00:00:00.000Z"}]
+        """)
+
+    let buckets = try await storage.listBuckets()
+
+    #expect(buckets.map(\.versioningStatus) == [.suspended, "PAUSED", nil])
+  }
+
+  @Test
+  func createBucketSendsTheVersioningStatus() async throws {
+    let sent = LockIsolated<[Sent]>([])
+    let storage = Self.makeClient(sent: sent, response: #"{"name":"t"}"#)
+
+    try await storage.createBucket("t", versioning: .enabled)
+
+    #expect(sent.value.map(\.body) == [#"{"id":"t","name":"t","versioning_status":"ENABLED"}"#])
+  }
+
+  @Test
+  func updateBucketSendsOnlyTheVersioningStatus() async throws {
+    let sent = LockIsolated<[Sent]>([])
+    let storage = Self.makeClient(sent: sent, response: #"{"message":"ok"}"#)
+
+    try await storage.updateBucket("t", versioning: .suspended)
+
+    #expect(sent.value.map(\.request.method) == [.put])
+    #expect(sent.value.map(\.body) == [#"{"versioning_status":"SUSPENDED"}"#])
+  }
+
+  @Test
   func purgeCacheWithoutABucketPurgesTheTenant() async throws {
     let sent = LockIsolated<[Sent]>([])
     let storage = Self.makeClient(sent: sent, response: #"{"message":"success"}"#)

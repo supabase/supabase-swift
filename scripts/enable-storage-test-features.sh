@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Turns on the Storage features the Supabase CLI leaves off, for the integration tests.
 #
-# The CLI starts Storage without object lifecycles, analytics (Iceberg) buckets or a CDN purge
-# endpoint, and has no setting for them. On the Docker stack, this script recreates the CLI's
+# The CLI starts Storage without object lifecycles, object versioning, analytics (Iceberg) buckets
+# or a CDN purge endpoint, and has no setting for them. On the Docker stack, this script recreates the CLI's
 # storage container with the same configuration plus:
 #
-# - STORAGE_LIFECYCLE_ENABLED=true and ICEBERG_ENABLED=true;
+# - STORAGE_LIFECYCLE_ENABLED=true, STORAGE_VERSIONING_ENABLED=true and ICEBERG_ENABLED=true;
 # - CDN_PURGE_ENDPOINT_URL pointing at a stub that records each purge Storage forwards. The stub
 #   answers `GET /requests` with them and `DELETE /requests` clears them, on host port 54329.
 #
@@ -70,6 +70,7 @@ while IFS= read -r variable; do
 done < <(docker inspect "$STORAGE" --format '{{range .Config.Env}}{{println .}}{{end}}')
 ARGS+=(
   -e STORAGE_LIFECYCLE_ENABLED=true
+  -e STORAGE_VERSIONING_ENABLED=true
   -e ICEBERG_ENABLED=true
   -e CDN_PURGE_ENDPOINT_URL=http://cdn-purge-stub:8080
 )
@@ -82,7 +83,7 @@ docker run -d --name "$STORAGE" "${LABELS[@]}" --network "$NETWORK" --network-al
 for _ in $(seq 1 60); do
   if [[ "$(docker inspect "$STORAGE" --format '{{.State.Health.Status}}')" == healthy ]] \
     && curl -fsS http://127.0.0.1:54329/requests >/dev/null 2>&1; then
-    echo "Storage restarted with lifecycles, Iceberg and a CDN purge stub."
+    echo "Storage restarted with lifecycles, versioning, Iceberg and a CDN purge stub."
     exit 0
   fi
   sleep 1

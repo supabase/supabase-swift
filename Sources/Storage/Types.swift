@@ -878,6 +878,10 @@ public struct ObjectInfo: Identifiable, Hashable, Decodable, Sendable {
 /// - ``allowedMimeTypes``
 /// - ``fileSizeLimit``
 ///
+/// ### Versioning
+///
+/// - ``versioningStatus``
+///
 /// ### Timestamps
 ///
 /// - ``createdAt``
@@ -911,6 +915,10 @@ public struct Bucket: Identifiable, Hashable, Decodable, Sendable {
   /// Maximum file size allowed for uploads to this bucket, in bytes.
   public var fileSizeLimit: Int64?
 
+  /// Whether the bucket keeps a new version of an object on each write. `nil` when Storage leaves
+  /// it out, as Storage releases before v1.81.0 do.
+  public var versioningStatus: BucketVersioningStatus?
+
   /// Creates a ``Bucket``.
   ///
   /// - Parameters:
@@ -923,6 +931,7 @@ public struct Bucket: Identifiable, Hashable, Decodable, Sendable {
   ///   - updatedAt: Last-updated timestamp.
   ///   - allowedMimeTypes: Permitted MIME types for uploads. `nil` allows all types.
   ///   - fileSizeLimit: Maximum upload size in bytes. `nil` means no limit.
+  ///   - versioningStatus: Whether the bucket keeps a new version of an object on each write.
   public init(
     id: String,
     name: String,
@@ -932,7 +941,8 @@ public struct Bucket: Identifiable, Hashable, Decodable, Sendable {
     createdAt: Date,
     updatedAt: Date,
     allowedMimeTypes: [String]? = nil,
-    fileSizeLimit: Int64? = nil
+    fileSizeLimit: Int64? = nil,
+    versioningStatus: BucketVersioningStatus? = nil
   ) {
     self.id = id
     self.name = name
@@ -943,6 +953,7 @@ public struct Bucket: Identifiable, Hashable, Decodable, Sendable {
     self.updatedAt = updatedAt
     self.allowedMimeTypes = allowedMimeTypes
     self.fileSizeLimit = fileSizeLimit
+    self.versioningStatus = versioningStatus
   }
 
   enum CodingKeys: String, CodingKey {
@@ -955,6 +966,7 @@ public struct Bucket: Identifiable, Hashable, Decodable, Sendable {
     case updatedAt = "updated_at"
     case allowedMimeTypes = "allowed_mime_types"
     case fileSizeLimit = "file_size_limit"
+    case versioningStatus = "versioning_status"
   }
 }
 
@@ -994,6 +1006,98 @@ public struct BucketType: RawRepresentable, Codable, Hashable, Sendable,
 
   /// A bucket of Iceberg tables.
   public static let analytics = BucketType(rawValue: "ANALYTICS")
+}
+
+/// Whether a bucket keeps a new version of an object on each write, as ``Bucket`` reports it.
+///
+/// ## Topics
+///
+/// ### Predefined statuses
+///
+/// - ``disabled``
+/// - ``enabled``
+/// - ``suspended``
+public struct BucketVersioningStatus: RawRepresentable, Decodable, Hashable, Sendable,
+  ExpressibleByStringLiteral
+{
+  /// The value Storage sends, e.g. `"ENABLED"`.
+  public let rawValue: String
+
+  /// Creates a ``BucketVersioningStatus`` from the value Storage sends.
+  public init(rawValue: String) { self.rawValue = rawValue }
+
+  /// Creates a ``BucketVersioningStatus`` from a string literal.
+  public init(stringLiteral value: String) { self.init(rawValue: value) }
+
+  /// Versioning was never turned on. Each write replaces the object.
+  public static let disabled = BucketVersioningStatus(rawValue: "DISABLED")
+
+  /// Each write keeps the previous object as a noncurrent version.
+  public static let enabled = BucketVersioningStatus(rawValue: "ENABLED")
+
+  /// Versioning was turned on, then paused. Existing versions stay, but new writes replace the
+  /// current version.
+  public static let suspended = BucketVersioningStatus(rawValue: "SUSPENDED")
+}
+
+/// The versioning status to create a bucket with, for
+/// ``StorageClient/createBucket(_:options:versioning:)``.
+///
+/// A new bucket cannot start suspended, so this type has no `suspended` member.
+///
+/// ## Topics
+///
+/// ### Predefined statuses
+///
+/// - ``disabled``
+/// - ``enabled``
+public struct BucketVersioningCreateStatus: RawRepresentable, Hashable, Sendable,
+  ExpressibleByStringLiteral
+{
+  /// The value Storage expects, e.g. `"ENABLED"`.
+  public let rawValue: String
+
+  /// Creates a ``BucketVersioningCreateStatus`` from the value Storage expects.
+  public init(rawValue: String) { self.rawValue = rawValue }
+
+  /// Creates a ``BucketVersioningCreateStatus`` from a string literal.
+  public init(stringLiteral value: String) { self.init(rawValue: value) }
+
+  /// Create the bucket without versioning. The server default.
+  public static let disabled = BucketVersioningCreateStatus(rawValue: "DISABLED")
+
+  /// Create the bucket with versioning turned on.
+  public static let enabled = BucketVersioningCreateStatus(rawValue: "ENABLED")
+}
+
+/// The versioning status to move a bucket to, for
+/// ``StorageClient/updateBucket(_:options:versioning:)``.
+///
+/// A bucket cannot go back to disabled, so this type has no `disabled` member.
+///
+/// ## Topics
+///
+/// ### Predefined statuses
+///
+/// - ``enabled``
+/// - ``suspended``
+public struct BucketVersioningUpdateStatus: RawRepresentable, Hashable, Sendable,
+  ExpressibleByStringLiteral
+{
+  /// The value Storage expects, e.g. `"SUSPENDED"`.
+  public let rawValue: String
+
+  /// Creates a ``BucketVersioningUpdateStatus`` from the value Storage expects.
+  public init(rawValue: String) { self.rawValue = rawValue }
+
+  /// Creates a ``BucketVersioningUpdateStatus`` from a string literal.
+  public init(stringLiteral value: String) { self.init(rawValue: value) }
+
+  /// Turn versioning on, or back on after a suspension.
+  public static let enabled = BucketVersioningUpdateStatus(rawValue: "ENABLED")
+
+  /// Pause versioning. Only a bucket that had versioning turned on can be suspended.
+  public static let suspended = BucketVersioningUpdateStatus(rawValue: "SUSPENDED")
 }
 
 /// Options for ``StorageClient/listBuckets(options:)``: paging, sort and a name filter.
@@ -1352,8 +1456,8 @@ public enum DownloadBehavior: Sendable {
 
 // MARK: - BucketOptions
 
-/// The settings of a Storage bucket, for ``StorageClient/createBucket(_:options:)`` and
-/// ``StorageClient/updateBucket(_:options:)``.
+/// The settings of a Storage bucket, for ``StorageClient/createBucket(_:options:versioning:)`` and
+/// ``StorageClient/updateBucket(_:options:versioning:)``.
 ///
 /// Every field is optional. On create, a `nil` field takes the server default (private, no size
 /// limit, every MIME type). On update, only the fields that are set are sent, so the others keep
@@ -1395,7 +1499,7 @@ public struct BucketOptions: Hashable, Sendable {
   public var allowedMimeTypes: [String]?
 
   /// The bucket type, on create only: a bucket cannot change type, so
-  /// ``StorageClient/updateBucket(_:options:)`` throws when it is set. Defaults to
+  /// ``StorageClient/updateBucket(_:options:versioning:)`` throws when it is set. Defaults to
   /// ``BucketType/standard``.
   public var type: BucketType?
 
