@@ -100,7 +100,7 @@ public struct Hostile {
   public var hashValue: Int
   public var mood: Mood
   public var moods: [Mood]?
-  public var span: _PostgresRange<Int>?
+  public var span: _PostgresRange<_Int4Range>?
   public var nick: String
   public var ids: [UUID]?
   public var price: Decimal

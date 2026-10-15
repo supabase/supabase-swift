@@ -69,12 +69,12 @@ public struct Notes {
 @Table("postgres_values")
 public struct PostgresValues {
   @PrimaryKey @Generated public var id: Int
-  public var intSpan: _PostgresRange<Int>?
-  public var bigSpan: _PostgresRange<Int>?
-  public var numSpan: _PostgresRange<Decimal>?
-  public var localSpan: _PostgresRange<Date>?
-  public var instantSpan: _PostgresRange<Date>?
-  public var daySpan: _PostgresRange<Date>?
+  public var intSpan: _PostgresRange<_Int4Range>?
+  public var bigSpan: _PostgresRange<_Int8Range>?
+  public var numSpan: _PostgresRange<_NumRange>?
+  public var localSpan: _PostgresRange<_TSRange>?
+  public var instantSpan: _PostgresRange<_TSTZRange>?
+  public var daySpan: _PostgresRange<_DateRange>?
   public var duration: _PostgresInterval?
   public var atTime: _PostgresTime?
   public var atTimeTz: _PostgresTime?
@@ -133,7 +133,7 @@ public struct Users {
   @PrimaryKey @Default public var id: UUID
   public var email: String?
   public var username: String?
-  public var ageRange: _PostgresRange<Int>?
+  public var ageRange: _PostgresRange<_Int4Range>?
   public var catchphrase: String?
   public var data: JSONValue?
   @Default public var status: UserStatus?

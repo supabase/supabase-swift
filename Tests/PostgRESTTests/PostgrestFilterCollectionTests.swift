@@ -17,13 +17,13 @@ struct PostgrestFilterCollectionTests {
     static let selectString = "*"
 
     var tags: [String]
-    var scheduled: _PostgresRange<Date>
+    var scheduled: _PostgresRange<_TSTZRange>
     var content: String
     var metadata: JSONValue
 
     struct Columns: Sendable {
       let tags = _PostgrestColumn<Post, [String]>("tags")
-      let scheduled = _PostgrestColumn<Post, _PostgresRange<Date>>("scheduled")
+      let scheduled = _PostgrestColumn<Post, _PostgresRange<_TSTZRange>>("scheduled")
       let content = _PostgrestColumn<Post, String>("content")
       let metadata = _PostgrestColumn<Post, JSONValue>("metadata")
     }

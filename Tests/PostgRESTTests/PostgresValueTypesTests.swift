@@ -16,13 +16,13 @@ struct PostgresValueTypesTests {
     static let relationName = "postgres_values"
     static let selectString = "*"
 
-    var span: _PostgresRange<Int>
+    var span: _PostgresRange<_Int4Range>
     var duration: _PostgresInterval
     var at: _PostgresTime
     var payload: _PostgresBytes
 
     struct Columns: Sendable {
-      let span = _PostgrestColumn<Row, _PostgresRange<Int>>("span")
+      let span = _PostgrestColumn<Row, _PostgresRange<_Int4Range>>("span")
       let duration = _PostgrestColumn<Row, _PostgresInterval>("duration")
       let at = _PostgrestColumn<Row, _PostgresTime>("at")
       let payload = _PostgrestColumn<Row, _PostgresBytes>("payload")
@@ -94,9 +94,9 @@ struct PostgresValueTypesTests {
 
   @Test
   func textTypesRoundTripAsStrings() throws {
-    let span: _PostgresRange<Date> = "[2024-01-01,2024-02-01)"
+    let span: _PostgresRange<_DateRange> = "[2024-01-01,2024-02-01)"
     let data = try JSONEncoder().encode([span])
-    #expect(try JSONDecoder().decode([_PostgresRange<Date>].self, from: data) == [span])
+    #expect(try JSONDecoder().decode([_PostgresRange<_DateRange>].self, from: data) == [span])
     #expect(
       try JSONDecoder().decode(_PostgresInterval.self, from: Data(#""1 day 02:00:00""#.utf8))
         == "1 day 02:00:00")
