@@ -21,12 +21,15 @@ public import Helpers
 public struct StorageError: SupabaseError {
   /// What failed. Compare against the static members and keep a fallback branch.
   public struct Kind: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+    /// The kind's name, e.g. `"server"`.
     public let rawValue: String
 
+    /// Creates a kind from its name.
     public init(rawValue: String) {
       self.rawValue = rawValue
     }
 
+    /// Creates a kind from a string literal.
     public init(stringLiteral value: String) {
       self.init(rawValue: value)
     }
@@ -53,16 +56,20 @@ public struct StorageError: SupabaseError {
   /// Compare against the static members and keep a fallback branch: Storage adds codes, and a
   /// server newer than the SDK can send one this version does not know.
   public struct Code: Decodable, RawRepresentable, Sendable, Hashable, ExpressibleByStringLiteral {
+    /// The code as Storage sends it, e.g. `"NoSuchKey"`.
     public var rawValue: String
 
+    /// Creates a code from the value Storage sends.
     public init(rawValue: String) {
       self.rawValue = rawValue
     }
 
+    /// Creates a code from the value Storage sends.
     public init(_ rawValue: String) {
       self.init(rawValue: rawValue)
     }
 
+    /// Creates a code from a string literal.
     public init(stringLiteral value: String) {
       self.init(rawValue: value)
     }
@@ -85,6 +92,7 @@ public struct StorageError: SupabaseError {
     /// The human-readable message.
     public var message: String
 
+    /// Creates a ``ServerError``.
     public init(
       statusCode: Int? = nil, error: String? = nil, code: Code? = nil, message: String
     ) {
@@ -124,6 +132,7 @@ public struct StorageError: SupabaseError {
       }
     }
 
+    /// Decodes the flat error body, or the Iceberg catalog shape.
     public init(from decoder: any Decoder) throws {
       let container = try decoder.container(keyedBy: CodingKeys.self)
 
@@ -149,7 +158,9 @@ public struct StorageError: SupabaseError {
     }
   }
 
+  /// What failed. Check it first.
   public var kind: Kind
+  /// A human-readable description of the failure, from Storage or from the SDK.
   public var message: String
   /// The code Storage sent, such as ``Code/noSuchKey``. Set when ``kind`` is
   /// ``Kind-swift.struct/server`` and the body carried one; `nil` otherwise.
@@ -161,7 +172,10 @@ public struct StorageError: SupabaseError {
   /// The decoded error body. Set when ``kind`` is ``Kind-swift.struct/server`` and the body was
   /// a Storage error payload; `nil` otherwise.
   public var serverError: ServerError?
+  /// The HTTP status, headers, body and request id of a non-2xx response. `nil` when no
+  /// response arrived. The status is often 400 whatever the failure; read ``serverStatusCode``.
   public var response: HTTPErrorResponse?
+  /// The error that caused this one, such as a `URLError` or a `DecodingError`.
   public var underlyingError: (any Error)?
 
   /// Whether Storage reported that the object or bucket does not exist: ``code`` is
@@ -171,6 +185,7 @@ public struct StorageError: SupabaseError {
       || response?.statusCode == 404
   }
 
+  /// Creates a ``StorageError``.
   public init(
     kind: Kind,
     message: String,
@@ -189,6 +204,7 @@ public struct StorageError: SupabaseError {
     self.underlyingError = underlyingError
   }
 
+  /// The kind and the message, plus the HTTP status and request id when a response arrived.
   public var description: String {
     formattedDescription(kind: kind.rawValue)
   }
