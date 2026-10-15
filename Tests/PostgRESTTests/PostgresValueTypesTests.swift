@@ -111,6 +111,12 @@ struct PostgresValueTypesTests {
     #expect(
       try JSONDecoder().decode(_PostgresInterval.self, from: Data(#""1 day 02:00:00""#.utf8))
         == "1 day 02:00:00")
+    let interval: _PostgresInterval = "P1DT2H"
+    #expect(String(decoding: try JSONEncoder().encode(interval), as: UTF8.self) == #""P1DT2H""#)
+    let time: _PostgresTime = "13:45:00+02"
+    let encodedTime = try JSONEncoder().encode(time)
+    #expect(String(decoding: encodedTime, as: UTF8.self) == #""13:45:00+02""#)
+    #expect(try JSONDecoder().decode(_PostgresTime.self, from: encodedTime) == time)
   }
 
   /// A composite comes back as an object and goes out unchanged.
