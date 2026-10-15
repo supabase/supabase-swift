@@ -240,7 +240,7 @@ extension StorageMockerTests {
       }
       .register()
 
-      let options = BucketOptions(isPublic: true)
+      let options = CreateBucketOptions(isPublic: true)
       let name = try await storage.createBucket(
         "newbucket",
         options: options
@@ -275,7 +275,7 @@ extension StorageMockerTests {
       .register()
 
       try await storage.updateBucket(
-        "bucket123", options: BucketOptions(allowedMimeTypes: ["image/png"]))
+        "bucket123", options: UpdateBucketOptions(allowedMimeTypes: ["image/png"]))
     }
 
     @Test
@@ -283,7 +283,7 @@ extension StorageMockerTests {
       let storage = makeSUT()
 
       await #expect {
-        try await storage.updateBucket("bucket123", options: BucketOptions())
+        try await storage.updateBucket("bucket123", options: UpdateBucketOptions())
       } throws: { error in
         (error as? StorageError)?.kind == .invalidRequest
       }
@@ -325,7 +325,7 @@ extension StorageMockerTests {
       }
       .register()
 
-      let options = BucketOptions(isPublic: true)
+      let options = UpdateBucketOptions(isPublic: true)
       try await storage.updateBucket(
         "bucket123",
         options: options
@@ -471,7 +471,7 @@ extension StorageMockerTests {
 
       try await storage.createBucket(
         "newbucket",
-        options: BucketOptions(isPublic: false, fileSizeLimit: 10_485_760)
+        options: CreateBucketOptions(isPublic: false, fileSizeLimit: 10_485_760)
       )
     }
 
@@ -513,7 +513,7 @@ extension StorageMockerTests {
 
       try await storage.createBucket(
         "newbucket",
-        options: BucketOptions(isPublic: false, fileSizeLimit: .megabytes(1))
+        options: CreateBucketOptions(isPublic: false, fileSizeLimit: .megabytes(1))
       )
     }
   }

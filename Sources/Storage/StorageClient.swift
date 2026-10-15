@@ -143,8 +143,8 @@ public struct StorageClientConfiguration: Sendable {
 ///
 /// - ``listBuckets(options:)``
 /// - ``bucket(_:)``
-/// - ``createBucket(_:options:versioning:)``
-/// - ``updateBucket(_:options:versioning:)``
+/// - ``createBucket(_:options:)``
+/// - ``updateBucket(_:options:)``
 /// - ``emptyBucket(_:)``
 /// - ``deleteBucket(_:)``
 /// - ``purgeCache(bucket:includingTransformations:)``

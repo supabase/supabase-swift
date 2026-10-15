@@ -93,14 +93,14 @@ struct BucketVersioningIntegrationTests {
     let storage = StorageIntegration.admin
     let name = "versioning-\(UUID().uuidString.lowercased())"
     await StorageIntegration.finishPendingDrops()
-    try await storage.createBucket(name, versioning: .enabled)
+    try await storage.createBucket(name, options: CreateBucketOptions(versioningStatus: .enabled))
     defer { StorageIntegration.dropBucket(name) }
     #expect(try await storage.bucket(name).versioningStatus == .enabled)
 
-    try await storage.updateBucket(name, versioning: .suspended)
+    try await storage.updateBucket(name, options: UpdateBucketOptions(versioningStatus: .suspended))
     #expect(try await storage.bucket(name).versioningStatus == .suspended)
 
-    try await storage.updateBucket(name, versioning: .enabled)
+    try await storage.updateBucket(name, options: UpdateBucketOptions(versioningStatus: .enabled))
     let buckets = try await storage.listBuckets(options: BucketListOptions(search: name))
     #expect(buckets.map(\.versioningStatus) == [.enabled])
   }
@@ -111,7 +111,8 @@ struct BucketVersioningIntegrationTests {
     await StorageIntegration.finishPendingDrops()
 
     let error = await StorageIntegration.storageError {
-      try await StorageIntegration.admin.createBucket(name, versioning: .enabled)
+      try await StorageIntegration.admin.createBucket(
+        name, options: CreateBucketOptions(versioningStatus: .enabled))
     }
     #expect(error?.code == .featureNotEnabled)
   }
@@ -122,7 +123,8 @@ struct BucketVersioningIntegrationTests {
     defer { StorageIntegration.dropBucket(name) }
 
     let error = await StorageIntegration.storageError {
-      try await StorageIntegration.admin.updateBucket(name, versioning: .suspended)
+      try await StorageIntegration.admin.updateBucket(
+        name, options: UpdateBucketOptions(versioningStatus: .suspended))
     }
     #expect(error != nil)
     #expect(try await StorageIntegration.admin.bucket(name).versioningStatus == .disabled)

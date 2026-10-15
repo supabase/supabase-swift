@@ -54,13 +54,13 @@ struct StorageClientIntegrationTests {
 
     // A partial update leaves the other settings alone: the bucket stays public.
     try await storage.updateBucket(
-      bucketName, options: BucketOptions(allowedMimeTypes: ["image/jpeg"]))
+      bucketName, options: UpdateBucketOptions(allowedMimeTypes: ["image/jpeg"]))
 
     bucket = try await storage.bucket(bucketName)
     #expect(bucket.allowedMimeTypes == ["image/jpeg"])
     #expect(bucket.isPublic == true)
 
-    try await storage.updateBucket(bucketName, options: BucketOptions(isPublic: false))
+    try await storage.updateBucket(bucketName, options: UpdateBucketOptions(isPublic: false))
 
     bucket = try await storage.bucket(bucketName)
     #expect(bucket.isPublic == false)
@@ -100,7 +100,7 @@ struct StorageClientIntegrationTests {
   ])
   func fileSizeLimitRoundTrips(limit: ByteCount, bytes: Int64) async throws {
     let name = try await StorageIntegration.newBucket(
-      "limit", options: BucketOptions(isPublic: false, fileSizeLimit: limit))
+      "limit", options: CreateBucketOptions(isPublic: false, fileSizeLimit: limit))
     defer { StorageIntegration.dropBucket(name) }
 
     let bucket = try await storage.bucket(name)
@@ -115,7 +115,7 @@ struct StorageClientIntegrationTests {
 
     let created = try await storage.createBucket(
       name,
-      options: BucketOptions(
+      options: CreateBucketOptions(
         isPublic: true, fileSizeLimit: .kilobytes(1), allowedMimeTypes: ["text/plain"]))
     #expect(created == name)
 
@@ -145,10 +145,11 @@ struct StorageClientIntegrationTests {
   @Test
   func partialUpdateChangesOnlyTheGivenFields() async throws {
     let name = try await StorageIntegration.newBucket(
-      "partial", options: BucketOptions(isPublic: true, allowedMimeTypes: ["text/plain"]))
+      "partial", options: CreateBucketOptions(isPublic: true, allowedMimeTypes: ["text/plain"]))
     defer { StorageIntegration.dropBucket(name) }
 
-    try await storage.updateBucket(name, options: BucketOptions(fileSizeLimit: .init(bytes: 10)))
+    try await storage.updateBucket(
+      name, options: UpdateBucketOptions(fileSizeLimit: .init(bytes: 10)))
     var bucket = try await storage.bucket(name)
     #expect(bucket.isPublic == true)
     #expect(bucket.allowedMimeTypes == ["text/plain"])
@@ -161,7 +162,7 @@ struct StorageClientIntegrationTests {
     }
     #expect(tooBig?.code == .entityTooLarge)
 
-    try await storage.updateBucket(name, options: BucketOptions(isPublic: false))
+    try await storage.updateBucket(name, options: UpdateBucketOptions(isPublic: false))
     bucket = try await storage.bucket(name)
     #expect(bucket.isPublic == false)
     #expect(bucket.fileSizeLimit == 10)
@@ -170,7 +171,7 @@ struct StorageClientIntegrationTests {
   @Test
   func emptyUpdateIsRefusedBeforeSending() async throws {
     let error = await StorageIntegration.storageError {
-      try await storage.updateBucket("any", options: BucketOptions())
+      try await storage.updateBucket("any", options: UpdateBucketOptions())
     }
 
     #expect(error?.kind == .invalidRequest)

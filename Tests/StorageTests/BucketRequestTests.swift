@@ -92,22 +92,9 @@ struct BucketRequestTests {
     let sent = LockIsolated<[Sent]>([])
     let storage = Self.makeClient(sent: sent, response: #"{"name":"t"}"#)
 
-    try await storage.createBucket("t", options: BucketOptions(type: .analytics))
+    try await storage.createBucket("t", options: CreateBucketOptions(type: .analytics))
 
     #expect(sent.value.map(\.body) == [#"{"id":"t","name":"t","type":"ANALYTICS"}"#])
-  }
-
-  @Test
-  func updateBucketRefusesATypeBeforeSending() async throws {
-    let sent = LockIsolated<[Sent]>([])
-    let storage = Self.makeClient(sent: sent, response: #"{"message":"ok"}"#)
-
-    let error = await #expect(throws: StorageError.self) {
-      try await storage.updateBucket("t", options: BucketOptions(isPublic: true, type: .standard))
-    }
-
-    #expect(error?.kind == .invalidRequest)
-    #expect(sent.value.isEmpty)
   }
 
   @Test
@@ -132,7 +119,7 @@ struct BucketRequestTests {
     let sent = LockIsolated<[Sent]>([])
     let storage = Self.makeClient(sent: sent, response: #"{"name":"t"}"#)
 
-    try await storage.createBucket("t", versioning: .enabled)
+    try await storage.createBucket("t", options: CreateBucketOptions(versioningStatus: .enabled))
 
     #expect(sent.value.map(\.body) == [#"{"id":"t","name":"t","versioning_status":"ENABLED"}"#])
   }
@@ -142,7 +129,7 @@ struct BucketRequestTests {
     let sent = LockIsolated<[Sent]>([])
     let storage = Self.makeClient(sent: sent, response: #"{"message":"ok"}"#)
 
-    try await storage.updateBucket("t", versioning: .suspended)
+    try await storage.updateBucket("t", options: UpdateBucketOptions(versioningStatus: .suspended))
 
     #expect(sent.value.map(\.request.method) == [.put])
     #expect(sent.value.map(\.body) == [#"{"versioning_status":"SUSPENDED"}"#])

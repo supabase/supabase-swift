@@ -1041,7 +1041,7 @@ public struct BucketVersioningStatus: RawRepresentable, Decodable, Hashable, Sen
 }
 
 /// The versioning status to create a bucket with, for
-/// ``StorageClient/createBucket(_:options:versioning:)``.
+/// ``StorageClient/createBucket(_:options:)``.
 ///
 /// A new bucket cannot start suspended, so this type has no `suspended` member.
 ///
@@ -1071,7 +1071,7 @@ public struct BucketVersioningCreateStatus: RawRepresentable, Hashable, Sendable
 }
 
 /// The versioning status to move a bucket to, for
-/// ``StorageClient/updateBucket(_:options:versioning:)``.
+/// ``StorageClient/updateBucket(_:options:)``.
 ///
 /// A bucket cannot go back to disabled, so this type has no `disabled` member.
 ///
@@ -1211,9 +1211,9 @@ public struct BucketSortColumn: RawRepresentable, Hashable, Sendable, Expressibl
 /// will be sent. A whole number of bytes encodes as a JSON number, anything else as a string.
 ///
 /// ```swift
-/// BucketOptions(fileSizeLimit: .megabytes(1.5))   // "1.5mb"
-/// BucketOptions(fileSizeLimit: "500kb")
-/// BucketOptions(fileSizeLimit: 5_000_000)
+/// CreateBucketOptions(fileSizeLimit: .megabytes(1.5))   // "1.5mb"
+/// CreateBucketOptions(fileSizeLimit: "500kb")
+/// CreateBucketOptions(fileSizeLimit: 5_000_000)
 /// ```
 ///
 /// ## Topics
@@ -1454,33 +1454,30 @@ public enum DownloadBehavior: Sendable {
   }
 }
 
-// MARK: - BucketOptions
+// MARK: - Bucket options
 
-/// The settings of a Storage bucket, for ``StorageClient/createBucket(_:options:versioning:)`` and
-/// ``StorageClient/updateBucket(_:options:versioning:)``.
+/// The settings of a new Storage bucket, for ``StorageClient/createBucket(_:options:)``.
 ///
-/// Every field is optional. On create, a `nil` field takes the server default (private, no size
-/// limit, every MIME type). On update, only the fields that are set are sent, so the others keep
-/// their current value.
+/// A `nil` field takes the server default: a private standard bucket with no size limit, every
+/// MIME type and versioning off.
 ///
 /// ```swift
 /// try await storage.createBucket(
 ///   "user-uploads",
-///   options: BucketOptions(
+///   options: CreateBucketOptions(
 ///     isPublic: false,
 ///     fileSizeLimit: .megabytes(10),
-///     allowedMimeTypes: ["image/png", "image/jpeg"]
+///     allowedMimeTypes: ["image/png", "image/jpeg"],
+///     versioningStatus: .enabled
 ///   )
 /// )
-/// // Change one setting, keep the rest
-/// try await storage.updateBucket("user-uploads", options: BucketOptions(isPublic: true))
 /// ```
 ///
 /// ## Topics
 ///
 /// ### Creating bucket options
 ///
-/// - ``init(isPublic:fileSizeLimit:allowedMimeTypes:type:)``
+/// - ``init(isPublic:fileSizeLimit:allowedMimeTypes:type:versioningStatus:)``
 ///
 /// ### Bucket settings
 ///
@@ -1488,7 +1485,8 @@ public enum DownloadBehavior: Sendable {
 /// - ``fileSizeLimit``
 /// - ``allowedMimeTypes``
 /// - ``type``
-public struct BucketOptions: Hashable, Sendable {
+/// - ``versioningStatus``
+public struct CreateBucketOptions: Hashable, Sendable {
   /// Whether the bucket is publicly accessible without an authorization token.
   public var isPublic: Bool?
 
@@ -1498,29 +1496,92 @@ public struct BucketOptions: Hashable, Sendable {
   /// MIME types accepted during upload, e.g. `["image/png", "image/*"]`.
   public var allowedMimeTypes: [String]?
 
-  /// The bucket type, on create only: a bucket cannot change type, so
-  /// ``StorageClient/updateBucket(_:options:versioning:)`` throws when it is set. Defaults to
-  /// ``BucketType/standard``.
+  /// The bucket type. A bucket cannot change type later. Defaults to ``BucketType/standard``.
   public var type: BucketType?
 
-  /// Creates a ``BucketOptions`` value. A `nil` field is left to the server on create and left
-  /// unchanged on update.
+  /// Whether the bucket keeps a new version of an object on each write. Defaults to
+  /// ``BucketVersioningCreateStatus/disabled``.
+  public var versioningStatus: BucketVersioningCreateStatus?
+
+  /// Creates a ``CreateBucketOptions`` value. A `nil` field takes the server default.
   ///
   /// - Parameters:
   ///   - isPublic: Whether the bucket is publicly readable.
   ///   - fileSizeLimit: Maximum upload size, e.g. `.megabytes(10)`.
   ///   - allowedMimeTypes: Permitted MIME types.
-  ///   - type: The bucket type, on create only.
+  ///   - type: The bucket type.
+  ///   - versioningStatus: Whether the bucket keeps a new version of an object on each write.
   public init(
     isPublic: Bool? = nil,
     fileSizeLimit: ByteCount? = nil,
     allowedMimeTypes: [String]? = nil,
-    type: BucketType? = nil
+    type: BucketType? = nil,
+    versioningStatus: BucketVersioningCreateStatus? = nil
   ) {
     self.isPublic = isPublic
     self.fileSizeLimit = fileSizeLimit
     self.allowedMimeTypes = allowedMimeTypes
     self.type = type
+    self.versioningStatus = versioningStatus
+  }
+}
+
+/// The settings to change on an existing Storage bucket, for
+/// ``StorageClient/updateBucket(_:options:)``.
+///
+/// Only the fields that are set are sent, so the others keep their current value. A bucket cannot
+/// change type, so this type has no `type` field.
+///
+/// ```swift
+/// // Change one setting, keep the rest
+/// try await storage.updateBucket("user-uploads", options: UpdateBucketOptions(isPublic: true))
+/// try await storage.updateBucket(
+///   "user-uploads", options: UpdateBucketOptions(versioningStatus: .suspended))
+/// ```
+///
+/// ## Topics
+///
+/// ### Creating bucket options
+///
+/// - ``init(isPublic:fileSizeLimit:allowedMimeTypes:versioningStatus:)``
+///
+/// ### Bucket settings
+///
+/// - ``isPublic``
+/// - ``fileSizeLimit``
+/// - ``allowedMimeTypes``
+/// - ``versioningStatus``
+public struct UpdateBucketOptions: Hashable, Sendable {
+  /// Whether the bucket is publicly accessible without an authorization token.
+  public var isPublic: Bool?
+
+  /// Maximum file size allowed for uploads.
+  public var fileSizeLimit: ByteCount?
+
+  /// MIME types accepted during upload, e.g. `["image/png", "image/*"]`.
+  public var allowedMimeTypes: [String]?
+
+  /// The versioning status to move the bucket to. A bucket must have had versioning turned on
+  /// before it can be suspended.
+  public var versioningStatus: BucketVersioningUpdateStatus?
+
+  /// Creates an ``UpdateBucketOptions`` value. A `nil` field keeps its current value.
+  ///
+  /// - Parameters:
+  ///   - isPublic: Whether the bucket is publicly readable.
+  ///   - fileSizeLimit: Maximum upload size, e.g. `.megabytes(10)`.
+  ///   - allowedMimeTypes: Permitted MIME types.
+  ///   - versioningStatus: The versioning status to move the bucket to.
+  public init(
+    isPublic: Bool? = nil,
+    fileSizeLimit: ByteCount? = nil,
+    allowedMimeTypes: [String]? = nil,
+    versioningStatus: BucketVersioningUpdateStatus? = nil
+  ) {
+    self.isPublic = isPublic
+    self.fileSizeLimit = fileSizeLimit
+    self.allowedMimeTypes = allowedMimeTypes
+    self.versioningStatus = versioningStatus
   }
 }
 

@@ -139,7 +139,7 @@ struct BucketOperationsView: View {
 
       let sizeLimit: ByteCount? =
         !fileSizeLimit.isEmpty ? Int64(fileSizeLimit).map { ByteCount(bytes: $0) } : nil
-      let options = BucketOptions(isPublic: isPublic, fileSizeLimit: sizeLimit)
+      let options = CreateBucketOptions(isPublic: isPublic, fileSizeLimit: sizeLimit)
 
       try await supabase.storage.createBucket(bucketName, options: options)
 
@@ -176,7 +176,7 @@ struct BucketOperationsView: View {
       defer { isLoading = false }
 
       let newPublic = !bucket.isPublic
-      let options = BucketOptions(isPublic: newPublic)
+      let options = UpdateBucketOptions(isPublic: newPublic)
 
       try await supabase.storage.updateBucket(bucket.id, options: options)
 

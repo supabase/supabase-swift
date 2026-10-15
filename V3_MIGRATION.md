@@ -249,7 +249,7 @@ try await client.from("users").select().ilike("email", pattern: "john%").execute
 
 | Before | After |
 | --- | --- |
-| `BucketOptions.public` / `init(public:...)` | `BucketOptions.isPublic` / `init(isPublic:...)` |
+| `BucketOptions.public` / `init(public:...)` | `CreateBucketOptions.isPublic` / `UpdateBucketOptions.isPublic` (see [below](#bucketoptions-is-split-into-createbucketoptions-and-updatebucketoptions)) |
 | `createSignedURL`/`createSignedURLs`/`getPublicURL(..., download: Bool)` | `download: DownloadBehavior?` (`.withOriginalName`, `.named("file.pdf")`) |
 | `createSignedURLs(...) -> [URL]` | `createSignedURLs(...) -> [SignedURLResult]` |
 | `upload`/`update`/`uploadToSignedURL(...) -> String` | the overloads returning `FileUploadResponse` / `SignedURLUploadResponse` |
@@ -4132,8 +4132,9 @@ print(info.eTag ?? "", info.userMetadata ?? [:])
 
 ## `BucketOptions` fields are all optional, `updateBucket` is a partial update, and `ByteCount` replaces `StorageByteCount`
 
-`BucketOptions` is `isPublic: Bool?`, `fileSizeLimit: ByteCount?`, `allowedMimeTypes: [String]?`,
-every field `nil` by default. `createBucket` leaves a `nil` field to the server default and now
+The bucket options (now `CreateBucketOptions` and `UpdateBucketOptions`, see the next section) are
+`isPublic: Bool?`, `fileSizeLimit: ByteCount?`, `allowedMimeTypes: [String]?`, every field `nil`
+by default. `createBucket` leaves a `nil` field to the server default and now
 returns the bucket name the server stored. `updateBucket` sends only the fields that are set
 and throws `StorageError` with kind `.invalidRequest` when none is. `ByteCount` keeps the
 value as Storage reads it (`rawValue`): an exact count from `init(bytes:)` or an integer literal,
@@ -4145,9 +4146,9 @@ exact count when there is one.
 two optional fields and `BucketOptions` re-parsed them into a `String?`.
 
 This is a compile error for `StorageByteCount`, `intValue` and `stringValue`, and wherever
-`BucketOptions.isPublic` was read as a non-optional `Bool`. `BucketOptions(isPublic: true)`,
-`.megabytes(5)` and `fileSizeLimit: "5mb"` compile unchanged; the behavior change is that an update no longer
-resets the fields you did not pass.
+`isPublic` was read as a non-optional `Bool`. `isPublic: true`, `.megabytes(5)` and
+`fileSizeLimit: "5mb"` compile unchanged; the behavior change is that an update no longer resets
+the fields you did not pass.
 
 ```swift
 // Before: this also made the bucket private
@@ -4155,9 +4156,34 @@ try await storage.updateBucket("avatars", options: BucketOptions(allowedMimeType
 try await storage.createBucket("logs", options: BucketOptions(fileSizeLimit: StorageByteCount(stringValue: "5mb")))
 
 // After: only the MIME types change
-try await storage.updateBucket("avatars", options: BucketOptions(allowedMimeTypes: ["image/png"]))
-let name = try await storage.createBucket("logs", options: BucketOptions(fileSizeLimit: .megabytes(5)))
+try await storage.updateBucket("avatars", options: UpdateBucketOptions(allowedMimeTypes: ["image/png"]))
+let name = try await storage.createBucket("logs", options: CreateBucketOptions(fileSizeLimit: .megabytes(5)))
 ```
+
+## `BucketOptions` is split into `CreateBucketOptions` and `UpdateBucketOptions`
+
+`createBucket(_:options:)` takes `CreateBucketOptions` and `updateBucket(_:options:)` takes
+`UpdateBucketOptions`. Both have `isPublic`, `fileSizeLimit`, `allowedMimeTypes` and
+`versioningStatus`. Only `CreateBucketOptions` has `type`.
+
+Storage accepts different fields on create and update. A bucket's `type` is set on create and
+cannot change. A bucket is created with versioning `.disabled` or `.enabled`, and an update moves
+it to `.enabled` or `.suspended`. With one type per call, a field or value Storage refuses for
+that call does not compile.
+
+```swift
+// Before
+try await storage.createBucket("avatars", options: BucketOptions(public: true))
+try await storage.updateBucket("avatars", options: BucketOptions(public: false))
+
+// After
+try await storage.createBucket("avatars", options: CreateBucketOptions(isPublic: true, type: .standard))
+try await storage.updateBucket("avatars", options: UpdateBucketOptions(isPublic: false))
+try await storage.updateBucket("avatars", options: UpdateBucketOptions(versioningStatus: .suspended))
+```
+
+This is a compile error wherever `BucketOptions` is named. Where the options are an inline
+argument such as `options: .init(isPublic: true)`, the code compiles unchanged.
 
 ## The `download: String?` overloads and `SignedURL` are gone; `publicURL` no longer throws; `createSignedUploadURL(path:upsert:)`
 
@@ -4302,8 +4328,8 @@ let owner: String? = bucket.ownerId
 ```
 
 Code that reads `owner` or passes `owner:` to the initializer is a compile error. The same release adds
-`listBuckets(options:)` with paging, sort and a name filter, and `BucketOptions.type` for
-`createBucket`; `updateBucket` throws if `type` is set, because a bucket cannot change type.
+`listBuckets(options:)` with paging, sort and a name filter, and `CreateBucketOptions.type` for
+`createBucket`. `UpdateBucketOptions` has no `type`, because a bucket cannot change type.
 
 ## `move` and `copy` take `toBucket:` instead of `DestinationOptions`
 
