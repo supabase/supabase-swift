@@ -1590,6 +1590,12 @@ features:
       - ResumableUpload.ID.init
       - ResumableUpload.ID.rawValue
       - ResumableUpload.State
+      - ResumableUpload.State.pending
+      - ResumableUpload.State.uploading
+      - ResumableUpload.State.paused
+      - ResumableUpload.State.completed
+      - ResumableUpload.State.failed
+      - ResumableUpload.State.cancelled
       - ResumableUpload.id
       - ResumableUpload.bucketId
       - ResumableUpload.path
