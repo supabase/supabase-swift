@@ -29,15 +29,8 @@ final class StorageBucketIntegrationTests {
     uploadPath = "testpath/file-\(UUID().uuidString).jpg"
   }
 
-  // Async cleanup can outlive the test if the process exits immediately after — acceptable for
-  // local dev/CI cleanup, not correctness-critical.
   deinit {
-    let storage = storage
-    let bucketName = bucketName
-    Task {
-      try? await storage.emptyBucket(bucketName)
-      try? await storage.deleteBucket(bucketName)
-    }
+    StorageIntegration.dropBucket(bucketName)
   }
 
   @Test
@@ -857,6 +850,7 @@ final class StorageBucketIntegrationTests {
     prefix: String = "",
     options: BucketOptions = BucketOptions(isPublic: true)
   ) async throws -> String {
+    await StorageIntegration.finishPendingDrops()
     let bucketName = "\(!prefix.isEmpty ? prefix + "-" : "")bucket-\(UUID().uuidString)"
     return try await findOrCreateBucket(name: bucketName, options: options)
   }
