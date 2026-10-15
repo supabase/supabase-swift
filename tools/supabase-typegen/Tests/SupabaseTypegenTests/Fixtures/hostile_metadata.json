@@ -1076,5 +1076,503 @@
       "enums": [],
       "type_relation_id": null
     }
+  ],
+  "rpcFunctions": [
+    {
+      "schema": "date",
+      "name": "today",
+      "overloads": [
+        {
+          "function_id": 900,
+          "args": [],
+          "returns": {
+            "type_id": 0,
+            "format": "date",
+            "type_schema": "pg_catalog",
+            "relation_id": null,
+            "columns": null
+          },
+          "is_set_returning": false,
+          "rows_estimate": null,
+          "setof_options": null,
+          "computed_field_of": null,
+          "error": null
+        }
+      ]
+    },
+    {
+      "schema": "inventory",
+      "name": "restock",
+      "overloads": [
+        {
+          "function_id": 901,
+          "args": [],
+          "returns": {
+            "type_id": 0,
+            "format": "void",
+            "type_schema": "pg_catalog",
+            "relation_id": null,
+            "columns": null
+          },
+          "is_set_returning": false,
+          "rows_estimate": null,
+          "setof_options": null,
+          "computed_field_of": null,
+          "error": null
+        }
+      ]
+    },
+    {
+      "schema": "my\"schema",
+      "name": "restock",
+      "overloads": [
+        {
+          "function_id": 902,
+          "args": [
+            {
+              "type_id": 0,
+              "format": "int4",
+              "type_schema": "pg_catalog",
+              "name": "self",
+              "mode": "in",
+              "has_default": false,
+              "relation_id": null
+            },
+            {
+              "type_id": 0,
+              "format": "text",
+              "type_schema": "pg_catalog",
+              "name": "in",
+              "mode": "in",
+              "has_default": true,
+              "relation_id": null
+            }
+          ],
+          "returns": {
+            "type_id": 0,
+            "format": "row9",
+            "type_schema": "my\"schema",
+            "relation_id": 9,
+            "columns": null
+          },
+          "is_set_returning": true,
+          "rows_estimate": 1000,
+          "setof_options": null,
+          "computed_field_of": null,
+          "error": null
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "conflict",
+      "overloads": [
+        {
+          "function_id": 903,
+          "args": [
+            {
+              "type_id": 0,
+              "format": "int4",
+              "type_schema": "pg_catalog",
+              "name": "a",
+              "mode": "in",
+              "has_default": false,
+              "relation_id": null
+            }
+          ],
+          "returns": {
+            "type_id": 0,
+            "format": "text",
+            "type_schema": "pg_catalog",
+            "relation_id": null,
+            "columns": null
+          },
+          "is_set_returning": false,
+          "rows_estimate": null,
+          "setof_options": null,
+          "computed_field_of": null,
+          "error": "Could not choose the best candidate function between: public.conflict(a => int4), public.conflict(a => text). Try renaming the parameters or the function itself in the database so function overloading can be resolved"
+        },
+        {
+          "function_id": 904,
+          "args": [
+            {
+              "type_id": 0,
+              "format": "text",
+              "type_schema": "pg_catalog",
+              "name": "a",
+              "mode": "in",
+              "has_default": false,
+              "relation_id": null
+            }
+          ],
+          "returns": {
+            "type_id": 0,
+            "format": "text",
+            "type_schema": "pg_catalog",
+            "relation_id": null,
+            "columns": null
+          },
+          "is_set_returning": false,
+          "rows_estimate": null,
+          "setof_options": null,
+          "computed_field_of": null,
+          "error": "Could not choose the best candidate function between: public.conflict(a => int4), public.conflict(a => text). Try renaming the parameters or the function itself in the database so function overloading can be resolved"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "elsewhere_rows",
+      "overloads": [
+        {
+          "function_id": 905,
+          "args": [],
+          "returns": {
+            "type_id": 0,
+            "format": "row7",
+            "type_schema": "inventory",
+            "relation_id": 7,
+            "columns": null
+          },
+          "is_set_returning": true,
+          "rows_estimate": 1000,
+          "setof_options": null,
+          "computed_field_of": null,
+          "error": null
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "labels",
+      "overloads": [
+        {
+          "function_id": 906,
+          "args": [
+            {
+              "type_id": 0,
+              "format": "int4",
+              "type_schema": "pg_catalog",
+              "name": "user_id",
+              "mode": "in",
+              "has_default": false,
+              "relation_id": null
+            },
+            {
+              "type_id": 0,
+              "format": "int4",
+              "type_schema": "pg_catalog",
+              "name": "userId",
+              "mode": "in",
+              "has_default": false,
+              "relation_id": null
+            }
+          ],
+          "returns": {
+            "type_id": 0,
+            "format": "void",
+            "type_schema": "pg_catalog",
+            "relation_id": null,
+            "columns": null
+          },
+          "is_set_returning": false,
+          "rows_estimate": null,
+          "setof_options": null,
+          "computed_field_of": null,
+          "error": null
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "moods",
+      "overloads": [
+        {
+          "function_id": 907,
+          "args": [
+            {
+              "type_id": 0,
+              "format": "timestamptz",
+              "type_schema": "pg_catalog",
+              "name": "at",
+              "mode": "in",
+              "has_default": false,
+              "relation_id": null
+            }
+          ],
+          "returns": {
+            "type_id": 0,
+            "format": "mood",
+            "type_schema": "public",
+            "relation_id": null,
+            "columns": null
+          },
+          "is_set_returning": true,
+          "rows_estimate": 1000,
+          "setof_options": null,
+          "computed_field_of": null,
+          "error": null
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "my_schema_restock",
+      "overloads": [
+        {
+          "function_id": 908,
+          "args": [
+            {
+              "type_id": 0,
+              "format": "int4",
+              "type_schema": "pg_catalog",
+              "name": "self",
+              "mode": "in",
+              "has_default": false,
+              "relation_id": null
+            },
+            {
+              "type_id": 0,
+              "format": "text",
+              "type_schema": "pg_catalog",
+              "name": "in",
+              "mode": "in",
+              "has_default": true,
+              "relation_id": null
+            }
+          ],
+          "returns": {
+            "type_id": 0,
+            "format": "row9",
+            "type_schema": "my\"schema",
+            "relation_id": 9,
+            "columns": null
+          },
+          "is_set_returning": true,
+          "rows_estimate": 1000,
+          "setof_options": null,
+          "computed_field_of": null,
+          "error": null
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "pick",
+      "overloads": [
+        {
+          "function_id": 909,
+          "args": [
+            {
+              "type_id": 0,
+              "format": "int4",
+              "type_schema": "pg_catalog",
+              "name": "user_id",
+              "mode": "in",
+              "has_default": false,
+              "relation_id": null
+            }
+          ],
+          "returns": {
+            "type_id": 0,
+            "format": "int4",
+            "type_schema": "pg_catalog",
+            "relation_id": null,
+            "columns": null
+          },
+          "is_set_returning": false,
+          "rows_estimate": null,
+          "setof_options": null,
+          "computed_field_of": null,
+          "error": null
+        },
+        {
+          "function_id": 910,
+          "args": [
+            {
+              "type_id": 0,
+              "format": "int4",
+              "type_schema": "pg_catalog",
+              "name": "userId",
+              "mode": "in",
+              "has_default": false,
+              "relation_id": null
+            }
+          ],
+          "returns": {
+            "type_id": 0,
+            "format": "int4",
+            "type_schema": "pg_catalog",
+            "relation_id": null,
+            "columns": null
+          },
+          "is_set_returning": false,
+          "rows_estimate": null,
+          "setof_options": null,
+          "computed_field_of": null,
+          "error": null
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "report",
+      "overloads": [
+        {
+          "function_id": 911,
+          "args": [],
+          "returns": {
+            "type_id": 0,
+            "format": "record",
+            "type_schema": "pg_catalog",
+            "relation_id": null,
+            "columns": [
+              {
+                "name": "columns",
+                "type_id": 23,
+                "format": "int4",
+                "type_schema": "pg_catalog"
+              },
+              {
+                "name": "mood",
+                "type_id": 100,
+                "format": "mood",
+                "type_schema": "public"
+              },
+              {
+                "name": "self",
+                "type_id": 25,
+                "format": "text",
+                "type_schema": "pg_catalog"
+              }
+            ]
+          },
+          "is_set_returning": false,
+          "rows_estimate": null,
+          "setof_options": null,
+          "computed_field_of": null,
+          "error": null
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "rows",
+      "overloads": [
+        {
+          "function_id": 912,
+          "args": [],
+          "returns": {
+            "type_id": 0,
+            "format": "int4",
+            "type_schema": "pg_catalog",
+            "relation_id": null,
+            "columns": null
+          },
+          "is_set_returning": false,
+          "rows_estimate": null,
+          "setof_options": null,
+          "computed_field_of": null,
+          "error": null
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "shouted",
+      "overloads": [
+        {
+          "function_id": 913,
+          "args": [
+            {
+              "type_id": 0,
+              "format": "row1",
+              "type_schema": "public",
+              "name": "",
+              "mode": "in",
+              "has_default": false,
+              "relation_id": 1
+            }
+          ],
+          "returns": {
+            "type_id": 0,
+            "format": "text",
+            "type_schema": "pg_catalog",
+            "relation_id": null,
+            "columns": null
+          },
+          "is_set_returning": false,
+          "rows_estimate": null,
+          "setof_options": null,
+          "computed_field_of": 1,
+          "error": "the function public.shouted with parameter or with a single unnamed json/jsonb parameter, but no matches were found in the schema cache"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "takes_row",
+      "overloads": [
+        {
+          "function_id": 914,
+          "args": [
+            {
+              "type_id": 0,
+              "format": "row1",
+              "type_schema": "public",
+              "name": "h",
+              "mode": "in",
+              "has_default": false,
+              "relation_id": 1
+            }
+          ],
+          "returns": {
+            "type_id": 0,
+            "format": "void",
+            "type_schema": "pg_catalog",
+            "relation_id": null,
+            "columns": null
+          },
+          "is_set_returning": false,
+          "rows_estimate": null,
+          "setof_options": null,
+          "computed_field_of": null,
+          "error": null
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "unnamed_text",
+      "overloads": [
+        {
+          "function_id": 915,
+          "args": [
+            {
+              "type_id": 0,
+              "format": "text",
+              "type_schema": "pg_catalog",
+              "name": "",
+              "mode": "in",
+              "has_default": false,
+              "relation_id": null
+            }
+          ],
+          "returns": {
+            "type_id": 0,
+            "format": "int4",
+            "type_schema": "pg_catalog",
+            "relation_id": null,
+            "columns": null
+          },
+          "is_set_returning": false,
+          "rows_estimate": null,
+          "setof_options": null,
+          "computed_field_of": null,
+          "error": null
+        }
+      ]
+    }
   ]
 }

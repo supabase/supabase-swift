@@ -92,4 +92,47 @@ struct SupabaseTypegenOutputTests {
         + "messages:channel_messages(*),first:first_message(*)&shouted_slug=eq.GENERAL"
     )
   }
+
+  @Test
+  func generatedFunctionCallSendsItsArgumentsAndFilters() async throws {
+    let (client, transport) = recordingClient()
+    _ = try await client.rpc.searchMessages(query: "hello")
+      .where { $0.channelId.eq(1) }
+      .execute()
+
+    let request = try #require(transport.requests.first)
+    #expect(request.head.method == .post)
+    #expect(
+      request.head.path?.removingPercentEncoding == "/rpc/search_messages?channel_id=eq.1")
+    #expect(request.body.map { String(decoding: $0, as: UTF8.self) } == #"{"query":"hello"}"#)
+  }
+
+  @Test
+  func overloadsAreToldApartByTheirLabels() async throws {
+    let (client, transport) = recordingClient()
+    _ = try await client.rpc.messagesOf(channelSlug: "public", maxCount: 1).execute()
+
+    let body = try #require(transport.requests.first?.body)
+    #expect(
+      try JSONDecoder().decode(JSONValue.self, from: body)
+        == ["channel_slug": "public", "max_count": 1])
+  }
+
+  @Test
+  func generatedFunctionReturningARowFindsNone() async throws {
+    let (client, _) = recordingClient(
+      body: #"{"id":null,"channel_id":null,"data":null,"message":null,"username":null}"#)
+    let message = try await client.rpc.messageById(messageId: 99).execute().value
+
+    #expect(message == nil)
+  }
+
+  @Test
+  func generatedFunctionWithAJsonBodySendsItWhole() async throws {
+    let (client, transport) = recordingClient(body: "[1,2]")
+    let echoed = try await client.rpc.echo([1, 2]).execute().value
+
+    #expect(echoed == [1, 2])
+    #expect(transport.requests.first?.body.map { String(decoding: $0, as: UTF8.self) } == "[1,2]")
+  }
 }

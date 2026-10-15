@@ -23,6 +23,12 @@ struct FilePlan {
   var enums: [EnumPlan]
   /// In the model's order: schema, then name.
   var relations: [RelationPlan]
+  /// The row types of the functions that return `RETURNS TABLE` or `OUT` parameter rows, in the
+  /// order of ``functions``.
+  var functionResults: [RelationPlan] = []
+  /// The methods of the `_PostgrestRpc` extension: one per callable overload, by schema, then
+  /// name.
+  var functions: [FunctionPlan] = []
   /// One line each, for standard error: renames and types not mapped.
   var notes: [String] = []
 
@@ -68,6 +74,43 @@ struct FilePlan {
       case toOne(target: String)
       case toMany(target: String)
     }
+  }
+
+  struct FunctionPlan {
+    /// As spelled in source, backticks included.
+    var name: String
+    /// The function's name, which PostgREST addresses it by.
+    var function: String
+    /// The ``SchemaPlan/typeName`` of the function's schema, or `nil` for `public`.
+    var schemaTypeName: String?
+    /// Required parameters first, then the defaulted ones, each in name order.
+    var parameters: [ParameterPlan]
+    var result: Result
+
+    enum Result {
+      /// The rows of a relation or a function result type, filterable through its columns.
+      case rows(String)
+      /// One row, or `nil` when the function finds none.
+      case row(String)
+      case value(SwiftType)
+      case nothing
+    }
+  }
+
+  struct ParameterPlan {
+    /// The argument label, backticks included, or `nil` for the whole body of a function whose
+    /// sole parameter is an unnamed `json` or `jsonb`.
+    var label: String?
+    /// The name the method body reads the value by, when it differs from ``label``.
+    var internalName: String?
+    /// The Postgres parameter name.
+    var argument: String
+    var type: SwiftType
+    /// Whether the parameter is `nil` by default, which leaves the argument out.
+    var hasDefault: Bool
+
+    /// The name the method body reads the value by.
+    var variable: String { internalName ?? label ?? "body" }
   }
 
   struct PropertyPlan {
@@ -125,10 +168,18 @@ extension FilePlan {
       schemas.append(SchemaPlan(name: schema, typeName: typeName))
     }
 
-    let usedEnums = Set(
-      model.relations.flatMap {
-        $0.columns.compactMap(\.enumID) + $0.functions.compactMap(\.returnEnumID)
-      })
+    let callables = callableOverloads(of: model)
+    let relationEnums = model.relations.flatMap {
+      $0.columns.compactMap(\.enumID) + $0.functions.compactMap(\.returnEnumID)
+    }
+    let functionEnums = callables.flatMap { callable -> [Int] in
+      let overload = callable.overload
+      let types: [DatabaseModel.RpcType?] =
+        overload.arguments.map(\.type) + [overload.returnType]
+        + (overload.columns ?? []).map(\.type)
+      return types.compactMap { $0?.enumID }
+    }
+    let usedEnums = Set(relationEnums + functionEnums)
     let enumTypes = model.enums.values
       .filter { model.schemas.contains($0.name.schema) || usedEnums.contains($0.id) }
       .sorted { $0.name < $1.name }
@@ -137,6 +188,12 @@ extension FilePlan {
     let declarations: [(name: QualifiedName, label: String, suffix: String)] =
       model.relations.map { ($0.name, "\($0.name.schema).\($0.name.name)", "Table") }
       + enumTypes.map { ($0.name, "enum \($0.name.schema).\($0.name.name)", "Enum") }
+      + callables.filter { $0.returnsResultRows }.map {
+        (
+          QualifiedName(schema: $0.function.name.schema, name: $0.function.name.name + "_row"),
+          "\($0.label) result", "Row"
+        )
+      }
 
     // Every top-level declaration, keyed by its Swift name. Same-schema declarations that convert
     // to the same name are told apart with a number; a clash that crosses schemas is an error,
@@ -194,6 +251,210 @@ extension FilePlan {
     for index in relations.indices {
       relations[index].computed = computedMembers(
         of: relations[index], relationTypeNames: relationTypeNames, enumTypeNames: enumTypeNames)
+    }
+
+    var resultTypeNames = typeNames.dropFirst(model.relations.count + enumTypes.count)
+      .makeIterator()
+    for callable in callables {
+      var resultTypeName: String?
+      if callable.returnsResultRows, let typeName = resultTypeNames.next() {
+        let result = DatabaseModel.Relation(
+          name: callable.function.name,
+          kind: .functionResult,
+          columns: (callable.overload.columns ?? []).map { column in
+            DatabaseModel.Column(
+              name: column.name, format: column.type?.name.name ?? "",
+              typeSchema: column.type?.name.schema ?? "", enumID: column.type?.enumID,
+              hasDefault: false, identityGeneration: nil, isGenerated: false, isNullable: true)
+          },
+          primaryKey: [],
+          functions: []
+        )
+        functionResults.append(
+          RelationPlan(
+            relation: result,
+            typeName: typeName,
+            schemaTypeName: schemaTypeNames[result.name.schema],
+            properties: try properties(of: result, enumTypeNames: enumTypeNames),
+            readOnly: true
+          )
+        )
+        resultTypeName = typeName
+      }
+      functions.append(
+        functionPlan(
+          callable, resultTypeName: resultTypeName, relationTypeNames: relationTypeNames,
+          enumTypeNames: enumTypeNames, schemaTypeNames: schemaTypeNames))
+    }
+    nameFunctions()
+  }
+
+  /// One overload the generator writes a method for.
+  struct Callable {
+    var function: DatabaseModel.RpcFunction
+    var overload: DatabaseModel.RpcOverload
+    /// Names the overload in notes, for example `function public.search(query text)`.
+    var label: String
+    /// Whether the function returns `RETURNS TABLE` or `OUT` parameter rows, which get a row
+    /// type of their own.
+    var returnsResultRows: Bool { !overload.returnsRelationRows && overload.columns != nil }
+  }
+
+  /// The overloads a method can call, in the model's order, with a note for each one left out.
+  ///
+  /// An overload PostgREST cannot resolve, one that takes a row, and one with an unnamed parameter
+  /// other than a sole `json` or `jsonb` are left out. So is one that returns the rows of a
+  /// relation the file does not declare. A computed field is left out without a note when it
+  /// cannot be called, since its relation's `Columns` already covers it.
+  private mutating func callableOverloads(of model: DatabaseModel) -> [Callable] {
+    guard let functions = model.rpcFunctions else {
+      notes.append(
+        "the document has no rpcFunctions, so no function calls are generated; it needs "
+          + "postgrest-typegen 0.5.0 or later")
+      return []
+    }
+    let generated = Set(model.relations.map(\.name))
+    var callables: [Callable] = []
+    for function in functions {
+      for overload in function.overloads {
+        let signature = overload.arguments.map { argument in
+          let type = argument.type?.name.name ?? "unknown"
+          return argument.name.isEmpty ? type : "\(argument.name) \(type)"
+        }.joined(separator: ", ")
+        let label = "function \(function.name.schema).\(function.name.name)(\(signature))"
+        let isBody =
+          overload.arguments.count == 1 && overload.arguments[0].name.isEmpty
+          && overload.arguments[0].type.map {
+            $0.name.schema == "pg_catalog" && ["json", "jsonb"].contains($0.name.name)
+          } == true
+        let reason: String? =
+          if let error = overload.error {
+            error
+          } else if overload.returnType == nil
+            || overload.arguments.contains(where: { $0.type == nil })
+            || overload.columns?.contains(where: { $0.type == nil }) == true
+          {
+            "its types are not in the document"
+          } else if let row = overload.arguments.first(where: \.isRow) {
+            "it takes a row of \(row.type?.name.name ?? "unknown"), which has no Encodable Swift type"
+          } else if !isBody && overload.arguments.contains(where: \.name.isEmpty) {
+            "it has an unnamed parameter, which PostgREST only passes as the whole body of a "
+              + "function whose sole parameter is json or jsonb"
+          } else if overload.returnsRelationRows,
+            overload.returnRelation.map(generated.contains) != true
+          {
+            "it returns "
+              + (overload.returnRelation.map { "\($0.schema).\($0.name)" } ?? "unknown")
+              + ", which is not generated"
+          } else {
+            nil
+          }
+        if let reason {
+          if !overload.isComputedField {
+            notes.append("\(label) is not generated: \(reason)")
+          }
+          continue
+        }
+        callables.append(Callable(function: function, overload: overload, label: label))
+      }
+    }
+    return callables
+  }
+
+  private mutating func functionPlan(
+    _ callable: Callable,
+    resultTypeName: String?,
+    relationTypeNames: [QualifiedName: String],
+    enumTypeNames: [Int: String],
+    schemaTypeNames: [String: String]
+  ) -> FunctionPlan {
+    let overload = callable.overload
+    let name = callable.function.name
+    func swiftType(_ type: DatabaseModel.RpcType?, subject: String) -> SwiftType {
+      let type = type!
+      return scalarType(
+        schema: type.name.schema, name: type.name.name, enumID: type.enumID,
+        subject: "\(callable.label) \(subject)", enumTypeNames: enumTypeNames)
+    }
+
+    let result: FunctionPlan.Result
+    if let resultTypeName {
+      result = overload.isSetReturning ? .rows(resultTypeName) : .row(resultTypeName)
+    } else if overload.returnsRelationRows, let target = overload.returnRelation,
+      let typeName = relationTypeNames[target]
+    {
+      result = overload.isSetReturning ? .rows(typeName) : .row(typeName)
+    } else if overload.returnType?.name == QualifiedName(schema: "pg_catalog", name: "void") {
+      result = .nothing
+    } else {
+      let type = swiftType(overload.returnType, subject: "returns the type")
+      result = .value(overload.isSetReturning ? .array(.optional(type)) : .optional(type))
+    }
+
+    let ordered =
+      overload.arguments.filter { !$0.hasDefault } + overload.arguments.filter(\.hasDefault)
+    var parameters: [ParameterPlan]
+    if ordered.count == 1, ordered[0].name.isEmpty {
+      parameters = [
+        ParameterPlan(
+          label: nil, argument: "",
+          type: swiftType(ordered[0].type, subject: "takes the type"), hasDefault: false)
+      ]
+    } else {
+      let labels = numberRepeats(
+        in: ordered.map { Naming.propertyName($0.name) }, avoiding: [], kind: "parameter",
+        labels: ordered.map { "\(callable.label) parameter \($0.name)" })
+      parameters = zip(ordered, labels).map { argument, label in
+        let type = swiftType(argument.type, subject: "parameter \(argument.name) has the type")
+        return ParameterPlan(
+          label: label,
+          // `self` as a parameter would hide the `_PostgrestRpc` the method calls through.
+          internalName: Naming.unescaped(label) == "self" ? "selfArgument" : nil,
+          argument: argument.name,
+          type: argument.hasDefault ? .optional(type) : type,
+          hasDefault: argument.hasDefault
+        )
+      }
+    }
+
+    return FunctionPlan(
+      name: "", function: name.name, schemaTypeName: schemaTypeNames[name.schema],
+      parameters: parameters, result: result)
+  }
+
+  /// Names every method in ``functions``. Functions outside `public` carry their schema as a
+  /// prefix. Overloads share a name and differ in their argument labels, the way PostgREST tells
+  /// them apart; one that would repeat another method's name, labels and types is numbered.
+  private mutating func nameFunctions() {
+    let schemaNames = Dictionary(
+      schemas.map { ($0.typeName, $0.name) }, uniquingKeysWith: { first, _ in first })
+    var taken: Set<String> = []
+    for index in functions.indices {
+      let plan = functions[index]
+      let schema = plan.schemaTypeName.flatMap { schemaNames[$0] } ?? "public"
+      let qualified = "\(schema).\(plan.function)"
+      var name = Naming.propertyName(
+        (schema == "public" ? "" : schema + "_") + plan.function)
+      let bare = Naming.unescaped(name)
+      if Naming.rpcMembers.contains(bare) {
+        name = Naming.identifier(bare + "Function")
+        notes.append("function \(qualified) is named \(name): _PostgrestRpc already has \(bare)")
+      }
+      func signature(_ name: String) -> String {
+        let labels = plan.parameters.map { "\(Naming.unescaped($0.label ?? "_")):" }.joined()
+        let types = plan.parameters.map { "\($0.type.syntax)" }.joined(separator: ",")
+        return "\(Naming.unescaped(name))(\(labels)) \(types)"
+      }
+      if !taken.insert(signature(name)).inserted {
+        let base = name
+        name =
+          (2...).lazy.map { Naming.identifier("\(Naming.unescaped(base))\($0)") }
+          .first { taken.insert(signature($0)).inserted } ?? base
+        notes.append(
+          "function \(qualified) is named \(name): another call is also named "
+            + signature(base).prefix { $0 != " " })
+      }
+      functions[index].name = name
     }
   }
 
@@ -349,7 +610,7 @@ extension FilePlan {
     switch kind {
     case .table: false
     case .view(let isInsertEnabled, let isUpdateEnabled): !(isInsertEnabled || isUpdateEnabled)
-    case .materializedView, .foreignTable: true
+    case .materializedView, .foreignTable, .functionResult: true
     }
   }
 
@@ -456,12 +717,17 @@ extension FilePlan {
   func render(accessControl: Options.AccessControl) throws -> String {
     let access: DeclModifierListSyntax =
       accessControl == .public ? [DeclModifierSyntax(name: .keyword(.public))] : []
-    let usesFoundation = relations.contains { relation in
-      relation.properties.contains { $0.type.usesFoundation }
-        || relation.computed.contains {
-          if case .field(let type) = $0.kind { type.usesFoundation } else { false }
-        }
-    }
+    let usesFoundation =
+      (relations + functionResults).contains { relation in
+        relation.properties.contains { $0.type.usesFoundation }
+          || relation.computed.contains {
+            if case .field(let type) = $0.kind { type.usesFoundation } else { false }
+          }
+      }
+      || functions.contains { function in
+        function.parameters.contains { $0.type.usesFoundation }
+          || { if case .value(let type) = function.result { type.usesFoundation } else { false } }()
+      }
 
     let file = try SourceFileSyntax {
       // A public declaration needs its types' modules imported publicly under
@@ -499,7 +765,7 @@ extension FilePlan {
         .with(\.leadingTrivia, .newlines(2))
       }
 
-      for relation in relations {
+      for relation in relations + functionResults {
         try StructDeclSyntax(
           """
           \(tableAttribute(relation))
@@ -537,6 +803,17 @@ extension FilePlan {
           .with(\.leadingTrivia, .newlines(2))
         }
       }
+
+      if !functions.isEmpty {
+        try ExtensionDeclSyntax("extension _PostgrestRpc") {
+          for (index, function) in functions.enumerated() {
+            MemberBlockItemSyntax(
+              leadingTrivia: index == 0 ? .newline : .newlines(2),
+              decl: functionDecl(function, access: access))
+          }
+        }
+        .with(\.leadingTrivia, .newlines(2))
+      }
     }
 
     var output = ""
@@ -547,6 +824,49 @@ extension FilePlan {
       to: &output
     )
     return output
+  }
+
+  /// A method that calls the function through the `_PostgrestRpc` entry point its result needs.
+  private func functionDecl(_ function: FunctionPlan, access: DeclModifierListSyntax) -> DeclSyntax
+  {
+    let parameters = function.parameters.map { parameter in
+      let names =
+        switch (parameter.label, parameter.internalName) {
+        case (nil, _): "_ body"
+        case (let label?, let internalName?): "\(label) \(internalName)"
+        case (let label?, nil): label
+        }
+      return "\(names): \(parameter.type.syntax)\(parameter.hasDefault ? " = nil" : "")"
+    }.joined(separator: ", ")
+
+    let (entryPoint, returnType): (String, String) =
+      switch function.result {
+      case .rows(let row): ("rows", "_PostgrestQuery<\(row), [\(row)]>")
+      case .row(let row): ("row", "_PostgrestFunctionCall<\(row)?>")
+      case .value(let type): ("value", "_PostgrestFunctionCall<\(type.syntax)>")
+      case .nothing: ("perform", "_PostgrestFunctionCall<Void>")
+      }
+
+    var arguments = [StringLiteralExprSyntax(content: function.function).description]
+    if function.parameters.count == 1, function.parameters[0].label == nil {
+      arguments.append("arguments: _PostgrestArguments(body)")
+    } else if !function.parameters.isEmpty {
+      let entries = function.parameters.map {
+        "\(StringLiteralExprSyntax(content: $0.argument)): \($0.variable)"
+      }
+      arguments.append("arguments: [\(entries.joined(separator: ", "))]")
+    }
+    if let schema = function.schemaTypeName {
+      arguments.append("schema: \(schema).self")
+    }
+
+    return DeclSyntax(
+      """
+      \(access) func \(raw: function.name)(\(raw: parameters)) throws -> \(raw: returnType) {
+        try self.\(raw: entryPoint)(\(raw: arguments.joined(separator: ", ")))
+      }
+      """
+    )
   }
 
   private func attributes(of property: PropertyPlan) -> AttributeListSyntax {
