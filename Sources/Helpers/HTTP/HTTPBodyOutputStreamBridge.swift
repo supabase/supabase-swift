@@ -94,7 +94,14 @@
         return output.write(base, maxLength: buffer.count)
       }
       guard written > 0 else {
-        if written < 0 { fail(output.streamError ?? URLError(.unknown)) }
+        // `.atEnd` means URLSession closed the read end, usually because the server answered
+        // before reading the whole body (an early 413). The task still delivers that response;
+        // failing here would cancel it and surface a bare `URLError(.unknown)` instead.
+        if output.streamStatus == .atEnd {
+          close()
+        } else if written < 0 {
+          fail(output.streamError ?? URLError(.unknown))
+        }
         return
       }
       pending = pending.dropFirst(written)
