@@ -786,7 +786,7 @@ public struct ObjectInfo: Identifiable, Hashable, Decodable, Sendable {
 /// A Supabase Storage bucket.
 ///
 /// Buckets are the top-level containers for files. Retrieve bucket details with
-/// ``StorageClient/bucket(_:)`` or ``StorageClient/listBuckets()``.
+/// ``StorageClient/bucket(_:)`` or ``StorageClient/listBuckets(options:)``.
 ///
 /// ## Topics
 ///
@@ -794,7 +794,8 @@ public struct ObjectInfo: Identifiable, Hashable, Decodable, Sendable {
 ///
 /// - ``id``
 /// - ``name``
-/// - ``owner``
+/// - ``type``
+/// - ``ownerId``
 ///
 /// ### Access and limits
 ///
@@ -813,8 +814,12 @@ public struct Bucket: Identifiable, Hashable, Decodable, Sendable {
   /// The human-readable name of the bucket.
   public var name: String
 
-  /// The user ID of the bucket owner.
-  public var owner: String
+  /// Whether the bucket holds files or analytics tables. `nil` when Storage leaves it out, as
+  /// ``StorageClient/bucket(_:)`` does.
+  public var type: BucketType?
+
+  /// The ID of the user who owns the bucket, if any.
+  public var ownerId: String?
 
   /// Whether the bucket is publicly accessible without an authorization token.
   public var isPublic: Bool
@@ -836,7 +841,8 @@ public struct Bucket: Identifiable, Hashable, Decodable, Sendable {
   /// - Parameters:
   ///   - id: Unique bucket identifier.
   ///   - name: Human-readable bucket name.
-  ///   - owner: User ID of the bucket owner.
+  ///   - type: Whether the bucket holds files or analytics tables.
+  ///   - ownerId: ID of the user who owns the bucket.
   ///   - isPublic: Whether the bucket is publicly readable.
   ///   - createdAt: Creation timestamp.
   ///   - updatedAt: Last-updated timestamp.
@@ -845,7 +851,8 @@ public struct Bucket: Identifiable, Hashable, Decodable, Sendable {
   public init(
     id: String,
     name: String,
-    owner: String,
+    type: BucketType? = nil,
+    ownerId: String? = nil,
     isPublic: Bool,
     createdAt: Date,
     updatedAt: Date,
@@ -854,7 +861,8 @@ public struct Bucket: Identifiable, Hashable, Decodable, Sendable {
   ) {
     self.id = id
     self.name = name
-    self.owner = owner
+    self.type = type
+    self.ownerId = ownerId
     self.isPublic = isPublic
     self.createdAt = createdAt
     self.updatedAt = updatedAt
@@ -865,13 +873,151 @@ public struct Bucket: Identifiable, Hashable, Decodable, Sendable {
   enum CodingKeys: String, CodingKey {
     case id
     case name
-    case owner
+    case type
+    case ownerId = "owner_id"
     case isPublic = "public"
     case createdAt = "created_at"
     case updatedAt = "updated_at"
     case allowedMimeTypes = "allowed_mime_types"
     case fileSizeLimit = "file_size_limit"
   }
+}
+
+/// Whether a bucket holds files or analytics (Iceberg) tables.
+///
+/// ## Topics
+///
+/// ### Predefined types
+///
+/// - ``standard``
+/// - ``analytics``
+public struct BucketType: RawRepresentable, Codable, Hashable, Sendable,
+  ExpressibleByStringLiteral
+{
+  /// The value Storage sends and expects, e.g. `"STANDARD"`.
+  public let rawValue: String
+
+  /// Creates a ``BucketType`` from the value Storage sends.
+  public init(rawValue: String) { self.rawValue = rawValue }
+
+  public init(stringLiteral value: String) { self.init(rawValue: value) }
+
+  public init(from decoder: any Decoder) throws {
+    self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+  }
+
+  public func encode(to encoder: any Encoder) throws {
+    var container = encoder.singleValueContainer()
+    try container.encode(rawValue)
+  }
+
+  /// A bucket of files. The default.
+  public static let standard = BucketType(rawValue: "STANDARD")
+
+  /// A bucket of Iceberg tables.
+  public static let analytics = BucketType(rawValue: "ANALYTICS")
+}
+
+/// Options for ``StorageClient/listBuckets(options:)``: paging, sort and a name filter.
+///
+/// ```swift
+/// let buckets = try await storage.listBuckets(
+///   options: BucketListOptions(limit: 20, sortBy: .createdAt, order: .descending))
+/// ```
+///
+/// ## Topics
+///
+/// ### Creating list options
+///
+/// - ``init(limit:offset:sortBy:order:search:)``
+///
+/// ### Options
+///
+/// - ``limit``
+/// - ``offset``
+/// - ``sortBy``
+/// - ``order``
+/// - ``search``
+public struct BucketListOptions: Hashable, Sendable {
+  /// Maximum number of buckets to return. `nil` returns all of them.
+  public var limit: Int?
+
+  /// Zero-based offset used for paginating results.
+  public var offset: Int?
+
+  /// The column to sort by.
+  public var sortBy: BucketSortColumn?
+
+  /// The sort direction.
+  public var order: SortOrder?
+
+  /// A substring filter applied to bucket names.
+  public var search: String?
+
+  /// Creates a ``BucketListOptions`` value. A `nil` field is left to the server.
+  ///
+  /// - Parameters:
+  ///   - limit: Maximum number of buckets to return.
+  ///   - offset: Zero-based offset for pagination.
+  ///   - sortBy: The column to sort by.
+  ///   - order: The sort direction.
+  ///   - search: A substring filter applied to bucket names.
+  public init(
+    limit: Int? = nil,
+    offset: Int? = nil,
+    sortBy: BucketSortColumn? = nil,
+    order: SortOrder? = nil,
+    search: String? = nil
+  ) {
+    self.limit = limit
+    self.offset = offset
+    self.sortBy = sortBy
+    self.order = order
+    self.search = search
+  }
+
+  /// The query items `GET /bucket` and `GET /iceberg/bucket` read.
+  var queryItems: [URLQueryItem] {
+    [
+      limit.map { URLQueryItem(name: "limit", value: "\($0)") },
+      offset.map { URLQueryItem(name: "offset", value: "\($0)") },
+      sortBy.map { URLQueryItem(name: "sortColumn", value: $0.rawValue) },
+      order.map { URLQueryItem(name: "sortOrder", value: $0.rawValue) },
+      search.map { URLQueryItem(name: "search", value: $0) },
+    ].compactMap { $0 }
+  }
+}
+
+/// The column a bucket listing is sorted by.
+///
+/// ## Topics
+///
+/// ### Predefined columns
+///
+/// - ``id``
+/// - ``name``
+/// - ``createdAt``
+/// - ``updatedAt``
+public struct BucketSortColumn: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+  /// The column name sent to Storage, e.g. `"created_at"`.
+  public let rawValue: String
+
+  /// Creates a ``BucketSortColumn`` from the column name Storage expects.
+  public init(rawValue: String) { self.rawValue = rawValue }
+
+  public init(stringLiteral value: String) { self.init(rawValue: value) }
+
+  /// Sort by bucket ID.
+  public static let id = BucketSortColumn(rawValue: "id")
+
+  /// Sort by bucket name.
+  public static let name = BucketSortColumn(rawValue: "name")
+
+  /// Sort by the time the bucket was created.
+  public static let createdAt = BucketSortColumn(rawValue: "created_at")
+
+  /// Sort by the time the bucket was last updated.
+  public static let updatedAt = BucketSortColumn(rawValue: "updated_at")
 }
 
 // MARK: - ByteCount
@@ -1144,13 +1290,14 @@ public enum DownloadBehavior: Sendable {
 ///
 /// ### Creating bucket options
 ///
-/// - ``init(isPublic:fileSizeLimit:allowedMimeTypes:)``
+/// - ``init(isPublic:fileSizeLimit:allowedMimeTypes:type:)``
 ///
 /// ### Bucket settings
 ///
 /// - ``isPublic``
 /// - ``fileSizeLimit``
 /// - ``allowedMimeTypes``
+/// - ``type``
 public struct BucketOptions: Hashable, Sendable {
   /// Whether the bucket is publicly accessible without an authorization token.
   public var isPublic: Bool?
@@ -1161,6 +1308,11 @@ public struct BucketOptions: Hashable, Sendable {
   /// MIME types accepted during upload, e.g. `["image/png", "image/*"]`.
   public var allowedMimeTypes: [String]?
 
+  /// The bucket type, on create only: a bucket cannot change type, so
+  /// ``StorageClient/updateBucket(_:options:)`` throws when it is set. Defaults to
+  /// ``BucketType/standard``.
+  public var type: BucketType?
+
   /// Creates a ``BucketOptions`` value. A `nil` field is left to the server on create and left
   /// unchanged on update.
   ///
@@ -1168,14 +1320,17 @@ public struct BucketOptions: Hashable, Sendable {
   ///   - isPublic: Whether the bucket is publicly readable.
   ///   - fileSizeLimit: Maximum upload size, e.g. `.megabytes(10)`.
   ///   - allowedMimeTypes: Permitted MIME types.
+  ///   - type: The bucket type, on create only.
   public init(
     isPublic: Bool? = nil,
     fileSizeLimit: ByteCount? = nil,
-    allowedMimeTypes: [String]? = nil
+    allowedMimeTypes: [String]? = nil,
+    type: BucketType? = nil
   ) {
     self.isPublic = isPublic
     self.fileSizeLimit = fileSizeLimit
     self.allowedMimeTypes = allowedMimeTypes
+    self.type = type
   }
 }
 

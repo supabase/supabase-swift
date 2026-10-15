@@ -88,8 +88,8 @@ struct StorageRequests: Sendable {
 
   // MARK: - Buckets
 
-  func listBuckets() -> StorageRequest {
-    StorageRequest(head: HTTPRequest(method: .get, url: url("bucket")))
+  func listBuckets(_ options: BucketListOptions) -> StorageRequest {
+    StorageRequest(head: HTTPRequest(method: .get, url: url("bucket", query: options.queryItems)))
   }
 
   func bucket(_ id: String) -> StorageRequest {

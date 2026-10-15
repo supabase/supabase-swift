@@ -136,7 +136,7 @@ public struct StorageClientConfiguration: Sendable {
 ///
 /// ### Bucket management
 ///
-/// - ``listBuckets()``
+/// - ``listBuckets(options:)``
 /// - ``bucket(_:)``
 /// - ``createBucket(_:options:)``
 /// - ``updateBucket(_:options:)``

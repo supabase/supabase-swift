@@ -76,7 +76,8 @@ struct BucketDetailView: View {
           value: .object([
             "id": .string(bucket.id),
             "name": .string(bucket.name),
-            "owner": .string(bucket.owner),
+            "ownerId": bucket.ownerId.map(JSONValue.string) ?? .null,
+            "type": bucket.type.map { .string($0.rawValue) } ?? .null,
             "isPublic": .bool(bucket.isPublic),
             "createdAt": .string(bucket.createdAt.description),
             "updatedAt": .string(bucket.updatedAt.description),
@@ -108,7 +109,7 @@ struct BucketDetailView: View {
     bucket: Bucket(
       id: UUID().uuidString,
       name: "name",
-      owner: "owner",
+      ownerId: "owner",
       isPublic: false,
       createdAt: Date(),
       updatedAt: Date(),
