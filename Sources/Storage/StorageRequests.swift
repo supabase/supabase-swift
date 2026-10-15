@@ -27,7 +27,7 @@ struct StorageRequest: Sendable {
 struct StorageRequests: Sendable {
   private let base: URLComponents
   /// The base for the tus route: on hosted Supabase always the storage host, whatever
-  /// `usesNewHostname` says, as the gateway host buffers the whole request.
+  /// `usesNewHostname` says, since the docs require the direct host for tus uploads.
   private let resumableBase: URLComponents
 
   /// The base URL every route is appended to.
