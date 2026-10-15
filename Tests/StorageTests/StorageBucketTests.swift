@@ -1899,11 +1899,7 @@ extension StorageMockerTests {
           data: Data("not-really-a-png".utf8)
         )
 
-      #if canImport(UniformTypeIdentifiers)
-        #expect(request.value?.headerFields[.contentType] == "image/png")
-      #else
-        #expect(request.value?.headerFields[.contentType] == "application/octet-stream")
-      #endif
+      #expect(request.value?.headerFields[.contentType] == "image/png")
     }
 
     @Test
@@ -1918,11 +1914,7 @@ extension StorageMockerTests {
           fileURL: Bundle.module.url(forResource: "sadcat", withExtension: "jpg")!
         )
 
-      #if canImport(UniformTypeIdentifiers)
-        #expect(request.value?.headerFields[.contentType] == "image/jpeg")
-      #else
-        #expect(request.value?.headerFields[.contentType] == "application/octet-stream")
-      #endif
+      #expect(request.value?.headerFields[.contentType] == "image/jpeg")
     }
 
     @Test
