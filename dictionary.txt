@@ -294,7 +294,7 @@ memprobe
 attoseconds
 
 # Retry-After / Duration terms from RetryPolicy.swift.
-asctime
+ascii asctime
 fixdate
 
 # Term from the privacy manifest resource declared on the Helpers target (Package.swift).
