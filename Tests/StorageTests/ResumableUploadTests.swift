@@ -1,3 +1,4 @@
+import Clocks
 import ConcurrencyExtras
 import Foundation
 import HTTPTypes
@@ -78,16 +79,6 @@ struct ResumableUploadTests {
     throw URLError(.networkConnectionLost)
   }
 
-  /// A clock whose sleeps return at once and move `now` forward by the slept duration.
-  private struct FakeClock: Clock {
-    let instant = LockIsolated(ContinuousClock().now)
-    var now: ContinuousClock.Instant { instant.value }
-    var minimumResolution: Duration { .zero }
-    func sleep(until deadline: ContinuousClock.Instant, tolerance: Duration?) async throws {
-      instant.withValue { $0 = max($0, deadline) }
-    }
-  }
-
   private let root: URL
   private let fileURL: URL
 
@@ -106,7 +97,7 @@ struct ResumableUploadTests {
       http: .init(transport: ClosureTransport { try await script.send($0, body: $1) }),
       resumable: ResumableUploadConfiguration(
         chunkSize: 8, retryTimeout: retryTimeout, directory: root.appendingPathComponent("store")))
-    configuration.clock = FakeClock()
+    configuration.clock = ImmediateClock()
     return StorageClient(configuration: configuration).from("bucket")
   }
 

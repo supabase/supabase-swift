@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 16/09/26.
 //
 
+import Clocks
 import ConcurrencyExtras
 import Foundation
 import HTTPTypes
@@ -94,12 +95,4 @@ struct StorageAPITests {
 
     #expect(attempts.value.count == 1)
   }
-}
-
-/// A clock whose sleeps return at once, so retry tests do not wait out the backoff.
-private struct ImmediateClock: Clock {
-  var now: ContinuousClock.Instant { ContinuousClock().now }
-  var minimumResolution: Duration { ContinuousClock().minimumResolution }
-
-  func sleep(until deadline: ContinuousClock.Instant, tolerance: Duration?) async throws {}
 }
