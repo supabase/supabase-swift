@@ -150,6 +150,58 @@ extension StorageClient {
     try await api.execute(api.requests.deleteBucket(id))
   }
 
+  /// Returns the lifecycle policy of a Standard bucket, or `nil` if it has none.
+  ///
+  /// - Parameter id: The unique identifier of the bucket.
+  /// - Throws: ``StorageError`` if lifecycle support is off for the project, the bucket is not a
+  ///   Standard bucket, or the caller is not authorized.
+  public func lifecycle(forBucket id: String) async throws -> LifecycleConfiguration? {
+    do {
+      return try await api.execute(api.requests.lifecycle(id, method: .get))
+        .decoded(as: LifecycleConfiguration.self)
+    } catch let error as StorageError where error.code == .noSuchLifecycleConfiguration {
+      return nil
+    }
+  }
+
+  /// Replaces the lifecycle policy of a Standard bucket.
+  ///
+  /// The policy replaces whatever the bucket had. To remove it, call
+  /// ``deleteLifecycle(forBucket:)``.
+  ///
+  /// ```swift
+  /// try await storage.setLifecycle(
+  ///   LifecycleConfiguration(rules: [
+  ///     LifecycleRule(noncurrentVersionExpiration: NoncurrentVersionExpiration(noncurrentDays: 30))
+  ///   ]),
+  ///   forBucket: "documents"
+  /// )
+  /// ```
+  ///
+  /// - Parameters:
+  ///   - configuration: The policy, with 1 to 1000 rules.
+  ///   - id: The unique identifier of the bucket.
+  /// - Returns: The stored policy, with the identifiers Storage generated for rules that had none.
+  /// - Throws: ``StorageError`` if Storage rejects the policy (no rules, more than 1000, or an
+  ///   invalid rule), lifecycle support is off, the bucket is not a Standard bucket, or the caller
+  ///   is not authorized.
+  @discardableResult
+  public func setLifecycle(_ configuration: LifecycleConfiguration, forBucket id: String)
+    async throws -> LifecycleConfiguration
+  {
+    try await api.execute(api.requests.setLifecycle(id, configuration))
+      .decoded(as: LifecycleConfiguration.self)
+  }
+
+  /// Removes the lifecycle policy of a Standard bucket. Succeeds when the bucket has none.
+  ///
+  /// - Parameter id: The unique identifier of the bucket.
+  /// - Throws: ``StorageError`` if lifecycle support is off for the project, the bucket is not a
+  ///   Standard bucket, or the caller is not authorized.
+  public func deleteLifecycle(forBucket id: String) async throws {
+    try await api.execute(api.requests.lifecycle(id, method: .delete))
+  }
+
   /// Purges the CDN cache for every file in a bucket, so the next request for each one is served
   /// from Storage again.
   ///

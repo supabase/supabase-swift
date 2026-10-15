@@ -1528,6 +1528,36 @@ features:
     status: implemented
     symbols:
       - StorageClient.emptyBucket
+  storage.file_buckets.get_bucket_lifecycle:
+    status: implemented
+    symbols:
+      - StorageClient.lifecycle
+      - LifecycleConfiguration
+      - LifecycleConfiguration.rules
+      - LifecycleConfiguration.init
+      - LifecycleRule
+      - LifecycleRule.id
+      - LifecycleRule.status
+      - LifecycleRule.noncurrentVersionExpiration
+      - LifecycleRule.init
+      - LifecycleRule.encode
+      - LifecycleRuleStatus
+      - LifecycleRuleStatus.rawValue
+      - LifecycleRuleStatus.init
+      - LifecycleRuleStatus.enabled
+      - LifecycleRuleStatus.disabled
+      - NoncurrentVersionExpiration
+      - NoncurrentVersionExpiration.noncurrentDays
+      - NoncurrentVersionExpiration.newerNoncurrentVersions
+      - NoncurrentVersionExpiration.init
+  storage.file_buckets.update_bucket_lifecycle:
+    status: implemented
+    symbols:
+      - StorageClient.setLifecycle
+  storage.file_buckets.delete_bucket_lifecycle:
+    status: implemented
+    symbols:
+      - StorageClient.deleteLifecycle
   storage.file_buckets.access_bucket:
     status: implemented
     symbols:
