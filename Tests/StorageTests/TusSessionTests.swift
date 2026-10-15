@@ -149,6 +149,19 @@ struct TusSessionTests {
   }
 
   @Test
+  func createWithTheFirstChunkRequiresUploadOffset() async throws {
+    let sut = makeSUT { _ in
+      self.response(201, headers: ["Location": "/storage/v1/upload/resumable/abc"])
+    }
+
+    await #expect(throws: StorageError.self) {
+      try await sut.create(
+        bucket: "bucket", key: try ObjectKey("a"), length: 20, options: options,
+        firstChunk: Data(repeating: 1, count: 6))
+    }
+  }
+
+  @Test
   func createPassesServerErrorsThrough() async throws {
     let sut = makeSUT { _ in
       self.response(413, headers: ["Content-Type": "text/plain"], body: "Payload too large")
