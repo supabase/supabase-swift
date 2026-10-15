@@ -202,19 +202,25 @@ extension StorageClient {
     try await api.execute(api.requests.lifecycle(id, method: .delete))
   }
 
-  /// Purges the CDN cache for every file in a bucket, so the next request for each one is served
-  /// from Storage again.
+  /// Purges the CDN cache for every file in a bucket, or in the whole project, so the next
+  /// request for each one is served from Storage again. The CDN can take up to 60 seconds to
+  /// apply the purge.
   ///
-  /// > Important: This requires the `secret` key. On self-hosted Storage, the `purgeCache` tenant
-  /// > feature and a CDN purge endpoint must be configured, otherwise the request fails.
+  /// ```swift
+  /// try await storage.purgeCache(bucket: "avatars")
+  /// try await storage.purgeCache(bucket: nil)  // every bucket
+  /// ```
+  ///
+  /// > Important: This requires the `secret` key and the `purgeCache` tenant feature. On
+  /// > self-hosted Storage, a CDN purge endpoint must also be configured, otherwise the request
+  /// > fails.
   ///
   /// - Parameters:
-  ///   - bucket: The unique identifier of the bucket to purge.
-  ///   - transformationsOnly: Pass `true` to purge only the resized and reformatted variants,
-  ///     leaving the original files cached.
+  ///   - bucket: The unique identifier of the bucket to purge, or `nil` to purge every bucket.
+  ///   - includingTransformations: Pass `true` to also purge the resized and reformatted variants.
   /// - Throws: ``StorageError`` if the caller is not authorized or cache purging is not enabled.
-  public func purgeCache(bucket: String, transformationsOnly: Bool = false) async throws {
+  public func purgeCache(bucket: String?, includingTransformations: Bool = false) async throws {
     try await api.execute(
-      api.requests.purgeCache(bucket: bucket, key: nil, transformationsOnly: transformationsOnly))
+      api.requests.purgeCache(bucket: bucket, includingTransformations: includingTransformations))
   }
 }

@@ -127,15 +127,20 @@ struct StorageRequests: Sendable {
     lifecycle(id, method: .put, body: try json(configuration))
   }
 
-  /// `DELETE cdn/{bucket}` purges the bucket; with `key`, one object.
-  func purgeCache(bucket: String, key: ObjectKey?, transformationsOnly: Bool) -> StorageRequest {
-    let path = key.map { objectPath(bucket, $0) } ?? ObjectKey.encode(bucket)
+  /// `DELETE cdn/` purges the whole tenant, `cdn/{bucket}` one bucket, `cdn/{bucket}/{key}` one
+  /// object.
+  func purgeCache(bucket: String?, key: ObjectKey? = nil, includingTransformations: Bool)
+    -> StorageRequest
+  {
+    let path =
+      bucket.map { bucket in key.map { objectPath(bucket, $0) } ?? ObjectKey.encode(bucket) } ?? ""
     return StorageRequest(
       head: HTTPRequest(
         method: .delete,
         url: url(
           "cdn/\(path)",
-          query: transformationsOnly ? [URLQueryItem(name: "transformations", value: "true")] : [])
+          query: includingTransformations
+            ? [URLQueryItem(name: "transformations", value: "true")] : [])
       ))
   }
 
