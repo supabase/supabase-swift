@@ -91,7 +91,7 @@ public actor ResumableUpload {
       if state.isTerminal {
         stateBroadcaster.finish()
         progressBroadcaster.finish()
-        Self.live.withValue { if $0[liveKey] === self { $0.removeValue(forKey: liveKey) } }
+        Self.live.withValue { if $0[liveKey]?.upload === self { $0.removeValue(forKey: liveKey) } }
       }
     }
   }
@@ -109,8 +109,14 @@ public actor ResumableUpload {
   private let stateBroadcaster = StreamBroadcaster<State>(bufferingPolicy: .unbounded)
 
   /// The handles that are not yet terminal, one per record, so two callers asking for the
-  /// same upload drive one tus session instead of two.
-  private static let live = LockIsolated<[String: ResumableUpload]>([:])
+  /// same upload drive one tus session instead of two. Held weakly, so a handle that never
+  /// starts lives only as long as its caller keeps it.
+  private struct Live {
+    weak var upload: ResumableUpload?
+  }
+
+  private static let live = LockIsolated<[String: Live]>([:])
+  private nonisolated let started = LockIsolated(false)
 
   private nonisolated var liveKey: String { Self.liveKey(fingerprint: id.rawValue, api: api) }
 
@@ -125,16 +131,19 @@ public actor ResumableUpload {
   ) -> ResumableUpload {
     let key = liveKey(fingerprint: fingerprint, api: api)
     return live.withValue { live in
-      if let existing = live[key] { return existing }
+      if let existing = live[key]?.upload { return existing }
       let upload = make()
-      live[key] = upload
+      live = live.filter { $0.value.upload != nil }
+      live[key] = Live(upload: upload)
       return upload
     }
   }
 
-  /// Whether a handle for `fingerprint` is in flight in this process.
+  /// Whether a handle for `fingerprint` has started and is not yet terminal in this process.
   static func isLive(fingerprint: String, api: StorageAPI) -> Bool {
-    live.withValue { $0[liveKey(fingerprint: fingerprint, api: api)] != nil }
+    live.withValue {
+      $0[liveKey(fingerprint: fingerprint, api: api)]?.upload?.started.value == true
+    }
   }
 
   /// The live handle for `record`, or a pending one built from it.
@@ -214,6 +223,7 @@ public actor ResumableUpload {
       let record = try await loadOrCreateRecord()
       guard case .pending = state else { return }
       self.record = record
+      started.setValue(true)
       state = .uploading
       startLoop(from: record.lastKnownOffset, next: .append)
     } catch is CancellationError {
