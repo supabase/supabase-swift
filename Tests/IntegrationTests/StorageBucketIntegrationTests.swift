@@ -702,12 +702,7 @@ final class StorageBucketIntegrationTests {
     #expect(uploaded.id != nil)
 
     let info = try await api.info(path: "cat.jpg")
-    #if canImport(UniformTypeIdentifiers)
-      #expect(info.contentType == "image/jpeg")
-    #else
-      // Linux has no type database yet (SDK-2043); the upload falls back to a generic type.
-      #expect(info.contentType == "application/octet-stream")
-    #endif
+    #expect(info.contentType == "image/jpeg")
     #expect(info.size == Int64(file.count))
   }
 
