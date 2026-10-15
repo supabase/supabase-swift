@@ -253,6 +253,7 @@ let package = Package(
     .testTarget(
       name: "StorageTests",
       dependencies: [
+        .product(name: "Clocks", package: "swift-clocks"),
         .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
         .product(name: "IssueReporting", package: "swift-issue-reporting"),
         "Mocker",
