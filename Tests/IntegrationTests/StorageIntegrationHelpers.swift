@@ -75,8 +75,8 @@ enum StorageIntegration {
   ///
   /// Storage's file backend removes empty folders up to its root after each delete, without a
   /// lock against uploads. When a drop deletes the last object on the stack while another test
-  /// uploads, the upload's `mkdir` loses its parent and fails with ENOENT. So each new bucket
-  /// waits for earlier drops to finish.
+  /// uploads, the upload's `mkdir` loses its parent and fails with "no such file or directory".
+  /// So each new bucket waits for earlier drops to finish.
   private static let pendingDrops = LockIsolated<[Task<Void, Never>]>([])
 
   static func finishPendingDrops() async {
