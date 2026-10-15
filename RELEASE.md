@@ -69,8 +69,9 @@ what release-please on `main` treats as the last release. Copying the manifest v
 `release/v2` to `main` does not change it either.
 
 To set the next version of `main`, set `release-as` in `release-please-config.json`. It is set to
-`3.0.0-beta.1` for the first v3 beta. Remove it after that release ships; later betas then
-continue from the `v3.0.0-beta.1` tag on `main`.
+`3.0.0-alpha.1` for the first v3 alpha. Remove it after that release ships; later alphas then
+continue from the `v3.0.0-alpha.1` tag on `main`. To start the betas, set `prerelease-type` to
+`beta` and `release-as` to `3.0.0-beta.1`.
 
 ## Manual Release
 
