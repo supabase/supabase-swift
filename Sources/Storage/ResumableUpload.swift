@@ -113,10 +113,10 @@ public actor ResumableUpload {
   /// starts lives only as long as its caller keeps it.
   private struct Live {
     weak var upload: ResumableUpload?
+    var started = false
   }
 
   private static let live = LockIsolated<[String: Live]>([:])
-  private nonisolated let started = LockIsolated(false)
 
   private nonisolated var liveKey: String { Self.liveKey(fingerprint: id.rawValue, api: api) }
 
@@ -141,8 +141,9 @@ public actor ResumableUpload {
 
   /// Whether a handle for `fingerprint` has started and is not yet terminal in this process.
   static func isLive(fingerprint: String, api: StorageAPI) -> Bool {
-    live.withValue {
-      $0[liveKey(fingerprint: fingerprint, api: api)]?.upload?.started.value == true
+    live.withValue { live in
+      let entry = live[liveKey(fingerprint: fingerprint, api: api)]
+      return entry?.upload != nil && entry?.started == true
     }
   }
 
@@ -223,7 +224,11 @@ public actor ResumableUpload {
       let record = try await loadOrCreateRecord()
       guard case .pending = state else { return }
       self.record = record
-      started.setValue(true)
+      Self.live.withValue { live in
+        if live[liveKey]?.upload == nil || live[liveKey]?.upload === self {
+          live[liveKey] = Live(upload: self, started: true)
+        }
+      }
       state = .uploading
       startLoop(from: record.lastKnownOffset, next: .append)
     } catch is CancellationError {
