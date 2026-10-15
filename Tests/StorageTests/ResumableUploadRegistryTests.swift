@@ -146,6 +146,28 @@ struct ResumableUploadRegistryTests {
   }
 
   @Test
+  func clearRemovesTheRecordsOfHandlesThatNeverStarted() throws {
+    _ = try saveRecord(fingerprint: "a")
+    let pending = try storage.resumableUploads.pending()
+
+    try storage.resumableUploads.clear()
+
+    #expect(try store.records().isEmpty)
+    withExtendedLifetime(pending) {}
+  }
+
+  @Test
+  func aHandleThatNeverStartsIsReleased() throws {
+    weak var released: ResumableUpload?
+    do {
+      let upload = try storage.from("bucket").resumableUpload(path: "video.mp4", fileURL: fileURL)
+      released = upload
+      #expect(released != nil)
+    }
+    #expect(released == nil)
+  }
+
+  @Test
   func clearRemovesEveryRecord() throws {
     _ = try saveRecord(fingerprint: "a")
     _ = try saveRecord(fingerprint: "b")
