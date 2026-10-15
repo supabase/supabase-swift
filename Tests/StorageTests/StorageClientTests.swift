@@ -105,98 +105,93 @@ struct StorageClientTests {
         == "http://localhost:54321/storage/v1/sign/file2.txt?token=abc.def.ghi")
   }
 
-  // These snapshot the Content-Type inferred from the file extension. Linux has no `UTType`,
-  // so `mimeType(forPathExtension:)` falls back to `application/octet-stream` there and the
-  // snapshots would differ. The transport is a `ClosureTransport`, so `URLSession` plays no part.
-  #if !os(Linux) && !os(Android)
-    @Test
-    func uploadData() async throws {
-      let sut = makeSUT(fetch: { request in
-        assertInlineSnapshot(of: request, as: .curl) {
-          #"""
-          curl \
-          	--request POST \
-          	--header "Apikey: test.api.key" \
-          	--header "Authorization: Bearer test.api.key" \
-          	--header "Cache-Control: max-age=14400" \
-          	--header "Content-Type: text/plain" \
-          	--header "X-Client-Info: storage-swift/x.y.z" \
-          	--header "x-metadata: eyJrZXkiOiJ2YWx1ZSJ9" \
-          	--header "x-upsert: false" \
-          	--data "test data" \
-          	"http://localhost:54321/storage/v1/object/tests/file1.txt"
-          """#
+  @Test
+  func uploadData() async throws {
+    let sut = makeSUT(fetch: { request in
+      assertInlineSnapshot(of: request, as: .curl) {
+        #"""
+        curl \
+        	--request POST \
+        	--header "Apikey: test.api.key" \
+        	--header "Authorization: Bearer test.api.key" \
+        	--header "Cache-Control: max-age=14400" \
+        	--header "Content-Type: text/plain" \
+        	--header "X-Client-Info: storage-swift/x.y.z" \
+        	--header "x-metadata: eyJrZXkiOiJ2YWx1ZSJ9" \
+        	--header "x-upsert: false" \
+        	--data "test data" \
+        	"http://localhost:54321/storage/v1/object/tests/file1.txt"
+        """#
+      }
+      return (
+        """
+        {
+          "Id": "E621E1F8-C36C-495A-93FC-0C247A3E6E5F",
+          "Key": "tests/file1.txt"
         }
-        return (
-          """
-          {
-            "Id": "E621E1F8-C36C-495A-93FC-0C247A3E6E5F",
-            "Key": "tests/file1.txt"
-          }
-          """.data(using: .utf8)!,
-          HTTPURLResponse(
-            url: self.supabaseURL,
-            statusCode: 200,
-            httpVersion: nil,
-            headerFields: nil
-          )!
-        )
-      })
+        """.data(using: .utf8)!,
+        HTTPURLResponse(
+          url: self.supabaseURL,
+          statusCode: 200,
+          httpVersion: nil,
+          headerFields: nil
+        )!
+      )
+    })
 
-      try await sut.from(bucketId)
-        .upload(
-          path: "file1.txt",
-          data: "test data".data(using: .utf8)!,
-          options: UploadOptions(
-            cacheControl: .maxAge(.seconds(14400)),
-            metadata: ["key": "value"]
-          )
+    try await sut.from(bucketId)
+      .upload(
+        path: "file1.txt",
+        data: "test data".data(using: .utf8)!,
+        options: UploadOptions(
+          cacheControl: .maxAge(.seconds(14400)),
+          metadata: ["key": "value"]
         )
-    }
+      )
+  }
 
-    @Test
-    func uploadFileURL() async throws {
-      let sut = makeSUT(fetch: { request in
-        assertInlineSnapshot(of: request, as: .curl) {
-          #"""
-          curl \
-          	--request POST \
-          	--header "Apikey: test.api.key" \
-          	--header "Authorization: Bearer test.api.key" \
-          	--header "Cache-Control: max-age=3600" \
-          	--header "Content-Type: image/jpeg" \
-          	--header "X-Client-Info: storage-swift/x.y.z" \
-          	--header "x-metadata: eyJrZXkiOiJ2YWx1ZSJ9" \
-          	--header "x-upsert: false" \
-          	"http://localhost:54321/storage/v1/object/tests/sadcat.jpg"
-          """#
+  @Test
+  func uploadFileURL() async throws {
+    let sut = makeSUT(fetch: { request in
+      assertInlineSnapshot(of: request, as: .curl) {
+        #"""
+        curl \
+        	--request POST \
+        	--header "Apikey: test.api.key" \
+        	--header "Authorization: Bearer test.api.key" \
+        	--header "Cache-Control: max-age=3600" \
+        	--header "Content-Type: image/jpeg" \
+        	--header "X-Client-Info: storage-swift/x.y.z" \
+        	--header "x-metadata: eyJrZXkiOiJ2YWx1ZSJ9" \
+        	--header "x-upsert: false" \
+        	"http://localhost:54321/storage/v1/object/tests/sadcat.jpg"
+        """#
+      }
+      return (
+        """
+        {
+          "Id": "E621E1F8-C36C-495A-93FC-0C247A3E6E5F",
+          "Key": "tests/file1.txt"
         }
-        return (
-          """
-          {
-            "Id": "E621E1F8-C36C-495A-93FC-0C247A3E6E5F",
-            "Key": "tests/file1.txt"
-          }
-          """.data(using: .utf8)!,
-          HTTPURLResponse(
-            url: self.supabaseURL,
-            statusCode: 200,
-            httpVersion: nil,
-            headerFields: nil
-          )!
-        )
-      })
+        """.data(using: .utf8)!,
+        HTTPURLResponse(
+          url: self.supabaseURL,
+          statusCode: 200,
+          httpVersion: nil,
+          headerFields: nil
+        )!
+      )
+    })
 
-      try await sut.from(bucketId)
-        .upload(
-          path: "sadcat.jpg",
-          fileURL: uploadFileURL("sadcat.jpg"),
-          options: UploadOptions(
-            metadata: ["key": "value"]
-          )
+    try await sut.from(bucketId)
+      .upload(
+        path: "sadcat.jpg",
+        fileURL: uploadFileURL("sadcat.jpg"),
+        options: UploadOptions(
+          metadata: ["key": "value"]
         )
-    }
-  #endif
+      )
+  }
 
   private func makeSUT(
     fetch: @escaping @Sendable (URLRequest) async throws -> (Data, URLResponse) = unimplemented(
