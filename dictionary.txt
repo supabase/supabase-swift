@@ -294,8 +294,11 @@ memprobe
 attoseconds
 
 # Retry-After / Duration terms from RetryPolicy.swift.
-ascii asctime
+asctime
 fixdate
+
+# Swift's UInt8(ascii:) initializer, used by the bytea hex codec.
+ascii
 
 # Term from the privacy manifest resource declared on the Helpers target (Package.swift).
 xcprivacy
