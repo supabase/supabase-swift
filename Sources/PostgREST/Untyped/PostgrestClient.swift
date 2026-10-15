@@ -287,17 +287,7 @@ public struct PostgrestClient: Sendable {
     var request = makeRequest("rpc/\(fn)", method: head ? .head : get ? .get : .post)
 
     if head || get {
-      guard case .object(let json) = try JSONValue.decoder.decode(JSONValue.self, from: bodyData)
-      else {
-        throw PostgrestError(
-          kind: .invalidRequest,
-          message: "Params should be a key-value type when using `GET` or `HEAD` options."
-        )
-      }
-
-      for (key, value) in json {
-        request.leadingQuery.append(URLQueryItem(name: key, value: queryValue(for: value)))
-      }
+      request.leadingQuery = try argumentQueryItems(bodyData)
     } else if !(params is NoParams) {
       request.body = bodyData
     }
@@ -307,6 +297,18 @@ public struct PostgrestClient: Sendable {
     }
 
     return PostgrestFilterBuilder(client: self, request: request)
+  }
+
+  /// The arguments of a function call as query items, for a GET or HEAD request, which has no
+  /// body to carry them.
+  func argumentQueryItems(_ body: Data) throws -> [URLQueryItem] {
+    guard case .object(let json) = try JSONValue.decoder.decode(JSONValue.self, from: body) else {
+      throw PostgrestError(
+        kind: .invalidRequest,
+        message: "Params should be a key-value type when using `GET` or `HEAD` options."
+      )
+    }
+    return json.map { key, value in URLQueryItem(name: key, value: queryValue(for: value)) }
   }
 
   /// Calls a PostgreSQL stored function (RPC) with no parameters.

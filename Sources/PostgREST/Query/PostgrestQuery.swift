@@ -108,6 +108,10 @@ extension _PostgrestQuery {
   public func count(_ option: CountOption) async throws -> Int {
     var request = request
     request.method = .head
+    if let body = request.body {
+      request.leadingQuery = try client.argumentQueryItems(body)
+      request.body = nil
+    }
     request.setPreference("count=\(option.rawValue)")
     let response = try await request.execute(on: client) { _ in () }
     guard let count = response.count else {
