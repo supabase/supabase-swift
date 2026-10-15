@@ -117,7 +117,8 @@ public struct ObjectSortColumn: RawRepresentable, Hashable, Sendable, Expressibl
   /// Sort by the time the object was created.
   public static let createdAt = ObjectSortColumn(rawValue: "created_at")
 
-  /// Sort by the time the object was last read.
+  /// Sort by the time the object was last read. Only ``StorageBucket/list(path:options:)``
+  /// accepts it.
   public static let lastAccessedAt = ObjectSortColumn(rawValue: "last_accessed_at")
 }
 

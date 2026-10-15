@@ -50,6 +50,7 @@ public import HTTPTypes
 /// - ``move(from:to:options:)``
 /// - ``copy(from:to:options:)``
 /// - ``remove(paths:)``
+/// - ``objects(prefix:options:)``
 /// - ``list(path:options:)``
 /// - ``info(path:)``
 /// - ``exists(path:)``

@@ -1572,6 +1572,33 @@ features:
       - ObjectSortColumn.updatedAt
       - ObjectSortColumn.createdAt
       - ObjectSortColumn.lastAccessedAt
+      - StorageBucket.objects
+      - ObjectListing
+      - ObjectListing.Element
+      - ObjectListing.Pages
+      - ObjectListing.pages
+      - ObjectListing.page
+      - ObjectListing.makeAsyncIterator
+      - ObjectListing.AsyncIterator
+      - ObjectListing.AsyncIterator.next
+      - ObjectListing.Page
+      - ObjectListing.Page.init
+      - ObjectListing.Page.objects
+      - ObjectListing.Page.folders
+      - ObjectListing.Page.nextCursor
+      - ObjectListing.Page.hasNext
+      - ObjectListingOptions
+      - ObjectListingOptions.init
+      - ObjectListingOptions.pageSize
+      - ObjectListingOptions.delimited
+      - ObjectListingOptions.sortBy
+      - ObjectListingOptions.order
+      - ObjectListingOptions.exactMatch
+      - PageSequence
+      - PageSequence.Element
+      - PageSequence.makeAsyncIterator
+      - PageSequence.AsyncIterator
+      - PageSequence.AsyncIterator.next
       - ObjectMetadata
       - ObjectMetadata.init
       - ObjectMetadata.eTag
@@ -1748,6 +1775,8 @@ features:
     symbols:
       - ListOptions.versions
       - ListOptions.deleteMarkers
+      - ObjectListingOptions.versions
+      - ObjectListingOptions.deleteMarkers
       - VersionFilter
       - VersionFilter.init
       - VersionFilter.rawValue
