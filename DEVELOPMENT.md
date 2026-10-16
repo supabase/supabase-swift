@@ -208,7 +208,12 @@ supabase stop
 
 ### GitHub Actions Workflows
 
-- `ci.yml`: Runs tests on multiple platforms and Xcode versions
+- `ci.yml`: Runs tests on multiple platforms and Xcode versions. On pull requests, the
+  `changes` job filters by changed path: Swift builds and tests run only when package sources,
+  tests, manifests, or scripts change; the integration tests also run for
+  `Tests/IntegrationTests/**` (migrations, seed, config); the Examples jobs also run for
+  `Examples/**`. Spell check, format check, and SwiftLint always run. Pushes to `main` and
+  `release/*` run everything. Edit the filters in `ci.yml` when you add a path a job depends on.
 - `release.yml`: Automated releases via release-please
 - `conventional-commits.yml`: Validates commit message format
 
