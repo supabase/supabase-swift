@@ -42,7 +42,8 @@ enum Naming {
     "_PostgrestWritableRelation",
     "_PostgrestEmbed", "_PostgrestComputedField", "_PostgrestToOneRelation",
     "_PostgrestToManyRelation",
-    "_PostgresRange", "_PostgresInterval", "_PostgresTime", "_PostgresBytes", "_PostgresUnmapped",
+    "_PostgresRange", "_Int4Range", "_Int8Range", "_NumRange", "_TSRange", "_TSTZRange",
+    "_DateRange", "_PostgresInterval", "_PostgresTime", "_PostgresBytes", "_PostgresUnmapped",
   ]
 
   /// `snake_case` (or any other spelling) to `lowerCamelCase`, escaped. `1st_place` becomes

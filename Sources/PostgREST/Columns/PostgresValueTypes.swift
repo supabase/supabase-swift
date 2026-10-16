@@ -15,9 +15,10 @@ public import Helpers
 
 /// A Postgres range column, such as `int4range` or `tstzrange`, as its literal: `[1,10)`, `empty`.
 ///
-/// `Bound` is the Swift type of the range's bounds. It is never stored; it keeps a `daterange`
-/// operand off an `int4range` column. The literal is not parsed, because Postgres canonicalizes
-/// it — `[2024-01-01,2024-01-31]` comes back as `[2024-01-01,2024-02-01)`.
+/// `Bound` is a marker for the Postgres range type, such as ``_Int4Range`` or ``_TSTZRange``. It
+/// is never stored; it keeps a `daterange` operand off a `tstzrange` column. The literal is not
+/// parsed, because Postgres canonicalizes it — `[2024-01-01,2024-01-31]` comes back as
+/// `[2024-01-01,2024-02-01)`.
 public struct _PostgresRange<Bound>: RawRepresentable, Hashable, Sendable, Codable,
   ExpressibleByStringLiteral, PostgrestFilterValue
 {
@@ -41,6 +42,19 @@ public struct _PostgresRange<Bound>: RawRepresentable, Hashable, Sendable, Codab
     try container.encode(rawValue)
   }
 }
+
+/// The `Bound` of a Postgres `int4range` column: `_PostgresRange<_Int4Range>`.
+public enum _Int4Range {}
+/// The `Bound` of a Postgres `int8range` column: `_PostgresRange<_Int8Range>`.
+public enum _Int8Range {}
+/// The `Bound` of a Postgres `numrange` column: `_PostgresRange<_NumRange>`.
+public enum _NumRange {}
+/// The `Bound` of a Postgres `tsrange` column: `_PostgresRange<_TSRange>`.
+public enum _TSRange {}
+/// The `Bound` of a Postgres `tstzrange` column: `_PostgresRange<_TSTZRange>`.
+public enum _TSTZRange {}
+/// The `Bound` of a Postgres `daterange` column: `_PostgresRange<_DateRange>`.
+public enum _DateRange {}
 
 /// A Postgres `interval`, as the text PostgREST sends, for example `1 day 02:00:00`.
 ///

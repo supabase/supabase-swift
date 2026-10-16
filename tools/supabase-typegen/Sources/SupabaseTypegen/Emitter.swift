@@ -86,7 +86,7 @@ struct FilePlan {
 /// A Swift type the generator writes for a column.
 indirect enum SwiftType: Equatable, Sendable {
   case named(String)
-  /// A generic type with one argument, such as `_PostgresRange<Int>`.
+  /// A generic type with one argument, such as `_PostgresRange<_Int4Range>`.
   case generic(String, SwiftType)
   case array(SwiftType)
   case optional(SwiftType)
@@ -396,12 +396,12 @@ extension FilePlan {
         "int2": .named("Int"), "int4": .named("Int"), "int8": .named("Int"),
         "float4": .named("Double"), "float8": .named("Double"),
         "json": .named("JSONValue"), "jsonb": .named("JSONValue"),
-        "int4range": .generic("_PostgresRange", .named("Int")),
-        "int8range": .generic("_PostgresRange", .named("Int")),
-        "numrange": .generic("_PostgresRange", .named("Decimal")),
-        "tsrange": .generic("_PostgresRange", .named("Date")),
-        "tstzrange": .generic("_PostgresRange", .named("Date")),
-        "daterange": .generic("_PostgresRange", .named("Date")),
+        "int4range": .generic("_PostgresRange", .named("_Int4Range")),
+        "int8range": .generic("_PostgresRange", .named("_Int8Range")),
+        "numrange": .generic("_PostgresRange", .named("_NumRange")),
+        "tsrange": .generic("_PostgresRange", .named("_TSRange")),
+        "tstzrange": .generic("_PostgresRange", .named("_TSTZRange")),
+        "daterange": .generic("_PostgresRange", .named("_DateRange")),
         "interval": .named("_PostgresInterval"),
         "time": .named("_PostgresTime"), "timetz": .named("_PostgresTime"),
         "bytea": .named("_PostgresBytes"),
