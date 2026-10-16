@@ -7,7 +7,6 @@
 
 import ConcurrencyExtras
 import Crypto
-import CryptoSwift
 import CustomDump
 import Foundation
 import Helpers
@@ -715,13 +714,127 @@ private func base58Encode(_ input: Data) -> String {
 
 private func signEthereumPersonalMessage(_ message: String, privateKeyHex: String) throws -> String
 {
-  let privateKey = try P256K.Recovery.PrivateKey(dataRepresentation: Data(hex: privateKeyHex))
+  let privateKey = try P256K.Recovery.PrivateKey(dataRepresentation: bytes(fromHex: privateKeyHex))
 
   let prefixed = "\u{19}Ethereum Signed Message:\n\(message.utf8.count)\(message)"
-  let hash = SHA3(variant: .keccak256).calculate(for: Array(prefixed.utf8))
+  let hash = keccak256(Array(prefixed.utf8))
   let signature = privateKey.signature(for: HashDigest(hash))
   let compact = signature.compactRepresentation
 
   let v = UInt8(compact.recoveryId) + 27
-  return "0x" + compact.signature.toHexString() + String(format: "%02x", v)
+  return "0x" + hexString(compact.signature) + String(format: "%02x", v)
+}
+
+private func bytes(fromHex hex: String) -> [UInt8] {
+  var bytes: [UInt8] = []
+  var index = hex.startIndex
+  while index < hex.endIndex {
+    let next = hex.index(index, offsetBy: 2)
+    bytes.append(UInt8(hex[index..<next], radix: 16)!)
+    index = next
+  }
+  return bytes
+}
+
+private func hexString(_ bytes: some Sequence<UInt8>) -> String {
+  bytes.map { String(format: "%02x", $0) }.joined()
+}
+
+/// Keccak-256 as Ethereum uses it. This is not FIPS-202 `SHA3_256`, which pads with `0x06`
+/// instead of `0x01` and gives a different hash.
+private func keccak256(_ input: [UInt8]) -> [UInt8] {
+  let rate = 136
+  var padded = input + [0x01]
+  padded += [UInt8](repeating: 0, count: (rate - padded.count % rate) % rate)
+  padded[padded.count - 1] |= 0x80
+
+  var state = [UInt64](repeating: 0, count: 25)
+  for blockStart in stride(from: 0, to: padded.count, by: rate) {
+    for lane in 0..<(rate / 8) {
+      for byte in 0..<8 {
+        state[lane] ^= UInt64(padded[blockStart + lane * 8 + byte]) << (8 * byte)
+      }
+    }
+    keccakF1600(&state)
+  }
+  return (0..<32).map { UInt8(truncatingIfNeeded: state[$0 / 8] >> (8 * ($0 % 8))) }
+}
+
+private let keccakRoundConstants: [UInt64] = [
+  0x0000_0000_0000_0001, 0x0000_0000_0000_8082, 0x8000_0000_0000_808A, 0x8000_0000_8000_8000,
+  0x0000_0000_0000_808B, 0x0000_0000_8000_0001, 0x8000_0000_8000_8081, 0x8000_0000_0000_8009,
+  0x0000_0000_0000_008A, 0x0000_0000_0000_0088, 0x0000_0000_8000_8009, 0x0000_0000_8000_000A,
+  0x0000_0000_8000_808B, 0x8000_0000_0000_008B, 0x8000_0000_0000_8089, 0x8000_0000_0000_8003,
+  0x8000_0000_0000_8002, 0x8000_0000_0000_0080, 0x0000_0000_0000_800A, 0x8000_0000_8000_000A,
+  0x8000_0000_8000_8081, 0x8000_0000_0000_8080, 0x0000_0000_8000_0001, 0x8000_0000_8000_8008,
+]
+private let keccakRotations = [
+  1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 2, 14, 27, 41, 56, 8, 25, 43, 62, 18, 39, 61, 20, 44,
+]
+private let keccakPiLanes = [
+  10, 7, 11, 17, 18, 3, 5, 16, 8, 21, 24, 4, 15, 23, 19, 13, 12, 2, 20, 14, 22, 9, 6, 1,
+]
+
+private func keccakF1600(_ state: inout [UInt64]) {
+  func rotateLeft(_ value: UInt64, _ count: Int) -> UInt64 {
+    (value << count) | (value >> (64 - count))
+  }
+
+  for roundConstant in keccakRoundConstants {
+    // θ
+    let columns = (0..<5).map {
+      state[$0] ^ state[$0 + 5] ^ state[$0 + 10] ^ state[$0 + 15] ^ state[$0 + 20]
+    }
+    for x in 0..<5 {
+      let d = columns[(x + 4) % 5] ^ rotateLeft(columns[(x + 1) % 5], 1)
+      for y in stride(from: 0, to: 25, by: 5) {
+        state[y + x] ^= d
+      }
+    }
+
+    // ρ and π
+    var carried = state[1]
+    for (lane, rotation) in zip(keccakPiLanes, keccakRotations) {
+      (state[lane], carried) = (rotateLeft(carried, rotation), state[lane])
+    }
+
+    // χ
+    for y in stride(from: 0, to: 25, by: 5) {
+      let row = Array(state[y..<(y + 5)])
+      for x in 0..<5 {
+        state[y + x] = row[x] ^ (~row[(x + 1) % 5] & row[(x + 2) % 5])
+      }
+    }
+
+    // ι
+    state[0] ^= roundConstant
+  }
+}
+
+/// Checks the hand-written Keccak-256 that signs the Ethereum message in
+/// ``AuthClientIntegrationTests/signInWithWeb3Ethereum()``. It needs no local stack.
+@Suite struct Keccak256Tests {
+  @Test func matchesKnownVectors() {
+    #expect(
+      hexString(keccak256([]))
+        == "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"
+    )
+    #expect(
+      hexString(keccak256(Array("abc".utf8)))
+        == "4e03657aea45a94fc7d47ba826c8d667c0d1e6e33a64a036ec44f58fa12d6c45"
+    )
+  }
+
+  @Test func derivesTheEthereumAddressOfTheTestKey() throws {
+    let privateKey = try P256K.Signing.PrivateKey(
+      dataRepresentation: bytes(
+        fromHex: "4c0883a69102937d6231471b5dbb6204fe5129617082792ae468d01a3f362318")
+    )
+    let publicKey = privateKey.publicKey.uncompressedRepresentation.dropFirst()
+
+    #expect(
+      hexString(keccak256(Array(publicKey)).suffix(20))
+        == "2c7536e3605d9c16a7a3d7b1898e529396a65c23"
+    )
+  }
 }
