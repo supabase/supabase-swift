@@ -11,7 +11,7 @@ SWIFT_FLAGS=()
 if [[ "$(uname)" == "Darwin" ]]; then
   export SUPABASE_EXPERIMENTAL_STACK=1
   START_FLAGS=(--runtime native --eager)
-  SWIFT_FLAGS=(--triple arm64-apple-macosx14.0 -Xswiftc -Xfrontend -Xswiftc -enable-cross-import-overlays)
+  SWIFT_FLAGS=(--triple "$(uname -m)-apple-macosx14.0" -Xswiftc -Xfrontend -Xswiftc -enable-cross-import-overlays)
 fi
 
 run_suite() {
