@@ -327,3 +327,6 @@ nowe
 soea
 sowe
 quicktime
+
+# Release process term from CONTRIBUTING.md.
+hotfixes

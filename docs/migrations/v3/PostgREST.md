@@ -28,6 +28,10 @@ Changes that still compile but behave differently. Check each one by hand.
   failure, a 503 or a 520, up to three times. The wait is now random up to `min(30 s, 2^n s)`,
   and a `Retry-After` header is honored. Errors from a custom transport or middleware are no
   longer retried.
+- **`csv()` with `stripNulls()` throws one message.** The request still fails before it is sent,
+  as a `PostgrestError` of kind `.invalidRequest`. The message is now always
+  "`` `.csv()` cannot be combined with `.stripNulls()` ``", whatever the call order. Search for
+  code that matches the v2 message "`` `.stripNulls()` cannot be combined with `.csv()` ``".
 
 ## Renames and type changes
 
