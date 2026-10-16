@@ -89,7 +89,8 @@ extension _PostgrestQuery {
   /// Asks the server how many rows match, without transferring any of them.
   ///
   /// This is a HEAD request: PostgREST reports the total in the `Content-Range` header and sends
-  /// no body, so counting a large table costs no rows.
+  /// no body, so counting a large table costs no rows. The rows of a function are counted with a
+  /// `POST` asking for none instead, which carries the function's arguments.
   ///
   /// ```swift
   /// let remaining = try await client.from(Todo.self).select()
@@ -107,7 +108,11 @@ extension _PostgrestQuery {
   ///   request itself.
   public func count(_ option: CountOption) async throws -> Int {
     var request = request
-    request.method = .head
+    if request.relation.hasPrefix("rpc/") {
+      request.query.appendOrUpdate(URLQueryItem(name: "limit", value: "0"))
+    } else {
+      request.method = .head
+    }
     request.setPreference("count=\(option.rawValue)")
     let response = try await request.execute(on: client) { _ in () }
     guard let count = response.count else {
