@@ -1430,7 +1430,6 @@ public final class AuthClient: Sendable {
       user.codeChallengeMethod = codeChallengeMethod
     }
 
-    var session = try await sessionManager.session()
     let updatedUser = try await api.authorizedExecute(
       .init(
         method: .put,
@@ -1445,9 +1444,9 @@ public final class AuthClient: Sendable {
         ].compactMap { $0 }
       ), body: configuration.resolvedEncoder.encode(user)
     ).decoded(as: User.self, decoder: configuration.resolvedDecoder)
-    session.user = updatedUser
-    await sessionManager.update(session)
-    eventEmitter.emit(.userUpdated, session: session)
+    if let session = await sessionManager.updateUser(updatedUser) {
+      eventEmitter.emit(.userUpdated, session: session)
+    }
     return updatedUser
   }
 
