@@ -83,7 +83,6 @@ let package = Package(
     .target(
       name: "Auth",
       dependencies: [
-        .product(name: "Clocks", package: "swift-clocks"),
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "Crypto", package: "swift-crypto"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
@@ -95,6 +94,7 @@ let package = Package(
     .testTarget(
       name: "AuthTests",
       dependencies: [
+        .product(name: "Clocks", package: "swift-clocks"),
         .product(name: "CustomDump", package: "swift-custom-dump"),
         .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
         .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
@@ -226,7 +226,6 @@ let package = Package(
     .target(
       name: "Realtime",
       dependencies: [
-        .product(name: "Clocks", package: "swift-clocks"),
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
         .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
@@ -259,6 +258,7 @@ let package = Package(
     .testTarget(
       name: "StorageTests",
       dependencies: [
+        .product(name: "Clocks", package: "swift-clocks"),
         .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
         .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
         "Mocker",
@@ -273,7 +273,6 @@ let package = Package(
     .target(
       name: "Supabase",
       dependencies: [
-        .product(name: "Clocks", package: "swift-clocks"),
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
         .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
@@ -292,6 +291,7 @@ let package = Package(
     .testTarget(
       name: "SupabaseTests",
       dependencies: [
+        .product(name: "Clocks", package: "swift-clocks"),
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "CustomDump", package: "swift-custom-dump"),
         .product(name: "HTTPTypes", package: "swift-http-types"),

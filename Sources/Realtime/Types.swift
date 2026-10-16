@@ -5,7 +5,6 @@
 //  Created by Guilherme Souza on 13/05/24.
 //
 
-public import Clocks
 public import Foundation
 package import HTTPTypes
 public import Helpers
@@ -75,8 +74,10 @@ public struct RealtimeClientOptions: Sendable {
 
   /// The clock the heartbeat timer and reconnect backoff sleep on.
   ///
-  /// Defaults to `ContinuousClock()`. Pass a `TestClock` (swift-clocks) to drive those
-  /// behaviors deterministically in tests instead of waiting out real seconds.
+  /// Defaults to `ContinuousClock()`. Pass a `TestClock` to drive those behaviors
+  /// deterministically in tests instead of waiting out real seconds. `TestClock` comes from
+  /// [swift-clocks](https://github.com/pointfreeco/swift-clocks); add it to your test target
+  /// yourself, as this package does not export it.
   public var clock: any Clock<Duration>
 
   /// A template `URLSession` used to configure the Realtime WebSocket connection.
@@ -145,7 +146,8 @@ public struct RealtimeClientOptions: Sendable {
   ///   - session: A template `URLSession` to configure the WebSocket connection from. Defaults to `nil`.
   ///   - handleAppLifecycle: Whether to automatically reconnect on app foreground. Defaults to ``defaultHandleAppLifecycle``.
   ///   - clock: The clock the heartbeat timer and reconnect backoff sleep on. Defaults to
-  ///     `ContinuousClock()`; pass a `TestClock` to drive them deterministically in tests.
+  ///     `ContinuousClock()`; pass a `TestClock` from swift-clocks (add it to your
+  ///     test target yourself) to drive them deterministically in tests.
   public init(
     headers: [String: String] = [:],
     heartbeatInterval: Duration = Self.defaultHeartbeatInterval,
