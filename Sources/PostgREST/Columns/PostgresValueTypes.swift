@@ -137,14 +137,14 @@ public struct _PostgresBytes: Hashable, Sendable, Codable, PostgrestFilterValue 
     guard text.hasPrefix("\\x") else { return nil }
     let digits = Array(text.utf8.dropFirst(2))
     guard digits.count.isMultiple(of: 2) else { return nil }
-    var data = Data(capacity: digits.count / 2)
-    for index in stride(from: 0, to: digits.count, by: 2) {
-      guard let high = nibble(digits[index]), let low = nibble(digits[index + 1]) else {
+    var bytes = [UInt8](repeating: 0, count: digits.count / 2)
+    for index in bytes.indices {
+      guard let high = nibble(digits[2 * index]), let low = nibble(digits[2 * index + 1]) else {
         return nil
       }
-      data.append(high << 4 | low)
+      bytes[index] = high << 4 | low
     }
-    return data
+    return Data(bytes)
   }
 
   private static func nibble(_ digit: UInt8) -> UInt8? {
