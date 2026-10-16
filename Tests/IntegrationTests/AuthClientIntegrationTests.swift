@@ -757,7 +757,10 @@ private func keccak256(_ input: [UInt8]) -> [UInt8] {
     }
     keccakF1600(&state)
   }
-  return (0..<32).map { UInt8(truncatingIfNeeded: state[$0 / 8] >> (8 * ($0 % 8))) }
+  return (0..<32).map { (index: Int) -> UInt8 in
+    let shift = UInt64(8 * (index % 8))
+    return UInt8(truncatingIfNeeded: state[index / 8] >> shift)
+  }
 }
 
 private let keccakRoundConstants: [UInt64] = [
@@ -782,8 +785,11 @@ private func keccakF1600(_ state: inout [UInt64]) {
 
   for roundConstant in keccakRoundConstants {
     // θ
-    let columns = (0..<5).map {
-      state[$0] ^ state[$0 + 5] ^ state[$0 + 10] ^ state[$0 + 15] ^ state[$0 + 20]
+    var columns = [UInt64](repeating: 0, count: 5)
+    for x in 0..<5 {
+      for y in stride(from: 0, to: 25, by: 5) {
+        columns[x] ^= state[y + x]
+      }
     }
     for x in 0..<5 {
       let d = columns[(x + 4) % 5] ^ rotateLeft(columns[(x + 1) % 5], 1)
@@ -800,7 +806,7 @@ private func keccakF1600(_ state: inout [UInt64]) {
 
     // χ
     for y in stride(from: 0, to: 25, by: 5) {
-      let row = Array(state[y..<(y + 5)])
+      let row: [UInt64] = Array(state[y..<(y + 5)])
       for x in 0..<5 {
         state[y + x] = row[x] ^ (~row[(x + 1) % 5] & row[(x + 2) % 5])
       }
