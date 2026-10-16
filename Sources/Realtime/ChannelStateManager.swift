@@ -115,9 +115,10 @@ actor ChannelStateManager {
   private let leaveOperation: LeaveOperation
   private let retryDelay: RetryDelay
 
-  /// Set by ``didReceiveClose()`` when the server closes the channel while a
-  /// subscribe is in flight, so ``beginSubscribe()`` can surface a typed
-  /// error instead of the bare `CancellationError` from the cancelled task.
+  /// The subscribe task that ``didReceiveClose()`` cancelled because the
+  /// server closed the channel while it was in flight. ``beginSubscribe()``
+  /// compares it against its own task so it can surface a typed error
+  /// instead of the bare `CancellationError`, then clears it.
   private var subscribeTaskClosedByServer: Task<Void, any Error>?
 
   init(
@@ -337,9 +338,6 @@ actor ChannelStateManager {
         task.cancel()
       }
     } catch {
-      if case .subscribing(let current) = state, current != task {
-        throw error
-      }
       let closedByServer = subscribeTaskClosedByServer == task
       if closedByServer {
         subscribeTaskClosedByServer = nil
@@ -347,7 +345,7 @@ actor ChannelStateManager {
 
       // If the subscribe attempt didn't transition us to .subscribed, make
       // sure external observers see .unsubscribed.
-      if case .subscribing = state {
+      if case .subscribing(let current) = state, current == task {
         joinRef = nil
         pushes = [:]
         updateState(.unsubscribed)
@@ -358,8 +356,8 @@ actor ChannelStateManager {
       // `CancellationError`, `SubscribeFailure.channelClosed`, or — when the
       // close lands on the final retry attempt — `maxRetryAttemptsReached`.
       // All of them are consequences of the server close, so translate
-      // unconditionally; a genuine caller-side cancellation never sets the
-      // flag and still propagates as `CancellationError`.
+      // unconditionally; a genuine caller-side cancellation never records
+      // its task here and still propagates as `CancellationError`.
       if closedByServer {
         throw RealtimeError.channelClosedByServer
       }
@@ -415,6 +413,7 @@ actor ChannelStateManager {
     guard await ensureSocketConnected() else {
       throw SubscribeFailure.socketNotConnected
     }
+    try Task.checkCancellation()
 
     let ref = makeRef()
     joinRef = ref
