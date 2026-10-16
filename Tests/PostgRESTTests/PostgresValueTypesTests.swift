@@ -81,12 +81,23 @@ struct PostgresValueTypesTests {
     #expect(_PostgresBytes.data(fromHex: #"\x"#) == Data())
   }
 
+  @Test
+  func largeBytesRoundTripThroughTheHexForm() throws {
+    let data = Data((0..<(1 << 20)).map { UInt8(truncatingIfNeeded: $0 &* 31) })
+    let rawValue = _PostgresBytes(data).rawValue
+    #expect(rawValue.utf8.count == 2 + 2 * data.count)
+    #expect(rawValue.hasPrefix(#"\x001f3e5d"#))
+    #expect(_PostgresBytes.data(fromHex: rawValue) == data)
+  }
+
   /// Base64, an odd digit count and a non-hex digit are not the form PostgREST sends.
   @Test
   func bytesRejectAnythingButHex() {
     #expect(_PostgresBytes.data(fromHex: "3q2+7w==") == nil)
     #expect(_PostgresBytes.data(fromHex: #"\x123"#) == nil)
     #expect(_PostgresBytes.data(fromHex: #"\xzz"#) == nil)
+    #expect(_PostgresBytes.data(fromHex: #"\x+f"#) == nil)
+    #expect(_PostgresBytes.data(fromHex: #"\xde g"#) == nil)
     #expect(throws: DecodingError.self) {
       try JSONDecoder().decode(_PostgresBytes.self, from: Data(#""3q2+7w==""#.utf8))
     }
@@ -100,6 +111,12 @@ struct PostgresValueTypesTests {
     #expect(
       try JSONDecoder().decode(_PostgresInterval.self, from: Data(#""1 day 02:00:00""#.utf8))
         == "1 day 02:00:00")
+    let interval: _PostgresInterval = "P1DT2H"
+    #expect(String(decoding: try JSONEncoder().encode(interval), as: UTF8.self) == #""P1DT2H""#)
+    let time: _PostgresTime = "13:45:00+02"
+    let encodedTime = try JSONEncoder().encode(time)
+    #expect(String(decoding: encodedTime, as: UTF8.self) == #""13:45:00+02""#)
+    #expect(try JSONDecoder().decode(_PostgresTime.self, from: encodedTime) == time)
   }
 
   /// A composite comes back as an object and goes out unchanged.
