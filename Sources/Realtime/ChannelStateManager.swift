@@ -118,7 +118,7 @@ actor ChannelStateManager {
   /// Set by ``didReceiveClose()`` when the server closes the channel while a
   /// subscribe is in flight, so ``beginSubscribe()`` can surface a typed
   /// error instead of the bare `CancellationError` from the cancelled task.
-  private var closedByServerWhileSubscribing = false
+  private var subscribeTaskClosedByServer: Task<Void, any Error>?
 
   init(
     topic: String,
@@ -310,7 +310,7 @@ actor ChannelStateManager {
       // Record why the task is being cancelled so `beginSubscribe` can
       // rethrow a typed error — the caller must be able to tell a server
       // close apart from its own task cancellation (issue #1145, defect 2).
-      closedByServerWhileSubscribing = true
+      subscribeTaskClosedByServer = task
       task.cancel()
     }
     updateState(.unsubscribed)
@@ -321,7 +321,6 @@ actor ChannelStateManager {
 
   private func beginSubscribe() async throws {
     logger.debug("Beginning subscribe flow for channel '\(topic)'")
-    closedByServerWhileSubscribing = false
     let task = Task<Void, any Error> { [weak self] in
       guard let self else { return }
       try await self.runSubscribeAttempts()
@@ -338,8 +337,13 @@ actor ChannelStateManager {
         task.cancel()
       }
     } catch {
-      let closedByServer = closedByServerWhileSubscribing
-      closedByServerWhileSubscribing = false
+      if case .subscribing(let current) = state, current != task {
+        throw error
+      }
+      let closedByServer = subscribeTaskClosedByServer == task
+      if closedByServer {
+        subscribeTaskClosedByServer = nil
+      }
 
       // If the subscribe attempt didn't transition us to .subscribed, make
       // sure external observers see .unsubscribed.
