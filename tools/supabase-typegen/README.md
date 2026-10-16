@@ -45,7 +45,7 @@ value is encoded, and a plain Swift type otherwise:
 | Postgres | Swift |
 | -------- | ----- |
 | `json`, `jsonb` | `JSONValue`, and nothing else is |
-| `int4range`, `int8range` / `numrange` / `tsrange`, `tstzrange`, `daterange` | `_PostgresRange<Int>` / `<Decimal>` / `<Date>`, the only type the range filters accept |
+| `int4range`, `int8range` / `numrange` / `tsrange`, `tstzrange`, `daterange` | `_PostgresRange<_Int4Range>`, `<_Int8Range>` / `<_NumRange>` / `<_TSRange>`, `<_TSTZRange>`, `<_DateRange>`: one bound marker per range type, so a filter operand must be the column's own range type |
 | `interval` | `_PostgresInterval`, the text PostgREST sends, not parsed (it depends on `IntervalStyle`) |
 | `time`, `timetz` | `_PostgresTime` |
 | `bytea` | `_PostgresBytes`, `Data` in the `\x…` hex form, not base64 |

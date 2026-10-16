@@ -23,8 +23,58 @@ permissions:
   contents: read
 
 jobs:
+  # Pull requests only build and test what they touch; a docs-only or migration-only PR
+  # skips the Xcode matrices. Pushes to main/release and manual runs always run everything,
+  # because the Release workflow fires on this run's "success" conclusion.
+  #
+  # Skipped jobs count as passed in ci-success, so a skipped matrix never blocks a merge.
+  changes:
+    name: Detect changed paths
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      package: ${{ github.event_name != 'pull_request' || steps.filter.outputs.package }}
+      integration: ${{ github.event_name != 'pull_request' || steps.filter.outputs.integration }}
+      examples: ${{ github.event_name != 'pull_request' || steps.filter.outputs.examples }}
+    steps:
+      # Reads the PR's changed files from the API, so no checkout is needed.
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        id: filter
+        if: github.event_name == 'pull_request'
+        with:
+          # A file matches when it hits a positive pattern and no negated one. The default
+          # ("some") treats a negated pattern as "anything else", which would match every file.
+          predicate-quantifier: some-with-excludes
+          filters: |
+            swift: &swift
+              - Sources/**
+              - Package.swift
+              - Package@swift-*.swift
+              - Package.resolved
+              - Supabase.xcworkspace/**
+              - scripts/**
+              - tools/supabase-typegen/**
+              - .github/workflows/ci.yml
+            package:
+              - *swift
+              - Tests/**
+              - "!Tests/IntegrationTests/supabase*/**"
+            integration:
+              - *swift
+              - Tests/**
+            examples:
+              - Sources/**
+              - Package.swift
+              - Package@swift-*.swift
+              - Package.resolved
+              - Examples/**
+              - scripts/xcodebuild.sh
+              - .github/workflows/ci.yml
+
   macos:
     name: xcodebuild (macOS latest)
+    needs: changes
+    if: needs.changes.outputs.package == 'true'
     runs-on: blacksmith-6vcpu-macos-latest
     timeout-minutes: 30
     strategy:
@@ -80,6 +130,8 @@ jobs:
 
   macos-legacy:
     name: xcodebuild (legacy)
+    needs: changes
+    if: needs.changes.outputs.package == 'true'
     runs-on: blacksmith-6vcpu-macos-15
     timeout-minutes: 30
     strategy:
@@ -127,6 +179,8 @@ jobs:
 
   additional-platforms:
     name: xcodebuild (${{ matrix.platform }})
+    needs: changes
+    if: needs.changes.outputs.package == 'true'
     runs-on: blacksmith-6vcpu-macos-latest
     timeout-minutes: 30
     strategy:
@@ -154,6 +208,8 @@ jobs:
         run: PLATFORM="${{ matrix.platform }}" XCODEBUILD_ARGUMENT=build ./scripts/xcodebuild.sh
 
   spm:
+    needs: changes
+    if: needs.changes.outputs.package == 'true'
     runs-on: blacksmith-6vcpu-macos-latest
     timeout-minutes: 30
     strategy:
@@ -174,6 +230,8 @@ jobs:
 
   linux:
     name: Linux (${{ matrix.container }})
+    needs: changes
+    if: needs.changes.outputs.package == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     continue-on-error: ${{ matrix.container == 'swiftlang/swift:nightly-main-noble' }}
@@ -210,6 +268,8 @@ jobs:
 
   integration-tests:
     name: Integration Tests (${{ matrix.name }})
+    needs: changes
+    if: needs.changes.outputs.integration == 'true'
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     strategy:
@@ -307,6 +367,8 @@ jobs:
 
   examples:
     name: Examples (${{ matrix.scheme }})
+    needs: changes
+    if: needs.changes.outputs.examples == 'true'
     runs-on: blacksmith-6vcpu-macos-latest
     timeout-minutes: 30
     strategy:
@@ -334,6 +396,8 @@ jobs:
 
   examples-spm:
     name: Examples SPM (${{ matrix.example }})
+    needs: changes
+    if: needs.changes.outputs.examples == 'true'
     runs-on: blacksmith-6vcpu-macos-latest
     timeout-minutes: 30
     strategy:
@@ -367,6 +431,8 @@ jobs:
 
   docs:
     name: Test docs
+    needs: changes
+    if: needs.changes.outputs.package == 'true'
     runs-on: blacksmith-6vcpu-macos-latest
     timeout-minutes: 30
     steps:
@@ -429,6 +495,7 @@ jobs:
     if: always()
     needs:
       [
+        changes,
         macos,
         macos-legacy,
         additional-platforms,

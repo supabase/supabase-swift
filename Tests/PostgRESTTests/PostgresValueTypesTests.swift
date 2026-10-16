@@ -16,13 +16,13 @@ struct PostgresValueTypesTests {
     static let relationName = "postgres_values"
     static let selectString = "*"
 
-    var span: _PostgresRange<Int>
+    var span: _PostgresRange<_Int4Range>
     var duration: _PostgresInterval
     var at: _PostgresTime
     var payload: _PostgresBytes
 
     struct Columns: Sendable {
-      let span = _PostgrestColumn<Row, _PostgresRange<Int>>("span")
+      let span = _PostgrestColumn<Row, _PostgresRange<_Int4Range>>("span")
       let duration = _PostgrestColumn<Row, _PostgresInterval>("duration")
       let at = _PostgrestColumn<Row, _PostgresTime>("at")
       let payload = _PostgrestColumn<Row, _PostgresBytes>("payload")
@@ -81,12 +81,23 @@ struct PostgresValueTypesTests {
     #expect(_PostgresBytes.data(fromHex: #"\x"#) == Data())
   }
 
+  @Test
+  func largeBytesRoundTripThroughTheHexForm() throws {
+    let data = Data((0..<(1 << 20)).map { UInt8(truncatingIfNeeded: $0 &* 31) })
+    let rawValue = _PostgresBytes(data).rawValue
+    #expect(rawValue.utf8.count == 2 + 2 * data.count)
+    #expect(rawValue.hasPrefix(#"\x001f3e5d"#))
+    #expect(_PostgresBytes.data(fromHex: rawValue) == data)
+  }
+
   /// Base64, an odd digit count and a non-hex digit are not the form PostgREST sends.
   @Test
   func bytesRejectAnythingButHex() {
     #expect(_PostgresBytes.data(fromHex: "3q2+7w==") == nil)
     #expect(_PostgresBytes.data(fromHex: #"\x123"#) == nil)
     #expect(_PostgresBytes.data(fromHex: #"\xzz"#) == nil)
+    #expect(_PostgresBytes.data(fromHex: #"\x+f"#) == nil)
+    #expect(_PostgresBytes.data(fromHex: #"\xde g"#) == nil)
     #expect(throws: DecodingError.self) {
       try JSONDecoder().decode(_PostgresBytes.self, from: Data(#""3q2+7w==""#.utf8))
     }
@@ -94,12 +105,18 @@ struct PostgresValueTypesTests {
 
   @Test
   func textTypesRoundTripAsStrings() throws {
-    let span: _PostgresRange<Date> = "[2024-01-01,2024-02-01)"
+    let span: _PostgresRange<_DateRange> = "[2024-01-01,2024-02-01)"
     let data = try JSONEncoder().encode([span])
-    #expect(try JSONDecoder().decode([_PostgresRange<Date>].self, from: data) == [span])
+    #expect(try JSONDecoder().decode([_PostgresRange<_DateRange>].self, from: data) == [span])
     #expect(
       try JSONDecoder().decode(_PostgresInterval.self, from: Data(#""1 day 02:00:00""#.utf8))
         == "1 day 02:00:00")
+    let interval: _PostgresInterval = "P1DT2H"
+    #expect(String(decoding: try JSONEncoder().encode(interval), as: UTF8.self) == #""P1DT2H""#)
+    let time: _PostgresTime = "13:45:00+02"
+    let encodedTime = try JSONEncoder().encode(time)
+    #expect(String(decoding: encodedTime, as: UTF8.self) == #""13:45:00+02""#)
+    #expect(try JSONDecoder().decode(_PostgresTime.self, from: encodedTime) == time)
   }
 
   /// A composite comes back as an object and goes out unchanged.

@@ -15,9 +15,10 @@ public import Helpers
 
 /// A Postgres range column, such as `int4range` or `tstzrange`, as its literal: `[1,10)`, `empty`.
 ///
-/// `Bound` is the Swift type of the range's bounds. It is never stored; it keeps a `daterange`
-/// operand off an `int4range` column. The literal is not parsed, because Postgres canonicalizes
-/// it — `[2024-01-01,2024-01-31]` comes back as `[2024-01-01,2024-02-01)`.
+/// `Bound` is a marker for the Postgres range type, such as ``_Int4Range`` or ``_TSTZRange``. It
+/// is never stored; it keeps a `daterange` operand off a `tstzrange` column. The literal is not
+/// parsed, because Postgres canonicalizes it — `[2024-01-01,2024-01-31]` comes back as
+/// `[2024-01-01,2024-02-01)`.
 public struct _PostgresRange<Bound>: RawRepresentable, Hashable, Sendable, Codable,
   ExpressibleByStringLiteral, PostgrestFilterValue
 {
@@ -41,6 +42,19 @@ public struct _PostgresRange<Bound>: RawRepresentable, Hashable, Sendable, Codab
     try container.encode(rawValue)
   }
 }
+
+/// The `Bound` of a Postgres `int4range` column: `_PostgresRange<_Int4Range>`.
+public enum _Int4Range {}
+/// The `Bound` of a Postgres `int8range` column: `_PostgresRange<_Int8Range>`.
+public enum _Int8Range {}
+/// The `Bound` of a Postgres `numrange` column: `_PostgresRange<_NumRange>`.
+public enum _NumRange {}
+/// The `Bound` of a Postgres `tsrange` column: `_PostgresRange<_TSRange>`.
+public enum _TSRange {}
+/// The `Bound` of a Postgres `tstzrange` column: `_PostgresRange<_TSTZRange>`.
+public enum _TSTZRange {}
+/// The `Bound` of a Postgres `daterange` column: `_PostgresRange<_DateRange>`.
+public enum _DateRange {}
 
 /// A Postgres `interval`, as the text PostgREST sends, for example `1 day 02:00:00`.
 ///
@@ -107,7 +121,15 @@ public struct _PostgresBytes: Hashable, Sendable, Codable, PostgrestFilterValue 
 
   /// The hex form, for example `\xdeadbeef`.
   public var rawValue: String {
-    "\\x" + data.map { String(format: "%02x", $0) }.joined()
+    let digits = Array("0123456789abcdef".utf8)
+    var bytes = [UInt8](repeating: 0, count: 2 + 2 * data.count)
+    bytes[0] = UInt8(ascii: "\\")
+    bytes[1] = UInt8(ascii: "x")
+    for (index, byte) in data.enumerated() {
+      bytes[2 + 2 * index] = digits[Int(byte >> 4)]
+      bytes[3 + 2 * index] = digits[Int(byte & 0x0f)]
+    }
+    return String(decoding: bytes, as: UTF8.self)
   }
 
   public init(from decoder: any Decoder) throws {
@@ -129,13 +151,23 @@ public struct _PostgresBytes: Hashable, Sendable, Codable, PostgrestFilterValue 
     guard text.hasPrefix("\\x") else { return nil }
     let digits = Array(text.utf8.dropFirst(2))
     guard digits.count.isMultiple(of: 2) else { return nil }
-    var data = Data(capacity: digits.count / 2)
-    for index in stride(from: 0, to: digits.count, by: 2) {
-      guard let byte = UInt8(String(decoding: digits[index...index + 1], as: UTF8.self), radix: 16)
-      else { return nil }
-      data.append(byte)
+    var bytes = [UInt8](repeating: 0, count: digits.count / 2)
+    for index in bytes.indices {
+      guard let high = nibble(digits[2 * index]), let low = nibble(digits[2 * index + 1]) else {
+        return nil
+      }
+      bytes[index] = high << 4 | low
     }
-    return data
+    return Data(bytes)
+  }
+
+  private static func nibble(_ digit: UInt8) -> UInt8? {
+    switch digit {
+    case UInt8(ascii: "0")...UInt8(ascii: "9"): digit - UInt8(ascii: "0")
+    case UInt8(ascii: "a")...UInt8(ascii: "f"): digit - UInt8(ascii: "a") + 10
+    case UInt8(ascii: "A")...UInt8(ascii: "F"): digit - UInt8(ascii: "A") + 10
+    default: nil
+    }
   }
 }
 
