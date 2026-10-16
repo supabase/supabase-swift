@@ -740,7 +740,7 @@ private func hexString(_ bytes: some Sequence<UInt8>) -> String {
   bytes.map { String(format: "%02x", $0) }.joined()
 }
 
-/// Keccak-256 as Ethereum uses it. This is not FIPS-202 `SHA3_256`, which pads with `0x06`
+/// Keccak-256 as Ethereum uses it. This is not the standard `SHA3_256`, which pads with `0x06`
 /// instead of `0x01` and gives a different hash.
 private func keccak256(_ input: [UInt8]) -> [UInt8] {
   let rate = 136
