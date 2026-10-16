@@ -78,6 +78,22 @@ since it isn't a required check, nothing stops a merge if you don't.
 5. Run full test suite
 6. Create PR with `fix:` prefix
 
+### Hotfixes for v2
+
+`release/v2` ships v2 patch releases while `main` moves toward v3. Fix a bug on `main` first, then
+backport it:
+
+1. Open the fix PR against `main`, as in "Fixing a Bug".
+2. After it merges, branch from `release/v2` and run `git cherry-pick -x <sha>`. The `-x` flag
+   records the original commit in the message.
+3. Adapt the change to v2. Module names, file paths, and APIs differ between the two lines, and
+   the cherry-pick may not apply cleanly. Run `swift test` on the branch.
+4. Open the backport PR against `release/v2` with a `fix:` title. Link the `main` PR in the body.
+
+A fix that only `release/v2` needs, because the code no longer exists on `main`, is the one
+exception. Open it directly against `release/v2` and say so in the PR body.
+Release-please publishes the patch release from `release/v2` (see [RELEASE.md](RELEASE.md)).
+
 ### Updating Dependencies
 
 Dependencies are managed in `Package.swift`. Use version ranges when possible to allow flexibility.
