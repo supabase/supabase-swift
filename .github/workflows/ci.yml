@@ -42,11 +42,12 @@ jobs:
         id: filter
         if: github.event_name == 'pull_request'
         with:
+          # A file matches when it hits a positive pattern and no negated one. The default
+          # ("some") treats a negated pattern as "anything else", which would match every file.
+          predicate-quantifier: some-with-excludes
           filters: |
-            package: &package
+            swift: &swift
               - Sources/**
-              - Tests/**
-              - "!Tests/IntegrationTests/supabase*/**"
               - Package.swift
               - Package@swift-*.swift
               - Package.resolved
@@ -54,9 +55,13 @@ jobs:
               - scripts/**
               - tools/supabase-typegen/**
               - .github/workflows/ci.yml
+            package:
+              - *swift
+              - Tests/**
+              - "!Tests/IntegrationTests/supabase*/**"
             integration:
-              - *package
-              - Tests/IntegrationTests/**
+              - *swift
+              - Tests/**
             examples:
               - Sources/**
               - Package.swift
