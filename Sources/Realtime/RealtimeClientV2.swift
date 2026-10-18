@@ -337,6 +337,11 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       // returns, even if the state observer task hasn't caught up yet.
       handleConnected(conn: conn, isReconnect: false)
       self.yieldStatusIfChanged(.connected)
+    } catch is CancellationError {
+      // This caller was cancelled, or `disconnect()` cancelled the attempt it was waiting on.
+      // Leave `status` to whatever ends that attempt: a reconnect may still be running, and
+      // reporting `.disconnected` before it ends would be wrong.
+      options.logger.debug("Connect cancelled")
     } catch {
       options.logger.error("Connection failed: \(error)")
       self.yieldStatusIfChanged(.disconnected)

@@ -148,6 +148,51 @@ struct ConnectionManagerTests {
   }
 
   @Test
+  func cancelledConnectStopsWaitingForInFlightConnect() async throws {
+    // Issue #1584, for a caller that joins a connect another caller started: it can give up,
+    // but the connect keeps going for the caller that started it.
+    let transportReleased = LockIsolated(false)
+    let transportCallCount = self.transportCallCount
+    let ws = self.ws
+    let sut = makeSUT(
+      transport: { _, _ in
+        transportCallCount.withValue { $0 += 1 }
+        await waitUntil { transportReleased.value }
+        return ws
+      }
+    )
+
+    let firstConnect = Task {
+      try await sut.connect()
+    }
+    let transportCalled = await waitUntil { transportCallCount.value == 1 }
+    #expect(transportCalled)
+
+    let waiterFinished = LockIsolated(false)
+    let waiterError = LockIsolated<(any Error)?>(nil)
+    let waiter = Task {
+      do {
+        try await sut.connect()
+      } catch {
+        waiterError.setValue(error)
+      }
+      waiterFinished.setValue(true)
+    }
+    try await Task.sleep(nanoseconds: 50_000_000)
+    waiter.cancel()
+
+    let waiterReturned = await waitUntil(timeout: 1) { waiterFinished.value }
+    #expect(waiterReturned, "A cancelled connect() should stop waiting for the connect in progress")
+    #expect(waiterError.value is CancellationError)
+
+    transportReleased.setValue(true)
+    _ = try await firstConnect.value
+    let isConnected = await sut.connection != nil
+    #expect(isConnected, "The connect should still complete for the caller that started it")
+    #expect(transportCallCount.value == 1)
+  }
+
+  @Test
   func disconnectFromConnectedClosesWebSocketAndUpdatesState() async throws {
     let sut = makeSUT()
     try await sut.connect()
@@ -385,6 +430,114 @@ struct ConnectionManagerTests {
 
     let isConnected = await sut.connection != nil
     #expect(isConnected)
+  }
+
+  @Test
+  func cancelledConnectStopsWaitingWhileReconnectKeepsFailing() async throws {
+    // Issue #1584: a `connect()` that joined the automatic reconnect waited on it with
+    // `task.value`, which ignores the caller's own cancellation. The reconnect only ends once it
+    // succeeds or `disconnect()` cancels it, so the cancelled caller stayed blocked for as long
+    // as the outage lasted.
+    let connectionCount = LockIsolated(0)
+    let ws = self.ws
+
+    let sut = makeSUT(
+      reconnectDelay: .milliseconds(10),
+      transport: { _, _ in
+        let attempt = connectionCount.withValue { count -> Int in
+          count += 1
+          return count
+        }
+        // Attempt 1 is the initial `connect()`. Every automatic reconnect fails: the outage
+        // outlasts the test.
+        if attempt > 1 {
+          throw TestError.sample
+        }
+        return ws
+      }
+    )
+
+    try await sut.connect()
+    await sut.handleError(TestError.sample)
+    let reconnectFailed = await waitUntil(timeout: 2) { connectionCount.value >= 2 }
+    #expect(reconnectFailed)
+
+    let waiterFinished = LockIsolated(false)
+    let waiterError = LockIsolated<(any Error)?>(nil)
+    let waiter = Task {
+      do {
+        try await sut.connect()
+      } catch {
+        waiterError.setValue(error)
+      }
+      waiterFinished.setValue(true)
+    }
+    try await Task.sleep(nanoseconds: 50_000_000)
+    waiter.cancel()
+
+    let waiterReturned = await waitUntil(timeout: 1) { waiterFinished.value }
+    #expect(waiterReturned, "A cancelled connect() should stop waiting for the reconnect")
+    #expect(waiterError.value is CancellationError)
+
+    // Only that caller gave up: the reconnect keeps retrying.
+    let attemptsAtCancel = connectionCount.value
+    let stillRetrying = await waitUntil(timeout: 5) { connectionCount.value > attemptsAtCancel }
+    #expect(stillRetrying, "Cancelling a waiter must not cancel the shared reconnect")
+
+    await sut.disconnect(reason: "test cleanup")
+    await waiter.value
+  }
+
+  @Test
+  func cancelledConnectDoesNotKeepManagerAlive() async throws {
+    // Issue #1584: the cancelled caller stayed inside `connect()`, keeping the manager alive for
+    // as long as the outage lasted. Once it returns, nothing it leaves waiting on the reconnect
+    // may keep the manager alive either, because during an outage only `deinit` ends that
+    // reconnect.
+    final class WeakBox: @unchecked Sendable {
+      weak var manager: ConnectionManager?
+    }
+    let box = WeakBox()
+    let connectionCount = LockIsolated(0)
+    let ws = self.ws
+
+    func scope() async throws {
+      let sut = makeSUT(
+        reconnectDelay: .milliseconds(10),
+        transport: { _, _ in
+          let attempt = connectionCount.withValue { count -> Int in
+            count += 1
+            return count
+          }
+          if attempt > 1 {
+            throw TestError.sample
+          }
+          return ws
+        }
+      )
+      box.manager = sut
+      try await sut.connect()
+      await sut.handleError(TestError.sample)
+      await waitUntil(timeout: 2) { connectionCount.value >= 2 }
+
+      let waiterFinished = LockIsolated(false)
+      let waiter = Task {
+        _ = try? await sut.connect()
+        waiterFinished.setValue(true)
+      }
+      try await Task.sleep(nanoseconds: 50_000_000)
+      waiter.cancel()
+      await waitUntil(timeout: 1) { waiterFinished.value }
+    }
+    try await scope()
+
+    await waitUntil(timeout: 2) { box.manager == nil }
+    #expect(
+      box.manager == nil,
+      "ConnectionManager leaked: a cancelled connect() kept it alive during the outage."
+    )
+    // If it leaked, end the reconnect so it doesn't outlive the test.
+    await box.manager?.disconnect()
   }
 
   @Test

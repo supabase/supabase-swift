@@ -16,13 +16,17 @@ struct RealtimeReconnectRecoveryTests {
   let url = URL(string: "http://localhost:54321/realtime/v1")!
   let apiKey = "anon.api.key"
 
-  private func makeOptions(timeout: Duration = .seconds(3)) -> RealtimeClientOptions {
+  private func makeOptions(
+    timeout: Duration = .seconds(3),
+    maxRetryAttempts: Int = RealtimeClientOptions.defaultMaxRetryAttempts
+  ) -> RealtimeClientOptions {
     RealtimeClientOptions(
       headers: ["apikey": apiKey],
       // Long heartbeat so heartbeat machinery can't interfere.
       heartbeatInterval: .seconds(10),
       reconnectDelay: .milliseconds(50),
       timeout: timeout,
+      maxRetryAttempts: maxRetryAttempts,
       accessToken: { "token" }
     )
   }
@@ -83,6 +87,121 @@ struct RealtimeReconnectRecoveryTests {
       connectAttempts.value >= 3 && sut.status == .connected && channel.status == .subscribed
     }
     #expect(recovered, "Client did not recover automatically after a failed auto-reconnect attempt")
+  }
+
+  /// Issue #1584: a `connect()` call made during an outage waited on the automatic reconnect,
+  /// which keeps retrying until the network is back, and its caller could not cancel it. Once
+  /// cancelled, it must return right away, and must not report `.disconnected` while that
+  /// reconnect is still running.
+  @Test
+  func cancelledConnectReturnsDuringFailedAutoReconnect() async throws {
+    let sockets = LockIsolated<[AsyncFakeWebSocket]>([])
+    let connectAttempts = LockIsolated(0)
+    let networkDown = LockIsolated(false)
+
+    let sut = RealtimeClientV2(
+      url: url,
+      options: makeOptions(),
+      wsTransport: { _, _ in
+        connectAttempts.withValue { $0 += 1 }
+        if networkDown.value {
+          throw RealtimeError.transport("network down")
+        }
+        let socket = AsyncFakeWebSocket()
+        socket.serverResponder = AsyncFakeWebSocket.realtimeServerResponder()
+        sockets.withValue { $0.append(socket) }
+        return socket
+      },
+      http: HTTPClient(transport: RecordingTransport()),
+      clock: ContinuousClock()
+    )
+    defer { sut.disconnect() }
+
+    await sut.connect()
+    #expect(sut.status == .connected)
+
+    // Outage: the socket errors out, and every automatic reconnect fails until the network is
+    // back.
+    networkDown.setValue(true)
+    sockets.value[0].receiveFromServer(.text("not a valid frame"))
+    let reconnecting = await waitUntil(timeout: 2) {
+      connectAttempts.value >= 2 && sut.status == .connecting
+    }
+    #expect(reconnecting)
+
+    let connectReturned = LockIsolated(false)
+    let caller = Task {
+      await sut.connect()
+      connectReturned.setValue(true)
+    }
+    try await Task.sleep(nanoseconds: 50_000_000)
+    caller.cancel()
+
+    let returned = await waitUntil(timeout: 1) { connectReturned.value }
+    #expect(returned, "A cancelled connect() should return while the reconnect keeps failing")
+    #expect(sut.status == .connecting, "The reconnect is still running")
+
+    // The reconnect the caller gave up on still recovers the client once the network is back.
+    networkDown.setValue(false)
+    let recovered = await waitUntil(timeout: 5) { sut.status == .connected }
+    #expect(recovered)
+  }
+
+  /// Issue #1584, knock-on: `subscribeWithError()` bounds each attempt with `withTimeout`, whose
+  /// task group cannot return before the attempt does. The attempt was stuck in `connect()`,
+  /// which ignored the cancellation, so subscribing during an outage hung for the whole outage
+  /// instead of failing after `maxRetryAttempts` attempts.
+  @Test
+  func subscribeGivesUpAfterRetriesDuringFailedAutoReconnect() async throws {
+    let sockets = LockIsolated<[AsyncFakeWebSocket]>([])
+    let connectAttempts = LockIsolated(0)
+    let networkDown = LockIsolated(false)
+
+    let sut = RealtimeClientV2(
+      url: url,
+      options: makeOptions(timeout: .milliseconds(200), maxRetryAttempts: 2),
+      wsTransport: { _, _ in
+        connectAttempts.withValue { $0 += 1 }
+        if networkDown.value {
+          throw RealtimeError.transport("network down")
+        }
+        let socket = AsyncFakeWebSocket()
+        socket.serverResponder = AsyncFakeWebSocket.realtimeServerResponder()
+        sockets.withValue { $0.append(socket) }
+        return socket
+      },
+      http: HTTPClient(transport: RecordingTransport()),
+      clock: ContinuousClock()
+    )
+    defer { sut.disconnect() }
+
+    await sut.connect()
+
+    // Outage: the socket errors out, and every automatic reconnect fails for the rest of the test.
+    networkDown.setValue(true)
+    sockets.value[0].receiveFromServer(.text("not a valid frame"))
+    let reconnecting = await waitUntil(timeout: 2) {
+      connectAttempts.value >= 2 && sut.status == .connecting
+    }
+    #expect(reconnecting)
+
+    let channel = sut.channel("room-outage")
+    let subscribeFinished = LockIsolated(false)
+    let subscribeError = LockIsolated<(any Error)?>(nil)
+    let subscriber = Task {
+      do {
+        try await channel.subscribeWithError()
+      } catch {
+        subscribeError.setValue(error)
+      }
+      subscribeFinished.setValue(true)
+    }
+
+    // Two 200 ms attempts, with a retry delay of about a second between them.
+    let finished = await waitUntil(timeout: 5) { subscribeFinished.value }
+    #expect(finished, "subscribeWithError() should give up after its retries instead of hanging")
+    #expect((subscribeError.value as? RealtimeError)?.kind == .maxRetryAttemptsReached)
+    subscriber.cancel()
   }
 
   /// Defect 3 in #1145: `phx_close` was routed by topic only. A close

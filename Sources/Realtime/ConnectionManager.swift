@@ -62,7 +62,7 @@ actor ConnectionManager {
 
     case .connecting(let task):
       logger.debug("Connection already in progress, waiting...")
-      try await task.value
+      try await Self.wait(for: task)
       guard case .connected(let conn) = state else {
         throw RealtimeError.transport("Connection failed")
       }
@@ -78,7 +78,7 @@ actor ConnectionManager {
 
     case .reconnecting(let task, _):
       logger.debug("Reconnection in progress, waiting...")
-      try await task.value
+      try await Self.wait(for: task)
       guard case .connected(let conn) = state else {
         throw RealtimeError.transport("Connection failed")
       }
@@ -236,6 +236,59 @@ actor ConnectionManager {
     let conn = try await transport(url, headers)
     try Task.checkCancellation()
     updateState(.connected(conn))
+  }
+
+  /// A `connect()` caller waiting in `wait(for:)`.
+  private enum Waiter {
+    case pending
+    case waiting(CheckedContinuation<Void, any Error>)
+    /// Resumed, or cancelled before it could suspend.
+    case done
+  }
+
+  /// Waits for `attempt`, the connect or reconnect that concurrent `connect()` calls share, but
+  /// throws `CancellationError` as soon as the calling task is cancelled. `attempt` keeps running:
+  /// it belongs to the manager, not to this caller.
+  ///
+  /// `try await attempt.value` alone ignores the caller's cancellation, and a reconnect only ends
+  /// once it succeeds or `disconnect()` cancels it. A cancelled caller (a SwiftUI `.task`, or the
+  /// subscribe attempt `withTimeout` cancels) then stayed blocked for the whole outage (issue #1584).
+  ///
+  /// `static`, so it cannot capture the manager: a forwarding task left waiting on a reconnect
+  /// must not keep a released manager alive, since during an outage only `deinit` or
+  /// `disconnect()` ends that reconnect.
+  private static func wait(for attempt: Task<Void, any Error>) async throws {
+    let waiter = LockIsolated(Waiter.pending)
+
+    // Resumes after releasing the lock: resuming can take the runtime's task-status lock, which
+    // cancellation holds while it calls `onCancel` (issue #1154).
+    @Sendable func resume(with result: Result<Void, any Error>) {
+      let continuation = waiter.withValue { state -> CheckedContinuation<Void, any Error>? in
+        defer { state = .done }
+        guard case .waiting(let continuation) = state else { return nil }
+        return continuation
+      }
+      continuation?.resume(with: result)
+    }
+
+    try await withTaskCancellationHandler {
+      try await withCheckedThrowingContinuation { continuation in
+        let cancelled = waiter.withValue { state -> Bool in
+          guard case .pending = state else { return true }
+          state = .waiting(continuation)
+          return false
+        }
+        if cancelled {
+          continuation.resume(throwing: CancellationError())
+          return
+        }
+        // Outlives a cancelled caller until `attempt` ends, since awaiting a task can't be
+        // interrupted. It holds nothing but `attempt` and this waiter.
+        Task { resume(with: await attempt.result) }
+      }
+    } onCancel: {
+      resume(with: .failure(CancellationError()))
+    }
   }
 
   /// Equal-jitter exponential backoff capped at 30s (phoenix.js's `reconnectAfterMs`
