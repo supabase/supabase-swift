@@ -113,9 +113,11 @@ import Testing
       // Both transport calls block until the test releases them, so the stale outcome lands
       // while the new attempt is still `.connecting`.
       let gates = LockIsolated<[Int: CheckedContinuation<Void, Never>]>([:])
+      let (arrivals, arrived) = AsyncStream<Int>.makeStream()
       let h = Harness(beforeConnect: { attempt in
         await withCheckedContinuation { continuation in
           gates.withValue { $0[attempt] = continuation }
+          arrived.yield(attempt)
         }
         if attempt == 1, !staleAttemptSucceeds { throw URLError(.cannotConnectToHost) }
       })
@@ -124,7 +126,7 @@ import Testing
       for await status in h.client.statusChanges where status == .connecting { break }
       await h.client.disconnect()
       let fresh = Task { try await h.client.connect() }
-      while gates.value[2] == nil { await Task.yield() }
+      for await attempt in arrivals where attempt == 2 { break }
 
       gates.value[1]?.resume()
       await #expect(throws: (any Error).self) { try await stale.value }
