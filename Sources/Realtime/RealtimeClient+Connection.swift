@@ -312,16 +312,26 @@ extension RealtimeClient {
 
   /// Runs the transport for `connect()` and reports the outcome to the machine. Every caller
   /// that awaits this task observes `.connected` once it returns.
+  ///
+  /// `.cancelAllTasks` cancels this task but cannot stop the transport call already in flight.
+  /// The table has no attempt identity, so a cancelled attempt drops its outcome here instead
+  /// of handing it to whichever attempt is current by then.
   private func openSocket() async throws {
     let conn: any WebSocket
     do {
       conn = try await wsTransport(webSocketURL, options.headers.dictionary)
     } catch {
       options.logger.error("Connection failed: \(error)")
-      apply(.socketOpenFailed)
+      if !Task.isCancelled {
+        apply(.socketOpenFailed)
+      }
       throw error
     }
 
+    if Task.isCancelled {
+      conn.close(code: nil, reason: "Connection cancelled")
+      throw CancellationError()
+    }
     apply(.socketOpened(conn))
     guard case .connected = connection else {
       throw CancellationError()
