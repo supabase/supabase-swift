@@ -7,19 +7,22 @@
 
 /// Runs `body` and throws ``TimeoutError`` if it has not finished after `duration` on `clock`.
 ///
-/// `body` runs on the caller's actor and may capture non-`Sendable` values, including
-/// actor-isolated state: the child task that runs it hops to `isolation` first, so it is never
-/// called from another executor. The loser of the race is cancelled, so a body that wins late
-/// sees `Task.isCancelled`.
+/// `body` runs on the caller's actor and may capture non-`Sendable` values: it is called exactly
+/// once, from one child task, and the result crosses back to the caller only after that task has
+/// finished. The loser of the race is cancelled, so a body that wins late sees `Task.isCancelled`.
+///
+/// The timer is registered on `clock` before `body` starts, and both start inline where the OS
+/// has immediate child tasks. A test that reacts to the body's first side effect by advancing a
+/// `TestClock` therefore cannot run ahead of the deadline it is advancing to.
 @discardableResult
 package func withTimeout<Result>(
   _ duration: Duration,
   clock: any Clock<Duration> = ContinuousClock(),
-  isolation: (any Actor)? = #isolation,
+  isolation: isolated (any Actor)? = #isolation,
   body: () async throws -> Result
 ) async throws -> Result {
-  // Safe: `body` is invoked once, from a single child task that is on `isolation` by then, and
-  // `result` is written by that task and read only after the group has finished it.
+  // Safe: `body` is invoked once, from a single child task, and `result` is written by that task
+  // and read only after the group has finished it.
   nonisolated(unsafe) let body = body
   nonisolated(unsafe) var result: Result?
   let sendableBody: @Sendable () async throws -> Void = { result = try await body() }
@@ -27,16 +30,16 @@ package func withTimeout<Result>(
     try await withThrowingTaskGroup(of: Void.self) { group in
       defer { group.cancelAll() }
 
-      group.addTask {
-        try await run(sendableBody, on: isolation)
-      }
-
-      group.addTask {
+      group.addImmediateTaskIfAvailable {
         if duration > .zero {
           try await clock.sleep(for: duration)
         }
         try Task.checkCancellation()
         throw TimeoutError()
+      }
+
+      group.addImmediateTaskIfAvailable {
+        try await sendableBody()
       }
 
       // Two tasks were just added, so `next()` has one to return: the body (done, or failed) or
@@ -49,14 +52,6 @@ package func withTimeout<Result>(
   }
   // The body child finished without throwing, so it stored its result.
   return result!
-}
-
-/// Calls `body` on `isolation`. `body` is nonisolated(nonsending), so it stays there.
-private func run(
-  _ body: @Sendable () async throws -> Void,
-  on isolation: isolated (any Actor)?
-) async throws {
-  try await body()
 }
 
 package struct TimeoutError: Error, Hashable {}

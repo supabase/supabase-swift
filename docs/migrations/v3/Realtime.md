@@ -35,18 +35,28 @@ Changes that still compile but behave differently. Check each one by hand.
 | v2 | v3 |
 | --- | --- |
 | `import RealtimeV2` | `import Realtime` |
-| `RealtimeClient`, `RealtimeChannel`, `Presence` (v1 API) | `RealtimeClientV2`, `RealtimeChannelV2`, `PresenceV2` |
-| `RealtimeClientV2.subscriptions` | `RealtimeClientV2.channels` |
+| `RealtimeClient`, `RealtimeChannel`, `Presence` (v1 API) | `RealtimeClient`, `RealtimeChannel` (actors, see below), `PresenceV2` |
+| `RealtimeClientV2`, `RealtimeChannelV2` | `RealtimeClient`, `RealtimeChannel` |
+| `RealtimeClientV2.subscriptions` | `RealtimeClient.channels` |
 | `RealtimeClientV2.Configuration` | `RealtimeClientOptions` |
-| `RealtimeClientV2.init(config:)` | `RealtimeClientV2.init(url:options:)` |
+| `RealtimeClientV2.init(config:)` | `RealtimeClient.init(url:options:)` |
 | `RealtimeClientV2.addChannel(_:)` | removed; the client tracks channels |
 | `RealtimeClientV2.Status` | `RealtimeClientStatus` |
+| `RealtimeClientV2.connect()` | `connect() async throws` |
+| `RealtimeClientV2.disconnect()` | `disconnect() async` |
+| `RealtimeClientV2.statusChange`, `onStatusChange(_:)` | `statusChanges`, `statusSnapshot` |
+| `RealtimeClientV2.heartbeat`, `onHeartbeat(_:)` | `heartbeats` |
 | `RealtimeChannelV2.Status` | `RealtimeChannelStatus` |
-| `RealtimeChannelV2.Subscription` | `RealtimeSubscription` |
-| `RealtimeChannelV2.subscribe()` | `subscribeWithError()` |
-| `RealtimeChannelV2.updateAuth(jwt:)` | `RealtimeClientV2.setAuth(_:)` |
-| `broadcast(event:) -> AsyncStream<JSONObject>` | `broadcastStream(event:)` |
-| `postgresChange(_:schema:table:filter: String?)` | `postgresChange(_:schema:table:filter: RealtimePostgresFilter?)` |
+| `RealtimeChannelV2.Subscription`, `RealtimeSubscription`, `ObservationToken` | removed; cancel the task that reads the stream |
+| `RealtimeChannelV2.subscribe()`, `subscribeWithError()` | `subscribe() async throws` |
+| `RealtimeChannelV2.updateAuth(jwt:)` | `RealtimeClient.setAuth(_:)` |
+| `RealtimeChannelV2.statusChange`, `onStatusChange(_:)` | `statusChanges`, `statusSnapshot` |
+| `onBroadcast(event:callback:)`, `broadcastStream(event:)`, `broadcast(event:) -> AsyncStream` | `broadcasts(event:)` |
+| `broadcastDataStream(event:)` | `broadcastData(event:)` |
+| `onPostgresChange(_:...)`, `postgresChange(_:schema:table:filter: String?)` | `postgresChanges(_:schema:table:filter: RealtimePostgresFilter?)` |
+| `onPresenceChange(_:)`, `presenceChange()` | `presenceChanges()` |
+| `onSystem(callback:)`, `system()` | `systemMessages()` |
+| `broadcast(event:message:)`, `track(_:)`, `untrack()` (`Void`) | return a `PushHandle` |
 | `RealtimeMessageV2.eventType: EventType?` | `eventType: EventType` (not optional) |
 | `RealtimeMessageV2.EventType.tokenExpired` | `.system`; check the payload |
 | `RealtimeClientOptions(fetch:)` | `RealtimeClientOptions(http:)` |
@@ -70,7 +80,69 @@ Remove `vsn:`. The client always uses protocol 2.0.0, so the server must be Real
 later. Upgrade a self-hosted Realtime before you upgrade the SDK.
 
 The v1 API is removed. See [the RealtimeV2 migration guide](../RealtimeV2%20Migration%20Guide.md)
-to move from v1 to `RealtimeClientV2`.
+to move from v1 to the v2 API first, then apply this guide.
+
+## `RealtimeClient` and `RealtimeChannel` are actors
+
+Both types are now actors that share one executor. Most calls need `await`, including
+`channel(_:options:)` on the client and on `SupabaseClient`, and the stream methods on a
+channel. `statusSnapshot` and `statusChanges` do not need `await`.
+
+```swift
+// v2
+let channel = supabase.channel("room")
+let messages = channel.broadcastStream(event: "message")
+try await channel.subscribeWithError()
+// v3
+let channel = await supabase.channel("room")
+let messages = await channel.broadcasts(event: "message")
+try await channel.subscribe()
+```
+
+`connect()` now throws when the socket cannot be opened, and `disconnect()` is `async`.
+
+## Streams replace callbacks
+
+The `on*` callback methods and `RealtimeSubscription` tokens are removed. Read the matching
+`AsyncStream` instead. Cancel the task that reads it to stop listening. Removing the channel
+ends every stream.
+
+```swift
+// v2
+let subscription = channel.onBroadcast(event: "message") { payload in
+  print(payload)
+}
+defer { subscription.cancel() }
+// v3
+let task = Task {
+  for await payload in await channel.broadcasts(event: "message") {
+    print(payload)
+  }
+}
+defer { task.cancel() }
+```
+
+Open `postgresChanges` and `presenceChanges` streams before `subscribe()`. They shape the join
+request. Opening one after the join reports an issue and returns an empty stream. Presence is
+sent to the server only when a `presenceChanges()` stream is open.
+
+## Pushes return a `PushHandle`
+
+`broadcast(event:message:)`, `broadcast(event:data:)`, `track(_:)` and `untrack()` return a
+`PushHandle`. Ignore it to keep the fire-and-forget behavior. Call it to wait for the server
+reply when `acknowledgeBroadcasts` is on.
+
+```swift
+// v2
+try await channel.broadcast(event: "ping", message: ["n": 1])
+// v3
+let push = try await channel.broadcast(event: "ping", message: ["n": 1])
+let status = try await push()  // .ok, or throws RealtimeError
+```
+
+A WebSocket `broadcast` on a channel that is not subscribed no longer falls back to the REST
+endpoint. Its handle fails with `kind == .notSubscribed`. Use `httpSend` to broadcast without a
+subscription.
 
 ## Intervals are `Duration`
 

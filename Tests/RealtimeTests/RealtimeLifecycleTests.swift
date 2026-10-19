@@ -23,17 +23,17 @@ import Testing
     let apiKey = "publishable.api.key"
 
     let http: RecordingTransport
-    let testClock: TestClock<Duration>
+    let testClock: SignalingTestClock
     let servers: LockIsolated<[FakeWebSocket]>
 
     init() {
       http = RecordingTransport()
-      testClock = TestClock()
+      testClock = SignalingTestClock()
       servers = LockIsolated([])
     }
 
-    private func makeClient(handleAppLifecycle: Bool = false) -> RealtimeClientV2 {
-      RealtimeClientV2(
+    private func makeClient(handleAppLifecycle: Bool = false) -> RealtimeClient {
+      RealtimeClient(
         url: url,
         options: RealtimeClientOptions(
           headers: ["apikey": apiKey],
@@ -84,80 +84,92 @@ import Testing
     @Test
     func handleAppForegroundWhileConnectedIsNoOp() async throws {
       let sut = makeClient()
-      let channel = sut.channel("public:messages")
-      try await channel.subscribeWithError()
+      let channel = await sut.channel("public:messages")
+      try await channel.subscribe()
 
-      let statusBefore = sut.status
-      let channelStatusBefore = channel.status
+      let statusBefore = await sut.status
+      let channelStatusBefore = await channel.status
 
-      sut.handleAppBackground()
+      await sut.handleAppBackground()
       await sut.handleAppForeground()
 
-      #expect(sut.status == statusBefore)
-      #expect(channel.status == channelStatusBefore)
+      #expect(await sut.status == statusBefore)
+      #expect(await channel.status == channelStatusBefore)
     }
 
     @Test
     func handleAppForegroundWithoutPriorBackgroundIsNoOp() async {
       let sut = makeClient()
-      #expect(sut.status == .disconnected)
+      #expect(await sut.status == .disconnected)
 
       await sut.handleAppForeground()
-      #expect(sut.status == .disconnected)
+      #expect(await sut.status == .disconnected)
     }
 
     @Test
     func handleAppForegroundDoesNotConnectIfNotConnectedBeforeBackground() async {
       let sut = makeClient()
-      #expect(sut.status == .disconnected)
+      #expect(await sut.status == .disconnected)
 
-      sut.handleAppBackground()
+      await sut.handleAppBackground()
       await sut.handleAppForeground()
-      #expect(sut.status == .disconnected)
+      #expect(await sut.status == .disconnected)
     }
 
     @Test
     func handleAppForegroundReconnectsWhenBackgroundedWhileConnected() async throws {
       let sut = makeClient()
-      await sut.connect()
-      #expect(sut.status == .connected)
+      try await sut.connect()
+      #expect(await sut.status == .connected)
 
-      sut.handleAppBackground()
-      let statusUpdates = sut.statusChange
+      await sut.handleAppBackground()
+      // Open the stream before the OS close so no transition is missed.
+      let statusUpdates = sut.statusChanges
       servers.value.last?.close(code: nil, reason: "OS teardown")
-      _ = await statusUpdates.first { $0 == .disconnected }
+      // Status sequence: .connected → .connecting (reconnecting). `RealtimeClient` no longer
+      // publishes an intermediate `.disconnected` when it starts reconnecting.
+      _ = await statusUpdates.first { $0 == .connecting }
 
+      // auto-reconnect task wakes and reconnects.
       await testClock.advance(by: .seconds(8))
       _ = await statusUpdates.first { $0 == .connected }
-      #expect(sut.status == .connected)
+      #expect(await sut.status == .connected)
 
+      // the connection and rejoins channels itself.
       await sut.handleAppForeground()
-      #expect(sut.status == .connected)
+      #expect(await sut.status == .connected)
     }
 
     @Test
     func handleAppForegroundResubscribesChannelsWhenBackgroundedWhileConnected() async throws {
       let sut = makeClient()
-      let channel = sut.channel("public:messages")
-      try await channel.subscribeWithError()
-      #expect(sut.status == .connected)
-      #expect(channel.status == .subscribed)
+      let channel = await sut.channel("public:messages")
+      try await channel.subscribe()
+      #expect(await sut.status == .connected)
+      #expect(await channel.status == .subscribed)
 
-      sut.handleAppBackground()
-      let statusUpdates = sut.statusChange
+      await sut.handleAppBackground()
+      let statusUpdates = sut.statusChanges
+      let channelUpdates = channel.statusChanges
       servers.value.last?.close(code: nil, reason: "OS teardown")
-      _ = await statusUpdates.first { $0 == .disconnected }
+      // `RealtimeClient` goes straight to `.connecting` while it reconnects; there is no
+      // intermediate `.disconnected` any more.
+      _ = await statusUpdates.first { $0 == .connecting }
 
       await testClock.advance(by: .seconds(8))
       _ = await statusUpdates.first { $0 == .connected }
-      #expect(sut.status == .connected)
+      #expect(await sut.status == .connected)
 
-      await waitUntil(timeout: 5) { channel.status == .subscribed }
-      #expect(channel.status == .subscribed)
+      // rejoinChannels() runs after the reconnect: it resets the channel and joins again on
+      // the new socket. Wait for that new join to complete rather than for a `.subscribed`
+      // that the stale pre-reconnect state could still satisfy.
+      _ = await channelUpdates.first { $0 == .subscribing }
+      _ = await channelUpdates.first { $0 == .subscribed }
+      #expect(await channel.status == .subscribed)
 
       await sut.handleAppForeground()
-      #expect(sut.status == .connected)
-      #expect(channel.status == .subscribed)
+      #expect(await sut.status == .connected)
+      #expect(await channel.status == .subscribed)
     }
 
     @Test
@@ -165,7 +177,7 @@ import Testing
       let connectionCount = LockIsolated(0)
       let rejoinJoinTopics = LockIsolated<Set<String>>([])
 
-      let sut = RealtimeClientV2(
+      let sut = RealtimeClient(
         url: url,
         options: RealtimeClientOptions(
           headers: ["apikey": apiKey],
@@ -217,16 +229,17 @@ import Testing
         clock: testClock
       )
 
-      let channelA = sut.channel("topic-a")
-      let channelB = sut.channel("topic-b")
-      try await channelA.subscribeWithError()
-      try await channelB.subscribeWithError()
-      #expect(channelA.status == .subscribed)
-      #expect(channelB.status == .subscribed)
+      let channelA = await sut.channel("topic-a")
+      let channelB = await sut.channel("topic-b")
+      try await channelA.subscribe()
+      try await channelB.subscribe()
+      #expect(await channelA.status == .subscribed)
+      #expect(await channelB.status == .subscribed)
 
-      let statusUpdates = sut.statusChange
+      let statusUpdates = sut.statusChanges
       servers.value.last?.close(code: nil, reason: "OS teardown")
-      _ = await statusUpdates.first { $0 == .disconnected }
+      // No intermediate `.disconnected`: the client goes straight to `.connecting`.
+      _ = await statusUpdates.first { $0 == .connecting }
 
       await testClock.advance(by: .seconds(8))
       _ = await statusUpdates.first { $0 == .connected }
@@ -235,71 +248,71 @@ import Testing
 
       #expect(rejoinJoinTopics.value == ["realtime:topic-a", "realtime:topic-b"])
 
-      sut.disconnect()
+      await sut.disconnect()
     }
 
     @Test
     func explicitDisconnectWhileBackgroundedDoesNotReconnectOnForeground() async throws {
       let sut = makeClient()
-      await sut.connect()
-      #expect(sut.status == .connected)
+      try await sut.connect()
+      #expect(await sut.status == .connected)
 
-      sut.handleAppBackground()
-      sut.disconnect()
-      #expect(sut.status == .disconnected)
+      await sut.handleAppBackground()
+      await sut.disconnect()
+      #expect(await sut.status == .disconnected)
 
       await sut.handleAppForeground()
-      #expect(sut.status == .disconnected)
+      #expect(await sut.status == .disconnected)
     }
 
     @Test
     func heartbeatTaskDoesNotRetainClient() async throws {
       final class WeakBox: @unchecked Sendable {
-        weak var client: RealtimeClientV2?
+        weak var client: RealtimeClient?
       }
       let box = WeakBox()
 
-      func scope() async {
+      func scope() async throws {
         let sut = makeClient()
         box.client = sut
-        await sut.connect()
-        #expect(sut.status == .connected)
+        try await sut.connect()
+        #expect(await sut.status == .connected)
 
         await testClock.advance(by: .seconds(30))
 
         servers.value.last?.close(code: 4001, reason: "test teardown")
       }
-      await scope()
+      try await scope()
 
       await waitUntil(timeout: 5) { box.client == nil }
 
       #expect(
         box.client == nil,
-        "RealtimeClientV2 leaked: the heartbeat task retained self, preventing deinit."
+        "RealtimeClient leaked: the heartbeat task retained self, preventing deinit."
       )
     }
 
     @Test
     func deinitClosesLiveWebSocketConnection() async throws {
       final class WeakBox: @unchecked Sendable {
-        weak var client: RealtimeClientV2?
+        weak var client: RealtimeClient?
       }
       let box = WeakBox()
 
-      func scope() async {
+      func scope() async throws {
         let sut = makeClient()
         box.client = sut
-        await sut.connect()
-        #expect(sut.status == .connected)
+        try await sut.connect()
+        #expect(await sut.status == .connected)
       }
-      await scope()
+      try await scope()
 
       let server = try #require(servers.value.last)
       await waitUntil(timeout: 5) { box.client == nil && server.isClosed }
 
       #expect(
         box.client == nil,
-        "RealtimeClientV2 leaked: a task retained self while connected, preventing deinit."
+        "RealtimeClient leaked: a task retained self while connected, preventing deinit."
       )
       #expect(
         server.isClosed,
@@ -308,42 +321,16 @@ import Testing
     }
 
     @Test
-    func connectionManagerDeinitClosesLiveWebSocketConnection() async throws {
-      let (client, server) = FakeWebSocket.fakes()
-
-      func scope() async throws {
-        let sut = ConnectionManager(
-          transport: { _, _ in client },
-          url: URL(string: "ws://localhost")!,
-          headers: [:],
-          reconnectDelay: .milliseconds(100),
-          logger: supabaseDefaultLogger(label: "io.supabase.realtime"),
-          clock: testClock
-        )
-        try await sut.connect()
-        #expect(client.isClosed == false)
-      }
-      try await scope()
-
-      await waitUntil(timeout: 5) { server.isClosed }
-
-      #expect(
-        server.isClosed,
-        "WebSocket was left open after the connected ConnectionManager was deallocated."
-      )
-    }
-
-    @Test
     func handleAppLifecycleFalseDoesNotInstallLifecycleManager() {
       let sut = makeClient(handleAppLifecycle: false)
-      #expect(sut.mutableState.lifecycleManager == nil)
+      #expect(sut.lifecycleManager == nil)
     }
 
     #if os(iOS) || os(tvOS) || os(visionOS) || os(macOS)
       @Test
       func handleAppLifecycleTrueInstallsLifecycleManager() {
         let sut = makeClient(handleAppLifecycle: true)
-        #expect(sut.mutableState.lifecycleManager != nil)
+        #expect(sut.lifecycleManager != nil)
         _ = sut
       }
     #endif

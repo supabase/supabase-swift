@@ -232,6 +232,16 @@ supporting_symbols:
   - AuthMFARecoveryCodesGenerateResponse.friendlyName
   - AuthMFARecoveryCodesGenerateResponse.total
   - AuthMFARecoveryCodesGenerateResponse.codes
+  # RealtimeClient and RealtimeChannel are the actors every realtime.* capability
+  # hangs off; their executors and identity properties are not a capability of their own.
+  - SupabaseClient.realtime
+  - RealtimeClient
+  - RealtimeClient.init
+  - RealtimeClient.unownedExecutor
+  - RealtimeChannel
+  - RealtimeChannel.topic
+  - RealtimeChannel.config
+  - RealtimeChannel.unownedExecutor
   # RealtimeError (SDK-1788) is thrown by every realtime.* capability rather
   # than owned by one.
   - RealtimeError
@@ -1306,85 +1316,99 @@ features:
   realtime.client.connect:
     status: implemented
     symbols:
-      - RealtimeClientV2.connect
+      - RealtimeClient.connect
   realtime.client.disconnect:
     status: implemented
     symbols:
-      - RealtimeClientV2.disconnect
+      - RealtimeClient.disconnect
   realtime.client.get_channels:
     status: implemented
     symbols:
-      - RealtimeClientV2.channels
+      - RealtimeClient.channels
   realtime.client.remove_channel:
     status: implemented
     symbols:
-      - RealtimeClientV2.removeChannel
+      - RealtimeClient.removeChannel
   realtime.client.remove_all_channels:
     status: implemented
     symbols:
-      - RealtimeClientV2.removeAllChannels
+      - RealtimeClient.removeAllChannels
   realtime.client.connection_state:
     status: implemented
     symbols:
-      - RealtimeClientV2.status
+      - RealtimeClient.status
     supporting_symbols:
+      - RealtimeClient.statusSnapshot
+      - RealtimeClient.statusChanges
       - RealtimeClientStatus.init
       - RealtimeClientStatus.rawValue
   realtime.client.listen_heartbeats:
     status: implemented
     symbols:
-      - RealtimeClientV2.onHeartbeat
+      - RealtimeClient.heartbeats
     supporting_symbols:
       - HeartbeatStatus.init
       - HeartbeatStatus.rawValue
   realtime.client.set_auth_token:
     status: implemented
     symbols:
-      - RealtimeClientV2.setAuth
+      - RealtimeClient.setAuth
   realtime.client.channel:
     status: implemented
     symbols:
-      - RealtimeClientV2.channel
+      - RealtimeClient.channel
 
   realtime.channel.subscribe:
     status: implemented
     symbols:
-      - RealtimeChannelV2.subscribeWithError
+      - RealtimeChannel.subscribe
     supporting_symbols:
+      - RealtimeChannel.status
+      - RealtimeChannel.statusSnapshot
+      - RealtimeChannel.statusChanges
       - RealtimeChannelStatus.init
       - RealtimeChannelStatus.rawValue
   realtime.channel.unsubscribe:
     status: implemented
     symbols:
-      - RealtimeChannelV2.unsubscribe
+      - RealtimeChannel.unsubscribe
   realtime.channel.broadcast:
     status: implemented
     symbols:
-      - RealtimeChannelV2.broadcast
+      - RealtimeChannel.broadcast
     supporting_symbols:
+      - RealtimeClient.push
+      - PushHandle
+      - PushHandle.isRunning
+      - PushHandle.error
+      - PushHandle.cancel
+      - PushHandle.callAsFunction
       - PushStatus.init
       - PushStatus.rawValue
   realtime.channel.broadcast_http:
     status: implemented
     symbols:
-      - RealtimeChannelV2.httpSend
+      - RealtimeChannel.httpSend
 
   realtime.subscriptions.broadcast:
     status: implemented
     symbols:
       - BroadcastJoinConfig.replicationReady
+      - RealtimeChannel.broadcasts
+      - RealtimeChannel.broadcastData
     supporting_symbols:
+      - RealtimeChannel.systemMessages
       - RealtimeMessageV2.eventType
       - RealtimeMessageV2.EventType.init
       - RealtimeMessageV2.EventType.rawValue
   realtime.subscriptions.postgres_changes:
     status: implemented
     symbols:
-      - RealtimeChannelV2.onPostgresChange
+      - RealtimeChannel.postgresChanges
   realtime.subscriptions.subscribe_presence:
     status: implemented
     symbols:
-      - RealtimeChannelV2.onPresenceChange
+      - RealtimeChannel.presenceChanges
   realtime.subscriptions.postgres_changes_filter:
     status: implemented
     symbols:
@@ -1425,11 +1449,11 @@ features:
   realtime.presence.track:
     status: implemented
     symbols:
-      - RealtimeChannelV2.track
+      - RealtimeChannel.track
   realtime.presence.untrack:
     status: implemented
     symbols:
-      - RealtimeChannelV2.untrack
+      - RealtimeChannel.untrack
   realtime.presence.presence_state: not_implemented
   realtime.presence.presence_key:
     status: implemented
@@ -1443,7 +1467,7 @@ features:
   realtime.configuration.custom_websocket_transport: not_applicable
   realtime.configuration.reconnect_backoff:
     status: partially_implemented
-    note: "RealtimeClientOptions.reconnectDelay configures a fixed base delay; there is no hook to supply a custom attempt-count-to-delay function — the backoff curve itself (ConnectionManager.reconnectBackoff, built on RetryPolicy's equal-jitter exponential) is hardcoded."
+    note: "RealtimeClientOptions.reconnectDelay configures a fixed base delay; there is no hook to supply a custom attempt-count-to-delay function — the backoff curve itself (RealtimeClient.reconnectBackoff, built on RetryPolicy's equal-jitter exponential) is hardcoded."
   realtime.configuration.heartbeat_interval:
     status: implemented
     note: "Set via the heartbeatInterval parameter of RealtimeClientOptions.init; the backing stored property is internal, not public."

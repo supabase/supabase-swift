@@ -14,7 +14,7 @@ public import Logging
   public import FoundationNetworking
 #endif
 
-/// Options for initializing ``RealtimeClientV2``.
+/// Options for initializing ``RealtimeClient``.
 ///
 /// Use this struct to customize the behavior of the Realtime client, including connection
 /// timing, authentication, and app lifecycle handling.
@@ -24,7 +24,7 @@ public import Logging
 ///   heartbeatInterval: .seconds(30),
 ///   handleAppLifecycle: true
 /// )
-/// let client = RealtimeClientV2(url: realtimeURL, options: options)
+/// let client = RealtimeClient(url: realtimeURL, options: options)
 /// ```
 ///
 /// ## Topics
@@ -59,8 +59,8 @@ public struct RealtimeClientOptions: Sendable {
   /// disconnect on backgrounding; short background/foreground cycles keep the
   /// connection alive without churn.
   ///
-  /// Disable this to manage the connection yourself with ``RealtimeClientV2/connect()`` and
-  /// ``RealtimeClientV2/disconnect(code:reason:)``.
+  /// Disable this to manage the connection yourself with ``RealtimeClient/connect()`` and
+  /// ``RealtimeClient/disconnect(code:reason:)``.
   ///
   /// Default: `true` on iOS, macOS, tvOS, and visionOS. `false` on other platforms
   /// (including watchOS and Linux), where lifecycle observation is not supported.
@@ -136,7 +136,7 @@ public struct RealtimeClientOptions: Sendable {
   ///   - reconnectDelay: Base delay for reconnecting after a disconnection. The first attempt waits a random duration between half of this and this; later attempts double the range (capped at 30s) until reconnected. Defaults to ``defaultReconnectDelay``.
   ///   - timeout: Maximum time to wait for a server reply. Defaults to ``defaultTimeout``.
   ///   - disconnectOnSessionLoss: Whether to disconnect the channel when the authentication session is lost. Defaults to ``defaultDisconnectOnSessionLoss``.
-  ///   - connectOnSubscribe: Whether to automatically call ``RealtimeClientV2/connect()`` when subscribing to a channel. Defaults to ``defaultConnectOnSubscribe``.
+  ///   - connectOnSubscribe: Whether to automatically call ``RealtimeClient/connect()`` when subscribing to a channel. Defaults to ``defaultConnectOnSubscribe``.
   ///   - maxRetryAttempts: Maximum number of subscribe retry attempts. Defaults to ``defaultMaxRetryAttempts``.
   ///   - disconnectOnEmptyChannelsAfter: How long to wait before disconnecting when all channels are removed. Defaults to ``defaultDisconnectOnEmptyChannelsAfter``.
   ///   - logLevel: Optional log level for Realtime log output.
@@ -189,21 +189,7 @@ public struct RealtimeClientOptions: Sendable {
   }
 }
 
-/// A token that represents a Realtime subscription and cancels it on deallocation.
-///
-/// Store the returned token from subscription methods (e.g. ``RealtimeChannelV2/onBroadcast(event:callback:)``)
-/// to keep the subscription alive. When the token is deallocated or ``ObservationToken/cancel()``
-/// is called, the underlying callback is removed.
-///
-/// ```swift
-/// let subscription = channel.onBroadcast(event: "message") { payload in
-///   print(payload)
-/// }
-/// defer { subscription.cancel() }
-/// ```
-public typealias RealtimeSubscription = ObservationToken
-
-/// Describes the subscription state of a ``RealtimeChannelV2``.
+/// Describes the subscription state of a ``RealtimeChannel``.
 ///
 /// ## Topics
 /// ### States
@@ -239,7 +225,7 @@ public struct RealtimeChannelStatus: RawRepresentable, Hashable, Sendable,
   public static let unsubscribing: RealtimeChannelStatus = "unsubscribing"
 }
 
-/// Describes the connection state of a ``RealtimeClientV2``.
+/// Describes the connection state of a ``RealtimeClient``.
 ///
 /// ## Topics
 /// ### States
@@ -276,7 +262,7 @@ public struct RealtimeClientStatus: RawRepresentable, Hashable, Sendable,
 /// Describes the result of a heartbeat cycle.
 ///
 /// The Realtime client sends periodic heartbeat messages to keep the WebSocket
-/// connection alive. Use ``RealtimeClientV2/heartbeat`` or ``RealtimeClientV2/onHeartbeat(_:)``
+/// connection alive. Use ``RealtimeClient/heartbeats``
 /// to observe heartbeat status changes.
 ///
 /// ## Topics

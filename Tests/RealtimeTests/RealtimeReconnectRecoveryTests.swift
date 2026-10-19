@@ -20,12 +20,13 @@ struct RealtimeReconnectRecoveryTests {
     )
   }
 
+  /// stale latch could bite. Now `RealtimeClient` keeps retrying with
   @Test
   func subscribeConvergesAfterFailedAutoReconnect() async throws {
     let sockets = LockIsolated<[AsyncFakeWebSocket]>([])
     let connectAttempts = LockIsolated(0)
 
-    let sut = RealtimeClientV2(
+    let sut = RealtimeClient(
       url: url,
       options: makeOptions(),
       wsTransport: { _, _ in
@@ -44,25 +45,30 @@ struct RealtimeReconnectRecoveryTests {
       http: HTTPClient(transport: RecordingTransport()),
       clock: ContinuousClock()
     )
-    defer { sut.disconnect() }
 
-    let channel = sut.channel("room-1")
-    try await channel.subscribeWithError()
-    #expect(channel.status == .subscribed)
+    let channel = await sut.channel("room-1")
+    try await channel.subscribe()
+    #expect(await channel.status == .subscribed)
 
-    sockets.value[0].receiveFromServer(.text("not a valid frame"))
+    // Outage: the socket drops and the first auto-reconnect attempt fails. A remote close with a
+    // transport-level code triggers the reconnect; `RealtimeClient` now only logs a malformed
+    // frame, so it can no longer stand in for the outage.
+    sockets.value[0].receiveFromServer(.close(code: 1006, reason: "network down"))
 
     let recovered = await waitUntil(timeout: 5) {
-      connectAttempts.value >= 3 && sut.status == .connected && channel.status == .subscribed
+      connectAttempts.value >= 3 && sut.statusSnapshot == .connected
+        && channel.statusSnapshot == .subscribed
     }
     #expect(recovered, "Client did not recover automatically after a failed auto-reconnect attempt")
+
+    await sut.disconnect()
   }
 
   @Test
   func stalePhxCloseDoesNotKillCurrentSubscription() async throws {
     let sockets = LockIsolated<[AsyncFakeWebSocket]>([])
 
-    let sut = RealtimeClientV2(
+    let sut = RealtimeClient(
       url: url,
       options: makeOptions(),
       wsTransport: { _, _ in
@@ -74,11 +80,10 @@ struct RealtimeReconnectRecoveryTests {
       http: HTTPClient(transport: RecordingTransport()),
       clock: ContinuousClock()
     )
-    defer { sut.disconnect() }
 
-    let channel = sut.channel("room-close")
-    try await channel.subscribeWithError()
-    #expect(channel.status == .subscribed)
+    let channel = await sut.channel("room-close")
+    try await channel.subscribe()
+    #expect(await channel.status == .subscribed)
 
     let socket = sockets.value[0]
     let joinRef = socket.sentMessages.first { $0.event == "phx_join" }?.ref
@@ -95,8 +100,8 @@ struct RealtimeReconnectRecoveryTests {
     )
 
     try? await Task.sleep(nanoseconds: 300_000_000)
-    #expect(channel.status == .subscribed, "Stale phx_close killed the current subscription")
-    #expect(sut.channels[channel.topic] != nil, "Stale phx_close removed the channel")
+    #expect(await channel.status == .subscribed, "Stale phx_close killed the current subscription")
+    #expect(await sut.channels[channel.topic] != nil, "Stale phx_close removed the channel")
 
     socket.reply(
       RealtimeMessageV2(
@@ -107,15 +112,17 @@ struct RealtimeReconnectRecoveryTests {
         payload: [:]
       )
     )
-    await waitUntil(timeout: 2) { channel.status == .unsubscribed }
-    #expect(channel.status == .unsubscribed)
+    await waitUntil(timeout: 2) { channel.statusSnapshot == .unsubscribed }
+    #expect(await channel.status == .unsubscribed)
+
+    await sut.disconnect()
   }
 
   @Test
   func stalePhxErrorDoesNotKillCurrentSubscription() async throws {
     let sockets = LockIsolated<[AsyncFakeWebSocket]>([])
 
-    let sut = RealtimeClientV2(
+    let sut = RealtimeClient(
       url: url,
       options: makeOptions(),
       wsTransport: { _, _ in
@@ -127,11 +134,10 @@ struct RealtimeReconnectRecoveryTests {
       http: HTTPClient(transport: RecordingTransport()),
       clock: ContinuousClock()
     )
-    defer { sut.disconnect() }
 
-    let channel = sut.channel("room-error")
-    try await channel.subscribeWithError()
-    #expect(channel.status == .subscribed)
+    let channel = await sut.channel("room-error")
+    try await channel.subscribe()
+    #expect(await channel.status == .subscribed)
 
     let socket = sockets.value[0]
     socket.reply(
@@ -145,7 +151,7 @@ struct RealtimeReconnectRecoveryTests {
     )
 
     try? await Task.sleep(nanoseconds: 300_000_000)
-    #expect(channel.status == .subscribed, "Stale phx_error killed the current subscription")
+    #expect(await channel.status == .subscribed, "Stale phx_error killed the current subscription")
 
     socket.reply(
       RealtimeMessageV2(
@@ -156,15 +162,17 @@ struct RealtimeReconnectRecoveryTests {
         payload: [:]
       )
     )
-    await waitUntil(timeout: 2) { channel.status == .unsubscribed }
-    #expect(channel.status == .unsubscribed)
+    await waitUntil(timeout: 2) { channel.statusSnapshot == .unsubscribed }
+    #expect(await channel.status == .unsubscribed)
+
+    await sut.disconnect()
   }
 
   @Test
   func unsubscribeOnDeadSocketSkipsLeaveAndDoesNotStall() async throws {
     let sockets = LockIsolated<[AsyncFakeWebSocket]>([])
 
-    let sut = RealtimeClientV2(
+    let sut = RealtimeClient(
       url: url,
       options: makeOptions(timeout: .seconds(3)),
       wsTransport: { _, _ in
@@ -176,16 +184,15 @@ struct RealtimeReconnectRecoveryTests {
       http: HTTPClient(transport: RecordingTransport()),
       clock: ContinuousClock()
     )
-    defer { sut.disconnect() }
 
-    let channel = sut.channel("room-leave")
-    try await channel.subscribeWithError()
-    #expect(channel.status == .subscribed)
+    let channel = await sut.channel("room-leave")
+    try await channel.subscribe()
+    #expect(await channel.status == .subscribed)
 
     sockets.value[0].receiveFromServer(.close(code: 4001, reason: "auth"))
-    await waitUntil(timeout: 2) { sut.status == .disconnected }
-    #expect(sut.status == .disconnected)
-    #expect(channel.status == .subscribed)
+    await waitUntil(timeout: 2) { sut.statusSnapshot == .disconnected }
+    #expect(await sut.status == .disconnected)
+    #expect(await channel.status == .subscribed)
 
     let start = ContinuousClock.now
     await sut.removeChannel(channel)
@@ -194,13 +201,15 @@ struct RealtimeReconnectRecoveryTests {
       elapsed < .seconds(1.5),
       "removeChannel on a dead socket stalled waiting for phx_close (\(elapsed))"
     )
-    #expect(channel.status == .unsubscribed)
+    #expect(await channel.status == .unsubscribed)
 
-    await sut.connect()
-    #expect(sut.status == .connected)
+    try await sut.connect()
+    #expect(await sut.status == .connected)
     try? await Task.sleep(nanoseconds: 200_000_000)
 
     let leaves = sockets.value[1].sentMessages.filter { $0.event == "phx_leave" }
     #expect(leaves.isEmpty, "Stale phx_leave was flushed into the new connection")
+
+    await sut.disconnect()
   }
 }

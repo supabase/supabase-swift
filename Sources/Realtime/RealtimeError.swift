@@ -18,7 +18,7 @@ public import Helpers
 ///
 /// ```swift
 /// do {
-///   try await channel.subscribeWithError()
+///   try await channel.subscribe()
 /// } catch let error as RealtimeError where error.kind == .unauthorized {
 ///   signInAgain()
 /// }

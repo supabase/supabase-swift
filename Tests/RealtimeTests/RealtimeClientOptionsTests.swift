@@ -12,7 +12,7 @@ import Testing
 struct RealtimeClientOptionsTests {
   @Test
   func initializesWithoutAnAPIKeyInsteadOfTrapping() {
-    let client = RealtimeClientV2(
+    let client = RealtimeClient(
       url: URL(string: "https://project-ref.supabase.co/realtime/v1")!,
       options: RealtimeClientOptions(headers: [:])
     )

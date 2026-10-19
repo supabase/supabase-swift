@@ -5,15 +5,26 @@ import Foundation
 import InlineSnapshotTesting
 import TestHelpers
 import Testing
-
 @testable import Realtime
-
 #if canImport(FoundationNetworking)
   import FoundationNetworking
 #endif
 
 #if os(Linux)
 #else
+
+  /// Appends every element of `stream` to the returned box until the returned task is cancelled.
+  private func collect<Element: Sendable>(
+    _ stream: AsyncStream<Element>
+  ) -> (values: LockIsolated<[Element]>, task: Task<Void, Never>) {
+    let values = LockIsolated<[Element]>([])
+    let task = Task {
+      for await element in stream {
+        values.withValue { $0.append(element) }
+      }
+    }
+    return (values, task)
+  }
 
   @Suite(.serialized, .mainSerialExecutorSerialized)
   final class RealtimeTests: Sendable {
@@ -23,8 +34,8 @@ import Testing
     let server: FakeWebSocket
     let client: FakeWebSocket
     let http: RecordingTransport
-    let sut: RealtimeClientV2
-    let testClock: TestClock<Duration>
+    let sut: RealtimeClient
+    let testClock: SignalingTestClock
 
     let heartbeatInterval = RealtimeClientOptions.defaultHeartbeatInterval
     let reconnectDelay = RealtimeClientOptions.defaultReconnectDelay
@@ -35,9 +46,9 @@ import Testing
       self.client = client
       self.server = server
       http = RecordingTransport()
-      testClock = TestClock()
+      testClock = SignalingTestClock()
 
-      sut = RealtimeClientV2(
+      sut = RealtimeClient(
         url: url,
         options: RealtimeClientOptions(
           headers: ["apikey": apiKey],
@@ -51,14 +62,10 @@ import Testing
       )
     }
 
-    deinit {
-      sut.disconnect()
-    }
-
     @Test
-    func transport() async {
-      await withMainSerialExecutor {
-        let client = RealtimeClientV2(
+    func transport() async throws {
+      try await withMainSerialExecutor {
+        let client = RealtimeClient(
           url: url,
           options: RealtimeClientOptions(
             headers: ["apikey": apiKey],
@@ -79,34 +86,21 @@ import Testing
           clock: testClock
         )
 
-        await client.connect()
+        try await client.connect()
       }
     }
 
     @Test
     func behavior() async throws {
       try await withMainSerialExecutor {
-        let channel = sut.channel("public:messages")
-        var subscriptions: Set<ObservationToken> = []
+        let channel = await sut.channel("public:messages")
 
-        channel.onPostgresChange(InsertAction.self, table: "messages") { _ in
-        }
-        .store(in: &subscriptions)
+        let inserts = await channel.postgresChanges(InsertAction.self, table: "messages")
+        let updates = await channel.postgresChanges(UpdateAction.self, table: "messages")
+        let deletes = await channel.postgresChanges(DeleteAction.self, table: "messages")
 
-        channel.onPostgresChange(UpdateAction.self, table: "messages") { _ in
-        }
-        .store(in: &subscriptions)
-
-        channel.onPostgresChange(DeleteAction.self, table: "messages") { _ in
-        }
-        .store(in: &subscriptions)
-
-        let socketStatuses = LockIsolated([RealtimeClientStatus]())
-
-        sut.onStatusChange { status in
-          socketStatuses.withValue { $0.append(status) }
-        }
-        .store(in: &subscriptions)
+        let socketStatuses = collect(sut.statusChanges)
+        defer { socketStatuses.task.cancel() }
 
         let serverTask = Task { @Sendable [server = server] in
           for await event in server.events {
@@ -128,30 +122,30 @@ import Testing
         }
         defer { serverTask.cancel() }
 
-        let channelStatuses = LockIsolated([RealtimeChannelStatus]())
-        channel.onStatusChange { status in
-          channelStatuses.withValue {
-            $0.append(status)
-          }
-        }
-        .store(in: &subscriptions)
+        let channelStatuses = collect(channel.statusChanges)
+        defer { channelStatuses.task.cancel() }
 
         do {
-          try await channel.subscribeWithError()
+          try await channel.subscribe()
         } catch {
           Issue.record("Expected .subscribed but got error: \(error)")
         }
-        #expect(channelStatuses.value == [.unsubscribed, .subscribing, .subscribed])
+        // The postgres streams shape the join payload; keep them open until the join went out.
+        withExtendedLifetime((inserts, updates, deletes)) {}
 
+        await waitUntil { channelStatuses.values.value.count >= 3 }
+        #expect(channelStatuses.values.value == [.unsubscribed, .subscribing, .subscribed])
+
+        await waitUntil { socketStatuses.values.value.count >= 3 }
         #expect(
-          Array(socketStatuses.value.prefix(3))
+          Array(socketStatuses.values.value.prefix(3))
             == [.disconnected, .connecting, .connected]
         )
 
-        let messageTask = sut.mutableState.messageTask
+        let messageTask = await sut.messageTask
         #expect(messageTask != nil)
 
-        let heartbeatTask = sut.mutableState.heartbeatTask
+        let heartbeatTask = await sut.heartbeatTask
         #expect(heartbeatTask != nil)
 
         assertInlineSnapshot(of: client.sentEvents.map(\.json), as: .json) {
@@ -207,7 +201,7 @@ import Testing
     @Test(.requiresMainSerialExecutor)
     func subscribeTimeout() async throws {
       try await withMainSerialExecutor {
-        let channel = sut.channel("public:messages")
+        let channel = await sut.channel("public:messages")
         let joinEventCount = LockIsolated(0)
 
         let serverTask = Task { @Sendable [server = server] in
@@ -233,17 +227,19 @@ import Testing
         }
         defer { serverTask.cancel() }
 
-        await sut.connect()
+        try await sut.connect()
         await testClock.advance(by: heartbeatInterval)
 
         Task {
-          try await channel.subscribeWithError()
+          try await channel.subscribe()
         }
 
         await testClock.advance(by: timeout)
 
         await testClock.advance(by: .seconds(2.5))
 
+        // The heartbeat and the joins share one ref counter on `RealtimeClient`, so the
+        // heartbeat sent above takes ref "1" and the two joins take "2" and "3".
         let events: [JSONObject] = client.sentEvents.compactMap { $0.realtimeMessage }
           .filter { $0.event == "phx_join" }
           .map {
@@ -258,31 +254,6 @@ import Testing
         assertInlineSnapshot(of: events, as: .json) {
           #"""
           [
-            {
-              "event" : "phx_join",
-              "join_ref" : "1",
-              "payload" : {
-                "access_token" : "custom.access.token",
-                "config" : {
-                  "broadcast" : {
-                    "ack" : false,
-                    "replication_ready" : false,
-                    "self" : false
-                  },
-                  "postgres_changes" : [
-
-                  ],
-                  "presence" : {
-                    "enabled" : false,
-                    "key" : ""
-                  },
-                  "private" : false
-                },
-                "version" : "realtime-swift\/0.0.0"
-              },
-              "ref" : "1",
-              "topic" : "realtime:public:messages"
-            },
             {
               "event" : "phx_join",
               "join_ref" : "2",
@@ -307,6 +278,31 @@ import Testing
               },
               "ref" : "2",
               "topic" : "realtime:public:messages"
+            },
+            {
+              "event" : "phx_join",
+              "join_ref" : "3",
+              "payload" : {
+                "access_token" : "custom.access.token",
+                "config" : {
+                  "broadcast" : {
+                    "ack" : false,
+                    "replication_ready" : false,
+                    "self" : false
+                  },
+                  "postgres_changes" : [
+
+                  ],
+                  "presence" : {
+                    "enabled" : false,
+                    "key" : ""
+                  },
+                  "private" : false
+                },
+                "version" : "realtime-swift\/0.0.0"
+              },
+              "ref" : "3",
+              "topic" : "realtime:public:messages"
             }
           ]
           """#
@@ -318,7 +314,7 @@ import Testing
     func subscribeTimeout_successAfterRetries() async throws {
       try await withMainSerialExecutor {
         let successAttempt = 3
-        let channel = sut.channel("public:messages")
+        let channel = await sut.channel("public:messages")
         let joinEventCount = LockIsolated(0)
 
         let serverTask = Task { @Sendable [server = server] in
@@ -344,11 +340,11 @@ import Testing
         }
         defer { serverTask.cancel() }
 
-        await sut.connect()
+        try await sut.connect()
         await testClock.advance(by: heartbeatInterval)
 
         let subscribeTask = Task {
-          _ = try? await channel.subscribeWithError()
+          _ = try? await channel.subscribe()
         }
 
         for attempt in 1..<successAttempt {
@@ -364,14 +360,14 @@ import Testing
         }
 
         #expect(events.count == successAttempt)
-        #expect(channel.status == .subscribed)
+        #expect(await channel.status == .subscribed)
       }
     }
 
     @Test(.requiresMainSerialExecutor)
     func subscribeTimeout_failsAfterMaxRetries() async throws {
       try await withMainSerialExecutor {
-        let channel = sut.channel("public:messages")
+        let channel = await sut.channel("public:messages")
         let joinEventCount = LockIsolated(0)
 
         let serverTask = Task { @Sendable [server = server] in
@@ -394,11 +390,11 @@ import Testing
         }
         defer { serverTask.cancel() }
 
-        await sut.connect()
+        try await sut.connect()
         await testClock.advance(by: heartbeatInterval)
 
         let subscribeTask = Task {
-          try await channel.subscribeWithError()
+          try await channel.subscribe()
         }
 
         for attempt in 1...5 {
@@ -420,14 +416,14 @@ import Testing
           $0.event == "phx_join"
         }
         #expect(events.count == 5)
-        #expect(channel.status == .unsubscribed)
+        #expect(await channel.status == .unsubscribed)
       }
     }
 
     @Test
     func subscribeTimeout_cancelsOnTaskCancel() async throws {
       try await withMainSerialExecutor {
-        let channel = sut.channel("public:messages")
+        let channel = await sut.channel("public:messages")
         let joinEventCount = LockIsolated(0)
 
         let serverTask = Task { @Sendable [server = server] in
@@ -450,11 +446,11 @@ import Testing
         }
         defer { serverTask.cancel() }
 
-        await sut.connect()
+        try await sut.connect()
         await testClock.advance(by: heartbeatInterval)
 
         let subscribeTask = Task {
-          try await channel.subscribeWithError()
+          try await channel.subscribe()
         }
 
         await testClock.advance(by: timeout)
@@ -474,7 +470,7 @@ import Testing
         }
 
         #expect(events.count == 1)
-        #expect(channel.status == .unsubscribed)
+        #expect(await channel.status == .unsubscribed)
       }
     }
 
@@ -505,22 +501,19 @@ import Testing
         }
         defer { serverTask.cancel() }
 
-        let heartbeatStatuses = LockIsolated<[HeartbeatStatus]>([])
-        let subscription = sut.onHeartbeat { status in
-          heartbeatStatuses.withValue {
-            $0.append(status)
-          }
-        }
-        defer { subscription.cancel() }
+        let heartbeatStatuses = collect(sut.heartbeats)
+        defer { heartbeatStatuses.task.cancel() }
 
-        await sut.connect()
+        try await sut.connect()
 
         await testClock.advance(by: heartbeatInterval * 2)
 
-        let sawTwoHeartbeats = await waitUntil(timeout: 30) { heartbeatCount.value >= 2 }
+        let sawTwoHeartbeats = await waitUntil(timeout: 30) {
+          heartbeatCount.value >= 2 && heartbeatStatuses.values.value.count >= 4
+        }
         #expect(sawTwoHeartbeats)
 
-        expectNoDifference(heartbeatStatuses.value, [.sent, .ok, .sent, .ok])
+        expectNoDifference(heartbeatStatuses.values.value, [.sent, .ok, .sent, .ok])
       }
     }
 
@@ -538,34 +531,31 @@ import Testing
         }
         defer { serverTask.cancel() }
 
-        let statuses = LockIsolated<[RealtimeClientStatus]>([])
-        let subscription = sut.onStatusChange { status in
-          statuses.withValue {
-            $0.append(status)
-          }
-        }
-        defer { subscription.cancel() }
+        let statuses = collect(sut.statusChanges)
+        defer { statuses.task.cancel() }
 
-        await sut.connect()
+        try await sut.connect()
         await testClock.advance(by: heartbeatInterval)
 
         let didSendHeartbeat = await waitUntil(timeout: 15) { sentHeartbeat.value }
         #expect(didSendHeartbeat)
 
-        let pendingHeartbeatRef = sut.mutableState.pendingHeartbeatRef
+        let pendingHeartbeatRef = await sut.pendingHeartbeatRef
         #expect(pendingHeartbeatRef != nil)
 
         await testClock.advance(by: heartbeatInterval)
 
         await testClock.advance(by: reconnectDelay)
 
+        await waitUntil(timeout: 5) { statuses.values.value.count >= 5 }
+        // A heartbeat timeout moves the client straight to `.connecting` while it reconnects:
+        // `RealtimeClient` no longer publishes an intermediate `.disconnected`.
         #expect(
-          statuses.value
+          statuses.values.value
             == [
               .disconnected,
               .connecting,
               .connected,
-              .disconnected,
               .connecting,
               .connected,
             ]
@@ -573,11 +563,13 @@ import Testing
       }
     }
 
+    /// `heartbeats` consumers — it's an internal bookkeeping signal, not a
+    /// heartbeat outcome.
     @Test
     func heartbeat_doesNotLeakDisconnectedStatus() async throws {
       try await withMainSerialExecutor {
         let (client, server) = FakeWebSocket.fakes()
-        let sut = RealtimeClientV2(
+        let sut = RealtimeClient(
           url: url,
           options: RealtimeClientOptions(
             headers: ["apikey": apiKey],
@@ -589,15 +581,11 @@ import Testing
           http: HTTPClient(transport: http),
           clock: testClock
         )
-        defer { sut.disconnect() }
 
-        let heartbeatStatuses = LockIsolated<[HeartbeatStatus]>([])
-        let subscription = sut.onHeartbeat { status in
-          heartbeatStatuses.withValue { $0.append(status) }
-        }
-        defer { subscription.cancel() }
+        let heartbeatStatuses = collect(sut.heartbeats)
+        defer { heartbeatStatuses.task.cancel() }
 
-        await sut.connect()
+        try await sut.connect()
 
         server.close(code: nil, reason: "boom")
         await Task.megaYield()
@@ -605,33 +593,32 @@ import Testing
         await testClock.advance(by: .seconds(1))
 
         #expect(
-          !heartbeatStatuses.value.contains(.disconnected),
-          "heartbeat status leaked .disconnected to consumers: \(heartbeatStatuses.value)"
+          !heartbeatStatuses.values.value.contains(.disconnected),
+          "heartbeat status leaked .disconnected to consumers: \(heartbeatStatuses.values.value)"
         )
+
+        await sut.disconnect()
       }
     }
 
     @Test
     func heartbeat_timeout() async throws {
       try await withMainSerialExecutor {
-        let heartbeatStatuses = LockIsolated<[HeartbeatStatus]>([])
-        let s1 = sut.onHeartbeat { status in
-          heartbeatStatuses.withValue {
-            $0.append(status)
-          }
-        }
-        defer { s1.cancel() }
+        let heartbeatStatuses = collect(sut.heartbeats)
+        defer { heartbeatStatuses.task.cancel() }
 
-        await sut.connect()
+        try await sut.connect()
         await testClock.advance(by: heartbeatInterval)
 
-        #expect(heartbeatStatuses.value == [.sent])
+        await waitUntil(timeout: 5) { !heartbeatStatuses.values.value.isEmpty }
+        #expect(heartbeatStatuses.values.value == [.sent])
 
         await testClock.advance(by: timeout)
 
         await testClock.advance(by: heartbeatInterval)
 
-        #expect(heartbeatStatuses.value == [.sent, .timeout])
+        await waitUntil(timeout: 5) { heartbeatStatuses.values.value.count >= 2 }
+        #expect(heartbeatStatuses.values.value == [.sent, .timeout])
       }
     }
 
@@ -659,21 +646,21 @@ import Testing
         }
         defer { serverTask.cancel() }
 
-        let heartbeatStatuses = LockIsolated<[HeartbeatStatus]>([])
-        let subscription = sut.onHeartbeat { status in
-          heartbeatStatuses.withValue { $0.append(status) }
-        }
-        defer { subscription.cancel() }
+        let heartbeatStatuses = collect(sut.heartbeats)
+        defer { heartbeatStatuses.task.cancel() }
 
-        await sut.connect()
+        try await sut.connect()
 
-        await sut.connect()
+        // A redundant connect() — the client is already `.connected`, so it is a
+        // no-op. The socket must keep receiving frames afterwards.
+        try await sut.connect()
         await Task.megaYield()
 
         await testClock.advance(by: heartbeatInterval)
         await Task.megaYield()
 
-        #expect(heartbeatStatuses.value == [.sent, .ok])
+        await waitUntil(timeout: 5) { heartbeatStatuses.values.value.count >= 2 }
+        #expect(heartbeatStatuses.values.value == [.sent, .ok])
       }
     }
 
@@ -681,14 +668,21 @@ import Testing
     func broadcastWithHTTP() async throws {
       try await withMainSerialExecutor {
         http.respond(when: { $0.url?.path.contains("/api/broadcast/") == true }) { _, _ in
-          (HTTPResponse(status: .init(code: 200)), "{}".data(using: .utf8)!)
+          (HTTPResponse(status: .init(code: 202)), "{}".data(using: .utf8)!)
         }
 
-        let channel = sut.channel("public:messages") {
+        let channel = await sut.channel("public:messages") {
           $0.broadcast.acknowledgeBroadcasts = true
         }
 
-        try await channel.broadcast(event: "test", message: ["value": 42])
+        // `broadcast` on a channel that is not subscribed no longer falls back to the REST
+        // endpoint: its handle fails with `.notSubscribed` and no request goes out. REST
+        // delivery is the explicit `httpSend`, which expects a 202.
+        let push = await channel.broadcast(event: "test", message: ["value": 42] as JSONObject)
+        #expect((push.error as? RealtimeError)?.kind == .notSubscribed)
+        #expect(http.requests.isEmpty)
+
+        try await channel.httpSend(event: "test", message: ["value": 42] as JSONObject)
 
         let request = try #require(http.requests.last)
         var urlRequest = try #require(URLRequest(httpRequest: request.head))
@@ -714,7 +708,7 @@ import Testing
           "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyLCJleHAiOjY0MDkyMjExMjAwfQ.GfiEKLl36X8YWcatHg31jRbilovlGecfUKnOyXMSX9c"
         await sut.setAuth(validToken)
 
-        #expect(sut.mutableState.accessToken == validToken)
+        #expect(await sut.accessToken == validToken)
       }
     }
 
@@ -731,7 +725,7 @@ import Testing
       await withMainSerialExecutor {
         struct FetchError: Error {}
 
-        let sut = RealtimeClientV2(
+        let sut = RealtimeClient(
           url: url,
           options: RealtimeClientOptions(
             headers: ["apikey": apiKey],
@@ -741,16 +735,16 @@ import Testing
           http: HTTPClient(transport: http),
           clock: testClock
         )
-        defer { sut.disconnect() }
 
         let validToken =
           "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyLCJleHAiOjY0MDkyMjExMjAwfQ.GfiEKLl36X8YWcatHg31jRbilovlGecfUKnOyXMSX9c"
         await sut.setAuth(validToken)
-        #expect(sut.mutableState.accessToken == validToken)
+        #expect(await sut.accessToken == validToken)
 
         await sut.setAuth()
 
-        #expect(sut.mutableState.accessToken == validToken)
+        #expect(await sut.accessToken == validToken)
+        await sut.disconnect()
       }
     }
 
@@ -763,7 +757,7 @@ import Testing
           "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyLCJleHAiOjY0MDkyMjExMjAwfQ.GfiEKLl36X8YWcatHg31jRbilovlGecfUKnOyXMSX9c"
         let shouldThrow = LockIsolated(false)
 
-        let sut = RealtimeClientV2(
+        let sut = RealtimeClient(
           url: url,
           options: RealtimeClientOptions(
             headers: ["apikey": apiKey],
@@ -776,7 +770,6 @@ import Testing
           http: HTTPClient(transport: http),
           clock: testClock
         )
-        defer { sut.disconnect() }
 
         let serverTask = Task { @Sendable [server = server] in
           for await event in server.events {
@@ -801,12 +794,12 @@ import Testing
         }
         defer { serverTask.cancel() }
 
-        await sut.connect()
+        try await sut.connect()
         await sut.setAuth(validToken)
-        #expect(sut.mutableState.accessToken == validToken)
+        #expect(await sut.accessToken == validToken)
 
-        let channel = sut.channel("room")
-        try await channel.subscribeWithError()
+        let channel = await sut.channel("room")
+        try await channel.subscribe()
 
         let sentBefore = client.sentEvents.count
         shouldThrow.setValue(true)
@@ -821,56 +814,58 @@ import Testing
           accessTokenPushes.isEmpty,
           "No access_token update should be pushed to channels when the token fetch fails"
         )
-        #expect(sut.mutableState.accessToken == validToken)
+        #expect(await sut.accessToken == validToken)
+
+        await sut.disconnect()
       }
     }
 
     @Test
-    func listenForMessagesCancelsExistingTask() async {
-      await withMainSerialExecutor {
-        await sut.connect()
+    func listenForMessagesCancelsExistingTask() async throws {
+      try await withMainSerialExecutor {
+        try await sut.connect()
 
-        let firstMessageTask = sut.mutableState.messageTask
+        let firstMessageTask = await sut.messageTask
         #expect(firstMessageTask != nil)
         #expect(!(firstMessageTask?.isCancelled ?? true))
 
-        sut.disconnect()
-        await sut.connect()
+        await sut.disconnect()
+        try await sut.connect()
 
         #expect(firstMessageTask?.isCancelled ?? false)
 
-        let secondMessageTask = sut.mutableState.messageTask
+        let secondMessageTask = await sut.messageTask
         #expect(secondMessageTask != nil)
         #expect(!(secondMessageTask?.isCancelled ?? true))
       }
     }
 
     @Test
-    func startHeartbeatingCancelsExistingTask() async {
-      await withMainSerialExecutor {
-        await sut.connect()
+    func startHeartbeatingCancelsExistingTask() async throws {
+      try await withMainSerialExecutor {
+        try await sut.connect()
 
-        let firstHeartbeatTask = sut.mutableState.heartbeatTask
+        let firstHeartbeatTask = await sut.heartbeatTask
         #expect(firstHeartbeatTask != nil)
         #expect(!(firstHeartbeatTask?.isCancelled ?? true))
 
-        sut.disconnect()
-        await sut.connect()
+        await sut.disconnect()
+        try await sut.connect()
 
         #expect(firstHeartbeatTask?.isCancelled ?? false)
 
-        let secondHeartbeatTask = sut.mutableState.heartbeatTask
+        let secondHeartbeatTask = await sut.heartbeatTask
         #expect(secondHeartbeatTask != nil)
         #expect(!(secondHeartbeatTask?.isCancelled ?? true))
       }
     }
 
     @Test
-    func messageProcessingRespectsCancellation() async {
-      await withMainSerialExecutor {
+    func messageProcessingRespectsCancellation() async throws {
+      try await withMainSerialExecutor {
         let messagesProcessed = LockIsolated(0)
 
-        await sut.connect()
+        try await sut.connect()
 
         for i in 1...3 {
           server.send(
@@ -887,7 +882,7 @@ import Testing
 
         await Task.megaYield()
 
-        sut.disconnect()
+        await sut.disconnect()
 
         for i in 4...6 {
           server.send(
@@ -903,30 +898,30 @@ import Testing
 
         await Task.megaYield()
 
-        #expect(sut.mutableState.messageTask == nil, "Message task should be nil after disconnect")
+        #expect(await sut.messageTask == nil, "Message task should be nil after disconnect")
       }
     }
 
     @Test
-    func multipleReconnectionsHandleTaskLifecycleCorrectly() async {
-      await withMainSerialExecutor {
+    func multipleReconnectionsHandleTaskLifecycleCorrectly() async throws {
+      try await withMainSerialExecutor {
         var previousMessageTasks: [Task<Void, Never>?] = []
         var previousHeartbeatTasks: [Task<Void, Never>?] = []
 
         for _ in 1...3 {
-          await sut.connect()
+          try await sut.connect()
 
           await waitUntil { [sut = sut] in
-            let messageTask = sut.mutableState.messageTask
-            let heartbeatTask = sut.mutableState.heartbeatTask
+            let messageTask = await sut.messageTask
+            let heartbeatTask = await sut.heartbeatTask
             return messageTask != nil
               && heartbeatTask != nil
               && !(messageTask?.isCancelled ?? true)
               && !(heartbeatTask?.isCancelled ?? true)
           }
 
-          let messageTask = sut.mutableState.messageTask
-          let heartbeatTask = sut.mutableState.heartbeatTask
+          let messageTask = await sut.messageTask
+          let heartbeatTask = await sut.heartbeatTask
 
           #expect(messageTask != nil)
           #expect(heartbeatTask != nil)
@@ -936,7 +931,7 @@ import Testing
           previousMessageTasks.append(messageTask)
           previousHeartbeatTasks.append(heartbeatTask)
 
-          sut.disconnect()
+          await sut.disconnect()
 
           await waitUntil {
             (messageTask?.isCancelled ?? false) && (heartbeatTask?.isCancelled ?? false)
@@ -959,92 +954,91 @@ import Testing
     }
 
     @Test
-    func deferredDisconnect_disconnectsAfterDelay() async {
-      await withMainSerialExecutor {
+    func deferredDisconnect_disconnectsAfterDelay() async throws {
+      try await withMainSerialExecutor {
         let deferredSut = makeClientWithDeferredDisconnect(delay: .seconds(5))
-        defer { deferredSut.disconnect() }
 
-        await deferredSut.connect()
-        #expect(deferredSut.status == .connected)
+        try await deferredSut.connect()
+        #expect(await deferredSut.status == .connected)
 
-        let channel = deferredSut.channel("test:deferred")
+        let channel = await deferredSut.channel("test:deferred")
         await deferredSut.removeChannel(channel)
 
-        #expect(deferredSut.status == .connected)
-        #expect(deferredSut.mutableState.pendingDisconnectTask != nil)
+        #expect(await deferredSut.status == .connected)
+        #expect(await deferredSut.pendingDisconnectTask != nil)
 
         await testClock.advance(by: .seconds(5))
 
-        #expect(deferredSut.status == .disconnected)
-        #expect(deferredSut.mutableState.pendingDisconnectTask == nil)
+        #expect(await deferredSut.status == .disconnected)
+        #expect(await deferredSut.pendingDisconnectTask == nil)
       }
     }
 
     @Test
-    func deferredDisconnect_cancelledByNewChannel() async {
-      await withMainSerialExecutor {
-        let deferredSut = makeClientWithDeferredDisconnect(delay: .seconds(5))
-        defer { deferredSut.disconnect() }
-
-        await deferredSut.connect()
-
-        let channel = deferredSut.channel("test:deferred")
-        await deferredSut.removeChannel(channel)
-
-        #expect(deferredSut.status == .connected)
-        #expect(deferredSut.mutableState.pendingDisconnectTask != nil)
-        let pendingTask = deferredSut.mutableState.pendingDisconnectTask
-
-        _ = deferredSut.channel("test:new")
-
-        #expect(deferredSut.mutableState.pendingDisconnectTask == nil)
-        #expect(pendingTask?.isCancelled ?? false)
-
-        await testClock.advance(by: .seconds(5))
-        #expect(deferredSut.status == .connected)
-      }
-    }
-
-    @Test
-    func deferredDisconnect_cancelledByDirectDisconnect() async {
-      await withMainSerialExecutor {
+    func deferredDisconnect_cancelledByNewChannel() async throws {
+      try await withMainSerialExecutor {
         let deferredSut = makeClientWithDeferredDisconnect(delay: .seconds(5))
 
-        await deferredSut.connect()
+        try await deferredSut.connect()
 
-        let channel = deferredSut.channel("test:deferred")
+        let channel = await deferredSut.channel("test:deferred")
         await deferredSut.removeChannel(channel)
 
-        let pendingTask = deferredSut.mutableState.pendingDisconnectTask
+        #expect(await deferredSut.status == .connected)
+        let pendingTask = await deferredSut.pendingDisconnectTask
         #expect(pendingTask != nil)
 
-        deferredSut.disconnect()
+        _ = await deferredSut.channel("test:new")
 
+        #expect(await deferredSut.pendingDisconnectTask == nil)
         #expect(pendingTask?.isCancelled ?? false)
-        #expect(deferredSut.mutableState.pendingDisconnectTask == nil)
+
+        await testClock.advance(by: .seconds(5))
+        #expect(await deferredSut.status == .connected)
+
+        await deferredSut.disconnect()
       }
     }
 
     @Test
-    func removeAllChannels_disconnectsImmediately_withDeferredOption() async {
-      await withMainSerialExecutor {
+    func deferredDisconnect_cancelledByDirectDisconnect() async throws {
+      try await withMainSerialExecutor {
         let deferredSut = makeClientWithDeferredDisconnect(delay: .seconds(5))
-        defer { deferredSut.disconnect() }
 
-        await deferredSut.connect()
+        try await deferredSut.connect()
 
-        _ = deferredSut.channel("test:ch1")
-        _ = deferredSut.channel("test:ch2")
+        let channel = await deferredSut.channel("test:deferred")
+        await deferredSut.removeChannel(channel)
+
+        let pendingTask = await deferredSut.pendingDisconnectTask
+        #expect(pendingTask != nil)
+
+        await deferredSut.disconnect()
+
+        #expect(pendingTask?.isCancelled ?? false)
+        #expect(await deferredSut.pendingDisconnectTask == nil)
+      }
+    }
+
+    @Test
+    func removeAllChannels_disconnectsImmediately_withDeferredOption() async throws {
+      try await withMainSerialExecutor {
+        let deferredSut = makeClientWithDeferredDisconnect(delay: .seconds(5))
+
+        try await deferredSut.connect()
+
+        _ = await deferredSut.channel("test:ch1")
+        _ = await deferredSut.channel("test:ch2")
 
         await deferredSut.removeAllChannels()
 
-        #expect(deferredSut.status == .disconnected)
-        #expect(deferredSut.mutableState.pendingDisconnectTask == nil)
+        #expect(await deferredSut.status == .disconnected)
+        #expect(await deferredSut.pendingDisconnectTask == nil)
       }
     }
 
-    private func makeClientWithDeferredDisconnect(delay: Duration) -> RealtimeClientV2 {
-      RealtimeClientV2(
+    private func makeClientWithDeferredDisconnect(delay: Duration) -> RealtimeClient {
+      RealtimeClient(
         url: url,
         options: RealtimeClientOptions(
           headers: ["apikey": apiKey],
