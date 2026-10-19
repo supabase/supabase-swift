@@ -118,182 +118,176 @@ struct PushHandleTests {
   }
 }
 
-#if os(Linux)
-  // RealtimeChannelPushTests are disabled on Linux due to timing flakiness.
-#else
+@Suite
+struct RealtimeChannelPushTests {
+  @Test
+  func broadcastWithoutAcknowledgementResolvesImmediately() async throws {
+    let h = Harness()
+    let channel = await h.client.channel("room")
+    _ = try await h.subscribe(channel)
 
-  @Suite
-  struct RealtimeChannelPushTests {
-    @Test
-    func broadcastWithoutAcknowledgementResolvesImmediately() async throws {
-      let h = Harness()
-      let channel = await h.client.channel("room")
-      _ = try await h.subscribe(channel)
+    let push = await channel.broadcast(event: "cursor", message: ["x": 1] as JSONObject)
 
-      let push = await channel.broadcast(event: "cursor", message: ["x": 1] as JSONObject)
-
-      #expect(!push.isRunning)
-      #expect(try await push() == .ok)
-      #expect(h.socket.sentEvents.contains { if case .binary = $0 { true } else { false } })
-    }
-
-    @Test
-    func broadcastBeforeSubscribeFailsWithNotSubscribed() async {
-      let h = Harness()
-      let channel = await h.client.channel("room")
-
-      let push = await channel.broadcast(event: "cursor", message: ["x": 1] as JSONObject)
-
-      let error = await #expect(throws: RealtimeError.self) { try await push() }
-      #expect(error?.kind == .notSubscribed)
-    }
-
-    @Test
-    func acknowledgedPushResolvesOnServerReply() async throws {
-      let h = Harness()
-      let channel = await h.client.channel("room") { $0.broadcast.acknowledgeBroadcasts = true }
-      let join = try await h.subscribe(channel)
-
-      let push = await channel.track(state: ["online": true])
-      #expect(push.isRunning)
-
-      let frame = try #require(await h.received(ChannelEvent.presence))
-      try h.reply(h.pushReply(to: frame, join: join, payload: ["status": "ok", "response": [:]]))
-
-      #expect(try await push() == .ok)
-    }
-
-    @Test
-    func errorReplyFailsWithAckError() async throws {
-      let h = Harness()
-      let channel = await h.client.channel("room") { $0.broadcast.acknowledgeBroadcasts = true }
-      let join = try await h.subscribe(channel)
-
-      let push = await channel.track(state: ["online": true])
-      let frame = try #require(await h.received(ChannelEvent.presence))
-      try h.reply(
-        h.pushReply(
-          to: frame, join: join,
-          payload: ["status": "error", "response": ["reason": "payload_size_exceeded"]]
-        )
-      )
-
-      let error = await #expect(throws: RealtimeError.self) { try await push() }
-      #expect(error?.kind == .payloadTooLarge)
-      #expect((push.error as? RealtimeError)?.kind == .payloadTooLarge)
-    }
-
-    @Test
-    func pushWithoutReplyTimesOut() async throws {
-      let h = Harness(timeout: .seconds(10))
-      let channel = await h.client.channel("room") { $0.broadcast.acknowledgeBroadcasts = true }
-      _ = try await h.subscribe(channel)
-
-      let push = await channel.track(state: ["online": true])
-      _ = try #require(await h.received(ChannelEvent.presence))
-      await h.clock.advance(by: .seconds(10))
-
-      #expect(try await push() == .timeout)
-      #expect(push.error == nil)
-    }
-
-    @Test
-    func disconnectFailsPendingPushWithNotConnected() async throws {
-      let h = Harness()
-      let channel = await h.client.channel("room") { $0.broadcast.acknowledgeBroadcasts = true }
-      _ = try await h.subscribe(channel)
-
-      let push = await channel.track(state: ["online": true])
-      await h.client.disconnect()
-
-      let error = await #expect(throws: RealtimeError.self) { try await push() }
-      #expect(error?.kind == .notConnected)
-    }
-
-    @Test
-    func serverCloseFailsPendingPushWithChannelClosedByServer() async throws {
-      let h = Harness()
-      let channel = await h.client.channel("room") { $0.broadcast.acknowledgeBroadcasts = true }
-      let join = try await h.subscribe(channel)
-
-      let push = await channel.track(state: ["online": true])
-      try h.reply(
-        RealtimeMessageV2(
-          joinRef: join.ref, ref: nil, topic: channel.topic, event: ChannelEvent.close,
-          payload: [:]
-        )
-      )
-
-      let error = await #expect(throws: RealtimeError.self) { try await push() }
-      #expect(error?.kind == .channelClosedByServer)
-    }
-
-    /// A client on a `TestClock`, connected to an in-memory server socket the test drives.
-    private struct Harness {
-      let clock: TestClock<Duration>
-      let socket: FakeWebSocket
-      let server: FakeWebSocket
-      let client: RealtimeClient
-
-      init(timeout: Duration = RealtimeClientOptions.defaultTimeout) {
-        let clock = TestClock<Duration>()
-        let (socket, server) = FakeWebSocket.fakes()
-        self.clock = clock
-        self.socket = socket
-        self.server = server
-        client = RealtimeClient(
-          url: URL(string: "http://localhost:54321/realtime/v1")!,
-          options: RealtimeClientOptions(
-            heartbeatInterval: .seconds(3600),
-            timeout: timeout,
-            handleAppLifecycle: false
-          ),
-          wsTransport: { _, _ in socket },
-          http: HTTPClient(transport: RecordingTransport()),
-          clock: clock
-        )
-      }
-
-      /// The next frame for `event` the server receives.
-      func received(_ event: String) async -> RealtimeMessageV2? {
-        for await frame in server.events {
-          if case .text(let text) = frame,
-            let message = try? RealtimeSerializer().decodeText(text),
-            message.event == event
-          {
-            return message
-          }
-        }
-        return nil
-      }
-
-      func reply(_ message: RealtimeMessageV2) throws {
-        server.send(try RealtimeSerializer().encodeText(message))
-      }
-
-      func pushReply(
-        to frame: RealtimeMessageV2, join: RealtimeMessageV2, payload: JSONObject
-      ) -> RealtimeMessageV2 {
-        RealtimeMessageV2(
-          joinRef: join.ref, ref: frame.ref, topic: frame.topic, event: ChannelEvent.reply,
-          payload: payload
-        )
-      }
-
-      /// Subscribes `channel`, answering its `phx_join` the way the server does. Returns the join.
-      func subscribe(_ channel: RealtimeChannel) async throws -> RealtimeMessageV2 {
-        async let subscription: Void = channel.subscribe()
-        let join = try #require(await received(ChannelEvent.join))
-        try reply(
-          pushReply(
-            to: join, join: join,
-            payload: ["status": "ok", "response": ["postgres_changes": .array([])]]
-          )
-        )
-        try await subscription
-        return join
-      }
-    }
+    #expect(!push.isRunning)
+    #expect(try await push() == .ok)
+    #expect(h.socket.sentEvents.contains { if case .binary = $0 { true } else { false } })
   }
 
-#endif
+  @Test
+  func broadcastBeforeSubscribeFailsWithNotSubscribed() async {
+    let h = Harness()
+    let channel = await h.client.channel("room")
+
+    let push = await channel.broadcast(event: "cursor", message: ["x": 1] as JSONObject)
+
+    let error = await #expect(throws: RealtimeError.self) { try await push() }
+    #expect(error?.kind == .notSubscribed)
+  }
+
+  @Test
+  func acknowledgedPushResolvesOnServerReply() async throws {
+    let h = Harness()
+    let channel = await h.client.channel("room") { $0.broadcast.acknowledgeBroadcasts = true }
+    let join = try await h.subscribe(channel)
+
+    let push = await channel.track(state: ["online": true])
+    #expect(push.isRunning)
+
+    let frame = try #require(await h.received(ChannelEvent.presence))
+    try h.reply(h.pushReply(to: frame, join: join, payload: ["status": "ok", "response": [:]]))
+
+    #expect(try await push() == .ok)
+  }
+
+  @Test
+  func errorReplyFailsWithAckError() async throws {
+    let h = Harness()
+    let channel = await h.client.channel("room") { $0.broadcast.acknowledgeBroadcasts = true }
+    let join = try await h.subscribe(channel)
+
+    let push = await channel.track(state: ["online": true])
+    let frame = try #require(await h.received(ChannelEvent.presence))
+    try h.reply(
+      h.pushReply(
+        to: frame, join: join,
+        payload: ["status": "error", "response": ["reason": "payload_size_exceeded"]]
+      )
+    )
+
+    let error = await #expect(throws: RealtimeError.self) { try await push() }
+    #expect(error?.kind == .payloadTooLarge)
+    #expect((push.error as? RealtimeError)?.kind == .payloadTooLarge)
+  }
+
+  @Test
+  func pushWithoutReplyTimesOut() async throws {
+    let h = Harness(timeout: .seconds(10))
+    let channel = await h.client.channel("room") { $0.broadcast.acknowledgeBroadcasts = true }
+    _ = try await h.subscribe(channel)
+
+    let push = await channel.track(state: ["online": true])
+    _ = try #require(await h.received(ChannelEvent.presence))
+    await h.clock.advance(by: .seconds(10))
+
+    #expect(try await push() == .timeout)
+    #expect(push.error == nil)
+  }
+
+  @Test
+  func disconnectFailsPendingPushWithNotConnected() async throws {
+    let h = Harness()
+    let channel = await h.client.channel("room") { $0.broadcast.acknowledgeBroadcasts = true }
+    _ = try await h.subscribe(channel)
+
+    let push = await channel.track(state: ["online": true])
+    await h.client.disconnect()
+
+    let error = await #expect(throws: RealtimeError.self) { try await push() }
+    #expect(error?.kind == .notConnected)
+  }
+
+  @Test
+  func serverCloseFailsPendingPushWithChannelClosedByServer() async throws {
+    let h = Harness()
+    let channel = await h.client.channel("room") { $0.broadcast.acknowledgeBroadcasts = true }
+    let join = try await h.subscribe(channel)
+
+    let push = await channel.track(state: ["online": true])
+    try h.reply(
+      RealtimeMessageV2(
+        joinRef: join.ref, ref: nil, topic: channel.topic, event: ChannelEvent.close,
+        payload: [:]
+      )
+    )
+
+    let error = await #expect(throws: RealtimeError.self) { try await push() }
+    #expect(error?.kind == .channelClosedByServer)
+  }
+
+  /// A client on a `TestClock`, connected to an in-memory server socket the test drives.
+  private struct Harness {
+    let clock: TestClock<Duration>
+    let socket: FakeWebSocket
+    let server: FakeWebSocket
+    let client: RealtimeClient
+
+    init(timeout: Duration = RealtimeClientOptions.defaultTimeout) {
+      let clock = TestClock<Duration>()
+      let (socket, server) = FakeWebSocket.fakes()
+      self.clock = clock
+      self.socket = socket
+      self.server = server
+      client = RealtimeClient(
+        url: URL(string: "http://localhost:54321/realtime/v1")!,
+        options: RealtimeClientOptions(
+          heartbeatInterval: .seconds(3600),
+          timeout: timeout,
+          handleAppLifecycle: false
+        ),
+        wsTransport: { _, _ in socket },
+        http: HTTPClient(transport: RecordingTransport()),
+        clock: clock
+      )
+    }
+
+    /// The next frame for `event` the server receives.
+    func received(_ event: String) async -> RealtimeMessageV2? {
+      for await frame in server.events {
+        if case .text(let text) = frame,
+          let message = try? RealtimeSerializer().decodeText(text),
+          message.event == event
+        {
+          return message
+        }
+      }
+      return nil
+    }
+
+    func reply(_ message: RealtimeMessageV2) throws {
+      server.send(try RealtimeSerializer().encodeText(message))
+    }
+
+    func pushReply(
+      to frame: RealtimeMessageV2, join: RealtimeMessageV2, payload: JSONObject
+    ) -> RealtimeMessageV2 {
+      RealtimeMessageV2(
+        joinRef: join.ref, ref: frame.ref, topic: frame.topic, event: ChannelEvent.reply,
+        payload: payload
+      )
+    }
+
+    /// Subscribes `channel`, answering its `phx_join` the way the server does. Returns the join.
+    func subscribe(_ channel: RealtimeChannel) async throws -> RealtimeMessageV2 {
+      async let subscription: Void = channel.subscribe()
+      let join = try #require(await received(ChannelEvent.join))
+      try reply(
+        pushReply(
+          to: join, join: join,
+          payload: ["status": "ok", "response": ["postgres_changes": .array([])]]
+        )
+      )
+      try await subscription
+      return join
+    }
+  }
+}
