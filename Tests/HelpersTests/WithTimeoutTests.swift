@@ -72,6 +72,17 @@ struct WithTimeoutTests {
   }
 
   @Test
+  func registersTheTimerBeforeTheBodyStarts() async throws {
+    // Without immediate child tasks the timer is enqueued and may register after the body.
+    guard #available(iOS 26, macOS 26, tvOS 26, watchOS 26, visionOS 26, *) else { return }
+    let clock = TestClock()
+    try await withTimeout(.seconds(5), clock: clock) {
+      // `checkSuspension()` throws when a sleep is pending: the timer is already on the clock.
+      await #expect(throws: SuspensionError.self) { try await clock.checkSuspension() }
+    }
+  }
+
+  @Test
   func doesNotFireBeforeTheDeadline() async throws {
     // Advancing from inside the body cannot race the body's own sleep registration, which is
     // what made the Task-plus-advance version hang when `advance` won the race.
