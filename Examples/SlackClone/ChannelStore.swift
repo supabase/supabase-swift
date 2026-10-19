@@ -22,12 +22,12 @@ final class ChannelStore {
     Task {
       channels = await fetchChannels()
 
-      let channel = supabase.channel("public:channels")
+      let channel = await supabase.channel("public:channels")
 
-      let insertions = channel.postgresChange(InsertAction.self, table: "channels")
-      let deletions = channel.postgresChange(DeleteAction.self, table: "channels")
+      let insertions = await channel.postgresChanges(InsertAction.self, table: "channels")
+      let deletions = await channel.postgresChanges(DeleteAction.self, table: "channels")
 
-      try await channel.subscribeWithError()
+      try await channel.subscribe()
 
       Task {
         for await insertion in insertions {

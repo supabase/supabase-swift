@@ -32,7 +32,7 @@ import Logging
 /// - ``auth``
 /// - ``storage``
 /// - ``functions``
-/// - ``realtimeV2``
+/// - ``realtime``
 ///
 /// ### Querying the Database
 /// - ``from(_:)->PostgrestQueryBuilder``
@@ -140,7 +140,7 @@ public final class SupabaseClient: Sendable {
   }
 
   /// The Realtime client for subscribing to database changes and broadcasting presence events.
-  public var realtimeV2: RealtimeClientV2 {
+  public var realtime: RealtimeClient {
     mutableState.withValue {
       if let realtime = $0.realtime {
         return realtime
@@ -186,7 +186,7 @@ public final class SupabaseClient: Sendable {
 
   struct MutableState {
     var listenForAuthEventsTask: Task<Void, Never>?
-    var realtime: RealtimeClientV2?
+    var realtime: RealtimeClient?
     var functions: FunctionsClient?
 
     var changedAccessToken: String?
@@ -361,31 +361,31 @@ public final class SupabaseClient: Sendable {
   }
 
   /// All active Realtime channels.
-  public var channels: [RealtimeChannelV2] {
-    Array(realtimeV2.channels.values)
+  public var channels: [RealtimeChannel] {
+    get async { Array(await realtime.channels.values) }
   }
 
   /// Creates a Realtime channel with support for Broadcast, Presence, and Postgres Changes.
   /// - Parameters:
   ///   - name: A unique name for the channel.
   ///   - options: A closure to configure broadcast, presence, and Postgres change options.
-  /// - Returns: A configured ``RealtimeChannelV2`` ready to subscribe.
+  /// - Returns: A configured ``RealtimeChannel`` ready to subscribe.
   public func channel(
     _ name: String,
     options: @Sendable (inout RealtimeChannelConfig) -> Void = { _ in }
-  ) -> RealtimeChannelV2 {
-    realtimeV2.channel(name, options: options)
+  ) async -> RealtimeChannel {
+    await realtime.channel(name, options: options)
   }
 
   /// Unsubscribes from and removes a Realtime channel.
   /// - Parameter channel: The channel to remove.
-  public func removeChannel(_ channel: RealtimeChannelV2) async {
-    await realtimeV2.removeChannel(channel)
+  public func removeChannel(_ channel: RealtimeChannel) async {
+    await realtime.removeChannel(channel)
   }
 
   /// Unsubscribes from and removes all active Realtime channels.
   public func removeAllChannels() async {
-    await realtimeV2.removeAllChannels()
+    await realtime.removeAllChannels()
   }
 
   /// Passes an incoming URL to the Auth client for processing deep links and OAuth callbacks.
@@ -459,7 +459,7 @@ public final class SupabaseClient: Sendable {
   /// Storage. The bearer is the session token, else the key.
   ///
   /// ``AccessTokenMiddleware`` captures only the dependencies it needs — never `self` — because
-  /// each sub-client stores its middlewares for its whole lifetime: the cached ``realtimeV2`` and
+  /// each sub-client stores its middlewares for its whole lifetime: the cached ``realtime`` and
   /// ``functions`` sub-clients are held in ``mutableState`` for the lifetime of the client, and a
   /// caller may hold any sub-client for that long too. Capturing `self` here would form a
   /// `self -> sub-client -> middleware -> self` retain cycle that keeps ``deinit`` from ever
@@ -537,7 +537,7 @@ public final class SupabaseClient: Sendable {
     }
 
     if let accessToken {
-      await realtimeV2.setAuth(accessToken)
+      await realtime.setAuth(accessToken)
     }
   }
 
@@ -568,7 +568,7 @@ public final class SupabaseClient: Sendable {
     )
   }
 
-  private func _initRealtimeClient() -> RealtimeClientV2 {
+  private func _initRealtimeClient() -> RealtimeClient {
     var realtimeOptions = options.realtime
     realtimeOptions.headers.merge(with: _headers)
 
@@ -591,7 +591,7 @@ public final class SupabaseClient: Sendable {
     } else {
       reportIssue(
         """
-        You assigned a custom `accessToken` closure to the RealtimeClientV2. This might not work as you expect
+        You assigned a custom `accessToken` closure to the RealtimeClient. This might not work as you expect
         as SupabaseClient uses Auth for pulling an access token to send on the realtime channels.
 
         Please make sure you know what you're doing.
@@ -601,7 +601,7 @@ public final class SupabaseClient: Sendable {
 
     realtimeOptions.clock = clock
 
-    return RealtimeClientV2(
+    return RealtimeClient(
       url: supabaseURL.appendingPathComponent("/realtime/v1"),
       options: realtimeOptions
     )

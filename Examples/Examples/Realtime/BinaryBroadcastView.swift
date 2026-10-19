@@ -11,8 +11,7 @@ import SwiftUI
 struct BinaryBroadcastView: View {
   @State var receivedFrames: [BinaryFrame] = []
   @State var inputText: String = ""
-  @State var channel: RealtimeChannelV2?
-  @State var subscription: RealtimeSubscription?
+  @State var channel: RealtimeChannel?
   @State var error: Error?
 
   var body: some View {
@@ -73,7 +72,6 @@ struct BinaryBroadcastView: View {
       await subscribe()
     }
     .onDisappear {
-      subscription?.cancel()
       Task {
         if let channel {
           await supabase.removeChannel(channel)
@@ -83,14 +81,14 @@ struct BinaryBroadcastView: View {
   }
 
   func subscribe() async {
-    let channel = supabase.channel("binary-broadcast-example") {
+    let channel = await supabase.channel("binary-broadcast-example") {
       $0.broadcast.receiveOwnBroadcasts = true
     }
 
-    let dataStream = channel.broadcastDataStream(event: "binary_message")
+    let dataStream = await channel.broadcastData(event: "binary_message")
 
     do {
-      try await channel.subscribeWithError()
+      try await channel.subscribe()
       self.channel = channel
 
       for await data in dataStream {

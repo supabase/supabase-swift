@@ -260,7 +260,7 @@ Changes that still compile but behave differently. Check each one by hand.
   `AuthOptions.accessToken` closure throws, the request now fails with that error. In v2 the
   request went out with the API key. Only a missing session still falls back to the key.
 - **Realtime uses the global logger.** `SupabaseClient` replaces `logger` in
-  `SupabaseClientOptions(realtime:)` with `GlobalOptions.logger`. Build `RealtimeClientV2`
+  `SupabaseClientOptions(realtime:)` with `GlobalOptions.logger`. Build `RealtimeClient`
   yourself if you need a separate Realtime logger.
 - **Realtime does not get the global `URLSession`.** Pass the session to
   `RealtimeClientOptions(session:)` if the WebSocket needs it (for example for certificate
@@ -273,7 +273,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | v2 | v3 |
 | --- | --- |
 | `supabase.database` | `supabase.from(_:)`, `supabase.rpc(_:)`, `supabase.schema(_:)` |
-| `supabase.realtime` | `supabase.realtimeV2` |
+| `supabase.channel(_:options:)`, `supabase.channels` | same names, `async` |
 | `supabase.storage: SupabaseStorageClient` | `supabase.storage: StorageClient` |
 | `GlobalOptions(session:)` | `GlobalOptions(http: .init(transport: URLSessionTransport(session:)))` |
 | `GlobalOptions.logger: (any SupabaseLogger)?` | `GlobalOptions.logger: Logging.Logger` |

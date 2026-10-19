@@ -10,8 +10,8 @@ struct RealtimeColdStartTests {
   let url = URL(string: "http://localhost:54321/realtime/v1")!
   let apiKey = "anon.api.key"
 
-  private func makeClient(socket: AsyncFakeWebSocket) -> RealtimeClientV2 {
-    RealtimeClientV2(
+  private func makeClient(socket: AsyncFakeWebSocket) -> RealtimeClient {
+    RealtimeClient(
       url: url,
       options: RealtimeClientOptions(
         headers: ["apikey": apiKey],
@@ -29,6 +29,7 @@ struct RealtimeColdStartTests {
     )
   }
 
+  /// streams consumed in detached tasks, then `subscribe()`.
   @Test
   func coldStartSubscribe_realTimingProfile() async throws {
     for iteration in 1...5 {
@@ -36,11 +37,11 @@ struct RealtimeColdStartTests {
       socket.serverResponder = AsyncFakeWebSocket.realtimeServerResponder()
 
       let sut = makeClient(socket: socket)
-      defer { sut.disconnect() }
 
-      let channel = sut.channel("library-realtime")
-      let libros = channel.postgresChange(AnyAction.self, schema: "library", table: "libros")
-      let files = channel.postgresChange(AnyAction.self, schema: "library", table: "libro_files")
+      let channel = await sut.channel("library-realtime")
+      let libros = await channel.postgresChanges(AnyAction.self, schema: "library", table: "libros")
+      let files = await channel.postgresChanges(
+        AnyAction.self, schema: "library", table: "libro_files")
 
       let t1 = Task { for await _ in libros {} }
       let t2 = Task { for await _ in files {} }
@@ -50,16 +51,18 @@ struct RealtimeColdStartTests {
       }
 
       do {
-        try await channel.subscribeWithError()
+        try await channel.subscribe()
       } catch {
         Issue.record("Iteration \(iteration): subscribe failed: \(error)")
         return
       }
 
-      #expect(channel.status == .subscribed, "Iteration \(iteration)")
+      #expect(await channel.status == .subscribed, "Iteration \(iteration)")
+      await sut.disconnect()
     }
   }
 
+  /// `ensureSocketConnected` → concurrent `connect()` → the client's
   @Test
   func coldStartConcurrentSubscribes_doNotGoDeaf() async throws {
     for iteration in 1...5 {
@@ -67,13 +70,12 @@ struct RealtimeColdStartTests {
       socket.serverResponder = AsyncFakeWebSocket.realtimeServerResponder()
 
       let sut = makeClient(socket: socket)
-      defer { sut.disconnect() }
 
-      let channel1 = sut.channel("room-1")
-      let channel2 = sut.channel("room-2")
+      let channel1 = await sut.channel("room-1")
+      let channel2 = await sut.channel("room-2")
 
-      async let s1: Void = channel1.subscribeWithError()
-      async let s2: Void = channel2.subscribeWithError()
+      async let s1: Void = channel1.subscribe()
+      async let s2: Void = channel2.subscribe()
 
       do {
         _ = try await (s1, s2)
@@ -82,16 +84,18 @@ struct RealtimeColdStartTests {
         return
       }
 
-      #expect(channel1.status == .subscribed, "Iteration \(iteration)")
-      #expect(channel2.status == .subscribed, "Iteration \(iteration)")
+      #expect(await channel1.status == .subscribed, "Iteration \(iteration)")
+      #expect(await channel2.status == .subscribed, "Iteration \(iteration)")
+      await sut.disconnect()
     }
   }
 
+  /// `subscribe()` was a no-op for `.subscribed` channels,
   @Test
   func channelsRejoinAfterReconnect() async throws {
     let sockets = LockIsolated<[AsyncFakeWebSocket]>([])
 
-    let sut = RealtimeClientV2(
+    let sut = RealtimeClient(
       url: url,
       options: RealtimeClientOptions(
         headers: ["apikey": apiKey],
@@ -109,15 +113,18 @@ struct RealtimeColdStartTests {
       http: HTTPClient(transport: RecordingTransport()),
       clock: ContinuousClock()
     )
-    defer { sut.disconnect() }
 
-    let channel = sut.channel("room-rejoin")
+    let channel = await sut.channel("room-rejoin")
 
-    try await channel.subscribeWithError()
-    #expect(channel.status == .subscribed)
+    try await channel.subscribe()
+    #expect(await channel.status == .subscribed)
     #expect(sockets.value.count == 1)
 
-    sockets.value[0].receiveFromServer(.text("not a valid frame"))
+    // A remote close with a transport-level code initiates a reconnect. A malformed
+    // frame used to do the same, but `RealtimeClient` now only logs undecodable frames.
+    // Application-level codes (4000–4999) skip reconnect by design (auth errors should
+    // not loop with the same token).
+    sockets.value[0].receiveFromServer(.close(code: 1006, reason: "abnormal closure"))
     let reconnected = await waitUntil(timeout: 5) { sockets.value.count >= 2 }
     guard reconnected else {
       Issue.record("No reconnect within 5 s")
@@ -126,19 +133,22 @@ struct RealtimeColdStartTests {
 
     await waitUntil(timeout: 5) {
       sockets.value[1].sentMessages.contains { $0.event == "phx_join" }
-        && channel.status == .subscribed
+        && channel.statusSnapshot == .subscribed
     }
-    #expect(channel.status == .subscribed, "Channel did not rejoin after reconnect")
+    #expect(await channel.status == .subscribed, "Channel did not rejoin after reconnect")
 
     let joinsSentOnNewSocket = sockets.value[1].sentMessages.filter { $0.event == "phx_join" }
     #expect(joinsSentOnNewSocket.count == 1, "Expected one phx_join on the new socket")
+
+    await sut.disconnect()
   }
 
+  /// remote close or by the heartbeat timer itself), we verify that after
   @Test
   func pendingHeartbeatDoesNotLeakAcrossReconnect() async throws {
     let sockets = LockIsolated<[AsyncFakeWebSocket]>([])
 
-    let sut = RealtimeClientV2(
+    let sut = RealtimeClient(
       url: url,
       options: RealtimeClientOptions(
         headers: ["apikey": apiKey],
@@ -158,19 +168,24 @@ struct RealtimeColdStartTests {
       http: HTTPClient(transport: RecordingTransport()),
       clock: ContinuousClock()
     )
-    defer { sut.disconnect() }
 
     let heartbeatStatuses = LockIsolated<[HeartbeatStatus]>([])
-    let subscription = sut.onHeartbeat { status in
-      heartbeatStatuses.withValue { $0.append(status) }
+    let heartbeats = sut.heartbeats
+    let heartbeatTask = Task {
+      for await status in heartbeats {
+        heartbeatStatuses.withValue { $0.append(status) }
+      }
     }
-    defer { subscription.cancel() }
+    defer { heartbeatTask.cancel() }
 
-    await sut.connect()
+    try await sut.connect()
 
+    // never acks). The reconnect may be triggered by either the remote close
     await waitUntil { heartbeatStatuses.value.contains(.sent) }
 
-    sockets.value[0].receiveFromServer(.text("not a valid frame"))
+    // A remote close with a transport-level code initiates a reconnect. (A malformed
+    // frame used to do the same; `RealtimeClient` now only logs undecodable frames.)
+    sockets.value[0].receiveFromServer(.close(code: 1006, reason: "abnormal closure"))
 
     let reconnected = await waitUntil(timeout: 5) { sockets.value.count >= 2 }
     guard reconnected else {
@@ -190,6 +205,8 @@ struct RealtimeColdStartTests {
       into the replacement connection: \(heartbeatStatuses.value)
       """
     )
+
+    await sut.disconnect()
   }
 }
 

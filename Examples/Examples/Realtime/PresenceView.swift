@@ -11,7 +11,7 @@ import SwiftUI
 struct PresenceView: View {
   @Environment(AuthController.self) var auth
   @State var onlineUsers: [PresenceUser] = []
-  @State var channel: RealtimeChannelV2?
+  @State var channel: RealtimeChannel?
   @State var error: Error?
 
   var body: some View {
@@ -61,11 +61,11 @@ struct PresenceView: View {
 
   func subscribe() async {
     do {
-      let channel = supabase.channel("presence-example")
+      let channel = await supabase.channel("presence-example")
 
-      let presence = channel.presenceChange()
+      let presence = await channel.presenceChanges()
 
-      try await channel.subscribeWithError()
+      try await channel.subscribe()
       self.channel = channel
 
       let userId = auth.currentUserID

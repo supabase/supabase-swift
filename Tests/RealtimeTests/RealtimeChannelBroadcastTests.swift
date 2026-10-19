@@ -4,35 +4,28 @@
 //
 //  Created by Guilherme Souza on 12/02/26.
 //
-
 import ConcurrencyExtras
 import Foundation
 import TestHelpers
 import Testing
-
 @testable import Realtime
-
 #if os(Linux)
 #else
-
   @Suite
   final class RealtimeChannelBroadcastTests: Sendable {
     let url = URL(string: "http://localhost:54321/realtime/v1")!
     let apiKey = "publishable.api.key"
-
     let server: FakeWebSocket
     let client: FakeWebSocket
     let http: RecordingTransport
-    let sut: RealtimeClientV2
+    let sut: RealtimeClient
     let serverTask = LockIsolated<Task<Void, Never>?>(nil)
-
     init() {
       let (client, server) = FakeWebSocket.fakes()
       self.client = client
       self.server = server
       http = RecordingTransport()
-
-      sut = RealtimeClientV2(
+      sut = RealtimeClient(
         url: url,
         options: RealtimeClientOptions(
           headers: ["apikey": apiKey],
@@ -45,12 +38,9 @@ import Testing
         clock: ContinuousClock()
       )
     }
-
     deinit {
       serverTask.value?.cancel()
-      sut.disconnect()
     }
-
     private func setupServerAutoResponder(topic: String = "realtime:test") {
       let task = Task { @Sendable [server] in
         for await event in server.events {
@@ -85,13 +75,14 @@ import Testing
       serverTask.setValue(task)
     }
 
+
     @Test
     func broadcast_sendsJsonViaBinaryFrame() async throws {
       setupServerAutoResponder()
-      await sut.connect()
+      try await sut.connect()
 
-      let channel = sut.channel("test")
-      try await channel.subscribeWithError()
+      let channel = await sut.channel("test")
+      try await channel.subscribe()
 
       await channel.broadcast(
         event: "my_event", message: ["hello": .string("world")] as JSONObject
@@ -110,13 +101,14 @@ import Testing
       }
     }
 
+
     @Test
     func broadcast_sendsDataViaBinaryFrame() async throws {
       setupServerAutoResponder()
-      await sut.connect()
+      try await sut.connect()
 
-      let channel = sut.channel("test")
-      try await channel.subscribeWithError()
+      let channel = await sut.channel("test")
+      try await channel.subscribe()
 
       let binaryData = Data([0x01, 0x02, 0x03, 0x04])
       await channel.broadcast(event: "bin_event", data: binaryData)
@@ -134,39 +126,12 @@ import Testing
       }
     }
 
-    @Test
-    func callbackManager_triggerBroadcast() {
-      let mgr = CallbackManager()
-      let received = LockIsolated<JSONObject?>(nil)
-      mgr.addBroadcastCallback(event: "test") { json in
-        received.setValue(json)
-      }
-      mgr.triggerBroadcast(event: "test", json: ["hello": .string("world")])
-      #expect(received.value != nil)
-      #expect(received.value?["hello"]?.stringValue == "world")
-    }
-
-    @Test
-    func callbackManager_triggerBroadcastData() {
-      let mgr = CallbackManager()
-      let received = LockIsolated<Data?>(nil)
-      mgr.addBroadcastDataCallback(event: "test") { data in
-        received.setValue(data)
-      }
-      mgr.triggerBroadcastData(event: "test", data: Data([0x01, 0x02]))
-      #expect(received.value != nil)
-      #expect(received.value == Data([0x01, 0x02]))
-    }
 
     @Test
     func receive_jsonBroadcastFromBinaryFrame() async throws {
-      let channel = sut.channel("test")
+      let channel = await sut.channel("test")
 
-      let receivedPayload = LockIsolated<JSONObject?>(nil)
-      let subscription = channel.onBroadcast(event: "my_event") { json in
-        receivedPayload.setValue(json)
-      }
-      defer { subscription.cancel() }
+      let stream = await channel.broadcasts(event: "my_event")
 
       let broadcast = DecodedBroadcast(
         topic: "realtime:test",
@@ -175,21 +140,18 @@ import Testing
       )
       await channel.handleBinaryBroadcast(broadcast)
 
-      let payload = receivedPayload.value
+      let payload = await firstBuffered(stream, on: channel)
       #expect(payload != nil, "Expected to receive broadcast payload")
       #expect(payload?["event"]?.stringValue == "my_event")
       #expect(payload?["payload"]?.objectValue?["count"]?.intValue == 99)
     }
 
+
     @Test
     func receive_binaryBroadcastFromBinaryFrame() async throws {
-      let channel = sut.channel("test")
+      let channel = await sut.channel("test")
 
-      let receivedData = LockIsolated<Data?>(nil)
-      let subscription = channel.onBroadcastData(event: "bin_event") { data in
-        receivedData.setValue(data)
-      }
-      defer { subscription.cancel() }
+      let stream = await channel.broadcastData(event: "bin_event")
 
       let binaryPayload = Data([0xCA, 0xFE, 0xBA, 0xBE])
       let broadcast = DecodedBroadcast(
@@ -199,18 +161,15 @@ import Testing
       )
       await channel.handleBinaryBroadcast(broadcast)
 
-      #expect(receivedData.value == binaryPayload)
+      #expect(await firstBuffered(stream, on: channel) == binaryPayload)
     }
+
 
     @Test
     func receive_jsonBroadcastHasCorrectFormat() async throws {
-      let channel = sut.channel("test")
+      let channel = await sut.channel("test")
 
-      let receivedPayload = LockIsolated<JSONObject?>(nil)
-      let subscription = channel.onBroadcast(event: "evt") { json in
-        receivedPayload.setValue(json)
-      }
-      defer { subscription.cancel() }
+      let stream = await channel.broadcasts(event: "evt")
 
       let broadcast = DecodedBroadcast(
         topic: "realtime:test",
@@ -219,7 +178,7 @@ import Testing
       )
       await channel.handleBinaryBroadcast(broadcast)
 
-      let payload = receivedPayload.value
+      let payload = await firstBuffered(stream, on: channel)
       #expect(payload != nil)
       #expect(payload?["type"]?.stringValue == "broadcast")
       #expect(payload?["event"]?.stringValue == "evt")
@@ -229,13 +188,9 @@ import Testing
 
     @Test
     func receive_jsonBroadcastForwardsFrameMetadataAsMeta() async throws {
-      let channel = sut.channel("test")
+      let channel = await sut.channel("test")
 
-      let receivedPayload = LockIsolated<JSONObject?>(nil)
-      let subscription = channel.onBroadcast(event: "INSERT") { json in
-        receivedPayload.setValue(json)
-      }
-      defer { subscription.cancel() }
+      let stream = await channel.broadcasts(event: "INSERT")
 
       let broadcast = DecodedBroadcast(
         topic: "realtime:test",
@@ -245,20 +200,21 @@ import Testing
       )
       await channel.handleBinaryBroadcast(broadcast)
 
-      let meta = receivedPayload.value?["meta"]?.objectValue
+      let meta = await firstBuffered(stream, on: channel)?["meta"]?.objectValue
       #expect(meta?["id"]?.stringValue == "0b8a1e2c-77c4-4f1b-9d2a-3f5e6a7b8c9d")
       #expect(meta?["replayed"]?.boolValue == true)
     }
 
+
+    // The REST fallback for unsubscribed channels is gone, so the encoded payload is now read
+    // from the WebSocket frame of a subscribed channel instead of the REST request body.
     @Test
     func broadcast_perCallEncoderOverridesFixedInternalEncoder() async throws {
-      http.respond { _, _ in
-        (HTTPResponse(status: .init(code: 202)), Data())
-      }
+      setupServerAutoResponder()
+      try await sut.connect()
 
-      let channel = sut.channel("test") { config in
-        config.broadcast.acknowledgeBroadcasts = true
-      }
+      let channel = await sut.channel("test")
+      try await channel.subscribe()
 
       struct Message: Codable {
         let userName: String
@@ -271,12 +227,43 @@ import Testing
         event: "my_event", message: Message(userName: "abc"), encoder: snakeCaseEncoder
       )
 
-      let request = http.requests.last
-      let body = try #require(request?.body)
-      let json = try #require(try JSONSerialization.jsonObject(with: body) as? [String: Any])
-      #expect(json["user_name"] as? String == "abc")
-      #expect(json["userName"] == nil)
+      let frame = try #require(
+        client.sentEvents.compactMap { event -> Data? in
+          if case .binary(let data) = event { return data }
+          return nil
+        }.last
+      )
+      #expect(frame.range(of: Data(#""user_name":"abc""#.utf8)) != nil)
+      #expect(frame.range(of: Data("userName".utf8)) == nil)
     }
+
+    // MARK: - Broadcast on an unsubscribed channel
+
+    // Behavior change: a broadcast on a channel that is not subscribed no longer falls back to
+    // the REST endpoint. Its handle fails with `.notSubscribed`; REST sending is `httpSend`'s job.
+    @Test
+    func broadcast_whenNotSubscribedFailsWithoutRESTFallback() async throws {
+      http.respond { _, _ in
+        (HTTPResponse(status: .init(code: 202)), Data())
+      }
+
+      let channel = await sut.channel("test") { config in
+        config.broadcast.acknowledgeBroadcasts = true
+      }
+
+      let handle = await channel.broadcast(
+        event: "my_event", message: ["hello": .string("world")] as JSONObject
+      )
+
+      do {
+        _ = try await handle()
+        Issue.record("Expected the push to fail with .notSubscribed")
+      } catch {
+        #expect((error as? RealtimeError)?.kind == .notSubscribed)
+      }
+      #expect(http.requests.isEmpty)
+    }
+
 
     @Test
     func httpSend_urlUsesSubTopicWithoutRealtimePrefix() async throws {
@@ -284,8 +271,8 @@ import Testing
         (HTTPResponse(status: .init(code: 202)), Data())
       }
 
-      let channel = sut.channel("test")
-      #expect(channel.topic == "realtime:test")
+      let channel = await sut.channel("test")
+      #expect(await channel.topic == "realtime:test")
 
       try await channel.httpSend(
         event: "my_event", message: ["hello": .string("world")] as JSONObject
@@ -300,20 +287,24 @@ import Testing
       #expect(json?["hello"] as? String == "world")
     }
 
+
     @Test
     func endToEnd_binaryFrameViaWebSocket() async throws {
       setupServerAutoResponder()
-      await sut.connect()
+      try await sut.connect()
 
-      let channel = sut.channel("test")
+      let channel = await sut.channel("test")
 
+      let stream = await channel.broadcasts(event: "my_event")
       let receivedPayload = LockIsolated<JSONObject?>(nil)
-      let subscription = channel.onBroadcast(event: "my_event") { json in
-        receivedPayload.setValue(json)
+      let listenTask = Task {
+        for await json in stream {
+          receivedPayload.setValue(json)
+        }
       }
-      defer { subscription.cancel() }
+      defer { listenTask.cancel() }
 
-      try await channel.subscribeWithError()
+      try await channel.subscribe()
 
       let jsonPayload: JSONObject = ["count": .integer(99)]
       let payloadData = try JSONEncoder().encode(jsonPayload)
@@ -352,17 +343,20 @@ import Testing
     @Test
     func endToEnd_binaryFrameForwardsDatabaseMetadataAsMeta() async throws {
       setupServerAutoResponder()
-      await sut.connect()
+      try await sut.connect()
 
-      let channel = sut.channel("test")
+      let channel = await sut.channel("test")
 
+      let stream = await channel.broadcasts(event: "INSERT")
       let receivedPayload = LockIsolated<JSONObject?>(nil)
-      let subscription = channel.onBroadcast(event: "INSERT") { json in
-        receivedPayload.setValue(json)
+      let listenTask = Task {
+        for await json in stream {
+          receivedPayload.setValue(json)
+        }
       }
-      defer { subscription.cancel() }
+      defer { listenTask.cancel() }
 
-      try await channel.subscribeWithError()
+      try await channel.subscribe()
 
       let topic = Data("realtime:test".utf8)
       let event = Data("INSERT".utf8)
@@ -383,13 +377,22 @@ import Testing
       server.send(frame)
 
       let received = await waitUntil(timeout: 2) { receivedPayload.value != nil }
-      #expect(received, "Expected onBroadcast to receive the kind-4 frame")
+      #expect(received, "Expected the broadcasts stream to receive the kind-4 frame")
 
       let json = try #require(receivedPayload.value)
       #expect(json["payload"]?.objectValue?["record"]?.objectValue?["id"]?.intValue == 1)
       let meta = try #require(json["meta"]?.objectValue)
       #expect(meta["id"]?.stringValue == "0b8a1e2c-77c4-4f1b-9d2a-3f5e6a7b8c9d")
       #expect(meta["replayed"]?.boolValue == true)
+    }
+
+    /// Ends the channel's streams, then returns the first element `stream` had buffered, so a
+    /// missing delivery fails the test instead of hanging it.
+    private func firstBuffered<Element: Sendable>(
+      _ stream: AsyncStream<Element>, on channel: RealtimeChannel
+    ) async -> Element? {
+      await channel.finishStreams()
+      return await stream.first { _ in true }
     }
   }
 

@@ -1,5 +1,5 @@
 //
-//  RealtimeChannel+AsyncAwait.swift
+//  RealtimeChannel+Streams.swift
 //
 //
 //  Created by Guilherme Souza on 17/04/24.
@@ -7,48 +7,45 @@
 
 import ConcurrencyExtras
 public import Foundation
+import IssueReporting
 
-extension RealtimeChannelV2 {
+extension RealtimeChannel {
   /// Returns an async stream that emits a ``PresenceAction`` whenever clients join or leave.
   ///
-  /// The stream terminates when the caller cancels the enclosing task or the channel is removed.
-  /// Register this stream before calling ``subscribeWithError()``.
+  /// Having a presence stream open when ``subscribe()`` runs is what enables presence on the
+  /// channel, so open it before subscribing. The stream ends when the iterating task is
+  /// cancelled or the channel is removed.
   ///
   /// - Returns: An `AsyncStream` of ``PresenceAction`` values.
-  public func presenceChange() -> AsyncStream<any PresenceAction> {
+  public func presenceChanges() -> AsyncStream<any PresenceAction> {
+    guard canChangeJoinConfig(for: "presence") else { return .finished }
     let (stream, continuation) = AsyncStream<any PresenceAction>.makeStream(
       bufferingPolicy: .unbounded
     )
-
-    let subscription = onPresenceChange {
-      continuation.yield($0)
-    }
-
-    continuation.onTermination = { _ in
-      subscription.cancel()
-    }
-
+    register(.presence(continuation), terminating: continuation)
     return stream
   }
 
   /// Returns an async stream of ``InsertAction`` values for the given table.
   ///
-  /// Register this stream before calling ``subscribeWithError()``.
+  /// Open this stream before calling ``subscribe()``; it shapes the join request.
   ///
   /// - Parameters:
   ///   - type: Pass `InsertAction.self`.
   ///   - schema: The database schema. Defaults to `"public"`.
   ///   - table: The table name, or `nil` to match all tables.
   ///   - filter: An optional ``RealtimePostgresFilter`` to narrow the rows.
+  ///   - select: Restricts the change payload to a subset of columns. Requires an explicit
+  ///     `schema` and `table`.
   /// - Returns: An `AsyncStream<InsertAction>`.
-  public func postgresChange(
+  public func postgresChanges(
     _: InsertAction.Type,
     schema: String = "public",
     table: String? = nil,
     filter: RealtimePostgresFilter? = nil,
     select: [String]? = nil
   ) -> AsyncStream<InsertAction> {
-    postgresChange(
+    postgresChanges(
       event: .insert, schema: schema, table: table, filter: filter?.value, select: select
     )
     .compactErase()
@@ -56,22 +53,24 @@ extension RealtimeChannelV2 {
 
   /// Returns an async stream of ``UpdateAction`` values for the given table.
   ///
-  /// Register this stream before calling ``subscribeWithError()``.
+  /// Open this stream before calling ``subscribe()``; it shapes the join request.
   ///
   /// - Parameters:
   ///   - type: Pass `UpdateAction.self`.
   ///   - schema: The database schema. Defaults to `"public"`.
   ///   - table: The table name, or `nil` to match all tables.
   ///   - filter: An optional ``RealtimePostgresFilter`` to narrow the rows.
+  ///   - select: Restricts the change payload to a subset of columns. Requires an explicit
+  ///     `schema` and `table`.
   /// - Returns: An `AsyncStream<UpdateAction>`.
-  public func postgresChange(
+  public func postgresChanges(
     _: UpdateAction.Type,
     schema: String = "public",
     table: String? = nil,
     filter: RealtimePostgresFilter? = nil,
     select: [String]? = nil
   ) -> AsyncStream<UpdateAction> {
-    postgresChange(
+    postgresChanges(
       event: .update, schema: schema, table: table, filter: filter?.value, select: select
     )
     .compactErase()
@@ -79,22 +78,24 @@ extension RealtimeChannelV2 {
 
   /// Returns an async stream of ``DeleteAction`` values for the given table.
   ///
-  /// Register this stream before calling ``subscribeWithError()``.
+  /// Open this stream before calling ``subscribe()``; it shapes the join request.
   ///
   /// - Parameters:
   ///   - type: Pass `DeleteAction.self`.
   ///   - schema: The database schema. Defaults to `"public"`.
   ///   - table: The table name, or `nil` to match all tables.
   ///   - filter: An optional ``RealtimePostgresFilter`` to narrow the rows.
+  ///   - select: Restricts the change payload to a subset of columns. Requires an explicit
+  ///     `schema` and `table`.
   /// - Returns: An `AsyncStream<DeleteAction>`.
-  public func postgresChange(
+  public func postgresChanges(
     _: DeleteAction.Type,
     schema: String = "public",
     table: String? = nil,
     filter: RealtimePostgresFilter? = nil,
     select: [String]? = nil
   ) -> AsyncStream<DeleteAction> {
-    postgresChange(
+    postgresChanges(
       event: .delete, schema: schema, table: table, filter: filter?.value, select: select
     )
     .compactErase()
@@ -102,86 +103,72 @@ extension RealtimeChannelV2 {
 
   /// Returns an async stream of ``AnyAction`` values for all change types on the given table.
   ///
-  /// Register this stream before calling ``subscribeWithError()``.
+  /// Open this stream before calling ``subscribe()``; it shapes the join request.
   ///
   /// - Parameters:
   ///   - type: Pass `AnyAction.self`.
   ///   - schema: The database schema. Defaults to `"public"`.
   ///   - table: The table name, or `nil` to match all tables.
   ///   - filter: An optional ``RealtimePostgresFilter`` to narrow the rows.
+  ///   - select: Restricts the change payload to a subset of columns. Requires an explicit
+  ///     `schema` and `table`.
   /// - Returns: An `AsyncStream<AnyAction>`.
-  public func postgresChange(
+  public func postgresChanges(
     _: AnyAction.Type,
     schema: String = "public",
     table: String? = nil,
     filter: RealtimePostgresFilter? = nil,
     select: [String]? = nil
   ) -> AsyncStream<AnyAction> {
-    postgresChange(
+    postgresChanges(
       event: .all, schema: schema, table: table, filter: filter?.value, select: select
     )
   }
 
-  private func postgresChange(
+  func postgresChanges(
     event: PostgresChangeEvent,
     schema: String,
     table: String?,
     filter: String?,
     select: [String]? = nil
   ) -> AsyncStream<AnyAction> {
-    let (stream, continuation) = AsyncStream<AnyAction>.makeStream(bufferingPolicy: .unbounded)
-    let subscription = _onPostgresChange(
+    guard canChangeJoinConfig(for: "postgres_changes") else { return .finished }
+
+    let config = PostgresJoinConfig(
       event: event,
       schema: schema,
       table: table,
       filter: filter,
       select: select
-    ) {
-      continuation.yield($0)
-    }
-    continuation.onTermination = { _ in
-      subscription.cancel()
-    }
+    )
+
+    let (stream, continuation) = AsyncStream<AnyAction>.makeStream(bufferingPolicy: .unbounded)
+    register(.postgres(config, continuation), terminating: continuation)
     return stream
   }
 
   /// Returns an async stream of ``JSONObject`` broadcast payloads for the given event.
   ///
-  /// The stream terminates when the caller cancels the enclosing task or the channel is removed.
+  /// The stream ends when the iterating task is cancelled or the channel is removed. Pass `"*"`
+  /// to receive every event.
   ///
   /// - Parameter event: The broadcast event name to listen for.
   /// - Returns: An `AsyncStream<JSONObject>`.
-  public func broadcastStream(event: String) -> AsyncStream<JSONObject> {
+  public func broadcasts(event: String) -> AsyncStream<JSONObject> {
     let (stream, continuation) = AsyncStream<JSONObject>.makeStream(bufferingPolicy: .unbounded)
-
-    let subscription = onBroadcast(event: event) {
-      continuation.yield($0)
-    }
-
-    continuation.onTermination = { _ in
-      subscription.cancel()
-    }
-
+    register(.broadcast(event: event, continuation), terminating: continuation)
     return stream
   }
 
   /// Returns an async stream of raw binary `Data` broadcast payloads for the given event.
   ///
-  /// Use this when the sender is transmitting binary data via ``RealtimeChannelV2/broadcast(event:data:)``.
+  /// Use this when the sender is transmitting binary data via ``broadcast(event:data:)``.
   ///
   /// - Parameter event: The broadcast event name to listen for.
   /// - Returns: An `AsyncStream<Data>`.
-  public func broadcastDataStream(event: String) -> AsyncStream<Data> {
+  public func broadcastData(event: String) -> AsyncStream<Data> {
     let (stream, continuation) = AsyncStream<Data>.makeStream(bufferingPolicy: .unbounded)
-
-    let subscription = onBroadcastData(event: event) {
-      continuation.yield($0)
-    }
-
-    continuation.onTermination = { _ in
-      subscription.cancel()
-    }
-
+    register(.broadcastData(event: event, continuation), terminating: continuation)
     return stream
   }
 
@@ -190,25 +177,40 @@ extension RealtimeChannelV2 {
   /// System events convey channel-level status information from the server.
   ///
   /// - Returns: An `AsyncStream<RealtimeMessageV2>`.
-  public func system() -> AsyncStream<RealtimeMessageV2> {
+  public func systemMessages() -> AsyncStream<RealtimeMessageV2> {
     let (stream, continuation) = AsyncStream<RealtimeMessageV2>.makeStream(
       bufferingPolicy: .unbounded
     )
-
-    let subscription = onSystem {
-      continuation.yield($0)
-    }
-
-    continuation.onTermination = { _ in
-      subscription.cancel()
-    }
-
+    register(.system(continuation), terminating: continuation)
     return stream
+  }
+
+  /// Streams that shape the join payload can only be opened before the join is sent.
+  private func canChangeJoinConfig(for feature: String) -> Bool {
+    switch state {
+    case .unsubscribed, .unsubscribing:
+      return true
+    case .subscribing, .subscribed:
+      reportIssue(
+        """
+        Cannot open "\(feature)" streams for "\(topic)" after `subscribe()`.
+        Please open all your \(feature) streams before subscribing to the channel.
+        """
+      )
+      return false
+    }
   }
 }
 
 extension AsyncStream<AnyAction> {
   fileprivate func compactErase<T: Sendable>() -> AsyncStream<T> {
     AsyncStream<T>(compactMap { $0.wrappedAction as? T } as AsyncCompactMapSequence<Self, T>)
+  }
+}
+
+extension AsyncStream {
+  /// A stream with no elements.
+  fileprivate static var finished: AsyncStream {
+    AsyncStream { $0.finish() }
   }
 }

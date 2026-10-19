@@ -74,7 +74,7 @@ struct SupabaseClientTests {
     )
 
     #expect(client.auth.configuration.clock as AnyObject === clock)
-    #expect(client.realtimeV2.options.clock as AnyObject === clock)
+    #expect(client.realtime.options.clock as AnyObject === clock)
   }
 
   @Test
@@ -134,10 +134,10 @@ struct SupabaseClientTests {
 
     #expect(client.functions.configuration.region == .apNortheast1)
 
-    let realtimeURL = client.realtimeV2.url
+    let realtimeURL = client.realtime.url
     #expect(realtimeURL.absoluteString == "https://project-ref.supabase.co/realtime/v1")
 
-    let realtimeOptions = client.realtimeV2.options
+    let realtimeOptions = client.realtime.options
     let expectedRealtimeHeader = client._headers.merging(with: [
       .init("custom_realtime_header_key")!: "custom_realtime_header_value"
     ]
@@ -172,7 +172,7 @@ struct SupabaseClientTests {
       )
     )
 
-    let realtimeOptions = client.realtimeV2.options
+    let realtimeOptions = client.realtime.options
     #expect(realtimeOptions.logger[metadataKey: "system"] == "realtime")
   }
 
@@ -241,11 +241,11 @@ struct SupabaseClientTests {
     )
 
     #expect(
-      client.realtimeV2.options.http.transport is URLSessionTransport,
+      client.realtime.options.http.transport is URLSessionTransport,
       "the default URLSessionTransport should be propagated to Realtime client"
     )
     #expect(
-      client.realtimeV2.options.http.middlewares.contains { $0 is TraceContextMiddleware },
+      client.realtime.options.http.middlewares.contains { $0 is TraceContextMiddleware },
       "SDK middlewares should be installed when the caller sets no transport"
     )
   }
@@ -267,11 +267,11 @@ struct SupabaseClientTests {
     )
 
     #expect(
-      client.realtimeV2.options.http.transport is ClosureTransport,
+      client.realtime.options.http.transport is ClosureTransport,
       "user-provided realtime transport should be preserved"
     )
     #expect(
-      client.realtimeV2.options.http.middlewares.isEmpty,
+      client.realtime.options.http.middlewares.isEmpty,
       "middlewares should stay as the caller passed them when they set a transport"
     )
   }
@@ -297,7 +297,7 @@ struct SupabaseClientTests {
     )
 
     #expect(
-      client.realtimeV2.options.session === realtimeSpecificSession,
+      client.realtime.options.session === realtimeSpecificSession,
       "user-provided realtime session should be preserved"
     )
 
@@ -316,7 +316,7 @@ struct SupabaseClientTests {
     )
 
     #expect(
-      clientWithoutRealtimeSession.realtimeV2.options.session == nil,
+      clientWithoutRealtimeSession.realtime.options.session == nil,
       "the HTTP transport's URLSession must not leak into Realtime's WebSocket"
     )
   }
@@ -481,7 +481,7 @@ struct SupabaseClientTests {
 
       _ = client.rest
       _ = client.functions
-      _ = client.realtimeV2
+      _ = client.realtime
 
       _ = client.storage
     }
@@ -693,7 +693,7 @@ struct SupabaseClientTests {
       let entry = try #require(seen.value.first { $0.path.hasPrefix(prefix) }, "\(prefix)")
       #expect(entry.timeout == .seconds(7), "\(prefix)")
     }
-    #expect(client.realtimeV2.options.http.timeout == .seconds(7))
+    #expect(client.realtime.options.http.timeout == .seconds(7))
   }
 
   @Test
@@ -741,7 +741,7 @@ struct SupabaseClientTests {
       )
     )
 
-    let middlewares = client.realtimeV2.options.http.middlewares
+    let middlewares = client.realtime.options.http.middlewares
     #expect(middlewares.contains { $0 is TagMiddleware })
     #expect(middlewares.contains { $0 is TraceContextMiddleware })
   }
