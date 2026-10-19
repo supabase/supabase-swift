@@ -862,38 +862,12 @@ import Testing
     }
 
     @Test
-    func messageProcessingRespectsCancellation() async throws {
+    func disconnectCancelsTheSocketReader() async throws {
       try await withMainSerialExecutor {
-        let messagesProcessed = LockIsolated(0)
-
         try await sut.connect()
-
-        for i in 1...3 {
-          server.send(
-            RealtimeMessageV2(
-              joinRef: nil,
-              ref: "\(i)",
-              topic: "test-topic",
-              event: "test-event",
-              payload: ["index": .double(Double(i))]
-            )
-          )
-          messagesProcessed.withValue { $0 += 1 }
-        }
+        #expect(await sut.messageTask != nil, "connect() should start the socket reader")
 
         await sut.disconnect()
-
-        for i in 4...6 {
-          server.send(
-            RealtimeMessageV2(
-              joinRef: nil,
-              ref: "\(i)",
-              topic: "test-topic",
-              event: "test-event",
-              payload: ["index": .double(Double(i))]
-            )
-          )
-        }
 
         #expect(await sut.messageTask == nil, "Message task should be nil after disconnect")
       }
