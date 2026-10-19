@@ -4,6 +4,7 @@ import CustomDump
 import Foundation
 import InlineSnapshotTesting
 import TestHelpers
+import Helpers
 import Testing
 @testable import Realtime
 #if canImport(FoundationNetworking)
@@ -588,7 +589,9 @@ import Testing
         try await sut.connect()
 
         server.close(code: nil, reason: "boom")
-        for await status in sut.statusChanges where status == .connecting { break }
+        try await withTimeout(.seconds(5)) {
+          for await status in sut.statusChanges where status == .connecting { break }
+        }
 
         await testClock.advance(by: .seconds(1))
 
