@@ -1,6 +1,7 @@
 import Clocks
 import ConcurrencyExtras
 import Foundation
+import Helpers
 import TestHelpers
 import Testing
 
@@ -304,6 +305,36 @@ import Testing
 
       #expect(channel.statusSnapshot == .unsubscribed)
       #expect(await channel.joinRef == nil)
+    }
+
+    /// `removeAllChannels()` must keep each channel routable until its `phx_close` arrives: a
+    /// close for a topic no longer in `channels` is dropped, and the unsubscribe then waits for
+    /// the whole timeout.
+    @Test
+    func removeAllChannelsDeliversEachServerClose() async throws {
+      let h = Harness()
+      let room = await h.client.channel("room")
+      let lobby = await h.client.channel("lobby")
+      let roomJoin = try await h.subscribe(room)
+      let lobbyJoin = try await h.subscribe(lobby)
+
+      let roomStatuses = room.statusChanges
+      let lobbyStatuses = lobby.statusChanges
+      let removal = Task { await h.client.removeAllChannels() }
+      _ = try #require(await h.received(ChannelEvent.leave))
+      _ = try #require(await h.received(ChannelEvent.leave))
+      try h.close(roomJoin)
+      try h.close(lobbyJoin)
+      // Bounded on the wall clock: a dropped close leaves the unsubscribe waiting on the test
+      // clock, and `removal.value` could not be cancelled, so check the statuses instead.
+      try await withTimeout(.seconds(5)) {
+        for await status in roomStatuses where status == .unsubscribed { break }
+        for await status in lobbyStatuses where status == .unsubscribed { break }
+      }
+      await removal.value
+
+      #expect(await h.client.channels.isEmpty)
+      #expect(h.client.statusSnapshot == .disconnected)
     }
 
     /// Issue #1145: with the socket gone, `phx_leave` could only be buffered into the next

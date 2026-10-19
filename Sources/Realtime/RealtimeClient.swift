@@ -361,9 +361,9 @@ public actor RealtimeClient {
   /// ``RealtimeClientOptions/defaultDisconnectOnEmptyChannelsAfter`` and
   /// disconnects the WebSocket right away.
   public func removeAllChannels() async {
+    // Keep the channels routable until they have unsubscribed: each one waits for the server's
+    // `phx_close`, which `onMessage` can only deliver to a channel still in `channels`.
     let removed = Array(channels.values)
-    channels = [:]
-
     await withTaskGroup(of: Void.self) { group in
       for channel in removed {
         group.addTask {
@@ -374,6 +374,9 @@ public actor RealtimeClient {
         }
       }
       await group.waitForAll()
+    }
+    for channel in removed {
+      channels[channel.topic] = nil
     }
 
     // Cancel any pending deferred disconnect and disconnect immediately.
