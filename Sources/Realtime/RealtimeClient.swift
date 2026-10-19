@@ -85,14 +85,45 @@ public actor RealtimeClient {
   var ref = 0
   var pendingHeartbeatRef: String?
 
-  enum ConnectionState {
+  enum ConnectionState: Equatable {
     case disconnected
-    case connecting(Task<Void, any Error>)
+    /// `connect()` is waiting on the transport (`connectAttempt`).
+    case connecting
     case connected(any WebSocket)
+    /// The reconnect loop (`tasks`, at `.connection`) is retrying with backoff.
     case reconnecting
+
+    var status: RealtimeClientStatus {
+      switch self {
+      case .disconnected: .disconnected
+      case .connecting, .reconnecting: .connecting
+      case .connected: .connected
+      }
+    }
+
+    static func == (lhs: ConnectionState, rhs: ConnectionState) -> Bool {
+      switch (lhs, rhs) {
+      case (.disconnected, .disconnected), (.connecting, .connecting),
+        (.reconnecting, .reconnecting):
+        true
+      case (.connected(let a), .connected(let b)):
+        a === b
+      default:
+        false
+      }
+    }
   }
 
+  /// Only ever written by `apply(_:)`.
   var connection: ConnectionState = .disconnected
+
+  /// The `connect()` attempt in flight while `connection` is `.connecting`. Kept outside the
+  /// state so the transition table stays pure and comparable.
+  var connectAttempt: Task<Void, any Error>?
+
+  /// `apply(_:)` re-entrancy guard and the events raised while it was running.
+  var isApplying = false
+  var pendingEvents: [Event] = []
 
   /// Why an unstructured task exists. Starting a new run of some work replaces the previous
   /// run at the same location, so nothing has to be cancelled by hand.
@@ -209,8 +240,8 @@ public actor RealtimeClient {
     switch connection {
     case .connected(let conn):
       conn.close(code: nil, reason: "Client deallocated")
-    case .connecting(let task):
-      task.cancel()
+    case .connecting:
+      connectAttempt?.cancel()
     case .reconnecting:
       break
     case .disconnected:
