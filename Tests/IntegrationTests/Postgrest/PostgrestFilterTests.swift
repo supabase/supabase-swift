@@ -22,8 +22,6 @@ struct PostgrestFilterTests {
   )
 
   init() async throws {
-    // Clean up test data before running tests.
-    // Delete users with email (test data), preserving seed data (users with username only).
     try await client.from("users").delete().not("email", operator: .is, value: JSONValue.null)
       .execute()
   }

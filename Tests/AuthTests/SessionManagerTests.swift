@@ -16,14 +16,6 @@ import Testing
 
 @testable import Auth
 
-// `withMainSerialExecutor` mutates a process-global flag (ConcurrencyExtras'
-// `uncheckedUseMainSerialExecutor`) to force deterministic task scheduling within its closure.
-// Swift Testing runs tests in the same suite concurrently by default, so two tests racing to
-// flip that global would interfere with each other — serialize this suite, mirroring the
-// `_clock`-swap precedent in PostgrestBuilderTests (PR #1095). `.mainSerialExecutorSerialized`
-// additionally prevents this suite from interleaving with any other suite (in this or another
-// target) that also calls `withMainSerialExecutor`, since `.serialized` alone only serializes a
-// suite's own tests.
 @Suite(.serialized, .mainSerialExecutorSerialized)
 struct SessionManagerTests {
   let http = RecordingTransport()
@@ -114,7 +106,6 @@ struct SessionManagerTests {
         return (HTTPResponse(status: .ok), try AuthClient.Configuration.jsonEncoder.encode(session))
       }
 
-      // Fire N tasks and call sut.session()
       let tasks = (0..<10).map { _ in
         Task {
           try await sut.session()
@@ -126,14 +117,12 @@ struct SessionManagerTests {
       refreshSessionContinuation.yield(validSession)
       refreshSessionContinuation.finish()
 
-      // Await for all tasks to complete.
       var result: [Result<Session, any Error>] = []
       for task in tasks {
         let value = await task.result
         result.append(value)
       }
 
-      // Verify that refresher and storage was called only once.
       expectNoDifference(refreshSessionCallCount.value, 1)
       expectNoDifference(
         try result.map { try $0.get().accessToken },
@@ -148,8 +137,6 @@ struct SessionManagerTests {
     let dependencies = Self.makeDependencies(http: http, clock: clock)
     let sut = dependencies.sessionManager
 
-    // `.expired` is close enough to expiry that every tick refreshes, and the
-    // response is expired too, so the next tick refreshes again.
     dependencies.sessionStorage.store(.expired)
 
     let refreshCount = LockIsolated(0)
@@ -163,28 +150,20 @@ struct SessionManagerTests {
 
     await sut.startAutoRefresh()
 
-    // The loop refreshes once before its first sleep.
     let sawFirstTick = await waitUntil { refreshCount.value >= 1 }
 
-    // Only advancing the injected clock releases the next tick — no wall-clock
-    // time passes. Advance in a loop so the test does not depend on the
-    // auto-refresh task having reached its `sleep` at any exact moment.
     for _ in 0..<50 where refreshCount.value < 2 {
       await clock.advance(by: .seconds(autoRefreshTickDuration))
       try? await Task.sleep(nanoseconds: 10_000_000)
     }
     let tickCount = refreshCount.value
 
-    // Awaited, not deferred into a fire-and-forget Task, so the loop is gone before the test ends.
     await sut.stopAutoRefresh()
 
     #expect(sawFirstTick)
     #expect(tickCount >= 2)
   }
 
-  // MARK: - Commit guard (SDK-1882)
-
-  /// A session with tokens derived from `name`, so two sessions in one test are distinguishable.
   private func session(_ name: String) -> Session {
     Session(
       accessToken: "\(name)-access",
@@ -196,7 +175,6 @@ struct SessionManagerTests {
     )
   }
 
-  /// Holds the `/token` response until `release()` is called, so a sign-out can interleave.
   private func heldTokenResponse(
     _ response: @escaping @Sendable () throws -> (HTTPResponse, Data)
   ) -> (requestSeen: LockIsolated<Bool>, release: @Sendable () -> Void) {
@@ -243,7 +221,6 @@ struct SessionManagerTests {
     let sawRequest = await waitUntil { requestSeen.value }
     #expect(sawRequest)
 
-    // User A signs out, then user B signs in — both land while A's refresh is in flight.
     await sut.remove()
     await sut.update(userB)
 
@@ -262,7 +239,6 @@ struct SessionManagerTests {
     let userB = session("B")
 
     dependencies.sessionStorage.store(userA)
-    // `/logout` has already revoked A's refresh token by the time this answer arrives.
     let (requestSeen, release) = heldTokenResponse {
       (
         HTTPResponse(status: .badRequest, headerFields: [.apiVersionHeaderName: "2024-01-01"]),
@@ -285,8 +261,6 @@ struct SessionManagerTests {
     expectNoDifference(
       dependencies.sessionStorage.get()?.refreshToken, userB.refreshToken)
     #expect(!events.value.contains(.signedOut))
-    // A's caller still learns its own session is gone — the server did reject A's refresh token.
-    // What must not happen is B being signed out along with it.
     #expect((result.error as? AuthError)?.kind == .sessionMissing)
   }
 
@@ -304,15 +278,12 @@ struct SessionManagerTests {
 
     struct RefreshBody: Decodable { let refreshToken: String }
 
-    // Answers each token with its own rotated session, so joining the wrong task is visible in
-    // the result and not only in the request count.
     http.respond(when: { $0.url?.path.contains("/token") == true }) { _, body in
       let refreshToken = try AuthClient.Configuration.jsonDecoder.decode(
         RefreshBody.self, from: body ?? Data()
       ).refreshToken
       tokensRequested.withValue { $0.append(refreshToken) }
 
-      // Hold A's request only, so B's refresh is requested while A's is still in flight.
       if refreshToken == userA.refreshToken {
         _ = await gate.first(where: { _ in true })
       }
@@ -329,8 +300,6 @@ struct SessionManagerTests {
     #expect(sawRequest)
 
     await sut.update(userB)
-    // Started as a task, not awaited inline: while the bug is present B joins A's gated task, and
-    // awaiting inline would deadlock against the release below instead of failing.
     let refreshB = Task { try await sut.refreshSession(userB.refreshToken) }
     _ = await waitUntil { tokensRequested.value.count == 2 }
 
@@ -339,7 +308,6 @@ struct SessionManagerTests {
     _ = await refreshA.result
     let resultB = await refreshB.result
 
-    // B asked to refresh its own token, so it must not be served A's in-flight task.
     expectNoDifference(try resultB.get().refreshToken, refreshedB.refreshToken)
     expectNoDifference(tokensRequested.value.sorted(), [userA, userB].map(\.refreshToken).sorted())
   }
@@ -374,13 +342,9 @@ struct SessionManagerTests {
     let sawFirstA = await waitUntil { tokensRequested.value.contains(userA.refreshToken) }
     #expect(sawFirstA)
 
-    // B's refresh must not evict A's in-flight task, so this second A joins the first rather than
-    // redeeming A's refresh token a second time.
     let refreshB = Task { try await sut.refreshSession(userB.refreshToken) }
     _ = await waitUntil { tokensRequested.value.contains(userB.refreshToken) }
     let secondA = Task { try await sut.refreshSession(userA.refreshToken) }
-    // A short window: while the bug is present the third request is issued as soon as the join
-    // check misses, so this only has to outlast that — not wait out a full timeout.
     _ = await waitUntil(timeout: 0.5) { tokensRequested.value.count > 2 }
 
     continuation.yield(())
@@ -394,8 +358,6 @@ struct SessionManagerTests {
 
   @Test
   func refreshCommitsWhenStorageStartsEmpty() async throws {
-    // `setSession(accessToken:refreshToken:)` refreshes an externally-sourced token with nothing
-    // stored yet. The guard must not mistake that for a session replaced under it.
     let hydrated = session("hydrated")
 
     http.respond(when: { $0.url?.path.contains("/token") == true }) { _, _ in
@@ -409,8 +371,6 @@ struct SessionManagerTests {
       dependencies.sessionStorage.get()?.refreshToken, hydrated.refreshToken)
   }
 
-  // MARK: - Ownership (SDK-1894)
-
   @Test
   func refreshStartingFromEmptyStorageDoesNotOverwriteASessionStoredMeanwhile() async throws {
     let hydrated = session("hydrated")
@@ -422,12 +382,10 @@ struct SessionManagerTests {
     let (events, stopCollecting) = collectAuthEvents()
     defer { stopCollecting() }
 
-    // Storage is empty when this refresh starts — the `setSession` hydration path.
     let refresh = Task { try await sut.refreshSession(hydrated.refreshToken) }
     let sawRequest = await waitUntil { requestSeen.value }
     #expect(sawRequest)
 
-    // User B signs in while the refresh is in flight.
     await sut.update(userB)
 
     release()
@@ -481,8 +439,6 @@ struct SessionManagerTests {
     let (events, stopCollecting) = collectAuthEvents()
     defer { stopCollecting() }
 
-    // `refreshSession(refreshToken:)` is public and takes any token. A token that is not B's
-    // cannot scope its failure to B just because B happens to be stored.
     let result = await Task { try await sut.refreshSession("foreign-refresh") }.result
 
     expectNoDifference(dependencies.sessionStorage.get()?.refreshToken, userB.refreshToken)
@@ -492,9 +448,6 @@ struct SessionManagerTests {
 
   @Test
   func foreignRefreshTokenSuccessReplacesTheStoredSession() async throws {
-    // `setSession(accessToken:refreshToken:)` with an expired token while another user is stored
-    // refreshes a token storage does not hold. The caller asked for that replacement; only a
-    // session that changed under the refresh is grounds to discard it.
     let userB = session("B")
     let refreshedA = session("A2")
     dependencies.sessionStorage.store(userB)

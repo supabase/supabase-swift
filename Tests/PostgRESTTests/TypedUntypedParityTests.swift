@@ -11,15 +11,6 @@ import Testing
 
 @_spi(Experimental) @testable import PostgREST
 
-/// The typed API and the untyped string builders share one request core, so one operation spelled
-/// both ways has to put the same bytes on the wire. Each test builds a request through
-/// `from(Todo.self)` and through `from("todos")` and compares everything the transport sees.
-///
-/// Two rows are missing on purpose:
-///
-/// - `rpc` has no typed spelling yet (SDK-1577).
-/// - `maybeSingle()` differs by design: the typed one asks for the array and enforces the row
-///   count client-side (SDK-1635), the untyped one asks for the object media type.
 @Suite
 struct TypedUntypedParityTests {
   struct Todo: _PostgrestWritableRelation, _PostgrestKeyedRelation {
@@ -62,7 +53,6 @@ struct TypedUntypedParityTests {
     }
   }
 
-  /// What the transport sees, which is all a parity check is allowed to care about.
   struct Wire: Equatable {
     var method: String?
     var path: String?
@@ -98,8 +88,6 @@ struct TypedUntypedParityTests {
       fileID: fileID, filePath: filePath, line: line, column: column)
   }
 
-  // MARK: - select
-
   @Test
   func selectWholeRow() async throws {
     try await expectParity {
@@ -118,8 +106,6 @@ struct TypedUntypedParityTests {
     }
   }
 
-  // MARK: - filters
-
   @Test
   func comparisons() async throws {
     try await expectParity {
@@ -137,8 +123,6 @@ struct TypedUntypedParityTests {
     }
   }
 
-  /// Spec §9.5: a top-level scalar operand runs to the end of the parameter, so neither path
-  /// quotes it. Quoting would make `eq."a,b"` match nothing.
   @Test
   func scalarOperandsWithStructuralCharactersStayUnquoted() async throws {
     try await expectParity {
@@ -188,8 +172,6 @@ struct TypedUntypedParityTests {
     }
   }
 
-  /// The untyped `or` takes PostgREST grammar as written, so its caller quotes by hand what the
-  /// typed renderer quotes for them.
   @Test
   func orGroup() async throws {
     try await expectParity {
@@ -270,8 +252,6 @@ struct TypedUntypedParityTests {
         .execute()
     }
   }
-
-  // MARK: - modifiers
 
   @Test
   func orderLimitAndRange() async throws {
@@ -358,8 +338,6 @@ struct TypedUntypedParityTests {
       _ = try await $0.from("todos").select(count: .estimated).execute()
     }
   }
-
-  // MARK: - writes
 
   @Test
   func insertOneRow() async throws {

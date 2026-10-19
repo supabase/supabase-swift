@@ -9,11 +9,6 @@ import Foundation
 @_spi(Experimental) import PostgrestMacros
 import Testing
 
-// `NoteSummaries` and `Notes` are in `Generated.swift`, the view and its table in
-// `supabase/migrations/20261009000001_trigger_writable_view.sql`.
-
-/// A view Postgres cannot update on its own is writable through an `INSTEAD OF INSERT` trigger, so
-/// the generator leaves `readOnly` off it and the generated `Draft` inserts through it.
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil))
 struct PostgrestTriggerWritableViewIntegrationTests {
   let client = PostgrestClient(

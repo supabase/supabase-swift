@@ -594,8 +594,6 @@ struct RequestsTests {
 
     sut.dependencies.sessionStorage.store(.valid)
 
-    // The credential response carries W3C camelCase keys (e.g. `clientDataJSON`)
-    // that MUST survive encoding untouched by the snake_case strategy.
     await assert {
       _ = try await sut.mfa.verify(
         params: .init(
@@ -652,7 +650,6 @@ struct RequestsTests {
   func passkeyAuthenticationOptions() async throws {
     let sut = makeSUT()
 
-    // No session stored: passkey authentication options must not require auth.
     await assert {
       _ = try await sut.passkeyAuthenticationOptions()
     }

@@ -27,10 +27,6 @@ import Testing
 @Suite(.serialized)
 enum PostgrestMockerTests {}
 
-/// Shared fixture for suites that exercise `PostgrestClient` against a Mocker-backed session.
-///
-/// Suites compose this instead of subclassing, since Swift Testing suites don't share instance
-/// state through inheritance. Each suite creates its own `PostgrestQueryFixture` in its `init()`.
 struct PostgrestQueryFixture {
   static let url = URL(string: "http://localhost:54321/rest/v1")!
 

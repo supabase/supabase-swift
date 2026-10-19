@@ -26,8 +26,6 @@ struct TodoListView: View {
       IfLet($createTodoRequest) { $createTodoRequest in
         AddTodoListView(request: $createTodoRequest) { result in
           withAnimation {
-            //            createTodoRequest = nil
-
             switch result {
             case .success(let todo):
               error = nil
@@ -113,7 +111,6 @@ struct TodoListView: View {
         .value
       todos[id: updatedTodo.id] = updatedTodo
     } catch {
-      // rollback old todo.
       todos[id: todo.id] = todo
 
       self.error = error
@@ -136,7 +133,6 @@ struct TodoListView: View {
     } catch {
       self.error = error
 
-      // rollback todos on error.
       todos = oldTodos
     }
   }

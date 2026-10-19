@@ -21,8 +21,6 @@ struct SessionAPIClient: Sendable {
     do {
       return try await api.execute(request, body: body)
     } catch let error as AuthError where error.invalidatesSession {
-      // The check and the delete happen together inside the session manager's actor, so a
-      // sign-in cannot land between them.
       if await sessionManager.removeIfUnchanged(ownership) {
         eventEmitter.emit(.signedOut, session: nil)
       }

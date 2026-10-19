@@ -84,8 +84,6 @@ public final class HTTPBody: AsyncSequence, @unchecked Sendable {
     let attributes = try FileManager.default.attributesOfItem(atPath: fileURL.path)
     let size = (attributes[.size] as? NSNumber)?.int64Value ?? 0
     self.init(storage: .file(fileURL), length: .known(size), iterationBehavior: .multiple) {
-      // Opened on the first pull and read 64 KiB per pull, so a consumer that stops early never
-      // reads the rest of the file. `FileHandle` closes its descriptor when it is released.
       let handle = Box<FileHandle?>(nil)
       return AsyncThrowingStream {
         let open = try handle.value ?? FileHandle(forReadingFrom: fileURL)
@@ -215,7 +213,6 @@ extension Data {
   public init(collecting body: HTTPBody, upTo maxBytes: Int) async throws {
     var data = Data()
     if case .known(let count) = body.length, count > 0 {
-      // The declared length is a hint from the peer; never reserve more than the caller's cap.
       data.reserveCapacity(Int(clamping: Swift.min(count, Int64(maxBytes))))
     }
     for try await chunk in body {

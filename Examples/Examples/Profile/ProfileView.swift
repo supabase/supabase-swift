@@ -43,7 +43,6 @@ struct ProfileView: View {
           }
         }
 
-        // User Information
         if let user {
           Section("Account Information") {
             VStack(alignment: .leading, spacing: 8) {
@@ -106,7 +105,6 @@ struct ProfileView: View {
             .padding(.vertical, 4)
           }
 
-          // Profile Management
           Section("Profile Management") {
             NavigationLink {
               UpdateProfileView(user: user)
@@ -121,7 +119,6 @@ struct ProfileView: View {
             }
           }
 
-          // Security Section
           Section("Security") {
             HStack {
               Label("Multi-Factor Auth", systemImage: "lock.shield.fill")
@@ -155,7 +152,6 @@ struct ProfileView: View {
             }
           }
 
-          // Linked Identities
           Section("Linked Accounts") {
             NavigationLink {
               UserIdentityList()
@@ -187,7 +183,6 @@ struct ProfileView: View {
             }
           }
 
-          // Raw User Data
           Section("User Data (JSON)") {
             if let json = try? JSONValue(user) {
               JSONValueView(value: json)
@@ -195,7 +190,6 @@ struct ProfileView: View {
           }
         }
 
-        // Sign Out
         Section {
           Button(role: .destructive) {
             Task {
@@ -277,7 +271,6 @@ struct ProfileView: View {
 
       try await supabase.auth.reauthenticate()
 
-      // Refresh user data after reauthentication
       user = try await supabase.auth.user()
     } catch {
       self.error = error
@@ -290,7 +283,6 @@ struct ProfileView: View {
       error = nil
       try await supabase.auth.unlinkIdentity(identity)
 
-      // Refresh user data
       user = try await supabase.auth.user()
     } catch {
       self.error = error

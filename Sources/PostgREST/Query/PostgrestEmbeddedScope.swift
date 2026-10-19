@@ -8,8 +8,6 @@
 import Foundation
 import IssueReporting
 
-// MARK: - Declaration
-
 /// An embed a selection declares, as `@SelectionOf` records a `@Relationship` property.
 ///
 /// Three facts make an embed addressable, and a scope needs all three: the alias the response
@@ -94,8 +92,6 @@ public protocol _PostgrestEmbeddingSelection: _PostgrestSelection {
   /// The selection's embeds, for naming one in ``_PostgrestQuery/embedded(_:_:)``.
   static var embeds: Embeds { get }
 }
-
-// MARK: - Scope
 
 /// Filters, sort keys and a row window applied inside one embed.
 ///
@@ -204,8 +200,6 @@ extension _PostgrestEmbeddedScope where S: _PostgrestEmbeddingSelection {
   }
 }
 
-// MARK: - Query
-
 extension _PostgrestQuery {
   /// Shapes the rows of one embed without changing which parent rows come back.
   ///
@@ -267,7 +261,6 @@ extension _PostgrestQuery {
     applying(_PostgrestEmbeddedScope<S>().requiring(embed, scope))
   }
 
-  /// Appends a top-level scope's parameters and marks its `!inner` entries in `select`.
   private func applying<S>(_ scope: _PostgrestEmbeddedScope<S>) -> Self {
     var query = self
     query.request.query += scope.items
@@ -285,17 +278,11 @@ extension _PostgrestQuery {
     return query
   }
 
-  /// Inserts `!inner` into the entry at `path`, a chain of select-entry heads from the top level
-  /// down. Each head is searched from where the previous one matched, so a nested alias is found
-  /// inside its parent's parentheses and not at an unrelated level.
-  ///
-  /// Hint first, then `!inner`: §9.2 verified either order is accepted, and one is pinned.
   static func markingInner(_ path: [String], in select: String) -> String {
     var select = select
     var searchStart = select.startIndex
     var alreadyInner = false
     for head in path {
-      // An entry at this level is spelled one of two ways; take whichever comes first.
       let plain = select.range(of: head + "(", range: searchStart..<select.endIndex)
       let inner = select.range(of: head + "!inner(", range: searchStart..<select.endIndex)
       guard

@@ -68,7 +68,6 @@ struct PresenceView: View {
       try await channel.subscribeWithError()
       self.channel = channel
 
-      // Track current user
       let userId = auth.currentUserID
       try await channel.track(
         PresenceUser(
@@ -77,9 +76,7 @@ struct PresenceView: View {
         )
       )
 
-      // Listen to presence changes
       for await state in presence {
-        // Convert presence state to array of users
         var users: [PresenceUser] = []
         for (_, presence) in state.joins {
           let decoded = try presence.decodeState(as: PresenceUser.self)

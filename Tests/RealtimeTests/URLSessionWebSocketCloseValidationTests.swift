@@ -11,19 +11,9 @@ import Testing
 @testable import Realtime
 
 #if canImport(FoundationNetworking)
-  // `URLSessionWebSocketTask` lives in `FoundationNetworking` on Linux, matching the guard in
-  // `URLSessionWebSocket.swift`.
   import FoundationNetworking
 #endif
 
-/// Covers the two pure helpers that decide what close code and reason a socket ends up
-/// reporting: ``URLSessionWebSocket/validatedCloseCode(_:)``/
-/// ``URLSessionWebSocket/validatedCloseReason(_:)`` for values arriving from user code via
-/// `close(code:reason:)`, and ``URLSessionWebSocket/closeFrame(for:)`` for a transport error
-/// arriving from the receive loop.
-///
-/// All three are pure — the callers report the rejection and drive the teardown — so these
-/// tests never drive `reportIssue`, which segfaults under `xcodebuild test` (SDK-435).
 @Suite
 struct URLSessionWebSocketCloseValidationTests {
   @Test(arguments: [1000, 1001, 1002, 1003, 1007, 1011, 3000, 4000, 4999])
@@ -38,7 +28,6 @@ struct URLSessionWebSocketCloseValidationTests {
 
   @Test(arguments: [1004, 1005, 1006, 1015, 2999, 5000, 0, -1])
   func dropsCloseCodesRFC6455Forbids(code: Int) {
-    // Dropping the code closes without one (the peer sees 1005) rather than trapping.
     #expect(URLSessionWebSocket.validatedCloseCode(code) == nil)
   }
 
@@ -60,9 +49,6 @@ struct URLSessionWebSocketCloseValidationTests {
 
   @Test
   func truncatesOnWholeCharactersSoTheFrameNeverSplitsAScalar() throws {
-    // Each rocket is 4 UTF-8 bytes, so 30 fit within the 123-byte limit (120) and the 31st
-    // would overshoot it at 124. A byte-wise cut would split that 31st rocket, leaving a
-    // replacement character — the result would be neither this value nor a prefix of the original.
     let reason = String(repeating: "🚀", count: 40)
     let truncated = URLSessionWebSocket.validatedCloseReason(reason)
 
@@ -71,7 +57,6 @@ struct URLSessionWebSocketCloseValidationTests {
     #expect(reason.hasPrefix(try #require(truncated)))
   }
 
-  /// 1000 is a named case everywhere, so it converts on every platform.
   @Test
   func normalClosureConvertsOnEveryPlatform() throws {
     let converted = try #require(URLSessionWebSocketTask.CloseCode(rawValue: 1000))
@@ -107,12 +92,6 @@ struct URLSessionWebSocketCloseValidationTests {
     #expect(error?.underlyingError is URLError)
   }
 
-  // MARK: - Transport error → close frame
-
-  /// `ENOTCONN` is the one error that must *not* produce a close frame: the socket is already
-  /// gone and `onWebsocketTaskClosed`/`onComplete` will fire with the peer's own code. Reporting
-  /// an abnormal closure here would race that callback and feed the reconnect path a code the
-  /// peer never sent.
   @Test
   func reportsNoCloseFrameForASocketThatIsAlreadyDisconnected() {
     let error = NSError(
@@ -124,8 +103,6 @@ struct URLSessionWebSocketCloseValidationTests {
     #expect(URLSessionWebSocket.closeFrame(for: error) == nil)
   }
 
-  /// Only `ENOTCONN` is special, and only in its own domain — the same number elsewhere is an
-  /// unrelated error and still has to close the connection.
   @Test
   func treatsTheENOTCONNCodeInAnotherDomainAsAnOrdinaryError() throws {
     let error = NSError(
@@ -139,7 +116,6 @@ struct URLSessionWebSocketCloseValidationTests {
     #expect(frame.reason == error.localizedDescription)
   }
 
-  /// A POSIX protocol error is the only case that reports a code other than 1006.
   @Test
   func mapsAProtocolErrorToProtocolError() throws {
     let error = NSError(
@@ -165,8 +141,6 @@ struct URLSessionWebSocketCloseValidationTests {
     let frame = try #require(URLSessionWebSocket.closeFrame(for: error))
 
     #expect(frame.code == 1006)
-    // These carry a written reason rather than `localizedDescription`, so the peer sees the
-    // same text regardless of the host's locale.
     #expect(frame.reason == reason)
   }
 
@@ -179,9 +153,6 @@ struct URLSessionWebSocketCloseValidationTests {
     #expect(frame.reason == error.localizedDescription)
   }
 
-  /// The receive loop hands this helper whatever `URLSessionWebSocketTask.receive()` threw, and
-  /// `_handleMessage` passes a `RealtimeError` of its own for an unsupported frame type. Neither
-  /// is an `NSError` to begin with, so pin that bridging still lands on abnormal closure.
   @Test
   func mapsANativeSwiftErrorToAbnormalClosure() throws {
     let error = RealtimeError.decoding("Received unsupported message type")

@@ -84,8 +84,6 @@ public struct _PostgrestRequest: Sendable {
       throw PostgrestError(kind: .invalidRequest, message: invalidFilterReason)
     }
 
-    // CSV has no `nulls=stripped` variant. The typed `csv()` drops the flag; the untyped builder
-    // can still carry both, so the core refuses it before anything is sent.
     if stripsNulls, headerFields[.accept] == "text/csv" {
       throw PostgrestError(
         kind: .invalidRequest, message: "`.csv()` cannot be combined with `.stripNulls()`")
@@ -146,8 +144,6 @@ public struct _PostgrestRequest: Sendable {
       return try decoded(data)
     }
 
-    // A fixed decoder: the configured one carries key and date strategies for row types, and
-    // `ServerError` matches PostgREST's keys exactly.
     guard let serverError = try? JSONDecoder().decode(PostgrestError.ServerError.self, from: data)
     else {
       throw PostgrestError(
@@ -168,8 +164,6 @@ public struct _PostgrestRequest: Sendable {
   }
 
   func httpRequest(for configuration: PostgrestClient.Configuration) -> HTTPTypes.HTTPRequest {
-    // The client's headers were seeded by `PostgrestClient.makeRequest`, so a header the request
-    // replaced or removed stays that way.
     var fields = headerFields
     if fields[.accept] == nil {
       fields[.accept] = "application/json"
@@ -198,8 +192,6 @@ public struct _PostgrestRequest: Sendable {
 }
 
 extension PostgrestClient {
-  /// Starts a request against a relation or `rpc/<function>` path, carrying this client's
-  /// headers. Every PostgREST request, typed or untyped, starts here.
   func makeRequest(
     _ relation: String,
     method: HTTPTypes.HTTPRequest.Method = .get

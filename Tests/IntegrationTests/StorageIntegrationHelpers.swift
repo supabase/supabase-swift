@@ -15,8 +15,6 @@ import Testing
   import FoundationNetworking
 #endif
 
-/// What the Storage integration suites share: the client under test, buckets, fixtures and the
-/// two ways of looking at a result, the thrown `StorageError` and a plain HTTP fetch of a URL.
 enum StorageIntegration {
   static let url = URL(string: "\(DotEnv.supabaseURL)/storage/v1")!
 
@@ -32,11 +30,8 @@ enum StorageIntegration {
       ))
   }
 
-  /// Whether `scripts/enable-storage-test-features.sh` turned on object lifecycles, analytics
-  /// buckets and the CDN purge stub. Only the Docker stack can; the native one refuses those calls.
   static let hasTestFeatures = ProcessInfo.processInfo.environment["STORAGE_TEST_FEATURES"] != nil
 
-  /// A purge Storage forwarded to the CDN purge stub.
   struct ForwardedPurge: Decodable, Equatable {
     struct Body: Decodable, Equatable {
       var type: String
@@ -47,7 +42,6 @@ enum StorageIntegration {
     var body: Body
   }
 
-  /// The purges Storage forwarded to the CDN purge stub, oldest first.
   static func forwardedPurges() async throws -> [ForwardedPurge] {
     let (data, _) = try await fetch(URL(string: "http://127.0.0.1:54329/requests")!)
     return try JSONDecoder().decode([ForwardedPurge].self, from: data)
@@ -59,7 +53,6 @@ enum StorageIntegration {
     _ = try await URLSession.shared.data(for: request)
   }
 
-  /// The service-role client every suite uses to set up and tear down.
   static let admin = client()
 
   static func newBucket(
@@ -87,7 +80,6 @@ enum StorageIntegration {
     for drop in drops { await drop.value }
   }
 
-  /// Async cleanup can outlive the test if the process exits right after; fine for a local stack.
   static func dropBucket(_ name: String) {
     let drop = Task {
       try? await admin.emptyBucket(name)
@@ -103,7 +95,6 @@ enum StorageIntegration {
       .appendingPathComponent(name)
   }
 
-  /// Runs `body` and returns the `StorageError` it throws, recording an issue otherwise.
   static func storageError(
     _ body: () async throws -> Void, sourceLocation: SourceLocation = #_sourceLocation
   ) async -> StorageError? {
@@ -125,7 +116,6 @@ enum StorageIntegration {
 }
 
 extension String {
-  /// The key as it travels in a URL path: every segment percent-encoded the way `ObjectKey` does.
   var percentEncodedKey: String {
     var allowed = CharacterSet.alphanumerics
     allowed.insert(charactersIn: "-._~!$&'()*,;=:@")

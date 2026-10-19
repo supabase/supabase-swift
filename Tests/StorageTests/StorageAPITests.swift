@@ -17,8 +17,6 @@ import Testing
 @Suite
 struct StorageAPITests {
   #if os(macOS) || os(Linux)
-    /// `usesNewHostname` rewrites the host at construction, so a URL with no host is a programmer
-    /// error the initializer traps on, rather than a `URLError` surfacing on the first request.
     @Test
     func newHostnameWithoutAHostTraps() async {
       await #expect(processExitsWith: .failure) {
@@ -33,7 +31,6 @@ struct StorageAPITests {
     }
   #endif
 
-  /// Answers every request with a 503 and records the path of each attempt.
   private func makeSUT(retryEnabled: Bool = true) -> (
     StorageClient, LockIsolated<[String]>
   ) {

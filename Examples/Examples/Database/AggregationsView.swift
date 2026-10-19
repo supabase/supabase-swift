@@ -84,7 +84,6 @@ struct AggregationsView: View {
       isLoading = true
       defer { isLoading = false }
 
-      // Get total count
       let totalResponse =
         try await supabase
         .from("todos")
@@ -92,7 +91,6 @@ struct AggregationsView: View {
         .execute()
       totalTodos = totalResponse.count
 
-      // Get completed count
       let completedResponse =
         try await supabase
         .from("todos")
@@ -101,7 +99,6 @@ struct AggregationsView: View {
         .execute()
       completedTodos = completedResponse.count
 
-      // Get incomplete count
       let incompleteResponse =
         try await supabase
         .from("todos")

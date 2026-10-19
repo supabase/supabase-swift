@@ -20,7 +20,6 @@ struct PostgrestDiagnostic: DiagnosticMessage {
 }
 
 extension MacroExpansionContext {
-  /// Emits an error pointing at `node`.
   func error(_ message: String, at node: some SyntaxProtocol) {
     diagnose(Diagnostic(node: node, message: PostgrestDiagnostic(message: message)))
   }

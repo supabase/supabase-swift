@@ -1,6 +1,3 @@
-// Introspects one database with postgrest-typegen and writes the sorted GeneratorMetadata
-// document, as `supabase gen types` sends it to an external generator.
-// Run by refresh-typegen-fixtures.sh: bun refresh-typegen-fixtures.ts <sdk-dir> <database-url> <output>
 import { createRequire } from "node:module";
 import { writeFileSync } from "node:fs";
 

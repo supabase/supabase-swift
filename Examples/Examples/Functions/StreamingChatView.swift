@@ -92,7 +92,6 @@ struct StreamingChatView: View {
         }
       }
     } catch is CancellationError {
-      // the user left the screen or sent a new prompt
     } catch {
       self.error = error
     }

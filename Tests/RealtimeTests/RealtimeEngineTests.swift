@@ -67,8 +67,6 @@ struct RealtimeEngineTests {
     #expect(isSubscribed == true, sourceLocation: sourceLocation)
   }
 
-  // MARK: - Connection
-
   @Test
   func connectOpensTheSocketAndReportsConnected() async throws {
     let states = await engine.connectionStates()
@@ -178,8 +176,6 @@ struct RealtimeEngineTests {
     await eventually { [engine] in await !engine.connectionState.isConnected }
     #expect(!server.isConnected)
   }
-
-  // MARK: - Subscribe
 
   @Test
   func subscribeConnectsSendsTheJoinAndResolvesOnOk() async throws {
@@ -310,8 +306,6 @@ struct RealtimeEngineTests {
     #expect(!server.sentMessages.contains { $0.event == "phx_leave" })
   }
 
-  // MARK: - Inbound
-
   @Test
   func malformedFrameIsDroppedAndTheSocketStaysUp() async throws {
     await engine.addChannel(topic)
@@ -383,8 +377,6 @@ struct RealtimeEngineTests {
     pump.cancel()
     await eventually { [engine] in await engine.listenerCount(topic) == 0 }
   }
-
-  // MARK: - Outbound
 
   @Test
   func framesLeaveInCallOrder() async throws {
@@ -477,8 +469,6 @@ struct RealtimeEngineTests {
     if case .binary = server.sentFrames.last {} else { Issue.record("expected a binary frame") }
   }
 
-  // MARK: - Heartbeat and loss
-
   @Test
   func heartbeatIsSentOnTheIntervalAndATimeoutReconnectsWithoutLeaking() async throws {
     try await engine.connect()
@@ -555,8 +545,6 @@ struct RealtimeEngineTests {
     let error = await #expect(throws: RealtimeError.self) { try await pending.value }
     #expect(error?.kind == .notConnected)
   }
-
-  // MARK: - Token state (SDK-2100)
 
   private func makeTokenEngine(provider: @escaping @Sendable () async throws -> String?)
     -> RealtimeEngine
@@ -699,8 +687,6 @@ struct RealtimeEngineTests {
     #expect(joins[0].payload["access_token"] == "token-1")
     #expect(joins[1].payload["access_token"] == "token-2")
   }
-
-  // MARK: - Presence (SDK-2101)
 
   private func metas(_ refs: [String]) -> JSONValue {
     .object(["metas": .array(refs.map { .object(["phx_ref": .string($0)]) })])

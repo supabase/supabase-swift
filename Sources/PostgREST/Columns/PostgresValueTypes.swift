@@ -8,11 +8,6 @@
 public import Foundation
 public import Helpers
 
-// The Swift types `supabase-typegen` emits for Postgres types with no plain Swift counterpart.
-// Each exists because it changes what compiles or how a value is encoded: a range column gets the
-// range filters and nothing else, an interval or a time column gets no `like`, a `bytea` operand
-// is the `\x…` hex form. Each reads and writes the text form PostgREST uses for the column.
-
 /// A Postgres range column, such as `int4range` or `tstzrange`, as its literal: `[1,10)`, `empty`.
 ///
 /// `Bound` is a marker for the Postgres range type, such as ``_Int4Range`` or ``_TSTZRange``. It

@@ -12,7 +12,7 @@ import Testing
 
 @Suite
 struct RetryPolicyTests {
-  let now = Date(timeIntervalSince1970: 1_445_412_480)  // Wed, 21 Oct 2015 07:28:00 GMT
+  let now = Date(timeIntervalSince1970: 1_445_412_480)
 
   @Test
   func defaultsMatchTheAgreedShape() {
@@ -50,7 +50,6 @@ struct RetryPolicyTests {
 
   @Test
   func backoffDoesNotOverflowForAHugeBaseDelay() {
-    // `baseDelay * 2^30` would overflow `Duration`; the cap must be applied before multiplying.
     let policy = RetryPolicy(baseDelay: .seconds(Int.max), maxDelay: .seconds(5))
     #expect(policy.backoffDelay(retry: 40) <= .seconds(5))
   }
@@ -74,8 +73,6 @@ struct RetryPolicyTests {
 
   @Test
   func retryAfterHTTPDateNotInTheFutureFallsBackToBackoff() {
-    // A stale date carries no timing information; a zero wait would make every client that saw
-    // it replay at the same instant, which is what the jittered backoff exists to prevent.
     let past = "Wed, 21 Oct 2015 07:27:00 GMT"
     let exactlyNow = "Wed, 21 Oct 2015 07:28:00 GMT"
     #expect(RetryPolicy.retryAfterDelay(past, now: now) == nil)

@@ -294,7 +294,6 @@ struct FileManagementView: View {
         successMessage = "Deleted \(removed.count) file(s)"
       }
 
-      // Reset and reload
       sourcePath = ""
       destinationPath = ""
       destinationBucket = ""

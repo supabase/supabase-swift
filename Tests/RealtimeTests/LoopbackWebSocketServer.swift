@@ -22,12 +22,10 @@ struct LoopbackError: Error {
     private var isStopped = false
     private var received: [Data] = []
 
-    /// Every message the clients sent, in arrival order.
     var receivedMessages: [Data] {
       queue.sync { received }
     }
 
-    /// Sends a close frame with `code` to every connected client.
     func close(code: NWProtocolWebSocket.CloseCode, reason: String) {
       queue.async { [self] in
         let metadata = NWProtocolWebSocket.Metadata(opcode: .close)
@@ -102,12 +100,6 @@ struct LoopbackError: Error {
       }
     }
 
-    /// Pushes a frame from the server to every connected client.
-    ///
-    /// Every other test here only drives traffic client→server, which is why
-    /// `URLSessionWebSocket._handleMessage` had no coverage: nothing ever arrived for it to
-    /// handle. Dispatched on `queue` so it is ordered after the `newConnectionHandler` that
-    /// appended the connection.
     func send(text: String) {
       send(Data(text.utf8), opcode: .text)
     }
@@ -142,8 +134,6 @@ struct LoopbackError: Error {
     }
   }
 
-  /// A plain TCP listener for handshake failures the WebSocket server cannot produce: it hands
-  /// every accepted connection to `handle`, which may answer with raw HTTP or stay silent.
   final class LoopbackTCPServer: @unchecked Sendable {
     private let listener: NWListener
     private let queue = DispatchQueue(label: "co.supabase.LoopbackTCPServer")
@@ -155,7 +145,6 @@ struct LoopbackError: Error {
       self.handle = handle
     }
 
-    /// Answers every upgrade request with `status` and records the request it received.
     static func refusing(status: Int, reason: String) throws -> (
       LoopbackTCPServer, LockIsolated<String>
     ) {
@@ -173,7 +162,6 @@ struct LoopbackError: Error {
       return (server, request)
     }
 
-    /// Accepts the TCP connection and never answers the upgrade.
     static func stalling() throws -> LoopbackTCPServer {
       try LoopbackTCPServer { _ in }
     }

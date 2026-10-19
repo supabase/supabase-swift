@@ -211,25 +211,15 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
         guard let self else { return }
         switch state {
         case .connected(let conn):
-          // Only drive the restart from here when this .connected came from
-          // an automatic reconnect (.reconnecting → .connected). Connects
-          // triggered by `connect()` set things up synchronously there.
           if sawReconnecting {
             self.handleConnected(conn: conn, isReconnect: true)
             sawReconnecting = false
             self.yieldStatusIfChanged(.connected)
           }
         case .disconnected:
-          // A failed auto-reconnect lands here (.reconnecting → .connecting →
-          // .disconnected). Clear the latch so a later successful `connect()`
-          // (e.g. from `connectOnSubscribe`) isn't misclassified as a
-          // reconnect completion — `rejoinChannels()` would reset every
-          // channel and cancel the very join that connect was performing.
           sawReconnecting = false
           self.yieldStatusIfChanged(.disconnected)
         case .connecting:
-          // Skip — `connect()` yields .connecting/.connected synchronously
-          // before returning, so the observer would otherwise double-emit.
           break
         case .reconnecting:
           sawReconnecting = true
@@ -251,19 +241,9 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   }
 
   private func handleConnected(conn: any WebSocket, isReconnect: Bool) {
-    // Set up the per-connection machinery exactly once. `handleConnected` can
-    // run multiple times for the same physical connection (concurrent subscribes,
-    // subscribe retries racing an auto-reconnect). Guarding on connection identity
-    // prevents launching duplicate `listenForMessages` / `startHeartbeating` tasks,
-    // which would cancel-and-restart the stream consumer (potentially losing
-    // in-flight frames) and create a second heartbeat timer.
     let isNewConnection = mutableState.withValue { state -> Bool in
       if state.connection === conn { return false }
       state.connection = conn
-      // A heartbeat awaiting an ack on the previous connection can never be
-      // acknowledged on this one. Clearing the pending ref prevents the new
-      // connection's first heartbeat from misreading it as a timeout and
-      // tearing down a healthy socket.
       state.pendingHeartbeatRef = nil
       return true
     }
@@ -280,11 +260,6 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   }
 
   deinit {
-    // Close the live socket first: cancelling the bookkeeping tasks alone leaves the
-    // underlying WebSocket (and its URLSession) open when a connected client is released
-    // without calling `disconnect()`. `connectionManager` closes it on its own `deinit`
-    // too, but that only happens once its observers release it, so close it here to make
-    // the teardown deterministic.
     let connection = mutableState.withValue { state -> (any WebSocket)? in
       defer { state.connection = nil }
       return state.connection
@@ -332,9 +307,6 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       let conn = try await connectionManager.connect()
       options.logger.debug("Connected to realtime WebSocket")
 
-      // Set up message listening, heartbeating, and connection caching
-      // synchronously so callers can rely on state being ready after connect()
-      // returns, even if the state observer task hasn't caught up yet.
       handleConnected(conn: conn, isReconnect: false)
       self.yieldStatusIfChanged(.connected)
     } catch {
@@ -361,7 +333,6 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     options: @Sendable (inout RealtimeChannelConfig) -> Void = { _ in }
   ) -> RealtimeChannelV2 {
     mutableState.withValue {
-      // Cancel any pending deferred disconnect — a new channel is being added.
       $0.pendingDisconnectTask?.cancel()
       $0.pendingDisconnectTask = nil
 
@@ -403,7 +374,6 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       await channel.unsubscribe()
     }
 
-    // Atomically remove channel and check if we should disconnect
     let shouldDisconnect = mutableState.withValue { state -> Bool in
       state.channels[channel.topic] = nil
       return state.channels.isEmpty
@@ -429,7 +399,6 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
           try await clock.sleep(for: delay)
           self?.disconnect()
         } catch {
-          // Cancelled: a new channel was added or disconnect() was called directly.
         }
       }
     }
@@ -455,7 +424,6 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       await group.waitForAll()
     }
 
-    // Cancel any pending deferred disconnect and disconnect immediately.
     mutableState.withValue {
       $0.pendingDisconnectTask?.cancel()
       $0.pendingDisconnectTask = nil
@@ -485,11 +453,6 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     let stream = conn.events
     mutableState.withValue {
       $0.messageTask?.cancel()
-      // Only `options` and `connectionManager` (both `Sendable`) are captured up front —
-      // `self` is resolved per iteration. Binding a strong `self` outside the `for await`
-      // would keep the client alive for as long as the socket's event stream stays open,
-      // so a released client would never reach `deinit` while connected, leaking the
-      // client, the socket and its `URLSession`.
       $0.messageTask = Task { [weak self, options, connectionManager] in
         do {
           for await event in stream {
@@ -548,20 +511,14 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
 
   private func sendHeartbeat() async {
     if status != .connected {
-      // Don't leak `.disconnected` to `heartbeat`/`onHeartbeat(_:)` consumers — it's not
-      // a heartbeat outcome, just this cycle bailing out early.
       return
     }
 
-    // Check if previous heartbeat is still pending (not acknowledged).
-    // Return the new ref if we should send, nil if previous heartbeat timed out.
     let heartbeatRef = mutableState.withValue { state -> String? in
       if state.pendingHeartbeatRef != nil {
-        // Previous heartbeat was not acknowledged - this is a timeout
         return nil
       }
 
-      // No pending heartbeat, we can send a new one
       let ref = makeRef()
       state.pendingHeartbeatRef = ref
       return ref
@@ -580,16 +537,11 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       yieldHeartbeatStatus(.sent)
       await setAuth()
     } else {
-      // Timeout: previous heartbeat was never acknowledged
       options.logger.debug("Heartbeat timeout - previous heartbeat not acknowledged")
       yieldHeartbeatStatus(.timeout)
 
-      // Clear the pending ref before reconnecting
       mutableState.withValue { $0.pendingHeartbeatRef = nil }
 
-      // Scope the reconnect to the connection this heartbeat was sent on, so
-      // a timeout that fires after a reconnect has already replaced the
-      // socket can't tear down the healthy new connection.
       let conn = mutableState.withValue { $0.connection }
       await connectionManager.handleError(RealtimeError.heartbeatTimeout, from: conn)
     }
@@ -618,7 +570,6 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       $0.pendingDisconnectTask = nil
       $0.connection = nil
       $0.sendBuffer = []
-      // A developer-initiated disconnect should not be undone on the next foreground event.
       $0.wasConnectedBeforeBackground = false
     }
 
@@ -647,7 +598,6 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   /// Invoked automatically by ``RealtimeLifecycleManager`` when
   /// ``RealtimeClientOptions/handleAppLifecycle`` is `true`.
   func handleAppForeground() async {
-    // Atomic read-modify-write so two rapid foreground notifications can't both observe `true`.
     let wasConnected = mutableState.withValue { state -> Bool in
       let previous = state.wasConnectedBeforeBackground
       state.wasConnectedBeforeBackground = false
@@ -655,8 +605,6 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     }
 
     guard wasConnected else { return }
-    // Skip if already connected OR if an auto-reconnect is in-flight (.connecting),
-    // because the state observer will drive rejoinChannels() when that reconnect completes.
     guard status == .disconnected else { return }
 
     let hadChannels = !mutableState.channels.isEmpty

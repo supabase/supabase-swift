@@ -31,8 +31,6 @@ final class VectorIndexClientIntegrationTests {
     try await vectors.createBucket(bucketName)
   }
 
-  // Async cleanup can outlive the test if the process exits immediately after — acceptable for
-  // local dev/CI cleanup, not correctness-critical.
   deinit {
     let vectors = vectors
     let bucketName = bucketName
@@ -97,8 +95,6 @@ final class VectorIndexClientIntegrationTests {
       keys: ["a", "b"], returnData: true, returnMetadata: true)
     #expect(fetched.count == 2)
     let a = try #require(fetched.first { $0.key == "a" })
-    // The pgvector backend stores embeddings as `halfvec` (half precision), so components
-    // round-trip with reduced precision rather than exactly.
     let aData = try #require(a.data?.float32)
     for (actual, expected) in zip(aData, [0.1, 0.2, 0.3] as [Float]) {
       #expect(abs(actual - expected) < 0.001)

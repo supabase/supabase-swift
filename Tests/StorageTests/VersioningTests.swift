@@ -12,7 +12,6 @@ import Testing
 
 @testable import Storage
 
-/// `versionId` on every object route that takes one.
 @Suite
 struct VersioningTests {
   typealias Sent = BucketRequestTests.Sent

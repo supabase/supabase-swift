@@ -91,8 +91,6 @@ package enum ChannelMachine {
     }
   }
 
-  // MARK: - Error classification
-
   package enum ErrorClass: Sendable, Hashable {
     /// The user must act; no timer.
     case fatal
@@ -138,13 +136,10 @@ package enum ChannelMachine {
     return .success(replied.map(\.id))
   }
 
-  // MARK: - Transition
-
   package static func transition(
     _ state: inout State, _ event: Event, configuration: Configuration
   ) -> [Effect] {
     switch (state, event) {
-    // Subscribe.
     case (.unsubscribed, .subscribeRequested), (.failed, .subscribeRequested):
       state = .subscribing(attempt: 1, isRejoin: false)
       return [.sendJoin]
@@ -156,7 +151,6 @@ package enum ChannelMachine {
       state = .subscribing(attempt: attempt + 1, isRejoin: true)
       return [.sendJoin]
 
-    // Join replies.
     case (.subscribing(_, let isRejoin), .joinReplied(.success)):
       state = .subscribed
       return [.resolveSubscribe, .resendPresenceTrack] + (isRejoin ? [.emitResubscribed] : [])
@@ -165,8 +159,6 @@ package enum ChannelMachine {
       case .fatal:
         return fail(&state, with: error, rejectingSubscribe: true)
       case .authRefresh where attempt > 1:
-        // ponytail: one refresh per subscribe attempt chain; a retry-class failure before the
-        // expiry makes this fatal too. Track "refreshed once" separately if that bites.
         return fail(&state, with: error, rejectingSubscribe: true)
       case .authRefresh:
         state = .resubscribing(attempt: attempt, retryIn: .zero, lastError: error)
@@ -187,7 +179,6 @@ package enum ChannelMachine {
       state = .subscribing(attempt: attempt + 1, isRejoin: true)
       return [.sendJoin]
 
-    // Server-side ends while subscribed.
     case (.subscribed, .systemError(let message)):
       let error = RealtimeError.channelClosed(message: message)
       switch classify(error) {
@@ -210,7 +201,6 @@ package enum ChannelMachine {
       let delay = configuration.rejoin.delay(forAttempt: 1)
       return scheduleRejoin(&state, attempt: 1, after: delay, error: error)
 
-    // Socket.
     case (.subscribed, .socketLost(let error)):
       state = .resubscribing(attempt: 1, retryIn: .zero, lastError: error)
       return []
@@ -224,12 +214,10 @@ package enum ChannelMachine {
       state = .unsubscribed
       return []
 
-    // Bindings.
     case (.subscribed, .bindingsChanged):
       state = .subscribing(attempt: 1, isRejoin: true)
       return [.sendLeave, .sendJoin]
 
-    // Unsubscribe.
     case (.subscribed, .unsubscribeRequested):
       state = .unsubscribing
       return [.cancelLinger, .sendLeave]
@@ -246,7 +234,6 @@ package enum ChannelMachine {
       state = .unsubscribed
       return []
 
-    // Linger.
     case (.subscribed, .lastListenerEnded):
       return [.scheduleLinger(after: configuration.lingerAfterLastListener)]
     case (.subscribed, .listenerAdded):

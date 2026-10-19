@@ -32,9 +32,6 @@ struct StorageAPI: Sendable {
   /// `url` with `project-ref.supabase.co` rewritten to `project-ref.storage.supabase.co`; any
   /// other host is returned as is.
   static func storageHost(_ url: URL) -> URL {
-    // `url` is supplied once, at construction, so a URL that cannot be decomposed into host
-    // components is a programmer error, not a runtime condition. Trap here, where the offending
-    // value is, rather than letting it fail later as an opaque `URLError`.
     guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false),
       let host = components.host
     else {
@@ -42,8 +39,6 @@ struct StorageAPI: Sendable {
     }
     guard isLegacySupabaseHost(host) else { return url }
 
-    // Substitute on the same label boundary the check used, so a host that happens to start
-    // with `supabase.` is not rewritten at that leading position too.
     components.host = host.replacingOccurrences(of: ".supabase.", with: ".storage.supabase.")
     guard let rewritten = components.url else {
       preconditionFailure("Rewriting the storage host produced an invalid URL: \(components)")
@@ -51,7 +46,6 @@ struct StorageAPI: Sendable {
     return rewritten
   }
 
-  /// The configuration used to initialize this client instance.
   private(set) var configuration: StorageClientConfiguration
 
   /// Builds the request for each route under ``configuration``'s URL.
@@ -67,8 +61,6 @@ struct StorageAPI: Sendable {
       configuration.headers[.xClientInfo] = "storage-swift/\(version)"
     }
 
-    // if legacy uri is used, replace with new storage host (disables request buffering to allow > 50GB uploads)
-    // "project-ref.supabase.co" becomes "project-ref.storage.supabase.co"
     if configuration.usesNewHostname == true {
       configuration.url = Self.storageHost(configuration.url)
     }

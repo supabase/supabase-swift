@@ -37,8 +37,6 @@ package struct TokenState: Sendable {
   /// `nil` when the token has no expiry to plan around.
   package func refreshDelay(now: Date, leeway: Duration) -> Duration? {
     guard let expiresAt else { return nil }
-    // Whole seconds: `exp` is an integer claim, and sub-second drift from the Date round trip
-    // must not turn a 240 s wait into 239.999 s.
     let remaining = Duration.seconds(Int(expiresAt.timeIntervalSince(now).rounded()))
     return max(remaining - leeway, .zero)
   }

@@ -14,8 +14,6 @@ import Testing
 struct RealtimeSerializerTests {
   let serializer = RealtimeSerializer()
 
-  // MARK: - Text Encoding
-
   @Test
   func encodeText_withAllFields() throws {
     let message = RealtimeMessageV2(
@@ -56,8 +54,6 @@ struct RealtimeSerializerTests {
     #expect(array[2].stringValue == "phoenix")
     #expect(array[3].stringValue == "heartbeat")
   }
-
-  // MARK: - Text Decoding
 
   @Test
   func decodeText_withAllFields() throws {
@@ -103,8 +99,6 @@ struct RealtimeSerializerTests {
     }
   }
 
-  // MARK: - Text Round-trip
-
   @Test
   func textRoundTrip() throws {
     let original = RealtimeMessageV2(
@@ -128,8 +122,6 @@ struct RealtimeSerializerTests {
     #expect(decoded.payload == original.payload)
   }
 
-  // MARK: - Binary Encoding (type 0x03)
-
   @Test
   func encodeBroadcastPush_jsonPayload() throws {
     let data = try serializer.encodeBroadcastPush(
@@ -140,18 +132,16 @@ struct RealtimeSerializerTests {
       jsonPayload: ["hello": "world"]
     )
 
-    // Verify header
-    let topicLen = "realtime:test".utf8.count  // 13
-    let eventLen = "my_event".utf8.count  // 8
+    let topicLen = "realtime:test".utf8.count
+    let eventLen = "my_event".utf8.count
     #expect(data[0] == RealtimeSerializer.BinaryKind.userBroadcastPush.rawValue)
-    #expect(data[1] == 1)  // joinRef length
-    #expect(data[2] == 1)  // ref length
+    #expect(data[1] == 1)
+    #expect(data[2] == 1)
     #expect(data[3] == UInt8(topicLen))
     #expect(data[4] == UInt8(eventLen))
-    #expect(data[5] == 0)  // metadata length
+    #expect(data[5] == 0)
     #expect(data[6] == RealtimeSerializer.PayloadEncoding.json.rawValue)
 
-    // Verify string fields
     let headerSize = 7
     let joinRefStart = headerSize
     let refStart = joinRefStart + 1
@@ -164,7 +154,6 @@ struct RealtimeSerializerTests {
     #expect(String(data: data[topicStart..<eventStart], encoding: .utf8) == "realtime:test")
     #expect(String(data: data[eventStart..<payloadStart], encoding: .utf8) == "my_event")
 
-    // Verify payload is valid JSON
     let payloadData = data[payloadStart...]
     let json = try JSONDecoder().decode(JSONObject.self, from: Data(payloadData))
     #expect(json["hello"]?.stringValue == "world")
@@ -182,11 +171,10 @@ struct RealtimeSerializerTests {
     )
 
     #expect(data[0] == RealtimeSerializer.BinaryKind.userBroadcastPush.rawValue)
-    #expect(data[1] == 0)  // joinRef length (nil)
-    #expect(data[2] == 0)  // ref length (nil)
+    #expect(data[1] == 0)
+    #expect(data[2] == 0)
     #expect(data[6] == RealtimeSerializer.PayloadEncoding.binary.rawValue)
 
-    // Extract payload
     let headerSize = 7
     let topicLen = Int(data[3])
     let eventLen = Int(data[4])
@@ -207,11 +195,9 @@ struct RealtimeSerializerTests {
       jsonPayload: [:]
     )
 
-    #expect(data[1] == 0)  // joinRef length
-    #expect(data[2] == 0)  // ref length
+    #expect(data[1] == 0)
+    #expect(data[2] == 0)
   }
-
-  // MARK: - Binary Decoding (type 0x04)
 
   @Test
   func decodeBinary_jsonPayload() throws {
@@ -227,7 +213,7 @@ struct RealtimeSerializerTests {
     frame.append(RealtimeSerializer.BinaryKind.userBroadcast.rawValue)
     frame.append(UInt8(topicBytes.count))
     frame.append(UInt8(eventBytes.count))
-    frame.append(0)  // metadata length
+    frame.append(0)
     frame.append(RealtimeSerializer.PayloadEncoding.json.rawValue)
     frame.append(topicBytes)
     frame.append(eventBytes)
@@ -256,7 +242,7 @@ struct RealtimeSerializerTests {
     frame.append(RealtimeSerializer.BinaryKind.userBroadcast.rawValue)
     frame.append(UInt8(topicBytes.count))
     frame.append(UInt8(eventBytes.count))
-    frame.append(0)  // metadata length
+    frame.append(0)
     frame.append(RealtimeSerializer.PayloadEncoding.binary.rawValue)
     frame.append(topicBytes)
     frame.append(eventBytes)
@@ -283,7 +269,7 @@ struct RealtimeSerializerTests {
   @Test
   func decodeBinary_wrongKind() {
     var frame = Data()
-    frame.append(0x01)  // wrong kind
+    frame.append(0x01)
     frame.append(0)
     frame.append(0)
     frame.append(0)
@@ -301,14 +287,12 @@ struct RealtimeSerializerTests {
     frame.append(0)
     frame.append(0)
     frame.append(0)
-    frame.append(0xFF)  // unknown encoding
+    frame.append(0xFF)
 
     #expect(throws: (any Error).self) {
       try serializer.decodeBinary(frame)
     }
   }
-
-  // MARK: - Edge Cases
 
   @Test
   func encodeText_emptyPayload() throws {
@@ -328,11 +312,10 @@ struct RealtimeSerializerTests {
     frame.append(RealtimeSerializer.BinaryKind.userBroadcast.rawValue)
     frame.append(UInt8(topic.utf8.count))
     frame.append(UInt8(event.utf8.count))
-    frame.append(0)  // metadata length
+    frame.append(0)
     frame.append(RealtimeSerializer.PayloadEncoding.binary.rawValue)
     frame.append(Data(topic.utf8))
     frame.append(Data(event.utf8))
-    // No payload bytes
 
     let broadcast = try serializer.decodeBinary(frame)
     if case .binary(let data) = broadcast.payload {
@@ -373,8 +356,6 @@ struct RealtimeSerializerTests {
     }
   }
 
-  // MARK: - Strict array length
-
   @Test
   func decodeTextRejectsArraysWithMoreThanFiveElements() {
     do {
@@ -387,8 +368,6 @@ struct RealtimeSerializerTests {
       Issue.record("Unexpected error \(error)")
     }
   }
-
-  // MARK: - Kind 3 header length limits
 
   enum HeaderField: CaseIterable {
     case joinRef, ref, topic, event
@@ -424,13 +403,10 @@ struct RealtimeSerializerTests {
 
   @Test
   func encodeBroadcastPushCountsBytesNotCharacters() {
-    // "é" is two bytes in UTF-8, so 128 of them is 256 bytes.
     #expect(throws: RealtimeError.self) {
       try encodePush(.topic, value: String(repeating: "é", count: 128))
     }
   }
-
-  // MARK: - Kind 4 frames
 
   private func userBroadcastFrame(
     topic: String = "realtime:test",
@@ -454,7 +430,6 @@ struct RealtimeSerializerTests {
 
   @Test
   func decodeBinaryJSONEncodingWithDatabaseMetadata() throws {
-    // Shape of a `realtime.send` / `broadcast_changes` broadcast delivered as kind 4.
     let frame = userBroadcastFrame(
       event: "INSERT",
       metadata: Data(#"{"id":"0b8a1e2c-77c4-4f1b-9d2a-3f5e6a7b8c9d","replayed":true}"#.utf8),
@@ -476,7 +451,6 @@ struct RealtimeSerializerTests {
 
   @Test
   func decodeBinaryRawEncodingWithDatabaseMetadata() throws {
-    // Shape of a `send_binary` broadcast: raw bytes, metadata still JSON.
     let bytes = Data([0x00, 0xFF, 0x10, 0x80])
     let frame = userBroadcastFrame(
       metadata: Data(#"{"id":"abc","replayed":false}"#.utf8),

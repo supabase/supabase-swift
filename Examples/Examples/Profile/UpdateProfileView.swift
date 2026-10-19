@@ -259,7 +259,6 @@ struct UpdateProfileView: View {
       successMessage = messages.joined(separator: "\n")
       actionState = .result(.success(()))
 
-      // Clear password field after successful update
       password = ""
     } catch {
       actionState = .result(.failure(error))

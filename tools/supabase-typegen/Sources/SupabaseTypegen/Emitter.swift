@@ -39,7 +39,6 @@ struct FilePlan {
     struct Member {
       /// As spelled in source, backticks included.
       var name: String
-      /// The Postgres label.
       var value: String
     }
   }
@@ -83,7 +82,6 @@ struct FilePlan {
 
 }
 
-/// A Swift type the generator writes for a column.
 indirect enum SwiftType: Equatable, Sendable {
   case named(String)
   /// A generic type with one argument, such as `_PostgresRange<_Int4Range>`.
@@ -105,7 +103,6 @@ indirect enum SwiftType: Equatable, Sendable {
     }
   }
 
-  /// Whether the type needs `Foundation`.
   var usesFoundation: Bool {
     switch self {
     case .named(let name): FilePlan.foundationScalarTypes.values.contains(name)
@@ -133,15 +130,10 @@ extension FilePlan {
       .filter { model.schemas.contains($0.name.schema) || usedEnums.contains($0.id) }
       .sorted { $0.name < $1.name }
 
-    // Relations first, so an enum never renames a relation.
     let declarations: [(name: QualifiedName, label: String, suffix: String)] =
       model.relations.map { ($0.name, "\($0.name.schema).\($0.name.name)", "Table") }
       + enumTypes.map { ($0.name, "enum \($0.name.schema).\($0.name.name)", "Enum") }
 
-    // Every top-level declaration, keyed by its Swift name. Same-schema declarations that convert
-    // to the same name are told apart with a number; a clash that crosses schemas is an error,
-    // because no suffix would tell the reader which schema each type belongs to.
-    // `namespace` is the declaration's schema, or `nil` for a schema's own enum.
     var owners: [String: [(namespace: String?, label: String)]] = [:]
     for schema in schemas {
       owners[schema.typeName, default: []].append((nil, "schema \(schema.name)"))
@@ -308,7 +300,6 @@ extension FilePlan {
     enumTypeNames: [Int: String]
   ) throws(DataError) -> [PropertyPlan] {
     let qualified = "\(relation.name.schema).\(relation.name.name)"
-    // `@PrimaryKey` on an Optional property is a macro error, so stop here and name the column.
     let nullableKeys = relation.columns.filter {
       $0.isNullable && relation.primaryKey.contains($0.name)
     }
@@ -372,7 +363,6 @@ extension FilePlan {
       ?? name
   }
 
-  /// The `pg_catalog` types whose Swift type is in `Foundation`.
   fileprivate static let foundationScalarTypes = [
     "uuid": "UUID",
     "numeric": "Decimal",
@@ -566,7 +556,6 @@ extension FilePlan {
     return "@Table(\(name), schema: \(TokenSyntax.identifier(schema)).self\(raw: readOnly))"
   }
 
-  /// Built in rather than read from a `.swift-format` file, so every machine prints the same file.
   private static var formatConfiguration: Configuration {
     var configuration = Configuration()
     configuration.indentation = .spaces(2)

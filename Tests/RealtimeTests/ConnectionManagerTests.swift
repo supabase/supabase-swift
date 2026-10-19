@@ -10,7 +10,6 @@ import Testing
 struct ConnectionManagerTests {
   @Test
   func reconnectBackoffClampsAnUnusableBaseDelay() {
-    // `reconnectDelay` is user-supplied, so the backoff must clamp it into `0...30s`.
     for base: Duration in [.seconds(1_000_000_000), .seconds(-5)] {
       let delay = ConnectionManager.reconnectBackoff(baseDelay: base).backoffDelay(retry: 1)
       #expect(delay >= .zero && delay <= .seconds(30), "baseDelay \(base)")
@@ -261,8 +260,6 @@ struct ConnectionManagerTests {
     let sut = makeSUT()
     try await sut.connect()
 
-    // A late .close from a previous socket must not mark the current
-    // connection as disconnected.
     await sut.handleClose(code: 1006, reason: "stale socket closed", from: staleWS)
 
     let isConnected = await sut.connection != nil
@@ -292,7 +289,6 @@ struct ConnectionManagerTests {
 
     await sut.handleError(TestError.sample, from: ws)
 
-    // Wait for the reconnect to complete.
     let transportCallCount = self.transportCallCount
     let reconnected = await waitUntil(timeout: 5) { transportCallCount.value >= 2 }
     #expect(reconnected)
@@ -332,8 +328,6 @@ struct ConnectionManagerTests {
     }
 
     try await sut.connect()
-    // Use a transport-level close code (1001 = going away) to exercise the
-    // reconnect path. Application-level codes (4000–4999) skip reconnect.
     await sut.handleClose(code: 1001, reason: "server restart")
 
     let observedBoth = await waitUntil(timeout: 2) {
@@ -349,9 +343,6 @@ struct ConnectionManagerTests {
 
   @Test
   func handleErrorKeepsRetryingReconnectAfterAFailedAttempt() async throws {
-    // Issue #1147: the original auto-reconnect scheduled exactly one attempt.
-    // If that attempt failed (network still down), nothing scheduled another
-    // one and the client stayed parked in `.disconnected` forever.
     let connectionCount = LockIsolated(0)
     let ws = self.ws
 
@@ -362,9 +353,6 @@ struct ConnectionManagerTests {
           count += 1
           return count
         }
-        // Attempt 1 is the initial `connect()`. Attempt 2 (the first
-        // automatic reconnect) fails, simulating an outage still in
-        // progress. Attempt 3 succeeds once the network recovers.
         if attempt == 2 {
           throw TestError.sample
         }
@@ -392,12 +380,8 @@ struct ConnectionManagerTests {
     let sut = makeSUT(reconnectDelay: .milliseconds(10))
     try await sut.connect()
 
-    // Application-level close codes (4000–4999) must not trigger automatic
-    // reconnect — the caller needs to re-authenticate before reconnecting,
-    // otherwise reconnecting with the same bad token just loops.
     await sut.handleClose(code: 4001, reason: "jwt expired")
 
-    // Brief wait to confirm the reconnect task does not fire.
     try await Task.sleep(nanoseconds: 50_000_000)
 
     #expect(

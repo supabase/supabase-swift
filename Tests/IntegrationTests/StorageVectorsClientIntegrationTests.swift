@@ -22,8 +22,6 @@ struct StorageVectorsClientIntegrationTests {
   ).vectors
 
   init() async throws {
-    // Clean up test-vector-bucket if it exists from a previous failed run
-    // to make tests idempotent
     try? await vectors.deleteBucket("test-vector-bucket")
   }
 

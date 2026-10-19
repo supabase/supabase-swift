@@ -3,8 +3,6 @@ import Testing
 
 @testable import Storage
 
-// MARK: - ByteCount
-
 @Suite
 struct ByteCountTests {
   @Test
@@ -39,8 +37,6 @@ struct ByteCountTests {
   }
 }
 
-// MARK: - ObjectSortColumn
-
 @Suite
 struct ObjectSortColumnTests {
   @Test
@@ -52,8 +48,6 @@ struct ObjectSortColumnTests {
   }
 }
 
-// MARK: - VersionFilter
-
 @Suite
 struct VersionFilterTests {
   @Test
@@ -63,8 +57,6 @@ struct VersionFilterTests {
     #expect(VersionFilter.only.rawValue == "only")
   }
 }
-
-// MARK: - ResizeMode
 
 @Suite
 struct ResizeModeTests {
@@ -88,8 +80,6 @@ struct ResizeModeTests {
   }
 }
 
-// MARK: - ImageFormat
-
 @Suite
 struct ImageFormatTests {
   @Test
@@ -105,8 +95,6 @@ struct ImageFormatTests {
     #expect(format == .webp)
   }
 }
-
-// MARK: - SortOrder
 
 @Suite
 struct SortOrderTests {
@@ -128,8 +116,6 @@ struct SortOrderTests {
     #expect(String(data: encoded, encoding: .utf8) == "\"desc\"")
   }
 }
-
-// MARK: - DownloadBehavior
 
 @Suite
 struct DownloadBehaviorValueTests {

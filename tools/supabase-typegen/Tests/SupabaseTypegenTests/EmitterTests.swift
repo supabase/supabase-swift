@@ -26,7 +26,6 @@ struct GoldenCase: CustomTestStringConvertible, Sendable {
 
   var testDescription: String { golden }
 
-  /// `#filePath` is `tools/supabase-typegen/Tests/SupabaseTypegenTests/EmitterTests.swift`.
   var url: URL {
     URL(fileURLWithPath: #filePath)
       .deletingLastPathComponent()
@@ -41,9 +40,6 @@ struct GoldenCase: CustomTestStringConvertible, Sendable {
       + "generator_metadata.swift.golden"
   )
 
-  // The goldens below are the sources of test targets in the root package, so `swift build
-  // --build-tests` there compiles them against `PostgrestMacros`. Each fixture needs its own
-  // target: they declare types with the same names.
   static let integrationPublic = GoldenCase(
     fixture: "generator_metadata",
     arguments: ["--access-control", "public"],
@@ -56,7 +52,6 @@ struct GoldenCase: CustomTestStringConvertible, Sendable {
     golden: "Tests/SupabaseTypegenPostgrestTypegenOutputTests/Generated.swift"
   )
 
-  // Without `inventory`, whose `books` clashes with `public.inventory_books`.
   static let hostile = GoldenCase(
     fixture: "hostile_metadata",
     arguments: [
@@ -88,9 +83,6 @@ struct EmitterTests {
     )
   }
 
-  /// `@Column` is emitted exactly when `@Table`'s own conversion of the Swift name, backticks
-  /// included, does not give back the column name. `camelToSnakeCase` is the macro's source,
-  /// compiled in through the `CamelToSnake.swift` symlink.
   @Test(arguments: GoldenCase.all)
   func columnAttributeFollowsTheMacroConversion(_ golden: GoldenCase) throws {
     let model = DatabaseModel(
@@ -181,7 +173,6 @@ struct EmitterTests {
         }
 
         """))
-    // Only `channels` has any: `get_status(text)` and the rest do not take a row.
     #expect(result.standardOutput.components(separatedBy: ".Columns {").count == 2)
   }
 
@@ -200,15 +191,12 @@ struct EmitterTests {
     ] {
       #expect(result.standardOutput.contains(expected), "\(expected)")
     }
-    // One function name on several relations: `blurb_varchar` is on `todos` and `todos_view`.
     #expect(result.standardOutput.components(separatedBy: "var blurbVarchar:").count == 3)
-    // Takes two arguments, returns a composite that is no relation, or returns a set of scalars.
     for absent in ["testUnnamedMultipleRows", "testUnnamedRowComposite", "getUserIds", "add"] {
       #expect(!result.standardOutput.contains("var \(absent):"), "\(absent)")
     }
   }
 
-  /// Under `--access-control public` every member of the extension is `public`.
   @Test
   func computedMembersFollowTheAccessControl() {
     let result = run(arguments: ["--access-control", "public"]) { Fixture.integration }
@@ -216,7 +204,6 @@ struct EmitterTests {
     #expect(!result.standardOutput.contains("\n  var shoutedSlug"))
   }
 
-  /// A computed field alone needs `Foundation` when its type is `Date`.
   @Test
   func computedFieldTypeImportsFoundation() {
     let input = Fixture.integration { object in
@@ -246,7 +233,6 @@ struct EmitterTests {
     #expect(result.standardOutput.contains("_PostgrestComputedField<T, Date>"))
   }
 
-  /// An enum of a schema that is not selected is generated when only a computed field returns it.
   @Test
   func computedFieldEnumOfAnotherSchemaIsGenerated() {
     let input = Fixture.integration { object in
@@ -278,7 +264,6 @@ struct EmitterTests {
     #expect(result.standardOutput.contains("_PostgrestComputedField<T, OtherMood>"))
   }
 
-  /// A relation listed twice, here in both `tables` and `views`, is generated once, as the first.
   @Test
   func relationListedTwiceIsGeneratedOnce() {
     let input = Fixture.integration { object in

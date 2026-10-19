@@ -23,8 +23,6 @@ struct LoggerInterceptorTests {
 
   typealias Method = HTTPTypes.HTTPRequest.Method
 
-  // MARK: - Mock Logger
-
   final class LogCapture: @unchecked Sendable {
     var verboseLogs: [String] = []
     var errorLogs: [String] = []
@@ -67,8 +65,6 @@ struct LoggerInterceptorTests {
     return (logger, capture)
   }
 
-  // MARK: - Helper Methods
-
   func createTestRequest(
     url: String = "https://api.example.com/test",
     method: Method = .get
@@ -79,8 +75,6 @@ struct LoggerInterceptorTests {
   func createTestResponse(statusCode: Int = 200) -> HTTPTypes.HTTPResponse {
     HTTPTypes.HTTPResponse(status: HTTPTypes.HTTPResponse.Status(code: statusCode))
   }
-
-  // MARK: - Interceptor Tests
 
   @Test
   func interceptorLogsRequest() async throws {
@@ -93,8 +87,7 @@ struct LoggerInterceptorTests {
       (self.createTestResponse(), nil)
     }
 
-    // Verify request was logged
-    #expect(capture.verboseLogs.count == 2)  // Request and response
+    #expect(capture.verboseLogs.count == 2)
     #expect(capture.verboseLogs[0].contains("Request:"))
     #expect(capture.verboseLogs[0].contains("/users"))
   }
@@ -111,7 +104,6 @@ struct LoggerInterceptorTests {
       (self.createTestResponse(statusCode: 200), HTTPBody(responseData))
     }
 
-    // Verify response was logged
     #expect(capture.verboseLogs.count == 2)
     #expect(capture.verboseLogs[1].contains("Response: Status code: 200"))
   }
@@ -158,10 +150,8 @@ struct LoggerInterceptorTests {
       }
       Issue.record("Should have thrown error")
     } catch {
-      // Expected error
     }
 
-    // Verify error was logged
     #expect(capture.errorLogs.count == 1)
     #expect(capture.errorLogs[0].contains("Response: Failure"))
   }
@@ -178,7 +168,6 @@ struct LoggerInterceptorTests {
       (self.createTestResponse(), nil)
     }
 
-    // Verify JSON body was logged
     #expect(capture.verboseLogs[0].contains("Body:"))
     #expect(capture.verboseLogs[0].contains("name"))
   }
@@ -194,7 +183,6 @@ struct LoggerInterceptorTests {
       (self.createTestResponse(), nil)
     }
 
-    // Verify empty body handling
     #expect(capture.verboseLogs[0].contains("<none>"))
   }
 
@@ -246,8 +234,6 @@ struct LoggerInterceptorTests {
     }
   }
 
-  // MARK: - Stringify Function Tests
-
   @Test
   func stringifyWithNilData() {
     let result = stringify(nil)
@@ -274,7 +260,6 @@ struct LoggerInterceptorTests {
 
   @Test
   func stringifyWithInvalidUTF8Data() {
-    // Invalid UTF-8 sequence
     let invalidData = Data([0xFF, 0xFE, 0xFD])
     let result = stringify(invalidData)
 
@@ -286,7 +271,6 @@ struct LoggerInterceptorTests {
     let emptyData = Data()
     let result = stringify(emptyData)
 
-    // Empty JSON object or empty string
     #expect(result.isEmpty)
   }
 
@@ -338,8 +322,6 @@ struct LoggerInterceptorTests {
     #expect(result.contains("value"))
   }
 
-  // MARK: - Integration Tests
-
   @Test
   func interceptorPassesThroughResponse() async throws {
     let (logger, _) = makeLogger()
@@ -352,7 +334,6 @@ struct LoggerInterceptorTests {
       (self.createTestResponse(statusCode: 201), HTTPBody(testData))
     }
 
-    // Verify response is passed through unchanged
     #expect(head.status.code == 201)
     #expect(try await Data(collecting: try #require(body), upTo: .max) == testData)
   }
@@ -437,7 +418,6 @@ struct LoggerInterceptorTests {
       return (HTTPTypes.HTTPResponse(status: .ok), nil)
     }
 
-    // The logger buffered and re-wrapped the body; the transport must still be able to report.
     let hook = try #require(forwarded.value?.onUploadProgress)
     hook(5)
     #expect(seen.value == [5])

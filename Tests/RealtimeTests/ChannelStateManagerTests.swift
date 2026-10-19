@@ -8,9 +8,6 @@ import Testing
 
 @Suite
 struct ChannelStateManagerTests {
-  /// Helper that returns a `ChannelStateManager` wired up with controllable
-  /// fakes for every injected operation, plus spies so tests can assert what
-  /// the state machine did.
   struct Harness: Sendable {
     let sut: ChannelStateManager
     let ref: LockIsolated<Int>
@@ -70,11 +67,6 @@ struct ChannelStateManagerTests {
     )
   }
 
-  /// Schedules a task that waits for the state manager to push a `phx_join`
-  /// (observable via the harness's `joinCallCount`) and then signals a
-  /// successful subscription. Using a poll-then-confirm pattern avoids a race
-  /// where the confirmation fires before `subscribe()` has transitioned into
-  /// `.subscribing` and is therefore silently dropped.
   private func confirmSubscribeOnJoin(_ h: Harness) -> Task<Void, Never> {
     Task { [h] in
       while h.joinCallCount.value == 0 {
@@ -83,8 +75,6 @@ struct ChannelStateManagerTests {
       await h.sut.didReceiveSubscribedOK()
     }
   }
-
-  // MARK: - Initial state
 
   @Test
   func initialStateIsUnsubscribed() async {
@@ -99,13 +89,10 @@ struct ChannelStateManagerTests {
     #expect(joinRef == nil)
   }
 
-  // MARK: - Subscribe
-
   @Test
   func subscribePushesJoinAndTransitionsOnConfirmation() async throws {
     let h = makeHarness()
 
-    // Server-side confirmation arrives shortly after the join is pushed.
     let confirmer = Task { [h] in
       while h.joinCallCount.value == 0 {
         try? await Task.sleep(nanoseconds: 5_000_000)
@@ -146,7 +133,6 @@ struct ChannelStateManagerTests {
     async let first: Void = h.sut.subscribe()
     async let second: Void = h.sut.subscribe()
 
-    // Trigger confirmation after both calls have entered the actor.
     try? await Task.sleep(nanoseconds: 20_000_000)
     await h.sut.didReceiveSubscribedOK()
 
@@ -160,7 +146,6 @@ struct ChannelStateManagerTests {
   func subscribeRetriesOnTimeoutThenSucceeds() async throws {
     let h = makeHarness(timeout: .milliseconds(50), maxRetryAttempts: 3)
 
-    // Wait for the second join attempt before confirming.
     let confirmer = Task { [h] in
       while h.joinCallCount.value < 2 {
         try? await Task.sleep(nanoseconds: 5_000_000)
@@ -207,7 +192,6 @@ struct ChannelStateManagerTests {
       try await h.sut.subscribe()
       Issue.record("Expected subscribe to throw when socket is not connected")
     } catch {
-      // Expected
     }
 
     let state = await h.sut.state
@@ -217,16 +201,12 @@ struct ChannelStateManagerTests {
     }
   }
 
-  /// Issue #1145 (defect 2): a socket connect failure aborted the whole
-  /// subscribe on attempt 1 — only timeouts entered the retry ladder. A
-  /// transient connect failure must be retried like a timeout.
   @Test
   func subscribeRetriesWhenSocketConnectFailsTransiently() async throws {
     let h = makeHarness(
       timeout: .seconds(1), maxRetryAttempts: 3, retryDelay: { _ in .milliseconds(50) })
     h.ensureConnected.setValue(false)
 
-    // The "network" comes back shortly after the first failed attempt.
     let recovery = Task { [h] in
       try? await Task.sleep(nanoseconds: 20_000_000)
       h.ensureConnected.setValue(true)
@@ -244,9 +224,6 @@ struct ChannelStateManagerTests {
     }
   }
 
-  /// Issue #1145 (defect 2): connect failures were manufactured as
-  /// `Swift.CancellationError`, indistinguishable from the caller's own task
-  /// cancellation. They must surface as a typed error instead.
   @Test
   func connectFailureDoesNotSurfaceAsCancellationError() async {
     let h = makeHarness(
@@ -261,8 +238,6 @@ struct ChannelStateManagerTests {
       #expect((error as? RealtimeError)?.kind == .maxRetryAttemptsReached)
     }
   }
-
-  // MARK: - Unsubscribe
 
   @Test
   func unsubscribeFromUnsubscribedIsNoOp() async {
@@ -304,12 +279,10 @@ struct ChannelStateManagerTests {
 
     let subscribeTask = Task { try? await h.sut.subscribe() }
 
-    // Wait until the subscribe attempt has pushed phx_join.
     while h.joinCallCount.value == 0 {
       try? await Task.sleep(nanoseconds: 5_000_000)
     }
 
-    // Respond to the phx_leave with a close so unsubscribe can finish.
     let closer = Task { [h] in
       while h.leaveCallCount.value == 0 {
         try? await Task.sleep(nanoseconds: 5_000_000)
@@ -328,20 +301,12 @@ struct ChannelStateManagerTests {
     }
   }
 
-  // MARK: - Server-close while subscribed
-
-  /// A server close that aborts an in-flight subscribe must surface as
-  /// `RealtimeError.channelClosedByServer` — never as `CancellationError`
-  /// (which callers must be able to attribute to their own task) and never
-  /// as `maxRetryAttemptsReached` (which can otherwise mask a close landing
-  /// on the final retry attempt).
   @Test
   func serverCloseDuringSubscribeSurfacesTypedError() async {
     let h = makeHarness(timeout: .seconds(5), maxRetryAttempts: 1)
 
     let subscribeTask = Task { try await h.sut.subscribe() }
 
-    // Wait until the join is in flight, then the server closes the channel.
     while h.joinCallCount.value == 0 {
       try? await Task.sleep(nanoseconds: 5_000_000)
     }
@@ -359,8 +324,6 @@ struct ChannelStateManagerTests {
     }
   }
 
-  /// A close carrying a `join_ref` that doesn't match the current join must
-  /// be ignored — the check runs on the actor, atomically with the close.
   @Test
   func didReceiveCloseIgnoresStaleJoinRef() async throws {
     let h = makeHarness()
@@ -408,8 +371,6 @@ struct ChannelStateManagerTests {
     #expect(joinRef == nil)
   }
 
-  // MARK: - State stream
-
   @Test
   func stateChangesEmitsTransitions() async throws {
     let h = makeHarness()
@@ -423,9 +384,6 @@ struct ChannelStateManagerTests {
     let sawSubscribed = LockIsolated(false)
     let sawUnsubscribing = LockIsolated(false)
     let observerReadyFired = LockIsolated(false)
-    // Subscribe before spawning the Task — `stateChanges` crosses the actor
-    // boundary, so deferring the `await` into the Task would let state
-    // transitions race ahead of the observer actually registering.
     let stateChanges = await h.sut.stateChanges
     let observer = Task { [stateChanges] in
       for await state in stateChanges {
@@ -454,9 +412,6 @@ struct ChannelStateManagerTests {
       }
     }
 
-    // Wait for the observer to actually subscribe to the stream — otherwise
-    // fast state transitions below can race ahead of it and the `.subscribing`
-    // replay is missed.
     let becameReady = await waitUntil(timeout: 1) { observerReady.value }
     #expect(becameReady, "observer subscribed")
 
@@ -474,19 +429,12 @@ struct ChannelStateManagerTests {
     observer.cancel()
   }
 
-  // MARK: - Client changes & pushes
-
   @Test
   func clientChangesAreForwardedToJoinOperation() async throws {
     let h = makeHarness()
     let config = PostgresJoinConfig(event: .insert, schema: "public", table: "users", filter: nil)
-    // The channel owns the buffer — the actor reads it through the injected
-    // `getClientChanges` closure when it builds the join payload.
     h.clientChanges.withValue { $0.append(config) }
 
-    // Poll-then-confirm avoids a race where an eager `didReceiveSubscribedOK`
-    // runs before `subscribe()` has transitioned into `.subscribing` and is
-    // therefore dropped by the guard in the state manager.
     let confirmer = Task { [h] in
       while h.joinCallCount.value == 0 {
         try? await Task.sleep(nanoseconds: 5_000_000)
@@ -529,10 +477,8 @@ struct ChannelStateManagerTests {
     try await h.sut.subscribe()
     _ = await confirmer.value
 
-    // Caller snapshots joinRef…
     let staleJoinRef = await h.sut.joinRef
 
-    // …then the channel closes before the caller registers the push.
     await h.sut.didReceiveClose()
 
     let message = RealtimeMessageV2(

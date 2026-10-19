@@ -46,8 +46,6 @@ extension _PostgrestFilterableExpression where Value: PostgrestFilterValue {
   }
 }
 
-// MARK: - Escape hatch
-
 extension _PostgrestFilterableExpression {
   /// Applies an operator this SDK has no member for — a PostgREST operator newer than this
   /// version, for instance. The column stays compiler-checked.
@@ -71,8 +69,6 @@ extension _PostgrestFilterableExpression {
   }
 }
 
-// MARK: - Boolean IS checks
-
 extension _PostgrestFilterableExpression where Value == Bool {
   /// Matches rows where this boolean column IS true.
   ///
@@ -87,8 +83,6 @@ extension _PostgrestFilterableExpression where Value == Bool {
     _PostgrestFilter(column: postgrestExpression, operator: .is, operand: .is(false))
   }
 }
-
-// MARK: - Null checks
 
 extension _PostgrestNullableExpression {
   /// Matches rows where this expression is SQL `NULL`.

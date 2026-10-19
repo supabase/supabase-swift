@@ -32,8 +32,6 @@ extension URLRequest {
 }
 
 extension InputStream {
-  /// Blocks the calling thread until the writer closes its end. Only call this from a thread
-  /// that owns nothing else, such as Mocker's request callback on URLSession's own thread.
   fileprivate func readToEnd() -> Data {
     open()
     defer { close() }
@@ -160,10 +158,6 @@ struct URLSessionTransportTests {
     })
     mock.register()
 
-    // The second chunk is held back until the request has started. A streaming transport starts
-    // with the first chunk and then drains the second; a transport that collects the body first
-    // would never start (Linux does collect first, so there the gate is skipped and the flag is
-    // set before the request can begin).
     let chunks = AsyncThrowingStream<ArraySlice<UInt8>, any Error> { continuation in
       continuation.yield(ArraySlice("abc".utf8))
       Task {
@@ -181,7 +175,6 @@ struct URLSessionTransportTests {
 
     #expect(head.status == 200)
     #if canImport(FoundationNetworking)
-      // Linux spools the body before the request starts (documented on the transport).
       #expect(releasedBeforeRequestStarted.value == true)
     #else
       #expect(releasedBeforeRequestStarted.value == false)
@@ -268,7 +261,6 @@ struct URLSessionTransportTests {
       let session = URLSession.shared
       let task = session.dataTask(with: url)
 
-      // A streamed body reports as its chunks are pulled, so the task-level callback stays quiet.
       delegate.urlSession(
         session, task: task, didSendBodyData: 2, totalBytesSent: 2, totalBytesExpectedToSend: 4)
 
@@ -293,7 +285,6 @@ struct URLSessionTransportTests {
           iterationBehavior: behavior)
       }
 
-      // 307/308 resend the body, which a one-shot body cannot do, so the 3xx is handed back.
       let (single, _) = makeDelegate(requestBody: body(.single))
       single.urlSession(
         session, task: task, willPerformHTTPRedirection: response(307), newRequest: target,
@@ -301,11 +292,9 @@ struct URLSessionTransportTests {
       single.urlSession(
         session, task: task, willPerformHTTPRedirection: response(308), newRequest: target,
         completionHandler: follow)
-      // 303 turns the request into a bodiless GET, so nothing needs replaying.
       single.urlSession(
         session, task: task, willPerformHTTPRedirection: response(303), newRequest: target,
         completionHandler: follow)
-      // A body that can replay follows every redirect.
       let (multiple, _) = makeDelegate(requestBody: body(.multiple))
       multiple.urlSession(
         session, task: task, willPerformHTTPRedirection: response(307), newRequest: target,
@@ -335,8 +324,6 @@ struct URLSessionTransportTests {
       let firstStream = try #require(first.value?.value)
       #expect(await firstStream.readToEndOffThread() == Data("abcd".utf8))
 
-      // A redirect or auth retry asks for the body again. The one-shot body cannot replay, so
-      // the delegate cancels the task and reports why instead of a bare `URLError.cancelled`.
       delegate.urlSession(session, task: task, needNewBodyStream: { _ in })
       let deadline = ContinuousClock.now + .seconds(2)
       while task.state == .suspended && ContinuousClock.now < deadline {

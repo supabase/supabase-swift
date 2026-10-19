@@ -25,7 +25,6 @@ extension PostgrestRequestBuilder where Phase: PostgrestTransformablePhase {
   /// - Parameter columns: A comma-separated list of columns to retrieve. Defaults to `"*"` (all columns).
   /// - Returns: A ``PostgrestTransformBuilder`` so calls can be chained.
   public func select(_ columns: String = "*") -> PostgrestTransformBuilder {
-    // remove whitespaces except when quoted.
     var quoted = false
     let cleanedColumns = columns.compactMap { char -> String? in
       if char.isWhitespace, !quoted {
@@ -134,7 +133,6 @@ extension PostgrestRequestBuilder where Phase: PostgrestTransformablePhase {
 
     var copy = PostgrestTransformBuilder(carryingFrom: self)
     copy.request.query.appendOrUpdate(URLQueryItem(name: keyOffset, value: "\(from)"))
-    // Range is inclusive, so add 1
     copy.request.query.appendOrUpdate(URLQueryItem(name: keyLimit, value: "\(to - from + 1)"))
 
     return copy
@@ -216,8 +214,6 @@ extension PostgrestRequestBuilder where Phase: PostgrestTransformablePhase {
   /// - Returns: A ``PostgrestTransformBuilder`` so calls can be chained.
   public func stripNulls() -> PostgrestTransformBuilder {
     var copy = PostgrestTransformBuilder(carryingFrom: self)
-    // The media type is only final once the chain runs (`single()` may come later), so the core
-    // applies the flag when it builds the request (`_PostgrestRequest.httpRequest(for:)`).
     copy.request.stripsNulls = true
     return copy
   }

@@ -16,7 +16,6 @@ extension RealtimeChannelV2 {
   ///
   /// - Returns: An `AsyncStream` of ``PresenceAction`` values.
   public func presenceChange() -> AsyncStream<any PresenceAction> {
-    // Unbounded: these streams carry server payloads, so any bounded policy is silent data loss.
     let (stream, continuation) = AsyncStream<any PresenceAction>.makeStream(
       bufferingPolicy: .unbounded
     )
@@ -130,7 +129,6 @@ extension RealtimeChannelV2 {
     filter: String?,
     select: [String]? = nil
   ) -> AsyncStream<AnyAction> {
-    // Unbounded: dropping a database change is silent data loss for the caller.
     let (stream, continuation) = AsyncStream<AnyAction>.makeStream(bufferingPolicy: .unbounded)
     let subscription = _onPostgresChange(
       event: event,
@@ -154,7 +152,6 @@ extension RealtimeChannelV2 {
   /// - Parameter event: The broadcast event name to listen for.
   /// - Returns: An `AsyncStream<JSONObject>`.
   public func broadcastStream(event: String) -> AsyncStream<JSONObject> {
-    // Unbounded: dropping a broadcast is silent data loss for the caller.
     let (stream, continuation) = AsyncStream<JSONObject>.makeStream(bufferingPolicy: .unbounded)
 
     let subscription = onBroadcast(event: event) {
@@ -175,7 +172,6 @@ extension RealtimeChannelV2 {
   /// - Parameter event: The broadcast event name to listen for.
   /// - Returns: An `AsyncStream<Data>`.
   public func broadcastDataStream(event: String) -> AsyncStream<Data> {
-    // Unbounded: dropping a broadcast is silent data loss for the caller.
     let (stream, continuation) = AsyncStream<Data>.makeStream(bufferingPolicy: .unbounded)
 
     let subscription = onBroadcastData(event: event) {
@@ -195,7 +191,6 @@ extension RealtimeChannelV2 {
   ///
   /// - Returns: An `AsyncStream<RealtimeMessageV2>`.
   public func system() -> AsyncStream<RealtimeMessageV2> {
-    // Unbounded: dropping a system message is silent data loss for the caller.
     let (stream, continuation) = AsyncStream<RealtimeMessageV2>.makeStream(
       bufferingPolicy: .unbounded
     )
@@ -212,7 +207,6 @@ extension RealtimeChannelV2 {
   }
 }
 
-// Helper to work around type ambiguity in macOS 13
 extension AsyncStream<AnyAction> {
   fileprivate func compactErase<T: Sendable>() -> AsyncStream<T> {
     AsyncStream<T>(compactMap { $0.wrappedAction as? T } as AsyncCompactMapSequence<Self, T>)

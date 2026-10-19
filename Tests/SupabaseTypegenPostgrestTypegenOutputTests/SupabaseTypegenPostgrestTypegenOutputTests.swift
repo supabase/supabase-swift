@@ -11,10 +11,6 @@ import HTTPTypes
 import TestHelpers
 import Testing
 
-// `Generated.swift` is `supabase-typegen --access-control public` run on postgrest-typegen's own
-// fixture. It is here, not with the integration schema, because the integration schema has no
-// relation outside `public`.
-
 @Suite
 struct SupabaseTypegenPostgrestTypegenOutputTests {
   @Test

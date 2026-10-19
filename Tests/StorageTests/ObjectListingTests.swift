@@ -15,8 +15,6 @@ import Testing
 
 @Suite
 struct ObjectListingTests {
-  /// A bucket whose transport answers each request with the next of `responses` and records the
-  /// request bodies.
   static func makeBucket(
     bodies: LockIsolated<[String]> = .init([]),
     status: HTTPResponse.Status = .ok,

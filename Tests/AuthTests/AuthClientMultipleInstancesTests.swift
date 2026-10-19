@@ -14,9 +14,6 @@ import Testing
 
 @testable import Auth
 
-// These tests assert on client deallocation, which only happens after the `Task { @MainActor in ...
-// }` scheduled by `AuthClient.init` releases its strong reference to the client. Running them
-// concurrently makes them race for the main actor, so serialize the suite.
 @Suite(.serialized)
 struct AuthClientMultipleInstancesTests {
   @Test
@@ -68,10 +65,6 @@ struct AuthClientMultipleInstancesTests {
       #expect(client != nil)
     }
 
-    // `init` kicks off a `Task { @MainActor in ... }` that briefly holds a strong reference to
-    // `self`, and `deinit` itself hops off to a detached task to stop auto-refresh; poll instead
-    // of asserting after a single yield; the number of hops needed to actually deinit isn't fixed
-    // and grows under scheduler load (e.g. on Linux CI with a small cooperative thread pool).
     for _ in 0..<100 where client != nil {
       try? await Task.sleep(nanoseconds: NSEC_PER_MSEC * 10)
     }
@@ -79,11 +72,6 @@ struct AuthClientMultipleInstancesTests {
     #expect(client == nil)
   }
 
-  // MARK: - Sub-clients outlive their AuthClient (SDK-1875)
-
-  /// Builds a client whose transport answers every request with a 200 carrying `body`, and
-  /// returns only `subClient` of it, so the `AuthClient` itself is released before the caller's
-  /// next line.
   private func releasedClientSubClient<T>(
     _ subClient: (AuthClient) -> T, responding body: Data = Data()
   ) -> (subClient: T, transport: RecordingTransport) {
@@ -142,7 +130,6 @@ struct AuthClientMultipleInstancesTests {
   func deinitStopsAutoRefreshTask() async {
     let url = URL(string: "http://localhost:54321/auth")!
 
-    // Held on purpose, so the auto-refresh state is still observable after the client is gone.
     let sessionManager: SessionManager
 
     do {
@@ -156,9 +143,6 @@ struct AuthClientMultipleInstancesTests {
 
       client.startAutoRefresh()
 
-      // `startAutoRefresh()` schedules the start on a detached task, so poll instead of asserting
-      // after a single yield; on a small cooperative thread pool (Linux CI) one yield is not
-      // always enough for that task to have run.
       var didStart = await sessionManager.isAutoRefreshRunning()
       for _ in 0..<100 where !didStart {
         try? await Task.sleep(nanoseconds: NSEC_PER_MSEC * 10)
@@ -167,8 +151,6 @@ struct AuthClientMultipleInstancesTests {
       #expect(didStart)
     }
 
-    // `deinit` stops the auto-refresh loop from a detached task, so poll instead of asserting
-    // right away.
     var isAutoRefreshRunning = await sessionManager.isAutoRefreshRunning()
     for _ in 0..<100 where isAutoRefreshRunning {
       try? await Task.sleep(nanoseconds: NSEC_PER_MSEC * 10)

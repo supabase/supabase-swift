@@ -15,7 +15,6 @@ import Testing
 @testable import Realtime
 
 #if os(Linux)
-  // RealtimeLifecycleTests are disabled on Linux due to timing flakiness.
 #else
 
   @Suite
@@ -43,8 +42,6 @@ import Testing
         ),
         wsTransport: { [servers] _, _ in
           let (client, server) = FakeWebSocket.fakes()
-          // Auto-respond to heartbeats and phx_join so subscribe() completes.
-          // Retain the server so `client.other` (a weak ref) stays valid.
           servers.withValue { $0.append(server) }
           Task { [server] in
             for await event in server.events {
@@ -60,8 +57,6 @@ import Testing
                   )
                 )
               } else if msg.event == "phx_join" {
-                // Mirror the incoming ref so the client's pending push resolves,
-                // regardless of reconnect cycles (ref counter resets on disconnect).
                 server.send(
                   RealtimeMessageV2(
                     joinRef: msg.joinRef,
@@ -128,22 +123,14 @@ import Testing
       #expect(sut.status == .connected)
 
       sut.handleAppBackground()
-      // Subscribe before the OS close so the buffered .disconnected event is
-      // not missed even when .reconnecting follows immediately (PR #1015 made
-      // handleClose call initiateReconnect).
       let statusUpdates = sut.statusChange
       servers.value.last?.close(code: nil, reason: "OS teardown")
-      // Status sequence: .connected → .disconnected → .connecting (reconnecting).
       _ = await statusUpdates.first { $0 == .disconnected }
 
-      // Advance the test clock past the 7-second reconnect delay so the
-      // auto-reconnect task wakes and performConnection() runs.
       await testClock.advance(by: .seconds(8))
       _ = await statusUpdates.first { $0 == .connected }
       #expect(sut.status == .connected)
 
-      // handleAppForeground is a no-op: the auto-reconnect already recovered
-      // the connection and the state observer will rejoin channels.
       await sut.handleAppForeground()
       #expect(sut.status == .connected)
     }
@@ -165,14 +152,9 @@ import Testing
       _ = await statusUpdates.first { $0 == .connected }
       #expect(sut.status == .connected)
 
-      // rejoinChannels() is launched as a fire-and-forget Task from the state
-      // observer's handleConnected(isReconnect: true) path. Poll until it
-      // completes (FakeWebSocket delivers phx_reply synchronously but the task
-      // needs scheduler turns to run).
       await waitUntil(timeout: 5) { channel.status == .subscribed }
       #expect(channel.status == .subscribed)
 
-      // handleAppForeground is a no-op: already reconnected with channel resubscribed.
       await sut.handleAppForeground()
       #expect(sut.status == .connected)
       #expect(channel.status == .subscribed)
@@ -263,8 +245,6 @@ import Testing
       #expect(sut.status == .connected)
 
       sut.handleAppBackground()
-      // Explicit developer disconnect (e.g. sign-out) must clear the lifecycle flag so
-      // handleAppForeground() does not silently undo it.
       sut.disconnect()
       #expect(sut.status == .disconnected)
 
@@ -311,13 +291,9 @@ import Testing
         box.client = sut
         await sut.connect()
         #expect(sut.status == .connected)
-        // Deliberately no `disconnect()` — dropping a connected client must still tear
-        // down the socket.
       }
       await scope()
 
-      // The fake pair is cross-linked, so the server peer flips to closed only when the
-      // client-side socket is actually closed (not merely deallocated).
       let server = try #require(servers.value.last)
       await waitUntil(timeout: 5) { box.client == nil && server.isClosed }
 

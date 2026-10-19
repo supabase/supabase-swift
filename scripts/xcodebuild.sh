@@ -1,12 +1,4 @@
 #!/usr/bin/env bash
-# Runs xcodebuild against the Supabase workspace for a given platform.
-# Env vars (all optional, defaults match previous Makefile behavior):
-#   PLATFORM             IOS | MACOS | MAC_CATALYST | TVOS | VISIONOS | WATCHOS (default: IOS)
-#   CONFIG               Debug | Release (default: Debug)
-#   SCHEME               Xcode scheme (default: Supabase)
-#   WORKSPACE            Xcode workspace (default: Supabase.xcworkspace)
-#   XCODEBUILD_ARGUMENT  xcodebuild action, e.g. build | test (default: test)
-#   DERIVED_DATA_PATH    (default: ~/.derivedData/$CONFIG)
 set -euo pipefail
 
 CONFIG="${CONFIG-Debug}"

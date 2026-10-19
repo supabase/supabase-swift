@@ -13,8 +13,6 @@ import Testing
 struct PluginTests {
   @Test
   func macroModuleReExportsPostgREST() {
-    // Compiles only if PostgrestMacros re-exports PostgREST, which is what lets a user write a
-    // single `import PostgrestMacros`.
     #expect(PostgrestClient.Configuration.defaultHeaders["X-Client-Info"] != nil)
   }
 }

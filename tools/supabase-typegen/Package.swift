@@ -1,7 +1,4 @@
 // swift-tools-version:6.2
-// A package of its own, not a product of the root one: SwiftPM resolves every dependency of every
-// product a package vends, so swift-format here would be fetched by every app that depends on
-// `Supabase` and would narrow its swift-syntax to the one major swift-format pins.
 
 import PackageDescription
 
@@ -16,8 +13,6 @@ let package = Package(
     .package(url: "https://github.com/swiftlang/swift-syntax", "604.0.0"..<"605.0.0"),
   ],
   targets: [
-    // `CamelToSnake.swift` is a symlink to the `@Table` macro's own source, so the generator and
-    // the macro derive column names with the same function.
     .executableTarget(
       name: "SupabaseTypegen",
       dependencies: [
@@ -37,7 +32,6 @@ let package = Package(
   ]
 )
 
-// The root package's settings, so the generator is held to the same rules as the SDK.
 for target in package.targets {
   target.swiftSettings = [
     .enableUpcomingFeature("ExistentialAny"),

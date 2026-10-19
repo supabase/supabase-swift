@@ -30,8 +30,6 @@ struct PostgrestFilterOperatorTests {
     }
   }
 
-  /// The conversion prefix goes in front of `fts` and the configuration behind it, so the whole
-  /// operator is one token and no separate node is needed for text search.
   @Test
   func textSearchFoldsItsTypeAndConfigIntoTheToken() {
     #expect(

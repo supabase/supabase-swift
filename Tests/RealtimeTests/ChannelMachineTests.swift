@@ -64,7 +64,6 @@ struct ChannelMachineTests {
     attempt: 2, retryIn: .seconds(2), lastError: transient)
 
   static let rows: [Row] = [
-    // §9.2 subscribe
     Row(
       name: "subscribe sends the join",
       from: .unsubscribed, event: .subscribeRequested,
@@ -85,7 +84,6 @@ struct ChannelMachineTests {
       name: "socket connected while subscribing sends the join",
       from: .subscribing(attempt: 1, isRejoin: false), event: .socketConnected,
       to: .subscribing(attempt: 1), effects: [.sendJoin]),
-    // join ok
     Row(
       name: "first join ok resolves and re-tracks presence",
       from: .subscribing(attempt: 1, isRejoin: false), event: ok,
@@ -94,7 +92,6 @@ struct ChannelMachineTests {
       name: "a rejoin ok also emits the discontinuity",
       from: .subscribing(attempt: 2, isRejoin: true), event: ok,
       to: .subscribed, effects: [.resolveSubscribe, .resendPresenceTrack, .emitResubscribed]),
-    // join errors by class
     Row(
       name: "fatal join error fails without a timer",
       from: .subscribing(attempt: 1, isRejoin: false), event: .joinReplied(.failure(fatal)),
@@ -136,7 +133,6 @@ struct ChannelMachineTests {
       name: "rejoin timer sends the join with the next attempt",
       from: waitingForTimer, event: .rejoinTimerFired,
       to: .subscribing(attempt: 3), effects: [.sendJoin]),
-    // while subscribed
     Row(
       name: "system token expired refreshes and rejoins",
       from: .subscribed, event: .systemError(message: "Token has expired 3 seconds ago"),
@@ -194,7 +190,6 @@ struct ChannelMachineTests {
     Row(
       name: "bindings changed while unsubscribed waits for the next join",
       from: .unsubscribed, event: .bindingsChanged, to: .unsubscribed, effects: []),
-    // unsubscribe
     Row(
       name: "unsubscribe while subscribed sends the leave",
       from: .subscribed, event: .unsubscribeRequested,
@@ -219,7 +214,6 @@ struct ChannelMachineTests {
     Row(
       name: "socket lost while unsubscribing counts as left",
       from: .unsubscribing, event: .socketLost(lost), to: .unsubscribed, effects: []),
-    // linger
     Row(
       name: "last listener ended starts the linger",
       from: .subscribed, event: .lastListenerEnded,
@@ -231,7 +225,6 @@ struct ChannelMachineTests {
       name: "linger timer leaves",
       from: .subscribed, event: .lingerTimerFired,
       to: .unsubscribing, effects: [.sendLeave]),
-    // stale
     Row(
       name: "a stale join reply while unsubscribed is ignored",
       from: .unsubscribed, event: ok, to: .unsubscribed, effects: []),
@@ -272,8 +265,6 @@ struct ChannelMachineTests {
     #expect(state.error?.kind == .channelClosed)
     #expect(state.error?.message == "Too many messages per second")
   }
-
-  // MARK: - Classification (§3.5)
 
   struct ClassRow: CustomTestStringConvertible {
     let reason: String
@@ -331,8 +322,6 @@ struct ChannelMachineTests {
   func classifiesSystemMessages(message: String, expected: ChannelMachine.ErrorClass) {
     #expect(ChannelMachine.classify(RealtimeError.channelClosed(message: message)) == expected)
   }
-
-  // MARK: - Join reply verification
 
   @Test
   func joinReplyMapsIDsByPositionWhenBindingsMatch() throws {

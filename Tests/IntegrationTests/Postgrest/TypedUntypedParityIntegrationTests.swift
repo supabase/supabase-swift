@@ -10,13 +10,6 @@ import Foundation
 @_spi(Experimental) import PostgrestMacros
 import Testing
 
-// `Users` is in `Generated.swift`. The rows are the four seed users in `supabase/seed.sql`; every
-// test here is read-only.
-
-/// The server-side half of `TypedUntypedParityTests`: the same filter spelled through
-/// `from(Users.self)` and through `from("users")` has to return the same rows from a live
-/// PostgREST, not only build the same query string. The cases are the ones where the two paths
-/// used to format the operand differently, or where PostgREST's grammar is strict.
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil))
 struct TypedUntypedParityIntegrationTests {
   let client = PostgrestClient(
@@ -32,17 +25,13 @@ struct TypedUntypedParityIntegrationTests {
   ) async throws {
     let typedRows = try await typed.order { $0.username.asc() }.execute().value
     let untypedRows: [Users] = try await untyped.order("username").execute().value
-    // `Users` is generated without `Equatable`; a dump compares every stored property.
     #expect(
       String(customDumping: typedRows) == String(customDumping: untypedRows),
       sourceLocation: sourceLocation
     )
-    // At least: other suites in the same run insert users of their own and delete them in their
-    // `init()`, so an exact count would depend on suite order.
     #expect(typedRows.count >= count, sourceLocation: sourceLocation)
   }
 
-  /// `is(_:value: nil)` sends `is.null` now, where it sent `is.NULL`; the server reads both.
   @Test
   func isNullMatchesTheSeedRowsWithoutAnEmail() async throws {
     try await expectSameRows(
@@ -59,8 +48,6 @@ struct TypedUntypedParityIntegrationTests {
       count: 3)
   }
 
-  /// A scalar operand with spaces and quotes stays unquoted at top level on both paths (spec
-  /// §9.5): quoting it would match nothing.
   @Test
   func scalarOperandWithQuotesAndSpaces() async throws {
     try await expectSameRows(
@@ -69,7 +56,6 @@ struct TypedUntypedParityIntegrationTests {
       count: 1)
   }
 
-  /// Inside `in.(…)` the same operand must be quoted, on both paths.
   @Test
   func inListQuotesItsMembers() async throws {
     let phrases = ["'cat' 'fat'", "'bat' 'cat'"]
@@ -79,8 +65,6 @@ struct TypedUntypedParityIntegrationTests {
       count: 2)
   }
 
-  /// Inside `or=(…)` the typed renderer quotes the operand; the untyped caller writes the
-  /// grammar by hand, quotes included.
   @Test
   func orGroupWithAQuotedOperand() async throws {
     try await expectSameRows(

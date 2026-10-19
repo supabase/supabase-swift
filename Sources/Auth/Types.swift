@@ -301,7 +301,6 @@ public struct User: Codable, Hashable, Identifiable, Sendable {
     case id
     case appMetadata
     case userMetadata
-    // The wire field is the JWT `aud` claim; only the Swift spelling changed.
     case audience = "aud"
     case confirmationSentAt
     case recoverySentAt
@@ -1761,8 +1760,6 @@ public struct GenerateLinkType: RawRepresentable, Codable, Hashable, Sendable {
   public static let emailChangeNew = GenerateLinkType(rawValue: "email_change_new")
 }
 
-// MARK: - OAuth Client Types
-
 /// OAuth client grant types supported by the OAuth 2.1 server.
 /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
 public struct OAuthClientGrantType: RawRepresentable, Codable, Hashable, Sendable,
@@ -2013,8 +2010,6 @@ public struct ListOAuthClientsPaginatedResponse: Hashable, Sendable {
   public var total: Int
 }
 
-// MARK: - OAuth Authorization Server Types
-
 /// Details about the OAuth client requesting authorization.
 /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
 public struct OAuthAuthorizationClient: Decodable, Hashable, Sendable {
@@ -2097,10 +2092,6 @@ public enum OAuthAuthorizationDetailsResponse: Hashable, Sendable {
 
 extension OAuthAuthorizationDetailsResponse: Decodable {
   public init(from decoder: any Decoder) throws {
-    // Neither shape decoding failing surfaces both underlying errors, instead
-    // of a naive try?/fallback silently discarding a genuine decoding
-    // failure in .details (not just "this is the .redirect shape") in favor
-    // of the (less useful) .redirect error.
     self = try decodeOneOf(
       { .details(try OAuthAuthorizationDetails(from: decoder)) },
       { .redirect(try OAuthRedirect(from: decoder)) }
@@ -2121,8 +2112,6 @@ public struct OAuthGrant: Decodable, Hashable, Sendable {
   /// When the grant was given.
   public let grantedAt: Date
 }
-
-// MARK: - JWT Claims
 
 /// JSON Web Key (JWK) representation.
 public struct JWK: Decodable, Hashable, Sendable {

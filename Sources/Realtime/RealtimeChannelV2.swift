@@ -167,10 +167,6 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
         await channel.push(ChannelEvent.leave)
       },
       stateDidChange: { [weakSelfRef] state in
-        // Forward every state-machine transition to the public status
-        // storage synchronously. Running this on the actor avoids the
-        // async observer-Task delay, so reads of ``status`` right after
-        // ``subscribeWithError()`` returns see the latest value.
         weakSelfRef.value?.yieldStatus(Self.mapState(state))
       }
     )
@@ -326,8 +322,6 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     } catch is TimeoutError {
       throw RealtimeError(kind: .timeout, message: "httpSend() timed out.")
     } catch {
-      // Only the network layer's own failures are relabelled. `CancellationError`
-      // and errors thrown by a custom `ClientTransport` or the `accessToken` closure propagate as themselves.
       guard let urlError = error as? URLError else { throw error }
       // `URLSession` reports a cancelled `Task` as `URLError(.cancelled)`. A `.cancelled` with no
       // task cancellation behind it (a middleware cancelled the request) stays a transport error.
@@ -387,8 +381,6 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     } catch is TimeoutError {
       throw RealtimeError(kind: .timeout, message: "httpSend() timed out.")
     } catch {
-      // Only the network layer's own failures are relabelled. `CancellationError`
-      // and errors thrown by a custom `ClientTransport` or the `accessToken` closure propagate as themselves.
       guard let urlError = error as? URLError else { throw error }
       // `URLSession` reports a cancelled `Task` as `URLError(.cancelled)`. A `.cancelled` with no
       // task cancellation behind it (a middleware cancelled the request) stays a transport error.
@@ -441,8 +433,6 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   @MainActor
   public func broadcast(event: String, message: JSONObject) async {
     if status != .subscribed {
-      // `reportIssue` fires from an unstructured Task, which `withExpectedIssue` cannot
-      // capture, so the advisory is for applications only.
       if !isTesting {
         reportIssue(
           """
@@ -680,12 +670,6 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   }
 
   private func handleClose(_ message: RealtimeMessageV2) async {
-    // Phoenix tags `phx_close` with the `join_ref` of the join it closes.
-    // A close for a previous incarnation of this topic (e.g. a join
-    // abandoned during a reconnect) must not tear down the current
-    // subscription (issue #1145, defect 3). The join_ref check runs on
-    // the state-manager actor, atomically with the close, so a concurrent
-    // subscribe attempt can't swap `joinRef` in between.
     guard await stateManager.didReceiveClose(joinRef: message.joinRef) else {
       return
     }
@@ -696,11 +680,6 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     logger.error(
       "Received an error in channel \(message.topic). That could be as a result of an invalid access token"
     )
-    // Like `phx_close`, `phx_error` is tagged with the `join_ref` of the
-    // join it belongs to — an error from a stale join must not tear down
-    // the current subscription (#1148). Errors without a `join_ref`
-    // (e.g. auth errors before a join completes) are applied
-    // unconditionally.
     await stateManager.didReceiveClose(joinRef: message.joinRef)
   }
 
@@ -758,7 +737,6 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     _ callback: @escaping @Sendable (any PresenceAction) -> Void
   ) -> RealtimeSubscription {
     guard status != .subscribed && status != .subscribing else {
-      // See the comment on `broadcast(event:message:)` for why this is gated on `isTesting`.
       if !isTesting {
         reportIssue(
           """
@@ -1038,7 +1016,6 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     callback: @escaping @Sendable (AnyAction) -> Void
   ) -> RealtimeSubscription {
     guard status != .subscribed && status != .subscribing else {
-      // See the comment on `broadcast(event:message:)` for why this is gated on `isTesting`.
       if !isTesting {
         reportIssue(
           """
@@ -1058,9 +1035,6 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       select: select
     )
 
-    // Synchronous append — the buffer lives on the channel, not the actor, so this write
-    // cannot be reordered against a subsequent `subscribe()` call, which would send
-    // `phx_join` with an empty `postgres_changes` set.
     clientChanges.withValue { $0.append(config) }
 
     let id = callbackManager.addPostgresCallback(filter: config, callback: callback)
@@ -1173,12 +1147,6 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
 
     let push = PushV2(channel: self, message: message)
     if let ref = message.ref {
-      // Registering under `ref` must be guarded by the `joinRef` snapshot:
-      // if `didReceiveClose` ran on the actor between our `joinRef` read
-      // above and this call, the message we'd be sending is from a prior
-      // subscription cycle (the server will reject it) and keeping the
-      // push in the dictionary would orphan it — nothing would clear it
-      // again. `storePushIfJoinRefMatches` makes this pair atomic.
       let stored = await stateManager.storePushIfJoinRefMatches(
         push, ref: ref, joinRef: joinRef
       )

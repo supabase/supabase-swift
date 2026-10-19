@@ -108,7 +108,6 @@ struct PostgresChangesView: View {
         self.channel = channel
         isSubscribed = true
 
-        // Handle insertions
         Task {
           for await insertion in insertions {
             await MainActor.run {
@@ -124,7 +123,6 @@ struct PostgresChangesView: View {
           }
         }
 
-        // Handle updates
         Task {
           for await update in updates {
             await MainActor.run {
@@ -140,7 +138,6 @@ struct PostgresChangesView: View {
           }
         }
 
-        // Handle deletes
         Task {
           for await _ in deletes {
             await MainActor.run {

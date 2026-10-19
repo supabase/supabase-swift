@@ -9,9 +9,6 @@ import Testing
   import FoundationNetworking
 #endif
 
-/// Single-purpose capturing protocol, deliberately not the shared `RequestCapturingProtocol`:
-/// that's also used by `TracingTests` (a `.serialized` suite that still runs concurrently with
-/// this one), so touching its static storage here would race.
 private final class FunctionsAuthCapturingProtocol: URLProtocol {
   private static let storage = LockIsolated<URLRequest?>(nil)
   static var capturedRequest: URLRequest? {
@@ -41,10 +38,6 @@ private func makeFunctionsAuthCapturingSession() -> URLSession {
   return URLSession(configuration: config)
 }
 
-/// `.serialized`: the tests below share `FunctionsAuthCapturingProtocol`'s static request
-/// log, which would otherwise race against itself under Swift Testing's default parallel
-/// execution. That storage is private to this file, so — unlike the shared `RequestCapturingProtocol`
-/// — no other suite can race against it.
 @Suite(.serialized)
 struct SupabaseClientFunctionsAuthTests {
   @Test
@@ -54,10 +47,6 @@ struct SupabaseClientFunctionsAuthTests {
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       options: SupabaseClientOptions(
-        // A custom `accessToken` closure stands in for a real signed-in session, without needing
-        // to drive the full sign-in flow: it's what actually exercises the bug, since the
-        // transport-level auth injection this test guards against only fires when a live token
-        // is available to inject.
         auth: SupabaseClientOptions.AuthOptions(
           storage: AuthLocalStorageMock(),
           accessToken: { "live-session-token" }
@@ -100,7 +89,6 @@ struct SupabaseClientFunctionsAuthTests {
     #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer PUBLISHABLE_KEY")
   }
 
-  /// A new-format key is never a bearer token: with no session, the header is omitted.
   @Test
   func functionsInvokeWithNewFormatKeyAndNoSessionSendsNoBearer() async throws {
     FunctionsAuthCapturingProtocol.capturedRequest = nil
@@ -125,8 +113,6 @@ struct SupabaseClientFunctionsAuthTests {
     #expect(request.value(forHTTPHeaderField: "apikey") == "sb_publishable_abc123")
   }
 
-  /// An error from the configured `accessToken` provider is the caller's own and reaches
-  /// `invoke` as itself, not wrapped in a `FunctionsError`.
   @Test
   func functionsInvokeThrowsTheProviderErrorUnwrapped() async throws {
     struct TokenError: Error {}

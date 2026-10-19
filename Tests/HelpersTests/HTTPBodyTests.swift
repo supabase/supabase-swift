@@ -52,7 +52,6 @@ struct HTTPBodyTests {
     #expect(try await iterator.next() == [1])
     try await Task.sleep(for: .milliseconds(50))
 
-    // One pull per `next()`: nothing reads ahead into a buffer the consumer has not asked for.
     #expect(pulls.value == 1)
   }
 
@@ -104,7 +103,6 @@ struct HTTPBodyTests {
     var iterator = body.makeAsyncIterator()
     _ = try await iterator.next()
 
-    // Rewrite the part not yet pulled. A reader that had run ahead would still yield the old bytes.
     let writer = try FileHandle(forWritingTo: url)
     try writer.seek(toOffset: 64 * 1024)
     try writer.write(contentsOf: Data(repeating: 2, count: 64 * 1024))
@@ -145,7 +143,6 @@ struct HTTPBodyTests {
     #expect(try Data(contentsOf: url) == Data("on disk".utf8))
   }
 
-  /// A fresh directory, so a test can check that no temporary file is left behind.
   private func makeDirectory() throws -> URL {
     let directory = FileManager.default.temporaryDirectory
       .appendingPathComponent("HTTPBodyTests-\(UUID().uuidString)")
@@ -224,8 +221,6 @@ struct HTTPBodyTests {
     let body = try HTTPBody(fileURL: url)
       .reportingProgress { bytes in seen.withValue { $0.append(bytes) } }
 
-    // A file body must keep uploading flat from disk, so the storage kind survives wrapping and
-    // the transport reports progress through `onUploadProgress` instead of iterating the chunks.
     guard case .file(let storedURL) = body.storage else {
       Issue.record("expected .file storage, got \(body.storage)")
       return
@@ -239,8 +234,6 @@ struct HTTPBodyTests {
     onUploadProgress(13)
     #expect(seen.value == [5, 13])
 
-    // Iterating does not report again: a middleware that buffers the body must not make the
-    // observer see the upload twice.
     _ = try await Data(collecting: body, upTo: 100)
     #expect(seen.value == [5, 13])
   }
@@ -254,7 +247,6 @@ struct HTTPBodyTests {
     let body = HTTPBody(chunks, length: .known(2), iterationBehavior: .single)
       .reportingProgress { _ in }
 
-    // The transport hook stays unset, so `didSendBodyData` cannot double up on the pull counter.
     #expect(body.onUploadProgress == nil)
   }
 

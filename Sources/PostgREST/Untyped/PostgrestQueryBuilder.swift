@@ -39,7 +39,6 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
   ) -> PostgrestFilterBuilder {
     var copy = PostgrestFilterBuilder(carryingFrom: self)
     copy.request.method = .get
-    // remove whitespaces except when quoted.
     var quoted = false
     let cleanedColumns = columns.compactMap { char -> String? in
       if char.isWhitespace, !quoted {

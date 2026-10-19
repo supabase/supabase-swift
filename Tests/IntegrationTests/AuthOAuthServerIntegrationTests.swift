@@ -18,11 +18,6 @@ import Testing
 struct AuthOAuthServerIntegrationTests {
   let authClient = AuthClientIntegrationTests.makeClient()
 
-  /// Performs a raw GET to `/oauth/authorize` with PKCE params, capturing the
-  /// `authorization_id` from the 302 redirect's `Location` header — the
-  /// endpoint that actually creates a pending `oauth_authorizations` row.
-  /// `/oauth/authorize` is intentionally not part of the SDK's public
-  /// surface (same as the JS port), so integration tests reach it directly.
   private func createPendingAuthorization(
     accessToken: String,
     clientId: UUID,
@@ -144,8 +139,6 @@ struct AuthOAuthServerIntegrationTests {
     // only the GET assigns it). Skipping straight to consent 404s.
     _ = try await authClient.oauthServer.authorizationDetails(id: authorizationId)
 
-    // Denial must not throw — it's a successful call carrying an
-    // access_denied error in the redirect URL.
     let denyRedirect = try await authClient.oauthServer.denyAuthorization(
       id: authorizationId
     )
@@ -153,9 +146,6 @@ struct AuthOAuthServerIntegrationTests {
 
     try await serviceRoleClient.admin.oauth.deleteClient(id: oauthClient.clientId)
   }
-
-  // NOTE: `AuthClientIntegrationTests` has similar helpers, but they are `private` to that file.
-  // These are duplicated here (kept minimal) to avoid widening access in the other test file.
 
   @discardableResult
   private func signUpIfNeededOrSignIn(
@@ -173,7 +163,7 @@ struct AuthOAuthServerIntegrationTests {
   private func mockEmail(length: Int = Int.random(in: 5...10)) -> String {
     var username = ""
     for _ in 0..<length {
-      let randomAscii = Int.random(in: 97...122)  // ASCII values for lowercase letters
+      let randomAscii = Int.random(in: 97...122)
       let randomCharacter = Character(UnicodeScalar(randomAscii)!)
       username.append(randomCharacter)
     }

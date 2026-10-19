@@ -7,7 +7,6 @@
 
 import Foundation
 
-/// The outcome of one run: what `main.swift` writes to the standard streams and the exit code.
 struct RunResult: Equatable {
   var exitCode: Int32
   var standardOutput = ""
@@ -72,8 +71,6 @@ struct Options: Equatable {
       guard ["--schema", "--output", "--access-control"].contains(name) else {
         throw UsageError(message: "unknown option '\(name)'")
       }
-      // The next argument is an option of its own, not this one's value: `--output --schema public`
-      // must not write to a file named `--schema`.
       let next = remaining.first?.hasPrefix("--") == false ? remaining.popFirst() : nil
       guard let value = parts.count == 2 ? String(parts[1]) : next, !value.isEmpty else {
         throw UsageError(message: "option '\(name)' needs a value")

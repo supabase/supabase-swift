@@ -99,8 +99,6 @@
         query[kSecAttrAccessGroup as String] = accessGroup
       }
       if useDataProtectionKeychain {
-        // Stored as a Swift Bool rather than kCFBooleanTrue so the value round-trips through
-        // `as? Bool` in tests. It bridges to a CFBoolean when the dictionary becomes a CFDictionary.
         query[kSecUseDataProtectionKeychain as String] = true
       }
 
@@ -173,7 +171,7 @@
         case .interactionNotAllowed: errSecInteractionNotAllowed
         case .decodeFailed: errSecDecode
         case .other(let status): status
-        case .unknown: errSecSuccess  // This is not a Keychain error
+        case .unknown: errSecSuccess
         }
       }
     }
@@ -218,8 +216,6 @@
         "Unknown error: \(message)."
       }
     }
-
-    // MARK: - Error Cases
 
     /// A function or operation is not implemented.
     /// See [errSecUnimplemented](https://developer.apple.com/documentation/security/errsecunimplemented).

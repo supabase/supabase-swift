@@ -249,8 +249,6 @@ extension StorageMockerTests {
       #expect(name == "new-bucket")
     }
 
-    /// Sending every field on update used to reset `public` to `false` whenever a caller only
-    /// wanted to change the MIME types.
     @Test
     func updateBucketSendsOnlyTheFieldsThatAreSet() async throws {
       let storage = makeSUT()

@@ -9,11 +9,6 @@ import Foundation
 @_spi(Experimental) import PostgrestMacros
 import Testing
 
-// `PostgresValues` is in `Generated.swift`, the table in
-// `supabase/migrations/20261010000000_postgres_values.sql`.
-
-/// Each `_Postgres…` type the generator emits, written through the generated `Draft`, read back,
-/// and filtered on, against a live PostgREST.
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil))
 struct PostgresValuesIntegrationTests {
   let client = PostgrestClient(
@@ -37,7 +32,6 @@ struct PostgresValuesIntegrationTests {
     let row = try await client.from(PostgresValues.self)
       .insert(draft).returning().single().execute().value
 
-    // Each comes back in the server's own text form.
     #expect(row.intSpan == "[1,10)")
     #expect(row.daySpan == "[2024-01-01,2024-02-01)")
     #expect(row.duration == "1 day 02:00:00")
@@ -64,7 +58,6 @@ struct PostgresValuesIntegrationTests {
     #expect(try await matches { $0.atTimeTz.eq("11:45:00+00") } == false)
     #expect(try await matches { $0.payload.eq(_PostgresBytes(Data([0xde, 0xad, 0xbe, 0xef]))) })
     #expect(try await matches { $0.address.eq("192.168.0.1/24") })
-    // Inside a group each operand is quoted, which a range and a `bytea` need there.
     #expect(
       try await matches {
         $0.intSpan.eq("[0,1)") || $0.payload.eq(_PostgresBytes(Data([0xde, 0xad, 0xbe, 0xef])))

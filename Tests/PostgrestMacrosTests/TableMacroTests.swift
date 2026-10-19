@@ -15,8 +15,6 @@ import Testing
 /// the clause directly.
 @Suite(.macros(["Table": TableMacro.self]))
 struct TableMacroTests {
-  /// A generated surrogate key: `@Default` is what makes it optional in `Draft`, not
-  /// `@PrimaryKey`. See `draftOnATableThatIsNothingButACompoundKey` for a key without it.
   @Test
   func expandsAWritableTable() {
     assertMacro {
@@ -130,8 +128,6 @@ struct TableMacroTests {
     }
   }
 
-  /// `representedLiteralValue` undoes the escapes in the attribute arguments, so the expansion has
-  /// to escape a quote or a backslash again before splicing the name into its own literals.
   @Test
   func namesWithAQuoteOrABackslashRoundTrip() {
     assertMacro {
@@ -194,9 +190,6 @@ struct TableMacroTests {
 
   @Test
   func aWritableTableWithNoKeyOmitsPrimaryKeyColumns() {
-    // `primaryKeyColumns` is mandatory on `_PostgrestKeyedRelation`, so not emitting it is what
-    // keeps this type off that protocol — and off the derived-target `upsert` with it. Emitting an
-    // empty literal would conform it and send an empty `on_conflict`, a different request.
     assertMacro {
       """
       @Table("audit_events")
@@ -437,8 +430,6 @@ struct TableMacroTests {
     }
   }
 
-  /// A marker sits on the declaration, so it applies to every binding: `@PrimaryKey` on two
-  /// bindings is a compound key, `@Default` on two makes both optional in `Draft`.
   @Test
   func markersApplyToEveryBindingOfADeclaration() {
     assertMacro {
@@ -509,8 +500,6 @@ struct TableMacroTests {
     }
   }
 
-  /// `@Generated` keeps the column everywhere a read needs it and drops it from `Draft`; its
-  /// column type is the one `_PostgrestUpdate` has no subscript for.
   @Test
   func aGeneratedColumnIsReadOnly() {
     assertMacro {
@@ -644,8 +633,6 @@ struct TableMacroTests {
 
   @Test
   func draftCarriesACompoundPrimaryKey() {
-    // A compound natural key is never database-generated, so the client is the only thing that can
-    // supply it. Dropping it from `Draft` made the row impossible to create.
     assertMacro {
       """
       @Table("user_roles")
@@ -713,9 +700,6 @@ struct TableMacroTests {
 
   @Test
   func draftOnATableThatIsNothingButACompoundKey() {
-    // A pure join table previously expanded to `Draft` with no fields and an empty `init()`.
-    // Neither half is `@Default`, so both are required: `Draft()` and `Draft(userID:)` do not
-    // compile, and an incomplete key can no longer reach PostgREST as a 400.
     assertMacro {
       """
       @Table("user_roles")
@@ -773,10 +757,6 @@ struct TableMacroTests {
       """
     }
   }
-  /// `Int?` and `Optional<Int>` are the same type, and optionality has to be recognized in both
-  /// spellings everywhere it is decided. The generated initializers used to give `= nil` only to
-  /// the `?` form, so an `Optional<T>` column had to be passed explicitly — including in `Update`,
-  /// whose whole contract is naming only what changes.
   @Test
   func acceptsTheOptionalSpellingOfAnOptional() {
     assertMacro {

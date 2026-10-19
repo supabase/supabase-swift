@@ -19,10 +19,6 @@ import Testing
   import FoundationNetworking
 #endif
 
-/// Captures every request handed to it and responds with an empty JSON array.
-/// `startLoading` runs on the `URLSession` delegate queue, so mutable state is lock-guarded.
-///
-/// Shared with `TracingTests`, which needs it to assert on `traceparent` header injection.
 final class RequestCapturingProtocol: URLProtocol {
   private static let storage = LockIsolated<[URLRequest]>([])
 
@@ -77,8 +73,6 @@ struct SupabaseClientTests {
       )
     )
 
-    // Identity, not equality: `any Clock<Duration>` is not `Equatable`, and what matters is that
-    // the very instance the caller passed is the one the sub-clients sleep on.
     #expect(client.auth.configuration.clock as AnyObject === clock)
     #expect(client.realtimeV2.options.clock as AnyObject === clock)
   }
@@ -132,7 +126,6 @@ struct SupabaseClientTests {
       """
     }
     expectNoDifference(client.headers, client.auth.configuration.headers)
-    // The data clients carry no static `Authorization`; the bearer is `AccessTokenMiddleware`'s job.
     var dataHeaders = client.headers
     dataHeaders["Authorization"] = nil
     expectNoDifference(dataHeaders, client.functions.configuration.headers.dictionary)
@@ -347,24 +340,12 @@ struct SupabaseClientTests {
       client.mutableState.listenForAuthEventsTask == nil,
       "should not listen for internal auth events when using 3p authentication"
     )
-
-    // Not asserting that `client.auth` reports an issue here (as the XCTest version of this
-    // test did via `withExpectedIssue`/`withKnownIssue`): under Xcode 26's Swift Testing +
-    // XCTest bundle hosting, `reportIssue` (swift-issue-reporting) segfaults the test process
-    // when called from a `@Test` function, regardless of which "expected/known issue" wrapper
-    // is used. Reproduced locally via `xcodebuild test`; does not reproduce under `swift test`.
-    // Tracked as a migration-wide risk in SDK-435 for any later phase whose tests exercise
-    // `reportIssue`-instrumented production code.
   }
 
   @Test
   func customAccessTokenErrorPropagatesInsteadOfFallingBackToAnonKey() async {
     struct TokenProviderError: Error, Equatable {}
 
-    // A URLProtocol that fails any request it receives — proves the request never reaches the
-    // network instead of merely trusting that it didn't. Deliberately not the shared
-    // `RequestCapturingProtocol`: that's also used by `TracingTests` (a `.serialized` suite that
-    // still runs concurrently with this one), so touching its static storage here would race.
     final class UnreachableProtocol: URLProtocol {
       override static func canInit(with request: URLRequest) -> Bool { true }
       override static func canonicalRequest(for request: URLRequest) -> URLRequest { request }
@@ -400,8 +381,6 @@ struct SupabaseClientTests {
 
   @Test
   func missingSessionFallsBackToAnonKeyWithoutCustomAccessToken() async throws {
-    // Single-purpose capturing protocol (not the shared `RequestCapturingProtocol`) so this test
-    // doesn't race with other suites reading/resetting shared static storage.
     final class CapturingProtocol: URLProtocol {
       private static let storage = LockIsolated<URLRequest?>(nil)
       static var capturedRequest: URLRequest? {
@@ -452,7 +431,6 @@ struct SupabaseClientTests {
     }
     let box = WeakBox()
 
-    // Narrow scope so ARC drops the last strong reference when it returns.
     func scope() {
       let client = SupabaseClient(
         supabaseURL: URL(string: "https://project-ref.supabase.co")!,
@@ -473,7 +451,6 @@ struct SupabaseClientTests {
     }
     scope()
 
-    // Let the auth-state-change plumbing drain before asserting.
     await Task.megaYield()
 
     #expect(
@@ -489,7 +466,6 @@ struct SupabaseClientTests {
     }
     let box = WeakBox()
 
-    // Narrow scope so ARC drops the last strong reference when it returns.
     func scope() {
       let client = SupabaseClient(
         supabaseURL: URL(string: "https://project-ref.supabase.co")!,
@@ -503,17 +479,10 @@ struct SupabaseClientTests {
       )
       box.client = client
 
-      // Materialize every sub-client cached in `mutableState`: each one captures the
-      // `fetch`/`upload` closures there, so a `self` capture in one of those closures would
-      // form a retain cycle (client -> mutableState -> cached sub-client -> closure -> client).
       _ = client.rest
       _ = client.functions
       _ = client.realtimeV2
 
-      // `storage` builds a fresh, uncached `StorageClient` on every access (see
-      // `SupabaseClient.storage`), so discarding the result here can't exercise the same
-      // detection: nothing keeps the closures it captures alive past this statement, so this
-      // arm can't prove `storage` is cycle-free the way the cached sub-clients above can.
       _ = client.storage
     }
     scope()
@@ -538,8 +507,6 @@ struct SupabaseClientTests {
     #expect(client.functions.configuration.headers[.init("Apikey")!] == "sb_publishable_abc123")
   }
 
-  /// Storage gets the same headers as Functions: no static bearer for a publishable key, so the
-  /// session token from `AccessTokenMiddleware` is the only `Authorization` Storage sends.
   @Test
   func storageOmitsAuthorizationBearerForNewFormatKey() {
     let client = SupabaseClient(
@@ -553,9 +520,6 @@ struct SupabaseClientTests {
     #expect(headers[.init("Apikey")!] == "sb_publishable_abc123")
   }
 
-  /// The legacy-key bearer is the `accessToken` provider's fallback, not a static header, so a
-  /// per-call `Authorization` and the session token both win over it. The wire behavior is
-  /// covered by `SupabaseClientFunctionsAuthTests`.
   @Test
   func functionsCarriesNoStaticAuthorizationHeaderForLegacyKey() {
     let client = SupabaseClient(
@@ -597,15 +561,11 @@ struct SupabaseClientTests {
     _ = try? await client.storage.listBuckets()
     _ = try? await client.functions.invoke("hello")
 
-    // Every sub-client reached the caller's transport, through the caller's middleware.
     for prefix in ["/rest/v1/todos", "/storage/v1/bucket", "/functions/v1/hello"] {
       #expect(seenByTransport.value.contains { $0.path?.hasPrefix(prefix) == true })
     }
     #expect(seenByTransport.value.allSatisfy { $0.headerFields[.tag] == "yes" })
 
-    // Caller middlewares run *before* `AccessTokenMiddleware`: no data client carries
-    // `Authorization` when the caller's middleware sees it, and every one carries the live token
-    // by the time it reaches the transport.
     for prefix in ["/rest/v1/todos", "/storage/v1/bucket", "/functions/v1/hello"] {
       #expect(authorization(in: seenByMiddleware.value, forPathPrefix: prefix) == nil, "\(prefix)")
       #expect(
@@ -652,8 +612,6 @@ struct SupabaseClientTests {
     #expect(request.url?.query?.contains("forceFunctionRegion=us-east-1") == true)
   }
 
-  /// `functions.http` overrides the global configuration field by field: its transport wins,
-  /// and the caller's global middlewares still run.
   @Test
   func functionsHTTPOverridesTheGlobalTransport() async throws {
     let globalSeen = LockIsolated<[HTTPTypes.HTTPRequest]>([])
@@ -789,8 +747,6 @@ struct SupabaseClientTests {
   }
 }
 
-/// Stamps `X-Tag` on every request and records what it saw, so tests can assert both that a
-/// caller-supplied middleware runs and what the headers looked like at that point in the chain.
 private struct TagMiddleware: ClientMiddleware {
   let seen: LockIsolated<[HTTPTypes.HTTPRequest]>
 
@@ -813,7 +769,6 @@ private struct TagMiddleware: ClientMiddleware {
   }
 }
 
-/// The `Authorization` header of the first recorded request whose path starts with `prefix`.
 private func authorization(
   in requests: [HTTPTypes.HTTPRequest],
   forPathPrefix prefix: String

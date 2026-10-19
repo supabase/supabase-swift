@@ -37,10 +37,6 @@ struct PostgrestDerivedColumnTests {
     #expect(Item.columns.cost.cast(to: .int).postgrestExpression == "cost::int")
   }
 
-  /// A cast is select position only. Neither of these compiles, and both misbehave on the wire:
-  ///
-  ///     $0.cost.cast(to: .text).eq("10")    // 200, cast dropped, wrong rows
-  ///     $0.cost.cast(to: .text).asc()       // 400 PGRST100
   @Test
   func aCastIsSelectableAndNothingElse() {
     let costText = Item.columns.cost.cast(to: .text)
@@ -49,10 +45,6 @@ struct PostgrestDerivedColumnTests {
     #expect((costText as Any) is any _PostgrestOrderableExpression == false)
   }
 
-  /// A JSON path on a cast to `.text` does not compile, since `String` is not a JSON column type.
-  /// On a cast to a JSON type it compiles, but inherits the cast's select-only position.
-  /// PostgREST rejects `cost::text->>k` in every position, so select-only is as tight as the
-  /// type system can get here without forbidding the chain outright.
   @Test
   func castingThenJSONPathInheritsTheCastsSelectOnlyPosition() {
     let composed = Item.columns.cost.cast(to: _PostgrestCastTarget<JSONValue>("jsonb")).jsonText(
@@ -62,7 +54,6 @@ struct PostgrestDerivedColumnTests {
     #expect((composed as Any) is any _PostgrestOrderableExpression == false)
   }
 
-  /// A Postgres type with no shipped target is still reachable, and still says what it produces.
   @Test
   func aCustomTargetNamesItsOwnSwiftType() {
     let citext = _PostgrestCastTarget<String>("citext")
@@ -75,7 +66,6 @@ struct PostgrestDerivedColumnTests {
     #expect(Item.columns.data.jsonObject("meta").postgrestExpression == #"data->"meta""#)
   }
 
-  /// `->` produces `jsonb`, so a path is a `JSONValue` and chains on and filters by containment.
   @Test
   func jsonObjectReturnsJSONValue() {
     let meta: _PostgrestDerivedExpression<Item, JSONValue, _PostgrestEveryPosition> =
@@ -84,8 +74,6 @@ struct PostgrestDerivedColumnTests {
     #expect(rendered(meta.containsJSON(["c": 2])) == #"data->"meta"=cs.{"c":2}"#)
   }
 
-  /// PostgREST reads a `jsonb` comparison's operand as JSON. In filter form `.string("1")` went out
-  /// as `eq.1` and matched the number 1, and `.null` as `eq.NULL`, a `22P02`.
   @Test
   func aJSONComparisonEncodesItsOperandAsJSON() {
     let a = Item.columns.data.jsonObject("a")
@@ -99,7 +87,6 @@ struct PostgrestDerivedColumnTests {
     #expect(rendered(Item.columns.data.eq(["a": 1])) == #"data=eq.{"a":1}"#)
   }
 
-  /// List members and grouped operands are JSON first, then quoted like any other value.
   @Test
   func aJSONOperandIsQuotedInAListAndAGroup() {
     let a = Item.columns.data.jsonObject("a")
@@ -109,8 +96,6 @@ struct PostgrestDerivedColumnTests {
         == #"or=(data->"a".eq."\"x,y\"",cost.eq.2.0)"#)
   }
 
-  /// A non-finite `Double` has no JSON form, so a comparison or `in` with it is never sent. No
-  /// stand-in operand is: `eq.null` matches JSON-null rows.
   @Test(
     arguments: [
       { (c: Item.Columns) in c.data.jsonObject("a").eq(.double(.nan)) },
@@ -131,7 +116,6 @@ struct PostgrestDerivedColumnTests {
     #expect(capture.query == nil)
   }
 
-  /// Bare, `->0` is an array index and `->a.b` is a `PGRST100`; quoted, both reach the key.
   @Test
   func aKeyIsAlwaysQuoted() {
     #expect(Item.columns.data.jsonText("0").postgrestExpression == #"data->>"0""#)
@@ -140,8 +124,6 @@ struct PostgrestDerivedColumnTests {
     #expect(Item.columns.data.jsonText("").postgrestExpression == #"data->>"""#)
   }
 
-  /// Inside the quotes PostgREST reads a backslash as escaping the next character, so a stray
-  /// `\` is dropped (`"b\s"` reads key `bs`) and an unescaped `"` ends the key early.
   @Test
   func aKeyEscapesQuotesAndBackslashes() {
     #expect(Item.columns.data.jsonText(#"q"t"#).postgrestExpression == #"data->>"q\"t""#)
@@ -157,7 +139,6 @@ struct PostgrestDerivedColumnTests {
         == #"data->"tags"->>1"#)
   }
 
-  /// Every operator applies to a JSON path, because it conforms to the filterable protocol.
   @Test
   func aJSONPathComposesWithEveryOperator() {
     let name = Item.columns.data.jsonText("name")
@@ -167,10 +148,6 @@ struct PostgrestDerivedColumnTests {
     #expect((name as Any) is any _PostgrestOrderableExpression)
   }
 
-  /// A JSON extraction is null-testable whatever the column's own nullability: `data` is a
-  /// `NOT NULL` column here, and `data->>name` is still `NULL` when the key is absent. Verified
-  /// on PostgREST 16.1 — `data->>name=is.null` answers 200 with the rows whose extracted value
-  /// is null.
   @Test
   func aJSONPathIsNullTestableOnANotNullColumn() {
     #expect(rendered(Item.columns.data.jsonText("name").isNull()) == #"data->>"name"=is.null"#)
@@ -178,14 +155,6 @@ struct PostgrestDerivedColumnTests {
     #expect(rendered(!Item.columns.data.jsonText("name").isNull()) == #"data->>"name"=not.is.null"#)
   }
 
-  /// The operator is keyed on the filterable position, so a select-only derivation does not pick
-  /// it up. Neither call must compile:
-  ///
-  ///     $0.cost.cast(to: .text).isNull()   // does not conform to _PostgrestNullableExpression
-  ///     $0.cost.sum().isNull()             // same
-  ///
-  /// Nor does a `NOT NULL` stored column gain it — that guarantee is what put `isNull()` on a
-  /// refinement rather than on the base protocol.
   @Test
   func onlyAFilterableDerivationIsNullTestable() {
     #expect((Item.columns.data.jsonText("name") as Any) is any _PostgrestNullableExpression)
@@ -194,10 +163,6 @@ struct PostgrestDerivedColumnTests {
     #expect((Item.columns.cost as Any) is any _PostgrestNullableExpression == false)
   }
 
-  /// A JSON path survives a logic tree, which a cast does not.
-  ///
-  /// `cost` is a `Double` column, so `.eq(2)` renders `cost.eq.2.0` — what the SDK actually
-  /// sends, not `cost.eq.2`.
   @Test
   func aJSONPathWorksInsideAGroup() {
     let filter = Item.columns.data.jsonText("name").eq("Ada") || Item.columns.cost.eq(2)
@@ -206,7 +171,6 @@ struct PostgrestDerivedColumnTests {
         == [#"or=(data->>"name".eq.Ada,cost.eq.2.0)"#])
   }
 
-  /// A JSON path orders like any other orderable expression.
   @Test
   func orderAcceptsJSONPaths() async throws {
     let capture = QueryCapture()
