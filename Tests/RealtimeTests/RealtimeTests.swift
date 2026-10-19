@@ -820,7 +820,6 @@ import Testing
       }
     }
 
-
     @Test
     func listenForMessagesCancelsExistingTask() async throws {
       try await withMainSerialExecutor {
@@ -953,7 +952,6 @@ import Testing
         }
       }
     }
-
 
     @Test
     func deferredDisconnect_disconnectsAfterDelay() async throws {

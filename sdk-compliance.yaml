@@ -232,6 +232,16 @@ supporting_symbols:
   - AuthMFARecoveryCodesGenerateResponse.friendlyName
   - AuthMFARecoveryCodesGenerateResponse.total
   - AuthMFARecoveryCodesGenerateResponse.codes
+  # RealtimeClient and RealtimeChannel are the actors every realtime.* capability
+  # hangs off; their executors and identity properties are not a capability of their own.
+  - SupabaseClient.realtime
+  - RealtimeClient
+  - RealtimeClient.init
+  - RealtimeClient.unownedExecutor
+  - RealtimeChannel
+  - RealtimeChannel.topic
+  - RealtimeChannel.config
+  - RealtimeChannel.unownedExecutor
   # RealtimeError (SDK-1788) is thrown by every realtime.* capability rather
   # than owned by one.
   - RealtimeError
@@ -1328,6 +1338,8 @@ features:
     symbols:
       - RealtimeClient.status
     supporting_symbols:
+      - RealtimeClient.statusSnapshot
+      - RealtimeClient.statusChanges
       - RealtimeClientStatus.init
       - RealtimeClientStatus.rawValue
   realtime.client.listen_heartbeats:
@@ -1351,6 +1363,9 @@ features:
     symbols:
       - RealtimeChannel.subscribe
     supporting_symbols:
+      - RealtimeChannel.status
+      - RealtimeChannel.statusSnapshot
+      - RealtimeChannel.statusChanges
       - RealtimeChannelStatus.init
       - RealtimeChannelStatus.rawValue
   realtime.channel.unsubscribe:
@@ -1362,6 +1377,12 @@ features:
     symbols:
       - RealtimeChannel.broadcast
     supporting_symbols:
+      - RealtimeClient.push
+      - PushHandle
+      - PushHandle.isRunning
+      - PushHandle.error
+      - PushHandle.cancel
+      - PushHandle.callAsFunction
       - PushStatus.init
       - PushStatus.rawValue
   realtime.channel.broadcast_http:
@@ -1373,7 +1394,10 @@ features:
     status: implemented
     symbols:
       - BroadcastJoinConfig.replicationReady
+      - RealtimeChannel.broadcasts
+      - RealtimeChannel.broadcastData
     supporting_symbols:
+      - RealtimeChannel.systemMessages
       - RealtimeMessageV2.eventType
       - RealtimeMessageV2.EventType.init
       - RealtimeMessageV2.EventType.rawValue
