@@ -130,7 +130,7 @@ struct PushHandleTests {
       let channel = await h.client.channel("room")
       _ = try await h.subscribe(channel)
 
-      let push = await channel.broadcast(event: "cursor", message: ["x": 1])
+      let push = await channel.broadcast(event: "cursor", message: ["x": 1] as JSONObject)
 
       #expect(!push.isRunning)
       #expect(try await push() == .ok)
@@ -142,7 +142,7 @@ struct PushHandleTests {
       let h = Harness()
       let channel = await h.client.channel("room")
 
-      let push = await channel.broadcast(event: "cursor", message: ["x": 1])
+      let push = await channel.broadcast(event: "cursor", message: ["x": 1] as JSONObject)
 
       let error = await #expect(throws: RealtimeError.self) { try await push() }
       #expect(error?.kind == .notSubscribed)

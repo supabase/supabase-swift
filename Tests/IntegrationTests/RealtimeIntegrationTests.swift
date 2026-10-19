@@ -275,7 +275,7 @@
         try await channel.broadcast(event: "test-event", message: Message(value: 1, text: "first"))
         try await channel.broadcast(
           event: "test-event", message: Message(value: 2, text: "second"))
-        await channel.broadcast(event: "test-event", message: ["value": 3, "text": "third"])
+        await channel.broadcast(event: "test-event", message: ["value": 3, "text": "third"] as JSONObject)
 
         let receivedMessages = try await withTimeout(.seconds(5)) {
           await receivedMessagesStream.prefix(3).collect()
