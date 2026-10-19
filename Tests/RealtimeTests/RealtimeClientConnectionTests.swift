@@ -213,7 +213,7 @@ import Testing
 
     /// A client on a `TestClock` whose transport opens a fresh in-memory socket pair per connect.
     private struct Harness {
-      let clock: TestClock<Duration>
+      let clock: SignalingTestClock
       let client: RealtimeClient
       /// The URL and headers of every transport call, in order.
       let connects: LockIsolated<[(url: URL, headers: [String: String])]>
@@ -228,7 +228,7 @@ import Testing
         reconnectDelay: Duration = .seconds(1),
         beforeConnect: @escaping @Sendable (_ attempt: Int) async throws -> Void = { _ in }
       ) {
-        let clock = TestClock<Duration>()
+        let clock = SignalingTestClock()
         let connects = LockIsolated<[(url: URL, headers: [String: String])]>([])
         let sockets = LockIsolated<[FakeWebSocket]>([])
         let servers = LockIsolated<[FakeWebSocket]>([])

@@ -117,7 +117,7 @@ struct FakeRealtimeServerTests {
 
   @Test
   func repliesWithTheConfiguredJoinErrorAfterTheDelayOnTheInjectedClock() async throws {
-    let clock = TestClock()
+    let clock = SignalingTestClock()
     let server = FakeRealtimeServer(clock: clock)
     server.joinReply = .error(reason: "Unauthorized: nope")
     server.joinReplyDelay = .seconds(5)

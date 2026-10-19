@@ -35,7 +35,7 @@ import Testing
     let client: FakeWebSocket
     let http: RecordingTransport
     let sut: RealtimeClient
-    let testClock: TestClock<Duration>
+    let testClock: SignalingTestClock
 
     let heartbeatInterval = RealtimeClientOptions.defaultHeartbeatInterval
     let reconnectDelay = RealtimeClientOptions.defaultReconnectDelay
@@ -46,7 +46,7 @@ import Testing
       self.client = client
       self.server = server
       http = RecordingTransport()
-      testClock = TestClock()
+      testClock = SignalingTestClock()
 
       sut = RealtimeClient(
         url: url,

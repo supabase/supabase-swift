@@ -361,7 +361,7 @@ import Testing
 
     /// A client on a `TestClock`, connected to an in-memory server socket the test drives.
     private struct Harness {
-      let clock: TestClock<Duration>
+      let clock: SignalingTestClock
       let socket: FakeWebSocket
       let server: FakeWebSocket
       let client: RealtimeClient
@@ -372,7 +372,7 @@ import Testing
         maxRetryAttempts: Int = 3,
         failedConnects: Int = 0
       ) {
-        let clock = TestClock<Duration>()
+        let clock = SignalingTestClock()
         let (socket, server) = FakeWebSocket.fakes()
         let connects = LockIsolated(0)
         self.clock = clock

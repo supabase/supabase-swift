@@ -23,12 +23,12 @@ import Testing
     let apiKey = "publishable.api.key"
 
     let http: RecordingTransport
-    let testClock: TestClock<Duration>
+    let testClock: SignalingTestClock
     let servers: LockIsolated<[FakeWebSocket]>
 
     init() {
       http = RecordingTransport()
-      testClock = TestClock()
+      testClock = SignalingTestClock()
       servers = LockIsolated([])
     }
 
