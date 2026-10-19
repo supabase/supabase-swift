@@ -1051,6 +1051,15 @@ import Testing
     }
   }
 
+  /// The loop tasks by their old names, read out of the client's `TaskStorage`.
+  extension RealtimeClient {
+    fileprivate var messageTask: Task<Void, Never>? { tasks.tasks(at: .socketReader).first }
+    fileprivate var heartbeatTask: Task<Void, Never>? { tasks.tasks(at: .heartbeat).first }
+    fileprivate var pendingDisconnectTask: Task<Void, Never>? {
+      tasks.tasks(at: .idleDisconnect).first
+    }
+  }
+
 #endif
 
 extension RealtimeMessageV2 {
