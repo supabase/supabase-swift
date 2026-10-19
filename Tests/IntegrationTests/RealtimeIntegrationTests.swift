@@ -140,7 +140,6 @@
       }
     }
 
-
     @Test
     func channelStatusChanges() async throws {
       let client = client
@@ -252,7 +251,6 @@
       }
     }
 
-
     @Test
     func broadcastSendAndReceive() async throws {
       let client = client
@@ -275,7 +273,8 @@
         try await channel.broadcast(event: "test-event", message: Message(value: 1, text: "first"))
         try await channel.broadcast(
           event: "test-event", message: Message(value: 2, text: "second"))
-        await channel.broadcast(event: "test-event", message: ["value": 3, "text": "third"] as JSONObject)
+        await channel.broadcast(
+          event: "test-event", message: ["value": 3, "text": "third"] as JSONObject)
 
         let receivedMessages = try await withTimeout(.seconds(5)) {
           await receivedMessagesStream.prefix(3).collect()
@@ -287,7 +286,6 @@
         #expect(firstMessage["event"]?.stringValue == "test-event")
         #expect(firstMessage["payload"]?.objectValue?["value"]?.intValue == 1)
         #expect(firstMessage["payload"]?.objectValue?["text"]?.stringValue == "first")
-
 
         await channel.unsubscribe()
       }
@@ -358,7 +356,6 @@
         await channel.unsubscribe()
       }
     }
-
 
     @Test
     func postgresAllChanges() async throws {
@@ -546,7 +543,6 @@
       }
     }
 
-
     //      try await client.realtime.connect()
     //      let channel = await client.realtime.channel("invalid-channel-test")
     //        try await channel.subscribe()
@@ -554,7 +550,6 @@
     //      let channel2 = await client2.realtime.channel("broadcast-no-sub")
     //        await channel2.broadcasts(event: "test").prefix(1).collect()
     //      try await channel2.subscribe()
-
 
     @Test
     func realApplicationScenario_BroadcastAndPresence() async throws {
@@ -724,7 +719,6 @@
         await channel2.unsubscribe()
       }
     }
-
 
     private func subscribeMany(_ channels: [RealtimeChannel]) async throws {
       try await withThrowingTaskGroup { group in
