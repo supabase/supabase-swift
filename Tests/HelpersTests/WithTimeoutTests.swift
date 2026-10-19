@@ -58,14 +58,10 @@ struct WithTimeoutTests {
   }
 
   @Test
-  func cancelsTheBodyWhenTheClockPassesTheDeadline() async throws {
-    let clock = TestClock()
+  func cancelsTheBodyWhenTheDeadlinePasses() async {
     let bodyWasCancelled = LockIsolated(false)
-    let bodyStarted = AsyncStream<Void>.makeStream()
-
-    let task = Task {
-      try await withTimeout(.seconds(5), clock: clock) {
-        bodyStarted.continuation.yield()
+    await #expect(throws: TimeoutError.self) {
+      try await withTimeout(.milliseconds(50)) {
         await withTaskCancellationHandler {
           while !Task.isCancelled { await Task.yield() }
         } onCancel: {
@@ -73,26 +69,19 @@ struct WithTimeoutTests {
         }
       }
     }
-
-    // The body has registered its cancellation handler, so the timer can fire.
-    _ = await bodyStarted.stream.first { _ in true }
-    await clock.advance(by: .seconds(5))
-
-    await #expect(throws: TimeoutError.self) { try await task.value }
     #expect(bodyWasCancelled.value)
   }
 
   @Test
   func doesNotFireBeforeTheDeadline() async throws {
+    // Advancing from inside the body cannot race the body's own sleep registration, which is
+    // what made the Task-plus-advance version hang when `advance` won the race.
     let clock = TestClock()
-    let task = Task {
-      try await withTimeout(.seconds(5), clock: clock) {
-        try await clock.sleep(for: .seconds(2))
-        return "done"
-      }
+    let answer = try await withTimeout(.seconds(5), clock: clock) {
+      await clock.advance(by: .seconds(2))
+      return "done"
     }
-    await clock.advance(by: .seconds(2))
-    #expect(try await task.value == "done")
+    #expect(answer == "done")
   }
 }
 
@@ -110,6 +99,9 @@ private actor ExecutorProbe {
 private final class RecordingExecutor: SerialExecutor {
   let isRunningJob = LockIsolated(false)
   private let queue = DispatchQueue(label: "RecordingExecutor")
+
+  // The default implementation needs iOS 17 / macOS 14; the package supports iOS 16.
+  func asUnownedSerialExecutor() -> UnownedSerialExecutor { UnownedSerialExecutor(ordinary: self) }
 
   func enqueue(_ job: UnownedJob) {
     queue.async {
