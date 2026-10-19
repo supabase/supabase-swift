@@ -2,15 +2,6 @@
   "originHash" : "6b5e4663461dbe47c598b2deac87f3da8235f718265719451de59a85cc0f05dd",
   "pins" : [
     {
-      "identity" : "cryptoswift",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/krzyzanowskim/CryptoSwift.git",
-      "state" : {
-        "revision" : "f2a627b84c1ff96f21ac2fcb623ab36142dd5512",
-        "version" : "1.10.0"
-      }
-    },
-    {
       "identity" : "mocker",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/WeTransfer/Mocker",

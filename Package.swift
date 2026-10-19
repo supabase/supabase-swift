@@ -46,7 +46,6 @@ let package = Package(
     .package(url: "https://github.com/pointfreeco/swift-issue-reporting", from: "2.1.0"),
     .package(url: "https://github.com/WeTransfer/Mocker", from: "3.0.0"),
     .package(url: "https://github.com/21-DOT-DEV/swift-secp256k1.git", from: "0.23.2"),
-    .package(url: "https://github.com/krzyzanowskim/CryptoSwift.git", from: "1.10.0"),
   ],
   targets: [
     .target(
@@ -132,7 +131,6 @@ let package = Package(
         .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
         .product(name: "IssueReporting", package: "swift-issue-reporting"),
         .product(name: "P256K", package: "swift-secp256k1"),
-        .product(name: "CryptoSwift", package: "CryptoSwift"),
         "Helpers",
         "PostgrestMacros",
         "Supabase",
