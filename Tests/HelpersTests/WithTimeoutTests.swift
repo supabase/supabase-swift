@@ -59,14 +59,13 @@ struct WithTimeoutTests {
 
   @Test
   func cancelsTheBodyWhenTheDeadlinePasses() async {
+    // The loop can only end through cancellation, so the flag records that the body saw it,
+    // whether cancellation landed while the body was spinning or before it even started.
     let bodyWasCancelled = LockIsolated(false)
     await #expect(throws: TimeoutError.self) {
       try await withTimeout(.milliseconds(50)) {
-        await withTaskCancellationHandler {
-          while !Task.isCancelled { await Task.yield() }
-        } onCancel: {
-          bodyWasCancelled.setValue(true)
-        }
+        while !Task.isCancelled { await Task.yield() }
+        bodyWasCancelled.setValue(true)
       }
     }
     #expect(bodyWasCancelled.value)
