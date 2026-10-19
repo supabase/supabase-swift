@@ -6,6 +6,7 @@
 //
 
 import Clocks
+import Foundation
 import ConcurrencyExtras
 import Testing
 
@@ -29,11 +30,19 @@ struct WithTimeoutTests {
   }
 
   @Test
-  func propagatesTheBodysOwnError() async {
+  func propagatesTheBodyError() async {
     struct Failure: Error {}
     await #expect(throws: Failure.self) {
       try await withTimeout(.seconds(10)) { throw Failure() }
     }
+  }
+
+  @Test
+  func runsTheBodyOnTheCallersActor() async throws {
+    // A body that touches actor state must run as one of that actor's jobs; a plain task-group
+    // child would run on the global executor while the actor sits suspended.
+    let probe = ExecutorProbe()
+    #expect(try await probe.bodyRanOnMyExecutor())
   }
 
   @Test
@@ -84,5 +93,29 @@ struct WithTimeoutTests {
     }
     await clock.advance(by: .seconds(2))
     #expect(try await task.value == "done")
+  }
+}
+
+/// An actor whose executor records whether it is in the middle of running one of its jobs.
+private actor ExecutorProbe {
+  private let executor = RecordingExecutor()
+
+  nonisolated var unownedExecutor: UnownedSerialExecutor { executor.asUnownedSerialExecutor() }
+
+  func bodyRanOnMyExecutor() async throws -> Bool {
+    try await withTimeout(.seconds(10)) { executor.isRunningJob.value }
+  }
+}
+
+private final class RecordingExecutor: SerialExecutor {
+  let isRunningJob = LockIsolated(false)
+  private let queue = DispatchQueue(label: "RecordingExecutor")
+
+  func enqueue(_ job: UnownedJob) {
+    queue.async {
+      self.isRunningJob.setValue(true)
+      job.runSynchronously(on: self.asUnownedSerialExecutor())
+      self.isRunningJob.setValue(false)
+    }
   }
 }
