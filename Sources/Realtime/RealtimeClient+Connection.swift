@@ -37,9 +37,11 @@ extension RealtimeClient {
       options.logger.debug("Connection already in progress, waiting...")
       try await awaitConnection(task)
 
-    case .reconnecting(let task):
+    case .reconnecting:
       options.logger.debug("Reconnection in progress, waiting...")
-      await task.value
+      for task in tasks.tasks(at: .connection) {
+        await task.value
+      }
       guard case .connected = connection else {
         throw RealtimeError.transport("Connection failed")
       }
@@ -98,9 +100,9 @@ extension RealtimeClient {
     options.logger.debug("Closing WebSocket connection")
 
     ref = 0
-    stopConnectionTasks()
-    pendingDisconnectTask?.cancel()
-    pendingDisconnectTask = nil
+    tasks.cancelAll()
+    pendingHeartbeatRef = nil
+    generation += 1
     sendBuffer = []
     // A developer-initiated disconnect should not be undone on the next foreground event.
     wasConnectedBeforeBackground = false
@@ -111,9 +113,8 @@ extension RealtimeClient {
     case .connecting(let task):
       options.logger.debug("Cancelling connection attempt")
       task.cancel()
-    case .reconnecting(let task):
+    case .reconnecting:
       options.logger.debug("Cancelling reconnection attempt")
-      task.cancel()
     case .disconnected:
       break
     }
@@ -138,7 +139,7 @@ extension RealtimeClient {
   /// Wires up a freshly opened socket: the receive loop, the heartbeat, the buffered frames and,
   /// after an automatic reconnect, the channel rejoin.
   func handleConnected(_ conn: any WebSocket, isReconnect: Bool) {
-    stopConnectionTasks()
+    generation += 1
     setConnectionState(.connected(conn))
     // A heartbeat awaiting an ack on the previous connection can never be acknowledged on this
     // one. Clearing the pending ref prevents the new connection's first heartbeat from
@@ -154,11 +155,11 @@ extension RealtimeClient {
     }
   }
 
-  private func stopConnectionTasks() {
-    messageTask?.cancel()
-    messageTask = nil
-    heartbeatTask?.cancel()
-    heartbeatTask = nil
+  /// Stops the loops bound to the current socket. `generation` is bumped by whoever installs
+  /// the next socket, so a frame the dying reader already pulled is ignored as well.
+  private func stopSocketTasks() {
+    tasks.cancel(at: .socketReader)
+    tasks.cancel(at: .heartbeat)
     pendingHeartbeatRef = nil
   }
 
@@ -180,27 +181,31 @@ extension RealtimeClient {
   /// reach `deinit` and would leak itself, the socket and its `URLSession`.
   private func listenForMessages(on conn: any WebSocket) {
     let stream = conn.events
-    messageTask = Task.detached { [weak self] in
+    let generation = generation
+    let reader = Task.detached { [weak self] in
       for await event in stream {
         if Task.isCancelled { return }
         guard let self else { return }
-        await self.handleSocketEvent(event, from: conn)
+        await self.handleSocketEvent(event, generation: generation)
       }
     }
+    tasks.replace([reader], at: .socketReader)
   }
 
   private func startHeartbeating() {
-    heartbeatTask = Task.detached { [weak self, clock, interval = options.heartbeatInterval] in
+    let generation = generation
+    let heartbeat = Task.detached { [weak self, clock, interval = options.heartbeatInterval] in
       while !Task.isCancelled {
         try? await clock.sleep(for: interval)
         guard !Task.isCancelled, let self else { return }
-        await self.sendHeartbeat()
+        await self.sendHeartbeat(generation: generation)
       }
     }
+    tasks.replace([heartbeat], at: .heartbeat)
   }
 
-  private func sendHeartbeat() async {
-    guard case .connected(let conn) = connection else {
+  private func sendHeartbeat(generation: Int) async {
+    guard generation == self.generation, case .connected = connection else {
       // Don't leak `.disconnected` to `heartbeats` consumers — it's not a heartbeat outcome,
       // just this cycle bailing out early.
       return
@@ -211,7 +216,7 @@ extension RealtimeClient {
       options.logger.debug("Heartbeat timeout - previous heartbeat not acknowledged")
       heartbeatMirror.update(.timeout)
       pendingHeartbeatRef = nil
-      handleSocketError(RealtimeError.heartbeatTimeout, from: conn)
+      handleSocketError(RealtimeError.heartbeatTimeout, generation: generation)
       return
     }
 
@@ -232,7 +237,15 @@ extension RealtimeClient {
 
   // MARK: - Socket events
 
-  private func handleSocketEvent(_ event: LegacyWebSocketEvent, from conn: any WebSocket) async {
+  /// Applies one frame from the socket installed at `generation`. Frames from an older socket
+  /// are dropped: a reconnect already replaced it, and its close must not tear down the
+  /// healthy connection.
+  func handleSocketEvent(_ event: LegacyWebSocketEvent, generation: Int) async {
+    guard generation == self.generation else {
+      options.logger.debug("Ignoring event from a stale connection: \(event)")
+      return
+    }
+
     switch event {
     case .binary(let data):
       do {
@@ -256,7 +269,7 @@ extension RealtimeClient {
       options.logger.debug(
         "WebSocket closed. Code: \(code?.description ?? "<none>"), Reason: \(reason)"
       )
-      handleClose(code: code, reason: reason, from: conn)
+      handleClose(code: code, reason: reason)
     }
   }
 
@@ -277,39 +290,37 @@ extension RealtimeClient {
 
   /// Handles a socket failure by closing it and starting the reconnect ladder.
   ///
-  /// `conn` scopes the error to the socket it came from: a late error from a socket that a
-  /// reconnect already replaced is ignored, so it cannot tear down the healthy connection.
-  private func handleSocketError(_ error: any Error, from conn: any WebSocket) {
+  /// `generation` scopes the error to the socket it came from: a late error from a socket that
+  /// a reconnect already replaced is ignored, so it cannot tear down the healthy connection.
+  private func handleSocketError(_ error: any Error, generation: Int) {
     guard !(error is CancellationError) else {
       options.logger.debug("CancellationError do not trigger reconnects.")
       return
     }
 
-    guard case .connected(let current) = connection, current === conn else {
+    guard generation == self.generation, case .connected(let current) = connection else {
       options.logger.debug("Ignoring error from a stale or absent connection: \(error)")
       return
     }
 
     options.logger.debug("Connection error, initiating reconnect: \(error.localizedDescription)")
     current.close(code: nil, reason: "error: \(error.localizedDescription)")
-    stopConnectionTasks()
+    stopSocketTasks()
     initiateReconnect(reason: "error: \(error.localizedDescription)")
   }
 
   /// Handles a close initiated by the remote. The socket is already closed; just update state.
-  ///
-  /// Like `handleSocketError`, a `.close` frame from a socket a reconnect already replaced is
-  /// ignored so it cannot mark a healthy connection as disconnected.
-  private func handleClose(code: Int?, reason: String?, from conn: any WebSocket) {
+  /// `handleSocketEvent` has already dropped closes from a replaced socket.
+  private func handleClose(code: Int?, reason: String?) {
     let closeReason = "code: \(code?.description ?? "none"), reason: \(reason ?? "none")"
     options.logger.debug("Connection closed by remote: \(closeReason)")
 
-    guard case .connected(let current) = connection, current === conn else {
-      options.logger.debug("Ignoring close from a stale or absent connection: \(closeReason)")
+    guard case .connected = connection else {
+      options.logger.debug("Ignoring close from an absent connection: \(closeReason)")
       return
     }
 
-    stopConnectionTasks()
+    stopSocketTasks()
     // Application-level close codes (4000–4999) typically signal auth or protocol errors.
     // Reconnecting with the same bad token would loop; the caller must re-authenticate before
     // reconnecting.
@@ -357,7 +368,8 @@ extension RealtimeClient {
       }
     }
 
-    setConnectionState(.reconnecting(reconnectTask))
+    tasks.replace([reconnectTask], at: .connection)
+    setConnectionState(.reconnecting)
   }
 
   /// A single reconnect attempt. Only succeeds into `.connected`; a failure is left for the

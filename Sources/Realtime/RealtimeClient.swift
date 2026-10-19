@@ -89,20 +89,29 @@ public actor RealtimeClient {
     case disconnected
     case connecting(Task<Void, any Error>)
     case connected(any WebSocket)
-    case reconnecting(Task<Void, Never>)
+    case reconnecting
   }
 
   var connection: ConnectionState = .disconnected
 
-  /// Long-running task that keeps sending heartbeat messages.
-  var heartbeatTask: Task<Void, Never>?
+  /// Why an unstructured task exists. Starting a new run of some work replaces the previous
+  /// run at the same location, so nothing has to be cancelled by hand.
+  enum TaskLocation: Hashable {
+    /// The reconnect loop (`initiateReconnect`).
+    case connection
+    /// The loop reading frames from the current socket.
+    case socketReader
+    /// The loop sending heartbeats on the current socket.
+    case heartbeat
+    /// The deferred `disconnect()` after the last channel is removed.
+    case idleDisconnect
+  }
 
-  /// Long-running task that reads incoming frames from the WebSocket.
-  var messageTask: Task<Void, Never>?
+  let tasks = TaskStorage<TaskLocation>()
 
-  /// Pending task that calls `disconnect()` after `disconnectOnEmptyChannelsAfter` elapses.
-  /// Cancelled when a new channel is created or `disconnect()` is called directly.
-  var pendingDisconnectTask: Task<Void, Never>?
+  /// Counts socket installs and disconnects. The reader and heartbeat loops carry the value they
+  /// were started with, so an event from a socket that has since been replaced is ignored.
+  var generation = 0
 
   /// Frames pushed while the socket was not connected, sent in order once it is.
   var sendBuffer: [OutgoingFrame] = []
@@ -202,14 +211,12 @@ public actor RealtimeClient {
       conn.close(code: nil, reason: "Client deallocated")
     case .connecting(let task):
       task.cancel()
-    case .reconnecting(let task):
-      task.cancel()
+    case .reconnecting:
+      break
     case .disconnected:
       break
     }
-    heartbeatTask?.cancel()
-    messageTask?.cancel()
-    pendingDisconnectTask?.cancel()
+    // `tasks` cancels its own contents when it is destroyed right after this body.
     statusMirror.finish()
     heartbeatMirror.finish()
   }
@@ -283,8 +290,7 @@ public actor RealtimeClient {
     options configure: @Sendable (inout RealtimeChannelConfig) -> Void = { _ in }
   ) -> RealtimeChannel {
     // Cancel any pending deferred disconnect — a new channel is being added.
-    pendingDisconnectTask?.cancel()
-    pendingDisconnectTask = nil
+    tasks.cancel(at: .idleDisconnect)
 
     let realtimeTopic = "realtime:\(topic)"
 
@@ -338,9 +344,8 @@ public actor RealtimeClient {
 
   private func schedulePendingDisconnect() {
     let delay = options.disconnectOnEmptyChannelsAfter
-    pendingDisconnectTask?.cancel()
     // Detached and weak: the sleep must not keep a released client alive for up to `delay`.
-    pendingDisconnectTask = Task.detached { [weak self, clock] in
+    let task = Task.detached { [weak self, clock] in
       do {
         try await clock.sleep(for: delay)
         await self?.disconnect()
@@ -348,6 +353,7 @@ public actor RealtimeClient {
         // Cancelled: a new channel was added or disconnect() was called directly.
       }
     }
+    tasks.replace([task], at: .idleDisconnect)
   }
 
   /// Forgets a channel the server closed. The channel ends its own streams.
@@ -380,8 +386,7 @@ public actor RealtimeClient {
     }
 
     // Cancel any pending deferred disconnect and disconnect immediately.
-    pendingDisconnectTask?.cancel()
-    pendingDisconnectTask = nil
+    tasks.cancel(at: .idleDisconnect)
     await disconnect()
   }
 
