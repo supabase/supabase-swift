@@ -588,7 +588,7 @@ import Testing
         try await sut.connect()
 
         server.close(code: nil, reason: "boom")
-        await Task.megaYield()
+        for await status in sut.statusChanges where status == .connecting { break }
 
         await testClock.advance(by: .seconds(1))
 
@@ -654,10 +654,8 @@ import Testing
         // A redundant connect() — the client is already `.connected`, so it is a
         // no-op. The socket must keep receiving frames afterwards.
         try await sut.connect()
-        await Task.megaYield()
 
         await testClock.advance(by: heartbeatInterval)
-        await Task.megaYield()
 
         await waitUntil(timeout: 5) { heartbeatStatuses.values.value.count >= 2 }
         #expect(heartbeatStatuses.values.value == [.sent, .ok])
@@ -880,8 +878,6 @@ import Testing
           messagesProcessed.withValue { $0 += 1 }
         }
 
-        await Task.megaYield()
-
         await sut.disconnect()
 
         for i in 4...6 {
@@ -895,8 +891,6 @@ import Testing
             )
           )
         }
-
-        await Task.megaYield()
 
         #expect(await sut.messageTask == nil, "Message task should be nil after disconnect")
       }

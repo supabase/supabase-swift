@@ -26,6 +26,14 @@ struct LoopbackError: Error {
       queue.sync { received }
     }
 
+    /// Called on the server queue with every message a client sends, so a test can script
+    /// replies (join confirmations, heartbeat acks, broadcast echoes).
+    var onMessage: (@Sendable (Data) -> Void)? {
+      get { queue.sync { _onMessage } }
+      set { queue.sync { _onMessage = newValue } }
+    }
+    private var _onMessage: (@Sendable (Data) -> Void)?
+
     func close(code: NWProtocolWebSocket.CloseCode, reason: String) {
       queue.async { [self] in
         let metadata = NWProtocolWebSocket.Metadata(opcode: .close)
@@ -79,7 +87,10 @@ struct LoopbackError: Error {
 
     private func receive(on connection: NWConnection) {
       connection.receiveMessage { [weak self] data, context, _, error in
-        if let data { self?.received.append(data) }
+        if let data {
+          self?.received.append(data)
+          self?._onMessage?(data)
+        }
         if let metadata = context?.protocolMetadata(definition: NWProtocolWebSocket.definition)
           as? NWProtocolWebSocket.Metadata, metadata.opcode == .close
         {
