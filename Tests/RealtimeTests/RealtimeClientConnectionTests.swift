@@ -209,6 +209,30 @@ import Testing
       #expect(h.connects.value.count == 3)
     }
 
+    /// A frame from a socket that a reconnect already replaced must not touch the new one.
+    @Test
+    func eventsFromAReplacedSocketAreIgnored() async throws {
+      let h = Harness(reconnectDelay: .seconds(1))
+      try await h.client.connect()
+      let staleGeneration = await h.client.generation
+      var statuses = h.client.statusChanges.makeAsyncIterator()
+
+      h.servers.value[0].close(code: 1001, reason: "going away")
+      #expect(await statuses.next() == .connected)
+      #expect(await statuses.next() == .connecting)
+      await h.clock.advance(by: .seconds(1))
+      #expect(await statuses.next() == .connected)
+      #expect(h.connects.value.count == 2)
+
+      await h.client.handleSocketEvent(
+        .close(code: 1001, reason: "late"), generation: staleGeneration
+      )
+
+      #expect(h.client.statusSnapshot == .connected)
+      await h.clock.advance(by: .seconds(60))
+      #expect(h.connects.value.count == 2)
+    }
+
     // MARK: - Harness
 
     /// A client on a `TestClock` whose transport opens a fresh in-memory socket pair per connect.
