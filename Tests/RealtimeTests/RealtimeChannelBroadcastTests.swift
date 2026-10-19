@@ -75,7 +75,6 @@ import Testing
       serverTask.setValue(task)
     }
 
-
     @Test
     func broadcast_sendsJsonViaBinaryFrame() async throws {
       setupServerAutoResponder()
@@ -101,7 +100,6 @@ import Testing
       }
     }
 
-
     @Test
     func broadcast_sendsDataViaBinaryFrame() async throws {
       setupServerAutoResponder()
@@ -126,7 +124,6 @@ import Testing
       }
     }
 
-
     @Test
     func receive_jsonBroadcastFromBinaryFrame() async throws {
       let channel = await sut.channel("test")
@@ -146,7 +143,6 @@ import Testing
       #expect(payload?["payload"]?.objectValue?["count"]?.intValue == 99)
     }
 
-
     @Test
     func receive_binaryBroadcastFromBinaryFrame() async throws {
       let channel = await sut.channel("test")
@@ -163,7 +159,6 @@ import Testing
 
       #expect(await firstBuffered(stream, on: channel) == binaryPayload)
     }
-
 
     @Test
     func receive_jsonBroadcastHasCorrectFormat() async throws {
@@ -204,7 +199,6 @@ import Testing
       #expect(meta?["id"]?.stringValue == "0b8a1e2c-77c4-4f1b-9d2a-3f5e6a7b8c9d")
       #expect(meta?["replayed"]?.boolValue == true)
     }
-
 
     // The REST fallback for unsubscribed channels is gone, so the encoded payload is now read
     // from the WebSocket frame of a subscribed channel instead of the REST request body.
@@ -264,7 +258,6 @@ import Testing
       #expect(http.requests.isEmpty)
     }
 
-
     @Test
     func httpSend_urlUsesSubTopicWithoutRealtimePrefix() async throws {
       http.respond { _, _ in
@@ -286,7 +279,6 @@ import Testing
       let json = try JSONSerialization.jsonObject(with: body) as? [String: Any]
       #expect(json?["hello"] as? String == "world")
     }
-
 
     @Test
     func endToEnd_binaryFrameViaWebSocket() async throws {

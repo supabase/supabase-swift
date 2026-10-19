@@ -45,7 +45,6 @@ struct RealtimeChannelOnMessageTests {
     #expect(receivedBroadcasts.isEmpty)
   }
 
-
   @Test
   func systemOKTriggersSystemCallback() async {
     let systemMessages = await sut.systemMessages()
@@ -79,7 +78,6 @@ struct RealtimeChannelOnMessageTests {
     let receivedSystemMessages = await collect(systemMessages)
     #expect(receivedSystemMessages == [sent])
   }
-
 
   @Test
   func replyWithoutRefIsSwallowed() async {
@@ -148,7 +146,6 @@ struct RealtimeChannelOnMessageTests {
 
     #expect(await sut.serverChanges.isEmpty)
   }
-
 
   @Test
   func postgresChangesWithoutDataIsIgnored() async {
@@ -337,7 +334,6 @@ struct RealtimeChannelOnMessageTests {
     #expect(receivedActions.isEmpty)
   }
 
-
   @Test
   func broadcastTriggersMatchingBroadcastCallback() async throws {
     let broadcasts = await sut.broadcasts(event: "message")
@@ -368,7 +364,6 @@ struct RealtimeChannelOnMessageTests {
     #expect(receivedBroadcasts.isEmpty)
   }
 
-
   @Test
   func closeWithoutJoinRefRemovesChannelFromSocket() async {
     await sut.onMessage(message(event: ChannelEvent.close))
@@ -383,7 +378,6 @@ struct RealtimeChannelOnMessageTests {
     #expect(await client.channels[topic] != nil)
   }
 
-
   @Test
   func errorClosesChannelWithoutRemovingItFromSocket() async {
     await sut.onMessage(message(event: ChannelEvent.error))
@@ -391,7 +385,6 @@ struct RealtimeChannelOnMessageTests {
     #expect(await client.channels[topic] != nil)
     #expect(sut.statusSnapshot == .unsubscribed)
   }
-
 
   @Test
   func presenceDiffTriggersPresenceCallbackWithJoinsAndLeaves() async throws {
@@ -443,7 +436,6 @@ struct RealtimeChannelOnMessageTests {
     #expect(receivedActions.isEmpty)
   }
 
-
   @Test
   func presenceStateTriggersPresenceCallbackWithJoinsOnly() async throws {
     let actions = await sut.presenceChanges()
@@ -472,7 +464,6 @@ struct RealtimeChannelOnMessageTests {
     let receivedActions = await collect(actions)
     #expect(receivedActions.isEmpty)
   }
-
 
   private func message(
     event: String,
