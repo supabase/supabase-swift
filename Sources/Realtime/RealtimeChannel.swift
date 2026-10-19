@@ -371,9 +371,11 @@ public actor RealtimeChannel {
   /// Waits for the server's reply when ``BroadcastJoinConfig/acknowledgeBroadcasts`` is on, as
   /// ``broadcast(event:message:)`` does.
   ///
-  /// - Throws: ``RealtimeError`` with kind ``RealtimeError/Kind-swift.struct/notConnected``
-  ///   when the client is gone, and otherwise the errors of ``broadcast(event:message:)``.
+  /// - Throws: The errors of ``broadcast(event:message:)``.
   public func untrack() async throws {
+    guard case .subscribed = state else {
+      throw RealtimeError.notSubscribed
+    }
     try await pushAcknowledged(
       ChannelEvent.presence,
       payload: [

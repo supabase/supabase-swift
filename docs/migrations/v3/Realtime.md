@@ -141,6 +141,7 @@ for the server reply first, and the reply becomes the result of the call:
   `serverCode` set when the reason starts with a code.
 - The channel left or the socket closed while waiting: `kind == .notSubscribed` or
   `.notConnected`.
+- The server closed the channel while waiting: `kind == .channelClosedByServer`.
 
 Wrap the call in a `Task` to send without waiting. Cancelling that task stops the wait and
 throws `CancellationError`; the frame itself is not recalled.

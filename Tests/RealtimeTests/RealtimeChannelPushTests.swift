@@ -35,6 +35,15 @@ import Testing
     }
 
     @Test
+    func untrackBeforeSubscribeThrowsNotSubscribed() async {
+      let h = Harness()
+      let channel = await h.client.channel("room")
+
+      let error = await #expect(throws: RealtimeError.self) { try await channel.untrack() }
+      #expect(error?.kind == .notSubscribed)
+    }
+
+    @Test
     func acknowledgedPushReturnsOnServerReply() async throws {
       let h = Harness()
       let channel = await h.client.channel("room") { $0.broadcast.acknowledgeBroadcasts = true }
