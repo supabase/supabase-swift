@@ -151,7 +151,7 @@ public struct DeleteAction: PostgresAction, HasOldRecord, HasRawMessage {
 ///
 /// ```swift
 /// let changes = channel.postgresChange(AnyAction.self, schema: "public", table: "messages")
-/// try await channel.subscribeWithError()
+/// try await channel.subscribe()
 /// for await action in changes {
 ///   switch action {
 ///   case .insert(let insert): print(insert.record)

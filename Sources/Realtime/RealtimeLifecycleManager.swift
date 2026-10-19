@@ -20,17 +20,17 @@ import Foundation
   /// its connection when the app returns to the foreground.
   ///
   /// On backgrounding, the manager tells the client to record whether the socket was connected.
-  /// On foregrounding, it forwards the event to ``RealtimeClientV2/handleAppForeground()``,
+  /// On foregrounding, it forwards the event to ``RealtimeClient/handleAppForeground()``,
   /// which reconnects and re-joins channels only if the socket was connected before the app
   /// backgrounded and has since been torn down. The manager does not proactively disconnect
   /// on backgrounding — connections often survive short background cycles, and tearing them
   /// down preemptively wastes work during rapid transitions.
   final class RealtimeLifecycleManager: @unchecked Sendable {
-    private weak var client: RealtimeClientV2?
+    private weak var client: RealtimeClient?
     private var observers: [any NSObjectProtocol] = []
     private let lock = NSLock()
 
-    init(client: RealtimeClientV2) {
+    init(client: RealtimeClient) {
       self.client = client
       setupObservers()
     }
@@ -82,7 +82,7 @@ import Foundation
 
     private func handleBackground() {
       guard let client else { return }
-      client.handleAppBackground()
+      Task { await client.handleAppBackground() }
     }
   }
 

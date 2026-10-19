@@ -1,0 +1,282 @@
+import Clocks
+import ConcurrencyExtras
+import Foundation
+import TestHelpers
+import Testing
+
+@testable import Realtime
+
+#if os(Linux)
+  // RealtimeClientConnectionTests are disabled on Linux due to timing flakiness.
+#else
+
+  @Suite
+  struct RealtimeClientConnectionTests {
+    @Test
+    func reconnectBackoffClampsAnUnusableBaseDelay() {
+      // `reconnectDelay` is user-supplied, so the backoff must clamp it into `0...30s`.
+      for base: Duration in [.seconds(1_000_000_000), .seconds(-5)] {
+        let delay = RealtimeClient.reconnectBackoff(baseDelay: base).backoffDelay(retry: 1)
+        #expect(delay >= .zero && delay <= .seconds(30), "baseDelay \(base)")
+      }
+    }
+
+    // MARK: - Connect
+
+    @Test
+    func connectOpensTheSocketAndReportsConnectingThenConnected() async throws {
+      let h = Harness(headers: ["apikey": "key"])
+      var statuses = h.client.statusChanges.makeAsyncIterator()
+
+      try await h.client.connect()
+
+      #expect(h.client.statusSnapshot == .connected)
+      #expect(await statuses.next() == .disconnected)
+      #expect(await statuses.next() == .connecting)
+      #expect(await statuses.next() == .connected)
+      let connect = try #require(h.connects.value.first)
+      #expect(h.connects.value.count == 1)
+      #expect(
+        connect.url.absoluteString
+          == "ws://localhost:54321/realtime/v1/websocket?apikey=key&vsn=2.0.0"
+      )
+      #expect(connect.headers["apikey"] == "key")
+    }
+
+    @Test
+    func connectWhenConnectedIsNoOp() async throws {
+      let h = Harness()
+      try await h.client.connect()
+
+      try await h.client.connect()
+
+      #expect(h.client.statusSnapshot == .connected)
+      #expect(h.connects.value.count == 1)
+    }
+
+    @Test
+    func connectFailureThrowsTransportError() async {
+      let h = Harness(beforeConnect: { _ in throw URLError(.notConnectedToInternet) })
+
+      let error = await #expect(throws: RealtimeError.self) { try await h.client.connect() }
+
+      #expect(error?.kind == .transport)
+      #expect(h.client.statusSnapshot == .disconnected)
+    }
+
+    @Test
+    func concurrentConnectsShareOneAttempt() async throws {
+      let (gate, open) = AsyncStream<Void>.makeStream()
+      let h = Harness(beforeConnect: { _ in
+        for await _ in gate { break }
+      })
+
+      let first = Task { try await h.client.connect() }
+      for await status in h.client.statusChanges where status == .connecting { break }
+      let second = Task { try await h.client.connect() }
+      open.yield()
+
+      try await first.value
+      try await second.value
+      #expect(h.client.statusSnapshot == .connected)
+      #expect(h.connects.value.count == 1)
+    }
+
+    // MARK: - Disconnect
+
+    @Test
+    func disconnectClosesTheSocket() async throws {
+      let h = Harness()
+      try await h.client.connect()
+
+      await h.client.disconnect(reason: "test reason")
+
+      #expect(h.client.statusSnapshot == .disconnected)
+      #expect(h.sockets.value.first?.sentEvents.last == .close(code: nil, reason: "test reason"))
+    }
+
+    @Test
+    func disconnectWhileConnectingCancelsTheAttempt() async throws {
+      let h = Harness(beforeConnect: { _ in try await Task<Never, Never>.never() })
+
+      let connect = Task { try await h.client.connect() }
+      for await status in h.client.statusChanges where status == .connecting { break }
+      await h.client.disconnect()
+
+      await #expect(throws: CancellationError.self) { try await connect.value }
+      #expect(h.client.statusSnapshot == .disconnected)
+      #expect(h.sockets.value.isEmpty)
+    }
+
+    // MARK: - Heartbeat
+
+    @Test
+    func heartbeatIsSentEachIntervalAndAcknowledged() async throws {
+      let h = Harness(heartbeatInterval: .seconds(25))
+      try await h.client.connect()
+      var beats = h.client.heartbeats.makeAsyncIterator()
+
+      await h.clock.advance(by: .seconds(25))
+
+      #expect(await beats.next() == .sent)
+      let heartbeat = try #require(await h.received("heartbeat", on: 0))
+      #expect(heartbeat.topic == "phoenix")
+      try h.reply(
+        RealtimeMessageV2(
+          joinRef: nil, ref: heartbeat.ref, topic: "phoenix", event: ChannelEvent.reply,
+          payload: ["status": "ok", "response": [:]]
+        ),
+        on: 0
+      )
+      #expect(await beats.next() == .ok)
+    }
+
+    @Test
+    func missedHeartbeatReportsTimeoutAndReconnects() async throws {
+      let h = Harness(heartbeatInterval: .seconds(25), reconnectDelay: .seconds(1))
+      try await h.client.connect()
+      var beats = h.client.heartbeats.makeAsyncIterator()
+      var statuses = h.client.statusChanges.makeAsyncIterator()
+
+      await h.clock.advance(by: .seconds(25))
+      #expect(await beats.next() == .sent)
+      await h.clock.advance(by: .seconds(25))
+      #expect(await beats.next() == .timeout)
+
+      #expect(await statuses.next() == .connected)
+      #expect(await statuses.next() == .connecting)
+      await h.clock.advance(by: .seconds(1))
+      #expect(await statuses.next() == .connected)
+      #expect(h.connects.value.count == 2)
+      #expect(h.sockets.value.first?.isClosed == true)
+    }
+
+    // MARK: - Remote close
+
+    @Test
+    func applicationCloseCodeDoesNotReconnect() async throws {
+      let h = Harness(reconnectDelay: .seconds(1))
+      try await h.client.connect()
+      var statuses = h.client.statusChanges.makeAsyncIterator()
+
+      // 4000–4999 signal auth or protocol errors: reconnecting with the same token would loop.
+      h.servers.value[0].close(code: 4001, reason: "jwt expired")
+
+      #expect(await statuses.next() == .connected)
+      #expect(await statuses.next() == .disconnected)
+      await h.clock.advance(by: .seconds(60))
+      #expect(h.connects.value.count == 1)
+      #expect(h.client.statusSnapshot == .disconnected)
+    }
+
+    @Test
+    func transportCloseReconnectsAfterBackoff() async throws {
+      let h = Harness(reconnectDelay: .seconds(2))
+      try await h.client.connect()
+      var statuses = h.client.statusChanges.makeAsyncIterator()
+
+      h.servers.value[0].close(code: 1001, reason: "going away")
+
+      #expect(await statuses.next() == .connected)
+      #expect(await statuses.next() == .connecting)
+      // The first wait is in `reconnectDelay/2 ... reconnectDelay`.
+      await h.clock.advance(by: .milliseconds(900))
+      #expect(h.connects.value.count == 1)
+      await h.clock.advance(by: .milliseconds(1100))
+      #expect(await statuses.next() == .connected)
+      #expect(h.connects.value.count == 2)
+    }
+
+    /// Issue #1147: a failed reconnect attempt must schedule another instead of giving up.
+    @Test
+    func reconnectKeepsRetryingAfterAFailedAttempt() async throws {
+      let h = Harness(
+        reconnectDelay: .seconds(1),
+        beforeConnect: { attempt in
+          if attempt == 2 { throw URLError(.notConnectedToInternet) }
+        }
+      )
+      try await h.client.connect()
+      var statuses = h.client.statusChanges.makeAsyncIterator()
+
+      h.servers.value[0].close(code: 1001, reason: "going away")
+
+      #expect(await statuses.next() == .connected)
+      #expect(await statuses.next() == .connecting)
+      // Attempt 1 waits at most 1s and fails; attempt 2 waits at most 2s more.
+      await h.clock.advance(by: .seconds(3))
+      #expect(await statuses.next() == .connected)
+      #expect(h.connects.value.count == 3)
+    }
+
+    // MARK: - Harness
+
+    /// A client on a `TestClock` whose transport opens a fresh in-memory socket pair per connect.
+    private struct Harness {
+      let clock: TestClock<Duration>
+      let client: RealtimeClient
+      /// The URL and headers of every transport call, in order.
+      let connects: LockIsolated<[(url: URL, headers: [String: String])]>
+      /// The client side of every socket opened, in order.
+      let sockets: LockIsolated<[FakeWebSocket]>
+      /// The server side of every socket opened, in order.
+      let servers: LockIsolated<[FakeWebSocket]>
+
+      init(
+        headers: [String: String] = [:],
+        heartbeatInterval: Duration = .seconds(3600),
+        reconnectDelay: Duration = .seconds(1),
+        beforeConnect: @escaping @Sendable (_ attempt: Int) async throws -> Void = { _ in }
+      ) {
+        let clock = TestClock<Duration>()
+        let connects = LockIsolated<[(url: URL, headers: [String: String])]>([])
+        let sockets = LockIsolated<[FakeWebSocket]>([])
+        let servers = LockIsolated<[FakeWebSocket]>([])
+        self.clock = clock
+        self.connects = connects
+        self.sockets = sockets
+        self.servers = servers
+        client = RealtimeClient(
+          url: URL(string: "http://localhost:54321/realtime/v1")!,
+          options: RealtimeClientOptions(
+            headers: headers,
+            heartbeatInterval: heartbeatInterval,
+            reconnectDelay: reconnectDelay,
+            handleAppLifecycle: false
+          ),
+          wsTransport: { url, headers in
+            let attempt = connects.withValue {
+              $0.append((url, headers))
+              return $0.count
+            }
+            try await beforeConnect(attempt)
+            let (socket, server) = FakeWebSocket.fakes()
+            sockets.withValue { $0.append(socket) }
+            servers.withValue { $0.append(server) }
+            return socket
+          },
+          http: HTTPClient(transport: RecordingTransport()),
+          clock: clock
+        )
+      }
+
+      /// The next frame for `event` that server `index` receives.
+      func received(_ event: String, on index: Int) async -> RealtimeMessageV2? {
+        for await frame in servers.value[index].events {
+          if case .text(let text) = frame,
+            let message = try? RealtimeSerializer().decodeText(text),
+            message.event == event
+          {
+            return message
+          }
+        }
+        return nil
+      }
+
+      func reply(_ message: RealtimeMessageV2, on index: Int) throws {
+        servers.value[index].send(try RealtimeSerializer().encodeText(message))
+      }
+    }
+  }
+
+#endif

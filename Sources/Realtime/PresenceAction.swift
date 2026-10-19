@@ -10,7 +10,7 @@ public import Foundation
 /// The presence state of a single client tracked on a Realtime channel.
 ///
 /// Instances are received via ``PresenceAction/joins`` and ``PresenceAction/leaves``
-/// when other clients call ``RealtimeChannelV2/track(_:)`` or ``RealtimeChannelV2/untrack()``.
+/// when other clients call ``RealtimeChannel/track(_:)`` or ``RealtimeChannel/untrack()``.
 ///
 /// ## Topics
 /// ### Properties
@@ -22,7 +22,7 @@ public struct PresenceV2: Hashable, Sendable {
   /// The server-assigned presence reference string that uniquely identifies this presence entry.
   public let ref: String
 
-  /// The arbitrary state payload the client published via ``RealtimeChannelV2/track(_:)``,
+  /// The arbitrary state payload the client published via ``RealtimeChannel/track(_:)``,
   /// stored as a ``JSONObject``.
   public let state: JSONObject
 }
@@ -102,8 +102,7 @@ extension PresenceV2: Decodable {
 
 /// An event describing clients joining and leaving a Realtime channel's presence set.
 ///
-/// Received via ``RealtimeChannelV2/onPresenceChange(_:)`` or
-/// ``RealtimeChannelV2/presenceChange()``.
+/// Received via ``RealtimeChannel/presenceChanges()``.
 ///
 /// ## Topics
 /// ### Presence Maps

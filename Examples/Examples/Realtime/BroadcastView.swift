@@ -11,7 +11,7 @@ import SwiftUI
 struct BroadcastView: View {
   @State var messages: [BroadcastMessage] = []
   @State var messageText: String = ""
-  @State var channel: RealtimeChannelV2?
+  @State var channel: RealtimeChannel?
   @State var error: Error?
 
   var body: some View {
@@ -68,14 +68,14 @@ struct BroadcastView: View {
   }
 
   func subscribe() async {
-    let channel = supabase.channel("broadcast-example") {
+    let channel = await supabase.channel("broadcast-example") {
       $0.broadcast.receiveOwnBroadcasts = true
     }
 
     do {
-      let broadcast = channel.broadcastStream(event: "message")
+      let broadcast = await channel.broadcasts(event: "message")
 
-      try await channel.subscribeWithError()
+      try await channel.subscribe()
       self.channel = channel
 
       for await message in broadcast {
