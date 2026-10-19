@@ -298,6 +298,16 @@ public final class SupabaseClient: Sendable {
     fatalError()
   }
 
+  /// Calls Postgres functions with typed arguments and results, through the methods the schema
+  /// generator adds to ``_PostgrestRpc``.
+  ///
+  /// > Warning: The typed query API is experimental. Its shape may change in a minor release.
+  /// > Opt in with `@_spi(Experimental) import Supabase`.
+  @_spi(Experimental)
+  public var rpc: _PostgrestRpc {
+    rest.rpc
+  }
+
   /// Calls a Postgres function.
   /// - Parameters:
   ///   - fn: The name of the function to call.
