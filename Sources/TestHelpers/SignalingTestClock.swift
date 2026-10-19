@@ -3,7 +3,7 @@
 //  TestHelpers
 //
 
-public import Clocks
+package import Clocks
 import Foundation
 
 /// A `TestClock` whose `advance` waits for the sleep it is meant to fire.
@@ -17,19 +17,19 @@ import Foundation
 /// `grace` of real time for a sleep that the step would fire, then fires due sleeps in deadline
 /// order and repeats, so chained sleeps (timeout, then retry) are honoured in one call. When no
 /// sleep becomes due within the grace, it moves `now` to the target like `TestClock` does.
-public final class SignalingTestClock: Clock, @unchecked Sendable {
-  public typealias Instant = TestClock<Duration>.Instant
+package final class SignalingTestClock: Clock, @unchecked Sendable {
+  package typealias Instant = TestClock<Duration>.Instant
 
   private let inner = TestClock<Duration>()
   private let lock = NSLock()
   private var pending: [UUID: Instant] = [:]
 
-  public init() {}
+  package init() {}
 
-  public var now: Instant { inner.now }
-  public var minimumResolution: Duration { inner.minimumResolution }
+  package var now: Instant { inner.now }
+  package var minimumResolution: Duration { inner.minimumResolution }
 
-  public func sleep(until deadline: Instant, tolerance: Duration? = nil) async throws {
+  package func sleep(until deadline: Instant, tolerance: Duration? = nil) async throws {
     let id = UUID()
     lock.withLock { pending[id] = deadline }
     defer { lock.withLock { pending[id] = nil } }
@@ -42,7 +42,7 @@ public final class SignalingTestClock: Clock, @unchecked Sendable {
   ///   sleep that the step would fire.
   // ponytail: real-time grace, not a registration signal; make `sleep` signal registration and
   // have tests advance per expected sleep if this is ever too slow or still races under load.
-  public func advance(by duration: Duration, grace: Duration = .seconds(1)) async {
+  package func advance(by duration: Duration, grace: Duration = .seconds(1)) async {
     let target = now.advanced(by: duration)
     while let next = await nextDeadline(upTo: target, grace: grace) {
       lock.withLock { pending = pending.filter { $0.value > next } }
