@@ -64,6 +64,7 @@ let package = Package(
     .testTarget(
       name: "HelpersTests",
       dependencies: [
+        .product(name: "Clocks", package: "swift-clocks"),
         .product(name: "CustomDump", package: "swift-custom-dump"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
         "Helpers",
