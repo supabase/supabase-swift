@@ -221,6 +221,7 @@ let package = Package(
         .product(name: "CustomDump", package: "swift-custom-dump"),
         .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
         .product(name: "IssueReporting", package: "swift-issue-reporting"),
+        "Helpers",
         "Realtime",
         "TestHelpers",
       ]
