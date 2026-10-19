@@ -126,11 +126,16 @@ import Testing
       for await status in h.client.statusChanges where status == .connecting { break }
       await h.client.disconnect()
       let fresh = Task { try await h.client.connect() }
-      for await attempt in arrivals where attempt == 2 { break }
+      // Attempt 1 may reach the transport after attempt 2; wait for both gates to exist.
+      var arrivedAttempts = Set<Int>()
+      for await attempt in arrivals {
+        arrivedAttempts.insert(attempt)
+        if arrivedAttempts == [1, 2] { break }
+      }
 
-      gates.value[1]?.resume()
+      try #require(gates.value[1]).resume()
       await #expect(throws: (any Error).self) { try await stale.value }
-      gates.value[2]?.resume()
+      try #require(gates.value[2]).resume()
       try await fresh.value
 
       #expect(h.client.statusSnapshot == .connected)
