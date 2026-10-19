@@ -43,9 +43,8 @@ actor RealtimeExecutor {}
 /// try await channel.subscribe()
 /// ```
 ///
-/// The client is an actor, and every channel it creates runs on the same executor. Status reads
-/// that need no `await` go through ``statusSnapshot``; it is written in the same synchronous
-/// stretch as ``status``, so the two never disagree.
+/// The client is an actor, and every channel it creates runs on the same executor, so reading
+/// ``status`` from a channel never hops threads.
 ///
 /// ## Topics
 /// ### Channels
@@ -55,12 +54,11 @@ actor RealtimeExecutor {}
 /// - ``removeAllChannels()``
 /// ### Connection Status
 /// - ``status``
-/// - ``statusSnapshot``
-/// - ``statusChanges``
+/// - ``statusChanges()``
 /// - ``connect()``
 /// - ``disconnect(code:reason:)``
 /// ### Heartbeat
-/// - ``heartbeats``
+/// - ``heartbeats()``
 /// ### Authentication
 /// - ``setAuth(_:)``
 /// ### Sending Messages
@@ -158,8 +156,12 @@ public actor RealtimeClient {
   /// would spuriously open a connection.
   var wasConnectedBeforeBackground = false
 
-  nonisolated let statusMirror = StatusMirror<RealtimeClientStatus>(.disconnected)
-  nonisolated let heartbeatMirror = StatusMirror<HeartbeatStatus?>(nil)
+  /// The current WebSocket connection status.
+  public private(set) var status: RealtimeClientStatus = .disconnected
+  private var statusContinuations: [UUID: AsyncStream<RealtimeClientStatus>.Continuation] = [:]
+
+  private var lastHeartbeat: HeartbeatStatus?
+  private var heartbeatContinuations: [UUID: AsyncStream<HeartbeatStatus>.Continuation] = [:]
 
   /// All managed channels indexed by their topics.
   ///
@@ -248,57 +250,86 @@ public actor RealtimeClient {
       break
     }
     // `tasks` cancels its own contents when it is destroyed right after this body.
-    statusMirror.finish()
-    heartbeatMirror.finish()
+    for continuation in statusContinuations.values {
+      continuation.finish()
+    }
+    for continuation in heartbeatContinuations.values {
+      continuation.finish()
+    }
   }
 
   // MARK: - Status
 
-  /// The current WebSocket connection status.
-  public var status: RealtimeClientStatus {
-    statusMirror.current
-  }
-
-  /// The current connection status, readable without an `await`.
-  ///
-  /// Written in the same synchronous stretch that updates ``status``, so it never lags behind.
-  /// Use it from UI code that cannot suspend.
-  public nonisolated var statusSnapshot: RealtimeClientStatus {
-    statusMirror.current
-  }
-
   /// An async stream that emits connection status changes.
   ///
   /// The stream emits the current status immediately upon iteration and then each
-  /// subsequent change. Cancelling the iterating task ends the stream.
+  /// subsequent change. Cancelling the iterating task ends the stream; so does releasing the
+  /// client.
   ///
   /// ```swift
-  /// for await status in client.statusChanges {
+  /// for await status in await client.statusChanges() {
   ///   print("Status changed to \(status)")
   /// }
   /// ```
-  public nonisolated var statusChanges: AsyncStream<RealtimeClientStatus> {
-    statusMirror.stream()
+  public func statusChanges() -> AsyncStream<RealtimeClientStatus> {
+    let (stream, continuation) = AsyncStream<RealtimeClientStatus>.makeStream(
+      bufferingPolicy: .unbounded
+    )
+    let id = UUID()
+    statusContinuations[id] = continuation
+    continuation.onTermination = { [weak self] _ in
+      Task { await self?.removeStream(id) }
+    }
+    continuation.yield(status)
+    return stream
   }
 
   /// An async stream that emits heartbeat status updates.
   ///
   /// The client sends a heartbeat at each ``RealtimeClientOptions/defaultHeartbeatInterval``
   /// interval to keep the connection alive. The stream replays the latest status, if any, and
-  /// then emits every later one.
+  /// then emits every later one. Cancelling the iterating task ends the stream; so does
+  /// releasing the client.
   ///
   /// ```swift
-  /// for await beat in client.heartbeats {
+  /// for await beat in await client.heartbeats() {
   ///   print("Heartbeat: \(beat)")
   /// }
   /// ```
-  public nonisolated var heartbeats: AsyncStream<HeartbeatStatus> {
-    AsyncStream(heartbeatMirror.stream().compactMap { $0 })
+  public func heartbeats() -> AsyncStream<HeartbeatStatus> {
+    let (stream, continuation) = AsyncStream<HeartbeatStatus>.makeStream(
+      bufferingPolicy: .unbounded
+    )
+    let id = UUID()
+    heartbeatContinuations[id] = continuation
+    continuation.onTermination = { [weak self] _ in
+      Task { await self?.removeStream(id) }
+    }
+    if let lastHeartbeat {
+      continuation.yield(lastHeartbeat)
+    }
+    return stream
+  }
+
+  /// `onTermination` runs on the consumer's context, so the removal hops back here once.
+  private func removeStream(_ id: UUID) {
+    statusContinuations[id] = nil
+    heartbeatContinuations[id] = nil
   }
 
   func setStatus(_ status: RealtimeClientStatus) {
-    guard statusMirror.current != status else { return }
-    statusMirror.update(status)
+    guard self.status != status else { return }
+    self.status = status
+    for continuation in statusContinuations.values {
+      continuation.yield(status)
+    }
+  }
+
+  func recordHeartbeat(_ status: HeartbeatStatus) {
+    lastHeartbeat = status
+    for continuation in heartbeatContinuations.values {
+      continuation.yield(status)
+    }
   }
 
   // MARK: - Channels
@@ -356,7 +387,7 @@ public actor RealtimeClient {
   ///
   /// - Parameter channel: The channel to remove.
   public func removeChannel(_ channel: RealtimeChannel) async {
-    if channel.statusSnapshot == .subscribed {
+    if await channel.status == .subscribed {
       await channel.unsubscribe()
     }
 
@@ -404,7 +435,7 @@ public actor RealtimeClient {
     await withTaskGroup(of: Void.self) { group in
       for channel in removed {
         group.addTask {
-          if channel.statusSnapshot == .subscribed {
+          if await channel.status == .subscribed {
             await channel.unsubscribe()
           }
           await channel.finishStreams()
@@ -458,7 +489,7 @@ public actor RealtimeClient {
 
     accessToken = tokenToSend
 
-    for channel in channels.values where channel.statusSnapshot == .subscribed {
+    for channel in channels.values where await channel.status == .subscribed {
       options.logger.debug("Updating auth token for channel \(channel.topic)")
       await channel.push(
         ChannelEvent.accessToken,

@@ -92,8 +92,8 @@ struct AppLifecycleView: View {
     let channel = await supabase.channel(channelName)
     self.channel = channel
 
-    let socketStatusStream = supabase.realtime.statusChanges
-    let channelStatusStream = channel.statusChanges
+    let socketStatusStream = await supabase.realtime.statusChanges()
+    let channelStatusStream = await channel.statusChanges()
 
     async let socketStream: Void = { @MainActor in
       for await status in socketStatusStream {

@@ -1338,7 +1338,6 @@ features:
     symbols:
       - RealtimeClient.status
     supporting_symbols:
-      - RealtimeClient.statusSnapshot
       - RealtimeClient.statusChanges
       - RealtimeClientStatus.init
       - RealtimeClientStatus.rawValue
@@ -1364,7 +1363,6 @@ features:
       - RealtimeChannel.subscribe
     supporting_symbols:
       - RealtimeChannel.status
-      - RealtimeChannel.statusSnapshot
       - RealtimeChannel.statusChanges
       - RealtimeChannelStatus.init
       - RealtimeChannelStatus.rawValue

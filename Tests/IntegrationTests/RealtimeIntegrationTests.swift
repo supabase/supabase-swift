@@ -75,13 +75,13 @@
     func connectionAndDisconnection() async throws {
       let client = client
       try await withMainSerialExecutor {
-        #expect(client.realtime.statusSnapshot == .disconnected)
+        #expect(await client.realtime.status == .disconnected)
 
         try await client.realtime.connect()
-        #expect(client.realtime.statusSnapshot == .connected)
+        #expect(await client.realtime.status == .connected)
 
         await client.realtime.disconnect()
-        #expect(client.realtime.statusSnapshot == .disconnected)
+        #expect(await client.realtime.status == .disconnected)
       }
     }
 
@@ -91,7 +91,7 @@
       try await withMainSerialExecutor {
         let statuses = LockIsolated<[RealtimeClientStatus]>([])
 
-        let statusChanges = client.realtime.statusChanges
+        let statusChanges = await client.realtime.statusChanges()
         let observer = Task {
           for await status in statusChanges {
             statuses.withValue { $0.append(status) }
@@ -116,13 +116,13 @@
       let testClock = testClock
       try await withMainSerialExecutor {
         try await client.realtime.connect()
-        #expect(client.realtime.statusSnapshot == .connected)
+        #expect(await client.realtime.status == .connected)
 
         await client.realtime.disconnect()
 
         await testClock.advance(by: RealtimeClientOptions.defaultReconnectDelay + .seconds(1))
 
-        #expect(client.realtime.statusSnapshot == .disconnected)
+        #expect(await client.realtime.status == .disconnected)
       }
     }
 
@@ -131,12 +131,12 @@
       let client = client
       try await withMainSerialExecutor {
         try await client.realtime.connect()
-        #expect(client.realtime.statusSnapshot == .connected)
+        #expect(await client.realtime.status == .connected)
 
         try await client.realtime.connect()
         try await client.realtime.connect()
 
-        #expect(client.realtime.statusSnapshot == .connected)
+        #expect(await client.realtime.status == .connected)
       }
     }
 
@@ -149,7 +149,7 @@
         let channel = await client.realtime.channel("test-channel")
         let statuses = LockIsolated<[RealtimeChannelStatus]>([])
 
-        let statusChanges = channel.statusChanges
+        let statusChanges = await channel.statusChanges()
         let observer = Task {
           for await status in statusChanges {
             statuses.withValue { $0.append(status) }
@@ -179,9 +179,9 @@
 
         try await subscribeMany([channel1, channel2, channel3])
 
-        #expect(channel1.statusSnapshot == .subscribed)
-        #expect(channel2.statusSnapshot == .subscribed)
-        #expect(channel3.statusSnapshot == .subscribed)
+        #expect(await channel1.status == .subscribed)
+        #expect(await channel2.status == .subscribed)
+        #expect(await channel3.status == .subscribed)
 
         #expect(await client.realtime.channels.count == 3)
 
@@ -200,11 +200,11 @@
 
         let channel2 = await client.realtime.channel("reuse-channel")
         #expect(channel1 === channel2)
-        #expect(channel2.statusSnapshot == .subscribed)
+        #expect(await channel2.status == .subscribed)
 
         await channel1.unsubscribe()
 
-        #expect(channel2.statusSnapshot == .unsubscribed)
+        #expect(await channel2.status == .unsubscribed)
       }
     }
 
@@ -219,7 +219,7 @@
 
         await client.realtime.removeChannel(channel)
 
-        #expect(channel.statusSnapshot == .unsubscribed)
+        #expect(await channel.status == .unsubscribed)
         let topics = await client.realtime.channels.keys
         #expect(!topics.contains(channel.topic))
       }
@@ -239,13 +239,13 @@
 
         await client.realtime.removeAllChannels()
 
-        #expect(channel1.statusSnapshot == .unsubscribed)
-        #expect(channel2.statusSnapshot == .unsubscribed)
-        #expect(channel3.statusSnapshot == .unsubscribed)
+        #expect(await channel1.status == .unsubscribed)
+        #expect(await channel2.status == .unsubscribed)
+        #expect(await channel3.status == .unsubscribed)
         #expect(await client.realtime.channels.count == 0)
 
         #expect(
-          client.realtime.statusSnapshot == .disconnected,
+          await client.realtime.status == .disconnected,
           "Should disconnect client if all channels are removed"
         )
       }

@@ -79,7 +79,7 @@ extension RealtimeChannel {
       task.cancel()
       // Subscribe hadn't completed yet, so the server may not recognize the channel and will
       // likely never send `phx_close`. Don't wait for it.
-      await beginUnsubscribe(waitForServerClose: false, sendLeave: isSocketConnected)
+      await beginUnsubscribe(waitForServerClose: false, sendLeave: isSocketConnected())
 
     case .subscribed:
       // We had a live subscription; wait (bounded) for the server's `phx_close` so observers see
@@ -88,7 +88,7 @@ extension RealtimeChannel {
       // Unless the socket is dead: the server-side channel died with the connection,
       // `phx_leave` would only be buffered into the *next* connection as a stale frame, and
       // `phx_close` can never arrive — waiting would stall for the full timeout (issue #1145).
-      let socketConnected = isSocketConnected
+      let socketConnected = await isSocketConnected()
       await beginUnsubscribe(waitForServerClose: socketConnected, sendLeave: socketConnected)
     }
   }
@@ -318,7 +318,7 @@ extension RealtimeChannel {
   /// Connects the socket when the client allows it, and reports whether it is connected.
   private func ensureSocketConnected() async -> Bool {
     guard let client else { return false }
-    if client.statusSnapshot == .connected { return true }
+    if await client.status == .connected { return true }
     guard connectOnSubscribe else {
       reportIssue(
         "You can't subscribe to a channel while the realtime client is not connected. Did you forget to call `realtime.connect()`?"
@@ -326,13 +326,13 @@ extension RealtimeChannel {
       return false
     }
     try? await client.connect()
-    return client.statusSnapshot == .connected
+    return await client.status == .connected
   }
 
-  /// Synchronous socket-status probe: never connects. Used to decide whether `phx_leave` can be
-  /// delivered at all.
-  private var isSocketConnected: Bool {
-    client?.statusSnapshot == .connected
+  /// Socket-status probe: never connects. Used to decide whether `phx_leave` can be delivered
+  /// at all.
+  private func isSocketConnected() async -> Bool {
+    await client?.status == .connected
   }
 
   func failJoinWaiter(_ error: any Error) {

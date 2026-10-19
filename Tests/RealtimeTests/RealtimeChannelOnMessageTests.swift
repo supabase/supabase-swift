@@ -54,7 +54,7 @@ struct RealtimeChannelOnMessageTests {
 
     let receivedSystemMessages = await collect(systemMessages)
     #expect(receivedSystemMessages == [sent])
-    #expect(sut.statusSnapshot == .unsubscribed)
+    #expect(await sut.status == .unsubscribed)
   }
 
   @Test
@@ -383,7 +383,7 @@ struct RealtimeChannelOnMessageTests {
     await sut.onMessage(message(event: ChannelEvent.error))
 
     #expect(await client.channels[topic] != nil)
-    #expect(sut.statusSnapshot == .unsubscribed)
+    #expect(await sut.status == .unsubscribed)
   }
 
   @Test

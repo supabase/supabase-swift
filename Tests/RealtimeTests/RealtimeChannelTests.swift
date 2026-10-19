@@ -303,6 +303,7 @@ struct RealtimeChannelTests {
       case .broadcastData(let event, _): "broadcastData(\(event))"
       case .presence: "presence"
       case .system: "system"
+      case .status: "status"
       }
     }
     #expect(
@@ -925,7 +926,7 @@ extension RealtimeChannelTests {
     pollInterval: UInt64 = 10_000_000
   ) async {
     await waitUntil(timeout: timeout, pollInterval: pollInterval) {
-      channel.statusSnapshot == status
+      await channel.status == status
     }
   }
 

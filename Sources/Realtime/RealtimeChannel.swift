@@ -66,8 +66,7 @@ public struct RealtimeChannelConfig: Sendable {
 /// - ``config``
 /// ### Status
 /// - ``status``
-/// - ``statusSnapshot``
-/// - ``statusChanges``
+/// - ``statusChanges()``
 /// ### Lifecycle
 /// - ``subscribe()``
 /// - ``unsubscribe()``
@@ -151,7 +150,6 @@ public actor RealtimeChannel {
   }
 
   var state: SubscriptionState = .unsubscribed
-  nonisolated let statusMirror = StatusMirror<RealtimeChannelStatus>(.unsubscribed)
 
   /// The `ref` of the current join, tagged on every push and compared against the `join_ref`
   /// of server closes so a close for a previous incarnation of the topic is ignored.
@@ -190,6 +188,7 @@ public actor RealtimeChannel {
     case postgres(PostgresJoinConfig, AsyncStream<AnyAction>.Continuation)
     case presence(AsyncStream<any PresenceAction>.Continuation)
     case system(AsyncStream<RealtimeMessageV2>.Continuation)
+    case status(AsyncStream<RealtimeChannelStatus>.Continuation)
 
     func finish() {
       switch self {
@@ -198,6 +197,7 @@ public actor RealtimeChannel {
       case .postgres(_, let continuation): continuation.finish()
       case .presence(let continuation): continuation.finish()
       case .system(let continuation): continuation.finish()
+      case .status(let continuation): continuation.finish()
       }
     }
   }
@@ -235,35 +235,37 @@ public actor RealtimeChannel {
     for (_, listener) in listeners {
       listener.finish()
     }
-    statusMirror.finish()
   }
 
   // MARK: - Status
 
   /// The current subscription status of the channel.
   public var status: RealtimeChannelStatus {
-    statusMirror.current
-  }
-
-  /// The current subscription status, readable without an `await`.
-  ///
-  /// Written in the same synchronous stretch that updates ``status``, so it never lags behind.
-  public nonisolated var statusSnapshot: RealtimeChannelStatus {
-    statusMirror.current
+    state.status
   }
 
   /// An async stream that emits channel subscription status changes.
   ///
   /// The stream emits the current status immediately upon iteration and then each
-  /// subsequent change. Cancelling the iterating task ends the stream.
-  public nonisolated var statusChanges: AsyncStream<RealtimeChannelStatus> {
-    statusMirror.stream()
+  /// subsequent change. Cancelling the iterating task ends the stream; so does removing the
+  /// channel from its client.
+  public func statusChanges() -> AsyncStream<RealtimeChannelStatus> {
+    let (stream, continuation) = AsyncStream<RealtimeChannelStatus>.makeStream(
+      bufferingPolicy: .unbounded
+    )
+    register(.status(continuation), terminating: continuation)
+    continuation.yield(status)
+    return stream
   }
 
   func setState(_ newState: SubscriptionState) {
     logger.debug("State transition for '\(topic)': \(state) → \(newState)")
+    let previous = status
     state = newState
-    statusMirror.update(newState.status)
+    guard newState.status != previous else { return }
+    for case .status(let continuation) in listeners.map(\.listener) {
+      continuation.yield(newState.status)
+    }
   }
 
   // MARK: - Broadcast

@@ -100,7 +100,7 @@ import Testing
         let updates = await channel.postgresChanges(UpdateAction.self, table: "messages")
         let deletes = await channel.postgresChanges(DeleteAction.self, table: "messages")
 
-        let socketStatuses = collect(sut.statusChanges)
+        let socketStatuses = collect(await sut.statusChanges())
         defer { socketStatuses.task.cancel() }
 
         let serverTask = Task { @Sendable [server = server] in
@@ -123,7 +123,7 @@ import Testing
         }
         defer { serverTask.cancel() }
 
-        let channelStatuses = collect(channel.statusChanges)
+        let channelStatuses = collect(await channel.statusChanges())
         defer { channelStatuses.task.cancel() }
 
         do {
@@ -502,7 +502,7 @@ import Testing
         }
         defer { serverTask.cancel() }
 
-        let heartbeatStatuses = collect(sut.heartbeats)
+        let heartbeatStatuses = collect(await sut.heartbeats())
         defer { heartbeatStatuses.task.cancel() }
 
         try await sut.connect()
@@ -532,7 +532,7 @@ import Testing
         }
         defer { serverTask.cancel() }
 
-        let statuses = collect(sut.statusChanges)
+        let statuses = collect(await sut.statusChanges())
         defer { statuses.task.cancel() }
 
         try await sut.connect()
@@ -583,14 +583,14 @@ import Testing
           clock: testClock
         )
 
-        let heartbeatStatuses = collect(sut.heartbeats)
+        let heartbeatStatuses = collect(await sut.heartbeats())
         defer { heartbeatStatuses.task.cancel() }
 
         try await sut.connect()
 
         server.close(code: nil, reason: "boom")
         try await withTimeout(.seconds(5)) {
-          for await status in sut.statusChanges where status == .connecting { break }
+          for await status in await sut.statusChanges() where status == .connecting { break }
         }
 
         await testClock.advance(by: .seconds(1))
@@ -607,7 +607,7 @@ import Testing
     @Test
     func heartbeat_timeout() async throws {
       try await withMainSerialExecutor {
-        let heartbeatStatuses = collect(sut.heartbeats)
+        let heartbeatStatuses = collect(await sut.heartbeats())
         defer { heartbeatStatuses.task.cancel() }
 
         try await sut.connect()
@@ -649,7 +649,7 @@ import Testing
         }
         defer { serverTask.cancel() }
 
-        let heartbeatStatuses = collect(sut.heartbeats)
+        let heartbeatStatuses = collect(await sut.heartbeats())
         defer { heartbeatStatuses.task.cancel() }
 
         try await sut.connect()

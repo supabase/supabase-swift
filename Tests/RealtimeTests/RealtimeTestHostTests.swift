@@ -9,7 +9,7 @@ import Testing
   struct RealtimeTestHostTests {
     @Test
     func subscribeCompletesWhenTheServerConfirmsTheJoin() async throws {
-      let host = RealtimeTestHost()
+      let host = await RealtimeTestHost()
       let channel = await host.client.channel("room")
 
       async let subscribed: Void = channel.subscribe()
@@ -18,14 +18,14 @@ import Testing
       host.confirmJoin(join)
       try await subscribed
 
-      #expect(channel.statusSnapshot == .subscribed)
+      #expect(await channel.status == .subscribed)
       await host.waitUntil { host.statuses == [.disconnected, .connecting, .connected] }
       #expect(host.connectCount == 1)
     }
 
     @Test
     func acknowledgedBroadcastResolvesOnTheServerReply() async throws {
-      let host = RealtimeTestHost()
+      let host = await RealtimeTestHost()
       let channel = await host.client.channel("room") {
         $0.broadcast.acknowledgeBroadcasts = true
       }
@@ -45,7 +45,7 @@ import Testing
 
     @Test
     func waitUntilFailsFastWhenTheConditionNeverHolds() async {
-      let host = RealtimeTestHost()
+      let host = await RealtimeTestHost()
       await withKnownIssue {
         await host.waitUntil(timeout: .milliseconds(50)) { false }
       }
@@ -53,7 +53,7 @@ import Testing
 
     @Test
     func disconnectIsObservedWithoutYielding() async throws {
-      let host = RealtimeTestHost()
+      let host = await RealtimeTestHost()
       try await host.client.connect()
       await host.client.disconnect()
 
