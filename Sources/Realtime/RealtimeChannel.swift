@@ -169,9 +169,14 @@ public actor RealtimeChannel {
 
   // MARK: Pushes
 
+  /// A push waiting for its `phx_reply`.
+  ///
+  /// The slot is created before the frame goes out, so a reply can never arrive before anyone
+  /// is waiting for it. A reply that lands before the caller parks its continuation is kept in
+  /// `outcome` and handed over when the caller does.
   struct PendingPush {
-    let handle: PushHandle
-    let timeoutTask: Task<Void, Never>
+    var waiter: CheckedContinuation<Void, any Error>?
+    var outcome: Result<Void, any Error>?
   }
 
   /// Pushes waiting for a `phx_reply`, by `ref`.
@@ -230,10 +235,6 @@ public actor RealtimeChannel {
     for (_, listener) in listeners {
       listener.finish()
     }
-    for pending in pendingPushes.values {
-      pending.timeoutTask.cancel()
-      pending.handle.fail(RealtimeError.notSubscribed)
-    }
     statusMirror.finish()
   }
 
@@ -274,14 +275,12 @@ public actor RealtimeChannel {
   ///   - message: A `Codable` value to send as the message payload.
   ///   - encoder: The `JSONEncoder` used to serialize `message`. Defaults to the fixed internal
   ///     encoder (``JSONValue/encoder``) when `nil`.
-  /// - Returns: A ``PushHandle`` that resolves when the server acknowledges the message, if
-  ///   ``BroadcastJoinConfig/acknowledgeBroadcasts`` is on, and immediately otherwise.
-  /// - Throws: An error if `message` cannot be encoded.
-  @discardableResult
+  /// - Throws: An error if `message` cannot be encoded, or the errors of
+  ///   ``broadcast(event:message:)``.
   public func broadcast(
     event: String, message: some Codable, encoder: JSONEncoder? = nil
-  ) async throws -> PushHandle {
-    await broadcast(
+  ) async throws {
+    try await broadcast(
       event: event, message: try JSONObject(message, encoder: encoder ?? JSONValue.encoder))
   }
 
@@ -290,23 +289,29 @@ public actor RealtimeChannel {
   /// The channel must be subscribed. To broadcast without a subscription, use
   /// ``httpSend(event:message:timeout:)-(_,JSONObject,_)``.
   ///
+  /// Returns as soon as the frame is sent, unless ``BroadcastJoinConfig/acknowledgeBroadcasts``
+  /// is on: then it waits for the server's reply. Wrap the call in a `Task` to send without
+  /// waiting; cancelling that task stops the wait, not the frame.
+  ///
   /// - Parameters:
   ///   - event: The broadcast event name.
   ///   - message: A raw ``JSONObject`` payload.
-  /// - Returns: A ``PushHandle`` that resolves when the server acknowledges the message, if
-  ///   ``BroadcastJoinConfig/acknowledgeBroadcasts`` is on, and immediately otherwise. The
-  ///   handle fails with ``RealtimeError/Kind/notSubscribed`` when the channel is not subscribed.
-  @discardableResult
-  public func broadcast(event: String, message: JSONObject) async -> PushHandle {
+  /// - Throws: ``RealtimeError`` with kind ``RealtimeError/Kind-swift.struct/notSubscribed``
+  ///   when the channel is not subscribed, ``RealtimeError/Kind-swift.struct/timeout`` when no
+  ///   reply arrived within the client's configured timeout, the server's reason as
+  ///   ``RealtimeError/Kind-swift.struct/payloadTooLarge`` or
+  ///   ``RealtimeError/Kind-swift.struct/server`` when it rejected the message, and
+  ///   `CancellationError` when the awaiting task is cancelled.
+  public func broadcast(event: String, message: JSONObject) async throws {
     guard case .subscribed = state, let client else {
-      return .failed(RealtimeError.notSubscribed)
+      throw RealtimeError.notSubscribed
     }
     let ref = await client.makeRef()
-    let handle = registerPushIfAcknowledged(ref: ref)
-    await client.pushBroadcast(
-      joinRef: joinRef, ref: ref, topic: topic, event: event, jsonPayload: message
-    )
-    return handle
+    try await push(ref: ref) {
+      await client.pushBroadcast(
+        joinRef: joinRef, ref: ref, topic: topic, event: event, jsonPayload: message
+      )
+    }
   }
 
   /// Sends a binary broadcast message over the WebSocket.
@@ -314,18 +319,17 @@ public actor RealtimeChannel {
   /// - Parameters:
   ///   - event: The broadcast event name.
   ///   - data: Raw binary data to send as the payload.
-  /// - Returns: A ``PushHandle``, as for ``broadcast(event:message:)``.
-  @discardableResult
-  public func broadcast(event: String, data: Data) async -> PushHandle {
+  /// - Throws: The errors of ``broadcast(event:message:)``.
+  public func broadcast(event: String, data: Data) async throws {
     guard case .subscribed = state, let client else {
-      return .failed(RealtimeError.notSubscribed)
+      throw RealtimeError.notSubscribed
     }
     let ref = await client.makeRef()
-    let handle = registerPushIfAcknowledged(ref: ref)
-    await client.pushBroadcast(
-      joinRef: joinRef, ref: ref, topic: topic, event: event, binaryPayload: data
-    )
-    return handle
+    try await push(ref: ref) {
+      await client.pushBroadcast(
+        joinRef: joinRef, ref: ref, topic: topic, event: event, binaryPayload: data
+      )
+    }
   }
 
   // MARK: - Presence
@@ -335,26 +339,24 @@ public actor RealtimeChannel {
   /// The state is shared with all other clients on the same channel. Call this after subscribing.
   ///
   /// - Parameter state: A `Codable` value representing the client's presence state.
-  /// - Returns: A ``PushHandle`` for the `track` push.
-  /// - Throws: An error if the state cannot be encoded.
-  @discardableResult
-  public func track(_ state: some Codable) async throws -> PushHandle {
-    await track(state: try JSONObject(state))
+  /// - Throws: An error if the state cannot be encoded, or the errors of ``track(state:)``.
+  public func track(_ state: some Codable) async throws {
+    try await track(state: try JSONObject(state))
   }
 
   /// Tracks the current client's presence state using a raw `JSONObject`.
   ///
   /// The state is shared with all other clients on the same channel. Call this after subscribing.
+  /// Waits for the server's reply when ``BroadcastJoinConfig/acknowledgeBroadcasts`` is on, as
+  /// ``broadcast(event:message:)`` does.
   ///
   /// - Parameter state: A ``JSONObject`` representing the client's presence state.
-  /// - Returns: A ``PushHandle`` for the `track` push. It fails with
-  ///   ``RealtimeError/Kind/notSubscribed`` when the channel is not subscribed.
-  @discardableResult
-  public func track(state: JSONObject) async -> PushHandle {
+  /// - Throws: The errors of ``broadcast(event:message:)``.
+  public func track(state: JSONObject) async throws {
     guard case .subscribed = self.state else {
-      return .failed(RealtimeError.notSubscribed)
+      throw RealtimeError.notSubscribed
     }
-    return await push(
+    try await pushAcknowledged(
       ChannelEvent.presence,
       payload: [
         "type": "presence",
@@ -366,10 +368,13 @@ public actor RealtimeChannel {
 
   /// Stops tracking the current client's presence state on the channel.
   ///
-  /// - Returns: A ``PushHandle`` for the `untrack` push.
-  @discardableResult
-  public func untrack() async -> PushHandle {
-    await push(
+  /// Waits for the server's reply when ``BroadcastJoinConfig/acknowledgeBroadcasts`` is on, as
+  /// ``broadcast(event:message:)`` does.
+  ///
+  /// - Throws: ``RealtimeError`` with kind ``RealtimeError/Kind-swift.struct/notConnected``
+  ///   when the client is gone, and otherwise the errors of ``broadcast(event:message:)``.
+  public func untrack() async throws {
+    try await pushAcknowledged(
       ChannelEvent.presence,
       payload: [
         "type": "presence",
@@ -380,75 +385,107 @@ public actor RealtimeChannel {
 
   // MARK: - Pushes
 
-  /// Sends `event` on this channel and returns a handle for its reply.
+  /// Sends a protocol frame (`phx_join`, `phx_leave`, `access_token`) on this channel without
+  /// waiting for its reply. Does nothing when the client is gone.
+  func push(
+    _ event: String, ref explicitRef: String? = nil, payload: JSONObject = [:]
+  ) async {
+    guard let client else { return }
+    let ref: String
+    if let explicitRef { ref = explicitRef } else { ref = await client.makeRef() }
+    await client.push(message(ref: ref, event: event, payload: payload))
+  }
+
+  /// Sends `event` on this channel and waits for its reply when the channel acknowledges pushes.
+  private func pushAcknowledged(_ event: String, payload: JSONObject) async throws {
+    guard let client else {
+      throw RealtimeError.notConnected
+    }
+    let ref = await client.makeRef()
+    let message = message(ref: ref, event: event, payload: payload)
+    try await push(ref: ref) { await client.push(message) }
+  }
+
+  private func message(ref: String, event: String, payload: JSONObject) -> RealtimeMessageV2 {
+    RealtimeMessageV2(joinRef: joinRef, ref: ref, topic: topic, event: event, payload: payload)
+  }
+
+  /// Sends the frame `send` produces and, when the channel acknowledges pushes, waits for the
+  /// server's reply to `ref`.
   ///
   /// The reply slot is registered before the frame goes out, in the same synchronous stretch,
   /// so an acknowledgement can never arrive before anyone is waiting for it.
-  @discardableResult
-  func push(
-    _ event: String, ref explicitRef: String? = nil, payload: JSONObject = [:]
-  ) async -> PushHandle {
-    guard let client else {
-      return .failed(RealtimeError.notConnected)
-    }
-    let ref: String
-    if let explicitRef { ref = explicitRef } else { ref = await client.makeRef() }
-    let message = RealtimeMessageV2(
-      joinRef: joinRef,
-      ref: ref,
-      topic: topic,
-      event: event,
-      payload: payload
-    )
-    let handle = registerPushIfAcknowledged(ref: ref)
-    await client.push(message)
-    return handle
-  }
-
-  /// Registers a reply slot for `ref` when the channel acknowledges pushes, and starts the
-  /// timeout that resolves it with ``PushStatus/timeout``. Returns an already-resolved handle
-  /// otherwise.
-  private func registerPushIfAcknowledged(ref: String) -> PushHandle {
+  private func push(ref: String, send: () async -> Void) async throws {
     guard config.broadcast.acknowledgeBroadcasts else {
-      return .resolved(.ok)
+      await send()
+      return
     }
-    let handle = PushHandle()
-    let timeoutTask = Task.detached { [weak self, clock, timeout] in
-      try? await clock.sleep(for: timeout)
-      guard !Task.isCancelled else { return }
-      await self?.timeOutPush(ref: ref)
+    pendingPushes[ref] = PendingPush()
+    defer { pendingPushes[ref] = nil }
+    await send()
+    do {
+      try await withTimeout(timeout, clock: clock) {
+        try await withTaskCancellationHandler {
+          try await withCheckedThrowingContinuation {
+            (continuation: CheckedContinuation<Void, any Error>) in
+            awaitReply(for: ref, with: continuation)
+          }
+        } onCancel: {
+          Task { await self.settlePush(ref: ref, with: .failure(CancellationError())) }
+        }
+      }
+    } catch is TimeoutError {
+      logger.debug("Push \(ref) on '\(topic)' timed out.")
+      throw RealtimeError.pushTimeout
     }
-    pendingPushes[ref] = PendingPush(handle: handle, timeoutTask: timeoutTask)
-    return handle
   }
 
-  private func timeOutPush(ref: String) {
-    guard let pending = pendingPushes.removeValue(forKey: ref) else { return }
-    logger.debug("Push \(ref) on '\(topic)' timed out.")
-    pending.handle.resolve(.timeout)
+  /// Parks `continuation` until the reply for `ref` arrives, or resumes it at once when the
+  /// reply is already in, the slot is gone, or the task is already cancelled.
+  private func awaitReply(for ref: String, with continuation: CheckedContinuation<Void, any Error>)
+  {
+    guard let pending = pendingPushes[ref] else {
+      continuation.resume(throwing: RealtimeError.notSubscribed)
+      return
+    }
+    if let outcome = pending.outcome {
+      pendingPushes[ref] = nil
+      continuation.resume(with: outcome)
+    } else if Task.isCancelled {
+      pendingPushes[ref] = nil
+      continuation.resume(throwing: CancellationError())
+    } else {
+      pendingPushes[ref]?.waiter = continuation
+    }
+  }
+
+  /// Records the first outcome for `ref` and wakes its waiter. Later outcomes are ignored.
+  private func settlePush(ref: String, with outcome: Result<Void, any Error>) {
+    guard let pending = pendingPushes[ref] else { return }
+    if let waiter = pending.waiter {
+      pendingPushes[ref] = nil
+      waiter.resume(with: outcome)
+    } else if pending.outcome == nil {
+      pendingPushes[ref]?.outcome = outcome
+    }
   }
 
   private func didReceiveReply(ref: String, status: PushStatus, payload: JSONObject) {
-    guard let pending = pendingPushes.removeValue(forKey: ref) else { return }
-    pending.timeoutTask.cancel()
-    if status == .error {
-      let reason =
-        payload["response"]?.objectValue?["reason"]?.stringValue
-        ?? payload["response"]?.stringValue
-        ?? "The server rejected the push."
-      pending.handle.fail(RealtimeError.ackError(reason: reason))
-    } else {
-      pending.handle.resolve(status)
+    guard status == .error else {
+      settlePush(ref: ref, with: .success(()))
+      return
     }
+    let reason =
+      payload["response"]?.objectValue?["reason"]?.stringValue
+      ?? payload["response"]?.stringValue
+      ?? "The server rejected the push."
+    settlePush(ref: ref, with: .failure(RealtimeError.ackError(reason: reason)))
   }
 
   /// Fails every push still waiting for a reply.
   func failPendingPushes(with error: RealtimeError) {
-    let pending = pendingPushes
-    pendingPushes = [:]
-    for push in pending.values {
-      push.timeoutTask.cancel()
-      push.handle.fail(error)
+    for ref in pendingPushes.keys {
+      settlePush(ref: ref, with: .failure(error))
     }
   }
 

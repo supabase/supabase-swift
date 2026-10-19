@@ -399,4 +399,8 @@ extension RealtimeError {
   /// The socket is not connected, so the push cannot be answered.
   static let notConnected = RealtimeError(
     kind: .notConnected, message: "The realtime client is not connected.")
+
+  /// No `phx_reply` arrived for the push within the client's configured timeout.
+  static let pushTimeout = RealtimeError(
+    kind: .timeout, message: "The server did not reply to the push within the timeout.")
 }

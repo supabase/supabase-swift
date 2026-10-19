@@ -34,13 +34,13 @@ import Testing
       host.confirmJoin(try await host.receive(event: "phx_join"))
       try await subscribed
 
-      let push = await channel.track(state: ["name": "ana"])
+      async let push: Void = channel.track(state: ["name": "ana"])
       let frame = try await host.receive(event: "presence")
-      #expect(push.isRunning)
+      #expect(await channel.pendingPushes.count == 1)
       host.reply(to: frame)
 
-      #expect(try await push() == .ok)
-      #expect(!push.isRunning)
+      try await push
+      #expect(await channel.pendingPushes.isEmpty)
     }
 
     @Test

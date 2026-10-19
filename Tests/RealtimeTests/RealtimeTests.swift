@@ -677,10 +677,12 @@ import Testing
         }
 
         // `broadcast` on a channel that is not subscribed no longer falls back to the REST
-        // endpoint: its handle fails with `.notSubscribed` and no request goes out. REST
-        // delivery is the explicit `httpSend`, which expects a 202.
-        let push = await channel.broadcast(event: "test", message: ["value": 42] as JSONObject)
-        #expect((push.error as? RealtimeError)?.kind == .notSubscribed)
+        // endpoint: it throws `.notSubscribed` and no request goes out. REST delivery is the
+        // explicit `httpSend`, which expects a 202.
+        let error = await #expect(throws: RealtimeError.self) {
+          try await channel.broadcast(event: "test", message: ["value": 42] as JSONObject)
+        }
+        #expect(error?.kind == .notSubscribed)
         #expect(http.requests.isEmpty)
 
         try await channel.httpSend(event: "test", message: ["value": 42] as JSONObject)

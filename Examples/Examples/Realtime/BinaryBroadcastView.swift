@@ -110,7 +110,7 @@ struct BinaryBroadcastView: View {
 
     Task {
       let data = Data(inputText.utf8)
-      await channel?.broadcast(event: "binary_message", data: data)
+      try await channel?.broadcast(event: "binary_message", data: data)
 
       await MainActor.run {
         inputText = ""

@@ -6,118 +6,6 @@ import Testing
 
 @testable import Realtime
 
-@Suite
-struct PushHandleTests {
-  @Test
-  func pushStatusRawValues() {
-    #expect(PushStatus.ok.rawValue == "ok")
-    #expect(PushStatus.error.rawValue == "error")
-    #expect(PushStatus.timeout.rawValue == "timeout")
-    #expect(PushStatus(rawValue: "ok") == .ok)
-    #expect(PushStatus(rawValue: "invalid").rawValue == "invalid")
-  }
-
-  @Test
-  func newHandleIsRunning() {
-    let handle = PushHandle()
-
-    #expect(handle.isRunning)
-    #expect(handle.error == nil)
-  }
-
-  @Test
-  func resolveSettlesWithStatus() async throws {
-    let handle = PushHandle()
-    handle.resolve(.ok)
-
-    #expect(!handle.isRunning)
-    #expect(handle.error == nil)
-    #expect(try await handle() == .ok)
-  }
-
-  @Test
-  func resolveWakesAWaitingCaller() async throws {
-    let handle = PushHandle()
-    let waiter = Task { try await handle() }
-
-    handle.resolve(.timeout)
-
-    #expect(try await waiter.value == .timeout)
-  }
-
-  @Test
-  func everyWaiterReceivesTheOutcome() async throws {
-    let handle = PushHandle()
-    async let first = handle()
-    async let second = handle()
-
-    handle.resolve(.ok)
-
-    #expect(try await first == .ok)
-    #expect(try await second == .ok)
-  }
-
-  @Test
-  func failSettlesWithError() async {
-    let handle = PushHandle()
-    handle.fail(RealtimeError.notConnected)
-
-    #expect(!handle.isRunning)
-    #expect((handle.error as? RealtimeError)?.kind == .notConnected)
-    let error = await #expect(throws: RealtimeError.self) { try await handle() }
-    #expect(error?.kind == .notConnected)
-  }
-
-  @Test
-  func cancelThrowsCancellationErrorToEveryWaiter() async {
-    let handle = PushHandle()
-    let waiter = Task { try await handle() }
-
-    handle.cancel()
-
-    #expect(!handle.isRunning)
-    #expect(handle.error == nil)
-    await #expect(throws: CancellationError.self) { try await waiter.value }
-    await #expect(throws: CancellationError.self) { try await handle() }
-  }
-
-  @Test
-  func cancellingTheAwaitingTaskReturnsPromptlyAndLeavesTheHandleRunning() async {
-    let handle = PushHandle()
-    let waiter = Task { try await handle() }
-
-    waiter.cancel()
-
-    await #expect(throws: CancellationError.self) { try await waiter.value }
-    #expect(handle.isRunning)
-  }
-
-  @Test
-  func factoriesReturnSettledHandles() async throws {
-    let resolved = PushHandle.resolved(.ok)
-    #expect(!resolved.isRunning)
-    #expect(try await resolved() == .ok)
-
-    let failed = PushHandle.failed(RealtimeError.notSubscribed)
-    #expect(!failed.isRunning)
-    let error = await #expect(throws: RealtimeError.self) { try await failed() }
-    #expect(error?.kind == .notSubscribed)
-  }
-
-  @Test
-  func onlyTheFirstOutcomeCounts() async throws {
-    let handle = PushHandle()
-
-    handle.resolve(.ok)
-    handle.fail(RealtimeError.notConnected)
-    handle.resolve(.timeout)
-    handle.cancel()
-
-    #expect(handle.error == nil)
-    #expect(try await handle() == .ok)
-  }
-}
-
 #if os(Linux)
   // RealtimeChannelPushTests are disabled on Linux due to timing flakiness.
 #else
@@ -125,51 +13,49 @@ struct PushHandleTests {
   @Suite
   struct RealtimeChannelPushTests {
     @Test
-    func broadcastWithoutAcknowledgementResolvesImmediately() async throws {
+    func broadcastWithoutAcknowledgementReturnsOnceSent() async throws {
       let h = Harness()
       let channel = await h.client.channel("room")
       _ = try await h.subscribe(channel)
 
-      let push = await channel.broadcast(event: "cursor", message: ["x": 1] as JSONObject)
+      try await channel.broadcast(event: "cursor", message: ["x": 1] as JSONObject)
 
-      #expect(!push.isRunning)
-      #expect(try await push() == .ok)
       #expect(h.socket.sentEvents.contains { if case .binary = $0 { true } else { false } })
     }
 
     @Test
-    func broadcastBeforeSubscribeFailsWithNotSubscribed() async {
+    func broadcastBeforeSubscribeThrowsNotSubscribed() async {
       let h = Harness()
       let channel = await h.client.channel("room")
 
-      let push = await channel.broadcast(event: "cursor", message: ["x": 1] as JSONObject)
-
-      let error = await #expect(throws: RealtimeError.self) { try await push() }
+      let error = await #expect(throws: RealtimeError.self) {
+        try await channel.broadcast(event: "cursor", message: ["x": 1] as JSONObject)
+      }
       #expect(error?.kind == .notSubscribed)
     }
 
     @Test
-    func acknowledgedPushResolvesOnServerReply() async throws {
+    func acknowledgedPushReturnsOnServerReply() async throws {
       let h = Harness()
       let channel = await h.client.channel("room") { $0.broadcast.acknowledgeBroadcasts = true }
       let join = try await h.subscribe(channel)
 
-      let push = await channel.track(state: ["online": true])
-      #expect(push.isRunning)
-
+      let push = Task { try await channel.track(state: ["online": true]) }
       let frame = try #require(await h.received(ChannelEvent.presence))
+      #expect(await channel.pendingPushes.count == 1)
       try h.reply(h.pushReply(to: frame, join: join, payload: ["status": "ok", "response": [:]]))
 
-      #expect(try await push() == .ok)
+      try await push.value
+      #expect(await channel.pendingPushes.isEmpty)
     }
 
     @Test
-    func errorReplyFailsWithAckError() async throws {
+    func errorReplyThrowsTheServerReason() async throws {
       let h = Harness()
       let channel = await h.client.channel("room") { $0.broadcast.acknowledgeBroadcasts = true }
       let join = try await h.subscribe(channel)
 
-      let push = await channel.track(state: ["online": true])
+      let push = Task { try await channel.track(state: ["online": true]) }
       let frame = try #require(await h.received(ChannelEvent.presence))
       try h.reply(
         h.pushReply(
@@ -178,23 +64,61 @@ struct PushHandleTests {
         )
       )
 
-      let error = await #expect(throws: RealtimeError.self) { try await push() }
+      let error = await #expect(throws: RealtimeError.self) { try await push.value }
       #expect(error?.kind == .payloadTooLarge)
-      #expect((push.error as? RealtimeError)?.kind == .payloadTooLarge)
+      #expect(error?.isRetryable == false)
     }
 
     @Test
-    func pushWithoutReplyTimesOut() async throws {
+    func errorReplyWithACodedReasonCarriesTheServerCode() async throws {
+      let h = Harness()
+      let channel = await h.client.channel("room") { $0.broadcast.acknowledgeBroadcasts = true }
+      let join = try await h.subscribe(channel)
+
+      let push = Task { try await channel.track(state: ["online": true]) }
+      let frame = try #require(await h.received(ChannelEvent.presence))
+      try h.reply(
+        h.pushReply(
+          to: frame, join: join,
+          payload: [
+            "status": "error", "response": ["reason": "Unauthorized: presence is private"],
+          ]
+        )
+      )
+
+      let error = await #expect(throws: RealtimeError.self) { try await push.value }
+      #expect(error?.kind == .server)
+      #expect(error?.serverCode == .unauthorized)
+      #expect(error?.message == "Unauthorized: presence is private")
+    }
+
+    @Test
+    func pushWithoutReplyThrowsTimeout() async throws {
       let h = Harness(timeout: .seconds(10))
       let channel = await h.client.channel("room") { $0.broadcast.acknowledgeBroadcasts = true }
       _ = try await h.subscribe(channel)
 
-      let push = await channel.track(state: ["online": true])
+      let push = Task { try await channel.track(state: ["online": true]) }
       _ = try #require(await h.received(ChannelEvent.presence))
       await h.clock.advance(by: .seconds(10))
 
-      #expect(try await push() == .timeout)
-      #expect(push.error == nil)
+      let error = await #expect(throws: RealtimeError.self) { try await push.value }
+      #expect(error?.kind == .timeout)
+      #expect(await channel.pendingPushes.isEmpty)
+    }
+
+    @Test
+    func cancellingTheAwaitingTaskThrowsCancellationErrorAndDropsTheSlot() async throws {
+      let h = Harness()
+      let channel = await h.client.channel("room") { $0.broadcast.acknowledgeBroadcasts = true }
+      _ = try await h.subscribe(channel)
+
+      let push = Task { try await channel.track(state: ["online": true]) }
+      _ = try #require(await h.received(ChannelEvent.presence))
+      push.cancel()
+
+      await #expect(throws: CancellationError.self) { try await push.value }
+      #expect(await channel.pendingPushes.isEmpty)
     }
 
     @Test
@@ -203,10 +127,11 @@ struct PushHandleTests {
       let channel = await h.client.channel("room") { $0.broadcast.acknowledgeBroadcasts = true }
       _ = try await h.subscribe(channel)
 
-      let push = await channel.track(state: ["online": true])
+      let push = Task { try await channel.track(state: ["online": true]) }
+      _ = try #require(await h.received(ChannelEvent.presence))
       await h.client.disconnect()
 
-      let error = await #expect(throws: RealtimeError.self) { try await push() }
+      let error = await #expect(throws: RealtimeError.self) { try await push.value }
       #expect(error?.kind == .notConnected)
     }
 
@@ -216,7 +141,8 @@ struct PushHandleTests {
       let channel = await h.client.channel("room") { $0.broadcast.acknowledgeBroadcasts = true }
       let join = try await h.subscribe(channel)
 
-      let push = await channel.track(state: ["online": true])
+      let push = Task { try await channel.track(state: ["online": true]) }
+      _ = try #require(await h.received(ChannelEvent.presence))
       try h.reply(
         RealtimeMessageV2(
           joinRef: join.ref, ref: nil, topic: channel.topic, event: ChannelEvent.close,
@@ -224,7 +150,7 @@ struct PushHandleTests {
         )
       )
 
-      let error = await #expect(throws: RealtimeError.self) { try await push() }
+      let error = await #expect(throws: RealtimeError.self) { try await push.value }
       #expect(error?.kind == .channelClosedByServer)
     }
 

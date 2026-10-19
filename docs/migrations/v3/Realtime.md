@@ -56,7 +56,8 @@ Changes that still compile but behave differently. Check each one by hand.
 | `onPostgresChange(_:...)`, `postgresChange(_:schema:table:filter: String?)` | `postgresChanges(_:schema:table:filter: RealtimePostgresFilter?)` |
 | `onPresenceChange(_:)`, `presenceChange()` | `presenceChanges()` |
 | `onSystem(callback:)`, `system()` | `systemMessages()` |
-| `broadcast(event:message:)`, `track(_:)`, `untrack()` (`Void`) | return a `PushHandle` |
+| `broadcast(event:message:)`, `broadcast(event:data:)`, `track(_:)`, `untrack()` (`async`) | `async throws`; wait for the server reply when `acknowledgeBroadcasts` is on |
+| `PushStatus.timeout` | removed; a push that gets no reply throws `RealtimeError` with `kind == .timeout` |
 | `RealtimeMessageV2.eventType: EventType?` | `eventType: EventType` (not optional) |
 | `RealtimeMessageV2.EventType.tokenExpired` | `.system`; check the payload |
 | `RealtimeClientOptions(fetch:)` | `RealtimeClientOptions(http:)` |
@@ -126,22 +127,37 @@ Open `postgresChanges` and `presenceChanges` streams before `subscribe()`. They 
 request. Opening one after the join reports an issue and returns an empty stream. Presence is
 sent to the server only when a `presenceChanges()` stream is open.
 
-## Pushes return a `PushHandle`
+## Pushes throw instead of returning a status
 
-`broadcast(event:message:)`, `broadcast(event:data:)`, `track(_:)` and `untrack()` return a
-`PushHandle`. Ignore it to keep the fire-and-forget behavior. Call it to wait for the server
-reply when `acknowledgeBroadcasts` is on.
+`broadcast(event:message:)`, `broadcast(event:data:)`, `track(_:)` and `untrack()` are
+`async throws`. They return once the frame is sent. When `acknowledgeBroadcasts` is on they wait
+for the server reply first, and the reply becomes the result of the call:
+
+- The server acknowledged the push: the call returns.
+- No reply came within the client's `timeout`: the call throws `RealtimeError` with
+  `kind == .timeout`.
+- The server rejected the push: the call throws `RealtimeError` with the server's reason in
+  `message`, `kind == .payloadTooLarge` for an oversized payload and `.server` otherwise, and
+  `serverCode` set when the reason starts with a code.
+- The channel left or the socket closed while waiting: `kind == .notSubscribed` or
+  `.notConnected`.
+
+Wrap the call in a `Task` to send without waiting. Cancelling that task stops the wait and
+throws `CancellationError`; the frame itself is not recalled.
 
 ```swift
 // v2
 try await channel.broadcast(event: "ping", message: ["n": 1])
 // v3
-let push = try await channel.broadcast(event: "ping", message: ["n": 1])
-let status = try await push()  // .ok, or throws RealtimeError
+do {
+  try await channel.broadcast(event: "ping", message: ["n": 1])
+} catch let error as RealtimeError where error.kind == .timeout {
+  // no acknowledgement in time
+}
 ```
 
 A WebSocket `broadcast` on a channel that is not subscribed no longer falls back to the REST
-endpoint. Its handle fails with `kind == .notSubscribed`. Use `httpSend` to broadcast without a
+endpoint. It throws `kind == .notSubscribed`. Use `httpSend` to broadcast without a
 subscription.
 
 ## Intervals are `Duration`
