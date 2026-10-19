@@ -122,16 +122,13 @@ import Testing
         if attempt == 1, !staleAttemptSucceeds { throw URLError(.cannotConnectToHost) }
       })
 
+      // Attempts are numbered by transport-call order, so wait for each arrival before the
+      // next step: attempt 1 is then the stale task and attempt 2 the fresh one.
       let stale = Task { try await h.client.connect() }
-      for await status in h.client.statusChanges where status == .connecting { break }
+      for await attempt in arrivals where attempt == 1 { break }
       await h.client.disconnect()
       let fresh = Task { try await h.client.connect() }
-      // Attempt 1 may reach the transport after attempt 2; wait for both gates to exist.
-      var arrivedAttempts = Set<Int>()
-      for await attempt in arrivals {
-        arrivedAttempts.insert(attempt)
-        if arrivedAttempts == [1, 2] { break }
-      }
+      for await attempt in arrivals where attempt == 2 { break }
 
       try #require(gates.value[1]).resume()
       await #expect(throws: (any Error).self) { try await stale.value }
