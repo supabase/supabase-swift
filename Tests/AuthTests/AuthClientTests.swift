@@ -74,10 +74,6 @@ extension AuthMockerTests {
 
         let stream = sut.authStateChanges
 
-        // The listener (and its `onTermination` cleanup) must be registered synchronously,
-        // before the stream is returned. Previously this happened inside an unstructured
-        // `Task`, so a consumer that cancels before that task's body runs would never get
-        // `onTermination` wired up, leaking the `onAuthStateChange` registration (SDK-2092).
         expectNoDifference(sut.dependencies.eventEmitter.emitter.listenerCount, 1)
 
         let consumer = Task {
@@ -499,7 +495,6 @@ extension AuthMockerTests {
 
         let sut = makeSUT()
 
-        // Two PKCE flows are pending concurrently, each with its own verifier.
         sut.dependencies.codeVerifierStorage.set("verifier-a", "flow-a")
         sut.dependencies.codeVerifierStorage.set("verifier-b", "flow-b")
 
@@ -507,7 +502,6 @@ extension AuthMockerTests {
 
         expectNoDifference(capturedVerifier.value, "verifier-a")
 
-        // Exchanging "flow-a" must not disturb "flow-b"'s still-pending verifier.
         #expect(sut.dependencies.codeVerifierStorage.get("flow-a") == nil)
         #expect(sut.dependencies.codeVerifierStorage.get("flow-b") == "verifier-b")
       }
@@ -529,12 +523,8 @@ extension AuthMockerTests {
         )
         .register()
 
-        // Flow A starts (e.g. linking a GitHub identity)...
         let flowA = try await sut.linkIdentityURL(provider: .github)
 
-        // ...then flow B starts before flow A's callback arrives (e.g. the user also kicks off
-        // a Google sign-in in another window). Before flow ids, flow B's verifier would have
-        // silently overwritten flow A's in the single shared slot.
         let flowB = try await sut.linkIdentityURL(provider: .google)
 
         #expect(flowA.flowId != nil)
@@ -552,10 +542,8 @@ extension AuthMockerTests {
         )
         .register()
 
-        // Exchanging flow A's code must still resolve flow A's own verifier.
         _ = try await sut.exchangeCodeForSession(authCode: "code-a", flowId: flowA.flowId)
 
-        // Flow B is still pending, untouched by flow A's exchange.
         #expect(sut.dependencies.codeVerifierStorage.get(flowB.flowId) != nil)
       }
     }
@@ -2329,7 +2317,6 @@ extension AuthMockerTests {
       expectNoDifference(response.type, "webauthn")
       expectNoDifference(response.webauthn?.type, .create)
 
-      // W3C option keys are camelCase and must survive decoding untouched.
       let options = response.webauthn?.credentialOptions.objectValue
       expectNoDifference(options?["challenge"]?.stringValue, "Y2hhbGxlbmdl")
       expectNoDifference(options?["pubKeyCredParams"]?.arrayValue?.count, 1)
@@ -2598,7 +2585,6 @@ extension AuthMockerTests {
 
       expectNoDifference(options.challengeId, "challenge-1")
       expectNoDifference(options.options.objectValue?["challenge"]?.stringValue, "Y2hhbGxlbmdl")
-      // W3C option keys (camelCase) must survive decoding untouched.
       expectNoDifference(options.options.objectValue?["pubKeyCredParams"]?.arrayValue?.count, 1)
     }
 
@@ -2674,7 +2660,6 @@ extension AuthMockerTests {
 
       #expect(response.session != nil)
 
-      // The returned session is persisted by the SDK (read storage directly to avoid a refresh).
       let stored = sut.dependencies.sessionStorage.get()
       expectNoDifference(stored?.accessToken, response.session?.accessToken)
     }
@@ -2728,7 +2713,6 @@ extension AuthMockerTests {
         )
         .register()
 
-        // Capture what the SDK hands to the authenticator to prove it forwards the backend options.
         let forwardedOptions = LockIsolated<JSONValue?>(nil)
         let authenticator = WebAuthnAuthenticator(
           register: { _, _, _ in [:] },
@@ -2899,7 +2883,6 @@ extension AuthMockerTests {
         )
 
         #expect(!(session.accessToken.isEmpty))
-        // rpId is extracted from the server-returned credential_options, not passed by the caller.
         expectNoDifference(forwardedRpId.value, "example.com")
       }
     #endif
@@ -2908,7 +2891,6 @@ extension AuthMockerTests {
     func getAuthenticatorAssuranceLevel_whenAALAndVerifiedFactor_shouldReturnAAL2() async throws {
       var session = Session.valid
 
-      // access token with aal token
       session.accessToken =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyLCJhYWwiOiJhYWwxIiwiYW1yIjpbeyJtZXRob2QiOiJ0b3RwIiwidGltZXN0YW1wIjoxNTE2MjM5MDIyfSx7Im1ldGhvZCI6InBob25lIiwidGltZXN0YW1wIjoxNTE2MjM5MDIyfV19.OQy2SmA1hcw9V5wrY-bvORjbFh5tWznLIfcMCqPu_6M"
 
@@ -3413,11 +3395,8 @@ extension AuthMockerTests {
       )
     }
 
-    // MARK: - claims Tests
-
     @Test
     func getClaims_withHS256JWT_shouldFallbackAndReturnClaims() async throws {
-      // HS256 JWT (symmetric algorithm) - will use server-side verification
       let jwt =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6OTk5OTk5OTk5OSwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.4Adcj0vZKqXRB_mPpDVkWvB3xw7yHYjpzGJLKFQjKEc"
 
@@ -3449,7 +3428,6 @@ extension AuthMockerTests {
 
     @Test
     func getClaims_withoutJWT_shouldUseSessionAccessToken() async throws {
-      // HS256 JWT from session
       let jwt =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6OTk5OTk5OTk5OSwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.4Adcj0vZKqXRB_mPpDVkWvB3xw7yHYjpzGJLKFQjKEc"
 
@@ -3627,7 +3605,6 @@ extension AuthMockerTests {
 
     @Test
     func getClaims_withES256JWT_shouldFallbackToServerVerification() async throws {
-      // ES256 JWT without kid - will fallback to server
       let jwt =
         "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6OTk5OTk5OTk5OSwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.dummysignature"
 
@@ -3651,11 +3628,9 @@ extension AuthMockerTests {
 
     @Test
     func getClaims_withRS256JWT_whenJWKNotFound_shouldFallbackToServerVerification() async throws {
-      // RS256 JWT with kid but key not in JWKS - will try to fetch JWKS, not find it, then fallback to server
       let jwt =
         "eyJhbGciOiJSUzI1NiIsImtpZCI6InRlc3Qta2lkIiwidHlwIjoiSldUIn0.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6OTk5OTk5OTk5OSwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.dummysignature"
 
-      // Mock JWKS endpoint with different kid
       let jwksDict: [String: Any] = [
         "keys": [
           [
@@ -3697,7 +3672,6 @@ extension AuthMockerTests {
 
     @Test
     func getClaims_withNoKidInHeader_shouldFallbackToServerVerification() async throws {
-      // JWT without kid - cannot look up in JWKS
       let jwt =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI5ODc2NTQzMjEiLCJpc3MiOiJodHRwOi8vbG9jYWxob3N0OjU0MzIxL2F1dGgvdjEiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjo5OTk5OTk5OTk5LCJpYXQiOjE1MTYyMzkwMjIsInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.YT0NvH-jYKCiN-wrAVcMmTIxZkQ3OtqTVFjJAqGcRuw"
 
@@ -3752,7 +3726,6 @@ extension AuthMockerTests {
 
     @Test
     func getClaims_withExpiredJWT_shouldThrowJWTVerificationFailed() async throws {
-      // JWT with exp in the past
       let expiredJWT =
         "eyJhbGciOiJFUzI1NiIsImtpZCI6InRlc3Qta2lkIiwidHlwIjoiSldUIn0.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6MTUxNjIzOTAyMiwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.MEYCIQDmtLy0PF_lR7rJQHyKLmJKp1xFKECfVvGTBcXiVnz0jAIhAOoXZJ3kHSA2MqL1XhcUy8dWOZCr6zWCN_FXsP8qKfPR"
 
@@ -3771,7 +3744,6 @@ extension AuthMockerTests {
 
     @Test
     func getClaims_withExpiredJWTAndAllowExpired_shouldReturnClaims() async throws {
-      // JWT with exp in the past but allowsExpired option - falls back to server
       let expiredJWT =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6MTUxNjIzOTAyMiwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.aN0HLYHkp7nKZp4xWvBaDqSrCFBxk2tq0KZc4BXGqYs"
 
@@ -3798,7 +3770,6 @@ extension AuthMockerTests {
 
     @Test
     func getClaims_whenServerRejectsJWT_shouldThrowError() async throws {
-      // HS256 JWT that will be verified server-side
       let jwt =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6OTk5OTk5OTk5OSwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.4Adcj0vZKqXRB_mPpDVkWvB3xw7yHYjpzGJLKFQjKEc"
 
@@ -3821,14 +3792,11 @@ extension AuthMockerTests {
         _ = try await sut.claims(jwt: jwt)
         Issue.record("Expected error from server")
       } catch {
-        // Expected to fail
       }
     }
 
     @Test
     func getClaims_withComplexClaims_shouldDecodeAllFields() async throws {
-      // JWT with multiple claim fields
-      // HS256 so it falls back to server verification
       let jwt =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6OTk5OTk5OTk5OSwiaWF0IjoxNTE2MjM5MDIyLCJuYmYiOjE1MTYyMzkwMjIsImp0aSI6InRlc3QtanRpIiwicm9sZSI6ImF1dGhlbnRpY2F0ZWQiLCJlbWFpbCI6InRlc3RAZXhhbXBsZS5jb20iLCJwaG9uZSI6IisxMjM0NTY3ODkwIn0.dBYm1Y-TfRjPsxw_gXqHB5zGHSH9hXS0OeFN_wL8HbA"
 
@@ -3864,7 +3832,6 @@ extension AuthMockerTests {
 
     @Test
     func getClaims_withArrayAudience_shouldDecodeCorrectly() async throws {
-      // JWT with audience as array
       let jwt =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjpbImF1dGhlbnRpY2F0ZWQiLCJzZXJ2aWNlLXJvbGUiXSwiZXhwIjo5OTk5OTk5OTk5LCJpYXQiOjE1MTYyMzkwMjIsInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.Jz-lHQoR2VsQ_vX8wKyN7mPxT4aU9cF1bYsHqGdWlIk"
 
@@ -4011,22 +3978,11 @@ extension AuthMockerTests {
       return AuthClient(configuration: configuration, date: date, pkce: pkce, urlOpener: urlOpener)
     }
 
-    /// Convenience method for testing auth state changes and asserting events
-    /// - Parameters:
-    ///   - sut: The AuthClient instance to monitor
-    ///   - action: The async action to perform that should trigger events
-    ///   - expectedEvents: Array of expected AuthChangeEvent values
-    ///   - expectedSessions: Array of expected Session values (optional)
     private func assertAuthStateChanges<T>(
       sut: AuthClient,
       action: () async throws -> T,
       expectedEvents: [AuthChangeEvent],
       expectedSessions: [Session?]? = nil,
-      // `withMainSerialExecutor` hijacks a process-wide task-enqueue hook, so while this or any
-      // other suite serialized against it (.mainSerialExecutorSerialized) holds it, every
-      // concurrently-running suite in the process gets its own task scheduling funneled onto the
-      // same queue too. Under CI's loaded simulator that queue can back up well past what a fast
-      // local run would ever see — 30s gives real headroom without masking a genuinely stuck test.
       timeout: Duration = .seconds(30),
       fileID: StaticString = #fileID,
       filePath: StaticString = #filePath,

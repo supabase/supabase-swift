@@ -1,5 +1,4 @@
 // swift-tools-version:6.2
-// The swift-tools-version declares the minimum version of Swift required to build this package.
 // This manifest serves Swift <6.4; Package.swift (tools-version 6.4) serves 6.4+. Both must stay
 // otherwise identical. xctest-dynamic-overlay's own 6.4 manifest re-exports swift-issue-reporting
 // under a renamed target to avoid a name clash, but that shim only exists in ITS 6.4 manifest —
@@ -27,15 +26,12 @@ let package = Package(
     .library(name: "Auth", targets: ["Auth"]),
     .library(name: "Functions", targets: ["Functions"]),
     .library(name: "PostgREST", targets: ["PostgREST"]),
-    // Opt-in. `Supabase` deliberately does not re-export this, so swift-syntax is compiled
-    // only for users who write `import PostgrestMacros`.
     .library(name: "PostgrestMacros", targets: ["PostgrestMacros"]),
     .library(name: "Realtime", targets: ["Realtime"]),
     .library(name: "Storage", targets: ["Storage"]),
     .library(name: "Supabase", targets: ["Supabase"]),
   ],
   traits: [
-    // Enables W3C traceparent header propagation using opentelemetry-swift's active span.
     "OpenTelemetry"
   ],
   dependencies: [
@@ -63,10 +59,6 @@ let package = Package(
         .product(name: "Logging", package: "swift-log"),
         .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
       ],
-      // One manifest covers the whole SDK: every product links `Helpers`, so the bundle this
-      // resource produces is present however a consumer imports us. Duplicating it per library
-      // target would buy nothing while multiplying the places a future required-reason API has
-      // to be declared.
       resources: [.copy("PrivacyInfo.xcprivacy")]
     ),
     .testTarget(
@@ -199,8 +191,6 @@ let package = Package(
         "PostgrestMacrosPlugin",
       ]
     ),
-    // The sources of these three are `supabase-typegen`'s golden output, written by its
-    // `EmitterTests`; building them is the check that generated code still compiles.
     .testTarget(
       name: "SupabaseTypegenOutputTests",
       dependencies: [
@@ -333,24 +323,17 @@ for target in package.targets {
     .enableUpcomingFeature("NonisolatedNonsendingByDefault"),
   ]
 
-  // The compiler-plugin target must declare its macro types `public` to satisfy SwiftSyntax's
-  // `CompilerPlugin` protocol, and `InternalImportsByDefault` rejects a public conformance to a
-  // protocol from an internally-imported module. Plugins run at build time and ship no
-  // distributable API, so the two import-visibility features gain nothing there.
   if target.name != "PostgrestMacrosPlugin" {
     swiftSettings.append(.enableUpcomingFeature("InternalImportsByDefault"))
     swiftSettings.append(.enableUpcomingFeature("MemberImportVisibility"))
   }
 
-  // Compile-only guard that the public API stays usable from a module that opts into Swift 6.2's
-  // default `@MainActor` isolation (SE-0466). The SDK targets themselves stay nonisolated.
   if target.name == "DefaultIsolationTests" {
     swiftSettings.append(.defaultIsolation(MainActor.self))
   }
 
-  // Generated code is compiled the way an app's library target would be: with library evolution,
-  // so the access levels `--access-control public` and the macros write are checked too. Apple
-  // platforms only: on Linux, Foundation is not built with library evolution, so the flag fails.
+  // Apple platforms only: on Linux, Foundation is not built with library evolution, so the
+  // flag fails.
   if [
     "SupabaseTypegenOutputTests",
     "SupabaseTypegenPostgrestTypegenOutputTests",

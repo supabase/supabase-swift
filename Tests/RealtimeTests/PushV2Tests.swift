@@ -133,10 +133,8 @@ struct PushV2Tests {
       await push.send()
     }
 
-    // Give push time to start waiting
-    try? await Task.sleep(nanoseconds: 10_000_000)  // 10ms
+    try? await Task.sleep(nanoseconds: 10_000_000)
 
-    // Simulate receiving acknowledgment
     push.didReceive(status: PushStatus.ok)
 
     let status = await sendTask.value
@@ -147,10 +145,8 @@ struct PushV2Tests {
   @Test
   @MainActor
   func channelConfigurationForAcknowledgment() {
-    // Test that the channel configuration is properly checked for acknowledgment settings
     let mockSocket = MockRealtimeClient()
 
-    // Test acknowledgment disabled
     let configAckDisabled = RealtimeChannelConfig(
       broadcast: BroadcastJoinConfig(acknowledgeBroadcasts: false, receiveOwnBroadcasts: false),
       presence: PresenceJoinConfig(key: "", enabled: false),
@@ -164,7 +160,6 @@ struct PushV2Tests {
     )
     #expect(!channelAckDisabled.config.broadcast.acknowledgeBroadcasts)
 
-    // Test acknowledgment enabled
     let configAckEnabled = RealtimeChannelConfig(
       broadcast: BroadcastJoinConfig(acknowledgeBroadcasts: true, receiveOwnBroadcasts: false),
       presence: PresenceJoinConfig(key: "", enabled: false),
@@ -209,10 +204,8 @@ struct PushV2Tests {
       await push.send()
     }
 
-    // Give push time to start waiting
-    try? await Task.sleep(nanoseconds: 10_000_000)  // 10ms
+    try? await Task.sleep(nanoseconds: 10_000_000)
 
-    // Simulate receiving error acknowledgment
     push.didReceive(status: PushStatus.error)
 
     let status = await sendTask.value
@@ -233,7 +226,6 @@ struct PushV2Tests {
 
     let push = PushV2(channel: nil, message: sampleMessage)
 
-    // This should not crash or cause issues
     push.didReceive(status: PushStatus.ok)
     push.didReceive(status: PushStatus.error)
     push.didReceive(status: PushStatus.timeout)
@@ -269,22 +261,17 @@ struct PushV2Tests {
       await push.send()
     }
 
-    // Give push time to start waiting
-    try? await Task.sleep(nanoseconds: 10_000_000)  // 10ms
+    try? await Task.sleep(nanoseconds: 10_000_000)
 
-    // First response should be used
     push.didReceive(status: PushStatus.ok)
 
-    // Subsequent responses should be ignored
     push.didReceive(status: PushStatus.error)
     push.didReceive(status: PushStatus.timeout)
 
     let status = await sendTask.value
-    #expect(status == PushStatus.ok)  // Should be .ok, not .error or .timeout
+    #expect(status == PushStatus.ok)
   }
 }
-
-// MARK: - Mock Objects
 
 @MainActor
 private final class MockRealtimeChannel: RealtimeChannelProtocol {
@@ -353,16 +340,13 @@ private final class MockRealtimeClient: RealtimeClientProtocol, @unchecked Senda
   func pushBroadcast(
     joinRef: String?, ref: String?, topic: String, event: String, jsonPayload: JSONObject
   ) {
-    // No-op for mock
   }
 
   func pushBroadcast(
     joinRef: String?, ref: String?, topic: String, event: String, binaryPayload: Data
   ) {
-    // No-op for mock
   }
 
   func _remove(_ channel: any RealtimeChannelProtocol) {
-    // No-op for mock
   }
 }

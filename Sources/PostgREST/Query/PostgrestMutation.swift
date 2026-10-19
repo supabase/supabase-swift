@@ -184,8 +184,6 @@ extension _PostgrestMutation where Phase: _PostgrestExecutableMutationPhase {
   }
 }
 
-// `maxAffected(_:)` bounds the rows a filter selected, so only a scoped mutation offers it.
-// `dryRun()` has no such limit: PostgREST accepts `tx=rollback` on every write.
 extension _PostgrestMutation where Phase == _PostgrestScopedPhase {
   /// Limits the number of rows the write may affect.
   ///
@@ -505,7 +503,6 @@ extension _PostgrestSource where R: _PostgrestWritableRelation & _PostgrestKeyed
 }
 
 extension _PostgrestSource where R: _PostgrestWritableRelation {
-  /// A write that asks for no rows back. ``_PostgrestMutation/returning()`` opts in.
   fileprivate func mutation<Phase>(
     _ method: HTTPTypes.HTTPRequest.Method,
     body: Data? = nil,

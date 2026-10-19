@@ -75,8 +75,6 @@ struct ResumableStore: Sendable {
     self.now = now
   }
 
-  // MARK: - Fingerprint
-
   /// SHA-256 of the endpoint, bucket, path, size and modification date, so the same file picked
   /// twice through different temporary URLs is the same upload, and clients of two projects that
   /// share a record directory never share an upload.
@@ -99,8 +97,6 @@ struct ResumableStore: Sendable {
   private static func hex(_ digest: SHA256.Digest) -> String {
     digest.map { String(format: "%02x", $0) }.joined()
   }
-
-  // MARK: - Sources
 
   /// Uses `fileURL` in place when it sits in the app container outside its temporary directory;
   /// otherwise copies it into the store, since picker and `Transferable` URLs do not outlive the
@@ -145,8 +141,6 @@ struct ResumableStore: Sendable {
       (attributes[.modificationDate] as? Date) ?? Date(timeIntervalSince1970: 0)
     )
   }
-
-  // MARK: - Records
 
   func save(_ record: ResumableUploadRecord) throws {
     try createDirectory()

@@ -34,11 +34,9 @@ log "Checking for API changes since ${BASELINE_REPO_URL}#${BASELINE_TREEISH} (${
 SWIFT_OUTPUT=$(swift package --package-path "${REPO_ROOT}" diagnose-api-breaking-changes \
   "${BASELINE_COMMIT}" 2>&1) && RC=0 || RC=$?
 
-# Print full output to stderr so it appears in CI logs for debugging
 echo "$SWIFT_OUTPUT" >&2
 
 if [ "${RC}" -ne 0 ]; then
-  # Print only the breaking change lines to stdout (captured by the caller)
   echo "$SWIFT_OUTPUT" | grep "API breakage:" || true
   fatal "❌ Breaking API changes detected."
 fi

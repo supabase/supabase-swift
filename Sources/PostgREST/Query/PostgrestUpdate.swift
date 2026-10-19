@@ -101,8 +101,6 @@ public struct _PostgrestUpdate<R: _PostgrestWritableRelation>: Encodable, Sendab
   }
 }
 
-/// One assigned value, kept behind an existential so a single payload can hold columns of
-/// different types.
 struct PostgrestUpdateValue: Encodable, Sendable {
   private let value: any Encodable & Sendable
 
@@ -115,7 +113,6 @@ struct PostgrestUpdateValue: Encodable, Sendable {
   }
 }
 
-/// A coding key for a column name that is only known at runtime.
 struct PostgrestUpdateColumnKey: CodingKey {
   let stringValue: String
 

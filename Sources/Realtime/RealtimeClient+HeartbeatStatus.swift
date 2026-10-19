@@ -15,8 +15,6 @@ extension RealtimeClientV2 {
   /// ```
   public var heartbeat: AsyncStream<HeartbeatStatus> {
     let id = UUID()
-    // Unbounded: a cycle yields `.sent` then `.ok` within one ack, and consumers observe the
-    // pair rather than only the latest, so `.bufferingNewest(1)` would hide every `.sent`.
     let (stream, continuation) = AsyncStream<HeartbeatStatus>.makeStream(
       bufferingPolicy: .unbounded
     )
@@ -47,9 +45,6 @@ extension RealtimeClientV2 {
   public func onHeartbeat(
     _ listener: @escaping @Sendable (HeartbeatStatus) -> Void
   ) -> RealtimeSubscription {
-    // Subscribe synchronously, before spawning the observer Task — otherwise
-    // a heartbeat could race ahead of the Task actually starting to iterate,
-    // silently dropping it.
     let stream = heartbeat
     let task = Task {
       for await beat in stream {

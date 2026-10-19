@@ -93,7 +93,6 @@ final class CallbackManager: Sendable {
   }
 
   func triggerPostgresChanges(ids: [Int], data: AnyAction) {
-    // Read mutableState at start to acquire lock once.
     let mutableState = mutableState.value
 
     let filters = mutableState.serverChanges.filter {

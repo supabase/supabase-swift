@@ -20,9 +20,6 @@ import Testing
 @Suite
 struct RetryRequestInterceptorTests {
 
-  // MARK: - Helpers
-
-  /// Zero base delay makes the jittered wait exactly zero, so tests run instantly on any clock.
   let instant = RetryPolicy(baseDelay: .zero)
 
   func makeResponse(statusCode: Int, headers: HTTPFields = [:]) -> (
@@ -46,8 +43,6 @@ struct RetryRequestInterceptorTests {
     HTTPTypes.HTTPRequest(
       method: method, url: URL(string: "https://example.com")!, headerFields: headers)
   }
-
-  // MARK: - What is retried
 
   @Test
   func retriesEveryDefaultRetryableStatus() async throws {
@@ -176,8 +171,6 @@ struct RetryRequestInterceptorTests {
     #expect(seen.value == [nil, "1", "2"])
   }
 
-  // MARK: - Cancellation
-
   @Test
   func doesNotRetryCancellation() async {
     let interceptor = makeInterceptor()
@@ -212,7 +205,6 @@ struct RetryRequestInterceptorTests {
 
     let task = Task {
       try await interceptor.intercept(makeRequest(), body: nil) { _, _ in
-        // Stand in for URLSession: the exchange of a cancelled task fails with `URLError.cancelled`.
         while !Task.isCancelled { await Task.yield() }
         throw URLError(.cancelled)
       }
@@ -235,8 +227,6 @@ struct RetryRequestInterceptorTests {
     }
     #expect(callCount.value == 1)
   }
-
-  // MARK: - Bodies
 
   @Test
   func singleIterationBodyIsNotRetried() async throws {
@@ -278,13 +268,10 @@ struct RetryRequestInterceptorTests {
     let terminated = LockIsolated(false)
     let attempts = LockIsolated(0)
 
-    // `makeChunks` runs only when the body is iterated, so both flags stay false unless the
-    // interceptor actually drains the response it discards.
     let body = HTTPBody(storage: .stream, length: .unknown, iterationBehavior: .single) {
       iterated.setValue(true)
       return AsyncThrowingStream { continuation in
         continuation.onTermination = { _ in terminated.setValue(true) }
-        // More than the drain's 1 MiB cap, so collecting throws and drops the iterator.
         for _ in 0..<3 {
           continuation.yield(ArraySlice(repeating: 0, count: 512 * 1024))
         }
@@ -305,8 +292,6 @@ struct RetryRequestInterceptorTests {
     #expect(iterated.value, "The discarded response body should be iterated")
     #expect(terminated.value, "The discarded response body's stream should terminate")
   }
-
-  // MARK: - Delays
 
   @Test
   func waitsJitteredBackoffBetweenAttempts() async throws {
@@ -345,8 +330,6 @@ struct RetryRequestInterceptorTests {
   }
 }
 
-/// A clock that records the durations it is asked to sleep for, without
-/// waiting. `now` is fixed so recorded durations are exact.
 struct RecordingClock: Clock {
   let anchor: ContinuousClock.Instant
   let durations: LockIsolated<[Duration]>
@@ -364,7 +347,6 @@ struct RecordingClock: Clock {
   }
 }
 
-/// A clock whose every sleep is cancelled, standing in for a task cancelled mid-backoff.
 struct CancellingClock: Clock {
   var now: ContinuousClock.Instant { ContinuousClock().now }
   var minimumResolution: Duration { .zero }

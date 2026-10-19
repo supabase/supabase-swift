@@ -9,7 +9,6 @@ import Foundation
 import Storage
 import Testing
 
-/// `objects(prefix:options:)` pages through Storage's `object/list-v2` route.
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil))
 struct ObjectListingIntegrationTests {
   static let keys = ["2026/a.txt", "2026/b.txt", "2026/c.txt", "2026/deep/d.txt", "2026-old/e.txt"]

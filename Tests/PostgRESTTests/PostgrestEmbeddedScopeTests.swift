@@ -11,18 +11,6 @@ import Testing
 
 @_spi(Experimental) @testable import PostgREST
 
-/// The scope construct from spec §4.4, over hand-written conformances that spell out what
-/// `@SelectionOf` generates. The macro-generated form is covered end to end in
-/// `RelationshipIntegrationTests`.
-///
-/// One property is checked by the compiler rather than here: `embedded`/`requiring` are declared
-/// only where `Output == [S]` and `S: _PostgrestEmbeddingSelection`. A relation never conforms, so
-/// `client.from(Todo.self).select().requiring(\.comments) { $0 }` is *no such member* — a
-/// whole-row select declares no embeds to scope.
-///
-/// Another is checked outside `swift test`: a parent filter cannot be ORed with an embedded one.
-/// See `Tests/CompileFailures/PostgrestParentOrEmbeddedFilter.swift`, which
-/// `scripts/check-compile-failures.sh` requires to fail to compile.
 @Suite
 struct PostgrestEmbeddedScopeTests {
   struct Todo: _PostgrestRelation {
@@ -58,8 +46,6 @@ struct PostgrestEmbeddedScopeTests {
     static let columns = Columns()
   }
 
-  /// Selects `id` and `body` only. `approved`, `authorID` and `createdAt` are deliberately not
-  /// selected: a scope filters the embedded *relation*, so they stay filterable.
   struct CommentBody: _PostgrestSelection {
     typealias Source = Comment
     static let selectString = "id:id,body:body"
@@ -68,7 +54,6 @@ struct PostgrestEmbeddedScopeTests {
     var body: String
   }
 
-  /// A comment with its replies, so a scope can nest.
   struct CommentWithReplies: _PostgrestEmbeddingSelection {
     typealias Source = Comment
     static let selectString = "id:id,replies:\(embeds.replies.postgrestExpression)"
@@ -111,8 +96,6 @@ struct PostgrestEmbeddedScopeTests {
     static let embeds = Embeds()
   }
 
-  /// The §4.4 target query, verbatim, and its exact rendering. `!inner` goes after the
-  /// foreign-key hint; §9.2 verified either order works, so this pins one.
   @Test
   func requiringRendersTheTargetQuery() async throws {
     let capture = QueryCapture()
@@ -137,7 +120,6 @@ struct PostgrestEmbeddedScopeTests {
     )
   }
 
-  /// An operand with no wire form inside a scope fails the whole query before it is sent.
   @Test
   func anOperandWithNoJSONFormInAScopeFailsTheQuery() async throws {
     let capture = QueryCapture()
@@ -150,7 +132,6 @@ struct PostgrestEmbeddedScopeTests {
     #expect(capture.query == nil)
   }
 
-  /// The trap the two names exist for: the same scope without `!inner` keeps every parent row.
   @Test
   func embeddedLeavesTheSelectEntryAlone() async throws {
     let capture = QueryCapture()
@@ -182,8 +163,6 @@ struct PostgrestEmbeddedScopeTests {
     )
   }
 
-  /// A nested `requiring` marks the inner entry, not the outer one — the outer embed is still an
-  /// `embedded`, so parents without comments are kept.
   @Test
   func nestedRequiringMarksTheInnerEntryOnly() async throws {
     let capture = QueryCapture()
@@ -217,8 +196,6 @@ struct PostgrestEmbeddedScopeTests {
     )
   }
 
-  /// PostgREST honours only the first `order` it sees, so two sort keys in a scope merge into one
-  /// parameter, as they do at top level.
   @Test
   func orderKeysMergeWithinAScope() async throws {
     let capture = QueryCapture()
@@ -241,9 +218,6 @@ struct PostgrestEmbeddedScopeTests {
     #expect(capture.query?.hasSuffix("&comments.offset=10&comments.limit=10") == true)
   }
 
-  /// §9.2: omitting a needed foreign-key hint is HTTP 300 `PGRST201`. A typed embed always
-  /// carries the hint, so only the string form can reach it, and it must surface as the server's
-  /// own error rather than a failure to decode the rows that never came.
   @Test
   func anAmbiguousUntypedEmbedSurfacesTheServerError() async throws {
     let body = """

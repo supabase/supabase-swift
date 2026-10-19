@@ -117,7 +117,6 @@ struct AuthClientIntegrationTests {
   @Test
   func signInWithWeb3Ethereum() async throws {
     try await expectAuthChangeEvents([.initialSession, .signedIn]) {
-      // Throwaway test-only key, never used outside this test, no funds associated.
       let privateKeyHex = "4c0883a69102937d6231471b5dbb6204fe5129617082792ae468d01a3f362318"
       let address = "0x2c7536E3605D9C16a7a3D7b1898e529396a65c23"
       let issuedAt = ISO8601DateFormatter().string(from: Date())
@@ -149,24 +148,6 @@ struct AuthClientIntegrationTests {
     }
   }
 
-  //  func testSignUpAndSignInWithPhone() async throws {
-  //    try await expectAuthChangeEvents([.initialSession, .signedIn, .signedOut, .signedIn]) {
-  //      let phone = mockPhoneNumber()
-  //      let password = mockPassword()
-  //      let metadata: [String: JSONValue] = [
-  //        "test": .integer(42),
-  //      ]
-  //      let response = try await authClient.signUp(phone: phone, password: password, data: metadata)
-  //      XCTAssertNotNil(response.session)
-  //      XCTAssertEqual(response.user.phone, phone)
-  //      XCTAssertEqual(response.user.userMetadata["test"], 42)
-  //
-  //      try await authClient.signOut()
-  //
-  //      try await authClient.signIn(phone: phone, password: password)
-  //    }
-  //  }
-
   @Test
   func signInWithEmail_invalidEmail() async throws {
     let email = mockEmail()
@@ -183,13 +164,6 @@ struct AuthClientIntegrationTests {
       }
     }
   }
-
-  //  func testSignInWithOTP_usingEmail() async throws {
-  //    let email = mockEmail()
-  //
-  //    try await authClient.signInWithOTP(email: email)
-  //    try await authClient.verifyOTP(email: email, token: "123456", type: .magiclink)
-  //  }
 
   @Test
   func signOut_otherScope_shouldSignOutLocally() async throws {
@@ -370,7 +344,6 @@ struct AuthClientIntegrationTests {
       Issue.record("Expected deletePasskey to throw for a nonexistent passkey")
     } catch let error as AuthError {
       #expect(error.kind == .server)
-      // Backend returns 404 when the passkey doesn't exist or belongs to another user.
       #expect(error.response?.statusCode == 404)
     }
   }
@@ -420,12 +393,10 @@ struct AuthClientIntegrationTests {
     let email = mockEmail()
     let password = mockPassword()
 
-    // first create a user
     try await client.admin.createUser(
       attributes: AdminUserAttributes(email: email, password: password)
     )
 
-    // generate a magic link for the created user
     let link = try await client.admin.generateLink(params: .magicLink(email: email))
 
     expectNoDifference(link.properties.verificationType, .magiclink)
@@ -465,8 +436,6 @@ struct AuthClientIntegrationTests {
     #expect(user.invitedAt != nil)
   }
 
-  // Requires the isolated Supabase project at Tests/IntegrationTests/supabase-secure-email-change,
-  // which enables auth.email.enable_confirmations. See that project's config.toml for why.
   @Test
   func verifyOTPForSecureEmailChange() async throws {
     let client = Self.makeClient(serviceRole: true)
@@ -476,8 +445,6 @@ struct AuthClientIntegrationTests {
 
     _ = try await client.signUp(email: email, password: password)
 
-    // The current and new email each get their own confirmation link, mirroring the two emails
-    // GoTrue sends for a secure email change.
     let currentEmailLink = try await client.admin.generateLink(
       params: .emailChangeCurrent(email: email, newEmail: newEmail)
     )
@@ -495,10 +462,9 @@ struct AuthClientIntegrationTests {
     }
     #expect(confirmation.code == "200")
 
-    // Confirming the other email completes the change and returns a session. GoTrue's
-    // admin/generate_link response has a bug for `email_change_new`: `hashedToken` is computed
-    // from the current email, not the new one, so it never matches what's actually stored. The
-    // raw `emailOTP` is correct, so use the email+token overload instead of tokenHash here.
+    // GoTrue's admin/generate_link response has a bug for `email_change_new`: `hashedToken` is
+    // computed from the current email, not the new one, so it never matches what's actually
+    // stored. The raw `emailOTP` is correct, so use the email+token overload instead of tokenHash.
     let secondConfirmation = try await client.verifyOTP(
       email: newEmail,
       token: newEmailLink.properties.emailOTP,
@@ -516,19 +482,11 @@ struct AuthClientIntegrationTests {
     let session = try await signUpIfNeededOrSignIn(email: email, password: password).session
     let accessToken = try #require(session?.accessToken)
 
-    // Should complete without throwing: the admin client is authenticating with
-    // the target user's access token, not its own secret key.
     let adminClient = Self.makeClient(serviceRole: true)
     try await adminClient.admin.signOut(jwt: accessToken)
     withExtendedLifetime(adminClient) {}
   }
 
-  /// Pins the shape of the live JWKS that `claims` local verification depends on.
-  ///
-  /// A stock local project has no `auth.signing_keys_path`, so the CLI falls back to its
-  /// built-in ES256 key. `claims` picks its verifier from the JWK's `alg` field, not from
-  /// the JWT header, so an ES256 key served without `alg` would silently fall back to
-  /// `GET /user` even though the SDK can verify it.
   @Test
   func wellKnownJWKSServesES256Key() async throws {
     let url = URL(string: "\(DotEnv.supabaseURL)/auth/v1/.well-known/jwks.json")!
@@ -540,16 +498,13 @@ struct AuthClientIntegrationTests {
     expectNoDifference(jwk.crv, "P-256")
     #expect(jwk.kid != nil)
 
-    // The coordinates must be 32 raw bytes each, or `JWK.p256PublicKey` returns nil.
     expectNoDifference(Base64URL.decode(try #require(jwk.x))?.count, 32)
     expectNoDifference(Base64URL.decode(try #require(jwk.y))?.count, 32)
 
-    // The `alg` the server sends must map to a verifier the SDK actually implements.
     expectNoDifference(JWTAlgorithm(rawValue: try #require(jwk.alg)), .es256)
     #expect(jwk.p256PublicKey != nil)
   }
 
-  /// A live access token is ES256, and `claims` returns its claims.
   @Test
   func getClaimsWithLiveES256Session() async throws {
     let email = mockEmail()
@@ -559,9 +514,7 @@ struct AuthClientIntegrationTests {
 
     let decoded = try #require(JWT.decode(session.accessToken))
     expectNoDifference(decoded.header["alg"] as? String, "ES256")
-    // Local verification needs a `kid` to look the key up; without one it falls back.
     #expect(decoded.header["kid"] is String)
-    // The JWS signature is raw r||s, which is what `ECDSASignature(rawRepresentation:)` takes.
     expectNoDifference(decoded.signature.count, 64)
 
     let result = try await authClient.claims()
@@ -572,11 +525,6 @@ struct AuthClientIntegrationTests {
     expectNoDifference(result.claims.role, "authenticated")
   }
 
-  /// Proves the verification is local, not a `GET /user` round trip.
-  ///
-  /// `jwtVerificationFailed("Invalid JWT signature")` is only reachable from the local
-  /// verification branch. Were the ES256 token still falling back to the server, a tampered
-  /// token would surface a GoTrue API error instead.
   @Test
   func getClaimsRejectsTamperedLiveES256Token() async throws {
     let session = try #require(
@@ -616,7 +564,7 @@ struct AuthClientIntegrationTests {
   private func mockEmail(length: Int = Int.random(in: 5...10)) -> String {
     var username = ""
     for _ in 0..<length {
-      let randomAscii = Int.random(in: 97...122)  // ASCII values for lowercase letters
+      let randomAscii = Int.random(in: 97...122)
       let randomCharacter = Character(UnicodeScalar(randomAscii)!)
       username.append(randomCharacter)
     }
@@ -624,16 +572,12 @@ struct AuthClientIntegrationTests {
   }
 
   private func mockPhoneNumber() -> String {
-    // Generate random country code (1 to 3 digits)
     let countryCode = String(format: "%d", Int.random(in: 1...999))
 
-    // Generate random area code (3 digits)
     let areaCode = String(format: "%03d", Int.random(in: 100...999))
 
-    // Generate random subscriber number (7 digits)
     let subscriberNumber = String(format: "%07d", Int.random(in: 1_000_000...9_999_999))
 
-    // Format the phone number in E.164 format
     let phoneNumber = "\(countryCode)\(areaCode)\(subscriberNumber)"
 
     return phoneNumber
@@ -672,10 +616,9 @@ struct AuthClientIntegrationTests {
 
     try await block()
 
-    // Poll until we've collected the expected number of events or time out.
     let deadline = Date().addingTimeInterval(0.5)
     while receivedEvents.value.count < events.count, Date() < deadline {
-      try? await Task.sleep(nanoseconds: 10_000_000)  // 10ms
+      try? await Task.sleep(nanoseconds: 10_000_000)
     }
 
     expectNoDifference(events, receivedEvents.value)

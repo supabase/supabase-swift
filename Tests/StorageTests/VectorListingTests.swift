@@ -15,8 +15,6 @@ import Testing
 
 @Suite
 struct VectorListingTests {
-  /// A vectors client whose transport answers each request with the next of `responses` and
-  /// records the request bodies.
   static func makeVectors(bodies: LockIsolated<[String]> = .init([]), responses: [String])
     -> StorageVectorsClient
   {

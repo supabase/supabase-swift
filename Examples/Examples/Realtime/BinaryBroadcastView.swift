@@ -87,7 +87,6 @@ struct BinaryBroadcastView: View {
       $0.broadcast.receiveOwnBroadcasts = true
     }
 
-    // Use the binary data stream (protocol 2.0.0 feature)
     let dataStream = channel.broadcastDataStream(event: "binary_message")
 
     do {

@@ -14,9 +14,6 @@ public struct ErrorCode: Decodable, RawRepresentable, Sendable, Hashable {
   }
 }
 
-// Known error codes. Note that the server may also return other error codes
-// not included in this list (if the client library is older than the version
-// on the server).
 extension ErrorCode {
   /// ErrorCodeUnknown should not be used directly, it only indicates a failure in the error handling system in such a way that an error code was not assigned properly.
   public static let unknown = ErrorCode("unknown")
@@ -196,7 +193,6 @@ extension ErrorCode {
   @_spi(Experimental) public static let tooManyPasskeys = ErrorCode("too_many_passkeys")
   /// The user already has a verified MFA factor; unenroll it before enrolling a new one.
   public static let mfaVerifiedFactorExists = ErrorCode("mfa_verified_factor_exists")
-  //#nosec G101 -- Not a secret value.
   /// The provided credentials (email/password or phone/password) are incorrect.
   public static let invalidCredentials = ErrorCode("invalid_credentials")
   /// The email address is not on the allow-list for this project.

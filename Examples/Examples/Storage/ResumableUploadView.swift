@@ -9,8 +9,6 @@ import PhotosUI
 @_spi(Experimental) import Supabase
 import SwiftUI
 
-/// Mirrors one ``ResumableUpload`` for SwiftUI and keeps the app alive for a short while when
-/// it goes to the background mid-upload.
 @Observable @MainActor
 final class ResumableUploadModel {
   private(set) var upload: ResumableUpload?
@@ -45,8 +43,6 @@ final class ResumableUploadModel {
     await upload?.pause()
   }
 
-  /// A handle restored from disk is `.pending` until `start()`; after that `resume()` is the
-  /// call that continues a paused or failed upload.
   func resume() async {
     guard let upload else { return }
     do {
@@ -65,7 +61,6 @@ final class ResumableUploadModel {
     refreshPending()
   }
 
-  /// Picks a pending upload back up, for example one created before the last relaunch.
   func resume(_ pending: ResumableUpload) async {
     track(pending)
     await resume()
@@ -115,8 +110,6 @@ final class ResumableUploadModel {
   }
 }
 
-/// A picked photo or video staged as a file, so a large video never sits in memory whole; the
-/// SDK copies it into its own store during `start()`.
 struct PickedFile: Transferable {
   let url: URL
 
@@ -252,8 +245,6 @@ struct ResumableUploadView: View {
     .fileImporter(isPresented: $isImporting, allowedContentTypes: [.item]) { result in
       guard case .success(let url) = result else { return }
       Task {
-        // The SDK copies the file into its store during `start()`, so the security scope only
-        // needs to stay open until then.
         let scoped = url.startAccessingSecurityScopedResource()
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
         await model.start {

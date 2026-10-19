@@ -12,9 +12,6 @@ extension HTTPClient {
   }
 
   init(http: HTTPClientConfiguration, clock: any Clock<Duration>, logger: Logging.Logger) {
-    // GoTrue's writes are all safe to replay — `/token` within its refresh reuse interval — so
-    // POST, PUT and DELETE are retried too. A 429 is not: GoTrue's limiters count every attempt
-    // and their windows are minutes long, so replaying within seconds only burns the quota.
     var policy = RetryPolicy.default
     policy.retryableMethods.formUnion([.post, .put, .delete])
     policy.retryableStatuses.remove(429)
@@ -57,9 +54,6 @@ struct APIClient: Sendable {
     do {
       (response, data) = try await http.send(request, body: body)
     } catch {
-      // Only the network layer's own failures are relabelled. `CancellationError`, and anything
-      // thrown by user code that runs inside `send` (a custom `ClientTransport` or middleware, an `accessToken` closure),
-      // propagate as themselves.
       guard let urlError = error as? URLError else { throw error }
       throw AuthError(
         kind: .transport, message: urlError.localizedDescription, underlyingError: urlError)
@@ -91,9 +85,6 @@ struct APIClient: Sendable {
 
     guard let error = try? decoder.decode(_RawAPIErrorResponse.self, from: data) else {
       let statusCode = response.status.code
-      // `HTTPURLResponse` does not expose the reason phrase, so the status description is the
-      // closest analog. The status code is always included because the description is localized
-      // on Darwin and differs from the Linux one; the empty check is defensive only.
       let message: String
       if 500..<600 ~= statusCode {
         let description = HTTPURLResponse.localizedString(forStatusCode: statusCode)

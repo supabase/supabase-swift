@@ -102,7 +102,6 @@ struct TodoRealtimeView: View {
     }
     self.channel = channel
 
-    // Handle insertions
     async let insertionObservation: () = { @MainActor in
       for await insertion in insertions {
         try todos.insert(
@@ -110,7 +109,6 @@ struct TodoRealtimeView: View {
       }
     }()
 
-    // Handle updates
     async let updatesObservation: () = { @MainActor in
       for await update in updates {
         let record =
@@ -119,7 +117,6 @@ struct TodoRealtimeView: View {
       }
     }()
 
-    // Handle deletes
     async let deletesObservation: () = { @MainActor in
       for await delete in deletes {
         guard

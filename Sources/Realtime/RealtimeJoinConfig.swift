@@ -205,8 +205,6 @@ package struct PostgresJoinConfig: Codable, Hashable, Sendable {
     self.id = id
   }
 
-  // `select` is excluded from `==`/`hash`: the server-echoed config used for
-  // callback-id matching does not carry it.
   package static func == (lhs: Self, rhs: Self) -> Bool {
     lhs.schema == rhs.schema
       && lhs.table == rhs.table

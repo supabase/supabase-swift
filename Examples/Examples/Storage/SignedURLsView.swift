@@ -12,7 +12,7 @@ struct SignedURLsView: View {
   @State private var selectedBucket = ""
   @State private var buckets: [Bucket] = []
   @State private var filePath = ""
-  @State private var expiresIn = "3600"  // 1 hour
+  @State private var expiresIn = "3600"
   @State private var signedURL: URL?
   @State private var signedUploadURL: SignedUploadURL?
   @State private var publicURL: URL?

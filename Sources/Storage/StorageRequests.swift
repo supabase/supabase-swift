@@ -34,9 +34,6 @@ struct StorageRequests: Sendable {
   let url: URL
 
   init(url: URL) {
-    // `url` is supplied once, at construction, so a URL that cannot be decomposed is a programmer
-    // error, not a runtime condition. Trap here, where the offending value is, rather than letting
-    // it fail later as an opaque `URLError`.
     guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
       preconditionFailure("Storage client initialized with an invalid URL: \(url)")
     }
@@ -63,8 +60,6 @@ struct StorageRequests: Sendable {
     var components = base
     components.percentEncodedPath += "/\(encodedPath)"
     guard let url = components.url else {
-      // The base was validated at construction and every segment is percent-encoded by
-      // `ObjectKey`, so the components always form a URL. Reaching this is an SDK bug.
       preconditionFailure("Storage built an invalid URL from \(components)")
     }
     return url.appendingQueryItems(query)
@@ -99,8 +94,6 @@ struct StorageRequests: Sendable {
   private func objectPath(_ bucket: String, _ key: ObjectKey) -> String {
     "\(ObjectKey.encode(bucket))/\(key.encoded)"
   }
-
-  // MARK: - Buckets
 
   func listBuckets(_ options: BucketListOptions) -> StorageRequest {
     StorageRequest(head: HTTPRequest(method: .get, url: url("bucket", query: options.queryItems)))
@@ -158,8 +151,6 @@ struct StorageRequests: Sendable {
       ))
   }
 
-  // MARK: - Analytics buckets
-
   func analyticsBuckets(_ options: BucketListOptions) -> StorageRequest {
     StorageRequest(
       head: HTTPRequest(method: .get, url: url("iceberg/bucket", query: options.queryItems)))
@@ -179,8 +170,6 @@ struct StorageRequests: Sendable {
     StorageRequest(
       head: HTTPRequest(method: .delete, url: url("iceberg/bucket/\(ObjectKey.encode(name))")))
   }
-
-  // MARK: - Objects
 
   /// `POST` creates, `PUT` replaces. The file travels as the raw body, the same shape
   /// supabase-js uses for `ArrayBuffer` uploads; what a multipart form would carry as fields
@@ -233,8 +222,6 @@ struct StorageRequests: Sendable {
     }
     return headers
   }
-
-  // MARK: - Resumable (tus 1.0)
 
   static let tusVersion = "1.0.0"
   static let tusContentType = "application/offset+octet-stream"

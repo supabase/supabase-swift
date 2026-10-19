@@ -9,7 +9,6 @@ import Foundation
 import Storage
 import Testing
 
-/// `list(path:options:)` sends `ListOptions` the way Storage's `object/list` route reads it.
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil))
 struct ListOptionsIntegrationTests {
   @Test
@@ -44,8 +43,6 @@ struct ListOptionsIntegrationTests {
     let bucket = StorageIntegration.admin.from(name)
     try await bucket.upload(path: "a.txt", data: Data("a".utf8))
 
-    // Versioning is off on the local stack, so every filter that keeps current objects
-    // returns the one upload, and `.only` returns nothing.
     let included = try await bucket.list(
       options: ListOptions(versions: .include, deleteMarkers: .include))
     #expect(included.map(\.name) == ["a.txt"])

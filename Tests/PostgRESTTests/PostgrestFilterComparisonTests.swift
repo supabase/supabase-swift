@@ -33,8 +33,6 @@ struct PostgrestFilterComparisonTests {
     filter.queryItems().map { "\($0.name)=\($0.value ?? "")" }.joined(separator: "&")
   }
 
-  /// The `IS` keywords are sent bare in every position; a quoted `"null"` is a string, not SQL
-  /// `NULL`.
   @Test
   func isChecksStayBareInsideAGroup() {
     let c = Todo.columns
@@ -55,15 +53,12 @@ struct PostgrestFilterComparisonTests {
     #expect(rendered(c.id.isDistinct(3)) == "id=isdistinct.3")
   }
 
-  /// There is no `isNotNull()`; `!` covers it. `isNull()` does not compile on a `NOT NULL`
-  /// column — `$0.isDone.isNull()` is "has no member 'isNull'".
   @Test
   func nullChecksRenderTheIsOperator() {
     #expect(rendered(Todo.columns.dueDate.isNull()) == "due_at=is.null")
     #expect(rendered(!Todo.columns.dueDate.isNull()) == "due_at=not.is.null")
   }
 
-  /// `is.true` is not `eq.true` on a nullable boolean, so all three values are needed.
   @Test
   func booleanIsChecksRenderTheIsOperator() {
     #expect(rendered(Todo.columns.isDone.isTrue()) == "is_done=is.true")
@@ -71,8 +66,6 @@ struct PostgrestFilterComparisonTests {
     #expect(rendered(!Todo.columns.isDone.isTrue()) == "is_done=not.is.true")
   }
 
-  /// A nullable column takes the same operators, against a non-optional operand. `nil` must
-  /// never reach one: on a `text` column `col=eq.null` matches the literal string `'null'`.
   @Test
   func aNullableColumnComparesAgainstANonOptionalValue() {
     let when = Date(timeIntervalSince1970: 0)

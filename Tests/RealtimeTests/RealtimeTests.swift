@@ -13,17 +13,8 @@ import Testing
 #endif
 
 #if os(Linux)
-  // RealtimeTests are disabled on Linux due to timing flakiness.
 #else
 
-  // `withMainSerialExecutor` mutates a process-global flag (ConcurrencyExtras'
-  // `uncheckedUseMainSerialExecutor`) to force deterministic task scheduling within its closure.
-  // Swift Testing runs tests in the same suite concurrently by default, so two tests racing to
-  // flip that global would interfere with each other — serialize this suite, mirroring the
-  // `_clock`-swap precedent in PostgrestBuilderTests (PR #1095). `.mainSerialExecutorSerialized`
-  // additionally prevents this suite from interleaving with any other suite (in this or another
-  // target) that also calls `withMainSerialExecutor`, since `.serialized` alone only serializes a
-  // suite's own tests.
   @Suite(.serialized, .mainSerialExecutorSerialized)
   final class RealtimeTests: Sendable {
     let url = URL(string: "http://localhost:54321/realtime/v1")!
@@ -117,7 +108,6 @@ import Testing
         }
         .store(in: &subscriptions)
 
-        // Set up server to respond to heartbeats and phx_join
         let serverTask = Task { @Sendable [server = server] in
           for await event in server.events {
             guard let msg = event.realtimeMessage else { continue }
@@ -146,7 +136,6 @@ import Testing
         }
         .store(in: &subscriptions)
 
-        // Wait until it subscribes to assert WS events
         do {
           try await channel.subscribeWithError()
         } catch {
@@ -236,7 +225,6 @@ import Testing
               )
             } else if msg.event == "phx_join" {
               joinEventCount.withValue { $0 += 1 }
-              // Skip first join.
               if joinEventCount.value == 2 {
                 server.send(.messagesSubscribed)
               }
@@ -252,13 +240,8 @@ import Testing
           try await channel.subscribeWithError()
         }
 
-        // Wait for the timeout for rejoining.
         await testClock.advance(by: timeout)
 
-        // Wait for the retry delay (base delay is 1.0s, but we need to account for jitter)
-        // The retry delay is calculated as: baseDelay * pow(2, attempt-1) + jitter
-        // For attempt 2: 1.0 * pow(2, 1) = 2.0s + jitter (up to ±25% = ±0.5s)
-        // So we need to wait at least 2.5s to ensure the retry happens
         await testClock.advance(by: .seconds(2.5))
 
         let events: [JSONObject] = client.sentEvents.compactMap { $0.realtimeMessage }
@@ -331,7 +314,6 @@ import Testing
       }
     }
 
-    // Succeeds after 2 retries (on 3rd attempt)
     @Test(.requiresMainSerialExecutor)
     func subscribeTimeout_successAfterRetries() async throws {
       try await withMainSerialExecutor {
@@ -354,7 +336,6 @@ import Testing
               )
             } else if msg.event == "phx_join" {
               joinEventCount.withValue { $0 += 1 }
-              // Respond on the 3rd attempt
               if joinEventCount.value == successAttempt {
                 server.send(.messagesSubscribed)
               }
@@ -370,7 +351,6 @@ import Testing
           _ = try? await channel.subscribeWithError()
         }
 
-        // Wait for each attempt and retry delay
         for attempt in 1..<successAttempt {
           await testClock.advance(by: timeout)
           let retryDelay = pow(2.0, Double(attempt))
@@ -388,7 +368,6 @@ import Testing
       }
     }
 
-    // Fails after max retries (should unsubscribe)
     @Test(.requiresMainSerialExecutor)
     func subscribeTimeout_failsAfterMaxRetries() async throws {
       try await withMainSerialExecutor {
@@ -410,7 +389,6 @@ import Testing
               )
             } else if msg.event == "phx_join" {
               joinEventCount.withValue { $0 += 1 }
-              // Never respond to any join attempts
             }
           }
         }
@@ -446,7 +424,6 @@ import Testing
       }
     }
 
-    // Cancels and unsubscribes if the subscribe task is cancelled
     @Test
     func subscribeTimeout_cancelsOnTaskCancel() async throws {
       try await withMainSerialExecutor {
@@ -468,7 +445,6 @@ import Testing
               )
             } else if msg.event == "phx_join" {
               joinEventCount.withValue { $0 += 1 }
-              // Never respond to any join attempts
             }
           }
         }
@@ -488,7 +464,6 @@ import Testing
           try await subscribeTask.value
           Issue.record("Expected cancellation error but got success")
         } catch is CancellationError {
-          // Expected
         } catch {
           Issue.record("Expected CancellationError but got: \(error)")
         }
@@ -559,7 +534,6 @@ import Testing
             if event.realtimeMessage?.event == "heartbeat" {
               sentHeartbeat.setValue(true)
             }
-            // Intentionally not replying — trigger timeout/reconnect path.
           }
         }
         defer { serverTask.cancel() }
@@ -581,10 +555,8 @@ import Testing
         let pendingHeartbeatRef = sut.mutableState.pendingHeartbeatRef
         #expect(pendingHeartbeatRef != nil)
 
-        // Wait until next heartbeat
         await testClock.advance(by: heartbeatInterval)
 
-        // Wait for reconnect delay
         await testClock.advance(by: reconnectDelay)
 
         #expect(
@@ -601,11 +573,6 @@ import Testing
       }
     }
 
-    /// Regression test for SDK-1330: a heartbeat tick that lands while the
-    /// client is mid-reconnect (external close, not one triggered by the
-    /// heartbeat timer itself) must not publish `.disconnected` to
-    /// `onHeartbeat(_:)`/`heartbeat` consumers — it's an internal bookkeeping
-    /// signal, not a heartbeat outcome.
     @Test
     func heartbeat_doesNotLeakDisconnectedStatus() async throws {
       try await withMainSerialExecutor {
@@ -632,15 +599,9 @@ import Testing
 
         await sut.connect()
 
-        // Server drops the connection out from under us — unrelated to the
-        // heartbeat timer, which is still sleeping out its first interval.
         server.close(code: nil, reason: "boom")
         await Task.megaYield()
 
-        // The heartbeat timer ticks while the reconnect is still sleeping out
-        // its 10s `reconnectDelay` (jittered, but never below 5s) — the
-        // still-alive old heartbeat task must not observe `status != .connected`
-        // and publish `.disconnected`.
         await testClock.advance(by: .seconds(1))
 
         #expect(
@@ -661,31 +622,19 @@ import Testing
         }
         defer { s1.cancel() }
 
-        // Don't respond to any heartbeats — let the timeout fire naturally.
         await sut.connect()
         await testClock.advance(by: heartbeatInterval)
 
-        // First heartbeat sent
         #expect(heartbeatStatuses.value == [.sent])
 
-        // Wait for timeout
         await testClock.advance(by: timeout)
 
-        // Wait for next heartbeat.
         await testClock.advance(by: heartbeatInterval)
 
-        // Should have timeout status
         #expect(heartbeatStatuses.value == [.sent, .timeout])
       }
     }
 
-    // Regression test for SDK-959: a second `handleConnected` on an already
-    // established connection (e.g. `connect()` called while the socket is
-    // already connected, or while an auto-reconnect is in flight) used to
-    // re-read `conn.events`. The first event-stream's `onTermination` would
-    // then race to nil out the live `onEvent`, leaving the socket connected
-    // but deaf — heartbeat and `phx_join` replies were silently dropped,
-    // stalling subscribe for tens of seconds to minutes.
     @Test(.requiresMainSerialExecutor)
     func redundantConnect_doesNotDropIncomingFrames() async throws {
       try await withMainSerialExecutor {
@@ -718,16 +667,9 @@ import Testing
 
         await sut.connect()
 
-        // A redundant connect() — the ConnectionManager is already `.connected`,
-        // so it returns the same connection. The socket must keep receiving
-        // frames afterwards.
         await sut.connect()
         await Task.megaYield()
 
-        // Drive a heartbeat; the server replies. If the socket is still
-        // listening, the reply acks the heartbeat (.ok). If `onEvent` was
-        // niled out by the duplicate setup, the reply is dropped and the
-        // heartbeat is never acknowledged.
         await testClock.advance(by: heartbeatInterval)
         await Task.megaYield()
 
@@ -883,26 +825,20 @@ import Testing
       }
     }
 
-    // MARK: - Task Lifecycle Tests
-
     @Test
     func listenForMessagesCancelsExistingTask() async {
       await withMainSerialExecutor {
         await sut.connect()
 
-        // Get the first message task
         let firstMessageTask = sut.mutableState.messageTask
         #expect(firstMessageTask != nil)
         #expect(!(firstMessageTask?.isCancelled ?? true))
 
-        // Trigger reconnection which will call listenForMessages again
         sut.disconnect()
         await sut.connect()
 
-        // Verify the old task was cancelled
         #expect(firstMessageTask?.isCancelled ?? false)
 
-        // Verify a new task was created
         let secondMessageTask = sut.mutableState.messageTask
         #expect(secondMessageTask != nil)
         #expect(!(secondMessageTask?.isCancelled ?? true))
@@ -914,19 +850,15 @@ import Testing
       await withMainSerialExecutor {
         await sut.connect()
 
-        // Get the first heartbeat task
         let firstHeartbeatTask = sut.mutableState.heartbeatTask
         #expect(firstHeartbeatTask != nil)
         #expect(!(firstHeartbeatTask?.isCancelled ?? true))
 
-        // Trigger reconnection which will call startHeartbeating again
         sut.disconnect()
         await sut.connect()
 
-        // Verify the old task was cancelled
         #expect(firstHeartbeatTask?.isCancelled ?? false)
 
-        // Verify a new task was created
         let secondHeartbeatTask = sut.mutableState.heartbeatTask
         #expect(secondHeartbeatTask != nil)
         #expect(!(secondHeartbeatTask?.isCancelled ?? true))
@@ -940,7 +872,6 @@ import Testing
 
         await sut.connect()
 
-        // Send multiple messages
         for i in 1...3 {
           server.send(
             RealtimeMessageV2(
@@ -956,10 +887,8 @@ import Testing
 
         await Task.megaYield()
 
-        // Disconnect to cancel message processing
         sut.disconnect()
 
-        // Try to send more messages after disconnect (these should not be processed)
         for i in 4...6 {
           server.send(
             RealtimeMessageV2(
@@ -974,7 +903,6 @@ import Testing
 
         await Task.megaYield()
 
-        // Verify that the message task was cancelled and cleaned up
         #expect(sut.mutableState.messageTask == nil, "Message task should be nil after disconnect")
       }
     }
@@ -985,7 +913,6 @@ import Testing
         var previousMessageTasks: [Task<Void, Never>?] = []
         var previousHeartbeatTasks: [Task<Void, Never>?] = []
 
-        // Test multiple connect/disconnect cycles
         for _ in 1...3 {
           await sut.connect()
 
@@ -1015,12 +942,10 @@ import Testing
             (messageTask?.isCancelled ?? false) && (heartbeatTask?.isCancelled ?? false)
           }
 
-          // Verify tasks were cancelled after disconnect
           #expect(messageTask?.isCancelled ?? false)
           #expect(heartbeatTask?.isCancelled ?? false)
         }
 
-        // Verify all previous tasks were properly cancelled
         for task in previousMessageTasks {
           await waitUntil { task?.isCancelled ?? false }
           #expect(task?.isCancelled ?? false)
@@ -1032,8 +957,6 @@ import Testing
         }
       }
     }
-
-    // MARK: - Deferred Disconnect Tests
 
     @Test
     func deferredDisconnect_disconnectsAfterDelay() async {
@@ -1047,11 +970,9 @@ import Testing
         let channel = deferredSut.channel("test:deferred")
         await deferredSut.removeChannel(channel)
 
-        // Still connected — pending disconnect has not fired yet.
         #expect(deferredSut.status == .connected)
         #expect(deferredSut.mutableState.pendingDisconnectTask != nil)
 
-        // Advance past the delay — pending task fires and disconnects.
         await testClock.advance(by: .seconds(5))
 
         #expect(deferredSut.status == .disconnected)
@@ -1074,13 +995,11 @@ import Testing
         #expect(deferredSut.mutableState.pendingDisconnectTask != nil)
         let pendingTask = deferredSut.mutableState.pendingDisconnectTask
 
-        // Creating a new channel cancels the pending disconnect.
         _ = deferredSut.channel("test:new")
 
         #expect(deferredSut.mutableState.pendingDisconnectTask == nil)
         #expect(pendingTask?.isCancelled ?? false)
 
-        // Advance past what would have been the delay — client stays connected.
         await testClock.advance(by: .seconds(5))
         #expect(deferredSut.status == .connected)
       }
@@ -1099,7 +1018,6 @@ import Testing
         let pendingTask = deferredSut.mutableState.pendingDisconnectTask
         #expect(pendingTask != nil)
 
-        // Calling disconnect() directly cancels the pending timer.
         deferredSut.disconnect()
 
         #expect(pendingTask?.isCancelled ?? false)
@@ -1120,7 +1038,6 @@ import Testing
 
         await deferredSut.removeAllChannels()
 
-        // removeAllChannels always disconnects immediately, regardless of delay.
         #expect(deferredSut.status == .disconnected)
         #expect(deferredSut.mutableState.pendingDisconnectTask == nil)
       }

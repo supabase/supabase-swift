@@ -5,20 +5,6 @@
 //  Created by Guilherme Souza on 26/08/26.
 //
 
-// MARK: - Array operands
-//
-// `cs`, `cd` and `ov` each get three methods, because the operand literal is chosen by the
-// column's Postgres type rather than by the operator: `{a,b}` for an array, `[1,3)` for a range,
-// `{"a":1}` for jsonb. Mixing them is a 400.
-//
-// Every shape is type-checked: `where Value == [E]`, `where Value == _PostgresRange<B>` and
-// `where Value == JSONValue`. So `contains(["a"])` on a `String` column does not compile, nor does
-// a `daterange` operand on an `int4range` column, nor `containsJSON` on a `text` column. Each
-// would be a server error (`42883 operator does not exist`).
-//
-// The array operand is the `[E]` itself: its `rawValue` is the `{a,b}` literal with every member
-// escaped as the literal requires.
-
 extension _PostgrestFilterableExpression {
   /// Matches rows where this array column contains every element of `values`.
   ///
@@ -42,7 +28,6 @@ extension _PostgrestFilterableExpression {
   }
 }
 
-// MARK: - Range operands
 //
 // A range operand is a single value, so a group quotes it: a bare `)`/`]` closes an enclosing
 // `or=(…)` early and 400s. At top level it stays bare, since `eq."[1,10)"` is a `22P02`. Every
@@ -102,8 +87,6 @@ extension _PostgrestFilterableExpression {
   }
 }
 
-// MARK: - JSON operands
-
 extension _PostgrestFilterableExpression where Value == JSONValue {
   /// Matches rows where this `jsonb` column contains `json`.
   ///
@@ -122,8 +105,6 @@ extension _PostgrestFilterableExpression where Value == JSONValue {
     _PostgrestFilter(column: postgrestExpression, operator: .containedBy, value: json)
   }
 }
-
-// MARK: - Text search
 
 extension _PostgrestFilterableExpression where Value == String {
   /// Matches rows where this `text` or `tsvector` column matches the full-text `query`.

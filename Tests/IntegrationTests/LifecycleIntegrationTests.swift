@@ -9,9 +9,6 @@ import Foundation
 import Storage
 import Testing
 
-/// Object lifecycles need `STORAGE_LIFECYCLE_ENABLED`. Only the Docker stack sets it, after
-/// `scripts/enable-storage-test-features.sh`; the native stack refuses each call with
-/// `FeatureNotEnabled`.
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil))
 struct LifecycleIntegrationTests {
   let storage = StorageIntegration.admin
@@ -44,7 +41,6 @@ struct LifecycleIntegrationTests {
 
     try await storage.deleteLifecycle(forBucket: name)
     #expect(try await storage.lifecycle(forBucket: name) == nil)
-    // Deleting a policy that is not there still succeeds.
     try await storage.deleteLifecycle(forBucket: name)
   }
 
@@ -90,7 +86,6 @@ struct LifecycleIntegrationTests {
       LifecycleRule(noncurrentVersionExpiration: NoncurrentVersionExpiration(noncurrentDays: 30))
     ])
 
-    // `lifecycle(forBucket:)` keeps `nil` for a bucket with no policy and throws this refusal.
     let errors = [
       await StorageIntegration.storageError { _ = try await storage.lifecycle(forBucket: name) },
       await StorageIntegration.storageError {

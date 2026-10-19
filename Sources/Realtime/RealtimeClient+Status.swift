@@ -22,9 +22,6 @@ extension RealtimeClientV2 {
   /// ```
   public var statusChange: AsyncStream<RealtimeClientStatus> {
     let id = UUID()
-    // Unbounded: consumers wait for a specific status (`.connected`) rather than sampling the
-    // latest, and transitions arrive back to back (`.disconnected` then `.connecting` on an
-    // auto-reconnect), so a bounded policy would evict the one being waited on.
     let (stream, continuation) = AsyncStream<RealtimeClientStatus>.makeStream(
       bufferingPolicy: .unbounded
     )
@@ -53,9 +50,6 @@ extension RealtimeClientV2 {
   public func onStatusChange(
     _ listener: @escaping @Sendable (RealtimeClientStatus) -> Void
   ) -> RealtimeSubscription {
-    // Subscribe synchronously, before spawning the observer Task — otherwise
-    // a status change could race ahead of the Task actually starting to
-    // iterate, silently dropping it (including the initial replay).
     let stream = statusChange
     let task = Task {
       for await status in stream {

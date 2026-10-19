@@ -9,12 +9,6 @@ import Foundation
 @_spi(Experimental) import PostgrestMacros
 import Testing
 
-// `Counters` is in `Generated.swift`, the table in
-// `supabase/migrations/20261007000001_counters.sql`.
-
-/// The live half of `TableIntegrationTests.aGeneratedColumnNeverReachesAWriteBody`: against a real
-/// `GENERATED ALWAYS` identity key and a `GENERATED ALWAYS … STORED` column, the generated `Draft`
-/// and `_PostgrestUpdate` produce writes Postgres accepts, and the generated values come back.
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil))
 struct PostgrestGeneratedColumnIntegrationTests {
   let client = PostgrestClient(

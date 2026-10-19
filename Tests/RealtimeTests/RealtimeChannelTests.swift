@@ -56,8 +56,6 @@ struct RealtimeChannelTests {
     #expect(changes.first?.select == ["id", "name"])
   }
 
-  // MARK: - Callback rejection tests
-
   #if canImport(Darwin)
     @Test
     @MainActor
@@ -76,7 +74,6 @@ struct RealtimeChannelTests {
 
       let channel = socket.channel("test-topic")
 
-      // Never respond to phx_join, so channel stays in .subscribing
       let serverTask1 = Task { @Sendable [server] in
         for await event in server.events {
           guard let msg = event.realtimeMessage else { continue }
@@ -184,7 +181,6 @@ struct RealtimeChannelTests {
 
       let channel = socket.channel("test-topic")
 
-      // Never respond to phx_join, so channel stays in .subscribing
       let serverTask3 = Task { @Sendable [server] in
         for await event in server.events {
           guard let msg = event.realtimeMessage else { continue }
@@ -385,7 +381,6 @@ struct RealtimeChannelTests {
   @Test
   @MainActor
   func presenceEnabledDuringSubscribe() async {
-    // Create fake WebSocket for testing
     let (client, server) = FakeWebSocket.fakes()
 
     let socket = RealtimeClientV2(
@@ -399,37 +394,28 @@ struct RealtimeChannelTests {
       clock: ContinuousClock()
     )
 
-    // Create a channel without presence callback initially
     let channel = socket.channel("test-topic")
 
-    // Initially presence should be disabled
     #expect(!channel.config.presence.enabled)
 
-    // Connect the socket
     await socket.connect()
 
-    // Add a presence callback before subscribing
     let presenceSubscription = channel.onPresenceChange { _ in }
 
-    // Verify that presence callback exists
     #expect(channel.callbackManager.callbacks.contains(where: { $0.isPresence }))
 
-    // Start subscription process
     Task {
       try? await channel.subscribeWithError()
     }
 
-    // Wait for the join message to be sent
     let joinEvents = await waitForEvents(
       in: server,
       event: "phx_join",
       timeout: 1.0
     )
 
-    // Should have at least one join event
     #expect(joinEvents.count > 0)
 
-    // Check that the presence enabled flag is set to true in the join payload
     if let joinEvent = joinEvents.first,
       let config = joinEvent.payload["config"]?.objectValue,
       let presence = config["presence"]?.objectValue,
@@ -440,13 +426,9 @@ struct RealtimeChannelTests {
       Issue.record("Could not find presence enabled flag in join payload")
     }
 
-    // Clean up
     presenceSubscription.cancel()
     await channel.unsubscribe()
     socket.disconnect()
-
-    // Note: We don't assert the subscribe status here because the test doesn't wait for completion
-    // The subscription is still in progress when we clean up
   }
 
   @Test
@@ -473,9 +455,6 @@ struct RealtimeChannelTests {
     }
   }
 
-  /// `URLSession` reports a cancelled `Task` as `URLError(.cancelled)`; `httpSend` reports it as
-  /// `CancellationError` (SDK-2141). The stub mimics the session: it waits until the request is
-  /// cancelled, then fails the way `URLSessionTransport` does.
   @Test
   func httpSendThrowsCancellationErrorWhenTheTaskIsCancelled() async {
     let (requestStarted, onRequestStarted) = AsyncStream<Void>.makeStream()
@@ -511,8 +490,6 @@ struct RealtimeChannelTests {
     }
   }
 
-  /// A `URLError(.cancelled)` that no `Task` cancellation caused (a middleware cancelled the
-  /// request) stays a transport failure.
   @Test
   func httpSendWrapsCancelledURLErrorWithoutTaskCancellation() async {
     let httpClient = RecordingTransport { _, _ in throw URLError(.cancelled) }
@@ -797,7 +774,6 @@ struct RealtimeChannelTests {
 
     let channel = socket.channel("test-topic")
 
-    // Test with custom timeout
     try await channel.httpSend(event: "test", message: ["data": "test"], timeout: .seconds(3))
 
     let requests = httpClient.requests
@@ -826,7 +802,6 @@ struct RealtimeChannelTests {
 
     let channel = socket.channel("test-topic")
 
-    // Test without custom timeout
     try await channel.httpSend(event: "test", message: ["data": "test"])
 
     let requests = httpClient.requests
@@ -888,7 +863,6 @@ struct RealtimeChannelTests {
       try await channel.httpSend(event: "test", message: ["data": "test"])
       Issue.record("Expected httpSend to throw an error on 503 status")
     } catch {
-      // Should fall back to localized status text (case-insensitive)
       let description = error.localizedDescription.lowercased()
       #expect(
         description.contains("503") || description.contains("unavailable"),
@@ -996,9 +970,6 @@ extension RealtimeChannelTests {
   }
 }
 
-/// `@MainActor`-safe wrapper around the shared, non-isolated `waitUntil` helper —
-/// avoids a "passing a `@MainActor`-isolated closure as a `@Sendable` closure" diagnostic
-/// when the condition captures main-actor-isolated state (e.g. `RealtimeChannelV2.status`).
 @MainActor
 private func testingWaitUntil(
   timeout: TimeInterval,

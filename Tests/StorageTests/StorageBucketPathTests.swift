@@ -13,11 +13,8 @@ import Testing
 
 @testable import Storage
 
-/// Every path-taking method on ``StorageBucket`` sends the normalized key: in the URL,
-/// percent-encoded per segment, or in the JSON body, as the plain path.
 @Suite
 struct StorageBucketPathTests {
-  /// One public method, with the body the stub answers and where the key is expected.
   struct Operation: Sendable, CustomTestStringConvertible {
     enum Placement: Sendable { case url, body }
 
@@ -170,8 +167,6 @@ struct StorageBucketPathTests {
     #expect(requests.value.isEmpty)
   }
 
-  /// `publicURL` cannot throw, so a path every other method refuses is sent encoded instead:
-  /// the URL stays valid, no parser folds the segment away, and Storage rejects the key.
   @Test(arguments: [
     ("a/../b.png", "/storage/v1/object/public/bucket/a/%2E%2E/b.png"),
     ("./a.png", "/storage/v1/object/public/bucket/%2E/a.png"),

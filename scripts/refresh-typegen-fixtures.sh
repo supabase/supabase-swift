@@ -1,14 +1,4 @@
 #!/usr/bin/env bash
-# Regenerates the GeneratorMetadata fixtures in
-# tools/supabase-typegen/Tests/SupabaseTypegenTests/Fixtures with
-# postgrest-typegen's introspection, from a checkout of supabase/sdk.
-#
-#   SDK_DIR=~/work/sdk ./scripts/refresh-typegen-fixtures.sh
-#
-# Needs Docker and bun. Starts two throwaway Postgres containers and removes them on exit:
-#   generator_metadata.json         Tests/IntegrationTests/supabase (migrations, then seed.sql)
-#   postgrest_typegen_metadata.json postgrest-typegen's test/introspection/fixtures/*.sql
-# The two cannot share a database: both define public.users and public.user_status.
 set -euo pipefail
 
 : "${SDK_DIR:?Set SDK_DIR to a checkout of https://github.com/supabase/sdk}"
@@ -27,7 +17,6 @@ POSTGRES_IMAGE="${POSTGRES_IMAGE:-postgres:15-alpine}"
 CONTAINERS=()
 trap 'if ((${#CONTAINERS[@]})); then docker rm -f "${CONTAINERS[@]}" >/dev/null; fi' EXIT
 
-# Starts a container from $1, applies the SQL files that follow, and writes the metadata to Fixtures/$2.
 introspect() {
   local image="$1" out="$2"
   shift 2

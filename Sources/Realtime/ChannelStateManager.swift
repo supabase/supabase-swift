@@ -70,17 +70,9 @@ actor ChannelStateManager {
   /// subscribers. Reading from outside the actor crosses the actor boundary.
   var stateChanges: AsyncStream<State> {
     let id = UUID()
-    // Unbounded, and load-bearing: `runOneSubscribeAttempt` waits here for `.subscribed` and
-    // `runUnsubscribe` for `.unsubscribed`. A bounded policy could evict the transition the
-    // waiter needs, hanging the subscribe until it times out.
     let (stream, continuation) = AsyncStream<State>.makeStream(bufferingPolicy: .unbounded)
     stateChangeContinuations.append((id, continuation))
 
-    // `onTermination`'s closure is synchronous — it can't `await` back into
-    // the actor to remove the entry, so hop through a Task instead. This is
-    // fire-and-forget: `updateState` may yield to an already-terminated
-    // continuation once or twice before the removal runs, which is a
-    // harmless no-op.
     continuation.onTermination = { [weak self] _ in
       Task { await self?.removeStateChangeContinuation(id) }
     }
@@ -94,12 +86,8 @@ actor ChannelStateManager {
     stateChangeContinuations.removeAll { $0.0 == id }
   }
 
-  // MARK: - Per-subscription mutable state
-
   private(set) var joinRef: String?
   private var pushes: [String: PushV2] = [:]
-
-  // MARK: - Config & injected operations
 
   private let logger: Logging.Logger
   private let topic: String
@@ -115,9 +103,6 @@ actor ChannelStateManager {
   private let leaveOperation: LeaveOperation
   private let retryDelay: RetryDelay
 
-  /// Set by ``didReceiveClose()`` when the server closes the channel while a
-  /// subscribe is in flight, so ``beginSubscribe()`` can surface a typed
-  /// error instead of the bare `CancellationError` from the cancelled task.
   private var closedByServerWhileSubscribing = false
 
   init(
@@ -150,17 +135,8 @@ actor ChannelStateManager {
     self.stateDidChange = stateDidChange
   }
 
-  // MARK: - Mutable state accessors
-
   /// Atomically register `push` under `ref` only if `joinRef` still matches
   /// the snapshot the caller captured when building the outgoing message.
-  ///
-  /// Fixes a race where `didReceiveClose` could interleave between the
-  /// caller reading `joinRef` and calling this method. If the close wins,
-  /// the caller's message is from a previous subscription cycle — the
-  /// server will reject it, and registering the push would orphan it in
-  /// `pushes` (nothing would clear it again).
-  ///
   /// Returns `true` if the push was stored (caller should send the
   /// message); `false` if the state changed (caller should abandon it).
   func storePushIfJoinRefMatches(
@@ -176,8 +152,6 @@ actor ChannelStateManager {
   func removePush(ref: String) -> PushV2? {
     pushes.removeValue(forKey: ref)
   }
-
-  // MARK: - Public API
 
   /// Drive the channel to ``State/subscribed``. Safe to call concurrently:
   /// the second caller waits for the first attempt to finish instead of
@@ -196,12 +170,6 @@ actor ChannelStateManager {
     case .unsubscribing(let task):
       logger.debug("Waiting for in-flight unsubscribe on '\(topic)' before subscribing")
       await task.value
-      // Re-dispatch through `subscribe()` rather than calling `beginSubscribe()`
-      // directly — under actor re-entrancy, another caller may have flipped
-      // state to `.subscribing` while we were awaiting the unsubscribe task.
-      // Re-reading state here prevents us from overwriting their in-flight
-      // subscribe with a second one (which would orphan the first task and
-      // send a duplicate `phx_join`).
       try await subscribe()
 
     case .unsubscribed:
@@ -225,38 +193,15 @@ actor ChannelStateManager {
     case .subscribing(let task):
       logger.debug("Cancelling in-flight subscribe to unsubscribe '\(topic)'")
       task.cancel()
-      // Subscribe hadn't completed yet, so the server may not recognize the
-      // channel and will likely never send `phx_close`. Don't wait for it.
       await beginUnsubscribe(waitForServerClose: false, sendLeave: isSocketConnected())
 
     case .subscribed:
-      // We had a live subscription; wait (bounded) for the server's
-      // `phx_close` to arrive so observers see the full status trail.
-      //
-      // Unless the socket is dead: the server-side channel died with the
-      // connection, `phx_leave` would only be buffered into the *next*
-      // connection as a stale frame, and `phx_close` can never arrive —
-      // waiting would stall for the full timeout (issue #1145, hazard 4).
       let socketConnected = isSocketConnected()
       await beginUnsubscribe(waitForServerClose: socketConnected, sendLeave: socketConnected)
     }
   }
 
   /// Reset channel state so it can rejoin after a reconnect.
-  ///
-  /// A channel that is already `.subscribed` when the socket reconnects
-  /// must re-send `phx_join` on the new socket. But ``subscribe()`` is a
-  /// no-op for `.subscribed` channels — so `rejoinChannels()` would silently
-  /// skip them without this reset.
-  ///
-  /// For `.subscribing`, the in-flight join task is waiting for a reply that
-  /// will never arrive on the dead socket; cancel it so a fresh `phx_join` is
-  /// sent on the new connection.
-  ///
-  /// For `.unsubscribing`, the wait loop in ``runUnsubscribe`` polls
-  /// `stateChanges`. Transitioning to `.unsubscribed` here wakes it up
-  /// immediately — the server's `phx_close` won't arrive on the dead socket
-  /// anyway.
   func resetForReconnect() {
     joinRef = nil
     pushes = [:]
@@ -273,8 +218,6 @@ actor ChannelStateManager {
     }
   }
 
-  // MARK: - Server signals
-
   /// Called when the server confirms the `phx_join` (system.ok or phx_reply
   /// with `postgres_changes`).
   func didReceiveSubscribedOK() {
@@ -285,13 +228,6 @@ actor ChannelStateManager {
 
   /// Called when the server closes the channel (phx_close or system error
   /// that should drop the channel).
-  ///
-  /// When `expectedJoinRef` is provided (Phoenix tags `phx_close` with the
-  /// `join_ref` of the join it closes), the close is only applied if it still
-  /// matches the current ``joinRef`` — checked here, on the actor, so a
-  /// concurrent subscribe attempt can't swap `joinRef` between the caller's
-  /// check and the close (issue #1145, defect 3). Closes without a `join_ref`
-  /// are applied unconditionally.
   ///
   /// Returns `true` if the close was applied; `false` if it belonged to a
   /// stale join and was ignored.
@@ -307,17 +243,12 @@ actor ChannelStateManager {
     joinRef = nil
     pushes = [:]
     if case .subscribing(let task) = state {
-      // Record why the task is being cancelled so `beginSubscribe` can
-      // rethrow a typed error — the caller must be able to tell a server
-      // close apart from its own task cancellation (issue #1145, defect 2).
       closedByServerWhileSubscribing = true
       task.cancel()
     }
     updateState(.unsubscribed)
     return true
   }
-
-  // MARK: - Private
 
   private func beginSubscribe() async throws {
     logger.debug("Beginning subscribe flow for channel '\(topic)'")
@@ -329,9 +260,6 @@ actor ChannelStateManager {
     updateState(.subscribing(task))
 
     do {
-      // Forward cancellation of the caller's task to the spawned subscribe
-      // task. Without this, `task.value` would keep waiting for the inner
-      // retry loop even after the caller cancels.
       try await withTaskCancellationHandler {
         try await task.value
       } onCancel: {
@@ -341,21 +269,12 @@ actor ChannelStateManager {
       let closedByServer = closedByServerWhileSubscribing
       closedByServerWhileSubscribing = false
 
-      // If the subscribe attempt didn't transition us to .subscribed, make
-      // sure external observers see .unsubscribed.
       if case .subscribing = state {
         joinRef = nil
         pushes = [:]
         updateState(.unsubscribed)
       }
 
-      // The subscribe was aborted by `didReceiveClose()`, not by the caller.
-      // Depending on how the cancellation is observed, the task can exit with
-      // `CancellationError`, `SubscribeFailure.channelClosed`, or — when the
-      // close lands on the final retry attempt — `maxRetryAttemptsReached`.
-      // All of them are consequences of the server close, so translate
-      // unconditionally; a genuine caller-side cancellation never sets the
-      // flag and still propagates as `CancellationError`.
       if closedByServer {
         throw RealtimeError.channelClosedByServer
       }
@@ -397,9 +316,6 @@ actor ChannelStateManager {
           "Retrying subscribe for '\(topic)' in \(delay)"
         )
 
-        // A genuine cancellation of this task propagates out of `sleep` as
-        // `CancellationError`; the next attempt re-checks the socket itself,
-        // so no extra connectivity probe is needed here.
         try await clock.sleep(for: delay)
       }
     }
@@ -414,9 +330,6 @@ actor ChannelStateManager {
 
     let ref = makeRef()
     joinRef = ref
-    // Read through the injected closure — the channel owns the buffer so
-    // `onPostgresChange` can append synchronously without a racy
-    // fire-and-forget Task.
     let changes = getClientChanges()
 
     await joinOperation(ref, changes)
@@ -427,9 +340,6 @@ actor ChannelStateManager {
       case .subscribed:
         return
       case .unsubscribed:
-        // Channel was closed (by server or unsubscribe) while we were
-        // waiting. Abort this attempt; the outer flow decides whether to
-        // retry or propagate.
         throw SubscribeFailure.channelClosed
       case .subscribing, .unsubscribing:
         continue
@@ -449,12 +359,6 @@ actor ChannelStateManager {
   }
 
   private func runUnsubscribe(waitForServerClose: Bool, sendLeave: Bool) async {
-    // Send `phx_leave` (skipped when the socket is dead — it could never be
-    // delivered, only buffered into the next connection as a stale frame).
-    // When `waitForServerClose` is true, wait (bounded by `timeout`)
-    // for the server's `phx_close` to transition us to `.unsubscribed` via
-    // `didReceiveClose()`. Otherwise transition immediately — this is the
-    // fire-and-forget path used when we abort an in-flight subscribe.
     if sendLeave {
       await leaveOperation()
     }
@@ -481,8 +385,6 @@ actor ChannelStateManager {
     for (_, continuation) in stateChangeContinuations {
       continuation.yield(newState)
     }
-    // Invoke the synchronous observer after the subject is updated so the
-    // callback sees the new value via ``state`` as well.
     stateDidChange?(newState)
   }
 
@@ -491,8 +393,6 @@ actor ChannelStateManager {
       continuation.finish()
     }
   }
-
-  // MARK: - Defaults
 
   /// Default exponential-backoff retry delay with ±25% jitter, capped at 30s.
   static let defaultRetryDelay: RetryDelay = { attempt in

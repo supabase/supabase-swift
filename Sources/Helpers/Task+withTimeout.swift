@@ -9,8 +9,6 @@
 package func withTimeout<R: Sendable>(
   _ duration: Duration,
   clock: any Clock<Duration> = ContinuousClock(),
-  // `@concurrent`: as a `nonisolated(nonsending)` type, an actor-inherited closure runs on the
-  // task-group child's executor without hopping, and `PushV2.send()` traps on its MainActor check.
   @_inheritActorContext operation: @escaping @Sendable @concurrent () async throws -> R
 ) async throws -> R {
   try await withThrowingTaskGroup(of: R.self) { group in
@@ -30,8 +28,6 @@ package func withTimeout<R: Sendable>(
       throw TimeoutError()
     }
 
-    // Two tasks were just added, so `next()` always has one to return. Treat an empty group as a
-    // timeout rather than trapping.
     guard let result = try await group.next() else {
       throw TimeoutError()
     }

@@ -45,8 +45,6 @@ package struct RealtimeSerializer: Sendable {
     case json = 1
   }
 
-  // MARK: - Text encoding (JSON array format)
-
   /// Encodes a ``RealtimeMessageV2`` as a JSON array string: `[joinRef, ref, topic, event, payload]`.
   package func encodeText(_ message: RealtimeMessageV2) throws -> String {
     let array: [JSONValue] = [
@@ -60,8 +58,6 @@ package struct RealtimeSerializer: Sendable {
     let data = try JSONEncoder().encode(array)
     return String(decoding: data, as: UTF8.self)
   }
-
-  // MARK: - Text decoding (JSON array format)
 
   /// Decodes a JSON array string `[joinRef, ref, topic, event, payload]` into a ``RealtimeMessageV2``.
   package func decodeText(_ text: String) throws -> RealtimeMessageV2 {
@@ -94,8 +90,6 @@ package struct RealtimeSerializer: Sendable {
       payload: payload
     )
   }
-
-  // MARK: - Binary encoding (type 0x03 - client -> server)
 
   /// Encodes a broadcast push as a binary frame (type 0x03) with a JSON payload.
   ///
@@ -182,8 +176,6 @@ package struct RealtimeSerializer: Sendable {
 
     return data
   }
-
-  // MARK: - Binary decoding (type 0x04 - server -> client)
 
   /// Decodes a binary frame (type 0x04) into a ``DecodedBroadcast``.
   ///

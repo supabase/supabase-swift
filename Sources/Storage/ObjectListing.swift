@@ -42,7 +42,6 @@ public struct PageSequence<Page: Sendable>: AsyncSequence, Sendable {
     /// Fetches the page after the last one returned, or returns `nil` when there is none.
     public mutating func next() async throws -> Page? {
       guard !isFinished else { return nil }
-      // A failed fetch ends the sequence: the iterator returns `nil` after throwing.
       isFinished = true
       let page = try await sequence.fetch(cursor)
       cursor = sequence.nextCursor(page)

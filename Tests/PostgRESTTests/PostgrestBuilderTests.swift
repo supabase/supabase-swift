@@ -34,10 +34,8 @@ extension PostgrestMockerTests {
       let postgrest2 = try postgrest1.rpc("void_func").setHeader(
         name: .init("apikey")!, value: "bar")
 
-      // Original client object isn't affected
       #expect(
         postgrest1.from("users").select().request.headerFields[.init("apikey")!] == "foo")
-      // Derived client object uses new header value
       #expect(postgrest2.request.headerFields[.init("apikey")!] == "bar")
     }
 
@@ -385,8 +383,6 @@ extension PostgrestMockerTests {
       #expect(query.request.headerFields[.init("key")!] == "value")
     }
 
-    // MARK: - Encoder/decoder override tests
-
     @Test
     func insertPerCallEncoderOverridesClientDefault() async throws {
       let capturedBody = LockIsolated<Data?>(nil)
@@ -461,7 +457,6 @@ extension PostgrestMockerTests {
         (Data(#"{"user_id": 1}"#.utf8), self.makeHTTPURLResponse(statusCode: 200))
       }
 
-      // The client's default decoder has no key conversion, so it can't match `user_id` to `userId`.
       do {
         let _: SnakeCasePayload = try await sut.from("users").select().execute().value
         Issue.record("Expected a decoding error without a matching key strategy")
@@ -480,9 +475,6 @@ extension PostgrestMockerTests {
 
     @Test
     func errorDecodingIsUnaffectedByClientDecoderCustomization() async throws {
-      // A decoder aggressive enough to remap every key would prevent `PostgrestError` from ever
-      // finding its required `message` field, if it were used to decode the error response.
-      // Error decoding must use a fixed internal decoder instead, decoupled from this setting.
       let poisonedDecoder = JSONDecoder()
       poisonedDecoder.keyDecodingStrategy = .custom { _ in TestCodingKey(stringValue: "unmatched") }
 
@@ -522,8 +514,6 @@ extension PostgrestMockerTests {
         #expect(error.serverError?.code == "PGRST000")
       }
     }
-
-    // MARK: - Retry tests
 
     @Test
     func retryOn520ForGETRequest() async throws {
@@ -643,8 +633,6 @@ extension PostgrestMockerTests {
 
     @Test
     func noRetryOn500ForGET() async throws {
-      // PostgREST's retryable set is fixed at 503/520, mirroring postgrest-js; a 500 is a real
-      // server answer (a failing function, a bad query) and must surface at once.
       let callCount = LockIsolated(0)
 
       let sut = makeSUTWithCustomFetch { _ in
@@ -740,7 +728,7 @@ extension PostgrestMockerTests {
         try await sut.from("users").select().execute()
         Issue.record("Expected error to be thrown")
       } catch {
-        #expect(callCount.value == 4)  // 1 initial + 3 retries
+        #expect(callCount.value == 4)
       }
     }
 
@@ -775,7 +763,6 @@ extension PostgrestMockerTests {
 
       try await sut.from("users").select().execute()
       try await sut.from("users").select().timeout(.seconds(3)).execute()
-      // The override must survive a phase change (filter -> transform).
       try await sut.from("users").select().timeout(.seconds(3)).order("id").execute()
 
       #expect(seen.value == [.seconds(7), .seconds(3), .seconds(3)])
@@ -870,8 +857,6 @@ extension PostgrestMockerTests {
       }
     }
 
-    // MARK: - Helpers
-
     private func makeSUTWithCustomFetch(
       retryEnabled: Bool = true,
       decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder,
@@ -901,7 +886,6 @@ extension PostgrestMockerTests {
   }
 }
 
-/// A no-op clock for tests — skips all sleep delays so retry tests run instantly.
 struct ImmediateRetryTestClock: Clock {
   var now: ContinuousClock.Instant { ContinuousClock().now }
   var minimumResolution: ContinuousClock.Instant.Duration { ContinuousClock().minimumResolution }
@@ -909,15 +893,10 @@ struct ImmediateRetryTestClock: Clock {
   func sleep(until deadline: ContinuousClock.Instant, tolerance: Duration?) async throws {}
 }
 
-/// A row with a camelCase property, used to prove a custom `keyEncodingStrategy` was applied.
-/// `keyEncodingStrategy` only affects keys derived from a type's synthesized `CodingKeys`, not
-/// raw `Dictionary` keys, so this can't be a `[String: String]` literal.
 private struct EncoderOverrideRow: Encodable, Sendable {
   let userName: String
 }
 
-/// A `CodingKey` that remaps to a fixed, unmatched key — used to simulate a decoder whose key
-/// strategy is aggressive enough to break decoding of any fixed-shape response.
 private struct TestCodingKey: CodingKey {
   var stringValue: String
   var intValue: Int? { nil }

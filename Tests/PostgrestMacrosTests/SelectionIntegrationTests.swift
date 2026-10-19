@@ -9,8 +9,6 @@ import Foundation
 @_spi(Experimental) import PostgrestMacros
 import Testing
 
-// File scope, for the same reason as `TableIntegrationTests`: `@Table` and `@SelectionOf` both
-// attach extensions, which cannot be nested inside another type.
 @Table("todos")
 struct SelectionTodo {
   @PrimaryKey var id: Int
@@ -30,7 +28,6 @@ struct SelectionTodoDueDate {
   @Column("due_at") var dueDate: Date?
 }
 
-/// The same property, without repeating the relation's `@Column`.
 @SelectionOf(SelectionTodo.self)
 struct SelectionTodoInheritedColumn {
   var dueDate: Date?
@@ -52,8 +49,6 @@ struct SelectionOrderTotals: Hashable {
   @Aggregate(.count) var rows: Int
 }
 
-/// The escape hatch for what `@Aggregate` does not cover: a `Columns` member, selected under a
-/// property of the same name, which is not tied to the expression's `Value`.
 extension SelectionOrder.Columns {
   var exactTotal: _PostgrestAggregate<SelectionOrder, Double> { amount.sum() }
 }
@@ -69,9 +64,6 @@ struct SelectionIntegrationTests {
 
   @Test
   func selectStringListsTheDeclaredColumns() {
-    // Each entry is a PostgREST alias, `key:column`. The column comes from the relation; the key
-    // is what the response is returned under, and it is what `CodingKeys` decodes. Here the two
-    // agree, so the alias is a no-op.
     #expect(TodoSummary.selectString == "id:id,is_done:is_done")
   }
 
@@ -82,16 +74,11 @@ struct SelectionIntegrationTests {
 
   @Test
   func aSelectionInheritsTheRelationsColumnMapping() {
-    // The regression this guards: `dueDate` snake-cases to `due_date`, but the relation maps it to
-    // `due_at`. Deriving the column locally asked PostgREST for a column that does not exist, and
-    // nothing caught it — `_columnCheck` proves the key path resolves, not that the name matches.
-    // Reading the column from the relation makes repeating `@Column` on a selection unnecessary.
     #expect(SelectionTodoInheritedColumn.selectString == "due_date:due_at")
   }
 
   @Test
   func aSelectionNamesItsSource() {
-    // `select(_:)` is gated on this, so a selection cannot be handed to another relation.
     #expect(TodoSummary.Source.relationName == "todos")
   }
 
@@ -112,8 +99,6 @@ struct SelectionIntegrationTests {
 
     #expect(rows == [TodoSummary(id: 1, isDone: false)])
     #expect(capture.path?.hasSuffix("/todos") == true)
-    // `RequestCapture.query` is the decoded query, so the aliases read as written here. On the
-    // wire the `:` and `,` are escaped.
     #expect(capture.query?.contains("select=id:id,is_done:is_done") == true)
     #expect(capture.query?.contains("is_done=eq.false") == true)
   }
@@ -125,8 +110,6 @@ struct SelectionIntegrationTests {
 
   @Test
   func aggregatesGetTheirOwnKeys() {
-    // Two `sum()`s would both come back as `sum`. Each property aliases its own aggregate, so the
-    // response keys are distinct.
     #expect(
       SelectionOrderTotals.selectString
         == "category:category,total:amount.sum(),tax_total:tax.sum(),rows:count()"

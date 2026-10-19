@@ -26,7 +26,6 @@ struct PostgresActionTests {
     Column(name: "email", type: "text"),
   ]
 
-  // Fixed timestamp for consistency
   private let sampleDate = Date(timeIntervalSince1970: 1_722_246_000)
 
   @Test
@@ -255,12 +254,12 @@ struct PostgresActionTests {
   @Test
   func decodeRecordError() {
     struct TestRecord: Codable {
-      let id: Int  // This will cause decode error since we're passing string
+      let id: Int
       let name: String
     }
 
     let record: JSONObject = [
-      "id": .string("not-a-number"),  // This should cause decoding to fail
+      "id": .string("not-a-number"),
       "name": .string("John"),
     ]
 

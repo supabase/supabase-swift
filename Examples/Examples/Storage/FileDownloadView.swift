@@ -93,7 +93,6 @@ struct FileDownloadView: View {
         }
       }
 
-      // Preview Section
       if let downloadedImage {
         Section("Image Preview") {
           Image(uiImage: downloadedImage)
@@ -216,12 +215,9 @@ struct FileDownloadView: View {
 
       downloadedData = data
 
-      // Try to convert to image
       if let image = UIImage(data: data) {
         downloadedImage = image
-      }
-      // Try to convert to text
-      else if let text = String(data: data, encoding: .utf8) {
+      } else if let text = String(data: data, encoding: .utf8) {
         downloadedText = text
       }
     } catch {

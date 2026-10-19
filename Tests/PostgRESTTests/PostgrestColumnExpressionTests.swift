@@ -40,14 +40,11 @@ struct PostgrestColumnExpressionTests {
     #expect(type(of: Todo.columns.isDone).Value.self == Bool.self)
   }
 
-  /// `var dueDate: Date?` gives `Value == Date`, so operators take a non-optional operand.
   @Test
   func aNullableColumnCarriesItsWrappedType() {
     #expect(type(of: Todo.columns.dueDate).Value.self == Date.self)
   }
 
-  /// A plain column sits in all three positions; casts, aggregates and to-many projections are
-  /// select-only.
   @Test
   func bothColumnKindsAreSelectableFilterableAndOrderable() {
     #expect((Todo.columns.id as Any) is any _PostgrestFilterableExpression)

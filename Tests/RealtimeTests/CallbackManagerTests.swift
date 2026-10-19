@@ -210,7 +210,6 @@ struct CallbackManagerTests {
         "type": "broadcast",
       ]
 
-      // Match exact event
       let receivedMessage = LockIsolated<JSONObject?>(nil)
       callbackManager.addBroadcastCallback(event: event) {
         receivedMessage.setValue($0)
@@ -218,7 +217,6 @@ struct CallbackManagerTests {
       callbackManager.triggerBroadcast(event: event, json: jsonObject)
       #expect(receivedMessage.value == jsonObject)
 
-      // Match event case-insensitive
       let caseInsensitiveMessage = LockIsolated<JSONObject?>(nil)
       callbackManager.addBroadcastCallback(event: event) {
         caseInsensitiveMessage.setValue($0)
@@ -226,7 +224,6 @@ struct CallbackManagerTests {
       callbackManager.triggerBroadcast(event: "NEW_USER", json: jsonObject)
       #expect(caseInsensitiveMessage.value == jsonObject)
 
-      // Match any events with wildcard
       let wildcardReceivedMessage = LockIsolated<JSONObject?>(nil)
       callbackManager.addBroadcastCallback(event: "*") {
         wildcardReceivedMessage.setValue($0)

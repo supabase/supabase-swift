@@ -17,7 +17,6 @@ import Testing
 
 @Suite
 struct AuthAdminUserSequenceTests {
-  /// Builds a `GET /admin/users` body holding one user per element of `emails`.
   private func page(_ emails: [String]) -> Data {
     let users = emails.map { email in
       """
@@ -37,17 +36,12 @@ struct AuthAdminUserSequenceTests {
     return Data(#"{"users": [\#(users.joined(separator: ","))], "aud": "authenticated"}"#.utf8)
   }
 
-  /// A `Link` header advertising `next` (when non-nil) and `last`, the way GoTrue sends it.
   private func link(next: Int?, last: Int) -> String {
     let lastLink = "</admin/users?page=\(last)&per_page=>; rel=\"last\""
     guard let next else { return lastLink }
     return "</admin/users?page=\(next)&per_page=>; rel=\"next\", " + lastLink
   }
 
-  /// A client whose `admin/users` endpoint serves `pages` in order, one per request.
-  ///
-  /// Returns the client and the transport, so a test can assert on how many requests the
-  /// sequence actually issued.
   private func makeSUT(pages: [(emails: [String], next: Int?)]) -> (AuthClient, RecordingTransport)
   {
     let served = LockIsolated(0)
@@ -130,8 +124,6 @@ struct AuthAdminUserSequenceTests {
     expectNoDifference(transport.requests.count, 1)
   }
 
-  /// The reason this is an `AsyncSequence` and not an `AsyncThrowingStream`: a caller that stops
-  /// early must not have paid for the pages it never read.
   @Test
   func usersFetchesPagesLazily() async throws {
     let (sut, transport) = makeSUT(

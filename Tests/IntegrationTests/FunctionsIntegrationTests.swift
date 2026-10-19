@@ -14,7 +14,6 @@ import Testing
   import FoundationNetworking
 #endif
 
-/// Runs against the `echo` and `stream` functions in `supabase/functions`.
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil))
 struct FunctionsIntegrationTests {
   struct Echo: Decodable {
@@ -109,8 +108,6 @@ struct FunctionsIntegrationTests {
     #expect(try response.decode(as: Echo.self).method == "POST")
   }
 
-  // The local edge runtime answers a 404 without `sb-error-code`; the hosted gateway adds
-  // `NOT_FOUND`. Either way the kind is `.server` and the status is on the response.
   @Test
   func unknownSlugIsServerError() async throws {
     let error = await #expect(throws: FunctionsError.self) {
@@ -159,7 +156,6 @@ struct FunctionsIntegrationTests {
   func cancellingMidStreamCancelsTheRequest() async throws {
     let clock = ContinuousClock()
     let task = Task {
-      // 40 events, 50 ms apart: two seconds if the loop runs to the end.
       let response = try await client.stream(
         "stream",
         options: .init(

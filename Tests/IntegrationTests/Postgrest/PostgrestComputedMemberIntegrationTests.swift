@@ -9,11 +9,6 @@ import Foundation
 @_spi(Experimental) import PostgrestMacros
 import Testing
 
-// File scope: `@SelectionOf` attaches extensions, which cannot be nested in a type. The tables are
-// in `Generated.swift`.
-// The functions are in `supabase/migrations/20261008000000_computed_members.sql`, the rows in
-// `supabase/seed.sql`. Every test here is read-only.
-
 @SelectionOf(Channels.self)
 struct ComputedMemberChannelFeed {
   var id: Int
@@ -31,8 +26,6 @@ struct PostgrestComputedMemberIntegrationTests {
     headers: ["apikey": DotEnv.supabasePublishableKey]
   )
 
-  /// `Channels` decodes only `id` and `slug`, so this also proves `*` is exactly the two columns:
-  /// the response's keys are asserted, not just decodable.
   @Test
   func aWholeRowSelectReturnsNoComputedMember() async throws {
     let response = try await client.from(Channels.self)

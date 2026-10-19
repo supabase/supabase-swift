@@ -87,8 +87,6 @@ final class PushV2 {
       receivedContinuation.resume(returning: status)
       self.receivedContinuation = nil
     } else {
-      // The ack arrived before `send()` registered its continuation; buffer it
-      // so `send()` can resume immediately instead of timing out.
       receivedStatus = status
     }
   }

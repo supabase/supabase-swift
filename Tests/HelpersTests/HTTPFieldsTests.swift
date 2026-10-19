@@ -12,8 +12,6 @@ import Testing
 
 @testable import Helpers
 
-/// Some keys reaching `HTTPFields.init(_:)` are dynamic — `HTTPResponse.init` builds fields from
-/// `response.allHeaderFields`, which the server controls — so an invalid field name must not trap.
 @Suite
 struct HTTPFieldsTests {
   @Test

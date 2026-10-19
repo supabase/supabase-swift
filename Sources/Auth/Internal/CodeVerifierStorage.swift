@@ -27,11 +27,6 @@ extension CodeVerifierStorage {
   static let maxConcurrentFlows = 5
 
   static func live(configuration: AuthClient.Configuration) -> Self {
-    // Serializes the index read-modify-write in `set`/`remove`/`removeAll`: `AuthClient` is not an
-    // actor, so concurrent flow starts can genuinely run on different threads, not just interleave
-    // at await points. Without this, two concurrent writers can each read the index
-    // before either writes it back, so one writer's entry is silently dropped, breaking both
-    // eviction and `removeAll`'s cleanup for that flow.
     let lock = NSRecursiveLock()
 
     let baseStorageKey: @Sendable () -> String = {
@@ -106,9 +101,6 @@ extension CodeVerifierStorage {
           removeKey(flowSlotKey(evicted))
         }
         writeIndex(index)
-
-        // Dual write: exchanges with no flow id (older callers, or callers that never
-        // learned this flow's id) fall back to whichever verifier was stored most recently.
         writeString(code, legacyVerifierKey())
       },
       remove: { flowId in

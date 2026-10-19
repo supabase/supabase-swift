@@ -10,9 +10,6 @@ actor ConnectionManager {
     case reconnecting(Task<Void, any Error>, reason: String)
   }
 
-  // Unbounded, and load-bearing: the observer in `RealtimeClientV2.init` latches on seeing
-  // `.reconnecting` to tell an automatic reconnect apart from a fresh `connect()`. Drop that
-  // transition and a reconnect is misclassified, resetting channels mid-join.
   private let (stateStream, stateContinuation) = AsyncStream<State>.makeStream(
     bufferingPolicy: .unbounded
   )
@@ -159,9 +156,6 @@ actor ConnectionManager {
         return
       }
       updateState(.disconnected)
-      // Application-level close codes (4000–4999) typically signal auth or
-      // protocol errors. Reconnecting with the same bad token would loop;
-      // the caller must re-authenticate before reconnecting.
       if let code, code >= 4000 {
         logger.debug("Skipping reconnect for application close code \(code)")
         return
@@ -196,10 +190,6 @@ actor ConnectionManager {
   /// mid-retry and misclassify the eventual success as a fresh `connect()`
   /// instead of a reconnect, skipping `rejoinChannels()` (issue #1147).
   private func initiateReconnect(reason: String) {
-    // Captured by value so the sleep below doesn't need `self` at all — held
-    // only while actually attempting a connection, not for the whole backoff
-    // wait. Otherwise a released client would keep this actor (and everything
-    // it captures) alive for up to the current attempt's delay.
     let clock = self.clock
     let backoff = Self.reconnectBackoff(baseDelay: reconnectDelay)
     let logger = self.logger
@@ -261,18 +251,10 @@ actor ConnectionManager {
   }
 
   deinit {
-    // A manager released while still connected must tear down its socket, otherwise the
-    // underlying WebSocket (and the dedicated URLSession backing it, along with its
-    // self-rescheduling receive loop) stays alive forever. `deinit` only runs once no other
-    // code can reference the actor, so reading isolated state here is safe.
     switch state {
     case .connected(let conn):
       conn.close(code: nil, reason: "Deallocated")
     case .reconnecting(let task, _):
-      // The retry loop only holds `self` while actually attempting a
-      // connection, not while sleeping out the backoff — so this actor can
-      // reach `deinit` while a reconnect is still pending. Cancel it instead
-      // of leaving it to wake up, find `self` gone, and exit on its own.
       task.cancel()
     case .connecting, .disconnected:
       break

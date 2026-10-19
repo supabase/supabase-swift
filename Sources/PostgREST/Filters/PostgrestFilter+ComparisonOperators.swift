@@ -5,8 +5,6 @@
 //  Created by Guilherme Souza on 09/10/26.
 //
 
-// Each operator calls the method of the same meaning, so both spellings build the same tree.
-
 /// Matches rows where `lhs` equals `rhs`. Same as `lhs.eq(rhs)`.
 public func == <E: _PostgrestFilterableExpression>(
   lhs: E, rhs: E.Value

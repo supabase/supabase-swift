@@ -46,8 +46,6 @@ struct TableMacroSupportTests {
 
   @Test
   func aDeclaredKeyAddsTheKeyedRelation() {
-    // What gates the derived-target `upsert`. Listed after `_PostgrestRelation` for the same reason
-    // the whole chain is listed: the generated extension does not derive an inherited conformance.
     #expect(
       clause(
         readOnly: false,
@@ -63,7 +61,6 @@ struct TableMacroSupportTests {
 
   @Test
   func aKeyedViewIsKeyedButNotWritable() {
-    // A view Postgres reports a key for is still read-only. The two axes are independent.
     #expect(
       clause(
         readOnly: true,
@@ -83,7 +80,6 @@ struct TableMacroSupportTests {
 
   @Test
   func skipsWhatTheTypeAlreadyDeclares() {
-    // `struct Todo: Decodable, Sendable` must not get a second Decodable conformance.
     #expect(
       clause(readOnly: false, missing: ["_PostgrestRelation", "_PostgrestWritableRelation"])
         == ": _PostgrestRelation, _PostgrestWritableRelation"
@@ -115,16 +111,11 @@ struct TableMacroSupportTests {
     #expect(unwrapped("[String]?") == "[String]")
     #expect(unwrapped("Optional<[Int]>") == "[Int]")
     #expect(unwrapped("String") == "String")
-    // An implicitly unwrapped optional is a nullable column too, and `String!` in a generic
-    // argument does not compile at all.
     #expect(unwrapped("String!") == "String")
-    // Every layer comes off. One left on gives a column whose `Value` is optional, which loses
-    // every operator, because `Optional` does not conform to `PostgrestFilterValue`.
     #expect(unwrapped("Optional<Int>!") == "Int")
     #expect(unwrapped("Int??") == "Int")
   }
 
-  /// The two used to test separate sets of spellings, and disagreed on `Optional<Int>!`.
   @Test
   func optionalityAgreesWithUnwrapping() {
     for type in ["Date?", "Optional<Date>", "String!", "Optional<Int>!", "Int??"] {

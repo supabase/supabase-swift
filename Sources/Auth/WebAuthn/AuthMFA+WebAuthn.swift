@@ -13,8 +13,6 @@ import Foundation
 
 #if canImport(AuthenticationServices) && !os(tvOS) && !os(watchOS)
   extension AuthMFA {
-    // MARK: - WebAuthn MFA (high-level, native UI)
-
     /// Enrolls a new WebAuthn (passkey) factor, driving the full ceremony: enrolls the factor,
     /// requests a challenge, presents the native passkey registration UI via
     /// `AuthenticationServices`, and verifies the credential with the backend.

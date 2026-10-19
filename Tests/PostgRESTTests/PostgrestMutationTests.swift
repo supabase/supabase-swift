@@ -21,8 +21,6 @@ struct PostgrestMutationTests {
     var isDone: Bool
     var note: String?
 
-    /// A hand-written conformance keeps these in step with `Columns` by hand; `@Column`
-    /// generates both from one input.
     enum CodingKeys: String, CodingKey {
       case id
       case task
@@ -44,8 +42,6 @@ struct PostgrestMutationTests {
       var task: String
       var isDone: Bool?
 
-      /// Mirrors the relation's own mapping, so a batch's `columns` parameter is asserted in the
-      /// database's spelling rather than in Swift's.
       enum CodingKeys: String, CodingKey {
         case task
         case isDone = "is_done"
@@ -53,7 +49,6 @@ struct PostgrestMutationTests {
     }
   }
 
-  /// A view: conforms to `_PostgrestRelation` only, so the writes must not be offered.
   struct ActiveTodo: _PostgrestRelation {
     static let relationName = "active_todos"
     static let selectString = "*"
@@ -73,7 +68,6 @@ struct PostgrestMutationTests {
     _ = try await capture.client.from(Todo.self)
       .insert(Todo.Draft(task: "buy milk", isDone: nil)).execute()
     #expect(capture.httpMethod == "POST")
-    // The hand-written `Draft` here omits the primary key, so `id` must not appear in the body.
     #expect(capture.bodyString?.contains("\"task\":\"buy milk\"") == true)
     #expect(capture.bodyString?.contains("\"id\"") == false)
   }
@@ -98,7 +92,6 @@ struct PostgrestMutationTests {
 
   @Test
   func updateSendsAnExplicitNullForAnAssignedNil() async throws {
-    // The whole point of SDK-1610: the body has to carry `null`, not drop the key.
     let capture = QueryCapture()
     _ = try await capture.client.from(Todo.self)
       .update { $0.note = nil }.where { $0.id.eq(1) }.execute()
@@ -115,7 +108,6 @@ struct PostgrestMutationTests {
 
   @Test
   func anUpdateBuiltAheadOfTimeCanBeHandedToTheSource() async throws {
-    // The payload is a value, so one layer can decide the change and another can send it.
     let update = _PostgrestUpdate<Todo> { $0.note = nil }
     let capture = QueryCapture()
     _ = try await capture.client.from(Todo.self).update(update).where { $0.id.eq(1) }.execute()
@@ -131,16 +123,6 @@ struct PostgrestMutationTests {
 
   @Test
   func eachWriteStartsInThePhaseThatDecidesWhatItOffers() throws {
-    // Swift cannot assert that code fails to compile, so these lines are documentation, not
-    // enforcement. Each one is a compile error:
-    //
-    //   source.delete().execute()                    // unscoped: no execute()
-    //   source.update { $0.task = "x" }.returning()  // unscoped: no returning()
-    //   source.insert(draft).where { $0.id.eq(1) }   // PostgREST ignores filters on a POST
-    //   source.upsert(draft).where { $0.id.eq(1) }
-    //
-    // What can be checked at run time is the phase each write returns, and that the conditional
-    // `_PostgrestFilterableRequest` conformance is missing where `where(_:)` must not be offered.
     let source = QueryCapture().client.from(Todo.self)
     let draft = Todo.Draft(task: "buy milk")
 
@@ -168,7 +150,6 @@ struct PostgrestMutationTests {
 
   @Test
   func deleteAllRendersNoFilter() async throws {
-    // `.all()` is a marker for the type checker, not a query change: nothing is added to the URL.
     let capture = QueryCapture()
     _ = try await capture.client.from(Todo.self).delete().all().execute()
     #expect(capture.httpMethod == "DELETE")
@@ -186,8 +167,6 @@ struct PostgrestMutationTests {
 
   @Test
   func aScopedMutationAcceptsMoreFilters() async throws {
-    // The first filter leaves the unscoped phase, later ones go through `_PostgrestFilterableRequest`.
-    // Both have to reach the wire, ANDed like any other `where`.
     let capture = QueryCapture()
     _ = try await capture.client.from(Todo.self).delete()
       .where { $0.id.eq(1) }
@@ -216,8 +195,6 @@ struct PostgrestMutationTests {
 
   @Test
   func singleRowInsertSendsAnObjectAndNoColumnsParameter() async throws {
-    // The `columns` parameter exists to reconcile rows that encode differently. One row cannot
-    // disagree with itself, so the single-row path must stay as it was.
     let capture = QueryCapture()
     _ = try await capture.client.from(Todo.self)
       .insert(Todo.Draft(task: "buy milk", isDone: nil)).execute()
@@ -239,9 +216,6 @@ struct PostgrestMutationTests {
 
   @Test
   func bulkInsertNamesTheUnionOfColumnsAcrossRaggedRows() async throws {
-    // A draft omits a nil optional rather than sending `null`, so these two rows encode different
-    // key sets. Without the union, PostgREST reads the column list off the first row and drops
-    // `is_done` from the second — the whole reason the parameter is sent.
     let capture = QueryCapture()
     _ = try await capture.client.from(Todo.self)
       .insert([Todo.Draft(task: "a", isDone: nil), Todo.Draft(task: "b", isDone: true)])
@@ -251,9 +225,6 @@ struct PostgrestMutationTests {
 
   @Test
   func bulkInsertOfAnEmptyCollectionWritesNothingRatherThanFailing() async throws {
-    // Decided behavior: an empty batch is a request that writes nothing, not an error. The
-    // `columns` parameter has to be left off — `columns=` names one column called "", which
-    // PostgREST rejects, and a no-op that 400s is not a no-op.
     let capture = QueryCapture()
     _ = try await capture.client.from(Todo.self).insert([Todo.Draft]()).execute()
     #expect(capture.bodyString == "[]")
@@ -262,8 +233,6 @@ struct PostgrestMutationTests {
 
   @Test
   func bulkInsertTakesAnyCollection() async throws {
-    // `some Collection` rather than `[Draft]`, so a slice reaches the wire without the caller
-    // rebuilding an array.
     let rows = [Todo.Draft(task: "a"), Todo.Draft(task: "b"), Todo.Draft(task: "c")]
     let capture = QueryCapture()
     _ = try await capture.client.from(Todo.self).insert(rows[1...]).execute()
@@ -325,7 +294,6 @@ struct PostgrestMutationTests {
 
   @Test
   func maxAffectedComposesWithReturning() async throws {
-    // The acceptance criterion from SDK-1638: neither preference may clobber the other.
     let capture = QueryCapture(body: #"[{"id":1,"task":"done","is_done":true}]"#)
     _ = try await capture.client.from(Todo.self)
       .update { $0.isDone = true }.where { $0.id.eq(1) }

@@ -210,8 +210,6 @@ public struct StorageError: SupabaseError {
   }
 }
 
-// The codes Storage defines today. The server may send one that is not listed here, so treat
-// unknown values as a normal outcome rather than a bug.
 extension StorageError.Code {
   /// The specified bucket does not exist.
   public static let noSuchBucket = StorageError.Code("NoSuchBucket")

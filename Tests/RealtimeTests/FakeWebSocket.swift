@@ -23,12 +23,10 @@ final class FakeWebSocket: WebSocket {
     (events, eventsContinuation) = AsyncStream.makeStream()
   }
 
-  /// Events send by this connection.
   var sentEvents: [LegacyWebSocketEvent] {
     mutableState.value.sentEvents
   }
 
-  /// Events received by this connection.
   var receivedEvents: [LegacyWebSocketEvent] {
     mutableState.value.receivedEvents
   }
@@ -102,12 +100,6 @@ final class FakeWebSocket: WebSocket {
     }
   }
 
-  /// Creates a pair of fake ``WebSocket``s that are connected to each other.
-  ///
-  /// Sending a message on one ``WebSocket`` will result in that same message being
-  /// received by the other.
-  ///
-  /// This can be useful in constructing tests.
   static func fakes(`protocol`: String = "") -> (FakeWebSocket, FakeWebSocket) {
     let (peer1, peer2) = (FakeWebSocket(protocol: `protocol`), FakeWebSocket(protocol: `protocol`))
 

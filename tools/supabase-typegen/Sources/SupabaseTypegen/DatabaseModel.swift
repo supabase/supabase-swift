@@ -66,7 +66,6 @@ struct DatabaseModel: Equatable {
     /// The id of the enum type returned, or of its elements for an array, or `nil` when it is not
     /// an enum.
     var returnEnumID: Int?
-    /// Whether the function returns the row type of a relation.
     var returnsRow: Bool
     /// The relation whose row type is returned, or `nil` when the document does not list it.
     var returnRelation: QualifiedName?
@@ -165,7 +164,6 @@ extension DatabaseModel {
       )
     }
 
-    // A document that lists one relation twice, say in both `tables` and `views`, keeps the first.
     var seen: Set<QualifiedName> = []
     relations =
       kinds

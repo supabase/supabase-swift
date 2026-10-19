@@ -7,7 +7,6 @@
 
 import SwiftParser
 
-/// Turns Postgres names into Swift identifiers.
 enum Naming {
   /// Property names `@Table`'s expansion cannot take, and which it does not diagnose itself: the
   /// members it adds to the type, and `self`, which as a `Draft.init` parameter would shadow the
@@ -85,7 +84,6 @@ enum Naming {
     name.filter { $0 != "`" }
   }
 
-  /// A word with no lowercase letter, such as `STATUS` or `ID`.
   private static func isAllCaps(_ word: String) -> Bool {
     !word.contains(where: \.isLowercase)
   }

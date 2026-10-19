@@ -213,8 +213,6 @@ public actor ResumableUpload {
     }
   }
 
-  // MARK: - Control
-
   /// Creates the upload on the server, or finds the one a previous run left, and starts
   /// sending chunks. Returns as soon as the first request is answered; ``result`` awaits the
   /// rest. Does nothing once started.
@@ -222,8 +220,6 @@ public actor ResumableUpload {
   /// - Throws: ``StorageError`` when the server refuses the upload, in which case ``state`` is
   ///   ``State/failed(_:)``.
   public func start() async throws {
-    // The actor is reentrant across the await below, so a second start() must not reach
-    // create(); it would open a second tus upload and overwrite the record.
     guard case .pending = state, !startInProgress else { return }
     startInProgress = true
     defer { startInProgress = false }
@@ -281,8 +277,6 @@ public actor ResumableUpload {
   }
 
   var isRunning: Bool { loop != nil }
-
-  // MARK: - Upload loop
 
   private func startLoop(from offset: Int64, next: Next) {
     pauseRequested = false
@@ -376,8 +370,6 @@ public actor ResumableUpload {
     if !keepRecord, let record { try? store.remove(record) }
     state = .failed(error)
   }
-
-  // MARK: - Records
 
   private func loadOrCreateRecord() async throws -> ResumableUploadRecord {
     let tus = TusSession(api: api)

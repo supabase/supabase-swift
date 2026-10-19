@@ -17,19 +17,11 @@ import Testing
   import FoundationNetworking
 #endif
 
-/// Characterization tests for ``RealtimeChannelV2/onMessage(_:)``.
-///
-/// These pin the dispatcher's current behavior for every event type it handles,
-/// including the paths that swallow a decoding error and the ones that
-/// deliberately do nothing, so the switch can be restructured without changing
-/// what reaches the callbacks.
 @Suite
 struct RealtimeChannelOnMessageTests {
   let socket: SpyRealtimeClient
   let sut: RealtimeChannelV2
 
-  /// A commit timestamp and its wire form, round-tripped through the SDK's own
-  /// encoder so the fixture can't drift from ``JSONValue/decoder``'s format.
   let commitTimestamp: Date
   let commitTimestampJSON: JSONValue
 
@@ -52,8 +44,6 @@ struct RealtimeChannelOnMessageTests {
     self.commitTimestampJSON = try JSONValue(timestamp)
   }
 
-  // MARK: - Unknown event
-
   @Test
   func unknownEventDispatchesNothing() async {
     let systemMessages = recordSystemMessages()
@@ -65,8 +55,6 @@ struct RealtimeChannelOnMessageTests {
     #expect(broadcasts.value.isEmpty)
   }
 
-  // MARK: - system
-
   @Test
   func systemOKTriggersSystemCallback() async {
     let systemMessages = recordSystemMessages()
@@ -75,8 +63,6 @@ struct RealtimeChannelOnMessageTests {
     await sut.onMessage(sent)
 
     #expect(systemMessages.value == [sent])
-    // `didReceiveSubscribedOK` only promotes a channel that is already
-    // `.subscribing`, so a system.ok on its own cannot subscribe a channel.
     #expect(sut.status == .unsubscribed)
   }
 
@@ -99,8 +85,6 @@ struct RealtimeChannelOnMessageTests {
 
     #expect(systemMessages.value == [sent])
   }
-
-  // MARK: - phx_reply
 
   @Test
   func replyWithoutRefIsSwallowed() async {
@@ -169,8 +153,6 @@ struct RealtimeChannelOnMessageTests {
 
     #expect(sut.callbackManager.serverChanges.isEmpty)
   }
-
-  // MARK: - postgres_changes
 
   @Test
   func postgresChangesWithoutDataIsIgnored() async {
@@ -351,8 +333,6 @@ struct RealtimeChannelOnMessageTests {
     #expect(actions.value.isEmpty)
   }
 
-  // MARK: - broadcast
-
   @Test
   func broadcastTriggersMatchingBroadcastCallback() async throws {
     let broadcasts = recordBroadcasts(event: "message")
@@ -366,7 +346,6 @@ struct RealtimeChannelOnMessageTests {
 
     let received = try #require(broadcasts.value.first)
     #expect(broadcasts.value.count == 1)
-    // The whole message payload is forwarded, not just the inner `payload`.
     #expect(received["event"]?.stringValue == "message")
     #expect(received["payload"]?.objectValue?["body"]?.stringValue == "hi")
   }
@@ -382,8 +361,6 @@ struct RealtimeChannelOnMessageTests {
     #expect(broadcasts.value.isEmpty)
   }
 
-  // MARK: - phx_close
-
   @Test
   func closeWithoutJoinRefRemovesChannelFromSocket() async {
     await sut.onMessage(message(event: ChannelEvent.close))
@@ -393,14 +370,10 @@ struct RealtimeChannelOnMessageTests {
 
   @Test
   func closeForStaleJoinRefDoesNotRemoveChannel() async {
-    // The channel never joined, so its `joinRef` is nil and any tagged close
-    // belongs to a previous incarnation of the topic (issue #1145).
     await sut.onMessage(message(event: ChannelEvent.close, joinRef: "stale-ref"))
 
     #expect(socket.removedTopics.isEmpty)
   }
-
-  // MARK: - phx_error
 
   @Test
   func errorClosesChannelWithoutRemovingItFromSocket() async {
@@ -409,8 +382,6 @@ struct RealtimeChannelOnMessageTests {
     #expect(socket.removedTopics.isEmpty)
     #expect(sut.status == .unsubscribed)
   }
-
-  // MARK: - presence_diff
 
   @Test
   func presenceDiffTriggersPresenceCallbackWithJoinsAndLeaves() async throws {
@@ -459,8 +430,6 @@ struct RealtimeChannelOnMessageTests {
     #expect(actions.value.isEmpty)
   }
 
-  // MARK: - presence_state
-
   @Test
   func presenceStateTriggersPresenceCallbackWithJoinsOnly() async throws {
     let actions = recordPresenceActions()
@@ -487,8 +456,6 @@ struct RealtimeChannelOnMessageTests {
 
     #expect(actions.value.isEmpty)
   }
-
-  // MARK: - Helpers
 
   private func message(
     event: String,
@@ -529,8 +496,6 @@ struct RealtimeChannelOnMessageTests {
     return actions
   }
 
-  /// Registers a postgres callback under server-change id `1`, matching the
-  /// `"ids": [1]` used by the postgres_changes fixtures.
   private func recordPostgresActions() -> LockIsolated<[AnyAction]> {
     let filter = PostgresJoinConfig(
       event: .all,
@@ -548,7 +513,6 @@ struct RealtimeChannelOnMessageTests {
   }
 }
 
-/// Records the `_remove` calls `onMessage` makes on a `phx_close`.
 final class SpyRealtimeClient: RealtimeClientProtocol, @unchecked Sendable {
   private let _removedTopics = LockIsolated([String]())
 

@@ -11,12 +11,6 @@ import Testing
 @testable import Auth
 @testable import Supabase
 
-/// The default auth storage key namespaces the stored session by project ref, so two projects in
-/// the same app do not share a session.
-///
-/// A `supabaseURL` with no host is a construction-time programmer error and traps. The derivation
-/// helper covers that case everywhere; the exit test below also constructs a client and checks the
-/// trap itself, on the platforms where Swift Testing can run one.
 @Suite
 struct SupabaseClientStorageKeyTests {
   @Test(
@@ -30,16 +24,11 @@ struct SupabaseClientStorageKeyTests {
     #expect(SupabaseClient.defaultStorageKey(for: try #require(URL(string: url))) == expected)
   }
 
-  // `"".split(separator: ".")` is empty, so an empty host yields `nil` rather than reading past
-  // the end of the array — which is what the old `host.split(separator: ".")[0]` did.
   @Test(arguments: ["https:///rest/v1", "mailto:someone@example.com"])
   func derivesNoStorageKeyWhenTheURLHasNoHost(url: String) throws {
     #expect(SupabaseClient.defaultStorageKey(for: try #require(URL(string: url))) == nil)
   }
 
-  // `storage` is passed explicitly, and `options` is never omitted: on Linux and Android
-  // `AuthOptions.init` has no default storage, and the two-argument `SupabaseClient.init` does
-  // not exist there at all.
   @Test
   func honorsAnExplicitStorageKeyOverTheProjectRef() {
     let client = SupabaseClient(

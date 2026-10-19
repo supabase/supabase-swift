@@ -19,8 +19,6 @@ extension RealtimeChannelV2 {
   /// subsequent change. Use ``onStatusChange(_:)`` for a closure-based alternative.
   public var statusChange: AsyncStream<RealtimeChannelStatus> {
     let id = UUID()
-    // Unbounded, for the same reason as `RealtimeClientV2.statusChange`: consumers wait for a
-    // specific status, and `.subscribing` → `.subscribed` arrive back to back.
     let (stream, continuation) = AsyncStream<RealtimeChannelStatus>.makeStream(
       bufferingPolicy: .unbounded
     )
@@ -49,9 +47,6 @@ extension RealtimeChannelV2 {
   public func onStatusChange(
     _ listener: @escaping @Sendable (RealtimeChannelStatus) -> Void
   ) -> RealtimeSubscription {
-    // Subscribe synchronously, before spawning the observer Task — otherwise
-    // a status change could race ahead of the Task actually starting to
-    // iterate, silently dropping it (including the initial replay).
     let stream = statusChange
     let task = Task {
       for await status in stream {

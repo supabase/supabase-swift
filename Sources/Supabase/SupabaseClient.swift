@@ -240,10 +240,6 @@ public final class SupabaseClient: Sendable {
       )
       .merging(with: HTTPFields(options.global.headers))
 
-    // The default storage key namespaces the stored session by project ref, taken from the URL's
-    // host. `supabaseURL` is supplied once, at construction, so a URL without a host is a
-    // programmer error rather than a runtime condition — trap on it, where the offending value is,
-    // instead of degrading into a shared storage key that silently collides across projects.
     guard let defaultStorageKey = Self.defaultStorageKey(for: supabaseURL) else {
       preconditionFailure(
         """
@@ -260,8 +256,6 @@ public final class SupabaseClient: Sendable {
       storageKey: options.auth.storageKey ?? defaultStorageKey,
       localStorage: options.auth.storage,
       logger: options.global.logger,
-      // DON'T give the AuthClient `AccessTokenMiddleware` — resolving the access token goes
-      // through the AuthClient itself, which may cause a deadlock.
       http: HTTPClientConfiguration(
         transport: options.global.http.transport ?? URLSessionTransport(),
         middlewares: options.global.http.middlewares + [TraceContextMiddleware()],
@@ -295,7 +289,6 @@ public final class SupabaseClient: Sendable {
     rest.from(relation)
   }
 
-  // See the unavailable `PostgrestClient.from(_:_:)` twin: it names the missing SPI import.
   @available(
     *, unavailable,
     message:
@@ -356,7 +349,6 @@ public final class SupabaseClient: Sendable {
     rest.schema(schema)
   }
 
-  // See the unavailable `PostgrestClient.from(_:_:)` twin.
   @available(
     *, unavailable,
     message:
@@ -518,7 +510,6 @@ public final class SupabaseClient: Sendable {
   private func listenForAuthEvents() {
     let task = Task { [weak self, authStateChanges = _auth.authStateChanges] in
       for await (event, session) in authStateChanges {
-        // `handleTokenChanged` needs a live client; once it's gone there is nothing to update.
         guard let self else { return }
         await self.handleTokenChanged(event: event, session: session)
       }
@@ -563,7 +554,6 @@ public final class SupabaseClient: Sendable {
             + (options.functions.http?.middlewares ?? [])
             + [
               TraceContextMiddleware(),
-              // The session token, else the legacy JWT key; a new-format key is never a bearer.
               AccessTokenMiddleware(getAccessToken: {
                 [provider = accessTokenProvider, supabaseKey] in
                 APIKeyFormat.functionsBearerToken(

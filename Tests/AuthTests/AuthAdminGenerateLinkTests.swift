@@ -40,8 +40,6 @@ extension AuthMockerTests {
       return AuthClient(configuration: configuration)
     }
 
-    /// Builds a flat JSON object mirroring what the `/admin/generate_link` endpoint returns:
-    /// the user's own fields merged with the generate-link-specific properties.
     private func responseData(verificationType: String) throws -> Data {
       let user = User(fromMockNamed: "user")
       let encoder = AuthClient.Configuration.jsonEncoder

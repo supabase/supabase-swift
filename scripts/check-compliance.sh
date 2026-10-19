@@ -1,32 +1,4 @@
 #!/usr/bin/env bash
-# Checks sdk-compliance.yaml against the package's current public API.
-#
-# supabase/sdk's capability-matrix gate (validate-sdk-compliance-swift.yml,
-# run via .github/workflows/validate-capabilities.yml) already detects both
-# newly added public API and registered symbols the code no longer has. But
-# that workflow is not a required status check on `main` — only `CI Success`
-# (this repo's own ci.yml) is — so a failing compliance check does not, by
-# itself, block a merge, and nothing else runs it locally before a push.
-# This script reproduces the stale-entry half of that check locally and
-# without a base ref: it dumps the current public symbol graph, normalizes
-# it the same way upstream's normalize-symbolgraph.ts does (pathComponents
-# joined with ".", everything from the first "(" in the last component
-# stripped), and does a comm-style diff against every symbol
-# sdk-compliance.yaml declares (`symbols` + `supporting_symbols`, top level
-# and per feature).
-#
-# This only fails the build on STALE entries: symbols the manifest still
-# declares after the code that implemented them was deleted, moved, or
-# renamed.
-#
-# Symbols present in code but missing from the manifest are reported too,
-# but are advisory only here, not fatal: the manifest carries a large
-# backlog of pre-existing supporting types (structs, DTO properties, etc.)
-# it never enumerated, predating this script, and upstream's CI already
-# gates genuinely new public API against the matrix on every PR diff.
-# Making that backlog fatal here would fail on a clean main and train
-# whoever runs this to ignore or disable it. Register new public API in
-# sdk-compliance.yaml as you add it — see CONTRIBUTING.md.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -34,9 +6,6 @@ cd "$ROOT"
 
 COMPLIANCE_FILE="sdk-compliance.yaml"
 
-# dump-symbol-graph re-resolves the package graph as a side effect and
-# rewrites Package.resolved. Back it up and restore it so this check doesn't
-# leave unrelated churn behind.
 RESOLVED_FILE="Package.resolved"
 RESOLVED_BACKUP=""
 if [ -f "$RESOLVED_FILE" ]; then
@@ -46,9 +15,6 @@ if [ -f "$RESOLVED_FILE" ]; then
 fi
 
 echo "Dumping public symbol graph..." >&2
-# Delete graphs from earlier runs first, so a failed extraction can never
-# fall back to stale output: a module that didn't emit a graph this run
-# shows all its manifest entries as stale below, which fails the check.
 find .build -name "*.symbols.json" -delete 2>/dev/null || true
 # A failing exit here isn't necessarily fatal: test targets can fail to
 # extract while library targets already landed first (same rationale as
@@ -81,11 +47,6 @@ jq -s '[.[] | .symbols[]]' $(cat "$SGFILES_LIST") | jq -r '
   | ($p[:-1] + [($p[-1] | sub("\\(.*"; ""))]) | join(".")
 ' | LC_ALL=C sort -u > "$CODE_SYMBOLS"
 
-# sdk-compliance.yaml only ever holds plain "- Symbol.Name" list items under
-# `symbols:`/`supporting_symbols:` (top level or per feature) — there's no
-# other array in the schema — so grepping for list items is a safe
-# substitute for a real YAML parser here.
-#
 # Names swift package dump-symbol-graph can't see at all (currently just
 # leading-underscore members, e.g. FunctionsClient._invokeWithStreamedResponse)
 # are excluded from the manifest side too: they can never match, so leaving

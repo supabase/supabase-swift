@@ -32,9 +32,6 @@ struct APIKeyFormatTests {
 
   @Test
   func shouldWarnOnceForUnrecognizedSubtype() {
-    // NOTE: `warnedSubtypes` dedup state is module-scoped, so every distinct subtype used in
-    // this file must be unique to this test (mirrors the same constraint in supabase-js's
-    // fetch.test.ts `checkApiKeyFormat` suite).
     #expect(APIKeyFormat.shouldWarn(for: "sb_uniquesubtypeA_key1"))
     #expect(!APIKeyFormat.shouldWarn(for: "sb_uniquesubtypeA_key2"))
   }
@@ -47,14 +44,12 @@ struct APIKeyFormatTests {
 
   @Test
   func shouldWarnGroupsUnparsableSubtypesTogether() {
-    // Keys with no second underscore share the 'unknown' dedup bucket.
     #expect(APIKeyFormat.shouldWarn(for: "sb_"))
     #expect(!APIKeyFormat.shouldWarn(for: "sb_uniqueunparseabletype"))
   }
 
   @Test
   func functionsBearerTokenSuppressesNewFormatKeyFallback() {
-    // no-session + new-key: accessToken fallback equals the raw new-format key -> suppressed.
     #expect(
       APIKeyFormat.functionsBearerToken(
         accessToken: "sb_publishable_abc123",
@@ -65,7 +60,6 @@ struct APIKeyFormatTests {
 
   @Test
   func functionsBearerTokenKeepsLegacyKeyFallback() {
-    // no-session + legacy-key: unchanged existing behavior.
     #expect(
       APIKeyFormat.functionsBearerToken(
         accessToken: "legacy-jwt-key", supabaseKey: "legacy-jwt-key")
@@ -75,7 +69,6 @@ struct APIKeyFormatTests {
 
   @Test
   func functionsBearerTokenPassesThroughRealSessionToken() {
-    // has-session: a genuine session JWT is always sent, regardless of key format.
     #expect(
       APIKeyFormat.functionsBearerToken(
         accessToken: "real.session.jwt",

@@ -26,7 +26,6 @@ struct BucketOperationsView: View {
           .foregroundColor(.secondary)
       }
 
-      // Create Bucket
       Section("Create New Bucket") {
         TextField("Bucket name", text: $bucketName)
           .textInputAutocapitalization(.never)
@@ -45,7 +44,6 @@ struct BucketOperationsView: View {
         .disabled(bucketName.isEmpty || isLoading)
       }
 
-      // Existing Buckets
       Section("Existing Buckets") {
         Button("Refresh List") {
           Task {

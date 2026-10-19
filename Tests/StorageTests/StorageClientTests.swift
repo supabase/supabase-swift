@@ -218,8 +218,6 @@ struct StorageClientTests {
       .appendingPathComponent(fileName)
   }
 
-  // MARK: - setValue(_:forHTTPHeaderField:) Tests
-
   @Test
   func setHeader_setsHeaderOnRequest() async throws {
     let capturedRequest = LockIsolated(URLRequest?.none)
@@ -358,7 +356,6 @@ struct StorageClientTests {
       )
     })
 
-    // First, make a request with setHeader on StorageBucket
     _ = try await sut.from(bucketId)
       .setHeader(name: .init("X-Child-Header")!, value: "child-value")
       .list()
@@ -368,11 +365,8 @@ struct StorageClientTests {
         == "child-value"
     )
 
-    // Then make a request from a new StorageBucket instance (via sut.from())
-    // The new instance should NOT have the previous instance's header
     _ = try await sut.from(bucketId).list()
 
-    // The new StorageBucket instance should NOT have the previous instance's header
     #expect(capturedRequests[1].value(forHTTPHeaderField: "X-Child-Header") == nil)
   }
 

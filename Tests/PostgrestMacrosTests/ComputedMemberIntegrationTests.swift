@@ -9,8 +9,6 @@ import Foundation
 @_spi(Experimental) import PostgrestMacros
 import Testing
 
-// File scope, for the same reason as `SelectionIntegrationTests`: both macros attach extensions.
-
 @Table("users")
 struct ComputedUser {
   @PrimaryKey var id: Int

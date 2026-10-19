@@ -13,7 +13,6 @@ extension PKCE {
       return Data(buffer).pkceBase64EncodedString()
     },
     generateCodeChallenge: { codeVerifier in
-      // `Data(_:)` over a String's UTF-8 view cannot fail, unlike `data(using: .utf8)`.
       var hasher = SHA256()
       hasher.update(data: Data(codeVerifier.utf8))
       let hashed = hasher.finalize()
@@ -23,8 +22,6 @@ extension PKCE {
 }
 
 extension Data {
-  // Returns a base64 encoded string, replacing reserved characters
-  // as per the PKCE spec https://tools.ietf.org/html/rfc7636#section-4.2
   func pkceBase64EncodedString() -> String {
     base64EncodedString()
       .replacingOccurrences(of: "+", with: "-")

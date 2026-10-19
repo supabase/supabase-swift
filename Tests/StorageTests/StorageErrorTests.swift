@@ -75,8 +75,6 @@ struct StorageErrorTests {
     #expect(payload.message == "Error")
   }
 
-  /// Every code the SDK names, with the body Storage sends for it. A code the server adds later
-  /// still decodes, as `Code(rawValue:)`; this pins that the named ones match their wire spelling.
   static let knownCodes: [(StorageError.Code, String)] = [
     (.noSuchBucket, "NoSuchBucket"),
     (.noSuchLifecycleConfiguration, "NoSuchLifecycleConfiguration"),

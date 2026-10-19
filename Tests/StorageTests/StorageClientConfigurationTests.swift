@@ -21,7 +21,6 @@ struct StorageClientConfigurationTests {
     #expect(configuration.logger[metadataKey: "system"] == "storage")
   }
 
-  /// Records the head of every request and answers an empty bucket list.
   private func makeSUT(
     headers: HTTPFields,
     accessToken: (@Sendable () async throws -> String?)? = nil,
@@ -86,8 +85,6 @@ struct StorageClientConfigurationTests {
     #expect(requests.value.first?.headerFields[.authorization] == nil)
   }
 
-  /// The configured headers are merged before the middleware chain runs, so a static
-  /// `Authorization` wins over the token the middleware would set.
   @Test
   func staticAuthorizationHeaderWinsOverAccessTokenMiddleware() async throws {
     let requests = LockIsolated<[HTTPRequest]>([])

@@ -13,7 +13,6 @@ import Testing
 @testable import Realtime
 
 #if os(Linux)
-  // RealtimeChannelBroadcastTests are disabled on Linux due to timing flakiness.
 #else
 
   @Suite
@@ -52,7 +51,6 @@ import Testing
       sut.disconnect()
     }
 
-    /// Sets up the server to auto-respond to heartbeats and phx_join events.
     private func setupServerAutoResponder(topic: String = "realtime:test") {
       let task = Task { @Sendable [server] in
         for await event in server.events {
@@ -87,8 +85,6 @@ import Testing
       serverTask.setValue(task)
     }
 
-    // MARK: - Sending JSON broadcast via binary frame
-
     @Test
     func broadcast_sendsJsonViaBinaryFrame() async throws {
       setupServerAutoResponder()
@@ -97,12 +93,10 @@ import Testing
       let channel = sut.channel("test")
       try await channel.subscribeWithError()
 
-      // Send a broadcast
       await channel.broadcast(
         event: "my_event", message: ["hello": .string("world")] as JSONObject
       )
 
-      // Check that a binary frame was sent
       let binaryEvents = client.sentEvents.compactMap { event -> Data? in
         if case .binary(let data) = event { return data }
         return nil
@@ -116,8 +110,6 @@ import Testing
       }
     }
 
-    // MARK: - Sending Data broadcast via binary frame
-
     @Test
     func broadcast_sendsDataViaBinaryFrame() async throws {
       setupServerAutoResponder()
@@ -126,7 +118,6 @@ import Testing
       let channel = sut.channel("test")
       try await channel.subscribeWithError()
 
-      // Send binary broadcast
       let binaryData = Data([0x01, 0x02, 0x03, 0x04])
       await channel.broadcast(event: "bin_event", data: binaryData)
 
@@ -142,8 +133,6 @@ import Testing
         #expect(frame[6] == RealtimeSerializer.PayloadEncoding.binary.rawValue)
       }
     }
-
-    // MARK: - Basic callback manager test
 
     @Test
     func callbackManager_triggerBroadcast() {
@@ -169,8 +158,6 @@ import Testing
       #expect(received.value == Data([0x01, 0x02]))
     }
 
-    // MARK: - Receiving JSON broadcast from binary frame
-
     @Test
     func receive_jsonBroadcastFromBinaryFrame() async throws {
       let channel = sut.channel("test")
@@ -181,7 +168,6 @@ import Testing
       }
       defer { subscription.cancel() }
 
-      // Directly invoke the channel's binary broadcast handler
       let broadcast = DecodedBroadcast(
         topic: "realtime:test",
         event: "my_event",
@@ -195,8 +181,6 @@ import Testing
       #expect(payload?["payload"]?.objectValue?["count"]?.intValue == 99)
     }
 
-    // MARK: - Receiving binary broadcast from binary frame
-
     @Test
     func receive_binaryBroadcastFromBinaryFrame() async throws {
       let channel = sut.channel("test")
@@ -207,7 +191,6 @@ import Testing
       }
       defer { subscription.cancel() }
 
-      // Directly invoke the channel's binary broadcast handler
       let binaryPayload = Data([0xCA, 0xFE, 0xBA, 0xBE])
       let broadcast = DecodedBroadcast(
         topic: "realtime:test",
@@ -218,8 +201,6 @@ import Testing
 
       #expect(receivedData.value == binaryPayload)
     }
-
-    // MARK: - JSON broadcast callback receives correct wrapper format
 
     @Test
     func receive_jsonBroadcastHasCorrectFormat() async throws {
@@ -269,16 +250,12 @@ import Testing
       #expect(meta?["replayed"]?.boolValue == true)
     }
 
-    // MARK: - Per-call encoder override
-
     @Test
     func broadcast_perCallEncoderOverridesFixedInternalEncoder() async throws {
       http.respond { _, _ in
         (HTTPResponse(status: .init(code: 202)), Data())
       }
 
-      // Not subscribed, so this falls back to the REST broadcast endpoint. Ack the broadcast so
-      // `broadcast(event:message:encoder:)` awaits the REST call before returning.
       let channel = sut.channel("test") { config in
         config.broadcast.acknowledgeBroadcasts = true
       }
@@ -300,8 +277,6 @@ import Testing
       #expect(json["user_name"] as? String == "abc")
       #expect(json["userName"] == nil)
     }
-
-    // MARK: - REST broadcast URL uses the sub-topic (without `realtime:` prefix)
 
     @Test
     func httpSend_urlUsesSubTopicWithoutRealtimePrefix() async throws {
@@ -325,8 +300,6 @@ import Testing
       #expect(json?["hello"] as? String == "world")
     }
 
-    // MARK: - End-to-end binary frame via WebSocket
-
     @Test
     func endToEnd_binaryFrameViaWebSocket() async throws {
       setupServerAutoResponder()
@@ -342,7 +315,6 @@ import Testing
 
       try await channel.subscribeWithError()
 
-      // Build and send a binary frame (type 0x04) from the server
       let jsonPayload: JSONObject = ["count": .integer(99)]
       let payloadData = try JSONEncoder().encode(jsonPayload)
       let topic = "realtime:test"
@@ -362,18 +334,15 @@ import Testing
 
       server.send(frame)
 
-      // Wait for the message to be processed
       let received = await waitUntil(timeout: 0.5) { receivedPayload.value != nil }
 
       let payload = receivedPayload.value
       if !received {
-        // This test can be flaky in CI due to async scheduling, mark as known limitation
         print(
           "WARNING: End-to-end binary frame test did not receive payload in time"
         )
         print("Client received events: \(client.receivedEvents)")
       }
-      // Only assert if we received something - the unit tests above cover the logic
       if let payload {
         #expect(payload["event"]?.stringValue == "my_event")
         #expect(payload["payload"]?.objectValue?["count"]?.intValue == 99)

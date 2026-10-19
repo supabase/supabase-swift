@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Cross-compiles the test suite for Android and runs it on an attached device or emulator.
-#
 # One-time setup — the host toolchain version must match the Swift SDK exactly, so Xcode's own
 # toolchain cannot be used:
 #
@@ -8,17 +6,6 @@
 #   swift sdk install https://download.swift.org/swift-6.4.0-release/android-sdk/swift-6.4.0-RELEASE/swift-6.4.0-RELEASE_android.artifactbundle.tar.gz \
 #     --checksum 21fb555122a3d801ad943d48df7ebffdd8824de61c25c180bb792d3edaee0b43
 #   curl -fSL -o ndk.zip https://dl.google.com/android/repository/android-ndk-r30-$(uname -s).zip && unzip -q ndk.zip
-#
-#
-# Env vars (all optional except ANDROID_NDK_HOME):
-#   ANDROID_NDK_HOME  NDK root (required; LTS r30 or newer)
-#   SWIFT_SDK         Installed Swift SDK name (default: swift-6.4.0-RELEASE_android)
-#   ARCH              aarch64 | x86_64 (default: aarch64)
-#   API               Android API level to target (default: 23)
-#   CONFIG            debug | release (default: debug)
-#   SCRATCH_PATH      SwiftPM scratch path (default: .build-android)
-#   TARGETS           Space-separated test targets (default: every unit-test target)
-#   FILTER            Passed through to swift-testing's --filter
 set -euo pipefail
 
 : "${ANDROID_NDK_HOME:?set ANDROID_NDK_HOME to your Android NDK root}"

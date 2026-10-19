@@ -13,8 +13,6 @@ struct UploadBodyTests {
     var body: Data
   }
 
-  /// A transport that drains the request body the way a streaming transport does and records
-  /// what it sent.
   private func makeBucket(sent: LockIsolated<Sent?>) -> StorageBucket {
     StorageClient(
       configuration: StorageClientConfiguration(

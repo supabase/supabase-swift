@@ -30,9 +30,9 @@ import Foundation
     fileprivate func encodeRSAPublishKey(modulus: [UInt8], exponent: [UInt8]) -> Data {
       var prefixedModulus: [UInt8] = [0x00]  // To indicate that the number is not negative
       prefixedModulus.append(contentsOf: modulus)
-      let encodedModulus = prefixedModulus.derEncode(as: 2)  // Integer
-      let encodedExponent = exponent.derEncode(as: 2)  // Integer
-      let encodedSequence = (encodedModulus + encodedExponent).derEncode(as: 48)  // Sequence
+      let encodedModulus = prefixedModulus.derEncode(as: 2)
+      let encodedExponent = exponent.derEncode(as: 2)
+      let encodedSequence = (encodedModulus + encodedExponent).derEncode(as: 48)
       return Data(encodedSequence)
     }
 

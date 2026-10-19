@@ -131,8 +131,6 @@ package actor RealtimeEngine {
     self.logger = configuration.logger
   }
 
-  // MARK: - Connection API
-
   package var connectionState: ConnectionMachine.State { connection }
 
   /// Returns once the socket is connected. Throws the fatal error when the upgrade is refused
@@ -179,8 +177,6 @@ package actor RealtimeEngine {
     registry.connectionStates[id] = continuation
     return stream
   }
-
-  // MARK: - Channel API
 
   package func addChannel(_ topic: String, config: RealtimeJoinConfig = RealtimeJoinConfig()) {
     guard channels[topic] == nil else { return }
@@ -309,8 +305,6 @@ package actor RealtimeEngine {
     pushAccessTokenToJoinedChannels()
   }
 
-  // MARK: - Presence API
-
   package func presenceState(_ topic: String) -> PresenceState {
     channels[topic]?.presence.state ?? PresenceState()
   }
@@ -392,8 +386,6 @@ package actor RealtimeEngine {
     channels[topic]?.tokenPush = Throttle()
     channels[topic]?.presencePush = Throttle()
   }
-
-  // MARK: - Machines
 
   private func applyConnection(_ event: ConnectionMachine.Event) {
     let before = connection.key
@@ -545,8 +537,6 @@ package actor RealtimeEngine {
     waiters.forEach { $0.resume(throwing: error) }
   }
 
-  // MARK: - Join and leave
-
   private func sendJoin(_ topic: String) {
     guard connection.isConnected, outbound != nil else {
       if configuration.connectOnSubscribe, case .disconnected = connection {
@@ -593,7 +583,6 @@ package actor RealtimeEngine {
       guard channels[topic]?.joinRef == ref else { return }
       applyChannel(topic, .joinTimedOut)
     } catch {
-      // The socket went away; `channelsSocketLost` already moved the channel on.
     }
   }
 
@@ -656,8 +645,6 @@ package actor RealtimeEngine {
     }
     return reply.payload
   }
-
-  // MARK: - Wire
 
   private func makeRef() -> String {
     refCounter += 1
@@ -750,8 +737,6 @@ package actor RealtimeEngine {
       if await refreshAccessToken() { pushAccessTokenToJoinedChannels() }
     }
   }
-
-  // MARK: - Supervisor
 
   private func run(generation: Int) async {
     defer { if self.generation == generation { supervisor = nil } }
@@ -885,8 +870,6 @@ package actor RealtimeEngine {
       }
     }
   }
-
-  // MARK: - Inbound
 
   private func handleText(_ text: String) {
     let message: RealtimeMessageV2

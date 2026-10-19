@@ -51,12 +51,10 @@ struct CodeVerifierStorageTests {
       for i in 0..<CodeVerifierStorage.maxConcurrentFlows {
         storage.set("verifier-\(i)", "flow-\(i)")
       }
-      // All 5 flows are still pending.
       for i in 0..<CodeVerifierStorage.maxConcurrentFlows {
         #expect(storage.get("flow-\(i)") == "verifier-\(i)")
       }
 
-      // A 6th flow evicts the oldest (flow-0).
       storage.set("verifier-5", "flow-5")
 
       #expect(storage.get("flow-0") == nil)
@@ -87,8 +85,6 @@ struct CodeVerifierStorageTests {
       storage.set("verifier-a", "flow-a")
       storage.set("verifier-b", "flow-b")
 
-      // "flow-a" is no longer the most recent verifier, so removing it must not clear the
-      // legacy fallback slot that "flow-b" owns.
       storage.remove("flow-a")
       #expect(storage.get(nil) == "verifier-b")
 

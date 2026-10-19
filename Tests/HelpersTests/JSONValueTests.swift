@@ -113,40 +113,29 @@ struct JSONValueTests {
     try expectNoDifference(codableValue, json.decode(as: CodableValue.self))
   }
 
-  // MARK: - Value Property Tests
-
   @Test
   func valueProperty() {
-    // Test null value
     #expect(JSONValue.null.value is NSNull)
 
-    // Test string value
     #expect(JSONValue.string("test").value as? String == "test")
 
-    // Test integer value
     #expect(JSONValue.integer(42).value as? Int == 42)
 
-    // Test double value
     #expect(JSONValue.double(3.14).value as? Double == 3.14)
 
-    // Test bool value
     #expect(JSONValue.bool(true).value as? Bool == true)
     #expect(JSONValue.bool(false).value as? Bool == false)
 
-    // Test object value
     let object: JSONValue = ["key": "value"]
     let objectValue = object.value as? [String: Any]
     #expect(objectValue?["key"] as? String == "value")
 
-    // Test array value
     let array: JSONValue = [1, 2, 3]
     let arrayValue = array.value as? [Any]
     #expect(arrayValue?[0] as? Int == 1)
     #expect(arrayValue?[1] as? Int == 2)
     #expect(arrayValue?[2] as? Int == 3)
   }
-
-  // MARK: - Type-Specific Value Accessors
 
   @Test
   func isNil() {
@@ -228,8 +217,6 @@ struct JSONValueTests {
     #expect(JSONValue.object([:]).arrayValue == nil)
   }
 
-  // MARK: - ExpressibleByLiteral Tests
-
   @Test
   func expressibleByNilLiteral() {
     let json: JSONValue = nil
@@ -280,8 +267,6 @@ struct JSONValueTests {
     #expect(json == expected)
   }
 
-  // MARK: - CustomStringConvertible Tests
-
   @Test
   func description() {
     #expect(JSONValue.null.description == "<null>")
@@ -291,23 +276,18 @@ struct JSONValueTests {
     #expect(JSONValue.bool(true).description == "true")
     #expect(JSONValue.bool(false).description == "false")
 
-    // Test object description
     let object: JSONValue = ["key": "value"]
     #expect(object.description.contains("key"))
     #expect(object.description.contains("value"))
 
-    // Test array description
     let array: JSONValue = [1, 2, 3]
     #expect(array.description.contains("1"))
     #expect(array.description.contains("2"))
     #expect(array.description.contains("3"))
   }
 
-  // MARK: - Hashable Tests
-
   @Test
   func equality() {
-    // Test same values
     #expect(JSONValue.null == JSONValue.null)
     #expect(JSONValue.string("test") == JSONValue.string("test"))
     #expect(JSONValue.integer(42) == JSONValue.integer(42))
@@ -315,25 +295,21 @@ struct JSONValueTests {
     #expect(JSONValue.bool(true) == JSONValue.bool(true))
     #expect(JSONValue.bool(false) == JSONValue.bool(false))
 
-    // Test different values
     #expect(JSONValue.string("test") != JSONValue.string("different"))
     #expect(JSONValue.integer(42) != JSONValue.integer(43))
     #expect(JSONValue.double(3.14) != JSONValue.double(3.15))
     #expect(JSONValue.bool(true) != JSONValue.bool(false))
 
-    // Test different types
     #expect(JSONValue.string("42") != JSONValue.integer(42))
     #expect(JSONValue.integer(42) != JSONValue.double(42.0))
     #expect(JSONValue.null != JSONValue.string(""))
 
-    // Test objects
     let object1: JSONValue = ["key": "value"]
     let object2: JSONValue = ["key": "value"]
     let object3: JSONValue = ["key": "different"]
     #expect(object1 == object2)
     #expect(object1 != object3)
 
-    // Test arrays
     let array1: JSONValue = [1, 2, 3]
     let array2: JSONValue = [1, 2, 3]
     let array3: JSONValue = [1, 2, 4]
@@ -363,12 +339,9 @@ struct JSONValueTests {
     #expect(set.contains(.array([1, 2, 3])))
   }
 
-  // MARK: - JSONArray and JSONObject Extension Tests
-
   @Test
   func jsonArrayDecode() throws {
     let jsonArray: JSONArray = [JSONValue.integer(1), JSONValue.integer(2), JSONValue.integer(3)]
-    // Decode each element individually since the JSONArray.decode method has issues
     let decoded: [Int] = try jsonArray.map { try $0.decode(as: Int.self) }
     #expect(decoded == [1, 2, 3])
   }
@@ -405,18 +378,14 @@ struct JSONValueTests {
 
   @Test
   func jsonObjectInitFromCodableFailure() {
-    // Test with a simple string, which should fail because it's not an object
     #expect(throws: (any Error).self) {
       try JSONObject("not an object")
     }
 
-    // Test with an integer, which should also fail
     #expect(throws: (any Error).self) {
       try JSONObject(42)
     }
   }
-
-  // MARK: - Error Handling Tests
 
   @Test
   func invalidJSONDecoding() {
@@ -438,8 +407,6 @@ struct JSONValueTests {
     #expect(decoded.userName == "John")
     #expect(decoded.userAge == 30)
   }
-
-  // MARK: - Edge Cases
 
   @Test
   func emptyObjectAndArray() {
@@ -486,8 +453,8 @@ struct JSONValueTests {
 
   @Test
   func largeNumbers() {
-    let largeInt: JSONValue = 9_223_372_036_854_775_807  // Int.max
-    let largeDouble: JSONValue = 1.7976931348623157e+308  // Double.max
+    let largeInt: JSONValue = 9_223_372_036_854_775_807
+    let largeDouble: JSONValue = 1.7976931348623157e+308
 
     #expect(largeInt.intValue == 9_223_372_036_854_775_807)
     #expect(largeDouble.doubleValue == 1.7976931348623157e+308)
@@ -504,8 +471,6 @@ struct JSONValueTests {
     #expect(escapedString.stringValue == "Line 1\nLine 2\tTab")
   }
 }
-
-// MARK: - Helper Types
 
 struct CodableValue: Codable, Equatable {
   let integer: Int

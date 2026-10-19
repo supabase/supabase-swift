@@ -1,19 +1,4 @@
 #!/usr/bin/env bash
-# Turns on the Storage features the Supabase CLI leaves off, for the integration tests.
-#
-# The CLI starts Storage without object lifecycles, object versioning, analytics (Iceberg) buckets
-# or a CDN purge endpoint, and has no setting for them. On the Docker stack, this script recreates the CLI's
-# storage container with the same configuration plus:
-#
-# - STORAGE_LIFECYCLE_ENABLED=true, STORAGE_VERSIONING_ENABLED=true and ICEBERG_ENABLED=true;
-# - CDN_PURGE_ENDPOINT_URL pointing at a stub that records each purge Storage forwards. The stub
-#   answers `GET /requests` with them and `DELETE /requests` clears them, on host port 54329.
-#
-# Run it after `supabase start`, then run the tests with STORAGE_TEST_FEATURES=1. The native
-# stack (macOS) runs no containers, so it cannot use this script; its tests check that Storage
-# refuses each call instead.
-#
-# Usage: enable-storage-test-features.sh [project-dir]  (default: Tests/IntegrationTests)
 set -euo pipefail
 
 PROJECT_DIR=${1:-Tests/IntegrationTests}

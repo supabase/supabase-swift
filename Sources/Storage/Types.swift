@@ -1203,8 +1203,6 @@ public struct BucketSortColumn: RawRepresentable, Hashable, Sendable, Expressibl
   public static let updatedAt = BucketSortColumn(rawValue: "updated_at")
 }
 
-// MARK: - ByteCount
-
 /// A number of bytes, for a bucket's file-size limit, in any form Storage reads.
 ///
 /// Storage accepts an exact count or a size string such as `"1.5mb"`, so the value is kept as it
@@ -1300,8 +1298,6 @@ extension ByteCount: Encodable {
   }
 }
 
-// MARK: - ResizeMode
-
 /// The strategy used to fit an image into the requested dimensions during server-side transformation.
 ///
 /// ```swift
@@ -1340,8 +1336,6 @@ extension ResizeMode: ExpressibleByStringLiteral {
   public init(stringLiteral value: String) { self.init(rawValue: value) }
 }
 
-// MARK: - ImageFormat
-
 /// The output image format produced by the server-side image transformation pipeline.
 ///
 /// ```swift
@@ -1378,8 +1372,6 @@ extension ImageFormat: ExpressibleByStringLiteral {
   /// Creates a ``ImageFormat`` from a string literal.
   public init(stringLiteral value: String) { self.init(rawValue: value) }
 }
-
-// MARK: - SortOrder
 
 /// Sort direction for ``StorageBucket/list(path:options:)`` results.
 ///
@@ -1422,8 +1414,6 @@ extension SortOrder: Encodable {
   }
 }
 
-// MARK: - DownloadBehavior
-
 /// Controls the `Content-Disposition` header behavior for signed and public URLs.
 ///
 /// ```swift
@@ -1453,8 +1443,6 @@ public enum DownloadBehavior: Sendable {
     }
   }
 }
-
-// MARK: - Bucket options
 
 /// The settings of a new Storage bucket, for ``StorageClient/createBucket(_:options:)``.
 ///
@@ -1584,8 +1572,6 @@ public struct UpdateBucketOptions: Hashable, Sendable {
     self.versioningStatus = versioningStatus
   }
 }
-
-// MARK: - ImageTransform
 
 /// A server-side image transformation applied before the asset is served.
 ///
@@ -1736,8 +1722,6 @@ public struct ImageTransform: Hashable, Sendable {
   }
 }
 
-// MARK: - Gravity
-
 /// Which part of an image a ``ResizeMode/cover`` crop keeps.
 ///
 /// ```swift
@@ -1811,8 +1795,6 @@ extension Gravity: ExpressibleByStringLiteral {
   public init(stringLiteral value: String) { self.init(rawValue: value) }
 }
 
-// MARK: - FocalPoint
-
 /// The point of an image a ``Gravity/focalPoint`` crop keeps, as fractions of the width and
 /// height from the top-left corner, each in `0...1`.
 public struct FocalPoint: Hashable, Sendable {
@@ -1876,7 +1858,6 @@ public struct LifecycleRule: Hashable, Codable, Sendable {
     case id, status, filter, noncurrentVersionExpiration
   }
 
-  // Storage requires `filter`, and accepts only the empty object.
   /// Encodes the rule with the empty `filter` Storage requires.
   public func encode(to encoder: any Encoder) throws {
     var container = encoder.container(keyedBy: EncodingKeys.self)

@@ -14,7 +14,6 @@
 //       The SDK reads rpId from the server response — no client-side configuration needed.
 //
 
-// WebAuthn/passkey APIs are experimental and live behind Auth's `Experimental` SPI.
 @_spi(Experimental) import Auth
 import AuthenticationServices
 import Supabase
@@ -26,7 +25,6 @@ import SwiftUI
   import AppKit
 #endif
 
-/// Returns a window to present the native passkey UI from.
 @MainActor
 private func webAuthnPresentationAnchor() -> ASPresentationAnchor {
   #if canImport(UIKit)
@@ -38,7 +36,6 @@ private func webAuthnPresentationAnchor() -> ASPresentationAnchor {
   #endif
 }
 
-/// Footer explaining the domain/entitlement setup passkeys need.
 private struct WebAuthnSetupNote: View {
   var body: some View {
     Text(
@@ -50,8 +47,6 @@ private struct WebAuthnSetupNote: View {
     .foregroundColor(.secondary)
   }
 }
-
-// MARK: - First-factor sign-in (signed-out)
 
 struct SignInWithPasskeyView: View {
   @State private var error: Error?
@@ -102,7 +97,6 @@ struct SignInWithPasskeyView: View {
         isLoading = true
         defer { isLoading = false }
 
-        // On success, AuthController observes authStateChanges and RootView switches to HomeView.
         try await supabase.auth.signInWithPasskey(
           presentationAnchor: webAuthnPresentationAnchor()
         )
@@ -112,8 +106,6 @@ struct SignInWithPasskeyView: View {
     }
   }
 }
-
-// MARK: - Management (signed-in)
 
 struct WebAuthnPasskeysView: View {
   @State private var passkeys: [PasskeyListItem] = []

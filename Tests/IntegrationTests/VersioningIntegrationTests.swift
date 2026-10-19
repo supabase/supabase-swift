@@ -13,8 +13,6 @@ import Testing
   import FoundationNetworking
 #endif
 
-/// The `versionId` parameters reach Storage. The buckets keep versioning off, so each object has
-/// one version, its current one, and the tests address it by its id.
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil))
 struct VersioningIntegrationTests {
   @Test
@@ -67,11 +65,6 @@ struct VersioningIntegrationTests {
   }
 }
 
-/// A bucket's versioning status goes through create, update and read.
-///
-/// Storage reports the status from v1.81.0. An older stack ignores it, so the suite runs only
-/// where Storage reports one. Turning versioning on also needs `STORAGE_VERSIONING_ENABLED`, which
-/// `scripts/enable-storage-test-features.sh` sets.
 @Suite(
   .enabled("Storage reports a bucket's versioning status") {
     guard ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil else { return false }

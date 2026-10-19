@@ -35,7 +35,6 @@ struct PostgresValueTypesTests {
     filter.queryItems().map { "\($0.name)=\($0.value ?? "")" }.joined(separator: "&")
   }
 
-  /// Every operand is the text form, bare at top level. Quoted, a range or a `bytea` is a `22P02`.
   @Test
   func anOperandIsTheBareTextForm() {
     let columns = Row.columns
@@ -46,8 +45,6 @@ struct PostgresValueTypesTests {
       rendered(columns.payload.eq(_PostgresBytes(Data([0xde, 0xad])))) == #"payload=eq.\xdead"#)
   }
 
-  /// Only a `JSONValue` operand is encoded as JSON. When every unmapped column was a `JSONValue`, an
-  /// interval operand went out as `eq."1 day"`, and a range or a `bytea` one quoted is a `22P02`.
   @Test
   func aNonJSONOperandIsNotEncodedAsJSON() {
     let columns = Row.columns
@@ -58,8 +55,6 @@ struct PostgresValueTypesTests {
       rendered(columns.payload.isDistinct(_PostgresBytes(Data()))) == #"payload=isdistinct.\x"#)
   }
 
-  /// Inside a group or a list, a value with `,`, `)` or `\` is quoted and escaped; PostgREST
-  /// unquotes it before Postgres parses it.
   @Test
   func anOperandIsQuotedInAGroupAndAList() {
     let columns = Row.columns
@@ -90,7 +85,6 @@ struct PostgresValueTypesTests {
     #expect(_PostgresBytes.data(fromHex: rawValue) == data)
   }
 
-  /// Base64, an odd digit count and a non-hex digit are not the form PostgREST sends.
   @Test
   func bytesRejectAnythingButHex() {
     #expect(_PostgresBytes.data(fromHex: "3q2+7w==") == nil)
@@ -119,7 +113,6 @@ struct PostgresValueTypesTests {
     #expect(try JSONDecoder().decode(_PostgresTime.self, from: encodedTime) == time)
   }
 
-  /// A composite comes back as an object and goes out unchanged.
   @Test
   func anUnmappedValueRoundTripsItsJSON() throws {
     let json = Data(#"{"amount":1,"currency":"USD"}"#.utf8)

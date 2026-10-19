@@ -9,8 +9,6 @@ import Foundation
 import Storage
 import Testing
 
-/// `copy` sends `CopyOptions` the way Storage's `object/copy` route reads them, and returns the
-/// copy as an `UploadedObject`.
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil))
 struct CopyOptionsIntegrationTests {
   static func seededBucket() async throws -> (name: String, bucket: StorageBucket) {
@@ -75,7 +73,6 @@ struct CopyOptionsIntegrationTests {
     let (name, bucket) = try await Self.seededBucket()
     defer { StorageIntegration.dropBucket(name) }
 
-    // The limit is a project setting, off on the local stack, so 1001 paths go through.
     let paths = ["src.txt"] + (1...1000).map { "missing-\($0).txt" }
     let removed = try await bucket.remove(paths: paths)
     #expect(removed.map(\.name) == ["src.txt"])

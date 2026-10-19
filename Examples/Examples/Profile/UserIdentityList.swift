@@ -296,7 +296,6 @@ struct UserIdentityList: View {
         try await supabase.auth.linkIdentity(provider: provider)
       }
 
-      // Refresh the list
       id = UUID()
     } catch {
       self.error = error
@@ -312,7 +311,6 @@ struct UserIdentityList: View {
 
       try await supabase.auth.unlinkIdentity(identity)
 
-      // Refresh the list
       id = UUID()
     } catch {
       self.error = error

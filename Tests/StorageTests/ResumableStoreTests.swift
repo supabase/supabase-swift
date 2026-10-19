@@ -47,8 +47,6 @@ struct ResumableStoreTests {
       cacheControl: "max-age=3600", metadata: ["key": "value"])
   }
 
-  // MARK: - Fingerprint
-
   @Test
   func fingerprintIgnoresTheURLAndFollowsBucketPathSizeAndDate() throws {
     let a = try writeFile("a.mp4")
@@ -105,8 +103,6 @@ struct ResumableStoreTests {
           url: Self.url, bucketId: "bucket", path: "video.mp4", data: Data("abd".utf8))
     )
   }
-
-  // MARK: - Records
 
   @Test
   func saveWritesOneJSONFilePerRecordAndLoadsItBack() throws {
@@ -179,8 +175,6 @@ struct ResumableStoreTests {
 
     #expect(try store.records() == [])
   }
-
-  // MARK: - Sources
 
   @Test
   func prepareUsesAFileInsideTheContainerInPlace() async throws {
