@@ -468,6 +468,31 @@ struct RealtimeChannelSubscriptionTests {
     await #expect(throws: (any Error).self) { try await subscription.value }
   }
 
+  /// A removal woken by a reconnect's reset stops the rejoin. The reset and the start of the
+  /// rejoin's join share one turn of the channel, so the removal finds the join in flight, not an
+  /// `.unsubscribed` channel whose rejoin is still to come and would join it once unmapped.
+  @Test(.timeLimit(.minutes(1)))
+  func removalAfterTheResetStopsTheRejoin() async throws {
+    let h = Harness(timeout: .seconds(10), maxRetryAttempts: 3)
+    // Keeps the client from disconnecting once the topic's channel is removed.
+    _ = await h.client.channel("other")
+    let channel = await h.client.channel("room")
+    _ = try await h.subscribe(channel)
+
+    let statuses = await channel.statusChanges()
+    let rejoin = Task { try await channel.rejoinAfterReconnect() }
+    for await status in statuses where status == .unsubscribed { break }
+    #expect(await channel.status == .subscribing)
+    await h.client.removeChannel(channel)
+
+    #expect(await channel.status == .unsubscribed)
+    #expect(await h.client.channels[channel.topic] == nil)
+    await #expect(throws: (any Error).self) { try await rejoin.value }
+    // Past the attempt's timeout and the first retry delay: at most the rejoin's first join.
+    await h.clock.advance(by: .seconds(12))
+    #expect(h.sent(ChannelEvent.join).count <= 2)
+  }
+
   /// `removeAllChannels()` must keep each channel routable until its `phx_close` arrives: a
   /// close for a topic no longer in `channels` is dropped, and the unsubscribe then waits for
   /// the whole timeout.

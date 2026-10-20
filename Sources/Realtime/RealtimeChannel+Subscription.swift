@@ -133,6 +133,16 @@ extension RealtimeChannel {
     return !unsubscribeRequested
   }
 
+  /// Resets the channel after a reconnect and joins again unless the caller has unsubscribed it.
+  ///
+  /// The reset and the start of the join run in one turn of this actor. An ``unsubscribe()`` or a
+  /// removal that arrives after the reset finds the join in flight and stops it; it never finds
+  /// an `.unsubscribed` channel whose rejoin is still to come.
+  func rejoinAfterReconnect() async throws {
+    guard resetForReconnect() else { return }
+    try await awaitSubscribe(startSubscribe())
+  }
+
   /// The socket was closed by ``RealtimeClient/disconnect(code:reason:)``: nothing in flight can
   /// be answered any more.
   func socketDidDisconnect() {
@@ -184,12 +194,20 @@ extension RealtimeChannel {
   // MARK: - Subscribe flow
 
   private func beginSubscribe() async throws {
+    try await awaitSubscribe(startSubscribe())
+  }
+
+  /// Starts the subscribe attempts and moves to `.subscribing`, without a suspension point.
+  private func startSubscribe() -> Task<Void, any Error> {
     logger.debug("Beginning subscribe flow for channel '\(topic)'")
     let task = Task<Void, any Error> {
       try await runSubscribeAttempts()
     }
     setState(.subscribing(task))
+    return task
+  }
 
+  private func awaitSubscribe(_ task: Task<Void, any Error>) async throws {
     do {
       // Forward cancellation of the caller's task to the spawned subscribe task. Without this,
       // `task.value` would keep waiting for the inner retry loop even after the caller cancels.
