@@ -66,6 +66,10 @@ extension RealtimeChannel {
   /// Leaves the Realtime topic and transitions the channel to
   /// ``RealtimeChannelStatus/unsubscribed``. Cancels an in-flight subscribe if one is running.
   public func unsubscribe() async {
+    // Probe the socket before reading `state`: the probe suspends, and another caller could move
+    // the state while this one waits. After it, the switch and the transition run without a
+    // suspension point.
+    let socketConnected = await isSocketConnected()
     switch state {
     case .unsubscribed:
       logger.debug("Unsubscribe no-op for channel '\(topic)': already unsubscribed")
@@ -79,7 +83,7 @@ extension RealtimeChannel {
       task.cancel()
       // Subscribe hadn't completed yet, so the server may not recognize the channel and will
       // likely never send `phx_close`. Don't wait for it.
-      await beginUnsubscribe(waitForServerClose: false, sendLeave: isSocketConnected())
+      await beginUnsubscribe(waitForServerClose: false, sendLeave: socketConnected)
 
     case .subscribed:
       // We had a live subscription; wait (bounded) for the server's `phx_close` so observers see
@@ -88,7 +92,6 @@ extension RealtimeChannel {
       // Unless the socket is dead: the server-side channel died with the connection,
       // `phx_leave` would only be buffered into the *next* connection as a stale frame, and
       // `phx_close` can never arrive — waiting would stall for the full timeout (issue #1145).
-      let socketConnected = await isSocketConnected()
       await beginUnsubscribe(waitForServerClose: socketConnected, sendLeave: socketConnected)
     }
   }
