@@ -52,9 +52,10 @@ package struct PresenceTracker: Sendable {
 
   package init() {}
 
-  /// Forgets the server's view at a rejoin. The tracked payload survives so it can be re-sent.
+  /// Starts a rejoin: diffs wait for the new join's first state again. The last known set stays,
+  /// so that state reports who left during the outage, and the tracked payload stays so it can
+  /// be re-sent.
   package mutating func reset() {
-    state = PresenceState()
     hasState = false
     pendingDiffs = []
   }

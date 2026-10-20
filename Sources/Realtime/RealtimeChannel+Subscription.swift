@@ -64,8 +64,11 @@ extension RealtimeChannel {
   }
 
   /// Leaves the Realtime topic and transitions the channel to
-  /// ``RealtimeChannelStatus/unsubscribed``. Cancels an in-flight subscribe if one is running.
+  /// ``RealtimeChannelStatus/unsubscribed``. Cancels an in-flight subscribe if one is running,
+  /// and forgets the presence state passed to ``track(state:)``.
   public func unsubscribe() async {
+    // Even when already unsubscribed: the channel may still be rejoined on the next reconnect.
+    presence.trackedPayload = nil
     // Probe the socket before reading `state`: the probe suspends, and another caller could move
     // the state while this one waits. After it, the switch and the transition run without a
     // suspension point.

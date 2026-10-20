@@ -743,13 +743,17 @@
         let realtime = client.realtime
         let isAna: @Sendable (PresenceV2) -> Bool = { $0.state["user"] == "ana" }
         try await withTimeout(.seconds(15)) {
-          // Joined, then left with the dropped socket, then joined again by the re-track.
-          var sawLeave = false
+          // Joined, then left with the dropped socket and joined again by the re-track. The
+          // leave and the new join come from different server processes, in either order.
           var rejoined = false
+          var sawLeave = false
+          var sawRejoin = false
           for await change in changes {
-            if rejoined, change.leaves.values.contains(where: isAna) { sawLeave = true }
-            if sawLeave, change.joins.values.contains(where: isAna) { return }
-            if !rejoined, change.joins.values.contains(where: isAna) {
+            if rejoined {
+              sawLeave = sawLeave || change.leaves.values.contains(where: isAna)
+              sawRejoin = sawRejoin || change.joins.values.contains(where: isAna)
+              if sawLeave, sawRejoin { return }
+            } else if change.joins.values.contains(where: isAna) {
               rejoined = true
               // What the client does after a dropped socket comes back.
               await realtime.disconnect()
