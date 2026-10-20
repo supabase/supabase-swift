@@ -243,7 +243,9 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     await stateManager.unsubscribe()
   }
 
-  func resetForReconnect() async {
+  /// Resets the channel for a rejoin. Returns whether it should rejoin.
+  @discardableResult
+  func resetForReconnect() async -> Bool {
     await stateManager.resetForReconnect()
   }
 

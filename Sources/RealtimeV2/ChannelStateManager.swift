@@ -95,6 +95,10 @@ actor ChannelStateManager {
   private(set) var joinRef: String?
   private var pushes: [String: PushV2] = [:]
 
+  /// Whether the caller's latest request was ``unsubscribe()``. A reconnect
+  /// rejoins only the channels the caller has not unsubscribed.
+  private var unsubscribeRequested = false
+
   // MARK: - Config & injected operations
 
   private let logger: (any SupabaseLogger)?
@@ -179,6 +183,7 @@ actor ChannelStateManager {
   /// the second caller waits for the first attempt to finish instead of
   /// starting a new one.
   func subscribe() async throws {
+    unsubscribeRequested = false
     switch state {
     case .subscribed:
       logger?.debug("Subscribe no-op for channel '\(topic)': already subscribed")
@@ -208,6 +213,7 @@ actor ChannelStateManager {
   /// Drive the channel to ``State/unsubscribed``. Cancels an in-flight
   /// subscribe if one is running.
   func unsubscribe() async {
+    unsubscribeRequested = true
     switch state {
     case .unsubscribed:
       logger?.debug("Unsubscribe no-op for channel '\(topic)': already unsubscribed")
@@ -253,7 +259,12 @@ actor ChannelStateManager {
   /// `stateChanges`. Transitioning to `.unsubscribed` here wakes it up
   /// immediately — the server's `phx_close` won't arrive on the dead socket
   /// anyway.
-  func resetForReconnect() {
+  ///
+  /// - Returns: Whether the channel should rejoin: `false` once the caller
+  ///   has unsubscribed it, so a reconnect never joins a channel that is
+  ///   being removed.
+  @discardableResult
+  func resetForReconnect() -> Bool {
     joinRef = nil
     pushes = [:]
     switch state {
@@ -267,6 +278,7 @@ actor ChannelStateManager {
     case .unsubscribed:
       break
     }
+    return !unsubscribeRequested
   }
 
   // MARK: - Server signals
@@ -466,11 +478,13 @@ actor ChannelStateManager {
       }
     }
 
+    // A reset or a server close may have ended the unsubscribe while it
+    // waited, and a newer subscribe may own the state and `joinRef` since:
+    // clearing them would strand that join.
+    guard case .unsubscribing = state else { return }
     joinRef = nil
     pushes = [:]
-    if case .unsubscribing = state {
-      updateState(.unsubscribed)
-    }
+    updateState(.unsubscribed)
   }
 
   private func updateState(_ newState: State) {
