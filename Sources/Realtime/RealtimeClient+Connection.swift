@@ -19,7 +19,7 @@ extension RealtimeClient {
     /// `connect()` was called.
     case connectRequested
     /// The transport handed back an open socket.
-    case socketOpened(any WebSocket)
+    case socketOpened(any WebSocketConnection)
     /// The transport failed while `connect()` was waiting on it.
     case socketOpenFailed
     /// `disconnect(code:reason:)` was called.
@@ -37,9 +37,9 @@ extension RealtimeClient {
     case openSocket
     /// Start the reader and heartbeat loops and flush buffered frames. After an automatic
     /// reconnect, also rejoin the channels.
-    case installSocket(any WebSocket, rejoinChannels: Bool)
+    case installSocket(any WebSocketConnection, rejoinChannels: Bool)
     /// Close a socket, either the current one or one that opened too late.
-    case closeSocket(any WebSocket, code: Int?, reason: String)
+    case closeSocket(any WebSocketConnection, code: Int?, reason: String)
     /// Stop the reader and heartbeat loops of the socket that just went away.
     case stopSocketLoops
     /// Cancel every task the client owns, including a `connect()` attempt in flight.
@@ -116,7 +116,8 @@ extension RealtimeClient {
     case (.connected(let conn), .socketFailed(let reason)):
       state = .reconnecting
       return [
-        .closeSocket(conn, code: nil, reason: "error: \(reason)"),
+        // 1001 rather than a normal closure: the client gives up on a connection that failed.
+        .closeSocket(conn, code: 1001, reason: "error: \(reason)"),
         .stopSocketLoops,
         .startReconnect(reason: "error: \(reason)"),
       ]
@@ -164,13 +165,17 @@ extension RealtimeClient {
       pendingHeartbeatRef = nil
       listenForMessages(on: conn)
       startHeartbeating()
-      flushSendBuffer()
-      if rejoinChannels {
-        Task.immediateIfAvailable { await self.rejoinChannels() }
+      let generation = generation
+      Task.immediateIfAvailable {
+        await self.flushSendBuffer(on: conn)
+        // A disconnect or a newer socket during the flush owns the channels now.
+        guard rejoinChannels, generation == self.generation else { return }
+        await self.rejoinChannels()
       }
 
     case .closeSocket(let conn, let code, let reason):
-      conn.close(code: code, reason: reason)
+      // A `nil` code is a normal closure.
+      conn.close(code: WebSocketCloseCode(rawValue: code ?? 1000), reason: reason)
 
     case .stopSocketLoops:
       tasks.cancel(at: .socketReader)
@@ -317,9 +322,9 @@ extension RealtimeClient {
   /// The table has no attempt identity, so a cancelled attempt drops its outcome here instead
   /// of handing it to whichever attempt is current by then.
   private func openSocket() async throws {
-    let conn: any WebSocket
+    let conn: any WebSocketConnection
     do {
-      conn = try await wsTransport(webSocketURL, options.headers.dictionary)
+      conn = try await openConnection()
     } catch {
       options.logger.error("Connection failed: \(error)")
       if !Task.isCancelled {
@@ -328,15 +333,22 @@ extension RealtimeClient {
       throw error
     }
 
-    if Task.isCancelled {
-      conn.close(code: nil, reason: "Connection cancelled")
-      throw CancellationError()
-    }
     apply(.socketOpened(conn))
     guard case .connected = connection else {
       throw CancellationError()
     }
     options.logger.debug("Connected to realtime WebSocket")
+  }
+
+  /// Asks the transport for a connection. One that opens after the calling task was cancelled
+  /// is closed here, since nothing else will ever see it.
+  private func openConnection() async throws -> any WebSocketConnection {
+    let conn = try await transport.connect(to: webSocketURL, headerFields: options.headers)
+    if Task.isCancelled {
+      conn.close(code: .normalClosure, reason: "Connection cancelled")
+      throw CancellationError()
+    }
+    return conn
   }
 
   func rejoinChannels() async {
@@ -355,8 +367,8 @@ extension RealtimeClient {
   /// Detached, and `self` is resolved per event: a loop task isolated to this actor would retain
   /// it for as long as the socket stays open, so a client released while connected could never
   /// reach `deinit` and would leak itself, the socket and its `URLSession`.
-  private func listenForMessages(on conn: any WebSocket) {
-    let stream = conn.events
+  private func listenForMessages(on connection: any WebSocketConnection) {
+    let stream = connection.events
     let generation = generation
     let reader = Task.detached { [weak self] in
       for await event in stream {
@@ -398,17 +410,21 @@ extension RealtimeClient {
 
     let heartbeatRef = makeRef()
     pendingHeartbeatRef = heartbeatRef
-    push(
-      RealtimeMessageV2(
-        joinRef: nil,
-        ref: heartbeatRef,
-        topic: "phoenix",
-        event: "heartbeat",
-        payload: [:]
-      )
-    )
     recordHeartbeat(.sent)
-    await setAuth()
+    // Not awaited: a write stalled on a half-open socket must not hold up the loop, or the
+    // next tick never reports the missing acknowledgement.
+    Task.immediateIfAvailable {
+      await self.push(
+        RealtimeMessageV2(
+          joinRef: nil,
+          ref: heartbeatRef,
+          topic: "phoenix",
+          event: "heartbeat",
+          payload: [:]
+        )
+      )
+      await self.setAuth()
+    }
   }
 
   // MARK: Socket events
@@ -416,14 +432,14 @@ extension RealtimeClient {
   /// Applies one frame from the socket installed at `generation`. Frames from an older socket
   /// are dropped: a reconnect already replaced it, and its close must not tear down the
   /// healthy connection.
-  func handleSocketEvent(_ event: LegacyWebSocketEvent, generation: Int) async {
+  func handleSocketEvent(_ event: WebSocketEvent, generation: Int) async {
     guard generation == self.generation else {
       options.logger.debug("Ignoring event from a stale connection: \(event)")
       return
     }
 
     switch event {
-    case .binary(let data):
+    case .frame(.binary(let data)):
       do {
         let broadcast = try serializer.decodeBinary(data)
         options.logger.debug(
@@ -434,18 +450,18 @@ extension RealtimeClient {
         options.logger.error("Failed to decode binary frame: \(error)")
       }
 
-    case .text(let text):
+    case .frame(.text(let text)):
       do {
         await onMessage(try serializer.decodeText(text))
       } catch {
         options.logger.error("Failed to decode text frame: \(error)")
       }
 
-    case .close(let code, let reason):
+    case .closed(let code, let reason):
       options.logger.debug(
-        "WebSocket closed. Code: \(code?.description ?? "<none>"), Reason: \(reason)"
+        "WebSocket closed. Code: \(code?.rawValue.description ?? "<none>"), Reason: \(reason ?? "<none>")"
       )
-      apply(.socketClosed(code: code, reason: reason))
+      apply(.socketClosed(code: code?.rawValue, reason: reason))
     }
   }
 
@@ -508,9 +524,7 @@ extension RealtimeClient {
   /// loop in `startReconnect` to retry.
   private func performReconnectAttempt() async throws {
     guard case .reconnecting = connection else { throw CancellationError() }
-    let conn = try await wsTransport(webSocketURL, options.headers.dictionary)
-    try Task.checkCancellation()
-    apply(.socketOpened(conn))
+    apply(.socketOpened(try await openConnection()))
     // `disconnect()` ran during the handshake; the machine closed the late socket.
     guard case .connected = connection else { throw CancellationError() }
   }

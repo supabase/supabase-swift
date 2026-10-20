@@ -352,7 +352,7 @@ struct FakeRealtimeServerTests {
       to: URL(string: "ws://fake")!, headerFields: [:])
     let events = record(connection)
 
-    await connection.close(code: .normalClosure, reason: "bye")
+    connection.close(code: .normalClosure, reason: "bye")
 
     #expect(await waitUntil { events.value.count == 1 })
     #expect(events.value == [.closed(code: .normalClosure, reason: "bye")])

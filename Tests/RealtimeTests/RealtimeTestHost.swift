@@ -58,7 +58,8 @@ final class RealtimeTestHost: Sendable {
         let observer = Task {
           let serializer = RealtimeSerializer()
           for await event in server.events {
-            if case .text(let text) = event, let message = try? serializer.decodeText(text) {
+            if case .frame(.text(let text)) = event, let message = try? serializer.decodeText(text)
+            {
               state.withValue { $0.frames.append(message) }
             }
             continuation.yield()

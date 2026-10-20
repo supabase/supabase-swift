@@ -498,6 +498,33 @@ struct RealtimeChannelSubscriptionTests {
     #expect(await statuses.next() == nil)
   }
 
+  @Test(.timeLimit(.minutes(1)))
+  func joinConfirmedWhileThePhxJoinIsStillSendingCompletesTheSubscribe() async throws {
+    let h = Harness()
+    let channel = await h.client.channel("room")
+    let statuses = await channel.statusChanges()
+    let server = h.server
+    // The join's send stays in flight until its reply has already subscribed the channel.
+    h.socket.onSend { frame in
+      guard case .text(let text) = frame,
+        let join = try? RealtimeSerializer().decodeText(text), join.event == ChannelEvent.join,
+        let reply = try? RealtimeSerializer().encodeText(
+          RealtimeMessageV2(
+            joinRef: join.ref, ref: join.ref, topic: join.topic, event: ChannelEvent.reply,
+            payload: ["status": "ok", "response": ["postgres_changes": .array([])]]
+          )
+        )
+      else { return }
+      server.send(reply)
+      for await status in statuses where status == .subscribed { break }
+    }
+
+    try await channel.subscribe()
+
+    #expect(await channel.status == .subscribed)
+    #expect(h.sent(ChannelEvent.join).count == 1)
+  }
+
   // MARK: - Harness
 
   /// Parks one caller in `park()` until `open()`. Tests wait for `isParked` before acting.
@@ -623,8 +650,8 @@ struct RealtimeChannelSubscriptionTests {
       server.send(try RealtimeSerializer().encodeText(message))
     }
 
-    private static func decode(_ frame: LegacyWebSocketEvent) -> RealtimeMessageV2? {
-      guard case .text(let text) = frame else { return nil }
+    private static func decode(_ frame: WebSocketEvent) -> RealtimeMessageV2? {
+      guard case .frame(.text(let text)) = frame else { return nil }
       return try? RealtimeSerializer().decodeText(text)
     }
   }

@@ -15,11 +15,6 @@ import Logging
   import FoundationNetworking
 #endif
 
-/// Factory function for returning a new WebSocket connection.
-typealias LegacyWebSocketTransport =
-  @Sendable (_ url: URL, _ headers: [String: String]) async throws ->
-  any WebSocket
-
 /// An empty actor is a serial executor. One is created per ``RealtimeClient``; the client and
 /// every channel it creates report its executor as their own, so Swift treats them as a single
 /// isolation domain: hopping between them is free, and the compiler still checks every access.
@@ -66,7 +61,7 @@ actor RealtimeExecutor {}
 public actor RealtimeClient {
   nonisolated let url: URL
   nonisolated let options: RealtimeClientOptions
-  nonisolated let wsTransport: LegacyWebSocketTransport
+  nonisolated let transport: any WebSocketTransport
   nonisolated let http: HTTPClient
   nonisolated let serializer = RealtimeSerializer()
   nonisolated let clock: any Clock<Duration>
@@ -87,7 +82,7 @@ public actor RealtimeClient {
     case disconnected
     /// `connect()` is waiting on the transport (`connectAttempt`).
     case connecting
-    case connected(any WebSocket)
+    case connected(any WebSocketConnection)
     /// The reconnect loop (`tasks`, at `.connection`) is retrying with backoff.
     case reconnecting
 
@@ -143,7 +138,7 @@ public actor RealtimeClient {
   var generation = 0
 
   /// Frames pushed while the socket was not connected, sent in order once it is.
-  var sendBuffer: [OutgoingFrame] = []
+  var sendBuffer: [WebSocketFrame] = []
 
   /// Retains the optional app-lifecycle observer for the client's lifetime.
   /// Stored as `AnyObject?` so this type remains available on platforms where
@@ -183,13 +178,10 @@ public actor RealtimeClient {
     self.init(
       url: url,
       options: options,
-      wsTransport: { url, headers in
-        return try await URLSessionWebSocket.connect(
-          to: url,
-          headers: headers,
-          session: options.session
-        )
-      },
+      transport: URLSessionWebSocketTransport(
+        configuration: options.session?.configuration ?? .default,
+        delegate: options.session?.delegate
+      ),
       http: HTTPClient(configuration: options.http, appending: interceptors),
       clock: options.clock
     )
@@ -198,12 +190,12 @@ public actor RealtimeClient {
   /// Designated initializer.
   ///
   /// `clock` is a separate parameter from ``RealtimeClientOptions/clock`` so tests can pair a
-  /// `TestClock` with a stub `wsTransport`. The public initializer forwards `options.clock`, so
+  /// `TestClock` with a stub `transport`. The public initializer forwards `options.clock`, so
   /// the two only ever differ inside this package's own tests.
   init(
     url: URL,
     options: RealtimeClientOptions,
-    wsTransport: @escaping LegacyWebSocketTransport,
+    transport: any WebSocketTransport,
     http: HTTPClient,
     clock: any Clock<Duration>
   ) {
@@ -214,7 +206,7 @@ public actor RealtimeClient {
 
     self.url = url
     self.options = options
-    self.wsTransport = wsTransport
+    self.transport = transport
     self.http = http
     self.clock = clock
     self.webSocketURL = Self.realtimeWebSocketURL(
@@ -241,7 +233,7 @@ public actor RealtimeClient {
     // actor, so reading isolated state here is safe.
     switch connection {
     case .connected(let conn):
-      conn.close(code: nil, reason: "Client deallocated")
+      conn.close(code: .normalClosure, reason: "Client deallocated")
     case .connecting:
       connectAttempt?.cancel()
     case .reconnecting:
@@ -500,19 +492,6 @@ public actor RealtimeClient {
 
   // MARK: - Sending
 
-  /// A frame waiting for, or going out on, the socket.
-  enum OutgoingFrame {
-    case text(String)
-    case binary(Data)
-
-    func send(on connection: any WebSocket) {
-      switch self {
-      case .text(let text): connection.send(text)
-      case .binary(let data): connection.send(data)
-      }
-    }
-  }
-
   /// Sends a message over the WebSocket, buffering it if the socket is not yet connected.
   ///
   /// If the socket is connected, the message is serialized and sent immediately.
@@ -520,9 +499,9 @@ public actor RealtimeClient {
   /// connection is established.
   ///
   /// - Parameter message: The ``RealtimeMessageV2`` to send.
-  public func push(_ message: RealtimeMessageV2) {
+  public func push(_ message: RealtimeMessageV2) async {
     do {
-      send(.text(try serializer.encodeText(message)))
+      await send(.text(try serializer.encodeText(message)))
     } catch {
       options.logger.error(
         """
@@ -543,9 +522,9 @@ public actor RealtimeClient {
     topic: String,
     event: String,
     jsonPayload: JSONObject
-  ) {
+  ) async {
     do {
-      send(
+      await send(
         .binary(
           try serializer.encodeBroadcastPush(
             joinRef: joinRef, ref: ref, topic: topic, event: event, jsonPayload: jsonPayload
@@ -564,9 +543,9 @@ public actor RealtimeClient {
     topic: String,
     event: String,
     binaryPayload: Data
-  ) {
+  ) async {
     do {
-      send(
+      await send(
         .binary(
           try serializer.encodeBroadcastPush(
             joinRef: joinRef, ref: ref, topic: topic, event: event, binaryPayload: binaryPayload
@@ -590,20 +569,31 @@ public actor RealtimeClient {
     )
   }
 
-  private func send(_ frame: OutgoingFrame) {
-    if case .connected(let conn) = connection {
-      frame.send(on: conn)
-    } else {
+  /// Frames queue behind any still in `sendBuffer`, so a push made while the buffer is being
+  /// flushed cannot overtake it.
+  private func send(_ frame: WebSocketFrame) async {
+    guard case .connected(let conn) = connection, sendBuffer.isEmpty else {
       sendBuffer.append(frame)
+      return
+    }
+    await send(frame, on: conn)
+  }
+
+  /// Sends the buffered frames in order. Stops if `conn` stops being the current connection;
+  /// the frames left over wait for the next one.
+  func flushSendBuffer(on conn: any WebSocketConnection) async {
+    while !sendBuffer.isEmpty, case .connected(let current) = connection, current === conn {
+      await send(sendBuffer.removeFirst(), on: conn)
     }
   }
 
-  func flushSendBuffer() {
-    guard case .connected(let conn) = connection else { return }
-    let frames = sendBuffer
-    sendBuffer = []
-    for frame in frames {
-      frame.send(on: conn)
+  /// A failed send closes the connection, and the reader reports that close, so the error is
+  /// only logged here.
+  private func send(_ frame: WebSocketFrame, on conn: any WebSocketConnection) async {
+    do {
+      try await conn.send(frame)
+    } catch {
+      options.logger.error("Failed to send frame: \(error)")
     }
   }
 

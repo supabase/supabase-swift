@@ -1,6 +1,7 @@
 import Clocks
 import ConcurrencyExtras
 import Foundation
+import HTTPTypes
 import TestHelpers
 import Testing
 
@@ -36,7 +37,7 @@ struct RealtimeClientConnectionTests {
       connect.url.absoluteString
         == "ws://localhost:54321/realtime/v1/websocket?apikey=key&vsn=2.0.0"
     )
-    #expect(connect.headers["apikey"] == "key")
+    #expect(connect.headers[HTTPField.Name("apikey")!] == "key")
   }
 
   @Test
@@ -88,7 +89,9 @@ struct RealtimeClientConnectionTests {
     await h.client.disconnect(reason: "test reason")
 
     #expect(await h.client.status == .disconnected)
-    #expect(h.sockets.value.first?.sentEvents.last == .close(code: nil, reason: "test reason"))
+    #expect(
+      h.sockets.value.first?.sentEvents.last == .closed(code: .normalClosure, reason: "test reason")
+    )
   }
 
   @Test
@@ -202,6 +205,31 @@ struct RealtimeClientConnectionTests {
     #expect(h.sockets.value.first?.isClosed == true)
   }
 
+  @Test(.timeLimit(.minutes(1)))
+  func heartbeatStuckOnItsWriteStillTimesOutAndReconnects() async throws {
+    let h = Harness(heartbeatInterval: .seconds(25), reconnectDelay: .seconds(1))
+    try await h.client.connect()
+    var beats = await h.client.heartbeats().makeAsyncIterator()
+    var statuses = await h.client.statusChanges().makeAsyncIterator()
+    let (stall, release) = AsyncStream<Void>.makeStream()
+    defer { release.finish() }
+    // A half-open socket: the heartbeat's write never completes.
+    h.sockets.value[0].onSend { _ in
+      for await _ in stall {}
+    }
+
+    await h.clock.advance(by: .seconds(25))
+    #expect(await beats.next() == .sent)
+    await h.clock.advance(by: .seconds(25))
+    #expect(await beats.next() == .timeout)
+
+    #expect(await statuses.next() == .connected)
+    #expect(await statuses.next() == .connecting)
+    await h.clock.advance(by: .seconds(1))
+    #expect(await statuses.next() == .connected)
+    #expect(h.sockets.value.first?.closeCode == 1001)
+  }
+
   // MARK: - Remote close
 
   @Test
@@ -291,7 +319,7 @@ struct RealtimeClientConnectionTests {
     let clock: SignalingTestClock
     let client: RealtimeClient
     /// The URL and headers of every transport call, in order.
-    let connects: LockIsolated<[(url: URL, headers: [String: String])]>
+    let connects: LockIsolated<[(url: URL, headers: HTTPFields)]>
     /// The client side of every socket opened, in order.
     let sockets: LockIsolated<[FakeWebSocket]>
     /// The server side of every socket opened, in order.
@@ -304,7 +332,7 @@ struct RealtimeClientConnectionTests {
       beforeConnect: @escaping @Sendable (_ attempt: Int) async throws -> Void = { _ in }
     ) {
       let clock = SignalingTestClock()
-      let connects = LockIsolated<[(url: URL, headers: [String: String])]>([])
+      let connects = LockIsolated<[(url: URL, headers: HTTPFields)]>([])
       let sockets = LockIsolated<[FakeWebSocket]>([])
       let servers = LockIsolated<[FakeWebSocket]>([])
       self.clock = clock
@@ -338,7 +366,7 @@ struct RealtimeClientConnectionTests {
     /// The next frame for `event` that server `index` receives.
     func received(_ event: String, on index: Int) async -> RealtimeMessageV2? {
       for await frame in servers.value[index].events {
-        if case .text(let text) = frame,
+        if case .frame(.text(let text)) = frame,
           let message = try? RealtimeSerializer().decodeText(text),
           message.event == event
         {
