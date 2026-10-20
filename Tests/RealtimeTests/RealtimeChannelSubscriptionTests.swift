@@ -259,6 +259,108 @@ struct RealtimeChannelSubscriptionTests {
     #expect(secondJoin.ref != firstJoin.ref)
   }
 
+  /// Issue #1556: the first subscribe is cancelled by a reset while a newer attempt has already
+  /// joined. Its failure must leave the newer attempt's state and `joinRef` alone.
+  @Test(.timeLimit(.minutes(1)))
+  func staleSubscribeFailureLeavesReplacementSubscribeUntouched() async throws {
+    let gate = Gate()
+    let h = Harness(
+      maxRetryAttempts: 1,
+      onAccessToken: { call in
+        if call == 1 { await gate.park() }
+      })
+    let channel = await h.client.channel("room")
+
+    let firstSubscribe = Task { try await channel.subscribe() }
+    #expect(await waitUntil { gate.isParked })
+
+    await channel.resetForReconnect()
+    let secondSubscribe = Task { try await channel.subscribe() }
+    let secondJoin = try #require(await h.received(ChannelEvent.join))
+    #expect(await channel.joinRef == secondJoin.ref)
+
+    gate.open()
+    await #expect(throws: (any Error).self) { try await firstSubscribe.value }
+
+    try #require(await channel.status == .subscribing)
+    #expect(await channel.joinRef == secondJoin.ref)
+    #expect(h.sent(ChannelEvent.join).count == 1)
+
+    try h.confirm(secondJoin)
+    try await secondSubscribe.value
+    #expect(await channel.status == .subscribed)
+    #expect(h.sent(ChannelEvent.join).count == 1)
+  }
+
+  /// A server close that cancels a subscribe still surfaces as `channelClosedByServer` to that
+  /// caller when a newer attempt has replaced it by the time it fails.
+  @Test(.timeLimit(.minutes(1)))
+  func serverCloseDuringStaleSubscribeStillSurfacesTypedError() async throws {
+    let gate = Gate()
+    let h = Harness(
+      maxRetryAttempts: 1,
+      onAccessToken: { call in
+        if call == 1 { await gate.park() }
+      })
+    let channel = await h.client.channel("room")
+
+    let firstSubscribe = Task { try await channel.subscribe() }
+    #expect(await waitUntil { gate.isParked })
+    #expect(await channel.didReceiveClose())
+
+    let secondSubscribe = Task { try await channel.subscribe() }
+    let secondJoin = try #require(await h.received(ChannelEvent.join))
+
+    gate.open()
+    let error = await #expect(throws: RealtimeError.self) { try await firstSubscribe.value }
+    #expect(error?.kind == .channelClosedByServer)
+
+    try #require(await channel.status == .subscribing)
+    #expect(await channel.joinRef == secondJoin.ref)
+
+    try h.confirm(secondJoin)
+    try await secondSubscribe.value
+    #expect(await channel.status == .subscribed)
+  }
+
+  /// A subscribe cancelled while its connect is in flight must not write `joinRef` or send a
+  /// `phx_join` once the connect returns; the attempt that replaced it owns the join.
+  @Test(.timeLimit(.minutes(1)))
+  func cancelledStaleSubscribeNeverJoinsAfterReconnect() async throws {
+    let gate = Gate()
+    let h = Harness(
+      maxRetryAttempts: 1,
+      onConnect: { attempt in
+        if attempt == 1 { await gate.park() }
+      })
+    let channel = await h.client.channel("room")
+
+    // Without the cancellation check the stale attempt parks on a join waiter the newer attempt
+    // then replaces, so it never finishes: wait for it with a bound instead of awaiting it.
+    let firstFinished = LockIsolated(false)
+    let firstSubscribe = Task {
+      defer { firstFinished.setValue(true) }
+      try await channel.subscribe()
+    }
+    #expect(await waitUntil { gate.isParked })
+
+    await channel.resetForReconnect()
+    let secondSubscribe = Task { try await channel.subscribe() }
+
+    gate.open()
+    let join = try #require(await h.received(ChannelEvent.join))
+    try #require(await waitUntil(timeout: 2) { firstFinished.value })
+    await #expect(throws: (any Error).self) { try await firstSubscribe.value }
+
+    #expect(h.sent(ChannelEvent.join).count == 1)
+    #expect(await channel.joinRef == join.ref)
+    try #require(await channel.status == .subscribing)
+
+    try h.confirm(join)
+    try await secondSubscribe.value
+    #expect(h.sent(ChannelEvent.join).count == 1)
+  }
+
   // MARK: - Unsubscribe
 
   @Test
@@ -398,6 +500,24 @@ struct RealtimeChannelSubscriptionTests {
 
   // MARK: - Harness
 
+  /// Parks one caller in `park()` until `open()`. Tests wait for `isParked` before acting.
+  private final class Gate: Sendable {
+    private let continuation = LockIsolated<CheckedContinuation<Void, Never>?>(nil)
+
+    var isParked: Bool { continuation.value != nil }
+
+    func park() async {
+      await withCheckedContinuation { continuation.setValue($0) }
+    }
+
+    func open() {
+      continuation.withValue {
+        $0?.resume()
+        $0 = nil
+      }
+    }
+  }
+
   /// A client on a `TestClock`, connected to an in-memory server socket the test drives.
   private struct Harness {
     let clock: SignalingTestClock
@@ -406,14 +526,19 @@ struct RealtimeChannelSubscriptionTests {
     let client: RealtimeClient
     let connects: LockIsolated<Int>
 
+    /// `onConnect` runs inside each transport call and `onAccessToken` inside each access-token
+    /// lookup, both numbered from 1, so a test can park one attempt at that point.
     init(
       timeout: Duration = RealtimeClientOptions.defaultTimeout,
       maxRetryAttempts: Int = 3,
-      failedConnects: Int = 0
+      failedConnects: Int = 0,
+      onConnect: @escaping @Sendable (_ attempt: Int) async -> Void = { _ in },
+      onAccessToken: @escaping @Sendable (_ call: Int) async -> Void = { _ in }
     ) {
       let clock = SignalingTestClock()
       let (socket, server) = FakeWebSocket.fakes()
       let connects = LockIsolated(0)
+      let accessTokenCalls = LockIsolated(0)
       self.clock = clock
       self.socket = socket
       self.server = server
@@ -424,6 +549,14 @@ struct RealtimeChannelSubscriptionTests {
           heartbeatInterval: .seconds(3600),
           timeout: timeout,
           maxRetryAttempts: maxRetryAttempts,
+          accessToken: {
+            let call = accessTokenCalls.withValue {
+              $0 += 1
+              return $0
+            }
+            await onAccessToken(call)
+            return nil
+          },
           handleAppLifecycle: false
         ),
         wsTransport: { _, _ in
@@ -431,6 +564,7 @@ struct RealtimeChannelSubscriptionTests {
             $0 += 1
             return $0
           }
+          await onConnect(attempt)
           if attempt <= failedConnects {
             throw URLError(.notConnectedToInternet)
           }

@@ -161,7 +161,7 @@ extension RealtimeChannel {
     if case .subscribing(let task) = state {
       // Record why the task is being cancelled so `beginSubscribe` can rethrow a typed error —
       // the caller must be able to tell a server close apart from its own task cancellation.
-      closedByServerWhileSubscribing = true
+      subscribeTaskClosedByServer = task
       task.cancel()
       failJoinWaiter(SubscribeFailure.channelClosed)
     }
@@ -174,7 +174,6 @@ extension RealtimeChannel {
 
   private func beginSubscribe() async throws {
     logger.debug("Beginning subscribe flow for channel '\(topic)'")
-    closedByServerWhileSubscribing = false
     let task = Task<Void, any Error> {
       try await runSubscribeAttempts()
     }
@@ -189,11 +188,15 @@ extension RealtimeChannel {
         task.cancel()
       }
     } catch {
-      let closedByServer = closedByServerWhileSubscribing
-      closedByServerWhileSubscribing = false
+      let closedByServer = subscribeTaskClosedByServer == task
+      if closedByServer {
+        subscribeTaskClosedByServer = nil
+      }
 
-      // If the attempt didn't reach `.subscribed`, make sure observers see `.unsubscribed`.
-      if case .subscribing = state {
+      // If the attempt didn't reach `.subscribed`, make sure observers see `.unsubscribed`. Only
+      // when the state is still this attempt's: a reset or close may have replaced it with a
+      // newer attempt, which owns the state now (issue #1556).
+      if case .subscribing(let current) = state, current == task {
         joinRef = nil
         failPendingPushes(with: RealtimeError.notSubscribed)
         setState(.unsubscribed)
@@ -203,8 +206,8 @@ extension RealtimeChannel {
       // the cancellation is observed, the task can exit with `CancellationError`,
       // `SubscribeFailure.channelClosed`, or — when the close lands on the final retry attempt —
       // `maxRetryAttemptsReached`. All of them are consequences of the server close, so
-      // translate unconditionally; a genuine caller-side cancellation never sets the flag and
-      // still propagates as `CancellationError`.
+      // translate unconditionally; a genuine caller-side cancellation never records its task
+      // here and still propagates as `CancellationError`.
       if closedByServer {
         throw RealtimeError.channelClosedByServer
       }
@@ -259,8 +262,13 @@ extension RealtimeChannel {
     }
 
     let ref = await client.makeRef()
+    let accessToken = await client.currentAccessToken()
+    // A reset or close may have cancelled this attempt while it waited above. A stale attempt
+    // must not write `joinRef` over the newer attempt's ref or send a `phx_join` the server
+    // would treat as a duplicate.
+    try Task.checkCancellation()
     joinRef = ref
-    await performJoin(ref: ref)
+    await performJoin(ref: ref, accessToken: accessToken)
 
     // Wait for `didReceiveSubscribedOK`. A close, a reset or cancellation fails the waiter.
     try await withTaskCancellationHandler {
@@ -292,7 +300,7 @@ extension RealtimeChannel {
   }
 
   /// Builds the `phx_join` payload from the config and the open streams, and pushes it.
-  private func performJoin(ref: String) async {
+  private func performJoin(ref: String, accessToken: String?) async {
     guard let client else { return }
     logger.debug("Sending phx_join for channel '\(topic)' (ref: \(ref))")
 
@@ -308,7 +316,7 @@ extension RealtimeChannel {
 
     let payload = RealtimeJoinPayload(
       config: joinConfig,
-      accessToken: await client.currentAccessToken(),
+      accessToken: accessToken,
       version: client.options.headers[.xClientInfo]
     )
 
