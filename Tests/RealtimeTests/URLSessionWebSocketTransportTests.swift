@@ -63,7 +63,7 @@ struct URLSessionWebSocketTransportTests {
       let texts = server.receivedMessages.map { String(decoding: $0, as: UTF8.self) }
       #expect(texts == (0..<50).map(String.init))
 
-      await connection.close(code: .normalClosure, reason: nil)
+      connection.close(code: .normalClosure, reason: nil)
     }
 
     @Test
@@ -80,7 +80,7 @@ struct URLSessionWebSocketTransportTests {
       #expect(await waitUntil { events.value.count == 2 })
       #expect(events.value == [.frame(.text("hello")), .frame(.binary(Data([1, 2, 3])))])
 
-      await connection.close(code: .normalClosure, reason: nil)
+      connection.close(code: .normalClosure, reason: nil)
     }
 
     @Test
@@ -92,7 +92,7 @@ struct URLSessionWebSocketTransportTests {
       let connection = try await connect(port: port)
       let (events, finished) = record(connection)
 
-      await connection.close(code: .normalClosure, reason: "done")
+      connection.close(code: .normalClosure, reason: "done")
       #expect(await waitUntil { finished.value })
       #expect(events.value == [.closed(code: .normalClosure, reason: "done")])
     }
@@ -119,7 +119,7 @@ struct URLSessionWebSocketTransportTests {
 
       let connection = try await connect(port: port)
       let (_, finished) = record(connection)
-      await connection.close(code: .normalClosure, reason: nil)
+      connection.close(code: .normalClosure, reason: nil)
       #expect(await waitUntil { finished.value })
 
       let error = await #expect(throws: RealtimeError.self) {

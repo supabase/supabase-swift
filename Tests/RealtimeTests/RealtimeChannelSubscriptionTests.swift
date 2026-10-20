@@ -489,8 +489,8 @@ struct RealtimeChannelSubscriptionTests {
       server.send(try RealtimeSerializer().encodeText(message))
     }
 
-    private static func decode(_ frame: LegacyWebSocketEvent) -> RealtimeMessageV2? {
-      guard case .text(let text) = frame else { return nil }
+    private static func decode(_ frame: WebSocketEvent) -> RealtimeMessageV2? {
+      guard case .frame(.text(let text)) = frame else { return nil }
       return try? RealtimeSerializer().decodeText(text)
     }
   }

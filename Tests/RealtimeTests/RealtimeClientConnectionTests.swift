@@ -1,6 +1,7 @@
 import Clocks
 import ConcurrencyExtras
 import Foundation
+import HTTPTypes
 import TestHelpers
 import Testing
 
@@ -36,7 +37,7 @@ struct RealtimeClientConnectionTests {
       connect.url.absoluteString
         == "ws://localhost:54321/realtime/v1/websocket?apikey=key&vsn=2.0.0"
     )
-    #expect(connect.headers["apikey"] == "key")
+    #expect(connect.headers[HTTPField.Name("apikey")!] == "key")
   }
 
   @Test
@@ -88,7 +89,9 @@ struct RealtimeClientConnectionTests {
     await h.client.disconnect(reason: "test reason")
 
     #expect(await h.client.status == .disconnected)
-    #expect(h.sockets.value.first?.sentEvents.last == .close(code: nil, reason: "test reason"))
+    #expect(
+      h.sockets.value.first?.sentEvents.last == .closed(code: .normalClosure, reason: "test reason")
+    )
   }
 
   @Test
@@ -291,7 +294,7 @@ struct RealtimeClientConnectionTests {
     let clock: SignalingTestClock
     let client: RealtimeClient
     /// The URL and headers of every transport call, in order.
-    let connects: LockIsolated<[(url: URL, headers: [String: String])]>
+    let connects: LockIsolated<[(url: URL, headers: HTTPFields)]>
     /// The client side of every socket opened, in order.
     let sockets: LockIsolated<[FakeWebSocket]>
     /// The server side of every socket opened, in order.
@@ -304,7 +307,7 @@ struct RealtimeClientConnectionTests {
       beforeConnect: @escaping @Sendable (_ attempt: Int) async throws -> Void = { _ in }
     ) {
       let clock = SignalingTestClock()
-      let connects = LockIsolated<[(url: URL, headers: [String: String])]>([])
+      let connects = LockIsolated<[(url: URL, headers: HTTPFields)]>([])
       let sockets = LockIsolated<[FakeWebSocket]>([])
       let servers = LockIsolated<[FakeWebSocket]>([])
       self.clock = clock
@@ -338,7 +341,7 @@ struct RealtimeClientConnectionTests {
     /// The next frame for `event` that server `index` receives.
     func received(_ event: String, on index: Int) async -> RealtimeMessageV2? {
       for await frame in servers.value[index].events {
-        if case .text(let text) = frame,
+        if case .frame(.text(let text)) = frame,
           let message = try? RealtimeSerializer().decodeText(text),
           message.event == event
         {

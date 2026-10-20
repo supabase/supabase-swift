@@ -15,7 +15,7 @@ import Testing
 #if canImport(Network) && !os(Linux)
   import Network
 
-  /// End-to-end: the production client, the real `URLSessionWebSocket` transport, and a
+  /// End-to-end: the production client, the real `URLSessionWebSocketTransport`, and a
   /// loopback WebSocket server that speaks just enough Phoenix to join and broadcast.
   @Suite(.serialized, .timeLimit(.minutes(1)))
   struct RealtimeLoopbackTests {

@@ -16,7 +16,7 @@ struct RealtimeChannelPushTests {
 
     try await channel.broadcast(event: "cursor", message: ["x": 1] as JSONObject)
 
-    #expect(h.socket.sentEvents.contains { if case .binary = $0 { true } else { false } })
+    #expect(h.socket.sentEvents.contains { if case .frame(.binary) = $0 { true } else { false } })
   }
 
   @Test
@@ -188,7 +188,7 @@ struct RealtimeChannelPushTests {
     /// The next frame for `event` the server receives.
     func received(_ event: String) async -> RealtimeMessageV2? {
       for await frame in server.events {
-        if case .text(let text) = frame,
+        if case .frame(.text(let text)) = frame,
           let message = try? RealtimeSerializer().decodeText(text),
           message.event == event
         {

@@ -211,7 +211,7 @@ struct RealtimeColdStartTests {
   }
 }
 
-final class AsyncFakeWebSocket: WebSocket, @unchecked Sendable {
+final class AsyncFakeWebSocket: WebSocketConnection, @unchecked Sendable {
   struct MutableState {
     var isClosed: Bool = false
     var sentMessages: [RealtimeMessageV2] = []
@@ -221,8 +221,8 @@ final class AsyncFakeWebSocket: WebSocket, @unchecked Sendable {
 
   let mutableState = LockIsolated(MutableState())
   let deliveryQueue = DispatchQueue(label: "AsyncFakeWebSocket.delivery")
-  let events: AsyncStream<LegacyWebSocketEvent>
-  private let eventsContinuation: AsyncStream<LegacyWebSocketEvent>.Continuation
+  let events: AsyncStream<WebSocketEvent>
+  private let eventsContinuation: AsyncStream<WebSocketEvent>.Continuation
 
   init() {
     (events, eventsContinuation) = AsyncStream.makeStream()
@@ -233,7 +233,6 @@ final class AsyncFakeWebSocket: WebSocket, @unchecked Sendable {
   var closeCode: Int? { mutableState.value.closeCode }
   var closeReason: String? { mutableState.value.closeReason }
   var isClosed: Bool { mutableState.value.isClosed }
-  let `protocol`: String = ""
 
   var sentMessages: [RealtimeMessageV2] { mutableState.value.sentMessages }
 
@@ -289,6 +288,17 @@ final class AsyncFakeWebSocket: WebSocket, @unchecked Sendable {
 
   func send(_ binary: Data) {}
 
+  func send(_ frame: WebSocketFrame) async throws {
+    switch frame {
+    case .text(let text): send(text)
+    case .binary(let data): send(data)
+    }
+  }
+
+  func close(code: WebSocketCloseCode, reason: String?) {
+    close(code: code.rawValue, reason: reason)
+  }
+
   func close(code: Int?, reason: String?) {
     mutableState.withValue {
       guard !$0.isClosed else { return }
@@ -297,20 +307,20 @@ final class AsyncFakeWebSocket: WebSocket, @unchecked Sendable {
       $0.closeReason = reason
     }
     deliveryQueue.async { [weak self] in
-      self?.receiveFromServer(.close(code: code ?? 1005, reason: reason ?? ""))
+      self?.receiveFromServer(.close(code: code, reason: reason))
     }
   }
 
-  func receiveFromServer(_ event: LegacyWebSocketEvent) {
+  func receiveFromServer(_ event: WebSocketEvent) {
     mutableState.withValue {
-      if case .close(let code, let reason) = event {
+      if case .closed(let code, let reason) = event {
         $0.isClosed = true
-        $0.closeCode = code
+        $0.closeCode = code?.rawValue
         $0.closeReason = reason
       }
     }
     eventsContinuation.yield(event)
-    if case .close = event {
+    if case .closed = event {
       eventsContinuation.finish()
     }
   }
@@ -318,6 +328,6 @@ final class AsyncFakeWebSocket: WebSocket, @unchecked Sendable {
   func reply(_ message: RealtimeMessageV2) {
     let serializer = RealtimeSerializer()
     let text = try! serializer.encodeText(message)
-    receiveFromServer(.text(text))
+    receiveFromServer(.frame(.text(text)))
   }
 }

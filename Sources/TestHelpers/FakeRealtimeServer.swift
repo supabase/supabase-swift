@@ -378,7 +378,7 @@ final class StubWebSocketConnection: WebSocketConnection {
     server.receive(frame, from: self)
   }
 
-  func close(code: WebSocketCloseCode, reason: String?) async {
+  func close(code: WebSocketCloseCode, reason: String?) {
     guard !isClosed.value else { return }
     server.clientClosed(code: code, reason: reason)
     finish(code: code, reason: reason)

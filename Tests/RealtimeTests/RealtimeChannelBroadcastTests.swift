@@ -86,7 +86,7 @@ final class RealtimeChannelBroadcastTests: Sendable {
     )
 
     let binaryEvents = client.sentEvents.compactMap { event -> Data? in
-      if case .binary(let data) = event { return data }
+      if case .frame(.binary(let data)) = event { return data }
       return nil
     }
 
@@ -110,7 +110,7 @@ final class RealtimeChannelBroadcastTests: Sendable {
     try await channel.broadcast(event: "bin_event", data: binaryData)
 
     let binaryFrames = client.sentEvents.compactMap { event -> Data? in
-      if case .binary(let data) = event { return data }
+      if case .frame(.binary(let data)) = event { return data }
       return nil
     }
 
@@ -221,7 +221,7 @@ final class RealtimeChannelBroadcastTests: Sendable {
 
     let frame = try #require(
       client.sentEvents.compactMap { event -> Data? in
-        if case .binary(let data) = event { return data }
+        if case .frame(.binary(let data)) = event { return data }
         return nil
       }.last
     )

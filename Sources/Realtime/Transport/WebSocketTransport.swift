@@ -31,8 +31,9 @@ package protocol WebSocketConnection: Sendable {
   /// order, so the engine can rely on `phx_join` reaching the wire before anything sent after.
   func send(_ frame: WebSocketFrame) async throws
 
-  /// Starts a graceful close. The `.closed` event on ``events`` reports completion.
-  func close(code: WebSocketCloseCode, reason: String?) async
+  /// Starts a graceful close and returns without waiting for it. The `.closed` event on
+  /// ``events`` reports completion.
+  func close(code: WebSocketCloseCode, reason: String?)
 }
 
 /// A frame on the wire, either direction.

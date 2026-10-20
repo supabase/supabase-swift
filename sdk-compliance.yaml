@@ -1456,7 +1456,7 @@ features:
   # Swift always has a native WebSocket (URLSessionWebSocketTask); unlike
   # supabase-js, there's no runtime (Node <22, Cloudflare Workers, Deno) that
   # needs an injected WebSocket constructor, and the SDK exposes none — the
-  # transport is always the internal URLSessionWebSocket.
+  # transport is always the internal URLSessionWebSocketTransport.
   realtime.configuration.custom_websocket_transport: not_applicable
   realtime.configuration.reconnect_backoff:
     status: partially_implemented

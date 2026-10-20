@@ -428,7 +428,7 @@ package actor RealtimeEngine {
       }
     case .closeTransport(let code):
       if let socket {
-        Task { await socket.close(code: code, reason: nil) }
+        socket.close(code: code, reason: nil)
       } else {
         supervisor?.cancel()
         supervisor = nil
@@ -759,7 +759,7 @@ package actor RealtimeEngine {
         try await transport.connect(to: configuration.url, headerFields: configuration.headers)
       }
       guard generation == self.generation else {
-        await connected.close(code: .normalClosure, reason: nil)
+        connected.close(code: .normalClosure, reason: nil)
         return
       }
       let (frames, continuation) = AsyncStream<WebSocketFrame>.makeStream(
@@ -842,7 +842,7 @@ package actor RealtimeEngine {
         try await connected.send(frame)
       } catch {
         logger.warning("send failed: \(error)")
-        await connected.close(code: .goingAway, reason: nil)
+        connected.close(code: .goingAway, reason: nil)
         return
       }
     }

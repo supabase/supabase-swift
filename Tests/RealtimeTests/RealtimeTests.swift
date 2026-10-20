@@ -1056,27 +1056,27 @@ extension FakeWebSocket {
   }
 }
 
-extension LegacyWebSocketEvent {
+extension WebSocketEvent {
   var json: Any {
     switch self {
-    case .binary(let data):
+    case .frame(.binary(let data)):
       let json = try? JSONSerialization.jsonObject(with: data)
       return ["binary": json]
-    case .text(let text):
+    case .frame(.text(let text)):
       let json = try? JSONSerialization.jsonObject(with: Data(text.utf8))
       return ["text": json]
-    case .close(let code, let reason):
+    case .closed(let code, let reason):
       return [
         "close": [
-          "code": code as Any,
-          "reason": reason,
+          "code": code?.rawValue as Any,
+          "reason": reason ?? "",
         ]
       ]
     }
   }
 
   var realtimeMessage: RealtimeMessageV2? {
-    guard case .text(let text) = self else { return nil }
+    guard case .frame(.text(let text)) = self else { return nil }
     let serializer = RealtimeSerializer()
     return try? serializer.decodeText(text)
   }
