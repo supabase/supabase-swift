@@ -60,8 +60,22 @@ package struct PresenceTracker: Sendable {
     pendingDiffs = []
   }
 
-  /// Applies a `presence_state` payload and the diffs that were waiting for it.
+  /// Applies a `presence_state` payload and the diffs that were waiting for it, as one change.
   package mutating func applyState(_ raw: JSONObject) -> PresenceChange {
+    let synced = syncState(raw)
+    var change = synced.state
+    for applied in synced.heldDiffs {
+      change.joins.merge(applied.joins) { $0 + $1 }
+      change.leaves.merge(applied.leaves) { $0 + $1 }
+    }
+    return change
+  }
+
+  /// Applies a `presence_state` payload and the diffs that were waiting for it, and returns the
+  /// change of the state itself apart from the change of each held diff.
+  package mutating func syncState(
+    _ raw: JSONObject
+  ) -> (state: PresenceChange, heldDiffs: [PresenceChange]) {
     let incoming = Self.decode(raw)
     var change = PresenceChange()
     for (key, entries) in state.entries {
@@ -76,13 +90,13 @@ package struct PresenceTracker: Sendable {
     }
     state.entries = incoming
     hasState = true
-    for diff in pendingDiffs {
-      let applied = merge(diff)
-      change.joins.merge(applied.joins) { $0 + $1 }
-      change.leaves.merge(applied.leaves) { $0 + $1 }
-    }
+    let pending = pendingDiffs
     pendingDiffs = []
-    return change
+    var heldDiffs: [PresenceChange] = []
+    for diff in pending {
+      heldDiffs.append(merge(diff))
+    }
+    return (change, heldDiffs)
   }
 
   /// Applies a `presence_diff` payload, or queues it (returning `nil`) until the first state.

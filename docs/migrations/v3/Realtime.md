@@ -16,14 +16,6 @@ Changes that still compile but behave differently. Check each one by hand.
   instead (see [Errors](#errors)).
 - **Cancellation throws `CancellationError`.** A cancelled `httpSend` used to throw
   `URLError(.cancelled)`. Search for `URLError` near `httpSend` and catch `CancellationError`.
-- **Presence is tracked again after a rejoin.** After the socket reconnects, the channel re-sends
-  the last `track(_:)` payload until `untrack()` or `unsubscribe()`. Drop code that called
-  `track(_:)` again on reconnect. While a rejoin waits for the server, `track(_:)` stores the
-  state for it and `untrack()` forgets it; neither throws.
-- **`track(_:)` and `untrack()` are rate limited.** The channel sends at most one presence call
-  per six seconds, under the server's limit of five per 30 seconds. A call inside that window
-  returns at once, and the newest state goes out when the window ends. A state equal to the last
-  one sent is not sent again.
 - **Presence diffs wait for the first state.** `presenceChanges()` delivers a `presence_diff`
   that arrives before the join's first `presence_state` after that state, not before it.
 - **A rejoin reports who left.** The first `presence_state` after a rejoin used to have empty
@@ -137,9 +129,8 @@ defer { task.cancel() }
 ```
 
 Open `postgresChanges` and `presenceChanges` streams before `subscribe()`. They shape the join
-request. Opening one after the join reports an issue and returns an empty stream. The join
-turns presence on only when a `presenceChanges()` stream is open, or when a rejoin re-sends a
-tracked payload.
+request. Opening one after the join reports an issue and returns an empty stream. Presence is
+sent to the server only when a `presenceChanges()` stream is open.
 
 ## Pushes throw instead of returning a status
 

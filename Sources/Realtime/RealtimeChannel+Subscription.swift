@@ -64,11 +64,8 @@ extension RealtimeChannel {
   }
 
   /// Leaves the Realtime topic and transitions the channel to
-  /// ``RealtimeChannelStatus/unsubscribed``. Cancels an in-flight subscribe if one is running,
-  /// and forgets the presence state passed to ``track(state:)``.
+  /// ``RealtimeChannelStatus/unsubscribed``. Cancels an in-flight subscribe if one is running.
   public func unsubscribe() async {
-    // Even when already unsubscribed: the channel may still be rejoined on the next reconnect.
-    presence.trackedPayload = nil
     // Probe the socket before reading `state`: the probe suspends, and another caller could move
     // the state while this one waits. After it, the switch and the transition run without a
     // suspension point.
@@ -313,7 +310,7 @@ extension RealtimeChannel {
     logger.debug("Sending phx_join for channel '\(topic)' (ref: \(ref))")
 
     var presence = config.presence
-    presence.enabled = isPresenceInUse
+    presence.enabled = hasPresenceListener
 
     let joinConfig = RealtimeJoinConfig(
       broadcast: config.broadcast,

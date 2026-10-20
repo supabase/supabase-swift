@@ -212,31 +212,12 @@ public actor RealtimeChannel {
 
   // MARK: Presence
 
-  /// The server's presence set for the current join, and the payload this client tracks.
+  /// The server's presence set for the current join.
   var presence = PresenceTracker()
 
   /// `presence_diff` messages that arrived before the join's first `presence_state`. The
   /// tracker holds them too; these copies reach ``presenceChanges()`` after the state.
   var presenceDiffsBeforeState: [RealtimeMessageV2] = []
-
-  /// The rate limit of `presence` pushes: a push starts a window of ``presencePushInterval``,
-  /// and pushes asked for inside it wait for it to end.
-  struct PresencePushWindow {
-    /// Bumped by every reset, so a push that fails after a reset leaves the new window alone.
-    var generation = 0
-    /// Ends the current window. `nil` when no window is running.
-    var timer: Task<Void, Never>?
-    /// The newest push asked for inside the window, sent when it ends.
-    var pending: JSONObject?
-    /// The last push sent on this join. An identical push is dropped.
-    var lastSent: JSONObject?
-  }
-
-  var presencePushes = PresencePushWindow()
-
-  /// The server allows five presence calls per 30 seconds per channel. One per six seconds
-  /// stays under that limit.
-  static let presencePushInterval: Duration = .seconds(6)
 
   init(
     topic: String,
@@ -264,7 +245,6 @@ public actor RealtimeChannel {
     for (_, listener) in listeners {
       listener.finish()
     }
-    presencePushes.timer?.cancel()
   }
 
   // MARK: - Status
@@ -293,7 +273,11 @@ public actor RealtimeChannel {
     let previous = status
     state = newState
     guard newState.status != previous else { return }
-    updatePresence(for: newState)
+    // A new join waits for its own first presence state.
+    if case .subscribing = newState {
+      presence.reset()
+      presenceDiffsBeforeState = []
+    }
     for case .status(let continuation) in listeners.map(\.listener) {
       continuation.yield(newState.status)
     }
@@ -380,124 +364,42 @@ public actor RealtimeChannel {
   /// Tracks the current client's presence state using a raw `JSONObject`.
   ///
   /// The state is shared with all other clients on the same channel. Call this after subscribing.
-  /// While the channel joins or rejoins, the call returns at once and the state goes out when
-  /// the join is confirmed. The channel re-sends it after every rejoin, until ``untrack()`` or
-  /// ``unsubscribe()``.
-  ///
-  /// The server accepts five presence calls per 30 seconds, so the channel sends at most one
-  /// per six seconds. A call inside that window returns at once; the newest state goes out when
-  /// the window ends. A state equal to the last one sent is not sent again.
-  ///
   /// Waits for the server's reply when ``BroadcastJoinConfig/acknowledgeBroadcasts`` is on, as
   /// ``broadcast(event:message:)`` does.
   ///
   /// - Parameter state: A ``JSONObject`` representing the client's presence state.
   /// - Throws: The errors of ``broadcast(event:message:)``.
   public func track(state: JSONObject) async throws {
-    switch self.state {
-    case .subscribed:
-      presence.trackedPayload = state
-      try await pushPresence(Self.trackPush(state))
-    case .subscribing:
-      presence.trackedPayload = state
-    case .unsubscribed, .unsubscribing:
+    guard case .subscribed = self.state else {
       throw RealtimeError.notSubscribed
     }
+    try await pushAcknowledged(
+      ChannelEvent.presence,
+      payload: [
+        "type": "presence",
+        "event": "track",
+        "payload": .object(state),
+      ]
+    )
   }
 
   /// Stops tracking the current client's presence state on the channel.
   ///
-  /// Shares the rate window of ``track(state:)``. Waits for the server's reply when
-  /// ``BroadcastJoinConfig/acknowledgeBroadcasts`` is on, as ``broadcast(event:message:)``
-  /// does.
-  ///
-  /// When the channel is not subscribed, the call only forgets the tracked state, so no rejoin
-  /// sends it again. It throws when there was nothing to forget.
+  /// Waits for the server's reply when ``BroadcastJoinConfig/acknowledgeBroadcasts`` is on, as
+  /// ``broadcast(event:message:)`` does.
   ///
   /// - Throws: The errors of ``broadcast(event:message:)``.
   public func untrack() async throws {
-    let wasTracked = presence.trackedPayload != nil
-    presence.trackedPayload = nil
-    guard case .subscribed = state else {
-      if wasTracked { return }
-      throw RealtimeError.notSubscribed
-    }
-    try await pushPresence(["type": "presence", "event": "untrack"])
-  }
-
-  private static func trackPush(_ state: JSONObject) -> JSONObject {
-    ["type": "presence", "event": "track", "payload": .object(state)]
-  }
-
-  /// Sends a `presence` push and starts a window. Inside a window, keeps it instead as the push
-  /// to send when the window ends, in place of any older one.
-  private func pushPresence(_ payload: JSONObject) async throws {
     guard case .subscribed = state else {
       throw RealtimeError.notSubscribed
     }
-    guard presencePushes.timer == nil else {
-      presencePushes.pending = payload
-      return
-    }
-    guard payload != presencePushes.lastSent else { return }
-    let generation = presencePushes.generation
-    presencePushes.lastSent = payload
-    presencePushes.timer = Task { [weak self, clock] in
-      try? await clock.sleep(for: Self.presencePushInterval)
-      await self?.presencePushWindowDidEnd()
-    }
-    do {
-      try await pushAcknowledged(ChannelEvent.presence, payload: payload)
-    } catch {
-      if presencePushes.generation == generation, presencePushes.lastSent == payload {
-        presencePushes.lastSent = nil
-      }
-      throw error
-    }
-  }
-
-  private func presencePushWindowDidEnd() async {
-    // A reset cancels the timer; the check runs on the actor, so it cannot race the reset.
-    guard !Task.isCancelled else { return }
-    presencePushes.timer = nil
-    guard let pending = presencePushes.pending else { return }
-    presencePushes.pending = nil
-    do {
-      try await pushPresence(pending)
-    } catch {
-      logger.debug("Coalesced presence push on '\(topic)' failed: \(error)")
-    }
-  }
-
-  /// Applies the presence side of a status change.
-  ///
-  /// A new join waits for its first presence state and starts a fresh rate window; once it is
-  /// confirmed, the tracked payload goes out again.
-  private func updatePresence(for newState: SubscriptionState) {
-    switch newState {
-    case .subscribing:
-      presence.reset()
-      presenceDiffsBeforeState = []
-      resetPresencePushWindow()
-    case .subscribed:
-      guard presence.trackedPayload != nil else { return }
-      Task.immediateIfAvailable {
-        // Read here, not when the task was made: a newer `track` may have replaced it.
-        guard let payload = presence.trackedPayload else { return }
-        do {
-          try await pushPresence(Self.trackPush(payload))
-        } catch {
-          logger.debug("Re-tracking presence on '\(topic)' failed: \(error)")
-        }
-      }
-    case .unsubscribing, .unsubscribed:
-      resetPresencePushWindow()
-    }
-  }
-
-  private func resetPresencePushWindow() {
-    presencePushes.timer?.cancel()
-    presencePushes = PresencePushWindow(generation: presencePushes.generation + 1)
+    try await pushAcknowledged(
+      ChannelEvent.presence,
+      payload: [
+        "type": "presence",
+        "event": "untrack",
+      ]
+    )
   }
 
   // MARK: - Pushes
@@ -761,13 +663,21 @@ public actor RealtimeChannel {
   }
 
   private func handlePresenceState(_ message: RealtimeMessageV2) {
-    let change = presence.applyState(message.payload)
+    let synced = presence.syncState(message.payload)
     let heldDiffs = presenceDiffsBeforeState
     presenceDiffsBeforeState = []
 
+    // The held diffs are delivered on their own below, so the state leaves out what they report.
+    var leaves = synced.state.leaves
+    for diff in synced.heldDiffs {
+      for (key, left) in diff.leaves {
+        let refs = Set(left.map(\.ref))
+        leaves[key]?.removeAll { refs.contains($0.ref) }
+      }
+    }
     do {
       let joins = try message.payload.decode(as: [String: PresenceV2].self)
-      deliverPresence(joins: joins, leaves: Self.presences(change.leaves), rawMessage: message)
+      deliverPresence(joins: joins, leaves: Self.presences(leaves), rawMessage: message)
     } catch {
       logger.debug("Failed: \(error)")
     }
@@ -877,12 +787,6 @@ public actor RealtimeChannel {
   /// payload, so the server only tracks presence for channels that read it.
   var hasPresenceListener: Bool {
     listeners.contains { if case .presence = $0.listener { true } else { false } }
-  }
-
-  /// Whether the join payload turns presence on: a `presenceChanges()` stream is open, or a
-  /// tracked payload must be re-sent after the join.
-  var isPresenceInUse: Bool {
-    hasPresenceListener || presence.trackedPayload != nil
   }
 
   /// The `postgres_changes` bindings of the open streams, in registration order.
