@@ -20,12 +20,12 @@ struct RealtimeLifecycleTests {
   let apiKey = "publishable.api.key"
 
   let http: RecordingTransport
-  let testClock: TestClock<Duration>
+  let testClock: SignalingTestClock
   let servers: LockIsolated<[FakeWebSocket]>
 
   init() {
     http = RecordingTransport()
-    testClock = TestClock()
+    testClock = SignalingTestClock()
     servers = LockIsolated([])
   }
 
@@ -121,7 +121,7 @@ struct RealtimeLifecycleTests {
 
     await sut.handleAppBackground()
     // Open the stream before the OS close so no transition is missed.
-    let statusUpdates = sut.statusChanges
+    let statusUpdates = await sut.statusChanges()
     servers.value.last?.close(code: nil, reason: "OS teardown")
     // Status sequence: .connected → .connecting (reconnecting). `RealtimeClient` no longer
     // publishes an intermediate `.disconnected` when it starts reconnecting.
@@ -146,8 +146,8 @@ struct RealtimeLifecycleTests {
     #expect(await channel.status == .subscribed)
 
     await sut.handleAppBackground()
-    let statusUpdates = sut.statusChanges
-    let channelUpdates = channel.statusChanges
+    let statusUpdates = await sut.statusChanges()
+    let channelUpdates = await channel.statusChanges()
     servers.value.last?.close(code: nil, reason: "OS teardown")
     // `RealtimeClient` goes straight to `.connecting` while it reconnects; there is no
     // intermediate `.disconnected` any more.
@@ -233,7 +233,7 @@ struct RealtimeLifecycleTests {
     #expect(await channelA.status == .subscribed)
     #expect(await channelB.status == .subscribed)
 
-    let statusUpdates = sut.statusChanges
+    let statusUpdates = await sut.statusChanges()
     servers.value.last?.close(code: nil, reason: "OS teardown")
     // No intermediate `.disconnected`: the client goes straight to `.connecting`.
     _ = await statusUpdates.first { $0 == .connecting }

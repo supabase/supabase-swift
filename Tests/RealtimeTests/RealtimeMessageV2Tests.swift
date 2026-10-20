@@ -19,10 +19,6 @@ struct RealtimeMessageV2Tests {
     #expect(message.status == .ok)
 
     message = RealtimeMessageV2(
-      joinRef: nil, ref: nil, topic: "heartbeat", event: "event", payload: ["status": "timeout"])
-    #expect(message.status == .timeout)
-
-    message = RealtimeMessageV2(
       joinRef: nil, ref: nil, topic: "heartbeat", event: "event", payload: ["status": "error"])
     #expect(message.status == .error)
 

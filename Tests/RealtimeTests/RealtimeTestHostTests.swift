@@ -8,7 +8,7 @@ import Testing
 struct RealtimeTestHostTests {
   @Test
   func subscribeCompletesWhenTheServerConfirmsTheJoin() async throws {
-    let host = RealtimeTestHost()
+    let host = await RealtimeTestHost()
     let channel = await host.client.channel("room")
 
     async let subscribed: Void = channel.subscribe()
@@ -17,14 +17,14 @@ struct RealtimeTestHostTests {
     host.confirmJoin(join)
     try await subscribed
 
-    #expect(channel.statusSnapshot == .subscribed)
+    #expect(await channel.status == .subscribed)
     await host.waitUntil { host.statuses == [.disconnected, .connecting, .connected] }
     #expect(host.connectCount == 1)
   }
 
   @Test
   func acknowledgedBroadcastResolvesOnTheServerReply() async throws {
-    let host = RealtimeTestHost()
+    let host = await RealtimeTestHost()
     let channel = await host.client.channel("room") {
       $0.broadcast.acknowledgeBroadcasts = true
     }
@@ -33,18 +33,18 @@ struct RealtimeTestHostTests {
     host.confirmJoin(try await host.receive(event: "phx_join"))
     try await subscribed
 
-    let push = await channel.track(state: ["name": "ana"])
+    async let push: Void = channel.track(state: ["name": "ana"])
     let frame = try await host.receive(event: "presence")
-    #expect(push.isRunning)
+    #expect(await channel.pendingPushes.count == 1)
     host.reply(to: frame)
 
-    #expect(try await push() == .ok)
-    #expect(!push.isRunning)
+    try await push
+    #expect(await channel.pendingPushes.isEmpty)
   }
 
   @Test
   func waitUntilFailsFastWhenTheConditionNeverHolds() async {
-    let host = RealtimeTestHost()
+    let host = await RealtimeTestHost()
     await withKnownIssue {
       await host.waitUntil(timeout: .milliseconds(50)) { false }
     }
@@ -52,7 +52,7 @@ struct RealtimeTestHostTests {
 
   @Test
   func disconnectIsObservedWithoutYielding() async throws {
-    let host = RealtimeTestHost()
+    let host = await RealtimeTestHost()
     try await host.client.connect()
     await host.client.disconnect()
 

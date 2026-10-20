@@ -22,11 +22,11 @@ struct RealtimeClientConnectionTests {
   @Test
   func connectOpensTheSocketAndReportsConnectingThenConnected() async throws {
     let h = Harness(headers: ["apikey": "key"])
-    var statuses = h.client.statusChanges.makeAsyncIterator()
+    var statuses = await h.client.statusChanges().makeAsyncIterator()
 
     try await h.client.connect()
 
-    #expect(h.client.statusSnapshot == .connected)
+    #expect(await h.client.status == .connected)
     #expect(await statuses.next() == .disconnected)
     #expect(await statuses.next() == .connecting)
     #expect(await statuses.next() == .connected)
@@ -46,7 +46,7 @@ struct RealtimeClientConnectionTests {
 
     try await h.client.connect()
 
-    #expect(h.client.statusSnapshot == .connected)
+    #expect(await h.client.status == .connected)
     #expect(h.connects.value.count == 1)
   }
 
@@ -57,7 +57,7 @@ struct RealtimeClientConnectionTests {
     let error = await #expect(throws: RealtimeError.self) { try await h.client.connect() }
 
     #expect(error?.kind == .transport)
-    #expect(h.client.statusSnapshot == .disconnected)
+    #expect(await h.client.status == .disconnected)
   }
 
   @Test
@@ -68,13 +68,13 @@ struct RealtimeClientConnectionTests {
     })
 
     let first = Task { try await h.client.connect() }
-    for await status in h.client.statusChanges where status == .connecting { break }
+    for await status in await h.client.statusChanges() where status == .connecting { break }
     let second = Task { try await h.client.connect() }
     open.yield()
 
     try await first.value
     try await second.value
-    #expect(h.client.statusSnapshot == .connected)
+    #expect(await h.client.status == .connected)
     #expect(h.connects.value.count == 1)
   }
 
@@ -87,7 +87,7 @@ struct RealtimeClientConnectionTests {
 
     await h.client.disconnect(reason: "test reason")
 
-    #expect(h.client.statusSnapshot == .disconnected)
+    #expect(await h.client.status == .disconnected)
     #expect(h.sockets.value.first?.sentEvents.last == .close(code: nil, reason: "test reason"))
   }
 
@@ -96,11 +96,11 @@ struct RealtimeClientConnectionTests {
     let h = Harness(beforeConnect: { _ in try await Task<Never, Never>.never() })
 
     let connect = Task { try await h.client.connect() }
-    for await status in h.client.statusChanges where status == .connecting { break }
+    for await status in await h.client.statusChanges() where status == .connecting { break }
     await h.client.disconnect()
 
     await #expect(throws: CancellationError.self) { try await connect.value }
-    #expect(h.client.statusSnapshot == .disconnected)
+    #expect(await h.client.status == .disconnected)
     #expect(h.sockets.value.isEmpty)
   }
 
@@ -131,7 +131,7 @@ struct RealtimeClientConnectionTests {
     try #require(gates.value[2]).resume()
     try await fresh.value
 
-    #expect(h.client.statusSnapshot == .connected)
+    #expect(await h.client.status == .connected)
     let current = try #require(h.sockets.value.last)
     #expect(!current.isClosed)
     if staleAttemptSucceeds {
@@ -145,10 +145,27 @@ struct RealtimeClientConnectionTests {
   // MARK: - Heartbeat
 
   @Test
+  func releasingTheClientEndsItsStatusAndHeartbeatStreams() async {
+    let statuses: AsyncStream<RealtimeClientStatus>
+    let beats: AsyncStream<HeartbeatStatus>
+    do {
+      let h = Harness()
+      statuses = await h.client.statusChanges()
+      beats = await h.client.heartbeats()
+    }
+
+    var statusIterator = statuses.makeAsyncIterator()
+    #expect(await statusIterator.next() == .disconnected)
+    #expect(await statusIterator.next() == nil)
+    var beatIterator = beats.makeAsyncIterator()
+    #expect(await beatIterator.next() == nil)
+  }
+
+  @Test
   func heartbeatIsSentEachIntervalAndAcknowledged() async throws {
     let h = Harness(heartbeatInterval: .seconds(25))
     try await h.client.connect()
-    var beats = h.client.heartbeats.makeAsyncIterator()
+    var beats = await h.client.heartbeats().makeAsyncIterator()
 
     await h.clock.advance(by: .seconds(25))
 
@@ -169,8 +186,8 @@ struct RealtimeClientConnectionTests {
   func missedHeartbeatReportsTimeoutAndReconnects() async throws {
     let h = Harness(heartbeatInterval: .seconds(25), reconnectDelay: .seconds(1))
     try await h.client.connect()
-    var beats = h.client.heartbeats.makeAsyncIterator()
-    var statuses = h.client.statusChanges.makeAsyncIterator()
+    var beats = await h.client.heartbeats().makeAsyncIterator()
+    var statuses = await h.client.statusChanges().makeAsyncIterator()
 
     await h.clock.advance(by: .seconds(25))
     #expect(await beats.next() == .sent)
@@ -191,7 +208,7 @@ struct RealtimeClientConnectionTests {
   func applicationCloseCodeDoesNotReconnect() async throws {
     let h = Harness(reconnectDelay: .seconds(1))
     try await h.client.connect()
-    var statuses = h.client.statusChanges.makeAsyncIterator()
+    var statuses = await h.client.statusChanges().makeAsyncIterator()
 
     // 4000–4999 signal auth or protocol errors: reconnecting with the same token would loop.
     h.servers.value[0].close(code: 4001, reason: "jwt expired")
@@ -200,14 +217,14 @@ struct RealtimeClientConnectionTests {
     #expect(await statuses.next() == .disconnected)
     await h.clock.advance(by: .seconds(60))
     #expect(h.connects.value.count == 1)
-    #expect(h.client.statusSnapshot == .disconnected)
+    #expect(await h.client.status == .disconnected)
   }
 
   @Test
   func transportCloseReconnectsAfterBackoff() async throws {
     let h = Harness(reconnectDelay: .seconds(2))
     try await h.client.connect()
-    var statuses = h.client.statusChanges.makeAsyncIterator()
+    var statuses = await h.client.statusChanges().makeAsyncIterator()
 
     h.servers.value[0].close(code: 1001, reason: "going away")
 
@@ -231,7 +248,7 @@ struct RealtimeClientConnectionTests {
       }
     )
     try await h.client.connect()
-    var statuses = h.client.statusChanges.makeAsyncIterator()
+    var statuses = await h.client.statusChanges().makeAsyncIterator()
 
     h.servers.value[0].close(code: 1001, reason: "going away")
 
@@ -249,7 +266,7 @@ struct RealtimeClientConnectionTests {
     let h = Harness(reconnectDelay: .seconds(1))
     try await h.client.connect()
     let staleGeneration = await h.client.generation
-    var statuses = h.client.statusChanges.makeAsyncIterator()
+    var statuses = await h.client.statusChanges().makeAsyncIterator()
 
     h.servers.value[0].close(code: 1001, reason: "going away")
     #expect(await statuses.next() == .connected)
@@ -262,7 +279,7 @@ struct RealtimeClientConnectionTests {
       .close(code: 1001, reason: "late"), generation: staleGeneration
     )
 
-    #expect(h.client.statusSnapshot == .connected)
+    #expect(await h.client.status == .connected)
     await h.clock.advance(by: .seconds(60))
     #expect(h.connects.value.count == 2)
   }
@@ -271,7 +288,7 @@ struct RealtimeClientConnectionTests {
 
   /// A client on a `TestClock` whose transport opens a fresh in-memory socket pair per connect.
   private struct Harness {
-    let clock: TestClock<Duration>
+    let clock: SignalingTestClock
     let client: RealtimeClient
     /// The URL and headers of every transport call, in order.
     let connects: LockIsolated<[(url: URL, headers: [String: String])]>
@@ -286,7 +303,7 @@ struct RealtimeClientConnectionTests {
       reconnectDelay: Duration = .seconds(1),
       beforeConnect: @escaping @Sendable (_ attempt: Int) async throws -> Void = { _ in }
     ) {
-      let clock = TestClock<Duration>()
+      let clock = SignalingTestClock()
       let connects = LockIsolated<[(url: URL, headers: [String: String])]>([])
       let sockets = LockIsolated<[FakeWebSocket]>([])
       let servers = LockIsolated<[FakeWebSocket]>([])

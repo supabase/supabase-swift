@@ -42,7 +42,7 @@ final class RealtimeTestHost: Sendable {
     url: URL = URL(string: "http://localhost:54321/realtime/v1")!,
     options: RealtimeClientOptions = RealtimeClientOptions(handleAppLifecycle: false),
     http: HTTPClient = HTTPClient(transport: RecordingTransport())
-  ) {
+  ) async {
     // Newest-1: a wait only needs to know that something changed since it last looked.
     (signal, signalContinuation) = AsyncStream<Void>.makeStream(
       bufferingPolicy: .bufferingNewest(1)
@@ -76,7 +76,8 @@ final class RealtimeTestHost: Sendable {
       clock: clock
     )
 
-    let statusObserver = Task { [statusChanges = client.statusChanges] in
+    let statusChanges = await client.statusChanges()
+    let statusObserver = Task {
       for await status in statusChanges {
         state.withValue { $0.statuses.append(status) }
         continuation.yield()

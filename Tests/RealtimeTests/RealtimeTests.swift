@@ -33,7 +33,7 @@ final class RealtimeTests: Sendable {
   let client: FakeWebSocket
   let http: RecordingTransport
   let sut: RealtimeClient
-  let testClock: TestClock<Duration>
+  let testClock: SignalingTestClock
 
   let heartbeatInterval = RealtimeClientOptions.defaultHeartbeatInterval
   let reconnectDelay = RealtimeClientOptions.defaultReconnectDelay
@@ -44,7 +44,7 @@ final class RealtimeTests: Sendable {
     self.client = client
     self.server = server
     http = RecordingTransport()
-    testClock = TestClock()
+    testClock = SignalingTestClock()
 
     sut = RealtimeClient(
       url: url,
@@ -97,7 +97,7 @@ final class RealtimeTests: Sendable {
       let updates = await channel.postgresChanges(UpdateAction.self, table: "messages")
       let deletes = await channel.postgresChanges(DeleteAction.self, table: "messages")
 
-      let socketStatuses = collect(sut.statusChanges)
+      let socketStatuses = collect(await sut.statusChanges())
       defer { socketStatuses.task.cancel() }
 
       let serverTask = Task { @Sendable [server = server] in
@@ -120,7 +120,7 @@ final class RealtimeTests: Sendable {
       }
       defer { serverTask.cancel() }
 
-      let channelStatuses = collect(channel.statusChanges)
+      let channelStatuses = collect(await channel.statusChanges())
       defer { channelStatuses.task.cancel() }
 
       do {
@@ -499,7 +499,7 @@ final class RealtimeTests: Sendable {
       }
       defer { serverTask.cancel() }
 
-      let heartbeatStatuses = collect(sut.heartbeats)
+      let heartbeatStatuses = collect(await sut.heartbeats())
       defer { heartbeatStatuses.task.cancel() }
 
       try await sut.connect()
@@ -529,7 +529,7 @@ final class RealtimeTests: Sendable {
       }
       defer { serverTask.cancel() }
 
-      let statuses = collect(sut.statusChanges)
+      let statuses = collect(await sut.statusChanges())
       defer { statuses.task.cancel() }
 
       try await sut.connect()
@@ -580,14 +580,14 @@ final class RealtimeTests: Sendable {
         clock: testClock
       )
 
-      let heartbeatStatuses = collect(sut.heartbeats)
+      let heartbeatStatuses = collect(await sut.heartbeats())
       defer { heartbeatStatuses.task.cancel() }
 
       try await sut.connect()
 
       server.close(code: nil, reason: "boom")
       try await withTimeout(.seconds(5)) {
-        for await status in sut.statusChanges where status == .connecting { break }
+        for await status in await sut.statusChanges() where status == .connecting { break }
       }
 
       await testClock.advance(by: .seconds(1))
@@ -604,7 +604,7 @@ final class RealtimeTests: Sendable {
   @Test
   func heartbeat_timeout() async throws {
     try await withMainSerialExecutor {
-      let heartbeatStatuses = collect(sut.heartbeats)
+      let heartbeatStatuses = collect(await sut.heartbeats())
       defer { heartbeatStatuses.task.cancel() }
 
       try await sut.connect()
@@ -646,7 +646,7 @@ final class RealtimeTests: Sendable {
       }
       defer { serverTask.cancel() }
 
-      let heartbeatStatuses = collect(sut.heartbeats)
+      let heartbeatStatuses = collect(await sut.heartbeats())
       defer { heartbeatStatuses.task.cancel() }
 
       try await sut.connect()
@@ -674,10 +674,12 @@ final class RealtimeTests: Sendable {
       }
 
       // `broadcast` on a channel that is not subscribed no longer falls back to the REST
-      // endpoint: its handle fails with `.notSubscribed` and no request goes out. REST
-      // delivery is the explicit `httpSend`, which expects a 202.
-      let push = await channel.broadcast(event: "test", message: ["value": 42] as JSONObject)
-      #expect((push.error as? RealtimeError)?.kind == .notSubscribed)
+      // endpoint: it throws `.notSubscribed` and no request goes out. REST delivery is the
+      // explicit `httpSend`, which expects a 202.
+      let error = await #expect(throws: RealtimeError.self) {
+        try await channel.broadcast(event: "test", message: ["value": 42] as JSONObject)
+      }
+      #expect(error?.kind == .notSubscribed)
       #expect(http.requests.isEmpty)
 
       try await channel.httpSend(event: "test", message: ["value": 42] as JSONObject)

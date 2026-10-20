@@ -262,7 +262,7 @@ public struct RealtimeClientStatus: RawRepresentable, Hashable, Sendable,
 /// Describes the result of a heartbeat cycle.
 ///
 /// The Realtime client sends periodic heartbeat messages to keep the WebSocket
-/// connection alive. Use ``RealtimeClient/heartbeats``
+/// connection alive. Use ``RealtimeClient/heartbeats()``
 /// to observe heartbeat status changes.
 ///
 /// ## Topics

@@ -56,8 +56,10 @@ struct RealtimeReconnectRecoveryTests {
     sockets.value[0].receiveFromServer(.close(code: 1006, reason: "network down"))
 
     let recovered = await waitUntil(timeout: 5) {
-      connectAttempts.value >= 3 && sut.statusSnapshot == .connected
-        && channel.statusSnapshot == .subscribed
+      let clientStatus = await sut.status
+      let channelStatus = await channel.status
+      return connectAttempts.value >= 3 && clientStatus == .connected
+        && channelStatus == .subscribed
     }
     #expect(recovered, "Client did not recover automatically after a failed auto-reconnect attempt")
 
@@ -112,7 +114,7 @@ struct RealtimeReconnectRecoveryTests {
         payload: [:]
       )
     )
-    await waitUntil(timeout: 2) { channel.statusSnapshot == .unsubscribed }
+    await waitUntil(timeout: 2) { await channel.status == .unsubscribed }
     #expect(await channel.status == .unsubscribed)
 
     await sut.disconnect()
@@ -162,7 +164,7 @@ struct RealtimeReconnectRecoveryTests {
         payload: [:]
       )
     )
-    await waitUntil(timeout: 2) { channel.statusSnapshot == .unsubscribed }
+    await waitUntil(timeout: 2) { await channel.status == .unsubscribed }
     #expect(await channel.status == .unsubscribed)
 
     await sut.disconnect()
@@ -190,7 +192,7 @@ struct RealtimeReconnectRecoveryTests {
     #expect(await channel.status == .subscribed)
 
     sockets.value[0].receiveFromServer(.close(code: 4001, reason: "auth"))
-    await waitUntil(timeout: 2) { sut.statusSnapshot == .disconnected }
+    await waitUntil(timeout: 2) { await sut.status == .disconnected }
     #expect(await sut.status == .disconnected)
     #expect(await channel.status == .subscribed)
 

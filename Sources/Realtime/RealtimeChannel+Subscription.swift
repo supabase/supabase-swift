@@ -66,6 +66,10 @@ extension RealtimeChannel {
   /// Leaves the Realtime topic and transitions the channel to
   /// ``RealtimeChannelStatus/unsubscribed``. Cancels an in-flight subscribe if one is running.
   public func unsubscribe() async {
+    // Probe the socket before reading `state`: the probe suspends, and another caller could move
+    // the state while this one waits. After it, the switch and the transition run without a
+    // suspension point.
+    let socketConnected = await isSocketConnected()
     switch state {
     case .unsubscribed:
       logger.debug("Unsubscribe no-op for channel '\(topic)': already unsubscribed")
@@ -79,7 +83,7 @@ extension RealtimeChannel {
       task.cancel()
       // Subscribe hadn't completed yet, so the server may not recognize the channel and will
       // likely never send `phx_close`. Don't wait for it.
-      await beginUnsubscribe(waitForServerClose: false, sendLeave: isSocketConnected)
+      await beginUnsubscribe(waitForServerClose: false, sendLeave: socketConnected)
 
     case .subscribed:
       // We had a live subscription; wait (bounded) for the server's `phx_close` so observers see
@@ -88,7 +92,6 @@ extension RealtimeChannel {
       // Unless the socket is dead: the server-side channel died with the connection,
       // `phx_leave` would only be buffered into the *next* connection as a stale frame, and
       // `phx_close` can never arrive — waiting would stall for the full timeout (issue #1145).
-      let socketConnected = isSocketConnected
       await beginUnsubscribe(waitForServerClose: socketConnected, sendLeave: socketConnected)
     }
   }
@@ -320,7 +323,7 @@ extension RealtimeChannel {
   /// Connects the socket when the client allows it, and reports whether it is connected.
   private func ensureSocketConnected() async -> Bool {
     guard let client else { return false }
-    if client.statusSnapshot == .connected { return true }
+    if await client.status == .connected { return true }
     guard connectOnSubscribe else {
       reportIssue(
         "You can't subscribe to a channel while the realtime client is not connected. Did you forget to call `realtime.connect()`?"
@@ -328,13 +331,13 @@ extension RealtimeChannel {
       return false
     }
     try? await client.connect()
-    return client.statusSnapshot == .connected
+    return await client.status == .connected
   }
 
-  /// Synchronous socket-status probe: never connects. Used to decide whether `phx_leave` can be
-  /// delivered at all.
-  private var isSocketConnected: Bool {
-    client?.statusSnapshot == .connected
+  /// Socket-status probe: never connects. Used to decide whether `phx_leave` can be delivered
+  /// at all.
+  private func isSocketConnected() async -> Bool {
+    await client?.status == .connected
   }
 
   /// Fails the parked join waiter. With `ref`, only if the parked waiter belongs to that join;
@@ -404,4 +407,8 @@ extension RealtimeError {
   /// The socket is not connected, so the push cannot be answered.
   static let notConnected = RealtimeError(
     kind: .notConnected, message: "The realtime client is not connected.")
+
+  /// No `phx_reply` arrived for the push within the client's configured timeout.
+  static let pushTimeout = RealtimeError(
+    kind: .timeout, message: "The server did not reply to the push within the timeout.")
 }

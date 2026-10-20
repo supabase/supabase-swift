@@ -15,7 +15,7 @@ import Testing
 
 @Suite(.timeLimit(.minutes(1)))
 struct RealtimeEngineTests {
-  let clock = TestClock()
+  let clock = SignalingTestClock()
   let server: FakeRealtimeServer
   let engine: RealtimeEngine
   let topic = "realtime:room"

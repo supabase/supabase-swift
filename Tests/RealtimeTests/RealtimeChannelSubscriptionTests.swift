@@ -1,6 +1,7 @@
 import Clocks
 import ConcurrencyExtras
 import Foundation
+import Helpers
 import TestHelpers
 import Testing
 
@@ -15,7 +16,7 @@ struct RealtimeChannelSubscriptionTests {
     let h = Harness()
     let channel = await h.client.channel("room")
 
-    #expect(channel.statusSnapshot == .unsubscribed)
+    #expect(await channel.status == .unsubscribed)
     #expect(await channel.joinRef == nil)
   }
 
@@ -26,7 +27,7 @@ struct RealtimeChannelSubscriptionTests {
 
     let join = try await h.subscribe(channel)
 
-    #expect(channel.statusSnapshot == .subscribed)
+    #expect(await channel.status == .subscribed)
     #expect(await channel.joinRef == join.ref)
     #expect(h.sent(ChannelEvent.join).count == 1)
   }
@@ -54,12 +55,11 @@ struct RealtimeChannelSubscriptionTests {
 
     try await first
     try await second
-    #expect(channel.statusSnapshot == .subscribed)
+    #expect(await channel.status == .subscribed)
     #expect(h.sent(ChannelEvent.join).count == 1)
   }
 
-  @Test(
-    .disabledOnLinux("TestClock.advance races the retry sleep registration; the advance is lost."))
+  @Test
   func subscribeRetriesAfterTimeoutThenSucceeds() async throws {
     let h = Harness(timeout: .seconds(10), maxRetryAttempts: 3)
     let channel = await h.client.channel("room")
@@ -72,13 +72,12 @@ struct RealtimeChannelSubscriptionTests {
     try h.confirm(secondJoin)
 
     try await subscription.value
-    #expect(channel.statusSnapshot == .subscribed)
+    #expect(await channel.status == .subscribed)
     #expect(secondJoin.ref != firstJoin.ref)
     #expect(await channel.joinRef == secondJoin.ref)
   }
 
-  @Test(
-    .disabledOnLinux("TestClock.advance races the retry sleep registration; the advance is lost."))
+  @Test
   func subscribeThrowsMaxRetryAttemptsReachedWhenNoAttemptIsConfirmed() async throws {
     let h = Harness(timeout: .seconds(10), maxRetryAttempts: 2)
     let channel = await h.client.channel("room")
@@ -91,19 +90,18 @@ struct RealtimeChannelSubscriptionTests {
 
     let error = await #expect(throws: RealtimeError.self) { try await subscription.value }
     #expect(error?.kind == .maxRetryAttemptsReached)
-    #expect(channel.statusSnapshot == .unsubscribed)
+    #expect(await channel.status == .unsubscribed)
     #expect(await channel.joinRef == nil)
     #expect(h.sent(ChannelEvent.join).count == 2)
   }
 
   /// Issue #1145 (defect 2): a transient socket connect failure must enter the retry ladder
   /// like a timeout instead of aborting the subscribe.
-  @Test(
-    .disabledOnLinux("TestClock.advance races the retry sleep registration; the advance is lost."))
+  @Test
   func subscribeRetriesWhenSocketConnectFailsTransiently() async throws {
     let h = Harness(maxRetryAttempts: 3, failedConnects: 1)
     let channel = await h.client.channel("room")
-    var statuses = h.client.statusChanges.makeAsyncIterator()
+    var statuses = await h.client.statusChanges().makeAsyncIterator()
 
     let subscription = Task { try await channel.subscribe() }
     #expect(await statuses.next() == .disconnected)
@@ -113,18 +111,17 @@ struct RealtimeChannelSubscriptionTests {
     try h.confirm(try #require(await h.received(ChannelEvent.join)))
 
     try await subscription.value
-    #expect(channel.statusSnapshot == .subscribed)
+    #expect(await channel.status == .subscribed)
     #expect(h.connects.value == 2)
   }
 
   /// Issue #1145 (defect 2): connect failures must not surface as `CancellationError`, which
   /// callers attribute to their own task.
-  @Test(
-    .disabledOnLinux("TestClock.advance races the retry sleep registration; the advance is lost."))
+  @Test
   func persistentConnectFailureThrowsMaxRetryAttemptsReached() async throws {
     let h = Harness(maxRetryAttempts: 2, failedConnects: .max)
     let channel = await h.client.channel("room")
-    var statuses = h.client.statusChanges.makeAsyncIterator()
+    var statuses = await h.client.statusChanges().makeAsyncIterator()
 
     let subscription = Task { try await channel.subscribe() }
     #expect(await statuses.next() == .disconnected)
@@ -134,7 +131,7 @@ struct RealtimeChannelSubscriptionTests {
 
     let error = await #expect(throws: RealtimeError.self) { try await subscription.value }
     #expect(error?.kind == .maxRetryAttemptsReached)
-    #expect(channel.statusSnapshot == .unsubscribed)
+    #expect(await channel.status == .unsubscribed)
   }
 
   @Test
@@ -157,7 +154,7 @@ struct RealtimeChannelSubscriptionTests {
     )
 
     try await subscription.value
-    #expect(channel.statusSnapshot == .subscribed)
+    #expect(await channel.status == .subscribed)
     withExtendedLifetime(inserts) {}
   }
 
@@ -168,7 +165,7 @@ struct RealtimeChannelSubscriptionTests {
 
     await channel.didReceiveSubscribedOK()
 
-    #expect(channel.statusSnapshot == .unsubscribed)
+    #expect(await channel.status == .unsubscribed)
   }
 
   // MARK: - Cancellation and server close
@@ -183,7 +180,7 @@ struct RealtimeChannelSubscriptionTests {
     subscription.cancel()
 
     await #expect(throws: CancellationError.self) { try await subscription.value }
-    #expect(channel.statusSnapshot == .unsubscribed)
+    #expect(await channel.status == .unsubscribed)
     #expect(await channel.joinRef == nil)
   }
 
@@ -200,7 +197,7 @@ struct RealtimeChannelSubscriptionTests {
 
     let error = await #expect(throws: RealtimeError.self) { try await subscription.value }
     #expect(error?.kind == .channelClosedByServer)
-    #expect(channel.statusSnapshot == .unsubscribed)
+    #expect(await channel.status == .unsubscribed)
   }
 
   @Test
@@ -210,10 +207,10 @@ struct RealtimeChannelSubscriptionTests {
     let join = try await h.subscribe(channel)
 
     #expect(await channel.didReceiveClose(joinRef: "stale-join-ref") == false)
-    #expect(channel.statusSnapshot == .subscribed)
+    #expect(await channel.status == .subscribed)
 
     #expect(await channel.didReceiveClose(joinRef: join.ref) == true)
-    #expect(channel.statusSnapshot == .unsubscribed)
+    #expect(await channel.status == .unsubscribed)
     #expect(await channel.joinRef == nil)
   }
 
@@ -225,7 +222,7 @@ struct RealtimeChannelSubscriptionTests {
 
     #expect(await channel.didReceiveClose() == true)
 
-    #expect(channel.statusSnapshot == .unsubscribed)
+    #expect(await channel.status == .unsubscribed)
     #expect(await channel.joinRef == nil)
   }
 
@@ -238,7 +235,7 @@ struct RealtimeChannelSubscriptionTests {
     let firstJoin = try await h.subscribe(channel)
 
     await channel.resetForReconnect()
-    #expect(channel.statusSnapshot == .unsubscribed)
+    #expect(await channel.status == .unsubscribed)
     #expect(await channel.joinRef == nil)
 
     let secondJoin = try await h.subscribe(channel)
@@ -256,7 +253,7 @@ struct RealtimeChannelSubscriptionTests {
     await channel.resetForReconnect()
 
     await #expect(throws: (any Error).self) { try await subscription.value }
-    #expect(channel.statusSnapshot == .unsubscribed)
+    #expect(await channel.status == .unsubscribed)
 
     let secondJoin = try await h.subscribe(channel)
     #expect(secondJoin.ref != firstJoin.ref)
@@ -271,7 +268,7 @@ struct RealtimeChannelSubscriptionTests {
 
     await channel.unsubscribe()
 
-    #expect(channel.statusSnapshot == .unsubscribed)
+    #expect(await channel.status == .unsubscribed)
     #expect(h.sent(ChannelEvent.leave).isEmpty)
   }
 
@@ -286,7 +283,7 @@ struct RealtimeChannelSubscriptionTests {
     try h.close(join)
     await unsubscription.value
 
-    #expect(channel.statusSnapshot == .unsubscribed)
+    #expect(await channel.status == .unsubscribed)
     #expect(await channel.joinRef == nil)
     #expect(h.sent(ChannelEvent.leave).count == 1)
   }
@@ -302,8 +299,38 @@ struct RealtimeChannelSubscriptionTests {
     await h.clock.advance(by: .seconds(10))
     await unsubscription.value
 
-    #expect(channel.statusSnapshot == .unsubscribed)
+    #expect(await channel.status == .unsubscribed)
     #expect(await channel.joinRef == nil)
+  }
+
+  /// `removeAllChannels()` must keep each channel routable until its `phx_close` arrives: a
+  /// close for a topic no longer in `channels` is dropped, and the unsubscribe then waits for
+  /// the whole timeout.
+  @Test
+  func removeAllChannelsDeliversEachServerClose() async throws {
+    let h = Harness()
+    let room = await h.client.channel("room")
+    let lobby = await h.client.channel("lobby")
+    let roomJoin = try await h.subscribe(room)
+    let lobbyJoin = try await h.subscribe(lobby)
+
+    let roomStatuses = await room.statusChanges()
+    let lobbyStatuses = await lobby.statusChanges()
+    let removal = Task { await h.client.removeAllChannels() }
+    _ = try #require(await h.received(ChannelEvent.leave))
+    _ = try #require(await h.received(ChannelEvent.leave))
+    try h.close(roomJoin)
+    try h.close(lobbyJoin)
+    // Bounded on the wall clock: a dropped close leaves the unsubscribe waiting on the test
+    // clock, and `removal.value` could not be cancelled, so check the statuses instead.
+    try await withTimeout(.seconds(5)) {
+      for await status in roomStatuses where status == .unsubscribed { break }
+      for await status in lobbyStatuses where status == .unsubscribed { break }
+    }
+    await removal.value
+
+    #expect(await h.client.channels.isEmpty)
+    #expect(await h.client.status == .disconnected)
   }
 
   /// Issue #1145: with the socket gone, `phx_leave` could only be buffered into the next
@@ -317,7 +344,7 @@ struct RealtimeChannelSubscriptionTests {
 
     await channel.unsubscribe()
 
-    #expect(channel.statusSnapshot == .unsubscribed)
+    #expect(await channel.status == .unsubscribed)
     #expect(await h.client.sendBuffer.isEmpty)
     #expect(h.sent(ChannelEvent.leave).isEmpty)
   }
@@ -332,7 +359,7 @@ struct RealtimeChannelSubscriptionTests {
     await channel.unsubscribe()
 
     await #expect(throws: CancellationError.self) { try await subscription.value }
-    #expect(channel.statusSnapshot == .unsubscribed)
+    #expect(await channel.status == .unsubscribed)
     #expect(h.sent(ChannelEvent.leave).count == 1)
   }
 
@@ -342,7 +369,7 @@ struct RealtimeChannelSubscriptionTests {
   func statusChangesEmitsEveryTransition() async throws {
     let h = Harness()
     let channel = await h.client.channel("room")
-    var statuses = channel.statusChanges.makeAsyncIterator()
+    var statuses = await channel.statusChanges().makeAsyncIterator()
 
     let join = try await h.subscribe(channel)
     let unsubscription = Task { await channel.unsubscribe() }
@@ -357,11 +384,23 @@ struct RealtimeChannelSubscriptionTests {
     #expect(trail == [.unsubscribed, .subscribing, .subscribed, .unsubscribing, .unsubscribed])
   }
 
+  @Test
+  func removingTheChannelEndsItsStatusStream() async {
+    let h = Harness()
+    let channel = await h.client.channel("room")
+    var statuses = await channel.statusChanges().makeAsyncIterator()
+    #expect(await statuses.next() == .unsubscribed)
+
+    await h.client.removeChannel(channel)
+
+    #expect(await statuses.next() == nil)
+  }
+
   // MARK: - Harness
 
   /// A client on a `TestClock`, connected to an in-memory server socket the test drives.
   private struct Harness {
-    let clock: TestClock<Duration>
+    let clock: SignalingTestClock
     let socket: FakeWebSocket
     let server: FakeWebSocket
     let client: RealtimeClient
@@ -372,7 +411,7 @@ struct RealtimeChannelSubscriptionTests {
       maxRetryAttempts: Int = 3,
       failedConnects: Int = 0
     ) {
-      let clock = TestClock<Duration>()
+      let clock = SignalingTestClock()
       let (socket, server) = FakeWebSocket.fakes()
       let connects = LockIsolated(0)
       self.clock = clock

@@ -390,7 +390,7 @@ extension RealtimeClient {
     if pendingHeartbeatRef != nil {
       // Previous heartbeat was never acknowledged.
       options.logger.debug("Heartbeat timeout - previous heartbeat not acknowledged")
-      heartbeatMirror.update(.timeout)
+      recordHeartbeat(.timeout)
       pendingHeartbeatRef = nil
       apply(.socketFailed(reason: RealtimeError.heartbeatTimeout.message))
       return
@@ -407,7 +407,7 @@ extension RealtimeClient {
         payload: [:]
       )
     )
-    heartbeatMirror.update(.sent)
+    recordHeartbeat(.sent)
     await setAuth()
   }
 
@@ -451,7 +451,7 @@ extension RealtimeClient {
 
   private func onMessage(_ message: RealtimeMessageV2) async {
     if message.topic == "phoenix", message.event == "phx_reply" {
-      heartbeatMirror.update(message.status == .ok ? .ok : .error)
+      recordHeartbeat(message.status == .ok ? .ok : .error)
     }
 
     if let ref = message.ref, ref == pendingHeartbeatRef {

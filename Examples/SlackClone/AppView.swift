@@ -35,7 +35,7 @@ final class AppViewModel {
     }
 
     Task {
-      for await status in supabase.realtime.statusChanges {
+      for await status in await supabase.realtime.statusChanges() {
         realtimeConnectionStatus = status
       }
     }

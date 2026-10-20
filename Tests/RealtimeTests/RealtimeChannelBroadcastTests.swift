@@ -81,7 +81,7 @@ final class RealtimeChannelBroadcastTests: Sendable {
     let channel = await sut.channel("test")
     try await channel.subscribe()
 
-    await channel.broadcast(
+    try await channel.broadcast(
       event: "my_event", message: ["hello": .string("world")] as JSONObject
     )
 
@@ -107,7 +107,7 @@ final class RealtimeChannelBroadcastTests: Sendable {
     try await channel.subscribe()
 
     let binaryData = Data([0x01, 0x02, 0x03, 0x04])
-    await channel.broadcast(event: "bin_event", data: binaryData)
+    try await channel.broadcast(event: "bin_event", data: binaryData)
 
     let binaryFrames = client.sentEvents.compactMap { event -> Data? in
       if case .binary(let data) = event { return data }
@@ -232,7 +232,7 @@ final class RealtimeChannelBroadcastTests: Sendable {
   // MARK: - Broadcast on an unsubscribed channel
 
   // Behavior change: a broadcast on a channel that is not subscribed no longer falls back to
-  // the REST endpoint. Its handle fails with `.notSubscribed`; REST sending is `httpSend`'s job.
+  // the REST endpoint. It throws `.notSubscribed`; REST sending is `httpSend`'s job.
   @Test
   func broadcast_whenNotSubscribedFailsWithoutRESTFallback() async throws {
     http.respond { _, _ in
@@ -243,16 +243,12 @@ final class RealtimeChannelBroadcastTests: Sendable {
       config.broadcast.acknowledgeBroadcasts = true
     }
 
-    let handle = await channel.broadcast(
-      event: "my_event", message: ["hello": .string("world")] as JSONObject
-    )
-
-    do {
-      _ = try await handle()
-      Issue.record("Expected the push to fail with .notSubscribed")
-    } catch {
-      #expect((error as? RealtimeError)?.kind == .notSubscribed)
+    let error = await #expect(throws: RealtimeError.self) {
+      try await channel.broadcast(
+        event: "my_event", message: ["hello": .string("world")] as JSONObject
+      )
     }
+    #expect(error?.kind == .notSubscribed)
     #expect(http.requests.isEmpty)
   }
 
