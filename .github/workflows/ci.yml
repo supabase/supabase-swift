@@ -455,6 +455,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Lint formatting
         run: swift format lint --strict --recursive Sources Tests Package.swift Examples tools/supabase-typegen/Sources tools/supabase-typegen/Tests tools/supabase-typegen/Package.swift
+      - name: Forbid yield loops in Realtime tests
+        run: ./scripts/check-no-yield-loops.sh
 
   lint:
     name: SwiftLint

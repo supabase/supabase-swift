@@ -4,6 +4,7 @@ import CustomDump
 import Foundation
 import InlineSnapshotTesting
 import TestHelpers
+import Helpers
 import Testing
 @testable import Realtime
 #if canImport(FoundationNetworking)
@@ -588,7 +589,9 @@ import Testing
         try await sut.connect()
 
         server.close(code: nil, reason: "boom")
-        await Task.megaYield()
+        try await withTimeout(.seconds(5)) {
+          for await status in sut.statusChanges where status == .connecting { break }
+        }
 
         await testClock.advance(by: .seconds(1))
 
@@ -654,10 +657,8 @@ import Testing
         // A redundant connect() — the client is already `.connected`, so it is a
         // no-op. The socket must keep receiving frames afterwards.
         try await sut.connect()
-        await Task.megaYield()
 
         await testClock.advance(by: heartbeatInterval)
-        await Task.megaYield()
 
         await waitUntil(timeout: 5) { heartbeatStatuses.values.value.count >= 2 }
         #expect(heartbeatStatuses.values.value == [.sent, .ok])
@@ -861,42 +862,12 @@ import Testing
     }
 
     @Test
-    func messageProcessingRespectsCancellation() async throws {
+    func disconnectCancelsTheSocketReader() async throws {
       try await withMainSerialExecutor {
-        let messagesProcessed = LockIsolated(0)
-
         try await sut.connect()
-
-        for i in 1...3 {
-          server.send(
-            RealtimeMessageV2(
-              joinRef: nil,
-              ref: "\(i)",
-              topic: "test-topic",
-              event: "test-event",
-              payload: ["index": .double(Double(i))]
-            )
-          )
-          messagesProcessed.withValue { $0 += 1 }
-        }
-
-        await Task.megaYield()
+        #expect(await sut.messageTask != nil, "connect() should start the socket reader")
 
         await sut.disconnect()
-
-        for i in 4...6 {
-          server.send(
-            RealtimeMessageV2(
-              joinRef: nil,
-              ref: "\(i)",
-              topic: "test-topic",
-              event: "test-event",
-              payload: ["index": .double(Double(i))]
-            )
-          )
-        }
-
-        await Task.megaYield()
 
         #expect(await sut.messageTask == nil, "Message task should be nil after disconnect")
       }
