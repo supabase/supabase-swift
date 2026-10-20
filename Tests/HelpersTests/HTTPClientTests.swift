@@ -84,8 +84,6 @@ struct HTTPClientTests {
 
   @Test
   func retryRunsOutsideTheCallersMiddlewares() async throws {
-    // The caller's middlewares (and the SDK's access-token one) must run once per attempt, so a
-    // replayed request carries a freshly resolved token rather than the first attempt's.
     let seen = LockIsolated<[(HTTPTypes.HTTPRequest, HTTPBody?)]>([])
     let log = LockIsolated<[String]>([])
     let client = HTTPClient(
@@ -150,8 +148,6 @@ struct HTTPClientTests {
     #expect(try await iterator.next() == nil)
   }
 
-  /// Records the `RequestTimeout` task local the transport sees — the value
-  /// `URLSessionTransport` writes to `URLRequest.timeoutInterval`.
   struct TimeoutProbe: ClientTransport {
     let seen: LockIsolated<[Duration?]>
 

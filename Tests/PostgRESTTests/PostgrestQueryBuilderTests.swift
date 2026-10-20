@@ -18,10 +18,6 @@ extension PostgrestMockerTests {
     var url: URL { fixture.url }
     var sut: PostgrestClient { fixture.sut }
 
-    /// A client whose `Prefer` header is pre-set to `value`, for tests that verify an
-    /// already-present `Prefer` header is merged with the one the query builder adds. Setting it
-    /// this way (instead of `.setHeader(...)` on the query builder before choosing an operation)
-    /// is required now that `PostgrestQueryPhase` doesn't conform to `PostgrestExecutablePhase`.
     private func sut(withPreferHeader value: String) -> PostgrestClient {
       var configuration = sut.configuration
       configuration.headers["Prefer"] = value
@@ -530,9 +526,6 @@ extension PostgrestMockerTests {
 
     @Test
     func upsertDefaultToNullFalseKeepsEveryOtherPreference() async throws {
-      // The whole point of the option is that it is one more entry in a header that already carries
-      // `resolution=`, `return=`, `count=` and whatever the caller set. Dropping any of them turns
-      // the request into a different operation — see SDK-1626.
       Mock(
         url: url.appendingPathComponent("users"),
         ignoreQuery: true,

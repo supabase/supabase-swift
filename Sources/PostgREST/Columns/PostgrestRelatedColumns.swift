@@ -5,8 +5,6 @@
 //  Created by Guilherme Souza on 26/08/26.
 //
 
-// MARK: - Relations
-
 /// A to-**one** embedded relation (many-to-one or one-to-one), reached from its parent's column
 /// namespace.
 ///
@@ -81,13 +79,6 @@ public struct _PostgrestToManyRelation<
     )
   }
 }
-
-// MARK: - Columns
-//
-// Each embedded column implements `_deriving(_:)` to place a derivation inside its parentheses,
-// and declares its `Position`. Those two lines are all either kind contributes: `cast(to:)`,
-// `jsonText(_:)`, `jsonObject(_:)` and the five aggregates are declared once on
-// `_PostgrestColumnExpression` and are correct here for free.
 
 /// A column of a to-**one** embedded relation, seen from the parent.
 ///

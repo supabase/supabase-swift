@@ -23,13 +23,8 @@ extension Mock {
     column: UInt = #column
   ) -> Self {
     #if os(Linux) || os(Android)
-      // non-Darwin curl snapshots have a different Content-Length than expected
       return self
     #endif
-    // The comparison cannot happen in the handler below: Mocker calls it from the URL-loading
-    // queue, where Swift Testing has no current test, so a recorded issue is dropped and the
-    // assertion silently passes whatever the request was. Register the expectation here -- on the
-    // test's task -- and let `MockerSerializedTrait` compare it once the body returns.
     let token = PendingRequestSnapshotStore.shared.register(
       PendingRequestSnapshot(
         expected: expected?(),

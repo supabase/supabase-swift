@@ -99,17 +99,12 @@
       }
 
       for legacy in legacyKeychains {
-        // An absent legacy item reads as nil, so anything thrown here is a genuine failure —
-        // a locked Keychain, a denied ACL prompt — and must not be reported as "no session".
         guard let data = try legacy.data(forKey: key) else { continue }
 
         do {
           try keychain.set(data, forKey: key)
-          // Only drop the legacy copy once the new one has landed.
           try? legacy.deleteItem(forKey: key)
-        } catch {
-          // Leave the legacy copy in place; the next read retries the migration.
-        }
+        } catch {}
 
         return data
       }

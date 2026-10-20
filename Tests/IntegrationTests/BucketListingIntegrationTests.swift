@@ -9,8 +9,6 @@ import Foundation
 import Storage
 import Testing
 
-/// `listBuckets(options:)` sends `BucketListOptions` as the query Storage's `bucket` route reads,
-/// and buckets decode their `type`.
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil))
 struct BucketListingIntegrationTests {
   @Test

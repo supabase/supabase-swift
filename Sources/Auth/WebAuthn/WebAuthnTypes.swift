@@ -90,8 +90,6 @@ public struct WebAuthnChallengeResponseData: Decodable, Hashable, Sendable {
   public let credentialOptions: JSONValue
 }
 
-// MARK: - First-factor passkeys
-
 /// A passkey registered for the current user.
 ///
 /// - Warning: Experimental. See ``MFAWebAuthnEnrollParams``.

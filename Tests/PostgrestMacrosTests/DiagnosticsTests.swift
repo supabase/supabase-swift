@@ -35,9 +35,6 @@ struct DiagnosticsTests {
 
   @Test
   func tableRejectsARelationshipProperty() {
-    // `@Relationship` exists now, so this is what a user actually sees: the attribute resolves,
-    // and `@Table` rejects it before the compiler has anything to say. Embeds belong to a
-    // selection, so the fix is to move the property to a `@SelectionOf` type.
     assertMacro {
       """
       @Table("todos")
@@ -61,8 +58,6 @@ struct DiagnosticsTests {
 
   @Test
   func tableRejectsAColumnOnAMultiBindingDeclaration() {
-    // One name cannot serve two properties; the other markers are fine on a multi-binding
-    // declaration and stay covered in `TableMacroTests`.
     assertMacro {
       """
       @Table("todos")
@@ -130,10 +125,6 @@ struct DiagnosticsTests {
 
   @Test
   func selectionOfRejectsARelationshipWithNoRoot() {
-    // `\.todoID` infers its root from context a macro cannot see, so the expansion would have
-    // nothing to name the foreign key's relation by. Left unreported, the property falls through
-    // to the plain-column path and the reader gets "no member 'comments'" on a line they did not
-    // write.
     assertMacro {
       #"""
       @SelectionOf(Todo.self)
@@ -223,9 +214,6 @@ struct DiagnosticsTests {
 
   @Test
   func tableRejectsAPropertyWithNoTypeAnnotation() {
-    // Left alone, the property has a default, so `Decodable` synthesis still succeeds. The column
-    // never round-trips and the mistake surfaces only much later, as a compile error at some
-    // unrelated call site that expected the column to exist in `Columns` or `Draft`.
     assertMacro {
       """
       @Table("todos")
@@ -249,7 +237,6 @@ struct DiagnosticsTests {
 
   @Test
   func tableReportsEveryPropertyWithNoTypeAnnotation() {
-    // One diagnostic per property, so the author fixes them all in one pass.
     assertMacro {
       """
       @Table("todos")
@@ -277,8 +264,6 @@ struct DiagnosticsTests {
 
   @Test
   func tableAcceptsMembersThatMapToNoColumn() {
-    // A static member and a computed property are not stored, so neither maps to a column and
-    // neither is a missing annotation.
     assertMacro {
       """
       @Table("todos")
@@ -366,9 +351,6 @@ struct DiagnosticsTests {
 
   @Test
   func tableRejectsABindingThatCannotBorrowAnAnnotation() {
-    // `count` is an `Int` from its initializer, not the `String` that `label` declares, so
-    // `postgrestType(at:)` refuses to read `label`'s annotation forward and leaves `count`
-    // untyped. `label` itself is fine, so only `count` is reported.
     assertMacro {
       """
       @Table("todos")
@@ -415,7 +397,6 @@ struct DiagnosticsTests {
 
   @Test
   func selectionOfRejectsAnAggregateWithNoColumn() {
-    // Only `count()` has a form with no column; `sum()` on its own is not a select entry.
     assertMacro {
       #"""
       @SelectionOf(Order.self)

@@ -13,20 +13,13 @@ import Testing
 struct ExportsTests {
   @Test
   func helperImportIsAccessible() {
-    // Test that the Helpers module is properly exported
-    // This is a simple validation that the @_exported import works
-
-    // Test that we can access JSONObject from Helpers via Realtime
     let jsonObject: JSONObject = [:]
     #expect(jsonObject.isEmpty)
 
-    // Test that we can access JSONValue from Helpers via Realtime
     let anyJSON: JSONValue = .string("test")
     #expect(anyJSON == .string("test"))
 
-    // Test that we can access ObservationToken from Helpers via Realtime
     _ = ObservationToken {
-      // Empty cleanup
     }
   }
 }

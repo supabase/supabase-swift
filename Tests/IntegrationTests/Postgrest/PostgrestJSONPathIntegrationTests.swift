@@ -9,11 +9,6 @@ import Foundation
 @_spi(Experimental) import PostgrestMacros
 import Testing
 
-// `KeyValueStorage` is in `Generated.swift`. Each test writes its own rows under a unique key
-// prefix and deletes them, so it does not see rows from the Realtime suite that shares the table.
-
-/// The live half of `PostgrestDerivedColumnTests`' key and index cases: a quoted key reaches keys
-/// that a bare operand cannot, and an `Int` reaches an array element.
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil))
 struct PostgrestJSONPathIntegrationTests {
   let client = PostgrestClient(
@@ -41,11 +36,9 @@ struct PostgrestJSONPathIntegrationTests {
         .execute().value.map(\.key)
     }
 
-    // A bare `->>0` would read index 0 of the array instead of the object's key.
     #expect(try await keys { $0.value.jsonText("0").eq("zero-key") } == ["\(prefix)-object"])
     #expect(try await keys { $0.value.jsonText(0).eq("first") } == ["\(prefix)-array"])
     #expect(try await keys { $0.value.jsonText(-1).eq("last") } == ["\(prefix)-array"])
-    // A bare `->>a.b` is a PGRST100.
     #expect(try await keys { $0.value.jsonText("a.b").eq("dotted") } == ["\(prefix)-object"])
     #expect(try await keys { $0.value.jsonText(#"q"t"#).eq("quote") } == ["\(prefix)-object"])
     #expect(try await keys { $0.value.jsonObject("n").gt(2) } == ["\(prefix)-object"])
@@ -54,7 +47,6 @@ struct PostgrestJSONPathIntegrationTests {
       .execute()
   }
 
-  /// Every operand shape `containsJSON` encodes, top level and inside `or=(…)`.
   @Test
   func containmentTakesEveryJSONShape() async throws {
     let prefix = "json-contains-\(UUID().uuidString)"
@@ -93,7 +85,6 @@ struct PostgrestJSONPathIntegrationTests {
       .execute()
   }
 
-  /// A `->` path compares as JSON: the string `"1"` and the number `1` are different rows.
   @Test
   func aJSONObjectPathComparesAsJSON() async throws {
     let prefix = "json-compare-\(UUID().uuidString)"

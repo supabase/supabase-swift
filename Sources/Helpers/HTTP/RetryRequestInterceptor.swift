@@ -54,7 +54,6 @@ package struct RetryRequestInterceptor: ClientMiddleware {
         HTTPTypes.HTTPResponse, HTTPBody?
       )
   ) async throws -> (HTTPTypes.HTTPResponse, HTTPBody?) {
-    // A one-shot body cannot be replayed, so the request is not retryable regardless of method.
     guard body?.iterationBehavior != .single else {
       return try await next(request, body)
     }
@@ -80,10 +79,6 @@ package struct RetryRequestInterceptor: ClientMiddleware {
         return try result.get()
       }
 
-      // This attempt's body is about to be discarded. Drain it now so its producer (a URLSession
-      // task) finishes deterministically instead of whenever ARC releases the body — which may
-      // be after the backoff sleep. Exceeding the cap throws, which drops the iterator and
-      // terminates the stream just the same.
       if let responseBody = result.value?.1 {
         _ = try? await Data(collecting: responseBody, upTo: 1 << 20)
       }
@@ -106,8 +101,6 @@ package struct RetryRequestInterceptor: ClientMiddleware {
     case .failure(let error as URLError):
       return Self.retryableURLErrorCodes.contains(error.code)
     case .failure:
-      // `CancellationError`, and anything thrown by user code (a custom transport or
-      // middleware, an `accessToken` closure) — those propagate as themselves.
       return false
     }
   }

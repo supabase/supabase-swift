@@ -34,8 +34,6 @@ extension StorageMockerTests {
       )
     }
 
-    /// A client whose transport records the request head, for asserting the emitted upload
-    /// headers.
     private func makeRequestCapturingSUT(request captured: LockIsolated<HTTPRequest?>)
       -> StorageClient
     {
@@ -119,8 +117,6 @@ extension StorageMockerTests {
       }
     }
 
-    /// A `URLError(.cancelled)` that is not caused by cancelling the caller's `Task` (a
-    /// middleware or a custom transport cancelled the request) is a transport failure.
     @Test
     func cancelledURLErrorWithoutTaskCancellationIsWrapped() async {
       let storage = makeFailingSUT { throw URLError(.cancelled) }
@@ -136,8 +132,6 @@ extension StorageMockerTests {
       }
     }
 
-    /// Cancelling the enclosing `Task` mid-flight makes the real ``URLSessionTransport`` fail
-    /// with `URLError(.cancelled)`; Storage reports it as `CancellationError` (SDK-2008).
     @Test
     func cancellingTheTaskThrowsCancellationError() async {
       let storage = makeSUT()
@@ -1546,7 +1540,6 @@ extension StorageMockerTests {
       #expect(exists)
     }
 
-    /// Storage answers a missing key with HTTP 400 and `NoSuchKey` in the body.
     @Test
     func existsIsFalseForNoSuchKey() async throws {
       let storage = makeSUT()
@@ -1567,7 +1560,6 @@ extension StorageMockerTests {
       #expect(!exists)
     }
 
-    /// An older server that sends no `code` still says 404 in the body.
     @Test
     func existsIsFalseForABody404WithoutACode() async throws {
       let storage = makeSUT()
@@ -1586,8 +1578,6 @@ extension StorageMockerTests {
       #expect(!exists)
     }
 
-    /// A missing bucket and an expired session both arrive as HTTP 400; neither means "the file
-    /// does not exist".
     @Test(arguments: [
       ("NoSuchBucket", "404", StorageError.Code.noSuchBucket), ("InvalidJWT", "400", .invalidJWT),
     ])

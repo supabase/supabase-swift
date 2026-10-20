@@ -13,8 +13,6 @@ import Testing
 @Suite
 struct PresenceActionTests {
 
-  // MARK: - PresenceV2 Tests
-
   @Test
   func presenceV2Initialization() {
     let ref = "test_ref_123"
@@ -43,10 +41,8 @@ struct PresenceActionTests {
     #expect(presence1 != presence3)
 
     let set = Set([presence1, presence2, presence3])
-    #expect(set.count == 2)  // presence1 and presence2 are equal
+    #expect(set.count == 2)
   }
-
-  // MARK: - PresenceV2 Codable Tests
 
   @Test
   func presenceV2DecodingValidData() throws {
@@ -72,13 +68,11 @@ struct PresenceActionTests {
     #expect(presence.state["status"]?.stringValue == "active")
     #expect(presence.state["extra_field"]?.stringValue == "extra_value")
 
-    // Ensure phx_ref is not in the state
     #expect(presence.state["phx_ref"] == nil)
   }
 
   @Test
   func presenceV2DecodingWithMultipleMetas() throws {
-    // Should use the first meta object
     let jsonData = """
       {
         "metas": [
@@ -194,8 +188,6 @@ struct PresenceActionTests {
     }
   }
 
-  // MARK: - PresenceV2 decodeState Tests
-
   struct TestUser: Codable, Equatable {
     let id: String
     let name: String
@@ -248,7 +240,6 @@ struct PresenceActionTests {
     let state: JSONObject = [
       "id": .string("user_123"),
       "name": .string("John Doe"),
-      // Missing required age field
     ]
     let presence = PresenceV2(ref: "ref", state: state)
 
@@ -256,8 +247,6 @@ struct PresenceActionTests {
       try presence.decodeState(as: TestUser.self)
     }
   }
-
-  // MARK: - PresenceAction Protocol Extension Tests
 
   struct MockPresenceAction: PresenceAction {
     let joins: [String: PresenceV2]
@@ -280,7 +269,6 @@ struct PresenceActionTests {
     let invalidState: JSONObject = [
       "id": .string("user_3"),
       "name": .string("Charlie"),
-      // Missing age field
     ]
 
     let joins: [String: PresenceV2] = [
@@ -295,7 +283,6 @@ struct PresenceActionTests {
 
     let action = MockPresenceAction(joins: joins, leaves: [:], rawMessage: rawMessage)
 
-    // With ignoreOtherTypes = true (default), should return only valid users
     let users = try action.decodeJoins(as: TestUser.self)
     #expect(users.count == 2)
     #expect(users.contains(TestUser(id: "user_1", name: "Alice", age: 25)))
@@ -312,7 +299,6 @@ struct PresenceActionTests {
     let invalidState: JSONObject = [
       "id": .string("user_2"),
       "name": .string("Bob"),
-      // Missing age field
     ]
 
     let joins: [String: PresenceV2] = [
@@ -326,7 +312,6 @@ struct PresenceActionTests {
 
     let action = MockPresenceAction(joins: joins, leaves: [:], rawMessage: rawMessage)
 
-    // With ignoreOtherTypes = false, should throw on invalid data
     #expect(throws: (any Error).self) {
       try action.decodeJoins(as: TestUser.self, ignoreOtherTypes: false)
     }
@@ -347,7 +332,6 @@ struct PresenceActionTests {
     let invalidState: JSONObject = [
       "id": .string("user_3"),
       "name": .string("Charlie"),
-      // Missing age field
     ]
 
     let leaves: [String: PresenceV2] = [
@@ -362,7 +346,6 @@ struct PresenceActionTests {
 
     let action = MockPresenceAction(joins: [:], leaves: leaves, rawMessage: rawMessage)
 
-    // With ignoreOtherTypes = true (default), should return only valid users
     let users = try action.decodeLeaves(as: TestUser.self)
     #expect(users.count == 2)
     #expect(users.contains(TestUser(id: "user_1", name: "Alice", age: 25)))
@@ -379,7 +362,6 @@ struct PresenceActionTests {
     let invalidState: JSONObject = [
       "id": .string("user_2"),
       "name": .string("Bob"),
-      // Missing age field
     ]
 
     let leaves: [String: PresenceV2] = [
@@ -393,7 +375,6 @@ struct PresenceActionTests {
 
     let action = MockPresenceAction(joins: [:], leaves: leaves, rawMessage: rawMessage)
 
-    // With ignoreOtherTypes = false, should throw on invalid data
     #expect(throws: (any Error).self) {
       try action.decodeLeaves(as: TestUser.self, ignoreOtherTypes: false)
     }
@@ -448,8 +429,6 @@ struct PresenceActionTests {
     #expect(leaveUsers.count == 0)
   }
 
-  // MARK: - PresenceActionImpl Tests
-
   @Test
   func presenceActionImplInitialization() {
     let joins: [String: PresenceV2] = [
@@ -481,14 +460,11 @@ struct PresenceActionTests {
 
     let impl = PresenceActionImpl(joins: [:], leaves: [:], rawMessage: rawMessage)
 
-    // Test that it can be used as PresenceAction
     let presenceAction: any PresenceAction = impl
     #expect(presenceAction.joins.count == 0)
     #expect(presenceAction.leaves.count == 0)
     #expect(presenceAction.rawMessage.topic == "test")
   }
-
-  // MARK: - Edge Cases and Complex Scenarios
 
   @Test
   func presenceV2WithComplexNestedState() throws {
@@ -539,7 +515,6 @@ struct PresenceActionTests {
     ]
     let originalPresence = PresenceV2(ref: "original_ref", state: originalState)
 
-    // Create the expected server format manually by adding the state to metas with phx_ref
     let stateWithRef = originalState.merging(["phx_ref": .string(originalPresence.ref)]) { _, new in
       new
     }
@@ -574,11 +549,9 @@ struct PresenceActionTests {
     ]
     let partialState: JSONObject = [
       "id": .string("partial_user")
-      // name is optional, so this should still decode
     ]
     let invalidState: JSONObject = [
       "name": .string("No ID User")
-      // missing required id field
     ]
 
     let joins: [String: PresenceV2] = [
@@ -593,7 +566,6 @@ struct PresenceActionTests {
 
     let action = MockPresenceAction(joins: joins, leaves: [:], rawMessage: rawMessage)
 
-    // With ignoreOtherTypes = true, should get valid and partial users
     let users = try action.decodeJoins(as: PartialUser.self, ignoreOtherTypes: true)
     #expect(users.count == 2)
 

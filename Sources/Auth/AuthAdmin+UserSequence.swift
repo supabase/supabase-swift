@@ -57,8 +57,6 @@ extension AuthAdmin {
       }
 
       public mutating func next() async throws -> User? {
-        // A page can come back empty while a later one still has users, so keep going until
-        // the buffer fills or the server says there is nothing left.
         while buffer.isEmpty {
           if exhausted { return nil }
           let response = try await admin.listUsers(

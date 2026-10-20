@@ -1,11 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# The integration suites skip themselves unless this is set.
 export INTEGRATION_TESTS=1
 
-# Mirrors the integration-tests job in .github/workflows/ci.yml. On macOS it uses the CLI's
-# experimental native stack (no Docker); Linux has no native stack and falls back to Docker.
 START_FLAGS=()
 SWIFT_FLAGS=()
 if [[ "$(uname)" == "Darwin" ]]; then
@@ -18,7 +15,6 @@ run_suite() {
   local project="$1"
   shift
   (cd "$project" && supabase start ${START_FLAGS[@]+"${START_FLAGS[@]}"})
-  # Only the Docker stack can run the Storage features the CLI leaves off.
   if [[ "$(uname)" != "Darwin" && "$project" == Tests/IntegrationTests ]]; then
     ./scripts/enable-storage-test-features.sh
     export STORAGE_TEST_FEATURES=1

@@ -15,8 +15,6 @@ struct TransferProgressTests {
     #expect(TransferProgress(completedBytes: 0, totalBytes: 0).fractionCompleted == nil)
   }
 
-  /// A transport that drives the body's upload hook the way `URLSessionTransport` does with
-  /// `didSendBodyData`.
   private func makeBucket() -> StorageBucket {
     StorageClient(
       configuration: StorageClientConfiguration(

@@ -10,13 +10,6 @@ import Testing
 
 @testable import PostgREST
 
-/// The deprecated aliases on the untyped builder still forward to their replacement, so a caller
-/// who has not migrated yet gets the same request.
-///
-/// Each call below emits a deprecation warning on purpose. Swift Testing rejects
-/// `@available(*, deprecated)` on a `@Suite` or `@Test`, directly or through an extension, so
-/// there is no deprecated context to put the calls in; the warnings are the price of keeping the
-/// coverage until the aliases go in v4 (SDK-2183), when this file goes with them.
 @Suite
 struct PostgrestFilterAliasTests {
   private func query(

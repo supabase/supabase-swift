@@ -9,8 +9,6 @@ import Foundation
 @_spi(Experimental) import PostgrestMacros
 import Testing
 
-// File scope, for the same reason as `SelectionIntegrationTests`: both macros attach extensions.
-
 @Table("todos")
 struct RelationshipTodo {
   @PrimaryKey var id: Int
@@ -49,8 +47,6 @@ struct RelationshipTodoWithComments {
   @Relationship(\RelationshipComment.todoID) var comments: [RelationshipCommentBody]
 }
 
-/// The many-to-one direction: the foreign key sits on *this* selection's own relation, and the
-/// embed is a single row rather than an array.
 @SelectionOf(RelationshipComment.self)
 struct RelationshipCommentWithAuthor {
   var body: String
@@ -61,8 +57,6 @@ struct RelationshipCommentWithAuthor {
 struct RelationshipIntegrationTests {
   @Test
   func selectStringCarriesTheEmbedAndItsForeignKeyHint() {
-    // `comments:` is the alias the response comes back under, `comments` the embedded relation,
-    // `!todo_id` the disambiguating hint, and the parentheses the embed's own select list.
     #expect(
       RelationshipTodoWithComments.selectString
         == "id:id,task:task,comments:comments!todo_id(id:id,body:body)"
@@ -71,10 +65,6 @@ struct RelationshipIntegrationTests {
 
   @Test
   func aManyToOneEmbedReadsTheForeignKeyOffItsOwnRelation() {
-    // Two things at once. The key path is rooted on the selection's own relation rather than on
-    // the target, so the target comes from the property's type — `users`, which appears nowhere in
-    // the attribute. And the hint is read off that relation's namespace, so the `@Column`
-    // override applies: `written_by`, not the `author_id` a local snake-casing would produce.
     #expect(
       RelationshipCommentWithAuthor.selectString == "body:body,author:users!written_by(name:name)"
     )
@@ -90,8 +80,6 @@ struct RelationshipIntegrationTests {
   }
 }
 
-/// The scope over macro-generated `Embeds`, end to end. The rendering rules themselves are pinned
-/// in `PostgrestEmbeddedScopeTests`; this checks that what `@SelectionOf` emits feeds them.
 @Suite
 struct RelationshipScopeIntegrationTests {
   @Test
@@ -110,8 +98,6 @@ struct RelationshipScopeIntegrationTests {
     )
   }
 
-  /// The alias, not the relation name, prefixes the scope: PostgREST accepts either, and the alias
-  /// is the one the selection declares.
   @Test
   func aToOneScopeIsPrefixedByItsAlias() async throws {
     let capture = RequestCapture()

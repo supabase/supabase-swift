@@ -1,11 +1,9 @@
 #!/bin/bash
 
-# Define variables
-SCHEME="Supabase"               # Replace with your Xcode scheme name
-OUTPUT_FILE="lcov.info"     # Output coverage file name
-TEMP_COVERAGE_DIR="temp_coverage" # Temporary directory for intermediate coverage files
+SCHEME="Supabase"
+OUTPUT_FILE="lcov.info"
+TEMP_COVERAGE_DIR="temp_coverage"
 
-# Step 2: Find the profdata file
 PROFDATA_DIR="$DERIVED_DATA_PATH/Build/ProfileData"
 mkdir -p "$TEMP_COVERAGE_DIR"
 PROFDATA_FILES=()
@@ -20,15 +18,12 @@ elif [ "${#PROFDATA_FILES[@]}" -eq 1 ]; then
   PROFDATA_FILE="${PROFDATA_FILES[0]}"
   echo "Found profdata file: $PROFDATA_FILE"
 else
-  # More than one .profdata under DerivedData (e.g. a leftover from a
-  # restored cache) — merge them instead of picking one arbitrarily.
   PROFDATA_FILE="$TEMP_COVERAGE_DIR/merged.profdata"
   echo "Found ${#PROFDATA_FILES[@]} profdata files; merging into $PROFDATA_FILE:"
   printf '  %s\n' "${PROFDATA_FILES[@]}"
   xcrun llvm-profdata merge -o "$PROFDATA_FILE" "${PROFDATA_FILES[@]}"
 fi
 
-# Step 3: Get all test bundles
 echo "Searching for test bundles in Debug-iphonesimulator..."
 TEST_BUNDLES=$(find "$DERIVED_DATA_PATH/Build/Products/Debug-iphonesimulator" -type d -name "*.xctest")
 
@@ -40,7 +35,6 @@ fi
 echo "Found test bundles:"
 echo "$TEST_BUNDLES"
 
-# Step 4: Export coverage data for each test bundle
 for TEST_BUNDLE in $TEST_BUNDLES; do
   BINARY_NAME=$(basename "$TEST_BUNDLE" .xctest)
   BINARY_PATH="$TEST_BUNDLE/$BINARY_NAME"
@@ -72,9 +66,8 @@ for TEST_BUNDLE in $TEST_BUNDLES; do
   fi
 done
 
-# Step 5: Merge coverage data into a single file
 echo "Merging coverage data..."
-rm -f "$OUTPUT_FILE" # Ensure the output file doesn't already exist
+rm -f "$OUTPUT_FILE"
 
 for INFO_FILE in "$TEMP_COVERAGE_DIR"/*.info; do
   if [ -f "$INFO_FILE" ]; then
@@ -91,6 +84,5 @@ done
 
 echo "Coverage data exported to $OUTPUT_FILE"
 
-# Step 6: Clean up
 rm -rf "$TEMP_COVERAGE_DIR"
 echo "Temporary files cleaned up."

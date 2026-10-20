@@ -128,6 +128,14 @@ correctness rules; `swift-format` remains the source of truth for formatting,
 so the SwiftLint config (`.swiftlint.yml`) disables the purely stylistic rules
 that overlap with it. Install SwiftLint locally with `brew install swiftlint`.
 
+Realtime tests must not wait by yielding (`Task.yield()` or `Task.megaYield()` loops); they
+wait on a stream, a status or a frame with a bounded timeout (see `RealtimeTestHost` in
+`Tests/RealtimeTests`). CI runs the check; run it locally with:
+
+```bash
+./scripts/check-no-yield-loops.sh
+```
+
 ## Documentation
 
 ```bash

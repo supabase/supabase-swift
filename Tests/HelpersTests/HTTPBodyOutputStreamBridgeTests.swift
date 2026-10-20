@@ -12,11 +12,6 @@
 
   @testable import Helpers
 
-  /// Builds bodies of `count` chunks of `size` bytes, each filled with its index, and counts how
-  /// many times a consumer pulled so a test can tell whether the bridge read ahead of the reader.
-  ///
-  /// Goes through the package initializer so the pull counter sits right at the source, with no
-  /// wrapping sequence between it and the bridge.
   private struct CountingChunks: Sendable {
     let count: Int
     let size: Int
@@ -95,15 +90,12 @@
       }
       defer { bridge.cancel() }
 
-      // Nobody is reading: the 150-byte buffer takes the first chunk and half of the second, so
-      // the bridge holds the rest of the second and must not pull a third.
       await poll { chunks.pulls.value >= 2 }
       try await Task.sleep(for: .milliseconds(100))
       #expect(chunks.pulls.value == 2)
 
       let received = await drain(input)
       #expect(received == chunks.expectedBytes)
-      // Eight chunks plus the terminating `nil`.
       #expect(chunks.pulls.value == 9)
     }
 
@@ -128,7 +120,6 @@
 
       await poll { failure.value != nil }
       #expect(failure.value is HTTPBodyAlreadyConsumedError)
-      // The writer closed its end without writing anything.
       #expect(await drain(secondInput).isEmpty)
     }
 
@@ -141,8 +132,6 @@
       let bridge = HTTPBodyOutputStreamBridge(body: body, output: output) { failure.setValue($0) }
       defer { bridge.cancel() }
 
-      // Content-Length promised 30 bytes; the stream closes after 20 so the request fails instead
-      // of hanging until URLSession's timeout.
       #expect(await drain(input) == chunks.expectedBytes)
       await poll { failure.value != nil }
       let error = try #require(failure.value as? HTTPBodyLengthMismatchError)
@@ -159,7 +148,6 @@
       let bridge = HTTPBodyOutputStreamBridge(body: body, output: output) { failure.setValue($0) }
       defer { bridge.cancel() }
 
-      // The third chunk would overrun Content-Length; it is never written.
       #expect(await drain(input) == chunks.expectedBytes.prefix(20))
       await poll { failure.value != nil }
       let error = try #require(failure.value as? HTTPBodyLengthMismatchError)
@@ -176,8 +164,6 @@
       let bridge = HTTPBodyOutputStreamBridge(body: body, output: output) { failure.setValue($0) }
       defer { bridge.cancel() }
 
-      // URLSession closes its end once the server has answered without reading the whole body
-      // (an early 413). That must not cancel the task and lose the response.
       await poll { chunks.pulls.value >= 2 }
       input.open()
       var buffer = [UInt8](repeating: 0, count: 100)

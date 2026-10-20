@@ -36,7 +36,7 @@ struct ObservationTokenTests {
       }
     }
 
-    _ = handle  // Silence unused variable warning
+    _ = handle
     handle = nil
 
     #expect(onRemoveCallCount.value == 1)

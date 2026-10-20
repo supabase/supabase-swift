@@ -5,7 +5,6 @@
 //  Created by Guilherme Souza on 29/04/24.
 //
 
-public import Clocks
 public import Foundation
 public import Helpers
 public import Logging
@@ -81,7 +80,9 @@ extension AuthClient {
     /// The clock the auto-refresh loop sleeps on between ticks.
     ///
     /// Defaults to `ContinuousClock()`. Pass a `TestClock` to drive token refresh
-    /// deterministically in tests instead of waiting out real seconds.
+    /// deterministically in tests instead of waiting out real seconds. `TestClock` comes from
+    /// [swift-clocks](https://github.com/pointfreeco/swift-clocks); add it to your test target
+    /// yourself, as this package does not export it.
     public let clock: any Clock<Duration>
 
     /// Initializes a AuthClient Configuration with optional parameters.

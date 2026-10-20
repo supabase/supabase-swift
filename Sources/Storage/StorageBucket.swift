@@ -670,8 +670,6 @@ public struct StorageBucket: Sendable {
     )
     var response = body ?? HTTPBody(Data())
     if let progress {
-      // Not `reportingProgress`: Linux buffers responses into in-memory bodies, which it leaves
-      // to `URLSession`'s upload counts. The counter makes the body one-pass, as documented.
       let read = LockIsolated<Int64>(0)
       let length = response.length
       response = HTTPBody(

@@ -15,8 +15,6 @@ struct ConnectionMachineTests {
   typealias Event = ConnectionMachine.Event
   typealias Effect = ConnectionMachine.Effect
 
-  /// A comparable view of a state. `RealtimeError` is not `Equatable`, so rows compare the
-  /// case and whether it carries an error.
   enum Shape: Equatable {
     case disconnected(hasError: Bool)
     case connecting(attempt: Int)
@@ -54,7 +52,6 @@ struct ConnectionMachineTests {
   static let reconnecting = State.reconnecting(attempt: 2, retryIn: .seconds(2), lastError: lost)
 
   static let rows: [Row] = [
-    // §9.1 connect
     Row(
       name: "connect from idle opens the transport",
       from: .disconnected(nil), event: .connectRequested,
@@ -75,7 +72,6 @@ struct ConnectionMachineTests {
       name: "connect while connected is a no-op",
       from: .connected, event: .connectRequested,
       to: .connected, effects: []),
-    // upgrade
     Row(
       name: "upgrade ok starts the heartbeat and rejoins every channel",
       from: .connecting(attempt: 3), event: .upgradeSucceeded,
@@ -104,7 +100,6 @@ struct ConnectionMachineTests {
       from: .connecting(attempt: 1), event: .transportClosed(code: nil, reason: nil),
       to: .reconnecting(attempt: 1, retryIn: .seconds(1)),
       effects: [.scheduleRetry(after: .seconds(1))]),
-    // loss while connected
     Row(
       name: "transport closed while connected fails replies and reconnects",
       from: .connected, event: .transportClosed(code: .abnormalClosure, reason: "x"),
@@ -125,7 +120,6 @@ struct ConnectionMachineTests {
       name: "the close that follows a heartbeat timeout is ignored",
       from: reconnecting, event: .transportClosed(code: .normalClosure, reason: nil),
       to: .reconnecting(attempt: 2, retryIn: .seconds(2)), effects: []),
-    // retry
     Row(
       name: "retry timer opens the transport with the next attempt",
       from: reconnecting, event: .retryTimerFired,
@@ -145,7 +139,6 @@ struct ConnectionMachineTests {
       name: "a wake signal while disconnected is a no-op",
       from: .disconnected(nil), event: .wakeSignal,
       to: .disconnected(hasError: false), effects: []),
-    // disconnect / pause
     Row(
       name: "disconnect while connected leaves channels and closes normally",
       from: .connected, event: .disconnectRequested,
@@ -179,7 +172,6 @@ struct ConnectionMachineTests {
       name: "pause while reconnecting cancels the retry",
       from: reconnecting, event: .pauseRequested,
       to: .disconnected(hasError: false), effects: [.cancelRetry]),
-    // idle
     Row(
       name: "last channel removed schedules the idle disconnect",
       from: .connected, event: .lastChannelRemoved,
@@ -200,7 +192,6 @@ struct ConnectionMachineTests {
       name: "idle events while disconnected are no-ops",
       from: .disconnected(nil), event: .lastChannelRemoved,
       to: .disconnected(hasError: false), effects: []),
-    // stale timers
     Row(
       name: "a stale retry timer while connected is a no-op",
       from: .connected, event: .retryTimerFired, to: .connected, effects: []),

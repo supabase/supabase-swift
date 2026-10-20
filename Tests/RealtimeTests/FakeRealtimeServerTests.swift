@@ -117,7 +117,7 @@ struct FakeRealtimeServerTests {
 
   @Test
   func repliesWithTheConfiguredJoinErrorAfterTheDelayOnTheInjectedClock() async throws {
-    let clock = TestClock()
+    let clock = SignalingTestClock()
     let server = FakeRealtimeServer(clock: clock)
     server.joinReply = .error(reason: "Unauthorized: nope")
     server.joinReplyDelay = .seconds(5)
@@ -129,6 +129,8 @@ struct FakeRealtimeServerTests {
     await Task.megaYield()
     #expect(events.value.isEmpty)
 
+    // The server sleeps from an unstructured task; `SignalingTestClock.advance` waits for that
+    // sleep to register before it fires it.
     await clock.advance(by: .seconds(5))
     let reply = try await firstMessage(in: events)
     #expect(reply.payload["status"] == "error")

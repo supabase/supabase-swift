@@ -164,8 +164,6 @@ final class URLSessionWebSocketConnection: WebSocketConnection {
   init(task: URLSessionWebSocketTask, session: URLSession) {
     self.task = task
     self.session = session
-    // Unbounded on purpose: this stream carries protocol frames, and dropping a `phx_reply`
-    // leaves the push waiting on it hanging until it times out.
     (events, continuation) = AsyncStream.makeStream(bufferingPolicy: .unbounded)
     receiveTask.setValue(Task { await receiveLoop() })
   }

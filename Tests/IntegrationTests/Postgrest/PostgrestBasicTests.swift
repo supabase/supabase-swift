@@ -22,11 +22,8 @@ struct PostgrestBasicTests {
   )
 
   init() async throws {
-    // Clean up test data before running tests.
-    // Delete users with email (test data), preserving seed data (users with username only).
     try await client.from("users").delete().not("email", operator: .is, value: JSONValue.null)
       .execute()
-    // Delete messages except seed data (id 1 and 2).
     try await client.from("messages").delete().gt("id", value: 2).execute()
   }
 
@@ -133,7 +130,6 @@ struct PostgrestBasicTests {
 
   @Test
   func basicInsertUpdateAndDelete() async throws {
-    // Basic insert
     var response =
       try await client.from("messages")
       .insert(JSONValue.object(["message": "foo", "username": "supabot", "channel_id": 1]))
@@ -179,8 +175,6 @@ struct PostgrestBasicTests {
       ]
       """
     }
-
-    // Upsert
 
     response =
       try await client.from("messages")
@@ -242,8 +236,6 @@ struct PostgrestBasicTests {
       ]
       """
     }
-
-    // Bulk insert
 
     response = try await client.from("messages")
       .insert(
@@ -319,7 +311,6 @@ struct PostgrestBasicTests {
       """
     }
 
-    // Basic update
     response = try await client.from("messages")
       .update(["channel_id": 2])
       .eq("message", value: "foo")
@@ -402,7 +393,6 @@ struct PostgrestBasicTests {
       """
     }
 
-    // Basic delete
     response = try await client.from("messages")
       .delete()
       .eq("message", value: "foo")

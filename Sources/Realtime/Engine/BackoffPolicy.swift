@@ -36,7 +36,6 @@ package struct BackoffPolicy: Sendable, Hashable {
       guard let last = steps.last else { return .zero }
       return attempt <= steps.count ? steps[attempt - 1] : last
     case .fullJitter(let base, let cap):
-      // Compare before multiplying so a huge base cannot overflow `Duration`.
       let exponent = min(attempt - 1, 30)
       let ceiling = base > cap / (1 << exponent) ? cap : base * (1 << exponent)
       return ceiling * random(0...1)

@@ -49,8 +49,6 @@
 
     @Test
     func sharedTargetsMigrateOnceIntoOneLocation() throws {
-      // An app and its widget resolve to the same primary and the same legacy location, so the
-      // first reader's migration serves both and neither can delete an item the other still needs.
       let session = Data("session".utf8)
       let primary = FakeKeychain()
       let legacy = FakeKeychain(items: ["key": session])
@@ -119,8 +117,6 @@
         legacyKeychains: [FakeKeychain(readError: ProbeFailure())]
       )
 
-      // A genuine legacy failure must surface rather than read as "no session" — an absent
-      // item already returns nil, so a throw here is never just a miss.
       #expect(throws: ProbeFailure.self) {
         try storage.retrieve(key: "key")
       }

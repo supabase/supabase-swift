@@ -11,8 +11,6 @@ import Testing
   import FoundationNetworking
 #endif
 
-/// Captures the last `HTTPRequest` seen by a custom transport, for tests that need to inspect
-/// properties (like the resolved timeout) not surfaced by Mocker's `snapshotRequest` curl output.
 private actor CapturedRequestBox {
   var request: HTTPTypes.HTTPRequest?
   var timeout: Duration?
@@ -95,12 +93,6 @@ struct FunctionsClientTests {
     #expect(client.configuration.decoder === decoder)
   }
 
-  // Not asserting that `init(configuration:)` reports an issue for an `Authorization` header in
-  // `Configuration.headers`: `reportIssue` (swift-issue-reporting) called from a `@Test`
-  // function segfaults the test process on some toolchains (the nightly Linux job, and Xcode's
-  // XCTest hosting), regardless of the expected-issue wrapper used. Tracked in SDK-435; the
-  // same note applies in `SupabaseClientTests`.
-
   @Test
   func invokeReturnsTheResponseHead() async throws {
     let sut = makeSUT()
@@ -126,8 +118,6 @@ struct FunctionsClientTests {
     #expect(response.text == "hi")
   }
 
-  /// The default decoder reads the ISO 8601 date a TypeScript function writes with
-  /// `JSON.stringify`; `JSONDecoder()` would not.
   @Test
   func invokeDecodesISO8601DatesByDefault() async throws {
     let sut = makeSUT()
@@ -168,7 +158,6 @@ struct FunctionsClientTests {
     #expect(payload.userName == "a")
   }
 
-  /// A body that fails to encode is rejected before anything is sent.
   @Test
   func invokeWithABodyThatFailsToEncodeSendsNothing() async {
     struct Failing: Encodable {
@@ -538,8 +527,6 @@ struct FunctionsClientTests {
     }
   }
 
-  /// A `URLError(.cancelled)` that is not caused by cancelling the caller's `Task` (a middleware
-  /// or a custom transport cancelled the request) is a transport failure.
   @Test
   func invoke_cancelledURLErrorWithoutTaskCancellation_isWrapped() async {
     let sut = makeSUT { _, _ in throw URLError(.cancelled) }
@@ -555,8 +542,6 @@ struct FunctionsClientTests {
     }
   }
 
-  /// Cancelling the enclosing `Task` mid-flight makes the real ``URLSessionTransport`` fail with
-  /// `URLError(.cancelled)`; Functions reports it as `CancellationError` (SDK-2141).
   @Test
   func invoke_cancellingTheTask_throwsCancellationError() async {
     let sut = makeSUT()
@@ -587,9 +572,6 @@ struct FunctionsClientTests {
     }
   }
 
-  /// A non-2xx body is collected up to `FunctionsAPI.maxErrorBodyBytes`, keeping the
-  /// prefix, so an unbounded error response cannot hold the call open or exhaust memory
-  /// (SDK-1840).
   @Test
   func invoke_serverErrorBody_isCappedKeepingThePrefix() async {
     let sut = makeSUT()
@@ -769,8 +751,6 @@ struct FunctionsClientTests {
     #expect(capturedRequest?.headerFields[.authorization] == "Bearer override.token")
   }
 
-  /// The token middleware runs after the caller's middlewares (the SDK-1786 order), so none of
-  /// them sees the bearer.
   @Test
   func callerMiddlewareDoesNotSeeTheAccessToken() async throws {
     struct Capture: ClientMiddleware {
@@ -837,7 +817,6 @@ struct FunctionsClientTests {
       )
     }
 
-    // Nothing has been yielded yet, so the head can only have come back on its own.
     let response = try await sut.stream("stream")
     #expect(response.status == .ok)
     #expect(response.contentType == "text/event-stream")
@@ -861,8 +840,6 @@ struct FunctionsClientTests {
     #expect(try await Data(collecting: response.body, upTo: 1) == Data())
   }
 
-  /// End to end through `URLSessionTransport`. Mocker hands the whole payload over at once, so
-  /// the chunk count is not asserted.
   @Test
   func streamDeliversAMockedEventStreamAsBytes() async throws {
     let sut = makeSUT()
@@ -935,8 +912,6 @@ struct FunctionsClientTests {
     }
   }
 
-  /// A non-2xx head throws from `stream` itself, carrying the first
-  /// `FunctionsAPI.maxErrorBodyBytes` of the body (SDK-1840), so no body is ever exposed.
   @Test
   func stream_serverErrorBody_isCappedKeepingThePrefix() async {
     let sut = makeSUT()
@@ -985,7 +960,6 @@ struct FunctionsClientTests {
     }
   }
 
-  /// The network layer's own failures while the body streams are `.transport`, as on `invoke`.
   @Test
   func streamBodyTransportFailureIsWrapped() async throws {
     let chunks = AsyncThrowingStream<ArraySlice<UInt8>, any Error> {

@@ -55,7 +55,6 @@ struct SelectionOfMacroTests {
     }
   }
 
-  /// The select list reads the relation's namespace directly, not a key-path-to-column mapping.
   @Test
   func selectStringReadsTheColumnNamespace() {
     assertMacro {
@@ -97,10 +96,6 @@ struct SelectionOfMacroTests {
     }
   }
 
-  /// The embed the whole attribute exists for. The select entry reads off the `Embeds` namespace,
-  /// where every part of the rendered form is an interpolation: the embedded relation and its
-  /// select list come from the property's type, and the `!todo_id` hint from the foreign key's
-  /// own relation.
   @Test
   func expandsAToManyEmbed() {
     assertMacro {
@@ -156,9 +151,6 @@ struct SelectionOfMacroTests {
     }
   }
 
-  /// The other direction. `\Comment.authorID` is rooted on the selection's *own* relation rather
-  /// than on the target, and the expansion is the same shape — which is the point: the key path
-  /// names the foreign key, and the property names the embed.
   @Test
   func expandsAToOneEmbed() {
     assertMacro {
@@ -209,8 +201,6 @@ struct SelectionOfMacroTests {
     }
   }
 
-  /// A computed relationship is read off the selection's own relation, not the key path's root, so
-  /// a key path into another relation's namespace does not compile.
   @Test
   func expandsAComputedRelationshipEmbed() {
     assertMacro {

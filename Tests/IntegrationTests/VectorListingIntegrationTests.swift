@@ -9,7 +9,6 @@ import Foundation
 @_spi(Experimental) import Storage
 import Testing
 
-/// The Vectors listings page through `nextToken`, and timestamps decode as dates.
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil), .serialized)
 struct VectorListingIntegrationTests {
   let vectors = StorageIntegration.admin.vectors

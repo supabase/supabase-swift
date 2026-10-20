@@ -12,9 +12,7 @@ import Testing
 struct RealtimeClientOptionsTests {
   @Test
   func initializesWithoutAnAPIKeyInsteadOfTrapping() {
-    // The apikey rides along as a query item when present, and is simply absent when it is not.
-    // Constructing the client used to trap instead, taking the host app down over a header.
-    let client = RealtimeClientV2(
+    let client = RealtimeClient(
       url: URL(string: "https://project-ref.supabase.co/realtime/v1")!,
       options: RealtimeClientOptions(headers: [:])
     )

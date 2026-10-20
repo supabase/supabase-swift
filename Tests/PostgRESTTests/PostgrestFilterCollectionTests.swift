@@ -43,8 +43,6 @@ struct PostgrestFilterCollectionTests {
     #expect(rendered(tags.overlaps(["swift"])) == "tags=ov.{swift}")
   }
 
-  /// A member containing a literal brace is what tells the two escapers apart: the array escaper
-  /// quotes it, the filter escaper would let it through and corrupt the literal's delimiters.
   @Test
   func arrayOperatorMembersAreEscaped() {
     let tags = Post.columns.tags
@@ -52,7 +50,6 @@ struct PostgrestFilterCollectionTests {
     #expect(rendered(tags.containedBy(["a,b"])) == "tags=cd.{\"a,b\"}")
   }
 
-  /// `tags=cs.{}` matches every row whose column is non-null; a `NULL` column never matches.
   @Test
   func arrayOperatorsRenderAnEmptyArray() {
     let tags = Post.columns.tags
@@ -70,8 +67,6 @@ struct PostgrestFilterCollectionTests {
     #expect(rendered(s.rangeAdjacent("[2024-01-01,)")) == "scheduled=adj.[2024-01-01,)")
   }
 
-  /// Same wire operators as the array trio, but taking a range literal. Crossing the two shapes
-  /// (`span=ov.{1,20}`) is a 400.
   @Test
   func containmentOperatorsTakeARangeLiteral() {
     let s = Post.columns.scheduled
@@ -80,8 +75,6 @@ struct PostgrestFilterCollectionTests {
     #expect(rendered(s.overlapsRange("[25,35)")) == "scheduled=ov.[25,35)")
   }
 
-  /// The third operand shape `cs`/`cd` take: a JSON value, on a `jsonb` column. Keys are sorted,
-  /// which containment ignores.
   @Test
   func containmentOperatorsTakeJSON() {
     let metadata = Post.columns.metadata
@@ -91,8 +84,6 @@ struct PostgrestFilterCollectionTests {
     #expect(rendered(metadata.containedByJSON(["a": 1])) == #"metadata=cd.{"a":1}"#)
   }
 
-  /// The operand is encoded as JSON, not as a filter value: `JSONValue`'s filter form renders
-  /// `.array` as the Postgres literal `{20}` and `.string` bare, both a `22P02` against `jsonb`.
   @Test
   func aJSONOperandIsEncodedAsJSON() {
     let metadata = Post.columns.metadata
@@ -101,8 +92,6 @@ struct PostgrestFilterCollectionTests {
     #expect(rendered(metadata.containsJSON(["url": "a/b"])) == #"metadata=cs.{"url":"a/b"}"#)
   }
 
-  /// Inside a group the operand is quoted like any other value. PostgREST unquotes it before
-  /// parsing the JSON.
   @Test
   func aJSONOperandIsQuotedInsideAGroup() {
     let metadata = Post.columns.metadata
@@ -111,8 +100,6 @@ struct PostgrestFilterCollectionTests {
       rendered(filter) == #"or=(metadata.cs."{\"a\":1,\"n\":10}",metadata.cs."{\"n\":3}")"#)
   }
 
-  /// A non-finite `Double` has no JSON form. No stand-in operand is sent — `cs.null` matches
-  /// JSON-null rows — so `execute()` throws before the request is built, alone or in a group.
   @Test(
     arguments: [
       { (c: Post.Columns) in c.metadata.containsJSON(["n": .double(.nan)]) },
@@ -145,9 +132,6 @@ struct PostgrestFilterCollectionTests {
     #expect(rendered(content.textSearch("swift", type: .plain)) == "content=plfts.swift")
   }
 
-  /// A range literal is the case that *needs* `group()`'s escaping: bare, the `)` in
-  /// `or=(span.ov.[25,35),id.eq.3)` closes the logic group early and 400s. Routing these through
-  /// `.raw` the way `in` does would produce exactly that.
   @Test
   func rangeOperandIsEscapedInsideOr() {
     let s = Post.columns.scheduled

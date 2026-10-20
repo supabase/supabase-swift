@@ -40,9 +40,6 @@ struct PostgrestUpdateTests {
     }
   }
 
-  /// Decodes an encoded payload back into a key/value map, because `JSONEncoder` does not
-  /// preserve the key order of a dictionary-backed keyed container. Comparing the JSON text
-  /// would make a passing test depend on hash ordering.
   private func encoded(_ update: _PostgrestUpdate<Todo>) throws -> [String: JSONValue] {
     try JSONDecoder().decode([String: JSONValue].self, from: JSONEncoder().encode(update))
   }
@@ -53,9 +50,6 @@ struct PostgrestUpdateTests {
     expectNoDifference(try encoded(update), ["due_at": .null])
   }
 
-  /// The expected keys are derived from `Todo.columns` rather than hardcoded, so this fails if
-  /// the subscript ever reads a different source of truth than filters do. `dueAt` is the case
-  /// that matters: its wire name (`due_at`) differs from its Swift name.
   @Test
   func assignmentsResolveThroughTheColumnNamespace() throws {
     let update = _PostgrestUpdate<Todo> {
@@ -104,8 +98,6 @@ struct PostgrestUpdateTests {
 
   @Test
   func aKeyColumnCanBeAssigned() throws {
-    // SDK-1607: renaming a natural key is a real operation, so the key is assignable like any
-    // other column. Targeting is the filter's job, not the payload's.
     let update = _PostgrestUpdate<Todo> { $0.id = 2 }
     expectNoDifference(try encoded(update), ["id": 2])
   }

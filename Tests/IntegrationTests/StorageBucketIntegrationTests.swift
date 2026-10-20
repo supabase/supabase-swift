@@ -148,7 +148,6 @@ final class StorageBucketIntegrationTests {
       #expect(error.serverError?.error == "Payload too large")
       #expect(error.serverError?.code == .entityTooLarge)
       #expect(error.message == "The object exceeded the maximum allowed size")
-      // Storage answers with HTTP 400 and puts "413" in the body.
       #expect(error.serverStatusCode == 413)
       #expect(error.response != nil)
     } catch {
@@ -193,7 +192,6 @@ final class StorageBucketIntegrationTests {
       #expect(error.serverError?.error == "invalid_mime_type")
       #expect(error.serverError?.code == .invalidMimeType)
       #expect(error.message == "mime type image/jpeg is not supported")
-      // Storage answers with HTTP 400 and puts "415" in the body.
       #expect(error.serverStatusCode == 415)
       #expect(error.response != nil)
     } catch {
@@ -248,7 +246,6 @@ final class StorageBucketIntegrationTests {
       #expect(error.serverError?.error == "Duplicate")
       #expect(error.serverError?.code == .keyAlreadyExists)
       #expect(error.message == "The resource already exists")
-      // Storage answers with HTTP 400 and puts "409" in the body.
       #expect(error.serverStatusCode == 409)
       #expect(error.response != nil)
     } catch {
@@ -414,11 +411,6 @@ final class StorageBucketIntegrationTests {
     #expect(uploadedFile == file)
   }
 
-  // MARK: - Object keys
-
-  /// Every character Storage accepts in a key, plus the normalization the SDK applies before
-  /// sending: a leading slash and doubled slashes go away, the rest is sent percent-encoded so
-  /// the server reads back exactly the key the caller meant.
   static let acceptedKeys: [(input: String, key: String)] = [
     ("folder/my file.png", "folder/my file.png"),
     ("a+b.png", "a+b.png"),
@@ -475,8 +467,6 @@ final class StorageBucketIntegrationTests {
     #expect(try await !api.exists(path: input))
   }
 
-  /// Keys the server refuses: the SDK sends them encoded, so the server sees the original key,
-  /// validates it, and answers with `InvalidKey` rather than a mangled lookup.
   @Test(arguments: ["a#b.png", "100%.png", "café/文件.png", "tilde~.png"])
   func serverRejectsAKeyItDoesNotAllow(input: String) async throws {
     let error = await StorageIntegration.storageError {
@@ -512,9 +502,6 @@ final class StorageBucketIntegrationTests {
     #expect(try await api.list(path: "/").map(\.name) == ["nested"])
   }
 
-  // MARK: - Errors
-
-  /// Storage answers with HTTP 400 and puts the real status in the body; the SDK promotes it.
   @Test
   func missingObjectIsNoSuchKey() async throws {
     let api = storage.from(bucketName)
@@ -548,7 +535,7 @@ final class StorageBucketIntegrationTests {
     try await api.upload(path: "present.txt", data: file)
 
     #expect(try await api.exists(path: "present.txt"))
-    #expect(try await api.exists(path: "present.txt/"))  // normalized to the same key
+    #expect(try await api.exists(path: "present.txt/"))
     #expect(try await !api.exists(path: "absent.txt"))
 
     let error = await StorageIntegration.storageError {
@@ -576,7 +563,6 @@ final class StorageBucketIntegrationTests {
     #expect(try await api.download(path: uploadPath).data() == replacement)
   }
 
-  /// Row level security: the anon role reads an empty listing and cannot write.
   @Test
   func anonRoleIsFilteredByRowLevelSecurity() async throws {
     try await storage.from(bucketName).upload(path: uploadPath, data: file)
@@ -594,8 +580,6 @@ final class StorageBucketIntegrationTests {
     #expect(error?.serverStatusCode == 403)
     #expect(error?.message == "new row violates row-level security policy")
   }
-
-  // MARK: - Upload options and object types
 
   @Test
   func uploadStoresEveryOption() async throws {
@@ -690,7 +674,6 @@ final class StorageBucketIntegrationTests {
     #expect(try await api.download(path: uploadPath).data() == replacement)
     #expect(try await api.info(path: uploadPath).size == Int64(replacement.count))
 
-    // The server's PUT creates a missing object; the SDK does not pre-check.
     try await api.update(path: "created-by-update.txt", data: file)
     #expect(try await api.exists(path: "created-by-update.txt"))
   }
@@ -699,7 +682,6 @@ final class StorageBucketIntegrationTests {
   func extraHeadersReachTheServer() async throws {
     let api = storage.from(bucketName)
 
-    // `x-metadata` set by hand (base64 of {"via":"header"}) reaches the server unchanged.
     try await api.upload(
       path: "header.txt", data: file,
       options: UploadOptions(headers: [.init("x-metadata")!: "eyJ2aWEiOiJoZWFkZXIifQ=="]))
@@ -754,8 +736,6 @@ final class StorageBucketIntegrationTests {
     #expect(info.userMetadata == ["via": "signed-url"])
     #expect(try await api.download(path: "signed.txt").data() == file)
   }
-
-  // MARK: - Signed and public URLs
 
   @Test
   func signedURLServesTheObjectUntilItExpires() async throws {

@@ -5,8 +5,6 @@
 //  Created by Guilherme Souza on 26/08/26.
 //
 
-// MARK: - Positions
-
 /// Where an expression is allowed to appear. Carried as a phantom type so a derived expression
 /// inherits its receiver's positions instead of restating them.
 public protocol _PostgrestPosition: Sendable {}
@@ -25,8 +23,6 @@ public enum _PostgrestSelectAndOrder: _PostgrestOrderablePosition {}
 
 /// Every position — a stored column, or a JSON path on one.
 public enum _PostgrestEveryPosition: _PostgrestOrderablePosition, _PostgrestFilterablePosition {}
-
-// MARK: - Expressions
 
 /// Anything that can appear in a `select` list: a stored column, a cast, a JSON path, an
 /// aggregate, or a column projected through an embedded relation.
@@ -97,8 +93,6 @@ public protocol _PostgrestOrderableExpression<Root, Value>: _PostgrestColumnExpr
 /// conforming, instead of the operator having to be redeclared on it.
 public protocol _PostgrestNullableExpression<Root, Value>: _PostgrestFilterableExpression {}
 
-// MARK: - Nullability
-
 /// Whether a stored column's database type admits `NULL`.
 ///
 /// A phantom type on ``_PostgrestStoredColumn``, never a value and never on the wire: it exists so
@@ -136,7 +130,6 @@ public struct _PostgrestStoredColumn<
   }
 }
 
-/// Only a nullable column can be `NULL`, so only it gets `isNull()`.
 extension _PostgrestStoredColumn: _PostgrestNullableExpression
 where Nullability == _PostgrestNullable {}
 
@@ -172,8 +165,6 @@ public struct _PostgrestGeneratedColumn<
   }
 }
 
-/// A generated column declared nullable (`GENERATED ALWAYS AS (…) STORED` over nullable inputs)
-/// can be `NULL`, so it gets `isNull()` like any other nullable column.
 extension _PostgrestGeneratedColumn: _PostgrestNullableExpression
 where Nullability == _PostgrestNullable {}
 

@@ -38,8 +38,6 @@ final class URLSessionWebSocket: WebSocket {
     self._protocol = _protocol
     self.session = session
 
-    // Unbounded, and load-bearing: this stream carries protocol frames. Dropping a `phx_reply`
-    // leaves the push that is waiting on it hanging until it times out.
     (events, eventsContinuation) = AsyncStream.makeStream(bufferingPolicy: .unbounded)
 
     _scheduleReceive()
@@ -79,9 +77,6 @@ final class URLSessionWebSocket: WebSocket {
       )
     }
 
-    // `continuation` is assigned below, before `task.resume()`, so it is always present by the
-    // time any delegate callback can run. It is `Optional` rather than implicitly unwrapped so
-    // that an unset continuation does nothing instead of trapping.
     struct MutableState {
       var continuation: CheckedContinuation<URLSessionWebSocket, any Error>?
       var webSocket: URLSessionWebSocket?
@@ -100,13 +95,6 @@ final class URLSessionWebSocket: WebSocket {
       session, _, error in
       let afterUnlock: @Sendable () -> Void = mutableState.withValue {
         if let webSocket = $0.webSocket {
-          // There are three possibilities here:
-          // 1. the peer sent a close Frame, `onWebSocketTaskClosed` was already
-          //    called and `_connectionClosed` is a no-op.
-          // 2. we sent a close Frame (through `close()`) and `_connectionClosed`
-          //    is a no-op.
-          // 3. an error occurred (e.g. network failure) and `_connectionClosed`
-          //    will signal that and close `event`.
           return {
             webSocket._connectionClosed(
               code: 1006,
@@ -114,9 +102,6 @@ final class URLSessionWebSocket: WebSocket {
             )
           }
         } else if let error {
-          // No `URLSessionWebSocket` was ever created to own this session (connection
-          // failed before `onWebSocketTaskOpened`), so invalidate it here — otherwise
-          // it (and its task/delegate) leak.
           session.finishTasksAndInvalidate()
           guard let continuation = $0.continuation else { return {} }
           return {
@@ -126,8 +111,6 @@ final class URLSessionWebSocket: WebSocket {
                 underlyingError: error))
           }
         } else {
-          // `onWebSocketTaskOpened` should have been called and resumed continuation.
-          // So either there was an error creating the connection or a logic error.
           return {
             assertionFailure(
               "expected an error or `onWebSocketTaskOpened` to have been called first"
@@ -166,8 +149,6 @@ final class URLSessionWebSocket: WebSocket {
         for (key, value) in headers {
           request.setValue(value, forHTTPHeaderField: key)
         }
-        // session.webSocketTask(with: URLRequest) doesn't accept a protocols
-        // parameter, so set the Sec-WebSocket-Protocol header manually.
         if let protocols, !protocols.isEmpty {
           request.setValue(
             protocols.joined(separator: ", "), forHTTPHeaderField: "Sec-WebSocket-Protocol")
@@ -178,11 +159,6 @@ final class URLSessionWebSocket: WebSocket {
       }
     }
 
-    // Always create a dedicated internal session — copying `session`'s configuration (if
-    // any was supplied) and forwarding its delegate's auth-challenge callback — rather than
-    // ever using `session` directly. This keeps the connection immune to process-wide
-    // `URLSession` state (e.g. an app's own globally-registered `URLProtocol`) and
-    // guarantees this instance always owns (and can safely invalidate) its session.
     let dedicatedSession = URLSession.sessionWithConfiguration(
       session?.configuration ?? .default,
       onComplete: onComplete,
@@ -191,9 +167,6 @@ final class URLSessionWebSocket: WebSocket {
       wrappedDelegate: session?.delegate
     )
     let task = makeTask(on: dedicatedSession)
-    // Give the delegate a reference to the task it's serving, so its challenge-forwarding
-    // method can supply a real task to `wrappedDelegate`'s task-level implementation (see
-    // `_Delegate.associatedTask`).
     (dedicatedSession.delegate as? _Delegate)?.associatedTask.setValue(task)
 
     return try await withCheckedThrowingContinuation { continuation in
@@ -321,8 +294,6 @@ final class URLSessionWebSocket: WebSocket {
   /// Triggers a WebSocket event and updates internal state if needed.
   /// - Parameter event: The event to trigger.
   private func _trigger(_ event: LegacyWebSocketEvent) {
-    // Update state under the lock, but yield the continuation only after
-    // releasing it — see the comment on `onComplete` above for why.
     let shouldInvalidate = mutableState.withValue {
       if case .close(let code, let reason) = event {
         let wasClosed = $0.isClosed
@@ -336,8 +307,6 @@ final class URLSessionWebSocket: WebSocket {
 
     eventsContinuation.yield(event)
 
-    // This instance always owns `session` (a dedicated internal session `connect` created
-    // for it), so it's always safe to invalidate here.
     if shouldInvalidate {
       session.finishTasksAndInvalidate()
     }
@@ -448,8 +417,6 @@ final class URLSessionWebSocket: WebSocket {
   var `protocol`: String { _protocol }
 }
 
-// MARK: - URLSession Extension
-
 extension URLSession {
   /// Creates a URLSession with WebSocket delegate callbacks.
   ///
@@ -495,8 +462,6 @@ extension URLSession {
     }
   }
 }
-
-// MARK: - Private Delegate
 
 /// Internal URLSession delegate for handling WebSocket events.
 ///

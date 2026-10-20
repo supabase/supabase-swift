@@ -133,8 +133,6 @@ extension DeclGroupSyntax {
         !variable.modifiers.contains(where: { $0.name.text == "static" })
       else { return [] }
 
-      // Marker attributes sit on the declaration, not the binding, so every binding in
-      // `@Default var a, b: Bool` carries them.
       let attributes = variable.attributes.compactMap { $0.as(AttributeSyntax.self) }
       func attribute(_ name: String) -> AttributeSyntax? {
         attributes.first { $0.attributeName.trimmedDescription == name }
@@ -210,7 +208,6 @@ extension PatternBindingSyntax {
         }
       }
     case .getter:
-      // `var x: Int { 1 }` — an implicit getter, so computed.
       return false
     }
   }

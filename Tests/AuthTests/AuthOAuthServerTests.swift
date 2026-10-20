@@ -48,8 +48,6 @@ extension AuthMockerTests {
       return AuthClient(configuration: configuration)
     }
 
-    // MARK: - Decoding
-
     @Test
     func decodeOAuthAuthorizationDetails() throws {
       let json = """
@@ -155,8 +153,6 @@ extension AuthMockerTests {
 
     @Test
     func decodeOAuthAuthorizationDetailsAutoApproveRedirect() throws {
-      // The server auto-approves (and returns a bare redirect) when the user
-      // already has an active consent covering the requested scopes.
       let json = """
         { "redirect_url": "https://example.com/callback?code=abc123" }
         """.data(using: .utf8)!
@@ -175,11 +171,6 @@ extension AuthMockerTests {
 
     @Test
     func decodeOAuthAuthorizationDetailsResponseSurfacesBothErrorsWhenNeitherShapeMatches() throws {
-      // `client.id` is not a valid UUID, so decoding as OAuthAuthorizationDetails
-      // fails for a genuine reason (not just "this is the redirect shape");
-      // there's no `redirect_url` key either, so the redirect fallback also
-      // fails. Both underlying errors must be visible, not just the (less
-      // useful) redirect-decode one.
       let json = """
         {
           "authorization_id": "abc123def456",
@@ -232,8 +223,6 @@ extension AuthMockerTests {
       #expect(grant.client.id == clientId)
       #expect(grant.scopes == ["read", "write"])
     }
-
-    // MARK: - authorizationDetails
 
     @Test
     func authorizationDetails() async throws {
@@ -296,7 +285,6 @@ extension AuthMockerTests {
         _ = try await sut.oauthServer.authorizationDetails(id: "abc123def456")
         Issue.record("Expected AuthError.sessionMissing")
       } catch let error as AuthError where error.kind == .sessionMissing {
-        // expected
       }
     }
 
@@ -324,8 +312,6 @@ extension AuthMockerTests {
         #expect(error.errorCode == .oauthAuthorizationNotFound)
       }
     }
-
-    // MARK: - approveAuthorization / denyAuthorization
 
     @Test
     func approveAuthorization() async throws {
@@ -403,8 +389,6 @@ extension AuthMockerTests {
       #expect(redirect.redirectURL.query?.contains("error=access_denied") == true)
     }
 
-    // MARK: - listGrants
-
     @Test
     func listGrants() async throws {
       let responseData = """
@@ -448,8 +432,6 @@ extension AuthMockerTests {
       #expect(grants[0].client.id == clientId)
       #expect(grants[0].scopes == ["read", "write"])
     }
-
-    // MARK: - revokeGrant
 
     @Test
     func revokeGrant() async throws {

@@ -46,7 +46,7 @@ The known values are `static let` members, so call sites read the same as they d
 `enum`, but a `switch` needs a `default:` case:
 
 ```swift
-switch client.status {
+switch await client.status {
 case .connected: showOnline()
 case .connecting: showSpinner()
 case .disconnected: showOffline()

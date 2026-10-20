@@ -14,11 +14,8 @@ import Testing
   import FoundationNetworking
 #endif
 
-/// Resumable uploads against a live Storage: a chunked upload, pause and resume, cancel, and a
-/// second client continuing from the record.
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil))
 final class StorageResumableIntegrationTests {
-  /// 20 MiB: four chunks at the 6 MiB hosted Supabase requires, the last one short.
   static let fileSize = 20 << 20
 
   let bucketName: String
@@ -39,7 +36,6 @@ final class StorageResumableIntegrationTests {
     try? FileManager.default.removeItem(at: fileURL.deletingLastPathComponent())
   }
 
-  /// Non-constant bytes, written in 1 MiB pieces so the fixture never sits in memory whole.
   private static func writeFixture(to url: URL) throws {
     FileManager.default.createFile(atPath: url.path, contents: nil)
     let handle = try FileHandle(forWritingTo: url)
@@ -50,7 +46,6 @@ final class StorageResumableIntegrationTests {
     }
   }
 
-  /// A client whose records live in this test's directory, so a second one can find them.
   private func client() -> StorageClient {
     var configuration = StorageClientConfiguration(
       url: StorageIntegration.url,
@@ -63,7 +58,6 @@ final class StorageResumableIntegrationTests {
     client.from(bucketName)
   }
 
-  /// Returns once the server has confirmed at least one chunk.
   private func waitForFirstChunk(of upload: ResumableUpload) async {
     for await progress in upload.progress where progress.completedBytes > 0 { return }
   }

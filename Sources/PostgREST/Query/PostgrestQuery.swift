@@ -126,8 +126,6 @@ extension _PostgrestQuery {
     try await request.execute(on: client, decode: decode)
   }
 
-  /// The typed API never uses the client's configured decoder. Column names come from each row
-  /// type's `CodingKeys`, and a key strategy on a shared decoder would silently make them wrong.
   static var decoder: JSONDecoder { PostgrestClient.Configuration.jsonDecoder }
 
   private static var objectMediaType: String { "application/vnd.pgrst.object+json" }

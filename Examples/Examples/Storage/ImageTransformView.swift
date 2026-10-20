@@ -17,7 +17,6 @@ struct ImageTransformView: View {
   @State private var error: Error?
   @State private var isLoading = false
 
-  // Transform options
   @State private var width: String = "400"
   @State private var height: String = "400"
   @State private var quality: Double = 80
@@ -141,7 +140,6 @@ struct ImageTransformView: View {
         }
       }
 
-      // Original Image
       if let originalImage {
         Section("Original Image") {
           VStack(spacing: 8) {
@@ -158,7 +156,6 @@ struct ImageTransformView: View {
         }
       }
 
-      // Transformed Image
       if let transformedImage {
         Section("Transformed Image") {
           VStack(spacing: 8) {

@@ -73,8 +73,6 @@ package final class FakeRealtimeServer: Sendable {
   /// A transport that connects to this server.
   package var transport: StubWebSocketTransport { StubWebSocketTransport(server: self) }
 
-  // MARK: Configuration
-
   package var joinReply: JoinReply {
     get { state.value.joinReply }
     set { state.withValue { $0.joinReply = newValue } }
@@ -121,8 +119,6 @@ package final class FakeRealtimeServer: Sendable {
     state.withValue { $0.pendingUpgradeRefusal = status }
   }
 
-  // MARK: Observation
-
   package var connectCount: Int { state.value.connectCount }
   package var isConnected: Bool { state.value.current != nil }
   /// Every frame the client sent over any connection, in send order.
@@ -132,10 +128,7 @@ package final class FakeRealtimeServer: Sendable {
   package var clientCloseCode: WebSocketCloseCode? { state.value.clientCloseCode }
   package var clientCloseReason: String? { state.value.clientCloseReason }
 
-  // MARK: Server → client
-
   package func push(_ message: RealtimeMessageV2) {
-    // A message this fake built from JSON values always encodes.
     guard let text = try? serializer.encodeText(message) else { return }
     deliver(.text(text))
   }
@@ -223,8 +216,6 @@ package final class FakeRealtimeServer: Sendable {
     connection?.finish(code: code, reason: reason)
   }
 
-  // MARK: Client → server
-
   func accept() throws -> StubWebSocketConnection {
     let connection = StubWebSocketConnection(server: self)
     try state.withValue { state in
@@ -281,8 +272,6 @@ package final class FakeRealtimeServer: Sendable {
       $0.current = nil
     }
   }
-
-  // MARK: Wire format
 
   private func decode(_ frame: WebSocketFrame) -> RealtimeMessageV2? {
     switch frame {

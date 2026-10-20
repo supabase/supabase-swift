@@ -8,9 +8,6 @@
 import Foundation
 import Testing
 
-// No `@testable`, and no `PostgrestMacros`: `PostgRESTTests` does not depend on it. This file
-// compiling is the main assertion — the typed API works through its public surface alone, with a
-// hand-written conformance, the way an app that never imports the macros would use it.
 @_spi(Experimental) import PostgREST
 
 @Suite

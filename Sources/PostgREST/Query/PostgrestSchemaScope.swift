@@ -36,7 +36,6 @@ extension PostgrestClient {
     return _PostgrestSchemaScope(client: self.schema(S.name))
   }
 
-  // See the unavailable `from(_:_:)` twin.
   @available(
     *, unavailable,
     message:

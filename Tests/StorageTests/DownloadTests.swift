@@ -8,7 +8,6 @@ import Testing
 
 @Suite
 struct DownloadTests {
-  /// A stream of `count` chunks of `size` bytes that throws `error` after the last one, if given.
   static func chunks(
     _ count: Int, of size: Int, length: HTTPBody.Length? = nil, then error: (any Error)? = nil
   ) -> HTTPBody {
@@ -95,7 +94,6 @@ struct DownloadTests {
   @Test
   func aNetworkFailureMidBodyIsATransportError() async throws {
     let bucket = Self.makeBucket {
-      // An unknown length, so the logger streams the body instead of buffering it.
       Self.chunks(2, of: 10, length: .unknown, then: URLError(.networkConnectionLost))
     }
 

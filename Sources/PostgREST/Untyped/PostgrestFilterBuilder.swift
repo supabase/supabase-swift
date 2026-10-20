@@ -95,7 +95,6 @@ extension PostgrestRequestBuilder {
 // in `PostgrestRequestBuilder.swift` — DocC discards doc comments written on `extension` blocks,
 // so a `///` comment here would never be rendered.
 extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
-  /// Renders `node` through the same code the typed `where` uses and appends the result.
   func appending(_ node: PostgrestFilterNode) -> Self {
     var copy = self
     copy.request.query.append(contentsOf: node.queryItems())
@@ -109,8 +108,6 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
   ) -> Self {
     appending(.comparison(column: column, operator: `operator`, operand: .value(value.rawValue)))
   }
-
-  // MARK: - Filters
 
   /// Negates the specified filter using the PostgREST `not.<operator>` syntax.
   ///
@@ -767,7 +764,6 @@ extension PostgrestRequestBuilder where Phase: PostgrestFilterablePhase {
       ))
   }
 
-  // MARK: - Deprecated aliases
   //
   // Forwarders to the methods above, deleted in v4 (SDK-2183). `match(_:)` with a dictionary is
   // not one of them: it is supabase-js parity, not a second spelling.

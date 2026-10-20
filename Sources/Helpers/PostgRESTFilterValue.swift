@@ -1,7 +1,5 @@
 import Foundation
 
-/// Characters that carry structural meaning in a PostgREST filter value list
-/// (e.g. `in.(a,b,c)`) and therefore require the value to be double-quoted.
 private let postgrestReservedCharacters: Set<Character> = [",", "(", ")", "\"", "\\"]
 
 /// Whether `value` must be double-quoted when embedded in a PostgREST filter,
@@ -21,8 +19,6 @@ package func escapePostgRESTFilterValue(_ raw: String) -> String {
   return "\"\(escaped)\""
 }
 
-/// Characters that carry structural meaning inside a PostgREST array literal
-/// (e.g. `cs.{a,b}`) and therefore require the element to be double-quoted.
 private let postgrestArrayLiteralReservedCharacters: Set<Character> = [
   ",", "{", "}", "\"", "\\",
 ]

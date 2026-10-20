@@ -81,10 +81,6 @@ struct PostgrestClientAccessTokenTests {
           capturedAuthorizationHeaders.withValue {
             $0.append(request.headerFields[.authorization] ?? "")
           }
-          // Only the first request to reach the transport blocks here, holding it "in flight"
-          // while the token mutates and a second request runs to completion around it. The
-          // second request's own call recognizes `firstRequestIsInFlight` already flipped and
-          // returns immediately instead of blocking a second time.
           if !firstRequestIsInFlight.value {
             firstRequestIsInFlight.setValue(true)
             await waitUntil { firstRequestMayFinish.value }
@@ -99,8 +95,6 @@ struct PostgrestClientAccessTokenTests {
     }()
 
     await waitUntil { firstRequestIsInFlight.value }
-    // The first request already resolved and fixed its token into its own request before
-    // reaching the transport above, so this mutation must not reach it.
     token.setValue("second.token")
 
     _ = try await sut.from("todos").select().execute()
@@ -155,7 +149,6 @@ struct PostgrestClientAccessTokenTests {
     #expect(error?.underlyingError is TokenError)
   }
 
-  /// The typed query runs the same provider through the same core.
   @Test
   func accessTokenErrorFailsTheTypedQueryTheSameWay() async throws {
     struct TokenError: Error, Equatable {}

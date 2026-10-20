@@ -316,16 +316,12 @@ extension PostgrestRequestBuilder where Phase: PostgrestExecutablePhase {
     setHeader(name: .init(name)!, value: value)
   }
 
-  /// Set a HTTP header for the request.
   func setHeader(name: HTTPField.Name, value: String) -> Self {
     var copy = self
     copy.request.headerFields[name] = value
     return copy
   }
 
-  /// Adds or replaces one preference in the `Prefer` header, leaving any other preference already
-  /// there untouched — unlike ``setHeader(name:value:)-(String,_)``, which replaces the header
-  /// wholesale.
   func mergingPreferHeader(_ value: String) -> Self {
     var copy = self
     copy.request.setPreference(value)

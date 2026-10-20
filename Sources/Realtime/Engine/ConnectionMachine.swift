@@ -72,7 +72,6 @@ package enum ConnectionMachine {
     _ state: inout State, _ event: Event, configuration: Configuration
   ) -> [Effect] {
     switch (state, event) {
-    // Connect.
     case (.disconnected, .connectRequested), (.disconnected, .resumeRequested):
       state = .connecting(attempt: 1)
       return [.openTransport]
@@ -84,7 +83,6 @@ package enum ConnectionMachine {
       state = .connecting(attempt: attempt + 1)
       return [.openTransport]
 
-    // Handshake.
     case (.connecting, .upgradeSucceeded):
       state = .connected
       return [.startHeartbeat, .rejoinAllChannels]
@@ -97,7 +95,6 @@ package enum ConnectionMachine {
       let error = RealtimeError.socketClosed(code: code, reason: reason)
       return scheduleRetry(&state, attempt: attempt, error: error, configuration: configuration)
 
-    // Loss while connected.
     case (.connected, .transportClosed(let code, let reason)):
       let error = RealtimeError.socketClosed(code: code, reason: reason)
       return [.stopHeartbeat, .failPendingReplies, .channelsSocketLost]
@@ -110,7 +107,6 @@ package enum ConnectionMachine {
         + scheduleRetry(
           &state, attempt: 1, error: .heartbeatTimeout, configuration: configuration)
 
-    // Stop.
     case (.connected, .disconnectRequested), (.connected, .idleTimerFired):
       state = .disconnected(nil)
       return [
@@ -139,7 +135,6 @@ package enum ConnectionMachine {
       state = .disconnected(nil)
       return []
 
-    // Idle.
     case (.connected, .lastChannelRemoved):
       return [.scheduleIdleDisconnect(after: configuration.idleDisconnectAfter)]
     case (.connected, .channelAdded):

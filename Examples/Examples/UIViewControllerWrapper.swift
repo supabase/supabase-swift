@@ -22,7 +22,6 @@
     }
 
     func updateUIViewController(_: T, context _: Context) {
-      // Update the view controller if needed
     }
   }
 #endif

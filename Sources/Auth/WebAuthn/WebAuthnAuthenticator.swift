@@ -11,8 +11,6 @@ import Foundation
   import AuthenticationServices
 #endif
 
-// MARK: - W3C options parsing (platform independent, testable)
-
 extension JSONValue {
   /// Base64url-decodes the `challenge` field of W3C credential options.
   func webAuthnChallengeData() throws -> Data {
@@ -67,8 +65,6 @@ extension JSONValue {
     return data
   }
 }
-
-// MARK: - Platform authenticator
 
 #if canImport(AuthenticationServices) && !os(tvOS) && !os(watchOS)
   /// Drives the platform passkey ceremony via `ASAuthorizationController`.

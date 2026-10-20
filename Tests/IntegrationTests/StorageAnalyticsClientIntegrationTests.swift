@@ -9,8 +9,6 @@ import Foundation
 @_spi(Experimental) import Storage
 import Testing
 
-/// Analytics buckets need Storage's Iceberg routes. Only the Docker stack serves them, after
-/// `scripts/enable-storage-test-features.sh`; the native stack answers 404.
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil))
 struct StorageAnalyticsClientIntegrationTests {
   let analytics = StorageIntegration.admin.analytics

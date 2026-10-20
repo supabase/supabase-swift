@@ -12,9 +12,6 @@ import Testing
   import OpenTelemetrySdk
 #endif
 
-/// `.serialized`: OpenTelemetry's default context manager tracks the active span as ambient
-/// state (OS activity scope), not a per-`Task` value, so tests that set/read it would otherwise
-/// race against each other under Swift Testing's default parallel execution.
 @Suite(.serialized)
 struct TracingTests {
   @Test
@@ -67,9 +64,6 @@ struct TracingTests {
         )
       )
 
-      // `withActiveSpan` (not the imperative setActiveSpan/removeContextForSpan) is the only
-      // API that works with every default ContextManager — on Linux (no os.activity),
-      // TaskLocalContextManager's imperative set/remove are no-ops.
       try await OpenTelemetry.instance.contextProvider.withActiveSpan(span) {
         _ = try? await client.from("todos").select().execute()
       }

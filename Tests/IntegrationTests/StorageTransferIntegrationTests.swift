@@ -15,12 +15,10 @@ import Testing
   import FoundationNetworking
 #endif
 
-/// Uploads and downloads against a live Storage: progress, streamed bodies, ranges and files.
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil))
 final class StorageTransferIntegrationTests {
   let bucketName: String
   let bucket: StorageBucket
-  /// 4 MiB of non-repeating bytes, big enough for `URLSession` to report progress more than once.
   let payload = Data((0..<(4 << 20)).map { UInt8(truncatingIfNeeded: $0 &* 31 &+ $0 >> 8) })
 
   init() async throws {
@@ -32,7 +30,6 @@ final class StorageTransferIntegrationTests {
     StorageIntegration.dropBucket(bucketName)
   }
 
-  /// Records every progress call, for checking it rises and ends on the total.
   final class ProgressLog: Sendable {
     let reports = LockIsolated<[TransferProgress]>([])
 
@@ -56,8 +53,6 @@ final class StorageTransferIntegrationTests {
     try data.write(to: url)
     return url
   }
-
-  // MARK: - Upload progress
 
   @Test
   func uploadFromDataReportsProgressUpToItsSize() async throws {
@@ -93,9 +88,6 @@ final class StorageTransferIntegrationTests {
     log.expectRisesTo(Int64(payload.count))
   }
 
-  // MARK: - Streamed upload bodies
-
-  /// `payload` as 1 MiB chunks, pulled one at a time.
   private func streamed(length: HTTPBody.Length) -> HTTPBody {
     let payload = payload
     let chunks = AsyncStream { continuation in
@@ -146,8 +138,6 @@ final class StorageTransferIntegrationTests {
     #expect(error?.code == .entityTooLarge)
   }
 
-  // MARK: - Data downloads
-
   @Test
   func downloadsARange() async throws {
     try await bucket.upload(path: "range.bin", data: payload)
@@ -181,8 +171,6 @@ final class StorageTransferIntegrationTests {
 
     #expect(data == payload[0...9])
   }
-
-  // MARK: - Response metadata and streaming
 
   @Test
   func downloadStreamsTheObjectWithItsMetadata() async throws {
@@ -230,8 +218,6 @@ final class StorageTransferIntegrationTests {
 
     #expect(error?.isNotFound == true)
   }
-
-  // MARK: - Downloads to a file
 
   @Test
   func downloadWritesToAFileAndReplacesWhatWasThere() async throws {

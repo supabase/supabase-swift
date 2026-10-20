@@ -18,11 +18,8 @@ struct StorageClientIntegrationTests {
   let storage = StorageIntegration.client()
 
   init() async throws {
-    // Clean up test-bucket if it exists from a previous failed run
-    // to make tests idempotent
     let testBucketName = "test-bucket"
     do {
-      // First empty the bucket (required before deletion)
       let files = try await storage.from(testBucketName).list()
       if !files.isEmpty {
         let filePaths = files.map { $0.name }
@@ -30,7 +27,6 @@ struct StorageClientIntegrationTests {
       }
       try await storage.deleteBucket(testBucketName)
     } catch {
-      // Ignore errors - bucket may not exist, which is expected
     }
   }
 
@@ -52,7 +48,6 @@ struct StorageClientIntegrationTests {
     buckets = try await storage.listBuckets()
     #expect(buckets.contains { $0.id == bucket.id })
 
-    // A partial update leaves the other settings alone: the bucket stays public.
     try await storage.updateBucket(
       bucketName, options: UpdateBucketOptions(allowedMimeTypes: ["image/jpeg"]))
 
@@ -82,15 +77,12 @@ struct StorageClientIntegrationTests {
       #expect(error.serverError?.error == "Bucket not found")
       #expect(error.serverError?.code == .noSuchBucket)
       #expect(error.message == "Bucket not found")
-      // Storage answers a missing bucket with HTTP 400 and puts "404" in the body.
       #expect(error.serverStatusCode == 404)
       #expect(error.response != nil)
     } catch {
       Issue.record("Unexpected error \(error)")
     }
   }
-
-  // MARK: - Bucket options
 
   @Test(arguments: [
     (ByteCount.megabytes(1.5), Int64(1_500_000)),
@@ -178,8 +170,6 @@ struct StorageClientIntegrationTests {
     #expect(error?.response == nil)
   }
 
-  // MARK: - Bucket errors
-
   @Test
   func duplicateBucketIsBucketAlreadyExists() async throws {
     let name = try await StorageIntegration.newBucket("dup")
@@ -207,8 +197,6 @@ struct StorageClientIntegrationTests {
     #expect(error?.serverStatusCode == 409)
   }
 
-  // MARK: - Authentication and headers
-
   @Test
   func malformedBearerIsAccessDenied() async throws {
     let client = StorageIntegration.client(headers: [.authorization: "Bearer not-a-jwt"])
@@ -230,8 +218,6 @@ struct StorageClientIntegrationTests {
       _ = try await client.listBuckets()
     }
 
-    // The native stack reaches storage-api, which answers InvalidRequest with HTTP 400; the
-    // Docker stack's gateway refuses the request first, with its own status and no Storage code.
     #expect(error?.kind == .server)
     #expect((error?.response?.statusCode ?? 0) >= 400)
     #if os(macOS)
@@ -274,7 +260,6 @@ struct StorageClientIntegrationTests {
       headers: [.init("apikey")!: DotEnv.supabasePublishableKey],
       middlewares: [AccessTokenMiddleware { nil }])
 
-    // The gateway maps the anon apikey to the anon role: reads are filtered, writes refused.
     #expect(try await client.from(name).list().isEmpty)
     let error = await StorageIntegration.storageError {
       try await client.from(name).upload(path: "anon.txt", data: Data("a".utf8))
@@ -306,7 +291,7 @@ struct StorageClientIntegrationTests {
       name: .authorization, value: "Bearer \(DotEnv.supabaseSecretKey)")
 
     #expect(try await elevated.from(name).list().map(\.name) == ["seed.txt"])
-    #expect(try await anon.from(name).list().isEmpty)  // the original client is unchanged
+    #expect(try await anon.from(name).list().isEmpty)
   }
 
   @Test
@@ -324,7 +309,6 @@ struct StorageClientIntegrationTests {
     #expect(try await client.storage.listBuckets().contains { $0.id == name })
   }
 
-  /// A publishable key is never sent as a bearer: Storage sees the anon role through `apikey`.
   @Test
   func supabaseClientWithANewFormatKeySendsNoBearer() async throws {
     let name = try await StorageIntegration.newBucket("publishable")

@@ -57,7 +57,8 @@ public struct RealtimeMessageV2: Hashable, Sendable {
 
   /// The server reply status extracted from the payload, if present.
   ///
-  /// Parsed from `payload["status"]`. Common values are `.ok` and `.error`.
+  /// Parsed from `payload["status"]`. Common values are ``PushStatus/ok`` and
+  /// ``PushStatus/error``.
   public var status: PushStatus? {
     payload["status"]
       .flatMap(\.stringValue)
@@ -125,4 +126,27 @@ public struct RealtimeMessageV2: Hashable, Sendable {
 
 extension RealtimeMessageV2: HasRawMessage {
   public var rawMessage: RealtimeMessageV2 { self }
+}
+
+/// The status the server put in a reply, as read by ``RealtimeMessageV2/status``.
+///
+/// A status this SDK has no member for is preserved in ``rawValue``.
+public struct PushStatus: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+  public let rawValue: String
+
+  /// Creates a ``PushStatus`` from a raw string value.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  /// Creates a ``PushStatus`` from a string literal.
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
+  /// The server acknowledged the push.
+  public static let ok: PushStatus = "ok"
+
+  /// The server rejected the push.
+  public static let error: PushStatus = "error"
 }

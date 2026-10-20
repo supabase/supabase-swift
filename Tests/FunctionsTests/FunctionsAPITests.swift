@@ -29,8 +29,6 @@ struct FunctionsAPITests {
     ]
   )
 
-  // MARK: Request building
-
   @Test
   func defaultRequest() async throws {
     try await assertRequest(name: "hello-world") {
@@ -265,8 +263,6 @@ struct FunctionsAPITests {
     #expect(request.headerFields[.xClientInfo] == "functions-swift/\(Functions.version)")
   }
 
-  // MARK: Head classification
-
   struct HeadCase: Sendable, CustomTestStringConvertible {
     var relay = false
     var status: Int
@@ -325,8 +321,6 @@ struct FunctionsAPITests {
       Issue.record("Unexpected error \(error)")
     }
   }
-
-  // MARK: Helpers
 
   private func assertRequest(
     name: String,

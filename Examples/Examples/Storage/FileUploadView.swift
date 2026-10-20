@@ -173,7 +173,6 @@ struct FileUploadView: View {
     }
   }
 
-  /// The SDK calls `progress` off the main actor, so hop back before touching view state.
   private var reportProgress: @Sendable (TransferProgress) -> Void {
     { progress in
       Task { @MainActor in uploadProgress = progress.fractionCompleted ?? 0 }
@@ -205,7 +204,6 @@ struct FileUploadView: View {
       uploadedPath = response.path
       uploadProgress = 1.0
 
-      // Reset
       selectedImage = nil
       self.imageData = nil
       filePath = ""

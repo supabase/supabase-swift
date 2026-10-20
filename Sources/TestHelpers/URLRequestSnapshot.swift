@@ -15,21 +15,6 @@
   #endif
 
   extension Snapshotting where Value == URLRequest, Format == String {
-    // A snapshot strategy for comparing requests based on a cURL representation.
-    //
-    // ``` swift
-    // assertSnapshot(of: request, as: .curl)
-    // ```
-    //
-    // Records:
-    //
-    // ```
-    // curl \
-    //   --request POST \
-    //   --header "Accept: text/html" \
-    //   --data 'pricing[billing]=monthly&pricing[lane]=individual' \
-    //   "https://www.pointfree.co/subscribe"
-    // ```
     package static let _curl = SimplySnapshotting.lines.pullback { (request: URLRequest) in
 
       var components = ["curl"]

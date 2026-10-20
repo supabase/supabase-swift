@@ -11,9 +11,6 @@ import HTTPTypes
 import TestHelpers
 import Testing
 
-// `Generated.swift` is `supabase-typegen --access-control public` run on the integration schema.
-// These tests use it the way an app would.
-
 @SelectionOf(Channels.self)
 struct ChannelFeed {
   var slug: String
@@ -22,7 +19,6 @@ struct ChannelFeed {
   @Relationship(computed: \Channels.Columns.firstMessage) var first: Messages?
 }
 
-/// A client whose requests are recorded, answering each with `body`.
 func recordingClient(body: String = "[]") -> (PostgrestClient, RecordingTransport) {
   let transport = RecordingTransport { _, _ in
     (HTTPResponse(status: .ok, headerFields: [.contentType: "application/json"]), Data(body.utf8))

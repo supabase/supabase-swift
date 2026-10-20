@@ -13,7 +13,6 @@ import Testing
 
 @Suite
 struct ResumableUploadTests {
-  /// One scripted response per request, in order, and a log of what was sent.
   private final class Script: Sendable {
     typealias Step = @Sendable (HTTPRequest, Data) async throws -> (HTTPResponse, Data)
 

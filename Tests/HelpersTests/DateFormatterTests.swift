@@ -13,11 +13,8 @@ import Testing
 @Suite
 struct DateFormatterTests {
 
-  // MARK: - Date to ISO8601 String Tests
-
   @Test
   func dateToISO8601String() throws {
-    // Create a specific date: 2024-01-15 10:30:45.123 UTC
     var components = DateComponents()
     components.year = 2024
     components.month = 1
@@ -25,7 +22,7 @@ struct DateFormatterTests {
     components.hour = 10
     components.minute = 30
     components.second = 45
-    components.nanosecond = 123_000_000  // 123 milliseconds
+    components.nanosecond = 123_000_000
     components.timeZone = TimeZone(secondsFromGMT: 0)
 
     let calendar = Calendar(identifier: .iso8601)
@@ -33,7 +30,6 @@ struct DateFormatterTests {
 
     let iso8601String = date.iso8601String
 
-    // Should contain the date and time
     #expect(iso8601String.contains("2024-01-15"))
     #expect(iso8601String.contains("10:30:45"))
   }
@@ -43,11 +39,10 @@ struct DateFormatterTests {
     let now = Date()
     let iso8601String = now.iso8601String
 
-    // Verify it's not empty and has proper format
     #expect(!iso8601String.isEmpty)
-    #expect(iso8601String.contains("T"))  // Should have date-time separator
-    #expect(iso8601String.contains("-"))  // Should have date separators
-    #expect(iso8601String.contains(":"))  // Should have time separators
+    #expect(iso8601String.contains("T"))
+    #expect(iso8601String.contains("-"))
+    #expect(iso8601String.contains(":"))
   }
 
   @Test
@@ -74,8 +69,6 @@ struct DateFormatterTests {
 
     #expect(parsedDate == date)
   }
-
-  // MARK: - String to Date Parsing Tests
 
   @Test
   func parseISO8601StringWithFractionalSeconds() throws {
@@ -119,11 +112,11 @@ struct DateFormatterTests {
   func parseInvalidDateString() {
     let invalidStrings = [
       "not a date",
-      "2024-13-45",  // Invalid month and day
-      "2024/01/15",  // Wrong separator
-      "15-01-2024",  // Wrong order
+      "2024-13-45",
+      "2024/01/15",
+      "15-01-2024",
       "",
-      "2024-01-15 10:30:45",  // Space instead of T
+      "2024-01-15 10:30:45",
     ]
 
     for invalidString in invalidStrings {
@@ -140,11 +133,8 @@ struct DateFormatterTests {
     #expect(emptyString.date == nil)
   }
 
-  // MARK: - Round-trip Tests
-
   @Test
   func roundTripConversion() throws {
-    // Create a date, convert to string, parse back to date
     var components = DateComponents()
     components.year = 2023
     components.month = 6
@@ -162,7 +152,6 @@ struct DateFormatterTests {
     let parsedDate = try #require(
       dateString.date, "Failed to parse date from string: \(dateString)")
 
-    // Compare timestamps (allowing small tolerance for milliseconds)
     let timeDifference = abs(originalDate.timeIntervalSince(parsedDate))
     #expect(timeDifference < 1.0, "Dates should be within 1 second of each other")
   }
@@ -174,12 +163,9 @@ struct DateFormatterTests {
     let parsedDate = try #require(
       dateString.date, "Failed to parse current date from string: \(dateString)")
 
-    // Compare timestamps (allowing small tolerance for milliseconds)
     let timeDifference = abs(now.timeIntervalSince(parsedDate))
     #expect(timeDifference < 1.0, "Dates should be within 1 second of each other")
   }
-
-  // MARK: - Edge Cases
 
   @Test
   func parseDateAtMidnight() throws {
@@ -217,7 +203,7 @@ struct DateFormatterTests {
 
   @Test
   func parseLeapYearDate() {
-    let dateString = "2024-02-29T12:00:00"  // 2024 is a leap year
+    let dateString = "2024-02-29T12:00:00"
     #expect(dateString.date != nil, "Should parse leap year date")
   }
 
@@ -231,25 +217,19 @@ struct DateFormatterTests {
     ]
 
     for format in formats {
-      // These might not all parse depending on the formatter, but at least test them
       let _ = format.date
     }
   }
 
-  // MARK: - Non-UTC Offset Tests (SDK-2090)
-
   @Test(
     arguments: [
-      // Postgres `timestamptz` forms: fractional seconds, offset with/without colon, `Z`, short offset.
       ("2024-01-02T03:04:05.123456+00:00", 1_704_164_645.123456),
       ("2024-01-02T03:04:05+02:00", 1_704_157_445.0),
       ("2024-01-02T03:04:05+0200", 1_704_157_445.0),
       ("2024-01-02T03:04:05+02", 1_704_157_445.0),
       ("2024-01-02T03:04:05Z", 1_704_164_645.0),
-      // Postgres `timestamp` (no time zone): read as UTC.
       ("2024-01-02T03:04:05.123456", 1_704_164_645.123456),
       ("2024-01-02T03:04:05", 1_704_164_645.0),
-      // Postgres `date`: the day only, read as midnight UTC.
       ("2024-01-02", 1_704_153_600.0),
     ]
   )
@@ -263,11 +243,8 @@ struct DateFormatterTests {
 
   @Test
   func rejectsSpaceSeparatedTimestampWithOffset() {
-    // Not a Postgres JSON/REST wire format (PostgREST always emits `T`); explicitly unsupported.
     #expect("2024-01-02 03:04:05.123456+00".date == nil)
   }
-
-  // MARK: - Multiple Date Conversion Tests
 
   @Test
   func convertMultipleDates() {
@@ -276,7 +253,7 @@ struct DateFormatterTests {
       "2021-06-15T12:30:45",
       "2022-12-31T23:59:59",
       "2023-07-04T16:20:30.500",
-      "2024-02-29T08:15:22",  // Leap year
+      "2024-02-29T08:15:22",
     ]
 
     for dateString in dates {

@@ -1,4 +1,3 @@
-public import Clocks
 public import Foundation
 public import Helpers
 public import Logging
@@ -126,8 +125,10 @@ public struct SupabaseClientOptions: Sendable {
     /// The clock the time-based sub-client behaviors sleep on: Auth's token auto-refresh, Auth's
     /// and Storage's request-retry backoff, and Realtime's heartbeat timer and reconnect backoff.
     ///
-    /// Defaults to `ContinuousClock()`. Pass a `TestClock` (swift-clocks) to drive those
-    /// behaviors deterministically in tests instead of waiting out real seconds.
+    /// Defaults to `ContinuousClock()`. Pass a `TestClock` to drive those behaviors
+    /// deterministically in tests instead of waiting out real seconds. `TestClock` comes from
+    /// [swift-clocks](https://github.com/pointfreeco/swift-clocks); add it to your test target
+    /// yourself, as this package does not export it.
     public let clock: any Clock<Duration>
 
     /// Creates the shared options.

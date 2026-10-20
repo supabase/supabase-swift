@@ -15,7 +15,6 @@ struct HomeView: View {
     @Bindable var auth = auth
 
     TabView {
-      // Database Tab
       NavigationStack {
         DatabaseExamplesView()
       }
@@ -23,7 +22,6 @@ struct HomeView: View {
         Label("Database", systemImage: "cylinder.split.1x2")
       }
 
-      // Realtime Tab
       NavigationStack {
         RealtimeExamplesView()
       }
@@ -31,7 +29,6 @@ struct HomeView: View {
         Label("Realtime", systemImage: "bolt")
       }
 
-      // Storage Tab
       NavigationStack {
         StorageExamplesView()
           .navigationDestination(for: Bucket.self, destination: BucketDetailView.init)
@@ -40,7 +37,6 @@ struct HomeView: View {
         Label("Storage", systemImage: "externaldrive")
       }
 
-      // Functions Tab
       NavigationStack {
         FunctionsExamplesView()
       }
@@ -48,7 +44,6 @@ struct HomeView: View {
         Label("Functions", systemImage: "function")
       }
 
-      // Profile Tab
       ProfileView()
         .tabItem {
           Label("Profile", systemImage: "person.circle")

@@ -39,7 +39,6 @@ struct PostgrestFilterComparisonOperatorsTests {
     filter.queryItems().map { "\($0.name)=\($0.value ?? "")" }.joined(separator: "&")
   }
 
-  /// The rows of the design spec's §4.3 table, each in both spellings.
   @Test
   func operatorAndMethodSpellingsRenderTheSame() {
     let c = Todo.columns
@@ -84,9 +83,6 @@ struct PostgrestFilterComparisonOperatorsTests {
     #expect(rendered(c.id >= 3) == "id=gte.3")
   }
 
-  /// `eq.null` on a `text` column matches the string `'null'`, not the `NULL` row, so `== nil`
-  /// must render `is.null`. `c.dueDate.eq(nil)` and `c.id == nil` (a `NOT NULL` column) do not
-  /// compile.
   @Test
   func comparingWithNilRendersTheIsOperator() {
     let c = Todo.columns

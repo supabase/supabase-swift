@@ -48,8 +48,6 @@ struct RealtimeErrorTests {
     #expect((error as? any SupabaseError)?.message == "bad frame")
   }
 
-  // MARK: - Server reason classification (SDK-2098)
-
   struct JoinReasonRow: CustomTestStringConvertible {
     let reason: String
     let code: RealtimeError.ServerCode?
@@ -59,7 +57,6 @@ struct RealtimeErrorTests {
   }
 
   static let joinReasons: [JoinReasonRow] = [
-    // fatal
     .init(
       reason: "TopicNameRequired: You must provide a topic name",
       code: .topicNameRequired, kind: .server, isRetryable: false),
@@ -96,11 +93,9 @@ struct RealtimeErrorTests {
     .init(
       reason: "UnableToReplayMessages: Replay is not allowed for public channels",
       code: .unableToReplayMessages, kind: .server, isRetryable: false),
-    // auth refresh
     .init(
       reason: "InvalidJWTToken: Token has expired 12 seconds ago",
       code: .invalidJWTToken, kind: .unauthorized, isRetryable: true),
-    // rate limit
     .init(
       reason: "ChannelRateLimitReached: Too many channels",
       code: .channelRateLimitReached, kind: .rateLimited, isRetryable: true),
@@ -110,7 +105,6 @@ struct RealtimeErrorTests {
     .init(
       reason: "ClientJoinRateLimitReached: Too many joins per second",
       code: .clientJoinRateLimitReached, kind: .rateLimited, isRetryable: true),
-    // retry
     .init(
       reason: "RealtimeRestarting: Realtime is restarting, please standby",
       code: .realtimeRestarting, kind: .server, isRetryable: true),
@@ -150,7 +144,6 @@ struct RealtimeErrorTests {
     .init(
       reason: "SomeCodeThisSDKDoesNotKnow: details",
       code: "SomeCodeThisSDKDoesNotKnow", kind: .server, isRetryable: true),
-    // bare strings, no code
     .init(
       reason: "Realtime was unable to connect to the project database",
       code: nil, kind: .server, isRetryable: true),

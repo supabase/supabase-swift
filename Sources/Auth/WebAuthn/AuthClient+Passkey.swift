@@ -13,16 +13,6 @@ import HTTPTypes
 #endif
 
 extension AuthClient {
-  // MARK: - First-factor passkeys (lower-level)
-  //
-  // WebAuthn/passkey support is experimental — these methods are exposed under the `Experimental`
-  // SPI. Opt in with `@_spi(Experimental) import Supabase`.
-  //
-  // These methods only perform the network exchange. The caller is responsible for driving the
-  // platform authenticator (e.g. via `ASAuthorizationController`) between fetching options and
-  // submitting the credential response. For an end-to-end flow on iOS 16+/macOS 13+, prefer the
-  // `signInWithPasskey(presentationAnchor:)` and `registerPasskey(presentationAnchor:)` helpers.
-
   /// Fetches credential creation options to register a new passkey for the current user.
   ///
   /// Requires an authenticated session. ``PasskeyRegistrationOptions/options`` are W3C
@@ -140,7 +130,6 @@ extension AuthClient {
         method: .patch,
         url: configuration.url.appendingPathComponent("passkeys/\(id)")
       ),
-      // Dictionary keys are not transformed by the snake_case strategy, so spell it out.
       body: configuration.resolvedEncoder.encode(["friendly_name": friendlyName])
     )
     .decoded(decoder: configuration.resolvedDecoder)
@@ -162,8 +151,6 @@ extension AuthClient {
 
 #if canImport(AuthenticationServices) && !os(tvOS) && !os(watchOS)
   extension AuthClient {
-    // MARK: - First-factor passkeys (high-level, native UI)
-
     /// Signs in with a passkey, driving the full ceremony: fetches assertion options, presents the
     /// native passkey UI via `AuthenticationServices`, submits the assertion, and returns the new
     /// session.

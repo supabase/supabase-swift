@@ -13,7 +13,6 @@ import Testing
 
 @testable import Storage
 
-/// The bucket routes, checked at the request and response level.
 @Suite
 struct BucketRequestTests {
   struct Sent: Sendable {
@@ -21,7 +20,6 @@ struct BucketRequestTests {
     var body: String?
   }
 
-  /// A client whose transport records each request and answers with `response`.
   static func makeClient(
     sent: LockIsolated<[Sent]> = .init([]),
     status: HTTPResponse.Status = .ok,

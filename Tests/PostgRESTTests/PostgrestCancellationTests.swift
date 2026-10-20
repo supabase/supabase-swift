@@ -17,12 +17,6 @@ import Testing
   import FoundationNetworking
 #endif
 
-/// `database.using_modifiers.request_cancellation` is satisfied by Swift structured concurrency:
-/// cancel the `Task` that awaits `execute()`. There is no `abortSignal` equivalent to register, so
-/// these tests are what the compliance entry rests on. Each one cancels from outside and checks
-/// three things: the exchange is torn down (the transport sees the cancellation), nothing is
-/// retried, and the caller gets `CancellationError`, not a `PostgrestError` wrapping
-/// `URLError(.cancelled)`.
 @Suite
 struct PostgrestCancellationTests {
   struct Todo: _PostgrestRelation {
@@ -35,8 +29,6 @@ struct PostgrestCancellationTests {
     static let columns = Columns()
   }
 
-  /// A transport that behaves like `URLSession` under cancellation: it stays in flight until the
-  /// task is cancelled, then fails the exchange with `URLError(.cancelled)`.
   private final class HangingTransport: Sendable {
     let started = LockIsolated(false)
     let sawCancellation = LockIsolated(false)
@@ -94,8 +86,6 @@ struct PostgrestCancellationTests {
     #expect(hanging.sawCancellation.value)
   }
 
-  /// A clock whose sleep lasts until the task is cancelled, so the retry back-off is where the
-  /// cancellation lands.
   private struct SleepUntilCancelledClock: Clock {
     let inner = ContinuousClock()
     let sleeping = LockIsolated(false)

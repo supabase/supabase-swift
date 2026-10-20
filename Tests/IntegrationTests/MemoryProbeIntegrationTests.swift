@@ -4,17 +4,6 @@
 //
 //  Created by Guilherme Souza on 14/09/26.
 //
-//  Live probe: how much memory each upload/download shape costs on top of the process baseline.
-//  One scenario per process, so freed-but-still-resident pages from an earlier scenario cannot
-//  hide the cost of a later one:
-//
-//    INTEGRATION_TESTS=1 MEMORY_PROBE=1 MEMORY_PROBE_SCENARIO=<name> \
-//      swift test --no-parallel --filter MemoryProbe
-//
-//  Results are printed, not asserted. Set `MEMORY_PROBE_CHUNK_DELAY_MS` to make the download
-//  scenarios that stream (`download-transport-file`, `download-transport-iterate`) sleep that
-//  long per chunk, to see how much a consumer slower than the network holds.
-//
 
 #if canImport(Darwin)
   import Darwin
@@ -28,7 +17,6 @@
 
   private let megabyte = 1 << 20
 
-  /// Physical footprint of this process, the number Xcode's memory gauge shows.
   private func physicalFootprint() -> UInt64 {
     var info = task_vm_info_data_t()
     var count = mach_msg_type_number_t(
@@ -49,7 +37,6 @@
     func record(_ sample: UInt64) { lock.withLock { _value = max(_value, sample) } }
   }
 
-  /// Samples the footprint every few milliseconds while `body` runs and reports the peak delta.
   private func measure<T>(
     _ label: String, _ body: @Sendable () async throws -> T
   ) async throws -> T {
@@ -95,7 +82,6 @@
     static let chunkDelay = Int(
       ProcessInfo.processInfo.environment["MEMORY_PROBE_CHUNK_DELAY_MS"] ?? "")
 
-    /// `body`, sleeping ``chunkDelay`` before handing over each chunk.
     func paced(_ body: HTTPBody) -> HTTPBody {
       guard let delay = Self.chunkDelay else { return body }
       let chunks = body.map { @Sendable chunk in
@@ -125,7 +111,6 @@
       URL(string: "\(DotEnv.supabaseURL)/storage/v1/object/\(bucket)/\(path)")!
     }
 
-    /// Writes `fileSize` bytes of non-constant content to a temp file without holding it in memory.
     func makeLargeFile() throws -> URL {
       let url = FileManager.default.temporaryDirectory.appendingPathComponent(
         "memprobe-\(UUID().uuidString).bin")
@@ -158,7 +143,6 @@
       return (head, responseBody)
     }
 
-    /// Pull-based file reader: 1 MiB per `next()`, nothing read ahead. A body the SDK cannot rewind.
     struct FileChunks: AsyncSequence, Sendable {
       typealias Element = ArraySlice<UInt8>
       let fileURL: URL
@@ -208,19 +192,15 @@
 
       switch name {
       case "upload-api-data":
-        // Storage public API, Data → raw `HTTPBody(data)`.
-        // The caller already holds `data`; the delta is what the SDK adds on top of it.
         let data = try Data(contentsOf: fileURL)
         try await measure("storage.upload(data:)") {
           try await storage.from(bucket).upload(path: "o.bin", data: data)
         }
       case "upload-api-file":
-        // Storage public API, file URL → raw `HTTPBody(fileURL:)` → URLSession.upload(for:fromFile:).
         try await measure("storage.upload(fileURL:)") {
           try await storage.from(bucket).upload(path: "o.bin", fileURL: fileURL)
         }
       case "upload-api-resumable":
-        // Storage public API, file URL → tus, one 6 MiB chunk read per PATCH.
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
           "memprobe-resumable-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -233,30 +213,24 @@
           _ = try await upload.result
         }
       case "upload-transport-file":
-        // HTTPBody(fileURL:) → URLSession.upload(for:fromFile:).
         try await measure("transport POST HTTPBody(fileURL:)") {
           _ = try await rawSend(.post, objectURL("o.bin"), body: try HTTPBody(fileURL: fileURL))
         }
       case "upload-transport-data":
-        // HTTPBody(Data) → urlRequest.httpBody. Caller holds `data`; delta is copies on top.
         let data = try Data(contentsOf: fileURL)
         try await measure("transport POST HTTPBody(Data)") {
           _ = try await rawSend(.post, objectURL("o.bin"), body: HTTPBody(data))
         }
       case "upload-transport-stream":
-        // Streamed chunks, known length, one-shot → uploadTask(withStreamedRequest:), pulled one
-        // chunk at a time as URLSession drains the bound stream pair.
         try await measure("transport POST HTTPBody(stream .known .single)") {
           _ = try await rawSend(.post, objectURL("o.bin"), body: streamedBody(fileURL))
         }
       case "download-api-data":
-        // Storage public API → DownloadResponse.data().
         let downloaded = try await measure("storage.download(path:).data()") {
           try await storage.from(bucket).download(path: "seed.bin").data()
         }
         #expect(downloaded.count == Self.fileSize)
       case "download-api-file":
-        // Storage public API → DownloadResponse.write(to:): a temporary file, then one move.
         let downloadURL = FileManager.default.temporaryDirectory.appendingPathComponent(
           "memprobe-download-\(UUID().uuidString).bin")
         defer { try? FileManager.default.removeItem(at: downloadURL) }
@@ -266,7 +240,6 @@
         let attrs = try FileManager.default.attributesOfItem(atPath: downloadURL.path)
         #expect((attrs[.size] as? Int) == Self.fileSize)
       case "download-transport-file":
-        // Response streamed straight to disk.
         let downloadURL = FileManager.default.temporaryDirectory.appendingPathComponent(
           "memprobe-download-\(UUID().uuidString).bin")
         defer { try? FileManager.default.removeItem(at: downloadURL) }
@@ -277,14 +250,12 @@
         let attrs = try FileManager.default.attributesOfItem(atPath: downloadURL.path)
         #expect((attrs[.size] as? Int) == Self.fileSize)
       case "download-transport-data":
-        // Response collected into Data.
         let collected = try await measure("transport GET → Data(collecting:)") {
           let (_, body) = try await rawSend(.get, objectURL("seed.bin"), body: nil)
           return try await Data(collecting: body!, upTo: Self.fileSize + 1)
         }
         #expect(collected.count == Self.fileSize)
       case "download-transport-iterate":
-        // Response iterated chunk by chunk and discarded: the streaming floor.
         let counted = try await measure("transport GET → iterate chunks, discard") {
           let (_, body) = try await rawSend(.get, objectURL("seed.bin"), body: nil)
           var total = 0

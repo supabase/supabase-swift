@@ -10,8 +10,6 @@ import Testing
   import FoundationNetworking
 #endif
 
-/// `Configuration.logger` is tagged and consumed when building the `LoggerInterceptor` at
-/// construction time. Verify the tag by capturing the metadata the interceptor actually emits.
 @Suite
 struct FunctionsClientLoggerTests {
   let url = URL(string: "http://localhost:5432/functions/v1")!

@@ -43,8 +43,6 @@ struct FunctionBodyTests {
     #expect(try await bytes(body) == #"{"at":"1970-01-01T00:00:00.000Z"}"#)
   }
 
-  /// A value that cannot be encoded never reaches the transport: the failure is reported as
-  /// `.invalidRequest` instead of a bodiless request labelled `application/json`.
   @Test
   func jsonEncodeFailureThrowsInvalidRequest() {
     struct Failing: Encodable {

@@ -8,16 +8,8 @@
 import Foundation
 import Helpers
 
-/// One node of a filter tree, without the relation type: the typed ``_PostgrestFilter`` wraps
-/// one, and the untyped ``PostgrestRequestBuilder`` builds one from a string column, so both
-/// render through the same code.
 indirect enum PostgrestFilterNode: Sendable {
-  /// The right-hand side of a comparison, in the shape the operator method received it.
-  ///
-  /// Each shape has its own quoting rule inside `or=(…)`, so the shape is kept and the rule is
-  /// applied when the request is rendered.
   enum Operand: Sendable {
-    /// One value, as its ``PostgrestFilterValue/rawValue``. Quoted inside a group.
     case value(String)
 
     /// The members of the `(a,b)` list `in` takes, each as its raw value. Members are quoted in
@@ -26,19 +18,14 @@ indirect enum PostgrestFilterNode: Sendable {
     /// zero rows. The list's own parentheses are the operator's grammar and are never quoted.
     case list([String])
 
-    /// The `IS` keyword: `null` for `nil`, otherwise `true` or `false`. Never quoted.
     case `is`(Bool?)
 
-    /// A value with no wire form, such as a non-finite `Double` as JSON. It is never sent: the
-    /// request records the reason, and `execute()` throws it before building the request.
     case invalid(String)
 
-    /// A typed value's operand, or `.invalid` when it has none.
     static func typed(_ value: some PostgrestFilterValue) -> Self {
       value._typedOperand.map(Self.value) ?? .invalid(Self.noWireForm(value))
     }
 
-    /// A typed `in` list, or `.invalid` when a member has no operand.
     static func typedList<V: PostgrestFilterValue>(_ values: [V]) -> Self {
       var members: [String] = []
       for value in values {
@@ -55,7 +42,6 @@ indirect enum PostgrestFilterNode: Sendable {
 
   case comparison(column: String, operator: _PostgrestFilterOperator, operand: Operand)
 
-  /// Everything after the `=` as one string the caller wrote, sent as is in every position.
   case raw(column: String, operand: String)
 
   case and([PostgrestFilterNode])
@@ -145,8 +131,6 @@ public struct _PostgrestFilter<R: _PostgrestRelation>: Sendable {
   }
 }
 
-// MARK: - Composition
-
 /// Matches rows satisfying both filters.
 public func && <R>(lhs: _PostgrestFilter<R>, rhs: _PostgrestFilter<R>) -> _PostgrestFilter<R> {
   _PostgrestFilter(node: .and(_PostgrestFilter<R>.flatten(lhs.node, rhs.node, as: .and)))
@@ -162,11 +146,7 @@ prefix public func ! <R>(operand: _PostgrestFilter<R>) -> _PostgrestFilter<R> {
   _PostgrestFilter(node: .not(operand.node))
 }
 
-// MARK: - Rendering
-
 extension PostgrestFilterNode.Operand {
-  /// The operand as sent at top level, where a value runs to the end of the parameter and needs
-  /// no quoting.
   var topLevel: String {
     switch self {
     case .value(let raw):
@@ -194,19 +174,16 @@ extension PostgrestFilterNode.Operand {
 }
 
 extension _PostgrestFilter {
-  /// The query items this filter contributes to a request.
   func queryItems() -> [URLQueryItem] {
     node.queryItems()
   }
 
-  /// Why this filter cannot be sent, or `nil` when it can.
   var invalidFilterReason: String? {
     node.invalidFilterReason
   }
 }
 
 extension PostgrestFilterNode {
-  /// The first operand anywhere in the tree that has no wire form.
   var invalidFilterReason: String? {
     switch self {
     case .comparison(_, _, .invalid(let reason)): reason
@@ -219,7 +196,6 @@ extension PostgrestFilterNode {
 }
 
 extension PostgrestFilterNode {
-  /// The query items this node contributes to a request.
   func queryItems() -> [URLQueryItem] {
     Self.queryItems(for: self)
   }
@@ -274,8 +250,6 @@ extension PostgrestFilterNode {
     case .comparison(let column, let `operator`, let operand):
       return "\(column).\(`operator`.token).\(operand.grouped)"
     case .raw(let column, let operand):
-      // Not escaped: quoting would break the caller's own syntax. The cost is that a raw node
-      // cannot always sit in a group — a `::` in the column is a parse error inside `or=(…)`.
       return "\(column).\(operand)"
     case .and(let children):
       return "and(\(children.map(group).joined(separator: ",")))"

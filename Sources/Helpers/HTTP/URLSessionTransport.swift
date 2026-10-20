@@ -77,8 +77,7 @@ public struct URLSessionTransport: ClientTransport {
       urlRequest.timeoutInterval = timeout.timeInterval
     }
     // URLSession recomputes Content-Length from an in-memory or file body, but it cannot see the
-    // length of a streamed one and falls back to chunked transfer without this header. Setting
-    // it here also keeps custom URLProtocol observers (tests) consistent across body kinds.
+    // length of a streamed one and falls back to chunked transfer without this header.
     if let body, case .known(let count) = body.length,
       urlRequest.value(forHTTPHeaderField: "Content-Length") == nil
     {
@@ -102,12 +101,9 @@ public struct URLSessionTransport: ClientTransport {
       if case .file(let url)? = body?.storage {
         fileURL = url
       } else if let body, case .stream = body.storage {
-        // With no per-task delegate to feed a body stream from, the body is spooled to disk first
-        // and uploaded from there; memory stays flat either way.
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         spool = url
         try await body.write(to: url)
-        // Content-Length already carries the declared count, so the spooled size must match it.
         if case .known(let declared) = body.length {
           let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
           let actual = (attributes[.size] as? NSNumber)?.int64Value ?? 0
@@ -153,11 +149,6 @@ public struct URLSessionTransport: ClientTransport {
     private func streamResponse(from task: URLSessionTask, requestBody: HTTPBody?) async throws
       -> (HTTPTypes.HTTPResponse, HTTPBody?)
     {
-      // ponytail: the chunk stream is unbounded, so a consumer slower than the network holds
-      // the backlog — the memory probe with `MEMORY_PROBE_CHUNK_DELAY_MS=2` grows by the whole
-      // 200 MB response. A suspend/resume watermark does not fix it: `suspend()` from
-      // `didReceive(data:)` leaves the task `.suspended` while tens of MB keep arriving
-      // (SDK-1833). Bounding it needs a transport that can stop reading the socket.
       let (chunks, continuation) = AsyncThrowingStream<ArraySlice<UInt8>, any Error>.makeStream(
         bufferingPolicy: .unbounded
       )
@@ -229,9 +220,7 @@ public struct URLSessionTransport: ClientTransport {
     private let body: AsyncThrowingStream<ArraySlice<UInt8>, any Error>.Continuation
     private let requestBody: HTTPBody?
     private let state = LockIsolated(State.idle)
-    /// Feeds the current request body stream; replaced on every `needNewBodyStream`.
     private let bridge = LockIsolated<HTTPBodyOutputStreamBridge?>(nil)
-    /// Why the request body could not be sent, reported in place of URLSession's `.cancelled`.
     private let requestBodyError = LockIsolated<(any Error)?>(nil)
 
     init(
@@ -256,9 +245,6 @@ public struct URLSessionTransport: ClientTransport {
         completionHandler(nil)
         return
       }
-      // Each call gets a fresh iterator: a `.multiple` body replays, a `.single` body throws
-      // `HTTPBodyAlreadyConsumedError` on its first pull, which fails the task through here.
-      // (307/308 redirects never get this far for a `.single` body; see below.)
       let next = HTTPBodyOutputStreamBridge(body: requestBody, output: output) {
         [requestBodyError] error in
         requestBodyError.withValue { $0 = $0 ?? error }
@@ -287,12 +273,9 @@ public struct URLSessionTransport: ClientTransport {
       _ session: URLSession, task: URLSessionTask, didSendBodyData bytesSent: Int64,
       totalBytesSent: Int64, totalBytesExpectedToSend: Int64
     ) {
-      // Only `.file` and `.data` bodies set this hook; a streamed body reports as it is pulled.
       requestBody?.onUploadProgress?(totalBytesSent)
     }
 
-    /// Starts `task` and returns its response as soon as the headers arrive. Throws if the task
-    /// fails before that.
     func head(starting task: URLSessionTask) async throws -> URLResponse {
       try await withCheckedThrowingContinuation { continuation in
         state.setValue(.waitingForHead(continuation))
@@ -325,13 +308,11 @@ public struct URLSessionTransport: ClientTransport {
         pending?.resume(throwing: error)
         body.finish(throwing: error)
       } else {
-        // Completing without ever delivering a response is not a valid HTTP exchange.
         pending?.resume(throwing: URLError(.badServerResponse))
         body.finish()
       }
     }
 
-    /// Returns the head continuation if it is still waiting, advancing the state exactly once.
     private func takePendingHead(finished: Bool = false) -> CheckedContinuation<
       URLResponse, any Error
     >? {

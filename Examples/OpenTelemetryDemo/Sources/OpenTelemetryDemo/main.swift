@@ -8,8 +8,6 @@ import Supabase
   import FoundationNetworking
 #endif
 
-// Prints every request handed to it — proves the traceparent header the SDK attaches while a
-// span is active, without needing a real Supabase project or network access.
 final class RequestPrintingProtocol: URLProtocol {
   override class func canInit(with request: URLRequest) -> Bool { true }
   override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
@@ -35,15 +33,12 @@ struct NoOpAuthLocalStorage: AuthLocalStorage {
   func remove(key: String) throws {}
 }
 
-// 1. Set up an OTel tracer that prints every span it exports to stdout.
 let tracerProvider = TracerProviderBuilder()
   .add(spanProcessor: SimpleSpanProcessor(spanExporter: StdoutSpanExporter(isDebug: true)))
   .build()
 OpenTelemetry.registerTracerProvider(tracerProvider: tracerProvider)
 let tracer = tracerProvider.get(instrumentationName: "OpenTelemetryDemo")
 
-// 2. Point SupabaseClient at the request-printing stub above — no live project needed to see
-//    the traceparent header the SDK attaches.
 let config = URLSessionConfiguration.ephemeral
 config.protocolClasses = [RequestPrintingProtocol.self]
 
@@ -58,9 +53,6 @@ let supabase = SupabaseClient(
   )
 )
 
-// 3. Make a request while a span is active. Enabling the `OpenTelemetry` trait (see
-//    Package.swift) is the only thing that makes SupabaseClient attach the traceparent header —
-//    no extra configuration on the client itself.
 let span = tracer.spanBuilder(spanName: "list-todos").startSpan()
 await OpenTelemetry.instance.contextProvider.withActiveSpan(span) {
   _ = try? await supabase.from("todos").select().execute()

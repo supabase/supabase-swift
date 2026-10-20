@@ -13,8 +13,6 @@ import Testing
 @Suite
 struct URLOpenerTests {
 
-  // MARK: - Custom Opener Tests
-
   @Test
   func customURLOpener() async {
     final class Capture: @unchecked Sendable {
@@ -147,8 +145,6 @@ struct URLOpenerTests {
     #expect(capture.url?.fragment == "success")
   }
 
-  // MARK: - Edge Cases
-
   @Test
   func openerWithURLWithPort() async {
     final class Capture: @unchecked Sendable {
@@ -204,8 +200,6 @@ struct URLOpenerTests {
     #expect(capture.url != nil)
     #expect(capture.url?.query?.contains("redirect=") ?? false)
   }
-
-  // MARK: - Multiple Calls Tests
 
   @Test
   func multipleOpenerCalls() async {

@@ -20,8 +20,6 @@ import SwiftSyntaxMacros
 ///   `extension Todo: _PostgrestWritableRelation` alone reports "does not conform to inherited
 ///   protocol _PostgrestRelation", with no note saying which requirement is missing.
 public struct TableMacro: ExtensionMacro {
-  // MARK: Arguments
-
   struct Arguments {
     var name: String
     var schema: ExprSyntax?
@@ -54,8 +52,6 @@ public struct TableMacro: ExtensionMacro {
     else { return nil }
     return base.trimmedDescription
   }
-
-  // MARK: Expansion
 
   public static func expansion(
     of node: AttributeSyntax,
@@ -99,10 +95,6 @@ public struct TableMacro: ExtensionMacro {
       "  \(access)static let selectString = \"*\"",
       columnsNamespace(access: access, type: type.trimmedDescription, properties: properties),
     ]
-    // The one thing `@PrimaryKey` uniquely does — the marker changes nothing else about the
-    // expansion. The `_PostgrestKeyedRelation` conformance below rides on the same condition, and
-    // its requirement has no default, so a keyless relation does not conform and the
-    // derived-conflict-target `upsert` is withheld from it at compile time.
     let keyColumns = properties.filter(\.isPrimaryKey).map(\.columnName)
     if !keyColumns.isEmpty {
       let list = keyColumns.map { "\"\(postgrestEscaped($0))\"" }.joined(separator: ", ")
@@ -112,18 +104,6 @@ public struct TableMacro: ExtensionMacro {
       body.append(codingKeys)
     }
     if !arguments.readOnly {
-      // A `Draft` column is optional exactly when the database can fill it in — nullable, or
-      // has a default — and never because it is the key, matching the
-      // `is_nullable || is_identity || default_value !== null` that `postgres-meta` computes for
-      // supabase-js from the same column metadata. So a generated key is spelled
-      // `@PrimaryKey @Default var id: Int` and a natural one is required.
-      //
-      // There is no matching `Update` shape: one optional field would have to mean both "not
-      // assigned" and "assigned null", so a nullable column could never be cleared.
-      // `_PostgrestUpdate` builds the assignments from key paths into `Columns` instead.
-      //
-      // A `@Generated` column has no field at all: Postgres refuses a written value for it, so
-      // the shape cannot carry one. The update side is handled by its column type instead.
       body.append(
         writeShape(
           named: "Draft",
@@ -149,8 +129,6 @@ public struct TableMacro: ExtensionMacro {
       )
     ]
   }
-
-  // MARK: Generation
 
   /// The protocols `@Table` conforms the annotated type to.
   ///
@@ -231,9 +209,6 @@ public struct TableMacro: ExtensionMacro {
 
     let parameters =
       fields
-      // The default follows the *generated* parameter type, not the property's own. `@Default`
-      // makes a column optional in `Draft` even when the property is not, so testing the property
-      // here would drop the `= nil` that lets a caller omit a database-supplied column.
       .map { "\($0.property.name): \($0.type)\(postgrestIsOptionalType($0.type) ? " = nil" : "")" }
       .joined(separator: ", ")
     lines.append("")

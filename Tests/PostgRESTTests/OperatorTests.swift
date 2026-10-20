@@ -33,8 +33,6 @@ struct OperatorTests {
     #expect(known.map(\.rawValue).count == Set(known.map(\.rawValue)).count)
   }
 
-  /// The legacy constants are spelled once, on ``_PostgrestFilterOperator``, including the ones
-  /// whose names differ between the two surfaces.
   @Test
   func legacyConstantsDeriveFromTheFilterOperator() {
     #expect(PostgrestOperator.cs.rawValue == _PostgrestFilterOperator.contains.token)
