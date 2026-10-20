@@ -46,7 +46,7 @@ struct DefaultIsolationTests {
       _ = session.accessToken
       rows = try await client.from("table").select().execute().value
       let channel = await client.channel("room")
-      for await status in channel.statusChanges { _ = status }
+      for await status in await channel.statusChanges() { _ = status }
       try await client.storage.from("bucket").upload(path: "key", data: Data())
       _ = try await client.functions.invoke("function")
       let answer: Answer = try await client.functions.invoke(

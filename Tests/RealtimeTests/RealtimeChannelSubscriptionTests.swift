@@ -20,7 +20,7 @@ import Testing
       let h = Harness()
       let channel = await h.client.channel("room")
 
-      #expect(channel.statusSnapshot == .unsubscribed)
+      #expect(await channel.status == .unsubscribed)
       #expect(await channel.joinRef == nil)
     }
 
@@ -31,7 +31,7 @@ import Testing
 
       let join = try await h.subscribe(channel)
 
-      #expect(channel.statusSnapshot == .subscribed)
+      #expect(await channel.status == .subscribed)
       #expect(await channel.joinRef == join.ref)
       #expect(h.sent(ChannelEvent.join).count == 1)
     }
@@ -59,7 +59,7 @@ import Testing
 
       try await first
       try await second
-      #expect(channel.statusSnapshot == .subscribed)
+      #expect(await channel.status == .subscribed)
       #expect(h.sent(ChannelEvent.join).count == 1)
     }
 
@@ -76,7 +76,7 @@ import Testing
       try h.confirm(secondJoin)
 
       try await subscription.value
-      #expect(channel.statusSnapshot == .subscribed)
+      #expect(await channel.status == .subscribed)
       #expect(secondJoin.ref != firstJoin.ref)
       #expect(await channel.joinRef == secondJoin.ref)
     }
@@ -94,7 +94,7 @@ import Testing
 
       let error = await #expect(throws: RealtimeError.self) { try await subscription.value }
       #expect(error?.kind == .maxRetryAttemptsReached)
-      #expect(channel.statusSnapshot == .unsubscribed)
+      #expect(await channel.status == .unsubscribed)
       #expect(await channel.joinRef == nil)
       #expect(h.sent(ChannelEvent.join).count == 2)
     }
@@ -105,7 +105,7 @@ import Testing
     func subscribeRetriesWhenSocketConnectFailsTransiently() async throws {
       let h = Harness(maxRetryAttempts: 3, failedConnects: 1)
       let channel = await h.client.channel("room")
-      var statuses = h.client.statusChanges.makeAsyncIterator()
+      var statuses = await h.client.statusChanges().makeAsyncIterator()
 
       let subscription = Task { try await channel.subscribe() }
       #expect(await statuses.next() == .disconnected)
@@ -115,7 +115,7 @@ import Testing
       try h.confirm(try #require(await h.received(ChannelEvent.join)))
 
       try await subscription.value
-      #expect(channel.statusSnapshot == .subscribed)
+      #expect(await channel.status == .subscribed)
       #expect(h.connects.value == 2)
     }
 
@@ -125,7 +125,7 @@ import Testing
     func persistentConnectFailureThrowsMaxRetryAttemptsReached() async throws {
       let h = Harness(maxRetryAttempts: 2, failedConnects: .max)
       let channel = await h.client.channel("room")
-      var statuses = h.client.statusChanges.makeAsyncIterator()
+      var statuses = await h.client.statusChanges().makeAsyncIterator()
 
       let subscription = Task { try await channel.subscribe() }
       #expect(await statuses.next() == .disconnected)
@@ -135,7 +135,7 @@ import Testing
 
       let error = await #expect(throws: RealtimeError.self) { try await subscription.value }
       #expect(error?.kind == .maxRetryAttemptsReached)
-      #expect(channel.statusSnapshot == .unsubscribed)
+      #expect(await channel.status == .unsubscribed)
     }
 
     @Test
@@ -158,7 +158,7 @@ import Testing
       )
 
       try await subscription.value
-      #expect(channel.statusSnapshot == .subscribed)
+      #expect(await channel.status == .subscribed)
       withExtendedLifetime(inserts) {}
     }
 
@@ -169,7 +169,7 @@ import Testing
 
       await channel.didReceiveSubscribedOK()
 
-      #expect(channel.statusSnapshot == .unsubscribed)
+      #expect(await channel.status == .unsubscribed)
     }
 
     // MARK: - Cancellation and server close
@@ -184,7 +184,7 @@ import Testing
       subscription.cancel()
 
       await #expect(throws: CancellationError.self) { try await subscription.value }
-      #expect(channel.statusSnapshot == .unsubscribed)
+      #expect(await channel.status == .unsubscribed)
       #expect(await channel.joinRef == nil)
     }
 
@@ -201,7 +201,7 @@ import Testing
 
       let error = await #expect(throws: RealtimeError.self) { try await subscription.value }
       #expect(error?.kind == .channelClosedByServer)
-      #expect(channel.statusSnapshot == .unsubscribed)
+      #expect(await channel.status == .unsubscribed)
     }
 
     @Test
@@ -211,10 +211,10 @@ import Testing
       let join = try await h.subscribe(channel)
 
       #expect(await channel.didReceiveClose(joinRef: "stale-join-ref") == false)
-      #expect(channel.statusSnapshot == .subscribed)
+      #expect(await channel.status == .subscribed)
 
       #expect(await channel.didReceiveClose(joinRef: join.ref) == true)
-      #expect(channel.statusSnapshot == .unsubscribed)
+      #expect(await channel.status == .unsubscribed)
       #expect(await channel.joinRef == nil)
     }
 
@@ -226,7 +226,7 @@ import Testing
 
       #expect(await channel.didReceiveClose() == true)
 
-      #expect(channel.statusSnapshot == .unsubscribed)
+      #expect(await channel.status == .unsubscribed)
       #expect(await channel.joinRef == nil)
     }
 
@@ -239,7 +239,7 @@ import Testing
       let firstJoin = try await h.subscribe(channel)
 
       await channel.resetForReconnect()
-      #expect(channel.statusSnapshot == .unsubscribed)
+      #expect(await channel.status == .unsubscribed)
       #expect(await channel.joinRef == nil)
 
       let secondJoin = try await h.subscribe(channel)
@@ -257,7 +257,7 @@ import Testing
       await channel.resetForReconnect()
 
       await #expect(throws: (any Error).self) { try await subscription.value }
-      #expect(channel.statusSnapshot == .unsubscribed)
+      #expect(await channel.status == .unsubscribed)
 
       let secondJoin = try await h.subscribe(channel)
       #expect(secondJoin.ref != firstJoin.ref)
@@ -272,7 +272,7 @@ import Testing
 
       await channel.unsubscribe()
 
-      #expect(channel.statusSnapshot == .unsubscribed)
+      #expect(await channel.status == .unsubscribed)
       #expect(h.sent(ChannelEvent.leave).isEmpty)
     }
 
@@ -287,7 +287,7 @@ import Testing
       try h.close(join)
       await unsubscription.value
 
-      #expect(channel.statusSnapshot == .unsubscribed)
+      #expect(await channel.status == .unsubscribed)
       #expect(await channel.joinRef == nil)
       #expect(h.sent(ChannelEvent.leave).count == 1)
     }
@@ -303,7 +303,7 @@ import Testing
       await h.clock.advance(by: .seconds(10))
       await unsubscription.value
 
-      #expect(channel.statusSnapshot == .unsubscribed)
+      #expect(await channel.status == .unsubscribed)
       #expect(await channel.joinRef == nil)
     }
 
@@ -318,8 +318,8 @@ import Testing
       let roomJoin = try await h.subscribe(room)
       let lobbyJoin = try await h.subscribe(lobby)
 
-      let roomStatuses = room.statusChanges
-      let lobbyStatuses = lobby.statusChanges
+      let roomStatuses = await room.statusChanges()
+      let lobbyStatuses = await lobby.statusChanges()
       let removal = Task { await h.client.removeAllChannels() }
       _ = try #require(await h.received(ChannelEvent.leave))
       _ = try #require(await h.received(ChannelEvent.leave))
@@ -334,7 +334,7 @@ import Testing
       await removal.value
 
       #expect(await h.client.channels.isEmpty)
-      #expect(h.client.statusSnapshot == .disconnected)
+      #expect(await h.client.status == .disconnected)
     }
 
     /// Issue #1145: with the socket gone, `phx_leave` could only be buffered into the next
@@ -348,7 +348,7 @@ import Testing
 
       await channel.unsubscribe()
 
-      #expect(channel.statusSnapshot == .unsubscribed)
+      #expect(await channel.status == .unsubscribed)
       #expect(await h.client.sendBuffer.isEmpty)
       #expect(h.sent(ChannelEvent.leave).isEmpty)
     }
@@ -363,7 +363,7 @@ import Testing
       await channel.unsubscribe()
 
       await #expect(throws: CancellationError.self) { try await subscription.value }
-      #expect(channel.statusSnapshot == .unsubscribed)
+      #expect(await channel.status == .unsubscribed)
       #expect(h.sent(ChannelEvent.leave).count == 1)
     }
 
@@ -373,7 +373,7 @@ import Testing
     func statusChangesEmitsEveryTransition() async throws {
       let h = Harness()
       let channel = await h.client.channel("room")
-      var statuses = channel.statusChanges.makeAsyncIterator()
+      var statuses = await channel.statusChanges().makeAsyncIterator()
 
       let join = try await h.subscribe(channel)
       let unsubscription = Task { await channel.unsubscribe() }
@@ -386,6 +386,18 @@ import Testing
         trail.append(try #require(await statuses.next()))
       }
       #expect(trail == [.unsubscribed, .subscribing, .subscribed, .unsubscribing, .unsubscribed])
+    }
+
+    @Test
+    func removingTheChannelEndsItsStatusStream() async {
+      let h = Harness()
+      let channel = await h.client.channel("room")
+      var statuses = await channel.statusChanges().makeAsyncIterator()
+      #expect(await statuses.next() == .unsubscribed)
+
+      await h.client.removeChannel(channel)
+
+      #expect(await statuses.next() == nil)
     }
 
     // MARK: - Harness

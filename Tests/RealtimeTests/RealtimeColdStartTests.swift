@@ -132,8 +132,9 @@ struct RealtimeColdStartTests {
     }
 
     await waitUntil(timeout: 5) {
-      sockets.value[1].sentMessages.contains { $0.event == "phx_join" }
-        && channel.statusSnapshot == .subscribed
+      let channelStatus = await channel.status
+      return sockets.value[1].sentMessages.contains { $0.event == "phx_join" }
+        && channelStatus == .subscribed
     }
     #expect(await channel.status == .subscribed, "Channel did not rejoin after reconnect")
 
@@ -170,7 +171,7 @@ struct RealtimeColdStartTests {
     )
 
     let heartbeatStatuses = LockIsolated<[HeartbeatStatus]>([])
-    let heartbeats = sut.heartbeats
+    let heartbeats = await sut.heartbeats()
     let heartbeatTask = Task {
       for await status in heartbeats {
         heartbeatStatuses.withValue { $0.append(status) }

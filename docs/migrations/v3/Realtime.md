@@ -44,13 +44,13 @@ Changes that still compile but behave differently. Check each one by hand.
 | `RealtimeClientV2.Status` | `RealtimeClientStatus` |
 | `RealtimeClientV2.connect()` | `connect() async throws` |
 | `RealtimeClientV2.disconnect()` | `disconnect() async` |
-| `RealtimeClientV2.statusChange`, `onStatusChange(_:)` | `statusChanges`, `statusSnapshot` |
-| `RealtimeClientV2.heartbeat`, `onHeartbeat(_:)` | `heartbeats` |
+| `RealtimeClientV2.status`, `statusChange`, `onStatusChange(_:)` | `await status`, `await statusChanges()` |
+| `RealtimeClientV2.heartbeat`, `onHeartbeat(_:)` | `await heartbeats()` |
 | `RealtimeChannelV2.Status` | `RealtimeChannelStatus` |
 | `RealtimeChannelV2.Subscription`, `RealtimeSubscription`, `ObservationToken` | removed; cancel the task that reads the stream |
 | `RealtimeChannelV2.subscribe()`, `subscribeWithError()` | `subscribe() async throws` |
 | `RealtimeChannelV2.updateAuth(jwt:)` | `RealtimeClient.setAuth(_:)` |
-| `RealtimeChannelV2.statusChange`, `onStatusChange(_:)` | `statusChanges`, `statusSnapshot` |
+| `RealtimeChannelV2.status`, `statusChange`, `onStatusChange(_:)` | `await status`, `await statusChanges()` |
 | `onBroadcast(event:callback:)`, `broadcastStream(event:)`, `broadcast(event:) -> AsyncStream` | `broadcasts(event:)` |
 | `broadcastDataStream(event:)` | `broadcastData(event:)` |
 | `onPostgresChange(_:...)`, `postgresChange(_:schema:table:filter: String?)` | `postgresChanges(_:schema:table:filter: RealtimePostgresFilter?)` |
@@ -85,9 +85,10 @@ to move from v1 to the v2 API first, then apply this guide.
 
 ## `RealtimeClient` and `RealtimeChannel` are actors
 
-Both types are now actors that share one executor. Most calls need `await`, including
-`channel(_:options:)` on the client and on `SupabaseClient`, and the stream methods on a
-channel. `statusSnapshot` and `statusChanges` do not need `await`.
+Both types are now actors that share one executor. Every call needs `await`, including
+`channel(_:options:)` on the client and on `SupabaseClient`, the stream methods on a channel,
+and `status`, `statusChanges()` and `heartbeats()`. There is no synchronous status read; a view
+that needs the current status keeps the last value it got from `statusChanges()`.
 
 ```swift
 // v2
