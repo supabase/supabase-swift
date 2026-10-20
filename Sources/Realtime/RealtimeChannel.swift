@@ -156,7 +156,7 @@ public actor RealtimeChannel {
   var joinRef: String?
 
   /// Resumed by the server's join confirmation; failed by a close, a reset, or cancellation.
-  var joinWaiter: CheckedContinuation<Void, any Error>?
+  var joinWaiter: (ref: String, continuation: CheckedContinuation<Void, any Error>)?
 
   /// Resumed by the server's `phx_close` while an unsubscribe waits for it.
   var closeWaiter: CheckedContinuation<Void, Never>?

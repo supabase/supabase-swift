@@ -136,7 +136,7 @@ extension RealtimeChannel {
     guard case .subscribing = state else { return }
     logger.debug("Server confirmed subscribe for channel '\(topic)'")
     setState(.subscribed)
-    joinWaiter?.resume()
+    joinWaiter?.continuation.resume()
     joinWaiter = nil
   }
 
@@ -269,7 +269,9 @@ extension RealtimeChannel {
         awaitJoinConfirmation(for: ref, with: continuation)
       }
     } onCancel: {
-      Task { await self.failJoinWaiter(CancellationError()) }
+      // Lands on the actor later. Keyed on `ref` so a handler left over from a cancelled attempt
+      // cannot fail the waiter of the attempt that replaced it.
+      Task { await self.failJoinWaiter(CancellationError(), for: ref) }
     }
   }
 
@@ -286,7 +288,7 @@ extension RealtimeChannel {
       continuation.resume(throwing: CancellationError())
       return
     }
-    joinWaiter = continuation
+    joinWaiter = (ref, continuation)
   }
 
   /// Builds the `phx_join` payload from the config and the open streams, and pushes it.
@@ -338,8 +340,11 @@ extension RealtimeChannel {
     await client?.status == .connected
   }
 
-  func failJoinWaiter(_ error: any Error) {
-    joinWaiter?.resume(throwing: error)
+  /// Fails the parked join waiter. With `ref`, only if the parked waiter belongs to that join;
+  /// the waiter of a newer join is left alone.
+  func failJoinWaiter(_ error: any Error, for ref: String? = nil) {
+    if let ref, ref != joinWaiter?.ref { return }
+    joinWaiter?.continuation.resume(throwing: error)
     joinWaiter = nil
   }
 

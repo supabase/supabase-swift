@@ -259,8 +259,13 @@ jobs:
           key: ${{ runner.os }}-spm-${{ matrix.container }}-typegen
       - name: "Build Swift Package"
         run: swift build --explicit-target-dependency-import-check error
+      # RealtimeTests run serially on Linux: in a parallel run the process can stall with no
+      # worker threads and every in-flight test parked on a timer that never fires. The other
+      # targets keep the parallel runner.
       - name: "Test Swift Package"
-        run: swift test --skip IntegrationTests
+        run: swift test --skip IntegrationTests --skip RealtimeTests
+      - name: "Test RealtimeTests (serial)"
+        run: swift test --filter RealtimeTests --no-parallel
       - name: "Test Swift Package (OpenTelemetry trait)"
         run: swift test --traits OpenTelemetry --filter SupabaseTests
       - name: "Test supabase-typegen"

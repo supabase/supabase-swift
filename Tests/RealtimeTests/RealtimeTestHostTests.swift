@@ -3,62 +3,60 @@ import Testing
 
 @testable import Realtime
 
-#if !os(Linux)
-  /// The host is the base for deterministic Realtime tests, so it gets its own coverage.
-  @Suite
-  struct RealtimeTestHostTests {
-    @Test
-    func subscribeCompletesWhenTheServerConfirmsTheJoin() async throws {
-      let host = await RealtimeTestHost()
-      let channel = await host.client.channel("room")
+/// The host is the base for deterministic Realtime tests, so it gets its own coverage.
+@Suite
+struct RealtimeTestHostTests {
+  @Test
+  func subscribeCompletesWhenTheServerConfirmsTheJoin() async throws {
+    let host = await RealtimeTestHost()
+    let channel = await host.client.channel("room")
 
-      async let subscribed: Void = channel.subscribe()
-      let join = try await host.receive(event: "phx_join")
-      #expect(join.topic == "realtime:room")
-      host.confirmJoin(join)
-      try await subscribed
+    async let subscribed: Void = channel.subscribe()
+    let join = try await host.receive(event: "phx_join")
+    #expect(join.topic == "realtime:room")
+    host.confirmJoin(join)
+    try await subscribed
 
-      #expect(await channel.status == .subscribed)
-      await host.waitUntil { host.statuses == [.disconnected, .connecting, .connected] }
-      #expect(host.connectCount == 1)
+    #expect(await channel.status == .subscribed)
+    await host.waitUntil { host.statuses == [.disconnected, .connecting, .connected] }
+    #expect(host.connectCount == 1)
+  }
+
+  @Test
+  func acknowledgedBroadcastResolvesOnTheServerReply() async throws {
+    let host = await RealtimeTestHost()
+    let channel = await host.client.channel("room") {
+      $0.broadcast.acknowledgeBroadcasts = true
     }
 
-    @Test
-    func acknowledgedBroadcastResolvesOnTheServerReply() async throws {
-      let host = await RealtimeTestHost()
-      let channel = await host.client.channel("room") {
-        $0.broadcast.acknowledgeBroadcasts = true
-      }
+    async let subscribed: Void = channel.subscribe()
+    host.confirmJoin(try await host.receive(event: "phx_join"))
+    try await subscribed
 
-      async let subscribed: Void = channel.subscribe()
-      host.confirmJoin(try await host.receive(event: "phx_join"))
-      try await subscribed
+    async let push: Void = channel.track(state: ["name": "ana"])
+    let frame = try await host.receive(event: "presence")
+    #expect(await channel.pendingPushes.count == 1)
+    host.reply(to: frame)
 
-      async let push: Void = channel.track(state: ["name": "ana"])
-      let frame = try await host.receive(event: "presence")
-      #expect(await channel.pendingPushes.count == 1)
-      host.reply(to: frame)
+    try await push
+    #expect(await channel.pendingPushes.isEmpty)
+  }
 
-      try await push
-      #expect(await channel.pendingPushes.isEmpty)
-    }
-
-    @Test
-    func waitUntilFailsFastWhenTheConditionNeverHolds() async {
-      let host = await RealtimeTestHost()
-      await withKnownIssue {
-        await host.waitUntil(timeout: .milliseconds(50)) { false }
-      }
-    }
-
-    @Test
-    func disconnectIsObservedWithoutYielding() async throws {
-      let host = await RealtimeTestHost()
-      try await host.client.connect()
-      await host.client.disconnect()
-
-      await host.waitUntil { host.statuses.last == .disconnected }
-      #expect(host.sockets.first?.isClosed == true)
+  @Test
+  func waitUntilFailsFastWhenTheConditionNeverHolds() async {
+    let host = await RealtimeTestHost()
+    await withKnownIssue {
+      await host.waitUntil(timeout: .milliseconds(50)) { false }
     }
   }
-#endif
+
+  @Test
+  func disconnectIsObservedWithoutYielding() async throws {
+    let host = await RealtimeTestHost()
+    try await host.client.connect()
+    await host.client.disconnect()
+
+    await host.waitUntil { host.statuses.last == .disconnected }
+    #expect(host.sockets.first?.isClosed == true)
+  }
+}
