@@ -108,6 +108,44 @@ import Testing
       #expect(h.sockets.value.isEmpty)
     }
 
+    @Test(arguments: [true, false])
+    func aCancelledAttemptCannotTouchTheNextOne(staleAttemptSucceeds: Bool) async throws {
+      // Both transport calls block until the test releases them, so the stale outcome lands
+      // while the new attempt is still `.connecting`.
+      let gates = LockIsolated<[Int: CheckedContinuation<Void, Never>]>([:])
+      let (arrivals, arrived) = AsyncStream<Int>.makeStream()
+      let h = Harness(beforeConnect: { attempt in
+        await withCheckedContinuation { continuation in
+          gates.withValue { $0[attempt] = continuation }
+          arrived.yield(attempt)
+        }
+        if attempt == 1, !staleAttemptSucceeds { throw URLError(.cannotConnectToHost) }
+      })
+
+      // Attempts are numbered by transport-call order, so wait for each arrival before the
+      // next step: attempt 1 is then the stale task and attempt 2 the fresh one.
+      let stale = Task { try await h.client.connect() }
+      for await attempt in arrivals where attempt == 1 { break }
+      await h.client.disconnect()
+      let fresh = Task { try await h.client.connect() }
+      for await attempt in arrivals where attempt == 2 { break }
+
+      try #require(gates.value[1]).resume()
+      await #expect(throws: (any Error).self) { try await stale.value }
+      try #require(gates.value[2]).resume()
+      try await fresh.value
+
+      #expect(h.client.statusSnapshot == .connected)
+      let current = try #require(h.sockets.value.last)
+      #expect(!current.isClosed)
+      if staleAttemptSucceeds {
+        #expect(h.sockets.value.count == 2)
+        #expect(h.sockets.value.first?.closeReason == "Connection cancelled")
+      } else {
+        #expect(h.sockets.value.count == 1)
+      }
+    }
+
     // MARK: - Heartbeat
 
     @Test
