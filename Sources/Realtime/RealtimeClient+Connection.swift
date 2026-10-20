@@ -343,7 +343,7 @@ extension RealtimeClient {
     await withTaskGroup(of: Void.self) { group in
       for channel in channels.values {
         group.addTask {
-          await channel.resetForReconnect()
+          guard await channel.resetForReconnect() else { return }
           try? await channel.subscribe()
         }
       }

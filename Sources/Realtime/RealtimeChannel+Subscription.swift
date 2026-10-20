@@ -42,6 +42,7 @@ extension RealtimeChannel {
   /// - Throws: ``RealtimeError`` with kind `.timeout`, `.maxRetryAttemptsReached` or
   ///   `.channelClosedByServer`.
   public func subscribe() async throws {
+    unsubscribeRequested = false
     switch state {
     case .subscribed:
       logger.debug("Subscribe no-op for channel '\(topic)': already subscribed")
@@ -66,10 +67,14 @@ extension RealtimeChannel {
   /// Leaves the Realtime topic and transitions the channel to
   /// ``RealtimeChannelStatus/unsubscribed``. Cancels an in-flight subscribe if one is running.
   public func unsubscribe() async {
+    // Before the probe below suspends: a reconnect in between must not rejoin the channel.
+    unsubscribeRequested = true
     // Probe the socket before reading `state`: the probe suspends, and another caller could move
     // the state while this one waits. After it, the switch and the transition run without a
     // suspension point.
     let socketConnected = await isSocketConnected()
+    // A `subscribe()` that ran during the probe cleared the flag; this request comes later.
+    unsubscribeRequested = true
     switch state {
     case .unsubscribed:
       logger.debug("Unsubscribe no-op for channel '\(topic)': already unsubscribed")
@@ -103,8 +108,13 @@ extension RealtimeChannel {
   /// A channel that is `.subscribed` when the socket reconnects must re-send `phx_join` on the
   /// new socket, but ``subscribe()`` is a no-op for `.subscribed` channels, so the client resets
   /// it first. An in-flight join is waiting for a reply that will never arrive on the dead
-  /// socket; cancel it so a fresh `phx_join` goes out on the new connection.
-  func resetForReconnect() {
+  /// socket; cancel it so a fresh `phx_join` goes out on the new connection. An unsubscribe
+  /// waiting for the server's `phx_close` ends here: that close died with the socket.
+  ///
+  /// - Returns: Whether the channel should rejoin: `false` once the caller has unsubscribed it,
+  ///   so a reconnect never joins a channel that is being removed.
+  @discardableResult
+  func resetForReconnect() -> Bool {
     joinRef = nil
     failPendingPushes(with: RealtimeError.notConnected)
     switch state {
@@ -120,6 +130,7 @@ extension RealtimeChannel {
     case .unsubscribed:
       break
     }
+    return !unsubscribeRequested
   }
 
   /// The socket was closed by ``RealtimeClient/disconnect(code:reason:)``: nothing in flight can
@@ -391,11 +402,12 @@ extension RealtimeChannel {
       }
     }
 
+    // A reset or a server close may have ended the unsubscribe while it waited, and a newer
+    // subscribe may own the state and `joinRef` since: clearing them would strand that join.
+    guard case .unsubscribing = state else { return }
     joinRef = nil
     failPendingPushes(with: RealtimeError.notSubscribed)
-    if case .unsubscribing = state {
-      setState(.unsubscribed)
-    }
+    setState(.unsubscribed)
   }
 
   func resumeCloseWaiter() {

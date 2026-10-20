@@ -161,6 +161,10 @@ public actor RealtimeChannel {
   /// Resumed by the server's `phx_close` while an unsubscribe waits for it.
   var closeWaiter: CheckedContinuation<Void, Never>?
 
+  /// Whether the caller's latest request was ``unsubscribe()``. A reconnect rejoins only the
+  /// channels the caller has not unsubscribed.
+  var unsubscribeRequested = false
+
   /// The subscribe task a server close cancelled while it was in flight. That attempt compares
   /// it against its own task so `subscribe()` throws `channelClosedByServer` instead of the bare
   /// `CancellationError`, then clears it. A newer attempt never consumes it.
