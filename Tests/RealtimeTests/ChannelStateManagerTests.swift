@@ -24,7 +24,9 @@ struct ChannelStateManagerTests {
   private func makeHarness(
     timeoutInterval: TimeInterval = 0.2,
     maxRetryAttempts: Int = 3,
-    retryDelay: @escaping @Sendable (Int) -> TimeInterval = { _ in 0.01 }
+    retryDelay: @escaping @Sendable (Int) -> TimeInterval = { _ in 0.01 },
+    onJoin: @escaping @Sendable (_ joinCall: Int) async -> Void = { _ in },
+    onEnsureSocketConnected: @escaping @Sendable (_ connectCall: Int) async -> Void = { _ in }
   ) -> Harness {
     let ref = LockIsolated<Int>(0)
     let ensureConnected = LockIsolated<Bool>(true)
@@ -33,6 +35,7 @@ struct ChannelStateManagerTests {
     let lastJoinRef = LockIsolated<String?>(nil)
     let lastJoinChanges = LockIsolated<[PostgresJoinConfig]>([])
     let leaveCallCount = LockIsolated<Int>(0)
+    let ensureConnectedCallCount = LockIsolated<Int>(0)
 
     let sut = ChannelStateManager(
       topic: "test",
@@ -44,12 +47,23 @@ struct ChannelStateManagerTests {
         ref.withValue { $0 += 1 }
         return "\(ref.value)"
       },
-      ensureSocketConnected: { ensureConnected.value },
+      ensureSocketConnected: {
+        let connectCall = ensureConnectedCallCount.withValue {
+          $0 += 1
+          return $0
+        }
+        await onEnsureSocketConnected(connectCall)
+        return ensureConnected.value
+      },
       getClientChanges: { clientChanges.value },
       joinOperation: { ref, changes in
-        joinCallCount.withValue { $0 += 1 }
+        let joinCall = joinCallCount.withValue {
+          $0 += 1
+          return $0
+        }
         lastJoinRef.setValue(ref)
         lastJoinChanges.setValue(changes)
+        await onJoin(joinCall)
       },
       leaveOperation: {
         leaveCallCount.withValue { $0 += 1 }
@@ -323,6 +337,138 @@ struct ChannelStateManagerTests {
       Issue.record("Expected .unsubscribed, got \(state)")
       return
     }
+  }
+
+  @Test
+  func staleSubscribeFailureLeavesReplacementSubscribeUntouched() async throws {
+    let firstJoinGate = LockIsolated<CheckedContinuation<Void, Never>?>(nil)
+    let h = makeHarness(
+      timeoutInterval: 5.0,
+      maxRetryAttempts: 1,
+      onJoin: { joinCall in
+        guard joinCall == 1 else { return }
+        await withCheckedContinuation { continuation in
+          firstJoinGate.setValue(continuation)
+        }
+      }
+    )
+
+    let firstSubscribe = Task { try? await h.sut.subscribe() }
+    await waitUntil { firstJoinGate.value != nil }
+
+    await h.sut.resetForReconnect()
+    let secondSubscribe = Task { try await h.sut.subscribe() }
+    await waitUntil { h.joinCallCount.value == 2 }
+    let replacementJoinRef = await h.sut.joinRef
+    #expect(replacementJoinRef == h.lastJoinRef.value)
+
+    let gate = firstJoinGate.value
+    gate?.resume()
+    _ = await firstSubscribe.value
+
+    let stateAfterStaleFailure = await h.sut.state
+    guard case .subscribing = stateAfterStaleFailure else {
+      Issue.record("Expected .subscribing, got \(stateAfterStaleFailure)")
+      return
+    }
+    let joinRefAfterStaleFailure = await h.sut.joinRef
+    #expect(joinRefAfterStaleFailure == replacementJoinRef)
+
+    await h.sut.didReceiveSubscribedOK()
+    try await secondSubscribe.value
+
+    let finalState = await h.sut.state
+    guard case .subscribed = finalState else {
+      Issue.record("Expected .subscribed, got \(finalState)")
+      return
+    }
+    #expect(h.joinCallCount.value == 2)
+  }
+
+  @Test
+  func serverCloseDuringStaleSubscribeStillSurfacesTypedError() async throws {
+    let firstJoinGate = LockIsolated<CheckedContinuation<Void, Never>?>(nil)
+    let h = makeHarness(
+      timeoutInterval: 5.0,
+      maxRetryAttempts: 1,
+      onJoin: { joinCall in
+        guard joinCall == 1 else { return }
+        await withCheckedContinuation { continuation in
+          firstJoinGate.setValue(continuation)
+        }
+      }
+    )
+
+    let firstSubscribe = Task { try await h.sut.subscribe() }
+    await waitUntil { firstJoinGate.value != nil }
+    await h.sut.didReceiveClose()
+
+    let secondSubscribe = Task { try await h.sut.subscribe() }
+    await waitUntil { h.joinCallCount.value == 2 }
+    let replacementJoinRef = await h.sut.joinRef
+
+    firstJoinGate.value?.resume()
+    do {
+      try await firstSubscribe.value
+      Issue.record("Expected the closed subscribe to throw")
+    } catch {
+      #expect(
+        (error as? RealtimeError)?.errorDescription
+          == RealtimeError.channelClosedByServer.errorDescription,
+        "Expected channelClosedByServer, got \(error)"
+      )
+    }
+
+    let stateAfterStaleFailure = await h.sut.state
+    guard case .subscribing = stateAfterStaleFailure else {
+      Issue.record("Expected .subscribing, got \(stateAfterStaleFailure)")
+      return
+    }
+    let joinRefAfterStaleFailure = await h.sut.joinRef
+    #expect(joinRefAfterStaleFailure == replacementJoinRef)
+
+    await h.sut.didReceiveSubscribedOK()
+    try await secondSubscribe.value
+  }
+
+  @Test
+  func cancelledStaleSubscribeNeverJoinsAfterReconnect() async throws {
+    let firstConnectGate = LockIsolated<CheckedContinuation<Void, Never>?>(nil)
+    let h = makeHarness(
+      timeoutInterval: 5.0,
+      maxRetryAttempts: 1,
+      onEnsureSocketConnected: { connectCall in
+        guard connectCall == 1 else { return }
+        await withCheckedContinuation { continuation in
+          firstConnectGate.setValue(continuation)
+        }
+      }
+    )
+
+    let firstSubscribe = Task { try? await h.sut.subscribe() }
+    await waitUntil { firstConnectGate.value != nil }
+    await h.sut.resetForReconnect()
+
+    let secondSubscribe = Task { try await h.sut.subscribe() }
+    await waitUntil { h.joinCallCount.value == 1 }
+    let replacementJoinRef = await h.sut.joinRef
+    #expect(replacementJoinRef == h.lastJoinRef.value)
+
+    firstConnectGate.value?.resume()
+    _ = await firstSubscribe.value
+
+    #expect(h.joinCallCount.value == 1)
+    let joinRefAfterStaleFailure = await h.sut.joinRef
+    #expect(joinRefAfterStaleFailure == replacementJoinRef)
+    let stateAfterStaleFailure = await h.sut.state
+    guard case .subscribing = stateAfterStaleFailure else {
+      Issue.record("Expected .subscribing, got \(stateAfterStaleFailure)")
+      return
+    }
+
+    await h.sut.didReceiveSubscribedOK()
+    try await secondSubscribe.value
+    #expect(h.joinCallCount.value == 1)
   }
 
   // MARK: - Server-close while subscribed
