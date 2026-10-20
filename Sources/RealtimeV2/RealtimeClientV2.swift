@@ -504,8 +504,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     await withTaskGroup(of: Void.self) { group in
       for channel in channels.values {
         group.addTask {
-          guard await channel.resetForReconnect() else { return }
-          try? await channel.subscribeWithError()
+          try? await channel.rejoinAfterReconnect()
         }
       }
     }

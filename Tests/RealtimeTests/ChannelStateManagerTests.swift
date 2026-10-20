@@ -373,6 +373,41 @@ struct ChannelStateManagerTests {
     #expect(await h.sut.resetForReconnect() == true)
   }
 
+  /// An unsubscribe woken by a reconnect's reset stops the rejoin. The reset
+  /// and the start of the rejoin's join share one turn of the actor, so the
+  /// unsubscribe finds the join in flight, not an `.unsubscribed` channel
+  /// whose rejoin is still to come.
+  @Test
+  func unsubscribeAfterTheResetStopsTheRejoin() async throws {
+    let h = makeHarness()
+
+    let confirmer = confirmSubscribeOnJoin(h)
+    try await h.sut.subscribe()
+    _ = await confirmer.value
+
+    let stateChanges = await h.sut.stateChanges
+    let rejoin = Task { try await h.sut.rejoinAfterReconnect() }
+    for await state in stateChanges {
+      if case .unsubscribed = state { break }
+    }
+    let state = await h.sut.state
+    guard case .subscribing = state else {
+      Issue.record("Expected .subscribing after the reset, got \(state)")
+      return
+    }
+    await h.sut.unsubscribe()
+
+    guard case .unsubscribed = await h.sut.state else {
+      Issue.record("Expected .unsubscribed after the unsubscribe")
+      return
+    }
+    await #expect(throws: (any Error).self) { try await rejoin.value }
+    // Past the attempt's timeout and the retry delay: at most the rejoin's
+    // first join.
+    try await Task.sleep(nanoseconds: 500_000_000)
+    #expect(h.joinCallCount.value <= 2)
+  }
+
   // MARK: - Server-close while subscribed
 
   /// A server close that aborts an in-flight subscribe must surface as

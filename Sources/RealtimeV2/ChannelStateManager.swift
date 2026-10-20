@@ -281,6 +281,18 @@ actor ChannelStateManager {
     return !unsubscribeRequested
   }
 
+  /// Reset the channel after a reconnect and join again unless the caller
+  /// has unsubscribed it.
+  ///
+  /// The reset and the start of the join run in one turn of this actor. An
+  /// ``unsubscribe()`` or a removal that arrives after the reset finds the
+  /// join in flight and stops it; it never finds an `.unsubscribed` channel
+  /// whose rejoin is still to come.
+  func rejoinAfterReconnect() async throws {
+    guard resetForReconnect() else { return }
+    try await awaitSubscribe(startSubscribe())
+  }
+
   // MARK: - Server signals
 
   /// Called when the server confirms the `phx_join` (system.ok or phx_reply
@@ -329,6 +341,12 @@ actor ChannelStateManager {
   // MARK: - Private
 
   private func beginSubscribe() async throws {
+    try await awaitSubscribe(startSubscribe())
+  }
+
+  /// Start the subscribe attempts and move to `.subscribing`, without a
+  /// suspension point.
+  private func startSubscribe() -> Task<Void, any Error> {
     logger?.debug("Beginning subscribe flow for channel '\(topic)'")
     closedByServerWhileSubscribing = false
     let task = Task<Void, any Error> { [weak self] in
@@ -336,7 +354,10 @@ actor ChannelStateManager {
       try await self.runSubscribeAttempts()
     }
     updateState(.subscribing(task))
+    return task
+  }
 
+  private func awaitSubscribe(_ task: Task<Void, any Error>) async throws {
     do {
       // Forward cancellation of the caller's task to the spawned subscribe
       // task. Without this, `task.value` would keep waiting for the inner
