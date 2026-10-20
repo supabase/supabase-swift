@@ -1378,11 +1378,6 @@ features:
       - RealtimeChannel.broadcast
     supporting_symbols:
       - RealtimeClient.push
-      - PushHandle
-      - PushHandle.isRunning
-      - PushHandle.error
-      - PushHandle.cancel
-      - PushHandle.callAsFunction
       - PushStatus.init
       - PushStatus.rawValue
   realtime.channel.broadcast_http:

@@ -273,7 +273,7 @@
         try await channel.broadcast(event: "test-event", message: Message(value: 1, text: "first"))
         try await channel.broadcast(
           event: "test-event", message: Message(value: 2, text: "second"))
-        await channel.broadcast(
+        try await channel.broadcast(
           event: "test-event", message: ["value": 3, "text": "third"] as JSONObject)
 
         let receivedMessages = try await withTimeout(.seconds(5)) {
@@ -664,7 +664,7 @@
         try await channel1.broadcast(event: "chat-message", message: message3)
         try await Task.sleep(nanoseconds: 500_000_000)
 
-        await channel1.untrack()
+        try await channel1.untrack()
         try await Task.sleep(nanoseconds: 500_000_000)
 
         let presenceChanges1 = try await withTimeout(.seconds(5)) {

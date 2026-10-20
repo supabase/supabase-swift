@@ -237,17 +237,18 @@ extension RealtimeError {
     return RealtimeError(kind: kind, message: reason, serverCode: code, isRetryable: isRetryable)
   }
 
-  /// The error for a `phx_reply` with `status: "error"` to a broadcast sent with `ack`.
+  /// The error for a `phx_reply` with `status: "error"` to a push sent with `ack`.
   ///
   /// The server answers a payload over the project's size limit with the bare string
-  /// `"payload_size_exceeded"`; anything else is reported as it came.
+  /// `"payload_size_exceeded"`; anything else is reported as it came, with the code in front
+  /// of a `"<Code>: <message>"` reason in ``serverCode``.
   package static func ackError(reason: String) -> RealtimeError {
     if reason == "payload_size_exceeded" {
       return RealtimeError(
         kind: .payloadTooLarge, message: "Broadcast payload is over the project's size limit.",
         isRetryable: false)
     }
-    return RealtimeError(kind: .server, message: reason)
+    return RealtimeError(kind: .server, message: reason, serverCode: ServerCode.parse(reason))
   }
 
   /// The error for a WebSocket that closed while the engine still needed it.
