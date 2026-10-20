@@ -31,9 +31,12 @@ Changes that still compile but behave differently. Check each one by hand.
   and the full delay, capped at 30 seconds. It never waits longer than before.
 - **The `accessToken` callback is called less often, and before the token expires.** The client
   calls it at most once every 10 seconds; `setAuth()` inside that window keeps the current
-  token. It also calls it one minute before a JWT's `exp`. A `nil` result keeps the current
-  token instead of sending a `null` token to channels. Search for `setAuth()` calls that expect
-  the callback to run every time.
+  token. Channel joins no longer call it every time. While connected, it also calls it one
+  minute before a JWT's `exp`. A `nil` result keeps the current token instead of sending a
+  `null` token to channels, and `setAuth()` without a callback no longer clears the stored
+  token. The callback runs in a task of its own with the client's `timeout`, so cancelling a
+  `subscribe()` no longer cancels it. Search for `setAuth()` calls that expect the callback to
+  run every time.
 
 ## Renames and type changes
 
