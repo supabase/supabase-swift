@@ -100,7 +100,7 @@ public actor RealtimeClient {
         (.reconnecting, .reconnecting):
         true
       case (.connected(let a), .connected(let b)):
-        a.isSame(as: b)
+        a === b
       default:
         false
       }
@@ -582,7 +582,7 @@ public actor RealtimeClient {
   /// Sends the buffered frames in order. Stops if `conn` stops being the current connection;
   /// the frames left over wait for the next one.
   func flushSendBuffer(on conn: any WebSocketConnection) async {
-    while !sendBuffer.isEmpty, case .connected(let current) = connection, current.isSame(as: conn) {
+    while !sendBuffer.isEmpty, case .connected(let current) = connection, current === conn {
       await send(sendBuffer.removeFirst(), on: conn)
     }
   }
@@ -682,14 +682,6 @@ public actor RealtimeClient {
     }
 
     return url
-  }
-}
-
-extension WebSocketConnection {
-  /// Whether `other` is this same connection. Connections are compared by identity, and every
-  /// conforming type is a class.
-  func isSame(as other: any WebSocketConnection) -> Bool {
-    (self as AnyObject) === (other as AnyObject)
   }
 }
 

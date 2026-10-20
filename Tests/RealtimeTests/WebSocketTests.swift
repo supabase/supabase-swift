@@ -47,6 +47,34 @@ struct WebSocketTests {
       }
     }
 
+    /// A delegate that rejects a pinned certificate cancels the challenge, so the handshake
+    /// fails with `URLError.cancelled`. That is a failed connect the client must retry, not a
+    /// cancellation of the caller's task.
+    @Test
+    func cancelledHandshakeIsARetryableTransportError() async {
+      final class CancelledProtocol: URLProtocol {
+        override static func canInit(with request: URLRequest) -> Bool { true }
+        override static func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+        override func startLoading() {
+          client?.urlProtocol(self, didFailWithError: URLError(.cancelled))
+        }
+
+        override func stopLoading() {}
+      }
+
+      let config = URLSessionConfiguration.ephemeral
+      config.protocolClasses = [CancelledProtocol.self]
+      let transport = URLSessionWebSocketTransport(configuration: config)
+
+      let error = await #expect(throws: RealtimeError.self) {
+        _ = try await transport.connect(to: URL(string: "ws://127.0.0.1:1")!, headerFields: [:])
+      }
+      #expect(error?.kind == .transport)
+      #expect(error?.isRetryable == true)
+      #expect((error?.underlyingError as? URLError)?.code == .cancelled)
+    }
+
   #endif
 
   #if canImport(Network)
@@ -179,7 +207,11 @@ struct WebSocketTests {
             configuration: session.configuration, delegate: session.delegate
           ).connect(to: url, headerFields: [:])
           Issue.record("expected connection to fail due to certificate mismatch")
+        } catch let error as RealtimeError {
+          #expect(error.kind == .transport)
+          #expect(error.isRetryable)
         } catch {
+          Issue.record("Unexpected error: \(error)")
         }
 
         #expect(delegate.wasInvoked)
@@ -224,7 +256,11 @@ struct WebSocketTests {
             configuration: session.configuration, delegate: session.delegate
           ).connect(to: url, headerFields: [:])
           Issue.record("expected connection to fail due to certificate mismatch")
+        } catch let error as RealtimeError {
+          #expect(error.kind == .transport)
+          #expect(error.isRetryable)
         } catch {
+          Issue.record("Unexpected error: \(error)")
         }
 
         #expect(delegate.wasInvoked)

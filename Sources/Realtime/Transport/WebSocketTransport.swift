@@ -21,8 +21,9 @@ package protocol WebSocketTransport: Sendable {
   func connect(to url: URL, headerFields: HTTPFields) async throws -> any WebSocketConnection
 }
 
-/// One open WebSocket connection.
-package protocol WebSocketConnection: Sendable {
+/// One open WebSocket connection. A class, so the client can tell two connections apart by
+/// identity.
+package protocol WebSocketConnection: AnyObject, Sendable {
   /// Every frame the peer sends, then exactly one ``WebSocketEvent/closed(code:reason:)``,
   /// after which the stream finishes. A close is an event, never a thrown error.
   var events: AsyncStream<WebSocketEvent> { get }

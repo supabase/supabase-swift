@@ -98,22 +98,26 @@ package struct URLSessionWebSocketTransport: WebSocketTransport, @unchecked Send
     task.maximumMessageSize = 5_000_000
     (session.delegate as? _Delegate)?.associatedTask.setValue(task)
 
-    let connection = try await withTaskCancellationHandler {
-      try await withCheckedThrowingContinuation { continuation in
-        handshake.withValue { $0.continuation = continuation }
-        task.resume()
+    do {
+      return try await withTaskCancellationHandler {
+        try await withCheckedThrowingContinuation {
+          (continuation: CheckedContinuation<URLSessionWebSocketConnection, any Error>) in
+          handshake.withValue { $0.continuation = continuation }
+          task.resume()
+        }
+      } onCancel: {
+        task.cancel()
       }
-    } onCancel: {
-      task.cancel()
+    } catch {
+      // `URLError.cancelled` alone is not a cancellation: a delegate that rejects a pinned
+      // certificate cancels the challenge, and that failure must stay retryable.
+      if Task.isCancelled { throw CancellationError() }
+      throw error
     }
-    return connection
   }
 
   /// Maps a failed handshake to the error `connect` throws.
   static func connectError(task: URLSessionTask, error: (any Error)?) -> any Error {
-    if (error as? URLError)?.code == .cancelled {
-      return CancellationError()
-    }
     if let response = task.response as? HTTPURLResponse, response.statusCode != 101 {
       return RealtimeError.upgradeFailed(status: response.statusCode, underlyingError: error)
     }
@@ -210,10 +214,24 @@ final class URLSessionWebSocketConnection: WebSocketConnection {
     guard !isClosed.value else {
       throw RealtimeError(kind: .notConnected, message: "WebSocket is closed.")
     }
-    do {
+    let message: URLSessionWebSocketTask.Message =
       switch frame {
-      case .text(let text): try await task.send(.string(text))
-      case .binary(let data): try await task.send(.data(data))
+      case .text(let text): .string(text)
+      case .binary(let data): .data(data)
+      }
+    do {
+      // The completion-handler form hands the frame to URLSession before this method first
+      // suspends, on the caller's executor. The async form hops to the global pool first, so
+      // two overlapping sends could reach the task in either order.
+      try await withCheckedThrowingContinuation {
+        (continuation: CheckedContinuation<Void, any Error>) in
+        task.send(message) { error in
+          if let error {
+            continuation.resume(throwing: error)
+          } else {
+            continuation.resume()
+          }
+        }
       }
     } catch {
       closeConnection(with: error)
@@ -229,7 +247,7 @@ final class URLSessionWebSocketConnection: WebSocketConnection {
     let validatedCode = URLSessionWebSocketTransport.validatedCloseCode(code.rawValue)
     if validatedCode == nil {
       reportIssue(
-        "Invalid close code \(code.rawValue). Must be 1000 or in 3000...4999. Closing without a code."
+        "Invalid close code \(code.rawValue). Must be in 1000...1003, 1007...1011 or 3000...4999. Closing without a code."
       )
     }
 
@@ -243,7 +261,16 @@ final class URLSessionWebSocketConnection: WebSocketConnection {
     // Darwin imports `CloseCode` as a non-exhaustive `NS_ENUM`, so 4001 goes out as 4001.
     // swift-corelibs-foundation makes it a closed Swift enum, so 3000...4999 convert to `nil`
     // there and the frame goes out with no status rather than a wrong one.
-    if let closeCode = validatedCode.flatMap(URLSessionWebSocketTask.CloseCode.init(rawValue:)) {
+    let closeCode = validatedCode.flatMap(URLSessionWebSocketTask.CloseCode.init(rawValue:))
+    if let validatedCode, closeCode == nil {
+      reportIssue(
+        """
+        Close code \(validatedCode) is not representable by \
+        `URLSessionWebSocketTask.CloseCode` on this platform. Closing without a code.
+        """
+      )
+    }
+    if let closeCode {
       task.cancel(with: closeCode, reason: validatedReason.map { Data($0.utf8) })
     } else {
       task.cancel()

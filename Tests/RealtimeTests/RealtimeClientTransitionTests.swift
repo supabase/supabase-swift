@@ -87,7 +87,7 @@ struct RealtimeClientTransitionTests {
       Row(
         from: .connected(socket), .socketFailed(reason: "heartbeat timeout"), to: .reconnecting,
         effects: [
-          .closeSocket(socket, code: nil, reason: "error: heartbeat timeout"),
+          .closeSocket(socket, code: 1001, reason: "error: heartbeat timeout"),
           .stopSocketLoops,
           .startReconnect(reason: "error: heartbeat timeout"),
         ]),

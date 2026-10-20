@@ -53,9 +53,9 @@ extension RealtimeClient {
         (.cancelAllTasks, .cancelAllTasks):
         return true
       case (.installSocket(let a, let ra), .installSocket(let b, let rb)):
-        return a.isSame(as: b) && ra == rb
+        return a === b && ra == rb
       case (.closeSocket(let a, let ca, let ra), .closeSocket(let b, let cb, let rb)):
-        return a.isSame(as: b) && ca == cb && ra == rb
+        return a === b && ca == cb && ra == rb
       case (.startReconnect(let a), .startReconnect(let b)):
         return a == b
       default:
@@ -116,7 +116,8 @@ extension RealtimeClient {
     case (.connected(let conn), .socketFailed(let reason)):
       state = .reconnecting
       return [
-        .closeSocket(conn, code: nil, reason: "error: \(reason)"),
+        // 1001 rather than a normal closure: the client gives up on a connection that failed.
+        .closeSocket(conn, code: 1001, reason: "error: \(reason)"),
         .stopSocketLoops,
         .startReconnect(reason: "error: \(reason)"),
       ]
@@ -164,11 +165,12 @@ extension RealtimeClient {
       pendingHeartbeatRef = nil
       listenForMessages(on: conn)
       startHeartbeating()
+      let generation = generation
       Task.immediateIfAvailable {
         await self.flushSendBuffer(on: conn)
-        if rejoinChannels {
-          await self.rejoinChannels()
-        }
+        // A disconnect or a newer socket during the flush owns the channels now.
+        guard rejoinChannels, generation == self.generation else { return }
+        await self.rejoinChannels()
       }
 
     case .closeSocket(let conn, let code, let reason):
@@ -408,17 +410,21 @@ extension RealtimeClient {
 
     let heartbeatRef = makeRef()
     pendingHeartbeatRef = heartbeatRef
-    await push(
-      RealtimeMessageV2(
-        joinRef: nil,
-        ref: heartbeatRef,
-        topic: "phoenix",
-        event: "heartbeat",
-        payload: [:]
-      )
-    )
     recordHeartbeat(.sent)
-    await setAuth()
+    // Not awaited: a write stalled on a half-open socket must not hold up the loop, or the
+    // next tick never reports the missing acknowledgement.
+    Task.immediateIfAvailable {
+      await self.push(
+        RealtimeMessageV2(
+          joinRef: nil,
+          ref: heartbeatRef,
+          topic: "phoenix",
+          event: "heartbeat",
+          payload: [:]
+        )
+      )
+      await self.setAuth()
+    }
   }
 
   // MARK: Socket events

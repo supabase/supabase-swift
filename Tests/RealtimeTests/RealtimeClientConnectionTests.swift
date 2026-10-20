@@ -205,6 +205,31 @@ struct RealtimeClientConnectionTests {
     #expect(h.sockets.value.first?.isClosed == true)
   }
 
+  @Test(.timeLimit(.minutes(1)))
+  func heartbeatStuckOnItsWriteStillTimesOutAndReconnects() async throws {
+    let h = Harness(heartbeatInterval: .seconds(25), reconnectDelay: .seconds(1))
+    try await h.client.connect()
+    var beats = await h.client.heartbeats().makeAsyncIterator()
+    var statuses = await h.client.statusChanges().makeAsyncIterator()
+    let (stall, release) = AsyncStream<Void>.makeStream()
+    defer { release.finish() }
+    // A half-open socket: the heartbeat's write never completes.
+    h.sockets.value[0].onSend { _ in
+      for await _ in stall {}
+    }
+
+    await h.clock.advance(by: .seconds(25))
+    #expect(await beats.next() == .sent)
+    await h.clock.advance(by: .seconds(25))
+    #expect(await beats.next() == .timeout)
+
+    #expect(await statuses.next() == .connected)
+    #expect(await statuses.next() == .connecting)
+    await h.clock.advance(by: .seconds(1))
+    #expect(await statuses.next() == .connected)
+    #expect(h.sockets.value.first?.closeCode == 1001)
+  }
+
   // MARK: - Remote close
 
   @Test

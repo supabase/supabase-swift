@@ -275,11 +275,16 @@ extension RealtimeChannel {
     }
   }
 
-  /// Parks `continuation` until the server confirms the join for `ref`, or fails it at once if
+  /// Parks `continuation` until the server confirms the join for `ref`. Resumes it at once when
+  /// the confirmation already arrived while `phx_join` was being sent, and fails it at once if
   /// the join is already gone or the task is already cancelled.
   private func awaitJoinConfirmation(
     for ref: String, with continuation: CheckedContinuation<Void, any Error>
   ) {
+    if case .subscribed = state, joinRef == ref {
+      continuation.resume()
+      return
+    }
     guard case .subscribing = state, joinRef == ref else {
       continuation.resume(throwing: SubscribeFailure.channelClosed)
       return

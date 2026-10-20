@@ -14,6 +14,7 @@ final class FakeWebSocket: WebSocketConnection {
     var receivedEvents: [WebSocketEvent] = []
     var closeCode: Int?
     var closeReason: String?
+    var onSend: (@Sendable (WebSocketFrame) async -> Void)?
   }
 
   private let mutableState = LockIsolated(MutableState())
@@ -71,6 +72,13 @@ final class FakeWebSocket: WebSocketConnection {
 
   func send(_ frame: WebSocketFrame) async throws {
     send(frame: frame)
+    await mutableState.value.onSend?(frame)
+  }
+
+  /// Runs `hook` after each frame reaches the peer, before `send` returns. A hook that suspends
+  /// keeps the send in flight, as a slow network would.
+  func onSend(_ hook: @escaping @Sendable (WebSocketFrame) async -> Void) {
+    mutableState.withValue { $0.onSend = hook }
   }
 
   private func send(frame: WebSocketFrame) {
