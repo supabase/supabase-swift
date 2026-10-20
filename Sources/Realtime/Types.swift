@@ -93,10 +93,10 @@ public struct RealtimeClientOptions: Sendable {
   /// Default interval between heartbeat messages sent to keep the connection alive.
   public static let defaultHeartbeatInterval: Duration = .seconds(25)
 
-  /// Default base delay for reconnecting after a connection drop. The first
-  /// attempt waits a random duration between half of this and this; later attempts double the
-  /// range (capped at 30s) until the connection is reestablished.
-  public static let defaultReconnectDelay: Duration = .seconds(7)
+  /// Default base delay for reconnecting after a connection drop. The first attempt waits a
+  /// random duration between zero and this; each later attempt doubles the upper bound (capped
+  /// at 30s) until the connection is reestablished.
+  public static let defaultReconnectDelay: Duration = .seconds(1)
 
   /// Default maximum time to wait for a server reply before treating a request as timed out.
   public static let defaultTimeout: Duration = .seconds(10)
@@ -133,7 +133,7 @@ public struct RealtimeClientOptions: Sendable {
   /// - Parameters:
   ///   - headers: Additional HTTP headers sent with each WebSocket upgrade request.
   ///   - heartbeatInterval: Interval between heartbeat messages. Defaults to ``defaultHeartbeatInterval``.
-  ///   - reconnectDelay: Base delay for reconnecting after a disconnection. The first attempt waits a random duration between half of this and this; later attempts double the range (capped at 30s) until reconnected. Defaults to ``defaultReconnectDelay``.
+  ///   - reconnectDelay: Base delay for reconnecting after a disconnection. The first attempt waits a random duration between zero and this; each later attempt doubles the upper bound (capped at 30s) until reconnected. Defaults to ``defaultReconnectDelay``.
   ///   - timeout: Maximum time to wait for a server reply. Defaults to ``defaultTimeout``.
   ///   - disconnectOnSessionLoss: Whether to disconnect the channel when the authentication session is lost. Defaults to ``defaultDisconnectOnSessionLoss``.
   ///   - connectOnSubscribe: Whether to automatically call ``RealtimeClient/connect()`` when subscribing to a channel. Defaults to ``defaultConnectOnSubscribe``.

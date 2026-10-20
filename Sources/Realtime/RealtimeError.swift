@@ -166,7 +166,7 @@ public struct RealtimeError: SupabaseError {
   /// Whether the same operation can succeed later without the caller changing anything.
   ///
   /// `false` for errors the user must act on: a rejected token, a denied policy, a refused
-  /// upgrade with 401/403/404. The engine never retries those on its own.
+  /// upgrade with 401/403/404. The client stops reconnecting when it meets one.
   public var isRetryable: Bool
   public var response: HTTPErrorResponse?
   public var underlyingError: (any Error)?
@@ -251,7 +251,7 @@ extension RealtimeError {
     return RealtimeError(kind: .server, message: reason, serverCode: ServerCode.parse(reason))
   }
 
-  /// The error for a WebSocket that closed while the engine still needed it.
+  /// The error for a WebSocket that closed while the client still needed it.
   package static func socketClosed(code: WebSocketCloseCode?, reason: String?) -> RealtimeError {
     var message = "WebSocket closed"
     if let code { message += " (code \(code.rawValue))" }
@@ -259,6 +259,14 @@ extension RealtimeError {
     var error = RealtimeError(kind: .transport, message: message)
     error.closeCode = code
     return error
+  }
+
+  /// Whether `other` reports the same failure. `underlyingError` is not compared: it is
+  /// rarely `Equatable`, and two errors with the same kind, message and codes mean the same.
+  func isSameFailure(as other: RealtimeError?) -> Bool {
+    guard let other else { return false }
+    return kind == other.kind && message == other.message && serverCode == other.serverCode
+      && closeCode == other.closeCode && isRetryable == other.isRetryable
   }
 
   /// The error for an HTTP upgrade the server refused.
