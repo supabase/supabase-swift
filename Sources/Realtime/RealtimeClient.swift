@@ -74,7 +74,22 @@ public actor RealtimeClient {
     isolation.unownedExecutor
   }
 
-  var accessToken: String?
+  /// How long before the token's `exp` the client asks the `accessToken` callback for a new
+  /// one. The server closes every channel the moment the token expires.
+  static let accessTokenRefreshLeeway: Duration = .seconds(60)
+  /// The shortest wait between two `accessToken` callback calls, so a token already inside the
+  /// leeway, or a callback that fails, is retried at this pace instead of in a tight loop.
+  static let accessTokenRefreshInterval: Duration = .seconds(10)
+
+  var tokens = TokenState()
+  /// The `accessToken` callback call in flight. Concurrent refreshes wait for it.
+  var accessTokenFetch: Task<Void, Never>?
+  /// When the `accessToken` callback was last called, as read from `elapsed`.
+  var lastAccessTokenFetch: Duration?
+  /// The time since the client was created, on `clock`.
+  nonisolated let elapsed: @Sendable () -> Duration
+
+  var accessToken: String? { tokens.token }
   var ref = 0
   var pendingHeartbeatRef: String?
 
@@ -129,6 +144,8 @@ public actor RealtimeClient {
     case heartbeat
     /// The deferred `disconnect()` after the last channel is removed.
     case idleDisconnect
+    /// The timer that refreshes the access token before it expires.
+    case accessTokenRefresh
   }
 
   let tasks = TaskStorage<TaskLocation>()
@@ -209,6 +226,7 @@ public actor RealtimeClient {
     self.transport = transport
     self.http = http
     self.clock = clock
+    self.elapsed = Self.elapsedTime(on: clock)
     self.webSocketURL = Self.realtimeWebSocketURL(
       baseURL: Self.realtimeBaseURL(url: url),
       apikey: options.apikey,
@@ -216,7 +234,7 @@ public actor RealtimeClient {
     )
 
     if let accessToken = options.headers[.authorization]?.split(separator: " ").last {
-      self.accessToken = String(accessToken)
+      _ = tokens.apply(String(accessToken), generation: tokens.beginRefresh())
     }
 
     #if os(iOS) || os(tvOS) || os(visionOS) || os(macOS)
@@ -446,48 +464,138 @@ public actor RealtimeClient {
 
   // MARK: - Authentication
 
-  /// The token a channel joins with: the `accessToken` callback's value when there is one, else
-  /// the token stored on the client.
+  /// The token a channel joins with, refreshed from the `accessToken` callback first unless it
+  /// was called within ``accessTokenRefreshInterval``. While a refresh is in flight, the stored
+  /// token is returned at once; only a client with no token yet waits for the refresh.
   func currentAccessToken() async -> String? {
-    if let accessToken = try? await options.accessToken?() {
-      return accessToken
+    if accessTokenFetch == nil || tokens.token == nil {
+      await refreshAccessToken()
     }
-    return accessToken
+    return tokens.token
   }
 
   /// Updates the JWT access token used for channel authorization and Realtime RLS.
   ///
-  /// When called, the token is propagated to all currently-subscribed channels. If `token`
-  /// is `nil`, the value is fetched from the `accessToken` callback configured on
-  /// ``RealtimeClientOptions`` if provided, or the token already stored on the client is used.
+  /// When the token changes, it is sent to all currently-subscribed channels. If `token` is
+  /// `nil`, the value is fetched from the `accessToken` callback configured on
+  /// ``RealtimeClientOptions``. The callback is called at most once every 10 seconds; inside
+  /// that window the stored token is kept.
   ///
-  /// If the `accessToken` callback throws, the client keeps the current token and no update is sent to channels.
+  /// When the callback is set and the token is a JWT, the client also calls the callback one
+  /// minute before the token's `exp`, so channels are not closed when it expires.
+  ///
+  /// If the callback throws or returns `nil`, the client keeps the current token and no update
+  /// is sent to channels. A callback result that arrives after a newer call to this method is
+  /// discarded.
   /// - Parameter token: A JWT string, or `nil` to refresh from the configured `accessToken` callback.
   public func setAuth(_ token: String? = nil) async {
-    var tokenToSend = token
-
-    if tokenToSend == nil {
-      do {
-        tokenToSend = try await options.accessToken?()
-      } catch {
-        options.logger.error("Failed to fetch access token: \(error)")
-        return
-      }
-    }
-
-    guard tokenToSend != accessToken else {
+    guard let token else {
+      await refreshAccessToken()
       return
     }
+    await storeAccessToken(token, generation: tokens.beginRefresh())
+  }
 
-    accessToken = tokenToSend
+  /// Calls the `accessToken` callback even inside ``accessTokenRefreshInterval``, for a channel
+  /// whose join the server refused because of its token.
+  func refreshTokenForRejoin() async {
+    await refreshAccessToken(ignoringInterval: true)
+  }
+
+  /// Asks the `accessToken` callback for a token and stores it unless a newer token was set
+  /// while the callback ran. A caller that arrives while a call is in flight waits for it
+  /// instead of starting another.
+  func refreshAccessToken(ignoringInterval: Bool = false) async {
+    guard let provider = options.accessToken else { return }
+    if let fetch = accessTokenFetch {
+      return await fetch.value
+    }
+    let now = elapsed()
+    if !ignoringInterval, let last = lastAccessTokenFetch,
+      now - last < Self.accessTokenRefreshInterval
+    {
+      return
+    }
+    lastAccessTokenFetch = now
+
+    let generation = tokens.beginRefresh()
+    let fetch = Task.immediateIfAvailable { [weak self] in
+      let token: String?
+      do {
+        token = try await provider()
+      } catch {
+        self?.options.logger.error("Failed to fetch access token: \(error)")
+        token = nil
+      }
+      await self?.didFetchAccessToken(token, generation: generation)
+    }
+    // Cleared here, not inside the task: an immediate task can finish before it is stored.
+    accessTokenFetch = fetch
+    await fetch.value
+    accessTokenFetch = nil
+  }
+
+  private func didFetchAccessToken(_ token: String?, generation: Int) async {
+    // Scheduled even when nothing changed, so a callback that failed or returned the same token
+    // is asked again.
+    scheduleAccessTokenRefresh()
+    await storeAccessToken(token, generation: generation)
+  }
+
+  /// Stores `token` if it is new and from the latest refresh, then sends it to every subscribed
+  /// channel.
+  private func storeAccessToken(_ token: String?, generation: Int) async {
+    guard tokens.apply(token, generation: generation), let token = tokens.token else { return }
+    scheduleAccessTokenRefresh()
 
     for channel in channels.values where await channel.status == .subscribed {
       options.logger.debug("Updating auth token for channel \(channel.topic)")
-      await channel.push(
-        ChannelEvent.accessToken,
-        payload: ["access_token": tokenToSend.map { .string($0) } ?? .null]
-      )
+      await channel.push(ChannelEvent.accessToken, payload: ["access_token": .string(token)])
     }
+  }
+
+  /// Refreshes ``accessTokenRefreshLeeway`` before the token's `exp`, and never sooner than
+  /// ``accessTokenRefreshInterval`` from now, which the callback would refuse anyway. A new
+  /// token replaces the timer. Without a callback, or for a token with no `exp`, there is
+  /// nothing to schedule.
+  private func scheduleAccessTokenRefresh() {
+    guard options.accessToken != nil,
+      let due = tokens.refreshDelay(now: Date(), leeway: Self.accessTokenRefreshLeeway)
+    else {
+      tasks.cancel(at: .accessTokenRefresh)
+      return
+    }
+    let delay = max(due, Self.accessTokenRefreshInterval)
+    // A local, because the existential in `self.clock` is not opened when passed directly.
+    let clock = self.clock
+    let timer = Self.accessTokenRefreshTimer(on: clock, after: delay, client: self)
+    tasks.replace([timer], at: .accessTokenRefresh)
+  }
+
+  /// The deadline is read here, not inside the task, so a task that starts late still wakes
+  /// `delay` after the token was stored.
+  private static func accessTokenRefreshTimer(
+    on clock: some Clock<Duration>,
+    after delay: Duration,
+    client: RealtimeClient
+  ) -> Task<Void, Never> {
+    let deadline = clock.now.advanced(by: delay)
+    // Detached and weak: the sleep must not keep a released client alive until the token expires.
+    return Task.detached { [weak client] in
+      do {
+        try await clock.sleep(until: deadline, tolerance: nil)
+        await client?.refreshAccessToken()
+      } catch {
+        // Cancelled: a newer token replaced this timer.
+      }
+    }
+  }
+
+  /// Reads the time since this call on `clock`. A generic function opens the existential, so
+  /// two instants of the same concrete clock can be subtracted.
+  private static func elapsedTime(on clock: some Clock<Duration>) -> @Sendable () -> Duration {
+    let start = clock.now
+    return { start.duration(to: clock.now) }
   }
 
   // MARK: - Sending

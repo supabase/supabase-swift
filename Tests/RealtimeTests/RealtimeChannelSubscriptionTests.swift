@@ -269,6 +269,8 @@ struct RealtimeChannelSubscriptionTests {
       onAccessToken: { call in
         if call == 1 { await gate.park() }
       })
+    // With a token stored, the second attempt joins without waiting for the parked refresh.
+    await h.client.setAuth("token")
     let channel = await h.client.channel("room")
 
     let firstSubscribe = Task { try await channel.subscribe() }
@@ -302,6 +304,8 @@ struct RealtimeChannelSubscriptionTests {
       onAccessToken: { call in
         if call == 1 { await gate.park() }
       })
+    // With a token stored, the second attempt joins without waiting for the parked refresh.
+    await h.client.setAuth("token")
     let channel = await h.client.channel("room")
 
     let firstSubscribe = Task { try await channel.subscribe() }
