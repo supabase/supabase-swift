@@ -325,6 +325,89 @@ struct ChannelStateManagerTests {
     }
   }
 
+  /// A reset ends an unsubscribe that waits for the server's `phx_close` (it
+  /// died with the socket) and reports that the channel must not rejoin.
+  @Test
+  func resetEndsPendingUnsubscribeWithoutRejoin() async throws {
+    let h = makeHarness(timeoutInterval: 5.0)
+
+    let confirmer = confirmSubscribeOnJoin(h)
+    try await h.sut.subscribe()
+    _ = await confirmer.value
+
+    let start = ContinuousClock.now
+    let unsubscription = Task { await h.sut.unsubscribe() }
+    while h.leaveCallCount.value == 0 {
+      try? await Task.sleep(nanoseconds: 5_000_000)
+    }
+    #expect(await h.sut.resetForReconnect() == false)
+    await unsubscription.value
+
+    #expect(ContinuousClock.now - start < .seconds(2), "unsubscribe waited for the timeout")
+    let state = await h.sut.state
+    guard case .unsubscribed = state else {
+      Issue.record("Expected .unsubscribed, got \(state)")
+      return
+    }
+    #expect(await h.sut.joinRef == nil)
+  }
+
+  /// A reset asks to rejoin a channel the caller still wants, and again once
+  /// the caller subscribes a channel it had unsubscribed.
+  @Test
+  func resetRejoinsUntilTheCallerUnsubscribes() async throws {
+    let h = makeHarness()
+
+    var confirmer = confirmSubscribeOnJoin(h)
+    try await h.sut.subscribe()
+    _ = await confirmer.value
+    #expect(await h.sut.resetForReconnect() == true)
+
+    await h.sut.unsubscribe()
+    #expect(await h.sut.resetForReconnect() == false)
+
+    h.joinCallCount.setValue(0)
+    confirmer = confirmSubscribeOnJoin(h)
+    try await h.sut.subscribe()
+    _ = await confirmer.value
+    #expect(await h.sut.resetForReconnect() == true)
+  }
+
+  /// An unsubscribe woken by a reconnect's reset stops the rejoin. The reset
+  /// and the start of the rejoin's join share one turn of the actor, so the
+  /// unsubscribe finds the join in flight, not an `.unsubscribed` channel
+  /// whose rejoin is still to come.
+  @Test
+  func unsubscribeAfterTheResetStopsTheRejoin() async throws {
+    let h = makeHarness()
+
+    let confirmer = confirmSubscribeOnJoin(h)
+    try await h.sut.subscribe()
+    _ = await confirmer.value
+
+    let stateChanges = await h.sut.stateChanges
+    let rejoin = Task { try await h.sut.rejoinAfterReconnect() }
+    for await state in stateChanges {
+      if case .unsubscribed = state { break }
+    }
+    let state = await h.sut.state
+    guard case .subscribing = state else {
+      Issue.record("Expected .subscribing after the reset, got \(state)")
+      return
+    }
+    await h.sut.unsubscribe()
+
+    guard case .unsubscribed = await h.sut.state else {
+      Issue.record("Expected .unsubscribed after the unsubscribe")
+      return
+    }
+    await #expect(throws: (any Error).self) { try await rejoin.value }
+    // Past the attempt's timeout and the retry delay: at most the rejoin's
+    // first join.
+    try await Task.sleep(nanoseconds: 500_000_000)
+    #expect(h.joinCallCount.value <= 2)
+  }
+
   // MARK: - Server-close while subscribed
 
   /// A server close that aborts an in-flight subscribe must surface as

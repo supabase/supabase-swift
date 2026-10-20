@@ -243,8 +243,15 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     await stateManager.unsubscribe()
   }
 
-  func resetForReconnect() async {
+  /// Resets the channel for a rejoin. Returns whether it should rejoin.
+  @discardableResult
+  func resetForReconnect() async -> Bool {
     await stateManager.resetForReconnect()
+  }
+
+  /// Resets the channel after a reconnect and joins again unless the caller has unsubscribed it.
+  func rejoinAfterReconnect() async throws {
+    try await stateManager.rejoinAfterReconnect()
   }
 
   /// Build the `phx_join` payload from the current config and push it.
