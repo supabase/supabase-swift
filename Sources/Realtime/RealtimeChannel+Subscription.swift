@@ -310,7 +310,7 @@ extension RealtimeChannel {
     logger.debug("Sending phx_join for channel '\(topic)' (ref: \(ref))")
 
     var presence = config.presence
-    presence.enabled = hasPresenceListener
+    presence.enabled = isPresenceInUse
 
     let joinConfig = RealtimeJoinConfig(
       broadcast: config.broadcast,

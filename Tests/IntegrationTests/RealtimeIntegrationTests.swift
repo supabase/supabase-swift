@@ -632,6 +632,8 @@
           status: "typing",
           lastSeen: Date()
         )
+        // The channel sends one presence call per window; let the previous one end.
+        await testClock.advance(by: RealtimeChannel.presencePushInterval)
         try await channel2.track(user2Typing)
         try await Task.sleep(nanoseconds: 500_000_000)
 
@@ -651,6 +653,8 @@
           status: "online",
           lastSeen: Date()
         )
+        // The channel sends one presence call per window; let the previous one end.
+        await testClock.advance(by: RealtimeChannel.presencePushInterval)
         try await channel2.track(user2Online)
         try await Task.sleep(nanoseconds: 500_000_000)
 
@@ -664,6 +668,8 @@
         try await channel1.broadcast(event: "chat-message", message: message3)
         try await Task.sleep(nanoseconds: 500_000_000)
 
+        // The channel sends one presence call per window; let the previous one end.
+        await testClock.advance(by: RealtimeChannel.presencePushInterval)
         try await channel1.untrack()
         try await Task.sleep(nanoseconds: 500_000_000)
 
@@ -717,6 +723,45 @@
 
         await channel1.unsubscribe()
         await channel2.unsubscribe()
+      }
+    }
+
+    @Test
+    func presenceIsTrackedAgainAfterARejoin() async throws {
+      let client = client
+      let client2 = client2
+      try await withMainSerialExecutor {
+        let topic = "presence-rejoin-\(UUID().uuidString)"
+        let tracker = await client.realtime.channel(topic)
+        let observer = await client2.realtime.channel(topic)
+        let changes = await observer.presenceChanges()
+
+        try await observer.subscribe()
+        try await tracker.subscribe()
+        try await tracker.track(state: ["user": "ana"])
+
+        let realtime = client.realtime
+        let isAna: @Sendable (PresenceV2) -> Bool = { $0.state["user"] == "ana" }
+        try await withTimeout(.seconds(15)) {
+          // Joined, then left with the dropped socket, then joined again by the re-track.
+          var sawLeave = false
+          var rejoined = false
+          for await change in changes {
+            if rejoined, change.leaves.values.contains(where: isAna) { sawLeave = true }
+            if sawLeave, change.joins.values.contains(where: isAna) { return }
+            if !rejoined, change.joins.values.contains(where: isAna) {
+              rejoined = true
+              // What the client does after a dropped socket comes back.
+              await realtime.disconnect()
+              try await realtime.connect()
+              await realtime.rejoinChannels()
+            }
+          }
+          Issue.record("The presence stream ended before the re-track arrived.")
+        }
+
+        await tracker.unsubscribe()
+        await observer.unsubscribe()
       }
     }
 
