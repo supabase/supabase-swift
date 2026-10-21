@@ -212,12 +212,9 @@ public actor RealtimeChannel {
 
   // MARK: Presence
 
-  /// The server's presence set for the current join.
+  /// The server's presence set for the current join. Diffs that arrive before the join's first
+  /// `presence_state` wait in it for that state.
   var presence = PresenceTracker()
-
-  /// `presence_diff` messages that arrived before the join's first `presence_state`. The
-  /// tracker holds them too; these copies reach ``presenceChanges()`` after the state.
-  var presenceDiffsBeforeState: [RealtimeMessageV2] = []
 
   init(
     topic: String,
@@ -276,7 +273,6 @@ public actor RealtimeChannel {
     // A new join waits for its own first presence state.
     if case .subscribing = newState {
       presence.reset()
-      presenceDiffsBeforeState = []
     }
     for case .status(let continuation) in listeners.map(\.listener) {
       continuation.yield(newState.status)
@@ -520,7 +516,7 @@ public actor RealtimeChannel {
       case .close: await handleClose(message)
       case .error: handleError(message)
       case .presenceDiff: try handlePresenceDiff(message)
-      case .presenceState: handlePresenceState(message)
+      case .presenceState: try handlePresenceState(message)
       default: logger.debug("Received message with unhandled event type: \(message)")
       }
     } catch {
@@ -655,56 +651,16 @@ public actor RealtimeChannel {
   }
 
   private func handlePresenceDiff(_ message: RealtimeMessageV2) throws {
-    guard presence.applyDiff(message.payload) != nil else {
-      presenceDiffsBeforeState.append(message)
-      return
-    }
-    try deliverPresenceDiff(message)
-  }
-
-  private func handlePresenceState(_ message: RealtimeMessageV2) {
-    let synced = presence.syncState(message.payload)
-    let heldDiffs = presenceDiffsBeforeState
-    presenceDiffsBeforeState = []
-
-    // The held diffs are delivered on their own below, so the state leaves out what they report.
-    var leaves = synced.state.leaves
-    for diff in synced.heldDiffs {
-      for (key, left) in diff.leaves {
-        let refs = Set(left.map(\.ref))
-        leaves[key]?.removeAll { refs.contains($0.ref) }
-      }
-    }
-    do {
-      let joins = try message.payload.decode(as: [String: PresenceV2].self)
-      deliverPresence(joins: joins, leaves: Self.presences(leaves), rawMessage: message)
-    } catch {
-      logger.debug("Failed: \(error)")
-    }
-    for diff in heldDiffs {
-      do {
-        try deliverPresenceDiff(diff)
-      } catch {
-        logger.debug("Failed: \(error)")
-      }
-    }
-  }
-
-  /// Tracker entries in the shape ``presenceChanges()`` delivers: the first meta of each key.
-  private static func presences(_ entries: [String: [PresenceEntry]]) -> [String: PresenceV2] {
-    entries.compactMapValues { metas in
-      metas.first.map { entry in
-        var state = entry.payload
-        state["phx_ref_prev"] = entry.previousRef.map(JSONValue.string)
-        return PresenceV2(ref: entry.ref, state: state)
-      }
-    }
-  }
-
-  private func deliverPresenceDiff(_ message: RealtimeMessageV2) throws {
+    _ = presence.applyDiff(message.payload)
     let joins = try message.payload["joins"]?.decode(as: [String: PresenceV2].self) ?? [:]
     let leaves = try message.payload["leaves"]?.decode(as: [String: PresenceV2].self) ?? [:]
     deliverPresence(joins: joins, leaves: leaves, rawMessage: message)
+  }
+
+  private func handlePresenceState(_ message: RealtimeMessageV2) throws {
+    _ = presence.applyState(message.payload)
+    let joins = try message.payload.decode(as: [String: PresenceV2].self)
+    deliverPresence(joins: joins, leaves: [:], rawMessage: message)
   }
 
   /// Called by the client when a binary broadcast frame (type 0x04) is received.

@@ -16,10 +16,6 @@ Changes that still compile but behave differently. Check each one by hand.
   instead (see [Errors](#errors)).
 - **Cancellation throws `CancellationError`.** A cancelled `httpSend` used to throw
   `URLError(.cancelled)`. Search for `URLError` near `httpSend` and catch `CancellationError`.
-- **Presence diffs wait for the first state.** `presenceChanges()` delivers a `presence_diff`
-  that arrives before the join's first `presence_state` after that state, not before it.
-- **A rejoin reports who left.** The first `presence_state` after a rejoin used to have empty
-  `leaves`. It now lists the members who left while the socket was down.
 - **Status values keep unknown raw values.** `RealtimeMessageV2.status` used to be `nil` for a
   reply status the SDK did not know. It now returns a `PushStatus` with that raw value.
   `X(rawValue:) != nil` checks on the status types are now always `true`.

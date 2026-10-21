@@ -389,7 +389,6 @@ struct RealtimeChannelOnMessageTests {
   @Test
   func presenceDiffTriggersPresenceCallbackWithJoinsAndLeaves() async throws {
     let actions = await sut.presenceChanges()
-    await receiveEmptyPresenceState()
 
     await sut.onMessage(
       message(
@@ -402,8 +401,7 @@ struct RealtimeChannelOnMessageTests {
     )
 
     let receivedActions = await collect(actions)
-    #expect(receivedActions.count == 2)
-    let action = try #require(receivedActions.last)
+    let action = try #require(receivedActions.first)
     #expect(action.joins.keys.sorted() == ["user-1"])
     #expect(action.joins["user-1"]?.ref == "ref-1")
     #expect(action.joins["user-1"]?.state["name"]?.stringValue == "ana")
@@ -414,13 +412,11 @@ struct RealtimeChannelOnMessageTests {
   @Test
   func presenceDiffWithoutJoinsOrLeavesTriggersEmptyPresenceAction() async throws {
     let actions = await sut.presenceChanges()
-    await receiveEmptyPresenceState()
 
     await sut.onMessage(message(event: ChannelEvent.presenceDiff))
 
     let receivedActions = await collect(actions)
-    #expect(receivedActions.count == 2)
-    let action = try #require(receivedActions.last)
+    let action = try #require(receivedActions.first)
     #expect(action.joins.isEmpty)
     #expect(action.leaves.isEmpty)
   }
@@ -428,7 +424,6 @@ struct RealtimeChannelOnMessageTests {
   @Test
   func presenceDiffWithMalformedPresenceIsSwallowed() async {
     let actions = await sut.presenceChanges()
-    await receiveEmptyPresenceState()
 
     await sut.onMessage(
       message(
@@ -438,7 +433,7 @@ struct RealtimeChannelOnMessageTests {
     )
 
     let receivedActions = await collect(actions)
-    #expect(receivedActions.count == 1, "only the presence_state")
+    #expect(receivedActions.isEmpty)
   }
 
   @Test
@@ -468,11 +463,6 @@ struct RealtimeChannelOnMessageTests {
 
     let receivedActions = await collect(actions)
     #expect(receivedActions.isEmpty)
-  }
-
-  /// Diffs wait for the join's first `presence_state`; this delivers an empty one.
-  private func receiveEmptyPresenceState() async {
-    await sut.onMessage(message(event: ChannelEvent.presenceState))
   }
 
   private func message(

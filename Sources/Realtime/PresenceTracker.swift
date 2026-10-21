@@ -52,30 +52,15 @@ package struct PresenceTracker: Sendable {
 
   package init() {}
 
-  /// Starts a rejoin: diffs wait for the new join's first state again. The last known set stays,
-  /// so that state reports who left during the outage, and the tracked payload stays so it can
-  /// be re-sent.
+  /// Forgets the server's view at a rejoin. The tracked payload survives so it can be re-sent.
   package mutating func reset() {
+    state = PresenceState()
     hasState = false
     pendingDiffs = []
   }
 
-  /// Applies a `presence_state` payload and the diffs that were waiting for it, as one change.
+  /// Applies a `presence_state` payload and the diffs that were waiting for it.
   package mutating func applyState(_ raw: JSONObject) -> PresenceChange {
-    let synced = syncState(raw)
-    var change = synced.state
-    for applied in synced.heldDiffs {
-      change.joins.merge(applied.joins) { $0 + $1 }
-      change.leaves.merge(applied.leaves) { $0 + $1 }
-    }
-    return change
-  }
-
-  /// Applies a `presence_state` payload and the diffs that were waiting for it, and returns the
-  /// change of the state itself apart from the change of each held diff.
-  package mutating func syncState(
-    _ raw: JSONObject
-  ) -> (state: PresenceChange, heldDiffs: [PresenceChange]) {
     let incoming = Self.decode(raw)
     var change = PresenceChange()
     for (key, entries) in state.entries {
@@ -90,13 +75,13 @@ package struct PresenceTracker: Sendable {
     }
     state.entries = incoming
     hasState = true
-    let pending = pendingDiffs
-    pendingDiffs = []
-    var heldDiffs: [PresenceChange] = []
-    for diff in pending {
-      heldDiffs.append(merge(diff))
+    for diff in pendingDiffs {
+      let applied = merge(diff)
+      change.joins.merge(applied.joins) { $0 + $1 }
+      change.leaves.merge(applied.leaves) { $0 + $1 }
     }
-    return (change, heldDiffs)
+    pendingDiffs = []
+    return change
   }
 
   /// Applies a `presence_diff` payload, or queues it (returning `nil`) until the first state.

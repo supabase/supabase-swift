@@ -95,29 +95,17 @@ struct PresenceTrackerTests {
   }
 
   @Test
-  func resetQueuesDiffsAgainAndKeepsTheTrackedPayload() {
+  func resetClearsStateAndQueueButKeepsTheTrackedPayload() {
     var tracker = PresenceTracker()
     tracker.trackedPayload = ["name": "ana"]
     _ = tracker.applyState(["u1": metas([("r1", nil, "ana")])])
 
     tracker.reset()
 
+    #expect(tracker.state.entries.isEmpty)
     #expect(tracker.trackedPayload == ["name": "ana"])
     let afterReset = tracker.applyDiff(["joins": [:], "leaves": [:]])
     #expect(afterReset == nil)
-  }
-
-  @Test
-  func theFirstStateAfterAResetReportsWhoLeft() {
-    var tracker = PresenceTracker()
-    _ = tracker.applyState(["u1": metas([("r1", nil, "ana")]), "u2": metas([("r2", nil, "bo")])])
-
-    tracker.reset()
-    let change = tracker.applyState(["u1": metas([("r1", nil, "ana")])])
-
-    #expect(change.leaves["u2"]?.map(\.ref) == ["r2"])
-    #expect(change.joins.isEmpty)
-    #expect(Set(tracker.state.entries.keys) == ["u1"])
   }
 
   @Test
