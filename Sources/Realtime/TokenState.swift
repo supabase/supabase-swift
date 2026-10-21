@@ -33,11 +33,19 @@ struct TokenState: Sendable {
     return true
   }
 
-  /// How long until the token should be refreshed: `leeway` before `exp`, never negative.
-  /// `nil` when the token has no expiry to plan around.
+  /// How long until the token should be refreshed: `leeway` before `exp`, never negative and at
+  /// most ``maximumRefreshDelay``. `nil` when the token has no expiry to plan around.
   func refreshDelay(now: Date, leeway: Duration) -> Duration? {
     guard let expiresAt else { return nil }
-    let remaining = Duration.seconds(Int(expiresAt.timeIntervalSince(now).rounded()))
-    return max(remaining - leeway, .zero)
+    // Clamped before the conversion: `Int(_:)` traps on a value out of range, and `exp` is
+    // whatever number the token carries.
+    let remaining = min(
+      max(expiresAt.timeIntervalSince(now).rounded(), 0),
+      Self.maximumRefreshDelay.timeInterval
+    )
+    return max(.seconds(Int(remaining)) - leeway, .zero)
   }
+
+  /// The longest wait the refresh timer is set for: one year.
+  static let maximumRefreshDelay: Duration = .seconds(365 * 24 * 60 * 60)
 }

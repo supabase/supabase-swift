@@ -337,6 +337,9 @@ public actor RealtimeClient {
   func setStatus(_ status: RealtimeClientStatus) {
     guard self.status != status else { return }
     self.status = status
+    // The refresh timer runs only while connected: it stops here on a disconnect and starts
+    // again on every connect and reconnect.
+    scheduleAccessTokenRefresh()
     for continuation in statusContinuations.values {
       continuation.yield(status)
     }
@@ -533,18 +536,62 @@ public actor RealtimeClient {
 
     let generation = tokens.beginRefresh()
     let timeout = options.timeout
+    let logger = options.logger
+    // A local, because the existential in `self.clock` is not opened when passed directly.
+    let clock = self.clock
     // A task of its own, so a cancelled caller does not cancel the call the others wait for.
-    Task.immediateIfAvailable { [weak self, clock] in
-      let token: String?
-      do {
-        token = try await withTimeout(timeout, clock: clock) { try await provider() }
-      } catch {
-        self?.options.logger.error("Failed to fetch access token: \(error)")
-        token = nil
-      }
+    Task.immediateIfAvailable { [weak self] in
+      let token = await Self.callAccessTokenProvider(
+        provider, timeout: timeout, clock: clock, logger: logger)
       await self?.didFetchAccessToken(token, generation: generation)
     }
     await waitForAccessTokenFetch()
+  }
+
+  /// Calls `provider` and returns its token, or `nil` when it throws or does not return within
+  /// `timeout`. A call that ignores cancellation is left to finish on its own and its result is
+  /// dropped, so it cannot hold up the refreshes waiting for it. `withTimeout` cannot do this:
+  /// its task group waits for the call to return.
+  private static func callAccessTokenProvider(
+    _ provider: @escaping @Sendable () async throws -> String?,
+    timeout: Duration,
+    clock: some Clock<Duration>,
+    logger: Logger
+  ) async -> String? {
+    let deadline = clock.now.advanced(by: timeout)
+    let pending = LockIsolated<CheckedContinuation<String?, Never>?>(nil)
+    let timer = LockIsolated<Task<Void, Never>?>(nil)
+    let finish: @Sendable (String?) -> Void = { token in
+      pending.withValue {
+        $0?.resume(returning: token)
+        $0 = nil
+      }
+    }
+    return await withCheckedContinuation { continuation in
+      pending.setValue(continuation)
+      let call = Task {
+        let token: String?
+        do {
+          token = try await provider()
+        } catch {
+          logger.error("Failed to fetch access token: \(error)")
+          token = nil
+        }
+        timer.value?.cancel()
+        finish(token)
+      }
+      timer.setValue(
+        Task {
+          do {
+            try await clock.sleep(until: deadline, tolerance: nil)
+          } catch {
+            return
+          }
+          logger.error("The access token callback did not return within \(timeout)")
+          call.cancel()
+          finish(nil)
+        })
+    }
   }
 
   /// Returns when the callback call in flight has finished, or at once when the caller is
@@ -592,6 +639,8 @@ public actor RealtimeClient {
     scheduleAccessTokenRefresh()
 
     for channel in channels.values where await channel.status == .subscribed {
+      // A newer token was stored while this loop was suspended; its own loop sends it.
+      guard tokens.token == token else { break }
       options.logger.debug("Updating auth token for channel \(channel.topic)")
       await channel.push(ChannelEvent.accessToken, payload: ["access_token": .string(token)])
     }
@@ -618,7 +667,7 @@ public actor RealtimeClient {
 
   /// The refresh timer's entry point. A client that disconnected since the timer was set has no
   /// channel to keep alive, so it does not call the callback.
-  private func refreshAccessTokenIfConnected() async {
+  func refreshAccessTokenIfConnected() async {
     guard status == .connected else { return }
     await refreshAccessToken()
   }

@@ -14,13 +14,15 @@ import Testing
 
 @testable import Realtime
 
-@Suite
+// A broken wait fails after a minute instead of hanging the run.
+@Suite(.timeLimit(.minutes(1)))
 struct RealtimeClientAccessTokenTests {
   @Test
   func theCallbackIsCalledTheLeewayBeforeTheTokenExpires() async throws {
-    let expiry = Date().addingTimeInterval(120).timeIntervalSince1970
-    let provider = TokenProvider { call in call == 1 ? makeJWT(exp: expiry) : "refreshed" }
+    let expiry = LockIsolated<TimeInterval>(0)
+    let provider = TokenProvider { call in call == 1 ? makeJWT(exp: expiry.value) : "refreshed" }
     let host = await makeHost(provider)
+    expiry.setValue(expiresIn(120, on: host))
     try await subscribe(host)
     #expect(provider.calls == 1)
 
@@ -40,7 +42,7 @@ struct RealtimeClientAccessTokenTests {
     let host = await makeHost(provider)
     try await subscribe(host)
 
-    await host.client.setAuth(makeJWT(exp: Date().addingTimeInterval(120).timeIntervalSince1970))
+    await host.client.setAuth(makeJWT(exp: expiresIn(120, on: host)))
     await host.clock.advance(by: .seconds(59))
     #expect(provider.calls == 1)
 
@@ -52,17 +54,43 @@ struct RealtimeClientAccessTokenTests {
   }
 
   @Test
-  func theTimerDoesNotCallTheCallbackWhileDisconnected() async throws {
-    let expiry = Date().addingTimeInterval(120).timeIntervalSince1970
-    let provider = TokenProvider { _ in makeJWT(exp: expiry) }
+  func aDisconnectStopsTheTimer() async throws {
+    let expiry = LockIsolated<TimeInterval>(0)
+    let provider = TokenProvider { _ in makeJWT(exp: expiry.value) }
     let host = await makeHost(provider)
+    expiry.setValue(expiresIn(120, on: host))
     try await subscribe(host)
     await host.client.disconnect()
 
-    await host.client.setAuth(makeJWT(exp: expiry + 1))
+    await host.client.setAuth(makeJWT(exp: expiresIn(121, on: host)))
     await host.clock.advance(by: .seconds(61))
 
     #expect(provider.calls == 1)
+  }
+
+  @Test
+  func aReconnectStartsTheTimerAgain() async throws {
+    let expiry = LockIsolated<TimeInterval>(0)
+    let provider = TokenProvider { call in call == 1 ? makeJWT(exp: expiry.value) : "refreshed" }
+    let host = await makeHost(provider)
+    expiry.setValue(expiresIn(120, on: host))
+    try await subscribe(host)
+    await host.client.disconnect()
+    try await host.client.connect()
+
+    await host.clock.advance(by: .seconds(60))
+
+    await provider.waitForCall(2)
+  }
+
+  @Test
+  func theTimerDoesNotCallTheCallbackWhenDisconnected() async {
+    let provider = TokenProvider { _ in "token" }
+    let host = await makeHost(provider)
+
+    await host.client.refreshAccessTokenIfConnected()
+
+    #expect(provider.calls == 0)
   }
 
   @Test
@@ -123,30 +151,19 @@ struct RealtimeClientAccessTokenTests {
   }
 
   @Test
-  func concurrentRefreshesShareOneCallbackCall() async throws {
+  func concurrentRefreshesShareOneCallbackCall() async {
     let gate = CallbackGate()
     let provider = TokenProvider { _ in await gate.park() }
     let host = await makeHost(provider)
 
     let first = Task { await host.client.currentAccessToken() }
     await gate.waitForCall()
-    // A rejoin refresh skips the interval, so only the shared call keeps it from calling the
-    // callback a second time. It must still be waiting while the first call is held.
-    let (secondDone, secondDoneContinuation) = AsyncStream<Void>.makeStream()
-    let second = Task {
-      await host.client.refreshTokenForRejoin()
-      secondDoneContinuation.yield()
-    }
-    await #expect(throws: TimeoutError.self) {
-      try await withTimeout(.milliseconds(200)) {
-        for await _ in secondDone { return }
-      }
-    }
-
+    // Inside the interval, a second caller that did not share the call would get no token.
+    let second = Task { await host.client.currentAccessToken() }
     gate.release("shared")
-    await second.value
 
     #expect(await first.value == "shared")
+    #expect(await second.value == "shared")
     #expect(provider.calls == 1)
   }
 
@@ -184,13 +201,10 @@ struct RealtimeClientAccessTokenTests {
   }
 
   @Test
-  func aCallbackThatNeverReturnsTimesOut() async {
+  func aCallbackThatIgnoresCancellationStillTimesOut() async {
     let clock = SignalingTestClock()
-    let provider = TokenProvider { call in
-      guard call == 1 else { return "second" }
-      try? await Task<Void, Never>.never()
-      return nil
-    }
+    let gate = CallbackGate()
+    let provider = TokenProvider { call in call == 1 ? await gate.park() : "second" }
     let client = RealtimeClient(
       url: URL(string: "http://localhost:54321/realtime/v1")!,
       options: RealtimeClientOptions(accessToken: provider.callback, handleAppLifecycle: false),
@@ -200,10 +214,14 @@ struct RealtimeClientAccessTokenTests {
     )
 
     async let token = client.currentAccessToken()
+    await gate.waitForCall()
     await clock.advance(by: RealtimeClientOptions.defaultTimeout)
     #expect(await token == nil)
 
     await client.setAuth()
+    #expect(await client.accessToken == "second")
+
+    gate.release("too late")
     #expect(await client.accessToken == "second")
   }
 
@@ -227,40 +245,49 @@ struct RealtimeClientAccessTokenTests {
   private final class TokenProvider: Sendable {
     private let count = LockIsolated(0)
     private let respond: @Sendable (_ call: Int) async -> String?
+    private let callNumbers: AsyncStream<Int>
+    private let callNumbersContinuation: AsyncStream<Int>.Continuation
 
     init(_ respond: @escaping @Sendable (_ call: Int) async -> String?) {
       self.respond = respond
+      (callNumbers, callNumbersContinuation) = AsyncStream.makeStream()
     }
 
     var calls: Int { count.value }
 
     var callback: @Sendable () async throws -> String? {
-      { [count, respond] in
+      { [count, respond, callNumbersContinuation] in
         let call = count.withValue {
           $0 += 1
           return $0
         }
+        callNumbersContinuation.yield(call)
         return await respond(call)
       }
     }
+
+    /// Returns once call number `call` has started.
+    func waitForCall(_ call: Int) async {
+      for await started in callNumbers where started >= call { return }
+    }
   }
 
-  /// Holds a callback call in `park()` until the test releases it with a token.
+  /// Holds callback calls in `park()` until the test releases them with a token. A parked call
+  /// ignores cancellation, like a callback that never checks for it.
   private final class CallbackGate: Sendable {
+    private let parked = LockIsolated<[CheckedContinuation<String?, Never>]>([])
     private let started: AsyncStream<Void>
     private let startedContinuation: AsyncStream<Void>.Continuation
-    private let released: AsyncStream<String?>
-    private let releasedContinuation: AsyncStream<String?>.Continuation
 
     init() {
       (started, startedContinuation) = AsyncStream.makeStream()
-      (released, releasedContinuation) = AsyncStream.makeStream()
     }
 
     func park() async -> String? {
-      startedContinuation.yield()
-      for await token in released { return token }
-      return nil
+      await withCheckedContinuation { continuation in
+        parked.withValue { $0.append(continuation) }
+        startedContinuation.yield()
+      }
     }
 
     /// Returns once a call is parked.
@@ -269,8 +296,19 @@ struct RealtimeClientAccessTokenTests {
     }
 
     func release(_ token: String?) {
-      releasedContinuation.yield(token)
+      let calls = parked.withValue {
+        defer { $0 = [] }
+        return $0
+      }
+      for call in calls {
+        call.resume(returning: token)
+      }
     }
+  }
+
+  /// An `exp` `seconds` after the host client's own now, so the refresh delay is exact.
+  private func expiresIn(_ seconds: TimeInterval, on host: RealtimeTestHost) -> TimeInterval {
+    host.client.now().addingTimeInterval(seconds).timeIntervalSince1970
   }
 
   private func makeHost(_ provider: TokenProvider) async -> RealtimeTestHost {
