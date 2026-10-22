@@ -7,7 +7,7 @@ on:
       - release/*
   pull_request:
     branches:
-      - "*"
+      - "**"
       - release/*
   workflow_dispatch:
 
@@ -23,15 +23,65 @@ permissions:
   contents: read
 
 jobs:
+  # Pull requests only build and test what they touch; a docs-only or migration-only PR
+  # skips the Xcode matrices. Pushes to main/release and manual runs always run everything,
+  # because the Release workflow fires on this run's "success" conclusion.
+  #
+  # Skipped jobs count as passed in ci-success, so a skipped matrix never blocks a merge.
+  changes:
+    name: Detect changed paths
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      package: ${{ github.event_name != 'pull_request' || steps.filter.outputs.package }}
+      integration: ${{ github.event_name != 'pull_request' || steps.filter.outputs.integration }}
+      examples: ${{ github.event_name != 'pull_request' || steps.filter.outputs.examples }}
+    steps:
+      # Reads the PR's changed files from the API, so no checkout is needed.
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        id: filter
+        if: github.event_name == 'pull_request'
+        with:
+          # A file matches when it hits a positive pattern and no negated one. The default
+          # ("some") treats a negated pattern as "anything else", which would match every file.
+          predicate-quantifier: some-with-excludes
+          filters: |
+            swift: &swift
+              - Sources/**
+              - Package.swift
+              - Package@swift-*.swift
+              - Package.resolved
+              - Supabase.xcworkspace/**
+              - scripts/**
+              - tools/supabase-typegen/**
+              - .github/workflows/ci.yml
+            package:
+              - *swift
+              - Tests/**
+              - "!Tests/IntegrationTests/supabase*/**"
+            integration:
+              - *swift
+              - Tests/**
+            examples:
+              - Sources/**
+              - Package.swift
+              - Package@swift-*.swift
+              - Package.resolved
+              - Examples/**
+              - scripts/xcodebuild.sh
+              - .github/workflows/ci.yml
+
   macos:
     name: xcodebuild (macOS latest)
+    needs: changes
+    if: needs.changes.outputs.package == 'true'
     runs-on: blacksmith-6vcpu-macos-latest
     timeout-minutes: 30
     strategy:
       matrix:
         command: [test, ""]
         platform: [IOS, MACOS]
-        xcode: ["26.4"]
+        xcode: ["26.4", "27.0"]
         include:
           - { command: test, skip_release: 1 }
           - { command: "", skip_debug: 1 }
@@ -61,11 +111,13 @@ jobs:
         if: matrix.skip_release != '1'
         run: CONFIG=Release PLATFORM="${{ matrix.platform }}" XCODEBUILD_ARGUMENT="${{ matrix.command }}" ./scripts/xcodebuild.sh
       - name: Install lcov
-        if: matrix.command == 'test' && matrix.platform == 'IOS'
+        if: matrix.command == 'test' && matrix.platform == 'IOS' && matrix.xcode == '26.4'
         run: brew install lcov
       - name: Export code coverage
         id: coverage
-        if: matrix.command == 'test' && matrix.platform == 'IOS'
+        # Coveralls isn't configured for parallel/matrix uploads (no `parallel: true` or unique
+        # `flag-name`), so only one Xcode leg should upload coverage per run.
+        if: matrix.command == 'test' && matrix.platform == 'IOS' && matrix.xcode == '26.4'
         run: DERIVED_DATA_PATH=~/.derivedData/Debug ./scripts/generate-coverage.sh
       - name: Trust Coveralls Homebrew tap (Homebrew 6 requirement)
         if: steps.coverage.outcome == 'success'
@@ -78,6 +130,8 @@ jobs:
 
   macos-legacy:
     name: xcodebuild (legacy)
+    needs: changes
+    if: needs.changes.outputs.package == 'true'
     runs-on: blacksmith-6vcpu-macos-15
     timeout-minutes: 30
     strategy:
@@ -125,6 +179,8 @@ jobs:
 
   additional-platforms:
     name: xcodebuild (${{ matrix.platform }})
+    needs: changes
+    if: needs.changes.outputs.package == 'true'
     runs-on: blacksmith-6vcpu-macos-latest
     timeout-minutes: 30
     strategy:
@@ -152,6 +208,8 @@ jobs:
         run: PLATFORM="${{ matrix.platform }}" XCODEBUILD_ARGUMENT=build ./scripts/xcodebuild.sh
 
   spm:
+    needs: changes
+    if: needs.changes.outputs.package == 'true'
     runs-on: blacksmith-6vcpu-macos-latest
     timeout-minutes: 30
     strategy:
@@ -166,9 +224,14 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-spm-
       - run: swift build -c ${{ matrix.config }}
+      - name: Check compile-failure fixtures
+        if: matrix.config == 'debug'
+        run: ./scripts/check-compile-failures.sh debug
 
   linux:
     name: Linux (${{ matrix.container }})
+    needs: changes
+    if: needs.changes.outputs.package == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     continue-on-error: ${{ matrix.container == 'swiftlang/swift:nightly-main-noble' }}
@@ -190,21 +253,64 @@ jobs:
       - name: "Cache Swift Package"
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: .build
-          key: ${{ runner.os }}-spm-${{ matrix.container }}
+          path: |
+            .build
+            tools/supabase-typegen/.build
+          key: ${{ runner.os }}-spm-${{ matrix.container }}-typegen
       - name: "Build Swift Package"
         run: swift build --explicit-target-dependency-import-check error
+      # RealtimeTests run serially on Linux: in a parallel run the process can stall with no
+      # worker threads and every in-flight test parked on a timer that never fires. The other
+      # targets keep the parallel runner.
       - name: "Test Swift Package"
-        run: swift test --skip IntegrationTests
+        run: swift test --skip IntegrationTests --skip RealtimeTests
+      - name: "Test RealtimeTests (serial)"
+        run: swift test --filter RealtimeTests --no-parallel
       - name: "Test Swift Package (OpenTelemetry trait)"
         run: swift test --traits OpenTelemetry --filter SupabaseTests
+      - name: "Test supabase-typegen"
+        run: swift test --package-path tools/supabase-typegen
 
   integration-tests:
-    name: Integration Tests (Linux)
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+    name: Integration Tests (${{ matrix.name }})
+    needs: changes
+    if: needs.changes.outputs.integration == 'true'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux runs the CLI's Docker stack, so scripts/enable-storage-test-features.sh can
+          # turn on the Storage features the CLI leaves off (lifecycles, analytics buckets, CDN
+          # purge), and their full integration tests run here. The native stack cannot.
+          - name: Linux
+            runner: ubuntu-latest
+            storage-features: true
+          # The CLI's experimental stack backend runs every service as a native process on macOS
+          # arm64, so no Docker is needed. Only macOS runs RealtimeIntegrationTests (the Swift
+          # Linux images' libcurl has no WebSocket support) and MemoryProbeIntegrationTests
+          # (Darwin-only).
+          #
+          # swift-snapshot-testing records attachments through Swift Testing's cross-import
+          # overlays (`_Testing_Foundation`, `_Testing_AppKit`). Xcode enables them; SwiftPM does
+          # not, so pass the frontend flag. The overlays require macOS 14, so raise the target.
+          - name: macOS
+            runner: blacksmith-6vcpu-macos-latest
+            xcode: "26.4"
+            start-flags: --runtime native --eager
+            swift-flags: >-
+              --triple arm64-apple-macosx14.0
+              -Xswiftc -Xfrontend -Xswiftc -enable-cross-import-overlays
+    env:
+      INTEGRATION_TESTS: 1
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Select Xcode ${{ matrix.xcode }}
+        if: matrix.xcode
+        run: |
+          sudo xcode-select -s /Applications/Xcode_${{ matrix.xcode }}.app
+          echo "SUPABASE_EXPERIMENTAL_STACK=1" >> "$GITHUB_ENV"
       - name: "Cache Swift Package"
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -216,16 +322,19 @@ jobs:
         uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
         with:
           version: latest
+      # start applies migrations and seed itself, so no `db reset` is needed.
       - name: "Start Supabase"
         working-directory: Tests/IntegrationTests
-        run: supabase start
-      - name: "Reset Database"
-        working-directory: Tests/IntegrationTests
-        run: supabase db reset
+        run: supabase start ${{ matrix.start-flags }}
+      - name: "Enable Storage test features"
+        if: matrix.storage-features
+        run: |
+          ./scripts/enable-storage-test-features.sh
+          echo "STORAGE_TEST_FEATURES=1" >> "$GITHUB_ENV"
       - name: "Run Integration Tests"
-        env:
-          INTEGRATION_TESTS: 1
-        run: swift test --filter IntegrationTests --skip verifyOTPForSecureEmailChange --no-parallel
+        run: >-
+          swift test ${{ matrix.swift-flags }}
+          --filter IntegrationTests --skip verifyOTPForSecureEmailChange --no-parallel
       - name: "Stop Supabase"
         working-directory: Tests/IntegrationTests
         if: always()
@@ -238,11 +347,9 @@ jobs:
       # Tests/IntegrationTests/supabase-secure-email-change/supabase/config.toml.
       - name: "Start Supabase (secure email change)"
         working-directory: Tests/IntegrationTests/supabase-secure-email-change
-        run: supabase start
+        run: supabase start ${{ matrix.start-flags }}
       - name: "Run Secure Email Change Integration Test"
-        env:
-          INTEGRATION_TESTS: 1
-        run: swift test --filter verifyOTPForSecureEmailChange --no-parallel
+        run: swift test ${{ matrix.swift-flags }} --filter verifyOTPForSecureEmailChange --no-parallel
       - name: "Stop Supabase (secure email change)"
         working-directory: Tests/IntegrationTests/supabase-secure-email-change
         if: always()
@@ -265,6 +372,8 @@ jobs:
 
   examples:
     name: Examples (${{ matrix.scheme }})
+    needs: changes
+    if: needs.changes.outputs.examples == 'true'
     runs-on: blacksmith-6vcpu-macos-latest
     timeout-minutes: 30
     strategy:
@@ -292,6 +401,8 @@ jobs:
 
   examples-spm:
     name: Examples SPM (${{ matrix.example }})
+    needs: changes
+    if: needs.changes.outputs.examples == 'true'
     runs-on: blacksmith-6vcpu-macos-latest
     timeout-minutes: 30
     strategy:
@@ -325,6 +436,8 @@ jobs:
 
   docs:
     name: Test docs
+    needs: changes
+    if: needs.changes.outputs.package == 'true'
     runs-on: blacksmith-6vcpu-macos-latest
     timeout-minutes: 30
     steps:
@@ -346,7 +459,9 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Lint formatting
-        run: swift format lint --strict --recursive Sources Tests Package.swift Examples
+        run: swift format lint --strict --recursive Sources Tests Package.swift Examples tools/supabase-typegen/Sources tools/supabase-typegen/Tests tools/supabase-typegen/Package.swift
+      - name: Forbid yield loops in Realtime tests
+        run: ./scripts/check-no-yield-loops.sh
 
   lint:
     name: SwiftLint
@@ -387,6 +502,7 @@ jobs:
     if: always()
     needs:
       [
+        changes,
         macos,
         macos-legacy,
         additional-platforms,

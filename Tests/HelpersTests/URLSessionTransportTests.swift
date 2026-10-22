@@ -32,8 +32,6 @@ extension URLRequest {
 }
 
 extension InputStream {
-  /// Blocks the calling thread until the writer closes its end. Only call this from a thread
-  /// that owns nothing else, such as Mocker's request callback on URLSession's own thread.
   fileprivate func readToEnd() -> Data {
     open()
     defer { close() }
@@ -160,10 +158,6 @@ struct URLSessionTransportTests {
     })
     mock.register()
 
-    // The second chunk is held back until the request has started. A streaming transport starts
-    // with the first chunk and then drains the second; a transport that collects the body first
-    // would never start (Linux does collect first, so there the gate is skipped and the flag is
-    // set before the request can begin).
     let chunks = AsyncThrowingStream<ArraySlice<UInt8>, any Error> { continuation in
       continuation.yield(ArraySlice("abc".utf8))
       Task {
@@ -181,7 +175,6 @@ struct URLSessionTransportTests {
 
     #expect(head.status == 200)
     #if canImport(FoundationNetworking)
-      // Linux spools the body before the request starts (documented on the transport).
       #expect(releasedBeforeRequestStarted.value == true)
     #else
       #expect(releasedBeforeRequestStarted.value == false)
@@ -214,23 +207,18 @@ struct URLSessionTransportTests {
     }
 
     @Test
-    func fileBodyProgressReportsOnceOnCompletionOnLinux() async throws {
-      let transport = makeTransport()
-      let fileURL = FileManager.default.temporaryDirectory.appendingPathComponent(
-        UUID().uuidString)
-      try Data("file".utf8).write(to: fileURL)
-      defer { try? FileManager.default.removeItem(at: fileURL) }
-      Mock(url: url, statusCode: 200, data: [.put: Data()]).register()
+    func uploadProgressComesFromDidSendBodyDataOnLinux() {
       let seen = LockIsolated<[Int64]>([])
+      let delegate = UploadProgressDelegate { bytes in seen.withValue { $0.append(bytes) } }
+      let session = URLSession.shared
+      let task = session.dataTask(with: url)
 
-      _ = try await transport.send(
-        HTTPRequest(method: .put, url: url),
-        body: try HTTPBody(fileURL: fileURL).reportingProgress { bytes in
-          seen.withValue { $0.append(bytes) }
-        })
+      delegate.urlSession(
+        session, task: task, didSendBodyData: 2, totalBytesSent: 2, totalBytesExpectedToSend: 4)
+      delegate.urlSession(
+        session, task: task, didSendBodyData: 2, totalBytesSent: 4, totalBytesExpectedToSend: 4)
 
-      // No per-task delegate here, so the only honest report is the total, after the fact.
-      #expect(seen.value == [4])
+      #expect(seen.value == [2, 4])
     }
   #endif
 
@@ -273,7 +261,6 @@ struct URLSessionTransportTests {
       let session = URLSession.shared
       let task = session.dataTask(with: url)
 
-      // A streamed body reports as its chunks are pulled, so the task-level callback stays quiet.
       delegate.urlSession(
         session, task: task, didSendBodyData: 2, totalBytesSent: 2, totalBytesExpectedToSend: 4)
 
@@ -298,7 +285,6 @@ struct URLSessionTransportTests {
           iterationBehavior: behavior)
       }
 
-      // 307/308 resend the body, which a one-shot body cannot do, so the 3xx is handed back.
       let (single, _) = makeDelegate(requestBody: body(.single))
       single.urlSession(
         session, task: task, willPerformHTTPRedirection: response(307), newRequest: target,
@@ -306,11 +292,9 @@ struct URLSessionTransportTests {
       single.urlSession(
         session, task: task, willPerformHTTPRedirection: response(308), newRequest: target,
         completionHandler: follow)
-      // 303 turns the request into a bodiless GET, so nothing needs replaying.
       single.urlSession(
         session, task: task, willPerformHTTPRedirection: response(303), newRequest: target,
         completionHandler: follow)
-      // A body that can replay follows every redirect.
       let (multiple, _) = makeDelegate(requestBody: body(.multiple))
       multiple.urlSession(
         session, task: task, willPerformHTTPRedirection: response(307), newRequest: target,
@@ -340,8 +324,6 @@ struct URLSessionTransportTests {
       let firstStream = try #require(first.value?.value)
       #expect(await firstStream.readToEndOffThread() == Data("abcd".utf8))
 
-      // A redirect or auth retry asks for the body again. The one-shot body cannot replay, so
-      // the delegate cancels the task and reports why instead of a bare `URLError.cancelled`.
       delegate.urlSession(session, task: task, needNewBodyStream: { _ in })
       let deadline = ContinuousClock.now + .seconds(2)
       while task.state == .suspended && ContinuousClock.now < deadline {
@@ -403,4 +385,31 @@ struct URLSessionTransportTests {
       _ = try await transport.send(HTTPRequest(method: .get, url: url), body: nil)
     }
   }
+
+  #if !canImport(FoundationNetworking)
+    @Test
+    func uploadTaskExpectsTheBodyLength() throws {
+      let transport = makeTransport()
+      let request = URLRequest(url: url)
+      let fileURL = FileManager.default.temporaryDirectory.appendingPathComponent(
+        UUID().uuidString)
+      try Data("file".utf8).write(to: fileURL)
+      defer { try? FileManager.default.removeItem(at: fileURL) }
+      let chunks = AsyncStream<ArraySlice<UInt8>> { $0.finish() }
+
+      let file = transport.makeTask(for: request, body: try HTTPBody(fileURL: fileURL))
+      let data = transport.makeTask(for: request, body: HTTPBody(Data("abc".utf8)))
+      let stream = transport.makeTask(
+        for: request, body: HTTPBody(chunks, length: .known(7), iterationBehavior: .single))
+      let unknown = transport.makeTask(
+        for: request, body: HTTPBody(chunks, length: .unknown, iterationBehavior: .single))
+      let none = transport.makeTask(for: request, body: nil)
+
+      #expect(file.countOfBytesClientExpectsToSend == 4)
+      #expect(data.countOfBytesClientExpectsToSend == 3)
+      #expect(stream.countOfBytesClientExpectsToSend == 7)
+      #expect(unknown.countOfBytesClientExpectsToSend == NSURLSessionTransferSizeUnknown)
+      #expect(none.countOfBytesClientExpectsToSend == NSURLSessionTransferSizeUnknown)
+    }
+  #endif
 }

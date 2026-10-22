@@ -1,9 +1,11 @@
 import ConcurrencyExtras
 import Foundation
+import HTTPTypes
+import Helpers
 
 @testable import Realtime
 
-final class FakeWebSocket: WebSocket {
+final class FakeWebSocket: WebSocketConnection {
   struct MutableState {
     var isClosed: Bool = false
     weak var other: FakeWebSocket?
@@ -12,23 +14,21 @@ final class FakeWebSocket: WebSocket {
     var receivedEvents: [WebSocketEvent] = []
     var closeCode: Int?
     var closeReason: String?
+    var onSend: (@Sendable (WebSocketFrame) async -> Void)?
   }
 
   private let mutableState = LockIsolated(MutableState())
   let events: AsyncStream<WebSocketEvent>
   private let eventsContinuation: AsyncStream<WebSocketEvent>.Continuation
 
-  private init(`protocol`: String) {
-    self.`protocol` = `protocol`
+  private init() {
     (events, eventsContinuation) = AsyncStream.makeStream()
   }
 
-  /// Events send by this connection.
   var sentEvents: [WebSocketEvent] {
     mutableState.value.sentEvents
   }
 
-  /// Events received by this connection.
   var receivedEvents: [WebSocketEvent] {
     mutableState.value.receivedEvents
   }
@@ -45,42 +45,53 @@ final class FakeWebSocket: WebSocket {
     mutableState.withValue { s in
       if s.isClosed { return }
 
-      s.sentEvents.append(.close(code: code, reason: reason ?? ""))
+      let event = WebSocketEvent.closed(
+        code: code.map(WebSocketCloseCode.init(rawValue:)), reason: reason)
+      s.sentEvents.append(event)
 
       s.isClosed = true
       s.closeCode = code
       s.closeReason = reason
       if s.other?.isClosed == false {
-        s.other?._trigger(.close(code: code ?? 1005, reason: reason ?? ""))
+        s.other?._trigger(event)
       }
     }
+  }
+
+  func close(code: WebSocketCloseCode, reason: String?) {
+    close(code: code.rawValue, reason: reason)
   }
 
   func send(_ text: String) {
-    mutableState.withValue {
-      guard !$0.isClosed else { return }
-
-      $0.sentEvents.append(.text(text))
-
-      if $0.other?.isClosed == false {
-        $0.other?._trigger(.text(text))
-      }
-    }
+    send(frame: .text(text))
   }
 
   func send(_ binary: Data) {
+    send(frame: .binary(binary))
+  }
+
+  func send(_ frame: WebSocketFrame) async throws {
+    send(frame: frame)
+    await mutableState.value.onSend?(frame)
+  }
+
+  /// Runs `hook` after each frame reaches the peer, before `send` returns. A hook that suspends
+  /// keeps the send in flight, as a slow network would.
+  func onSend(_ hook: @escaping @Sendable (WebSocketFrame) async -> Void) {
+    mutableState.withValue { $0.onSend = hook }
+  }
+
+  private func send(frame: WebSocketFrame) {
     mutableState.withValue {
       guard !$0.isClosed else { return }
 
-      $0.sentEvents.append(.binary(binary))
+      $0.sentEvents.append(.frame(frame))
 
       if $0.other?.isClosed == false {
-        $0.other?._trigger(.binary(binary))
+        $0.other?._trigger(.frame(frame))
       }
     }
   }
-
-  let `protocol`: String
 
   var isClosed: Bool {
     mutableState.value.isClosed
@@ -90,30 +101,59 @@ final class FakeWebSocket: WebSocket {
     mutableState.withValue {
       $0.receivedEvents.append(event)
 
-      if case .close(let code, let reason) = event {
+      if case .closed(let code, let reason) = event {
         $0.isClosed = true
-        $0.closeCode = code
+        $0.closeCode = code?.rawValue
         $0.closeReason = reason
       }
     }
     eventsContinuation.yield(event)
-    if case .close = event {
+    if case .closed = event {
       eventsContinuation.finish()
     }
   }
 
-  /// Creates a pair of fake ``WebSocket``s that are connected to each other.
-  ///
-  /// Sending a message on one ``WebSocket`` will result in that same message being
-  /// received by the other.
-  ///
-  /// This can be useful in constructing tests.
-  static func fakes(`protocol`: String = "") -> (FakeWebSocket, FakeWebSocket) {
-    let (peer1, peer2) = (FakeWebSocket(protocol: `protocol`), FakeWebSocket(protocol: `protocol`))
+  static func fakes() -> (FakeWebSocket, FakeWebSocket) {
+    let (peer1, peer2) = (FakeWebSocket(), FakeWebSocket())
 
     peer1.mutableState.withValue { $0.other = peer2 }
     peer2.mutableState.withValue { $0.other = peer1 }
 
     return (peer1, peer2)
+  }
+}
+
+/// A transport that hands the client whatever connection `open` returns.
+struct ClosureWebSocketTransport: WebSocketTransport {
+  let open: @Sendable (URL, HTTPFields) async throws -> any WebSocketConnection
+
+  func connect(to url: URL, headerFields: HTTPFields) async throws -> any WebSocketConnection {
+    try await open(url, headerFields)
+  }
+}
+
+extension RealtimeClient {
+  /// Builds a client whose transport is the `wsTransport` closure.
+  init(
+    url: URL,
+    options: RealtimeClientOptions,
+    wsTransport: @escaping @Sendable (URL, HTTPFields) async throws -> any WebSocketConnection,
+    http: HTTPClient,
+    clock: any Clock<Duration>
+  ) {
+    self.init(
+      url: url,
+      options: options,
+      transport: ClosureWebSocketTransport(open: wsTransport),
+      http: http,
+      clock: clock
+    )
+  }
+}
+
+extension WebSocketEvent {
+  /// A close with a plain `Int` code, the way tests script the server.
+  static func close(code: Int?, reason: String?) -> WebSocketEvent {
+    .closed(code: code.map(WebSocketCloseCode.init(rawValue:)), reason: reason)
   }
 }

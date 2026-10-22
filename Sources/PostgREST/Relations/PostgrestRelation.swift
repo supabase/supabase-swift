@@ -10,13 +10,13 @@
 /// Conformance is normally synthesized by the `@Table` or `@SelectionOf` macro in the
 /// `PostgrestMacros` module, or emitted by the schema generator. Hand-written conformances are
 /// supported and are the escape hatch when neither fits.
-public protocol PostgrestSelection: Decodable, Sendable {
+public protocol _PostgrestSelection: Decodable, Sendable {
   /// The relation this shape selects from.
   ///
   /// Naming the source is what stops a selection being handed to the wrong relation. A relation is
-  /// its own source, fixed by the same-type constraint on ``PostgrestRelation``, so a hand-written
+  /// its own source, fixed by the same-type constraint on ``_PostgrestRelation``, so a hand-written
   /// relation conformance declares nothing here.
-  associatedtype Source: PostgrestRelation
+  associatedtype Source: _PostgrestRelation
 
   /// The PostgREST `select` expression for this shape, for example `"id,task"`.
   static var selectString: String { get }
@@ -25,21 +25,21 @@ public protocol PostgrestSelection: Decodable, Sendable {
 /// A queryable source of rows: a table, a view, or a materialized view.
 ///
 /// "Relation" is Postgres's own term for that family. Selecting a whole row is the degenerate
-/// selection, which is why this refines ``PostgrestSelection``.
-public protocol PostgrestRelation: PostgrestSelection where Source == Self {
+/// selection, which is why this refines ``_PostgrestSelection``.
+public protocol _PostgrestRelation: _PostgrestSelection where Source == Self {
   /// The relation's name as PostgREST addresses it.
   static var relationName: String { get }
 
   /// The Postgres schema the relation belongs to.
   ///
-  /// `@Table` sets it from its `schema:` argument, which defaults to ``PublicSchema``. Naming it
-  /// as a type is what lets ``PostgrestSchemaScope`` reject a relation from another schema at
+  /// `@Table` sets it from its `schema:` argument, which defaults to ``_PublicSchema``. Naming it
+  /// as a type is what lets ``_PostgrestSchemaScope`` reject a relation from another schema at
   /// compile time.
-  associatedtype Schema: PostgrestSchema = PublicSchema
+  associatedtype Schema: _PostgrestSchema = _PublicSchema
 
   /// The namespace of this relation's columns.
   ///
-  /// `@Table` generates it as a nested `Columns` struct holding one ``PostgrestColumn`` per
+  /// `@Table` generates it as a nested `Columns` struct holding one ``_PostgrestColumn`` per
   /// column. A hand-written conformance declares its own.
   associatedtype Columns: Sendable
 
@@ -50,7 +50,7 @@ public protocol PostgrestRelation: PostgrestSelection where Source == Self {
   static var columns: Columns { get }
 }
 
-extension PostgrestRelation {
+extension _PostgrestRelation {
   /// The name of the relation's ``Schema``, as PostgREST addresses it.
   public static var schema: String { Schema.name }
 }
@@ -58,13 +58,13 @@ extension PostgrestRelation {
 /// A relation that declares a primary key.
 ///
 /// Conformance is what makes the key-derived operations available, so it is deliberately a separate
-/// protocol rather than an optional member on ``PostgrestRelation``: a relation with no key does
+/// protocol rather than an optional member on ``_PostgrestRelation``: a relation with no key does
 /// not conform, and reaching for one of those operations on it is *no such overload* instead of a
 /// request the database cannot honor.
 ///
 /// `@Table` conforms a type to this whenever a property is marked `@PrimaryKey`. A hand-written
 /// conformance opts in by declaring ``primaryKeyColumns``.
-public protocol PostgrestKeyedRelation: PostgrestRelation {
+public protocol _PostgrestKeyedRelation: _PostgrestRelation {
   /// The columns making up the relation's primary key, in declaration order.
   ///
   /// There is no default. An empty array would conform a keyless relation and let it derive an
@@ -83,11 +83,11 @@ public protocol PostgrestKeyedRelation: PostgrestRelation {
 /// made the `upsert` parameter read like a category error and made every call site stutter.
 ///
 /// There is no matching `Update` shape. A draft is a whole row, so a row type fits a write that
-/// sends one; an update sends a set of column assignments, which ``PostgrestUpdate`` builds from
-/// key paths into this relation's ``PostgrestRelation/Columns`` namespace. Modelling both as row
+/// sends one; an update sends a set of column assignments, which ``_PostgrestUpdate`` builds from
+/// key paths into this relation's ``_PostgrestRelation/Columns`` namespace. Modelling both as row
 /// types is what once made clearing a nullable column impossible — a single optional field cannot
 /// mean both "not assigned" and "assigned null".
-public protocol PostgrestWritableRelation: PostgrestRelation {
+public protocol _PostgrestWritableRelation: _PostgrestRelation {
   /// The shape a write sends: every column, optional exactly where the database can fill it in —
   /// a nullable column, or one with a default. A primary key is included, and required unless it
   /// is also defaulted.

@@ -23,16 +23,12 @@
     private let output: OutputStream
     private let declaredLength: Int64?
     private let onFailure: @Sendable (any Error) -> Void
-    // Touched only on `queue`.
     private var iterator: HTTPBody.Iterator
     private var pending: ArraySlice<UInt8> = []
     private var pulled: Int64 = 0
     private var fetch: Task<Void, Never>?
     private var isClosed = false
 
-    /// Starts pumping `body` into `output`. Calls `onFailure` at most once, when the body throws,
-    /// the stream fails, or the body's byte count disagrees with its declared length; reaching
-    /// the end of the body just closes the stream.
     init(
       body: HTTPBody, output: OutputStream, onFailure: @escaping @Sendable (any Error) -> Void
     ) {
@@ -54,7 +50,6 @@
       output.delegate = nil
     }
 
-    /// Stops pumping and closes the write end. Safe to call more than once.
     func cancel() {
       queue.async { self.close() }
     }
@@ -72,8 +67,6 @@
       }
     }
 
-    /// Writes what it holds while the stream has space, then pulls the next chunk. Idle while a
-    /// pull is in flight; the pull's completion re-enters here.
     private func pump() {
       guard !isClosed, fetch == nil else { return }
       if pending.isEmpty {
@@ -94,7 +87,14 @@
         return output.write(base, maxLength: buffer.count)
       }
       guard written > 0 else {
-        if written < 0 { fail(output.streamError ?? URLError(.unknown)) }
+        // `.atEnd` means URLSession closed the read end, usually because the server answered
+        // before reading the whole body (an early 413). The task still delivers that response;
+        // failing here would cancel it and surface a bare `URLError(.unknown)` instead.
+        if output.streamStatus == .atEnd {
+          close()
+        } else if written < 0 {
+          fail(output.streamError ?? URLError(.unknown))
+        }
         return
       }
       pending = pending.dropFirst(written)
@@ -113,7 +113,6 @@
         pending = chunk
         pump()
       case .success(nil):
-        // `pump` only pulls once `pending` is empty, so everything pulled has been written.
         if let declaredLength, pulled != declaredLength {
           fail(HTTPBodyLengthMismatchError(declared: declaredLength, actual: pulled))
           return

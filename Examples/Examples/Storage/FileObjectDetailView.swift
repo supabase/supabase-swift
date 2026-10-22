@@ -9,8 +9,8 @@ import Supabase
 import SwiftUI
 
 struct FileObjectDetailView: View {
-  let api: StorageFileApi
-  let fileObject: FileObject
+  let api: StorageBucket
+  let fileObject: StorageObject
 
   @Environment(\.openURL) var openURL
   @State var lastActionResult: (action: String, result: Any)?
@@ -21,14 +21,15 @@ struct FileObjectDetailView: View {
         JSONValueView(
           value: .object([
             "name": .string(fileObject.name),
-            "bucketId": fileObject.bucketId.map(JSONValue.string) ?? .null,
-            "owner": fileObject.owner.map(JSONValue.string) ?? .null,
             "id": fileObject.id.map { .string($0.uuidString) } ?? .null,
             "updatedAt": fileObject.updatedAt.map { .string($0.description) } ?? .null,
             "createdAt": fileObject.createdAt.map { .string($0.description) } ?? .null,
             "lastAccessedAt": fileObject.lastAccessedAt.map { .string($0.description) } ?? .null,
-            "metadata": fileObject.metadata.map(JSONValue.object) ?? .null,
-            "buckets": fileObject.buckets.map { .string($0.name) } ?? .null,
+            "version": fileObject.version.map(JSONValue.string) ?? .null,
+            "size": fileObject.metadata?.size.map { .string(String($0)) } ?? .null,
+            "mimeType": fileObject.metadata?.mimeType.map(JSONValue.string) ?? .null,
+            "eTag": fileObject.metadata?.eTag.map(JSONValue.string) ?? .null,
+            "userMetadata": fileObject.userMetadata.map(JSONValue.object) ?? .null,
           ])
         )
       }
@@ -37,7 +38,8 @@ struct FileObjectDetailView: View {
         Button("createSignedURL") {
           Task {
             do {
-              let url = try await api.createSignedURL(path: fileObject.name, expiresIn: 60)
+              let url = try await api.createSignedURL(
+                path: fileObject.name, expiresIn: .seconds(60))
               lastActionResult = ("createSignedURL", url)
               openURL(url)
             } catch {}
@@ -49,7 +51,7 @@ struct FileObjectDetailView: View {
             do {
               let url = try await api.createSignedURL(
                 path: fileObject.name,
-                expiresIn: 60,
+                expiresIn: .seconds(60),
                 download: .withOriginalName
               )
               lastActionResult = ("createSignedURL (download)", url)

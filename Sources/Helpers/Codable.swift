@@ -6,11 +6,12 @@
 //
 
 import ConcurrencyExtras
-package import Foundation
+public import Foundation
 import IssueReporting
 
 extension JSONDecoder {
   /// Default `JSONDecoder` for decoding types from Supabase.
+  @usableFromInline
   package static func supabase() -> JSONDecoder {
     let decoder = JSONDecoder()
     decoder.dateDecodingStrategy = .custom { decoder in
@@ -31,6 +32,7 @@ extension JSONDecoder {
 }
 extension JSONEncoder {
   /// Default `JSONEncoder` for encoding types to Supabase.
+  @usableFromInline
   package static func supabase() -> JSONEncoder {
     let encoder = JSONEncoder()
     encoder.dateEncodingStrategy = .custom { date, encoder in

@@ -37,6 +37,9 @@ supporting_symbols:
   - SupabaseClientOptions.GlobalOptions.clock
   - AuthClient.Configuration.clock
   - RealtimeClientOptions.clock
+  # A per-module logger override on the facade, mirroring `GlobalOptions.logger`; a logging
+  # knob, not a capability.
+  - SupabaseClientOptions.FunctionsOptions.logger
 
   # A handful of PostgrestRequestBuilder members are used across many
   # database.* capabilities simultaneously (executing every query/mutate/rpc,
@@ -44,9 +47,6 @@ supporting_symbols:
   # feature. Every other filter/modifier method is a 1:1 entry point for
   # exactly one capability and is attributed to that feature's own `symbols:`
   # list instead (see the database.* section below).
-  # The typed-query contracts are in the same category: a relation type is used by
-  # both the read and the write features rather than owned by one capability.
-  - PostgrestClient.Configuration.accessToken
   - PostgrestExecutableBuilder
   - PostgrestExecutableBuilder.execute
   - PostgrestExecutablePhase
@@ -63,38 +63,7 @@ supporting_symbols:
   - PostgrestArrayElement
   - PostgrestArrayElement.postgrestArrayElement
   - PostgrestFilterValue.postgrestArrayElement
-  # The request wrapper `where(_:)` is declared on, so one declaration serves both the typed query
-  # and the typed mutation. Shared by every database.using_filters.* capability rather than owned
-  # by one — the operator methods themselves are attributed individually below.
-  - PostgrestFilterableRequest
-  - PostgrestFilterableRequest.Relation
-  - PostgrestFilterableRequest.request
-  - PostgrestFilterableRequest.where
-  - PostgrestMutation
-  - PostgrestMutation.Relation
-  - PostgrestMutation.request
-  - PostgrestMutation.execute
-  # The request value every typed query and mutation holds and sends. Opaque for now: its members
-  # are internal until the inspectable request model is settled.
-  - PostgrestRequest
-  # The update payload is a set of column assignments rather than a row shape, which is what lets
-  # a nullable column be cleared: a column is in the body because it was assigned, and `nil` is
-  # sent as an explicit null. Shared by the typed update entry point and any caller that builds an
-  # update ahead of time and hands it over.
-  - PostgrestUpdate
-  - PostgrestUpdate.init
-  - PostgrestUpdate.isEmpty
-  - PostgrestUpdate.subscript
-  - PostgrestUpdate.encode
   - PostgrestQueryPhase
-  - PostgrestRelation
-  - PostgrestRelation.Columns
-  - PostgrestRelation.columns
-  - PostgrestRelation.relationName
-  - PostgrestRelation.schema
-  - PostgrestRelation.Schema
-  - PostgrestKeyedRelation
-  - PostgrestKeyedRelation.primaryKeyColumns
   - PostgrestRequestBuilder
   - PostgrestRequestBuilder.Operator
   - PostgrestRequestBuilder.execute
@@ -105,127 +74,21 @@ supporting_symbols:
   - PostgrestRequestBuilder.plainToFullTextSearch
   - PostgrestRequestBuilder.setHeader
   - PostgrestRequestBuilder.webFullTextSearch
-  - PostgrestSelection
-  - PostgrestSelection.Source
-  - PostgrestSelection.selectString
   - PostgrestTransformPhase
   - PostgrestTransformablePhase
-  - PostgrestQuery.Relation
-  - PostgrestWritableRelation
-  - PostgrestWritableRelation.Draft
 
-  # The typed column-expression surface. A column expression is the left-hand side of every
-  # filter, every `order` key and every `select` entry at once, so none of these types belongs to
-  # a single capability. The ~34 operator methods declared over them are 1:1 with a capability and
-  # are attributed to that feature's own `symbols:` list instead (see database.using_filters.*
-  # below); `asc()`/`desc()` likewise, under database.using_modifiers.order.
-  #
-  # The position refinements are rules enforced by the type system rather than by the server: the
-  # base protocol is select position, `PostgrestFilterableExpression` adds the left of a filter,
-  # `PostgrestOrderableExpression` adds an `order` key. `PostgrestNullableExpression` is not a
-  # position but a nullability refinement, and it is where `isNull()` lives so that any future
-  # nullable expression gets the operator by conforming rather than by redeclaring it.
-  - PostgrestColumnExpression
-  - PostgrestColumnExpression.Root
-  - PostgrestColumnExpression.Value
-  - PostgrestColumnExpression.postgrestExpression
-  - PostgrestFilterableExpression
-  - PostgrestOrderableExpression
-  - PostgrestNullableExpression
-  # One stored-column struct with a nullability phantom, plus the two aliases callers and the
-  # generator spell it as. The members are on the struct, so they are registered there.
-  - PostgrestStoredColumn
-  - PostgrestStoredColumn.init
-  - PostgrestStoredColumn.postgrestExpression
-  - PostgrestStoredColumn.Position
-  - PostgrestColumn
-  - PostgrestNullableColumn
-  - PostgrestNullability
-  - PostgrestNotNull
-  - PostgrestNullable
-  # The filter value itself, and the AND junction. `||` and `!` map onto
-  # database.using_filters.or and .not; `&&` has no capability of its own — PostgREST ANDs
-  # top-level query parameters already, so conjunction is the default rather than a feature — and
-  # sits here instead of being attributed to a capability it does not implement.
-  - PostgrestFilter
+  # The typed query API is experimental. Every type it declares is `_`-prefixed (`_PostgrestRelation`,
+  # `_PostgrestQuery`, …), and its entry points (`from<R>(_:)`, `schema<S>(_:)`) are
+  # `@_spi(Experimental)`. The public symbol graph the compliance scanner reads holds neither, so
+  # those symbols are not listed here or under the database.* features: the features keep their
+  # status through the string builder's symbols. What remains visible is the AND junction: `||`
+  # and `!` map onto database.using_filters.or and .not; `&&` has no capability of its own —
+  # PostgREST ANDs top-level query parameters already, so conjunction is the default rather than a
+  # feature — and sits here instead of being attributed to a capability it does not implement.
   - "&&"
-  # The operator every typed filter is built through, one case per wire token. The operator
-  # methods on the expression protocols are attributed to their capabilities below; the enum is the
-  # shared spelling behind all of them, so it sits here rather than under any one of them.
-  - PostgrestFilterOperator
-  - PostgrestFilterOperator.token
-  - PostgrestFilterOperator.eq
-  - PostgrestFilterOperator.neq
-  - PostgrestFilterOperator.gt
-  - PostgrestFilterOperator.gte
-  - PostgrestFilterOperator.lt
-  - PostgrestFilterOperator.lte
-  - PostgrestFilterOperator.is
-  - PostgrestFilterOperator.isDistinct
-  - PostgrestFilterOperator.in
-  - PostgrestFilterOperator.like
-  - PostgrestFilterOperator.ilike
-  - PostgrestFilterOperator.likeAllOf
-  - PostgrestFilterOperator.likeAnyOf
-  - PostgrestFilterOperator.ilikeAllOf
-  - PostgrestFilterOperator.ilikeAnyOf
-  - PostgrestFilterOperator.regexMatch
-  - PostgrestFilterOperator.regexIMatch
-  - PostgrestFilterOperator.contains
-  - PostgrestFilterOperator.containedBy
-  - PostgrestFilterOperator.overlaps
-  - PostgrestFilterOperator.rangeLt
-  - PostgrestFilterOperator.rangeGt
-  - PostgrestFilterOperator.rangeGte
-  - PostgrestFilterOperator.rangeLte
-  - PostgrestFilterOperator.rangeAdjacent
-  - PostgrestFilterOperator.textSearch
-
-  # Casts, JSON paths and aggregates. These are absent from `capabilities/database.yaml` in every
-  # SDK — there is no `database.*` id to attribute them to yet — so they are registered here,
-  # which accounts for them without claiming a capability.
-  #
-  # All three are one type. A derivation keeps the embed name and the inner expression apart, so a
-  # further derivation lands inside an embed's parentheses, and a phantom `Position` carries where
-  # the result may appear — inherited from whatever it was applied to. `PostgrestCastColumn` and
-  # `PostgrestAggregate` remain as aliases that fix `Position` to select-only.
-  - PostgrestDerivedExpression
-  - PostgrestDerivedExpression.postgrestExpression
-  - PostgrestDerivedExpression.countAll
-  - PostgrestCastColumn
-  - PostgrestAggregate
-  - PostgrestCastTarget
-  - PostgrestCastTarget.init
-  - PostgrestCastTarget.sqlType
-  - PostgrestCastTarget.text
-  - PostgrestCastTarget.int
-  - PostgrestCastTarget.double
-  - PostgrestCastTarget.boolean
-  # Declared once each on the base protocol, and correct for a stored column, a derivation and
-  # either embed direction alike, because each expression kind places a derivation through a
-  # single hook rather than shadowing every accessor.
-  - PostgrestColumnExpression.cast
-  - PostgrestColumnExpression.jsonText
-  - PostgrestColumnExpression.jsonObject
-  - PostgrestColumnExpression.sum
-  - PostgrestColumnExpression.avg
-  - PostgrestColumnExpression.min
-  - PostgrestColumnExpression.max
-  - PostgrestColumnExpression.count
-
-  # Where an expression may appear, as a phantom type. The two marker protocols are what the
-  # conditional conformances of PostgrestDerivedExpression key off, so a derivation's position is
-  # the intersection of the accessor's and its receiver's.
-  - PostgrestPosition
-  - PostgrestOrderablePosition
-  - PostgrestFilterablePosition
-  - PostgrestSelectOnly
-  - PostgrestSelectAndOrder
-  - PostgrestEveryPosition
-  - PostgrestColumnExpression.Position
 
   # The `PostgrestMacros` attributes. `@Table` synthesizes the relation
-  # conformance used by every database.* typed entry point, and the three
+  # conformance used by every database.* typed entry point, and the four
   # markers are inputs to that one expansion rather than capabilities of their
   # own. Attribute names are unprefixed on purpose — nothing re-exports
   # `PostgrestMacros`, so a user opts in with an explicit import.
@@ -234,7 +97,9 @@ supporting_symbols:
   - Column
   - PrimaryKey
   - Default
+  - Generated
   - Relationship
+  - Aggregate
   # Error root shared by every module error (SDK-1788). Each module's error
   # struct conforms to SupabaseError and carries the failed HTTP response as an
   # HTTPErrorResponse, so one catch clause serves the whole SDK. The
@@ -282,6 +147,19 @@ supporting_symbols:
   - StorageError.ServerError.statusCode
   - StorageError.ServerError.error
   - StorageError.ServerError.message
+  - StorageClient
+  - StorageClient.init
+  - StorageClient.configuration
+  - StorageClientConfiguration
+  - StorageClientConfiguration.init
+  - StorageClientConfiguration.url
+  - StorageClientConfiguration.headers
+  - StorageClientConfiguration.logger
+  - StorageClientConfiguration.usesNewHostname
+  - StorageError.ServerError.code
+  - StorageError.code
+  - StorageError.serverStatusCode
+  - StorageError.isNotFound
   - StorageError.init
   - StorageError.kind
   - StorageError.message
@@ -299,6 +177,7 @@ supporting_symbols:
   - PostgrestError.Kind.transport
   - PostgrestError.Kind.decoding
   - PostgrestError.Kind.invalidRequest
+  - PostgrestError.Kind.accessToken
   - PostgrestError.ServerError
   - PostgrestError.ServerError.init
   - PostgrestError.ServerError.code
@@ -353,6 +232,16 @@ supporting_symbols:
   - AuthMFARecoveryCodesGenerateResponse.friendlyName
   - AuthMFARecoveryCodesGenerateResponse.total
   - AuthMFARecoveryCodesGenerateResponse.codes
+  # RealtimeClient and RealtimeChannel are the actors every realtime.* capability
+  # hangs off; their executors and identity properties are not a capability of their own.
+  - SupabaseClient.realtime
+  - RealtimeClient
+  - RealtimeClient.init
+  - RealtimeClient.unownedExecutor
+  - RealtimeChannel
+  - RealtimeChannel.topic
+  - RealtimeChannel.config
+  - RealtimeChannel.unownedExecutor
   # RealtimeError (SDK-1788) is thrown by every realtime.* capability rather
   # than owned by one.
   - RealtimeError
@@ -374,6 +263,44 @@ supporting_symbols:
   - RealtimeError.description
   - RealtimeError.maxRetryAttemptsReached
   - RealtimeError.channelClosedByServer
+  - RealtimeError.Kind.notSubscribed
+  - RealtimeError.Kind.notConnected
+  - RealtimeError.Kind.unauthorized
+  - RealtimeError.Kind.rateLimited
+  - RealtimeError.Kind.channelClosed
+  - RealtimeError.Kind.payloadTooLarge
+  - RealtimeError.serverCode
+  - RealtimeError.isRetryable
+  # The code the server prefixes to a join or channel error reason (SDK-2098).
+  - RealtimeError.ServerCode
+  - RealtimeError.ServerCode.init
+  - RealtimeError.ServerCode.rawValue
+  - RealtimeError.ServerCode.topicNameRequired
+  - RealtimeError.ServerCode.invalidJWTToken
+  - RealtimeError.ServerCode.malformedJWT
+  - RealtimeError.ServerCode.jwtSignatureError
+  - RealtimeError.ServerCode.jwtSignerError
+  - RealtimeError.ServerCode.unauthorized
+  - RealtimeError.ServerCode.privateOnly
+  - RealtimeError.ServerCode.tenantNotFound
+  - RealtimeError.ServerCode.realtimeDisabledForTenant
+  - RealtimeError.ServerCode.realtimeDisabledForConfiguration
+  - RealtimeError.ServerCode.unableToReplayMessages
+  - RealtimeError.ServerCode.channelRateLimitReached
+  - RealtimeError.ServerCode.connectionRateLimitReached
+  - RealtimeError.ServerCode.clientJoinRateLimitReached
+  - RealtimeError.ServerCode.realtimeRestarting
+  - RealtimeError.ServerCode.initializingProjectConnection
+  - RealtimeError.ServerCode.increaseConnectionPool
+  - RealtimeError.ServerCode.databaseLackOfConnections
+  - RealtimeError.ServerCode.databaseConnectionRateLimitReached
+  - RealtimeError.ServerCode.unableToConnectToProject
+  - RealtimeError.ServerCode.queryCanceled
+  - RealtimeError.ServerCode.missingPartition
+  - RealtimeError.ServerCode.timeoutOnRpcCall
+  - RealtimeError.ServerCode.errorOnRpcCall
+  - RealtimeError.ServerCode.postgresChangesSubscribeTimeout
+  - RealtimeError.ServerCode.unknownErrorOnChannel
   # The default server-reply timeout governs subscribe, unsubscribe,
   # broadcast and broadcast_http alike rather than being owned by one.
   - RealtimeClientOptions.defaultTimeout
@@ -863,9 +790,9 @@ features:
       - AuthLocalStorage
   client.session_management.persist_session:
     status: implemented
-    note: "Sessions persist by default via AuthLocalStorage.defaultLocalStorage (KeychainLocalStorage on Apple platforms). There's no separate boolean toggle to disable persistence — that's done by swapping in a custom, non-persisting AuthLocalStorage via client.session_management.custom_storage."
+    note: "Sessions persist by default via AuthClient.Configuration.defaultLocalStorage (KeychainLocalStorage on Apple platforms). There's no separate boolean toggle to disable persistence — that's done by swapping in a custom, non-persisting AuthLocalStorage via client.session_management.custom_storage."
     symbols:
-      - AuthLocalStorage.defaultLocalStorage
+      - AuthClient.Configuration.defaultLocalStorage
 
   client.request_configuration.custom_http_client:
     status: implemented
@@ -874,6 +801,7 @@ features:
       - AuthClient.Configuration.http
       - PostgrestClient.Configuration.http
       - StorageClientConfiguration.http
+      - SupabaseClientOptions.FunctionsOptions.http
     supporting_symbols:
       - HTTPClientConfiguration
       - HTTPClientConfiguration.init
@@ -883,6 +811,9 @@ features:
       - ClientTransport.send
       - ClientMiddleware
       - ClientMiddleware.intercept
+      - AccessTokenMiddleware
+      - AccessTokenMiddleware.init
+      - AccessTokenMiddleware.intercept
       - URLSessionTransport
       - URLSessionTransport.init
       - URLSessionTransport.send
@@ -916,6 +847,8 @@ features:
     status: implemented
     symbols:
       - SupabaseClientOptions.GlobalOptions.headers
+      - StorageClient.setHeader
+      - StorageBucket.setHeader
 
   client.observability.trace_propagation:
     status: implemented
@@ -927,23 +860,14 @@ features:
     status: implemented
     symbols:
       - PostgrestClient.from
-    supporting_symbols:
-      # The value `from(_ type:)` returns once a relation has been chosen but
-      # no operation has been picked yet.
-      - PostgrestSource
   database.query.select:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.select
-      - PostgrestSource.select
     supporting_symbols:
-      - PostgrestQuery
-      - PostgrestQuery.request
-      - PostgrestQuery.execute
       # Row counting. `capabilities/database.yaml` has no id for it — it is an option on every
       # verb in supabase-js rather than a modifier — so it is registered against `select`, the
       # verb the count-only HEAD form belongs to, instead of claiming a capability of its own.
-      - PostgrestQuery.count
       - CountOption
       - CountOption.init
       - CountOption.rawValue
@@ -956,12 +880,6 @@ features:
       - PostgrestClient.schema
     supporting_symbols:
       - PostgrestClient.Configuration.schema
-      - PostgrestSchema
-      - PostgrestSchema.name
-      - PublicSchema
-      - PublicSchema.name
-      - PostgrestSchemaScope
-      - PostgrestSchemaScope.from
   database.query.rpc:
     status: implemented
     symbols:
@@ -971,28 +889,18 @@ features:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.insert
-      - PostgrestSource.insert
   database.mutate.update:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.update
-      - PostgrestSource.update
   database.mutate.upsert:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.upsert
-      - PostgrestSource.upsert
-    supporting_symbols:
-      - PostgrestConflictResolution
-      - PostgrestConflictResolution.init
-      - PostgrestConflictResolution.rawValue
-      - PostgrestConflictResolution.mergeDuplicates
-      - PostgrestConflictResolution.ignoreDuplicates
   database.mutate.delete:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.delete
-      - PostgrestSource.delete
   database.mutate.select_after_mutation:
     status: implemented
     symbols:
@@ -1000,7 +908,6 @@ features:
       - PostgrestRequestBuilder.update
       - PostgrestRequestBuilder.upsert
       - PostgrestRequestBuilder.delete
-      - PostgrestMutation.returning
     supporting_symbols:
       - PostgrestReturningOptions
       - PostgrestReturningOptions.init
@@ -1013,114 +920,95 @@ features:
     symbols:
       - PostgrestRequestBuilder.eq
       - PostgrestRequestBuilder.equals
-      - PostgrestFilterableExpression.eq
+      - "=="
+    note: "`==` also has a `nil` overload on a nullable column, which renders `is.null` (never `eq.null`); it is listed here once, since a symbol belongs to one feature."
   database.using_filters.neq:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.neq
       - PostgrestRequestBuilder.notEquals
-      - PostgrestFilterableExpression.neq
+      - "!="
   database.using_filters.gt:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.gt
       - PostgrestRequestBuilder.greaterThan
-      - PostgrestFilterableExpression.gt
+      - ">"
   database.using_filters.gte:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.gte
       - PostgrestRequestBuilder.greaterThanOrEquals
-      - PostgrestFilterableExpression.gte
+      - ">="
   database.using_filters.lt:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.lt
       - PostgrestRequestBuilder.lowerThan
-      - PostgrestFilterableExpression.lt
+      - "<"
   database.using_filters.lte:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.lte
       - PostgrestRequestBuilder.lowerThanOrEquals
-      - PostgrestFilterableExpression.lte
+      - "<="
   database.using_filters.like:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.like
-      - PostgrestFilterableExpression.like
   database.using_filters.ilike:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.ilike
-      - PostgrestFilterableExpression.ilike
   database.using_filters.is:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.is
-      - PostgrestFilterableExpression.isTrue
-      - PostgrestFilterableExpression.isFalse
-      - PostgrestNullableExpression.isNull
   database.using_filters.in:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.in
-      - PostgrestFilterableExpression.in
   database.using_filters.contains:
     status: implemented
     note: "The operand literal is chosen by the column's Postgres type, not by the operator — `cs.{a,b}` for an array, `cs.[1,3)` for a range, `cs.{\"a\":1}` for jsonb. The typed surface spells the three as separate methods so each takes the operand shape it needs; the string builder takes one dictionary/array argument."
     symbols:
       - PostgrestRequestBuilder.contains
-      - PostgrestFilterableExpression.contains
-      - PostgrestFilterableExpression.containsRange
-      - PostgrestFilterableExpression.containsJSON
   database.using_filters.contained_by:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.containedBy
-      - PostgrestFilterableExpression.containedBy
-      - PostgrestFilterableExpression.containedByRange
-      - PostgrestFilterableExpression.containedByJSON
   database.using_filters.range_gt:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.rangeGt
       - PostgrestRequestBuilder.rangeGreaterThan
-      - PostgrestFilterableExpression.rangeGt
   database.using_filters.range_gte:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.rangeGte
       - PostgrestRequestBuilder.rangeGreaterThanOrEquals
-      - PostgrestFilterableExpression.rangeGte
   database.using_filters.range_lt:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.rangeLt
       - PostgrestRequestBuilder.rangeLowerThan
-      - PostgrestFilterableExpression.rangeLt
   database.using_filters.range_lte:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.rangeLte
       - PostgrestRequestBuilder.rangeLowerThanOrEquals
-      - PostgrestFilterableExpression.rangeLte
   database.using_filters.range_adjacent:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.rangeAdjacent
-      - PostgrestFilterableExpression.rangeAdjacent
   database.using_filters.overlaps:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.overlaps
-      - PostgrestFilterableExpression.overlaps
-      - PostgrestFilterableExpression.overlapsRange
   database.using_filters.text_search:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.textSearch
-      - PostgrestFilterableExpression.textSearch
     supporting_symbols:
       - TextSearchType
       - TextSearchType.init
@@ -1174,27 +1062,22 @@ features:
       - "||"
   database.using_filters.raw:
     status: implemented
-    note: "Two escape hatches on the typed surface, at different strengths. `PostgrestFilterableExpression.raw(_:)` keeps the column compiler-checked and leaves only the operand as a string; `PostgrestFilter.raw(_:_:)` takes both as strings, for an expression the generated namespace cannot name at all."
+    note: "Two escape hatches on the typed surface, at different strengths. `_PostgrestFilterableExpression.raw(_:)` keeps the column compiler-checked and leaves only the operand as a string; `_PostgrestFilter.raw(_:_:)` takes both as strings, for an expression the generated namespace cannot name at all."
     symbols:
       - PostgrestRequestBuilder.filter
-      - PostgrestFilterableExpression.raw
-      - PostgrestFilter.raw
   database.using_filters.regex:
     status: implemented
     note: "PostgrestRequestBuilder.match(_:pattern:) — the PostgrestFilterValue-typed overload backing the `~` operator, distinct from the dictionary-based overload used by database.using_filters.match above."
     symbols:
       - PostgrestRequestBuilder.match
-      - PostgrestFilterableExpression.regexMatch
   database.using_filters.regex_icase:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.imatch
-      - PostgrestFilterableExpression.regexIMatch
   database.using_filters.is_distinct:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.isDistinct
-      - PostgrestFilterableExpression.isDistinct
   database.using_filters.not_in:
     status: implemented
     note: "The typed surface has no dedicated `notIn`: negation is the `!` operator on the filter tree, so `!$0.id.in([1, 2])` renders `id=not.in.(1,2)`."
@@ -1204,124 +1087,83 @@ features:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.likeAllOf
-      - PostgrestFilterableExpression.likeAllOf
   database.using_filters.like_any:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.likeAnyOf
-      - PostgrestFilterableExpression.likeAnyOf
   database.using_filters.ilike_all:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.iLikeAllOf
-      - PostgrestFilterableExpression.ilikeAllOf
   database.using_filters.ilike_any:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.iLikeAnyOf
-      - PostgrestFilterableExpression.ilikeAnyOf
 
   database.using_modifiers.order:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.order
-      - PostgrestQuery.order
-      - PostgrestOrderableExpression.asc
-      - PostgrestOrderableExpression.desc
-      - PostgrestOrderableExpression.nulls
-    supporting_symbols:
-      - PostgrestOrdering
-      - PostgrestOrdering.nulls
-      - PostgrestNullPlacement
-      - PostgrestNullPlacement.init
-      - PostgrestNullPlacement.rawValue
-      - PostgrestNullPlacement.first
-      - PostgrestNullPlacement.last
   database.using_modifiers.limit:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.limit
-      - PostgrestQuery.limit
   database.using_modifiers.range:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.range
-      - PostgrestQuery.range
   database.using_modifiers.single_row:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.single
-      - PostgrestQuery.single
   database.using_modifiers.maybe_single_row:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.maybeSingle
-      - PostgrestQuery.maybeSingle
   database.using_modifiers.strip_nulls:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.stripNulls
-      - PostgrestQuery.stripNulls
   database.using_modifiers.format_csv:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.csv
-      - PostgrestQuery.csv
-    supporting_symbols:
-      # The dead end csv(), geojson() and explain(...) return. It has no stripNulls(), which is
-      # what makes the csv + stripNulls conflict unrepresentable.
-      - PostgrestRawQuery
-      - PostgrestRawQuery.execute
   database.using_modifiers.format_geojson:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.geojson
-      - PostgrestQuery.geojson
   database.using_modifiers.explain:
     status: implemented
     symbols:
       - ExplainFormat
-      - PostgrestQuery.explain
   database.using_modifiers.max_affected_rows:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.maxAffected
-  # Cancellation is plain Swift structured concurrency (cancel the enclosing
-  # Task; the request's retry loop observes it via Task.checkCancellation())
-  # — there is no dedicated cancel()-style symbol to register.
-  database.using_modifiers.request_cancellation: implemented
+  # Cancellation is plain Swift structured concurrency — there is no dedicated
+  # cancel()-style symbol to register. PostgrestCancellationTests pins the
+  # behavior end to end (SDK-1640).
+  database.using_modifiers.request_cancellation:
+    status: implemented
+    note: "Cancel the Task that awaits execute(). The transport exchange is torn down (URLSessionTransport cancels its URLSessionTask), a cancellation during a retry back-off stops the retry loop instead of starting the next attempt, and the caller gets CancellationError, never a PostgrestError wrapping URLError(.cancelled). Same on the typed and the untyped path, since both send through _PostgrestRequest."
   database.using_modifiers.relationship_embed:
-    status: partially_implemented
-    note: "Two spellings. The string builder takes query-string syntax in select() (e.g. 'user(*)'). The typed surface has a dedicated relationship API: `PostgrestToOneRelation`/`PostgrestToManyRelation`, declared on a relation's `Columns` namespace (emitted by the postgres-meta-backed generator, or hand-written; `@Table` does not synthesize them, since a macro cannot see foreign-key metadata), and projecting a column through one is compiler-checked in select position, and in order position for the to-one direction only (a to-many order key is PGRST118 on the server). Still partial: filtering *inside* an embed needs the `parent.title` rendering and an `!inner` decision, which is scoped separately (SDK-1575) — `embeddedFilterName` is what it will read."
+    status: implemented
+    note: "Two spellings. The string builder takes query-string syntax in select() (e.g. 'user!inner(*)') and scopes or/order/limit/range with `referencedTable:`. The typed surface has a dedicated relationship API: `_PostgrestToOneRelation`/`_PostgrestToManyRelation`, declared on a relation's `Columns` namespace (emitted by the postgres-meta-backed generator, or hand-written; `@Table` does not synthesize them, since a macro cannot see foreign-key metadata), and projecting a column through one is compiler-checked in select position, and in order position for the to-one direction only (a to-many order key is PGRST118 on the server). A `@SelectionOf` type declares embeds with `@Relationship(\\Comment.todoID)`; the foreign key is required, so the generated select always carries the `!todo_id` hint and PostgREST's HTTP 300 `PGRST201` cannot be produced. Filtering, ordering and limiting *inside* an embed is a scope on the query: `embedded(_:_:)` narrows the nested rows only, and `requiring(_:_:)` emits `!inner` and drops unmatched parents. Two methods rather than a flag, because PostgREST's default keeps every parent row and a flag's default would be silently wrong half the time. Scopes nest (`comments.replies.limit=3`) and filter the embedded relation, not the nested selection, so an unselected column is still filterable. A computed relationship (a row- or set-returning function over the parent's row type) is declared the same way, as a `_PostgrestToOneRelation`/`_PostgrestToManyRelation` on `Columns` named by the function, and a selection embeds it with `@Relationship(computed: \\Channel.Columns.getMessages)`, which renders `get_messages(...)` with no foreign-key hint and takes the same scopes."
+    # The typed spellings (`_PostgrestToOneRelation`, `embedded`, `requiring`, …) are
+    # `_`-prefixed or reached through an `@_spi(Experimental)` entry point, so the symbol graph does
+    # not hold them. The string builder embeds through the `select()` query string.
     symbols:
-      - PostgrestToOneRelation.subscript
-      - PostgrestToManyRelation.subscript
-    supporting_symbols:
-      - PostgrestToOneRelation
-      - PostgrestToOneRelation.init
-      - PostgrestToOneRelation.postgrestEmbedName
-      - PostgrestToManyRelation
-      - PostgrestToManyRelation.init
-      - PostgrestToManyRelation.postgrestEmbedName
-      # An embedded projection renders `parent(title)`, so a cast, JSON path or aggregate on one
-      # has to land *inside* the parentheses — PostgREST 16.1 answers 200 and silently drops
-      # anything outside them. Each embed kind states that once, by placing a derivation itself,
-      # and declares no accessors of its own: the eight live on PostgrestColumnExpression above.
-      # Cardinality is the `Position` each carries — the to-one direction is orderable, the
-      # to-many direction is select-only, since a to-many order key is PGRST118.
-      - PostgrestToOneColumn
-      - PostgrestToOneColumn.postgrestExpression
-      - PostgrestToOneColumn.embeddedFilterName
-      - PostgrestToOneColumn.Position
-      - PostgrestToManyColumn
-      - PostgrestToManyColumn.postgrestExpression
-      - PostgrestToManyColumn.embeddedFilterName
-      - PostgrestToManyColumn.Position
+      - PostgrestRequestBuilder.select
   database.using_modifiers.dry_run:
     status: implemented
     symbols:
       - PostgrestRequestBuilder.dryRun
 
+  database.configuration.access_token:
+    status: implemented
+    note: "The token can be a static value via `headers`, or resolved per request from a callback (`PostgrestClient.Configuration.accessToken`), invoked fresh for every `execute()` so an in-flight request's own call already fixed its header before any later mutation to whatever the callback reads from. A throwing callback fails the request before it is sent, as a `PostgrestError` of kind `accessToken` with the callback's error in `underlyingError`."
+    symbols:
+      - PostgrestClient.Configuration.accessToken
   database.configuration.auto_retry:
     status: implemented
     symbols:
@@ -1340,6 +1182,67 @@ features:
     status: implemented
     symbols:
       - FunctionsClient.invoke
+    # The request side (Configuration, FunctionBody, FunctionInvokeOptions), the
+    # response side (FunctionResponse) and the error vocabulary (FunctionsError.Code,
+    # the platform's `sb-error-code`, and the response header names) all belong to
+    # the one invoke capability.
+    supporting_symbols:
+      - FunctionsClient.Configuration
+      - FunctionsClient.Configuration.decoder
+      - FunctionsClient.Configuration.headers
+      - FunctionsClient.Configuration.http
+      - FunctionsClient.Configuration.init
+      - FunctionsClient.Configuration.logger
+      - FunctionsClient.Configuration.url
+      - FunctionsClient.configuration
+      - FunctionInvokeOptions.headers
+      - FunctionInvokeOptions.query
+      - FunctionBody
+      - FunctionBody.contentType
+      - FunctionBody.data
+      - FunctionBody.httpBody
+      - FunctionBody.json
+      - FunctionBody.stream
+      - FunctionBody.text
+      - FunctionResponse
+      - FunctionResponse.body
+      - FunctionResponse.contentType
+      - FunctionResponse.decode
+      - FunctionResponse.description
+      - FunctionResponse.executionID
+      - FunctionResponse.headers
+      - FunctionResponse.region
+      - FunctionResponse.requestID
+      - FunctionResponse.status
+      - FunctionResponse.text
+      - FunctionsError.Code
+      - FunctionsError.Code.bootError
+      - FunctionsError.Code.edgeFunctionError
+      - FunctionsError.Code.edgeRuntimeError
+      - FunctionsError.Code.edgeRuntimeServiceDegraded
+      - FunctionsError.Code.idleTimeout
+      - FunctionsError.Code.init
+      - FunctionsError.Code.invalidResponseStatusCode
+      - FunctionsError.Code.invalidURL
+      - FunctionsError.Code.notFound
+      - FunctionsError.Code.notFoundFunctionBlob
+      - FunctionsError.Code.rateLimitExceeded
+      - FunctionsError.Code.rawValue
+      - FunctionsError.Code.unauthorizedAsymmetricJWT
+      - FunctionsError.Code.unauthorizedInvalidJWTFormat
+      - FunctionsError.Code.unauthorizedLegacyJWT
+      - FunctionsError.Code.unauthorizedNoAuthHeader
+      - FunctionsError.Code.unauthorizedUnsupportedTokenAlgorithm
+      - FunctionsError.Code.workerError
+      - FunctionsError.Code.workerResourceLimit
+      - FunctionsError.Kind.invalidRequest
+      - FunctionsError.code
+      - FunctionsError.isPlatformError
+      - HTTPField.Name.sbErrorCode
+      - HTTPField.Name.xDenoExecutionID
+      - HTTPField.Name.xRegion
+      - HTTPField.Name.xRelayError
+      - HTTPField.Name.xSbEdgeRegion
   # No runtime setter exists; the token is supplied as an `accessToken`
   # closure at construction time and re-invoked on every request, so
   # "updating" the token means having the closure read from a mutable
@@ -1347,23 +1250,27 @@ features:
   functions.invocation.set_auth_token:
     status: implemented
     symbols:
-      - FunctionsClient.init
+      - FunctionsClient.Configuration.accessToken
+  # The method is `HTTPRequest.Method` from swift-http-types (re-exported); no SDK-owned type.
   functions.invocation.method_override:
     status: implemented
     symbols:
-      - FunctionInvokeOptions.Method
-      - FunctionInvokeOptions.Method.init
-      - FunctionInvokeOptions.Method.rawValue
-      - FunctionInvokeOptions.Method.get
-      - FunctionInvokeOptions.Method.post
-      - FunctionInvokeOptions.Method.put
-      - FunctionInvokeOptions.Method.patch
-      - FunctionInvokeOptions.Method.delete
+      - FunctionInvokeOptions.method
   functions.invocation.streaming_response:
     status: implemented
-    note: "Yields Data chunks via an AsyncThrowingStream rather than passing through a raw Response object; _invokeWithStreamedResponse is marked experimental (leading underscore) but is a genuine public symbol."
+    note: "stream() returns the head as soon as it arrives; the body is an HTTPBody of byte chunks whose boundaries follow the network. No SSE framing: callers bring their own parser. On Linux the body arrives whole when the server closes (SDK-1839)."
     symbols:
-      - FunctionsClient._invokeWithStreamedResponse
+      - FunctionsClient.stream
+      - FunctionStreamResponse.body
+    supporting_symbols:
+      - FunctionStreamResponse
+      - FunctionStreamResponse.status
+      - FunctionStreamResponse.headers
+      - FunctionStreamResponse.contentType
+      - FunctionStreamResponse.region
+      - FunctionStreamResponse.executionID
+      - FunctionStreamResponse.requestID
+      - FunctionStreamResponse.description
   functions.invocation.region_selection:
     status: implemented
     symbols:
@@ -1377,6 +1284,7 @@ features:
       - FunctionRegion.apSoutheast2
       - FunctionRegion.caCentral1
       - FunctionRegion.euCentral1
+      - FunctionRegion.euCentral2
       - FunctionRegion.euWest1
       - FunctionRegion.euWest2
       - FunctionRegion.euWest3
@@ -1384,101 +1292,116 @@ features:
       - FunctionRegion.usEast1
       - FunctionRegion.usWest1
       - FunctionRegion.usWest2
+      - FunctionsClient.Configuration.region
+      - FunctionInvokeOptions.region
   # Cancellation is plain Swift structured concurrency: cancel the enclosing
-  # Task for invoke(), or stop iterating / cancel the Task for the
-  # AsyncThrowingStream returned by _invokeWithStreamedResponse. No dedicated
-  # cancel()-style symbol exists.
-  functions.invocation.request_cancellation: implemented
+  # Task for invoke(), or stop iterating / cancel the Task for the body of
+  # stream(). No dedicated cancel()-style symbol exists.
+  functions.invocation.request_cancellation:
+    status: implemented
+    note: "Cancel the enclosing Task. invoke() and stream() throw CancellationError, never a FunctionsError wrapping URLError(.cancelled); cancelling the task that iterates FunctionStreamResponse.body cancels the underlying URLSessionTask and throws CancellationError from the loop. On Linux the body is buffered before iteration starts, so a cancel there cannot cut the transfer short (SDK-1839)."
+    symbols:
+      - FunctionsClient.invoke
+      - FunctionsClient.stream
+      - FunctionStreamResponse.body
   functions.invocation.timeout:
     status: implemented
     symbols:
       - FunctionsClient.requestIdleTimeout
       - HTTPClientConfiguration.timeout
+      - FunctionInvokeOptions.timeout
 
   # ── Realtime ───────────────────────────────────────────────────────────────
 
   realtime.client.connect:
     status: implemented
     symbols:
-      - RealtimeClientV2.connect
+      - RealtimeClient.connect
   realtime.client.disconnect:
     status: implemented
     symbols:
-      - RealtimeClientV2.disconnect
+      - RealtimeClient.disconnect
   realtime.client.get_channels:
     status: implemented
     symbols:
-      - RealtimeClientV2.channels
+      - RealtimeClient.channels
   realtime.client.remove_channel:
     status: implemented
     symbols:
-      - RealtimeClientV2.removeChannel
+      - RealtimeClient.removeChannel
   realtime.client.remove_all_channels:
     status: implemented
     symbols:
-      - RealtimeClientV2.removeAllChannels
+      - RealtimeClient.removeAllChannels
   realtime.client.connection_state:
     status: implemented
     symbols:
-      - RealtimeClientV2.status
+      - RealtimeClient.status
     supporting_symbols:
+      - RealtimeClient.statusChanges
       - RealtimeClientStatus.init
       - RealtimeClientStatus.rawValue
   realtime.client.listen_heartbeats:
     status: implemented
     symbols:
-      - RealtimeClientV2.onHeartbeat
+      - RealtimeClient.heartbeats
     supporting_symbols:
       - HeartbeatStatus.init
       - HeartbeatStatus.rawValue
   realtime.client.set_auth_token:
     status: implemented
     symbols:
-      - RealtimeClientV2.setAuth
+      - RealtimeClient.setAuth
   realtime.client.channel:
     status: implemented
     symbols:
-      - RealtimeClientV2.channel
+      - RealtimeClient.channel
 
   realtime.channel.subscribe:
     status: implemented
     symbols:
-      - RealtimeChannelV2.subscribeWithError
+      - RealtimeChannel.subscribe
     supporting_symbols:
+      - RealtimeChannel.status
+      - RealtimeChannel.statusChanges
       - RealtimeChannelStatus.init
       - RealtimeChannelStatus.rawValue
   realtime.channel.unsubscribe:
     status: implemented
     symbols:
-      - RealtimeChannelV2.unsubscribe
+      - RealtimeChannel.unsubscribe
   realtime.channel.broadcast:
     status: implemented
     symbols:
-      - RealtimeChannelV2.broadcast
+      - RealtimeChannel.broadcast
     supporting_symbols:
+      - RealtimeClient.push
       - PushStatus.init
       - PushStatus.rawValue
   realtime.channel.broadcast_http:
     status: implemented
     symbols:
-      - RealtimeChannelV2.httpSend
+      - RealtimeChannel.httpSend
 
   realtime.subscriptions.broadcast:
     status: implemented
     symbols:
       - BroadcastJoinConfig.replicationReady
+      - RealtimeChannel.broadcasts
+      - RealtimeChannel.broadcastData
     supporting_symbols:
+      - RealtimeChannel.systemMessages
       - RealtimeMessageV2.eventType
       - RealtimeMessageV2.EventType.init
       - RealtimeMessageV2.EventType.rawValue
   realtime.subscriptions.postgres_changes:
     status: implemented
     symbols:
-      - RealtimeChannelV2.onPostgresChange
+      - RealtimeChannel.postgresChanges
   realtime.subscriptions.subscribe_presence:
     status: implemented
     symbols:
-      - RealtimeChannelV2.onPresenceChange
+      - RealtimeChannel.presenceChanges
   realtime.subscriptions.postgres_changes_filter:
     status: implemented
     symbols:
@@ -1519,11 +1442,11 @@ features:
   realtime.presence.track:
     status: implemented
     symbols:
-      - RealtimeChannelV2.track
+      - RealtimeChannel.track
   realtime.presence.untrack:
     status: implemented
     symbols:
-      - RealtimeChannelV2.untrack
+      - RealtimeChannel.untrack
   realtime.presence.presence_state: not_implemented
   realtime.presence.presence_key:
     status: implemented
@@ -1533,11 +1456,11 @@ features:
   # Swift always has a native WebSocket (URLSessionWebSocketTask); unlike
   # supabase-js, there's no runtime (Node <22, Cloudflare Workers, Deno) that
   # needs an injected WebSocket constructor, and the SDK exposes none — the
-  # transport is always the internal URLSessionWebSocket.
+  # transport is always the internal URLSessionWebSocketTransport.
   realtime.configuration.custom_websocket_transport: not_applicable
   realtime.configuration.reconnect_backoff:
     status: partially_implemented
-    note: "RealtimeClientOptions.reconnectDelay configures a fixed base delay; there is no hook to supply a custom attempt-count-to-delay function — the backoff curve itself (ConnectionManager.reconnectBackoff, built on RetryPolicy's equal-jitter exponential) is hardcoded."
+    note: "RealtimeClientOptions.reconnectDelay configures a fixed base delay; there is no hook to supply a custom attempt-count-to-delay function — the backoff curve itself (RealtimeClient.reconnectBackoff, built on RetryPolicy's equal-jitter exponential) is hardcoded."
   realtime.configuration.heartbeat_interval:
     status: implemented
     note: "Set via the heartbeatInterval parameter of RealtimeClientOptions.init; the backing stored property is internal, not public."
@@ -1563,58 +1486,223 @@ features:
       - LogLevel.rawValue
   realtime.configuration.binary_protocol:
     status: implemented
-    symbols:
-      - RealtimeClientOptions.protocolVersion
+    no_public_symbols: true
+    note: "Always on: the client only speaks protocol 2.0.0 (vsn=2.0.0), so there is no option to select it. Protocol 1.0.0 was removed in v3."
 
   # ── Storage ────────────────────────────────────────────────────────────────
 
   storage.file_buckets.create_file_bucket:
     status: implemented
     symbols:
-      - StorageByteCount
-      - StorageByteCount.init
-      - StorageByteCount.intValue
-      - StorageByteCount.kilobytes
-      - StorageByteCount.megabytes
-      - StorageByteCount.gigabytes
-      - StorageByteCount.stringValue
-      - StorageByteCount.encode
-      - BucketOptions.isPublic
+      - StorageClient.createBucket
+      - ByteCount
+      - ByteCount.init
+      - ByteCount.rawValue
+      - ByteCount.bytes
+      - ByteCount.encode
+      - ByteCount.kilobytes
+      - ByteCount.megabytes
+      - ByteCount.gigabytes
+      - CreateBucketOptions
+      - CreateBucketOptions.init
+      - CreateBucketOptions.isPublic
+      - CreateBucketOptions.fileSizeLimit
+      - CreateBucketOptions.allowedMimeTypes
+      - CreateBucketOptions.type
+      - BucketType
+      - BucketType.init
+      - BucketType.rawValue
+      - BucketType.encode
+      - BucketType.standard
+      - BucketType.analytics
   storage.file_buckets.get_bucket:
     status: implemented
     symbols:
-      - SupabaseStorageClient.bucket
+      - StorageClient.bucket
+      - Bucket
+      - Bucket.init
+      - Bucket.id
+      - Bucket.name
+      - Bucket.isPublic
+      - Bucket.fileSizeLimit
+      - Bucket.allowedMimeTypes
+      - Bucket.createdAt
+      - Bucket.updatedAt
+      - Bucket.type
+      - Bucket.ownerId
   storage.file_buckets.list_file_buckets:
     status: implemented
     symbols:
-      - SupabaseStorageClient.listBuckets
+      - StorageClient.listBuckets
+      - BucketListOptions
+      - BucketListOptions.init
+      - BucketListOptions.limit
+      - BucketListOptions.offset
+      - BucketListOptions.sortBy
+      - BucketListOptions.order
+      - BucketListOptions.search
+      - BucketSortColumn
+      - BucketSortColumn.init
+      - BucketSortColumn.rawValue
+      - BucketSortColumn.id
+      - BucketSortColumn.name
+      - BucketSortColumn.createdAt
+      - BucketSortColumn.updatedAt
   storage.file_buckets.update_bucket:
     status: implemented
     symbols:
-      - SupabaseStorageClient.updateBucket
+      - StorageClient.updateBucket
+      - UpdateBucketOptions
+      - UpdateBucketOptions.init
+      - UpdateBucketOptions.isPublic
+      - UpdateBucketOptions.fileSizeLimit
+      - UpdateBucketOptions.allowedMimeTypes
   storage.file_buckets.delete_file_bucket:
     status: implemented
     symbols:
-      - SupabaseStorageClient.deleteBucket
+      - StorageClient.deleteBucket
   storage.file_buckets.empty_bucket:
     status: implemented
     symbols:
-      - SupabaseStorageClient.emptyBucket
+      - StorageClient.emptyBucket
+  storage.file_buckets.get_bucket_lifecycle:
+    status: implemented
+    symbols:
+      - StorageClient.lifecycle
+      - LifecycleConfiguration
+      - LifecycleConfiguration.rules
+      - LifecycleConfiguration.init
+      - LifecycleRule
+      - LifecycleRule.id
+      - LifecycleRule.status
+      - LifecycleRule.noncurrentVersionExpiration
+      - LifecycleRule.init
+      - LifecycleRule.encode
+      - LifecycleRuleStatus
+      - LifecycleRuleStatus.rawValue
+      - LifecycleRuleStatus.init
+      - LifecycleRuleStatus.enabled
+      - LifecycleRuleStatus.disabled
+      - NoncurrentVersionExpiration
+      - NoncurrentVersionExpiration.noncurrentDays
+      - NoncurrentVersionExpiration.newerNoncurrentVersions
+      - NoncurrentVersionExpiration.init
+  storage.file_buckets.update_bucket_lifecycle:
+    status: implemented
+    symbols:
+      - StorageClient.setLifecycle
+  storage.file_buckets.delete_bucket_lifecycle:
+    status: implemented
+    symbols:
+      - StorageClient.deleteLifecycle
   storage.file_buckets.access_bucket:
     status: implemented
     symbols:
-      - SupabaseStorageClient.from
+      - StorageClient.from
+      - StorageBucket
+      - StorageBucket.id
+      - StorageBucket.configuration
   storage.file_buckets.upload:
     status: implemented
     symbols:
-      - StorageFileApi.upload
+      - StorageBucket.upload
+      - UploadOptions.upsert
+      - UploadedObject
+      - UploadedObject.init
+      - UploadedObject.id
+      - UploadedObject.path
+      - UploadedObject.fullPath
+      # The `progress:` closure every upload and download takes.
+      - TransferProgress
+      - TransferProgress.init
+      - TransferProgress.completedBytes
+      - TransferProgress.totalBytes
+      - TransferProgress.fractionCompleted
+  # ResumableUpload, ResumableUploadRegistry, ResumableUploadConfiguration,
+  # StorageBucket.resumableUpload and StorageClient.resumableUploads are all
+  # @_spi(Experimental) until the spec (supabase/sdk#278) settles, so the public
+  # symbol graph the compliance scanner reads never contains them.
+  storage.file_buckets.resumable_upload: implemented
   storage.file_buckets.download:
     status: implemented
     symbols:
-      - StorageFileApi.download
+      - StorageBucket.download
+      - DownloadOptions
+      - DownloadOptions.init
+      - DownloadOptions.range
+      - DownloadOptions.cacheNonce
+      - DownloadOptions.headers
+      - DownloadResponse.data
+      - DownloadResponse.write
   storage.file_buckets.list_files:
     status: implemented
     symbols:
+      - StorageBucket.list
+      - StorageObject
+      - StorageObject.init
+      - StorageObject.name
+      - StorageObject.id
+      - StorageObject.version
+      - StorageObject.createdAt
+      - StorageObject.updatedAt
+      - StorageObject.lastAccessedAt
+      - StorageObject.metadata
+      - StorageObject.userMetadata
+      - StorageObject.isVersioned
+      - StorageObject.isDeleteMarker
+      - StorageObject.archivedAt
+      - StorageObject.isFolder
+      - ListOptions
+      - ListOptions.init
+      - ListOptions.limit
+      - ListOptions.offset
+      - ListOptions.sortBy
+      - ListOptions.order
+      - ListOptions.search
+      - ListOptions.exactMatch
+      - ObjectSortColumn
+      - ObjectSortColumn.init
+      - ObjectSortColumn.rawValue
+      - ObjectSortColumn.name
+      - ObjectSortColumn.updatedAt
+      - ObjectSortColumn.createdAt
+      - ObjectSortColumn.lastAccessedAt
+      - StorageBucket.objects
+      - ObjectListing
+      - ObjectListing.Element
+      - ObjectListing.Pages
+      - ObjectListing.pages
+      - ObjectListing.page
+      - ObjectListing.makeAsyncIterator
+      - ObjectListing.AsyncIterator
+      - ObjectListing.AsyncIterator.next
+      - ObjectListing.Page
+      - ObjectListing.Page.init
+      - ObjectListing.Page.objects
+      - ObjectListing.Page.folders
+      - ObjectListing.Page.nextCursor
+      - ObjectListing.Page.hasNext
+      - ObjectListingOptions
+      - ObjectListingOptions.init
+      - ObjectListingOptions.pageSize
+      - ObjectListingOptions.delimited
+      - ObjectListingOptions.sortBy
+      - ObjectListingOptions.order
+      - ObjectListingOptions.exactMatch
+      - PageSequence
+      - PageSequence.Element
+      - PageSequence.makeAsyncIterator
+      - PageSequence.AsyncIterator
+      - PageSequence.AsyncIterator.next
+      - ObjectMetadata
+      - ObjectMetadata.init
+      - ObjectMetadata.eTag
+      - ObjectMetadata.size
+      - ObjectMetadata.mimeType
+      - ObjectMetadata.cacheControl
+      - ObjectMetadata.lastModified
+      - ObjectMetadata.contentLength
+      - ObjectMetadata.additional
       - SortOrder
       - SortOrder.init
       - SortOrder.rawValue
@@ -1624,122 +1712,257 @@ features:
   storage.file_buckets.move:
     status: implemented
     symbols:
-      - StorageFileApi.move
+      - StorageBucket.move
   storage.file_buckets.copy:
     status: implemented
     symbols:
-      - StorageFileApi.copy
+      - StorageBucket.copy
+      - CopyOptions
+      - CopyOptions.init
+      - CopyOptions.upsert
+      - CopyOptions.copyMetadata
+      - CopyOptions.metadata
+      - CopyOptions.contentType
+      - CopyOptions.cacheControl
   storage.file_buckets.remove:
     status: implemented
     symbols:
-      - StorageFileApi.remove
+      - StorageBucket.remove
   storage.file_buckets.get_public_url:
     status: implemented
     symbols:
-      - StorageFileApi.publicURL
+      - StorageBucket.publicURL
       - DownloadBehavior
       - DownloadBehavior.withOriginalName
       - DownloadBehavior.named
   storage.file_buckets.create_signed_url:
     status: implemented
     symbols:
-      - StorageFileApi.createSignedURL
+      - StorageBucket.createSignedURL
   storage.file_buckets.create_signed_urls:
     status: implemented
     symbols:
-      - StorageFileApi.createSignedURLs
+      - StorageBucket.createSignedURLs
+      - SignedURLResult
+      - SignedURLResult.success
+      - SignedURLResult.failure
+      - SignedURLResult.path
+      - SignedURLResult.signedURL
+      - SignedURLResult.error
   storage.file_buckets.create_signed_upload_url:
     status: implemented
     symbols:
-      - StorageFileApi.createSignedUploadURL
+      - StorageBucket.createSignedUploadURL
+      - SignedUploadURL
+      - SignedUploadURL.path
+      - SignedUploadURL.signedURL
+      - SignedUploadURL.token
   storage.file_buckets.upload_with_signed_url:
     status: implemented
     symbols:
-      - StorageFileApi.uploadToSignedURL
+      - StorageBucket.uploadToSignedURL
   storage.file_buckets.update_file:
     status: implemented
     symbols:
-      - StorageFileApi.update
+      - StorageBucket.update
   storage.file_buckets.file_exists:
     status: implemented
     symbols:
-      - StorageFileApi.exists
+      - StorageBucket.exists
   storage.file_buckets.file_info:
     status: implemented
     symbols:
-      - StorageFileApi.info
+      - StorageBucket.info
+      - ObjectInfo
+      - ObjectInfo.init
+      - ObjectInfo.id
+      - ObjectInfo.version
+      - ObjectInfo.name
+      - ObjectInfo.bucketId
+      - ObjectInfo.size
+      - ObjectInfo.contentType
+      - ObjectInfo.cacheControl
+      - ObjectInfo.eTag
+      - ObjectInfo.lastModified
+      - ObjectInfo.createdAt
+      - ObjectInfo.updatedAt
+      - ObjectInfo.lastAccessedAt
+      - ObjectInfo.userMetadata
+      - ObjectInfo.isVersioned
+      - ObjectInfo.isDeleteMarker
+      - ObjectInfo.archivedAt
   storage.file_buckets.download_with_transform:
     status: implemented
     symbols:
+      - ImageTransform
+      - ImageTransform.init
+      - ImageTransform.width
+      - ImageTransform.height
+      - ImageTransform.resize
+      - ImageTransform.quality
+      - ImageTransform.format
+      - ImageTransform.gravity
+      - ImageTransform.focalPoint
+      - Gravity
+      - Gravity.init
+      - Gravity.rawValue
+      - Gravity.north
+      - Gravity.south
+      - Gravity.east
+      - Gravity.west
+      - Gravity.northEast
+      - Gravity.northWest
+      - Gravity.southEast
+      - Gravity.southWest
+      - Gravity.center
+      - Gravity.smart
+      - Gravity.focalPoint
+      - FocalPoint
+      - FocalPoint.init
+      - FocalPoint.x
+      - FocalPoint.y
       - ResizeMode
       - ResizeMode.init
       - ResizeMode.rawValue
       - ResizeMode.cover
       - ResizeMode.contain
       - ResizeMode.fill
-      - ResizeMode.encode
       - ImageFormat
       - ImageFormat.init
       - ImageFormat.rawValue
       - ImageFormat.origin
       - ImageFormat.webp
       - ImageFormat.avif
-      - ImageFormat.encode
-  storage.file_buckets.copy_cross_bucket:
-    status: implemented
-    note: "Not a separate method: the destinationBucket field of the options: DestinationOptions? parameter on StorageFileApi.copy."
-    symbols:
-      - DestinationOptions.destinationBucket
-  storage.file_buckets.move_cross_bucket:
-    status: implemented
-    note: "Not a separate method: the destinationBucket field of the options: DestinationOptions? parameter on StorageFileApi.move."
-    symbols:
-      - DestinationOptions.destinationBucket
+  # Not separate methods: the `toBucket:` parameter of StorageBucket.copy and
+  # StorageBucket.move, which their own capabilities already claim.
+  storage.file_buckets.copy_cross_bucket: implemented
+  storage.file_buckets.move_cross_bucket: implemented
   storage.file_buckets.upload_with_metadata:
     status: implemented
-    note: "Not a separate method: the metadata/cacheControl/contentType fields of the options: FileOptions parameter on StorageFileApi.upload."
+    note: "Not a separate method: the metadata/cacheControl/contentType fields of the options: UploadOptions parameter on StorageBucket.upload."
     symbols:
-      - FileOptions.metadata
-      - FileOptions.cacheControl
-      - FileOptions.contentType
+      - UploadOptions.metadata
+      - UploadOptions.cacheControl
+      - UploadOptions.contentType
+      - UploadOptions
+      - UploadOptions.init
+      - UploadOptions.headers
+      - CacheControl
+      - CacheControl.init
+      - CacheControl.rawValue
+      - CacheControl.maxAge
+      - CacheControl.noCache
+      - CacheControl.noStore
   # Not a separate method: a bare `cacheNonce: String?` parameter repeated on
   # createSignedURL, createSignedURLs, download, and publicURL — no
   # dedicated named symbol exists distinct from those methods, which are
   # already claimed by their own capabilities above.
   storage.file_buckets.url_cache_nonce: implemented
-  storage.file_buckets.download_as_stream: not_implemented
+  storage.file_buckets.download_as_stream:
+    status: implemented
+    symbols:
+      - StorageBucket.download
+      - DownloadResponse
+      - DownloadResponse.init
+      - DownloadResponse.httpResponse
+      - DownloadResponse.body
+      - DownloadResponse.contentType
+      - DownloadResponse.contentLength
+      - DownloadResponse.contentRange
+      - DownloadResponse.eTag
+      - DownloadResponse.lastModified
+      - DownloadResponse.cacheControl
+  storage.file_buckets.download_specific_version:
+    status: implemented
+    symbols:
+      - DownloadOptions.versionId
+  # Not separate methods: the `versionId:` parameter of StorageBucket.info and
+  # the `sourceVersionId:` parameter of StorageBucket.move and StorageBucket.copy.
+  storage.file_buckets.file_info_specific_version: implemented
+  storage.file_buckets.move_specific_version: implemented
+  storage.file_buckets.copy_specific_version: implemented
+  storage.file_buckets.remove_specific_version:
+    status: implemented
+    symbols:
+      - ObjectVersion
+      - ObjectVersion.init
+      - ObjectVersion.path
+      - ObjectVersion.versionId
+  storage.file_buckets.bucket_versioning_status:
+    status: implemented
+    symbols:
+      - Bucket.versioningStatus
+      - CreateBucketOptions.versioningStatus
+      - UpdateBucketOptions.versioningStatus
+      - BucketVersioningStatus
+      - BucketVersioningStatus.init
+      - BucketVersioningStatus.rawValue
+      - BucketVersioningStatus.disabled
+      - BucketVersioningStatus.enabled
+      - BucketVersioningStatus.suspended
+      - BucketVersioningCreateStatus
+      - BucketVersioningCreateStatus.init
+      - BucketVersioningCreateStatus.rawValue
+      - BucketVersioningCreateStatus.disabled
+      - BucketVersioningCreateStatus.enabled
+      - BucketVersioningUpdateStatus
+      - BucketVersioningUpdateStatus.init
+      - BucketVersioningUpdateStatus.rawValue
+      - BucketVersioningUpdateStatus.enabled
+      - BucketVersioningUpdateStatus.suspended
+  storage.file_buckets.list_file_versions:
+    status: implemented
+    symbols:
+      - ListOptions.versions
+      - ListOptions.deleteMarkers
+      - ObjectListingOptions.versions
+      - ObjectListingOptions.deleteMarkers
+      - VersionFilter
+      - VersionFilter.init
+      - VersionFilter.rawValue
+      - VersionFilter.exclude
+      - VersionFilter.include
+      - VersionFilter.only
   storage.file_buckets.purge_bucket_cache:
     status: implemented
     symbols:
-      - SupabaseStorageClient.purgeCache
+      - StorageClient.purgeCache
   storage.file_buckets.purge_cache:
     status: implemented
     symbols:
-      - StorageFileApi.purgeCache
+      - StorageBucket.purgeCache
   storage.file_buckets.request_cancellation: implemented
 
   # ── Storage — Vector Buckets ───────────────────────────────────────────────
 
-  storage.vector_buckets.create_vector_bucket: not_implemented
-  storage.vector_buckets.list_vector_buckets: not_implemented
-  storage.vector_buckets.delete_vector_bucket: not_implemented
-  storage.vector_buckets.access_vector_index: not_implemented
-  storage.vector_buckets.create_index: not_implemented
-  storage.vector_buckets.delete_index: not_implemented
-  storage.vector_buckets.get_index: not_implemented
-  storage.vector_buckets.list_indexes: not_implemented
-  storage.vector_buckets.put_vectors: not_implemented
-  storage.vector_buckets.get_vectors: not_implemented
-  storage.vector_buckets.delete_vectors: not_implemented
-  storage.vector_buckets.list_vectors: not_implemented
-  storage.vector_buckets.query_vectors: not_implemented
-  storage.vector_buckets.parallel_scan: not_implemented
+  # StorageVectorsClient, VectorBucketClient and VectorIndexClient are all
+  # @_spi(Experimental) (vector buckets are a public alpha of Supabase Storage),
+  # so the public symbol graph the compliance scanner reads never contains them.
+  # parallel_scan is listVectors(segment:).
+  storage.vector_buckets.create_vector_bucket: implemented
+  storage.vector_buckets.list_vector_buckets: implemented
+  storage.vector_buckets.delete_vector_bucket: implemented
+  storage.vector_buckets.access_vector_index: implemented
+  storage.vector_buckets.create_index: implemented
+  storage.vector_buckets.delete_index: implemented
+  storage.vector_buckets.get_index: implemented
+  storage.vector_buckets.list_indexes: implemented
+  storage.vector_buckets.put_vectors: implemented
+  storage.vector_buckets.get_vectors: implemented
+  storage.vector_buckets.delete_vectors: implemented
+  storage.vector_buckets.list_vectors: implemented
+  storage.vector_buckets.query_vectors: implemented
+  storage.vector_buckets.parallel_scan: implemented
 
   # ── Storage — Analytics Buckets ────────────────────────────────────────────
 
-  storage.analytics.create_analytics_bucket: not_implemented
-  storage.analytics.list_analytics_buckets: not_implemented
-  storage.analytics.delete_analytics_bucket: not_implemented
+  # StorageAnalyticsClient is @_spi(Experimental) (analytics buckets are a public
+  # alpha of Supabase Storage), so the public symbol graph the compliance scanner
+  # reads never contains it. The Iceberg REST catalog (namespaces, tables) is not
+  # wrapped: there is no Swift Iceberg client to hand it to.
+  storage.analytics.create_analytics_bucket: implemented
+  storage.analytics.list_analytics_buckets: implemented
+  storage.analytics.delete_analytics_bucket: implemented
   storage.analytics.create_namespace: not_implemented
   storage.analytics.list_namespaces: not_implemented
   storage.analytics.delete_namespace: not_implemented
@@ -1761,7 +1984,7 @@ features:
   storage.errors.error_codes:
     status: implemented
     symbols:
-      - StorageError.ServerError.code
+      - StorageError.code
     supporting_symbols:
       - StorageError.Code
       - StorageError.Code.init
@@ -1827,5 +2050,9 @@ features:
       - StorageError.Code.noAvailableShard
       - StorageError.Code.shardNotFound
 
-  # Newly synced from the canonical spec; no local group yet, place manually.
-  storage.configuration.auto_retry: not_implemented
+  storage.configuration.auto_retry:
+    status: implemented
+    note: "Reads only: GET, HEAD and list(). Uploads, moves, copies, removals and bucket changes are never replayed."
+    symbols:
+      - StorageClientConfiguration.retryEnabled
+      - SupabaseClientOptions.StorageOptions.retryEnabled

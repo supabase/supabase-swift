@@ -11,7 +11,7 @@ import SwiftUI
 struct FileManagementView: View {
   @State private var selectedBucket = ""
   @State private var buckets: [Bucket] = []
-  @State private var files: [FileObject] = []
+  @State private var files: [StorageObject] = []
   @State private var sourcePath = ""
   @State private var destinationPath = ""
   @State private var destinationBucket = ""
@@ -164,9 +164,7 @@ struct FileManagementView: View {
               .move(
                 from: "file.jpg",
                 to: "file.jpg",
-                options: DestinationOptions(
-                  destinationBucket: "target-bucket"
-                )
+                toBucket: "target-bucket"
               )
             """
         )
@@ -174,14 +172,14 @@ struct FileManagementView: View {
         CodeExample(
           code: """
             // Copy a file
-            let newPath = try await supabase.storage
+            let copy = try await supabase.storage
               .from("my-bucket")
               .copy(
                 from: "folder/original.jpg",
                 to: "folder/copy.jpg"
               )
 
-            print("Copied to:", newPath)
+            print("Copied to:", copy.fullPath)
             """
         )
 
@@ -274,28 +272,20 @@ struct FileManagementView: View {
 
       switch selectedOperation {
       case .move:
-        let options =
-          destinationBucket.isEmpty
-          ? nil
-          : DestinationOptions(
-            destinationBucket: destinationBucket
-          )
         try await supabase.storage
           .from(selectedBucket)
-          .move(from: sourcePath, to: destinationPath, options: options)
+          .move(
+            from: sourcePath, to: destinationPath,
+            toBucket: destinationBucket.isEmpty ? nil : destinationBucket)
         successMessage = "File moved successfully to \(destinationPath)"
 
       case .copy:
-        let options =
-          destinationBucket.isEmpty
-          ? nil
-          : DestinationOptions(
-            destinationBucket: destinationBucket
-          )
-        let newPath = try await supabase.storage
+        let copy = try await supabase.storage
           .from(selectedBucket)
-          .copy(from: sourcePath, to: destinationPath, options: options)
-        successMessage = "File copied successfully to \(newPath)"
+          .copy(
+            from: sourcePath, to: destinationPath,
+            toBucket: destinationBucket.isEmpty ? nil : destinationBucket)
+        successMessage = "File copied successfully to \(copy.fullPath)"
 
       case .delete:
         let removed = try await supabase.storage
@@ -304,7 +294,6 @@ struct FileManagementView: View {
         successMessage = "Deleted \(removed.count) file(s)"
       }
 
-      // Reset and reload
       sourcePath = ""
       destinationPath = ""
       destinationBucket = ""

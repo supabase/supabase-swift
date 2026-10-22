@@ -34,59 +34,55 @@ struct TableMacroSupportTests {
 
   @Test
   func namesEveryLinkInTheRefinementChain() {
-    // `PostgrestWritableRelation` alone is not enough: a macro-generated extension does not derive
-    // the inherited conformance, and reports a missing `PostgrestRelation` with no useful note.
+    // `_PostgrestWritableRelation` alone is not enough: a macro-generated extension does not derive
+    // the inherited conformance, and reports a missing `_PostgrestRelation` with no useful note.
     #expect(
       clause(
         readOnly: false,
-        missing: ["Decodable", "Sendable", "PostgrestRelation", "PostgrestWritableRelation"]
-      ) == ": Decodable, Sendable, PostgrestRelation, PostgrestWritableRelation"
+        missing: ["Decodable", "Sendable", "_PostgrestRelation", "_PostgrestWritableRelation"]
+      ) == ": Decodable, Sendable, _PostgrestRelation, _PostgrestWritableRelation"
     )
   }
 
   @Test
   func aDeclaredKeyAddsTheKeyedRelation() {
-    // What gates the derived-target `upsert`. Listed after `PostgrestRelation` for the same reason
-    // the whole chain is listed: the generated extension does not derive an inherited conformance.
     #expect(
       clause(
         readOnly: false,
         hasPrimaryKey: true,
         missing: [
-          "Decodable", "Sendable", "PostgrestRelation", "PostgrestKeyedRelation",
-          "PostgrestWritableRelation",
+          "Decodable", "Sendable", "_PostgrestRelation", "_PostgrestKeyedRelation",
+          "_PostgrestWritableRelation",
         ]
       )
-        == ": Decodable, Sendable, PostgrestRelation, PostgrestKeyedRelation, PostgrestWritableRelation"
+        == ": Decodable, Sendable, _PostgrestRelation, _PostgrestKeyedRelation, _PostgrestWritableRelation"
     )
   }
 
   @Test
   func aKeyedViewIsKeyedButNotWritable() {
-    // A view Postgres reports a key for is still read-only. The two axes are independent.
     #expect(
       clause(
         readOnly: true,
         hasPrimaryKey: true,
-        missing: ["Decodable", "Sendable", "PostgrestRelation", "PostgrestKeyedRelation"]
-      ) == ": Decodable, Sendable, PostgrestRelation, PostgrestKeyedRelation"
+        missing: ["Decodable", "Sendable", "_PostgrestRelation", "_PostgrestKeyedRelation"]
+      ) == ": Decodable, Sendable, _PostgrestRelation, _PostgrestKeyedRelation"
     )
   }
 
   @Test
   func readOnlyStopsAtTheReadableRelation() {
     #expect(
-      clause(readOnly: true, missing: ["Decodable", "Sendable", "PostgrestRelation"])
-        == ": Decodable, Sendable, PostgrestRelation"
+      clause(readOnly: true, missing: ["Decodable", "Sendable", "_PostgrestRelation"])
+        == ": Decodable, Sendable, _PostgrestRelation"
     )
   }
 
   @Test
   func skipsWhatTheTypeAlreadyDeclares() {
-    // `struct Todo: Decodable, Sendable` must not get a second Decodable conformance.
     #expect(
-      clause(readOnly: false, missing: ["PostgrestRelation", "PostgrestWritableRelation"])
-        == ": PostgrestRelation, PostgrestWritableRelation"
+      clause(readOnly: false, missing: ["_PostgrestRelation", "_PostgrestWritableRelation"])
+        == ": _PostgrestRelation, _PostgrestWritableRelation"
     )
     #expect(clause(readOnly: false, missing: []) == "")
   }
@@ -106,6 +102,7 @@ struct TableMacroSupportTests {
     func unwrapped(_ type: String) -> String {
       StoredProperty(
         name: "x", type: type, isOptional: true, isPrimaryKey: false, hasDefault: false,
+        isGenerated: false,
         explicitColumn: nil
       ).unwrappedType
     }
@@ -114,16 +111,11 @@ struct TableMacroSupportTests {
     #expect(unwrapped("[String]?") == "[String]")
     #expect(unwrapped("Optional<[Int]>") == "[Int]")
     #expect(unwrapped("String") == "String")
-    // An implicitly unwrapped optional is a nullable column too, and `String!` in a generic
-    // argument does not compile at all.
     #expect(unwrapped("String!") == "String")
-    // Every layer comes off. One left on gives a column whose `Value` is optional, which loses
-    // every operator, because `Optional` does not conform to `PostgrestFilterValue`.
     #expect(unwrapped("Optional<Int>!") == "Int")
     #expect(unwrapped("Int??") == "Int")
   }
 
-  /// The two used to test separate sets of spellings, and disagreed on `Optional<Int>!`.
   @Test
   func optionalityAgreesWithUnwrapping() {
     for type in ["Date?", "Optional<Date>", "String!", "Optional<Int>!", "Int??"] {

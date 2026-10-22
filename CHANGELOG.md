@@ -1,5 +1,26 @@
 # Changelog
 
+## [2.55.4](https://github.com/supabase/supabase-swift/compare/v2.55.3...v2.55.4) (2026-10-13)
+
+### Bug Fixes
+
+* **auth:** post admin invites to the /invite route the Auth server serves ([#1505](https://github.com/supabase/supabase-swift/issues/1505)) ([#1518](https://github.com/supabase/supabase-swift/issues/1518)) ([19528e2](https://github.com/supabase/supabase-swift/commit/19528e2edefb4735ffc9eea8a0e90b00dd5d3c5a))
+* **ci:** bump swift-custom-dump pin in the workspace to 1.7.0 ([#1525](https://github.com/supabase/supabase-swift/issues/1525)) ([8cb9819](https://github.com/supabase/supabase-swift/commit/8cb9819ab16bb45236b579f1f794fd0587e2f7a0))
+* **release:** stop release-please making beta prereleases on release/v2 ([#1522](https://github.com/supabase/supabase-swift/issues/1522)) ([6b214f7](https://github.com/supabase/supabase-swift/commit/6b214f71a643ede2ac07dbc0b38faeb26810e741))
+
+## [2.55.3](https://github.com/supabase/supabase-swift/compare/v2.55.2...v2.55.3) (2026-09-29)
+
+### Bug Fixes
+
+* **auth:** discard a token refresh that outlived its session ([#1374](https://github.com/supabase/supabase-swift/issues/1374)) ([#1389](https://github.com/supabase/supabase-swift/issues/1389)) ([8edd308](https://github.com/supabase/supabase-swift/commit/8edd308d8f5cfdb367fb8b9618225a270ea3d3e7))
+
+## [2.55.2](https://github.com/supabase/supabase-swift/compare/v2.55.1...v2.55.2) (2026-09-09)
+
+### Bug Fixes
+
+* **auth:** send skip_http_redirect so signInWithSSO gets JSON instead of a 303 ([#1322](https://github.com/supabase/supabase-swift/issues/1322)) ([4d21170](https://github.com/supabase/supabase-swift/commit/4d21170308f966a354a4e7e9a381705d4fa473d5))
+
+
 ## [2.55.1](https://github.com/supabase/supabase-swift/compare/v2.55.0...v2.55.1) (2026-08-13)
 
 ### Bug Fixes

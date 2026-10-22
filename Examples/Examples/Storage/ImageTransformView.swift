@@ -17,7 +17,6 @@ struct ImageTransformView: View {
   @State private var error: Error?
   @State private var isLoading = false
 
-  // Transform options
   @State private var width: String = "400"
   @State private var height: String = "400"
   @State private var quality: Double = 80
@@ -141,7 +140,6 @@ struct ImageTransformView: View {
         }
       }
 
-      // Original Image
       if let originalImage {
         Section("Original Image") {
           VStack(spacing: 8) {
@@ -158,7 +156,6 @@ struct ImageTransformView: View {
         }
       }
 
-      // Transformed Image
       if let transformedImage {
         Section("Transformed Image") {
           VStack(spacing: 8) {
@@ -231,6 +228,7 @@ struct ImageTransformView: View {
       let data = try await supabase.storage
         .from(selectedBucket)
         .download(path: imagePath)
+        .data()
 
       if let image = UIImage(data: data) {
         originalImage = image
@@ -248,7 +246,7 @@ struct ImageTransformView: View {
       isLoading = true
       defer { isLoading = false }
 
-      let options = TransformOptions(
+      let options = ImageTransform(
         width: Int(width),
         height: Int(height),
         resize: .init(rawValue: resizeMode.rawValue),
@@ -258,7 +256,8 @@ struct ImageTransformView: View {
 
       let data = try await supabase.storage
         .from(selectedBucket)
-        .download(path: imagePath, options: options)
+        .download(path: imagePath, transform: options)
+        .data()
 
       if let image = UIImage(data: data) {
         transformedImage = image

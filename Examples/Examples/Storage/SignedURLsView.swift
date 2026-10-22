@@ -12,7 +12,7 @@ struct SignedURLsView: View {
   @State private var selectedBucket = ""
   @State private var buckets: [Bucket] = []
   @State private var filePath = ""
-  @State private var expiresIn = "3600"  // 1 hour
+  @State private var expiresIn = "3600"
   @State private var signedURL: URL?
   @State private var signedUploadURL: SignedUploadURL?
   @State private var publicURL: URL?
@@ -228,7 +228,7 @@ struct SignedURLsView: View {
 
       signedURL = try await supabase.storage
         .from(selectedBucket)
-        .createSignedURL(path: filePath, expiresIn: expiresInSeconds)
+        .createSignedURL(path: filePath, expiresIn: .seconds(expiresInSeconds))
     } catch {
       self.error = error
     }
@@ -256,7 +256,7 @@ struct SignedURLsView: View {
       error = nil
       publicURL = nil
 
-      publicURL = try supabase.storage
+      publicURL = supabase.storage
         .from(selectedBucket)
         .publicURL(path: filePath)
     } catch {

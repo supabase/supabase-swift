@@ -61,6 +61,18 @@ BREAKING CHANGE: This removes the old API
 
 Release-please also supports `release/*` branches for managing releases from feature branches if needed.
 
+`release/v2` ships v2 patch releases while `main` moves toward v3. Release-please finds the
+last release of a branch from that branch's Git history: the newest release PR or release tag it
+can reach. It reads `.release-please-manifest.json` only when the history has no release. Tags
+from `release/v2` are not in the history of `main`, so a `release/v2` release does not change
+what release-please on `main` treats as the last release. Copying the manifest version from
+`release/v2` to `main` does not change it either.
+
+To set the next version of `main`, set `release-as` in `release-please-config.json`. It is set to
+`3.0.0-alpha.1` for the first v3 alpha. Remove it after that release ships; later alphas then
+continue from the `v3.0.0-alpha.1` tag on `main`. To start the betas, set `prerelease-type` to
+`beta` and `release-as` to `3.0.0-beta.1`.
+
 ## Manual Release
 
 To manually trigger the release-please workflow:
@@ -74,3 +86,39 @@ To manually trigger the release-please workflow:
 - `release-please-config.json`: Release-please configuration
 - `.release-please-manifest.json`: Current version tracking
 - `.github/workflows/release.yml`: GitHub Actions workflow
+
+## Releasing the typegen binary
+
+`supabase gen types --lang swift` runs `supabase-typegen`, so each release carries prebuilt
+binaries: `supabase-typegen-macos-universal.tar.gz` (arm64 and x86_64) and
+`supabase-typegen-linux-x86_64.tar.gz` (Swift runtime linked statically). Each archive holds only
+the `supabase-typegen` executable. `.github/workflows/typegen-binaries.yml` builds them, and
+`release.yml` calls it with the tag each time release-please creates a release. A pull request
+that touches `tools/supabase-typegen` or that workflow runs the same build without a tag: it checks
+the binaries and keeps them as workflow artifacts, and changes no release. To attach the binaries
+to an existing release again, run the workflow by hand with its tag (only a tag that contains
+`tools/supabase-typegen` builds).
+
+`supabase-typegen --version` prints the release. The value lives in
+`tools/supabase-typegen/Sources/SupabaseTypegen/Version.swift`, which release-please bumps with
+`Sources/Helpers/Version.swift`. The workflow fails if the binary's version does not match the tag.
+The generated file has no version in it, so the goldens do not change on each release.
+
+The CLI (supabase/sdk#264) reads the supabase-swift version from the project's `Package.resolved`
+and downloads `https://github.com/supabase/supabase-swift/releases/download/v<version>/<asset>`
+itself. It takes the macOS archive on darwin arm64 and x64, and the Linux one on linux x64. It
+extracts the entry named `supabase-typegen`. So the asset names, the `v<version>` tag, and one
+`supabase-typegen` file at the archive root are a contract with the CLI. Change none of them
+without a matching change in supabase/sdk.
+
+When the download is not possible, the CLI falls back to `supabase-typegen` on the `PATH`. Users
+install it like this (the README has the same steps):
+
+```bash
+VERSION=2.55.1 # the supabase-swift version the project uses
+ASSET=supabase-typegen-macos-universal.tar.gz # or supabase-typegen-linux-x86_64.tar.gz
+mkdir -p ~/.local/bin
+curl -fsSL "https://github.com/supabase/supabase-swift/releases/download/v$VERSION/$ASSET" | tar -xz -C ~/.local/bin
+supabase-typegen --version
+```
+

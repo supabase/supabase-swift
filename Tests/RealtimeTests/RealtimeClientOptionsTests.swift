@@ -12,9 +12,7 @@ import Testing
 struct RealtimeClientOptionsTests {
   @Test
   func initializesWithoutAnAPIKeyInsteadOfTrapping() {
-    // The apikey rides along as a query item when present, and is simply absent when it is not.
-    // Constructing the client used to trap instead, taking the host app down over a header.
-    let client = RealtimeClientV2(
+    let client = RealtimeClient(
       url: URL(string: "https://project-ref.supabase.co/realtime/v1")!,
       options: RealtimeClientOptions(headers: [:])
     )
@@ -40,8 +38,6 @@ struct RealtimeClientOptionsTests {
 
   @Test
   func loggerIsTaggedWithSystemMetadata() {
-    // The `@_disfavoredOverload` initializer preserving the pre-`protocolVersion` signature delegates to this
-    // primary initializer via `self.init(...)`, so tagging here covers both entry points.
     let options = RealtimeClientOptions(
       headers: ["apikey": "test-key"],
       logger: Logging.Logger(label: "test")

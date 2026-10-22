@@ -12,91 +12,12 @@ import Testing
 
 @testable import Realtime
 
-// Cert-pinning tests generate self-signed identities via `SecPKCS12Import`, which is
-// flaky when invoked concurrently (observed intermittent `errSecInternalComponent`/-26276
-// failures under Swift Testing's default parallel execution). Serialize the suite so these
-// identity-importing tests never overlap, mirroring the `.serialized` precedent used
-// elsewhere for tests with process-global/shared-resource side effects.
 @Suite(.serialized)
 struct WebSocketTests {
 
-  // MARK: - WebSocketEvent Tests
-
-  @Test
-  func webSocketEventEquality() {
-    let textEvent1 = WebSocketEvent.text("hello")
-    let textEvent2 = WebSocketEvent.text("hello")
-    let textEvent3 = WebSocketEvent.text("world")
-
-    #expect(textEvent1 == textEvent2)
-    #expect(textEvent1 != textEvent3)
-
-    let binaryData = Data([1, 2, 3])
-    let binaryEvent1 = WebSocketEvent.binary(binaryData)
-    let binaryEvent2 = WebSocketEvent.binary(binaryData)
-    let binaryEvent3 = WebSocketEvent.binary(Data([4, 5, 6]))
-
-    #expect(binaryEvent1 == binaryEvent2)
-    #expect(binaryEvent1 != binaryEvent3)
-
-    let closeEvent1 = WebSocketEvent.close(code: 1000, reason: "normal")
-    let closeEvent2 = WebSocketEvent.close(code: 1000, reason: "normal")
-    let closeEvent3 = WebSocketEvent.close(code: 1001, reason: "going away")
-
-    #expect(closeEvent1 == closeEvent2)
-    #expect(closeEvent1 != closeEvent3)
-  }
-
-  @Test
-  func webSocketEventHashable() {
-    let textEvent = WebSocketEvent.text("hello")
-    let binaryEvent = WebSocketEvent.binary(Data([1, 2, 3]))
-    let closeEvent = WebSocketEvent.close(code: 1000, reason: "normal")
-
-    let events: Set<WebSocketEvent> = [textEvent, binaryEvent, closeEvent]
-    #expect(events.count == 3)
-  }
-
-  @Test
-  func webSocketEventPatternMatching() {
-    let textEvent = WebSocketEvent.text("hello world")
-    let binaryEvent = WebSocketEvent.binary(Data([1, 2, 3]))
-    let closeEvent = WebSocketEvent.close(code: 1000, reason: "normal")
-
-    switch textEvent {
-    case .text(let message):
-      #expect(message == "hello world")
-    default:
-      Issue.record("Expected text event")
-    }
-
-    switch binaryEvent {
-    case .binary(let data):
-      #expect(data == Data([1, 2, 3]))
-    default:
-      Issue.record("Expected binary event")
-    }
-
-    switch closeEvent {
-    case .close(let code, let reason):
-      #expect(code == 1000)
-      #expect(reason == "normal")
-    default:
-      Issue.record("Expected close event")
-    }
-  }
-
-  // MARK: - Connection Failure Tests
-
-  // `URLProtocol` lives in `FoundationNetworking` on Linux, and swift-corelibs-foundation does
-  // not route WebSocket tasks through custom `protocolClasses`, so this test is
-  // Apple-platforms-only.
   #if !canImport(FoundationNetworking)
     @Test
     func connectFailureWrapsURLErrorAsConnectionKind() async {
-      // A URLProtocol that fails any request it receives, so `connect` never reaches
-      // the network and the failure is deterministic instead of depending on an
-      // actual unreachable host.
       final class UnreachableProtocol: URLProtocol {
         override static func canInit(with request: URLRequest) -> Bool { true }
         override static func canonicalRequest(for request: URLRequest) -> URLRequest { request }
@@ -110,12 +31,12 @@ struct WebSocketTests {
 
       let config = URLSessionConfiguration.ephemeral
       config.protocolClasses = [UnreachableProtocol.self]
-      let session = URLSession(configuration: config)
+      let transport = URLSessionWebSocketTransport(configuration: config)
 
       let url = URL(string: "ws://127.0.0.1:1")!
 
       do {
-        _ = try await URLSessionWebSocket.connect(to: url, session: session)
+        _ = try await transport.connect(to: url, headerFields: [:])
         Issue.record("expected connect to throw")
       } catch let error as RealtimeError {
         #expect(error.kind == .transport)
@@ -126,9 +47,35 @@ struct WebSocketTests {
       }
     }
 
-  #endif
+    /// A delegate that rejects a pinned certificate cancels the challenge, so the handshake
+    /// fails with `URLError.cancelled`. That is a failed connect the client must retry, not a
+    /// cancellation of the caller's task.
+    @Test
+    func cancelledHandshakeIsARetryableTransportError() async {
+      final class CancelledProtocol: URLProtocol {
+        override static func canInit(with request: URLRequest) -> Bool { true }
+        override static func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
-  // MARK: - URLSessionWebSocket Lifecycle Tests
+        override func startLoading() {
+          client?.urlProtocol(self, didFailWithError: URLError(.cancelled))
+        }
+
+        override func stopLoading() {}
+      }
+
+      let config = URLSessionConfiguration.ephemeral
+      config.protocolClasses = [CancelledProtocol.self]
+      let transport = URLSessionWebSocketTransport(configuration: config)
+
+      let error = await #expect(throws: RealtimeError.self) {
+        _ = try await transport.connect(to: URL(string: "ws://127.0.0.1:1")!, headerFields: [:])
+      }
+      #expect(error?.kind == .transport)
+      #expect(error?.isRetryable == true)
+      #expect((error?.underlyingError as? URLError)?.code == .cancelled)
+    }
+
+  #endif
 
   #if canImport(Network)
     @Test
@@ -141,20 +88,17 @@ struct WebSocketTests {
 
       try await confirmation("sockets deallocated", expectedCount: 5) { deallocated in
         for _ in 0..<5 {
-          let socket = try await URLSessionWebSocket.connect(to: url)
+          let connection = try await URLSessionWebSocketTransport()
+            .connect(to: url, headerFields: [:])
           objc_setAssociatedObject(
-            socket,
+            connection as AnyObject,
             &deinitNotifierKey,
             DeinitNotifier { deallocated() },
             .OBJC_ASSOCIATION_RETAIN_NONATOMIC
           )
-          socket.close(code: 1000, reason: nil)
+          connection.close(code: .normalClosure, reason: nil)
         }
 
-        // Give ARC a chance to actually run the deinits before the
-        // confirmation scope closes and its count is checked. The iOS
-        // Simulator runs noticeably slower than a native macOS host under
-        // CI load, so this needs more margin than a quick local run suggests.
         try await Task.sleep(for: .seconds(1))
       }
     }
@@ -171,8 +115,11 @@ struct WebSocketTests {
       let delegate = RecordingDelegate()
       let session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
 
-      let socket = try await URLSessionWebSocket.connect(to: url, session: session)
-      socket.close(code: 1000, reason: nil)
+      let transport = URLSessionWebSocketTransport(
+        configuration: session.configuration, delegate: session.delegate)
+
+      let connection = try await transport.connect(to: url, headerFields: [:])
+      connection.close(code: .normalClosure, reason: nil)
     }
 
     @Test
@@ -182,90 +129,20 @@ struct WebSocketTests {
       defer { server.stop() }
 
       let url = URL(string: "ws://127.0.0.1:\(port)")!
-      // A session the caller owns and may keep using elsewhere (e.g. shared with
-      // Auth/PostgREST/Storage) — `connect` must only read its `configuration`/`delegate`
-      // as a template, never use or invalidate the object itself.
       let session = URLSession(configuration: .default)
 
-      let firstSocket = try await URLSessionWebSocket.connect(to: url, session: session)
-      firstSocket.close(code: 1000, reason: nil)
+      let transport = URLSessionWebSocketTransport(
+        configuration: session.configuration, delegate: session.delegate)
+
+      let first = try await transport.connect(to: url, headerFields: [:])
+      first.close(code: .normalClosure, reason: nil)
 
       // `finishTasksAndInvalidate()` invalidates asynchronously via a delegate callback;
       // give it time to take effect before checking whether the session still works.
       try await Task.sleep(for: .milliseconds(200))
 
-      // If `connect` had used `session` directly and invalidated it on close (the bug this
-      // test guards against), reusing it for a second connection would fail — URLSession
-      // refuses to schedule new work on an invalidated session.
-      let secondSocket = try await URLSessionWebSocket.connect(to: url, session: session)
-      secondSocket.close(code: 1000, reason: nil)
-    }
-
-    /// Drives `_handleMessage` over a real connection: it is private and only ever reached from
-    /// the `_task.receive()` loop, so a server that actually pushes frames is the only way in.
-    ///
-    /// Both frames matter. The second one can only arrive if handling the first re-armed the
-    /// receive loop — if `_scheduleReceive()` stopped being called on the success path, the
-    /// socket would go quiet after exactly one message and every other test here would still
-    /// pass.
-    @Test
-    func deliversServerFramesAndKeepsListeningAfterEachOne() async throws {
-      let server = try LoopbackWebSocketServer()
-      let port = try server.start()
-      defer { server.stop() }
-
-      let url = URL(string: "ws://127.0.0.1:\(port)")!
-      let socket = try await URLSessionWebSocket.connect(to: url)
-      defer { socket.close(code: 1000, reason: nil) }
-
-      let received = LockIsolated([WebSocketEvent]())
-      let pump = Task { [socket] in
-        for await event in socket.events {
-          received.withValue { $0.append(event) }
-        }
-      }
-      defer { pump.cancel() }
-
-      server.send(text: "hello")
-      #expect(await waitUntil { received.value.contains(.text("hello")) })
-
-      let payload = Data([0x01, 0x02, 0x03])
-      server.send(binary: payload)
-      #expect(await waitUntil { received.value.contains(.binary(payload)) })
-    }
-
-    /// Pins the observable contract: nothing surfaces on `events` once the socket is closed, so
-    /// a late frame can't reopen a stream a caller has already finished iterating.
-    ///
-    /// Deliberately not claimed as coverage of the `isClosed` guard in `_handleMessage`. Two
-    /// mechanisms enforce this — that guard, and `events` having already finished — and removing
-    /// either one on its own leaves this test green (verified by mutation). It pins the property,
-    /// not the line.
-    @Test
-    func deliversNothingOnceTheSocketIsClosed() async throws {
-      let server = try LoopbackWebSocketServer()
-      let port = try server.start()
-      defer { server.stop() }
-
-      let url = URL(string: "ws://127.0.0.1:\(port)")!
-      let socket = try await URLSessionWebSocket.connect(to: url)
-
-      let received = LockIsolated([WebSocketEvent]())
-      let pump = Task { [socket] in
-        for await event in socket.events {
-          received.withValue { $0.append(event) }
-        }
-      }
-      defer { pump.cancel() }
-
-      socket.close(code: 1000, reason: nil)
-      #expect(await waitUntil { socket.isClosed })
-
-      server.send(text: "too late")
-
-      // Give the frame a chance to be mishandled before concluding it was dropped.
-      try await Task.sleep(for: .milliseconds(200))
-      #expect(received.value.contains(.text("too late")) == false)
+      let second = try await transport.connect(to: url, headerFields: [:])
+      second.close(code: .normalClosure, reason: nil)
     }
 
     #if os(macOS)
@@ -303,8 +180,10 @@ struct WebSocketTests {
         let delegate = PinningSessionDelegate(expectedCertificateData: certificateData)
         let session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
 
-        let socket = try await URLSessionWebSocket.connect(to: url, session: session)
-        socket.close(code: 1000, reason: nil)
+        let connection = try await URLSessionWebSocketTransport(
+          configuration: session.configuration, delegate: session.delegate
+        ).connect(to: url, headerFields: [:])
+        connection.close(code: .normalClosure, reason: nil)
 
         #expect(delegate.wasInvoked)
       }
@@ -324,11 +203,15 @@ struct WebSocketTests {
         let session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
 
         do {
-          _ = try await URLSessionWebSocket.connect(to: url, session: session)
+          _ = try await URLSessionWebSocketTransport(
+            configuration: session.configuration, delegate: session.delegate
+          ).connect(to: url, headerFields: [:])
           Issue.record("expected connection to fail due to certificate mismatch")
+        } catch let error as RealtimeError {
+          #expect(error.kind == .transport)
+          #expect(error.isRetryable)
         } catch {
-          // Expected: the pinning delegate rejected the server's certificate, so the
-          // TLS handshake failed and `connect` threw.
+          Issue.record("Unexpected error: \(error)")
         }
 
         #expect(delegate.wasInvoked)
@@ -343,16 +226,13 @@ struct WebSocketTests {
         defer { server.stop() }
 
         let url = URL(string: "wss://127.0.0.1:\(port)")!
-        // A delegate implementing only the modern, task-level challenge method — the exact
-        // shape that a per-task `_Delegate.urlSession(_:didReceive:completionHandler:)`
-        // (session-level only) previously failed to forward to. `associatedTask` is what
-        // makes this work now; this test proves it over a real TLS handshake, not just a
-        // direct unit-test call into `_Delegate`.
         let delegate = PinningTaskDelegate(expectedCertificateData: certificateData)
         let session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
 
-        let socket = try await URLSessionWebSocket.connect(to: url, session: session)
-        socket.close(code: 1000, reason: nil)
+        let connection = try await URLSessionWebSocketTransport(
+          configuration: session.configuration, delegate: session.delegate
+        ).connect(to: url, headerFields: [:])
+        connection.close(code: .normalClosure, reason: nil)
 
         #expect(delegate.wasInvoked)
       }
@@ -372,11 +252,15 @@ struct WebSocketTests {
         let session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
 
         do {
-          _ = try await URLSessionWebSocket.connect(to: url, session: session)
+          _ = try await URLSessionWebSocketTransport(
+            configuration: session.configuration, delegate: session.delegate
+          ).connect(to: url, headerFields: [:])
           Issue.record("expected connection to fail due to certificate mismatch")
+        } catch let error as RealtimeError {
+          #expect(error.kind == .transport)
+          #expect(error.isRetryable)
         } catch {
-          // Expected: the pinning delegate rejected the server's certificate, so the
-          // TLS handshake failed and `connect` threw.
+          Issue.record("Unexpected error: \(error)")
         }
 
         #expect(delegate.wasInvoked)
@@ -384,17 +268,8 @@ struct WebSocketTests {
     #endif
   #endif
 
-  // MARK: - _Delegate Auth Challenge Forwarding Tests
-
-  // `URLAuthenticationChallenge`/`URLProtectionSpace` live in `FoundationNetworking` on Linux,
-  // and `_Delegate`'s challenge-forwarding logic itself is a no-op there (see its `#if
-  // canImport(FoundationNetworking)` guard in URLSessionWebSocket.swift) — these tests are
-  // Apple-platforms-only.
   #if !canImport(FoundationNetworking)
 
-    /// No-op sender required by `URLAuthenticationChallenge`'s designated initializer.
-    /// Never invoked: these tests exercise `_Delegate` directly rather than through a
-    /// live challenge-response cycle.
     private final class NoopChallengeSender: NSObject, URLAuthenticationChallengeSender {
       func use(_ credential: URLCredential, for challenge: URLAuthenticationChallenge) {}
       func continueWithoutCredential(for challenge: URLAuthenticationChallenge) {}
@@ -440,9 +315,6 @@ struct WebSocketTests {
       delegate.associatedTask.setValue(task)
       let challenge = makeChallenge()
 
-      // The OS only ever calls this delegate's session-level method (see its doc comment) —
-      // even when `wrappedDelegate` implements only the task-level one, that must still be
-      // reached via `associatedTask`.
       await confirmation("completion handler called") { completionCalled in
         delegate.urlSession(session, didReceive: challenge) { disposition, _ in
           #expect(disposition == .useCredential)
@@ -534,10 +406,6 @@ struct WebSocketTests {
   #endif
 }
 
-private struct LoopbackError: Error {
-  let message: String
-}
-
 #if canImport(Network)
   import Network
   import ObjectiveC
@@ -550,116 +418,9 @@ private struct LoopbackError: Error {
 
   private nonisolated(unsafe) var deinitNotifierKey: UInt8 = 0
 
-  private final class LoopbackWebSocketServer: @unchecked Sendable {
-    private let listener: NWListener
-    private let queue = DispatchQueue(label: "co.supabase.LoopbackWebSocketServer")
-    private var connections: [NWConnection] = []
-    private var isStopped = false
-
-    init() throws {
-      let parameters = NWParameters.tcp
-      let webSocketOptions = NWProtocolWebSocket.Options()
-      webSocketOptions.autoReplyPing = true
-      parameters.defaultProtocolStack.applicationProtocols.insert(webSocketOptions, at: 0)
-      listener = try NWListener(using: parameters, on: .any)
-    }
-
-    func start() throws -> UInt16 {
-      let ready = DispatchSemaphore(value: 0)
-
-      listener.stateUpdateHandler = { state in
-        if case .ready = state { ready.signal() }
-      }
-
-      listener.newConnectionHandler = { [weak self] connection in
-        guard let self else { return }
-        if self.isStopped {
-          connection.cancel()
-          return
-        }
-        self.connections.append(connection)
-        connection.start(queue: self.queue)
-        self.receive(on: connection)
-      }
-
-      listener.start(queue: queue)
-
-      guard ready.wait(timeout: .now() + 5) == .success, let port = listener.port else {
-        throw LoopbackError(message: "loopback server failed to start")
-      }
-
-      return port.rawValue
-    }
-
-    private func receive(on connection: NWConnection) {
-      connection.receiveMessage { [weak self] _, context, _, error in
-        if let metadata = context?.protocolMetadata(definition: NWProtocolWebSocket.definition)
-          as? NWProtocolWebSocket.Metadata, metadata.opcode == .close
-        {
-          let closeMetadata = NWProtocolWebSocket.Metadata(opcode: .close)
-          let closeContext = NWConnection.ContentContext(
-            identifier: "close", metadata: [closeMetadata])
-          connection.send(
-            content: nil,
-            contentContext: closeContext,
-            isComplete: true,
-            completion: .contentProcessed { _ in connection.cancel() }
-          )
-          return
-        }
-
-        guard error == nil else { return }
-        self?.receive(on: connection)
-      }
-    }
-
-    /// Pushes a frame from the server to every connected client.
-    ///
-    /// Every other test here only drives traffic client→server, which is why
-    /// `URLSessionWebSocket._handleMessage` had no coverage: nothing ever arrived for it to
-    /// handle. Dispatched on `queue` so it is ordered after the `newConnectionHandler` that
-    /// appended the connection.
-    func send(text: String) {
-      send(Data(text.utf8), opcode: .text)
-    }
-
-    func send(binary: Data) {
-      send(binary, opcode: .binary)
-    }
-
-    private func send(_ payload: Data, opcode: NWProtocolWebSocket.Opcode) {
-      queue.async { [self] in
-        let metadata = NWProtocolWebSocket.Metadata(opcode: opcode)
-        let context = NWConnection.ContentContext(identifier: "send", metadata: [metadata])
-
-        for connection in connections {
-          connection.send(
-            content: payload,
-            contentContext: context,
-            isComplete: true,
-            completion: .contentProcessed { _ in }
-          )
-        }
-      }
-    }
-
-    func stop() {
-      queue.sync {
-        isStopped = true
-        listener.cancel()
-        for connection in connections { connection.cancel() }
-        connections.removeAll()
-      }
-    }
-  }
-
   #if os(macOS)
     import Security
 
-    /// Generates a throwaway self-signed identity (private key + certificate) via the
-    /// system `openssl` binary, then imports it into a `SecIdentity` for use with
-    /// `NWProtocolTLS.Options`. macOS-only: relies on `Process` and `/usr/bin/openssl`,
-    /// neither available on iOS/tvOS/watchOS simulator test destinations.
     private func makeSelfSignedIdentity() throws -> (
       identity: SecIdentity, certificateData: Data, cleanup: () -> Void
     ) {
@@ -703,7 +464,6 @@ private struct LoopbackError: Error {
       if #available(macOS 15, *) {
         options[kSecImportToMemoryOnly as String] = true
       } else {
-        // Older macOS versions need an isolated keychain, deleted after the TLS test.
         let path = tmpDir.appendingPathComponent("test.keychain").path
         let status = password.withCString {
           SecKeychainCreate(path, UInt32(password.utf8.count), $0, false, nil, &temporaryKeychain)
@@ -819,10 +579,6 @@ private struct LoopbackError: Error {
       }
     }
 
-    /// Session-level pinning delegate: accepts the server's certificate only if it
-    /// matches `expectedCertificateData` byte-for-byte, otherwise cancels the challenge.
-    /// This mirrors the shape of a real app's pinning delegate (see the `Usage` example
-    /// in the design spec).
     private final class PinningSessionDelegate: NSObject, URLSessionDelegate {
       let expectedCertificateData: Data
       private let lockedWasInvoked = LockIsolated(false)
@@ -857,9 +613,6 @@ private struct LoopbackError: Error {
       }
     }
 
-    /// Task-level pinning delegate: identical logic to `PinningSessionDelegate`, but
-    /// implements only `URLSessionTaskDelegate`'s task-level challenge method (the modern,
-    /// recommended form since iOS 15/macOS 12) rather than the classic session-level one.
     private final class PinningTaskDelegate: NSObject, URLSessionTaskDelegate {
       let expectedCertificateData: Data
       private let lockedWasInvoked = LockIsolated(false)

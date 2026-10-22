@@ -52,7 +52,6 @@ struct HTTPBodyTests {
     #expect(try await iterator.next() == [1])
     try await Task.sleep(for: .milliseconds(50))
 
-    // One pull per `next()`: nothing reads ahead into a buffer the consumer has not asked for.
     #expect(pulls.value == 1)
   }
 
@@ -95,12 +94,106 @@ struct HTTPBodyTests {
   }
 
   @Test
+  func fileBodyReadsTheNextChunkOnlyWhenPulled() async throws {
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try Data(repeating: 1, count: 2 * 64 * 1024).write(to: url)
+    defer { try? FileManager.default.removeItem(at: url) }
+
+    let body = try HTTPBody(fileURL: url)
+    var iterator = body.makeAsyncIterator()
+    _ = try await iterator.next()
+
+    let writer = try FileHandle(forWritingTo: url)
+    try writer.seek(toOffset: 64 * 1024)
+    try writer.write(contentsOf: Data(repeating: 2, count: 64 * 1024))
+    try writer.close()
+
+    let second = try #require(try await iterator.next())
+    #expect(second.allSatisfy { $0 == 2 })
+  }
+
+  @Test(.timeLimit(.minutes(1)))
+  func cancellingTheConsumerStopsTheReader() async throws {
+    let pulls = LockIsolated(0)
+    let chunks = AsyncStream<ArraySlice<UInt8>> {
+      pulls.withValue { $0 += 1 }
+      try? await Task.sleep(for: .milliseconds(1))
+      return [0]
+    }
+    let body = HTTPBody(chunks, length: .unknown, iterationBehavior: .single)
+    let consumer = Task {
+      for try await _ in body {}
+    }
+    while pulls.value < 3 { await Task.yield() }
+
+    consumer.cancel()
+    _ = await consumer.result
+    let afterCancel = pulls.value
+    try await Task.sleep(for: .milliseconds(50))
+
+    #expect(pulls.value == afterCancel)
+  }
+
+  @Test
   func writeToFileRoundTrips() async throws {
     let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: url) }
 
     try await HTTPBody(Data("on disk".utf8)).write(to: url)
     #expect(try Data(contentsOf: url) == Data("on disk".utf8))
+  }
+
+  private func makeDirectory() throws -> URL {
+    let directory = FileManager.default.temporaryDirectory
+      .appendingPathComponent("HTTPBodyTests-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    return directory
+  }
+
+  @Test
+  func writeToFileReplacesAnExistingFile() async throws {
+    let directory = try makeDirectory()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let url = directory.appendingPathComponent("a.txt")
+    try Data("old contents".utf8).write(to: url)
+
+    try await HTTPBody(Data("new".utf8)).write(to: url)
+
+    #expect(try Data(contentsOf: url) == Data("new".utf8))
+    #expect(try FileManager.default.contentsOfDirectory(atPath: directory.path) == ["a.txt"])
+  }
+
+  @Test
+  func aFailedWriteKeepsTheOldFileAndLeavesNoTemporaryFile() async throws {
+    struct Lost: Error {}
+    let directory = try makeDirectory()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let url = directory.appendingPathComponent("a.txt")
+    try Data("old contents".utf8).write(to: url)
+    let chunks = AsyncThrowingStream<ArraySlice<UInt8>, any Error> {
+      $0.yield(ArraySlice([1, 2]))
+      $0.finish(throwing: Lost())
+    }
+
+    await #expect(throws: Lost.self) {
+      try await HTTPBody(chunks, length: .unknown, iterationBehavior: .single).write(to: url)
+    }
+
+    #expect(try Data(contentsOf: url) == Data("old contents".utf8))
+    #expect(try FileManager.default.contentsOfDirectory(atPath: directory.path) == ["a.txt"])
+  }
+
+  @Test
+  func writeToAMissingDirectoryThrowsAndCreatesNothing() async throws {
+    let directory = try makeDirectory()
+    defer { try? FileManager.default.removeItem(at: directory) }
+
+    await #expect(throws: (any Error).self) {
+      try await HTTPBody(Data("new".utf8)).write(
+        to: directory.appendingPathComponent("missing/a.txt"))
+    }
+
+    #expect(try FileManager.default.contentsOfDirectory(atPath: directory.path).isEmpty)
   }
 
   @Test
@@ -128,8 +221,6 @@ struct HTTPBodyTests {
     let body = try HTTPBody(fileURL: url)
       .reportingProgress { bytes in seen.withValue { $0.append(bytes) } }
 
-    // A file body must keep uploading flat from disk, so the storage kind survives wrapping and
-    // the transport reports progress through `onUploadProgress` instead of iterating the chunks.
     guard case .file(let storedURL) = body.storage else {
       Issue.record("expected .file storage, got \(body.storage)")
       return
@@ -143,8 +234,6 @@ struct HTTPBodyTests {
     onUploadProgress(13)
     #expect(seen.value == [5, 13])
 
-    // Iterating does not report again: a middleware that buffers the body must not make the
-    // observer see the upload twice.
     _ = try await Data(collecting: body, upTo: 100)
     #expect(seen.value == [5, 13])
   }
@@ -158,7 +247,49 @@ struct HTTPBodyTests {
     let body = HTTPBody(chunks, length: .known(2), iterationBehavior: .single)
       .reportingProgress { _ in }
 
-    // The transport hook stays unset, so `didSendBodyData` cannot double up on the pull counter.
     #expect(body.onUploadProgress == nil)
+  }
+
+  @Test
+  func mapErrorPassesChunksThroughAndTransformsTheFailure() async throws {
+    struct Upstream: Error {}
+    struct Mapped: Error {}
+    let chunks = AsyncThrowingStream<ArraySlice<UInt8>, any Error> {
+      $0.yield(ArraySlice([1, 2]))
+      $0.finish(throwing: Upstream())
+    }
+    let body = HTTPBody(chunks, length: .known(2), iterationBehavior: .single)
+      .mapError { error in error is Upstream ? Mapped() : error }
+
+    #expect(body.length == .known(2))
+    #expect(body.iterationBehavior == .single)
+    var received: [ArraySlice<UInt8>] = []
+    await #expect(throws: Mapped.self) {
+      for try await chunk in body { received.append(chunk) }
+    }
+    #expect(received == [[1, 2]])
+  }
+
+  /// `AsyncThrowingStream` ends cleanly when its consumer is cancelled, which would make a body
+  /// cut short look complete.
+  @Test
+  func iteratingFromACancelledTaskThrowsCancellationError() async {
+    let (chunks, continuation) = AsyncStream<ArraySlice<UInt8>>.makeStream()
+    let body = HTTPBody(chunks, length: .unknown, iterationBehavior: .single)
+    let (pulled, onPulled) = AsyncStream<Void>.makeStream()
+
+    let task = Task {
+      var count = 0
+      for try await _ in body {
+        count += 1
+        onPulled.yield()
+      }
+      return count
+    }
+    continuation.yield(ArraySlice([1]))
+    for await _ in pulled { break }
+    task.cancel()
+
+    await #expect(throws: CancellationError.self) { try await task.value }
   }
 }

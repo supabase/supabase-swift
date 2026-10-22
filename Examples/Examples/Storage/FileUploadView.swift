@@ -173,6 +173,12 @@ struct FileUploadView: View {
     }
   }
 
+  private var reportProgress: @Sendable (TransferProgress) -> Void {
+    { progress in
+      Task { @MainActor in uploadProgress = progress.fractionCompleted ?? 0 }
+    }
+  }
+
   @MainActor
   func uploadImage() async {
     guard let imageData else { return }
@@ -183,26 +189,21 @@ struct FileUploadView: View {
       isUploading = true
       uploadProgress = 0
 
-      let options = FileOptions(
-        cacheControl: cacheControl,
+      let options = UploadOptions(
         contentType: "image/jpeg",
-        shouldUpsert: upsertEnabled
+        cacheControl: .maxAge(.seconds(Int(cacheControl) ?? 3600)),
+        upsert: upsertEnabled
       )
-
-      // Simulate progress
-      for i in 1...3 {
-        uploadProgress = Double(i) / 3.0
-        try await Task.sleep(nanoseconds: 200_000_000)
-      }
 
       let response = try await supabase.storage
         .from(selectedBucket)
-        .upload(path: filePath, data: imageData, options: options)
+        .upload(
+          path: filePath, data: imageData, options: options,
+          progress: reportProgress)
 
       uploadedPath = response.path
       uploadProgress = 1.0
 
-      // Reset
       selectedImage = nil
       self.imageData = nil
       filePath = ""
@@ -223,19 +224,16 @@ struct FileUploadView: View {
       isUploading = true
       uploadProgress = 0
 
-      let options = FileOptions(
-        cacheControl: cacheControl,
-        shouldUpsert: upsertEnabled
+      let options = UploadOptions(
+        cacheControl: .maxAge(.seconds(Int(cacheControl) ?? 3600)),
+        upsert: upsertEnabled
       )
-
-      for i in 1...3 {
-        uploadProgress = Double(i) / 3.0
-        try await Task.sleep(nanoseconds: 200_000_000)
-      }
 
       let response = try await supabase.storage
         .from(selectedBucket)
-        .upload(path: filePath, fileURL: selectedDocument, options: options)
+        .upload(
+          path: filePath, fileURL: selectedDocument, options: options,
+          progress: reportProgress)
 
       uploadedPath = response.path
       uploadProgress = 1.0
@@ -264,20 +262,17 @@ struct FileUploadView: View {
 
       let data = sampleText.data(using: .utf8)!
 
-      let options = FileOptions(
-        cacheControl: cacheControl,
+      let options = UploadOptions(
         contentType: "text/plain",
-        shouldUpsert: upsertEnabled
+        cacheControl: .maxAge(.seconds(Int(cacheControl) ?? 3600)),
+        upsert: upsertEnabled
       )
-
-      for i in 1...3 {
-        uploadProgress = Double(i) / 3.0
-        try await Task.sleep(nanoseconds: 100_000_000)
-      }
 
       let response = try await supabase.storage
         .from(selectedBucket)
-        .upload(path: filePath, data: data, options: options)
+        .upload(
+          path: filePath, data: data, options: options,
+          progress: reportProgress)
 
       uploadedPath = response.path
       uploadProgress = 1.0

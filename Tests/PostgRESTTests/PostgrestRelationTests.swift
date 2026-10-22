@@ -11,7 +11,7 @@ import Testing
 
 @Suite
 struct PostgrestRelationTests {
-  struct Todo: PostgrestWritableRelation {
+  struct Todo: _PostgrestWritableRelation {
     static let relationName = "todos"
     static let selectString = "*"
 
@@ -20,9 +20,9 @@ struct PostgrestRelationTests {
     var isDone: Bool
 
     struct Columns: Sendable {
-      let id = PostgrestColumn<Todo, Int>("id")
-      let task = PostgrestColumn<Todo, String>("task")
-      let isDone = PostgrestColumn<Todo, Bool>("is_done")
+      let id = _PostgrestColumn<Todo, Int>("id")
+      let task = _PostgrestColumn<Todo, String>("task")
+      let isDone = _PostgrestColumn<Todo, Bool>("is_done")
     }
 
     static let columns = Columns()
@@ -35,7 +35,7 @@ struct PostgrestRelationTests {
 
   @Test
   func aRelationIsAlsoASelection() {
-    func selectString<T: PostgrestSelection>(of type: T.Type) -> String { T.selectString }
+    func selectString<T: _PostgrestSelection>(of type: T.Type) -> String { T.selectString }
     #expect(selectString(of: Todo.self) == "*")
   }
 }

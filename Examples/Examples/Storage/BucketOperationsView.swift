@@ -26,7 +26,6 @@ struct BucketOperationsView: View {
           .foregroundColor(.secondary)
       }
 
-      // Create Bucket
       Section("Create New Bucket") {
         TextField("Bucket name", text: $bucketName)
           .textInputAutocapitalization(.never)
@@ -45,7 +44,6 @@ struct BucketOperationsView: View {
         .disabled(bucketName.isEmpty || isLoading)
       }
 
-      // Existing Buckets
       Section("Existing Buckets") {
         Button("Refresh List") {
           Task {
@@ -137,9 +135,9 @@ struct BucketOperationsView: View {
       isLoading = true
       defer { isLoading = false }
 
-      let sizeLimit: StorageByteCount? =
-        !fileSizeLimit.isEmpty ? Int64(fileSizeLimit).map { StorageByteCount($0) } : nil
-      let options = BucketOptions(isPublic: isPublic, fileSizeLimit: sizeLimit)
+      let sizeLimit: ByteCount? =
+        !fileSizeLimit.isEmpty ? Int64(fileSizeLimit).map { ByteCount(bytes: $0) } : nil
+      let options = CreateBucketOptions(isPublic: isPublic, fileSizeLimit: sizeLimit)
 
       try await supabase.storage.createBucket(bucketName, options: options)
 
@@ -176,10 +174,7 @@ struct BucketOperationsView: View {
       defer { isLoading = false }
 
       let newPublic = !bucket.isPublic
-      let options = BucketOptions(
-        isPublic: newPublic,
-        fileSizeLimit: bucket.fileSizeLimit.map { StorageByteCount($0) }
-      )
+      let options = UpdateBucketOptions(isPublic: newPublic)
 
       try await supabase.storage.updateBucket(bucket.id, options: options)
 

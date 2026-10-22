@@ -39,6 +39,25 @@ struct PostgrestErrorTests {
     #expect(payload.message == "duplicate key value violates unique constraint \"users_pkey\"")
   }
 
+  /// PostgREST answers an ambiguous embed (`PGRST201`) with `details` as an array of candidate
+  /// relationships rather than a string. The payload has to survive, because the details and hint
+  /// are what tell the caller which foreign-key hint to add.
+  @Test
+  func serverErrorKeepsStructuredDetails() throws {
+    let json = """
+      {"code":"PGRST201","message":"Could not embed because more than one relationship was found \
+      for 'todos' and 'comments'","details":[{"cardinality":"one-to-many","embedding":"todos with \
+      comments","relationship":"comments_todo_id_fkey using todos(id) and comments(todo_id)"}],\
+      "hint":"Try changing 'comments' to one of the following: 'comments!comments_todo_id_fkey'."}
+      """
+
+    let payload = try JSONDecoder().decode(PostgrestError.ServerError.self, from: Data(json.utf8))
+
+    #expect(payload.code == "PGRST201")
+    #expect(payload.details?.contains("comments_todo_id_fkey using todos(id)") == true)
+    #expect(payload.hint?.contains("comments!comments_todo_id_fkey") == true)
+  }
+
   @Test
   func descriptionIncludesKindStatusAndRequestID() {
     var headers = HTTPFields()

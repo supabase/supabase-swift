@@ -12,18 +12,16 @@ import Testing
 
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil), .serialized)
 struct StorageVectorsClientIntegrationTests {
-  let vectors = SupabaseStorageClient(
+  let vectors = StorageClient(
     configuration: StorageClientConfiguration(
       url: URL(string: "\(DotEnv.supabaseURL)/storage/v1")!,
       headers: [
-        "Authorization": "Bearer \(DotEnv.supabaseSecretKey)"
+        .authorization: "Bearer \(DotEnv.supabaseSecretKey)"
       ]
     )
   ).vectors
 
   init() async throws {
-    // Clean up test-vector-bucket if it exists from a previous failed run
-    // to make tests idempotent
     try? await vectors.deleteBucket("test-vector-bucket")
   }
 
@@ -31,7 +29,7 @@ struct StorageVectorsClientIntegrationTests {
   func vectorBucket_CRUD() async throws {
     let bucketName = "test-vector-bucket"
 
-    var page = try await vectors.listBuckets()
+    var page = try await vectors.listBuckets().page()
     #expect(!page.vectorBuckets.contains { $0.vectorBucketName == bucketName })
 
     try await vectors.createBucket(bucketName)
@@ -39,12 +37,12 @@ struct StorageVectorsClientIntegrationTests {
     let bucket = try await vectors.bucket(bucketName)
     #expect(bucket.vectorBucketName == bucketName)
 
-    page = try await vectors.listBuckets()
+    page = try await vectors.listBuckets().page()
     #expect(page.vectorBuckets.contains { $0.vectorBucketName == bucketName })
 
     try await vectors.deleteBucket(bucketName)
 
-    page = try await vectors.listBuckets()
+    page = try await vectors.listBuckets().page()
     #expect(!page.vectorBuckets.contains { $0.vectorBucketName == bucketName })
   }
 
@@ -53,10 +51,10 @@ struct StorageVectorsClientIntegrationTests {
     let bucketName = "test-vector-bucket"
     try await vectors.createBucket(bucketName)
 
-    let matching = try await vectors.listBuckets(prefix: "test-vector-")
+    let matching = try await vectors.listBuckets(prefix: "test-vector-").page()
     #expect(matching.vectorBuckets.contains { $0.vectorBucketName == bucketName })
 
-    let nonMatching = try await vectors.listBuckets(prefix: "no-such-prefix-")
+    let nonMatching = try await vectors.listBuckets(prefix: "no-such-prefix-").page()
     #expect(!nonMatching.vectorBuckets.contains { $0.vectorBucketName == bucketName })
 
     try await vectors.deleteBucket(bucketName)

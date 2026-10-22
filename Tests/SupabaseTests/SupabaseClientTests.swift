@@ -13,16 +13,12 @@ import Testing
 @testable import Auth
 @testable import Functions
 @testable import Realtime
-@testable import Supabase
+@_spi(Experimental) @testable import Supabase
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
 #endif
 
-/// Captures every request handed to it and responds with an empty JSON array.
-/// `startLoading` runs on the `URLSession` delegate queue, so mutable state is lock-guarded.
-///
-/// Shared with `TracingTests`, which needs it to assert on `traceparent` header injection.
 final class RequestCapturingProtocol: URLProtocol {
   private static let storage = LockIsolated<[URLRequest]>([])
 
@@ -77,10 +73,8 @@ struct SupabaseClientTests {
       )
     )
 
-    // Identity, not equality: `any Clock<Duration>` is not `Equatable`, and what matters is that
-    // the very instance the caller passed is the one the sub-clients sleep on.
     #expect(client.auth.configuration.clock as AnyObject === clock)
-    #expect(client.realtimeV2.options.clock as AnyObject === clock)
+    #expect(client.realtime.options.clock as AnyObject === clock)
   }
 
   @Test
@@ -132,16 +126,18 @@ struct SupabaseClientTests {
       """
     }
     expectNoDifference(client.headers, client.auth.configuration.headers)
-    expectNoDifference(client.headers, client.functions.headers.dictionary)
-    expectNoDifference(client.headers, client.storage.configuration.headers)
-    expectNoDifference(client.headers, client.rest.configuration.headers)
+    var dataHeaders = client.headers
+    dataHeaders["Authorization"] = nil
+    expectNoDifference(dataHeaders, client.functions.configuration.headers.dictionary)
+    expectNoDifference(dataHeaders, client.storage.configuration.headers.dictionary)
+    expectNoDifference(dataHeaders, client.rest.configuration.headers)
 
-    #expect(client.functions.region == "ap-northeast-1")
+    #expect(client.functions.configuration.region == .apNortheast1)
 
-    let realtimeURL = client.realtimeV2.url
+    let realtimeURL = client.realtime.url
     #expect(realtimeURL.absoluteString == "https://project-ref.supabase.co/realtime/v1")
 
-    let realtimeOptions = client.realtimeV2.options
+    let realtimeOptions = client.realtime.options
     let expectedRealtimeHeader = client._headers.merging(with: [
       .init("custom_realtime_header_key")!: "custom_realtime_header_value"
     ]
@@ -176,7 +172,7 @@ struct SupabaseClientTests {
       )
     )
 
-    let realtimeOptions = client.realtimeV2.options
+    let realtimeOptions = client.realtime.options
     #expect(realtimeOptions.logger[metadataKey: "system"] == "realtime")
   }
 
@@ -200,6 +196,24 @@ struct SupabaseClientTests {
       )
     )
     #expect(noRetryClient.rest.configuration.retryEnabled == false)
+  }
+
+  @Test
+  func storageResumableOptionForwardsToStorageClient() {
+    var storageOptions = SupabaseClientOptions.StorageOptions()
+    storageOptions.resumable = ResumableUploadConfiguration(
+      chunkSize: 1024, retryTimeout: .seconds(5))
+    let client = SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      options: SupabaseClientOptions(
+        auth: SupabaseClientOptions.AuthOptions(storage: AuthLocalStorageMock()),
+        storage: storageOptions
+      )
+    )
+
+    #expect(client.storage.configuration.resumable.chunkSize == 1024)
+    #expect(client.storage.configuration.resumable.retryTimeout == .seconds(5))
   }
 
   #if !os(Linux) && !os(Android)
@@ -227,11 +241,11 @@ struct SupabaseClientTests {
     )
 
     #expect(
-      client.realtimeV2.options.http.transport is URLSessionTransport,
+      client.realtime.options.http.transport is URLSessionTransport,
       "the default URLSessionTransport should be propagated to Realtime client"
     )
     #expect(
-      client.realtimeV2.options.http.middlewares.contains { $0 is TraceContextMiddleware },
+      client.realtime.options.http.middlewares.contains { $0 is TraceContextMiddleware },
       "SDK middlewares should be installed when the caller sets no transport"
     )
   }
@@ -253,11 +267,11 @@ struct SupabaseClientTests {
     )
 
     #expect(
-      client.realtimeV2.options.http.transport is ClosureTransport,
+      client.realtime.options.http.transport is ClosureTransport,
       "user-provided realtime transport should be preserved"
     )
     #expect(
-      client.realtimeV2.options.http.middlewares.isEmpty,
+      client.realtime.options.http.middlewares.isEmpty,
       "middlewares should stay as the caller passed them when they set a transport"
     )
   }
@@ -283,7 +297,7 @@ struct SupabaseClientTests {
     )
 
     #expect(
-      client.realtimeV2.options.session === realtimeSpecificSession,
+      client.realtime.options.session === realtimeSpecificSession,
       "user-provided realtime session should be preserved"
     )
 
@@ -302,7 +316,7 @@ struct SupabaseClientTests {
     )
 
     #expect(
-      clientWithoutRealtimeSession.realtimeV2.options.session == nil,
+      clientWithoutRealtimeSession.realtime.options.session == nil,
       "the HTTP transport's URLSession must not leak into Realtime's WebSocket"
     )
   }
@@ -326,24 +340,12 @@ struct SupabaseClientTests {
       client.mutableState.listenForAuthEventsTask == nil,
       "should not listen for internal auth events when using 3p authentication"
     )
-
-    // Not asserting that `client.auth` reports an issue here (as the XCTest version of this
-    // test did via `withExpectedIssue`/`withKnownIssue`): under Xcode 26's Swift Testing +
-    // XCTest bundle hosting, `reportIssue` (swift-issue-reporting) segfaults the test process
-    // when called from a `@Test` function, regardless of which "expected/known issue" wrapper
-    // is used. Reproduced locally via `xcodebuild test`; does not reproduce under `swift test`.
-    // Tracked as a migration-wide risk in SDK-435 for any later phase whose tests exercise
-    // `reportIssue`-instrumented production code.
   }
 
   @Test
   func customAccessTokenErrorPropagatesInsteadOfFallingBackToAnonKey() async {
     struct TokenProviderError: Error, Equatable {}
 
-    // A URLProtocol that fails any request it receives — proves the request never reaches the
-    // network instead of merely trusting that it didn't. Deliberately not the shared
-    // `RequestCapturingProtocol`: that's also used by `TracingTests` (a `.serialized` suite that
-    // still runs concurrently with this one), so touching its static storage here would race.
     final class UnreachableProtocol: URLProtocol {
       override static func canInit(with request: URLRequest) -> Bool { true }
       override static func canonicalRequest(for request: URLRequest) -> URLRequest { request }
@@ -379,8 +381,6 @@ struct SupabaseClientTests {
 
   @Test
   func missingSessionFallsBackToAnonKeyWithoutCustomAccessToken() async throws {
-    // Single-purpose capturing protocol (not the shared `RequestCapturingProtocol`) so this test
-    // doesn't race with other suites reading/resetting shared static storage.
     final class CapturingProtocol: URLProtocol {
       private static let storage = LockIsolated<URLRequest?>(nil)
       static var capturedRequest: URLRequest? {
@@ -431,7 +431,6 @@ struct SupabaseClientTests {
     }
     let box = WeakBox()
 
-    // Narrow scope so ARC drops the last strong reference when it returns.
     func scope() {
       let client = SupabaseClient(
         supabaseURL: URL(string: "https://project-ref.supabase.co")!,
@@ -452,7 +451,6 @@ struct SupabaseClientTests {
     }
     scope()
 
-    // Let the auth-state-change plumbing drain before asserting.
     await Task.megaYield()
 
     #expect(
@@ -468,7 +466,6 @@ struct SupabaseClientTests {
     }
     let box = WeakBox()
 
-    // Narrow scope so ARC drops the last strong reference when it returns.
     func scope() {
       let client = SupabaseClient(
         supabaseURL: URL(string: "https://project-ref.supabase.co")!,
@@ -482,17 +479,10 @@ struct SupabaseClientTests {
       )
       box.client = client
 
-      // Materialize every sub-client cached in `mutableState`: each one captures the
-      // `fetch`/`upload` closures there, so a `self` capture in one of those closures would
-      // form a retain cycle (client -> mutableState -> cached sub-client -> closure -> client).
       _ = client.rest
       _ = client.functions
-      _ = client.realtimeV2
+      _ = client.realtime
 
-      // `storage` builds a fresh, uncached `SupabaseStorageClient` on every access (see
-      // `SupabaseClient.storage`), so discarding the result here can't exercise the same
-      // detection: nothing keeps the closures it captures alive past this statement, so this
-      // arm can't prove `storage` is cycle-free the way the cached sub-clients above can.
       _ = client.storage
     }
     scope()
@@ -513,20 +503,33 @@ struct SupabaseClientTests {
       options: SupabaseClientOptions(auth: .init(storage: AuthLocalStorageMock()))
     )
 
-    #expect(client.functions.headers.dictionary["Authorization"] == nil)
-    #expect(client.functions.headers.dictionary["Apikey"] == "sb_publishable_abc123")
+    #expect(client.functions.configuration.headers[.authorization] == nil)
+    #expect(client.functions.configuration.headers[.init("Apikey")!] == "sb_publishable_abc123")
   }
 
   @Test
-  func functionsKeepsAuthorizationBearerForLegacyKey() {
+  func storageOmitsAuthorizationBearerForNewFormatKey() {
+    let client = SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "sb_publishable_abc123",
+      options: SupabaseClientOptions(auth: .init(storage: AuthLocalStorageMock()))
+    )
+
+    let headers = client.storage.configuration.headers
+    #expect(headers[.authorization] == nil)
+    #expect(headers[.init("Apikey")!] == "sb_publishable_abc123")
+  }
+
+  @Test
+  func functionsCarriesNoStaticAuthorizationHeaderForLegacyKey() {
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "legacy-jwt-key",
       options: SupabaseClientOptions(auth: .init(storage: AuthLocalStorageMock()))
     )
 
-    #expect(client.functions.headers.dictionary["Authorization"] == "Bearer legacy-jwt-key")
-    #expect(client.functions.headers.dictionary["Apikey"] == "legacy-jwt-key")
+    #expect(client.functions.configuration.headers[.authorization] == nil)
+    #expect(client.functions.configuration.headers[.init("Apikey")!] == "legacy-jwt-key")
   }
 
   @Test
@@ -558,35 +561,102 @@ struct SupabaseClientTests {
     _ = try? await client.storage.listBuckets()
     _ = try? await client.functions.invoke("hello")
 
-    // Every sub-client reached the caller's transport, through the caller's middleware.
     for prefix in ["/rest/v1/todos", "/storage/v1/bucket", "/functions/v1/hello"] {
       #expect(seenByTransport.value.contains { $0.path?.hasPrefix(prefix) == true })
     }
     #expect(seenByTransport.value.allSatisfy { $0.headerFields[.tag] == "yes" })
 
-    // Caller middlewares run *before* `AccessTokenMiddleware`: REST and Storage still carry the
-    // anon key when the caller's middleware sees them, and the live token by the time they reach
-    // the transport.
-    for prefix in ["/rest/v1/todos", "/storage/v1/bucket"] {
-      #expect(
-        authorization(in: seenByMiddleware.value, forPathPrefix: prefix) == "Bearer PUBLISHABLE_KEY"
-      )
+    for prefix in ["/rest/v1/todos", "/storage/v1/bucket", "/functions/v1/hello"] {
+      #expect(authorization(in: seenByMiddleware.value, forPathPrefix: prefix) == nil, "\(prefix)")
       #expect(
         authorization(in: seenByTransport.value, forPathPrefix: prefix)
-          == "Bearer live-session-token"
+          == "Bearer live-session-token", "\(prefix)"
       )
     }
+  }
 
-    // Functions deliberately gets no `AccessTokenMiddleware`: it resolves the token itself while
-    // building the request, so the live token is already on the header before any middleware runs.
-    #expect(
-      authorization(in: seenByMiddleware.value, forPathPrefix: "/functions/v1/hello")
-        == "Bearer live-session-token"
+  @Test
+  func functionsIsBuiltOnceAndCached() {
+    let client = SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      options: SupabaseClientOptions(auth: .init(storage: AuthLocalStorageMock()))
     )
-    #expect(
-      authorization(in: seenByTransport.value, forPathPrefix: "/functions/v1/hello")
-        == "Bearer live-session-token"
+
+    #expect(client.mutableState.functions == nil)
+    _ = client.functions
+    #expect(client.mutableState.functions != nil)
+  }
+
+  @Test
+  func functionsRegionReachesTheWire() async throws {
+    let seen = LockIsolated<[HTTPTypes.HTTPRequest]>([])
+    let transport = ClosureTransport { request, _ in
+      seen.withValue { $0.append(request) }
+      return (HTTPTypes.HTTPResponse(status: .ok), nil)
+    }
+    let client = SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      options: SupabaseClientOptions(
+        auth: .init(storage: AuthLocalStorageMock(), automaticallyRefreshesToken: false),
+        global: .init(http: .init(transport: transport)),
+        functions: .init(region: .usEast1)
+      )
     )
+
+    try await client.functions.invoke("hello")
+
+    let request = try #require(seen.value.first)
+    #expect(request.headerFields[.init("x-region")!] == "us-east-1")
+    #expect(request.url?.query?.contains("forceFunctionRegion=us-east-1") == true)
+  }
+
+  @Test
+  func functionsHTTPOverridesTheGlobalTransport() async throws {
+    let globalSeen = LockIsolated<[HTTPTypes.HTTPRequest]>([])
+    let functionsSeen = LockIsolated<[HTTPTypes.HTTPRequest]>([])
+    let client = SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      options: SupabaseClientOptions(
+        auth: .init(storage: AuthLocalStorageMock(), automaticallyRefreshesToken: false),
+        global: .init(
+          http: .init(
+            transport: ClosureTransport { request, _ in
+              globalSeen.withValue { $0.append(request) }
+              return (HTTPTypes.HTTPResponse(status: .ok), nil)
+            },
+            middlewares: [TagMiddleware()])),
+        functions: .init(
+          http: .init(
+            transport: ClosureTransport { request, _ in
+              functionsSeen.withValue { $0.append(request) }
+              return (HTTPTypes.HTTPResponse(status: .ok), nil)
+            }))
+      )
+    )
+
+    try await client.functions.invoke("hello")
+
+    #expect(globalSeen.value.isEmpty)
+    let request = try #require(functionsSeen.value.first)
+    #expect(request.headerFields[.tag] == "yes")
+  }
+
+  @Test
+  func functionsLoggerIsNotOverwrittenByTheGlobalLogger() {
+    let client = SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      options: SupabaseClientOptions(
+        auth: .init(storage: AuthLocalStorageMock()),
+        global: .init(logger: Logging.Logger(label: "global")),
+        functions: .init(logger: Logging.Logger(label: "functions"))
+      )
+    )
+
+    #expect(client.functions.configuration.logger.label == "functions")
   }
 
   @Test
@@ -623,7 +693,7 @@ struct SupabaseClientTests {
       let entry = try #require(seen.value.first { $0.path.hasPrefix(prefix) }, "\(prefix)")
       #expect(entry.timeout == .seconds(7), "\(prefix)")
     }
-    #expect(client.realtimeV2.options.http.timeout == .seconds(7))
+    #expect(client.realtime.options.http.timeout == .seconds(7))
   }
 
   @Test
@@ -671,14 +741,12 @@ struct SupabaseClientTests {
       )
     )
 
-    let middlewares = client.realtimeV2.options.http.middlewares
+    let middlewares = client.realtime.options.http.middlewares
     #expect(middlewares.contains { $0 is TagMiddleware })
     #expect(middlewares.contains { $0 is TraceContextMiddleware })
   }
 }
 
-/// Stamps `X-Tag` on every request and records what it saw, so tests can assert both that a
-/// caller-supplied middleware runs and what the headers looked like at that point in the chain.
 private struct TagMiddleware: ClientMiddleware {
   let seen: LockIsolated<[HTTPTypes.HTTPRequest]>
 
@@ -701,7 +769,6 @@ private struct TagMiddleware: ClientMiddleware {
   }
 }
 
-/// The `Authorization` header of the first recorded request whose path starts with `prefix`.
 private func authorization(
   in requests: [HTTPTypes.HTTPRequest],
   forPathPrefix prefix: String

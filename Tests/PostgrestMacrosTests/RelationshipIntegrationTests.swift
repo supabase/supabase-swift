@@ -6,10 +6,8 @@
 //
 
 import Foundation
-import PostgrestMacros
+@_spi(Experimental) import PostgrestMacros
 import Testing
-
-// File scope, for the same reason as `SelectionIntegrationTests`: both macros attach extensions.
 
 @Table("todos")
 struct RelationshipTodo {
@@ -49,8 +47,6 @@ struct RelationshipTodoWithComments {
   @Relationship(\RelationshipComment.todoID) var comments: [RelationshipCommentBody]
 }
 
-/// The many-to-one direction: the foreign key sits on *this* selection's own relation, and the
-/// embed is a single row rather than an array.
 @SelectionOf(RelationshipComment.self)
 struct RelationshipCommentWithAuthor {
   var body: String
@@ -61,8 +57,6 @@ struct RelationshipCommentWithAuthor {
 struct RelationshipIntegrationTests {
   @Test
   func selectStringCarriesTheEmbedAndItsForeignKeyHint() {
-    // `comments:` is the alias the response comes back under, `comments` the embedded relation,
-    // `!todo_id` the disambiguating hint, and the parentheses the embed's own select list.
     #expect(
       RelationshipTodoWithComments.selectString
         == "id:id,task:task,comments:comments!todo_id(id:id,body:body)"
@@ -71,10 +65,6 @@ struct RelationshipIntegrationTests {
 
   @Test
   func aManyToOneEmbedReadsTheForeignKeyOffItsOwnRelation() {
-    // Two things at once. The key path is rooted on the selection's own relation rather than on
-    // the target, so the target comes from the property's type — `users`, which appears nowhere in
-    // the attribute. And the hint is read off that relation's namespace, so the `@Column`
-    // override applies: `written_by`, not the `author_id` a local snake-casing would produce.
     #expect(
       RelationshipCommentWithAuthor.selectString == "body:body,author:users!written_by(name:name)"
     )
@@ -87,5 +77,39 @@ struct RelationshipIntegrationTests {
       RelationshipTodoWithComments.self, from: Data(json.utf8)
     )
     #expect(row.comments.map(\.id) == [7])
+  }
+}
+
+@Suite
+struct RelationshipScopeIntegrationTests {
+  @Test
+  func requiringMarksTheGeneratedEmbedAndPrefixesTheScope() async throws {
+    let capture = RequestCapture()
+    _ = try await capture.client
+      .from(RelationshipTodo.self)
+      .select(RelationshipTodoWithComments.self)
+      .requiring(\.comments) { $0.where { $0.authorID.eq(7) }.limit(5) }
+      .execute()
+
+    #expect(
+      capture.query
+        == "select=id:id,task:task,comments:comments!todo_id!inner(id:id,body:body)"
+        + "&comments.written_by=eq.7&comments.limit=5"
+    )
+  }
+
+  @Test
+  func aToOneScopeIsPrefixedByItsAlias() async throws {
+    let capture = RequestCapture()
+    _ = try await capture.client
+      .from(RelationshipComment.self)
+      .select(RelationshipCommentWithAuthor.self)
+      .embedded(\.author) { $0.where { $0.name.eq("Ada") } }
+      .execute()
+
+    #expect(
+      capture.query
+        == "select=body:body,author:users!written_by(name:name)&author.name=eq.Ada"
+    )
   }
 }

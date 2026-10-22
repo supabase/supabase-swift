@@ -11,7 +11,7 @@ import SwiftUI
 struct BucketDetailView: View {
   let bucket: Bucket
 
-  @State private var fileObjects = ActionState<[FileObject], Error>.idle
+  @State private var fileObjects = ActionState<[StorageObject], Error>.idle
   @State private var presentBucketDetails = false
 
   @State private var lastActionResult: (action: String, result: Any)?
@@ -76,7 +76,8 @@ struct BucketDetailView: View {
           value: .object([
             "id": .string(bucket.id),
             "name": .string(bucket.name),
-            "owner": .string(bucket.owner),
+            "ownerId": bucket.ownerId.map(JSONValue.string) ?? .null,
+            "type": bucket.type.map { .string($0.rawValue) } ?? .null,
             "isPublic": .bool(bucket.isPublic),
             "createdAt": .string(bucket.createdAt.description),
             "updatedAt": .string(bucket.updatedAt.description),
@@ -87,7 +88,7 @@ struct BucketDetailView: View {
         )
       }
     }
-    .navigationDestination(for: FileObject.self) {
+    .navigationDestination(for: StorageObject.self) {
       FileObjectDetailView(api: supabase.storage.from(bucket.id), fileObject: $0)
     }
   }
@@ -108,7 +109,7 @@ struct BucketDetailView: View {
     bucket: Bucket(
       id: UUID().uuidString,
       name: "name",
-      owner: "owner",
+      ownerId: "owner",
       isPublic: false,
       createdAt: Date(),
       updatedAt: Date(),

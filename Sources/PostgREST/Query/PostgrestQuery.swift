@@ -20,26 +20,23 @@ import HTTPTypes
 ///
 /// This is a value type: chaining off the same query twice gives two independent requests.
 ///
-/// > Warning: Part of the typed query API, which is alpha. Its shape may change in a minor release.
-public struct PostgrestQuery<R: PostgrestRelation, Output: Decodable & Sendable>: Sendable {
+/// > Warning: Part of the typed query API, which is experimental. Its shape may change in a minor
+/// > release. Opt in with `@_spi(Experimental) import Supabase`.
+public struct _PostgrestQuery<R: _PostgrestRelation, Output: Decodable & Sendable>: Sendable {
   let client: PostgrestClient
 
   /// The request this query sends.
-  public var request: PostgrestRequest
-
-  /// Set by ``stripNulls()``. Applied when the request is sent, because ``single()`` may still
-  /// change the media type it has to be added to.
-  var stripsNulls = false
+  public var request: _PostgrestRequest
 
   /// Turns a 2xx body into `Output`. Chosen by the method that produced this query, so
   /// ``maybeSingle()`` can decode an array and enforce at most one row.
-  let decode: @Sendable (Data, JSONDecoder) throws -> Output
+  let decode: @Sendable (Data) throws -> Output
 
   init(
     client: PostgrestClient,
-    request: PostgrestRequest,
-    decode: @escaping @Sendable (Data, JSONDecoder) throws -> Output = { data, decoder in
-      try decoder.decode(Output.self, from: data)
+    request: _PostgrestRequest,
+    decode: @escaping @Sendable (Data) throws -> Output = {
+      try Self.decoder.decode(Output.self, from: $0)
     }
   ) {
     self.client = client
@@ -48,17 +45,17 @@ public struct PostgrestQuery<R: PostgrestRelation, Output: Decodable & Sendable>
   }
 }
 
-extension PostgrestQuery: PostgrestFilterableRequest {
+extension _PostgrestQuery: _PostgrestFilterableRequest {
   public typealias Relation = R
 }
 
-extension PostgrestQuery {
+extension _PostgrestQuery {
   /// Sends the request and decodes the response.
   ///
   /// - Returns: A ``PostgrestResponse`` whose `value` is the decoded `Output`.
   @discardableResult
   public func execute() async throws -> PostgrestResponse<Output> {
-    try await send(sentRequest)
+    try await send(request)
   }
 
   /// Sends the request and decodes the response, asking the server for a total row count as well.
@@ -84,7 +81,7 @@ extension PostgrestQuery {
   ///   ``PostgrestResponse/count`` is the total.
   @discardableResult
   public func execute(count: CountOption) async throws -> PostgrestResponse<Output> {
-    var request = sentRequest
+    var request = request
     request.setPreference("count=\(count.rawValue)")
     return try await send(request)
   }
@@ -109,10 +106,10 @@ extension PostgrestQuery {
   /// - Throws: ``PostgrestError`` if the response carries no count, or any error thrown by the
   ///   request itself.
   public func count(_ option: CountOption) async throws -> Int {
-    var request = sentRequest
+    var request = request
     request.method = .head
     request.setPreference("count=\(option.rawValue)")
-    let response = try await request.execute(on: client) { _, _ in () }
+    let response = try await request.execute(on: client) { _ in () }
     guard let count = response.count else {
       throw PostgrestError(
         kind: .decoding,
@@ -125,24 +122,16 @@ extension PostgrestQuery {
     return count
   }
 
-  private var sentRequest: PostgrestRequest {
-    guard stripsNulls else { return request }
-    var request = request
-    request.headerFields[.accept] =
-      request.headerFields[.accept] == Self.objectMediaType
-      ? "\(Self.objectMediaType);nulls=stripped"
-      : "application/vnd.pgrst.array+json;nulls=stripped"
-    return request
-  }
-
-  private func send(_ request: PostgrestRequest) async throws -> PostgrestResponse<Output> {
+  private func send(_ request: _PostgrestRequest) async throws -> PostgrestResponse<Output> {
     try await request.execute(on: client, decode: decode)
   }
+
+  static var decoder: JSONDecoder { PostgrestClient.Configuration.jsonDecoder }
 
   private static var objectMediaType: String { "application/vnd.pgrst.object+json" }
 }
 
-extension PostgrestQuery {
+extension _PostgrestQuery {
   /// Returns exactly one row, decoded as `Element` rather than `[Element]`.
   ///
   /// ```swift
@@ -156,11 +145,10 @@ extension PostgrestQuery {
   /// ``execute()`` throws a ``PostgrestError`` with code `PGRST116` when the query matches no row
   /// or more than one. Use ``maybeSingle()`` when no row is a valid answer.
   ///
-  /// - Returns: A ``PostgrestQuery`` decoding into a single `Element`.
-  public func single<Element>() -> PostgrestQuery<R, Element> where Output == [Element] {
-    var query = PostgrestQuery<R, Element>(client: client, request: request)
+  /// - Returns: A ``_PostgrestQuery`` decoding into a single `Element`.
+  public func single<Element>() -> _PostgrestQuery<R, Element> where Output == [Element] {
+    var query = _PostgrestQuery<R, Element>(client: client, request: request)
     query.request.headerFields[.accept] = Self.objectMediaType
-    query.stripsNulls = stripsNulls
     return query
   }
 
@@ -184,10 +172,10 @@ extension PostgrestQuery {
   /// > Important: The count is checked after the response arrives. On a write, such as
   /// > `delete().returning().maybeSingle()`, every matched row has already been written by then.
   ///
-  /// - Returns: A ``PostgrestQuery`` decoding into `Element?`.
-  public func maybeSingle<Element>() -> PostgrestQuery<R, Element?> where Output == [Element] {
-    var query = PostgrestQuery<R, Element?>(client: client, request: request) { data, decoder in
-      let rows = try decoder.decode([Element].self, from: data)
+  /// - Returns: A ``_PostgrestQuery`` decoding into `Element?`.
+  public func maybeSingle<Element>() -> _PostgrestQuery<R, Element?> where Output == [Element] {
+    let query = _PostgrestQuery<R, Element?>(client: client, request: request) {
+      let rows = try Self.decoder.decode([Element].self, from: $0)
       guard rows.count <= 1 else {
         throw PostgrestError(
           kind: .decoding,
@@ -196,7 +184,6 @@ extension PostgrestQuery {
       }
       return rows.first
     }
-    query.stripsNulls = stripsNulls
     return query
   }
 
@@ -208,7 +195,7 @@ extension PostgrestQuery {
   /// - Returns: A new query that asks PostgREST for `nulls=stripped`.
   public func stripNulls() -> Self {
     var query = self
-    query.stripsNulls = true
+    query.request.stripsNulls = true
     return query
   }
 
@@ -216,8 +203,8 @@ extension PostgrestQuery {
   ///
   /// > Note: A ``stripNulls()`` applied before this has no effect, since CSV is not JSON.
   ///
-  /// - Returns: A ``PostgrestRawQuery`` whose response is the CSV text.
-  public func csv() -> PostgrestRawQuery {
+  /// - Returns: A ``_PostgrestRawQuery`` whose response is the CSV text.
+  public func csv() -> _PostgrestRawQuery {
     rawQuery(accept: "text/csv")
   }
 
@@ -227,8 +214,8 @@ extension PostgrestQuery {
   ///
   /// > Note: A ``stripNulls()`` applied before this has no effect.
   ///
-  /// - Returns: A ``PostgrestRawQuery`` whose response is the GeoJSON text.
-  public func geojson() -> PostgrestRawQuery {
+  /// - Returns: A ``_PostgrestRawQuery`` whose response is the GeoJSON text.
+  public func geojson() -> _PostgrestRawQuery {
     rawQuery(accept: "application/geo+json")
   }
 
@@ -246,7 +233,7 @@ extension PostgrestQuery {
   ///   - buffers: Includes buffer usage. Needs `analyze`.
   ///   - wal: Includes write-ahead log record generation. Needs `analyze`.
   ///   - format: The plan format. Defaults to ``ExplainFormat/text``.
-  /// - Returns: A ``PostgrestRawQuery`` whose response is the plan.
+  /// - Returns: A ``_PostgrestRawQuery`` whose response is the plan.
   public func explain(
     analyze: Bool = false,
     verbose: Bool = false,
@@ -254,7 +241,7 @@ extension PostgrestQuery {
     buffers: Bool = false,
     wal: Bool = false,
     format: ExplainFormat = .text
-  ) -> PostgrestRawQuery {
+  ) -> _PostgrestRawQuery {
     let options = [
       analyze ? "analyze" : nil,
       verbose ? "verbose" : nil,
@@ -271,9 +258,10 @@ extension PostgrestQuery {
     )
   }
 
-  private func rawQuery(accept: String) -> PostgrestRawQuery {
+  private func rawQuery(accept: String) -> _PostgrestRawQuery {
     var request = request
     request.headerFields[.accept] = accept
-    return PostgrestRawQuery(client: client, request: request)
+    request.stripsNulls = false
+    return _PostgrestRawQuery(client: client, request: request)
   }
 }

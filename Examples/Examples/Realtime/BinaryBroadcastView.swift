@@ -11,8 +11,7 @@ import SwiftUI
 struct BinaryBroadcastView: View {
   @State var receivedFrames: [BinaryFrame] = []
   @State var inputText: String = ""
-  @State var channel: RealtimeChannelV2?
-  @State var subscription: RealtimeSubscription?
+  @State var channel: RealtimeChannel?
   @State var error: Error?
 
   var body: some View {
@@ -73,7 +72,6 @@ struct BinaryBroadcastView: View {
       await subscribe()
     }
     .onDisappear {
-      subscription?.cancel()
       Task {
         if let channel {
           await supabase.removeChannel(channel)
@@ -83,15 +81,14 @@ struct BinaryBroadcastView: View {
   }
 
   func subscribe() async {
-    let channel = supabase.channel("binary-broadcast-example") {
+    let channel = await supabase.channel("binary-broadcast-example") {
       $0.broadcast.receiveOwnBroadcasts = true
     }
 
-    // Use the binary data stream (protocol 2.0.0 feature)
-    let dataStream = channel.broadcastDataStream(event: "binary_message")
+    let dataStream = await channel.broadcastData(event: "binary_message")
 
     do {
-      try await channel.subscribeWithError()
+      try await channel.subscribe()
       self.channel = channel
 
       for await data in dataStream {
@@ -113,10 +110,15 @@ struct BinaryBroadcastView: View {
 
     Task {
       let data = Data(inputText.utf8)
-      await channel?.broadcast(event: "binary_message", data: data)
-
-      await MainActor.run {
-        inputText = ""
+      do {
+        try await channel?.broadcast(event: "binary_message", data: data)
+        await MainActor.run {
+          inputText = ""
+        }
+      } catch {
+        await MainActor.run {
+          self.error = error
+        }
       }
     }
   }

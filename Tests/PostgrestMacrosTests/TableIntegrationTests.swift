@@ -6,25 +6,17 @@
 //
 
 import Foundation
-import PostgrestMacros
+@_spi(Experimental) import PostgrestMacros
 import Testing
 
-// Declared at file scope on purpose. `@Table` attaches an extension, and Swift does not allow an
-// extension of a type nested inside another type, so annotating a nested struct fails to compile.
 @Table("todos")
 struct IntegrationTodo: Hashable {
-  // `@Default` is what makes the key optional in `Draft`, not `@PrimaryKey`. It says the database
-  // generates this one — an identity column or a column with a default — matching what
-  // `postgres-meta` reads to make a column optional for supabase-js.
   @PrimaryKey @Default var id: Int
   var task: String
   @Default var isDone: Bool
   @Column("due_at") var dueDate: Date?
 }
 
-// A compound natural key. Nothing in the database generates these, so neither half is `@Default`
-// and both are required by `Draft` — an incomplete key is a compile error, and a `Draft` that
-// dropped them made the table impossible to write to at all.
 @Table("user_roles")
 struct IntegrationUserRole {
   @PrimaryKey var userID: Int
@@ -32,7 +24,6 @@ struct IntegrationUserRole {
   var grantedAt: Date?
 }
 
-// `Optional<T>` rather than `T?`, to keep the generated defaults honest for both spellings.
 @Table("notes")
 struct IntegrationNote {
   @PrimaryKey @Default var id: Int
@@ -40,18 +31,19 @@ struct IntegrationNote {
   var tag: Optional<String>  // swiftlint:disable:this syntactic_sugar
 }
 
-// A writable table with no declared key — an append-only log. It must not conform to
-// `PostgrestKeyedRelation`, so the derived-target `upsert` is simply not available on it: there is
-// no key for PostgREST to merge on, and the call would quietly insert another row every time.
+@Table("counters")
+struct IntegrationCounter {
+  @PrimaryKey @Generated var id: Int
+  var count: Int
+  @Generated var updatedAt: Date?
+}
+
 @Table("audit_events")
 struct IntegrationAuditEvent {
   var action: String
   var recordedBy: String
 }
 
-// An implicitly unwrapped optional. The spelling means the same nullable column as `T?`, and it
-// only ever reached a property type before `Columns` existed — a generic argument rejects `!`, so
-// the compile error landed on expanded code the author never wrote.
 @Table("drafts")
 struct IntegrationDraftNote {
   @PrimaryKey @Default var id: Int
@@ -64,11 +56,11 @@ struct IntegrationActiveTodo {
   var task: String
 }
 
-/// Shadows `PostgREST.PublicSchema` the way the postgres-meta Swift generator's output does, so
-/// every `@Table` in this module compiles against the collision.
+enum _PublicSchema {}
+
 enum PublicSchema {}
 
-enum IntegrationPrivateSchema: PostgrestSchema {
+enum IntegrationPrivateSchema: _PostgrestSchema {
   static let name = "private"
 }
 
@@ -90,25 +82,20 @@ struct TableIntegrationTests {
 
   @Test
   func macroSuppliesTheSchemaType() {
-    #expect(Todo.Schema.self == PostgREST.PublicSchema.self)
+    #expect(Todo.Schema.self == PostgREST._PublicSchema.self)
     #expect(IntegrationSecret.Schema.self == IntegrationPrivateSchema.self)
     #expect(IntegrationSecret.schema == "private")
   }
 
-  /// `assertMacro` checks the emitted text. This checks the expansion compiles into usable
-  /// values on a real type, which the text alone does not prove.
   @Test
   func theGeneratedNamespaceCarriesNamesAndTypes() {
     #expect(Todo.columns.task.postgrestExpression == "task")
     #expect(Todo.columns.isDone.postgrestExpression == "is_done")
     #expect(Todo.columns.dueDate.postgrestExpression == "due_at")
     #expect(type(of: Todo.columns.isDone).Value.self == Bool.self)
-    // The nullable column carries the wrapped type.
     #expect(type(of: Todo.columns.dueDate).Value.self == Date.self)
   }
 
-  /// An implicitly unwrapped optional is a nullable column: the wrapped type reaches `Value`, so
-  /// the operators are there, and `isNull()` is too.
   @Test
   func anImplicitlyUnwrappedOptionalIsANullableColumn() {
     #expect(IntegrationDraftNote.columns.title.postgrestExpression == "title")
@@ -119,8 +106,6 @@ struct TableIntegrationTests {
 
   @Test
   func insertOmitsANilPrimaryKeyAndUsesColumnNames() throws {
-    // The key is optional rather than absent, so leaving it out still lets the database fill it in.
-    // Optional because it is `@Default`, not because it is the key.
     let data = try JSONEncoder().encode(Todo.Draft(task: "buy milk", isDone: false))
     let json = String(decoding: data, as: UTF8.self)
     #expect(json.contains("\"id\"") == false)
@@ -137,13 +122,6 @@ struct TableIntegrationTests {
 
   @Test
   func insertCarriesAWholeCompoundPrimaryKey() throws {
-    // The acceptance criterion for a join table: both halves of the key reach the wire, so the row
-    // can actually be created.
-    //
-    // Both are also *required*, because neither is `@Default`. `IntegrationUserRole.Draft()` and
-    // `.Draft(userID: 1)` no longer compile, which is the point — before, they compiled and sent
-    // an incomplete body for PostgREST to reject at runtime. Swift cannot assert that something
-    // fails to compile, so this notes it rather than covering it.
     let data = try JSONEncoder().encode(IntegrationUserRole.Draft(userID: 1, roleID: 2))
     let json = String(decoding: data, as: UTF8.self)
     #expect(json.contains("\"user_id\":1") == true)
@@ -151,28 +129,53 @@ struct TableIntegrationTests {
   }
 
   @Test
+  func aGeneratedColumnNeverReachesAWriteBody() async throws {
+    let capture = RequestCapture()
+    _ = try await capture.client.from(IntegrationCounter.self)
+      .insert(IntegrationCounter.Draft(count: 1)).execute()
+    #expect(capture.bodyString == #"{"count":1}"#)
+
+    let update = RequestCapture()
+    _ = try await update.client.from(IntegrationCounter.self)
+      .update { $0.count = 2 }.where { $0.id.eq(1) }.execute()
+    #expect(update.bodyString == #"{"count":2}"#)
+    #expect(update.query?.contains("id=eq.1") == true)
+  }
+
+  @Test
+  func aGeneratedColumnStillReadsFiltersAndOrders() async throws {
+    #expect(IntegrationCounter.primaryKeyColumns == ["id"])
+    #expect(IntegrationCounter.columns.id.postgrestExpression == "id")
+    #expect(IntegrationCounter.columns.updatedAt.postgrestExpression == "updated_at")
+
+    let capture = RequestCapture(body: #"[{"id":1,"count":3,"updated_at":null}]"#)
+    let rows = try await capture.client.from(IntegrationCounter.self).select()
+      .where { $0.updatedAt.isNull() && $0.id.gt(0) }
+      .order { $0.id.desc() }
+      .execute().value
+    #expect(capture.query?.contains("updated_at=is.null") == true)
+    #expect(capture.query?.contains("id=gt.0") == true)
+    #expect(capture.query?.contains("order=id.desc") == true)
+    #expect(rows.first?.id == 1)
+    #expect(rows.first?.count == 3)
+  }
+
+  @Test
   func macroReportsThePrimaryKeyColumns() {
-    // The only thing `@PrimaryKey` produces now that it no longer gates `Draft` optionality or
-    // filters `Update`. Declaration order, and column names rather than property names.
     #expect(Todo.primaryKeyColumns == ["id"])
     #expect(IntegrationUserRole.primaryKeyColumns == ["user_id", "role_id"])
   }
 
   @Test
   func onlyARelationWithADeclaredKeyIsKeyed() {
-    // The conformance *is* the mechanism. `primaryKeyColumns` is mandatory on
-    // `PostgrestKeyedRelation`, so "no key" is a missing conformance rather than an empty array —
-    // and an empty `on_conflict`, which is a different request, stops being representable.
-    #expect(Todo.self is any PostgrestKeyedRelation.Type)
-    #expect(IntegrationUserRole.self is any PostgrestKeyedRelation.Type)
-    #expect(!(IntegrationAuditEvent.self is any PostgrestKeyedRelation.Type))
-    #expect(!(IntegrationActiveTodo.self is any PostgrestKeyedRelation.Type))
+    #expect(Todo.self is any _PostgrestKeyedRelation.Type)
+    #expect(IntegrationUserRole.self is any _PostgrestKeyedRelation.Type)
+    #expect(!(IntegrationAuditEvent.self is any _PostgrestKeyedRelation.Type))
+    #expect(!(IntegrationActiveTodo.self is any _PostgrestKeyedRelation.Type))
   }
 
   @Test
   func aKeylessRelationCanStillUpsertOnAnExplicitTarget() async throws {
-    // Losing the derived overload must not cost the keyless relation the operation itself. A
-    // unique constraint it does have is still a legal target.
     let capture = RequestCapture()
     _ = try await capture.client
       .from(IntegrationAuditEvent.self)
@@ -187,17 +190,12 @@ struct TableIntegrationTests {
 
   @Test
   func anOptionalSpelledColumnCanBeOmitted() throws {
-    // This is the assertion the expansion test cannot make: `MacroTesting` compares generated
-    // text, it does not compile it. The call omits `tag`, which only compiles if the generated
-    // initializer defaulted an `Optional<String>` to nil.
     let insert = try JSONEncoder().encode(IntegrationNote.Draft(body: "hello"))
     #expect(String(decoding: insert, as: UTF8.self) == #"{"body":"hello"}"#)
   }
 
   @Test
   func aNilOptionalIsOmittedSoTheDatabaseDefaultApplies() throws {
-    // `@Default var isDone` is optional in `Draft` precisely so it can be left out. Encoding it
-    // as `null` would insert NULL instead of letting the column default apply.
     let data = try JSONEncoder().encode(Todo.Draft(task: "buy milk"))
     let json = String(decoding: data, as: UTF8.self)
     #expect(json == #"{"task":"buy milk"}"#)
@@ -205,15 +203,13 @@ struct TableIntegrationTests {
 
   @Test
   func aPartialUpdateNamesOnlyWhatItChanges() throws {
-    let data = try JSONEncoder().encode(PostgrestUpdate<Todo> { $0.isDone = true })
+    let data = try JSONEncoder().encode(_PostgrestUpdate<Todo> { $0.isDone = true })
     let json = String(decoding: data, as: UTF8.self)
     #expect(json == #"{"is_done":true}"#)
   }
 
   @Test
   func aMacroTypeCanClearANullableColumn() async throws {
-    // SDK-1610. `due_at` is nullable, so `nil` has to reach the wire as an explicit null rather
-    // than dropping the key, which is what "leave this column alone" means.
     let capture = RequestCapture()
     _ = try await capture.client
       .from(Todo.self)
@@ -273,9 +269,6 @@ struct TableIntegrationTests {
 
   @Test
   func aTypedUpsertCarriesTheConflictKey() async throws {
-    // The conflict target only means something if the columns it names are in the body. While
-    // `Draft` dropped the key, the merge half of every upsert was unreachable and each call just
-    // inserted another row.
     let capture = RequestCapture()
     _ = try await capture.client
       .from(Todo.self)
@@ -288,9 +281,6 @@ struct TableIntegrationTests {
 
   @Test
   func aTypedUpsertReturningKeepsTheConflictResolutionPreference() async throws {
-    // SDK-1626. `returning()` used to replace the whole `Prefer` header, so it silently dropped
-    // the `resolution=merge-duplicates` that `upsert()` had already set — turning the upsert into
-    // a plain insert the moment a caller asked for the row back.
     let capture = RequestCapture()
     _ = try await capture.client
       .from(Todo.self)
@@ -326,8 +316,6 @@ struct TableIntegrationTests {
 
   @Test
   func aTypedUpsertCanIgnoreDuplicatesInsteadOfMergingThem() async throws {
-    // SDK-1627. `resolution=ignore-duplicates` is `ON CONFLICT DO NOTHING` — insert if absent,
-    // leave an existing row exactly as it is. A distinct operation, not a tuning knob.
     let capture = RequestCapture()
     _ = try await capture.client
       .from(Todo.self)
@@ -340,8 +328,6 @@ struct TableIntegrationTests {
 
   @Test
   func anIgnoreDuplicatesResolutionSurvivesReturning() async throws {
-    // The pairing that SDK-1626 broke for `merge`: whichever resolution the caller picked has to
-    // still be on the header once they ask for the row back.
     let capture = RequestCapture()
     _ = try await capture.client
       .from(Todo.self)
@@ -396,9 +382,6 @@ struct TableIntegrationTests {
 
   @Test
   func aTypedUpsertDerivesTheConflictTargetFromTheKey() async throws {
-    // PostgREST resolves an absent `on_conflict` against the primary key already, so this is the
-    // same request either way. Naming it is what makes the request say what it merges on, and it
-    // is only reachable because the relation declares a key — a keyless one has no such overload.
     let capture = RequestCapture()
     _ = try await capture.client
       .from(Todo.self)
@@ -410,7 +393,6 @@ struct TableIntegrationTests {
 
   @Test
   func aTypedUpsertDerivesACompoundConflictTarget() async throws {
-    // A join table conflicts on both halves of its key, in declaration order.
     let capture = RequestCapture()
     _ = try await capture.client
       .from(IntegrationUserRole.self)
@@ -422,9 +404,6 @@ struct TableIntegrationTests {
 
   @Test
   func aTypedUpsertTakesAnExplicitConflictTarget() async throws {
-    // Merging on a unique constraint that is not the primary key is the reason the override
-    // exists. Spelled as a key path, so a column that does not exist is a compile error rather
-    // than a PostgREST 400.
     let capture = RequestCapture()
     _ = try await capture.client
       .from(IntegrationNote.self)
@@ -436,8 +415,6 @@ struct TableIntegrationTests {
 
   @Test
   func anExplicitConflictTargetMapsEveryColumnName() async throws {
-    // `isDone` has to reach the wire as `is_done`, so the override reads the name off `Columns`
-    // rather than interpolating the property name.
     let capture = RequestCapture()
     _ = try await capture.client
       .from(Todo.self)
@@ -449,9 +426,6 @@ struct TableIntegrationTests {
 
   @Test
   func updateCanChangeAKeyColumn() async throws {
-    // Renaming a natural key is a real operation. Targeting is a separate concern — the filter
-    // below is what picks the row — so keeping the key out of the payload only removed the
-    // ability to change it.
     let capture = RequestCapture()
     _ = try await capture.client
       .from(IntegrationUserRole.self)
@@ -464,7 +438,6 @@ struct TableIntegrationTests {
 
   @Test
   func updateStillOmitsAKeyItIsNotChanging() async throws {
-    // The addition is purely additive: a caller that does not name the key is unaffected.
     let capture = RequestCapture()
     _ = try await capture.client
       .from(Todo.self)

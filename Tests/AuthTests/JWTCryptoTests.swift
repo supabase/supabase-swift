@@ -15,12 +15,8 @@ import Testing
   @Suite
   struct JWTCryptoTests {
 
-    // MARK: - JWK+RSA Tests
-
     @Test
     func rsaPublishKeyGeneration() {
-      // Test data from a real RS256 JWT (modulus and exponent)
-      // This is a sample RSA256 public key
       let jwk = JWK(
         kty: "RSA",
         keyOps: ["verify"],
@@ -35,14 +31,12 @@ import Testing
         k: nil
       )
 
-      // Test valid RSA key generation
       let rsaKey = jwk.rsaPublishKey
       #expect(rsaKey != nil, "RSA public key should be generated successfully")
     }
 
     @Test
     func rsaPublishKeyInvalidAlgorithm() {
-      // Test with invalid algorithm
       let jwk = JWK(
         kty: "RSA",
         keyOps: nil,
@@ -62,7 +56,6 @@ import Testing
 
     @Test
     func rsaPublishKeyInvalidKeyType() {
-      // Test with invalid key type
       let jwk = JWK(
         kty: "EC",  // Wrong type - should be RSA
         keyOps: nil,
@@ -82,13 +75,12 @@ import Testing
 
     @Test
     func rsaPublishKeyMissingModulus() {
-      // Test with missing modulus
       let jwk = JWK(
         kty: "RSA",
         keyOps: nil,
         alg: "RS256",
         kid: "test-key-4",
-        n: nil,  // Missing modulus
+        n: nil,
         e: "AQAB",
         crv: nil,
         x: nil,
@@ -102,14 +94,13 @@ import Testing
 
     @Test
     func rsaPublishKeyMissingExponent() {
-      // Test with missing exponent
       let jwk = JWK(
         kty: "RSA",
         keyOps: nil,
         alg: "RS256",
         kid: "test-key-5",
         n: "test-modulus",
-        e: nil,  // Missing exponent
+        e: nil,
         crv: nil,
         x: nil,
         y: nil,
@@ -122,7 +113,6 @@ import Testing
 
     @Test
     func rsaPublishKeyInvalidBase64() {
-      // Test with invalid Base64URL data
       let jwk = JWK(
         kty: "RSA",
         keyOps: nil,
@@ -173,8 +163,6 @@ import Testing
       #expect(!isValid, "Verification with a malformed key should return false, not crash")
     }
 
-    // MARK: - DER Encoding Tests
-
     @Test
     func derEncodeLongFormLengthWithInteriorZero() {
       let content = [UInt8](repeating: 0xAB, count: 256)
@@ -197,12 +185,8 @@ import Testing
       #expect(encoded.count == 2 + 5, "Header (2) + content (5)")
     }
 
-    // MARK: - JWTAlgorithm Tests
-
     @Test
     func rs256VerificationWithValidSignature() throws {
-      // Create a sample JWT token (this would normally come from a real auth server)
-      // For testing, we'll use a known-good JWT
       let header = #"{"alg":"RS256","typ":"JWT"}"#
       let payload = #"{"sub":"1234567890","name":"Test User","iat":1516239022}"#
 
@@ -212,13 +196,11 @@ import Testing
       let headerB64 = Base64URL.encode(headerData)
       let payloadB64 = Base64URL.encode(payloadData)
 
-      // Create a mock signature (in real scenario, this would be a proper RSA signature)
       let mockSignature = Data([0x00, 0x01, 0x02, 0x03])
       let signatureB64 = Base64URL.encode(mockSignature)
 
       let jwtString = "\(headerB64).\(payloadB64).\(signatureB64)"
 
-      // Decode the JWT
       let decoded = try #require(JWT.decode(jwtString), "Failed to decode JWT")
 
       #expect(decoded.raw.header == headerB64)

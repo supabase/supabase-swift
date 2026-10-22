@@ -9,8 +9,9 @@ import SwiftSyntax
 import SwiftSyntaxMacros
 
 /// The marker attributes carry no expansion of their own — the enclosing macro reads them off the
-/// properties: `@Table` reads `@Column`, `@PrimaryKey` and `@Default`, and `@SelectionOf` reads
-/// `@Column` and `@Relationship`.
+/// properties: `@Table` reads `@Column`, `@PrimaryKey`, `@Default` and `@Generated`, and
+/// `@SelectionOf` reads
+/// `@Column`, `@Relationship` and `@Aggregate`.
 ///
 /// The declarations still matter. `@Relationship(\Comment.todoID)` is type-checked as a written
 /// expression, so a key path naming no such column is an error at the attribute, before anything

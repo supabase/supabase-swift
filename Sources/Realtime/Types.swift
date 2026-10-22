@@ -5,7 +5,6 @@
 //  Created by Guilherme Souza on 13/05/24.
 //
 
-public import Clocks
 public import Foundation
 package import HTTPTypes
 public import Helpers
@@ -15,41 +14,21 @@ public import Logging
   public import FoundationNetworking
 #endif
 
-/// Phoenix protocol version used for WebSocket communication.
-///
-/// The version controls how messages are serialized on the wire between the client
-/// and the Realtime server.
-///
-/// ## Topics
-/// ### Protocol Versions
-/// - ``v1``
-/// - ``v2``
-public enum RealtimeProtocolVersion: String, Sendable {
-  /// Protocol 1.0.0 — JSON object text frames for all messages.
-  case v1 = "1.0.0"
-
-  /// Protocol 2.0.0 — JSON array text frames for non-broadcast messages,
-  /// binary frames for broadcast messages.
-  case v2 = "2.0.0"
-}
-
-/// Options for initializing ``RealtimeClientV2``.
+/// Options for initializing ``RealtimeClient``.
 ///
 /// Use this struct to customize the behavior of the Realtime client, including connection
-/// timing, authentication, protocol version, and app lifecycle handling.
+/// timing, authentication, and app lifecycle handling.
 ///
 /// ```swift
 /// let options = RealtimeClientOptions(
 ///   heartbeatInterval: .seconds(30),
-///   protocolVersion: .v2,
 ///   handleAppLifecycle: true
 /// )
-/// let client = RealtimeClientV2(url: realtimeURL, options: options)
+/// let client = RealtimeClient(url: realtimeURL, options: options)
 /// ```
 ///
 /// ## Topics
-/// ### Protocol and Lifecycle
-/// - ``protocolVersion``
+/// ### Lifecycle
 /// - ``handleAppLifecycle``
 /// ### Default Values
 /// - ``defaultHeartbeatInterval``
@@ -61,7 +40,7 @@ public enum RealtimeProtocolVersion: String, Sendable {
 /// - ``defaultDisconnectOnEmptyChannelsAfter``
 /// - ``defaultHandleAppLifecycle``
 /// ### Initialization
-/// - ``init(headers:heartbeatInterval:reconnectDelay:timeout:disconnectOnSessionLoss:connectOnSubscribe:maxRetryAttempts:disconnectOnEmptyChannelsAfter:protocolVersion:logLevel:http:accessToken:logger:session:handleAppLifecycle:clock:)``
+/// - ``init(headers:heartbeatInterval:reconnectDelay:timeout:disconnectOnSessionLoss:connectOnSubscribe:maxRetryAttempts:disconnectOnEmptyChannelsAfter:logLevel:http:accessToken:logger:session:handleAppLifecycle:clock:)``
 public struct RealtimeClientOptions: Sendable {
   package var headers: HTTPFields
   var heartbeatInterval: Duration
@@ -72,12 +51,6 @@ public struct RealtimeClientOptions: Sendable {
   var maxRetryAttempts: Int
   var disconnectOnEmptyChannelsAfter: Duration
 
-  /// The Phoenix serializer protocol version.
-  ///
-  /// Defaults to ``RealtimeProtocolVersion/v2``. Use ``RealtimeProtocolVersion/v1`` only
-  /// when connecting to a Realtime server that does not support protocol 2.0.0.
-  public var protocolVersion: RealtimeProtocolVersion
-
   /// Whether to automatically handle app lifecycle changes (background/foreground).
   ///
   /// When enabled, the client observes platform lifecycle notifications and — on
@@ -86,8 +59,8 @@ public struct RealtimeClientOptions: Sendable {
   /// disconnect on backgrounding; short background/foreground cycles keep the
   /// connection alive without churn.
   ///
-  /// Disable this to manage the connection yourself with ``RealtimeClientV2/connect()`` and
-  /// ``RealtimeClientV2/disconnect(code:reason:)``.
+  /// Disable this to manage the connection yourself with ``RealtimeClient/connect()`` and
+  /// ``RealtimeClient/disconnect(code:reason:)``.
   ///
   /// Default: `true` on iOS, macOS, tvOS, and visionOS. `false` on other platforms
   /// (including watchOS and Linux), where lifecycle observation is not supported.
@@ -101,8 +74,10 @@ public struct RealtimeClientOptions: Sendable {
 
   /// The clock the heartbeat timer and reconnect backoff sleep on.
   ///
-  /// Defaults to `ContinuousClock()`. Pass a `TestClock` (swift-clocks) to drive those
-  /// behaviors deterministically in tests instead of waiting out real seconds.
+  /// Defaults to `ContinuousClock()`. Pass a `TestClock` to drive those behaviors
+  /// deterministically in tests instead of waiting out real seconds. `TestClock` comes from
+  /// [swift-clocks](https://github.com/pointfreeco/swift-clocks); add it to your test target
+  /// yourself, as this package does not export it.
   public var clock: any Clock<Duration>
 
   /// A template `URLSession` used to configure the Realtime WebSocket connection.
@@ -161,10 +136,9 @@ public struct RealtimeClientOptions: Sendable {
   ///   - reconnectDelay: Base delay for reconnecting after a disconnection. The first attempt waits a random duration between half of this and this; later attempts double the range (capped at 30s) until reconnected. Defaults to ``defaultReconnectDelay``.
   ///   - timeout: Maximum time to wait for a server reply. Defaults to ``defaultTimeout``.
   ///   - disconnectOnSessionLoss: Whether to disconnect the channel when the authentication session is lost. Defaults to ``defaultDisconnectOnSessionLoss``.
-  ///   - connectOnSubscribe: Whether to automatically call ``RealtimeClientV2/connect()`` when subscribing to a channel. Defaults to ``defaultConnectOnSubscribe``.
+  ///   - connectOnSubscribe: Whether to automatically call ``RealtimeClient/connect()`` when subscribing to a channel. Defaults to ``defaultConnectOnSubscribe``.
   ///   - maxRetryAttempts: Maximum number of subscribe retry attempts. Defaults to ``defaultMaxRetryAttempts``.
   ///   - disconnectOnEmptyChannelsAfter: How long to wait before disconnecting when all channels are removed. Defaults to ``defaultDisconnectOnEmptyChannelsAfter``.
-  ///   - protocolVersion: The Phoenix protocol version to use. Defaults to ``RealtimeProtocolVersion/v2``.
   ///   - logLevel: Optional log level for Realtime log output.
   ///   - http: The transport and middleware chain REST broadcast calls go through.
   ///   - accessToken: Optional async closure that returns the current access token.
@@ -172,7 +146,8 @@ public struct RealtimeClientOptions: Sendable {
   ///   - session: A template `URLSession` to configure the WebSocket connection from. Defaults to `nil`.
   ///   - handleAppLifecycle: Whether to automatically reconnect on app foreground. Defaults to ``defaultHandleAppLifecycle``.
   ///   - clock: The clock the heartbeat timer and reconnect backoff sleep on. Defaults to
-  ///     `ContinuousClock()`; pass a `TestClock` to drive them deterministically in tests.
+  ///     `ContinuousClock()`; pass a `TestClock` from swift-clocks (add it to your
+  ///     test target yourself) to drive them deterministically in tests.
   public init(
     headers: [String: String] = [:],
     heartbeatInterval: Duration = Self.defaultHeartbeatInterval,
@@ -182,7 +157,6 @@ public struct RealtimeClientOptions: Sendable {
     connectOnSubscribe: Bool = Self.defaultConnectOnSubscribe,
     maxRetryAttempts: Int = Self.defaultMaxRetryAttempts,
     disconnectOnEmptyChannelsAfter: Duration = Self.defaultDisconnectOnEmptyChannelsAfter,
-    protocolVersion: RealtimeProtocolVersion = .v2,
     logLevel: LogLevel? = nil,
     http: HTTPClientConfiguration = .init(),
     accessToken: (@Sendable () async throws -> String?)? = nil,
@@ -199,7 +173,6 @@ public struct RealtimeClientOptions: Sendable {
     self.connectOnSubscribe = connectOnSubscribe
     self.maxRetryAttempts = maxRetryAttempts
     self.disconnectOnEmptyChannelsAfter = disconnectOnEmptyChannelsAfter
-    self.protocolVersion = protocolVersion
     self.handleAppLifecycle = handleAppLifecycle
     self.logLevel = logLevel
     self.http = http
@@ -216,21 +189,7 @@ public struct RealtimeClientOptions: Sendable {
   }
 }
 
-/// A token that represents a Realtime subscription and cancels it on deallocation.
-///
-/// Store the returned token from subscription methods (e.g. ``RealtimeChannelV2/onBroadcast(event:callback:)``)
-/// to keep the subscription alive. When the token is deallocated or ``ObservationToken/cancel()``
-/// is called, the underlying callback is removed.
-///
-/// ```swift
-/// let subscription = channel.onBroadcast(event: "message") { payload in
-///   print(payload)
-/// }
-/// defer { subscription.cancel() }
-/// ```
-public typealias RealtimeSubscription = ObservationToken
-
-/// Describes the subscription state of a ``RealtimeChannelV2``.
+/// Describes the subscription state of a ``RealtimeChannel``.
 ///
 /// ## Topics
 /// ### States
@@ -266,7 +225,7 @@ public struct RealtimeChannelStatus: RawRepresentable, Hashable, Sendable,
   public static let unsubscribing: RealtimeChannelStatus = "unsubscribing"
 }
 
-/// Describes the connection state of a ``RealtimeClientV2``.
+/// Describes the connection state of a ``RealtimeClient``.
 ///
 /// ## Topics
 /// ### States
@@ -303,7 +262,7 @@ public struct RealtimeClientStatus: RawRepresentable, Hashable, Sendable,
 /// Describes the result of a heartbeat cycle.
 ///
 /// The Realtime client sends periodic heartbeat messages to keep the WebSocket
-/// connection alive. Use ``RealtimeClientV2/heartbeat`` or ``RealtimeClientV2/onHeartbeat(_:)``
+/// connection alive. Use ``RealtimeClient/heartbeats()``
 /// to observe heartbeat status changes.
 ///
 /// ## Topics
@@ -348,7 +307,7 @@ extension HTTPField.Name {
 
 /// Verbosity of log output emitted by the Realtime client.
 ///
-/// Pass a value to ``RealtimeClientOptions/init(headers:heartbeatInterval:reconnectDelay:timeout:disconnectOnSessionLoss:connectOnSubscribe:maxRetryAttempts:disconnectOnEmptyChannelsAfter:protocolVersion:logLevel:http:accessToken:logger:session:handleAppLifecycle:clock:)``
+/// Pass a value to ``RealtimeClientOptions/init(headers:heartbeatInterval:reconnectDelay:timeout:disconnectOnSessionLoss:connectOnSubscribe:maxRetryAttempts:disconnectOnEmptyChannelsAfter:logLevel:http:accessToken:logger:session:handleAppLifecycle:clock:)``
 /// to control how much detail the Realtime server logs.
 ///
 /// ## Topics

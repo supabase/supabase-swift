@@ -23,10 +23,8 @@ import struct HTTPTypes.HTTPFields
 
 typealias AuthClientID = Int
 
-/// JWKS cache TTL (Time To Live) - 10 minutes
 private let jwksTTL: TimeInterval = 10 * 60
 
-/// Cached JWKS value with timestamp
 private struct CachedJWKS {
   let jwks: JWKS
   let cachedAt: Date
@@ -142,7 +140,6 @@ private let globalJWKSCache = GlobalJWKSCache()
 public final class AuthClient: Sendable {
   private static let _globalClientID = LockIsolated(0)
 
-  /// Thread-safe auto-incrementing client ID generator.
   private static func nextClientID() -> AuthClientID {
     _globalClientID.withValue { value in
       value += 1
@@ -260,13 +257,7 @@ public final class AuthClient: Sendable {
   }
 
   deinit {
-    // Capture only the session manager in the task below, capturing `self` would resurrect this
-    // client while it is being deallocated.
     let sessionManager = dependencies.sessionManager
-
-    // The auto-refresh loop retains the session manager, so it keeps ticking forever unless it is
-    // explicitly stopped. `observeAppLifecycleChanges()` only stops it when the app resigns active,
-    // which never happens for short-lived clients, or when auto-refresh was started manually.
     Task { await sessionManager.stopAutoRefresh() }
   }
 
@@ -320,9 +311,7 @@ public final class AuthClient: Sendable {
     }
   #else
     @MainActor
-    private func observeAppLifecycleChanges() {
-      // no-op
-    }
+    private func observeAppLifecycleChanges() {}
   #endif
 
   /// Listen for auth state changes.
@@ -356,15 +345,8 @@ public final class AuthClient: Sendable {
         event: AuthChangeEvent,
         session: Session?
       )
-      // Unbounded: consumers commonly wait for one specific event (`.signedIn`, `.initialSession`).
-      // A bounded policy could evict exactly that one when events arrive back to back.
     >.makeStream(bufferingPolicy: .unbounded)
 
-    // Attach (and wire up `onTermination`) synchronously, before returning the stream.
-    // `eventEmitter.attach` doesn't need to be async — only the subsequent initial-session
-    // emission below does — so doing this inside a `Task` would let a consumer cancel the
-    // stream before that task's body ran, leaving `onTermination` unset when termination
-    // already happened and leaking this registration (SDK-2092).
     let token = eventEmitter.attach { event, session in
       continuation.yield((event, session))
     }
@@ -885,10 +867,6 @@ public final class AuthClient: Sendable {
         scopes: scopes,
         queryParams: queryParams
       ) { @MainActor [configuration] url in
-        // Resolved before the continuation exists, so a missing scheme simply throws instead of
-        // creating a continuation only to immediately fail it. Derived from the same
-        // `oauthRedirectURL` the authorize request used, so the scheme listened on and the
-        // redirect the provider was given cannot disagree.
         let callbackScheme = try Self.oauthCallbackScheme(
           for: Self.oauthRedirectURL(
             redirectTo: redirectTo,
@@ -908,8 +886,6 @@ public final class AuthClient: Sendable {
             if let result = Self.oauthCallbackResult(url: url, error: error) {
               continuation.resume(with: result)
             } else {
-              // `ASWebAuthenticationSession` always reports a URL or an error. Surface a broken
-              // contract as a thrown error rather than taking the host app down with it.
               reportIssue(Self.oauthSessionContractViolation)
               continuation.resume(
                 throwing: AuthError.oauthFlowFailed(Self.oauthSessionContractViolation)
@@ -1222,10 +1198,7 @@ public final class AuthClient: Sendable {
     } catch let error as AuthError
       where error.kind == .sessionMissing
       || error.kind == .server && [404, 403, 401].contains(error.response?.statusCode ?? 0)
-    {
-      // ignore 404s since user might not exist anymore
-      // ignore 401s, and 403s since an invalid or expired JWT should sign out the current session.
-    }
+    {}
   }
 
   /// Log in an user given a User supplied OTP received via email.
@@ -1650,7 +1623,6 @@ public final class AuthClient: Sendable {
     if currentSession.isExpired {
       Task {
         _ = try? await sessionManager.refreshSession(currentSession.refreshToken)
-        // No need to emit `tokenRefreshed` nor `signOut` event since the `refreshSession` does it already.
       }
     }
   }
@@ -1772,7 +1744,6 @@ public final class AuthClient: Sendable {
       for: storageKey
     )
 
-    // A key rotation can sign a JWT with a key the freshly fetched set does not carry yet.
     return fetchedJWKS.keys.first(where: { $0.kid == kid })
   }
 
@@ -1835,7 +1806,6 @@ public final class AuthClient: Sendable {
       let algorithm = (signingKey.alg ?? alg).flatMap(JWTAlgorithm.init(rawValue:))
     else {
       _ = try await user(jwt: token)
-      // getUser succeeds, so claims can be trusted
       let claims = try configuration.resolvedDecoder.decode(
         JWTClaims.self,
         from: JSONSerialization.data(withJSONObject: decodedJWT.payload)

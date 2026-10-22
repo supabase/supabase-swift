@@ -1,7 +1,7 @@
-public import Clocks
 public import Foundation
 public import Helpers
 public import Logging
+@_spi(Experimental) public import Storage
 
 #if canImport(FoundationNetworking)
   public import FoundationNetworking
@@ -32,9 +32,15 @@ public struct SupabaseClientOptions: Sendable {
     public let schema: String?
 
     /// The JSONEncoder to use when encoding database request objects.
+    ///
+    /// Applies to the untyped API (`from(_:)` with a table name, `rpc(_:)`) only. The typed API
+    /// always uses a fixed encoder.
     public let encoder: JSONEncoder
 
     /// The JSONDecoder to use when decoding database response objects.
+    ///
+    /// Applies to the untyped API (`from(_:)` with a table name, `rpc(_:)`) only. The typed API
+    /// always uses a fixed decoder.
     public let decoder: JSONDecoder
 
     /// Whether to automatically retry transient (network, 503 or 520) PostgREST errors on GET
@@ -116,11 +122,13 @@ public struct SupabaseClientOptions: Sendable {
     /// for the defaults (60 seconds; 150 for Edge Functions).
     public let http: HTTPClientConfiguration
 
-    /// The clock the time-based sub-client behaviors sleep on: Auth's token auto-refresh and
-    /// request-retry backoff, and Realtime's heartbeat timer and reconnect backoff.
+    /// The clock the time-based sub-client behaviors sleep on: Auth's token auto-refresh, Auth's
+    /// and Storage's request-retry backoff, and Realtime's heartbeat timer and reconnect backoff.
     ///
-    /// Defaults to `ContinuousClock()`. Pass a `TestClock` (swift-clocks) to drive those
-    /// behaviors deterministically in tests instead of waiting out real seconds.
+    /// Defaults to `ContinuousClock()`. Pass a `TestClock` to drive those behaviors
+    /// deterministically in tests instead of waiting out real seconds. `TestClock` comes from
+    /// [swift-clocks](https://github.com/pointfreeco/swift-clocks); add it to your test target
+    /// yourself, as this package does not export it.
     public let clock: any Clock<Duration>
 
     /// Creates the shared options.
@@ -147,26 +155,31 @@ public struct SupabaseClientOptions: Sendable {
 
   /// Options for the Edge Functions sub-client.
   public struct FunctionsOptions: Sendable {
-    /// The Region to invoke the functions in.
-    public let region: String?
+    /// The region to invoke functions in. `nil` lets the platform choose.
+    public var region: FunctionRegion?
 
     /// The JSON decoder to use for decoding function response bodies.
-    public let decoder: JSONDecoder
+    public var decoder: JSONDecoder
 
-    @_disfavoredOverload
-    public init(
-      region: String? = nil,
-      decoder: JSONDecoder = JSONDecoder()
-    ) {
-      self.region = region
-      self.decoder = decoder
-    }
+    /// Overrides ``SupabaseClientOptions/GlobalOptions/http`` for Functions, field by field: a
+    /// `nil` transport or timeout falls back to the global one, and its middlewares run after the
+    /// global ones. `nil` uses the global configuration as is.
+    public var http: HTTPClientConfiguration?
+
+    /// Overrides ``SupabaseClientOptions/GlobalOptions/logger`` for Functions. `nil` uses the
+    /// global logger.
+    public var logger: Logger?
 
     public init(
       region: FunctionRegion? = nil,
-      decoder: JSONDecoder = JSONDecoder()
+      decoder: JSONDecoder = .supabase(),
+      http: HTTPClientConfiguration? = nil,
+      logger: Logger? = nil
     ) {
-      self.init(region: region?.rawValue, decoder: decoder)
+      self.region = region
+      self.decoder = decoder
+      self.http = http
+      self.logger = logger
     }
   }
 
@@ -175,8 +188,20 @@ public struct SupabaseClientOptions: Sendable {
     /// Whether storage client should be initialized with the new hostname format, i.e. `project-ref.storage.supabase.co`
     public let usesNewHostname: Bool
 
-    public init(usesNewHostname: Bool = false) {
+    /// Whether to automatically retry transient Storage errors on reads (`GET`, `HEAD`,
+    /// `list(path:options:)` and each page of `objects(prefix:options:)`). Writes are never
+    /// retried. Defaults to `true`.
+    public let retryEnabled: Bool
+
+    /// How resumable uploads are chunked, retried and persisted. See
+    /// `StorageClientConfiguration.resumable`.
+    ///
+    /// - Warning: Experimental. See `ResumableUpload`.
+    @_spi(Experimental) public var resumable = ResumableUploadConfiguration()
+
+    public init(usesNewHostname: Bool = false, retryEnabled: Bool = true) {
       self.usesNewHostname = usesNewHostname
+      self.retryEnabled = retryEnabled
     }
   }
 

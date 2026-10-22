@@ -45,66 +45,61 @@ public protocol PostgrestArrayElement {
 public protocol PostgrestFilterValue: PostgrestArrayElement {
   /// The string representation sent to PostgREST as the filter value.
   var rawValue: String { get }
+
+  /// The operand the typed query API sends for this value, or `nil` when the value has no wire
+  /// form. Defaults to ``rawValue``; the untyped builder always sends ``rawValue``.
+  var _typedOperand: String? { get }
 }
 
 extension PostgrestFilterValue {
+  public var _typedOperand: String? { rawValue }
+
   /// Escaping the raw value as a scalar is always correct for a non-`nil`, non-array value.
   public var postgrestArrayElement: String {
     escapePostgRESTArrayLiteralElement(rawValue)
   }
 }
 
-/// `String` can be used directly as a PostgREST filter value.
 extension String: PostgrestFilterValue {
   public var rawValue: String { self }
 }
 
-/// `Int` can be used directly as a PostgREST filter value.
 extension Int: PostgrestFilterValue {
   public var rawValue: String { "\(self)" }
 }
 
-/// `Int16` can be used directly as a PostgREST filter value.
 extension Int16: PostgrestFilterValue {
   public var rawValue: String { "\(self)" }
 }
 
-/// `Int32` can be used directly as a PostgREST filter value.
 extension Int32: PostgrestFilterValue {
   public var rawValue: String { "\(self)" }
 }
 
-/// `Int64` can be used directly as a PostgREST filter value.
 extension Int64: PostgrestFilterValue {
   public var rawValue: String { "\(self)" }
 }
 
-/// `Double` can be used directly as a PostgREST filter value.
 extension Double: PostgrestFilterValue {
   public var rawValue: String { "\(self)" }
 }
 
-/// `Float` can be used directly as a PostgREST filter value.
 extension Float: PostgrestFilterValue {
   public var rawValue: String { "\(self)" }
 }
 
-/// `Decimal` can be used directly as a PostgREST filter value.
 extension Decimal: PostgrestFilterValue {
   public var rawValue: String { "\(self)" }
 }
 
-/// `Bool` can be used directly as a PostgREST filter value.
 extension Bool: PostgrestFilterValue {
   public var rawValue: String { "\(self)" }
 }
 
-/// `UUID` can be used directly as a PostgREST filter value.
 extension UUID: PostgrestFilterValue {
   public var rawValue: String { uuidString }
 }
 
-/// `Date` can be used directly as a PostgREST filter value, formatted as an ISO 8601 string.
 extension Date: PostgrestFilterValue {
   public var rawValue: String {
     let formatter = ISO8601DateFormatter()
@@ -113,24 +108,16 @@ extension Date: PostgrestFilterValue {
   }
 }
 
-/// An array of ``PostgrestArrayElement`` values is itself a ``PostgrestFilterValue``.
-///
-/// The raw value is a Postgres array literal, e.g. `{a,b,c}`. Because the element only needs to be
-/// a ``PostgrestArrayElement``, an array may contain `nil` — `{1,NULL}` — even though `nil` cannot
-/// be used as a filter operand on its own.
 extension Array: PostgrestFilterValue where Element: PostgrestArrayElement {
   public var rawValue: String {
     "{\(map(\.postgrestArrayElement).joined(separator: ","))}"
   }
 }
 
-/// A nested array is already an array literal, so it is passed through unescaped rather than
-/// quoted as a scalar string.
 extension Array: PostgrestArrayElement where Element: PostgrestArrayElement {
   public var postgrestArrayElement: String { rawValue }
 }
 
-/// `JSONValue` can be used directly as a PostgREST filter value.
 extension JSONValue: PostgrestFilterValue {
   public var rawValue: String {
     switch self {
@@ -142,6 +129,19 @@ extension JSONValue: PostgrestFilterValue {
     case .bool(let bool): bool.rawValue
     case .null: "NULL"
     }
+  }
+
+  /// The typed API only has a `JSONValue` operand on a `json`/`jsonb` expression, since the
+  /// generator types no other column as `JSONValue`, and PostgREST reads that operand as JSON. So
+  /// it is encoded as JSON here, where ``rawValue`` is the filter form the untyped builder sends —
+  /// a `.string` bare, an `.array` as the Postgres literal `{20}`, `.null` as `NULL`.
+  ///
+  /// Only a non-finite `.double` fails to encode, and then this is `nil`. No operand stands in for
+  /// it: `null` is a valid operand that matches JSON-null rows, so a `delete` would remove them.
+  public var _typedOperand: String? {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+    return (try? encoder.encode(self)).map { String(decoding: $0, as: UTF8.self) }
   }
 
   /// `.null` is an actual SQL `NULL` array member, not the string `"NULL"`, and `.array` is a
@@ -156,11 +156,6 @@ extension JSONValue: PostgrestFilterValue {
   }
 }
 
-/// An optional value is a Postgres array member, but **not** a filter operand.
-///
-/// `nil` encodes as `NULL` inside an array literal. It conforms to ``PostgrestArrayElement`` only,
-/// so passing it to `eq`, `neq`, `gt` and friends is a compile error rather than a query that
-/// silently matches the wrong rows.
 extension Optional: PostgrestArrayElement where Wrapped: PostgrestArrayElement {
   public var postgrestArrayElement: String {
     guard let self else { return "NULL" }
@@ -170,12 +165,9 @@ extension Optional: PostgrestArrayElement where Wrapped: PostgrestArrayElement {
 
 extension JSONObject: PostgrestArrayElement {}
 
-/// `JSONObject` can be used directly as a PostgREST filter value.
 extension JSONObject: PostgrestFilterValue {
   public var rawValue: String {
     let value = mapValues(\.value)
-    // A `JSONObject` only ever holds `JSONValue`s, so serialization cannot fail. An empty object
-    // is a better fallback than trapping inside a filter the caller built from their own data.
     guard let serialized = JSONSerialization.stringify(value) else {
       reportIssue("Failed to serialize JSONObject as a PostgREST filter value.")
       return "{}"

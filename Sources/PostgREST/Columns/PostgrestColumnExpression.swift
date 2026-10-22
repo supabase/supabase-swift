@@ -5,37 +5,33 @@
 //  Created by Guilherme Souza on 26/08/26.
 //
 
-// MARK: - Positions
-
 /// Where an expression is allowed to appear. Carried as a phantom type so a derived expression
 /// inherits its receiver's positions instead of restating them.
-public protocol PostgrestPosition: Sendable {}
+public protocol _PostgrestPosition: Sendable {}
 
 /// A position set that includes `order`.
-public protocol PostgrestOrderablePosition: PostgrestPosition {}
+public protocol _PostgrestOrderablePosition: _PostgrestPosition {}
 
 /// A position set that includes the left of a filter operator.
-public protocol PostgrestFilterablePosition: PostgrestPosition {}
+public protocol _PostgrestFilterablePosition: _PostgrestPosition {}
 
 /// `select` only — a cast, an aggregate, or any projection of a to-many embed.
-public enum PostgrestSelectOnly: PostgrestPosition {}
+public enum _PostgrestSelectOnly: _PostgrestPosition {}
 
 /// `select` and `order`, but not a filter — a to-one embedded projection.
-public enum PostgrestSelectAndOrder: PostgrestOrderablePosition {}
+public enum _PostgrestSelectAndOrder: _PostgrestOrderablePosition {}
 
 /// Every position — a stored column, or a JSON path on one.
-public enum PostgrestEveryPosition: PostgrestOrderablePosition, PostgrestFilterablePosition {}
-
-// MARK: - Expressions
+public enum _PostgrestEveryPosition: _PostgrestOrderablePosition, _PostgrestFilterablePosition {}
 
 /// Anything that can appear in a `select` list: a stored column, a cast, a JSON path, an
 /// aggregate, or a column projected through an embedded relation.
 ///
 /// `@Table` generates the conformances. You do not conform your own types.
-public protocol PostgrestColumnExpression<Root, Value>: Sendable {
+public protocol _PostgrestColumnExpression<Root, Value>: Sendable {
   /// The relation this expression belongs to. Using it against another relation is a compile
   /// error.
-  associatedtype Root: PostgrestRelation
+  associatedtype Root: _PostgrestRelation
 
   /// The Swift type this expression produces. Operators require a matching operand, so
   /// `.eq("seven")` on an `Int` column does not compile.
@@ -43,7 +39,7 @@ public protocol PostgrestColumnExpression<Root, Value>: Sendable {
 
   /// Where this expression may appear. A derivation of it inherits this, so a JSON path on a
   /// to-many embed is select-only without that rule being written per embed kind.
-  associatedtype Position: PostgrestPosition
+  associatedtype Position: _PostgrestPosition
 
   /// The text PostgREST expects, in a `select` list or on the left of an operator.
   var postgrestExpression: String { get }
@@ -54,17 +50,17 @@ public protocol PostgrestColumnExpression<Root, Value>: Sendable {
   ///
   /// This is the single hook each expression kind implements. Every accessor — `cast(to:)`,
   /// `jsonText(_:)`, `sum()` and the rest — is declared once against it.
-  func _deriving<V, P: PostgrestPosition>(
+  func _deriving<V, P: _PostgrestPosition>(
     _ derivation: String
-  ) -> PostgrestDerivedExpression<Root, V, P>
+  ) -> _PostgrestDerivedExpression<Root, V, P>
 }
 
-extension PostgrestColumnExpression {
+extension _PostgrestColumnExpression {
   /// Appends, which is correct for everything that is not an embedded projection.
-  public func _deriving<V, P: PostgrestPosition>(
+  public func _deriving<V, P: _PostgrestPosition>(
     _ derivation: String
-  ) -> PostgrestDerivedExpression<Root, V, P> {
-    PostgrestDerivedExpression(embed: nil, inner: postgrestExpression + derivation)
+  ) -> _PostgrestDerivedExpression<Root, V, P> {
+    _PostgrestDerivedExpression(embed: nil, inner: postgrestExpression + derivation)
   }
 }
 
@@ -78,55 +74,53 @@ extension PostgrestColumnExpression {
 /// - There is no `HAVING`, so an aggregate cannot be filtered on.
 /// - An embedded column filters as `orders.id` but selects as `orders(id)`; filtering inside an
 ///   embed is not supported yet.
-public protocol PostgrestFilterableExpression<Root, Value>: PostgrestColumnExpression {}
+public protocol _PostgrestFilterableExpression<Root, Value>: _PostgrestColumnExpression {}
 
 /// A column expression that can be used as an `order` key.
 ///
 /// Stored columns, JSON paths and to-one embedded columns conform. Casts, aggregates and to-many
 /// embedded columns do not — PostgREST rejects all three in `order`.
-public protocol PostgrestOrderableExpression<Root, Value>: PostgrestColumnExpression {}
+public protocol _PostgrestOrderableExpression<Root, Value>: _PostgrestColumnExpression {}
 
 /// A filterable expression whose value the database allows to be `NULL`.
 ///
-/// Carries ``PostgrestNullableExpression/isNull()``, which is meaningless on a `NOT NULL` column:
+/// Carries ``_PostgrestNullableExpression/isNull()``, which is meaningless on a `NOT NULL` column:
 /// it can never match, and a filter that silently returns nothing is worse than one that does not
 /// compile.
 ///
 /// This is a protocol rather than a member of one concrete column type so that a future nullable
 /// expression — a JSON path into a nullable column, an outer-joined embed — gets `isNull()` by
 /// conforming, instead of the operator having to be redeclared on it.
-public protocol PostgrestNullableExpression<Root, Value>: PostgrestFilterableExpression {}
-
-// MARK: - Nullability
+public protocol _PostgrestNullableExpression<Root, Value>: _PostgrestFilterableExpression {}
 
 /// Whether a stored column's database type admits `NULL`.
 ///
-/// A phantom type on ``PostgrestStoredColumn``, never a value and never on the wire: it exists so
+/// A phantom type on ``_PostgrestStoredColumn``, never a value and never on the wire: it exists so
 /// one struct serves both column kinds while `isNull()` and an update's `nil` assignment stay
 /// available on exactly the nullable one.
-public protocol PostgrestNullability: Sendable {}
+public protocol _PostgrestNullability: Sendable {}
 
 /// A `NOT NULL` column.
-public enum PostgrestNotNull: PostgrestNullability {}
+public enum _PostgrestNotNull: _PostgrestNullability {}
 
 /// A column the database allows to be `NULL`.
-public enum PostgrestNullable: PostgrestNullability {}
+public enum _PostgrestNullable: _PostgrestNullability {}
 
 /// A stored column, reached through a relation's generated `Columns` namespace.
 ///
-/// Spell it as ``PostgrestColumn`` or ``PostgrestNullableColumn`` rather than naming this type
+/// Spell it as ``_PostgrestColumn`` or ``_PostgrestNullableColumn`` rather than naming this type
 /// directly; both are aliases that fix `Nullability`.
 ///
 /// `Value` is always the **wrapped** type: `var dueDate: Date?` generates
-/// `PostgrestNullableColumn<Todo, Date>`, not `Optional<Date>`. So every operator takes a
-/// non-optional operand — use ``PostgrestNullableExpression/isNull()`` to test for `NULL` — while
+/// `_PostgrestNullableColumn<Todo, Date>`, not `Optional<Date>`. So every operator takes a
+/// non-optional operand — use ``_PostgrestNullableExpression/isNull()`` to test for `NULL` — while
 /// an update accepts `nil` on a nullable column to clear it.
-public struct PostgrestStoredColumn<
-  Root: PostgrestRelation,
+public struct _PostgrestStoredColumn<
+  Root: _PostgrestRelation,
   Value,
-  Nullability: PostgrestNullability
->: PostgrestFilterableExpression, PostgrestOrderableExpression {
-  public typealias Position = PostgrestEveryPosition
+  Nullability: _PostgrestNullability
+>: _PostgrestFilterableExpression, _PostgrestOrderableExpression {
+  public typealias Position = _PostgrestEveryPosition
 
   public let postgrestExpression: String
 
@@ -136,14 +130,75 @@ public struct PostgrestStoredColumn<
   }
 }
 
-/// Only a nullable column can be `NULL`, so only it gets `isNull()`.
-extension PostgrestStoredColumn: PostgrestNullableExpression
-where Nullability == PostgrestNullable {}
+extension _PostgrestStoredColumn: _PostgrestNullableExpression
+where Nullability == _PostgrestNullable {}
 
 /// A stored `NOT NULL` column.
-public typealias PostgrestColumn<Root: PostgrestRelation, Value> =
-  PostgrestStoredColumn<Root, Value, PostgrestNotNull>
+public typealias _PostgrestColumn<Root: _PostgrestRelation, Value> =
+  _PostgrestStoredColumn<Root, Value, _PostgrestNotNull>
 
 /// A stored column the database allows to be `NULL`.
-public typealias PostgrestNullableColumn<Root: PostgrestRelation, Value> =
-  PostgrestStoredColumn<Root, Value, PostgrestNullable>
+public typealias _PostgrestNullableColumn<Root: _PostgrestRelation, Value> =
+  _PostgrestStoredColumn<Root, Value, _PostgrestNullable>
+
+/// A stored column the database fills in and refuses to be written: `GENERATED ALWAYS AS
+/// IDENTITY`, or `GENERATED ALWAYS AS (…) STORED`.
+///
+/// `@Table` emits one for a property marked `@Generated`. It selects, filters and orders like
+/// ``_PostgrestStoredColumn``, and the single difference is the type: it is not a
+/// ``_PostgrestColumn``, so ``_PostgrestUpdate`` has no subscript for it and the generated `Draft`
+/// has no field for it. A write that named it would be answered `428C9` by Postgres; here it does
+/// not compile. The same column is `?: never` in the shapes `postgres-meta` generates for
+/// supabase-js.
+public struct _PostgrestGeneratedColumn<
+  Root: _PostgrestRelation,
+  Value,
+  Nullability: _PostgrestNullability
+>: _PostgrestFilterableExpression, _PostgrestOrderableExpression {
+  public typealias Position = _PostgrestEveryPosition
+
+  public let postgrestExpression: String
+
+  /// - Parameter name: The database column name.
+  public init(_ name: String) {
+    self.postgrestExpression = name
+  }
+}
+
+extension _PostgrestGeneratedColumn: _PostgrestNullableExpression
+where Nullability == _PostgrestNullable {}
+
+/// A computed field: a scalar function whose only argument is `Root`'s row type, which PostgREST
+/// exposes as though it were a column.
+///
+/// ```sql
+/// create function full_name(users) returns text as $$ select $1.first_name || ' ' || $1.last_name $$
+///   language sql stable;
+/// ```
+///
+/// ```swift
+/// extension User.Columns {
+///   var fullName: _PostgrestComputedField<User, String> { .init("full_name") }
+/// }
+/// ```
+///
+/// It selects, filters and orders like a column, but `select=*` does not return it, so it is
+/// declared on the `Columns` namespace rather than as a stored property of `Root`: a whole-row
+/// `select()` decodes exactly what PostgREST sends. Name it in a `@SelectionOf` type to fetch it.
+/// It is never writable, and always nullable, since nothing stops the function returning `NULL`.
+///
+/// > Warning: Part of the typed query API, which is experimental. Its shape may change in a minor
+/// > release. Opt in with `@_spi(Experimental) import Supabase`.
+public struct _PostgrestComputedField<Root: _PostgrestRelation, Value>:
+  _PostgrestNullableExpression,
+  _PostgrestOrderableExpression
+{
+  public typealias Position = _PostgrestEveryPosition
+
+  public let postgrestExpression: String
+
+  /// - Parameter name: The function name.
+  public init(_ name: String) {
+    self.postgrestExpression = name
+  }
+}

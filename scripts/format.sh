@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Formats all Swift sources (excluding docc catalogs and hidden directories)
-# with swift-format. Single source of truth for AGENTS.md, README.md, and CI.
 set -euo pipefail
 
 find . \

@@ -4,7 +4,6 @@
 //
 //  Created by Guilherme Souza on 09/09/24.
 //
-
 import ConcurrencyExtras
 import Foundation
 import HTTPTypes
@@ -12,7 +11,6 @@ import InlineSnapshotTesting
 import Logging
 import TestHelpers
 import Testing
-
 @testable import Realtime
 
 #if canImport(FoundationNetworking)
@@ -21,14 +19,14 @@ import Testing
 
 @Suite
 struct RealtimeChannelTests {
-  let sut = RealtimeChannelV2(
+  let sut = RealtimeChannel(
     topic: "topic",
     config: RealtimeChannelConfig(
       broadcast: BroadcastJoinConfig(),
       presence: PresenceJoinConfig(),
       isPrivate: false
     ),
-    socket: RealtimeClientV2(
+    client: RealtimeClient(
       url: URL(string: "https://localhost:54321/realtime/v1")!,
       options: RealtimeClientOptions(headers: ["apikey": "test-key"])
     ),
@@ -36,8 +34,8 @@ struct RealtimeChannelTests {
   )
 
   @Test
-  func typedFilterAndSelectAreBufferedIntoPostgresJoinConfig() {
-    let subscription = sut.onPostgresChange(
+  func typedFilterAndSelectAreBufferedIntoPostgresJoinConfig() async {
+    let stream = await sut.postgresChanges(
       UpdateAction.self,
       table: "orders",
       filter: .and([
@@ -45,25 +43,25 @@ struct RealtimeChannelTests {
         .not(.in("status", values: ["draft"])),
       ]),
       select: ["id", "name"]
-    ) { _ in }
-    defer { subscription.cancel() }
+    )
 
-    let changes = sut.clientChanges.value
+    let changes = await sut.clientChanges
     #expect(changes.count == 1)
     #expect(changes.first?.event == .update)
     #expect(changes.first?.table == "orders")
     #expect(changes.first?.filter == "amount=gt.100,status=not.in.(draft)")
     #expect(changes.first?.select == ["id", "name"])
+    withExtendedLifetime(stream) {}
   }
 
-  // MARK: - Callback rejection tests
+  // MARK: - Stream rejection tests
 
   #if canImport(Darwin)
     @Test
     @MainActor
-    func presenceChangeCallbackRejectedWhileSubscribing() async {
+    func presenceChangeCallbackRejectedWhileSubscribing() async throws {
       let (client, server) = FakeWebSocket.fakes()
-      let socket = RealtimeClientV2(
+      let socket = RealtimeClient(
         url: URL(string: "https://localhost:54321/realtime/v1")!,
         options: RealtimeClientOptions(
           headers: ["apikey": "test-key"],
@@ -74,9 +72,8 @@ struct RealtimeChannelTests {
         clock: ContinuousClock()
       )
 
-      let channel = socket.channel("test-topic")
+      let channel = await socket.channel("test-topic")
 
-      // Never respond to phx_join, so channel stays in .subscribing
       let serverTask1 = Task { @Sendable [server] in
         for await event in server.events {
           guard let msg = event.realtimeMessage else { continue }
@@ -95,30 +92,32 @@ struct RealtimeChannelTests {
       }
       defer { serverTask1.cancel() }
 
-      await socket.connect()
+      try await socket.connect()
 
-      let subscribeTask = Task { try? await channel.subscribeWithError() }
+      let subscribeTask = Task { try? await channel.subscribe() }
 
       await waitForChannelStatus(.subscribing, channel: channel, timeout: 2.0)
-      #expect(channel.status == .subscribing)
+      #expect(await channel.status == .subscribing)
 
-      let callbackCountBefore = channel.callbackManager.callbacks.count
+      let listenerCountBefore = await channel.listeners.count
 
-      _ = channel.onPresenceChange { _ in }
+      await withKnownIssue {
+        _ = await channel.presenceChanges()
+      }
 
-      #expect(channel.callbackManager.callbacks.count == callbackCountBefore)
+      #expect(await channel.listeners.count == listenerCountBefore)
 
       subscribeTask.cancel()
-      socket.disconnect()
+      await socket.disconnect()
     }
   #endif
 
   #if canImport(Darwin)
     @Test
     @MainActor
-    func presenceChangeCallbackRejectedWhileSubscribed() async {
+    func presenceChangeCallbackRejectedWhileSubscribed() async throws {
       let (client, server) = FakeWebSocket.fakes()
-      let socket = RealtimeClientV2(
+      let socket = RealtimeClient(
         url: URL(string: "https://localhost:54321/realtime/v1")!,
         options: RealtimeClientOptions(
           headers: ["apikey": "test-key"],
@@ -129,7 +128,7 @@ struct RealtimeChannelTests {
         clock: ContinuousClock()
       )
 
-      let channel = socket.channel("test-topic")
+      let channel = await socket.channel("test-topic")
 
       let serverTask2 = Task { @Sendable [server] in
         for await event in server.events {
@@ -152,26 +151,28 @@ struct RealtimeChannelTests {
       }
       defer { serverTask2.cancel() }
 
-      await socket.connect()
-      try? await channel.subscribeWithError()
-      #expect(channel.status == .subscribed)
+      try await socket.connect()
+      try? await channel.subscribe()
+      #expect(await channel.status == .subscribed)
 
-      let callbackCountBefore = channel.callbackManager.callbacks.count
+      let listenerCountBefore = await channel.listeners.count
 
-      _ = channel.onPresenceChange { _ in }
+      await withKnownIssue {
+        _ = await channel.presenceChanges()
+      }
 
-      #expect(channel.callbackManager.callbacks.count == callbackCountBefore)
+      #expect(await channel.listeners.count == listenerCountBefore)
 
-      socket.disconnect()
+      await socket.disconnect()
     }
   #endif
 
   #if canImport(Darwin)
     @Test
     @MainActor
-    func postgresChangeCallbackRejectedWhileSubscribing() async {
+    func postgresChangeCallbackRejectedWhileSubscribing() async throws {
       let (client, server) = FakeWebSocket.fakes()
-      let socket = RealtimeClientV2(
+      let socket = RealtimeClient(
         url: URL(string: "https://localhost:54321/realtime/v1")!,
         options: RealtimeClientOptions(
           headers: ["apikey": "test-key"],
@@ -182,9 +183,8 @@ struct RealtimeChannelTests {
         clock: ContinuousClock()
       )
 
-      let channel = socket.channel("test-topic")
+      let channel = await socket.channel("test-topic")
 
-      // Never respond to phx_join, so channel stays in .subscribing
       let serverTask3 = Task { @Sendable [server] in
         for await event in server.events {
           guard let msg = event.realtimeMessage else { continue }
@@ -203,30 +203,32 @@ struct RealtimeChannelTests {
       }
       defer { serverTask3.cancel() }
 
-      await socket.connect()
+      try await socket.connect()
 
-      let subscribeTask = Task { try? await channel.subscribeWithError() }
+      let subscribeTask = Task { try? await channel.subscribe() }
 
       await waitForChannelStatus(.subscribing, channel: channel, timeout: 2.0)
-      #expect(channel.status == .subscribing)
+      #expect(await channel.status == .subscribing)
 
-      let callbackCountBefore = channel.callbackManager.callbacks.count
+      let listenerCountBefore = await channel.listeners.count
 
-      _ = channel.onPostgresChange(AnyAction.self, schema: "public") { _ in }
+      await withKnownIssue {
+        _ = await channel.postgresChanges(AnyAction.self, schema: "public")
+      }
 
-      #expect(channel.callbackManager.callbacks.count == callbackCountBefore)
+      #expect(await channel.listeners.count == listenerCountBefore)
 
       subscribeTask.cancel()
-      socket.disconnect()
+      await socket.disconnect()
     }
   #endif
 
   #if canImport(Darwin)
     @Test
     @MainActor
-    func postgresChangeCallbackRejectedWhileSubscribed() async {
+    func postgresChangeCallbackRejectedWhileSubscribed() async throws {
       let (client, server) = FakeWebSocket.fakes()
-      let socket = RealtimeClientV2(
+      let socket = RealtimeClient(
         url: URL(string: "https://localhost:54321/realtime/v1")!,
         options: RealtimeClientOptions(
           headers: ["apikey": "test-key"],
@@ -237,7 +239,7 @@ struct RealtimeChannelTests {
         clock: ContinuousClock()
       )
 
-      let channel = socket.channel("test-topic")
+      let channel = await socket.channel("test-topic")
 
       let serverTask4 = Task { @Sendable [server] in
         for await event in server.events {
@@ -260,135 +262,110 @@ struct RealtimeChannelTests {
       }
       defer { serverTask4.cancel() }
 
-      await socket.connect()
-      try? await channel.subscribeWithError()
-      #expect(channel.status == .subscribed)
+      try await socket.connect()
+      try? await channel.subscribe()
+      #expect(await channel.status == .subscribed)
 
-      let callbackCountBefore = channel.callbackManager.callbacks.count
+      let listenerCountBefore = await channel.listeners.count
 
-      _ = channel.onPostgresChange(AnyAction.self, schema: "public") { _ in }
+      await withKnownIssue {
+        _ = await channel.postgresChanges(AnyAction.self, schema: "public")
+      }
 
-      #expect(channel.callbackManager.callbacks.count == callbackCountBefore)
+      #expect(await channel.listeners.count == listenerCountBefore)
 
-      socket.disconnect()
+      await socket.disconnect()
     }
   #endif
 
   @Test
-  func attachCallbacks() {
-    var subscriptions = Set<RealtimeSubscription>()
+  func attachCallbacks() async {
+    let streams: [any Sendable] = [
+      await sut.postgresChanges(
+        AnyAction.self,
+        schema: "public",
+        table: "users",
+        filter: .eq("id", value: 1)
+      ),
+      await sut.postgresChanges(InsertAction.self, schema: "private"),
+      await sut.postgresChanges(UpdateAction.self, table: "messages"),
+      await sut.postgresChanges(DeleteAction.self),
+      await sut.broadcasts(event: "test"),
+      await sut.broadcasts(event: "cursor-pos"),
+      await sut.presenceChanges(),
+      await sut.systemMessages(),
+    ]
 
-    sut.onPostgresChange(
-      AnyAction.self,
-      schema: "public",
-      table: "users",
-      filter: "id=eq.1"
-    ) { _ in }.store(in: &subscriptions)
-    sut.onPostgresChange(
-      InsertAction.self,
-      schema: "private"
-    ) { _ in }.store(in: &subscriptions)
-    sut.onPostgresChange(
-      UpdateAction.self,
-      table: "messages"
-    ) { _ in }.store(in: &subscriptions)
-    sut.onPostgresChange(
-      DeleteAction.self
-    ) { _ in }.store(in: &subscriptions)
-
-    sut.onBroadcast(event: "test") { _ in }.store(in: &subscriptions)
-    sut.onBroadcast(event: "cursor-pos") { _ in }.store(in: &subscriptions)
-
-    sut.onPresenceChange { _ in }.store(in: &subscriptions)
-
-    sut.onSystem {
+    let kinds = await sut.listeners.map { entry -> String in
+      switch entry.listener {
+      case .postgres: "postgres"
+      case .broadcast(let event, _): "broadcast(\(event))"
+      case .broadcastData(let event, _): "broadcastData(\(event))"
+      case .presence: "presence"
+      case .system: "system"
+      case .status: "status"
+      }
     }
-    .store(in: &subscriptions)
+    #expect(
+      kinds == [
+        "postgres", "postgres", "postgres", "postgres",
+        "broadcast(test)", "broadcast(cursor-pos)",
+        "presence", "system",
+      ]
+    )
+    #expect(await sut.hasPresenceListener)
 
-    assertInlineSnapshot(of: sut.callbackManager.callbacks, as: .dump) {
+    let clientChanges = await sut.clientChanges
+    assertInlineSnapshot(of: clientChanges, as: .dump) {
       """
-      ▿ 8 elements
-        ▿ RealtimeCallback
-          ▿ postgres: PostgresCallback
-            - callback: (Function)
-            ▿ filter: PostgresJoinConfig
-              ▿ event: Optional<PostgresChangeEvent>
-                - some: PostgresChangeEvent.all
-              ▿ filter: Optional<String>
-                - some: "id=eq.1"
-              - id: 0
-              - schema: "public"
-              - select: Optional<Array<String>>.none
-              ▿ table: Optional<String>
-                - some: "users"
-            - id: 1
-        ▿ RealtimeCallback
-          ▿ postgres: PostgresCallback
-            - callback: (Function)
-            ▿ filter: PostgresJoinConfig
-              ▿ event: Optional<PostgresChangeEvent>
-                - some: PostgresChangeEvent.insert
-              - filter: Optional<String>.none
-              - id: 0
-              - schema: "private"
-              - select: Optional<Array<String>>.none
-              - table: Optional<String>.none
-            - id: 2
-        ▿ RealtimeCallback
-          ▿ postgres: PostgresCallback
-            - callback: (Function)
-            ▿ filter: PostgresJoinConfig
-              ▿ event: Optional<PostgresChangeEvent>
-                - some: PostgresChangeEvent.update
-              - filter: Optional<String>.none
-              - id: 0
-              - schema: "public"
-              - select: Optional<Array<String>>.none
-              ▿ table: Optional<String>
-                - some: "messages"
-            - id: 3
-        ▿ RealtimeCallback
-          ▿ postgres: PostgresCallback
-            - callback: (Function)
-            ▿ filter: PostgresJoinConfig
-              ▿ event: Optional<PostgresChangeEvent>
-                - some: PostgresChangeEvent.delete
-              - filter: Optional<String>.none
-              - id: 0
-              - schema: "public"
-              - select: Optional<Array<String>>.none
-              - table: Optional<String>.none
-            - id: 4
-        ▿ RealtimeCallback
-          ▿ broadcast: BroadcastCallback
-            - callback: (Function)
-            - event: "test"
-            - id: 5
-        ▿ RealtimeCallback
-          ▿ broadcast: BroadcastCallback
-            - callback: (Function)
-            - event: "cursor-pos"
-            - id: 6
-        ▿ RealtimeCallback
-          ▿ presence: PresenceCallback
-            - callback: (Function)
-            - id: 7
-        ▿ RealtimeCallback
-          ▿ system: SystemCallback
-            - callback: (Function)
-            - id: 8
+      ▿ 4 elements
+        ▿ PostgresJoinConfig
+          ▿ event: Optional<PostgresChangeEvent>
+            - some: PostgresChangeEvent.all
+          ▿ filter: Optional<String>
+            - some: "id=eq.1"
+          - id: 0
+          - schema: "public"
+          - select: Optional<Array<String>>.none
+          ▿ table: Optional<String>
+            - some: "users"
+        ▿ PostgresJoinConfig
+          ▿ event: Optional<PostgresChangeEvent>
+            - some: PostgresChangeEvent.insert
+          - filter: Optional<String>.none
+          - id: 0
+          - schema: "private"
+          - select: Optional<Array<String>>.none
+          - table: Optional<String>.none
+        ▿ PostgresJoinConfig
+          ▿ event: Optional<PostgresChangeEvent>
+            - some: PostgresChangeEvent.update
+          - filter: Optional<String>.none
+          - id: 0
+          - schema: "public"
+          - select: Optional<Array<String>>.none
+          ▿ table: Optional<String>
+            - some: "messages"
+        ▿ PostgresJoinConfig
+          ▿ event: Optional<PostgresChangeEvent>
+            - some: PostgresChangeEvent.delete
+          - filter: Optional<String>.none
+          - id: 0
+          - schema: "public"
+          - select: Optional<Array<String>>.none
+          - table: Optional<String>.none
 
       """
     }
+    withExtendedLifetime(streams) {}
   }
 
   @Test
   @MainActor
-  func presenceEnabledDuringSubscribe() async {
-    // Create fake WebSocket for testing
+  func presenceEnabledDuringSubscribe() async throws {
     let (client, server) = FakeWebSocket.fakes()
 
-    let socket = RealtimeClientV2(
+    let socket = RealtimeClient(
       url: URL(string: "https://localhost:54321/realtime/v1")!,
       options: RealtimeClientOptions(
         headers: ["apikey": "test-key"],
@@ -399,54 +376,45 @@ struct RealtimeChannelTests {
       clock: ContinuousClock()
     )
 
-    // Create a channel without presence callback initially
-    let channel = socket.channel("test-topic")
+    // Create a channel without a presence stream initially
+    let channel = await socket.channel("test-topic")
 
-    // Initially presence should be disabled
     #expect(!channel.config.presence.enabled)
 
-    // Connect the socket
-    await socket.connect()
+    try await socket.connect()
 
-    // Add a presence callback before subscribing
-    let presenceSubscription = channel.onPresenceChange { _ in }
+    // Open a presence stream before subscribing
+    let presence = await channel.presenceChanges()
 
-    // Verify that presence callback exists
-    #expect(channel.callbackManager.callbacks.contains(where: { $0.isPresence }))
+    // Verify that the presence listener exists
+    #expect(await channel.hasPresenceListener)
 
-    // Start subscription process
     Task {
-      try? await channel.subscribeWithError()
+      try? await channel.subscribe()
     }
 
-    // Wait for the join message to be sent
     let joinEvents = await waitForEvents(
       in: server,
       event: "phx_join",
       timeout: 1.0
     )
 
-    // Should have at least one join event
     #expect(joinEvents.count > 0)
 
-    // Check that the presence enabled flag is set to true in the join payload
     if let joinEvent = joinEvents.first,
       let config = joinEvent.payload["config"]?.objectValue,
       let presence = config["presence"]?.objectValue,
       let enabled = presence["enabled"]?.boolValue
     {
-      #expect(enabled, "Presence should be enabled when presence callback exists")
+      #expect(enabled, "Presence should be enabled when a presence stream is open")
     } else {
       Issue.record("Could not find presence enabled flag in join payload")
     }
 
-    // Clean up
-    presenceSubscription.cancel()
+    withExtendedLifetime(presence) {}
     await channel.unsubscribe()
-    socket.disconnect()
+    await socket.disconnect()
 
-    // Note: We don't assert the subscribe status here because the test doesn't wait for completion
-    // The subscription is still in progress when we clean up
   }
 
   @Test
@@ -454,7 +422,7 @@ struct RealtimeChannelTests {
     let httpClient = RecordingTransport()
     let (client, _) = FakeWebSocket.fakes()
 
-    let socket = RealtimeClientV2(
+    let socket = RealtimeClient(
       url: URL(string: "https://localhost:54321/realtime/v1")!,
       options: RealtimeClientOptions(headers: ["apikey": "test-key"]),
       wsTransport: { _, _ in client },
@@ -462,7 +430,7 @@ struct RealtimeChannelTests {
       clock: ContinuousClock()
     )
 
-    let channel = socket.channel("test-topic")
+    let channel = await socket.channel("test-topic")
 
     do {
       try await channel.httpSend(event: "test", message: ["data": "test"])
@@ -474,6 +442,69 @@ struct RealtimeChannelTests {
   }
 
   @Test
+  func httpSendThrowsCancellationErrorWhenTheTaskIsCancelled() async {
+    let (requestStarted, onRequestStarted) = AsyncStream<Void>.makeStream()
+    let httpClient = RecordingTransport { _, _ in
+      onRequestStarted.yield()
+      try? await Task.sleep(for: .seconds(10))
+      throw URLError(.cancelled)
+    }
+    let (client, _) = FakeWebSocket.fakes()
+
+    let socket = RealtimeClient(
+      url: URL(string: "https://localhost:54321/realtime/v1")!,
+      options: RealtimeClientOptions(
+        headers: ["apikey": "test-key"],
+        accessToken: { "test-token" }
+      ),
+      wsTransport: { _, _ in client },
+      http: HTTPClient(transport: httpClient),
+      clock: ContinuousClock()
+    )
+    let channel = await socket.channel("test-topic")
+
+    let task = Task { try await channel.httpSend(event: "test", message: ["data": "test"]) }
+    for await _ in requestStarted { break }
+    task.cancel()
+
+    do {
+      try await task.value
+      Issue.record("Expected failure")
+    } catch is CancellationError {
+    } catch {
+      Issue.record("Unexpected error \(error)")
+    }
+  }
+
+  @Test
+  func httpSendWrapsCancelledURLErrorWithoutTaskCancellation() async {
+    let httpClient = RecordingTransport { _, _ in throw URLError(.cancelled) }
+    let (client, _) = FakeWebSocket.fakes()
+
+    let socket = RealtimeClient(
+      url: URL(string: "https://localhost:54321/realtime/v1")!,
+      options: RealtimeClientOptions(
+        headers: ["apikey": "test-key"],
+        accessToken: { "test-token" }
+      ),
+      wsTransport: { _, _ in client },
+      http: HTTPClient(transport: httpClient),
+      clock: ContinuousClock()
+    )
+    let channel = await socket.channel("test-topic")
+
+    do {
+      try await channel.httpSend(event: "test", data: Data())
+      Issue.record("Expected failure")
+    } catch let error as RealtimeError {
+      #expect(error.kind == .transport)
+      #expect((error.underlyingError as? URLError)?.code == .cancelled)
+    } catch {
+      Issue.record("Unexpected error \(error)")
+    }
+  }
+
+  @Test
   func httpSendSucceedsOn202Status() async throws {
     let httpClient = RecordingTransport()
     httpClient.respond { _, _ in
@@ -481,7 +512,7 @@ struct RealtimeChannelTests {
     }
     let (client, _) = FakeWebSocket.fakes()
 
-    let socket = RealtimeClientV2(
+    let socket = RealtimeClient(
       url: URL(string: "https://localhost:54321/realtime/v1")!,
       options: RealtimeClientOptions(
         headers: ["apikey": "test-key"],
@@ -492,7 +523,7 @@ struct RealtimeChannelTests {
       clock: ContinuousClock()
     )
 
-    let channel = socket.channel("test-topic") { config in
+    let channel = await socket.channel("test-topic") { config in
       config.isPrivate = true
     }
 
@@ -523,7 +554,7 @@ struct RealtimeChannelTests {
     }
     let (client, _) = FakeWebSocket.fakes()
 
-    let socket = RealtimeClientV2(
+    let socket = RealtimeClient(
       url: URL(string: "https://localhost:54321/realtime/v1")!,
       options: RealtimeClientOptions(
         headers: ["apikey": "test-key"],
@@ -534,7 +565,7 @@ struct RealtimeChannelTests {
       clock: ContinuousClock()
     )
 
-    let channel = socket.channel("room/one")
+    let channel = await socket.channel("room/one")
 
     try await channel.httpSend(event: "cursor move", message: ["x": 1])
 
@@ -553,7 +584,7 @@ struct RealtimeChannelTests {
     }
     let (client, _) = FakeWebSocket.fakes()
 
-    let socket = RealtimeClientV2(
+    let socket = RealtimeClient(
       url: URL(string: "https://localhost:54321/realtime/v1")!,
       options: RealtimeClientOptions(
         headers: ["apikey": "test-key"],
@@ -564,7 +595,7 @@ struct RealtimeChannelTests {
       clock: ContinuousClock()
     )
 
-    let channel = socket.channel("test-topic")
+    let channel = await socket.channel("test-topic")
 
     let payload = Data([0x01, 0x02, 0x03])
     try await channel.httpSend(event: "binary-event", data: payload)
@@ -586,7 +617,7 @@ struct RealtimeChannelTests {
     let httpClient = RecordingTransport()
     let (client, _) = FakeWebSocket.fakes()
 
-    let socket = RealtimeClientV2(
+    let socket = RealtimeClient(
       url: URL(string: "https://localhost:54321/realtime/v1")!,
       options: RealtimeClientOptions(headers: ["apikey": "test-key"]),
       wsTransport: { _, _ in client },
@@ -594,7 +625,7 @@ struct RealtimeChannelTests {
       clock: ContinuousClock()
     )
 
-    let channel = socket.channel("test-topic")
+    let channel = await socket.channel("test-topic")
 
     do {
       try await channel.httpSend(event: "test", data: Data([0x01]))
@@ -614,7 +645,7 @@ struct RealtimeChannelTests {
     }
     let (client, _) = FakeWebSocket.fakes()
 
-    let socket = RealtimeClientV2(
+    let socket = RealtimeClient(
       url: URL(string: "https://localhost:54321/realtime/v1")!,
       options: RealtimeClientOptions(
         headers: ["apikey": "test-key"],
@@ -625,7 +656,7 @@ struct RealtimeChannelTests {
       clock: ContinuousClock()
     )
 
-    let channel = socket.channel("test-topic")
+    let channel = await socket.channel("test-topic")
 
     do {
       try await channel.httpSend(event: "test", message: ["data": "test"])
@@ -644,7 +675,7 @@ struct RealtimeChannelTests {
     let httpClient = RecordingTransport()
     httpClient.respond { _, _ in throw URLError(.timedOut) }
     let (client, _) = FakeWebSocket.fakes()
-    let socket = RealtimeClientV2(
+    let socket = RealtimeClient(
       url: URL(string: "https://localhost:54321/realtime/v1")!,
       options: RealtimeClientOptions(
         headers: ["apikey": "test-key"], accessToken: { "test-token" }),
@@ -652,7 +683,7 @@ struct RealtimeChannelTests {
       http: HTTPClient(transport: httpClient),
       clock: ContinuousClock()
     )
-    let channel = socket.channel("test-topic")
+    let channel = await socket.channel("test-topic")
 
     do {
       try await channel.httpSend(event: "test", message: ["data": "test"])
@@ -670,7 +701,7 @@ struct RealtimeChannelTests {
     let httpClient = RecordingTransport()
     httpClient.respond { _, _ in throw CancellationError() }
     let (client, _) = FakeWebSocket.fakes()
-    let socket = RealtimeClientV2(
+    let socket = RealtimeClient(
       url: URL(string: "https://localhost:54321/realtime/v1")!,
       options: RealtimeClientOptions(
         headers: ["apikey": "test-key"], accessToken: { "test-token" }),
@@ -678,7 +709,7 @@ struct RealtimeChannelTests {
       http: HTTPClient(transport: httpClient),
       clock: ContinuousClock()
     )
-    let channel = socket.channel("test-topic")
+    let channel = await socket.channel("test-topic")
 
     await #expect(throws: CancellationError.self) {
       try await channel.httpSend(event: "test", message: ["data": "test"])
@@ -692,7 +723,7 @@ struct RealtimeChannelTests {
     let httpClient = RecordingTransport()
     httpClient.respond { _, _ in throw FetchError() }
     let (client, _) = FakeWebSocket.fakes()
-    let socket = RealtimeClientV2(
+    let socket = RealtimeClient(
       url: URL(string: "https://localhost:54321/realtime/v1")!,
       options: RealtimeClientOptions(
         headers: ["apikey": "test-key"], accessToken: { "test-token" }),
@@ -700,7 +731,7 @@ struct RealtimeChannelTests {
       http: HTTPClient(transport: httpClient),
       clock: ContinuousClock()
     )
-    let channel = socket.channel("test-topic")
+    let channel = await socket.channel("test-topic")
 
     await #expect(throws: FetchError.self) {
       try await channel.httpSend(event: "test", message: ["data": "test"])
@@ -715,7 +746,7 @@ struct RealtimeChannelTests {
     }
     let (client, _) = FakeWebSocket.fakes()
 
-    let socket = RealtimeClientV2(
+    let socket = RealtimeClient(
       url: URL(string: "https://localhost:54321/realtime/v1")!,
       options: RealtimeClientOptions(
         headers: ["apikey": "test-key"],
@@ -727,9 +758,8 @@ struct RealtimeChannelTests {
       clock: ContinuousClock()
     )
 
-    let channel = socket.channel("test-topic")
+    let channel = await socket.channel("test-topic")
 
-    // Test with custom timeout
     try await channel.httpSend(event: "test", message: ["data": "test"], timeout: .seconds(3))
 
     let requests = httpClient.requests
@@ -744,7 +774,7 @@ struct RealtimeChannelTests {
     }
     let (client, _) = FakeWebSocket.fakes()
 
-    let socket = RealtimeClientV2(
+    let socket = RealtimeClient(
       url: URL(string: "https://localhost:54321/realtime/v1")!,
       options: RealtimeClientOptions(
         headers: ["apikey": "test-key"],
@@ -756,9 +786,8 @@ struct RealtimeChannelTests {
       clock: ContinuousClock()
     )
 
-    let channel = socket.channel("test-topic")
+    let channel = await socket.channel("test-topic")
 
-    // Test without custom timeout
     try await channel.httpSend(event: "test", message: ["data": "test"])
 
     let requests = httpClient.requests
@@ -774,7 +803,7 @@ struct RealtimeChannelTests {
     }
     let (client, _) = FakeWebSocket.fakes()
 
-    let socket = RealtimeClientV2(
+    let socket = RealtimeClient(
       url: URL(string: "https://localhost:54321/realtime/v1")!,
       options: RealtimeClientOptions(
         headers: ["apikey": "test-key"],
@@ -785,7 +814,7 @@ struct RealtimeChannelTests {
       clock: ContinuousClock()
     )
 
-    let channel = socket.channel("test-topic")
+    let channel = await socket.channel("test-topic")
 
     do {
       try await channel.httpSend(event: "test", message: ["data": "test"])
@@ -803,7 +832,7 @@ struct RealtimeChannelTests {
     }
     let (client, _) = FakeWebSocket.fakes()
 
-    let socket = RealtimeClientV2(
+    let socket = RealtimeClient(
       url: URL(string: "https://localhost:54321/realtime/v1")!,
       options: RealtimeClientOptions(
         headers: ["apikey": "test-key"],
@@ -814,13 +843,12 @@ struct RealtimeChannelTests {
       clock: ContinuousClock()
     )
 
-    let channel = socket.channel("test-topic")
+    let channel = await socket.channel("test-topic")
 
     do {
       try await channel.httpSend(event: "test", message: ["data": "test"])
       Issue.record("Expected httpSend to throw an error on 503 status")
     } catch {
-      // Should fall back to localized status text (case-insensitive)
       let description = error.localizedDescription.lowercased()
       #expect(
         description.contains("503") || description.contains("unavailable"),
@@ -832,9 +860,9 @@ struct RealtimeChannelTests {
   #if canImport(Darwin)
     @Test
     @MainActor
-    func channelErrorResetsSubscribedStatus() async {
+    func channelErrorResetsSubscribedStatus() async throws {
       let (client, server) = FakeWebSocket.fakes()
-      let socket = RealtimeClientV2(
+      let socket = RealtimeClient(
         url: URL(string: "https://localhost:54321/realtime/v1")!,
         options: RealtimeClientOptions(
           headers: ["apikey": "test-key"],
@@ -845,7 +873,7 @@ struct RealtimeChannelTests {
         clock: ContinuousClock()
       )
 
-      let channel = socket.channel("test-topic")
+      let channel = await socket.channel("test-topic")
 
       let serverTask = Task { @Sendable [server] in
         for await event in server.events {
@@ -868,9 +896,9 @@ struct RealtimeChannelTests {
       }
       defer { serverTask.cancel() }
 
-      await socket.connect()
-      try? await channel.subscribeWithError()
-      #expect(channel.status == .subscribed)
+      try await socket.connect()
+      try? await channel.subscribe()
+      #expect(await channel.status == .subscribed)
 
       server.send(
         RealtimeMessageV2(
@@ -883,27 +911,25 @@ struct RealtimeChannelTests {
       )
 
       await waitForChannelStatus(.unsubscribed, channel: channel, timeout: 2.0)
-      #expect(channel.status == .unsubscribed)
+      #expect(await channel.status == .unsubscribed)
 
-      socket.disconnect()
+      await socket.disconnect()
     }
   #endif
 }
 
 extension RealtimeChannelTests {
-  @MainActor
   private func waitForChannelStatus(
     _ status: RealtimeChannelStatus,
-    channel: RealtimeChannelV2,
+    channel: RealtimeChannel,
     timeout: TimeInterval,
     pollInterval: UInt64 = 10_000_000
   ) async {
-    await testingWaitUntil(timeout: timeout, pollInterval: pollInterval) {
-      channel.status == status
+    await waitUntil(timeout: timeout, pollInterval: pollInterval) {
+      await channel.status == status
     }
   }
 
-  @MainActor
   private func waitForEvents(
     in socket: FakeWebSocket,
     event: String,
@@ -926,21 +952,4 @@ extension RealtimeChannelTests {
 
     return []
   }
-}
-
-/// `@MainActor`-safe wrapper around the shared, non-isolated `waitUntil` helper —
-/// avoids a "passing a `@MainActor`-isolated closure as a `@Sendable` closure" diagnostic
-/// when the condition captures main-actor-isolated state (e.g. `RealtimeChannelV2.status`).
-@MainActor
-private func testingWaitUntil(
-  timeout: TimeInterval,
-  pollInterval: UInt64,
-  condition: @MainActor @escaping () -> Bool
-) async {
-  let deadline = Date().addingTimeInterval(timeout)
-  while Date() < deadline {
-    if condition() { return }
-    try? await Task.sleep(nanoseconds: pollInterval)
-  }
-  _ = condition()
 }

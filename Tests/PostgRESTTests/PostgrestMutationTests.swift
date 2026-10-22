@@ -8,11 +8,11 @@
 import Foundation
 import Testing
 
-@testable import PostgREST
+@_spi(Experimental) @testable import PostgREST
 
 @Suite
 struct PostgrestMutationTests {
-  struct Todo: PostgrestWritableRelation, PostgrestKeyedRelation {
+  struct Todo: _PostgrestWritableRelation, _PostgrestKeyedRelation {
     static let relationName = "todos"
     static let selectString = "*"
 
@@ -21,8 +21,6 @@ struct PostgrestMutationTests {
     var isDone: Bool
     var note: String?
 
-    /// A hand-written conformance keeps these in step with `Columns` by hand; `@Column`
-    /// generates both from one input.
     enum CodingKeys: String, CodingKey {
       case id
       case task
@@ -31,10 +29,10 @@ struct PostgrestMutationTests {
     }
 
     struct Columns: Sendable {
-      let id = PostgrestColumn<Todo, Int>("id")
-      let task = PostgrestColumn<Todo, String>("task")
-      let isDone = PostgrestColumn<Todo, Bool>("is_done")
-      let note = PostgrestNullableColumn<Todo, String>("note")
+      let id = _PostgrestColumn<Todo, Int>("id")
+      let task = _PostgrestColumn<Todo, String>("task")
+      let isDone = _PostgrestColumn<Todo, Bool>("is_done")
+      let note = _PostgrestNullableColumn<Todo, String>("note")
     }
 
     static let columns = Columns()
@@ -44,8 +42,6 @@ struct PostgrestMutationTests {
       var task: String
       var isDone: Bool?
 
-      /// Mirrors the relation's own mapping, so a batch's `columns` parameter is asserted in the
-      /// database's spelling rather than in Swift's.
       enum CodingKeys: String, CodingKey {
         case task
         case isDone = "is_done"
@@ -53,15 +49,14 @@ struct PostgrestMutationTests {
     }
   }
 
-  /// A view: conforms to `PostgrestRelation` only, so the writes must not be offered.
-  struct ActiveTodo: PostgrestRelation {
+  struct ActiveTodo: _PostgrestRelation {
     static let relationName = "active_todos"
     static let selectString = "*"
 
     var id: Int
 
     struct Columns: Sendable {
-      let id = PostgrestColumn<ActiveTodo, Int>("id")
+      let id = _PostgrestColumn<ActiveTodo, Int>("id")
     }
 
     static let columns = Columns()
@@ -73,7 +68,6 @@ struct PostgrestMutationTests {
     _ = try await capture.client.from(Todo.self)
       .insert(Todo.Draft(task: "buy milk", isDone: nil)).execute()
     #expect(capture.httpMethod == "POST")
-    // The hand-written `Draft` here omits the primary key, so `id` must not appear in the body.
     #expect(capture.bodyString?.contains("\"task\":\"buy milk\"") == true)
     #expect(capture.bodyString?.contains("\"id\"") == false)
   }
@@ -98,7 +92,6 @@ struct PostgrestMutationTests {
 
   @Test
   func updateSendsAnExplicitNullForAnAssignedNil() async throws {
-    // The whole point of SDK-1610: the body has to carry `null`, not drop the key.
     let capture = QueryCapture()
     _ = try await capture.client.from(Todo.self)
       .update { $0.note = nil }.where { $0.id.eq(1) }.execute()
@@ -115,8 +108,7 @@ struct PostgrestMutationTests {
 
   @Test
   func anUpdateBuiltAheadOfTimeCanBeHandedToTheSource() async throws {
-    // The payload is a value, so one layer can decide the change and another can send it.
-    let update = PostgrestUpdate<Todo> { $0.note = nil }
+    let update = _PostgrestUpdate<Todo> { $0.note = nil }
     let capture = QueryCapture()
     _ = try await capture.client.from(Todo.self).update(update).where { $0.id.eq(1) }.execute()
     #expect(capture.bodyString == #"{"note":null}"#)
@@ -130,6 +122,70 @@ struct PostgrestMutationTests {
   }
 
   @Test
+  func eachWriteStartsInThePhaseThatDecidesWhatItOffers() throws {
+    let source = QueryCapture().client.from(Todo.self)
+    let draft = Todo.Draft(task: "buy milk")
+
+    let insert = try source.insert(draft)
+    let upsert = try source.upsert(draft)
+    let update = try source.update { $0.task = "done" }
+    let delete = source.delete()
+
+    #expect(type(of: insert) == _PostgrestMutation<Todo, _PostgrestInsertPhase>.self)
+    #expect(
+      type(of: try source.insert([draft])) == _PostgrestMutation<Todo, _PostgrestInsertPhase>.self)
+    #expect(type(of: upsert) == _PostgrestMutation<Todo, _PostgrestInsertPhase>.self)
+    #expect(type(of: update) == _PostgrestMutation<Todo, _PostgrestUnscopedPhase>.self)
+    #expect(type(of: delete) == _PostgrestMutation<Todo, _PostgrestUnscopedPhase>.self)
+
+    #expect(!(insert as Any is any _PostgrestFilterableRequest))
+    #expect(!(upsert as Any is any _PostgrestFilterableRequest))
+    #expect(!(delete as Any is any _PostgrestFilterableRequest))
+
+    let scoped = delete.where { $0.id.eq(1) }
+    #expect(type(of: scoped) == _PostgrestMutation<Todo, _PostgrestScopedPhase>.self)
+    #expect(type(of: delete.all()) == _PostgrestMutation<Todo, _PostgrestScopedPhase>.self)
+    #expect(scoped as Any is any _PostgrestFilterableRequest)
+  }
+
+  @Test
+  func deleteAllRendersNoFilter() async throws {
+    let capture = QueryCapture()
+    _ = try await capture.client.from(Todo.self).delete().all().execute()
+    #expect(capture.httpMethod == "DELETE")
+    #expect(capture.query == nil)
+  }
+
+  @Test
+  func updateAllRendersNoFilter() async throws {
+    let capture = QueryCapture()
+    _ = try await capture.client.from(Todo.self).update { $0.isDone = true }.all().execute()
+    #expect(capture.httpMethod == "PATCH")
+    #expect(capture.query == nil)
+    #expect(capture.bodyString == #"{"is_done":true}"#)
+  }
+
+  @Test
+  func aScopedMutationAcceptsMoreFilters() async throws {
+    let capture = QueryCapture()
+    _ = try await capture.client.from(Todo.self).delete()
+      .where { $0.id.eq(1) }
+      .where { $0.isDone.eq(true) }
+      .execute()
+    #expect(capture.query?.contains("id=eq.1") == true)
+    #expect(capture.query?.contains("is_done=eq.true") == true)
+  }
+
+  @Test
+  func aScopedMutationCanReturnTheRows() async throws {
+    let capture = QueryCapture(body: #"[{"id":1,"task":"done","is_done":false}]"#)
+    let rows = try await capture.client.from(Todo.self)
+      .update { $0.task = "done" }.where { $0.id.eq(1) }.returning().execute().value
+    #expect(rows.map(\.task) == ["done"])
+    #expect(capture.query?.contains("id=eq.1") == true)
+  }
+
+  @Test
   func returningDecodesRows() async throws {
     let capture = QueryCapture(body: #"[{"id":1,"task":"buy milk","is_done":false}]"#)
     let rows = try await capture.client.from(Todo.self)
@@ -139,8 +195,6 @@ struct PostgrestMutationTests {
 
   @Test
   func singleRowInsertSendsAnObjectAndNoColumnsParameter() async throws {
-    // The `columns` parameter exists to reconcile rows that encode differently. One row cannot
-    // disagree with itself, so the single-row path must stay as it was.
     let capture = QueryCapture()
     _ = try await capture.client.from(Todo.self)
       .insert(Todo.Draft(task: "buy milk", isDone: nil)).execute()
@@ -162,9 +216,6 @@ struct PostgrestMutationTests {
 
   @Test
   func bulkInsertNamesTheUnionOfColumnsAcrossRaggedRows() async throws {
-    // A draft omits a nil optional rather than sending `null`, so these two rows encode different
-    // key sets. Without the union, PostgREST reads the column list off the first row and drops
-    // `is_done` from the second — the whole reason the parameter is sent.
     let capture = QueryCapture()
     _ = try await capture.client.from(Todo.self)
       .insert([Todo.Draft(task: "a", isDone: nil), Todo.Draft(task: "b", isDone: true)])
@@ -174,9 +225,6 @@ struct PostgrestMutationTests {
 
   @Test
   func bulkInsertOfAnEmptyCollectionWritesNothingRatherThanFailing() async throws {
-    // Decided behavior: an empty batch is a request that writes nothing, not an error. The
-    // `columns` parameter has to be left off — `columns=` names one column called "", which
-    // PostgREST rejects, and a no-op that 400s is not a no-op.
     let capture = QueryCapture()
     _ = try await capture.client.from(Todo.self).insert([Todo.Draft]()).execute()
     #expect(capture.bodyString == "[]")
@@ -185,8 +233,6 @@ struct PostgrestMutationTests {
 
   @Test
   func bulkInsertTakesAnyCollection() async throws {
-    // `some Collection` rather than `[Draft]`, so a slice reaches the wire without the caller
-    // rebuilding an array.
     let rows = [Todo.Draft(task: "a"), Todo.Draft(task: "b"), Todo.Draft(task: "c")]
     let capture = QueryCapture()
     _ = try await capture.client.from(Todo.self).insert(rows[1...]).execute()
@@ -244,5 +290,71 @@ struct PostgrestMutationTests {
     _ = try await capture.client.from(Todo.self).upsert([Todo.Draft]()).execute()
     #expect(capture.bodyString == "[]")
     #expect(capture.query?.contains("columns") != true)
+  }
+
+  @Test
+  func maxAffectedComposesWithReturning() async throws {
+    let capture = QueryCapture(body: #"[{"id":1,"task":"done","is_done":true}]"#)
+    _ = try await capture.client.from(Todo.self)
+      .update { $0.isDone = true }.where { $0.id.eq(1) }
+      .maxAffected(5)
+      .returning()
+      .execute()
+    let prefer = capture.header("Prefer") ?? ""
+    #expect(prefer.contains("handling=strict"))
+    #expect(prefer.contains("max-affected=5"))
+    #expect(prefer.contains("return=representation"))
+  }
+
+  @Test
+  func maxAffectedCalledTwiceReplacesItsOwnValueOnly() async throws {
+    let capture = QueryCapture()
+    _ = try await capture.client.from(Todo.self)
+      .update { $0.isDone = true }.where { $0.id.eq(1) }
+      .maxAffected(1)
+      .maxAffected(5)
+      .execute()
+    let prefer = capture.header("Prefer") ?? ""
+    #expect(prefer.contains("max-affected=5"))
+    #expect(prefer.contains("max-affected=1") == false)
+    #expect(prefer.contains("handling=strict"))
+  }
+
+  @Test
+  func maxAffectedOnDelete() async throws {
+    let capture = QueryCapture()
+    _ = try await capture.client.from(Todo.self)
+      .delete().where { $0.id.eq(1) }
+      .maxAffected(1)
+      .execute()
+    let prefer = capture.header("Prefer") ?? ""
+    #expect(prefer.contains("handling=strict"))
+    #expect(prefer.contains("max-affected=1"))
+  }
+
+  @Test
+  func dryRunSendsTxRollback() async throws {
+    let capture = QueryCapture()
+    _ = try await capture.client.from(Todo.self)
+      .delete().where { $0.id.eq(1) }
+      .dryRun()
+      .execute()
+    #expect(capture.header("Prefer") == "return=minimal,tx=rollback")
+  }
+
+  @Test
+  func dryRunComposesWithReturningAndMaxAffected() async throws {
+    let capture = QueryCapture(body: #"[{"id":1,"task":"done","is_done":true}]"#)
+    _ = try await capture.client.from(Todo.self)
+      .update { $0.isDone = true }.where { $0.id.eq(1) }
+      .maxAffected(5)
+      .dryRun()
+      .returning()
+      .execute()
+    let prefer = capture.header("Prefer") ?? ""
+    #expect(prefer.contains("handling=strict"))
+    #expect(prefer.contains("max-affected=5"))
+    #expect(prefer.contains("tx=rollback"))
+    #expect(prefer.contains("return=representation"))
   }
 }

@@ -12,7 +12,7 @@ import Testing
 
 @Suite
 struct PostgrestFilterPatternTests {
-  struct Todo: PostgrestRelation {
+  struct Todo: _PostgrestRelation {
     static let relationName = "todos"
     static let selectString = "*"
 
@@ -21,15 +21,15 @@ struct PostgrestFilterPatternTests {
     var note: String?
 
     struct Columns: Sendable {
-      let id = PostgrestColumn<Todo, Int>("id")
-      let task = PostgrestColumn<Todo, String>("task")
-      let note = PostgrestNullableColumn<Todo, String>("note")
+      let id = _PostgrestColumn<Todo, Int>("id")
+      let task = _PostgrestColumn<Todo, String>("task")
+      let note = _PostgrestNullableColumn<Todo, String>("note")
     }
 
     static let columns = Columns()
   }
 
-  private func rendered(_ filter: PostgrestFilter<Todo>) -> String {
+  private func rendered(_ filter: _PostgrestFilter<Todo>) -> String {
     filter.queryItems().map { "\($0.name)=\($0.value ?? "")" }.joined(separator: "&")
   }
 
@@ -42,7 +42,6 @@ struct PostgrestFilterPatternTests {
     #expect(rendered(task.regexIMatch("^jo")) == "task=imatch.^jo")
   }
 
-  /// The multi-pattern forms take a braced array literal, not a parenthesised list.
   @Test
   func multiPatternOperatorsRenderABracedArray() {
     let task = Todo.columns.task
@@ -52,8 +51,6 @@ struct PostgrestFilterPatternTests {
     #expect(rendered(task.ilikeAnyOf(["a%"])) == "task=ilike(any).{a%}")
   }
 
-  /// An empty list reaches the server as an empty literal rather than being short-circuited: for
-  /// `all` that is vacuously true and matches every row, for `any`/`in` it matches none.
   @Test
   func emptyListsRenderAnEmptyLiteral() {
     #expect(rendered(Todo.columns.task.likeAllOf([])) == "task=like(all).{}")
@@ -61,39 +58,30 @@ struct PostgrestFilterPatternTests {
     #expect(rendered(Todo.columns.id.in([])) == "id=in.()")
   }
 
-  /// There is no `notIn`; `!` covers it.
   @Test
   func listOperatorsRenderAParenthesisedList() {
     #expect(rendered(Todo.columns.id.in([1, 2, 3])) == "id=in.(1,2,3)")
     #expect(rendered(!Todo.columns.id.in([1, 2])) == "id=not.in.(1,2)")
   }
 
-  /// List operands are escaped, unlike single values at top level: a comma splits the list, and a
-  /// parenthesis silently matches nothing.
   @Test
   func listMembersAreEscaped() {
     #expect(rendered(Todo.columns.task.in(["a,b"])) == "task=in.(\"a,b\")")
     #expect(rendered(Todo.columns.task.in(["p(q)", "Ada"])) == "task=in.(\"p(q)\",Ada)")
   }
 
-  /// A comma splits one pattern into two, and a brace corrupts the literal's delimiters. The
-  /// brace case is what distinguishes the array escaper from the filter escaper here — swapping
-  /// them would leave a stray `{` unquoted while the paren case still passed.
   @Test
   func multiPatternMembersAreEscaped() {
     #expect(rendered(Todo.columns.task.likeAnyOf(["a,%"])) == "task=like(any).{\"a,%\"}")
     #expect(rendered(Todo.columns.task.likeAnyOf(["a{b"])) == "task=like(any).{\"a{b\"}")
   }
 
-  /// A nullable text column reaches the same declarations: its `Value` is the wrapped `String`.
   @Test
   func nullableColumnsTakePatternAndListOperators() {
     #expect(rendered(Todo.columns.note.like("Jo%")) == "note=like.Jo%")
     #expect(rendered(Todo.columns.note.in(["a", "b"])) == "note=in.(a,b)")
   }
 
-  /// `in`'s own `(…)` must not be re-escaped inside a group: `or=(id.in."(2,3)",id.eq.4)` is
-  /// a `PGRST100`. Reproduces with no special characters at all.
   @Test
   func inKeepsItsListParensBareInsideAGroup() {
     #expect(
@@ -101,8 +89,6 @@ struct PostgrestFilterPatternTests {
         == "or=(id.in.(2,3),id.eq.4)")
   }
 
-  /// A negated `in` inside a group follows the leaf rule, `not.` after the column, and its list
-  /// parens stay bare there too.
   @Test
   func negatedInInsideAGroupKeepsItsListParensBare() {
     #expect(
@@ -110,7 +96,6 @@ struct PostgrestFilterPatternTests {
         == "or=(id.not.in.(2,3),id.eq.4)")
   }
 
-  /// Members are still escaped inside a group. Only the list's own outer parens stay bare.
   @Test
   func inEscapesItsListMembersInsideAGroup() {
     #expect(
@@ -118,8 +103,6 @@ struct PostgrestFilterPatternTests {
         == "or=(task.in.(\"p(q)\",Ada),id.eq.4)")
   }
 
-  /// PostgREST tolerates the redundant quoting `group()` adds around a `{…}` operand, so the
-  /// multi-pattern operators need no exemption. Pinned so the escaping path cannot change it.
   @Test
   func multiPatternOperatorsComposeWithOr() {
     let task = Todo.columns.task

@@ -7,7 +7,7 @@
 
 import FacebookLogin
 import GoogleSignIn
-import Supabase
+@_spi(Experimental) import Supabase
 import SwiftUI
 import UIKit
 
@@ -59,6 +59,9 @@ struct ExamplesApp: App {
         .environment(AuthController())
         .onOpenURL {
           supabase.handle($0)
+        }
+        .task {
+          _ = try? await supabase.storage.resumableUploads.resumeAll()
         }
     }
   }

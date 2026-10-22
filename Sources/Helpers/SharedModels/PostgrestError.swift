@@ -49,6 +49,10 @@ public struct PostgrestError: SupabaseError {
     /// The SDK refused to send the request, e.g. RPC params that are not a JSON object for a
     /// `GET`, or two incompatible transforms on one query. Fix the call. No request was sent.
     public static let invalidRequest: Kind = "invalidRequest"
+    /// The access-token provider (`PostgrestClient.Configuration.accessToken`) threw, so the
+    /// request could not be authenticated and was not sent. ``PostgrestError/underlyingError`` is
+    /// the provider's error, for example an Auth refresh failure.
+    public static let accessToken: Kind = "accessToken"
   }
 
   /// The error body PostgREST returns for a rejected request, with its wire field names.
@@ -67,6 +71,29 @@ public struct PostgrestError: SupabaseError {
       self.message = message
       self.details = details
       self.hint = hint
+    }
+
+    private enum CodingKeys: String, CodingKey {
+      case code, message, details, hint
+    }
+
+    public init(from decoder: any Decoder) throws {
+      let container = try decoder.container(keyedBy: CodingKeys.self)
+      code = try container.decodeIfPresent(String.self, forKey: .code)
+      message = try container.decode(String.self, forKey: .message)
+      hint = try container.decodeIfPresent(String.self, forKey: .hint)
+      switch try container.decodeIfPresent(JSONValue.self, forKey: .details) {
+      case nil, .null:
+        details = nil
+      case .string(let text):
+        details = text
+      case let structured?:
+        // Not always a string: an ambiguous embed (`PGRST201`) sends an array of candidate
+        // relationships. Kept as JSON text so the field stays a `String` and nothing is dropped.
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        details = String(decoding: try encoder.encode(structured), as: UTF8.self)
+      }
     }
   }
 

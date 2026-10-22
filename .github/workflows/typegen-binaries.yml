@@ -1,0 +1,111 @@
+# Builds the supabase-typegen executable and, given a tag, attaches it to that GitHub release.
+# release.yml calls it for every release release-please creates. A pull request that touches the
+# tool or this file runs it without a tag: the binaries are built, checked and kept as workflow
+# artifacts, and no release is changed.
+name: supabase-typegen binaries
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to attach the binaries to, for example v2.55.1
+        required: true
+  pull_request:
+    paths:
+      - tools/supabase-typegen/**
+      - .github/workflows/typegen-binaries.yml
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    name: Build (macOS universal)
+    runs-on: blacksmith-6vcpu-macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag }}
+      - name: Select Xcode 26.4
+        run: sudo xcode-select -s /Applications/Xcode_26.4.app
+      - name: Build
+        run: |
+          swift build -c release --arch arm64 --arch x86_64 --package-path tools/supabase-typegen
+          bin=$(swift build -c release --arch arm64 --arch x86_64 --package-path tools/supabase-typegen --show-bin-path)
+          echo "BIN=$bin/supabase-typegen" >> "$GITHUB_ENV"
+      - name: Check
+        run: |
+          archs=" $(lipo -archs "$BIN") "
+          [[ $archs == *" arm64 "* && $archs == *" x86_64 "* ]] || { echo "::error::archs:$archs"; exit 1; }
+          "$BIN" < tools/supabase-typegen/Tests/SupabaseTypegenTests/Fixtures/generator_metadata.json > /dev/null
+          "$BIN" --version
+      - name: Package
+        run: tar -czf supabase-typegen-macos-universal.tar.gz -C "$(dirname "$BIN")" supabase-typegen
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: supabase-typegen-macos-universal
+          path: supabase-typegen-macos-universal.tar.gz
+
+  linux:
+    name: Build (Linux x86_64)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # jammy's glibc, so the binary also runs on older distributions than the build image.
+    container: swift:6.2-jammy
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag }}
+      - name: Build
+        run: |
+          swift build -c release --static-swift-stdlib --package-path tools/supabase-typegen
+          bin=$(swift build -c release --static-swift-stdlib --package-path tools/supabase-typegen --show-bin-path)
+          echo "BIN=$bin/supabase-typegen" >> "$GITHUB_ENV"
+      - name: Check
+        run: |
+          "$BIN" < tools/supabase-typegen/Tests/SupabaseTypegenTests/Fixtures/generator_metadata.json > /dev/null
+          "$BIN" --version
+      - name: Package
+        run: tar -czf supabase-typegen-linux-x86_64.tar.gz -C "$(dirname "$BIN")" supabase-typegen
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: supabase-typegen-linux-x86_64
+          path: supabase-typegen-linux-x86_64.tar.gz
+
+  publish:
+    name: ${{ inputs.tag && 'Publish' || 'Verify' }}
+    needs: [macos, linux]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ inputs.tag }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: supabase-typegen-*
+          merge-multiple: true
+      # A runner with no Swift toolchain, so this fails if the binary still needs the Swift runtime.
+      - name: Run the Linux binary outside the Swift image
+        run: |
+          tar -xzf supabase-typegen-linux-x86_64.tar.gz
+          version=$(./supabase-typegen --version)
+          echo "supabase-typegen --version: $version"
+          if [ -n "$TAG" ] && [ "$version" != "${TAG#v}" ]; then
+            echo "::error::the binary reports $version, but the release is $TAG"
+            exit 1
+          fi
+      - name: Attach to the release
+        if: inputs.tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release upload "$TAG" --clobber --repo "$GITHUB_REPOSITORY"
+          supabase-typegen-macos-universal.tar.gz supabase-typegen-linux-x86_64.tar.gz

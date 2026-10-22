@@ -9,7 +9,7 @@ import ConcurrencyExtras
 import Foundation
 import Testing
 
-@testable import Supabase
+@_spi(Experimental) @testable import Supabase
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -41,11 +41,11 @@ private final class TypedSchemaCapturingProtocol: URLProtocol {
 
 @Suite(.serialized)
 struct SupabaseClientTypedSchemaTests {
-  enum PrivateSchema: PostgrestSchema {
+  enum PrivateSchema: _PostgrestSchema {
     static let name = "private"
   }
 
-  struct Secret: PostgrestRelation {
+  struct Secret: _PostgrestRelation {
     typealias Schema = PrivateSchema
     static let relationName = "secrets"
     static let selectString = "*"
@@ -53,7 +53,7 @@ struct SupabaseClientTypedSchemaTests {
     var id: Int
 
     struct Columns: Sendable {
-      let id = PostgrestColumn<Secret, Int>("id")
+      let id = _PostgrestColumn<Secret, Int>("id")
     }
 
     static let columns = Columns()

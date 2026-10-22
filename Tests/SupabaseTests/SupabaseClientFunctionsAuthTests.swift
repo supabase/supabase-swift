@@ -1,5 +1,6 @@
 import ConcurrencyExtras
 import Foundation
+import HTTPTypes
 import Testing
 
 @testable import Supabase
@@ -8,9 +9,6 @@ import Testing
   import FoundationNetworking
 #endif
 
-/// Single-purpose capturing protocol, deliberately not the shared `RequestCapturingProtocol`:
-/// that's also used by `TracingTests` (a `.serialized` suite that still runs concurrently with
-/// this one), so touching its static storage here would race.
 private final class FunctionsAuthCapturingProtocol: URLProtocol {
   private static let storage = LockIsolated<URLRequest?>(nil)
   static var capturedRequest: URLRequest? {
@@ -40,10 +38,6 @@ private func makeFunctionsAuthCapturingSession() -> URLSession {
   return URLSession(configuration: config)
 }
 
-/// `.serialized`: the three tests below share `FunctionsAuthCapturingProtocol`'s static request
-/// log, which would otherwise race against itself under Swift Testing's default parallel
-/// execution. That storage is private to this file, so — unlike the shared `RequestCapturingProtocol`
-/// — no other suite can race against it.
 @Suite(.serialized)
 struct SupabaseClientFunctionsAuthTests {
   @Test
@@ -53,10 +47,6 @@ struct SupabaseClientFunctionsAuthTests {
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       options: SupabaseClientOptions(
-        // A custom `accessToken` closure stands in for a real signed-in session, without needing
-        // to drive the full sign-in flow: it's what actually exercises the bug, since the
-        // transport-level auth injection this test guards against only fires when a live token
-        // is available to inject.
         auth: SupabaseClientOptions.AuthOptions(
           storage: AuthLocalStorageMock(),
           accessToken: { "live-session-token" }
@@ -69,7 +59,7 @@ struct SupabaseClientFunctionsAuthTests {
 
     _ = try? await client.functions.invoke(
       "hello-world",
-      options: FunctionInvokeOptions(headers: ["Authorization": "Bearer per-call-override"])
+      options: FunctionInvokeOptions(headers: [.authorization: "Bearer per-call-override"])
     )
 
     let request = try #require(FunctionsAuthCapturingProtocol.capturedRequest)
@@ -97,6 +87,52 @@ struct SupabaseClientFunctionsAuthTests {
 
     let request = try #require(FunctionsAuthCapturingProtocol.capturedRequest)
     #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer PUBLISHABLE_KEY")
+  }
+
+  @Test
+  func functionsInvokeWithNewFormatKeyAndNoSessionSendsNoBearer() async throws {
+    FunctionsAuthCapturingProtocol.capturedRequest = nil
+    let client = SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "sb_publishable_abc123",
+      options: SupabaseClientOptions(
+        auth: SupabaseClientOptions.AuthOptions(
+          storage: AuthLocalStorageMock(),
+          automaticallyRefreshesToken: false
+        ),
+        global: SupabaseClientOptions.GlobalOptions(
+          http: .init(transport: URLSessionTransport(session: makeFunctionsAuthCapturingSession()))
+        )
+      )
+    )
+
+    try await client.functions.invoke("hello-world")
+
+    let request = try #require(FunctionsAuthCapturingProtocol.capturedRequest)
+    #expect(request.value(forHTTPHeaderField: "Authorization") == nil)
+    #expect(request.value(forHTTPHeaderField: "apikey") == "sb_publishable_abc123")
+  }
+
+  @Test
+  func functionsInvokeThrowsTheProviderErrorUnwrapped() async throws {
+    struct TokenError: Error {}
+    let client = SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      options: SupabaseClientOptions(
+        auth: SupabaseClientOptions.AuthOptions(
+          storage: AuthLocalStorageMock(),
+          accessToken: { throw TokenError() }
+        ),
+        global: SupabaseClientOptions.GlobalOptions(
+          http: .init(transport: URLSessionTransport(session: makeFunctionsAuthCapturingSession()))
+        )
+      )
+    )
+
+    await #expect(throws: TokenError.self) {
+      try await client.functions.invoke("hello-world")
+    }
   }
 
   @Test

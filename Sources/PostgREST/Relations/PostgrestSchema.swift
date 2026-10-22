@@ -11,19 +11,19 @@
 /// relation at it with `@Table("secrets", schema: PrivateSchema.self)`:
 ///
 /// ```swift
-/// enum PrivateSchema: PostgrestSchema {
+/// enum PrivateSchema: _PostgrestSchema {
 ///   static let name = "private"
 /// }
 /// ```
 ///
 /// Naming the schema is what lets the compiler reject a relation queried through the wrong one.
-/// See ``PostgrestSchemaScope``.
-public protocol PostgrestSchema: Sendable {
+/// See ``_PostgrestSchemaScope``.
+public protocol _PostgrestSchema: Sendable {
   /// The schema's name as PostgREST addresses it, for example `"private"`.
   static var name: String { get }
 }
 
 /// The schema a relation belongs to when it does not name one, matching PostgREST's own default.
-public enum PublicSchema: PostgrestSchema {
+public enum _PublicSchema: _PostgrestSchema {
   public static let name = "public"
 }

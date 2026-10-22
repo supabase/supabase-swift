@@ -10,7 +10,7 @@ import SwiftUI
 
 struct PostgresChangesView: View {
   @State var events: [RealtimeEvent] = []
-  @State var channel: RealtimeChannelV2?
+  @State var channel: RealtimeChannel?
   @State var isSubscribed = false
   @State var error: Error?
 
@@ -81,34 +81,33 @@ struct PostgresChangesView: View {
   }
 
   func subscribe() {
-    let channel = supabase.channel("postgres-changes-example")
-
     Task {
       do {
-        let insertions = channel.postgresChange(
+        let channel = await supabase.channel("postgres-changes-example")
+
+        let insertions = await channel.postgresChanges(
           InsertAction.self,
           schema: "public",
           table: "todos"
         )
 
-        let updates = channel.postgresChange(
+        let updates = await channel.postgresChanges(
           UpdateAction.self,
           schema: "public",
           table: "todos"
         )
 
-        let deletes = channel.postgresChange(
+        let deletes = await channel.postgresChanges(
           DeleteAction.self,
           schema: "public",
           table: "todos"
         )
 
-        try await channel.subscribeWithError()
+        try await channel.subscribe()
 
         self.channel = channel
         isSubscribed = true
 
-        // Handle insertions
         Task {
           for await insertion in insertions {
             await MainActor.run {
@@ -124,7 +123,6 @@ struct PostgresChangesView: View {
           }
         }
 
-        // Handle updates
         Task {
           for await update in updates {
             await MainActor.run {
@@ -140,7 +138,6 @@ struct PostgresChangesView: View {
           }
         }
 
-        // Handle deletes
         Task {
           for await _ in deletes {
             await MainActor.run {

@@ -8,7 +8,7 @@
 import Foundation
 import Helpers
 
-extension PostgrestFilterableRequest {
+extension _PostgrestFilterableRequest {
   /// Scopes the request by a filter.
   ///
   /// The closure receives the relation's column namespace. Each PostgREST operator is a method
@@ -36,14 +36,17 @@ extension PostgrestFilterableRequest {
   ///
   /// - Parameter build: Builds the filter from the relation's columns.
   /// - Returns: A new request with the filter applied. The receiver is unchanged.
-  public func `where`(_ build: (Relation.Columns) -> PostgrestFilter<Relation>) -> Self {
+  public func `where`(_ build: (Relation.Columns) -> _PostgrestFilter<Relation>) -> Self {
     var filtered = self
-    filtered.request.query.append(contentsOf: build(Relation.columns).queryItems())
+    let filter = build(Relation.columns)
+    filtered.request.query.append(contentsOf: filter.queryItems())
+    filtered.request.invalidFilterReason =
+      filtered.request.invalidFilterReason ?? filter.invalidFilterReason
     return filtered
   }
 }
 
-extension PostgrestQuery {
+extension _PostgrestQuery {
   /// Sorts the result.
   ///
   /// The direction is spelled on the column, the same way an operator is:
@@ -57,7 +60,7 @@ extension PostgrestQuery {
   ///
   /// - Parameter build: Builds the sort key from the relation's columns.
   public func order(
-    _ build: (R.Columns) -> PostgrestOrdering<R>
+    _ build: (R.Columns) -> _PostgrestOrdering<R>
   ) -> Self {
     appendingOrder(build(R.columns).rendered)
   }
@@ -70,32 +73,20 @@ extension PostgrestQuery {
   /// .order { $0.dueDate.nulls(.first) }    // order=due_at.nullsfirst
   /// ```
   ///
-  /// Chain ``PostgrestOrderableExpression/asc()`` or ``PostgrestOrderableExpression/desc()`` when
+  /// Chain ``_PostgrestOrderableExpression/asc()`` or ``_PostgrestOrderableExpression/desc()`` when
   /// the direction matters. Direction and placement are independent on the wire, so
-  /// ``PostgrestOrderableExpression/nulls(_:)`` sets a placement without choosing one.
-  public func order<E: PostgrestOrderableExpression>(
+  /// ``_PostgrestOrderableExpression/nulls(_:)`` sets a placement without choosing one.
+  public func order<E: _PostgrestOrderableExpression>(
     _ build: (R.Columns) -> E
   ) -> Self where E.Root == R {
     appendingOrder(
-      PostgrestOrdering<R>(column: build(R.columns).postgrestExpression, ascending: nil).rendered
+      _PostgrestOrdering<R>(column: build(R.columns).postgrestExpression, ascending: nil).rendered
     )
   }
 
-  /// Merges one rendered sort key into the single `order` parameter PostgREST expects.
-  ///
-  /// A merge, not a second parameter: PostgREST honours only the first `order` it sees and
-  /// silently ignores the rest, so `order=name.asc&order=id.desc` sorts by name alone. Only
-  /// `order=name.asc,id.desc` applies both.
-  ///
   private func appendingOrder(_ value: String) -> Self {
     var query = self
-    if let index = query.request.query.firstIndex(where: { $0.name == "order" }),
-      let existing = query.request.query[index].value
-    {
-      query.request.query[index] = URLQueryItem(name: "order", value: "\(existing),\(value)")
-    } else {
-      query.request.query.append(URLQueryItem(name: "order", value: value))
-    }
+    query.request.query.mergeOrder(value)
     return query
   }
 
@@ -115,5 +106,21 @@ extension PostgrestQuery {
       URLQueryItem(name: "offset", value: "\(bounds.lowerBound)"))
     query.request.query.appendOrUpdate(URLQueryItem(name: "limit", value: "\(bounds.count)"))
     return query
+  }
+}
+
+extension [URLQueryItem] {
+  /// Merges one rendered sort key into the single `order` parameter PostgREST expects.
+  ///
+  /// A merge, not a second parameter: PostgREST honours only the first `order` it sees and
+  /// silently ignores the rest, so `order=name.asc&order=id.desc` sorts by name alone. Only
+  /// `order=name.asc,id.desc` applies both. The same rule holds inside an embedded scope, where
+  /// the alias prefix is added afterwards.
+  mutating func mergeOrder(_ value: String) {
+    if let index = firstIndex(where: { $0.name == "order" }), let existing = self[index].value {
+      self[index] = URLQueryItem(name: "order", value: "\(existing),\(value)")
+    } else {
+      append(URLQueryItem(name: "order", value: value))
+    }
   }
 }

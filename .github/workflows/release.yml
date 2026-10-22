@@ -23,6 +23,9 @@ jobs:
        github.event.workflow_run.event == 'push' &&
        github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
       - name: Generate token
         id: app-token
@@ -36,3 +39,10 @@ jobs:
         with:
           target-branch: ${{ github.event_name == 'workflow_dispatch' && github.ref_name || github.event.workflow_run.head_branch }}
           token: ${{ steps.app-token.outputs.token }}
+
+  typegen-binaries:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    uses: ./.github/workflows/typegen-binaries.yml
+    with:
+      tag: ${{ needs.release-please.outputs.tag_name }}

@@ -10,7 +10,7 @@ import Foundation
 import TestHelpers
 import Testing
 
-@testable import PostgREST
+@_spi(Experimental) @testable import PostgREST
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -68,6 +68,45 @@ struct PostgrestClientAccessTokenTests {
   }
 
   @Test
+  func inFlightRequestKeepsItsResolvedTokenAcrossALaterTokenMutation() async throws {
+    let token = LockIsolated("first.token")
+    let capturedAuthorizationHeaders = LockIsolated([String]())
+    let firstRequestIsInFlight = LockIsolated(false)
+    let firstRequestMayFinish = LockIsolated(false)
+
+    let sut = PostgrestClient(
+      url: url,
+      http: .init(
+        transport: ClosureTransport { request, _ in
+          capturedAuthorizationHeaders.withValue {
+            $0.append(request.headerFields[.authorization] ?? "")
+          }
+          if !firstRequestIsInFlight.value {
+            firstRequestIsInFlight.setValue(true)
+            await waitUntil { firstRequestMayFinish.value }
+          }
+          return self.okResponse()
+        }),
+      accessToken: { token.value }
+    )
+
+    async let first: Void = {
+      _ = try await sut.from("todos").select().execute()
+    }()
+
+    await waitUntil { firstRequestIsInFlight.value }
+    token.setValue("second.token")
+
+    _ = try await sut.from("todos").select().execute()
+    firstRequestMayFinish.setValue(true)
+    try await first
+
+    #expect(
+      capturedAuthorizationHeaders.value == ["Bearer first.token", "Bearer second.token"]
+    )
+  }
+
+  @Test
   func explicitAuthorizationHeaderOverridesAccessToken() async throws {
     let capturedHeaders = LockIsolated(HTTPFields())
 
@@ -90,7 +129,7 @@ struct PostgrestClientAccessTokenTests {
   }
 
   @Test
-  func accessTokenErrorPropagatesToExecute() async throws {
+  func accessTokenErrorFailsTheRequestAsAPostgrestError() async throws {
     struct TokenError: Error, Equatable {}
 
     let sut = PostgrestClient(
@@ -103,9 +142,41 @@ struct PostgrestClientAccessTokenTests {
       accessToken: { throw TokenError() }
     )
 
-    await #expect(throws: TokenError.self) {
+    let error = await #expect(throws: PostgrestError.self) {
       try await sut.from("todos").select().execute()
     }
+    #expect(error?.kind == .accessToken)
+    #expect(error?.underlyingError is TokenError)
+  }
+
+  @Test
+  func accessTokenErrorFailsTheTypedQueryTheSameWay() async throws {
+    struct TokenError: Error, Equatable {}
+    struct Todo: _PostgrestRelation {
+      static let relationName = "todos"
+      static let selectString = "*"
+      var id: Int
+      struct Columns: Sendable {
+        let id = _PostgrestColumn<Todo, Int>("id")
+      }
+      static let columns = Columns()
+    }
+
+    let sut = PostgrestClient(
+      url: url,
+      http: .init(
+        transport: ClosureTransport { _, _ in
+          Issue.record("transport should not be called when the access token provider throws")
+          return self.okResponse()
+        }),
+      accessToken: { throw TokenError() }
+    )
+
+    let error = await #expect(throws: PostgrestError.self) {
+      try await sut.from(Todo.self).select().execute()
+    }
+    #expect(error?.kind == .accessToken)
+    #expect(error?.underlyingError is TokenError)
   }
 
   @Test

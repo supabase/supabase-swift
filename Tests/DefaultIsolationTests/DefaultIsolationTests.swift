@@ -25,6 +25,14 @@ struct DefaultIsolationTests {
     func remove(key: String) throws {}
   }
 
+  struct Prompt: Encodable {
+    var text: String
+  }
+
+  struct Answer: Decodable {
+    var text: String
+  }
+
   final class Model {
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
@@ -37,10 +45,16 @@ struct DefaultIsolationTests {
       let session = try await client.auth.signIn(email: "user@example.com", password: "password")
       _ = session.accessToken
       rows = try await client.from("table").select().execute().value
-      let channel = client.channel("room")
-      for await status in channel.statusChange { _ = status }
+      let channel = await client.channel("room")
+      for await status in await channel.statusChanges() { _ = status }
       try await client.storage.from("bucket").upload(path: "key", data: Data())
       _ = try await client.functions.invoke("function")
+      let answer: Answer = try await client.functions.invoke(
+        "function", body: .json(Prompt(text: "hi")))
+      _ = answer
+      _ = try await client.functions.invoke("function", as: Answer.self)
+      let streamed = try await client.functions.stream("function")
+      for try await chunk in streamed.body { _ = chunk }
       for await (event, session) in client.auth.authStateChanges { _ = (event, session) }
     }
   }

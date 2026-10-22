@@ -8,11 +8,11 @@
 import Foundation
 import Testing
 
-@testable import PostgREST
+@_spi(Experimental) @testable import PostgREST
 
 @Suite
 struct PostgrestQueryTests {
-  struct Todo: PostgrestWritableRelation {
+  struct Todo: _PostgrestWritableRelation {
     static let relationName = "todos"
     static let selectString = "*"
 
@@ -20,8 +20,8 @@ struct PostgrestQueryTests {
     var task: String
 
     struct Columns: Sendable {
-      let id = PostgrestColumn<Todo, Int>("id")
-      let isDone = PostgrestColumn<Todo, Bool>("is_done")
+      let id = _PostgrestColumn<Todo, Int>("id")
+      let isDone = _PostgrestColumn<Todo, Bool>("is_done")
     }
 
     static let columns = Columns()
@@ -36,7 +36,6 @@ struct PostgrestQueryTests {
     let capture = QueryCapture(responseHeaders: ["Content-Range": "*/42"])
     let total = try await capture.client.from(Todo.self).select().count(.exact)
     #expect(total == 42)
-    // `head: true` is the whole point — the body is never sent, so the count costs no rows.
     #expect(capture.httpMethod == "HEAD")
     #expect(capture.header("Prefer")?.contains("count=exact") == true)
   }
@@ -52,7 +51,6 @@ struct PostgrestQueryTests {
 
   @Test
   func countThrowsWhenTheServerSendsNoTotal() async throws {
-    // No `Content-Range`, so there is no number to return and `Int` cannot be honoured.
     let capture = QueryCapture()
     await #expect(throws: PostgrestError.self) {
       _ = try await capture.client.from(Todo.self).select().count(.exact)
@@ -69,7 +67,6 @@ struct PostgrestQueryTests {
       .execute(count: .exact)
     #expect(response.value.count == 1)
     #expect(response.count == 42)
-    // Still a GET: this is the page *and* the total from one round trip.
     #expect(capture.httpMethod == "GET")
     #expect(capture.header("Prefer")?.contains("count=exact") == true)
   }
@@ -94,8 +91,6 @@ struct PostgrestQueryTests {
 
   @Test
   func aMutationCountComposesWithReturning() async throws {
-    // The count preference is set at send time, after `returning()` has written the header, and
-    // `appendOrUpdate` replaces only the `return=` component. So the two do not clobber.
     let capture = QueryCapture(
       body: #"[{"id":1,"task":"buy milk"}]"#,
       responseHeaders: ["Content-Range": "0-0/1"]
@@ -111,7 +106,6 @@ struct PostgrestQueryTests {
 
   @Test
   func whereAfterOrderStillFilters() async throws {
-    // The modifiers are order-free: `order` no longer moves the query into a phase without `where`.
     let capture = QueryCapture()
     _ = try await capture.client.from(Todo.self).select()
       .order { $0.id.asc() }.limit(5).where { $0.isDone.eq(false) }.execute()
@@ -142,7 +136,6 @@ struct PostgrestQueryTests {
     let todo: Todo? = try await capture.client.from(Todo.self).select().maybeSingle().execute()
       .value
     #expect(todo?.task == "buy milk")
-    // The capability spec: the default media type, with the row count checked on the client.
     #expect(capture.header("Accept") == "application/json")
   }
 
@@ -164,7 +157,6 @@ struct PostgrestQueryTests {
 
   @Test
   func singleThrowsForNoRows() async throws {
-    // Only an optional output turns PGRST116 into a value. `single()` keeps it an error.
     let capture = QueryCapture(
       body: #"""
         {"code":"PGRST116","message":"Cannot coerce the result to a single JSON object",\#
@@ -194,7 +186,7 @@ struct PostgrestQueryTests {
   @Test
   func whereWorksAfterReturning() async throws {
     let capture = QueryCapture(body: #"{"id":1,"task":"buy milk"}"#)
-    let todo = try await capture.client.from(Todo.self).delete().returning()
+    let todo = try await capture.client.from(Todo.self).delete().all().returning()
       .where { $0.id.eq(1) }.single().execute().value
     #expect(todo.id == 1)
     #expect(capture.httpMethod == "DELETE")

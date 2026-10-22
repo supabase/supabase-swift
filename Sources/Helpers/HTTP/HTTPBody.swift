@@ -84,8 +84,6 @@ public final class HTTPBody: AsyncSequence, @unchecked Sendable {
     let attributes = try FileManager.default.attributesOfItem(atPath: fileURL.path)
     let size = (attributes[.size] as? NSNumber)?.int64Value ?? 0
     self.init(storage: .file(fileURL), length: .known(size), iterationBehavior: .multiple) {
-      // Opened on the first pull and read 64 KiB per pull, so a consumer that stops early never
-      // reads the rest of the file. `FileHandle` closes its descriptor when it is released.
       let handle = Box<FileHandle?>(nil)
       return AsyncThrowingStream {
         let open = try handle.value ?? FileHandle(forReadingFrom: fileURL)
@@ -156,11 +154,17 @@ public final class HTTPBody: AsyncSequence, @unchecked Sendable {
     var base: AsyncThrowingStream<ArraySlice<UInt8>, any Error>.Iterator
 
     /// Advances to the next chunk. Throws ``HTTPBodyAlreadyConsumedError`` when a `.single`
-    /// body is iterated a second time.
+    /// body is iterated a second time, and `CancellationError` when the iterating task is
+    /// cancelled, so a body cut short never looks complete.
     // `@concurrent` because `AsyncThrowingStream.Iterator.next(isolation:)` needs macOS 15 /
     // iOS 18; the plain `next()` it calls is `@concurrent`, so `base` cannot stay on the caller.
     @concurrent public mutating func next() async throws -> ArraySlice<UInt8>? {
-      try await base.next()
+      guard let chunk = try await base.next() else {
+        // `AsyncThrowingStream` ends cleanly when its consumer is cancelled.
+        try Task.checkCancellation()
+        return nil
+      }
+      return chunk
     }
   }
 }
@@ -209,7 +213,6 @@ extension Data {
   public init(collecting body: HTTPBody, upTo maxBytes: Int) async throws {
     var data = Data()
     if case .known(let count) = body.length, count > 0 {
-      // The declared length is a hint from the peer; never reserve more than the caller's cap.
       data.reserveCapacity(Int(clamping: Swift.min(count, Int64(maxBytes))))
     }
     for try await chunk in body {
@@ -223,15 +226,46 @@ extension Data {
 }
 
 extension HTTPBody {
-  /// Streams the body to a file, chunk by chunk, creating or truncating it first.
+  /// Streams the body to a file, chunk by chunk, so it never has to fit in memory.
+  ///
+  /// The bytes go to a temporary file next to `fileURL`, which then replaces `fileURL` in one
+  /// move. So `fileURL` holds either its old contents or the whole body, never a partial one, and
+  /// a failed or cancelled write leaves no temporary file behind. The directory must exist.
   public func write(to fileURL: URL) async throws {
-    guard FileManager.default.createFile(atPath: fileURL.path, contents: nil) else {
-      throw CocoaError(.fileWriteUnknown)
-    }
-    let handle = try FileHandle(forWritingTo: fileURL)
-    defer { try? handle.close() }
-    for try await chunk in self {
-      try handle.write(contentsOf: chunk)
+    let fileManager = FileManager.default
+    let temporary = fileURL.deletingLastPathComponent().appendingPathComponent(
+      ".\(fileURL.lastPathComponent).\(UUID().uuidString).download")
+
+    do {
+      guard fileManager.createFile(atPath: temporary.path, contents: nil) else {
+        throw CocoaError(.fileWriteUnknown, userInfo: [NSFilePathErrorKey: temporary.path])
+      }
+      let handle = try FileHandle(forWritingTo: temporary)
+      do {
+        for try await chunk in self {
+          try handle.write(contentsOf: chunk)
+        }
+        try handle.close()
+      } catch {
+        try? handle.close()
+        throw error
+      }
+      #if os(Windows)
+        if fileManager.fileExists(atPath: fileURL.path) {
+          _ = try fileManager.replaceItemAt(fileURL, withItemAt: temporary)
+        } else {
+          try fileManager.moveItem(at: temporary, to: fileURL)
+        }
+      #else
+        // `rename(2)` replaces an existing file atomically. swift-corelibs-foundation's
+        // `replaceItemAt` fails with "The file doesn't exist" when the destination does.
+        guard rename(temporary.path, fileURL.path) == 0 else {
+          throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+        }
+      #endif
+    } catch {
+      try? fileManager.removeItem(at: temporary)
+      throw error
     }
   }
 
@@ -273,6 +307,27 @@ extension HTTPBody {
           onProgress(total.value)
         }
         return chunk
+      }
+    }
+  }
+}
+
+extension HTTPBody {
+  /// Returns a body that passes every error its chunks throw through `transform`. ``length``
+  /// and ``iterationBehavior`` are preserved.
+  package func mapError(_ transform: @escaping @Sendable (any Error) -> any Error) -> HTTPBody {
+    let base = self
+    return HTTPBody(
+      storage: storage, length: length, iterationBehavior: iterationBehavior,
+      onUploadProgress: onUploadProgress
+    ) {
+      let iterator = Box(base.makeAsyncIterator())
+      return AsyncThrowingStream {
+        do {
+          return try await iterator.value.next()
+        } catch {
+          throw transform(error)
+        }
       }
     }
   }

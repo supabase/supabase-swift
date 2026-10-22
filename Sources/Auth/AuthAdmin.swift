@@ -124,7 +124,7 @@ public struct AuthAdmin: Sendable {
     try await api.execute(
       HTTPRequest(
         method: .post,
-        url: url.appendingPathComponent("admin/invite"),
+        url: url.appendingPathComponent("invite"),
         query: [
           (redirectTo ?? redirectToURL).map {
             URLQueryItem(

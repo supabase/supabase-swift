@@ -115,7 +115,6 @@ struct FilteringView: View {
 
       var filtered = supabase.from("todos").select()
 
-      // Apply filter
       switch filterComplete {
       case .all:
         break
@@ -125,7 +124,6 @@ struct FilteringView: View {
         filtered = filtered.eq("is_complete", value: false)
       }
 
-      // Apply sorting
       let query: PostgrestTransformBuilder
       switch sortOrder {
       case .newest:

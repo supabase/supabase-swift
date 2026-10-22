@@ -53,6 +53,15 @@ struct FunctionsExamplesView: View {
         }
       }
 
+      Section("More Examples") {
+        NavigationLink("Streaming Chat") {
+          StreamingChatView()
+        }
+        NavigationLink("Upload a File") {
+          FunctionUploadView()
+        }
+      }
+
       Section("About Edge Functions") {
         VStack(alignment: .leading, spacing: 12) {
           FeaturePoint(
@@ -109,7 +118,7 @@ struct FunctionsExamplesView: View {
 
       let response: HelloWorldResponse = try await supabase.functions.invoke(
         "hello-world",
-        options: FunctionInvokeOptions(body: request)
+        body: .json(request)
       )
 
       result = response.message

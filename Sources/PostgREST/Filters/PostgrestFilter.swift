@@ -8,6 +8,48 @@
 import Foundation
 import Helpers
 
+indirect enum PostgrestFilterNode: Sendable {
+  enum Operand: Sendable {
+    case value(String)
+
+    /// The members of the `(a,b)` list `in` takes, each as its raw value. Members are quoted in
+    /// every position, with the filter escaper rather than the array one: an `in.(…)` list is
+    /// filter-value syntax, and with the array escaper `name=in.(p(q),Ada)` answers 200 with
+    /// zero rows. The list's own parentheses are the operator's grammar and are never quoted.
+    case list([String])
+
+    case `is`(Bool?)
+
+    case invalid(String)
+
+    static func typed(_ value: some PostgrestFilterValue) -> Self {
+      value._typedOperand.map(Self.value) ?? .invalid(Self.noWireForm(value))
+    }
+
+    static func typedList<V: PostgrestFilterValue>(_ values: [V]) -> Self {
+      var members: [String] = []
+      for value in values {
+        guard let member = value._typedOperand else { return .invalid(Self.noWireForm(value)) }
+        members.append(member)
+      }
+      return .list(members)
+    }
+
+    private static func noWireForm(_ value: some PostgrestFilterValue) -> String {
+      "\(value) has no wire form, so the filter cannot be sent."
+    }
+  }
+
+  case comparison(column: String, operator: _PostgrestFilterOperator, operand: Operand)
+
+  case raw(column: String, operand: String)
+
+  case and([PostgrestFilterNode])
+  case or([PostgrestFilterNode])
+  case not(PostgrestFilterNode)
+
+}
+
 /// A filter on a relation.
 ///
 /// Built inside a `where` closure by calling an operator method on a column, then composing the
@@ -22,35 +64,12 @@ import Helpers
 ///
 /// A top-level `&&` renders as separate query parameters, `||` as one `or=(…)`, and an `&&`
 /// nested inside an `||` as `and(…)`.
-public struct PostgrestFilter<R: PostgrestRelation>: Sendable {
-  /// The right-hand side of a comparison, in the shape the operator method received it.
-  ///
-  /// Each shape has its own quoting rule inside `or=(…)`, so the shape is kept and the rule is
-  /// applied when the request is rendered.
-  enum Operand: Sendable {
-    /// One value, as its ``PostgrestFilterValue/rawValue``. Quoted inside a group.
-    case value(String)
-
-    /// The members of the `(a,b)` list `in` takes, each as its raw value. Members are quoted in
-    /// every position, with the filter escaper rather than the array one: an `in.(…)` list is
-    /// filter-value syntax, and with the array escaper `name=in.(p(q),Ada)` answers 200 with
-    /// zero rows. The list's own parentheses are the operator's grammar and are never quoted.
-    case list([String])
-
-    /// The `IS` keyword: `null` for `nil`, otherwise `true` or `false`. Never quoted.
-    case `is`(Bool?)
-  }
-
-  indirect enum Node: Sendable {
-    case comparison(column: String, operator: PostgrestFilterOperator, operand: Operand)
-
-    /// Everything after the `=` as one string the caller wrote, sent as is in every position.
-    case raw(column: String, operand: String)
-
-    case and([Node])
-    case or([Node])
-    case not(Node)
-  }
+///
+/// The six comparisons also have operator spellings that build the same filter:
+/// `$0.priority > 3` is `$0.priority.gt(3)`, and `$0.dueDate == nil` is `$0.dueDate.isNull()`.
+public struct _PostgrestFilter<R: _PostgrestRelation>: Sendable {
+  typealias Node = PostgrestFilterNode
+  typealias Operand = PostgrestFilterNode.Operand
 
   var node: Node
 
@@ -58,11 +77,11 @@ public struct PostgrestFilter<R: PostgrestRelation>: Sendable {
     self.node = node
   }
 
-  init(column: String, operator: PostgrestFilterOperator, value: some PostgrestFilterValue) {
-    self.node = .comparison(column: column, operator: `operator`, operand: .value(value.rawValue))
+  init(column: String, operator: _PostgrestFilterOperator, value: some PostgrestFilterValue) {
+    self.node = .comparison(column: column, operator: `operator`, operand: .typed(value))
   }
 
-  init(column: String, operator: PostgrestFilterOperator, operand: Operand) {
+  init(column: String, operator: _PostgrestFilterOperator, operand: Operand) {
     self.node = .comparison(column: column, operator: `operator`, operand: operand)
   }
 
@@ -73,7 +92,7 @@ public struct PostgrestFilter<R: PostgrestRelation>: Sendable {
   /// A filter written entirely in PostgREST syntax, for an expression the generated namespace
   /// cannot name.
   ///
-  /// Nothing here is checked. Prefer ``PostgrestFilterableExpression/raw(_:)``, which keeps the
+  /// Nothing here is checked. Prefer ``_PostgrestFilterableExpression/raw(_:)``, which keeps the
   /// column compiler-checked and takes only the operand as a string.
   ///
   /// ```swift
@@ -112,28 +131,22 @@ public struct PostgrestFilter<R: PostgrestRelation>: Sendable {
   }
 }
 
-// MARK: - Composition
-
 /// Matches rows satisfying both filters.
-public func && <R>(lhs: PostgrestFilter<R>, rhs: PostgrestFilter<R>) -> PostgrestFilter<R> {
-  PostgrestFilter(node: .and(PostgrestFilter<R>.flatten(lhs.node, rhs.node, as: .and)))
+public func && <R>(lhs: _PostgrestFilter<R>, rhs: _PostgrestFilter<R>) -> _PostgrestFilter<R> {
+  _PostgrestFilter(node: .and(_PostgrestFilter<R>.flatten(lhs.node, rhs.node, as: .and)))
 }
 
 /// Matches rows satisfying either filter.
-public func || <R>(lhs: PostgrestFilter<R>, rhs: PostgrestFilter<R>) -> PostgrestFilter<R> {
-  PostgrestFilter(node: .or(PostgrestFilter<R>.flatten(lhs.node, rhs.node, as: .or)))
+public func || <R>(lhs: _PostgrestFilter<R>, rhs: _PostgrestFilter<R>) -> _PostgrestFilter<R> {
+  _PostgrestFilter(node: .or(_PostgrestFilter<R>.flatten(lhs.node, rhs.node, as: .or)))
 }
 
 /// Matches rows that do not satisfy `operand`.
-prefix public func ! <R>(operand: PostgrestFilter<R>) -> PostgrestFilter<R> {
-  PostgrestFilter(node: .not(operand.node))
+prefix public func ! <R>(operand: _PostgrestFilter<R>) -> _PostgrestFilter<R> {
+  _PostgrestFilter(node: .not(operand.node))
 }
 
-// MARK: - Rendering
-
-extension PostgrestFilter.Operand {
-  /// The operand as sent at top level, where a value runs to the end of the parameter and needs
-  /// no quoting.
+extension PostgrestFilterNode.Operand {
   var topLevel: String {
     switch self {
     case .value(let raw):
@@ -142,6 +155,8 @@ extension PostgrestFilter.Operand {
       return "(\(members.map(escapePostgRESTFilterValue).joined(separator: ",")))"
     case .is(let bool):
       return bool.map { "\($0)" } ?? "null"
+    case .invalid:
+      return ""
     }
   }
 
@@ -152,19 +167,40 @@ extension PostgrestFilter.Operand {
     switch self {
     case .value(let raw):
       return escapePostgRESTFilterValue(raw)
-    case .list, .is:
+    case .list, .is, .invalid:
       return topLevel
     }
   }
 }
 
-extension PostgrestFilter {
-  /// The query items this filter contributes to a request.
+extension _PostgrestFilter {
   func queryItems() -> [URLQueryItem] {
-    Self.queryItems(for: node)
+    node.queryItems()
   }
 
-  private static func queryItems(for node: Node) -> [URLQueryItem] {
+  var invalidFilterReason: String? {
+    node.invalidFilterReason
+  }
+}
+
+extension PostgrestFilterNode {
+  var invalidFilterReason: String? {
+    switch self {
+    case .comparison(_, _, .invalid(let reason)): reason
+    case .comparison, .raw: nil
+    case .and(let children), .or(let children):
+      children.lazy.compactMap(\.invalidFilterReason).first
+    case .not(let inner): inner.invalidFilterReason
+    }
+  }
+}
+
+extension PostgrestFilterNode {
+  func queryItems() -> [URLQueryItem] {
+    Self.queryItems(for: self)
+  }
+
+  private static func queryItems(for node: Self) -> [URLQueryItem] {
     switch node {
     case .comparison(let column, let `operator`, let operand):
       return [URLQueryItem(name: column, value: "\(`operator`.token).\(operand.topLevel)")]
@@ -209,13 +245,11 @@ extension PostgrestFilter {
   /// - A negated leaf puts `not.` after the column (`id.not.eq.2`); `not.` may only precede
   ///   `and`/`or` here. Negating a whole group is unaffected.
   /// - Double negation must collapse, or `!!a || b` renders `not.not.` and 400s.
-  private static func group(_ node: Node) -> String {
+  private static func group(_ node: Self) -> String {
     switch node {
     case .comparison(let column, let `operator`, let operand):
       return "\(column).\(`operator`.token).\(operand.grouped)"
     case .raw(let column, let operand):
-      // Not escaped: quoting would break the caller's own syntax. The cost is that a raw node
-      // cannot always sit in a group — a `::` in the column is a parse error inside `or=(…)`.
       return "\(column).\(operand)"
     case .and(let children):
       return "and(\(children.map(group).joined(separator: ",")))"

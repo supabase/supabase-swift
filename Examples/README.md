@@ -127,6 +127,8 @@ Serverless function invocation:
 - Pass parameters
 - Handle responses
 - Error management
+- Stream server-sent events into a chat screen
+- Send a file from disk as the request body
 
 ### 👤 User Profile Management
 
@@ -185,9 +187,15 @@ The Examples app is configured to use a local Supabase instance from the `/supab
 # Navigate to the root directory
 cd /path/to/supabase-swift
 
-# Start Supabase local development
-supabase start
+# Start Supabase local development with the CLI's experimental native stack (macOS, no Docker)
+export SUPABASE_EXPERIMENTAL_STACK=1
+supabase start --runtime native
 ```
+
+The native stack starts much faster than Docker, and CI uses it too. On Linux, run plain
+`supabase start`, which uses Docker. If `start` fails because port 54322 is already in use, an
+older Docker stack still holds the ports. Stop it with the experimental variable unset:
+`env -u SUPABASE_EXPERIMENTAL_STACK supabase stop`.
 
 This will start the local Supabase services:
 - **API**: http://127.0.0.1:54321
@@ -263,6 +271,8 @@ This is the default publishable key for local Supabase development.
    **Functions Tab**:
    - Invoke sample Edge Functions
    - Test with different parameters
+   - Stream a reply from the `chat` function
+   - Upload a photo to the `upload` function
 
    **Profile Tab**:
    - View your account details
@@ -367,7 +377,9 @@ Examples/
 │   │   └── FileSearchView.swift             # Search and metadata
 │   │
 │   ├── Functions/         # Edge Functions examples
-│   │   └── FunctionsExamplesView.swift      # Function invocation
+│   │   ├── FunctionsExamplesView.swift      # Function invocation
+│   │   ├── StreamingChatView.swift          # Streamed server-sent events
+│   │   └── FunctionUploadView.swift         # File body with a long timeout
 │   │
 │   ├── Profile/           # User profile management
 │   │   ├── ProfileView.swift                # Profile overview
@@ -514,7 +526,7 @@ supabase status
 
 # Restart services
 supabase stop
-supabase start
+SUPABASE_EXPERIMENTAL_STACK=1 supabase start --runtime native
 ```
 
 ### Connection errors

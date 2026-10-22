@@ -3,101 +3,60 @@ import Testing
 
 @testable import Storage
 
-// MARK: - StorageByteCount
-
 @Suite
-struct StorageByteCountTests {
+struct ByteCountTests {
   @Test
-  func integerInit() {
-    let count = StorageByteCount(5_000_000)
-    #expect(count.intValue == 5_000_000)
+  func bytesAndLiterals() {
+    #expect(ByteCount(bytes: 5_000_000).rawValue == "5000000")
+    #expect(ByteCount(bytes: 5_000_000).bytes == 5_000_000)
+    let integer: ByteCount = 2048
+    #expect(integer.bytes == 2048)
+    let numericString: ByteCount = "1000000"
+    #expect(numericString.bytes == 1_000_000)
+    let humanReadable: ByteCount = "1.5mb"
+    #expect(humanReadable.bytes == nil)
+    #expect(humanReadable.rawValue == "1.5mb")
   }
 
   @Test
-  func integerLiteral() {
-    let count: StorageByteCount = 2048
-    #expect(count.intValue == 2048)
+  func unitsKeepTheServerSpelling() {
+    #expect(ByteCount.kilobytes(500).rawValue == "500kb")
+    #expect(ByteCount.megabytes(1.5).rawValue == "1.5mb")
+    #expect(ByteCount.gigabytes(2).rawValue == "2gb")
+    #expect(ByteCount.gigabytes(1e19).rawValue == "1e+19gb")
   }
 
   @Test
-  func equality() {
-    #expect(StorageByteCount(1_000_000) == StorageByteCount(1_000_000))
-  }
-
-  @Test
-  func kilobytes() {
-    let count = StorageByteCount.kilobytes(500)
-    #expect(count.intValue == nil)
-    #expect(count.stringValue == "500kb")
-  }
-
-  @Test
-  func megabytes() {
-    let count = StorageByteCount.megabytes(1.5)
-    #expect(count.intValue == nil)
-    #expect(count.stringValue == "1.5mb")
-  }
-
-  @Test
-  func gigabytes() {
-    let count = StorageByteCount.gigabytes(2)
-    #expect(count.intValue == nil)
-    #expect(count.stringValue == "2gb")
-  }
-
-  @Test
-  func stringLiteralNumeric() {
-    let count: StorageByteCount = "1000000"
-    #expect(count.intValue == 1_000_000)
-  }
-
-  @Test
-  func stringLiteralHumanReadable() {
-    let count: StorageByteCount = "1mb"
-    #expect(count.intValue == nil)
-  }
-
-  @Test
-  func encodesAsNumber() throws {
-    let encoded = try JSONEncoder().encode(StorageByteCount(1_000_000))
-    let json = String(decoding: encoded, as: UTF8.self)
-    #expect(json == "1000000")
-  }
-
-  @Test
-  func encodesAsString() throws {
-    let count: StorageByteCount = "1mb"
-    let encoded = try JSONEncoder().encode(count)
-    let json = String(decoding: encoded, as: UTF8.self)
-    #expect(json == "\"1mb\"")
-  }
-
-  @Test
-  func gigabytesWholeValueOutsideInt64Range() {
-    let count = StorageByteCount.gigabytes(1e19)
-    #expect(count.stringValue == "1e+19gb")
+  func encodesANumberOrAString() throws {
+    #expect(
+      try String(decoding: JSONEncoder().encode(ByteCount(bytes: 1_000_000)), as: UTF8.self)
+        == "1000000")
+    #expect(
+      try String(decoding: JSONEncoder().encode(ByteCount.megabytes(1)), as: UTF8.self) == "\"1mb\""
+    )
   }
 }
 
-// MARK: - SortBy
-
 @Suite
-struct SortByTests {
+struct ObjectSortColumnTests {
   @Test
-  func initWithDefaultedOrder() {
-    let sortBy = SortBy(column: "name")
-    #expect(sortBy.column == "name")
-    #expect(sortBy.order == nil)
-  }
-
-  @Test
-  func initWithSortOrder() {
-    let sortBy = SortBy(column: "name", order: .ascending)
-    #expect(sortBy.order == .ascending)
+  func staticConstants() {
+    #expect(ObjectSortColumn.name.rawValue == "name")
+    #expect(ObjectSortColumn.updatedAt.rawValue == "updated_at")
+    #expect(ObjectSortColumn.createdAt.rawValue == "created_at")
+    #expect(ObjectSortColumn.lastAccessedAt.rawValue == "last_accessed_at")
   }
 }
 
-// MARK: - ResizeMode
+@Suite
+struct VersionFilterTests {
+  @Test
+  func staticConstants() {
+    #expect(VersionFilter.exclude.rawValue == "exclude")
+    #expect(VersionFilter.include.rawValue == "include")
+    #expect(VersionFilter.only.rawValue == "only")
+  }
+}
 
 @Suite
 struct ResizeModeTests {
@@ -119,15 +78,7 @@ struct ResizeModeTests {
     let mode = ResizeMode(rawValue: "custom")
     #expect(mode.rawValue == "custom")
   }
-
-  @Test
-  func encodes() throws {
-    let encoded = try JSONEncoder().encode(ResizeMode.cover)
-    #expect(String(data: encoded, encoding: .utf8) == "\"cover\"")
-  }
 }
-
-// MARK: - ImageFormat
 
 @Suite
 struct ImageFormatTests {
@@ -143,15 +94,7 @@ struct ImageFormatTests {
     let format: ImageFormat = "webp"
     #expect(format == .webp)
   }
-
-  @Test
-  func encodes() throws {
-    let encoded = try JSONEncoder().encode(ImageFormat.webp)
-    #expect(String(data: encoded, encoding: .utf8) == "\"webp\"")
-  }
 }
-
-// MARK: - SortOrder
 
 @Suite
 struct SortOrderTests {
@@ -173,8 +116,6 @@ struct SortOrderTests {
     #expect(String(data: encoded, encoding: .utf8) == "\"desc\"")
   }
 }
-
-// MARK: - DownloadBehavior
 
 @Suite
 struct DownloadBehaviorValueTests {

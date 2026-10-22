@@ -14,11 +14,17 @@ struct StoredProperty {
   var isOptional: Bool
   var isPrimaryKey: Bool
   var hasDefault: Bool
+
+  /// `@Generated`: the database fills the column in and refuses a written value, so it has no
+  /// field in `Draft` and its column type is one `_PostgrestUpdate` cannot assign.
+  var isGenerated: Bool
   var explicitColumn: String?
 
-  /// The `@Relationship` foreign key, rendered as a reference into the owning relation's column
-  /// namespace — `Comment.columns.todoID` — or `nil` for a plain column.
-  var foreignKey: String?
+  /// What `@Relationship` embeds, or `nil` for a plain column.
+  var embed: PostgrestEmbedReference?
+
+  /// What `@Aggregate` selects, or `nil` for a plain column or an embed.
+  var aggregate: PostgrestAggregateReference? = nil
 
   /// The database column name: an explicit `@Column`, otherwise the snake_case form.
   ///
@@ -35,7 +41,7 @@ struct StoredProperty {
   /// The selection an embed decodes into: the property's type with every `Array` and `Optional`
   /// layer removed, so `[CommentBody]` and `UserName?` both give the selection itself.
   ///
-  /// Only meaningful for a property carrying ``foreignKey``. To-many and to-one differ in the
+  /// Only meaningful for a property carrying ``embed``. To-many and to-one differ in the
   /// Swift type and in nothing PostgREST is told — the embed renders the same either way, and the
   /// server decides how many rows come back.
   var embeddedSelection: String { postgrestUnwrapElementType(type) ?? type }
@@ -45,12 +51,12 @@ struct StoredProperty {
 ///
 /// Three spellings count, because all three mean a nullable column: `Int?`, `Optional<Int>` and
 /// `Int!`. A generated schema can emit either of the first two, and the `!` spelling reaches a
-/// generic argument where it is illegal — `PostgrestColumn<Todo, String!>` does not compile, and
+/// generic argument where it is illegal — `_PostgrestColumn<Todo, String!>` does not compile, and
 /// the error lands on macro-expanded code the author never wrote.
 ///
 /// Stripping *every* layer is what keeps `Value` non-optional, which the whole wrapped-type design
 /// rests on: a column is nullable or it is not, so `Optional<Int>!` and `Int??` both describe a
-/// nullable `Int`. Leaving one layer on gives `PostgrestNullableColumn<Todo, Int?>`, and because
+/// nullable `Int`. Leaving one layer on gives `_PostgrestNullableColumn<Todo, Int?>`, and because
 /// `Optional` deliberately does not conform to `PostgrestFilterValue` that column silently loses
 /// every operator — "no member `eq`" rather than anything naming the real problem.
 ///
@@ -108,7 +114,7 @@ extension DeclGroupSyntax {
   ///
   /// - **Every binding counts.** `var task: String, note: String` is one `VariableDeclSyntax` with
   ///   two bindings. Reading only the first silently drops `note` from `CodingKeys`, the column
-  ///   map, `Draft` and `PostgrestUpdate`.
+  ///   map, `Draft` and `_PostgrestUpdate`.
   /// - **A shared annotation sits on the last binding.** In `var draft, review: String` only
   ///   `review` carries the type, so a binding without one takes the next annotation forward —
   ///   but only when it has no initializer of its own. In `var a = 1, b: String`, `a` is an `Int`
@@ -127,8 +133,6 @@ extension DeclGroupSyntax {
         !variable.modifiers.contains(where: { $0.name.text == "static" })
       else { return [] }
 
-      // Marker attributes sit on the declaration, not the binding, so every binding in
-      // `@Default var a, b: Bool` carries them.
       let attributes = variable.attributes.compactMap { $0.as(AttributeSyntax.self) }
       func attribute(_ name: String) -> AttributeSyntax? {
         attributes.first { $0.attributeName.trimmedDescription == name }
@@ -140,7 +144,8 @@ extension DeclGroupSyntax {
         .expression.as(StringLiteralExprSyntax.self)?
         .representedLiteralValue
 
-      let foreignKey = attribute("Relationship").flatMap(postgrestForeignKeyReference)
+      let embed = attribute("Relationship").flatMap(postgrestEmbedReference)
+      let aggregate = attribute("Aggregate").flatMap(postgrestAggregateReference)
 
       let bindings = Array(variable.bindings)
       return bindings.indices.compactMap { index -> StoredProperty? in
@@ -158,8 +163,10 @@ extension DeclGroupSyntax {
           isOptional: postgrestIsOptionalType(typeText),
           isPrimaryKey: attribute("PrimaryKey") != nil,
           hasDefault: attribute("Default") != nil,
+          isGenerated: attribute("Generated") != nil,
           explicitColumn: column,
-          foreignKey: foreignKey
+          embed: embed,
+          aggregate: aggregate
         )
       }
     }
@@ -201,7 +208,6 @@ extension PatternBindingSyntax {
         }
       }
     case .getter:
-      // `var x: Int { 1 }` — an implicit getter, so computed.
       return false
     }
   }

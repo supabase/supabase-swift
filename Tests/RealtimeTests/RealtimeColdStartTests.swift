@@ -5,33 +5,22 @@ import Testing
 
 @testable import Realtime
 
-/// Regression tests for SDK-959: deaf-socket stalls on cold-start subscribe.
-///
-/// These tests intentionally mimic the production timing profile — a
-/// transport that takes real time to connect and a server that delivers
-/// frames asynchronously on a separate queue (like URLSession's delegate
-/// queue) — instead of the synchronous delivery of `FakeWebSocket`, which
-/// masks the races involved. They run against the real clock with compressed
-/// intervals.
 @Suite
 struct RealtimeColdStartTests {
   let url = URL(string: "http://localhost:54321/realtime/v1")!
   let apiKey = "anon.api.key"
 
-  private func makeClient(socket: AsyncFakeWebSocket) -> RealtimeClientV2 {
-    RealtimeClientV2(
+  private func makeClient(socket: AsyncFakeWebSocket) -> RealtimeClient {
+    RealtimeClient(
       url: url,
       options: RealtimeClientOptions(
         headers: ["apikey": apiKey],
-        // Long heartbeat so heartbeat machinery can't mask subscribe stalls
-        // by triggering recovery reconnects on slow CI machines.
         heartbeatInterval: .seconds(10),
         reconnectDelay: .milliseconds(100),
         timeout: .seconds(2),
         accessToken: { "token" }
       ),
       wsTransport: { _, _ in
-        // Simulate real connection latency.
         try await Task.sleep(nanoseconds: 20_000_000)
         return socket
       },
@@ -40,10 +29,7 @@ struct RealtimeColdStartTests {
     )
   }
 
-  /// Reporter's flow from SDK-959: cold client, one channel, postgresChange
-  /// streams consumed in detached tasks, then `subscribeWithError()`.
-  /// With the deaf-socket bug this throws `maxRetryAttemptsReached` because
-  /// the `phx_join` reply is never seen.
+  /// streams consumed in detached tasks, then `subscribe()`.
   @Test
   func coldStartSubscribe_realTimingProfile() async throws {
     for iteration in 1...5 {
@@ -51,11 +37,11 @@ struct RealtimeColdStartTests {
       socket.serverResponder = AsyncFakeWebSocket.realtimeServerResponder()
 
       let sut = makeClient(socket: socket)
-      defer { sut.disconnect() }
 
-      let channel = sut.channel("library-realtime")
-      let libros = channel.postgresChange(AnyAction.self, schema: "library", table: "libros")
-      let files = channel.postgresChange(AnyAction.self, schema: "library", table: "libro_files")
+      let channel = await sut.channel("library-realtime")
+      let libros = await channel.postgresChanges(AnyAction.self, schema: "library", table: "libros")
+      let files = await channel.postgresChanges(
+        AnyAction.self, schema: "library", table: "libro_files")
 
       let t1 = Task { for await _ in libros {} }
       let t2 = Task { for await _ in files {} }
@@ -65,22 +51,18 @@ struct RealtimeColdStartTests {
       }
 
       do {
-        try await channel.subscribeWithError()
+        try await channel.subscribe()
       } catch {
         Issue.record("Iteration \(iteration): subscribe failed: \(error)")
         return
       }
 
-      #expect(channel.status == .subscribed, "Iteration \(iteration)")
+      #expect(await channel.status == .subscribed, "Iteration \(iteration)")
+      await sut.disconnect()
     }
   }
 
-  /// Two channels subscribing concurrently at cold start: both call
-  /// `ensureSocketConnected` → concurrent `connect()` → ConnectionManager's
-  /// `.connecting` wait path returns the same connection to both callers →
-  /// both used to call `handleConnected(conn:)`, reading `conn.events` twice
-  /// and leaving the socket deaf (no heartbeat acks, no phx_join replies) —
-  /// the SDK-959 stall, thrown here as `maxRetryAttemptsReached`.
+  /// `ensureSocketConnected` → concurrent `connect()` → the client's
   @Test
   func coldStartConcurrentSubscribes_doNotGoDeaf() async throws {
     for iteration in 1...5 {
@@ -88,13 +70,12 @@ struct RealtimeColdStartTests {
       socket.serverResponder = AsyncFakeWebSocket.realtimeServerResponder()
 
       let sut = makeClient(socket: socket)
-      defer { sut.disconnect() }
 
-      let channel1 = sut.channel("room-1")
-      let channel2 = sut.channel("room-2")
+      let channel1 = await sut.channel("room-1")
+      let channel2 = await sut.channel("room-2")
 
-      async let s1: Void = channel1.subscribeWithError()
-      async let s2: Void = channel2.subscribeWithError()
+      async let s1: Void = channel1.subscribe()
+      async let s2: Void = channel2.subscribe()
 
       do {
         _ = try await (s1, s2)
@@ -103,21 +84,18 @@ struct RealtimeColdStartTests {
         return
       }
 
-      #expect(channel1.status == .subscribed, "Iteration \(iteration)")
-      #expect(channel2.status == .subscribed, "Iteration \(iteration)")
+      #expect(await channel1.status == .subscribed, "Iteration \(iteration)")
+      #expect(await channel2.status == .subscribed, "Iteration \(iteration)")
+      await sut.disconnect()
     }
   }
 
-  /// After a disconnect/reconnect, channels that were already `.subscribed`
-  /// must re-send `phx_join` on the new socket. Before this fix,
-  /// `ChannelStateManager.subscribe()` was a no-op for `.subscribed` channels,
-  /// so `rejoinChannels()` silently skipped them — channels went deaf after
-  /// the first reconnect (reported by rpiacent on PR #1003). // cspell:ignore rpiacent
+  /// `subscribe()` was a no-op for `.subscribed` channels,
   @Test
   func channelsRejoinAfterReconnect() async throws {
     let sockets = LockIsolated<[AsyncFakeWebSocket]>([])
 
-    let sut = RealtimeClientV2(
+    let sut = RealtimeClient(
       url: url,
       options: RealtimeClientOptions(
         headers: ["apikey": apiKey],
@@ -135,59 +113,43 @@ struct RealtimeColdStartTests {
       http: HTTPClient(transport: RecordingTransport()),
       clock: ContinuousClock()
     )
-    defer { sut.disconnect() }
 
-    let channel = sut.channel("room-rejoin")
+    let channel = await sut.channel("room-rejoin")
 
-    try await channel.subscribeWithError()
-    #expect(channel.status == .subscribed)
+    try await channel.subscribe()
+    #expect(await channel.status == .subscribed)
     #expect(sockets.value.count == 1)
 
-    // Inject a malformed frame: listenForMessages throws → handleError →
-    // initiateReconnect. A remote .close with a transport-level code would also
-    // reconnect, but application-level codes (4000–4999) skip reconnect by design
-    // (auth errors should not loop with the same token).
-    sockets.value[0].receiveFromServer(.text("not a valid frame"))
+    // A remote close with a transport-level code initiates a reconnect. A malformed
+    // frame used to do the same, but `RealtimeClient` now only logs undecodable frames.
+    // Application-level codes (4000–4999) skip reconnect by design (auth errors should
+    // not loop with the same token).
+    sockets.value[0].receiveFromServer(.close(code: 1006, reason: "abnormal closure"))
     let reconnected = await waitUntil(timeout: 5) { sockets.value.count >= 2 }
     guard reconnected else {
       Issue.record("No reconnect within 5 s")
       return
     }
 
-    // Channel must re-subscribe on the new socket. Waiting only for
-    // `channel.status == .subscribed` is racy on Linux: the channel may still
-    // appear subscribed from socket 1 before `rejoinChannels` has had a chance
-    // to reset it. Wait until socket 2 has actually sent a `phx_join` AND the
-    // channel is subscribed — a state that cannot be satisfied by the stale
-    // socket-1 subscription.
     await waitUntil(timeout: 5) {
-      sockets.value[1].sentMessages.contains { $0.event == "phx_join" }
-        && channel.status == .subscribed
+      let channelStatus = await channel.status
+      return sockets.value[1].sentMessages.contains { $0.event == "phx_join" }
+        && channelStatus == .subscribed
     }
-    #expect(channel.status == .subscribed, "Channel did not rejoin after reconnect")
+    #expect(await channel.status == .subscribed, "Channel did not rejoin after reconnect")
 
-    // Exactly one phx_join sent on socket 2 (index 1).
     let joinsSentOnNewSocket = sockets.value[1].sentMessages.filter { $0.event == "phx_join" }
     #expect(joinsSentOnNewSocket.count == 1, "Expected one phx_join on the new socket")
+
+    await sut.disconnect()
   }
 
-  /// A heartbeat left pending on a connection that errors out must not be
-  /// misread as a timeout on the replacement connection. Before the fix,
-  /// `pendingHeartbeatRef` survived reconnects, so the new connection's first
-  /// heartbeat reported `.timeout` and tore down a healthy socket —
-  /// perpetuating the reconnect cycle indefinitely.
-  ///
-  /// Detection strategy: instead of asserting on specific heartbeat statuses
-  /// (which are sensitive to whether the reconnect was triggered by the
-  /// malformed frame or by the heartbeat timer itself), we verify that after
-  /// the first reconnect the socket count stabilizes. With the bug, socket 2's
-  /// first heartbeat immediately times out → a second reconnect → socket 3 →
-  /// etc. With the fix, socket 2 stays connected.
+  /// remote close or by the heartbeat timer itself), we verify that after
   @Test
   func pendingHeartbeatDoesNotLeakAcrossReconnect() async throws {
     let sockets = LockIsolated<[AsyncFakeWebSocket]>([])
 
-    let sut = RealtimeClientV2(
+    let sut = RealtimeClient(
       url: url,
       options: RealtimeClientOptions(
         headers: ["apikey": apiKey],
@@ -198,8 +160,6 @@ struct RealtimeColdStartTests {
       ),
       wsTransport: { _, _ in
         let socket = AsyncFakeWebSocket()
-        // Every socket after the first acks heartbeats normally so that a
-        // healthy post-reconnect connection never times out on its own.
         if sockets.value.count >= 1 {
           socket.serverResponder = AsyncFakeWebSocket.realtimeServerResponder()
         }
@@ -209,36 +169,31 @@ struct RealtimeColdStartTests {
       http: HTTPClient(transport: RecordingTransport()),
       clock: ContinuousClock()
     )
-    defer { sut.disconnect() }
 
     let heartbeatStatuses = LockIsolated<[HeartbeatStatus]>([])
-    let subscription = sut.onHeartbeat { status in
-      heartbeatStatuses.withValue { $0.append(status) }
+    let heartbeats = await sut.heartbeats()
+    let heartbeatTask = Task {
+      for await status in heartbeats {
+        heartbeatStatuses.withValue { $0.append(status) }
+      }
     }
-    defer { subscription.cancel() }
+    defer { heartbeatTask.cancel() }
 
-    await sut.connect()
+    try await sut.connect()
 
-    // Wait for the first heartbeat to be sent (ref stays pending — socket 0
-    // never acks). The reconnect may be triggered by either the malformed frame
-    // or the second heartbeat timeout; both exercise the same code path.
+    // never acks). The reconnect may be triggered by either the remote close
     await waitUntil { heartbeatStatuses.value.contains(.sent) }
 
-    // Inject a malformed frame: listenForMessages throws → handleError →
-    // initiates reconnect.
-    sockets.value[0].receiveFromServer(.text("not a valid frame"))
+    // A remote close with a transport-level code initiates a reconnect. (A malformed
+    // frame used to do the same; `RealtimeClient` now only logs undecodable frames.)
+    sockets.value[0].receiveFromServer(.close(code: 1006, reason: "abnormal closure"))
 
-    // Wait for the first reconnect to complete.
     let reconnected = await waitUntil(timeout: 5) { sockets.value.count >= 2 }
     guard reconnected else {
       Issue.record("No reconnect within 5 s — socket count: \(sockets.value.count)")
       return
     }
 
-    // Record the count right after the first reconnect. If pendingHeartbeatRef
-    // leaked into socket 2, its first heartbeat (0.2 s away) immediately times
-    // out → another reconnect → socket count grows. Allow 5 heartbeat cycles
-    // plus a buffer for scheduling jitter to observe this.
     let countAfterFirstReconnect = sockets.value.count
     await waitUntil(timeout: 0.2 * 5 + 1.0) {
       sockets.value.count > countAfterFirstReconnect
@@ -251,14 +206,12 @@ struct RealtimeColdStartTests {
       into the replacement connection: \(heartbeatStatuses.value)
       """
     )
+
+    await sut.disconnect()
   }
 }
 
-/// A `WebSocket` fake whose server side delivers frames asynchronously on a
-/// serial queue, standing in for URLSession's delegate queue. The `events`
-/// stream is backed by an `AsyncStream` continuation so frames received before
-/// the consumer starts iterating are buffered by the stream itself.
-final class AsyncFakeWebSocket: WebSocket, @unchecked Sendable {
+final class AsyncFakeWebSocket: WebSocketConnection, @unchecked Sendable {
   struct MutableState {
     var isClosed: Bool = false
     var sentMessages: [RealtimeMessageV2] = []
@@ -275,17 +228,14 @@ final class AsyncFakeWebSocket: WebSocket, @unchecked Sendable {
     (events, eventsContinuation) = AsyncStream.makeStream()
   }
 
-  /// Server-side autoresponder, invoked off the sender's thread.
   var serverResponder: (@Sendable (RealtimeMessageV2, AsyncFakeWebSocket) -> Void)?
 
   var closeCode: Int? { mutableState.value.closeCode }
   var closeReason: String? { mutableState.value.closeReason }
   var isClosed: Bool { mutableState.value.isClosed }
-  let `protocol`: String = ""
 
   var sentMessages: [RealtimeMessageV2] { mutableState.value.sentMessages }
 
-  /// Standard Realtime server behavior: acks heartbeats, confirms joins.
   static func realtimeServerResponder()
     -> @Sendable (RealtimeMessageV2, AsyncFakeWebSocket) -> Void
   {
@@ -330,7 +280,6 @@ final class AsyncFakeWebSocket: WebSocket, @unchecked Sendable {
     let serializer = RealtimeSerializer()
     guard let message = try? serializer.decodeText(text) else { return }
     mutableState.withValue { $0.sentMessages.append(message) }
-    // The server processes the message asynchronously, like a real network.
     deliveryQueue.async { [weak self] in
       guard let self else { return }
       self.serverResponder?(message, self)
@@ -339,6 +288,17 @@ final class AsyncFakeWebSocket: WebSocket, @unchecked Sendable {
 
   func send(_ binary: Data) {}
 
+  func send(_ frame: WebSocketFrame) async throws {
+    switch frame {
+    case .text(let text): send(text)
+    case .binary(let data): send(data)
+    }
+  }
+
+  func close(code: WebSocketCloseCode, reason: String?) {
+    close(code: code.rawValue, reason: reason)
+  }
+
   func close(code: Int?, reason: String?) {
     mutableState.withValue {
       guard !$0.isClosed else { return }
@@ -346,25 +306,21 @@ final class AsyncFakeWebSocket: WebSocket, @unchecked Sendable {
       $0.closeCode = code
       $0.closeReason = reason
     }
-    // Like URLSession, the .close event arrives later on the delegate queue.
     deliveryQueue.async { [weak self] in
-      self?.receiveFromServer(.close(code: code ?? 1005, reason: reason ?? ""))
+      self?.receiveFromServer(.close(code: code, reason: reason))
     }
   }
 
-  /// Server pushes an event to the client; delivered through the `events`
-  /// stream. Frames received before the consumer starts iterating are buffered
-  /// by `AsyncStream` itself.
   func receiveFromServer(_ event: WebSocketEvent) {
     mutableState.withValue {
-      if case .close(let code, let reason) = event {
+      if case .closed(let code, let reason) = event {
         $0.isClosed = true
-        $0.closeCode = code
+        $0.closeCode = code?.rawValue
         $0.closeReason = reason
       }
     }
     eventsContinuation.yield(event)
-    if case .close = event {
+    if case .closed = event {
       eventsContinuation.finish()
     }
   }
@@ -372,6 +328,6 @@ final class AsyncFakeWebSocket: WebSocket, @unchecked Sendable {
   func reply(_ message: RealtimeMessageV2) {
     let serializer = RealtimeSerializer()
     let text = try! serializer.encodeText(message)
-    receiveFromServer(.text(text))
+    receiveFromServer(.frame(.text(text)))
   }
 }

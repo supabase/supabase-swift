@@ -8,9 +8,6 @@ import Testing
   import FoundationNetworking
 #endif
 
-/// Single-purpose capturing protocol, deliberately not the shared `RequestCapturingProtocol`:
-/// that's also used by `TracingTests` (a `.serialized` suite that still runs concurrently with
-/// this one), so touching its static storage here would race.
 private final class PostgrestAuthCapturingProtocol: URLProtocol {
   private static let storage = LockIsolated<URLRequest?>(nil)
   static var capturedRequest: URLRequest? {
@@ -41,16 +38,6 @@ private func makePostgrestAuthCapturingSession() -> URLSession {
   return URLSession(configuration: config)
 }
 
-/// `.serialized`: the tests below share `PostgrestAuthCapturingProtocol`'s static request log, which
-/// would otherwise race against itself under Swift Testing's default parallel execution. That
-/// storage is private to this file, so — unlike the shared `RequestCapturingProtocol` — no other
-/// suite can race against it.
-///
-/// These pin the design decision in ``SupabaseClient/rest``: it deliberately does *not* pass an
-/// `accessToken` closure into `PostgrestClient.Configuration`, and relies on `AccessTokenMiddleware`
-/// to resolve and inject the live session token on every request instead. Without a test, dropping that
-/// transport-level injection (or adding a stale `Authorization` header to `Configuration.headers`)
-/// would silently send requests as the anon/publishable key.
 @Suite(.serialized)
 struct SupabaseClientPostgrestAuthTests {
   @Test
@@ -60,8 +47,6 @@ struct SupabaseClientPostgrestAuthTests {
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       options: SupabaseClientOptions(
-        // A custom `accessToken` closure stands in for a real signed-in session, without needing to
-        // drive the full sign-in flow.
         auth: SupabaseClientOptions.AuthOptions(
           storage: AuthLocalStorageMock(),
           accessToken: { "live-session-token" }
@@ -76,6 +61,30 @@ struct SupabaseClientPostgrestAuthTests {
 
     let request = try #require(PostgrestAuthCapturingProtocol.capturedRequest)
     #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer live-session-token")
+  }
+
+  @Test
+  func restRequestPerCallAuthorizationWinsOverLiveAccessToken() async throws {
+    PostgrestAuthCapturingProtocol.capturedRequest = nil
+    let client = SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      options: SupabaseClientOptions(
+        auth: SupabaseClientOptions.AuthOptions(
+          storage: AuthLocalStorageMock(),
+          accessToken: { "live-session-token" }
+        ),
+        global: SupabaseClientOptions.GlobalOptions(
+          http: .init(transport: URLSessionTransport(session: makePostgrestAuthCapturingSession()))
+        )
+      )
+    )
+
+    _ = try await client.from("todos").select()
+      .setHeader(name: "Authorization", value: "Bearer per-call-override").execute()
+
+    let request = try #require(PostgrestAuthCapturingProtocol.capturedRequest)
+    #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer per-call-override")
   }
 
   @Test

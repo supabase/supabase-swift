@@ -11,7 +11,7 @@ import SwiftUI
 
 struct TodoRealtimeView: View {
   @State var todos: IdentifiedArrayOf<Todo> = []
-  @State var channel: RealtimeChannelV2?
+  @State var channel: RealtimeChannel?
   @State var error: Error?
 
   var body: some View {
@@ -74,35 +74,34 @@ struct TodoRealtimeView: View {
   }
 
   func subscribeToChanges() async {
-    let channel = supabase.channel("live-todos")
+    let channel = await supabase.channel("live-todos")
 
-    let insertions = channel.postgresChange(
+    let insertions = await channel.postgresChanges(
       InsertAction.self,
       schema: "public",
       table: "todos"
     )
 
-    let updates = channel.postgresChange(
+    let updates = await channel.postgresChanges(
       UpdateAction.self,
       schema: "public",
       table: "todos"
     )
 
-    let deletes = channel.postgresChange(
+    let deletes = await channel.postgresChanges(
       DeleteAction.self,
       schema: "public",
       table: "todos"
     )
 
     do {
-      try await channel.subscribeWithError()
+      try await channel.subscribe()
     } catch {
       print("Error: \(error)")
       return
     }
     self.channel = channel
 
-    // Handle insertions
     async let insertionObservation: () = { @MainActor in
       for await insertion in insertions {
         try todos.insert(
@@ -110,7 +109,6 @@ struct TodoRealtimeView: View {
       }
     }()
 
-    // Handle updates
     async let updatesObservation: () = { @MainActor in
       for await update in updates {
         let record =
@@ -119,7 +117,6 @@ struct TodoRealtimeView: View {
       }
     }()
 
-    // Handle deletes
     async let deletesObservation: () = { @MainActor in
       for await delete in deletes {
         guard

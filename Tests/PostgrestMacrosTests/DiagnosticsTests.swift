@@ -35,9 +35,6 @@ struct DiagnosticsTests {
 
   @Test
   func tableRejectsARelationshipProperty() {
-    // `@Relationship` exists now, so this is what a user actually sees: the attribute resolves,
-    // and `@Table` rejects it before the compiler has anything to say. Embeds belong to a
-    // selection, so the fix is to move the property to a `@SelectionOf` type.
     assertMacro {
       """
       @Table("todos")
@@ -56,6 +53,52 @@ struct DiagnosticsTests {
         ╰─ 🛑 @Relationship belongs on a @SelectionOf type, not on @Table
       }
       """#
+    }
+  }
+
+  @Test
+  func tableRejectsAColumnOnAMultiBindingDeclaration() {
+    assertMacro {
+      """
+      @Table("todos")
+      struct Todo {
+        @PrimaryKey var id: Int
+        @Column("a") var x: Int, y: Int
+      }
+      """
+    } diagnostics: {
+      """
+      @Table("todos")
+      struct Todo {
+        @PrimaryKey var id: Int
+        @Column("a") var x: Int, y: Int
+        ┬───────────
+        ╰─ 🛑 @Column names one column, but this declaration binds 2 properties — split it into one declaration per property
+      }
+      """
+    }
+  }
+
+  @Test
+  func tableRejectsAPrimaryKeyOnAnOptionalProperty() {
+    assertMacro {
+      """
+      @Table("todos")
+      struct Todo {
+        @PrimaryKey var id: Int?
+        var task: String
+      }
+      """
+    } diagnostics: {
+      """
+      @Table("todos")
+      struct Todo {
+        @PrimaryKey var id: Int?
+                        ┬─
+                        ╰─ 🛑 @PrimaryKey on 'id' has an Optional type, but a primary key is never null — make 'id' non-optional, or move @PrimaryKey to the key column
+        var task: String
+      }
+      """
     }
   }
 
@@ -82,10 +125,6 @@ struct DiagnosticsTests {
 
   @Test
   func selectionOfRejectsARelationshipWithNoRoot() {
-    // `\.todoID` infers its root from context a macro cannot see, so the expansion would have
-    // nothing to name the foreign key's relation by. Left unreported, the property falls through
-    // to the plain-column path and the reader gets "no member 'comments'" on a line they did not
-    // write.
     assertMacro {
       #"""
       @SelectionOf(Todo.self)
@@ -101,7 +140,28 @@ struct DiagnosticsTests {
         var id: Int
         @Relationship(\.todoID) var comments: [CommentBody]
         ┬──────────────────────
-        ╰─ 🛑 @Relationship requires a key path to one foreign key column, written with its root, as in '@Relationship(\Comment.todoID)'
+        ╰─ 🛑 @Relationship requires a key path to one foreign key column, written with its root, as in '@Relationship(\Comment.todoID)', or to a computed relationship, as in '@Relationship(computed: \Channel.Columns.getMessages)'
+      }
+      """#
+    }
+  }
+
+  @Test
+  func selectionOfRejectsAComputedRelationshipWithNoRoot() {
+    assertMacro {
+      #"""
+      @SelectionOf(Channel.self)
+      struct ChannelFeed {
+        @Relationship(computed: \.getMessages) var messages: [Message]
+      }
+      """#
+    } diagnostics: {
+      #"""
+      @SelectionOf(Channel.self)
+      struct ChannelFeed {
+        @Relationship(computed: \.getMessages) var messages: [Message]
+        ┬─────────────────────────────────────
+        ╰─ 🛑 @Relationship requires a key path to one foreign key column, written with its root, as in '@Relationship(\Comment.todoID)', or to a computed relationship, as in '@Relationship(computed: \Channel.Columns.getMessages)'
       }
       """#
     }
@@ -154,9 +214,6 @@ struct DiagnosticsTests {
 
   @Test
   func tableRejectsAPropertyWithNoTypeAnnotation() {
-    // Left alone, the property has a default, so `Decodable` synthesis still succeeds. The column
-    // never round-trips and the mistake surfaces only much later, as a compile error at some
-    // unrelated call site that expected the column to exist in `Columns` or `Draft`.
     assertMacro {
       """
       @Table("todos")
@@ -180,7 +237,6 @@ struct DiagnosticsTests {
 
   @Test
   func tableReportsEveryPropertyWithNoTypeAnnotation() {
-    // One diagnostic per property, so the author fixes them all in one pass.
     assertMacro {
       """
       @Table("todos")
@@ -208,8 +264,6 @@ struct DiagnosticsTests {
 
   @Test
   func tableAcceptsMembersThatMapToNoColumn() {
-    // A static member and a computed property are not stored, so neither maps to a column and
-    // neither is a missing annotation.
     assertMacro {
       """
       @Table("todos")
@@ -232,13 +286,13 @@ struct DiagnosticsTests {
       extension Todo {
         static let relationName = "todos"
 
-        typealias Schema = PostgREST.PublicSchema
+        typealias Schema = PostgREST._PublicSchema
 
         static let selectString = "*"
 
         struct Columns: Sendable {
-          let id = PostgrestColumn<Todo, Int>("id")
-          let task = PostgrestColumn<Todo, String>("task")
+          let id = _PostgrestColumn<Todo, Int>("id")
+          let task = _PostgrestColumn<Todo, String>("task")
 
           init() {
           }
@@ -297,9 +351,6 @@ struct DiagnosticsTests {
 
   @Test
   func tableRejectsABindingThatCannotBorrowAnAnnotation() {
-    // `count` is an `Int` from its initializer, not the `String` that `label` declares, so
-    // `postgrestType(at:)` refuses to read `label`'s annotation forward and leaves `count`
-    // untyped. `label` itself is fine, so only `count` is reported.
     assertMacro {
       """
       @Table("todos")
@@ -318,6 +369,92 @@ struct DiagnosticsTests {
             ╰─ 🛑 @Table requires an explicit type annotation on 'count', as in 'var count: <Type> = ...' — without one the macro cannot infer the type, and the column is dropped
       }
       """
+    }
+  }
+
+  @Test
+  func tableRejectsAnAggregateProperty() {
+    assertMacro {
+      #"""
+      @Table("orders")
+      struct Order {
+        var id: Int
+        @Aggregate(.sum, of: \Order.amount) var total: Double?
+      }
+      """#
+    } diagnostics: {
+      #"""
+      @Table("orders")
+      struct Order {
+        var id: Int
+        @Aggregate(.sum, of: \Order.amount) var total: Double?
+        ┬──────────────────────────────────
+        ╰─ 🛑 @Aggregate belongs on a @SelectionOf type, not on @Table
+      }
+      """#
+    }
+  }
+
+  @Test
+  func selectionOfRejectsAnAggregateWithNoColumn() {
+    assertMacro {
+      #"""
+      @SelectionOf(Order.self)
+      struct OrderTotals {
+        @Aggregate(.sum) var total: Double?
+      }
+      """#
+    } diagnostics: {
+      #"""
+      @SelectionOf(Order.self)
+      struct OrderTotals {
+        @Aggregate(.sum) var total: Double?
+        ┬───────────────
+        ╰─ 🛑 @Aggregate requires a function and a key path to one column, written with its root, as in '@Aggregate(.sum, of: \Order.amount)', or '@Aggregate(.count)' to count rows
+      }
+      """#
+    }
+  }
+
+  @Test
+  func selectionOfRejectsAnAggregateWithNoRoot() {
+    assertMacro {
+      #"""
+      @SelectionOf(Order.self)
+      struct OrderTotals {
+        @Aggregate(.sum, of: \.amount) var total: Double?
+      }
+      """#
+    } diagnostics: {
+      #"""
+      @SelectionOf(Order.self)
+      struct OrderTotals {
+        @Aggregate(.sum, of: \.amount) var total: Double?
+        ┬─────────────────────────────
+        ╰─ 🛑 @Aggregate requires a function and a key path to one column, written with its root, as in '@Aggregate(.sum, of: \Order.amount)', or '@Aggregate(.count)' to count rows
+      }
+      """#
+    }
+  }
+
+  @Test
+  func selectionOfRejectsAnAggregateOnAnEmbed() {
+    assertMacro {
+      #"""
+      @SelectionOf(Order.self)
+      struct OrderTotals {
+        @Aggregate(.count) @Relationship(\Item.orderID) var items: [ItemBody]
+      }
+      """#
+    } diagnostics: {
+      #"""
+      @SelectionOf(Order.self)
+      struct OrderTotals {
+        @Aggregate(.count) @Relationship(\Item.orderID) var items: [ItemBody]
+        ┬─────────────────
+        ╰─ 🛑 @Aggregate cannot be combined with @Relationship
+      }
+      """#
     }
   }
 }

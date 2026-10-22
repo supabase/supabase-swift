@@ -8,11 +8,11 @@
 import Foundation
 import Testing
 
-@testable import PostgREST
+@_spi(Experimental) @testable import PostgREST
 
 @Suite
 struct PostgrestQueryWhereTests {
-  struct Todo: PostgrestWritableRelation {
+  struct Todo: _PostgrestWritableRelation {
     static let relationName = "todos"
     static let selectString = "*"
 
@@ -23,11 +23,11 @@ struct PostgrestQueryWhereTests {
     var metadata: String
 
     struct Columns: Sendable {
-      let id = PostgrestColumn<Todo, Int>("id")
-      let isDone = PostgrestColumn<Todo, Bool>("is_done")
-      let priority = PostgrestColumn<Todo, Int>("priority")
-      let dueDate = PostgrestNullableColumn<Todo, Date>("due_at")
-      let metadata = PostgrestColumn<Todo, String>("metadata")
+      let id = _PostgrestColumn<Todo, Int>("id")
+      let isDone = _PostgrestColumn<Todo, Bool>("is_done")
+      let priority = _PostgrestColumn<Todo, Int>("priority")
+      let dueDate = _PostgrestNullableColumn<Todo, Date>("due_at")
+      let metadata = _PostgrestColumn<Todo, String>("metadata")
     }
 
     static let columns = Columns()
@@ -50,7 +50,6 @@ struct PostgrestQueryWhereTests {
     #expect(capture.query?.contains("priority=gt.3") == true)
   }
 
-  /// The target call site, verbatim.
   @Test
   func whereAppliesANestedGroup() async throws {
     let capture = QueryCapture()
@@ -61,8 +60,6 @@ struct PostgrestQueryWhereTests {
     #expect(capture.query?.contains("or=(and(is_done.eq.false,priority.gt.3),id.eq.7)") == true)
   }
 
-  /// SQL has one WHERE clause, so the singular name invites the wrong reading. Two calls AND
-  /// together.
   @Test
   func repeatedWhereAccumulates() async throws {
     let capture = QueryCapture()
@@ -83,7 +80,6 @@ struct PostgrestQueryWhereTests {
     #expect(capture.httpMethod == "DELETE")
   }
 
-  /// A filter built conditionally inside the closure, so no second entry point is needed.
   @Test
   func aFilterCanBeAssembledInsideTheClosure() async throws {
     let capture = QueryCapture()
@@ -100,7 +96,6 @@ struct PostgrestQueryWhereTests {
     #expect(capture.query?.contains("priority=gte.3") == true)
   }
 
-  /// The direction is spelled on the column, so two sort keys can differ.
   @Test
   func orderUsesTheNamespaceColumnName() async throws {
     let capture = QueryCapture()
@@ -110,8 +105,6 @@ struct PostgrestQueryWhereTests {
     #expect(capture.query?.contains("limit=5") == true)
   }
 
-  /// A bare column sends no direction, rather than the SDK substituting `.asc`, so PostgREST's
-  /// own default applies.
   @Test
   func orderWithoutADirectionSendsTheBareColumn() async throws {
     let capture = QueryCapture()
@@ -121,8 +114,6 @@ struct PostgrestQueryWhereTests {
     #expect(capture.query?.contains("order=due_at.desc") == false)
   }
 
-  /// The two spellings coexist as overloads, and a directionless key merges into the same single
-  /// `order` parameter as a directed one.
   @Test
   func directedAndDirectionlessKeysMergeInOrder() async throws {
     let capture = QueryCapture()
@@ -131,7 +122,6 @@ struct PostgrestQueryWhereTests {
     #expect(capture.query?.contains("order=priority.desc,id") == true)
   }
 
-  /// An unspecified placement is not sent, so the database default applies.
   @Test
   func nullPlacementIsOmittedUnlessAskedFor() async throws {
     let capture = QueryCapture()
@@ -148,8 +138,6 @@ struct PostgrestQueryWhereTests {
     #expect(capture.query?.contains("order=due_at.desc.nullsfirst") == true)
   }
 
-  /// Direction and placement are independent on the wire, so asking for a placement must not
-  /// force a direction into the query — `order=due_at.nullslast` is a 200.
   @Test
   func aPlacementDoesNotRequireADirection() async throws {
     let capture = QueryCapture()
@@ -160,7 +148,6 @@ struct PostgrestQueryWhereTests {
     #expect(capture.query?.contains("desc") == false)
   }
 
-  /// Repeated calls merge into one `order` parameter, so the second key breaks ties in the first.
   @Test
   func repeatedOrderAppendsASecondKey() async throws {
     let capture = QueryCapture()
@@ -169,8 +156,6 @@ struct PostgrestQueryWhereTests {
     #expect(capture.query?.contains("order=priority.desc,id.asc") == true)
   }
 
-  /// Value semantics: branching two chains off one query must not leak the first chain's filter
-  /// into the second.
   @Test
   func branchingTwoChainsDoesNotAlias() async throws {
     let capture = QueryCapture()

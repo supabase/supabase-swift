@@ -4,7 +4,9 @@
 //
 //  Created by AI Assistant on 09/01/25.
 //
-
+// Linux: the official Swift images' libcurl is built without WebSocket support, so
+// `URLSessionWebSocketTask` fails with "WebSockets not supported by libcurl" and the client never
+// connects.
 #if !os(Android) && !os(Linux)
   import Clocks
   import ConcurrencyExtras
@@ -15,25 +17,19 @@
   import Supabase
   import TestHelpers
   import Testing
-
   @testable import Helpers
   @testable import Realtime
-
-  // Serialize this suite so concurrent tests don't open competing realtime connections against
-  // the same local Supabase instance — Swift Testing runs `@Test`s in the same suite concurrently
-  // by default, unlike XCTest's implicit one-class-at-a-time execution. Use a class (not a
-  // struct) so `deinit` can disconnect both clients afterward, mirroring the old `tearDown()`.
   @Suite(
     .serialized,
     .mainSerialExecutorSerialized,
+    // `subscribe()` times out on `testClock`, which never advances, so a stack that is
+    .timeLimit(.minutes(1)),
     .enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil)
   )
   final class RealtimeIntegrationTests: Sendable {
     let testClock = TestClock<Duration>()
-
     let client: SupabaseClient
     let client2: SupabaseClient
-
     init() async throws {
       client = SupabaseClient(
         supabaseURL: URL(string: DotEnv.supabaseURL) ?? URL(string: "http://127.0.0.1:54321")!,
@@ -48,7 +44,6 @@
           )
         )
       )
-
       client2 = SupabaseClient(
         supabaseURL: URL(string: DotEnv.supabaseURL) ?? URL(string: "http://127.0.0.1:54321")!,
         supabaseKey: DotEnv.supabasePublishableKey,
@@ -62,39 +57,31 @@
           )
         )
       )
-
-      // Clean up any existing data
       _ = try? await client.from("key_value_storage").delete().neq("key", value: UUID().uuidString)
         .execute()
     }
-
-    // Async cleanup can outlive the test if the process exits immediately after — acceptable for
-    // local dev/CI cleanup against an ephemeral local Supabase instance, not correctness-critical.
     deinit {
       let client = client
       let client2 = client2
       Task {
-        await client.realtimeV2.removeAllChannels()
-        client.realtimeV2.disconnect()
-
-        await client2.realtimeV2.removeAllChannels()
-        client2.realtimeV2.disconnect()
+        await client.realtime.removeAllChannels()
+        await client.realtime.disconnect()
+        await client2.realtime.removeAllChannels()
+        await client2.realtime.disconnect()
       }
     }
-
-    // MARK: - Connection Management Tests
 
     @Test
     func connectionAndDisconnection() async throws {
       let client = client
       try await withMainSerialExecutor {
-        #expect(client.realtimeV2.status == .disconnected)
+        #expect(await client.realtime.status == .disconnected)
 
-        await client.realtimeV2.connect()
-        #expect(client.realtimeV2.status == .connected)
+        try await client.realtime.connect()
+        #expect(await client.realtime.status == .connected)
 
-        client.realtimeV2.disconnect()
-        #expect(client.realtimeV2.status == .disconnected)
+        await client.realtime.disconnect()
+        #expect(await client.realtime.status == .disconnected)
       }
     }
 
@@ -104,19 +91,19 @@
       try await withMainSerialExecutor {
         let statuses = LockIsolated<[RealtimeClientStatus]>([])
 
-        let subscription = client.realtimeV2.onStatusChange { status in
-          statuses.withValue { $0.append(status) }
+        let statusChanges = await client.realtime.statusChanges()
+        let observer = Task {
+          for await status in statusChanges {
+            statuses.withValue { $0.append(status) }
+            if status == .disconnected, statuses.value.contains(.connected) { return }
+          }
         }
 
-        await client.realtimeV2.connect()
-        client.realtimeV2.disconnect()
+        try await client.realtime.connect()
+        await client.realtime.disconnect()
 
-        // Wait a bit for all status changes
-        await Task.megaYield()
+        await observer.value
 
-        subscription.cancel()
-
-        // Should have at least connecting and connected
         #expect(statuses.value.contains(.connecting))
         #expect(statuses.value.contains(.connected))
         #expect(statuses.value.contains(.disconnected))
@@ -128,15 +115,14 @@
       let client = client
       let testClock = testClock
       try await withMainSerialExecutor {
-        await client.realtimeV2.connect()
-        #expect(client.realtimeV2.status == .connected)
+        try await client.realtime.connect()
+        #expect(await client.realtime.status == .connected)
 
-        client.realtimeV2.disconnect()
+        await client.realtime.disconnect()
 
-        // Wait for potential reconnection delay
         await testClock.advance(by: RealtimeClientOptions.defaultReconnectDelay + .seconds(1))
 
-        #expect(client.realtimeV2.status == .disconnected)
+        #expect(await client.realtime.status == .disconnected)
       }
     }
 
@@ -144,35 +130,36 @@
     func multipleConnectCalls() async throws {
       let client = client
       try await withMainSerialExecutor {
-        await client.realtimeV2.connect()
-        #expect(client.realtimeV2.status == .connected)
+        try await client.realtime.connect()
+        #expect(await client.realtime.status == .connected)
 
-        // Multiple connect calls should be idempotent
-        await client.realtimeV2.connect()
-        await client.realtimeV2.connect()
+        try await client.realtime.connect()
+        try await client.realtime.connect()
 
-        #expect(client.realtimeV2.status == .connected)
+        #expect(await client.realtime.status == .connected)
       }
     }
-
-    // MARK: - Channel Management Tests
 
     @Test
     func channelStatusChanges() async throws {
       let client = client
       try await withMainSerialExecutor {
-        await client.realtimeV2.connect()
+        try await client.realtime.connect()
 
-        let channel = client.realtimeV2.channel("test-channel")
+        let channel = await client.realtime.channel("test-channel")
         let statuses = LockIsolated<[RealtimeChannelStatus]>([])
 
-        let subscription = channel.onStatusChange { status in
-          statuses.withValue { $0.append(status) }
+        let statusChanges = await channel.statusChanges()
+        let observer = Task {
+          for await status in statusChanges {
+            statuses.withValue { $0.append(status) }
+            if status == .unsubscribed, statuses.value.contains(.subscribed) { return }
+          }
         }
-        defer { subscription.cancel() }
 
-        try await channel.subscribeWithError()
+        try await channel.subscribe()
         await channel.unsubscribe()
+        await observer.value
 
         #expect(
           statuses.value
@@ -185,19 +172,18 @@
     func multipleChannels() async throws {
       let client = client
       try await withMainSerialExecutor {
-        // Do not connect client, let first channel subscription do it.
 
-        let channel1 = client.realtimeV2.channel("channel-1")
-        let channel2 = client.realtimeV2.channel("channel-2")
-        let channel3 = client.realtimeV2.channel("channel-3")
+        let channel1 = await client.realtime.channel("channel-1")
+        let channel2 = await client.realtime.channel("channel-2")
+        let channel3 = await client.realtime.channel("channel-3")
 
         try await subscribeMany([channel1, channel2, channel3])
 
-        #expect(channel1.status == .subscribed)
-        #expect(channel2.status == .subscribed)
-        #expect(channel3.status == .subscribed)
+        #expect(await channel1.status == .subscribed)
+        #expect(await channel2.status == .subscribed)
+        #expect(await channel3.status == .subscribed)
 
-        #expect(client.realtimeV2.channels.count == 3)
+        #expect(await client.realtime.channels.count == 3)
 
         await unsubscribeMany([channel1, channel2, channel3])
       }
@@ -207,20 +193,18 @@
     func channelReuse() async throws {
       let client = client
       try await withMainSerialExecutor {
-        await client.realtimeV2.connect()
+        try await client.realtime.connect()
 
-        let channel1 = client.realtimeV2.channel("reuse-channel")
-        try await channel1.subscribeWithError()
+        let channel1 = await client.realtime.channel("reuse-channel")
+        try await channel1.subscribe()
 
-        // Getting the same channel should return the existing instance
-        let channel2 = client.realtimeV2.channel("reuse-channel")
+        let channel2 = await client.realtime.channel("reuse-channel")
         #expect(channel1 === channel2)
-        #expect(channel2.status == .subscribed)
+        #expect(await channel2.status == .subscribed)
 
         await channel1.unsubscribe()
 
-        // Unsubscribing channel1 should unsubscribe channel2
-        #expect(channel2.status == .unsubscribed)
+        #expect(await channel2.status == .unsubscribed)
       }
     }
 
@@ -228,15 +212,16 @@
     func removeChannel() async throws {
       let client = client
       try await withMainSerialExecutor {
-        await client.realtimeV2.connect()
+        try await client.realtime.connect()
 
-        let channel = client.realtimeV2.channel("remove-test")
-        try await channel.subscribeWithError()
+        let channel = await client.realtime.channel("remove-test")
+        try await channel.subscribe()
 
-        await client.realtimeV2.removeChannel(channel)
+        await client.realtime.removeChannel(channel)
 
-        #expect(channel.status == .unsubscribed)
-        #expect(!client.realtimeV2.channels.keys.contains(channel.topic))
+        #expect(await channel.status == .unsubscribed)
+        let topics = await client.realtime.channels.keys
+        #expect(!topics.contains(channel.topic))
       }
     }
 
@@ -244,37 +229,35 @@
     func removeAllChannels() async throws {
       let client = client
       try await withMainSerialExecutor {
-        await client.realtimeV2.connect()
+        try await client.realtime.connect()
 
-        let channel1 = client.realtimeV2.channel("all-1")
-        let channel2 = client.realtimeV2.channel("all-2")
-        let channel3 = client.realtimeV2.channel("all-3")
+        let channel1 = await client.realtime.channel("all-1")
+        let channel2 = await client.realtime.channel("all-2")
+        let channel3 = await client.realtime.channel("all-3")
 
         try await subscribeMany([channel1, channel2, channel3])
 
-        await client.realtimeV2.removeAllChannels()
+        await client.realtime.removeAllChannels()
 
-        #expect(channel1.status == .unsubscribed)
-        #expect(channel2.status == .unsubscribed)
-        #expect(channel3.status == .unsubscribed)
-        #expect(client.realtimeV2.channels.count == 0)
+        #expect(await channel1.status == .unsubscribed)
+        #expect(await channel2.status == .unsubscribed)
+        #expect(await channel3.status == .unsubscribed)
+        #expect(await client.realtime.channels.count == 0)
 
         #expect(
-          client.realtimeV2.status == .disconnected,
+          await client.realtime.status == .disconnected,
           "Should disconnect client if all channels are removed"
         )
       }
     }
 
-    // MARK: - Broadcast Tests
-
     @Test
     func broadcastSendAndReceive() async throws {
       let client = client
       try await withMainSerialExecutor {
-        await client.realtimeV2.connect()
+        try await client.realtime.connect()
 
-        let channel = client.realtimeV2.channel("broadcast-test") {
+        let channel = await client.realtime.channel("broadcast-test") {
           $0.broadcast.receiveOwnBroadcasts = true
         }
 
@@ -283,19 +266,18 @@
           let text: String
         }
 
-        let receivedMessagesTask = Task {
-          await channel.broadcastStream(event: "test-event").prefix(3).collect()
-        }
+        let receivedMessagesStream = await channel.broadcasts(event: "test-event")
 
-        try await channel.subscribeWithError()
+        try await channel.subscribe()
 
         try await channel.broadcast(event: "test-event", message: Message(value: 1, text: "first"))
         try await channel.broadcast(
           event: "test-event", message: Message(value: 2, text: "second"))
-        await channel.broadcast(event: "test-event", message: ["value": 3, "text": "third"])
+        try await channel.broadcast(
+          event: "test-event", message: ["value": 3, "text": "third"] as JSONObject)
 
         let receivedMessages = try await withTimeout(.seconds(5)) {
-          await receivedMessagesTask.value
+          await receivedMessagesStream.prefix(3).collect()
         }
 
         #expect(receivedMessages.count == 3)
@@ -305,8 +287,6 @@
         #expect(firstMessage["payload"]?.objectValue?["value"]?.intValue == 1)
         #expect(firstMessage["payload"]?.objectValue?["text"]?.stringValue == "first")
 
-        // Clean up
-
         await channel.unsubscribe()
       }
     }
@@ -315,21 +295,16 @@
     func broadcastMultipleEvents() async throws {
       let client = client
       try await withMainSerialExecutor {
-        await client.realtimeV2.connect()
+        try await client.realtime.connect()
 
-        let channel = client.realtimeV2.channel("broadcast-multi") {
+        let channel = await client.realtime.channel("broadcast-multi") {
           $0.broadcast.receiveOwnBroadcasts = true
         }
 
-        let event1Messages = Task {
-          await channel.broadcastStream(event: "event-1").prefix(2).collect()
-        }
+        let event1Messages = await channel.broadcasts(event: "event-1")
+        let event2Messages = await channel.broadcasts(event: "event-2")
 
-        let event2Messages = Task {
-          await channel.broadcastStream(event: "event-2").prefix(2).collect()
-        }
-
-        try await channel.subscribeWithError()
+        try await channel.subscribe()
 
         try await channel.broadcast(event: "event-1", message: ["data": "1"])
         try await channel.broadcast(event: "event-2", message: ["data": "2"])
@@ -337,11 +312,11 @@
         try await channel.broadcast(event: "event-2", message: ["data": "4"])
 
         let event1 = try await withTimeout(.seconds(5)) {
-          await event1Messages.value
+          await event1Messages.prefix(2).collect()
         }
 
         let event2 = try await withTimeout(.seconds(5)) {
-          await event2Messages.value
+          await event2Messages.prefix(2).collect()
         }
 
         #expect(event1.count == 2)
@@ -355,24 +330,25 @@
     func broadcastWithoutOwnBroadcasts() async throws {
       let client = client
       try await withMainSerialExecutor {
-        await client.realtimeV2.connect()
+        try await client.realtime.connect()
 
-        let channel = client.realtimeV2.channel("broadcast-no-own") {
+        let channel = await client.realtime.channel("broadcast-no-own") {
           $0.broadcast.receiveOwnBroadcasts = false
         }
 
         let receivedCount = LockIsolated<Int>(0)
-        let subscription = channel.onBroadcast(event: "test") { _ in
-          receivedCount.withValue { $0 += 1 }
+        let broadcasts = await channel.broadcasts(event: "test")
+        let subscription = Task {
+          for await _ in broadcasts {
+            receivedCount.withValue { $0 += 1 }
+          }
         }
 
-        try await channel.subscribeWithError()
+        try await channel.subscribe()
 
-        // Send broadcast - should not receive it
         try await channel.broadcast(event: "test", message: ["data": "test"])
 
-        // Wait a bit
-        try await Task.sleep(nanoseconds: 500_000_000)  // 0.5 seconds
+        try await Task.sleep(nanoseconds: 500_000_000)
 
         #expect(receivedCount.value == 0)
 
@@ -381,40 +357,36 @@
       }
     }
 
-    // MARK: - Postgres Changes Tests
-
     @Test
     func postgresAllChanges() async throws {
       let client = client
       try await withMainSerialExecutor {
-        await client.realtimeV2.connect()
+        try await client.realtime.connect()
 
-        let channel = client.realtimeV2.channel("postgres-all")
+        let channel = await client.realtime.channel("postgres-all")
 
         struct Entry: Codable, Equatable {
           let key: String
           let value: JSONValue
         }
 
-        let allChangesTask = Task {
-          await channel.postgresChange(AnyAction.self, schema: "public", table: "key_value_storage")
-            .prefix(3).collect()
+        let allChanges = await channel.postgresChanges(
+          AnyAction.self, schema: "public", table: "key_value_storage")
+        let system = await channel.systemMessages()
+
+        try await channel.subscribe()
+
+        _ = try await withTimeout(.seconds(10)) {
+          await system.first(where: { _ in true })
         }
-
-        try await channel.subscribeWithError()
-
-        // Wait for subscription
-        _ = await channel.system().first(where: { _ in true })
 
         let testKey = UUID().uuidString
 
-        // Insert
         _ = try await client.from("key_value_storage")
           .insert(["key": testKey, "value": "value1"]).select().single().execute()
 
         try await Task.sleep(nanoseconds: 500_000_000)
 
-        // Update
         try await client.from("key_value_storage").update(["value": "value2"]).eq(
           "key",
           value: testKey
@@ -423,16 +395,14 @@
 
         try await Task.sleep(nanoseconds: 500_000_000)
 
-        // Delete
         try await client.from("key_value_storage").delete().eq("key", value: testKey).execute()
 
         let received = try await withTimeout(.seconds(5)) {
-          await allChangesTask.value
+          await allChanges.prefix(3).collect()
         }
 
         #expect(received.count == 3)
 
-        // Verify action types
         if case .insert(let action) = received[0] {
           let record = try action.decodeRecord(as: Entry.self, decoder: .supabase())
           #expect(record.key == testKey)
@@ -462,9 +432,9 @@
     func postgresChangesWithFilter() async throws {
       let client = client
       try await withMainSerialExecutor {
-        await client.realtimeV2.connect()
+        try await client.realtime.connect()
 
-        let channel = client.realtimeV2.channel("postgres-filter")
+        let channel = await client.realtime.channel("postgres-filter")
 
         struct Entry: Codable, Equatable {
           let key: String
@@ -474,33 +444,30 @@
         let testKey1 = UUID().uuidString
         let testKey2 = UUID().uuidString
 
-        // Set up filter for specific key
-        let filteredTask = Task {
-          await channel.postgresChange(
-            InsertAction.self,
-            schema: "public",
-            table: "key_value_storage",
-            filter: .eq("key", value: testKey1)
-          ).prefix(1).collect()
+        let filtered = await channel.postgresChanges(
+          InsertAction.self,
+          schema: "public",
+          table: "key_value_storage",
+          filter: .eq("key", value: testKey1)
+        )
+        let system = await channel.systemMessages()
+
+        try await channel.subscribe()
+
+        _ = try await withTimeout(.seconds(10)) {
+          await system.first(where: { _ in true })
         }
 
-        try await channel.subscribeWithError()
-
-        // Wait for subscription
-        _ = await channel.system().first(where: { _ in true })
-
-        // Insert with key1 - should be received
         _ = try await client.from("key_value_storage")
           .insert(["key": testKey1, "value": "filtered"]).select().single().execute()
 
         try await Task.sleep(nanoseconds: 500_000_000)
 
-        // Insert with key2 - should NOT be received
         _ = try await client.from("key_value_storage")
           .insert(["key": testKey2, "value": "not-filtered"]).select().single().execute()
 
         let received = try await withTimeout(.seconds(5)) {
-          await filteredTask.value
+          await filtered.prefix(1).collect()
         }
 
         #expect(received.count == 1)
@@ -516,56 +483,36 @@
     func postgresChangesMultipleSubscriptions() async throws {
       let client = client
       try await withMainSerialExecutor {
-        await client.realtimeV2.connect()
+        try await client.realtime.connect()
 
-        let channel = client.realtimeV2.channel("postgres-multi")
+        let channel = await client.realtime.channel("postgres-multi")
 
         struct Entry: Codable, Equatable {
           let key: String
           let value: JSONValue
         }
 
-        let insertTask = Task {
-          await channel.postgresChange(
-            InsertAction.self,
-            schema: "public",
-            table: "key_value_storage"
-          )
-          .prefix(1).collect()
+        let insertions = await channel.postgresChanges(
+          InsertAction.self, schema: "public", table: "key_value_storage")
+        let updates = await channel.postgresChanges(
+          UpdateAction.self, schema: "public", table: "key_value_storage")
+        let deletions = await channel.postgresChanges(
+          DeleteAction.self, schema: "public", table: "key_value_storage")
+        let system = await channel.systemMessages()
+
+        try await channel.subscribe()
+
+        _ = try await withTimeout(.seconds(10)) {
+          await system.first(where: { _ in true })
         }
-
-        let updateTask = Task {
-          await channel.postgresChange(
-            UpdateAction.self,
-            schema: "public",
-            table: "key_value_storage"
-          )
-          .prefix(1).collect()
-        }
-
-        let deleteTask = Task {
-          await channel.postgresChange(
-            DeleteAction.self,
-            schema: "public",
-            table: "key_value_storage"
-          )
-          .prefix(1).collect()
-        }
-
-        try await channel.subscribeWithError()
-
-        // Wait for subscription
-        _ = await channel.system().first(where: { _ in true })
 
         let testKey = UUID().uuidString
 
-        // Insert
         _ = try await client.from("key_value_storage")
           .insert(["key": testKey, "value": "value1"]).select().single().execute()
 
         try await Task.sleep(nanoseconds: 500_000_000)
 
-        // Update
         try await client.from("key_value_storage").update(["value": "value2"]).eq(
           "key",
           value: testKey
@@ -574,111 +521,45 @@
 
         try await Task.sleep(nanoseconds: 500_000_000)
 
-        // Delete
         try await client.from("key_value_storage").delete().eq("key", value: testKey).execute()
 
-        let inserts = try await withTimeout(.seconds(5)) {
-          await insertTask.value
+        let inserted = try await withTimeout(.seconds(5)) {
+          await insertions.prefix(1).collect()
         }
 
-        let updates = try await withTimeout(.seconds(5)) {
-          await updateTask.value
+        let updated = try await withTimeout(.seconds(5)) {
+          await updates.prefix(1).collect()
         }
 
-        let deletes = try await withTimeout(.seconds(5)) {
-          await deleteTask.value
+        let deleted = try await withTimeout(.seconds(5)) {
+          await deletions.prefix(1).collect()
         }
 
-        #expect(inserts.count == 1)
-        #expect(updates.count == 1)
-        #expect(deletes.count == 1)
+        #expect(inserted.count == 1)
+        #expect(updated.count == 1)
+        #expect(deleted.count == 1)
 
         await channel.unsubscribe()
       }
     }
 
-    // MARK: - Error Handling Tests
+    //      try await client.realtime.connect()
+    //      let channel = await client.realtime.channel("invalid-channel-test")
+    //        try await channel.subscribe()
+    //      let channel1 = await client.realtime.channel("broadcast-no-sub")
+    //      let channel2 = await client2.realtime.channel("broadcast-no-sub")
+    //        await channel2.broadcasts(event: "test").prefix(1).collect()
+    //      try await channel2.subscribe()
 
-    //    func testSubscribeToInvalidChannel() async throws {
-    //      await client.realtimeV2.connect()
-    //
-    //      // Try to subscribe to a channel that might not exist or have permissions
-    //      let channel = client.realtimeV2.channel("invalid-channel-test")
-    //
-    //      // This should not throw if the channel is just a name
-    //      // But if there are RLS policies, it might fail
-    //      do {
-    //        try await channel.subscribeWithError()
-    //        // If it succeeds, that's fine too
-    //      } catch {
-    //        // If it fails, that's expected for some configurations
-    //        XCTAssertNotNil(error)
-    //      }
-    //    }
-    //
-    //    func testBroadcastWithoutSubscription() async throws {
-    //      let channel1 = client.realtimeV2.channel("broadcast-no-sub")
-    //      let channel2 = client2.realtimeV2.channel("broadcast-no-sub")
-    //
-    //      struct Message: Codable {
-    //        let data: String
-    //        let timestamp: Int
-    //      }
-    //
-    //      let receivedMessagesTask = Task {
-    //        await channel2.broadcastStream(event: "test").prefix(1).collect()
-    //      }
-    //
-    //      // Subscribe the second client to receive broadcasts
-    //      try await channel2.subscribeWithError()
-    //
-    //      // httpSend requires Authorization, sign in with a test user before broadcasting.
-    //      try await client.auth.signUp(
-    //        email: "test-\(UUID().uuidString)@example.com",
-    //        password: "The.pass123"
-    //      )
-    //
-    //      // Give time for token propagate from auth to realtime.
-    //      await Task.megaYield()
-    //
-    //      // Send broadcast via HTTP from first client (without subscription)
-    //      // This should fall back to HTTP and be received by the second client
-    //      try await channel1.httpSend(
-    //        event: "test",
-    //        message: Message(data: "test-data", timestamp: 12345)
-    //      )
-    //
-    //      // Verify the second client received the broadcast
-    //      let receivedMessages = try await withTimeout(.seconds(5)) {
-    //        await receivedMessagesTask.value
-    //      }
-    //
-    //      XCTAssertEqual(receivedMessages.count, 1)
-    //      let receivedPayload = receivedMessages[0]["payload"]?.objectValue
-    //      XCTAssertEqual(receivedPayload?["data"]?.stringValue, "test-data")
-    //      XCTAssertEqual(receivedPayload?["timestamp"]?.intValue, 12345)
-    //
-    //      await channel1.unsubscribe()
-    //      await channel2.unsubscribe()
-    //    }
-
-    // MARK: - Real Application Simulation
-
-    /// Simulates a real application scenario with 2 clients using broadcast and presence.
-    /// This test simulates a chat room or collaborative workspace where:
-    /// - Users join and track their presence
-    /// - Users exchange messages via broadcast
-    /// - Users can see each other's presence changes
     @Test
     func realApplicationScenario_BroadcastAndPresence() async throws {
       let client = client
       let client2 = client2
       try await withMainSerialExecutor {
-        // User state models
         struct UserPresence: Codable, Equatable, Sendable {
           let userId: String
           let username: String
-          let status: String  // "online", "typing", "away"
+          let status: String
           let lastSeen: Date
         }
 
@@ -690,20 +571,17 @@
           let timestamp: Date
         }
 
-        // Connect both clients
-        await client.realtimeV2.connect()
-        await client2.realtimeV2.connect()
+        try await client.realtime.connect()
+        try await client2.realtime.connect()
 
-        // Both users join the same channel (e.g., a chat room or workspace)
-        let channel1 = client.realtimeV2.channel("app-room") {
+        let channel1 = await client.realtime.channel("app-room") {
           $0.broadcast.receiveOwnBroadcasts = true
         }
 
-        let channel2 = client2.realtimeV2.channel("app-room") {
+        let channel2 = await client2.realtime.channel("app-room") {
           $0.broadcast.receiveOwnBroadcasts = true
         }
 
-        // Set up presence tracking for both users
         let user1Id = UUID().uuidString
         let user2Id = UUID().uuidString
 
@@ -721,40 +599,23 @@
           lastSeen: Date()
         )
 
-        // Set up listeners for presence changes
-        let client1PresenceChanges = Task {
-          await channel1.presenceChange().prefix(5).collect()
-        }
+        let client1PresenceChanges = await channel1.presenceChanges()
+        let client2PresenceChanges = await channel2.presenceChanges()
 
-        let client2PresenceChanges = Task {
-          await channel2.presenceChange().prefix(5).collect()
-        }
+        let client1Messages = await channel1.broadcasts(event: "chat-message")
+        let client2Messages = await channel2.broadcasts(event: "chat-message")
 
-        // Set up listeners for chat messages
-        let client1Messages = Task {
-          await channel1.broadcastStream(event: "chat-message").prefix(3).collect()
-        }
+        try await channel1.subscribe()
+        try await channel2.subscribe()
 
-        let client2Messages = Task {
-          await channel2.broadcastStream(event: "chat-message").prefix(3).collect()
-        }
-
-        // Subscribe both clients
-        try await channel1.subscribeWithError()
-        try await channel2.subscribeWithError()
-
-        // Wait for subscriptions to be ready
         try await Task.sleep(nanoseconds: 500_000_000)
 
-        // User 1 joins and tracks presence
         try await channel1.track(user1Presence)
         try await Task.sleep(nanoseconds: 500_000_000)
 
-        // User 2 joins and tracks presence
         try await channel2.track(user2Presence)
         try await Task.sleep(nanoseconds: 500_000_000)
 
-        // User 1 sends a message
         let message1 = ChatMessage(
           messageId: UUID().uuidString,
           userId: user1Id,
@@ -765,7 +626,6 @@
         try await channel1.broadcast(event: "chat-message", message: message1)
         try await Task.sleep(nanoseconds: 500_000_000)
 
-        // User 2 updates presence to "typing"
         let user2Typing = UserPresence(
           userId: user2Id,
           username: "Bob",
@@ -775,7 +635,6 @@
         try await channel2.track(user2Typing)
         try await Task.sleep(nanoseconds: 500_000_000)
 
-        // User 2 sends a reply
         let message2 = ChatMessage(
           messageId: UUID().uuidString,
           userId: user2Id,
@@ -786,7 +645,6 @@
         try await channel2.broadcast(event: "chat-message", message: message2)
         try await Task.sleep(nanoseconds: 500_000_000)
 
-        // User 2 updates presence back to "online"
         let user2Online = UserPresence(
           userId: user2Id,
           username: "Bob",
@@ -796,7 +654,6 @@
         try await channel2.track(user2Online)
         try await Task.sleep(nanoseconds: 500_000_000)
 
-        // User 1 sends another message
         let message3 = ChatMessage(
           messageId: UUID().uuidString,
           userId: user1Id,
@@ -807,54 +664,34 @@
         try await channel1.broadcast(event: "chat-message", message: message3)
         try await Task.sleep(nanoseconds: 500_000_000)
 
-        // User 1 leaves (untracks presence)
-        await channel1.untrack()
+        try await channel1.untrack()
         try await Task.sleep(nanoseconds: 500_000_000)
 
-        // Collect all events
         let presenceChanges1 = try await withTimeout(.seconds(5)) {
-          await client1PresenceChanges.value
+          await client1PresenceChanges.prefix(5).collect()
         }
 
         let presenceChanges2 = try await withTimeout(.seconds(5)) {
-          await client2PresenceChanges.value
+          await client2PresenceChanges.prefix(5).collect()
         }
 
         let messages1 = try await withTimeout(.seconds(5)) {
-          await client1Messages.value
+          await client1Messages.prefix(3).collect()
         }
 
         let messages2 = try await withTimeout(.seconds(5)) {
-          await client2Messages.value
+          await client2Messages.prefix(3).collect()
         }
 
-        // Verify presence changes
-        // Client 1 should see:
-        // 1. Initial state (empty)
-        // 2. User 1 joins (themselves)
-        // 3. User 2 joins
-        // 4. User 2 status changes to "typing"
-        // 5. User 2 status changes back to "online"
         #expect(presenceChanges1.count >= 3, "Client 1 should see presence changes")
 
-        // Client 2 should see:
-        // 1. Initial state (empty)
-        // 2. User 1 joins
-        // 3. User 2 joins (themselves)
-        // 4. User 2 status changes to "typing"
-        // 5. User 2 status changes back to "online"
-        // 6. User 1 leaves
         #expect(presenceChanges2.count >= 3, "Client 2 should see presence changes")
 
-        // Verify both clients can decode presence
-        // Note: Due to timing, exact presence changes may vary, but structure should be correct
         #expect(presenceChanges1.count > 0, "Client 1 should receive presence changes")
 
-        // Verify messages were received by both clients
         #expect(messages1.count == 3, "Client 1 should receive all 3 messages")
         #expect(messages2.count == 3, "Client 2 should receive all 3 messages")
 
-        // Verify message content
         let receivedMessage1 = try messages1[0]["payload"]?.objectValue?.decode(
           as: ChatMessage.self,
           decoder: .supabase()
@@ -869,7 +706,6 @@
         #expect(receivedMessage2?.text == "Hello, Bob! How are you?")
         #expect(receivedMessage2?.username == "Alice")
 
-        // Verify the last message
         let receivedMessage3 = try messages1[2]["payload"]?.objectValue?.decode(
           as: ChatMessage.self,
           decoder: .supabase()
@@ -877,29 +713,24 @@
         #expect(receivedMessage3?.text == "Great to hear! Let's work on the project together.")
         #expect(receivedMessage3?.username == "Alice")
 
-        // Verify user 1 leaving is detected by user 2
-        // Note: Due to timing, exact presence changes may vary, but structure should be correct
         #expect(presenceChanges2.count > 0, "Client 2 should receive presence changes")
 
-        // Cleanup
         await channel1.unsubscribe()
         await channel2.unsubscribe()
       }
     }
 
-    // MARK: - Helpers
-
-    private func subscribeMany(_ channels: [RealtimeChannelV2]) async throws {
+    private func subscribeMany(_ channels: [RealtimeChannel]) async throws {
       try await withThrowingTaskGroup { group in
         for channel in channels {
-          group.addTask { try await channel.subscribeWithError() }
+          group.addTask { try await channel.subscribe() }
         }
 
         try await group.waitForAll()
       }
     }
 
-    private func unsubscribeMany(_ channels: [RealtimeChannelV2]) async {
+    private func unsubscribeMany(_ channels: [RealtimeChannel]) async {
       await withTaskGroup { group in
         for channel in channels {
           group.addTask { await channel.unsubscribe() }

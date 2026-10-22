@@ -13,8 +13,6 @@ import Testing
 @Suite
 struct RealtimeJoinConfigTests {
 
-  // MARK: - RealtimeJoinPayload Tests
-
   @Test
   func realtimeJoinPayloadInit() {
     let config = RealtimeJoinConfig()
@@ -46,8 +44,6 @@ struct RealtimeJoinConfigTests {
     #expect(jsonObject?["access_token"] as? String == "token123")
     #expect(jsonObject?["version"] as? String == "1.0")
   }
-
-  // MARK: - RealtimeJoinConfig Tests
 
   @Test
   func realtimeJoinConfigDefaults() {
@@ -123,8 +119,6 @@ struct RealtimeJoinConfigTests {
     #expect(jsonObject?["private"] as? Bool == true)
   }
 
-  // MARK: - BroadcastJoinConfig Tests
-
   @Test
   func broadcastJoinConfigDefaults() {
     let config = BroadcastJoinConfig()
@@ -186,8 +180,6 @@ struct RealtimeJoinConfigTests {
     #expect(jsonObject?["replication_ready"] as? Bool == true)
   }
 
-  // MARK: - PresenceJoinConfig Tests
-
   @Test
   func presenceJoinConfigDefaults() {
     let config = PresenceJoinConfig()
@@ -220,8 +212,6 @@ struct RealtimeJoinConfigTests {
     #expect(jsonObject?["enabled"] as? Bool == true)
   }
 
-  // MARK: - PostgresChangeEvent Tests
-
   @Test
   func postgresChangeEventRawValues() {
     #expect(PostgresChangeEvent.insert.rawValue == "INSERT")
@@ -251,8 +241,6 @@ struct RealtimeJoinConfigTests {
 
     #expect(decodedEvents == events)
   }
-
-  // MARK: - PostgresJoinConfig Additional Tests
 
   @Test
   func postgresJoinConfigDefaults() {
@@ -301,7 +289,7 @@ struct RealtimeJoinConfigTests {
     let data = try encoder.encode(config)
 
     let jsonObject = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-    #expect(jsonObject?["id"] == nil)  // Should not encode id when it's 0
+    #expect(jsonObject?["id"] == nil)
   }
 
   @Test
@@ -318,7 +306,7 @@ struct RealtimeJoinConfigTests {
     let data = try encoder.encode(config)
 
     let jsonObject = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-    #expect(jsonObject?["table"] == nil)  // Should not encode nil table
-    #expect(jsonObject?["filter"] == nil)  // Should not encode nil filter
+    #expect(jsonObject?["table"] == nil)
+    #expect(jsonObject?["filter"] == nil)
   }
 }

@@ -15,11 +15,11 @@ import Testing
 
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil))
 final class VectorIndexClientIntegrationTests {
-  let vectors = SupabaseStorageClient(
+  let vectors = StorageClient(
     configuration: StorageClientConfiguration(
       url: URL(string: "\(DotEnv.supabaseURL)/storage/v1")!,
       headers: [
-        "Authorization": "Bearer \(DotEnv.supabaseSecretKey)"
+        .authorization: "Bearer \(DotEnv.supabaseSecretKey)"
       ]
     )
   ).vectors
@@ -31,14 +31,12 @@ final class VectorIndexClientIntegrationTests {
     try await vectors.createBucket(bucketName)
   }
 
-  // Async cleanup can outlive the test if the process exits immediately after — acceptable for
-  // local dev/CI cleanup, not correctness-critical.
   deinit {
     let vectors = vectors
     let bucketName = bucketName
     Task {
       let bucket = vectors.from(bucketName)
-      if let indexes = try? await bucket.listIndexes() {
+      if let indexes = try? await bucket.listIndexes().page() {
         for index in indexes.indexes {
           try? await bucket.deleteIndex(index.indexName)
         }
@@ -52,7 +50,7 @@ final class VectorIndexClientIntegrationTests {
     let bucket = vectors.from(bucketName)
     let indexName = "test-index"
 
-    var page = try await bucket.listIndexes()
+    var page = try await bucket.listIndexes().page()
     #expect(!page.indexes.contains { $0.indexName == indexName })
 
     try await bucket.createIndex(
@@ -71,12 +69,12 @@ final class VectorIndexClientIntegrationTests {
     #expect(index.dimension == 3)
     #expect(index.distanceMetric == .cosine)
 
-    page = try await bucket.listIndexes()
+    page = try await bucket.listIndexes().page()
     #expect(page.indexes.contains { $0.indexName == indexName })
 
     try await bucket.deleteIndex(indexName)
 
-    page = try await bucket.listIndexes()
+    page = try await bucket.listIndexes().page()
     #expect(!page.indexes.contains { $0.indexName == indexName })
   }
 
@@ -97,20 +95,18 @@ final class VectorIndexClientIntegrationTests {
       keys: ["a", "b"], returnData: true, returnMetadata: true)
     #expect(fetched.count == 2)
     let a = try #require(fetched.first { $0.key == "a" })
-    // The pgvector backend stores embeddings as `halfvec` (half precision), so components
-    // round-trip with reduced precision rather than exactly.
     let aData = try #require(a.data?.float32)
     for (actual, expected) in zip(aData, [0.1, 0.2, 0.3] as [Float]) {
       #expect(abs(actual - expected) < 0.001)
     }
     #expect(a.metadata?["type"]?.stringValue == "doc")
 
-    let listed = try await index.listVectors(returnData: true)
+    let listed = try await index.listVectors(returnData: true).page()
     #expect(listed.vectors.map(\.key).sorted() == ["a", "b"])
 
     try await index.deleteVectors(keys: ["a"])
 
-    let afterDelete = try await index.listVectors()
+    let afterDelete = try await index.listVectors().page()
     #expect(afterDelete.vectors.map(\.key) == ["b"])
   }
 

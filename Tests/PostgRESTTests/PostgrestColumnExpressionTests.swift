@@ -12,7 +12,7 @@ import Testing
 
 @Suite
 struct PostgrestColumnExpressionTests {
-  struct Todo: PostgrestRelation {
+  struct Todo: _PostgrestRelation {
     static let relationName = "todos"
     static let selectString = "*"
 
@@ -21,9 +21,9 @@ struct PostgrestColumnExpressionTests {
     var dueDate: Date?
 
     struct Columns: Sendable {
-      let id = PostgrestColumn<Todo, Int>("id")
-      let isDone = PostgrestColumn<Todo, Bool>("is_done")
-      let dueDate = PostgrestNullableColumn<Todo, Date>("due_at")
+      let id = _PostgrestColumn<Todo, Int>("id")
+      let isDone = _PostgrestColumn<Todo, Bool>("is_done")
+      let dueDate = _PostgrestNullableColumn<Todo, Date>("due_at")
     }
 
     static let columns = Columns()
@@ -40,19 +40,16 @@ struct PostgrestColumnExpressionTests {
     #expect(type(of: Todo.columns.isDone).Value.self == Bool.self)
   }
 
-  /// `var dueDate: Date?` gives `Value == Date`, so operators take a non-optional operand.
   @Test
   func aNullableColumnCarriesItsWrappedType() {
     #expect(type(of: Todo.columns.dueDate).Value.self == Date.self)
   }
 
-  /// A plain column sits in all three positions; casts, aggregates and to-many projections are
-  /// select-only.
   @Test
   func bothColumnKindsAreSelectableFilterableAndOrderable() {
-    #expect((Todo.columns.id as Any) is any PostgrestFilterableExpression)
-    #expect((Todo.columns.id as Any) is any PostgrestOrderableExpression)
-    #expect((Todo.columns.dueDate as Any) is any PostgrestFilterableExpression)
-    #expect((Todo.columns.dueDate as Any) is any PostgrestOrderableExpression)
+    #expect((Todo.columns.id as Any) is any _PostgrestFilterableExpression)
+    #expect((Todo.columns.id as Any) is any _PostgrestOrderableExpression)
+    #expect((Todo.columns.dueDate as Any) is any _PostgrestFilterableExpression)
+    #expect((Todo.columns.dueDate as Any) is any _PostgrestOrderableExpression)
   }
 }
