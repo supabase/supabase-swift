@@ -116,11 +116,9 @@ public actor RealtimeChannel {
   /// must not keep the client (and its socket) alive.
   weak var client: RealtimeClient?
 
-  nonisolated let maxRetryAttempts: Int
   nonisolated let timeout: Duration
   nonisolated let clock: any Clock<Duration>
   nonisolated let connectOnSubscribe: Bool
-  nonisolated let retryDelay: @Sendable (_ attempt: Int) -> Duration
 
   // MARK: Subscription state
 
@@ -155,8 +153,13 @@ public actor RealtimeChannel {
   /// of server closes so a close for a previous incarnation of the topic is ignored.
   var joinRef: String?
 
-  /// Resumed by the server's join confirmation; failed by a close, a reset, or cancellation.
+  /// Resumed by the server's join confirmation; failed by a join error, a close, a reset, or
+  /// cancellation.
   var joinWaiter: (ref: String, continuation: CheckedContinuation<Void, any Error>)?
+
+  /// A join error that arrived while its `phx_join` was still being sent, before the attempt
+  /// parked its waiter. The attempt for `ref` picks it up.
+  var joinFailure: (ref: String, error: RealtimeError)?
 
   /// Resumed by the server's `phx_close` while an unsubscribe waits for it.
   var closeWaiter: CheckedContinuation<Void, Never>?
@@ -220,9 +223,7 @@ public actor RealtimeChannel {
     topic: String,
     config: RealtimeChannelConfig,
     client: RealtimeClient,
-    logger: Logging.Logger,
-    retryDelay: @escaping @Sendable (_ attempt: Int) -> Duration = RealtimeChannel
-      .defaultRetryDelay
+    logger: Logging.Logger
   ) {
     self.topic = topic
     self.subTopic =
@@ -231,11 +232,9 @@ public actor RealtimeChannel {
     self.logger = logger
     self.client = client
     self.isolation = client.isolation
-    self.maxRetryAttempts = client.options.maxRetryAttempts
     self.timeout = client.options.timeout
     self.clock = client.clock
     self.connectOnSubscribe = client.options.connectOnSubscribe
-    self.retryDelay = retryDelay
   }
 
   deinit {
@@ -525,10 +524,17 @@ public actor RealtimeChannel {
   }
 
   private func handleSystem(_ message: RealtimeMessageV2) {
-    if message.status == .ok {
+    switch message.status {
+    case .ok where message.joinRef == nil || message.joinRef == joinRef:
       didReceiveSubscribedOK()
-    } else {
-      logger.debug("Failed to subscribe to channel \(message.topic): \(message.payload)")
+    case .error:
+      // The server reports a postgres-changes subscription it could not set up this way. The
+      // join itself stands, so broadcast and presence keep working and the channel stays
+      // subscribed.
+      let reason = message.payload["message"]?.stringValue ?? "\(message.payload)"
+      logger.error("Channel '\(topic)' reported an error: \(reason)")
+    default:
+      break
     }
 
     for case .system(let continuation) in listeners.map(\.listener) {
@@ -544,17 +550,32 @@ public actor RealtimeChannel {
       throw RealtimeError.decoding("Received a reply with unexpected payload: \(message)")
     }
 
-    didReceiveReply(ref: ref, status: PushStatus(rawValue: status), payload: message.payload)
+    // A reply to `phx_join` carries the join's ref. A late reply to an earlier join of this
+    // topic matches neither the current join nor a push, so it is dropped.
+    if ref == joinRef {
+      try didReceiveJoinReply(
+        ref: ref, status: PushStatus(rawValue: status), payload: message.payload)
+    } else {
+      didReceiveReply(ref: ref, status: PushStatus(rawValue: status), payload: message.payload)
+    }
+  }
 
-    guard
-      message.payload["response"]?.objectValue?.keys
-        .contains(ChannelEvent.postgresChanges) == true
-    else { return }
+  private func didReceiveJoinReply(ref: String, status: PushStatus, payload: JSONObject) throws {
+    let response = payload["response"]
+    guard status != .error else {
+      let reason =
+        response?.objectValue?["reason"]?.stringValue
+        ?? response?.stringValue
+        ?? "The server rejected the join."
+      didReceiveJoinError(.joinError(reason: reason), for: ref)
+      return
+    }
 
+    guard response?.objectValue?.keys.contains(ChannelEvent.postgresChanges) == true else {
+      return
+    }
     serverChanges =
-      try message.payload["response"]?
-      .objectValue?["postgres_changes"]?
-      .decode(as: [PostgresJoinConfig].self) ?? []
+      try response?.objectValue?["postgres_changes"]?.decode(as: [PostgresJoinConfig].self) ?? []
     didReceiveSubscribedOK()
   }
 
@@ -750,18 +771,12 @@ public actor RealtimeChannel {
     listeners.compactMap { if case .postgres(let config, _) = $0.listener { config } else { nil } }
   }
 
-  /// Default exponential-backoff retry delay with ±25% jitter, capped at 30s.
-  static let defaultRetryDelay: @Sendable (_ attempt: Int) -> Duration = { attempt in
-    let baseDelay: Double = 1.0
-    let maxDelay: Double = 30.0
-    let backoffMultiplier: Double = 2.0
+  /// The waits between join attempts after a timeout, a lost connection, or a transient join
+  /// error. The last step repeats.
+  static let rejoinBackoff = BackoffPolicy.steps([
+    .seconds(1), .seconds(2), .seconds(5), .seconds(10),
+  ])
 
-    let exponentialDelay = baseDelay * pow(backoffMultiplier, Double(attempt - 1))
-    let cappedDelay = min(exponentialDelay, maxDelay)
-
-    let jitterRange = cappedDelay * 0.25
-    let jitter = Double.random(in: -jitterRange...jitterRange)
-
-    return .seconds(max(0.1, cappedDelay + jitter))
-  }
+  /// The wait before the next join attempt after the server applied a rate limit.
+  static let rateLimitBackoff: Duration = .seconds(30)
 }

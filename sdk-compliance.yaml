@@ -250,7 +250,6 @@ supporting_symbols:
   - RealtimeError.Kind.rawValue
   - RealtimeError.Kind.timeout
   - RealtimeError.Kind.accessTokenMissing
-  - RealtimeError.Kind.maxRetryAttemptsReached
   - RealtimeError.Kind.channelClosedByServer
   - RealtimeError.Kind.server
   - RealtimeError.Kind.transport
@@ -261,7 +260,6 @@ supporting_symbols:
   - RealtimeError.response
   - RealtimeError.underlyingError
   - RealtimeError.description
-  - RealtimeError.maxRetryAttemptsReached
   - RealtimeError.channelClosedByServer
   - RealtimeError.Kind.notSubscribed
   - RealtimeError.Kind.notConnected
