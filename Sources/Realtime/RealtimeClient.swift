@@ -86,6 +86,8 @@ public actor RealtimeClient {
   var isFetchingAccessToken = false
   /// The callers waiting for the call in flight. A cancelled caller is resumed early.
   var accessTokenWaiters: [UUID: CheckedContinuation<Void, Never>] = [:]
+  /// How many `accessToken` callback calls have started.
+  var accessTokenFetchCount = 0
   /// When the `accessToken` callback was last called, as read from `elapsed`.
   var lastAccessTokenFetch: Duration?
   /// The time since the client was created, on `clock`.
@@ -475,12 +477,11 @@ public actor RealtimeClient {
   // MARK: - Authentication
 
   /// The token a channel joins with, refreshed from the `accessToken` callback first unless it
-  /// was called within ``accessTokenRefreshInterval``. While a refresh is in flight, the stored
-  /// token is returned at once; only a client with no token yet waits for the refresh.
+  /// was called within ``accessTokenRefreshInterval``. A join that arrives while a call is in
+  /// flight waits for it: the stored token may be expired, or the key from the `Authorization`
+  /// header.
   func currentAccessToken() async -> String? {
-    if !isFetchingAccessToken || tokens.token == nil {
-      await refreshAccessToken()
-    }
+    await refreshAccessToken()
     return tokens.token
   }
 
@@ -507,14 +508,27 @@ public actor RealtimeClient {
     }
     // An unchanged token must not start a new generation: that would discard a newer token from
     // a callback call in flight.
-    guard token != tokens.token else { return }
-    await storeAccessToken(token, generation: tokens.beginRefresh())
+    guard token != tokens.token, tokens.apply(token, generation: tokens.beginRefresh()) else {
+      return
+    }
+    scheduleAccessTokenRefresh()
+    await pushAccessToken(token)
   }
 
   /// Calls the `accessToken` callback even inside ``accessTokenRefreshInterval``, for a channel
-  /// whose join the server refused because of its token.
+  /// whose join the server refused because of its token. A call already in flight started
+  /// before the refusal and may return the refused token, so a new call follows it unless
+  /// another caller already started one.
   func refreshTokenForRejoin() async {
-    await refreshAccessToken(ignoringInterval: true)
+    let fetchesBefore = accessTokenFetchCount
+    if isFetchingAccessToken {
+      await waitForAccessTokenFetch()
+    }
+    if accessTokenFetchCount == fetchesBefore {
+      await refreshAccessToken(ignoringInterval: true)
+    } else if isFetchingAccessToken {
+      await waitForAccessTokenFetch()
+    }
   }
 
   /// Asks the `accessToken` callback for a token and stores it unless a newer token was set
@@ -533,6 +547,7 @@ public actor RealtimeClient {
     }
     lastAccessTokenFetch = now
     isFetchingAccessToken = true
+    accessTokenFetchCount += 1
 
     let generation = tokens.beginRefresh()
     let timeout = options.timeout
@@ -560,36 +575,39 @@ public actor RealtimeClient {
   ) async -> String? {
     let deadline = clock.now.advanced(by: timeout)
     let pending = LockIsolated<CheckedContinuation<String?, Never>?>(nil)
-    let timer = LockIsolated<Task<Void, Never>?>(nil)
-    let finish: @Sendable (String?) -> Void = { token in
+    let call = LockIsolated<Task<Void, Never>?>(nil)
+    // Returns whether this resumed the caller: only the first of the call and the timer does.
+    let finish: @Sendable (String?) -> Bool = { token in
       pending.withValue {
+        defer { $0 = nil }
         $0?.resume(returning: token)
-        $0 = nil
+        return $0 != nil
       }
     }
     return await withCheckedContinuation { continuation in
       pending.setValue(continuation)
-      let call = Task {
-        let token: String?
+      // The timer exists before the call starts, so a call that returns at once can cancel it.
+      let timer = Task {
         do {
-          token = try await provider()
+          try await clock.sleep(until: deadline, tolerance: nil)
         } catch {
-          logger.error("Failed to fetch access token: \(error)")
-          token = nil
+          return
         }
-        timer.value?.cancel()
-        finish(token)
+        guard finish(nil) else { return }
+        logger.error("The access token callback did not return within \(timeout)")
+        call.value?.cancel()
       }
-      timer.setValue(
+      call.setValue(
         Task {
+          let token: String?
           do {
-            try await clock.sleep(until: deadline, tolerance: nil)
+            token = try await provider()
           } catch {
-            return
+            logger.error("Failed to fetch access token: \(error)")
+            token = nil
           }
-          logger.error("The access token callback did not return within \(timeout)")
-          call.cancel()
-          finish(nil)
+          timer.cancel()
+          _ = finish(token)
         })
     }
   }
@@ -615,36 +633,43 @@ public actor RealtimeClient {
     accessTokenWaiters.removeValue(forKey: id)?.resume()
   }
 
+  /// Stores the result, then resumes the waiters before the token is sent to channels, so a
+  /// join waiting for it does not also wait for every push.
   private func didFetchAccessToken(_ token: String?, generation: Int) async {
-    if await !storeAccessToken(token, generation: generation) {
-      // Scheduled even when nothing changed, so a callback that failed or returned the same
-      // token is asked again.
-      scheduleAccessTokenRefresh()
-    }
+    let stored = tokens.apply(token, generation: generation)
+    // Scheduled even when nothing changed, so a callback that failed or returned the same token
+    // is asked again.
+    scheduleAccessTokenRefresh()
     isFetchingAccessToken = false
     let waiters = accessTokenWaiters.values
     accessTokenWaiters = [:]
     for waiter in waiters {
       waiter.resume()
     }
+    if stored, let token = tokens.token {
+      await pushAccessToken(token)
+    }
   }
 
-  /// Stores `token` if it is new and from the latest refresh, then sends it to every subscribed
-  /// channel. Returns whether it was stored.
-  @discardableResult
-  private func storeAccessToken(_ token: String?, generation: Int) async -> Bool {
-    guard tokens.apply(token, generation: generation), let token = tokens.token else {
-      return false
-    }
-    scheduleAccessTokenRefresh()
-
-    for channel in channels.values where await channel.status == .subscribed {
+  /// Sends `token` to every subscribed channel, and to every channel whose `phx_join` already
+  /// went out with another token. A channel still waiting for a token joins with this one.
+  private func pushAccessToken(_ token: String) async {
+    for channel in channels.values {
       // A newer token was stored while this loop was suspended; its own loop sends it.
       guard tokens.token == token else { break }
+      switch await channel.status {
+      case .subscribed:
+        break
+      case .subscribing:
+        guard await channel.joinRef != nil, await channel.joinAccessToken != token else {
+          continue
+        }
+      default:
+        continue
+      }
       options.logger.debug("Updating auth token for channel \(channel.topic)")
       await channel.push(ChannelEvent.accessToken, payload: ["access_token": .string(token)])
     }
-    return true
   }
 
   /// Refreshes ``accessTokenRefreshLeeway`` before the token's `exp`, and never sooner than

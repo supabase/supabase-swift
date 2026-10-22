@@ -60,12 +60,27 @@ struct RealtimeClientAccessTokenTests {
     let host = await makeHost(provider)
     expiry.setValue(expiresIn(120, on: host))
     try await subscribe(host)
+    #expect(await hasRefreshTimer(host))
+
     await host.client.disconnect()
+    #expect(await !hasRefreshTimer(host))
 
     await host.client.setAuth(makeJWT(exp: expiresIn(121, on: host)))
-    await host.clock.advance(by: .seconds(61))
+    #expect(await !hasRefreshTimer(host))
+  }
 
-    #expect(provider.calls == 1)
+  @Test
+  func aDroppedSocketStopsTheTimer() async throws {
+    let expiry = LockIsolated<TimeInterval>(0)
+    let provider = TokenProvider { _ in makeJWT(exp: expiry.value) }
+    let host = await makeHost(provider)
+    expiry.setValue(expiresIn(120, on: host))
+    try await subscribe(host)
+    #expect(await hasRefreshTimer(host))
+
+    host.server?.close(code: nil, reason: "dropped")
+    await host.waitUntil { host.statuses.last == .connecting }
+    #expect(await !hasRefreshTimer(host))
   }
 
   @Test
@@ -159,8 +174,9 @@ struct RealtimeClientAccessTokenTests {
     let first = Task { await host.client.currentAccessToken() }
     await gate.waitForCall()
     // Inside the interval, a second caller that did not share the call would get no token.
-    let second = Task { await host.client.currentAccessToken() }
-    gate.release("shared")
+    let second = await startWaiting(on: host, thenRelease: gate, with: "shared") {
+      await $0.currentAccessToken()
+    }
 
     #expect(await first.value == "shared")
     #expect(await second.value == "shared")
@@ -168,20 +184,71 @@ struct RealtimeClientAccessTokenTests {
   }
 
   @Test
-  func aJoinUsesTheStoredTokenWhileARefreshIsInFlight() async {
+  func aJoinDuringARefreshWaitsForTheNewToken() async {
     let gate = CallbackGate()
     let provider = TokenProvider { _ in await gate.park() }
-    let host = await makeHost(provider)
-    await host.client.setAuth("stored")
+    let host = await makeHost(provider, headers: ["Authorization": "Bearer anon-key"])
 
-    let slowRefresh = Task { await host.client.setAuth() }
+    let first = Task { await host.client.currentAccessToken() }
     await gate.waitForCall()
+    let second = await startWaiting(on: host, thenRelease: gate, with: "user-token") {
+      await $0.currentAccessToken()
+    }
 
-    #expect(await host.client.currentAccessToken() == "stored")
-    gate.release("refreshed")
-    await slowRefresh.value
-    #expect(await host.client.currentAccessToken() == "refreshed")
-    #expect(provider.calls == 1)
+    #expect(await first.value == "user-token")
+    #expect(await second.value == "user-token")
+  }
+
+  @Test
+  func aJoinSentWithTheOldTokenGetsTheNewOne() async throws {
+    let provider = TokenProvider { _ in "first" }
+    let host = await makeHost(provider)
+    let channel = await host.client.channel("room")
+
+    async let subscribed: Void = channel.subscribe()
+    let join = try await host.receive(event: ChannelEvent.join)
+    #expect(join.payload["access_token"] == "first")
+
+    await host.client.setAuth("second")
+    let push = try await host.receive(event: ChannelEvent.accessToken)
+    #expect(push.payload["access_token"] == "second")
+
+    host.confirmJoin(join)
+    try await subscribed
+  }
+
+  @Test
+  func waitersDoNotWaitForThePushesToChannels() async throws {
+    let callbackGate = CallbackGate()
+    let sendGate = CallbackGate()
+    let provider = TokenProvider { call in call == 1 ? "first" : await callbackGate.park() }
+    let host = await makeHost(provider)
+    try await subscribe(host)
+    await host.clock.advance(by: RealtimeClient.accessTokenRefreshInterval)
+    try #require(host.sockets.last).onSend { frame in
+      if case .text(let text) = frame, text.contains("\"\(ChannelEvent.accessToken)\"") {
+        _ = await sendGate.park()
+      }
+    }
+
+    let refresh = Task { await host.client.setAuth() }
+    await callbackGate.waitForCall()
+    let waiting = await startWaiting(on: host, thenRelease: callbackGate, with: "second") {
+      await $0.currentAccessToken()
+    }
+
+    // Bounded, so a waiter that waits for the parked push fails the test instead of hanging it.
+    let token = try await withTimeout(.seconds(5)) {
+      await withTaskCancellationHandler {
+        await waiting.value
+      } onCancel: {
+        waiting.cancel()
+      }
+    }
+    #expect(token == "second")
+    await sendGate.waitForCall()
+    sendGate.release(nil)
+    await refresh.value
   }
 
   @Test
@@ -237,6 +304,31 @@ struct RealtimeClientAccessTokenTests {
     await host.client.refreshTokenForRejoin()
     #expect(provider.calls == 2)
     #expect(await host.client.accessToken == "token-2")
+  }
+
+  @Test
+  func aRefreshForRejoinCallsAgainAfterACallThatStartedBeforeTheRefusal() async {
+    let gate = CallbackGate()
+    let provider = TokenProvider { call in call == 1 ? await gate.park() : "fresh" }
+    let host = await makeHost(provider)
+
+    let refresh = Task { await host.client.setAuth() }
+    await gate.waitForCall()
+    let rejoins = await host.client.withIsolation { client in
+      let rejoins = [
+        Task.immediateIfAvailable { await client.refreshTokenForRejoin() },
+        Task.immediateIfAvailable { await client.refreshTokenForRejoin() },
+      ]
+      gate.release("refused")
+      return rejoins
+    }
+    for rejoin in rejoins {
+      await rejoin.value
+    }
+    await refresh.value
+
+    #expect(await host.client.accessToken == "fresh")
+    #expect(provider.calls == 2)
   }
 
   // MARK: Helpers
@@ -306,14 +398,36 @@ struct RealtimeClientAccessTokenTests {
     }
   }
 
+  /// Starts `operation` on the client's executor and only then releases `gate`, so `operation`
+  /// is already waiting for the callback call when that call finishes.
+  private func startWaiting<T: Sendable>(
+    on host: RealtimeTestHost,
+    thenRelease gate: CallbackGate,
+    with token: String,
+    _ operation: @escaping @Sendable (isolated RealtimeClient) async -> T
+  ) async -> Task<T, Never> {
+    await host.client.withIsolation { client in
+      let task = Task.immediateIfAvailable { await operation(client) }
+      gate.release(token)
+      return task
+    }
+  }
+
+  private func hasRefreshTimer(_ host: RealtimeTestHost) async -> Bool {
+    await host.client.withIsolation { !$0.tasks.tasks(at: .accessTokenRefresh).isEmpty }
+  }
+
   /// An `exp` `seconds` after the host client's own now, so the refresh delay is exact.
   private func expiresIn(_ seconds: TimeInterval, on host: RealtimeTestHost) -> TimeInterval {
     host.client.now().addingTimeInterval(seconds).timeIntervalSince1970
   }
 
-  private func makeHost(_ provider: TokenProvider) async -> RealtimeTestHost {
+  private func makeHost(
+    _ provider: TokenProvider, headers: [String: String] = [:]
+  ) async -> RealtimeTestHost {
     await RealtimeTestHost(
       options: RealtimeClientOptions(
+        headers: headers,
         heartbeatInterval: .seconds(3600),
         accessToken: provider.callback,
         handleAppLifecycle: false
@@ -331,5 +445,13 @@ struct RealtimeClientAccessTokenTests {
   private func accessTokenPushes(_ host: RealtimeTestHost) -> [String?] {
     host.frames.filter { $0.event == ChannelEvent.accessToken }
       .map { $0.payload["access_token"]?.stringValue }
+  }
+}
+
+extension RealtimeClient {
+  /// Runs `body` on the client's executor, so a test can order work against the client's own.
+  fileprivate func withIsolation<T: Sendable>(_ body: @Sendable (isolated RealtimeClient) -> T) -> T
+  {
+    body(self)
   }
 }
