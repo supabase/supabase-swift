@@ -508,6 +508,72 @@ extension AuthMockerTests {
     }
 
     @Test
+    func exchangeCodeForSessionFailsWhenTheFlowIdHasNoVerifier() async throws {
+      try await withMainSerialExecutor {
+        let requested = LockIsolated(false)
+
+        var mock = Mock(
+          url: clientURL.appendingPathComponent("token").appendingQueryItems([
+            URLQueryItem(name: "grant_type", value: "pkce")
+          ]),
+          statusCode: 200,
+          data: [
+            .post: MockData.session
+          ]
+        )
+        mock.onRequestHandler = OnRequestHandler(requestCallback: { _ in
+          requested.setValue(true)
+        })
+        mock.register()
+
+        let sut = makeSUT()
+        sut.dependencies.codeVerifierStorage.set("verifier-b", "flow-b")
+
+        do {
+          _ = try await sut.exchangeCodeForSession(authCode: "12345", flowId: "flow-a")
+          Issue.record("Expected oauthFlowFailed error")
+        } catch let error as AuthError {
+          #expect(error.kind == .oauthFlowFailed)
+        }
+
+        #expect(requested.value == false)
+        #expect(sut.dependencies.codeVerifierStorage.get("flow-b") == "verifier-b")
+      }
+    }
+
+    @Test
+    func exchangeCodeForSessionFailsWhenNoVerifierIsStored() async throws {
+      try await withMainSerialExecutor {
+        let requested = LockIsolated(false)
+
+        var mock = Mock(
+          url: clientURL.appendingPathComponent("token").appendingQueryItems([
+            URLQueryItem(name: "grant_type", value: "pkce")
+          ]),
+          statusCode: 200,
+          data: [
+            .post: MockData.session
+          ]
+        )
+        mock.onRequestHandler = OnRequestHandler(requestCallback: { _ in
+          requested.setValue(true)
+        })
+        mock.register()
+
+        let sut = makeSUT()
+
+        do {
+          _ = try await sut.exchangeCodeForSession(authCode: "12345")
+          Issue.record("Expected oauthFlowFailed error")
+        } catch let error as AuthError {
+          #expect(error.kind == .oauthFlowFailed)
+        }
+
+        #expect(requested.value == false)
+      }
+    }
+
+    @Test
     func concurrentPKCEFlowsKeepIndependentVerifiers() async throws {
       try await withMainSerialExecutor {
         let sut = makeSUT()

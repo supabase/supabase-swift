@@ -740,9 +740,9 @@ public final class AuthClient: Sendable {
   {
     let codeVerifier = codeVerifierStorage.get(flowId)
 
-    if codeVerifier == nil {
-      logger.error(
-        "code verifier not found, a code verifier should exist when calling this method."
+    if codeVerifier == nil, configuration.flowType == .pkce {
+      throw AuthError.oauthFlowFailed(
+        "PKCE code verifier not found. The flow was started on another device, its verifier was evicted or already used, or the storage was cleared."
       )
     }
 
