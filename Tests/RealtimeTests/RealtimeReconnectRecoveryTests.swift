@@ -398,6 +398,109 @@ struct RealtimeReconnectRecoveryTests {
     subscription.cancel()
     _ = try? await subscription.value
   }
+
+  /// `removeChannel(_:)` marks the channel removed even when it is already
+  /// `.unsubscribed`, e.g. after its subscribe gave up during an outage. A
+  /// reconnect that captured the channel before the removal must not join it
+  /// once it is unmapped.
+  @Test
+  func removedChannelDoesNotRejoinAfterItsSubscribeGaveUp() async throws {
+    let sockets = LockIsolated<[AsyncFakeWebSocket]>([])
+
+    let sut = RealtimeClientV2(
+      url: url,
+      options: RealtimeClientOptions(
+        headers: ["apikey": apiKey],
+        heartbeatInterval: 10,
+        reconnectDelay: 0.05,
+        timeoutInterval: 0.3,
+        maxRetryAttempts: 1,
+        accessToken: { "token" },
+        handleAppLifecycle: false
+      ),
+      wsTransport: { _, _ in
+        let socket = AsyncFakeWebSocket()
+        let phoenix = AsyncFakeWebSocket.phoenixResponder(answersLeave: true)
+        // The server never answers a join of the topic.
+        socket.serverResponder = { message, socket in
+          if message.event == "phx_join", message.topic == "realtime:room" { return }
+          phoenix(message, socket)
+        }
+        sockets.withValue { $0.append(socket) }
+        return socket
+      },
+      http: HTTPClientMock(),
+      clock: ContinuousClock()
+    )
+    defer { sut.disconnect() }
+
+    // Another channel keeps the client connected once the topic's channel is removed.
+    let other = sut.channel("other")
+    try await other.subscribeWithError()
+    let removed = sut.channel("room")
+    await #expect(throws: (any Error).self) { try await removed.subscribeWithError() }
+    #expect(removed.status == .unsubscribed)
+
+    await sut.removeChannel(removed)
+    // The step of a reconnect's `rejoinChannels()` that captured the channel before the removal.
+    try? await removed.rejoinAfterReconnect()
+
+    let joins = sockets.value[0].sentMessages.filter {
+      $0.event == "phx_join" && $0.topic == removed.topic
+    }
+    #expect(joins.count == 1, "The removed channel joined again: \(joins)")
+  }
+
+  /// A channel the server closed is unmapped, so it never joins again:
+  /// neither through a reconnect's rejoin nor through a later subscribe.
+  @Test
+  func channelClosedByTheServerNeverJoinsAgain() async throws {
+    let sockets = LockIsolated<[AsyncFakeWebSocket]>([])
+
+    let sut = RealtimeClientV2(
+      url: url,
+      options: RealtimeClientOptions(
+        headers: ["apikey": apiKey],
+        heartbeatInterval: 10,
+        reconnectDelay: 0.05,
+        timeoutInterval: 0.3,
+        maxRetryAttempts: 1,
+        accessToken: { "token" },
+        handleAppLifecycle: false
+      ),
+      wsTransport: { _, _ in
+        let socket = AsyncFakeWebSocket()
+        socket.serverResponder = AsyncFakeWebSocket.phoenixResponder(answersLeave: true)
+        sockets.withValue { $0.append(socket) }
+        return socket
+      },
+      http: HTTPClientMock(),
+      clock: ContinuousClock()
+    )
+    defer { sut.disconnect() }
+
+    let channel = sut.channel("room")
+    try await channel.subscribeWithError()
+    let join = try #require(
+      sockets.value[0].sentMessages.last { $0.event == "phx_join" && $0.topic == channel.topic }
+    )
+    sockets.value[0].reply(
+      RealtimeMessageV2(
+        joinRef: join.joinRef, ref: join.joinRef, topic: channel.topic, event: "phx_close",
+        payload: [:]
+      )
+    )
+    #expect(await waitUntil(timeout: 2) { sut.channels[channel.topic] == nil })
+
+    try? await channel.rejoinAfterReconnect()
+    await #expect(throws: CancellationError.self) { try await channel.subscribeWithError() }
+
+    #expect(channel.status == .unsubscribed)
+    let joins = sockets.value[0].sentMessages.filter {
+      $0.event == "phx_join" && $0.topic == channel.topic
+    }
+    #expect(joins.count == 1, "The closed channel joined again: \(joins)")
+  }
 }
 
 

@@ -21,10 +21,13 @@ struct ChannelStateManagerTests {
     let leaveCallCount: LockIsolated<Int>
   }
 
+  /// `onLeave` runs inside each `phx_leave`, numbered from 1, so a test can
+  /// park one unsubscribe there.
   private func makeHarness(
     timeoutInterval: TimeInterval = 0.2,
     maxRetryAttempts: Int = 3,
-    retryDelay: @escaping @Sendable (Int) -> TimeInterval = { _ in 0.01 }
+    retryDelay: @escaping @Sendable (Int) -> TimeInterval = { _ in 0.01 },
+    onLeave: @escaping @Sendable (_ call: Int) async -> Void = { _ in }
   ) -> Harness {
     let ref = LockIsolated<Int>(0)
     let ensureConnected = LockIsolated<Bool>(true)
@@ -52,7 +55,11 @@ struct ChannelStateManagerTests {
         lastJoinChanges.setValue(changes)
       },
       leaveOperation: {
-        leaveCallCount.withValue { $0 += 1 }
+        let call = leaveCallCount.withValue {
+          $0 += 1
+          return $0
+        }
+        await onLeave(call)
       },
       retryDelay: retryDelay
     )
@@ -80,6 +87,25 @@ struct ChannelStateManagerTests {
         try? await Task.sleep(nanoseconds: 5_000_000)
       }
       await h.sut.didReceiveSubscribedOK()
+    }
+  }
+
+  /// Parks one caller in `park()` until `open()`. Tests wait for `isParked`
+  /// before acting.
+  private final class Gate: Sendable {
+    private let continuation = LockIsolated<CheckedContinuation<Void, Never>?>(nil)
+
+    var isParked: Bool { continuation.value != nil }
+
+    func park() async {
+      await withCheckedContinuation { continuation.setValue($0) }
+    }
+
+    func open() {
+      continuation.withValue {
+        $0?.resume()
+        $0 = nil
+      }
     }
   }
 
@@ -406,6 +432,88 @@ struct ChannelStateManagerTests {
     // first join.
     try await Task.sleep(nanoseconds: 500_000_000)
     #expect(h.joinCallCount.value <= 2)
+  }
+
+  /// A reconnect joins only a channel the caller subscribed: a channel it
+  /// only created may not have registered its postgres-change or presence
+  /// callbacks yet, so that join would be incomplete.
+  @Test
+  func resetDoesNotRejoinAChannelThatWasNeverSubscribed() async {
+    let h = makeHarness()
+
+    #expect(await h.sut.resetForReconnect() == false)
+  }
+
+  /// A `subscribe()` that waits on an in-flight unsubscribe must not join
+  /// once a removal that waited on the same unsubscribe has gone through,
+  /// whichever of the two resumes first.
+  @Test
+  func subscribeWaitingOnAnUnsubscribeDoesNotJoinARemovedChannel() async throws {
+    let h = makeHarness(timeoutInterval: 5.0)
+    let confirmer = confirmSubscribeOnJoin(h)
+    try await h.sut.subscribe()
+    _ = await confirmer.value
+
+    let unsubscription = Task { await h.sut.unsubscribe() }
+    while h.leaveCallCount.value == 0 {
+      try? await Task.sleep(nanoseconds: 5_000_000)
+    }
+    // Let the subscribe, then the removal, reach their wait for the
+    // unsubscribe.
+    let subscription = Task { try await h.sut.subscribe() }
+    try? await Task.sleep(nanoseconds: 20_000_000)
+    let removal = Task { await h.sut.unsubscribeForRemoval() }
+    try? await Task.sleep(nanoseconds: 20_000_000)
+    // The server's `phx_close` ends the unsubscribe; both resume.
+    await h.sut.didReceiveClose()
+    await unsubscription.value
+    await removal.value
+
+    await #expect(throws: CancellationError.self) { try await subscription.value }
+    #expect(h.joinCallCount.value == 1)
+    #expect(await h.sut.resetForReconnect() == false)
+  }
+
+  /// An unsubscribe that a reset ended while it sent `phx_leave` must leave a
+  /// newer unsubscribe alone when it resumes: the newer one owns the state
+  /// and `joinRef`, and still waits for its own `phx_close`.
+  @Test
+  func staleUnsubscribeLeavesTheNewerUnsubscribeAlone() async throws {
+    let gate = Gate()
+    let h = makeHarness(
+      timeoutInterval: 2.0,
+      onLeave: { call in
+        if call == 1 { await gate.park() }
+      })
+    var confirmer = confirmSubscribeOnJoin(h)
+    try await h.sut.subscribe()
+    _ = await confirmer.value
+
+    let older = Task { await h.sut.unsubscribe() }
+    #expect(await waitUntil { gate.isParked })
+    await h.sut.resetForReconnect()
+    h.joinCallCount.setValue(0)
+    confirmer = confirmSubscribeOnJoin(h)
+    try await h.sut.subscribe()
+    _ = await confirmer.value
+    let newerJoinRef = await h.sut.joinRef
+    let newer = Task { await h.sut.unsubscribe() }
+    #expect(await waitUntil { h.leaveCallCount.value == 2 })
+
+    gate.open()
+    await older.value
+
+    guard case .unsubscribing = await h.sut.state else {
+      Issue.record("The older unsubscribe ended the newer one")
+      return
+    }
+    #expect(await h.sut.joinRef == newerJoinRef)
+    await h.sut.didReceiveClose()
+    await newer.value
+    guard case .unsubscribed = await h.sut.state else {
+      Issue.record("Expected .unsubscribed after the newer unsubscribe")
+      return
+    }
   }
 
   // MARK: - Server-close while subscribed

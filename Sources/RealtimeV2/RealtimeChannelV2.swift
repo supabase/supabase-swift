@@ -222,7 +222,12 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   /// All callbacks (broadcast, presence, postgres changes) must be registered before calling
   /// this method. Calling it more than once on an already-subscribed channel is a no-op.
   ///
-  /// - Throws: A ``RealtimeError`` if the subscribe attempt fails or times out.
+  /// A channel removed from its client, or closed by the server, never joins again; get a new one
+  /// from ``RealtimeClientV2/channel(_:options:)``.
+  ///
+  /// - Throws: A ``RealtimeError`` if the subscribe attempt fails or times out;
+  ///   `CancellationError` when an ``unsubscribe()`` or a removal stops it, or when the channel
+  ///   was already removed.
   public func subscribeWithError() async throws {
     logger?.debug("Subscribe requested for channel '\(topic)'")
     try await stateManager.subscribe()
@@ -249,9 +254,14 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     await stateManager.resetForReconnect()
   }
 
-  /// Resets the channel after a reconnect and joins again unless the caller has unsubscribed it.
+  /// Resets the channel after a reconnect and joins again if the caller still wants it joined.
   func rejoinAfterReconnect() async throws {
     try await stateManager.rejoinAfterReconnect()
+  }
+
+  /// Unsubscribes the channel for its removal from the client; it never joins again.
+  func unsubscribeForRemoval() async {
+    await stateManager.unsubscribeForRemoval()
   }
 
   /// Build the `phx_join` payload from the current config and push it.
@@ -705,8 +715,12 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
         // abandoned during a reconnect) must not tear down the current
         // subscription (issue #1145, defect 3). The join_ref check runs on
         // the state-manager actor, atomically with the close, so a concurrent
-        // subscribe attempt can't swap `joinRef` in between.
-        guard await stateManager.didReceiveClose(joinRef: message.joinRef) else {
+        // subscribe attempt can't swap `joinRef` in between. The same turn
+        // marks the channel removed: a reconnect or a `subscribe()` must never
+        // join it once `_remove` has unmapped it.
+        guard
+          await stateManager.didReceiveClose(joinRef: message.joinRef, removesChannel: true)
+        else {
           return
         }
         socket._remove(self)

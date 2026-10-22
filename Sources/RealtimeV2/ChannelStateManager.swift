@@ -95,9 +95,18 @@ actor ChannelStateManager {
   private(set) var joinRef: String?
   private var pushes: [String: PushV2] = [:]
 
-  /// Whether the caller's latest request was ``unsubscribe()``. A reconnect
-  /// rejoins only the channels the caller has not unsubscribed.
-  private var unsubscribeRequested = false
+  /// Whether the caller wants the channel joined: set by ``subscribe()``,
+  /// cleared by ``unsubscribe()``. A reconnect rejoins only these channels.
+  private var subscribeRequested = false
+
+  /// Whether the client removed the channel, or the server closed it.
+  /// Terminal: the client no longer routes replies to the channel, so it
+  /// never joins again.
+  private var isRemoved = false
+
+  /// The number of the latest unsubscribe run. A run owns the
+  /// `.unsubscribing` state only while it is the latest one.
+  private var unsubscribeRun = 0
 
   // MARK: - Config & injected operations
 
@@ -116,7 +125,7 @@ actor ChannelStateManager {
   private let retryDelay: RetryDelay
 
   /// Set by ``didReceiveClose()`` when the server closes the channel while a
-  /// subscribe is in flight, so ``beginSubscribe()`` can surface a typed
+  /// subscribe is in flight, so `awaitSubscribe(_:)` can surface a typed
   /// error instead of the bare `CancellationError` from the cancelled task.
   private var closedByServerWhileSubscribing = false
 
@@ -182,8 +191,15 @@ actor ChannelStateManager {
   /// Drive the channel to ``State/subscribed``. Safe to call concurrently:
   /// the second caller waits for the first attempt to finish instead of
   /// starting a new one.
+  ///
+  /// Throws `CancellationError` once the channel is removed: it never joins
+  /// again.
   func subscribe() async throws {
-    unsubscribeRequested = false
+    guard !isRemoved else {
+      logger?.debug("Subscribe refused for channel '\(topic)': the channel was removed")
+      throw CancellationError()
+    }
+    subscribeRequested = true
     switch state {
     case .subscribed:
       logger?.debug("Subscribe no-op for channel '\(topic)': already subscribed")
@@ -197,23 +213,23 @@ actor ChannelStateManager {
     case .unsubscribing(let task):
       logger?.debug("Waiting for in-flight unsubscribe on '\(topic)' before subscribing")
       await task.value
-      // Re-dispatch through `subscribe()` rather than calling `beginSubscribe()`
+      // Re-dispatch through `subscribe()` rather than starting the join
       // directly — under actor re-entrancy, another caller may have flipped
-      // state to `.subscribing` while we were awaiting the unsubscribe task.
-      // Re-reading state here prevents us from overwriting their in-flight
-      // subscribe with a second one (which would orphan the first task and
-      // send a duplicate `phx_join`).
+      // state to `.subscribing`, or removed the channel, while we were
+      // awaiting the unsubscribe task. Re-reading state here prevents us from
+      // overwriting their in-flight subscribe with a second one (which would
+      // orphan the first task and send a duplicate `phx_join`).
       try await subscribe()
 
     case .unsubscribed:
-      try await beginSubscribe()
+      try await awaitSubscribe(startSubscribe())
     }
   }
 
   /// Drive the channel to ``State/unsubscribed``. Cancels an in-flight
   /// subscribe if one is running.
   func unsubscribe() async {
-    unsubscribeRequested = true
+    subscribeRequested = false
     switch state {
     case .unsubscribed:
       logger?.debug("Unsubscribe no-op for channel '\(topic)': already unsubscribed")
@@ -229,7 +245,7 @@ actor ChannelStateManager {
       task.cancel()
       // Subscribe hadn't completed yet, so the server may not recognize the
       // channel and will likely never send `phx_close`. Don't wait for it.
-      await beginUnsubscribe(waitForServerClose: false, sendLeave: isSocketConnected())
+      await startUnsubscribe(waitForServerClose: false, sendLeave: isSocketConnected()).value
 
     case .subscribed:
       // We had a live subscription; wait (bounded) for the server's
@@ -240,8 +256,18 @@ actor ChannelStateManager {
       // connection as a stale frame, and `phx_close` can never arrive —
       // waiting would stall for the full timeout (issue #1145, hazard 4).
       let socketConnected = isSocketConnected()
-      await beginUnsubscribe(waitForServerClose: socketConnected, sendLeave: socketConnected)
+      await startUnsubscribe(waitForServerClose: socketConnected, sendLeave: socketConnected)
+        .value
     }
+  }
+
+  /// The client removes the channel. It leaves the topic and never joins
+  /// again: once unmapped, it would never see a reply, and each retried
+  /// `phx_join` would be a duplicate join that closes the topic's next
+  /// channel.
+  func unsubscribeForRemoval() async {
+    isRemoved = true
+    await unsubscribe()
   }
 
   /// Reset channel state so it can rejoin after a reconnect.
@@ -260,9 +286,10 @@ actor ChannelStateManager {
   /// immediately — the server's `phx_close` won't arrive on the dead socket
   /// anyway.
   ///
-  /// - Returns: Whether the channel should rejoin: `false` once the caller
-  ///   has unsubscribed it, so a reconnect never joins a channel that is
-  ///   being removed.
+  /// - Returns: Whether the channel should rejoin: only when the caller
+  ///   subscribed it and has neither unsubscribed nor removed it since, so a
+  ///   reconnect never joins a channel the caller does not want or the client
+  ///   no longer routes to.
   @discardableResult
   func resetForReconnect() -> Bool {
     joinRef = nil
@@ -278,11 +305,11 @@ actor ChannelStateManager {
     case .unsubscribed:
       break
     }
-    return !unsubscribeRequested
+    return subscribeRequested && !isRemoved
   }
 
-  /// Reset the channel after a reconnect and join again unless the caller
-  /// has unsubscribed it.
+  /// Reset the channel after a reconnect and join again if the caller still
+  /// wants it joined.
   ///
   /// The reset and the start of the join run in one turn of this actor. An
   /// ``unsubscribe()`` or a removal that arrives after the reset finds the
@@ -313,10 +340,16 @@ actor ChannelStateManager {
   /// check and the close (issue #1145, defect 3). Closes without a `join_ref`
   /// are applied unconditionally.
   ///
+  /// With `removesChannel`, an applied close also marks the channel removed,
+  /// in the same turn, so a reconnect or a ``subscribe()`` never joins it
+  /// once the client has unmapped it.
+  ///
   /// Returns `true` if the close was applied; `false` if it belonged to a
   /// stale join and was ignored.
   @discardableResult
-  func didReceiveClose(joinRef expectedJoinRef: String? = nil) -> Bool {
+  func didReceiveClose(
+    joinRef expectedJoinRef: String? = nil, removesChannel: Bool = false
+  ) -> Bool {
     if let expectedJoinRef, expectedJoinRef != joinRef {
       logger?.debug(
         "Ignoring close for stale join_ref \(expectedJoinRef) on '\(topic)' "
@@ -325,10 +358,13 @@ actor ChannelStateManager {
       return false
     }
     logger?.debug("Server closed channel '\(topic)'")
+    if removesChannel {
+      isRemoved = true
+    }
     joinRef = nil
     pushes = [:]
     if case .subscribing(let task) = state {
-      // Record why the task is being cancelled so `beginSubscribe` can
+      // Record why the task is being cancelled so `awaitSubscribe` can
       // rethrow a typed error — the caller must be able to tell a server
       // close apart from its own task cancellation (issue #1145, defect 2).
       closedByServerWhileSubscribing = true
@@ -339,10 +375,6 @@ actor ChannelStateManager {
   }
 
   // MARK: - Private
-
-  private func beginSubscribe() async throws {
-    try await awaitSubscribe(startSubscribe())
-  }
 
   /// Start the subscribe attempts and move to `.subscribing`, without a
   /// suspension point.
@@ -469,17 +501,27 @@ actor ChannelStateManager {
     throw SubscribeFailure.channelClosed
   }
 
-  private func beginUnsubscribe(waitForServerClose: Bool, sendLeave: Bool) async {
+  /// Start an unsubscribe run and move to `.unsubscribing`, without a
+  /// suspension point.
+  func startUnsubscribe(waitForServerClose: Bool, sendLeave: Bool) -> Task<Void, Never> {
     logger?.debug("Beginning unsubscribe flow for channel '\(topic)'")
+    unsubscribeRun += 1
+    let run = unsubscribeRun
     let task = Task<Void, Never> { [weak self] in
       guard let self else { return }
-      await self.runUnsubscribe(waitForServerClose: waitForServerClose, sendLeave: sendLeave)
+      await self.runUnsubscribe(
+        run, waitForServerClose: waitForServerClose, sendLeave: sendLeave)
     }
     updateState(.unsubscribing(task))
-    await task.value
+    return task
   }
 
-  private func runUnsubscribe(waitForServerClose: Bool, sendLeave: Bool) async {
+  private func runUnsubscribe(_ run: Int, waitForServerClose: Bool, sendLeave: Bool) async {
+    // A reset or a server close may end this run at any suspension point
+    // (the run's own start included), and a newer subscribe or unsubscribe
+    // may own the state and `joinRef` since: this run must not touch them.
+    guard ownsState(run) else { return }
+
     // Send `phx_leave` (skipped when the socket is dead — it could never be
     // delivered, only buffered into the next connection as a stale frame).
     // When `waitForServerClose` is true, wait (bounded by `timeoutInterval`)
@@ -490,7 +532,7 @@ actor ChannelStateManager {
       await leaveOperation()
     }
 
-    if waitForServerClose {
+    if waitForServerClose, ownsState(run) {
       let stream = stateChanges
       _ = try? await withTimeout(interval: timeoutInterval, clock: clock) {
         for await observed in stream {
@@ -499,13 +541,17 @@ actor ChannelStateManager {
       }
     }
 
-    // A reset or a server close may have ended the unsubscribe while it
-    // waited, and a newer subscribe may own the state and `joinRef` since:
-    // clearing them would strand that join.
-    guard case .unsubscribing = state else { return }
+    guard ownsState(run) else { return }
     joinRef = nil
     pushes = [:]
     updateState(.unsubscribed)
+  }
+
+  /// Whether the state is still `.unsubscribing` with the task of unsubscribe
+  /// run `run`.
+  private func ownsState(_ run: Int) -> Bool {
+    guard case .unsubscribing = state else { return false }
+    return run == unsubscribeRun
   }
 
   private func updateState(_ newState: State) {
