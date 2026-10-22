@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.55.5](https://github.com/supabase/supabase-swift/compare/v2.55.4...v2.55.5) (2026-10-22)
+
+
+### Bug Fixes
+
+* **realtime:** stale subscribe no longer resets the rejoined channel ([#1606](https://github.com/supabase/supabase-swift/issues/1606)) ([d16ddc7](https://github.com/supabase/supabase-swift/commit/d16ddc762474aa149cc0f2710b6b3289802e7ac5))
+
 ## [2.55.4](https://github.com/supabase/supabase-swift/compare/v2.55.3...v2.55.4) (2026-10-13)
 
 
