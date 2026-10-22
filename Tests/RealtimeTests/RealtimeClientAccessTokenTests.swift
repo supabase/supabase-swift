@@ -388,9 +388,10 @@ struct RealtimeClientAccessTokenTests {
     }
 
     func release(_ token: String?) {
-      let calls = parked.withValue {
-        defer { $0 = [] }
-        return $0
+      let calls = parked.withValue { parked in
+        let calls = parked
+        parked = []
+        return calls
       }
       for call in calls {
         call.resume(returning: token)

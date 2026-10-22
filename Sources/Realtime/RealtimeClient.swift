@@ -578,10 +578,11 @@ public actor RealtimeClient {
     let call = LockIsolated<Task<Void, Never>?>(nil)
     // Returns whether this resumed the caller: only the first of the call and the timer does.
     let finish: @Sendable (String?) -> Bool = { token in
-      pending.withValue {
-        defer { $0 = nil }
-        $0?.resume(returning: token)
-        return $0 != nil
+      pending.withValue { continuation in
+        guard let waiting = continuation else { return false }
+        continuation = nil
+        waiting.resume(returning: token)
+        return true
       }
     }
     return await withCheckedContinuation { continuation in
