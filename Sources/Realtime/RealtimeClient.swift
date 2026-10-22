@@ -490,8 +490,8 @@ public actor RealtimeClient {
   /// When the token changes, it is sent to all currently-subscribed channels. If `token` is
   /// `nil`, the value is fetched from the `accessToken` callback configured on
   /// ``RealtimeClientOptions``. The callback is called at most once every 10 seconds; inside
-  /// that window the stored token is kept. A callback that does not return within
-  /// ``RealtimeClientOptions/timeout`` is treated as failed.
+  /// that window the stored token is kept. A callback that does not return within the client's
+  /// `timeout` option is treated as failed.
   ///
   /// While the client is connected, the callback is set, and the token is a JWT, the client also
   /// calls the callback one minute before the token's `exp`, so channels are not closed when it
