@@ -5,45 +5,16 @@
 //  Created by Guilherme Souza on 12/02/26.
 //
 
-package import Foundation
-package import Helpers
+import Foundation
+import Helpers
 
-/// Represents a decoded binary broadcast message from the server.
-package struct DecodedBroadcast: Sendable {
-  package let topic: String
-  /// The user event name extracted from the binary frame.
-  package let event: String
-  /// The frame's metadata object, e.g. `id` and `replayed` on database-originated broadcasts.
-  package var meta: JSONObject? = nil
-  package let payload: Payload
-
-  package enum Payload: Sendable {
-    case json(JSONObject)
-    case binary(Data)
-  }
-}
-
-/// Handles encoding/decoding between ``RealtimeMessageV2`` and the Realtime protocol 2.0.0 wire format.
+/// Handles encoding/decoding between ``RealtimeMessageV2`` and the Realtime protocol 2.0.0 text
+/// frames: `[joinRef, ref, topic, event, payload]`.
 ///
-/// Protocol 2.0.0 uses:
-/// - JSON array text frames for non-broadcast messages: `[joinRef, ref, topic, event, payload]`
-/// - Binary frames (type 0x03 client->server, type 0x04 server->client) for broadcast messages.
-///   Note: broadcast messages can also arrive as JSON array text frames — the server may deliver
-///   broadcasts on either transport, so the client must be able to handle both.
+/// Broadcasts can arrive on either transport: as a text frame, or as a binary frame that
+/// ``BroadcastFrameCodec`` decodes.
 package struct RealtimeSerializer: Sendable {
   package init() {}
-
-  package enum BinaryKind: UInt8 {
-    /// Client -> server broadcast push.
-    case userBroadcastPush = 3
-    /// Server -> client broadcast.
-    case userBroadcast = 4
-  }
-
-  package enum PayloadEncoding: UInt8 {
-    case binary = 0
-    case json = 1
-  }
 
   /// Encodes a ``RealtimeMessageV2`` as a JSON array string: `[joinRef, ref, topic, event, payload]`.
   package func encodeText(_ message: RealtimeMessageV2) throws -> String {
@@ -87,167 +58,6 @@ package struct RealtimeSerializer: Sendable {
       ref: ref,
       topic: topic,
       event: event,
-      payload: payload
-    )
-  }
-
-  /// Encodes a broadcast push as a binary frame (type 0x03) with a JSON payload.
-  ///
-  /// Binary frame format:
-  /// ```
-  /// [kind:1][joinRef_len:1][ref_len:1][topic_len:1][event_len:1][meta_len:1][encoding:1]
-  /// [joinRef][ref][topic][event][metadata][payload]
-  /// ```
-  package func encodeBroadcastPush(
-    joinRef: String?,
-    ref: String?,
-    topic: String,
-    event: String,
-    jsonPayload: JSONObject
-  ) throws -> Data {
-    let payloadData = try JSONEncoder().encode(jsonPayload)
-    return try _encodeBroadcastPush(
-      joinRef: joinRef,
-      ref: ref,
-      topic: topic,
-      event: event,
-      encoding: .json,
-      payload: payloadData
-    )
-  }
-
-  /// Encodes a broadcast push as a binary frame (type 0x03) with a binary payload.
-  package func encodeBroadcastPush(
-    joinRef: String?,
-    ref: String?,
-    topic: String,
-    event: String,
-    binaryPayload: Data
-  ) throws -> Data {
-    try _encodeBroadcastPush(
-      joinRef: joinRef,
-      ref: ref,
-      topic: topic,
-      event: event,
-      encoding: .binary,
-      payload: binaryPayload
-    )
-  }
-
-  private func _encodeBroadcastPush(
-    joinRef: String?,
-    ref: String?,
-    topic: String,
-    event: String,
-    encoding: PayloadEncoding,
-    payload: Data
-  ) throws -> Data {
-    let joinRefBytes = Data((joinRef ?? "").utf8)
-    let refBytes = Data((ref ?? "").utf8)
-    let topicBytes = Data(topic.utf8)
-    let eventBytes = Data(event.utf8)
-    let metaBytes = Data()
-
-    guard joinRefBytes.count <= 255,
-      refBytes.count <= 255,
-      topicBytes.count <= 255,
-      eventBytes.count <= 255,
-      metaBytes.count <= 255
-    else {
-      throw RealtimeError.encoding(
-        "Binary frame header fields must not exceed 255 bytes each."
-      )
-    }
-
-    var data = Data()
-    data.append(BinaryKind.userBroadcastPush.rawValue)
-    data.append(UInt8(joinRefBytes.count))
-    data.append(UInt8(refBytes.count))
-    data.append(UInt8(topicBytes.count))
-    data.append(UInt8(eventBytes.count))
-    data.append(UInt8(metaBytes.count))
-    data.append(encoding.rawValue)
-    data.append(joinRefBytes)
-    data.append(refBytes)
-    data.append(topicBytes)
-    data.append(eventBytes)
-    data.append(metaBytes)
-    data.append(payload)
-
-    return data
-  }
-
-  /// Decodes a binary frame (type 0x04) into a ``DecodedBroadcast``.
-  ///
-  /// Binary frame format:
-  /// ```
-  /// [kind:1][topic_len:1][event_len:1][meta_len:1][encoding:1]
-  /// [topic][event][metadata][payload]
-  /// ```
-  package func decodeBinary(_ data: Data) throws -> DecodedBroadcast {
-    guard data.count >= 5 else {
-      throw RealtimeError.decoding("Binary frame too short: \(data.count) bytes.")
-    }
-
-    let kind = data[data.startIndex]
-    guard kind == BinaryKind.userBroadcast.rawValue else {
-      throw RealtimeError.decoding(
-        "Unexpected binary frame kind: \(kind), expected \(BinaryKind.userBroadcast.rawValue)."
-      )
-    }
-
-    let topicLen = Int(data[data.startIndex + 1])
-    let eventLen = Int(data[data.startIndex + 2])
-    let metaLen = Int(data[data.startIndex + 3])
-    let encodingByte = data[data.startIndex + 4]
-
-    guard let encoding = PayloadEncoding(rawValue: encodingByte) else {
-      throw RealtimeError.decoding("Unknown payload encoding: \(encodingByte).")
-    }
-
-    let headerSize = 5
-    let expectedMinSize = headerSize + topicLen + eventLen + metaLen
-    guard data.count >= expectedMinSize else {
-      throw RealtimeError.decoding(
-        "Binary frame too short for declared field lengths."
-      )
-    }
-
-    var offset = data.startIndex + headerSize
-
-    let topicData = data[offset..<(offset + topicLen)]
-    offset += topicLen
-
-    let eventData = data[offset..<(offset + eventLen)]
-    offset += eventLen
-
-    let metaData = data[offset..<(offset + metaLen)]
-    offset += metaLen
-
-    let payloadData = data[offset...]
-
-    guard let topic = String(data: topicData, encoding: .utf8) else {
-      throw RealtimeError.decoding("Failed to decode topic as UTF-8.")
-    }
-    guard let event = String(data: eventData, encoding: .utf8) else {
-      throw RealtimeError.decoding("Failed to decode event as UTF-8.")
-    }
-
-    let meta = metaLen > 0 ? try JSONDecoder().decode(JSONObject.self, from: Data(metaData)) : nil
-
-    let payload: DecodedBroadcast.Payload
-    switch encoding {
-    case .json:
-      let jsonObject = try JSONDecoder().decode(JSONObject.self, from: Data(payloadData))
-      payload = .json(jsonObject)
-    case .binary:
-      payload = .binary(Data(payloadData))
-    }
-
-    return DecodedBroadcast(
-      topic: topic,
-      event: event,
-      meta: meta,
       payload: payload
     )
   }
