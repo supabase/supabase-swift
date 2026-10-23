@@ -72,6 +72,8 @@ public enum RealtimePostgresIsValue: Sendable {
 /// ### Logical Operators
 /// - ``not(_:)``
 /// - ``and(_:)``
+/// ### Filter Strings
+/// - ``raw(_:)``
 public enum RealtimePostgresFilter {
   /// Match rows where `column` equals `value` (`column=eq.value`).
   case eq(_ column: String, value: any RealtimePostgresFilterValue)
@@ -103,6 +105,10 @@ public enum RealtimePostgresFilter {
   indirect case not(RealtimePostgresFilter)
   /// Combine multiple conditions with a logical `AND` (comma-separated).
   case and([RealtimePostgresFilter])
+  /// A filter string sent as written, such as `"id=eq.1"`. Use it for an operator the typed cases
+  /// do not cover. It works inside ``and(_:)``. ``not(_:)`` cannot negate it, because a raw string
+  /// has no column to negate; write the `not.` prefix into the string instead.
+  case raw(String)
 
   private var parts: (column: String, expr: String)? {
     switch self {
@@ -135,7 +141,7 @@ public enum RealtimePostgresFilter {
       return (column, "is.\(value.rawValue)")
     case .isDistinct(let column, let value):
       return (column, "isdistinct.\(Self.serialize(value))")
-    case .not, .and:
+    case .not, .and, .raw:
       return nil
     }
   }
@@ -144,10 +150,12 @@ public enum RealtimePostgresFilter {
     switch self {
     case .and(let filters):
       return filters.map(\.value).joined(separator: ",")
+    case .raw(let filter):
+      return filter
     case .not(let inner):
       guard let parts = inner.parts else {
         reportIssue(
-          "RealtimePostgresFilter.not can only negate a single condition, not `.not`/`.and`."
+          "RealtimePostgresFilter.not can only negate a single condition, not `.not`, `.and`, or `.raw`."
         )
         return inner.value
       }

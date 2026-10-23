@@ -40,6 +40,10 @@ let package = Package(
     .package(url: "https://github.com/pointfreeco/swift-issue-reporting", from: "2.1.0"),
     .package(url: "https://github.com/WeTransfer/Mocker", from: "3.0.0"),
     .package(url: "https://github.com/21-DOT-DEV/swift-secp256k1.git", from: "0.23.2"),
+    .package(
+      url: "https://github.com/supabase/phoenix-swift",
+      revision: "0c5d449f29c88ad10adb5a7612a8d740ec28a147"
+    ),
   ],
   targets: [
     .target(
@@ -207,6 +211,7 @@ let package = Package(
     .target(
       name: "Realtime",
       dependencies: [
+        .product(name: "Phoenix", package: "phoenix-swift"),
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
         .product(name: "IssueReporting", package: "swift-issue-reporting"),
@@ -217,6 +222,7 @@ let package = Package(
     .testTarget(
       name: "RealtimeTests",
       dependencies: [
+        .product(name: "PhoenixTesting", package: "phoenix-swift"),
         .product(name: "Clocks", package: "swift-clocks"),
         .product(name: "CustomDump", package: "swift-custom-dump"),
         .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
@@ -304,7 +310,6 @@ let package = Package(
         "Auth",
         "Helpers",
         "Mocker",
-        "Realtime",
       ]
     ),
   ]

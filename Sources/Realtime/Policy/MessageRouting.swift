@@ -14,7 +14,7 @@ enum ChannelBinding: Sendable {
   case postgres(PostgresJoinConfig)
   case presence
   case system
-  /// A `statusChanges()` stream. No message reaches it; it keeps the bindings aligned with the
+  /// A `statusChange` stream. No message reaches it; it keeps the bindings aligned with the
   /// channel's streams.
   case status
 }
@@ -84,7 +84,7 @@ func route(
     let matched = serverChanges.filter { ids.contains($0.id) }
     return ChannelRoute(.postgres(action), bindings: bindings) { binding in
       guard case .postgres(let change) = binding else { return false }
-      return matched.contains { $0 == change }
+      return matched.contains { $0.matches(change) }
     }
 
   case .presenceDiff:

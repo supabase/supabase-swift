@@ -68,14 +68,14 @@ struct BroadcastView: View {
   }
 
   func subscribe() async {
-    let channel = await supabase.channel("broadcast-example") {
+    let channel = supabase.channel("broadcast-example") {
       $0.broadcast.receiveOwnBroadcasts = true
     }
 
     do {
-      let broadcast = await channel.broadcasts(event: "message")
+      let broadcast = channel.broadcastStream(event: "message")
 
-      try await channel.subscribe()
+      try await channel.subscribeWithError()
       self.channel = channel
 
       for await message in broadcast {

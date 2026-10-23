@@ -27,7 +27,7 @@ struct RealtimeErrorTests {
     #expect(RealtimeError.maxRetryAttemptsReached.message == "Maximum retry attempts reached.")
     #expect(RealtimeError.channelClosedByServer.kind == .channelClosedByServer)
     #expect(RealtimeError.accessTokenMissing.kind == .accessTokenMissing)
-    #expect(RealtimeError.heartbeatTimeout.kind == .timeout)
+    #expect(RealtimeError.postgresChangesMismatch.kind == .postgresChangesMismatch)
   }
 
   @Test
@@ -186,21 +186,20 @@ struct RealtimeErrorTests {
   }
 
   @Test
-  func socketClosedCarriesTheCloseCodeAndIsRetryable() {
-    let error = RealtimeError.socketClosed(code: WebSocketCloseCode(rawValue: 1006), reason: "x")
+  func socketClosedNamesTheCloseCodeAndIsRetryableBelow4000() {
+    let error = RealtimeError.socketClosed(code: 1006, reason: "x")
 
     #expect(error.kind == .transport)
-    #expect(error.closeCode == WebSocketCloseCode(rawValue: 1006))
     #expect(error.isRetryable)
     #expect(error.message.contains("1006"))
     #expect(error.message.contains("x"))
   }
 
   @Test
-  func socketClosedWithoutACodeOrReasonStillHasAMessage() {
-    let error = RealtimeError.socketClosed(code: nil, reason: nil)
+  func socketClosedWithAnApplicationCodeIsNotRetryable() {
+    let error = RealtimeError.socketClosed(code: 4001, reason: nil)
 
-    #expect(error.closeCode == nil)
+    #expect(!error.isRetryable)
     #expect(!error.message.isEmpty)
   }
 
@@ -227,6 +226,5 @@ struct RealtimeErrorTests {
 
     #expect(error.isRetryable)
     #expect(error.serverCode == nil)
-    #expect(error.closeCode == nil)
   }
 }

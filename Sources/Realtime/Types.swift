@@ -34,19 +34,17 @@ public import Logging
 /// - ``defaultHeartbeatInterval``
 /// - ``defaultReconnectDelay``
 /// - ``defaultTimeout``
-/// - ``defaultDisconnectOnSessionLoss``
 /// - ``defaultConnectOnSubscribe``
 /// - ``defaultMaxRetryAttempts``
 /// - ``defaultDisconnectOnEmptyChannelsAfter``
 /// - ``defaultHandleAppLifecycle``
 /// ### Initialization
-/// - ``init(headers:heartbeatInterval:reconnectDelay:timeout:disconnectOnSessionLoss:connectOnSubscribe:maxRetryAttempts:disconnectOnEmptyChannelsAfter:logLevel:http:accessToken:logger:session:handleAppLifecycle:clock:)``
+/// - ``init(headers:heartbeatInterval:reconnectDelay:timeout:connectOnSubscribe:maxRetryAttempts:disconnectOnEmptyChannelsAfter:logLevel:http:accessToken:logger:session:handleAppLifecycle:clock:)``
 public struct RealtimeClientOptions: Sendable {
   package var headers: HTTPFields
   var heartbeatInterval: Duration
   var reconnectDelay: Duration
   var timeout: Duration
-  var disconnectOnSessionLoss: Bool
   var connectOnSubscribe: Bool
   var maxRetryAttempts: Int
   var disconnectOnEmptyChannelsAfter: Duration
@@ -99,10 +97,9 @@ public struct RealtimeClientOptions: Sendable {
   public static let defaultReconnectDelay: Duration = .seconds(1)
 
   /// Default maximum time to wait for a server reply before treating a request as timed out.
+  ///
+  /// Also the shortest wait for a join reply, whatever `timeout` the options hold.
   public static let defaultTimeout: Duration = .seconds(10)
-
-  /// Default for whether to disconnect the channel when the session is lost.
-  public static let defaultDisconnectOnSessionLoss = true
 
   /// Default for whether to automatically connect the socket when subscribing to a channel.
   public static let defaultConnectOnSubscribe: Bool = true
@@ -133,11 +130,13 @@ public struct RealtimeClientOptions: Sendable {
   /// - Parameters:
   ///   - headers: Additional HTTP headers sent with each WebSocket upgrade request.
   ///   - heartbeatInterval: Interval between heartbeat messages. Defaults to ``defaultHeartbeatInterval``.
-  ///   - reconnectDelay: Base delay for reconnecting after a disconnection. The first attempt waits a random duration between zero and this; each later attempt doubles the upper bound (capped at 30s) until reconnected. Defaults to ``defaultReconnectDelay``.
-  ///   - timeout: Maximum time to wait for a server reply. Defaults to ``defaultTimeout``.
-  ///   - disconnectOnSessionLoss: Whether to disconnect the channel when the authentication session is lost. Defaults to ``defaultDisconnectOnSessionLoss``.
+  ///   - reconnectDelay: Base delay for reconnecting after a disconnection. The first attempt waits a random duration between zero and this; each later attempt doubles the upper bound (capped at 30s). The client stops after `maxRetryAttempts` failures in a row, on HTTP 401, 403, or 404, and on a close code of 4000 or above. Defaults to ``defaultReconnectDelay``.
+  ///   - timeout: Maximum time to wait for a server reply. A join waits at least
+  ///     ``defaultTimeout``, because the server can hold its answer to a rejected join for a few
+  ///     seconds. Defaults to ``defaultTimeout``.
   ///   - connectOnSubscribe: Whether to automatically call ``RealtimeClient/connect()`` when subscribing to a channel. Defaults to ``defaultConnectOnSubscribe``.
-  ///   - maxRetryAttempts: Maximum number of subscribe retry attempts. Defaults to ``defaultMaxRetryAttempts``.
+  ///   - maxRetryAttempts: Maximum number of join attempts per subscribe, and of failed connection
+  ///     attempts in a row before the client stops reconnecting. Defaults to ``defaultMaxRetryAttempts``.
   ///   - disconnectOnEmptyChannelsAfter: How long to wait before disconnecting when all channels are removed. Defaults to ``defaultDisconnectOnEmptyChannelsAfter``.
   ///   - logLevel: Optional log level for Realtime log output.
   ///   - http: The transport and middleware chain REST broadcast calls go through.
@@ -153,7 +152,6 @@ public struct RealtimeClientOptions: Sendable {
     heartbeatInterval: Duration = Self.defaultHeartbeatInterval,
     reconnectDelay: Duration = Self.defaultReconnectDelay,
     timeout: Duration = Self.defaultTimeout,
-    disconnectOnSessionLoss: Bool = Self.defaultDisconnectOnSessionLoss,
     connectOnSubscribe: Bool = Self.defaultConnectOnSubscribe,
     maxRetryAttempts: Int = Self.defaultMaxRetryAttempts,
     disconnectOnEmptyChannelsAfter: Duration = Self.defaultDisconnectOnEmptyChannelsAfter,
@@ -169,7 +167,6 @@ public struct RealtimeClientOptions: Sendable {
     self.heartbeatInterval = heartbeatInterval
     self.reconnectDelay = reconnectDelay
     self.timeout = timeout
-    self.disconnectOnSessionLoss = disconnectOnSessionLoss
     self.connectOnSubscribe = connectOnSubscribe
     self.maxRetryAttempts = maxRetryAttempts
     self.disconnectOnEmptyChannelsAfter = disconnectOnEmptyChannelsAfter
@@ -262,7 +259,7 @@ public struct RealtimeClientStatus: RawRepresentable, Hashable, Sendable,
 /// Describes the result of a heartbeat cycle.
 ///
 /// The Realtime client sends periodic heartbeat messages to keep the WebSocket
-/// connection alive. Use ``RealtimeClient/heartbeats()``
+/// connection alive. Use ``RealtimeClient/heartbeat``
 /// to observe heartbeat status changes.
 ///
 /// ## Topics
@@ -271,7 +268,6 @@ public struct RealtimeClientStatus: RawRepresentable, Hashable, Sendable,
 /// - ``ok``
 /// - ``error``
 /// - ``timeout``
-/// - ``disconnected``
 public struct HeartbeatStatus: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
   public let rawValue: String
 
@@ -296,9 +292,6 @@ public struct HeartbeatStatus: RawRepresentable, Hashable, Sendable, Expressible
 
   /// Heartbeat was not acknowledged within the configured timeout interval.
   public static let timeout: HeartbeatStatus = "timeout"
-
-  /// Socket is disconnected; no heartbeat can be sent.
-  public static let disconnected: HeartbeatStatus = "disconnected"
 }
 
 extension HTTPField.Name {
@@ -307,7 +300,7 @@ extension HTTPField.Name {
 
 /// Verbosity of log output emitted by the Realtime client.
 ///
-/// Pass a value to ``RealtimeClientOptions/init(headers:heartbeatInterval:reconnectDelay:timeout:disconnectOnSessionLoss:connectOnSubscribe:maxRetryAttempts:disconnectOnEmptyChannelsAfter:logLevel:http:accessToken:logger:session:handleAppLifecycle:clock:)``
+/// Pass a value to ``RealtimeClientOptions/init(headers:heartbeatInterval:reconnectDelay:timeout:connectOnSubscribe:maxRetryAttempts:disconnectOnEmptyChannelsAfter:logLevel:http:accessToken:logger:session:handleAppLifecycle:clock:)``
 /// to control how much detail the Realtime server logs.
 ///
 /// ## Topics

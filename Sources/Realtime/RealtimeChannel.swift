@@ -9,8 +9,8 @@ import ConcurrencyExtras
 public import Foundation
 import HTTPTypes
 import Helpers
-import IssueReporting
 import Logging
+import Phoenix
 
 /// Configuration for a ``RealtimeChannel``.
 ///
@@ -39,26 +39,25 @@ public struct RealtimeChannelConfig: Sendable {
 
 /// A Realtime channel that joins a topic and delivers its events as `AsyncStream`s.
 ///
-/// Obtain an instance from ``RealtimeClient/channel(_:options:)``, open the streams you want,
-/// then call ``subscribe()``. Postgres-change and presence streams shape the join request, so
-/// open them **before** subscribing; broadcast and system streams can be opened at any time.
+/// Get one from ``RealtimeClient/channel(_:options:)``, make the streams you want, then call
+/// ``subscribeWithError()``. Postgres change and presence streams shape the join request, so make
+/// them before subscribing. Broadcast, status, and system streams can be made at any time.
 ///
 /// ```swift
-/// let channel = await client.channel("room:lobby") { config in
+/// let channel = client.channel("room:lobby") { config in
 ///   config.broadcast.receiveOwnBroadcasts = true
 /// }
 ///
-/// let messages = await channel.broadcasts(event: "message")
-/// try await channel.subscribe()
+/// let messages = channel.broadcastStream(event: "message")
+/// try await channel.subscribeWithError()
 ///
 /// for await payload in messages {
 ///   print(payload)
 /// }
 /// ```
 ///
-/// The channel is an actor on its client's executor: every channel of one client, and the client
-/// itself, form a single isolation domain. Cancelling the task that iterates a stream ends the
-/// stream and removes its listener; removing the channel ends every stream.
+/// A stream ends when the task that reads it is cancelled, or when the channel is removed from
+/// its client. Two streams on the same event each get every message.
 ///
 /// ## Topics
 /// ### Identity
@@ -66,9 +65,9 @@ public struct RealtimeChannelConfig: Sendable {
 /// - ``config``
 /// ### Status
 /// - ``status``
-/// - ``statusChanges()``
+/// - ``statusChange``
 /// ### Lifecycle
-/// - ``subscribe()``
+/// - ``subscribeWithError()``
 /// - ``unsubscribe()``
 /// ### Broadcasting
 /// - ``broadcast(event:message:encoder:)``
@@ -81,231 +80,508 @@ public struct RealtimeChannelConfig: Sendable {
 /// - ``track(_:)``
 /// - ``track(state:)``
 /// - ``untrack()``
-/// - ``presenceChanges()``
+/// - ``presenceChange()``
 /// ### Postgres Changes
-/// - ``postgresChanges(_:schema:table:filter:select:)-(AnyAction.Type,_,_,_,_)``
-/// - ``postgresChanges(_:schema:table:filter:select:)-(InsertAction.Type,_,_,_,_)``
-/// - ``postgresChanges(_:schema:table:filter:select:)-(UpdateAction.Type,_,_,_,_)``
-/// - ``postgresChanges(_:schema:table:filter:select:)-(DeleteAction.Type,_,_,_,_)``
+/// - ``postgresChange(_:schema:table:filter:select:)-(AnyAction.Type,_,_,_,_)``
+/// - ``postgresChange(_:schema:table:filter:select:)-(InsertAction.Type,_,_,_,_)``
+/// - ``postgresChange(_:schema:table:filter:select:)-(UpdateAction.Type,_,_,_,_)``
+/// - ``postgresChange(_:schema:table:filter:select:)-(DeleteAction.Type,_,_,_,_)``
 /// ### Broadcast Events
-/// - ``broadcasts(event:)``
-/// - ``broadcastData(event:)``
+/// - ``broadcastStream(event:)``
+/// - ``broadcastDataStream(event:)``
 /// ### System Events
-/// - ``systemMessages()``
-public actor RealtimeChannel {
-  /// The fully-qualified topic string sent to the Realtime server (e.g. `"realtime:room:lobby"`).
-  public nonisolated let topic: String
-
-  /// The channel's topic without the `realtime:` prefix, as expected by the
-  /// broadcast REST endpoint (WebSocket frames use the full ``topic``).
-  nonisolated let subTopic: String
+/// - ``system()``
+public final class RealtimeChannel: Sendable {
+  /// The topic sent to the Realtime server, such as `"realtime:room:lobby"`.
+  public let topic: String
 
   /// The channel's configuration, as passed to ``RealtimeClient/channel(_:options:)``.
-  public nonisolated let config: RealtimeChannelConfig
+  public let config: RealtimeChannelConfig
 
-  nonisolated let logger: Logging.Logger
+  /// The topic without the `realtime:` prefix, as the REST broadcast endpoint expects it.
+  let subTopic: String
+  let connection: RealtimeConnection
+  let state = LockIsolated(State())
 
-  /// The client's executor owner, kept so the channel stays on it even after the client is gone.
-  private let isolation: RealtimeExecutor
+  var logger: Logging.Logger { connection.options.logger }
 
-  public nonisolated var unownedExecutor: UnownedSerialExecutor {
-    isolation.unownedExecutor
-  }
-
-  /// Weak: the client owns its channels, and a channel the app keeps after releasing the client
-  /// must not keep the client (and its socket) alive.
-  weak var client: RealtimeClient?
-
-  nonisolated let maxRetryAttempts: Int
-  nonisolated let timeout: Duration
-  nonisolated let clock: any Clock<Duration>
-  nonisolated let connectOnSubscribe: Bool
-  nonisolated let retryDelay: @Sendable (_ attempt: Int) -> Duration
-
-  // MARK: Subscription state
-
-  enum SubscriptionState: CustomStringConvertible {
-    case unsubscribed
-    case subscribing(Task<Void, any Error>)
-    case subscribed
-    case unsubscribing(Task<Void, Never>)
-
-    var description: String {
-      switch self {
-      case .unsubscribed: "unsubscribed"
-      case .subscribing: "subscribing"
-      case .subscribed: "subscribed"
-      case .unsubscribing: "unsubscribing"
-      }
-    }
+  struct State: Sendable {
+    var phase: Phase = .idle
+    var streams = StreamRegistry()
+    var serverChanges: [PostgresJoinConfig] = []
+    var sentChanges: [PostgresJoinConfig] = []
+    var publishedStatus: RealtimeChannelStatus = .unsubscribed
+    var nextGeneration: UInt64 = 0
+    var isRemoving = false
 
     var status: RealtimeChannelStatus {
-      switch self {
-      case .unsubscribed: .unsubscribed
-      case .subscribing: .subscribing
-      case .subscribed: .subscribed
-      case .unsubscribing: .unsubscribing
+      switch phase {
+      case .idle, .removed: .unsubscribed
+      case .attached(let attachment) where attachment.leaving != nil: .unsubscribing
+      case .attached(let attachment): RealtimeChannelStatus(attachment.inner.status)
+      }
+    }
+
+    /// Yielding under the lock keeps the stream order equal to the state order.
+    mutating func publishStatus() {
+      let current = status
+      guard current != publishedStatus else { return }
+      publishedStatus = current
+      streams.yieldStatus(current)
+    }
+
+    mutating func endAttachment() {
+      if case .attached(let attachment) = phase { attachment.pump.cancel() }
+      phase = .idle
+      serverChanges = []
+    }
+
+    func attachment(_ generation: UInt64) -> Attachment? {
+      if case .attached(let attachment) = phase, attachment.generation == generation {
+        attachment
+      } else {
+        nil
       }
     }
   }
 
-  var state: SubscriptionState = .unsubscribed
-
-  /// The `ref` of the current join, tagged on every push and compared against the `join_ref`
-  /// of server closes so a close for a previous incarnation of the topic is ignored.
-  var joinRef: String?
-
-  /// The access token the current `phx_join` was sent with, so a token stored while the join
-  /// waits for its reply is still sent to the channel.
-  var joinAccessToken: String?
-
-  /// Resumed by the server's join confirmation; failed by a close, a reset, or cancellation.
-  var joinWaiter: (ref: String, continuation: CheckedContinuation<Void, any Error>)?
-
-  /// Resumed by the server's `phx_close` while an unsubscribe waits for it.
-  var closeWaiter: CheckedContinuation<Void, Never>?
-
-  /// The subscribe task a server close cancelled while it was in flight. That attempt compares
-  /// it against its own task so `subscribe()` throws `channelClosedByServer` instead of the bare
-  /// `CancellationError`, then clears it. A newer attempt never consumes it.
-  var subscribeTaskClosedByServer: Task<Void, any Error>?
-
-  // MARK: Pushes
-
-  /// A push waiting for its `phx_reply`.
-  ///
-  /// The slot is created before the frame goes out, so a reply can never arrive before anyone
-  /// is waiting for it. A reply that lands before the caller parks its continuation is kept in
-  /// `outcome` and handed over when the caller does.
-  struct PendingPush {
-    var waiter: CheckedContinuation<Void, any Error>?
-    var outcome: Result<Void, any Error>?
+  enum Phase: Sendable {
+    case idle
+    case attached(Attachment)
+    case removed
   }
 
-  /// Pushes waiting for a `phx_reply`, by `ref`.
-  var pendingPushes: [String: PendingPush] = [:]
-
-  // MARK: Listeners
-
-  enum Listener {
-    case broadcast(event: String, AsyncStream<JSONObject>.Continuation)
-    case broadcastData(event: String, AsyncStream<Data>.Continuation)
-    case postgres(PostgresJoinConfig, AsyncStream<AnyAction>.Continuation)
-    case presence(AsyncStream<any PresenceAction>.Continuation)
-    case system(AsyncStream<RealtimeMessageV2>.Continuation)
-    case status(AsyncStream<RealtimeChannelStatus>.Continuation)
-
-    func finish() {
-      switch self {
-      case .broadcast(_, let continuation): continuation.finish()
-      case .broadcastData(_, let continuation): continuation.finish()
-      case .postgres(_, let continuation): continuation.finish()
-      case .presence(let continuation): continuation.finish()
-      case .system(let continuation): continuation.finish()
-      case .status(let continuation): continuation.finish()
-      }
-    }
-
-    var binding: ChannelBinding {
-      switch self {
-      case .broadcast(let event, _): .broadcast(event: event)
-      case .broadcastData(let event, _): .broadcastData(event: event)
-      case .postgres(let change, _): .postgres(change)
-      case .presence: .presence
-      case .system: .system
-      case .status: .status
-      }
-    }
-
-    func yield(_ delivery: ChannelDelivery) {
-      switch (self, delivery) {
-      case (.broadcast(_, let continuation), .broadcast(let json)): continuation.yield(json)
-      case (.broadcastData(_, let continuation), .broadcastData(let data)): continuation.yield(data)
-      case (.postgres(_, let continuation), .postgres(let action)): continuation.yield(action)
-      case (.presence(let continuation), .presence(let action)): continuation.yield(action)
-      case (.system(let continuation), .system(let message)): continuation.yield(message)
-      default: assertionFailure("route paired a \(delivery) delivery with a \(binding) stream")
-      }
-    }
+  /// A closed Phoenix channel cannot join again, so every subscribe after an unsubscribe makes a
+  /// new attachment.
+  struct Attachment: Sendable {
+    let generation: UInt64
+    let inner: Phoenix.Channel
+    let pump: Task<Void, Never>
+    var subscribing: Task<Void, any Error>?
+    /// The callers waiting on `subscribing`. The last one to be cancelled cancels it.
+    var waiters = 1
+    var leaving: Task<Void, Never>?
   }
 
-  /// Open streams, in registration order. The order fixes the `postgres_changes` array of the
-  /// join payload, and indexes the deliveries of ``route(_:bindings:serverChanges:)``.
-  var listeners: [(id: UUID, listener: Listener)] = []
-
-  /// The `postgres_changes` bindings the server echoed back on join, with their ids.
-  var serverChanges: [PostgresJoinConfig] = []
-
-  // MARK: Presence
-
-  /// The server's presence set for the current join. Diffs that arrive before the join's first
-  /// `presence_state` wait in it for that state.
-  var presence = PresenceTracker()
-
-  init(
-    topic: String,
-    config: RealtimeChannelConfig,
-    client: RealtimeClient,
-    logger: Logging.Logger,
-    retryDelay: @escaping @Sendable (_ attempt: Int) -> Duration = RealtimeChannel
-      .defaultRetryDelay
-  ) {
+  init(topic: String, config: RealtimeChannelConfig, connection: RealtimeConnection) {
     self.topic = topic
     self.subTopic =
       topic.hasPrefix("realtime:") ? String(topic.dropFirst("realtime:".count)) : topic
     self.config = config
-    self.logger = logger
-    self.client = client
-    self.isolation = client.isolation
-    self.maxRetryAttempts = client.options.maxRetryAttempts
-    self.timeout = client.options.timeout
-    self.clock = client.clock
-    self.connectOnSubscribe = client.options.connectOnSubscribe
-    self.retryDelay = retryDelay
+    self.connection = connection
   }
 
   deinit {
-    for (_, listener) in listeners {
-      listener.finish()
+    if case .attached(let attachment) = state.value.phase {
+      attachment.pump.cancel()
+      let inner = attachment.inner
+      Task { await inner.leave() }
+    }
+    for sink in state.withValue({ $0.streams.removeAll() }) {
+      sink.finish()
     }
   }
 
-  // MARK: - Status
-
-  /// The current subscription status of the channel.
+  /// The subscription status.
   public var status: RealtimeChannelStatus {
-    state.status
+    state.value.status
   }
 
-  /// An async stream that emits channel subscription status changes.
+  /// Joins the channel and returns once the server accepted the join.
   ///
-  /// The stream emits the current status immediately upon iteration and then each
-  /// subsequent change. Cancelling the iterating task ends the stream; so does removing the
-  /// channel from its client.
-  public func statusChanges() -> AsyncStream<RealtimeChannelStatus> {
-    let (stream, continuation) = AsyncStream<RealtimeChannelStatus>.makeStream(
-      bufferingPolicy: .unbounded
+  /// Connects the client first unless `RealtimeClientOptions.connectOnSubscribe` is off. Calling
+  /// it while a subscribe runs waits for that one. After the first join, the channel joins again
+  /// on its own after a dropped connection, and ``status`` shows ``RealtimeChannelStatus/subscribing``
+  /// meanwhile.
+  ///
+  /// Each join attempt waits at least ``RealtimeClientOptions/defaultTimeout`` for the server's
+  /// reply, even when `RealtimeClientOptions.timeout` is shorter, because the server can take that
+  /// long to reject a private channel.
+  ///
+  /// - Throws: ``RealtimeError`` with the server's reason when it rejected the join, kind
+  ///   `.maxRetryAttemptsReached` after `maxRetryAttempts` failed attempts, kind
+  ///   `.postgresChangesMismatch` when the server did not accept the `postgresChange` streams,
+  ///   kind `.channelClosed` after the channel was removed, the error of
+  ///   ``RealtimeClient/connect()`` when the client cannot connect, kind `.notConnected` when
+  ///   ``RealtimeClient/disconnect(code:reason:)`` runs first, and `CancellationError` when the
+  ///   calling task is cancelled. Cancelling the last waiting caller rolls the join back.
+  public func subscribeWithError() async throws {
+    while true {
+      switch try nextSubscribeStep() {
+      case .subscribed:
+        return
+      case .attempt(let attempt, let generation):
+        try await withTaskCancellationHandler {
+          try await attempt.value
+        } onCancel: {
+          if releaseWaiter(generation) { attempt.cancel() }
+        }
+        try Task.checkCancellation()
+        return
+      case .leave(let leaving, let generation):
+        await leaving.value
+        detach(generation)
+        try Task.checkCancellation()
+      case .rejoin(let inner):
+        try await awaitRejoin(inner)
+        try Task.checkCancellation()
+      }
+    }
+  }
+
+  private static let removedError = RealtimeError(
+    kind: .channelClosed, message: "The channel was removed from its client.", isRetryable: false)
+
+  private enum SubscribeStep {
+    case subscribed
+    case attempt(Task<Void, any Error>, generation: UInt64)
+    case leave(Task<Void, Never>, generation: UInt64)
+    /// Phoenix is joining again on its own.
+    case rejoin(Phoenix.Channel)
+  }
+
+  /// Returns `true` when no caller waits on the attempt anymore.
+  private func releaseWaiter(_ generation: UInt64) -> Bool {
+    state.withValue { state in
+      guard var attachment = state.attachment(generation), attachment.subscribing != nil else {
+        return false
+      }
+      attachment.waiters -= 1
+      state.phase = .attached(attachment)
+      return attachment.waiters == 0
+    }
+  }
+
+  /// Waits for Phoenix to join again, or for it to close the channel. Connects first, so a
+  /// stopped client does not leave the caller waiting.
+  private func awaitRejoin(_ inner: Phoenix.Channel) async throws {
+    if connection.options.connectOnSubscribe {
+      try await connection.connect()
+    }
+    let maxAttempts = connection.options.maxRetryAttempts
+    let didConnect = connection.options.connectOnSubscribe
+    let connection = connection
+    try await withThrowingTaskGroup(of: Void.self) { group in
+      group.addTask {
+        for await status in inner.statuses {
+          if status == .joined { return }
+          if case .closed = status { return }
+        }
+      }
+      group.addTask { try await Self.failAfterAttempts(inner, maxAttempts: maxAttempts) }
+      group.addTask { try await connection.failWhenSocketStops(didConnect: didConnect) }
+      defer { group.cancelAll() }
+      try await group.next()
+    }
+  }
+
+  private func nextSubscribeStep() throws -> SubscribeStep {
+    try state.withValue { state in
+      switch state.phase {
+      case .removed:
+        throw Self.removedError
+      case .idle where state.isRemoving:
+        throw Self.removedError
+      case .idle:
+        return attach(&state)
+      case .attached(var attachment):
+        if let leaving = attachment.leaving {
+          return .leave(leaving, generation: attachment.generation)
+        }
+        if let subscribing = attachment.subscribing {
+          attachment.waiters += 1
+          state.phase = .attached(attachment)
+          return .attempt(subscribing, generation: attachment.generation)
+        }
+        switch attachment.inner.status {
+        case .joined:
+          return .subscribed
+        case .closed:
+          state.endAttachment()
+          if state.isRemoving { throw Self.removedError }
+          return attach(&state)
+        default:
+          return .rejoin(attachment.inner)
+        }
+      }
+    }
+  }
+
+  /// The pump subscribes to the inner streams before the join goes out, so it sees the first
+  /// message.
+  private func attach(_ state: inout State) -> SubscribeStep {
+    let generation = state.nextGeneration
+    state.nextGeneration += 1
+    let inner = connection.socket.channel(
+      Topic(topic),
+      options: ChannelOptions(
+        params: { [weak self] in self?.joinParams() ?? [:] },
+        timeout: connection.joinTimeout,
+        onRejectedJoin: .close
+      )
     )
-    register(.status(continuation), terminating: continuation)
-    continuation.yield(status)
-    return stream
+    let pump = startPump(inner, generation: generation)
+    let attempt = Task { try await self.runSubscribe(inner, generation: generation) }
+    state.phase = .attached(
+      Attachment(generation: generation, inner: inner, pump: pump, subscribing: attempt))
+    state.publishStatus()
+    return .attempt(attempt, generation: generation)
   }
 
-  func setState(_ newState: SubscriptionState) {
-    logger.debug("State transition for '\(topic)': \(state) → \(newState)")
-    let previous = status
-    state = newState
-    guard newState.status != previous else { return }
-    // A new join waits for its own first presence state.
-    if case .subscribing = newState {
-      presence.reset()
-    }
-    for case .status(let continuation) in listeners.map(\.listener) {
-      continuation.yield(newState.status)
+  private func runSubscribe(_ inner: Phoenix.Channel, generation: UInt64) async throws {
+    do {
+      if connection.options.connectOnSubscribe {
+        try await connection.connect()
+      }
+      await connection.refreshToken()
+      let response = try await join(inner)
+      if bindingsMismatch(in: response, generation: generation) {
+        await unsubscribe(generation: generation)
+        throw RealtimeError.postgresChangesMismatch
+      }
+      state.withValue { state in
+        guard case .attached(var attachment) = state.phase, attachment.generation == generation
+        else { return }
+        attachment.subscribing = nil
+        state.phase = .attached(attachment)
+        state.publishStatus()
+      }
+    } catch {
+      await inner.leave()
+      detach(generation)
+      if error is CancellationError { throw error }
+      if state.value.isRemoving { throw Self.removedError }
+      throw RealtimeError(channelFailure: error)
     }
   }
 
-  // MARK: - Broadcast
+  /// Leaving the group cancels the join, and Phoenix rolls it back.
+  private func join(_ inner: Phoenix.Channel) async throws -> Phoenix.Payload {
+    let maxAttempts = connection.options.maxRetryAttempts
+    let didConnect = connection.options.connectOnSubscribe
+    let connection = connection
+    return try await withThrowingTaskGroup(of: Phoenix.Payload?.self) { group in
+      group.addTask { try await inner.join() }
+      group.addTask {
+        try await Self.failAfterAttempts(inner, maxAttempts: maxAttempts)
+        return nil
+      }
+      group.addTask {
+        try await connection.failWhenSocketStops(didConnect: didConnect)
+        return nil
+      }
+      defer { group.cancelAll() }
+      while let result = try await group.next() {
+        if let result { return result }
+      }
+      throw CancellationError()
+    }
+  }
+
+  private static func failAfterAttempts(_ inner: Phoenix.Channel, maxAttempts: Int) async throws {
+    var failures = 0
+    var wasErrored = false
+    for await status in inner.statuses {
+      switch status {
+      case .errored:
+        if !wasErrored {
+          failures += 1
+          if failures >= maxAttempts { throw RealtimeError.maxRetryAttemptsReached }
+        }
+        wasErrored = true
+      case .closed:
+        return
+      default:
+        wasErrored = false
+      }
+    }
+  }
+
+  /// Leaves the channel and returns once the server confirmed or the leave timed out.
+  ///
+  /// Streams stay open, and ``subscribeWithError()`` joins the channel again. The leave waits as
+  /// long as a join attempt, at least ``RealtimeClientOptions/defaultTimeout``.
+  public func unsubscribe() async {
+    await unsubscribe(generation: nil)
+  }
+
+  /// With a `generation`, does nothing when a newer subscribe replaced that attachment.
+  private func unsubscribe(generation expected: UInt64?) async {
+    let pending: (Task<Void, Never>, UInt64)? = state.withValue { state in
+      guard case .attached(var attachment) = state.phase else { return nil }
+      if let expected, attachment.generation != expected { return nil }
+      if let leaving = attachment.leaving {
+        return (leaving, attachment.generation)
+      }
+      let inner = attachment.inner
+      let leaving = Task { await inner.leave() }
+      attachment.leaving = leaving
+      state.phase = .attached(attachment)
+      state.publishStatus()
+      return (leaving, attachment.generation)
+    }
+    guard let (leaving, generation) = pending else { return }
+    await leaving.value
+    detach(generation)
+  }
+
+  private func detach(_ generation: UInt64) {
+    state.withValue { state in
+      guard state.attachment(generation) != nil else { return }
+      state.endAttachment()
+      state.publishStatus()
+    }
+  }
+
+  func remove() async {
+    state.withValue { $0.isRemoving = true }
+    await unsubscribe()
+    let sinks = state.withValue { state in
+      state.endAttachment()
+      state.phase = .removed
+      state.publishStatus()
+      return state.streams.removeAll()
+    }
+    for sink in sinks {
+      sink.finish()
+    }
+  }
+
+  private func startPump(_ inner: Phoenix.Channel, generation: UInt64) -> Task<Void, Never> {
+    let messages = inner.messages()
+    let statuses = inner.statuses
+    let joins = inner.joins
+    return Task { [weak self] in
+      await withTaskGroup(of: Void.self) { [weak self] group in
+        group.addTask { [weak self] in
+          for await message in messages { self?.receive(message, generation: generation) }
+        }
+        group.addTask { [weak self] in
+          for await _ in statuses { self?.statusChanged(generation: generation) }
+        }
+        group.addTask { [weak self] in
+          for await response in joins {
+            self?.rejoined(response, generation: generation)
+          }
+        }
+      }
+    }
+  }
+
+  /// Decodes outside the lock, delivers under it. A stream opened or ended meanwhile makes the
+  /// route stale, so it is computed again under the lock.
+  private func receive(_ message: Phoenix.Message, generation: UInt64) {
+    guard
+      let snapshot = state.withValue({ state in
+        state.attachment(generation).map { _ in
+          (state.streams.bindings, state.serverChanges, state.streams.version)
+        }
+      })
+    else { return }
+    let routed: ChannelRoute?
+    do {
+      routed = try routeMessage(message, bindings: snapshot.0, serverChanges: snapshot.1)
+    } catch {
+      logger.debug("Dropped a \(message.event) message on \(topic) that does not decode.")
+      return
+    }
+    guard let routed else { return }
+    if routed.listeners.isEmpty {
+      if case .binary = message.payload {
+        logger.warning(
+          "Received a binary broadcast on \(topic) but no Data stream is open. Open one with broadcastDataStream(event:) to receive Data."
+        )
+      }
+      return
+    }
+    state.withValue { state in
+      guard state.attachment(generation) != nil else { return }
+      if state.streams.version == snapshot.2 {
+        state.streams.deliver(routed)
+      } else if let again = try? routeMessage(
+        message, bindings: state.streams.bindings, serverChanges: state.serverChanges)
+      {
+        state.streams.deliver(again)
+      }
+    }
+  }
+
+  private func routeMessage(
+    _ message: Phoenix.Message,
+    bindings: [ChannelBinding],
+    serverChanges: [PostgresJoinConfig]
+  ) throws -> ChannelRoute? {
+    switch message.payload {
+    case .binary(let data) where message.event == ChannelEvent.broadcast:
+      return route(try BroadcastFrameCodec.decode(data), bindings: bindings)
+    case .binary(let data):
+      return route(
+        DecodedBroadcast(topic: topic, event: message.event, payload: .binary(data)),
+        bindings: bindings)
+    case .json:
+      let realtimeMessage = RealtimeMessageV2(
+        joinRef: nil, ref: nil, topic: topic, event: message.event,
+        payload: message.payload.jsonObject)
+      return try route(realtimeMessage, bindings: bindings, serverChanges: serverChanges)
+    }
+  }
+
+  /// The status loop wakes on every inner change and publishes the value derived now, so a late
+  /// wake-up publishes nothing stale.
+  private func statusChanged(generation: UInt64) {
+    state.withValue { state in
+      guard let attachment = state.attachment(generation) else { return }
+      if case .closed = attachment.inner.status, attachment.leaving == nil {
+        state.endAttachment()
+      }
+      state.publishStatus()
+    }
+  }
+
+  private func rejoined(_ response: Phoenix.Payload, generation: UInt64) {
+    let isRejoin = state.withValue { $0.attachment(generation)?.subscribing == nil }
+    guard isRejoin, bindingsMismatch(in: response, generation: generation) else { return }
+    logger.error(
+      "The server did not accept the postgres_changes bindings of \(topic) on rejoin. Unsubscribing."
+    )
+    Task { await self.unsubscribe(generation: generation) }
+  }
+
+  /// Stores the join reply's bindings and returns `true` when they differ from what the join
+  /// sent. Runs for the same reply from the subscribe path and the pump, so it must stay
+  /// idempotent.
+  private func bindingsMismatch(in response: Phoenix.Payload, generation: UInt64) -> Bool {
+    state.withValue { state in
+      guard state.attachment(generation) != nil else { return false }
+      let echoed: [PostgresJoinConfig]
+      do {
+        echoed = try serverChanges(fromJoinReply: response.jsonObject)
+      } catch {
+        logger.error("The join reply of \(topic) has postgres_changes in an unknown shape.")
+        echoed = []
+      }
+      state.serverChanges = echoed
+      return !postgresChangesMatch(sent: state.sentChanges, server: echoed)
+    }
+  }
+
+  /// Phoenix calls it at every join attempt, when it encodes the frame.
+  private func joinParams() -> Phoenix.JSONObject {
+    let accessToken = connection.token.value
+    let version = connection.options.headers[.xClientInfo]
+    return state.withValue { state in
+      state.sentChanges = state.streams.postgresChanges
+      do {
+        return try joinPayload(
+          config: config, bindings: state.streams.bindings, accessToken: accessToken,
+          version: version
+        ).phoenix
+      } catch {
+        logger.error("Failed to encode the join payload of \(topic).")
+        return [:]
+      }
+    }
+  }
 
   /// Sends a broadcast message with a `Codable` payload over the WebSocket.
   ///
@@ -320,7 +596,8 @@ public actor RealtimeChannel {
     event: String, message: some Codable, encoder: JSONEncoder? = nil
   ) async throws {
     try await broadcast(
-      event: event, message: try JSONObject(message, encoder: encoder ?? JSONValue.encoder))
+      event: event,
+      message: try Helpers.JSONObject(message, encoder: encoder ?? Helpers.JSONValue.encoder))
   }
 
   /// Sends a broadcast message with a raw `JSONObject` payload over the WebSocket.
@@ -328,28 +605,21 @@ public actor RealtimeChannel {
   /// The channel must be subscribed. To broadcast without a subscription, use
   /// ``httpSend(event:message:timeout:)-(_,JSONObject,_)``.
   ///
-  /// Returns as soon as the frame is sent, unless ``BroadcastJoinConfig/acknowledgeBroadcasts``
-  /// is on: then it waits for the server's reply. Wrap the call in a `Task` to send without
-  /// waiting; cancelling that task stops the wait, not the frame.
+  /// Returns as soon as the frame is queued, unless ``BroadcastJoinConfig/acknowledgeBroadcasts``
+  /// is on: then it waits for the server's reply. Cancelling the task stops the wait, not the
+  /// frame.
   ///
   /// - Parameters:
   ///   - event: The broadcast event name.
   ///   - message: A raw ``JSONObject`` payload.
-  /// - Throws: ``RealtimeError`` with kind ``RealtimeError/Kind-swift.struct/notSubscribed``
-  ///   when the channel is not subscribed, ``RealtimeError/Kind-swift.struct/timeout`` when no
-  ///   reply arrived within the client's configured timeout, the server's reason as
-  ///   ``RealtimeError/Kind-swift.struct/payloadTooLarge`` or
-  ///   ``RealtimeError/Kind-swift.struct/server`` when it rejected the message, and
-  ///   `CancellationError` when the awaiting task is cancelled.
-  public func broadcast(event: String, message: JSONObject) async throws {
-    guard case .subscribed = state, let client else {
-      throw RealtimeError.notSubscribed
-    }
-    let ref = await client.makeRef()
-    try await push(ref: ref) {
-      await client.pushBroadcast(
-        joinRef: joinRef, ref: ref, topic: topic, event: event, jsonPayload: message
-      )
+  /// - Throws: ``RealtimeError`` with kind `.notSubscribed` when the channel is not subscribed,
+  ///   `.timeout` when no reply arrived within `RealtimeClientOptions.timeout`, the server's
+  ///   reason as `.payloadTooLarge` or `.server` when it rejected the message, and
+  ///   `CancellationError` when the task is cancelled.
+  public func broadcast(event: String, message: Helpers.JSONObject) async throws {
+    try await pushBroadcast(event: event) {
+      try BroadcastFrameCodec.encodePush(
+        joinRef: nil, ref: nil, topic: topic, event: event, jsonPayload: message)
     }
   }
 
@@ -360,18 +630,30 @@ public actor RealtimeChannel {
   ///   - data: Raw binary data to send as the payload.
   /// - Throws: The errors of ``broadcast(event:message:)``.
   public func broadcast(event: String, data: Data) async throws {
-    guard case .subscribed = state, let client else {
-      throw RealtimeError.notSubscribed
-    }
-    let ref = await client.makeRef()
-    try await push(ref: ref) {
-      await client.pushBroadcast(
-        joinRef: joinRef, ref: ref, topic: topic, event: event, binaryPayload: data
-      )
+    try await pushBroadcast(event: event) {
+      try BroadcastFrameCodec.encodePush(
+        joinRef: nil, ref: nil, topic: topic, event: event, binaryPayload: data)
     }
   }
 
-  // MARK: - Presence
+  /// The refs stay empty because ``SupabaseFrameCodec`` stamps them.
+  private func pushBroadcast(event: String, template: () throws -> Data) async throws {
+    let inner = try subscribedInner()
+    let frame: Data
+    do {
+      frame = try template()
+    } catch {
+      throw RealtimeError.encoding("The broadcast '\(event)' could not be encoded.")
+    }
+    try await mappingChannelErrors {
+      if config.broadcast.acknowledgeBroadcasts {
+        try await inner.push(
+          ChannelEvent.broadcast, .binary(frame), timeout: connection.options.timeout)
+      } else {
+        try await inner.send(ChannelEvent.broadcast, .binary(frame))
+      }
+    }
+  }
 
   /// Tracks the current client's presence state using a `Codable` value.
   ///
@@ -380,291 +662,58 @@ public actor RealtimeChannel {
   /// - Parameter state: A `Codable` value representing the client's presence state.
   /// - Throws: An error if the state cannot be encoded, or the errors of ``track(state:)``.
   public func track(_ state: some Codable) async throws {
-    try await track(state: try JSONObject(state))
+    try await track(state: try Helpers.JSONObject(state))
   }
 
-  /// Tracks the current client's presence state using a raw `JSONObject`.
-  ///
-  /// The state is shared with all other clients on the same channel. Call this after subscribing.
-  /// Waits for the server's reply when ``BroadcastJoinConfig/acknowledgeBroadcasts`` is on, as
-  /// ``broadcast(event:message:)`` does.
+  /// Tracks the current client's presence state using a raw `JSONObject`, and waits for the
+  /// server's reply.
   ///
   /// - Parameter state: A ``JSONObject`` representing the client's presence state.
   /// - Throws: The errors of ``broadcast(event:message:)``.
-  public func track(state: JSONObject) async throws {
-    guard case .subscribed = self.state else {
-      throw RealtimeError.notSubscribed
-    }
-    try await pushAcknowledged(
-      ChannelEvent.presence,
-      payload: [
-        "type": "presence",
-        "event": "track",
-        "payload": .object(state),
-      ]
-    )
+  public func track(state: Helpers.JSONObject) async throws {
+    try await pushPresence(["type": "presence", "event": "track", "payload": .object(state)])
   }
 
-  /// Stops tracking the current client's presence state on the channel.
-  ///
-  /// Waits for the server's reply when ``BroadcastJoinConfig/acknowledgeBroadcasts`` is on, as
-  /// ``broadcast(event:message:)`` does.
+  /// Stops tracking the current client's presence state, and waits for the server's reply.
   ///
   /// - Throws: The errors of ``broadcast(event:message:)``.
   public func untrack() async throws {
-    guard case .subscribed = state else {
-      throw RealtimeError.notSubscribed
+    try await pushPresence(["type": "presence", "event": "untrack"])
+  }
+
+  private func pushPresence(_ payload: Helpers.JSONObject) async throws {
+    let inner = try subscribedInner()
+    try await mappingChannelErrors {
+      try await inner.push(
+        ChannelEvent.presence, .json(.object(payload.phoenix)),
+        timeout: connection.options.timeout)
     }
-    try await pushAcknowledged(
-      ChannelEvent.presence,
-      payload: [
-        "type": "presence",
-        "event": "untrack",
-      ]
-    )
   }
 
-  // MARK: - Pushes
-
-  /// Sends a protocol frame (`phx_join`, `phx_leave`, `access_token`) on this channel without
-  /// waiting for its reply. Does nothing when the client is gone.
-  func push(
-    _ event: String, ref explicitRef: String? = nil, payload: JSONObject = [:]
-  ) async {
-    guard let client else { return }
-    let ref: String
-    if let explicitRef { ref = explicitRef } else { ref = await client.makeRef() }
-    await client.push(message(ref: ref, event: event, payload: payload))
+  /// The server replies only to an invalid token, with a `phx_close`.
+  func sendAccessToken(_ token: String?) async {
+    guard let inner = try? subscribedInner() else { return }
+    logger.debug("Updating auth token for channel \(topic)")
+    let value: Phoenix.JSONValue = token.map { .string($0) } ?? .null
+    try? await inner.send(ChannelEvent.accessToken, .json(.object(["access_token": value])))
   }
 
-  /// Sends `event` on this channel and waits for its reply when the channel acknowledges pushes.
-  private func pushAcknowledged(_ event: String, payload: JSONObject) async throws {
-    guard let client else {
-      throw RealtimeError.notConnected
+  private func subscribedInner() throws -> Phoenix.Channel {
+    try state.withValue { state in
+      guard case .attached(let attachment) = state.phase, attachment.leaving == nil,
+        attachment.inner.status == .joined
+      else { throw RealtimeError.notSubscribed }
+      return attachment.inner
     }
-    let ref = await client.makeRef()
-    let message = message(ref: ref, event: event, payload: payload)
-    try await push(ref: ref) { await client.push(message) }
   }
 
-  private func message(ref: String, event: String, payload: JSONObject) -> RealtimeMessageV2 {
-    RealtimeMessageV2(joinRef: joinRef, ref: ref, topic: topic, event: event, payload: payload)
-  }
-
-  /// Sends the frame `send` produces and, when the channel acknowledges pushes, waits for the
-  /// server's reply to `ref`.
-  ///
-  /// The reply slot is registered before the frame goes out, in the same synchronous stretch,
-  /// so an acknowledgement can never arrive before anyone is waiting for it.
-  private func push(ref: String, send: () async -> Void) async throws {
-    guard config.broadcast.acknowledgeBroadcasts else {
-      await send()
-      return
-    }
-    pendingPushes[ref] = PendingPush()
-    defer { pendingPushes[ref] = nil }
-    await send()
+  private func mappingChannelErrors(_ operation: () async throws -> Void) async throws {
     do {
-      try await withTimeout(timeout, clock: clock) {
-        try await withTaskCancellationHandler {
-          try await withCheckedThrowingContinuation {
-            (continuation: CheckedContinuation<Void, any Error>) in
-            awaitReply(for: ref, with: continuation)
-          }
-        } onCancel: {
-          Task { await self.settlePush(ref: ref, with: .failure(CancellationError())) }
-        }
-      }
-    } catch is TimeoutError {
-      logger.debug("Push \(ref) on '\(topic)' timed out.")
-      throw RealtimeError.pushTimeout
-    }
-  }
-
-  /// Parks `continuation` until the reply for `ref` arrives, or resumes it at once when the
-  /// reply is already in, the slot is gone, or the task is already cancelled.
-  private func awaitReply(for ref: String, with continuation: CheckedContinuation<Void, any Error>)
-  {
-    guard let pending = pendingPushes[ref] else {
-      continuation.resume(throwing: RealtimeError.notSubscribed)
-      return
-    }
-    if let outcome = pending.outcome {
-      pendingPushes[ref] = nil
-      continuation.resume(with: outcome)
-    } else if Task.isCancelled {
-      pendingPushes[ref] = nil
-      continuation.resume(throwing: CancellationError())
-    } else {
-      pendingPushes[ref]?.waiter = continuation
-    }
-  }
-
-  /// Records the first outcome for `ref` and wakes its waiter. Later outcomes are ignored.
-  private func settlePush(ref: String, with outcome: Result<Void, any Error>) {
-    guard let pending = pendingPushes[ref] else { return }
-    if let waiter = pending.waiter {
-      pendingPushes[ref] = nil
-      waiter.resume(with: outcome)
-    } else if pending.outcome == nil {
-      pendingPushes[ref]?.outcome = outcome
-    }
-  }
-
-  private func didReceiveReply(ref: String, status: PushStatus, payload: JSONObject) {
-    guard status == .error else {
-      settlePush(ref: ref, with: .success(()))
-      return
-    }
-    let reason =
-      payload["response"]?.objectValue?["reason"]?.stringValue
-      ?? payload["response"]?.stringValue
-      ?? "The server rejected the push."
-    settlePush(ref: ref, with: .failure(RealtimeError.ackError(reason: reason)))
-  }
-
-  /// Fails every push still waiting for a reply.
-  func failPendingPushes(with error: RealtimeError) {
-    for ref in pendingPushes.keys {
-      settlePush(ref: ref, with: .failure(error))
-    }
-  }
-
-  // MARK: - Incoming messages
-
-  func onMessage(_ message: RealtimeMessageV2) async {
-    do {
-      switch message.eventType {
-      case .system: handleSystem(message)
-      case .reply: try handleReply(message)
-      case .close: await handleClose(message)
-      case .error: handleError(message)
-      case .presenceDiff: _ = presence.applyDiff(message.payload)
-      case .presenceState: _ = presence.applyState(message.payload)
-      case .postgresChanges, .broadcast: break
-      default: logger.debug("Received message with unhandled event type: \(message)")
-      }
-      if let routed = try route(message, bindings: bindings, serverChanges: serverChanges) {
-        deliver(routed)
-      }
+      try await operation()
+    } catch let error as CancellationError {
+      throw error
     } catch {
-      logger.debug("Failed: \(error)")
+      throw RealtimeError(channelFailure: error)
     }
-  }
-
-  private func handleSystem(_ message: RealtimeMessageV2) {
-    if message.status == .ok {
-      didReceiveSubscribedOK()
-    } else {
-      logger.debug("Failed to subscribe to channel \(message.topic): \(message.payload)")
-    }
-  }
-
-  private func handleReply(_ message: RealtimeMessageV2) throws {
-    guard
-      let ref = message.ref,
-      let status = message.payload["status"]?.stringValue
-    else {
-      throw RealtimeError.decoding("Received a reply with unexpected payload: \(message)")
-    }
-
-    didReceiveReply(ref: ref, status: PushStatus(rawValue: status), payload: message.payload)
-
-    guard
-      message.payload["response"]?.objectValue?.keys
-        .contains(ChannelEvent.postgresChanges) == true
-    else { return }
-
-    serverChanges =
-      try message.payload["response"]?
-      .objectValue?["postgres_changes"]?
-      .decode(as: [PostgresJoinConfig].self) ?? []
-    didReceiveSubscribedOK()
-  }
-
-  private func handleClose(_ message: RealtimeMessageV2) async {
-    // Phoenix tags `phx_close` with the `join_ref` of the join it closes. A close for a previous
-    // incarnation of this topic (e.g. a join abandoned during a reconnect) must not tear down
-    // the current subscription (issue #1145, defect 3).
-    guard didReceiveClose(joinRef: message.joinRef) else {
-      return
-    }
-    await client?.remove(self)
-    finishStreams()
-  }
-
-  private func handleError(_ message: RealtimeMessageV2) {
-    logger.error(
-      "Received an error in channel \(message.topic). That could be as a result of an invalid access token"
-    )
-    // Like `phx_close`, `phx_error` is tagged with the `join_ref` of the join it belongs to — an
-    // error from a stale join must not tear down the current subscription (#1148). Errors
-    // without a `join_ref` (e.g. auth errors before a join completes) are applied
-    // unconditionally.
-    didReceiveClose(joinRef: message.joinRef)
-  }
-
-  /// Called by the client when a binary broadcast frame (type 0x04) is received.
-  func handleBinaryBroadcast(_ broadcast: DecodedBroadcast) {
-    let routed = route(broadcast, bindings: bindings)
-    if routed.listeners.isEmpty, case .binary = broadcast.payload {
-      logger.warning(
-        "Received binary broadcast for event '\(broadcast.event)' but no Data stream is open. Open one with broadcastData(event:) to receive Data."
-      )
-    }
-    deliver(routed)
-  }
-
-  private func deliver(_ routed: ChannelRoute) {
-    for index in routed.listeners {
-      listeners[index].listener.yield(routed.delivery)
-    }
-  }
-
-  // MARK: - Listeners
-
-  /// Registers `listener` and ends it when the stream's consumer goes away.
-  ///
-  /// `onTermination` runs on the consumer's context, so the removal hops back here once.
-  func register<Element>(
-    _ listener: Listener, terminating continuation: AsyncStream<Element>.Continuation
-  ) {
-    let id = UUID()
-    listeners.append((id, listener))
-    continuation.onTermination = { [weak self] _ in
-      Task { await self?.removeListener(id) }
-    }
-  }
-
-  private func removeListener(_ id: UUID) {
-    listeners.removeAll { $0.id == id }
-  }
-
-  /// Ends every open stream and forgets its listener.
-  func finishStreams() {
-    let open = listeners
-    listeners = []
-    for (_, listener) in open {
-      listener.finish()
-    }
-  }
-
-  var bindings: [ChannelBinding] {
-    listeners.map(\.listener.binding)
-  }
-
-  /// Default exponential-backoff retry delay with ±25% jitter, capped at 30s.
-  static let defaultRetryDelay: @Sendable (_ attempt: Int) -> Duration = { attempt in
-    let baseDelay: Double = 1.0
-    let maxDelay: Double = 30.0
-    let backoffMultiplier: Double = 2.0
-
-    let exponentialDelay = baseDelay * pow(backoffMultiplier, Double(attempt - 1))
-    let cappedDelay = min(exponentialDelay, maxDelay)
-
-    let jitterRange = cappedDelay * 0.25
-    let jitter = Double.random(in: -jitterRange...jitterRange)
-
-    return .seconds(max(0.1, cappedDelay + jitter))
   }
 }
