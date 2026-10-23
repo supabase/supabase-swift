@@ -310,28 +310,19 @@ extension RealtimeChannel {
     guard let client else { return }
     logger.debug("Sending phx_join for channel '\(topic)' (ref: \(ref))")
 
-    var presence = config.presence
-    presence.enabled = hasPresenceListener
-
-    let joinConfig = RealtimeJoinConfig(
-      broadcast: config.broadcast,
-      presence: presence,
-      postgresChanges: clientChanges,
-      isPrivate: config.isPrivate
-    )
-
-    let payload = RealtimeJoinPayload(
-      config: joinConfig,
-      accessToken: accessToken,
-      version: client.options.headers[.xClientInfo]
-    )
-
-    guard let encodedPayload = try? JSONObject(payload) else {
+    guard
+      let payload = try? joinPayload(
+        config: config,
+        bindings: bindings,
+        accessToken: accessToken,
+        version: client.options.headers[.xClientInfo]
+      )
+    else {
       reportIssue("Failed to encode the phx_join payload for channel '\(topic)'. Skipping join.")
       return
     }
 
-    await push(ChannelEvent.join, ref: ref, payload: encodedPayload)
+    await push(ChannelEvent.join, ref: ref, payload: payload)
   }
 
   /// Connects the socket when the client allows it, and reports whether it is connected.
