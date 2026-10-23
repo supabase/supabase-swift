@@ -17,7 +17,7 @@ struct RealtimeClientOptionsTests {
       options: RealtimeClientOptions(headers: [:])
     )
 
-    #expect(client.options.apikey == nil)
+    #expect(client.connection.options.apikey == nil)
   }
 
   @Test

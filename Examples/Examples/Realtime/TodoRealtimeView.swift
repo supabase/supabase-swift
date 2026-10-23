@@ -74,28 +74,28 @@ struct TodoRealtimeView: View {
   }
 
   func subscribeToChanges() async {
-    let channel = await supabase.channel("live-todos")
+    let channel = supabase.channel("live-todos")
 
-    let insertions = await channel.postgresChanges(
+    let insertions = channel.postgresChange(
       InsertAction.self,
       schema: "public",
       table: "todos"
     )
 
-    let updates = await channel.postgresChanges(
+    let updates = channel.postgresChange(
       UpdateAction.self,
       schema: "public",
       table: "todos"
     )
 
-    let deletes = await channel.postgresChanges(
+    let deletes = channel.postgresChange(
       DeleteAction.self,
       schema: "public",
       table: "todos"
     )
 
     do {
-      try await channel.subscribe()
+      try await channel.subscribeWithError()
     } catch {
       print("Error: \(error)")
       return

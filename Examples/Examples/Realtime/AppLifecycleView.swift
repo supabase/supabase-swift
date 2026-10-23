@@ -89,11 +89,11 @@ struct AppLifecycleView: View {
 
   @MainActor
   private func observe() async {
-    let channel = await supabase.channel(channelName)
+    let channel = supabase.channel(channelName)
     self.channel = channel
 
-    let socketStatusStream = await supabase.realtime.statusChanges()
-    let channelStatusStream = await channel.statusChanges()
+    let socketStatusStream = supabase.realtime.statusChange
+    let channelStatusStream = channel.statusChange
 
     async let socketStream: Void = { @MainActor in
       for await status in socketStatusStream {
@@ -110,7 +110,7 @@ struct AppLifecycleView: View {
     }()
 
     do {
-      try await channel.subscribe()
+      try await channel.subscribeWithError()
     } catch {
       log("Subscribe failed: \(error.localizedDescription)")
     }

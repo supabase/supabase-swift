@@ -88,22 +88,19 @@ extension RealtimeChannel {
     contentType: String,
     timeout: Duration?
   ) async throws {
-    guard let client else {
-      throw RealtimeError.notConnected
-    }
-    guard let accessToken = await client.currentAccessToken() else {
+    guard let accessToken = await connection.refreshToken() else {
       throw RealtimeError.accessTokenMissing
     }
 
     var headers: HTTPFields = [.contentType: contentType]
-    if let apiKey = client.options.apikey {
+    if let apiKey = connection.options.apikey {
       headers[.apiKey] = apiKey
     }
     headers[.authorization] = "Bearer \(accessToken)"
 
     let request = HTTPRequest(
       method: .post,
-      url: client.broadcastURL(topic: subTopic, event: event, isPrivate: config.isPrivate),
+      url: connection.broadcastURL(topic: subTopic, event: event, isPrivate: config.isPrivate),
       headerFields: headers
     )
 
@@ -111,9 +108,9 @@ extension RealtimeChannel {
     let data: Data
     do {
       (response, data) = try await withTimeout(
-        timeout ?? client.options.timeout, clock: client.clock
+        timeout ?? connection.options.timeout, clock: connection.options.clock
       ) {
-        try await client.http.send(request, body: body)
+        try await connection.http.send(request, body: body)
       }
     } catch is TimeoutError {
       throw RealtimeError(kind: .timeout, message: "httpSend() timed out.")

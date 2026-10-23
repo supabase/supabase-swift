@@ -121,6 +121,37 @@ package enum BroadcastFrameCodec {
     return data
   }
 
+  /// Writes `joinRef` and `ref` into a kind 3 frame made by ``encodePush(joinRef:ref:topic:event:jsonPayload:)``
+  /// or ``encodePush(joinRef:ref:topic:event:binaryPayload:)``, replacing the refs it holds.
+  ///
+  /// A channel makes the frame before the socket mints its refs, so the socket's codec stamps them.
+  package static func stamp(_ frame: Data, joinRef: String?, ref: String?) throws -> Data {
+    let bytes = [UInt8](frame)
+    let headerSize = 7
+    guard bytes.count >= headerSize, bytes[0] == BinaryKind.userBroadcastPush.rawValue,
+      let encoding = PayloadEncoding(rawValue: bytes[6]), bytes[5] == 0
+    else {
+      throw RealtimeError.encoding("Not a kind 3 frame with empty metadata.")
+    }
+    let topicStart = headerSize + Int(bytes[1]) + Int(bytes[2])
+    let eventStart = topicStart + Int(bytes[3])
+    let payloadStart = eventStart + Int(bytes[4])
+    guard payloadStart <= bytes.count,
+      let topic = String(bytes: bytes[topicStart..<eventStart], encoding: .utf8),
+      let event = String(bytes: bytes[eventStart..<payloadStart], encoding: .utf8)
+    else {
+      throw RealtimeError.encoding("Kind 3 frame is truncated.")
+    }
+    return try encodePush(
+      joinRef: joinRef,
+      ref: ref,
+      topic: topic,
+      event: event,
+      encoding: encoding,
+      payload: Data(bytes[payloadStart...])
+    )
+  }
+
   /// Decodes a kind 4 frame into a ``DecodedBroadcast``.
   ///
   /// Binary frame format:
