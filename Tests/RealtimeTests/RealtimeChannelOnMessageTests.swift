@@ -13,8 +13,7 @@ import Testing
 #if canImport(FoundationNetworking)
   import FoundationNetworking
 #endif
-/// Characterization tests for ``RealtimeChannel/onMessage(_:)``.
-/// what reaches the streams.
+/// `MessageRoutingTests` covers the routing itself.
 @Suite
 struct RealtimeChannelOnMessageTests {
   let client: RealtimeClient
@@ -34,18 +33,6 @@ struct RealtimeChannelOnMessageTests {
     self.commitTimestampJSON = try JSONValue(timestamp)
   }
   @Test
-  func unknownEventDispatchesNothing() async {
-    let systemMessages = await sut.systemMessages()
-    let broadcasts = await sut.broadcasts(event: "*")
-    await sut.onMessage(message(event: "not_a_channel_event"))
-
-    let receivedSystemMessages = await collect(systemMessages)
-    #expect(receivedSystemMessages.isEmpty)
-    let receivedBroadcasts = await collect(broadcasts)
-    #expect(receivedBroadcasts.isEmpty)
-  }
-
-  @Test
   func systemOKTriggersSystemCallback() async {
     let systemMessages = await sut.systemMessages()
     let sent = message(event: ChannelEvent.system, payload: ["status": "ok"])
@@ -55,28 +42,6 @@ struct RealtimeChannelOnMessageTests {
     let receivedSystemMessages = await collect(systemMessages)
     #expect(receivedSystemMessages == [sent])
     #expect(await sut.status == .unsubscribed)
-  }
-
-  @Test
-  func systemErrorStillTriggersSystemCallback() async {
-    let systemMessages = await sut.systemMessages()
-    let sent = message(event: ChannelEvent.system, payload: ["status": "error"])
-
-    await sut.onMessage(sent)
-
-    let receivedSystemMessages = await collect(systemMessages)
-    #expect(receivedSystemMessages == [sent])
-  }
-
-  @Test
-  func systemWithoutStatusStillTriggersSystemCallback() async {
-    let systemMessages = await sut.systemMessages()
-    let sent = message(event: ChannelEvent.system)
-
-    await sut.onMessage(sent)
-
-    let receivedSystemMessages = await collect(systemMessages)
-    #expect(receivedSystemMessages == [sent])
   }
 
   @Test
@@ -170,16 +135,6 @@ struct RealtimeChannelOnMessageTests {
   }
 
   @Test
-  func postgresChangesWithoutDataIsIgnored() async {
-    let actions = await recordPostgresActions()
-
-    await sut.onMessage(message(event: ChannelEvent.postgresChanges, payload: ["ids": [1]]))
-
-    let receivedActions = await collect(actions)
-    #expect(receivedActions.isEmpty)
-  }
-
-  @Test
   func postgresChangesInsertDispatchesInsertAction() async throws {
     let actions = await recordPostgresActions()
 
@@ -212,151 +167,6 @@ struct RealtimeChannelOnMessageTests {
   }
 
   @Test
-  func postgresChangesUpdateDispatchesUpdateActionWithBothRecords() async throws {
-    let actions = await recordPostgresActions()
-
-    await sut.onMessage(
-      message(
-        event: ChannelEvent.postgresChanges,
-        payload: [
-          "ids": [1],
-          "data": [
-            "type": "UPDATE",
-            "record": ["id": 1, "body": "new"],
-            "old_record": ["id": 1, "body": "old"],
-            "columns": [["name": "body", "type": "text"]],
-            "commit_timestamp": commitTimestampJSON,
-          ],
-        ]
-      )
-    )
-
-    let receivedActions = await collect(actions)
-    let action = try #require(receivedActions.first)
-    guard case .update(let update) = action else {
-      Issue.record("Expected .update, got \(action)")
-      return
-    }
-    #expect(update.record == ["id": 1, "body": "new"])
-    #expect(update.oldRecord == ["id": 1, "body": "old"])
-  }
-
-  @Test
-  func postgresChangesUpdateWithoutRecordsFallsBackToEmptyObjects() async throws {
-    let actions = await recordPostgresActions()
-
-    await sut.onMessage(
-      message(
-        event: ChannelEvent.postgresChanges,
-        payload: [
-          "ids": [1],
-          "data": [
-            "type": "UPDATE",
-            "columns": [["name": "body", "type": "text"]],
-            "commit_timestamp": commitTimestampJSON,
-          ],
-        ]
-      )
-    )
-
-    let receivedActions = await collect(actions)
-    let action = try #require(receivedActions.first)
-    guard case .update(let update) = action else {
-      Issue.record("Expected .update, got \(action)")
-      return
-    }
-    #expect(update.record.isEmpty)
-    #expect(update.oldRecord.isEmpty)
-  }
-
-  @Test
-  func postgresChangesDeleteDispatchesDeleteAction() async throws {
-    let actions = await recordPostgresActions()
-
-    await sut.onMessage(
-      message(
-        event: ChannelEvent.postgresChanges,
-        payload: [
-          "ids": [1],
-          "data": [
-            "type": "DELETE",
-            "old_record": ["id": 1],
-            "columns": [["name": "id", "type": "int4"]],
-            "commit_timestamp": commitTimestampJSON,
-          ],
-        ]
-      )
-    )
-
-    let receivedActions = await collect(actions)
-    let action = try #require(receivedActions.first)
-    guard case .delete(let delete) = action else {
-      Issue.record("Expected .delete, got \(action)")
-      return
-    }
-    #expect(delete.oldRecord == ["id": 1])
-  }
-
-  @Test
-  func postgresChangesWithUnknownTypeIsSwallowed() async {
-    let actions = await recordPostgresActions()
-
-    await sut.onMessage(
-      message(
-        event: ChannelEvent.postgresChanges,
-        payload: [
-          "ids": [1],
-          "data": [
-            "type": "TRUNCATE",
-            "columns": [],
-            "commit_timestamp": commitTimestampJSON,
-          ],
-        ]
-      )
-    )
-
-    let receivedActions = await collect(actions)
-    #expect(receivedActions.isEmpty)
-  }
-
-  @Test
-  func postgresChangesWithMalformedDataIsSwallowed() async {
-    let actions = await recordPostgresActions()
-
-    await sut.onMessage(
-      message(
-        event: ChannelEvent.postgresChanges,
-        payload: ["ids": [1], "data": ["type": "INSERT"]]
-      )
-    )
-
-    let receivedActions = await collect(actions)
-    #expect(receivedActions.isEmpty)
-  }
-
-  @Test
-  func postgresChangesWithoutIdsMatchesNoCallback() async {
-    let actions = await recordPostgresActions()
-
-    await sut.onMessage(
-      message(
-        event: ChannelEvent.postgresChanges,
-        payload: [
-          "data": [
-            "type": "INSERT",
-            "record": ["id": 1],
-            "columns": [["name": "id", "type": "int4"]],
-            "commit_timestamp": commitTimestampJSON,
-          ]
-        ]
-      )
-    )
-
-    let receivedActions = await collect(actions)
-    #expect(receivedActions.isEmpty)
-  }
-
-  @Test
   func broadcastTriggersMatchingBroadcastCallback() async throws {
     let broadcasts = await sut.broadcasts(event: "message")
 
@@ -372,18 +182,6 @@ struct RealtimeChannelOnMessageTests {
     #expect(receivedBroadcasts.count == 1)
     #expect(received["event"]?.stringValue == "message")
     #expect(received["payload"]?.objectValue?["body"]?.stringValue == "hi")
-  }
-
-  @Test
-  func broadcastWithoutEventIsSwallowed() async {
-    let broadcasts = await sut.broadcasts(event: "*")
-
-    await sut.onMessage(
-      message(event: ChannelEvent.broadcast, payload: ["payload": ["body": "hi"]])
-    )
-
-    let receivedBroadcasts = await collect(broadcasts)
-    #expect(receivedBroadcasts.isEmpty)
   }
 
   @Test
@@ -432,33 +230,6 @@ struct RealtimeChannelOnMessageTests {
   }
 
   @Test
-  func presenceDiffWithoutJoinsOrLeavesTriggersEmptyPresenceAction() async throws {
-    let actions = await sut.presenceChanges()
-
-    await sut.onMessage(message(event: ChannelEvent.presenceDiff))
-
-    let receivedActions = await collect(actions)
-    let action = try #require(receivedActions.first)
-    #expect(action.joins.isEmpty)
-    #expect(action.leaves.isEmpty)
-  }
-
-  @Test
-  func presenceDiffWithMalformedPresenceIsSwallowed() async {
-    let actions = await sut.presenceChanges()
-
-    await sut.onMessage(
-      message(
-        event: ChannelEvent.presenceDiff,
-        payload: ["joins": ["user-1": ["metas": []]]]
-      )
-    )
-
-    let receivedActions = await collect(actions)
-    #expect(receivedActions.isEmpty)
-  }
-
-  @Test
   func presenceStateTriggersPresenceCallbackWithJoinsOnly() async throws {
     let actions = await sut.presenceChanges()
 
@@ -473,18 +244,6 @@ struct RealtimeChannelOnMessageTests {
     let action = try #require(receivedActions.first)
     #expect(action.joins["user-1"]?.ref == "ref-1")
     #expect(action.leaves.isEmpty)
-  }
-
-  @Test
-  func presenceStateWithMalformedPresenceIsSwallowed() async {
-    let actions = await sut.presenceChanges()
-
-    await sut.onMessage(
-      message(event: ChannelEvent.presenceState, payload: ["user-1": "not-a-presence"])
-    )
-
-    let receivedActions = await collect(actions)
-    #expect(receivedActions.isEmpty)
   }
 
   private func message(

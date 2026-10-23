@@ -45,7 +45,7 @@ struct RealtimeChannelTests {
       select: ["id", "name"]
     )
 
-    let changes = await sut.clientChanges
+    let changes = await sut.bindings.postgresChanges
     #expect(changes.count == 1)
     #expect(changes.first?.event == .update)
     #expect(changes.first?.table == "orders")
@@ -313,9 +313,9 @@ struct RealtimeChannelTests {
         "presence", "system",
       ]
     )
-    #expect(await sut.hasPresenceListener)
+    #expect(await sut.bindings.hasPresence)
 
-    let clientChanges = await sut.clientChanges
+    let clientChanges = await sut.bindings.postgresChanges
     assertInlineSnapshot(of: clientChanges, as: .dump) {
       """
       ▿ 4 elements
@@ -387,7 +387,7 @@ struct RealtimeChannelTests {
     let presence = await channel.presenceChanges()
 
     // Verify that the presence listener exists
-    #expect(await channel.hasPresenceListener)
+    #expect(await channel.bindings.hasPresence)
 
     Task {
       try? await channel.subscribe()
@@ -951,5 +951,15 @@ extension RealtimeChannelTests {
     }
 
     return []
+  }
+}
+
+extension [ChannelBinding] {
+  fileprivate var postgresChanges: [PostgresJoinConfig] {
+    compactMap { if case .postgres(let change) = $0 { change } else { nil } }
+  }
+
+  fileprivate var hasPresence: Bool {
+    contains { if case .presence = $0 { true } else { false } }
   }
 }
