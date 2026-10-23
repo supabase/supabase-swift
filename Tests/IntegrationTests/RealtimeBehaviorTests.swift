@@ -252,8 +252,8 @@
     func cancelledStreamLeavesSiblingStreamDelivering() async throws {
       let client = makeClient()
       let channel = client.channel(uniqueTopic()) { $0.broadcast.receiveOwnBroadcasts = true }
-      let cancelled = channel.broadcastStream(event: "fanout")
-      let sibling = channel.broadcastStream(event: "fanout")
+      let cancelled = channel.broadcastStream(event: "shared")
+      let sibling = channel.broadcastStream(event: "shared")
       try await channel.subscribeWithError()
       let reader = Task {
         var count = 0
@@ -263,7 +263,7 @@
 
       reader.cancel()
       let cancelledCount = await reader.value
-      try await channel.broadcast(event: "fanout", message: Note(text: "after cancel"))
+      try await channel.broadcast(event: "shared", message: Note(text: "after cancel"))
 
       let received = try await collect(sibling, "sibling stream", count: 1)
       #expect(received[0]["payload"]?.objectValue?["text"]?.stringValue == "after cancel")
