@@ -201,10 +201,32 @@ public actor RealtimeChannel {
       case .status(let continuation): continuation.finish()
       }
     }
+
+    var binding: ChannelBinding {
+      switch self {
+      case .broadcast(let event, _): .broadcast(event: event)
+      case .broadcastData(let event, _): .broadcastData(event: event)
+      case .postgres(let change, _): .postgres(change)
+      case .presence: .presence
+      case .system: .system
+      case .status: .status
+      }
+    }
+
+    func yield(_ delivery: ChannelDelivery) {
+      switch (self, delivery) {
+      case (.broadcast(_, let continuation), .broadcast(let json)): continuation.yield(json)
+      case (.broadcastData(_, let continuation), .broadcastData(let data)): continuation.yield(data)
+      case (.postgres(_, let continuation), .postgres(let action)): continuation.yield(action)
+      case (.presence(let continuation), .presence(let action)): continuation.yield(action)
+      case (.system(let continuation), .system(let message)): continuation.yield(message)
+      default: assertionFailure("route paired a \(delivery) delivery with a \(binding) stream")
+      }
+    }
   }
 
   /// Open streams, in registration order. The order fixes the `postgres_changes` array of the
-  /// join payload.
+  /// join payload, and indexes the deliveries of ``route(_:bindings:serverChanges:)``.
   var listeners: [(id: UUID, listener: Listener)] = []
 
   /// The `postgres_changes` bindings the server echoed back on join, with their ids.
@@ -511,13 +533,15 @@ public actor RealtimeChannel {
       switch message.eventType {
       case .system: handleSystem(message)
       case .reply: try handleReply(message)
-      case .postgresChanges: try handlePostgresChanges(message)
-      case .broadcast: try handleBroadcast(message)
       case .close: await handleClose(message)
       case .error: handleError(message)
-      case .presenceDiff: try handlePresenceDiff(message)
-      case .presenceState: try handlePresenceState(message)
+      case .presenceDiff: _ = presence.applyDiff(message.payload)
+      case .presenceState: _ = presence.applyState(message.payload)
+      case .postgresChanges, .broadcast: break
       default: logger.debug("Received message with unhandled event type: \(message)")
+      }
+      if let routed = try route(message, bindings: bindings, serverChanges: serverChanges) {
+        deliver(routed)
       }
     } catch {
       logger.debug("Failed: \(error)")
@@ -529,10 +553,6 @@ public actor RealtimeChannel {
       didReceiveSubscribedOK()
     } else {
       logger.debug("Failed to subscribe to channel \(message.topic): \(message.payload)")
-    }
-
-    for case .system(let continuation) in listeners.map(\.listener) {
-      continuation.yield(message)
     }
   }
 
@@ -558,76 +578,6 @@ public actor RealtimeChannel {
     didReceiveSubscribedOK()
   }
 
-  private func handlePostgresChanges(_ message: RealtimeMessageV2) throws {
-    guard let data = message.payload["data"] else {
-      logger.debug("Expected \"data\" key in message payload.")
-      return
-    }
-
-    let ids = message.payload["ids"]?.arrayValue?.compactMap(\.intValue) ?? []
-    let action = try Self.makeAction(
-      from: data.decode(as: PostgresActionData.self),
-      rawMessage: message
-    )
-
-    let matched = serverChanges.filter { ids.contains($0.id) }
-    for case .postgres(let filter, let continuation) in listeners.map(\.listener)
-    where matched.contains(where: { $0 == filter }) {
-      continuation.yield(action)
-    }
-  }
-
-  private static func makeAction(
-    from data: PostgresActionData,
-    rawMessage: RealtimeMessageV2
-  ) throws -> AnyAction {
-    switch data.type {
-    case "UPDATE":
-      return .update(
-        UpdateAction(
-          columns: data.columns,
-          commitTimestamp: data.commitTimestamp,
-          record: data.record ?? [:],
-          oldRecord: data.oldRecord ?? [:],
-          rawMessage: rawMessage
-        )
-      )
-
-    case "DELETE":
-      return .delete(
-        DeleteAction(
-          columns: data.columns,
-          commitTimestamp: data.commitTimestamp,
-          oldRecord: data.oldRecord ?? [:],
-          rawMessage: rawMessage
-        )
-      )
-
-    case "INSERT":
-      return .insert(
-        InsertAction(
-          columns: data.columns,
-          commitTimestamp: data.commitTimestamp,
-          record: data.record ?? [:],
-          rawMessage: rawMessage
-        )
-      )
-
-    default:
-      throw RealtimeError.decoding("Unknown event type: \(data.type)")
-    }
-  }
-
-  private func handleBroadcast(_ message: RealtimeMessageV2) throws {
-    let payload = message.payload
-
-    guard let event = payload["event"]?.stringValue else {
-      throw RealtimeError.decoding("Expected 'event' key in 'payload' for broadcast event.")
-    }
-
-    deliverBroadcast(event: event, json: payload)
-  }
-
   private func handleClose(_ message: RealtimeMessageV2) async {
     // Phoenix tags `phx_close` with the `join_ref` of the join it closes. A close for a previous
     // incarnation of this topic (e.g. a join abandoned during a reconnect) must not tear down
@@ -650,65 +600,21 @@ public actor RealtimeChannel {
     didReceiveClose(joinRef: message.joinRef)
   }
 
-  private func handlePresenceDiff(_ message: RealtimeMessageV2) throws {
-    _ = presence.applyDiff(message.payload)
-    let joins = try message.payload["joins"]?.decode(as: [String: PresenceV2].self) ?? [:]
-    let leaves = try message.payload["leaves"]?.decode(as: [String: PresenceV2].self) ?? [:]
-    deliverPresence(joins: joins, leaves: leaves, rawMessage: message)
-  }
-
-  private func handlePresenceState(_ message: RealtimeMessageV2) throws {
-    _ = presence.applyState(message.payload)
-    let joins = try message.payload.decode(as: [String: PresenceV2].self)
-    deliverPresence(joins: joins, leaves: [:], rawMessage: message)
-  }
-
   /// Called by the client when a binary broadcast frame (type 0x04) is received.
   func handleBinaryBroadcast(_ broadcast: DecodedBroadcast) {
-    let event = broadcast.event
-
-    switch broadcast.payload {
-    case .json(let json):
-      var message: JSONObject = [
-        "event": .string(event),
-        "payload": .object(json),
-        "type": "broadcast",
-      ]
-      message["meta"] = broadcast.meta.map(JSONValue.object)
-      deliverBroadcast(event: event, json: message)
-
-    case .binary(let data):
-      var delivered = false
-      for case .broadcastData(let listening, let continuation) in listeners.map(\.listener)
-      where Self.eventMatches(listening, event) {
-        continuation.yield(data)
-        delivered = true
-      }
-      if !delivered {
-        logger.warning(
-          "Received binary broadcast for event '\(event)' but no Data stream is open. Open one with broadcastData(event:) to receive Data."
-        )
-      }
+    let routed = route(broadcast, bindings: bindings)
+    if routed.listeners.isEmpty, case .binary = broadcast.payload {
+      logger.warning(
+        "Received binary broadcast for event '\(broadcast.event)' but no Data stream is open. Open one with broadcastData(event:) to receive Data."
+      )
     }
+    deliver(routed)
   }
 
-  private func deliverBroadcast(event: String, json: JSONObject) {
-    for case .broadcast(let listening, let continuation) in listeners.map(\.listener)
-    where Self.eventMatches(listening, event) {
-      continuation.yield(json)
+  private func deliver(_ routed: ChannelRoute) {
+    for index in routed.listeners {
+      listeners[index].listener.yield(routed.delivery)
     }
-  }
-
-  private func deliverPresence(
-    joins: [String: PresenceV2], leaves: [String: PresenceV2], rawMessage: RealtimeMessageV2
-  ) {
-    for case .presence(let continuation) in listeners.map(\.listener) {
-      continuation.yield(PresenceActionImpl(joins: joins, leaves: leaves, rawMessage: rawMessage))
-    }
-  }
-
-  private static func eventMatches(_ listening: String, _ event: String) -> Bool {
-    listening == "*" || listening.lowercased() == event.lowercased()
   }
 
   // MARK: - Listeners
@@ -739,15 +645,8 @@ public actor RealtimeChannel {
     }
   }
 
-  /// Whether a `presenceChanges()` stream is open: that is what turns presence on in the join
-  /// payload, so the server only tracks presence for channels that read it.
-  var hasPresenceListener: Bool {
-    listeners.contains { if case .presence = $0.listener { true } else { false } }
-  }
-
-  /// The `postgres_changes` bindings of the open streams, in registration order.
-  var clientChanges: [PostgresJoinConfig] {
-    listeners.compactMap { if case .postgres(let config, _) = $0.listener { config } else { nil } }
+  var bindings: [ChannelBinding] {
+    listeners.map(\.listener.binding)
   }
 
   /// Default exponential-backoff retry delay with ±25% jitter, capped at 30s.
