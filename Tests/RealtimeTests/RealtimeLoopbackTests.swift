@@ -149,7 +149,7 @@ import Testing
     }
 
     /// Parses a client→server broadcast push with a JSON payload (binary kind 0x03). The
-    /// production serializer only decodes the server→client kind, so the server side lives here.
+    /// production codec only decodes the server→client kind, so the server side lives here.
     ///
     /// ```
     /// [kind:1][joinRef_len:1][ref_len:1][topic_len:1][event_len:1][meta_len:1][encoding:1]
@@ -159,7 +159,8 @@ import Testing
       topic: String, event: String, payload: JSONObject
     )? {
       let header = Array(data.prefix(7))
-      guard header.count == 7, header[0] == RealtimeSerializer.BinaryKind.userBroadcastPush.rawValue
+      guard header.count == 7,
+        header[0] == BroadcastFrameCodec.BinaryKind.userBroadcastPush.rawValue
       else {
         return nil
       }
