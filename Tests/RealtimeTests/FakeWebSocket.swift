@@ -134,19 +134,24 @@ struct ClosureWebSocketTransport: WebSocketTransport {
 
 extension RealtimeClient {
   /// Builds a client whose transport is the `wsTransport` closure.
+  ///
+  /// The backoff jitter is pinned to the top of its range, so the n-th reconnect waits exactly
+  /// `min(30s, reconnectDelay · 2^(n-1))`.
   init(
     url: URL,
     options: RealtimeClientOptions,
     wsTransport: @escaping @Sendable (URL, HTTPFields) async throws -> any WebSocketConnection,
     http: HTTPClient,
-    clock: any Clock<Duration>
+    clock: any Clock<Duration>,
+    jitter: @escaping @Sendable (ClosedRange<Double>) -> Double = { $0.upperBound }
   ) {
     self.init(
       url: url,
       options: options,
       transport: ClosureWebSocketTransport(open: wsTransport),
       http: http,
-      clock: clock
+      clock: clock,
+      jitter: jitter
     )
   }
 }
