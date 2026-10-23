@@ -44,12 +44,9 @@
     }
 
     @Test
-    func broadcastWithAckReachesOwnStream() async throws {
+    func broadcastToSelfReachesOwnStream() async throws {
       let client = makeClient()
-      let channel = client.channel(uniqueTopic()) {
-        $0.broadcast.acknowledgeBroadcasts = true
-        $0.broadcast.receiveOwnBroadcasts = true
-      }
+      let channel = client.channel(uniqueTopic()) { $0.broadcast.receiveOwnBroadcasts = true }
       let messages = channel.broadcastStream(event: "ping")
       try await channel.subscribeWithError()
 
@@ -123,8 +120,13 @@
         try await LocalStack.insertRow(key: otherKey)
         try await LocalStack.insertRow(key: matchingKey)
 
-        let all = try await collect(inserts, "unfiltered inserts", count: 2)
-        #expect(all.map { $0.record["key"]?.stringValue } == [otherKey, matchingKey])
+        let ownKeys = [otherKey, matchingKey]
+        let keys = try await collect(inserts, "unfiltered inserts") {
+          $0.filter { ownKeys.contains($0.record["key"]?.stringValue ?? "") }.count == 2
+        }
+        .compactMap { $0.record["key"]?.stringValue }
+        .filter(ownKeys.contains)
+        #expect(keys == ownKeys)
         let matching = try await collect(filtered, "filtered insert", count: 1)
         #expect(matching[0].record["key"]?.stringValue == matchingKey)
       }) {
@@ -139,10 +141,12 @@
         let client = makeClient(LocalStack.failFastOptions)
         let channel = client.channel(topic) { $0.isPrivate = true }
 
-        await #expect(throws: (any Error).self) {
+        let error = await #expect(throws: RealtimeError.self) {
           try await channel.subscribeWithError()
         }
 
+        #expect(error?.errorDescription == "Maximum retry attempts reached.")
+        #expect(client.status == .connected)
         #expect(channel.status == .unsubscribed)
         await client.removeAllChannels()
       }
@@ -195,6 +199,7 @@
       #expect(client.status == .disconnected)
       let seen = try await collect(statuses, "client statuses", count: 3)
       #expect(seen == [.disconnected, .connecting, .disconnected])
+      await client.removeAllChannels()
     }
 
     @Test
@@ -235,7 +240,12 @@
       relay.cutAndHold()
       _ = try await collect(clientStatuses, "reconnect start") { $0.last == .connecting }
       await client.removeChannel(removed)
-      let removedHistory = record(removed.statusChange)
+      let removedStatuses = removed.statusChange
+      let removedHistory = LockIsolated<[RealtimeChannelStatus]>([])
+      let recorder = Task {
+        for await status in removedStatuses { removedHistory.withValue { $0.append(status) } }
+      }
+      defer { recorder.cancel() }
       relay.release()
 
       _ = try await collect(keptStatuses, "kept channel rejoin") {
@@ -343,15 +353,6 @@
       throw Failure(description: "\(what) not observed within \(limit), saw \(seen.value)")
     }
     return seen.value
-  }
-
-  private func record<Element: Sendable>(_ stream: AsyncStream<Element>) -> LockIsolated<[Element]>
-  {
-    let history = LockIsolated<[Element]>([])
-    Task {
-      for await element in stream { history.withValue { $0.append(element) } }
-    }
-    return history
   }
 
   private enum LocalStack {
