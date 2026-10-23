@@ -405,6 +405,234 @@ struct RealtimeChannelSubscriptionTests {
     #expect(await channel.joinRef == nil)
   }
 
+  /// A reset ends an unsubscribe that waits for the server's `phx_close` (it died with the
+  /// socket) and reports that the channel must not rejoin.
+  @Test
+  func resetEndsPendingUnsubscribeWithoutRejoin() async throws {
+    let h = Harness(timeout: .seconds(10))
+    let channel = await h.client.channel("room")
+    _ = try await h.subscribe(channel)
+
+    let unsubscription = Task { await channel.unsubscribe() }
+    _ = try #require(await h.received(ChannelEvent.leave))
+    #expect(await channel.resetForReconnect() == false)
+    await unsubscription.value
+
+    #expect(await channel.status == .unsubscribed)
+    #expect(await channel.joinRef == nil)
+    #expect(await channel.resetForReconnect() == false)
+  }
+
+  /// A reset asks to rejoin a channel the caller still wants, and again once the caller
+  /// subscribes a channel it had unsubscribed.
+  @Test
+  func resetRejoinsUntilTheCallerUnsubscribes() async throws {
+    let h = Harness(timeout: .seconds(10))
+    let channel = await h.client.channel("room")
+    _ = try await h.subscribe(channel)
+    #expect(await channel.resetForReconnect() == true)
+
+    // A server close would also unmap the channel, so let the unsubscribe time out instead.
+    _ = try await h.subscribe(channel)
+    let unsubscription = Task { await channel.unsubscribe() }
+    _ = try #require(await h.received(ChannelEvent.leave))
+    await h.clock.advance(by: .seconds(10))
+    await unsubscription.value
+    #expect(await channel.resetForReconnect() == false)
+
+    _ = try await h.subscribe(channel)
+    #expect(await channel.resetForReconnect() == true)
+  }
+
+  /// `removeChannel(_:)` stops a join still in flight. Unmapped, the channel would never see its
+  /// reply and would keep retrying the join, and the server closes the topic's next channel on
+  /// each duplicate join.
+  @Test(.timeLimit(.minutes(1)))
+  func removeChannelStopsAJoinInFlight() async throws {
+    let h = Harness(timeout: .seconds(10), maxRetryAttempts: 3)
+    // Keeps the client from disconnecting once the topic's channel is removed.
+    _ = await h.client.channel("other")
+    let channel = await h.client.channel("room")
+
+    let subscription = Task { try await channel.subscribe() }
+    _ = try #require(await h.received(ChannelEvent.join))
+    await h.client.removeChannel(channel)
+
+    #expect(await channel.status == .unsubscribed)
+    #expect(await h.client.channels[channel.topic] == nil)
+    // Past the attempt's timeout and the first retry delay.
+    await h.clock.advance(by: .seconds(12))
+    #expect(h.sent(ChannelEvent.join).count == 1)
+
+    subscription.cancel()
+    await #expect(throws: (any Error).self) { try await subscription.value }
+  }
+
+  /// A removal woken by a reconnect's reset stops the rejoin. The reset and the start of the
+  /// rejoin's join share one turn of the channel, so the removal finds the join in flight, not an
+  /// `.unsubscribed` channel whose rejoin is still to come and would join it once unmapped.
+  @Test(.timeLimit(.minutes(1)))
+  func removalAfterTheResetStopsTheRejoin() async throws {
+    let h = Harness(timeout: .seconds(10), maxRetryAttempts: 3)
+    // Keeps the client from disconnecting once the topic's channel is removed.
+    _ = await h.client.channel("other")
+    let channel = await h.client.channel("room")
+    _ = try await h.subscribe(channel)
+
+    let statuses = await channel.statusChanges()
+    let rejoin = Task { try await channel.rejoinAfterReconnect() }
+    for await status in statuses where status == .unsubscribed { break }
+    #expect(await channel.status == .subscribing)
+    await h.client.removeChannel(channel)
+
+    #expect(await channel.status == .unsubscribed)
+    #expect(await h.client.channels[channel.topic] == nil)
+    await #expect(throws: (any Error).self) { try await rejoin.value }
+    // Past the attempt's timeout and the first retry delay: at most the rejoin's first join.
+    await h.clock.advance(by: .seconds(12))
+    #expect(h.sent(ChannelEvent.join).count <= 2)
+  }
+
+  /// A reconnect joins only the channels the caller subscribed. A channel it only created may not
+  /// have opened its postgres-change or presence streams yet, so that join would be incomplete.
+  @Test(.timeLimit(.minutes(1)))
+  func reconnectRejoinsOnlyTheChannelsTheCallerSubscribed() async throws {
+    let h = Harness()
+    let subscribed = await h.client.channel("room")
+    let idle = await h.client.channel("lobby")
+    _ = try await h.subscribe(subscribed)
+
+    let rejoin = Task { await h.client.rejoinChannels() }
+    let join = try #require(await h.received(ChannelEvent.join))
+    #expect(join.topic == subscribed.topic)
+    try h.confirm(join)
+    try #require(await finishes(rejoin))
+
+    #expect(await subscribed.status == .subscribed)
+    #expect(await idle.status == .unsubscribed)
+    #expect(h.sent(ChannelEvent.join).filter { $0.topic == idle.topic }.isEmpty)
+  }
+
+  /// `removeChannel(_:)` marks the channel removed even when it is already `.unsubscribed`, e.g.
+  /// after its subscribe gave up during an outage. A reconnect that captured the channel before
+  /// the removal must not join it once it is unmapped.
+  @Test(.timeLimit(.minutes(1)))
+  func removedChannelDoesNotRejoinAfterItsSubscribeGaveUp() async throws {
+    let h = Harness(timeout: .seconds(10), maxRetryAttempts: 1)
+    // Keeps the client from disconnecting once the topic's channel is removed.
+    _ = await h.client.channel("other")
+    let channel = await h.client.channel("room")
+    let subscription = Task { try await channel.subscribe() }
+    _ = try #require(await h.received(ChannelEvent.join))
+    await h.clock.advance(by: .seconds(10))
+    let error = await #expect(throws: RealtimeError.self) { try await subscription.value }
+    #expect(error?.kind == .maxRetryAttemptsReached)
+
+    await h.client.removeChannel(channel)
+    // The step of a reconnect's `rejoinChannels()` that captured the channel before the removal.
+    // A join of the unmapped channel would wait for a reply that never comes.
+    let rejoin = Task { try await channel.rejoinAfterReconnect() }
+    try #require(await finishes(rejoin))
+
+    #expect(await channel.status == .unsubscribed)
+    #expect(h.sent(ChannelEvent.join).count == 1)
+  }
+
+  /// A channel the server closed is unmapped, so it never joins again: neither through a
+  /// reconnect's rejoin nor through a later `subscribe()`.
+  @Test(.timeLimit(.minutes(1)))
+  func channelClosedByTheServerNeverJoinsAgain() async throws {
+    let h = Harness()
+    let channel = await h.client.channel("room")
+    let join = try await h.subscribe(channel)
+    try h.close(join)
+    #expect(await waitUntil { await h.client.channels[channel.topic] == nil })
+
+    // A join of the unmapped channel would wait for a reply that never comes.
+    let rejoin = Task { try await channel.rejoinAfterReconnect() }
+    try #require(await finishes(rejoin))
+    let subscription = Task { try await channel.subscribe() }
+    try #require(await finishes(subscription))
+    await #expect(throws: CancellationError.self) { try await subscription.value }
+
+    #expect(await channel.status == .unsubscribed)
+    #expect(h.sent(ChannelEvent.join).count == 1)
+  }
+
+  /// A `subscribe()` that waits on an in-flight unsubscribe must not join once a removal that
+  /// waited on the same unsubscribe has unmapped the channel, whichever of the two resumes first.
+  @Test(.timeLimit(.minutes(1)))
+  func subscribeWaitingOnAnUnsubscribeDoesNotJoinARemovedChannel() async throws {
+    let h = Harness(timeout: .seconds(10))
+    // Keeps the client from disconnecting once the topic's channel is removed.
+    _ = await h.client.channel("other")
+    let channel = await h.client.channel("room")
+    _ = try await h.subscribe(channel)
+
+    let unsubscription = Task { await channel.unsubscribe() }
+    _ = try #require(await h.received(ChannelEvent.leave))
+    let subscription = Task { try await channel.subscribe() }
+    #expect(await waitUntil { await channel.subscribeRequested })
+    let removal = Task { await h.client.removeChannel(channel) }
+    #expect(await waitUntil { await channel.isRemoved })
+    // The unsubscribe stops waiting for `phx_close`; the subscribe and the removal resume.
+    await h.clock.advance(by: .seconds(10))
+    await unsubscription.value
+    await removal.value
+
+    // A join on the unmapped channel would wait for a reply that never comes.
+    try #require(await finishes(subscription))
+    await #expect(throws: CancellationError.self) { try await subscription.value }
+    #expect(await channel.status == .unsubscribed)
+    #expect(await h.client.channels[channel.topic] == nil)
+    #expect(h.sent(ChannelEvent.join).count == 1)
+  }
+
+  /// An unsubscribe that a reset ended while it waited for `phx_close` must leave a newer
+  /// unsubscribe alone when it resumes: the newer one owns the state and `joinRef`, and still
+  /// waits for its own `phx_close`.
+  @Test(.timeLimit(.minutes(1)))
+  func staleUnsubscribeLeavesTheNewerUnsubscribeAlone() async throws {
+    let h = Harness(timeout: .seconds(10))
+    let channel = await h.client.channel("room")
+    _ = try await h.subscribe(channel)
+    let older = Task { await channel.unsubscribe() }
+    _ = try #require(await h.received(ChannelEvent.leave))
+    #expect(await waitUntil { await channel.closeWaiter != nil })
+
+    let newer = await channel.resetAndStartNewerUnsubscribe(joinRef: "newer-join")
+    await older.value
+
+    #expect(await channel.status == .unsubscribing)
+    #expect(await channel.joinRef == "newer-join")
+    let leave = try #require(await h.received(ChannelEvent.leave))
+    #expect(leave.joinRef == "newer-join")
+    #expect(await channel.didReceiveClose(joinRef: "newer-join"))
+    try #require(await finishes(newer))
+    #expect(await channel.status == .unsubscribed)
+  }
+
+  /// An unsubscribe that a reset ended before it sent `phx_leave` must neither leave the newer
+  /// join nor park on the newer unsubscribe's `phx_close`: taking that waiter would leave the
+  /// newer unsubscribe unable to end.
+  @Test(.timeLimit(.minutes(1)))
+  func staleUnsubscribeDoesNotTakeTheNewerUnsubscribesCloseWaiter() async throws {
+    let h = Harness(timeout: .seconds(10))
+    let channel = await h.client.channel("room")
+    _ = try await h.subscribe(channel)
+
+    let (older, newer) = await channel.startUnsubscribeThenResetAndStartNewer(
+      joinRef: "newer-join")
+    try #require(await finishes(older))
+
+    #expect(await channel.status == .unsubscribing)
+    #expect(await waitUntil { await channel.closeWaiter != nil })
+    #expect(await channel.didReceiveClose(joinRef: "newer-join"))
+    try #require(await finishes(newer))
+    #expect(await channel.status == .unsubscribed)
+    #expect(h.sent(ChannelEvent.leave).count == 1)
+  }
+
   /// `removeAllChannels()` must keep each channel routable until its `phx_close` arrives: a
   /// close for a topic no longer in `channels` is dropped, and the unsubscribe then waits for
   /// the whole timeout.
@@ -526,6 +754,19 @@ struct RealtimeChannelSubscriptionTests {
   }
 
   // MARK: - Harness
+
+  /// Whether `task` finishes within `timeout` of real time. A regression that strands the task
+  /// then fails the test instead of hanging the run.
+  private func finishes<Success, Failure>(
+    _ task: Task<Success, Failure>, timeout: TimeInterval = 2
+  ) async -> Bool {
+    let finished = LockIsolated(false)
+    Task {
+      _ = await task.result
+      finished.setValue(true)
+    }
+    return await waitUntil(timeout: timeout) { finished.value }
+  }
 
   /// Parks one caller in `park()` until `open()`. Tests wait for `isParked` before acting.
   private final class Gate: Sendable {
@@ -654,5 +895,27 @@ struct RealtimeChannelSubscriptionTests {
       guard case .frame(.text(let text)) = frame else { return nil }
       return try? RealtimeSerializer().decodeText(text)
     }
+  }
+}
+
+extension RealtimeChannel {
+  /// In one turn of the channel: a reconnect resets it, a newer subscribe is confirmed with
+  /// `joinRef`, and a newer unsubscribe starts. An older unsubscribe run resumes only after this
+  /// turn, so it always finds the newer one owning the state.
+  fileprivate func resetAndStartNewerUnsubscribe(joinRef newJoinRef: String) -> Task<Void, Never> {
+    resetForReconnect()
+    // Stands in for a newer subscribe the server has confirmed.
+    joinRef = newJoinRef
+    setState(.subscribed)
+    return startUnsubscribe(waitForServerClose: true)
+  }
+
+  /// Starts an unsubscribe and, in the same turn, ``resetAndStartNewerUnsubscribe(joinRef:)``:
+  /// the older run first runs once the newer one owns the state.
+  fileprivate func startUnsubscribeThenResetAndStartNewer(
+    joinRef newJoinRef: String
+  ) -> (older: Task<Void, Never>, newer: Task<Void, Never>) {
+    let older = startUnsubscribe(waitForServerClose: true)
+    return (older, resetAndStartNewerUnsubscribe(joinRef: newJoinRef))
   }
 }

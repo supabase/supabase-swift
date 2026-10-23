@@ -373,15 +373,14 @@ public actor RealtimeClient {
 
   /// Unsubscribes from and removes a channel, ending every stream opened on it.
   ///
-  /// If the channel is currently subscribed, it is unsubscribed first. After removal,
-  /// if no channels remain, the client disconnects (or schedules a deferred disconnect
-  /// based on ``RealtimeClientOptions/defaultDisconnectOnEmptyChannelsAfter``).
+  /// The channel is unsubscribed first, which also stops a join still in flight, and it never
+  /// joins again: get a new one from ``channel(_:options:)``. After removal, if no channels
+  /// remain, the client disconnects (or schedules a deferred disconnect based on
+  /// ``RealtimeClientOptions/defaultDisconnectOnEmptyChannelsAfter``).
   ///
   /// - Parameter channel: The channel to remove.
   public func removeChannel(_ channel: RealtimeChannel) async {
-    if await channel.status == .subscribed {
-      await channel.unsubscribe()
-    }
+    await channel.unsubscribeForRemoval()
 
     channels[channel.topic] = nil
     await channel.finishStreams()
@@ -427,9 +426,7 @@ public actor RealtimeClient {
     await withTaskGroup(of: Void.self) { group in
       for channel in removed {
         group.addTask {
-          if await channel.status == .subscribed {
-            await channel.unsubscribe()
-          }
+          await channel.unsubscribeForRemoval()
           await channel.finishStreams()
         }
       }
