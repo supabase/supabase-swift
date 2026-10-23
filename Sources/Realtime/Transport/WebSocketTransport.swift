@@ -8,14 +8,14 @@
 package import Foundation
 package import HTTPTypes
 
-/// Opens WebSocket connections for the Realtime engine.
+/// Opens WebSocket connections for ``RealtimeClient``.
 ///
-/// The engine owns one connection at a time and reads it through ``WebSocketConnection``. The
+/// The client owns one connection at a time and reads it through ``WebSocketConnection``. The
 /// default is ``URLSessionWebSocketTransport``; tests inject a stub.
 package protocol WebSocketTransport: Sendable {
   /// Performs the HTTP upgrade and returns the open connection.
   ///
-  /// Throws `RealtimeError` with kind `.transport`. The error's `isRetryable` tells the engine
+  /// Throws `RealtimeError` with kind `.transport`. The error's `isRetryable` says
   /// whether to back off and try again (network failure, 429, 5xx) or to stop (401, 403, 404).
   /// Rethrows `CancellationError` when the calling task is cancelled mid-handshake.
   func connect(to url: URL, headerFields: HTTPFields) async throws -> any WebSocketConnection
@@ -29,7 +29,7 @@ package protocol WebSocketConnection: AnyObject, Sendable {
   var events: AsyncStream<WebSocketEvent> { get }
 
   /// Sends one frame and returns once the transport has accepted it. Frames go out in call
-  /// order, so the engine can rely on `phx_join` reaching the wire before anything sent after.
+  /// order, so the client can rely on `phx_join` reaching the wire before anything sent after.
   func send(_ frame: WebSocketFrame) async throws
 
   /// Starts a graceful close and returns without waiting for it. The `.closed` event on

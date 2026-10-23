@@ -41,7 +41,7 @@ public struct RealtimeError: SupabaseError {
     public static let timeout: Kind = "timeout"
     /// A send was attempted on a channel that is not subscribed. Call `subscribe()` first.
     public static let notSubscribed: Kind = "notSubscribed"
-    /// The socket went away while a reply was pending. The engine reconnects on its own; retry
+    /// The socket went away while a reply was pending. The client reconnects on its own; retry
     /// the call once the status is back to connected.
     public static let notConnected: Kind = "notConnected"
     /// `httpSend` needs an access token and none was available. Sign in, or pass an
@@ -50,8 +50,7 @@ public struct RealtimeError: SupabaseError {
     /// The server rejected the token or the topic's RLS policy denied access. Retrying as-is
     /// will not help; ``RealtimeError/serverCode`` says which check failed.
     public static let unauthorized: Kind = "unauthorized"
-    /// The server applied a rate limit. ``RealtimeError/serverCode`` names which one. The engine
-    /// backs off before trying again.
+    /// The server applied a rate limit. ``RealtimeError/serverCode`` names which one.
     public static let rateLimited: Kind = "rateLimited"
     /// The server closed the channel (`phx_close`) with a `system` error. The message carries
     /// the server's reason.
