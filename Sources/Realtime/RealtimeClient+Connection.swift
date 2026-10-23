@@ -441,7 +441,7 @@ extension RealtimeClient {
     switch event {
     case .frame(.binary(let data)):
       do {
-        let broadcast = try serializer.decodeBinary(data)
+        let broadcast = try BroadcastFrameCodec.decode(data)
         options.logger.debug(
           "Received binary broadcast for topic \(broadcast.topic), event \(broadcast.event)"
         )

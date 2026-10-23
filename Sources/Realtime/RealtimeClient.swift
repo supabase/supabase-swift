@@ -526,7 +526,7 @@ public actor RealtimeClient {
     do {
       await send(
         .binary(
-          try serializer.encodeBroadcastPush(
+          try BroadcastFrameCodec.encodePush(
             joinRef: joinRef, ref: ref, topic: topic, event: event, jsonPayload: jsonPayload
           )
         )
@@ -547,7 +547,7 @@ public actor RealtimeClient {
     do {
       await send(
         .binary(
-          try serializer.encodeBroadcastPush(
+          try BroadcastFrameCodec.encodePush(
             joinRef: joinRef, ref: ref, topic: topic, event: event, binaryPayload: binaryPayload
           )
         )
