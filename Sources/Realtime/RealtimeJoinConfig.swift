@@ -64,7 +64,7 @@ public struct BroadcastJoinConfig: Encodable, Hashable, Sendable {
   /// Instructs the server to emit a `system` event once the Postgres replication
   /// connection backing this channel is established and ready to stream changes.
   ///
-  /// Listen for it with the ``RealtimeChannel/systemMessages()`` async stream: the message's `status` is
+  /// Listen for it with the ``RealtimeChannel/system()`` async stream: the message's `status` is
   /// `.ok` (message `"Replication connection established"`) on success, or
   /// `.error` if the connection is not ready in time.
   public var replicationReady: Bool = false
@@ -166,18 +166,13 @@ package struct PostgresJoinConfig: Codable, Hashable, Sendable {
     self.id = id
   }
 
-  package static func == (lhs: Self, rhs: Self) -> Bool {
-    lhs.schema == rhs.schema
-      && lhs.table == rhs.table
-      && lhs.filter == rhs.filter
-      && (lhs.event == rhs.event || rhs.event == .all)
-  }
-
-  package func hash(into hasher: inout Hasher) {
-    hasher.combine(schema)
-    hasher.combine(table)
-    hasher.combine(filter)
-    hasher.combine(event)
+  /// Whether a change the server reports under this binding reaches a stream opened with
+  /// `listener`. A listener for every event (`*`) receives a change from a binding for one event.
+  package func matches(_ listener: PostgresJoinConfig) -> Bool {
+    schema == listener.schema
+      && table == listener.table
+      && filter == listener.filter
+      && (event == listener.event || listener.event == .all)
   }
 
   package func encode(to encoder: any Encoder) throws {
