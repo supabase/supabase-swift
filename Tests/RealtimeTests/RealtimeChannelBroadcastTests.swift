@@ -93,8 +93,8 @@ final class RealtimeChannelBroadcastTests: Sendable {
     #expect(!binaryEvents.isEmpty, "Expected at least one binary frame to be sent")
 
     if let binaryData = binaryEvents.last {
-      #expect(binaryData[0] == RealtimeSerializer.BinaryKind.userBroadcastPush.rawValue)
-      #expect(binaryData[6] == RealtimeSerializer.PayloadEncoding.json.rawValue)
+      #expect(binaryData[0] == BroadcastFrameCodec.BinaryKind.userBroadcastPush.rawValue)
+      #expect(binaryData[6] == BroadcastFrameCodec.PayloadEncoding.json.rawValue)
     }
   }
 
@@ -117,8 +117,8 @@ final class RealtimeChannelBroadcastTests: Sendable {
     #expect(!binaryFrames.isEmpty, "Expected at least one binary frame to be sent")
 
     if let frame = binaryFrames.last {
-      #expect(frame[0] == RealtimeSerializer.BinaryKind.userBroadcastPush.rawValue)
-      #expect(frame[6] == RealtimeSerializer.PayloadEncoding.binary.rawValue)
+      #expect(frame[0] == BroadcastFrameCodec.BinaryKind.userBroadcastPush.rawValue)
+      #expect(frame[6] == BroadcastFrameCodec.PayloadEncoding.binary.rawValue)
     }
   }
 
@@ -300,11 +300,11 @@ final class RealtimeChannelBroadcastTests: Sendable {
     let eventBytes = Data(event.utf8)
 
     var frame = Data()
-    frame.append(RealtimeSerializer.BinaryKind.userBroadcast.rawValue)
+    frame.append(BroadcastFrameCodec.BinaryKind.userBroadcast.rawValue)
     frame.append(UInt8(topicBytes.count))
     frame.append(UInt8(eventBytes.count))
     frame.append(0)
-    frame.append(RealtimeSerializer.PayloadEncoding.json.rawValue)
+    frame.append(BroadcastFrameCodec.PayloadEncoding.json.rawValue)
     frame.append(topicBytes)
     frame.append(eventBytes)
     frame.append(payloadData)
@@ -350,11 +350,11 @@ final class RealtimeChannelBroadcastTests: Sendable {
     let payload = Data(#"{"record":{"id":1}}"#.utf8)
 
     var frame = Data()
-    frame.append(RealtimeSerializer.BinaryKind.userBroadcast.rawValue)
+    frame.append(BroadcastFrameCodec.BinaryKind.userBroadcast.rawValue)
     frame.append(UInt8(topic.count))
     frame.append(UInt8(event.count))
     frame.append(UInt8(metadata.count))
-    frame.append(RealtimeSerializer.PayloadEncoding.json.rawValue)
+    frame.append(BroadcastFrameCodec.PayloadEncoding.json.rawValue)
     frame.append(topic)
     frame.append(event)
     frame.append(metadata)
