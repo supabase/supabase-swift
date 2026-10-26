@@ -225,6 +225,22 @@ struct TypesTests {
     #expect(identity.identityId == UUID(uuidString: "6c69f399-be1b-467a-9c53-d3753abdd2df"))
   }
 
+  @Test
+  func amrEntryReadsObjectsAndStrings() {
+    let object: [String: Any] = ["method": "totp", "timestamp": 1_700_000_100.0]
+
+    #expect(
+      AMREntry(value: object, issuedAt: 1_700_000_000)
+        == AMREntry(method: "totp", timestamp: 1_700_000_100)
+    )
+    #expect(
+      AMREntry(value: "pwd", issuedAt: 1_700_000_000)
+        == AMREntry(method: "pwd", timestamp: 1_700_000_000)
+    )
+    #expect(AMREntry(value: "pwd", issuedAt: nil) == nil)
+    #expect(AMREntry(value: 42, issuedAt: 1_700_000_000) == nil)
+  }
+
   private func decodeUser(_ fields: String) throws -> User {
     let json = """
       {

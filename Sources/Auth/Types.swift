@@ -1359,7 +1359,17 @@ public struct AMREntry: Decodable, Hashable, Sendable {
 }
 
 extension AMREntry {
-  init?(value: Any) {
+  /// Reads one `amr` claim entry: GoTrue's `{"method", "timestamp"}` object, or the bare method
+  /// string of RFC 8176 that a custom access token hook can emit. A bare string carries no time, so
+  /// it takes the token's `iat`.
+  init?(value: Any, issuedAt: TimeInterval?) {
+    if let method = value as? Method {
+      guard let issuedAt else { return nil }
+      self.method = method
+      self.timestamp = issuedAt
+      return
+    }
+
     guard let dict = value as? [String: Any],
       let method = dict["method"] as? Method,
       let timestamp = dict["timestamp"] as? TimeInterval

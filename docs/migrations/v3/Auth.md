@@ -41,6 +41,9 @@ Changes that still compile but behave differently. Check each one by hand.
 - **An identity needs `identity_id`.** A `UserIdentity` without `identity_id` now fails to decode,
   and so does the `User` that holds it. v2 filled in the all-zero UUID, which
   `unlinkIdentity(_:)` then sent to the server. Search for `00000000-0000-0000-0000-000000000000`.
+- **String `amr` entries are kept.** When a custom access token hook writes `amr` as strings,
+  `authenticatorAssuranceLevel()` now returns them in `currentAuthenticationMethods`, with the
+  token's `iat` as the `timestamp`. v2 dropped them.
 - **MFA IDs print in uppercase.** Factor and challenge IDs are `UUID`. `"\(factor.id)"` is
   uppercase; compare `UUID` values, not strings.
 
