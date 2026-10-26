@@ -18,10 +18,12 @@ elif [ "${#PROFDATA_FILES[@]}" -eq 1 ]; then
   PROFDATA_FILE="${PROFDATA_FILES[0]}"
   echo "Found profdata file: $PROFDATA_FILE"
 else
-  PROFDATA_FILE="$TEMP_COVERAGE_DIR/merged.profdata"
-  echo "Found ${#PROFDATA_FILES[@]} profdata files; merging into $PROFDATA_FILE:"
+  # The DerivedData cache can restore profiles from earlier runs, even from another branch. Only
+  # the newest belongs to this run: merging the others would count lines these tests never ran,
+  # and a freshly merged file would also hide them from the staleness check below.
+  PROFDATA_FILE=$(ls -t "${PROFDATA_FILES[@]}" | head -n 1)
+  echo "Found ${#PROFDATA_FILES[@]} profdata files; using the newest: $PROFDATA_FILE"
   printf '  %s\n' "${PROFDATA_FILES[@]}"
-  xcrun llvm-profdata merge -o "$PROFDATA_FILE" "${PROFDATA_FILES[@]}"
 fi
 
 echo "Searching for test bundles in Debug-iphonesimulator..."
@@ -69,18 +71,23 @@ done
 echo "Merging coverage data..."
 rm -f "$OUTPUT_FILE"
 
+# One lcov call for every tracefile: each call writes `--output-file` from scratch.
+TRACEFILE_ARGS=()
 for INFO_FILE in "$TEMP_COVERAGE_DIR"/*.info; do
   if [ -f "$INFO_FILE" ]; then
-    lcov \
-      --ignore-errors inconsistent \
-      --add-tracefile "$INFO_FILE" \
-      --output-file "$OUTPUT_FILE"
-    if [ $? -ne 0 ]; then
-      echo "Failed to merge $INFO_FILE into $OUTPUT_FILE. Exiting."
-      exit 1
-    fi
+    TRACEFILE_ARGS+=(--add-tracefile "$INFO_FILE")
   fi
 done
+
+if [ "${#TRACEFILE_ARGS[@]}" -eq 0 ]; then
+  echo "No coverage data was exported. Exiting."
+  exit 1
+fi
+
+if ! lcov --ignore-errors inconsistent "${TRACEFILE_ARGS[@]}" --output-file "$OUTPUT_FILE"; then
+  echo "Failed to merge coverage data into $OUTPUT_FILE. Exiting."
+  exit 1
+fi
 
 echo "Coverage data exported to $OUTPUT_FILE"
 
